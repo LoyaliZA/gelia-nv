@@ -15,7 +15,10 @@ export function claveIdempotenciaReponerVencido(resguardoId) {
     let clave = sessionStorage.getItem(storageKey);
 
     if (!clave) {
-        clave = `pdv:rep:${resguardoId}:${crypto.randomUUID()}`;
+        const terminal = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+            ? crypto.randomUUID()
+            : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        clave = `pdv:rep:${resguardoId}:${terminal}`;
         sessionStorage.setItem(storageKey, clave);
     }
 

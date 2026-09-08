@@ -9,6 +9,7 @@ use App\Models\Sucursal;
 use App\Models\User;
 use App\Services\PuntoVenta\Operacion\ConsultaEstadoOperativoPdvService;
 use App\Services\PuntoVenta\PuntoVentaModulo;
+use App\Services\PuntoVenta\SerializarCapacidadesPdvService;
 use Illuminate\Http\JsonResponse;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -19,6 +20,7 @@ class OperacionPdvController extends Controller
         ConsultaEstadoOperativoPdvRequest $request,
         ConsultaEstadoOperativoPdvService $consulta,
         ResuelveAlcancePdv $alcance,
+        SerializarCapacidadesPdvService $capacidades,
     ): Response|JsonResponse {
         /** @var User $user */
         $user = $request->user();
@@ -31,6 +33,7 @@ class OperacionPdvController extends Controller
         return Inertia::render('PuntoVenta/Operacion/Index', [
             'estado' => fn () => $payload,
             'permisos' => fn () => $this->serializarPermisos($user, $alcance),
+            'capacidades' => fn () => $capacidades->serializar($user),
             'sucursal_activa' => fn () => $this->serializarSucursalActiva($user, $alcance),
             'sucursales_asignadas' => fn () => $this->serializarSucursalesAsignadas($user),
         ]);
@@ -58,6 +61,7 @@ class OperacionPdvController extends Controller
             'pausa' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_OPERACION_PAUSA),
             'cerrar_sucursal' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_OPERACION_JORNADA_CERRAR_SUCURSAL),
             'ampliar' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_OPERACION_JORNADA_AMPLIAR),
+            'equipo_gestionar' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_OPERACION_EQUIPO_GESTIONAR),
         ];
     }
 

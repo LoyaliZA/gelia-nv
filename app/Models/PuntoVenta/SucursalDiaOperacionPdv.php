@@ -100,4 +100,12 @@ class SucursalDiaOperacionPdv extends Model
         $this->cierre_manual_at = null;
         $this->cierre_manual_por_id = null;
     }
+
+    public function aplicarReaperturaManual(): void
+    {
+        $this->acepta_altas = true;
+        $this->cierre_manual_at = null;
+        $this->cierre_manual_por_id = null;
+        $this->cierre_automatico_invalidado = false;
+    }
 }

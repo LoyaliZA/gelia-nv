@@ -21,6 +21,10 @@ class IntervaloOperativoPdv extends Model
         'user_id',
         'sucursal_id',
         'tipo',
+        'motivo_pausa_id',
+        'motivo_detalle',
+        'pausa_iniciada_por_id',
+        'pausa_finalizada_por_id',
         'atencion_id',
         'inicio_at',
         'fin_at',
@@ -68,6 +72,44 @@ class IntervaloOperativoPdv extends Model
     public function atencion(): BelongsTo
     {
         return $this->belongsTo(TurnoPdvAtencion::class, 'atencion_id');
+    }
+
+    public function motivoPausa(): BelongsTo
+    {
+        return $this->belongsTo(MotivoPausaPdv::class, 'motivo_pausa_id');
+    }
+
+    public function pausaIniciadaPor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'pausa_iniciada_por_id');
+    }
+
+    public function pausaFinalizadaPor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'pausa_finalizada_por_id');
+    }
+
+    public function etiquetaMotivoPausa(): ?string
+    {
+        if ($this->relationLoaded('motivoPausa')) {
+            return $this->motivoPausa?->nombre;
+        }
+
+        return $this->motivoPausa()->value('nombre');
+    }
+
+    public function textoMotivoPausaCompleto(): ?string
+    {
+        $nombre = $this->etiquetaMotivoPausa();
+        if ($nombre === null || $nombre === '') {
+            return null;
+        }
+
+        if ($this->motivo_detalle !== null && $this->motivo_detalle !== '') {
+            return $nombre.' — '.$this->motivo_detalle;
+        }
+
+        return $nombre;
     }
 
     public function estaAbierto(): bool

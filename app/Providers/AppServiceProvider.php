@@ -182,6 +182,10 @@ class AppServiceProvider extends ServiceProvider
         // EnviarWebPushTrasNotificacion se registra por discovery (App\Listeners).
         // NO usar Event::listen aquí: duplicaba cada push (2x blast).
         Event::listen(CommandStarting::class, PreventDestructiveDatabaseCommands::class);
+        Event::listen(
+            \Illuminate\Auth\Events\Logout::class,
+            \App\Listeners\PuntoVenta\LiberarTerminalAlertasSucursalAlCerrarSesion::class,
+        );
         Event::subscribe(\App\Listeners\PuntoVenta\Broadcast\TransmitirCambioPdvRealtimeSubscriber::class);
         Event::subscribe(\App\Listeners\PuntoVenta\NotificarTurnoPdvSubscriber::class);
 

@@ -65,6 +65,10 @@ export function esRecepcionComplementaria(resguardo) {
 }
 
 export function resguardoAdmiteRecepcion(resguardo, puedeRecibir = null) {
+    if (typeof resguardo?.admite_recepcion === 'boolean') {
+        return resguardo.admite_recepcion;
+    }
+
     if (typeof puedeRecibir === 'boolean') {
         return puedeRecibir;
     }
@@ -76,6 +80,31 @@ export function resguardoAdmiteRecepcion(resguardo, puedeRecibir = null) {
     const estadoPermitido = ['pendiente_recepcion', 'en_custodia'].includes(resguardo?.estado);
 
     return estadoPermitido && cantidadBultosPendiente(resguardo) > 0;
+}
+
+export function mensajeEstadoNoRecepcion({ motivo, resguardo, catalogos = {} }) {
+    const etiqueta = resguardo?.estado_etiqueta
+        || catalogos.estados?.[resguardo?.estado]
+        || resguardo?.estado;
+
+    if (motivo === 'recepcion_completa' || resguardo?.recepcion_completa === true) {
+        return {
+            titulo: 'Este resguardo ya recibió todos los bultos esperados.',
+            detalle: 'Si otra terminal completó la recepción, consulta el detalle actualizado.',
+        };
+    }
+
+    if (motivo === 'sin_bultos_pendientes') {
+        return {
+            titulo: 'No hay bultos registrados para recibir.',
+            detalle: 'Verifica el pedido en CEDIS; el resguardo puede tener cantidad esperada en cero.',
+        };
+    }
+
+    return {
+        titulo: `No se puede recibir en estado «${etiqueta}».`,
+        detalle: null,
+    };
 }
 
 export function resguardoAdmiteEntregaTotal(resguardo) {

@@ -10,6 +10,7 @@ use App\Models\Sucursal;
 use App\Models\User;
 use App\Services\PuntoVenta\AlcancePdv;
 use App\Services\PuntoVenta\PuntoVentaModulo;
+use App\Services\PuntoVenta\Turnos\PlazosTurnosPdvConfig;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -37,6 +38,7 @@ class UiRecepcionTurnoPdvTest extends TestCase
         Role::findOrCreate('Super Admin', 'web');
         $this->activarModulo();
         $this->seedPermisos();
+        $this->seedPlazos();
 
         $this->sucursal = Sucursal::factory()->create(['nombre' => 'Sucursal Centro']);
         $this->recepcion = User::factory()->create();
@@ -61,9 +63,11 @@ class UiRecepcionTurnoPdvTest extends TestCase
                 ->where('permisos.ver', true)
                 ->where('permisos.marcar_prioridad', true)
                 ->where('sucursal_activa.id', $this->sucursal->id)
+                ->where('sucursal_dia.acepta_altas', true)
                 ->where('catalogos.servicio', 'Ventas')
                 ->has('catalogos.estados')
-                ->has('bandeja.en_cola'));
+                ->has('bandeja.en_cola')
+                ->has('bandeja.resumen'));
     }
 
     public function test_recepcion_solo_ver_sin_permiso_alta(): void
@@ -186,5 +190,14 @@ class UiRecepcionTurnoPdvTest extends TestCase
         foreach (PuntoVentaModulo::permisosIniciales() as $permiso) {
             Permission::findOrCreate($permiso, 'web');
         }
+    }
+
+    private function seedPlazos(): void
+    {
+        $config = new PlazosTurnosPdvConfig;
+        ConfiguracionSistema::query()->updateOrCreate(
+            ['clave' => PlazosTurnosPdvConfig::CLAVE],
+            ['valor' => json_encode($config->configuracionInicialAprobada(), JSON_THROW_ON_ERROR)],
+        );
     }
 }

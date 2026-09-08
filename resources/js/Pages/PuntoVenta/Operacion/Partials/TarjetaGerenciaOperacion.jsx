@@ -10,6 +10,7 @@ import {
     puedeAmpliarHorario,
     puedeCerrarSucursal,
     puedeConfigurarHorarioCierre,
+    puedeReabrirSucursal,
     valorDatetimeLocalDesdeIso,
 } from './operacionUtils';
 
@@ -22,14 +23,17 @@ export default function TarjetaGerenciaOperacion({
 }) {
     const [cargando, setCargando] = useState(false);
     const [modalCierre, setModalCierre] = useState(false);
+    const [modalReabrir, setModalReabrir] = useState(false);
     const [ampliacionLocal, setAmpliacionLocal] = useState('');
+    const [horaApertura, setHoraApertura] = useState(estado?.horario_cierre?.hora_apertura || '');
     const [horaCierre, setHoraCierre] = useState(estado?.horario_cierre?.hora_cierre || '19:00');
     const [zonaHoraria, setZonaHoraria] = useState(estado?.horario_cierre?.zona_horaria || '');
 
     useEffect(() => {
+        setHoraApertura(estado?.horario_cierre?.hora_apertura || '');
         setHoraCierre(estado?.horario_cierre?.hora_cierre || '19:00');
         setZonaHoraria(estado?.horario_cierre?.zona_horaria || '');
-    }, [estado?.horario_cierre?.hora_cierre, estado?.horario_cierre?.zona_horaria]);
+    }, [estado?.horario_cierre?.hora_apertura, estado?.horario_cierre?.hora_cierre, estado?.horario_cierre?.zona_horaria]);
 
     const ejecutar = async (peticion, etiquetaAccion) => {
         setCargando(true);
@@ -49,6 +53,7 @@ export default function TarjetaGerenciaOperacion({
         } finally {
             setCargando(false);
             setModalCierre(false);
+            setModalReabrir(false);
         }
     };
 
@@ -57,6 +62,13 @@ export default function TarjetaGerenciaOperacion({
             version: estado?.sucursal_dia?.version,
         }),
         'cierre manual de sucursal',
+    );
+
+    const reabrirSucursal = () => ejecutar(
+        () => axios.post(route('punto_venta.operacion.jornada.reabrir_sucursal'), {
+            version: estado?.sucursal_dia?.version,
+        }),
+        'reapertura de sucursal',
     );
 
     const ampliarHorario = () => {
@@ -77,13 +89,15 @@ export default function TarjetaGerenciaOperacion({
 
     const guardarHorarioCierre = () => ejecutar(
         () => axios.put(route('punto_venta.operacion.configuracion.horario_cierre'), {
+            hora_apertura: horaApertura || null,
             hora_cierre: horaCierre,
             zona_horaria: zonaHoraria || null,
         }),
-        'configuración de horario de cierre',
+        'configuración de horario operativo',
     );
 
     const mostrarGerencia = puedeCerrarSucursal(estado, permisos)
+        || puedeReabrirSucursal(estado, permisos)
         || puedeAmpliarHorario(estado, permisos)
         || puedeConfigurarHorarioCierre(permisos);
 
@@ -108,12 +122,21 @@ export default function TarjetaGerenciaOperacion({
                     <div className="flex items-center gap-2">
                         <Clock className="w-4 h-4 theme-text-muted" aria-hidden />
                         <p className="text-xs font-black uppercase tracking-widest theme-text-main m-0">
-                            Horario de cierre (sucursal activa)
+                            Horario operativo (sucursal activa)
                         </p>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         <label className="space-y-1">
-                            <span className="text-[10px] font-black uppercase tracking-widest theme-text-muted">Hora</span>
+                            <span className="text-[10px] font-black uppercase tracking-widest theme-text-muted">Apertura</span>
+                            <input
+                                type="time"
+                                className="w-full min-h-[44px] rounded-xl border theme-border theme-element px-3 text-sm font-semibold"
+                                value={horaApertura}
+                                onChange={(event) => setHoraApertura(event.target.value)}
+                            />
+                        </label>
+                        <label className="space-y-1">
+                            <span className="text-[10px] font-black uppercase tracking-widest theme-text-muted">Cierre</span>
                             <input
                                 type="time"
                                 className="w-full min-h-[44px] rounded-xl border theme-border theme-element px-3 text-sm font-semibold"
@@ -134,7 +157,7 @@ export default function TarjetaGerenciaOperacion({
                     </div>
                     {!estado?.horario_cierre?.configurado && (
                         <p className="text-xs font-semibold text-amber-700 dark:text-amber-300 m-0">
-                            Sin horario persistido; al guardar se usará el valor provisional de planeación.
+                            Sin horario persistido; al guardar se usará el valor provisional de planeación. Deja apertura vacía para no restringir altas.
                         </p>
                     )}
                     <button
@@ -170,6 +193,17 @@ export default function TarjetaGerenciaOperacion({
                 </div>
             )}
 
+            {puedeReabrirSucursal(estado, permisos) && (
+                <button
+                    type="button"
+                    className={`${THEME_BTN_PRIMARY} w-full min-h-[44px] px-4 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest`}
+                    disabled={cargando}
+                    onClick={() => setModalReabrir(true)}
+                >
+                    Reabrir sucursal
+                </button>
+            )}
+
             {puedeCerrarSucursal(estado, permisos) && (
                 <button
                     type="button"
@@ -180,6 +214,15 @@ export default function TarjetaGerenciaOperacion({
                     Cerrar sucursal (sin altas nuevas)
                 </button>
             )}
+
+            <ModalConfirmarAccion
+                abierto={modalReabrir}
+                titulo="Reabrir sucursal"
+                mensaje="La sucursal volverá a aceptar altas nuevas de turnos. No activa vendedores automáticamente."
+                etiquetaConfirmar="Reabrir sucursal"
+                onClose={() => setModalReabrir(false)}
+                onConfirm={reabrirSucursal}
+            />
 
             <ModalConfirmarAccion
                 abierto={modalCierre}

@@ -206,6 +206,11 @@ class CierreHorarioOperacionPdvTest extends TestCase
 
     public function test_configuracion_ausente_bloquea_funcion_sin_inventar_hora(): void
     {
+        ConfiguracionSistema::query()
+            ->where('clave', HorarioCierreOperacionPdvConfig::CLAVE)
+            ->delete();
+        \Illuminate\Support\Facades\Cache::forget(HorarioCierreOperacionPdvConfig::CACHE_KEY);
+
         $servicio = app(CierreHorarioSucursalPdvService::class);
 
         $this->assertFalse($servicio->ejecutar($this->sucursal->id, now()->setTime(23, 0)));
@@ -264,7 +269,7 @@ class CierreHorarioOperacionPdvTest extends TestCase
      */
     private function configurarHorario(array $datos): void
     {
-        $config = new HorarioCierreOperacionPdvConfig;
+        $config = app(HorarioCierreOperacionPdvConfig::class);
         $normalizado = $config->normalizarCompleto(array_merge([
             'activo' => true,
             'zona_horaria' => 'America/Mexico_City',

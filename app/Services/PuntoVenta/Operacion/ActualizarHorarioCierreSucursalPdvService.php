@@ -22,7 +22,7 @@ class ActualizarHorarioCierreSucursalPdvService
      *   es_override_sucursal: bool
      * }
      */
-    public function ejecutar(User $actor, string $horaCierre, ?string $zonaHoraria = null): array
+    public function ejecutar(User $actor, string $horaCierre, ?string $horaApertura = null, ?string $zonaHoraria = null): array
     {
         $sucursalId = $this->alcance->sucursalActivaId($actor);
         if ($sucursalId === null) {
@@ -45,6 +45,7 @@ class ActualizarHorarioCierreSucursalPdvService
         }
 
         $override['hora_cierre'] = $horaCierre;
+        $override['hora_apertura'] = $horaApertura;
         if ($zonaHoraria !== null && trim($zonaHoraria) !== '') {
             $override['zona_horaria'] = trim($zonaHoraria);
         }
@@ -56,6 +57,7 @@ class ActualizarHorarioCierreSucursalPdvService
 
         return [
             'configurado' => $efectivo !== null,
+            'hora_apertura' => $efectivo['hora_apertura'] ?? null,
             'hora_cierre' => $efectivo['hora_cierre'] ?? null,
             'zona_horaria' => $efectivo['zona_horaria'] ?? null,
             'es_override_sucursal' => true,

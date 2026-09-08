@@ -1,5 +1,10 @@
 import { resolveTonoPath } from './alertasPrefs';
-import { PDV_TTS_TIPOS, mensajeTtsPdv } from './pdvSpeechUtils';
+import { PDV_TTS_TIPOS, mensajeTtsPersonalPdv } from './pdvSpeechUtils';
+import { mensajeTtsTerminalPdv, definicionAlertaPdv } from './pdvAlertasCatalog';
+import {
+    debeReproducirSonidoPersonalPdv,
+    debeReproducirSonidoTerminalPdv,
+} from './pdvAlertasAudiencia';
 
 export const PDV_ALERTAS_PREFS_EVENT = 'pdv-alertas-prefs-changed';
 
@@ -93,17 +98,73 @@ export function canalesEfectivosPdv(prefsUsuario, silencioTerminal = false) {
     return { ...base.canales };
 }
 
-export function debeReproducirSonidoPdv(envelope, prefsUsuario, silencioTerminal = false) {
+export function debeReproducirSonidoPdv(envelope, prefsUsuario, silencioTerminal = false, opciones = {}) {
+    const {
+        userId = null,
+        terminalActiva = false,
+        modo = null,
+    } = opciones;
+
+    if (!canalesEfectivosPdv(prefsUsuario, silencioTerminal).sonido) {
+        return false;
+    }
+
+    if (modo === 'personal') {
+        return debeReproducirSonidoPersonalPdv(envelope, prefsUsuario, silencioTerminal, userId);
+    }
+    if (modo === 'terminal') {
+        return debeReproducirSonidoTerminalPdv(envelope, prefsUsuario, silencioTerminal, terminalActiva);
+    }
+
     const tipo = String(envelope?.tipo || '');
-    if (!PDV_SONIDO_TIPOS.has(tipo)) return false;
-    return canalesEfectivosPdv(prefsUsuario, silencioTerminal).sonido === true;
+    if (!envelope?.audiencia && PDV_SONIDO_TIPOS.has(tipo)) {
+        return true;
+    }
+
+    return debeReproducirSonidoPersonalPdv(envelope, prefsUsuario, silencioTerminal, userId)
+        || debeReproducirSonidoTerminalPdv(envelope, prefsUsuario, silencioTerminal, terminalActiva);
 }
 
-export function debeAnunciarVozPdv(envelope, prefsUsuario, silencioTerminal = false) {
+export function debeAnunciarVozPdv(envelope, prefsUsuario, silencioTerminal = false, opciones = {}) {
+    const {
+        userId = null,
+        terminalActiva = false,
+        modo = null,
+    } = opciones;
+
     if (!canalesEfectivosPdv(prefsUsuario, silencioTerminal).voz) return false;
+
+    if (modo === 'personal') {
+        const tipo = String(envelope?.tipo || '');
+        if (!PDV_TTS_TIPOS.has(tipo)) return false;
+        return mensajeTtsPersonalPdv(envelope) !== null;
+    }
+
+    if (modo === 'terminal') {
+        return mensajeTtsTerminalPdv(envelope) !== null;
+    }
+
     const tipo = String(envelope?.tipo || '');
-    if (!PDV_TTS_TIPOS.has(tipo)) return false;
-    return mensajeTtsPdv(envelope) !== null;
+    if (!envelope?.audiencia && PDV_TTS_TIPOS.has(tipo)) {
+        return mensajeTtsPersonalPdv(envelope) !== null;
+    }
+
+    if (PDV_TTS_TIPOS.has(tipo) && envelope?.audiencia === 'usuario') {
+        return mensajeTtsPersonalPdv(envelope) !== null;
+    }
+
+    if (envelope?.audiencia === 'sucursal' && terminalActiva) {
+        return mensajeTtsTerminalPdv(envelope) !== null;
+    }
+
+    return false;
+}
+
+export function debeReproducirTonoEventoPdv(envelope, modo = 'personal') {
+    if (modo === 'personal') {
+        return PDV_SONIDO_TIPOS.has(String(envelope?.tipo || ''));
+    }
+    return definicionAlertaPdv(envelope?.tipo) !== null;
 }
 
 export function estadoWebPushPdv(prefsUsuario, webpush = {}) {

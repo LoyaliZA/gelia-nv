@@ -9,6 +9,9 @@ use App\Models\PuntoVenta\TurnoPdv;
 use App\Models\PuntoVenta\TurnoPdvEvento;
 use App\Models\Sucursal;
 use App\Models\User;
+use App\Services\PuntoVenta\Operacion\AperturaHorarioSucursalPdvService;
+use App\Services\PuntoVenta\Operacion\HorarioCierreOperacionPdvConfig;
+use App\Services\PuntoVenta\Operacion\ResolverSucursalDiaOperacionPdv;
 use App\Services\PuntoVenta\PuntoVentaModulo;
 use App\Support\PuntoVenta\Turnos\EstadosActivosTurnoPdv;
 use App\Support\PuntoVenta\Turnos\FolioTurnoGenerado;
@@ -21,9 +24,12 @@ class AltaTurnoPdvService
 {
     public function __construct(
         private readonly ResuelveAlcancePdv $alcance,
+        private readonly ResolverSucursalDiaOperacionPdv $sucursalDia,
         private readonly GenerarFolioTurnoService $generarFolio,
         private readonly ResolverPrioridadesTurnoPdvService $resolverPrioridades,
         private readonly AsignarTurnoPdvService $asignarTurno,
+        private readonly AperturaHorarioSucursalPdvService $aperturaHorario,
+        private readonly HorarioCierreOperacionPdvConfig $horarioOperacion,
     ) {}
 
     public function ejecutar(
@@ -40,6 +46,7 @@ class AltaTurnoPdvService
             PuntoVentaModulo::PERMISO_TURNOS_ALTA,
             $sucursal->id
         );
+        $this->assertSucursalAceptaAltas($sucursal->id);
 
         return DB::transaction(function () use (
             $actor,
@@ -67,25 +74,29 @@ class AltaTurnoPdvService
             $folio = $this->generarFolio->ejecutar($sucursal, TurnoPdv::SERVICIO_VENTAS);
             $ahora = now();
 
-            $turno = TurnoPdv::query()->create([
-                'sucursal_id' => $sucursal->id,
-                'cliente_id' => $cliente?->id,
-                'folio' => $folio->folio,
-                'servicio' => TurnoPdv::SERVICIO_VENTAS,
-                'origen' => TurnoPdv::ORIGEN_RECEPCION,
-                'estado' => TurnoPdv::ESTADO_EN_COLA,
-                'prioridad' => TurnoPdv::PRIORIDAD_NORMAL,
-                'prioridad_adulto_mayor' => $prioridades['prioridad_adulto_mayor'],
-                'prioridad_discapacidad' => $prioridades['prioridad_discapacidad'],
-                'prioridad_diamante' => $prioridades['prioridad_diamante'],
-                'prioridad_vip' => $prioridades['prioridad_vip'],
-                'snapshot_nombre_llamado' => $nombreParaLlamado,
-                'snapshot_cliente_nombre' => $cliente?->nombre,
-                'snapshot_json' => $this->construirSnapshot($cliente, $folio, $prioridades),
-                'alta_at' => $ahora,
-                'alta_por_id' => $actor->id,
-                'version' => 1,
-            ]);
+            try {
+                $turno = TurnoPdv::query()->create([
+                    'sucursal_id' => $sucursal->id,
+                    'cliente_id' => $cliente?->id,
+                    'folio' => $folio->folio,
+                    'servicio' => TurnoPdv::SERVICIO_VENTAS,
+                    'origen' => TurnoPdv::ORIGEN_RECEPCION,
+                    'estado' => TurnoPdv::ESTADO_EN_COLA,
+                    'prioridad' => TurnoPdv::PRIORIDAD_NORMAL,
+                    'prioridad_adulto_mayor' => $prioridades['prioridad_adulto_mayor'],
+                    'prioridad_discapacidad' => $prioridades['prioridad_discapacidad'],
+                    'prioridad_diamante' => $prioridades['prioridad_diamante'],
+                    'prioridad_vip' => $prioridades['prioridad_vip'],
+                    'snapshot_nombre_llamado' => $nombreParaLlamado,
+                    'snapshot_cliente_nombre' => $cliente?->nombre,
+                    'snapshot_json' => $this->construirSnapshot($cliente, $folio, $prioridades),
+                    'alta_at' => $ahora,
+                    'alta_por_id' => $actor->id,
+                    'version' => 1,
+                ]);
+            } catch (UniqueConstraintViolationException) {
+                $this->lanzarErrorTurnoDuplicado($sucursal->id, $cliente);
+            }
 
             $asignacion = $this->asignarTurno->ejecutar($turno, $ahora, 'alta_inmediata');
             $estadoFinal = $asignacion !== null
@@ -127,6 +138,31 @@ class AltaTurnoPdvService
 
             return $turno->fresh(['cliente', 'sucursal', 'altaPor', 'atencionActual']);
         });
+    }
+
+    private function assertSucursalAceptaAltas(int $sucursalId): void
+    {
+        $this->aperturaHorario->ejecutar($sucursalId, now());
+
+        $dia = $this->sucursalDia->obtenerOCrear($sucursalId);
+        if ($dia->acepta_altas) {
+            return;
+        }
+
+        if ($this->horarioOperacion->estaAntesDeApertura($sucursalId, now())) {
+            $horario = $this->horarioOperacion->resolverParaSucursal($sucursalId);
+            $hora = $horario['hora_apertura'] ?? null;
+
+            throw ValidationException::withMessages([
+                'sucursal' => $hora
+                    ? "La sucursal abre a las {$hora}. Los turnos se podrán registrar a partir de esa hora."
+                    : 'La sucursal aún no acepta altas nuevas. Verifique el horario operativo del día.',
+            ]);
+        }
+
+        throw ValidationException::withMessages([
+            'sucursal' => 'La sucursal ya no acepta altas nuevas. Verifique el estado operativo del día.',
+        ]);
     }
 
     private function resolverSucursalActiva(User $actor): Sucursal
@@ -187,17 +223,38 @@ class AltaTurnoPdvService
             return;
         }
 
-        $activo = TurnoPdv::query()
-            ->where('sucursal_id', $sucursalId)
-            ->where('cliente_id', $cliente->id)
-            ->whereIn('estado', EstadosActivosTurnoPdv::valores())
-            ->exists();
-
-        if ($activo) {
+        if ($this->tieneTurnoActivo($sucursalId, $cliente->id)) {
             throw ValidationException::withMessages([
-                'cliente_id' => 'Esta persona ya tiene un turno activo en la sucursal.',
+                'cliente_id' => $this->mensajeTurnoActivoCliente(),
             ]);
         }
+    }
+
+    private function lanzarErrorTurnoDuplicado(int $sucursalId, ?Cliente $cliente): never
+    {
+        if ($cliente instanceof Cliente && $this->tieneTurnoActivo($sucursalId, $cliente->id)) {
+            throw ValidationException::withMessages([
+                'cliente_id' => $this->mensajeTurnoActivoCliente(),
+            ]);
+        }
+
+        throw ValidationException::withMessages([
+            'turno' => 'No se pudo registrar el turno porque ya existe en la sucursal. Actualiza la bandeja e intenta de nuevo.',
+        ]);
+    }
+
+    private function tieneTurnoActivo(int $sucursalId, int $clienteId): bool
+    {
+        return TurnoPdv::query()
+            ->where('sucursal_id', $sucursalId)
+            ->where('cliente_id', $clienteId)
+            ->whereIn('estado', EstadosActivosTurnoPdv::valores())
+            ->exists();
+    }
+
+    private function mensajeTurnoActivoCliente(): string
+    {
+        return 'Esta persona ya tiene un turno activo en la sucursal. Actualiza la bandeja antes de registrar otro.';
     }
 
     /**

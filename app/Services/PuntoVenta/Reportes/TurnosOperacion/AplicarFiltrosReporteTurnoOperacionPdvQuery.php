@@ -308,6 +308,7 @@ class AplicarFiltrosReporteTurnoOperacionPdvQuery
 
         $pertenece = User::query()
             ->whereKey($personaId)
+            ->permission(PuntoVentaModulo::PERMISO_TURNOS_ATENDER)
             ->whereHas('sucursales', function (Builder $query) use ($sucursales): void {
                 $query->whereIn('sucursales.id', $sucursales)
                     ->where('sucursales.activo', true)

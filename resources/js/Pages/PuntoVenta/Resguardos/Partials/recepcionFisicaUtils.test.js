@@ -112,7 +112,8 @@ describe('recepcionFisicaUtils', () => {
     });
 
     it('usa flags backend para admitir recepción y entrega total', () => {
-        expect(resguardoAdmiteRecepcion(resguardoBase, true)).toBe(true);
+        expect(resguardoAdmiteRecepcion({ ...resguardoBase, admite_recepcion: true })).toBe(true);
+        expect(resguardoAdmiteRecepcion({ ...resguardoBase, admite_recepcion: false })).toBe(false);
         expect(resguardoAdmiteRecepcion({ ...resguardoBase, recepcion_completa: true }, false)).toBe(false);
         expect(resguardoAdmiteEntregaTotal({ recepcion_completa: true })).toBe(true);
         expect(resguardoAdmiteEntregaTotal(resguardoBase)).toBe(false);

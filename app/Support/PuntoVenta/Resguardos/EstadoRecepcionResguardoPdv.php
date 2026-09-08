@@ -24,12 +24,40 @@ final class EstadoRecepcionResguardoPdv
 
     public static function cantidadRecibida(ResguardoPdv $resguardo): int
     {
+        if (isset($resguardo->bultos_recibidos_count)) {
+            return (int) $resguardo->bultos_recibidos_count;
+        }
+
         return self::bultosRecibidos($resguardo)->count();
     }
 
     public static function cantidadPendiente(ResguardoPdv $resguardo): int
     {
         return max(0, (int) $resguardo->cantidad_bultos_esperada - self::cantidadRecibida($resguardo));
+    }
+
+    public static function motivoNoRecepcion(ResguardoPdv $resguardo): ?string
+    {
+        if (self::admiteRecepcion($resguardo)) {
+            return null;
+        }
+
+        if (self::recepcionCompleta($resguardo)) {
+            return 'recepcion_completa';
+        }
+
+        if (! in_array($resguardo->estado, [
+            ResguardoPdv::ESTADO_PENDIENTE_RECEPCION,
+            ResguardoPdv::ESTADO_EN_CUSTODIA,
+        ], true)) {
+            return 'estado_invalido';
+        }
+
+        if (self::cantidadPendiente($resguardo) < 1) {
+            return 'sin_bultos_pendientes';
+        }
+
+        return 'estado_invalido';
     }
 
     public static function recepcionCompleta(ResguardoPdv $resguardo): bool

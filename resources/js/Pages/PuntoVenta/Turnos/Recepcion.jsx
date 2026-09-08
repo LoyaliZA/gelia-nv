@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React from 'react';
 import { Head } from '@inertiajs/react';
 import { AlertTriangle, CheckCircle2, ShieldOff, Ticket } from 'lucide-react';
 import AppLayout from '../../../Layouts/AppLayout';
@@ -7,30 +7,40 @@ import GeliaTituloCard from '../../../Components/GeliaTituloCard';
 import { geliaCardClass, THEME_BTN_PRIMARY } from '../../../utils/geliaTheme';
 import SelectorSucursalActivaPdv from '../Resguardos/Partials/SelectorSucursalActivaPdv';
 import BandejaColaRecepcionTurno from './Partials/BandejaColaRecepcionTurno';
+import EncabezadoRecepcionTurno from './Partials/EncabezadoRecepcionTurno';
 import FormularioAltaTurno from './Partials/FormularioAltaTurno';
 import useAltaTurno from './Partials/useAltaTurno';
+import useBandejaRecepcionTurno from './Partials/useBandejaRecepcionTurno';
+import ModalErrorAltaTurno from './Partials/ModalErrorAltaTurno';
 import {
     etiquetaEstadoTurno,
     etiquetasPrioridadTurno,
 } from './Partials/altaTurnoUtils';
+import { PDV_VISTA_REALTIME } from '../../../utils/pdvRealtimeMatrix';
 import { badgeEstadoTurno, badgePrioridadTurno } from './Partials/turnosStyles';
-import PdvAlertProvider, { usePdvAlertReload } from '../../../Components/PuntoVenta/PdvAlertProvider';
+import PdvAlertProvider, { usePdvAlertContext, usePdvAlertReload } from '../../../Components/PuntoVenta/PdvAlertProvider';
 
 export default function Recepcion({
     auth,
     bandeja: bandejaInicial,
     permisos = {},
     sucursal_activa: sucursalActiva = null,
+    sucursal_dia: sucursalDia = null,
     sucursales_asignadas: sucursalesAsignadas = [],
     catalogos = {},
 }) {
     const puedeAlta = Boolean(permisos.alta);
     const puedeVerBandeja = Boolean(permisos.ver);
-    const [senalRefresco, setSenalRefresco] = useState(0);
 
-    const refrescarBandeja = useCallback(() => {
-        setSenalRefresco((valor) => valor + 1);
-    }, []);
+    const {
+        bandeja,
+        cargando: bandejaCargando,
+        error: bandejaError,
+        refrescar: refrescarBandeja,
+    } = useBandejaRecepcionTurno({
+        bandeja: bandejaInicial,
+        habilitado: puedeVerBandeja,
+    });
 
     const {
         enviar,
@@ -38,8 +48,11 @@ export default function Recepcion({
         error,
         turnoCreado,
         reiniciar,
+        mostrarError,
+        limpiarError,
     } = useAltaTurno({
-        onExito: refrescarBandeja,
+        onExito: () => refrescarBandeja({ silencioso: true }),
+        bandeja: puedeVerBandeja ? bandeja : null,
     });
 
     return (
@@ -51,56 +64,137 @@ export default function Recepcion({
                 habilitado={Boolean(sucursalActiva?.id)}
             >
                 <RecepcionRealtimeSync refrescarBandeja={refrescarBandeja} habilitado={puedeVerBandeja} />
-                <GeliaPageShell className="max-w-[720px] space-y-5" data-recepcion-turno-root>
-                <GeliaTituloCard
-                    title="Recepción de turnos"
-                    description="Cola, asignados y alta en mostrador"
-                    icon={Ticket}
-                />
-
-                <SelectorSucursalActivaPdv
+                <RecepcionContenido
+                    puedeAlta={puedeAlta}
+                    puedeVerBandeja={puedeVerBandeja}
+                    bandeja={bandeja}
+                    bandejaCargando={bandejaCargando}
+                    bandejaError={bandejaError}
+                    refrescarBandeja={refrescarBandeja}
+                    permisos={permisos}
+                    catalogos={catalogos}
                     sucursalActiva={sucursalActiva}
+                    sucursalDia={sucursalDia}
                     sucursalesAsignadas={sucursalesAsignadas}
+                    turnoCreado={turnoCreado}
+                    reiniciar={reiniciar}
+                    enviar={enviar}
+                    enviando={enviando}
+                    mostrarError={mostrarError}
+                    error={error}
+                    limpiarError={limpiarError}
                 />
-
-                {puedeVerBandeja && (
-                    <BandejaColaRecepcionTurno
-                        bandeja={bandejaInicial}
-                        permisos={permisos}
-                        catalogos={catalogos}
-                        senalRefresco={senalRefresco}
-                        onTurnoDadoDeBaja={refrescarBandeja}
-                    />
-                )}
-
-                {puedeAlta ? (
-                    turnoCreado ? (
-                        <ConfirmacionFolio
-                            turno={turnoCreado}
-                            catalogos={catalogos}
-                            onNuevo={reiniciar}
-                        />
-                    ) : (
-                        <FormularioAltaTurno
-                            permisos={permisos}
-                            catalogos={catalogos}
-                            enviando={enviando}
-                            error={error}
-                            onEnviar={enviar}
-                        />
-                    )
-                ) : !puedeVerBandeja ? (
-                    <EstadoSinPermiso />
-                ) : null}
-                </GeliaPageShell>
             </PdvAlertProvider>
         </AppLayout>
     );
 }
 
+function RecepcionContenido({
+    puedeAlta,
+    puedeVerBandeja,
+    bandeja,
+    bandejaCargando,
+    bandejaError,
+    refrescarBandeja,
+    permisos,
+    catalogos,
+    sucursalActiva,
+    sucursalDia,
+    sucursalesAsignadas,
+    turnoCreado,
+    reiniciar,
+    enviar,
+    enviando,
+    mostrarError,
+    error,
+    limpiarError,
+}) {
+    const { estadoConexion, ultimaActualizacionConfirmada } = usePdvAlertContext() ?? {};
+
+    return (
+        <GeliaPageShell className="max-w-7xl space-y-4" data-recepcion-turno-root>
+            <GeliaTituloCard
+                title="Recepción de turnos"
+                description="Registro y supervisión de fila en mostrador"
+                icon={Ticket}
+            />
+
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <SelectorSucursalActivaPdv
+                    sucursalActiva={sucursalActiva}
+                    sucursalesAsignadas={sucursalesAsignadas}
+                />
+            </div>
+
+            {puedeVerBandeja && (
+                <EncabezadoRecepcionTurno
+                    bandeja={bandeja}
+                    estadoConexion={estadoConexion}
+                    ultimaActualizacion={ultimaActualizacionConfirmada}
+                />
+            )}
+
+            <div
+                className={`grid gap-4 lg:gap-5 ${
+                    puedeVerBandeja && (puedeAlta || turnoCreado)
+                        ? 'lg:grid-cols-[minmax(280px,360px)_minmax(0,1fr)]'
+                        : ''
+                }`}
+                data-recepcion-turno-layout
+            >
+                {(puedeAlta || turnoCreado) && (
+                    <div className="min-w-0 order-1">
+                        {puedeAlta ? (
+                            turnoCreado ? (
+                                <ConfirmacionFolio
+                                    turno={turnoCreado}
+                                    catalogos={catalogos}
+                                    onNuevo={reiniciar}
+                                />
+                            ) : (
+                                <FormularioAltaTurno
+                                    permisos={permisos}
+                                    catalogos={catalogos}
+                                    bandeja={bandeja}
+                                    sucursalDia={sucursalDia}
+                                    enviando={enviando}
+                                    onEnviar={enviar}
+                                    onMostrarError={mostrarError}
+                                />
+                            )
+                        ) : null}
+                    </div>
+                )}
+
+                {puedeVerBandeja ? (
+                    <div className="min-w-0 order-2">
+                        <BandejaColaRecepcionTurno
+                            bandeja={bandeja}
+                            cargando={bandejaCargando}
+                            error={bandejaError}
+                            refrescar={refrescarBandeja}
+                            permisos={permisos}
+                            catalogos={catalogos}
+                            onTurnoDadoDeBaja={() => refrescarBandeja({ silencioso: true })}
+                        />
+                    </div>
+                ) : !puedeAlta ? (
+                    <EstadoSinPermiso />
+                ) : null}
+            </div>
+
+            <ModalErrorAltaTurno
+                abierto={Boolean(error)}
+                mensaje={error}
+                onClose={limpiarError}
+            />
+        </GeliaPageShell>
+    );
+}
+
 function RecepcionRealtimeSync({ refrescarBandeja, habilitado }) {
     usePdvAlertReload({
-        dominio: 'turnos',
+        vista: PDV_VISTA_REALTIME.recepcion,
         refrescar: refrescarBandeja,
         habilitado,
     });

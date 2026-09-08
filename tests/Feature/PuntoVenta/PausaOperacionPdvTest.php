@@ -269,6 +269,7 @@ class PausaOperacionPdvTest extends TestCase
             PuntoVentaModulo::PERMISO_ACCEDER,
             PuntoVentaModulo::PERMISO_TURNOS_VER,
             PuntoVentaModulo::PERMISO_TURNOS_CERRAR_ATENCION,
+            PuntoVentaModulo::PERMISO_TURNOS_ATENDER,
             PuntoVentaModulo::PERMISO_OPERACION_JORNADA_ABRIR,
             PuntoVentaModulo::PERMISO_OPERACION_JORNADA_CERRAR,
             PuntoVentaModulo::PERMISO_OPERACION_PAUSA,
@@ -284,6 +285,7 @@ class PausaOperacionPdvTest extends TestCase
         $usuario->givePermissionTo([
             PuntoVentaModulo::PERMISO_TURNOS_VER,
             PuntoVentaModulo::PERMISO_TURNOS_CERRAR_ATENCION,
+            PuntoVentaModulo::PERMISO_TURNOS_ATENDER,
         ]);
     }
 

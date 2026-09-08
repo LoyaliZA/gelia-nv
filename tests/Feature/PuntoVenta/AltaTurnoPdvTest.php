@@ -8,6 +8,7 @@ use App\Events\PuntoVenta\TurnoCreado;
 use App\Models\CatalogoListaDescuento;
 use App\Models\Cliente;
 use App\Models\ConfiguracionSistema;
+use App\Models\PuntoVenta\SucursalDiaOperacionPdv;
 use App\Models\PuntoVenta\TurnoPdv;
 use App\Models\PuntoVenta\TurnoPdvAtencion;
 use App\Models\PuntoVenta\TurnoPdvEvento;
@@ -359,6 +360,21 @@ class AltaTurnoPdvTest extends TestCase
         Event::assertDispatched(TurnoAsignado::class, 1);
     }
 
+    public function test_rechaza_alta_con_sucursal_cerrada(): void
+    {
+        SucursalDiaOperacionPdv::factory()->sinAltas()->create([
+            'sucursal_id' => $this->sucursal->id,
+        ]);
+
+        $this->actingAs($this->recepcion)->postJson(
+            route('punto_venta.turnos.store'),
+            $this->payloadAlta(nombre: 'Sucursal cerrada', clave: 'pdv:turno:sucursal-cerrada')
+        )->assertUnprocessable()
+            ->assertJsonValidationErrors(['sucursal']);
+
+        $this->assertSame(0, TurnoPdv::query()->count());
+    }
+
     public function test_rechaza_alta_con_turno_activo_en_reatencion(): void
     {
         $cliente = $this->crearCliente('Cliente reatencion');
@@ -452,6 +468,11 @@ class AltaTurnoPdvTest extends TestCase
             public function esDisponible(User $user, int $sucursalId, bool $paraAltaNueva = false): bool
             {
                 return $user->is($this->persona);
+            }
+
+            public function contarDisponibles(int $sucursalId, string $servicio): int
+            {
+                return 1;
             }
         });
     }

@@ -9,6 +9,7 @@ use App\Models\Sucursal;
 use App\Models\User;
 use App\Services\PuntoVenta\AlcancePdv;
 use App\Services\PuntoVenta\PuntoVentaModulo;
+use App\Services\PuntoVenta\Turnos\PlazosTurnosPdvConfig;
 use App\Support\PuntoVenta\Turnos\MotivosBajaColaTurnoPdv;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
@@ -39,6 +40,7 @@ class UiBandejaColaRecepcionTurnoPdvTest extends TestCase
         Role::findOrCreate('Super Admin', 'web');
         $this->activarModulo();
         $this->seedPermisos();
+        $this->seedPlazos();
 
         $this->sucursal = Sucursal::factory()->create(['nombre' => 'Sucursal Bandeja']);
         $this->otraSucursal = Sucursal::factory()->create(['nombre' => 'Sucursal Remota']);
@@ -85,6 +87,8 @@ class UiBandejaColaRecepcionTurnoPdvTest extends TestCase
             ->assertOk()
             ->assertJsonCount(1, 'en_cola')
             ->assertJsonCount(1, 'asignados')
+            ->assertJsonPath('resumen.en_espera', 1)
+            ->assertJsonPath('resumen.asignados', 1)
             ->assertJsonPath('en_cola.0.id', $enCola->id)
             ->assertJsonPath('en_cola.0.puede_baja_cola', true)
             ->assertJsonPath('asignados.0.id', $asignado->id)
@@ -201,6 +205,7 @@ class UiBandejaColaRecepcionTurnoPdvTest extends TestCase
                 ->where('permisos.baja_cola', true)
                 ->has('bandeja.en_cola')
                 ->has('bandeja.asignados')
+                ->has('bandeja.resumen')
                 ->has('catalogos.motivos_baja', 3));
     }
 
@@ -217,5 +222,14 @@ class UiBandejaColaRecepcionTurnoPdvTest extends TestCase
         foreach (PuntoVentaModulo::permisosIniciales() as $permiso) {
             Permission::findOrCreate($permiso, 'web');
         }
+    }
+
+    private function seedPlazos(): void
+    {
+        $config = new PlazosTurnosPdvConfig;
+        ConfiguracionSistema::query()->updateOrCreate(
+            ['clave' => PlazosTurnosPdvConfig::CLAVE],
+            ['valor' => json_encode($config->configuracionInicialAprobada(), JSON_THROW_ON_ERROR)],
+        );
     }
 }

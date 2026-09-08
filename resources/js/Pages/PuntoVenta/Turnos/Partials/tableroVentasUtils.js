@@ -28,6 +28,24 @@ export function etiquetasPrioridadDesdeTurno(turno) {
     return etiquetas;
 }
 
+export function esReatencionTurno(turno) {
+    return turno?.es_reatencion === true;
+}
+
+export function etiquetaMotivoCierre(motivo, catalogos = {}) {
+    if (!motivo) return null;
+    const lista = catalogos?.motivos_cierre || [];
+    const encontrado = lista.find((item) => item.valor === motivo);
+    return encontrado?.etiqueta || motivo;
+}
+
+export function formatearHoraLocal(isoAt) {
+    if (!isoAt) return null;
+    const fecha = new Date(isoAt);
+    if (Number.isNaN(fecha.getTime())) return null;
+    return fecha.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+}
+
 export function estadoUiTurnoAsignado(turno) {
     const atencion = turno?.atencion;
     if (!atencion) return 'asignado';

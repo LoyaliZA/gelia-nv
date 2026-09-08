@@ -2,9 +2,12 @@ import { describe, expect, it } from 'vitest';
 import {
     debeMostrarModalEspera,
     esConflictoVersionTurno,
+    esReatencionTurno,
+    etiquetaMotivoCierre,
     estadoUiTurnoAsignado,
     etiquetasPrioridadDesdeTurno,
     formatearCronometro,
+    formatearHoraLocal,
     mensajeErrorOperacionTurno,
     milisegundosRestantes,
     puedeCerrarAtencion,
@@ -70,5 +73,16 @@ describe('tableroVentasUtils', () => {
         expect(esConflictoVersionTurno(conflicto)).toBe(true);
         expect(mensajeErrorOperacionTurno(conflicto)).toContain('Obsoleto');
         expect(mensajeErrorOperacionTurno(prohibido)).toContain('permiso');
+    });
+
+    it('detecta re-atención y etiqueta motivo de cierre previo', () => {
+        expect(esReatencionTurno({ es_reatencion: true })).toBe(true);
+        expect(esReatencionTurno({ es_reatencion: false })).toBe(false);
+
+        const catalogos = {
+            motivos_cierre: [{ valor: 'venta', etiqueta: 'Venta' }],
+        };
+        expect(etiquetaMotivoCierre('venta', catalogos)).toBe('Venta');
+        expect(formatearHoraLocal('2026-09-04T18:30:00Z')).toMatch(/\d{1,2}:\d{2}/);
     });
 });

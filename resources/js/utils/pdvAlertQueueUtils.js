@@ -21,6 +21,8 @@ const ETIQUETAS_EVENTO = {
     'turno.transferido': 'Turno transferido',
     'atencion.cerrada': 'Atención cerrada',
     'atencion.prorroga': 'Prórroga de atención',
+    'atencion.espera_proximo_vencer': 'Turno próximo a vencer',
+    'atencion.prorroga_proximo_vencer': 'Prórroga próxima a vencer',
     'resguardo.recepcion_esperada_creada': 'Recepción esperada de resguardo',
     'jornada.abierta': 'Jornada abierta',
     'jornada.cerrada': 'Jornada cerrada',
@@ -121,12 +123,18 @@ export function conexionDegradadaPdv(estadoConexion) {
     return estadoConexion !== PDV_ESTADO_CONEXION.conectado;
 }
 
+export function etiquetaConexionTiempoRealPdv(estadoConexion) {
+    if (estadoConexion === PDV_ESTADO_CONEXION.conectado) return 'En vivo';
+    if (estadoConexion === PDV_ESTADO_CONEXION.conectando) return 'Reconectando';
+    return 'Sin conexión';
+}
+
 export function mensajeConexionDegradadaPdv(estadoConexion) {
     if (estadoConexion === PDV_ESTADO_CONEXION.conectando) {
         return 'Reconectando actualizaciones en tiempo real…';
     }
     if (estadoConexion === PDV_ESTADO_CONEXION.degradado) {
-        return 'Conexión en tiempo real no disponible. La operación continúa; usa actualizar manualmente.';
+        return 'Sin conexión en tiempo real. Se conserva el último estado conocido; puedes usar Actualizar como respaldo.';
     }
-    return 'Sin conexión en tiempo real. La operación continúa; usa actualizar manualmente.';
+    return 'Sin conexión en tiempo real. Se conserva el último estado conocido; puedes usar Actualizar como respaldo.';
 }

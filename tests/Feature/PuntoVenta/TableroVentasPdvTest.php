@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Services\PuntoVenta\AlcancePdv;
 use App\Services\PuntoVenta\PuntoVentaModulo;
 use App\Services\PuntoVenta\Turnos\PlazosTurnosPdvConfig;
+use App\Support\PuntoVenta\Turnos\MotivosCierreAtencionTurnoPdv;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -49,6 +50,7 @@ class TableroVentasPdvTest extends TestCase
             PuntoVentaModulo::PERMISO_ACCEDER,
             PuntoVentaModulo::PERMISO_TURNOS_VER,
             PuntoVentaModulo::PERMISO_TURNOS_CERRAR_ATENCION,
+            PuntoVentaModulo::PERMISO_TURNOS_ATENDER,
         ]);
         $this->vendedor->concederAccesoSucursal($this->sucursal, esPrincipal: true);
         app(AlcancePdv::class)->establecerSucursalActiva($this->vendedor, $this->sucursal->id);
@@ -74,6 +76,7 @@ class TableroVentasPdvTest extends TestCase
             PuntoVentaModulo::PERMISO_ACCEDER,
             PuntoVentaModulo::PERMISO_TURNOS_VER,
             PuntoVentaModulo::PERMISO_TURNOS_CERRAR_ATENCION,
+            PuntoVentaModulo::PERMISO_TURNOS_ATENDER,
         ]);
         $otro->concederAccesoSucursal($this->otraSucursal, esPrincipal: true);
         app(AlcancePdv::class)->establecerSucursalActiva($otro, $this->otraSucursal->id);
@@ -146,10 +149,13 @@ class TableroVentasPdvTest extends TestCase
             ->assertJsonPath('turno_asignado.atencion.espera_inicial_vencida', true);
     }
 
-    public function test_sin_permiso_ver_devuelve_403(): void
+    public function test_sin_permiso_atender_devuelve_403(): void
     {
         $usuario = User::factory()->create();
-        $usuario->givePermissionTo(PuntoVentaModulo::PERMISO_ACCEDER);
+        $usuario->givePermissionTo([
+            PuntoVentaModulo::PERMISO_ACCEDER,
+            PuntoVentaModulo::PERMISO_TURNOS_VER,
+        ]);
         $usuario->concederAccesoSucursal($this->sucursal, esPrincipal: true);
         app(AlcancePdv::class)->establecerSucursalActiva($usuario, $this->sucursal->id);
 
@@ -158,7 +164,48 @@ class TableroVentasPdvTest extends TestCase
             ->assertForbidden();
     }
 
-    public function test_cola_contextual_muestra_reatencion_atendida_por_vendedor(): void
+    public function test_recepcion_sin_atender_no_accede_a_mi_atencion(): void
+    {
+        $recepcion = User::factory()->create();
+        $recepcion->givePermissionTo([
+            PuntoVentaModulo::PERMISO_ACCEDER,
+            PuntoVentaModulo::PERMISO_TURNOS_VER,
+            PuntoVentaModulo::PERMISO_TURNOS_ALTA,
+        ]);
+        $recepcion->concederAccesoSucursal($this->sucursal, esPrincipal: true);
+        app(AlcancePdv::class)->establecerSucursalActiva($recepcion, $this->sucursal->id);
+
+        $this->actingAs($recepcion)
+            ->getJson(route('punto_venta.turnos.ventas.datos'))
+            ->assertForbidden();
+    }
+
+    public function test_acceso_horizontal_no_expone_turno_de_otro_vendedor(): void
+    {
+        $otroVendedor = User::factory()->create(['name' => 'Otro Vendedor']);
+        $otroVendedor->givePermissionTo([
+            PuntoVentaModulo::PERMISO_ACCEDER,
+            PuntoVentaModulo::PERMISO_TURNOS_ATENDER,
+            PuntoVentaModulo::PERMISO_TURNOS_CERRAR_ATENCION,
+        ]);
+        $otroVendedor->concederAccesoSucursal($this->sucursal, esPrincipal: true);
+        app(AlcancePdv::class)->establecerSucursalActiva($otroVendedor, $this->sucursal->id);
+
+        $contextoOtro = $this->crearTurnoAsignado($otroVendedor);
+
+        $this->actingAs($this->vendedor)
+            ->getJson(route('punto_venta.turnos.ventas.datos'))
+            ->assertOk()
+            ->assertJsonPath('turno_asignado', null);
+
+        $this->actingAs($otroVendedor)
+            ->getJson(route('punto_venta.turnos.ventas.datos'))
+            ->assertOk()
+            ->assertJsonPath('turno_asignado.id', $contextoOtro['turno']->id)
+            ->assertJsonPath('turno_asignado.atencion.user_id', $otroVendedor->id);
+    }
+
+    public function test_payload_no_incluye_cola_contextual(): void
     {
         $turno = TurnoPdv::factory()->create([
             'sucursal_id' => $this->sucursal->id,
@@ -176,8 +223,112 @@ class TableroVentasPdvTest extends TestCase
         $this->actingAs($this->vendedor)
             ->getJson(route('punto_venta.turnos.ventas.datos'))
             ->assertOk()
-            ->assertJsonCount(1, 'cola_contextual')
-            ->assertJsonPath('cola_contextual.0.id', $turno->id);
+            ->assertJsonMissingPath('cola_contextual');
+    }
+
+    public function test_turno_asignado_siempre_pertenece_al_usuario_autenticado(): void
+    {
+        $contexto = $this->crearTurnoAsignado($this->vendedor);
+
+        $this->actingAs($this->vendedor)
+            ->getJson(route('punto_venta.turnos.ventas.datos'))
+            ->assertOk()
+            ->assertJsonPath('turno_asignado.id', $contexto['turno']->id)
+            ->assertJsonPath('turno_asignado.atencion.user_id', $this->vendedor->id);
+    }
+
+    public function test_estado_vendedor_propio_en_payload(): void
+    {
+        $this->actingAs($this->vendedor)
+            ->getJson(route('punto_venta.turnos.ventas.datos'))
+            ->assertOk()
+            ->assertJsonStructure(['estado_vendedor', 'cronometro'])
+            ->assertJsonMissingPath('equipo');
+    }
+
+    public function test_reatencion_etiquetada_en_payload_con_contexto_previo(): void
+    {
+        $turno = TurnoPdv::factory()->create([
+            'sucursal_id' => $this->sucursal->id,
+            'estado' => TurnoPdv::ESTADO_ASIGNADO,
+            'servicio' => 'Ventas',
+            'reatencion_expira_at' => now()->subHour(),
+        ]);
+
+        TurnoPdvAtencion::factory()->create([
+            'turno_id' => $turno->id,
+            'user_id' => $this->vendedor->id,
+            'numero_secuencia' => 1,
+            'inicio_at' => now()->subHours(2),
+            'fin_at' => now()->subHour(),
+            'motivo_cierre' => MotivosCierreAtencionTurnoPdv::VENTA,
+        ]);
+
+        $atencionReatencion = TurnoPdvAtencion::factory()->create([
+            'turno_id' => $turno->id,
+            'user_id' => $this->vendedor->id,
+            'numero_secuencia' => 2,
+            'inicio_at' => now()->subMinutes(5),
+            'fin_at' => null,
+        ]);
+
+        $turno->update(['atencion_actual_id' => $atencionReatencion->id]);
+
+        $this->actingAs($this->vendedor)
+            ->getJson(route('punto_venta.turnos.ventas.datos'))
+            ->assertOk()
+            ->assertJsonPath('turno_asignado.es_reatencion', true)
+            ->assertJsonPath('turno_asignado.servicio', 'Ventas')
+            ->assertJsonPath('turno_asignado.atencion_previa.motivo_cierre', MotivosCierreAtencionTurnoPdv::VENTA)
+            ->assertJsonPath('turno_asignado.atencion.user_id', $this->vendedor->id)
+            ->assertJsonMissingPath('turno_asignado.atencion_previa.vendedor_anterior');
+    }
+
+    public function test_reatencion_asignada_no_desaparece_con_vencimiento_expirado(): void
+    {
+        $turno = TurnoPdv::factory()->create([
+            'sucursal_id' => $this->sucursal->id,
+            'estado' => TurnoPdv::ESTADO_ASIGNADO,
+            'reatencion_expira_at' => now()->subMinutes(30),
+        ]);
+
+        TurnoPdvAtencion::factory()->create([
+            'turno_id' => $turno->id,
+            'user_id' => $this->vendedor->id,
+            'numero_secuencia' => 1,
+            'inicio_at' => now()->subHours(2),
+            'fin_at' => now()->subHour(),
+            'motivo_cierre' => MotivosCierreAtencionTurnoPdv::SIN_VENTA,
+        ]);
+
+        $atencionActual = TurnoPdvAtencion::factory()->create([
+            'turno_id' => $turno->id,
+            'user_id' => $this->vendedor->id,
+            'numero_secuencia' => 2,
+            'inicio_at' => now()->subMinutes(10),
+            'fin_at' => null,
+        ]);
+
+        $turno->update(['atencion_actual_id' => $atencionActual->id]);
+
+        $this->actingAs($this->vendedor)
+            ->getJson(route('punto_venta.turnos.ventas.datos'))
+            ->assertOk()
+            ->assertJsonPath('turno_asignado.id', $turno->id)
+            ->assertJsonPath('turno_asignado.es_reatencion', true)
+            ->assertJsonPath('turno_asignado.reatencion_vigente', false);
+    }
+
+    public function test_turno_normal_no_marca_reatencion(): void
+    {
+        $contexto = $this->crearTurnoAsignado($this->vendedor);
+
+        $this->actingAs($this->vendedor)
+            ->getJson(route('punto_venta.turnos.ventas.datos'))
+            ->assertOk()
+            ->assertJsonPath('turno_asignado.id', $contexto['turno']->id)
+            ->assertJsonPath('turno_asignado.es_reatencion', false)
+            ->assertJsonPath('turno_asignado.atencion_previa', null);
     }
 
     /**

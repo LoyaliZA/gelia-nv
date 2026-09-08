@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\PuntoVenta\Turnos\AltaTurnoPdvController;
+use App\Http\Controllers\PuntoVenta\Turnos\AsignarReatencionTurnoPdvController;
 use App\Http\Controllers\PuntoVenta\Turnos\BajaColaTurnoPdvController;
 use App\Http\Controllers\PuntoVenta\Turnos\CerrarAtencionTurnoPdvController;
 use App\Http\Controllers\PuntoVenta\Turnos\FormularioRecepcionTurnoPdvController;
@@ -10,7 +11,7 @@ use App\Http\Controllers\PuntoVenta\Turnos\TransferirTurnoPdvController;
 use App\Services\PuntoVenta\PuntoVentaModulo;
 use Illuminate\Support\Facades\Route;
 
-Route::middleware(['pdv.piso', 'pdv.permiso:'.PuntoVentaModulo::PERMISO_TURNOS_VER])
+Route::middleware(['pdv.piso', 'pdv.permiso:'.PuntoVentaModulo::PERMISO_TURNOS_ATENDER])
     ->prefix('turnos')
     ->name('turnos.')
     ->group(function () {
@@ -52,4 +53,8 @@ Route::middleware(['pdv.piso'])
         Route::post('/{turno}/transferir', TransferirTurnoPdvController::class)
             ->middleware('pdv.permiso:'.PuntoVentaModulo::PERMISO_TURNOS_TRANSFERIR)
             ->name('transferir');
+
+        Route::post('/{turno}/asignar-reatencion', AsignarReatencionTurnoPdvController::class)
+            ->middleware('pdv.permiso:'.PuntoVentaModulo::PERMISO_TURNOS_REATENCION_ASIGNAR)
+            ->name('asignar_reatencion');
     });

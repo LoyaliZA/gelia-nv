@@ -60,6 +60,8 @@ class UiBandejasResguardoPdvTest extends TestCase
             ->assertInertia(fn ($page) => $page
                 ->component('PuntoVenta/Resguardos/Index', false)
                 ->has('resguardos.data', 1)
+                ->has('resguardos.data.0.admite_recepcion')
+                ->has('resguardos.data.0.cantidad_bultos_pendiente')
                 ->where('bandeja', BandejaResguardoPdv::POR_RECIBIR)
                 ->where('filtros.q', 'REM-UI')
                 ->has('catalogos.bandejas')

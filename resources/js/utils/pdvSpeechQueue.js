@@ -1,4 +1,15 @@
-import { debeAnunciarTtsPdv, mensajeTtsPdv } from './pdvSpeechUtils';
+import { prioridadAlertaPdv } from './pdvAlertasCatalog';
+import { mensajeTtsPersonalPdv } from './pdvSpeechUtils';
+
+function insertarPorPrioridad(cola, item) {
+    const prioridad = item.prioridad ?? 2;
+    const indice = cola.findIndex((actual) => (actual.prioridad ?? 2) > prioridad);
+    if (indice === -1) {
+        cola.push(item);
+    } else {
+        cola.splice(indice, 0, item);
+    }
+}
 
 export function crearColaAnunciosTts({
     adaptadorVoz,
@@ -7,12 +18,20 @@ export function crearColaAnunciosTts({
     onFallo = () => {},
     estaSilenciado = () => false,
     audioDesbloqueado = () => true,
+    resolverTexto = null,
     timeoutMs = 30_000,
 } = {}) {
     const cola = [];
     const anunciados = new Set();
     let procesando = false;
     let cancelado = false;
+
+    const resolverMensaje = (envelope) => {
+        if (typeof resolverTexto === 'function') {
+            return resolverTexto(envelope);
+        }
+        return mensajeTtsPersonalPdv(envelope);
+    };
 
     const estadoActual = () => {
         if (!adaptadorVoz?.soportado?.()) return 'no_soportado';
@@ -58,13 +77,13 @@ export function crearColaAnunciosTts({
     };
 
     return {
-        encolar(envelope) {
-            if (cancelado || !debeAnunciarTtsPdv(envelope)) return false;
+        encolar(envelope, opciones = {}) {
+            if (cancelado) return false;
 
-            const eventId = String(envelope.event_id || '');
+            const eventId = String(envelope?.event_id || '');
             if (!eventId || anunciados.has(eventId)) return false;
 
-            const texto = mensajeTtsPdv(envelope);
+            const texto = resolverMensaje(envelope);
             if (!texto) return false;
 
             const estado = estadoActual();
@@ -76,7 +95,12 @@ export function crearColaAnunciosTts({
 
             if (cola.some((item) => item.eventId === eventId)) return false;
 
-            cola.push({ eventId, texto, envelope });
+            insertarPorPrioridad(cola, {
+                eventId,
+                texto,
+                envelope,
+                prioridad: opciones.prioridad ?? prioridadAlertaPdv(envelope),
+            });
             notificarEstado();
             procesarSiguiente();
             return true;
@@ -116,5 +140,7 @@ export function crearColaAnunciosTts({
 
         pendientes: () => cola.length,
         anunciados: () => anunciados.size,
+        marcarAnunciado: (eventId) => anunciados.add(String(eventId)),
+        yaAnunciado: (eventId) => anunciados.has(String(eventId)),
     };
 }

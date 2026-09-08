@@ -4,6 +4,7 @@ namespace App\Http\Controllers\PuntoVenta\Pantallas;
 
 use App\Http\Controllers\Controller;
 use App\Services\PuntoVenta\Pantallas\ConsultaEstadoSalaPdvService;
+use App\Services\PuntoVenta\Pantallas\ResolverTokenPantallaSalaPdvService;
 use App\Services\PuntoVenta\PuntoVentaModulo;
 use Illuminate\Http\JsonResponse;
 use Inertia\Inertia;
@@ -19,13 +20,24 @@ class PantallaSalaPdvController extends Controller
     ): Response {
         $this->asegurarModuloHabilitado($modulo);
 
-        $estado = $consulta->payload($sucursal, now());
+        return $this->renderSala($sucursal, $consulta, route('sala_turnos.publica.estado', ['sucursal' => $sucursal]));
+    }
 
-        return Inertia::render('PuntoVenta/Pantallas/Sala', [
-            'estado_inicial' => fn () => $estado,
-            'sucursal_id' => $sucursal,
-            'url_estado' => route('sala_turnos.publica.estado', ['sucursal' => $sucursal]),
-        ]);
+    public function showPorToken(
+        string $token,
+        ResolverTokenPantallaSalaPdvService $resolver,
+        ConsultaEstadoSalaPdvService $consulta,
+        PuntoVentaModulo $modulo,
+    ): Response {
+        $this->asegurarModuloHabilitado($modulo);
+
+        $registro = $resolver->resolver($token, now(), true);
+
+        return $this->renderSala(
+            (int) $registro->sucursal_id,
+            $consulta,
+            route('sala_turnos.publica.token.estado', ['token' => $token]),
+        );
     }
 
     public function estado(
@@ -36,6 +48,30 @@ class PantallaSalaPdvController extends Controller
         $this->asegurarModuloHabilitado($modulo);
 
         return response()->json($consulta->payload($sucursal, now()));
+    }
+
+    public function estadoPorToken(
+        string $token,
+        ResolverTokenPantallaSalaPdvService $resolver,
+        ConsultaEstadoSalaPdvService $consulta,
+        PuntoVentaModulo $modulo,
+    ): JsonResponse {
+        $this->asegurarModuloHabilitado($modulo);
+
+        $registro = $resolver->resolver($token, now());
+
+        return response()->json($consulta->payload((int) $registro->sucursal_id, now()));
+    }
+
+    private function renderSala(int $sucursalId, ConsultaEstadoSalaPdvService $consulta, string $urlEstado): Response
+    {
+        $estado = $consulta->payload($sucursalId, now());
+
+        return Inertia::render('PuntoVenta/Pantallas/Sala', [
+            'estado_inicial' => fn () => $estado,
+            'sucursal_id' => $sucursalId,
+            'url_estado' => $urlEstado,
+        ]);
     }
 
     private function asegurarModuloHabilitado(PuntoVentaModulo $modulo): void

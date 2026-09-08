@@ -32,13 +32,13 @@ final class PayloadOperacionPdvBroadcast
     /**
      * @return array<string, mixed>
      */
-    public static function intervalo(IntervaloOperativoPdv $intervalo): array
+    public static function intervalo(IntervaloOperativoPdv $intervalo, bool $incluirDetalleMotivo = false): array
     {
         $tipo = $intervalo->tipo instanceof TipoIntervaloOperativoPdv
             ? $intervalo->tipo->value
             : (string) $intervalo->tipo;
 
-        return [
+        $payload = [
             'intervalo_id' => $intervalo->id,
             'jornada_id' => $intervalo->jornada_id,
             'user_id' => $intervalo->user_id,
@@ -46,6 +46,15 @@ final class PayloadOperacionPdvBroadcast
             'inicio_at' => $intervalo->inicio_at?->toIso8601String(),
             'fin_at' => $intervalo->fin_at?->toIso8601String(),
         ];
+
+        if ($tipo === TipoIntervaloOperativoPdv::EnPausa->value) {
+            $payload['pausa_motivo'] = $intervalo->etiquetaMotivoPausa();
+            if ($incluirDetalleMotivo) {
+                $payload['pausa_motivo_completo'] = $intervalo->textoMotivoPausaCompleto();
+            }
+        }
+
+        return $payload;
     }
 
     /**

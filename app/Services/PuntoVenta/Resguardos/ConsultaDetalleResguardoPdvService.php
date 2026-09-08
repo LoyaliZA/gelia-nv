@@ -7,6 +7,7 @@ use App\Models\PuntoVenta\ResguardoPdv;
 use App\Models\PuntoVenta\ResguardoPdvEvento;
 use App\Models\User;
 use App\Services\PuntoVenta\PuntoVentaModulo;
+use App\Support\PuntoVenta\Resguardos\EstadoRecepcionResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\EtiquetasResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\SerializadorIncidenciaResguardoPdv;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -18,6 +19,7 @@ class ConsultaDetalleResguardoPdvService
         private readonly CalcularAntiguedadOperativaResguardoPdvService $antiguedad,
         private readonly PlazosCustodiaResguardoPdvConfig $plazos,
         private readonly ConsultaAuditoriaResguardoPdvService $auditoria,
+        private readonly SincronizarCantidadBultosEsperadaResguardoPdvService $sincronizarCantidadBultos,
     ) {}
 
     /**
@@ -46,6 +48,24 @@ class ConsultaDetalleResguardoPdvService
                 ->orderByDesc('reportado_at')
                 ->orderByDesc('id'),
         ]);
+
+        if ((int) $resguardo->cantidad_bultos_esperada < 1) {
+            $resguardo = $this->sincronizarCantidadBultos->ejecutar($resguardo);
+            $resguardo->load([
+                'sucursal:id,nombre',
+                'cliente:id,numero_cliente',
+                'pedido:id,folio,folio_remision',
+                'bultos' => fn ($q) => $q->orderBy('folio')->orderBy('id'),
+                'incidencias' => fn ($q) => $q
+                    ->with([
+                        'evidencias',
+                        'reportadoPor:id,username',
+                        'autorizadoPor:id,username',
+                    ])
+                    ->orderByDesc('reportado_at')
+                    ->orderByDesc('id'),
+            ]);
+        }
 
         $auditoria = $this->auditoria->obtener($user, $resguardo);
 
@@ -86,6 +106,10 @@ class ConsultaDetalleResguardoPdvService
             'snapshot_folio' => $resguardo->snapshot_folio,
             'referencia_cliente' => $this->referenciaCliente($resguardo),
             'cantidad_bultos_esperada' => $resguardo->cantidad_bultos_esperada,
+            'cantidad_bultos_recibida' => EstadoRecepcionResguardoPdv::cantidadRecibida($resguardo),
+            'cantidad_bultos_pendiente' => EstadoRecepcionResguardoPdv::cantidadPendiente($resguardo),
+            'admite_recepcion' => EstadoRecepcionResguardoPdv::admiteRecepcion($resguardo),
+            'recepcion_completa' => EstadoRecepcionResguardoPdv::recepcionCompleta($resguardo),
             'salida_cedis_at' => $resguardo->salida_cedis_at?->toIso8601String(),
             'recepcion_fisica_at' => $resguardo->recepcion_fisica_at?->toIso8601String(),
             'vencido_repuesto_at' => $resguardo->vencido_repuesto_at?->toIso8601String(),

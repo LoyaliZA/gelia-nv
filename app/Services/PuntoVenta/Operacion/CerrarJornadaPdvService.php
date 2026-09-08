@@ -42,8 +42,29 @@ class CerrarJornadaPdvService
         );
 
         return DB::transaction(function () use ($actor, $sucursalId, $versionEsperada, $ahora): array {
+            return $this->cerrarParaUsuario(
+                (int) $actor->id,
+                $sucursalId,
+                $versionEsperada,
+                $ahora,
+                (int) $actor->id,
+            );
+        });
+    }
+
+    /**
+     * @return array{jornada: JornadaPdv, estado_destino: EstadoJornadaPdv, reintento: bool}
+     */
+    public function cerrarParaUsuario(
+        int $userId,
+        int $sucursalId,
+        int $versionEsperada,
+        CarbonInterface $ahora,
+        int $actorId,
+    ): array {
+        return DB::transaction(function () use ($userId, $sucursalId, $versionEsperada, $ahora, $actorId): array {
             $jornada = JornadaPdv::query()
-                ->where('user_id', $actor->id)
+                ->where('user_id', $userId)
                 ->where('sucursal_id', $sucursalId)
                 ->where('estado', EstadoJornadaPdv::Abierta)
                 ->lockForUpdate()
@@ -51,7 +72,7 @@ class CerrarJornadaPdvService
 
             if (! $jornada instanceof JornadaPdv) {
                 $inactiva = JornadaPdv::query()
-                    ->where('user_id', $actor->id)
+                    ->where('user_id', $userId)
                     ->where('sucursal_id', $sucursalId)
                     ->whereIn('estado', [
                         EstadoJornadaPdv::Cerrada,
@@ -77,7 +98,7 @@ class CerrarJornadaPdvService
             $this->assertVersionJornada($jornada, $versionEsperada);
 
             $tieneAtencionAbierta = TurnoPdvAtencion::query()
-                ->where('user_id', $actor->id)
+                ->where('user_id', $userId)
                 ->whereNull('fin_at')
                 ->exists();
 
@@ -108,7 +129,7 @@ class CerrarJornadaPdvService
             JornadaCerrada::dispatch(
                 $jornadaActualizada,
                 $sucursalId,
-                (int) $actor->id,
+                $actorId,
                 'persona',
             );
 

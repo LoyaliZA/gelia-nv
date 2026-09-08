@@ -8,8 +8,10 @@ use App\Models\PuntoVenta\ResguardoPdv;
 use App\Models\PuntoVenta\ResguardoPdvIncidencia;
 use App\Models\User;
 use App\Services\PuntoVenta\PuntoVentaModulo;
+use App\Models\PuntoVenta\ResguardoPdvBulto;
 use App\Support\PuntoVenta\Resguardos\AntiguedadOperativaResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\BandejaResguardoPdv;
+use App\Support\PuntoVenta\Resguardos\EstadoRecepcionResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\EtiquetasResguardoPdv;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -24,6 +26,7 @@ class ConsultaBandejasResguardoPdvService
         private readonly ResuelveAlcancePdv $alcance,
         private readonly ResuelvePlazosCustodiaResguardoPdv $plazos,
         private readonly CalcularAntiguedadOperativaResguardoPdvService $antiguedad,
+        private readonly SincronizarCantidadBultosEsperadaResguardoPdvService $sincronizarCantidadBultos,
     ) {}
 
     /**
@@ -185,6 +188,8 @@ class ConsultaBandejasResguardoPdvService
             ->withCount([
                 'incidencias as incidencias_abiertas_count' => fn (Builder $q) => $q
                     ->where('estado', ResguardoPdvIncidencia::ESTADO_ABIERTA),
+                'bultos as bultos_recibidos_count' => fn (Builder $q) => $q
+                    ->where('estado', ResguardoPdvBulto::ESTADO_RECIBIDO),
             ]);
 
         return $this->alcance->aplicarConsultaGlobal(
@@ -206,6 +211,8 @@ class ConsultaBandejasResguardoPdvService
             ->withCount([
                 'incidencias as incidencias_abiertas_count' => fn (Builder $q) => $q
                     ->where('estado', ResguardoPdvIncidencia::ESTADO_ABIERTA),
+                'bultos as bultos_recibidos_count' => fn (Builder $q) => $q
+                    ->where('estado', ResguardoPdvBulto::ESTADO_RECIBIDO),
             ]);
 
         return $this->alcance->aplicarConsultaPiso(
@@ -479,6 +486,10 @@ class ConsultaBandejasResguardoPdvService
      */
     private function serializarResguardo(ResguardoPdv $resguardo): array
     {
+        if ((int) $resguardo->cantidad_bultos_esperada < 1) {
+            $resguardo = $this->sincronizarCantidadBultos->ejecutar($resguardo);
+        }
+
         $evaluacion = $this->antiguedadConfigurada()
             ? $this->antiguedad->evaluar($resguardo)
             : [
@@ -495,6 +506,9 @@ class ConsultaBandejasResguardoPdvService
             }
         }
 
+        $cantidadRecibida = EstadoRecepcionResguardoPdv::cantidadRecibida($resguardo);
+        $cantidadPendiente = EstadoRecepcionResguardoPdv::cantidadPendiente($resguardo);
+
         return [
             'id' => $resguardo->id,
             'version' => (int) $resguardo->version,
@@ -503,6 +517,10 @@ class ConsultaBandejasResguardoPdvService
             'snapshot_folio' => $resguardo->snapshot_folio,
             'snapshot_cliente_nombre' => $resguardo->snapshot_cliente_nombre,
             'cantidad_bultos_esperada' => $resguardo->cantidad_bultos_esperada,
+            'cantidad_bultos_recibida' => $cantidadRecibida,
+            'cantidad_bultos_pendiente' => $cantidadPendiente,
+            'admite_recepcion' => EstadoRecepcionResguardoPdv::admiteRecepcion($resguardo),
+            'recepcion_completa' => EstadoRecepcionResguardoPdv::recepcionCompleta($resguardo),
             'salida_cedis_at' => $resguardo->salida_cedis_at?->toIso8601String(),
             'recepcion_fisica_at' => $resguardo->recepcion_fisica_at?->toIso8601String(),
             'vencido_repuesto_at' => $resguardo->vencido_repuesto_at?->toIso8601String(),

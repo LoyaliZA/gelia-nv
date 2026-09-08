@@ -21,6 +21,7 @@ class ActualizarHorarioCierreSucursalPdvController extends Controller
         $horario = $servicio->ejecutar(
             $user,
             $datos['hora_cierre'],
+            $datos['hora_apertura'],
             $datos['zona_horaria'],
         );
 

@@ -136,3 +136,5 @@ export default function usePdvRealtime({
 
     return { estadoConexion };
 }
+
+export { canalesActivos as __canalesActivosPdvParaPruebas };

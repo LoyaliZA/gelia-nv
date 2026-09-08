@@ -23,4 +23,9 @@ interface ConsultaPersonaDisponiblePdv
      * Cuando $paraAltaNueva es true, exige además que la sucursal acepte altas (§5.6).
      */
     public function esDisponible(User $user, int $sucursalId, bool $paraAltaNueva = false): bool;
+
+    /**
+     * Cantidad de personas disponibles para asignación en la sucursal.
+     */
+    public function contarDisponibles(int $sucursalId, string $servicio): int;
 }

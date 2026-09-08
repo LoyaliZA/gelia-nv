@@ -3,14 +3,19 @@
 namespace App\Support\PuntoVenta\Broadcast;
 
 use App\Events\PuntoVenta\AtencionCerrada;
+use App\Events\PuntoVenta\AtencionEsperaProximoVencer;
 use App\Events\PuntoVenta\AtencionProrroga;
+use App\Events\PuntoVenta\AtencionProrrogaProximoVencer;
 use App\Events\PuntoVenta\EntregaResguardoPdvCompletada;
+use App\Events\PuntoVenta\EquipoAsistenciaActualizada;
 use App\Events\PuntoVenta\IncidenciaResguardoPdvRegistrada;
 use App\Events\PuntoVenta\JornadaAbierta;
 use App\Events\PuntoVenta\JornadaAmpliada;
 use App\Events\PuntoVenta\JornadaCerrada;
+use App\Events\PuntoVenta\JornadaAperturaHorario;
 use App\Events\PuntoVenta\JornadaCierreHorario;
 use App\Events\PuntoVenta\JornadaCierreManual;
+use App\Events\PuntoVenta\JornadaReaperturaManual;
 use App\Events\PuntoVenta\PausaFinalizada;
 use App\Events\PuntoVenta\PausaIniciada;
 use App\Events\PuntoVenta\RecepcionEsperadaPdvCreada;
@@ -19,6 +24,7 @@ use App\Events\PuntoVenta\TurnoAsignado;
 use App\Events\PuntoVenta\TurnoCreado;
 use App\Events\PuntoVenta\TurnoReatencion;
 use App\Events\PuntoVenta\TurnoTransferido;
+use App\Events\PuntoVenta\TurnoVentanaReatencionVencida;
 use App\Models\PuntoVenta\TurnoPdvEvento;
 use App\Support\PuntoVenta\Broadcast\Payloads\PayloadOperacionPdvBroadcast;
 use App\Support\PuntoVenta\Broadcast\Payloads\PayloadResguardoPdvBroadcast;
@@ -40,16 +46,22 @@ final class PdvRealtimeMapper
             TurnoCreado::class,
             TurnoAsignado::class,
             TurnoReatencion::class,
+            TurnoVentanaReatencionVencida::class,
             TurnoTransferido::class,
             AtencionCerrada::class,
             AtencionProrroga::class,
+            AtencionEsperaProximoVencer::class,
+            AtencionProrrogaProximoVencer::class,
             JornadaAbierta::class,
             JornadaCerrada::class,
             JornadaCierreManual::class,
+            JornadaReaperturaManual::class,
+            JornadaAperturaHorario::class,
             JornadaCierreHorario::class,
             JornadaAmpliada::class,
             PausaIniciada::class,
             PausaFinalizada::class,
+            EquipoAsistenciaActualizada::class,
         ];
     }
 
@@ -87,16 +99,22 @@ final class PdvRealtimeMapper
             TurnoCreado::class => $this->turnoSoloSucursal($event),
             TurnoAsignado::class => $this->turnoLlamado($event, TurnoPdvEvento::TIPO_ASIGNADO),
             TurnoReatencion::class => $this->turnoLlamado($event, TurnoPdvEvento::TIPO_REATENCION),
+            TurnoVentanaReatencionVencida::class => $this->turnoVentanaReatencionVencida($event),
             TurnoTransferido::class => $this->turnoTransferido($event),
             AtencionCerrada::class => $this->turnoAtencionCerrada($event),
             AtencionProrroga::class => $this->turnoProrroga($event),
+            AtencionEsperaProximoVencer::class => $this->turnoEsperaProximoVencer($event),
+            AtencionProrrogaProximoVencer::class => $this->turnoProrrogaProximoVencer($event),
             JornadaAbierta::class => $this->jornadaAbierta($event),
             JornadaCerrada::class => $this->jornadaCerrada($event),
             JornadaCierreManual::class => $this->cierreManual($event),
+            JornadaReaperturaManual::class => $this->reaperturaManual($event),
+            JornadaAperturaHorario::class => $this->aperturaHorario($event),
             JornadaCierreHorario::class => $this->cierreHorario($event),
             JornadaAmpliada::class => $this->jornadaAmpliada($event),
             PausaIniciada::class => $this->pausa($event, 'pausa.iniciada'),
             PausaFinalizada::class => $this->pausa($event, 'pausa.finalizada'),
+            EquipoAsistenciaActualizada::class => $this->equipoAsistenciaActualizada($event),
             default => [],
         };
     }
@@ -216,6 +234,29 @@ final class PdvRealtimeMapper
     /**
      * @return list<array{channels: list<Channel>, envelope: array<string, mixed>}>
      */
+    private function turnoVentanaReatencionVencida(TurnoVentanaReatencionVencida $event): array
+    {
+        return [[
+            'channels' => [CanalesPdv::sucursal($event->sucursalId)],
+            'envelope' => PdvRealtimeEnvelope::crear(
+                PayloadTurnoPdvBroadcast::eventIdDesdeEvento($event->evento),
+                TurnoPdvEvento::TIPO_VENTANA_REATENCION_VENCIDA,
+                'turnos',
+                'sucursal',
+                $event->sucursalId,
+                $event->turno->version,
+                [
+                    'turno_id' => $event->turno->id,
+                    'estado' => $event->turno->estado,
+                ],
+                $event->evento->ocurrido_at,
+            ),
+        ]];
+    }
+
+    /**
+     * @return list<array{channels: list<Channel>, envelope: array<string, mixed>}>
+     */
     private function turnoTransferido(TurnoTransferido $event): array
     {
         $eventId = PayloadTurnoPdvBroadcast::eventIdDesdeEvento($event->evento);
@@ -325,6 +366,53 @@ final class PdvRealtimeMapper
     /**
      * @return list<array{channels: list<Channel>, envelope: array<string, mixed>}>
      */
+    private function turnoEsperaProximoVencer(AtencionEsperaProximoVencer $event): array
+    {
+        return $this->turnoAlertaSucursal(
+            $event,
+            TurnoPdvEvento::TIPO_ESPERA_PROXIMO_VENCER,
+            $this->atencionConPersona($event->atencion),
+        );
+    }
+
+    /**
+     * @return list<array{channels: list<Channel>, envelope: array<string, mixed>}>
+     */
+    private function turnoProrrogaProximoVencer(AtencionProrrogaProximoVencer $event): array
+    {
+        return $this->turnoAlertaSucursal(
+            $event,
+            TurnoPdvEvento::TIPO_PRORROGA_PROXIMO_VENCER,
+            $this->atencionConPersona($event->atencion),
+        );
+    }
+
+    /**
+     * @return list<array{channels: list<Channel>, envelope: array<string, mixed>}>
+     */
+    private function turnoAlertaSucursal(
+        AtencionEsperaProximoVencer|AtencionProrrogaProximoVencer $event,
+        string $tipo,
+        \App\Models\PuntoVenta\TurnoPdvAtencion $atencion,
+    ): array {
+        return [[
+            'channels' => [CanalesPdv::sucursal($event->sucursalId)],
+            'envelope' => PdvRealtimeEnvelope::crear(
+                PayloadTurnoPdvBroadcast::eventIdDesdeEvento($event->evento),
+                $tipo,
+                'turnos',
+                'sucursal',
+                $event->sucursalId,
+                $event->turno->version,
+                PayloadTurnoPdvBroadcast::sucursal($event->turno, $atencion),
+                $event->evento->ocurrido_at,
+            ),
+        ]];
+    }
+
+    /**
+     * @return list<array{channels: list<Channel>, envelope: array<string, mixed>}>
+     */
     private function turnoProrroga(AtencionProrroga $event): array
     {
         $eventId = PayloadTurnoPdvBroadcast::eventIdDesdeEvento($event->evento);
@@ -426,6 +514,41 @@ final class PdvRealtimeMapper
     /**
      * @return list<array{channels: list<Channel>, envelope: array<string, mixed>}>
      */
+    private function reaperturaManual(JornadaReaperturaManual $event): array
+    {
+        return [[
+            'channels' => [CanalesPdv::sucursal($event->sucursalId)],
+            'envelope' => PdvRealtimeEnvelope::crear(
+                PayloadOperacionPdvBroadcast::eventIdSucursalDia('jornada.reapertura_manual', $event->sucursalDia->id),
+                'jornada.reapertura_manual',
+                'operacion',
+                'sucursal',
+                $event->sucursalId,
+                $event->sucursalDia->version,
+                PayloadOperacionPdvBroadcast::sucursalDia($event->sucursalDia),
+            ),
+        ]];
+    }
+
+    private function aperturaHorario(JornadaAperturaHorario $event): array
+    {
+        return [[
+            'channels' => [CanalesPdv::sucursal($event->sucursalId)],
+            'envelope' => PdvRealtimeEnvelope::crear(
+                PayloadOperacionPdvBroadcast::eventIdDesdeEvento($event->evento),
+                $event->evento->tipo_evento,
+                'operacion',
+                'sucursal',
+                $event->sucursalId,
+                $event->sucursalDia->version,
+                PayloadOperacionPdvBroadcast::sucursalDia($event->sucursalDia),
+            ),
+        ]];
+    }
+
+    /**
+     * @return list<array{channels: list<Channel>, envelope: array<string, mixed>}>
+     */
     private function cierreHorario(JornadaCierreHorario $event): array
     {
         return [[
@@ -481,6 +604,28 @@ final class PdvRealtimeMapper
                 [
                     'jornada' => PayloadOperacionPdvBroadcast::jornada($event->jornada),
                     'intervalo' => PayloadOperacionPdvBroadcast::intervalo($event->intervalo),
+                ],
+            ),
+        ]];
+    }
+
+    /**
+     * @return list<array{channels: list<Channel>, envelope: array<string, mixed>}>
+     */
+    private function equipoAsistenciaActualizada(EquipoAsistenciaActualizada $event): array
+    {
+        return [[
+            'channels' => [CanalesPdv::sucursal($event->sucursalId)],
+            'envelope' => PdvRealtimeEnvelope::crear(
+                'equipo.asistencia:'.$event->asistencia->id,
+                'equipo.asistencia',
+                'operacion',
+                'sucursal',
+                $event->sucursalId,
+                $event->asistencia->version,
+                [
+                    'user_id' => $event->asistencia->user_id,
+                    'no_llego_at' => $event->asistencia->no_llego_at?->toIso8601String(),
                 ],
             ),
         ]];

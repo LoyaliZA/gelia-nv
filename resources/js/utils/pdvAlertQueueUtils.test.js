@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
     conexionDegradadaPdv,
     encolarAlertaPdv,
+    etiquetaConexionTiempoRealPdv,
     expirarColaPdv,
     mapearEstadoConexionPdv,
     mensajeAlertaPdv,
@@ -67,6 +68,9 @@ describe('pdvAlertQueueUtils', () => {
         expect(mapearEstadoConexionPdv('unavailable')).toBe(PDV_ESTADO_CONEXION.degradado);
         expect(conexionDegradadaPdv(PDV_ESTADO_CONEXION.conectado)).toBe(false);
         expect(conexionDegradadaPdv(PDV_ESTADO_CONEXION.desconectado)).toBe(true);
+        expect(etiquetaConexionTiempoRealPdv(PDV_ESTADO_CONEXION.conectado)).toBe('En vivo');
+        expect(etiquetaConexionTiempoRealPdv(PDV_ESTADO_CONEXION.conectando)).toBe('Reconectando');
+        expect(etiquetaConexionTiempoRealPdv(PDV_ESTADO_CONEXION.desconectado)).toBe('Sin conexión');
         expect(mensajeAlertaPdv(envelopeBase())).toContain('turno');
     });
 });

@@ -14,18 +14,10 @@ class SeleccionarTurnoColaPdvService
      */
     public function siguiente(int $sucursalId, string $servicio = TurnoPdv::SERVICIO_VENTAS): ?TurnoPdv
     {
-        $ahora = now();
-
         return TurnoPdv::query()
             ->where('sucursal_id', $sucursalId)
             ->where('servicio', $servicio)
-            ->where(function ($query) use ($ahora) {
-                $query->where('estado', TurnoPdv::ESTADO_EN_COLA)
-                    ->orWhere(function ($query) use ($ahora) {
-                        $query->where('estado', TurnoPdv::ESTADO_EN_REATENCION)
-                            ->where('reatencion_expira_at', '>', $ahora);
-                    });
-            })
+            ->where('estado', TurnoPdv::ESTADO_EN_COLA)
             ->whereNull('atencion_actual_id')
             ->orderByRaw(
                 'CASE WHEN prioridad_adulto_mayor = 1'

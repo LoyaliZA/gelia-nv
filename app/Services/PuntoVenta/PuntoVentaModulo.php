@@ -44,6 +44,8 @@ final class PuntoVentaModulo
 
     public const PERMISO_TURNOS_CERRAR_ATENCION = 'pdv.turnos.cerrar_atencion';
 
+    public const PERMISO_TURNOS_ATENDER = 'pdv.turnos.atender';
+
     public const PERMISO_TURNOS_TRANSFERIR = 'pdv.turnos.transferir';
 
     public const PERMISO_OPERACION_JORNADA_ABRIR = 'pdv.operacion.jornada_abrir';
@@ -55,6 +57,16 @@ final class PuntoVentaModulo
     public const PERMISO_OPERACION_JORNADA_AMPLIAR = 'pdv.operacion.jornada_ampliar';
 
     public const PERMISO_OPERACION_PAUSA = 'pdv.operacion.pausa';
+
+    public const PERMISO_OPERACION_EQUIPO_GESTIONAR = 'pdv.operacion.equipo_gestionar';
+
+    public const PERMISO_OPERACION_EQUIPO_VER = 'pdv.operacion.equipo_ver';
+
+    public const PERMISO_TURNOS_REATENCION_ASIGNAR = 'pdv.turnos.reatencion_asignar';
+
+    public const PERMISO_TURNOS_ALERTAS_SUCURSAL = 'pdv.turnos.alertas_sucursal';
+
+    public const PERMISO_PANTALLA_SALA_ABRIR = 'pdv.pantalla_sala.abrir';
 
     /**
      * @return list<string>
@@ -79,12 +91,18 @@ final class PuntoVentaModulo
             self::PERMISO_TURNOS_MARCAR_PRIORIDAD,
             self::PERMISO_TURNOS_BAJA_COLA,
             self::PERMISO_TURNOS_CERRAR_ATENCION,
+            self::PERMISO_TURNOS_ATENDER,
             self::PERMISO_TURNOS_TRANSFERIR,
             self::PERMISO_OPERACION_JORNADA_ABRIR,
             self::PERMISO_OPERACION_JORNADA_CERRAR,
             self::PERMISO_OPERACION_JORNADA_CERRAR_SUCURSAL,
             self::PERMISO_OPERACION_JORNADA_AMPLIAR,
             self::PERMISO_OPERACION_PAUSA,
+            self::PERMISO_OPERACION_EQUIPO_GESTIONAR,
+            self::PERMISO_OPERACION_EQUIPO_VER,
+            self::PERMISO_TURNOS_REATENCION_ASIGNAR,
+            self::PERMISO_TURNOS_ALERTAS_SUCURSAL,
+            self::PERMISO_PANTALLA_SALA_ABRIR,
             AlcancePdv::PERMISO_ALCANCE_GLOBAL,
             self::PERMISO_REPORTES_EXPORTAR,
         ];

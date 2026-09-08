@@ -1,4 +1,4 @@
-/** Eventos con guion TTS aprobado (CONTRATO_PANTALLAS_PDV §5–§7). */
+/** Eventos con guion TTS personal aprobado (CONTRATO_PANTALLAS_PDV §5–§7). */
 export const PDV_TTS_TIPOS = new Set([
     'turno.asignado',
     'turno.reatencion',
@@ -29,17 +29,22 @@ export const PDV_TTS_ESTADO = {
     no_soportado: 'no_soportado',
 };
 
-export function debeAnunciarTtsPdv(envelope) {
+export function debeAnunciarTtsPersonalPdv(envelope) {
     const tipo = String(envelope?.tipo || '');
     if (!PDV_TTS_TIPOS.has(tipo)) return false;
-    return mensajeTtsPdv(envelope) !== null;
+    return mensajeTtsPersonalPdv(envelope) !== null;
+}
+
+/** @deprecated usar debeAnunciarTtsPersonalPdv */
+export function debeAnunciarTtsPdv(envelope) {
+    return debeAnunciarTtsPersonalPdv(envelope);
 }
 
 /**
- * Guion neutro: Turno {folio}. {nombre}. Favor de pasar con {primer nombre}.
+ * Guion neutro personal: Turno {folio}. {nombre}. Favor de pasar con {primer nombre}.
  * No nombra VIP, Diamante ni categorías (CONTRATO_PANTALLAS_PDV §5).
  */
-export function mensajeTtsPdv(envelope) {
+export function mensajeTtsPersonalPdv(envelope) {
     const datos = envelope?.datos;
     if (!datos || typeof datos !== 'object') return null;
 
@@ -55,6 +60,11 @@ export function mensajeTtsPdv(envelope) {
     }
 
     return `${base} Favor de atender.`;
+}
+
+/** @deprecated usar mensajeTtsPersonalPdv */
+export function mensajeTtsPdv(envelope) {
+    return mensajeTtsPersonalPdv(envelope);
 }
 
 export function primerNombreAtencionPdv(datos) {

@@ -55,6 +55,28 @@ describe('buildSidebarNavigation permissions', () => {
         expect(ids).not.toContain('control_pedidos_auditar');
     });
 
+    it('usuario con permiso equipo_ver ve enlace de vendedores', () => {
+        const tree = buildSidebarNavigation({
+            can: canWith(['punto_venta.acceder', 'pdv.operacion.equipo_ver']),
+            showAdminMenu: false,
+            manualesHubVisible: false,
+            geliaAiVisible: false,
+        });
+        const ids = collectLinkIds(tree);
+        expect(ids).toContain('punto_venta_vendedores');
+    });
+
+    it('usuario sin permiso equipo_ver no ve enlace de vendedores', () => {
+        const tree = buildSidebarNavigation({
+            can: canWith(['punto_venta.acceder', 'pdv.turnos.ver']),
+            showAdminMenu: false,
+            manualesHubVisible: false,
+            geliaAiVisible: false,
+        });
+        const ids = collectLinkIds(tree);
+        expect(ids).not.toContain('punto_venta_vendedores');
+    });
+
     it('usuario con permiso PDV ve enlace de resguardos', () => {
         const tree = buildSidebarNavigation({
             can: canWith(['punto_venta.acceder', 'pdv.resguardos.ver']),
@@ -77,6 +99,53 @@ describe('buildSidebarNavigation permissions', () => {
         });
         const ids = collectLinkIds(tree);
         expect(ids).not.toContain('punto_venta_resguardos');
+    });
+
+    it('usuario con permiso atender ve enlace Mi atención', () => {
+        const tree = buildSidebarNavigation({
+            can: canWith(['punto_venta.acceder', 'pdv.turnos.atender']),
+            showAdminMenu: false,
+            manualesHubVisible: false,
+            geliaAiVisible: false,
+        });
+        const ids = collectLinkIds(tree);
+        expect(ids).toContain('punto_venta_turnos_ventas');
+        const puntoVenta = tree.find((n) => n?.id === 'punto_venta');
+        const miAtencion = puntoVenta?.children?.find((n) => n?.id === 'punto_venta_turnos_ventas');
+        expect(miAtencion?.label).toBe('Mi atención');
+    });
+
+    it('usuario con turnos.ver pero sin atender no ve enlace Mi atención', () => {
+        const tree = buildSidebarNavigation({
+            can: canWith(['punto_venta.acceder', 'pdv.turnos.ver', 'pdv.turnos.alta']),
+            showAdminMenu: false,
+            manualesHubVisible: false,
+            geliaAiVisible: false,
+        });
+        const ids = collectLinkIds(tree);
+        expect(ids).not.toContain('punto_venta_turnos_ventas');
+    });
+
+    it('usuario con permiso pantalla_sala.abrir ve enlace Pantalla de sala', () => {
+        const tree = buildSidebarNavigation({
+            can: canWith(['punto_venta.acceder', 'pdv.pantalla_sala.abrir']),
+            showAdminMenu: false,
+            manualesHubVisible: false,
+            geliaAiVisible: false,
+        });
+        const ids = collectLinkIds(tree);
+        expect(ids).toContain('punto_venta_pantalla_sala');
+    });
+
+    it('usuario sin permiso pantalla_sala.abrir no ve enlace Pantalla de sala', () => {
+        const tree = buildSidebarNavigation({
+            can: canWith(['punto_venta.acceder', 'pdv.turnos.ver']),
+            showAdminMenu: false,
+            manualesHubVisible: false,
+            geliaAiVisible: false,
+        });
+        const ids = collectLinkIds(tree);
+        expect(ids).not.toContain('punto_venta_pantalla_sala');
     });
 
     it('abre antecesores de una ruta anidada activa', () => {

@@ -6,6 +6,7 @@ use App\Events\PuntoVenta\JornadaAbierta;
 use App\Events\PuntoVenta\RecepcionFisicaPdvCompletada;
 use App\Events\PuntoVenta\TurnoAsignado;
 use App\Events\PuntoVenta\TurnoCreado;
+use App\Events\PuntoVenta\TurnoVentanaReatencionVencida;
 use App\Models\ConfiguracionSistema;
 use App\Models\PuntoVenta\IntervaloOperativoPdv;
 use App\Models\PuntoVenta\JornadaPdv;
@@ -151,6 +152,34 @@ class EventosCanalesRealtimePdvTest extends TestCase
             $this->capturador->emisiones[0]['channels'][0],
         );
         $this->assertSame(TurnoPdvEvento::TIPO_ALTA, $this->capturador->emisiones[0]['payload']['tipo']);
+    }
+
+    public function test_ventana_reatencion_vencida_emite_solo_canal_sucursal_con_payload_minimo(): void
+    {
+        $turno = TurnoPdv::factory()->create([
+            'sucursal_id' => $this->sucursal->id,
+            'estado' => TurnoPdv::ESTADO_CERRADO,
+            'version' => 4,
+        ]);
+        $evento = TurnoPdvEvento::query()->create([
+            'turno_id' => $turno->id,
+            'tipo_evento' => TurnoPdvEvento::TIPO_VENTANA_REATENCION_VENCIDA,
+            'estado_anterior' => TurnoPdv::ESTADO_EN_REATENCION,
+            'estado_nuevo' => TurnoPdv::ESTADO_CERRADO,
+            'ocurrido_at' => now(),
+        ]);
+
+        TurnoVentanaReatencionVencida::dispatch($turno, $evento, (int) $this->sucursal->id);
+
+        $this->assertCount(1, $this->capturador->emisiones);
+        $emision = $this->capturador->emisiones[0];
+        $this->assertSame(
+            CanalesPdv::sucursal((int) $this->sucursal->id)->name,
+            $emision['channels'][0],
+        );
+        $this->assertSame(TurnoPdvEvento::TIPO_VENTANA_REATENCION_VENCIDA, $emision['payload']['tipo']);
+        $this->assertSame($turno->id, $emision['payload']['datos']['turno_id']);
+        $this->assertArrayNotHasKey('atencion', $emision['payload']['datos']);
     }
 
     public function test_resguardo_emite_solo_canal_sucursal_con_payload_reducido(): void

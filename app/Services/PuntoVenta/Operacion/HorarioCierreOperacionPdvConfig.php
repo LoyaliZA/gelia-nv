@@ -3,6 +3,8 @@
 namespace App\Services\PuntoVenta\Operacion;
 
 use App\Models\ConfiguracionSistema;
+use Carbon\Carbon;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\Cache;
 
 final class HorarioCierreOperacionPdvConfig
@@ -12,11 +14,10 @@ final class HorarioCierreOperacionPdvConfig
     public const CACHE_KEY = 'pdv.operacion.horario_cierre';
 
     /**
-     * Valor provisional aprobado en planeación (5D); editable desde UI operación.
-     *
      * @return array{
      *   activo: bool,
      *   zona_horaria: string,
+     *   hora_apertura: string|null,
      *   hora_cierre: string,
      *   por_sucursal: array<string, array<string, mixed>>
      * }
@@ -26,6 +27,7 @@ final class HorarioCierreOperacionPdvConfig
         return [
             'activo' => true,
             'zona_horaria' => (string) config('app.timezone', 'America/Mexico_City'),
+            'hora_apertura' => null,
             'hora_cierre' => '19:00',
             'por_sucursal' => [],
         ];
@@ -44,7 +46,7 @@ final class HorarioCierreOperacionPdvConfig
                 'valor' => json_encode($normalizado, JSON_UNESCAPED_UNICODE),
                 'tipo' => 'json',
                 'grupo' => 'PuntoVenta',
-                'descripcion' => 'Horario de cierre operativo PDV',
+                'descripcion' => 'Horario operativo PDV (apertura y cierre)',
             ]
         );
 
@@ -60,6 +62,7 @@ final class HorarioCierreOperacionPdvConfig
      * @return array{
      *   activo: bool,
      *   zona_horaria: string,
+     *   hora_apertura: string|null,
      *   hora_cierre: string,
      *   por_sucursal: array<string, array<string, mixed>>
      * }|null
@@ -82,6 +85,7 @@ final class HorarioCierreOperacionPdvConfig
     /**
      * @return array{
      *   zona_horaria: string,
+     *   hora_apertura: string|null,
      *   hora_cierre: string
      * }|null
      */
@@ -112,11 +116,28 @@ final class HorarioCierreOperacionPdvConfig
         return $this->horarioEfectivo($combinado);
     }
 
+    public function estaAntesDeApertura(int $sucursalId, CarbonInterface $ahora): bool
+    {
+        $horario = $this->resolverParaSucursal($sucursalId);
+        if ($horario === null || $horario['hora_apertura'] === null) {
+            return false;
+        }
+
+        $zona = $horario['zona_horaria'];
+        $ahoraLocal = $ahora->copy()->timezone($zona);
+        $fechaOperativa = $ahoraLocal->toDateString();
+        [$hora, $minuto] = array_map('intval', explode(':', $horario['hora_apertura']));
+        $umbral = Carbon::parse($fechaOperativa, $zona)->setTime($hora, $minuto, 0);
+
+        return $ahoraLocal->lt($umbral);
+    }
+
     /**
      * @param  array<string, mixed>  $configuracion
      * @return array{
      *   activo: bool,
      *   zona_horaria: string,
+     *   hora_apertura: string|null,
      *   hora_cierre: string,
      *   por_sucursal: array<string, array<string, mixed>>
      * }
@@ -128,7 +149,8 @@ final class HorarioCierreOperacionPdvConfig
             $zona = (string) config('app.timezone', 'America/Mexico_City');
         }
 
-        $horaCierre = $this->normalizarHoraCierre($configuracion['hora_cierre'] ?? null);
+        $horaApertura = $this->normalizarHora($configuracion['hora_apertura'] ?? null);
+        $horaCierre = $this->normalizarHora($configuracion['hora_cierre'] ?? null);
 
         $porSucursal = $configuracion['por_sucursal'] ?? [];
         if (! is_array($porSucursal)) {
@@ -146,18 +168,23 @@ final class HorarioCierreOperacionPdvConfig
         return [
             'activo' => (bool) ($configuracion['activo'] ?? false),
             'zona_horaria' => $zona,
+            'hora_apertura' => $horaApertura,
             'hora_cierre' => $horaCierre ?? '',
             'por_sucursal' => $porSucursalNormalizado,
         ];
     }
 
-    private function normalizarHoraCierre(mixed $valor): ?string
+    private function normalizarHora(mixed $valor): ?string
     {
         if (! is_string($valor)) {
             return null;
         }
 
         $valor = trim($valor);
+        if ($valor === '') {
+            return null;
+        }
+
         if (preg_match('/^([01]\d|2[0-3]):([0-5]\d)$/', $valor, $coincidencias) !== 1) {
             return null;
         }
@@ -169,21 +196,23 @@ final class HorarioCierreOperacionPdvConfig
      * @param  array{
      *   activo: bool,
      *   zona_horaria: string,
+     *   hora_apertura?: string|null,
      *   hora_cierre: string,
      *   por_sucursal?: array<string, array<string, mixed>>
      * }  $config
-     * @return array{zona_horaria: string, hora_cierre: string}|null
+     * @return array{zona_horaria: string, hora_apertura: string|null, hora_cierre: string}|null
      */
     private function horarioEfectivo(array $config): ?array
     {
-        $hora = $this->normalizarHoraCierre($config['hora_cierre'] ?? null);
-        if ($hora === null) {
+        $horaCierre = $this->normalizarHora($config['hora_cierre'] ?? null);
+        if ($horaCierre === null) {
             return null;
         }
 
         return [
             'zona_horaria' => (string) $config['zona_horaria'],
-            'hora_cierre' => $hora,
+            'hora_apertura' => $this->normalizarHora($config['hora_apertura'] ?? null),
+            'hora_cierre' => $horaCierre,
         ];
     }
 }

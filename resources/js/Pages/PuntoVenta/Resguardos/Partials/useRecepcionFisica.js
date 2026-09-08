@@ -111,7 +111,7 @@ export default function useRecepcionFisica({ resguardoId, versionInicial }) {
     }, []);
 
     const recargarFormulario = useCallback(() => {
-        router.reload({ only: ['resguardo', 'puede_recibir', 'almacenes'] });
+        router.reload({ only: ['resguardo', 'admite_recepcion', 'motivo_no_recepcion', 'almacenes'] });
         envioBloqueado.current = false;
         setError(null);
         setLlegadaParcial(null);

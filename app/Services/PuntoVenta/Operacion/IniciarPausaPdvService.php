@@ -21,6 +21,7 @@ class IniciarPausaPdvService
 
     public function __construct(
         private readonly ResuelveAlcancePdv $alcance,
+        private readonly ConsultaMotivosPausaPdvService $motivosPausa,
     ) {}
 
     /**
@@ -42,8 +43,40 @@ class IniciarPausaPdvService
         );
 
         return DB::transaction(function () use ($actor, $sucursalId, $ahora): array {
+            return $this->iniciarParaUsuario((int) $actor->id, $sucursalId, $ahora, (int) $actor->id);
+        });
+    }
+
+    /**
+     * @return array{jornada: JornadaPdv, intervalo: IntervaloOperativoPdv, reintento: bool}
+     */
+    public function iniciarParaUsuario(
+        int $userId,
+        int $sucursalId,
+        CarbonInterface $ahora,
+        int $actorId,
+        ?int $motivoPausaId = null,
+        ?string $motivoDetalle = null,
+        bool $requiereMotivo = false,
+    ): array {
+        $motivo = null;
+        $detalle = null;
+
+        if ($requiereMotivo) {
+            if ($motivoPausaId === null) {
+                throw ValidationException::withMessages([
+                    'motivo_pausa_id' => 'Debe seleccionar un motivo de pausa.',
+                ]);
+            }
+
+            $resuelto = $this->motivosPausa->resolverParaInicio($motivoPausaId, $motivoDetalle);
+            $motivo = $resuelto['motivo'];
+            $detalle = $resuelto['detalle'];
+        }
+
+        return DB::transaction(function () use ($userId, $sucursalId, $ahora, $actorId, $motivo, $detalle): array {
             $jornada = JornadaPdv::query()
-                ->where('user_id', $actor->id)
+                ->where('user_id', $userId)
                 ->where('sucursal_id', $sucursalId)
                 ->where('estado', EstadoJornadaPdv::Abierta)
                 ->lockForUpdate()
@@ -70,7 +103,7 @@ class IniciarPausaPdvService
             }
 
             if (TurnoPdvAtencion::query()
-                ->where('user_id', $actor->id)
+                ->where('user_id', $userId)
                 ->whereNull('fin_at')
                 ->exists()) {
                 throw ValidationException::withMessages([
@@ -89,9 +122,12 @@ class IniciarPausaPdvService
 
             $intervaloPausa = IntervaloOperativoPdv::query()->create([
                 'jornada_id' => $jornada->id,
-                'user_id' => $actor->id,
+                'user_id' => $userId,
                 'sucursal_id' => $sucursalId,
                 'tipo' => TipoIntervaloOperativoPdv::EnPausa,
+                'motivo_pausa_id' => $motivo?->id,
+                'motivo_detalle' => $detalle,
+                'pausa_iniciada_por_id' => $actorId,
                 'inicio_at' => $ahora,
                 'version' => 1,
             ]);
@@ -100,7 +136,7 @@ class IniciarPausaPdvService
                 $jornada->fresh(),
                 $intervaloPausa,
                 $sucursalId,
-                (int) $actor->id,
+                $actorId,
             );
 
             return [

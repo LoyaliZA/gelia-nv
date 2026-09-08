@@ -15,6 +15,7 @@ class ConsultaFormularioRecepcionFisicaPdvService
 {
     public function __construct(
         private readonly ResuelveAlcancePdv $alcance,
+        private readonly SincronizarCantidadBultosEsperadaResguardoPdvService $sincronizarCantidadBultos,
     ) {}
 
     /**
@@ -22,7 +23,8 @@ class ConsultaFormularioRecepcionFisicaPdvService
      *     resguardo: array<string, mixed>,
      *     almacenes: list<array{id: int, codigo: string, nombre: string}>,
      *     catalogos: array<string, mixed>,
-     *     puede_recibir: bool
+     *     admite_recepcion: bool,
+     *     motivo_no_recepcion: string|null
      * }
      */
     public function obtener(User $user, ResguardoPdv $resguardo): array
@@ -32,6 +34,10 @@ class ConsultaFormularioRecepcionFisicaPdvService
         $activaId = $this->alcance->sucursalActivaId($user);
         if ($activaId === null || (int) $resguardo->sucursal_id !== $activaId) {
             throw (new ModelNotFoundException)->setModel(ResguardoPdv::class, [$resguardo->id]);
+        }
+
+        if ((int) $resguardo->cantidad_bultos_esperada < 1) {
+            $resguardo = $this->sincronizarCantidadBultos->ejecutar($resguardo);
         }
 
         $resguardo->load([
@@ -63,7 +69,8 @@ class ConsultaFormularioRecepcionFisicaPdvService
                 'condiciones_bulto' => EtiquetasResguardoPdv::condicionesBulto(),
                 'estados' => EtiquetasResguardoPdv::estados(),
             ],
-            'puede_recibir' => EstadoRecepcionResguardoPdv::admiteRecepcion($resguardo),
+            'admite_recepcion' => EstadoRecepcionResguardoPdv::admiteRecepcion($resguardo),
+            'motivo_no_recepcion' => EstadoRecepcionResguardoPdv::motivoNoRecepcion($resguardo),
         ];
     }
 

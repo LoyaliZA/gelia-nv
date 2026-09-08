@@ -1,13 +1,12 @@
 import React, { useCallback, useState } from 'react';
 import { Head } from '@inertiajs/react';
-import { AlertTriangle, Clock, Loader2, RefreshCw, ShieldOff, Users } from 'lucide-react';
+import { AlertTriangle, Clock, Loader2, RefreshCw, ShieldOff } from 'lucide-react';
 import AppLayout from '../../../Layouts/AppLayout';
 import GeliaPageShell from '../../../Components/GeliaPageShell';
 import GeliaTituloCard from '../../../Components/GeliaTituloCard';
 import { geliaCardClass, THEME_BTN_PRIMARY } from '../../../utils/geliaTheme';
 import SelectorSucursalActivaPdv from '../Resguardos/Partials/SelectorSucursalActivaPdv';
-import ListaEquipoOperativo from './Partials/ListaEquipoOperativo';
-import TarjetaEstadoJornada from './Partials/TarjetaEstadoJornada';
+import TarjetaMiAtencion from './Partials/TarjetaMiAtencion';
 import TarjetaGerenciaOperacion from './Partials/TarjetaGerenciaOperacion';
 import useEstadoOperacion from './Partials/useEstadoOperacion';
 import { mensajeAvisoSucursal } from './Partials/operacionUtils';
@@ -21,6 +20,8 @@ export default function Index({
     sucursales_asignadas: sucursalesAsignadas = [],
 }) {
     const puedeVer = Boolean(permisos.ver);
+    const esGerenciaEquipo = Boolean(permisos.equipo_gestionar);
+    const mostrarMiAtencion = !esGerenciaEquipo;
     const {
         estado,
         cargando,
@@ -65,8 +66,10 @@ export default function Index({
                 <OperacionRealtimeSync refrescar={manejarActualizado} />
                 <GeliaPageShell className="max-w-[720px] space-y-5" data-operacion-root>
                 <GeliaTituloCard
-                    title="Operación de piso"
-                    description="Jornada, pausa y estado de sucursal"
+                    title={esGerenciaEquipo ? 'Equipo del día' : 'Operación de piso'}
+                    description={esGerenciaEquipo
+                        ? 'Quién llegó y trabajará hoy'
+                        : 'Jornada, pausa y estado de sucursal'}
                     icon={Clock}
                 />
 
@@ -115,14 +118,12 @@ export default function Index({
 
                 {estado && (
                     <>
-                        {(permisos.jornada_abrir || permisos.jornada_cerrar || permisos.pausa) && (
-                            <TarjetaEstadoJornada
+                        {mostrarMiAtencion && (
+                            <TarjetaMiAtencion
                                 estado={estado}
-                                permisos={permisos}
                                 servidorAt={servidorAt}
-                                onActualizado={manejarActualizado}
-                                onConflicto={manejarConflicto}
-                                onError={setMensajeAccion}
+                                nombre={auth?.user?.name}
+                                sucursal={sucursalActiva?.nombre}
                             />
                         )}
 
@@ -133,19 +134,6 @@ export default function Index({
                             onConflicto={manejarConflicto}
                             onError={setMensajeAccion}
                         />
-
-                        <section className="space-y-3" aria-labelledby="equipo-operacion-titulo">
-                            <div className="flex items-center gap-2">
-                                <Users className="w-4 h-4 theme-text-muted" aria-hidden />
-                                <h2 id="equipo-operacion-titulo" className="text-sm font-black uppercase tracking-widest theme-text-main m-0">
-                                    Equipo en sucursal
-                                </h2>
-                            </div>
-                            <p className="text-xs font-semibold theme-text-muted m-0">
-                                Solo lectura. La disponibilidad de chat no sustituye la jornada PDV.
-                            </p>
-                            <ListaEquipoOperativo equipo={estado.equipo ?? []} />
-                        </section>
                     </>
                 )}
                 </GeliaPageShell>

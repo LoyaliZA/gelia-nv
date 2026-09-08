@@ -5,10 +5,13 @@ namespace App\Http\Controllers\PuntoVenta\Turnos;
 use App\Contracts\PuntoVenta\ResuelveAlcancePdv;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\PuntoVenta\Turnos\ConsultarBandejaRecepcionTurnoPdvRequest;
+use App\Models\PuntoVenta\SucursalDiaOperacionPdv;
 use App\Models\PuntoVenta\TurnoPdv;
 use App\Models\Sucursal;
 use App\Models\User;
+use App\Services\PuntoVenta\Operacion\OperacionPdvConfig;
 use App\Services\PuntoVenta\PuntoVentaModulo;
+use App\Services\PuntoVenta\SerializarCapacidadesPdvService;
 use App\Services\PuntoVenta\Turnos\ConsultaBandejaRecepcionTurnoPdvService;
 use App\Support\PuntoVenta\Turnos\MotivosBajaColaTurnoPdv;
 use Illuminate\Http\JsonResponse;
@@ -22,6 +25,8 @@ class FormularioRecepcionTurnoPdvController extends Controller
         Request $request,
         ResuelveAlcancePdv $alcance,
         ConsultaBandejaRecepcionTurnoPdvService $consulta,
+        SerializarCapacidadesPdvService $capacidades,
+        OperacionPdvConfig $operacionConfig,
     ): Response {
         /** @var User $user */
         $user = $request->user();
@@ -30,7 +35,9 @@ class FormularioRecepcionTurnoPdvController extends Controller
         return Inertia::render('PuntoVenta/Turnos/Recepcion', [
             'bandeja' => fn () => $this->bandejaInicial($user, $consulta, $ahora),
             'permisos' => fn () => $this->serializarPermisos($user, $alcance),
+            'capacidades' => fn () => $capacidades->serializar($user),
             'sucursal_activa' => fn () => $this->serializarSucursalActiva($user, $alcance),
+            'sucursal_dia' => fn () => $this->serializarSucursalDia($user, $alcance, $operacionConfig, $ahora),
             'sucursales_asignadas' => fn () => $this->serializarSucursalesAsignadas($user),
             'catalogos' => fn () => $this->serializarCatalogos(),
         ]);
@@ -57,6 +64,12 @@ class FormularioRecepcionTurnoPdvController extends Controller
         if (! app(ResuelveAlcancePdv::class)->permiteConsultaPiso($user, PuntoVentaModulo::PERMISO_TURNOS_VER)) {
             return [
                 'servidor_at' => $ahora->toIso8601String(),
+                'resumen' => [
+                    'en_espera' => 0,
+                    'asignados' => 0,
+                    'mayor_espera_segundos' => 0,
+                    'vendedores_disponibles' => 0,
+                ],
                 'en_cola' => [],
                 'asignados' => [],
             ];
@@ -98,6 +111,39 @@ class FormularioRecepcionTurnoPdvController extends Controller
                 ['valor' => MotivosBajaColaTurnoPdv::DESISTIO, 'etiqueta' => 'Desistió'],
                 ['valor' => MotivosBajaColaTurnoPdv::OTRO, 'etiqueta' => 'Otro'],
             ],
+        ];
+    }
+
+    /**
+     * @return array{acepta_altas: bool, cierre_manual_at: string|null}|null
+     */
+    private function serializarSucursalDia(
+        User $user,
+        ResuelveAlcancePdv $alcance,
+        OperacionPdvConfig $operacionConfig,
+        \Carbon\CarbonInterface $ahora,
+    ): ?array {
+        $sucursalId = $alcance->sucursalActivaId($user);
+        if ($sucursalId === null) {
+            return null;
+        }
+
+        $fechaOperativa = $operacionConfig->fechaOperativa($sucursalId, $ahora);
+        $dia = SucursalDiaOperacionPdv::query()
+            ->where('sucursal_id', $sucursalId)
+            ->whereDate('fecha_operativa', $fechaOperativa)
+            ->first();
+
+        if (! $dia instanceof SucursalDiaOperacionPdv) {
+            return [
+                'acepta_altas' => true,
+                'cierre_manual_at' => null,
+            ];
+        }
+
+        return [
+            'acepta_altas' => (bool) $dia->acepta_altas,
+            'cierre_manual_at' => $dia->cierre_manual_at?->toIso8601String(),
         ];
     }
 

@@ -16,15 +16,25 @@ final class SerializadorTableroVentasPdv
      * }  $plazos
      * @return array<string, mixed>
      */
-    public static function turno(TurnoPdv $turno, array $plazos, CarbonInterface $ahora): array
-    {
+    public static function turno(
+        TurnoPdv $turno,
+        array $plazos,
+        CarbonInterface $ahora,
+        ?TurnoPdvAtencion $atencionPrevia = null,
+    ): array {
         $atencion = $turno->relationLoaded('atencionActual')
             ? $turno->atencionActual
             : null;
 
+        $esReatencion = $atencion instanceof TurnoPdvAtencion && $atencion->numero_secuencia > 1;
+
         return array_merge(
             self::resumenTurno($turno, $ahora),
             [
+                'es_reatencion' => $esReatencion,
+                'atencion_previa' => $esReatencion && $atencionPrevia instanceof TurnoPdvAtencion
+                    ? self::atencionPrevia($atencionPrevia)
+                    : null,
                 'version' => $turno->version,
                 'atencion_actual_id' => $turno->atencion_actual_id,
                 'atencion' => $atencion instanceof TurnoPdvAtencion
@@ -82,6 +92,17 @@ final class SerializadorTableroVentasPdv
             'prorroga_activa' => $prorrogaActiva,
             'prorroga_registrada' => $prorrogaRegistrada,
             'atencion_en_curso' => $atencionInicioAt !== null && $atencion->fin_at === null,
+        ];
+    }
+
+    /**
+     * @return array{cierre_at: string|null, motivo_cierre: string|null}
+     */
+    private static function atencionPrevia(TurnoPdvAtencion $atencion): array
+    {
+        return [
+            'cierre_at' => $atencion->fin_at?->toIso8601String(),
+            'motivo_cierre' => $atencion->motivo_cierre,
         ];
     }
 

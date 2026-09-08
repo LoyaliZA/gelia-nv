@@ -11,8 +11,11 @@ import ModalSolicitarTransferenciaTurno from './ModalSolicitarTransferenciaTurno
 import {
     claveIdempotenciaOperacionTurno,
     esConflictoVersionTurno,
+    esReatencionTurno,
+    etiquetaMotivoCierre,
     etiquetasPrioridadDesdeTurno,
     estadoUiTurnoAsignado,
+    formatearHoraLocal,
     mensajeErrorOperacionTurno,
     puedeCerrarAtencion,
     puedeIniciarAtencion,
@@ -42,6 +45,9 @@ export default function TarjetaTurnoVentas({
     const etiquetas = etiquetasPrioridadDesdeTurno(turno);
     const estadoUi = estadoUiTurnoAsignado(turno);
     const atencion = turno?.atencion;
+    const esReatencion = esReatencionTurno(turno);
+    const motivoCierrePrevia = etiquetaMotivoCierre(turno?.atencion_previa?.motivo_cierre, catalogos);
+    const horaCierrePrevia = formatearHoraLocal(turno?.atencion_previa?.cierre_at);
 
     useEffect(() => {
         if (estadoUi === 'espera_vencida' && permisos?.cerrar_atencion) {
@@ -139,15 +145,47 @@ export default function TarjetaTurnoVentas({
     };
 
     return (
-        <div className={`${geliaCardClass()} p-5 space-y-4`}>
+        <div className={`${geliaCardClass()} p-5 space-y-4`} data-tarjeta-turno-ventas data-es-reatencion={esReatencion ? '1' : '0'}>
             <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                    <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0">Turno asignado</p>
+                    <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0">
+                        {esReatencion ? 'Re-atención' : 'Turno asignado'}
+                    </p>
                     <p className="text-3xl font-black tracking-wider theme-text-main m-0 mt-1">{turno?.folio}</p>
                     <p className="text-sm font-bold theme-text-main m-0 mt-2">{turno?.snapshot_nombre_llamado || '—'}</p>
+                    {turno?.servicio && (
+                        <p className="text-xs font-semibold theme-text-muted m-0 mt-1">
+                            Servicio: <span className="theme-text-main">{turno.servicio}</span>
+                        </p>
+                    )}
                 </div>
-                <EstadoUiBadge estadoUi={estadoUi} />
+                <div className="flex flex-col items-end gap-2">
+                    {esReatencion && (
+                        <span className="inline-flex px-3 py-1.5 rounded-xl text-[10px] font-black uppercase bg-violet-500/15 text-violet-700 dark:text-violet-300">
+                            Re-atención
+                        </span>
+                    )}
+                    <EstadoUiBadge estadoUi={estadoUi} />
+                </div>
             </div>
+
+            {esReatencion && (motivoCierrePrevia || horaCierrePrevia) && (
+                <div className="rounded-xl border theme-border px-3 py-2.5 space-y-1">
+                    <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0">
+                        Atención previa
+                    </p>
+                    {motivoCierrePrevia && (
+                        <p className="text-xs font-semibold theme-text-main m-0">
+                            Motivo de cierre: {motivoCierrePrevia}
+                        </p>
+                    )}
+                    {horaCierrePrevia && (
+                        <p className="text-xs font-semibold theme-text-muted m-0">
+                            Cerrada a las {horaCierrePrevia}
+                        </p>
+                    )}
+                </div>
+            )}
 
             {etiquetas.length > 0 && (
                 <div className="flex flex-wrap gap-2">

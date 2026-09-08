@@ -2,6 +2,7 @@
 
 namespace App\Services\PuntoVenta\Turnos;
 
+use App\Contracts\PuntoVenta\ConsultaPersonaDisponiblePdv;
 use App\Contracts\PuntoVenta\ResuelveAlcancePdv;
 use App\Models\PuntoVenta\TurnoPdv;
 use App\Models\User;
@@ -15,6 +16,8 @@ class ConsultaBandejaRecepcionTurnoPdvService
 {
     public function __construct(
         private readonly ResuelveAlcancePdv $alcance,
+        private readonly ConsultaPersonaDisponiblePdv $consultaDisponible,
+        private readonly PlazosTurnosPdvConfig $plazos,
     ) {}
 
     /**
@@ -33,17 +36,56 @@ class ConsultaBandejaRecepcionTurnoPdvService
 
         $enCola = $this->consultarEnCola($sucursalId);
         $asignados = $this->consultarAsignados($sucursalId);
+        $plazos = $this->plazos->obtener();
 
         return [
             'servidor_at' => $ahora->toIso8601String(),
+            'resumen' => $this->construirResumen($enCola, $asignados, $sucursalId, $ahora),
             'en_cola' => $enCola
                 ->map(fn (TurnoPdv $turno) => SerializadorBandejaRecepcionTurnoPdv::turnoEnCola($turno, $ahora))
                 ->values()
                 ->all(),
             'asignados' => $asignados
-                ->map(fn (TurnoPdv $turno) => SerializadorBandejaRecepcionTurnoPdv::turnoAsignado($turno, $ahora))
+                ->map(fn (TurnoPdv $turno) => SerializadorBandejaRecepcionTurnoPdv::turnoAsignado($turno, $ahora, $plazos))
                 ->values()
                 ->all(),
+        ];
+    }
+
+    /**
+     * @param  Collection<int, TurnoPdv>  $enCola
+     * @param  Collection<int, TurnoPdv>  $asignados
+     * @return array{
+     *   en_espera: int,
+     *   asignados: int,
+     *   mayor_espera_segundos: int,
+     *   vendedores_disponibles: int
+     * }
+     */
+    private function construirResumen(
+        Collection $enCola,
+        Collection $asignados,
+        int $sucursalId,
+        CarbonInterface $ahora,
+    ): array {
+        $mayorEspera = $enCola
+            ->map(static function (TurnoPdv $turno) use ($ahora): int {
+                if ($turno->alta_at === null) {
+                    return 0;
+                }
+
+                return max(0, (int) $turno->alta_at->diffInSeconds($ahora));
+            })
+            ->max() ?? 0;
+
+        return [
+            'en_espera' => $enCola->count(),
+            'asignados' => $asignados->count(),
+            'mayor_espera_segundos' => (int) $mayorEspera,
+            'vendedores_disponibles' => $this->consultaDisponible->contarDisponibles(
+                $sucursalId,
+                TurnoPdv::SERVICIO_VENTAS,
+            ),
         ];
     }
 

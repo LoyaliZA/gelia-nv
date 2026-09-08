@@ -453,7 +453,7 @@ class CalcularMetricasReporteTurnoOperacionPdvTest extends TestCase
 
     private function seedHorarioCierre(): void
     {
-        $config = new HorarioCierreOperacionPdvConfig;
+        $config = app(HorarioCierreOperacionPdvConfig::class);
         $config->persistir($config->configuracionInicialPlaneada());
         Cache::forget(HorarioCierreOperacionPdvConfig::CACHE_KEY);
     }

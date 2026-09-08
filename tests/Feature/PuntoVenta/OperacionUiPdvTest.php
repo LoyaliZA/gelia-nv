@@ -6,7 +6,7 @@ use App\Models\ConfiguracionSistema;
 use App\Models\Sucursal;
 use App\Models\User;
 use App\Services\PuntoVenta\AlcancePdv;
-use App\Services\PuntoVenta\Operacion\AbrirJornadaPdvService;
+use App\Services\PuntoVenta\Operacion\GestionarEquipoOperativoPdvService;
 use App\Services\PuntoVenta\Operacion\HorarioCierreOperacionPdvConfig;
 use App\Services\PuntoVenta\PuntoVentaModulo;
 use App\Support\PuntoVenta\Operacion\TipoIntervaloOperativoPdv;
@@ -61,7 +61,7 @@ class OperacionUiPdvTest extends TestCase
 
     public function test_pagina_operacion_renderiza_inertia_con_estado_extendido(): void
     {
-        app(AbrirJornadaPdvService::class)->ejecutar($this->ventas, now());
+        $this->activarVendedor($this->ventas);
         $this->configurarHorario();
 
         $response = $this->actingAs($this->ventas)->get(route('punto_venta.operacion.index'));
@@ -75,12 +75,13 @@ class OperacionUiPdvTest extends TestCase
                 ->has('estado.equipo')
                 ->where('estado.jornada.estado', 'ABIERTA')
                 ->where('estado.actividad', TipoIntervaloOperativoPdv::Disponible->value)
+                ->where('estado.estado_vendedor', 'disponible')
             );
     }
 
     public function test_datos_operacion_incluye_equipo_y_no_muta(): void
     {
-        app(AbrirJornadaPdvService::class)->ejecutar($this->ventas, now());
+        $this->activarVendedor($this->ventas);
         $this->configurarHorario();
 
         $response = $this->actingAs($this->ventas)->getJson(route('punto_venta.operacion.datos'));
@@ -108,7 +109,7 @@ class OperacionUiPdvTest extends TestCase
             ->assertJsonPath('horario_cierre.hora_cierre', '20:30')
             ->assertJsonPath('horario_cierre.es_override_sucursal', true);
 
-        $config = new HorarioCierreOperacionPdvConfig;
+        $config = app(HorarioCierreOperacionPdvConfig::class);
         $efectivo = $config->resolverParaSucursal($this->sucursal->id);
         $this->assertSame('20:30', $efectivo['hora_cierre'] ?? null);
     }
@@ -135,9 +136,7 @@ class OperacionUiPdvTest extends TestCase
             PuntoVentaModulo::PERMISO_ACCEDER,
             PuntoVentaModulo::PERMISO_TURNOS_VER,
             PuntoVentaModulo::PERMISO_TURNOS_CERRAR_ATENCION,
-            PuntoVentaModulo::PERMISO_OPERACION_JORNADA_ABRIR,
-            PuntoVentaModulo::PERMISO_OPERACION_JORNADA_CERRAR,
-            PuntoVentaModulo::PERMISO_OPERACION_PAUSA,
+            PuntoVentaModulo::PERMISO_TURNOS_ATENDER,
         ]);
         $user->concederAccesoSucursal($this->sucursal, esPrincipal: true);
         app(AlcancePdv::class)->establecerSucursalActiva($user, $this->sucursal->id);
@@ -151,6 +150,8 @@ class OperacionUiPdvTest extends TestCase
         $user->givePermissionTo([
             PuntoVentaModulo::PERMISO_ACCEDER,
             PuntoVentaModulo::PERMISO_TURNOS_VER,
+            PuntoVentaModulo::PERMISO_OPERACION_EQUIPO_VER,
+            PuntoVentaModulo::PERMISO_OPERACION_EQUIPO_GESTIONAR,
             PuntoVentaModulo::PERMISO_OPERACION_JORNADA_CERRAR_SUCURSAL,
             PuntoVentaModulo::PERMISO_OPERACION_JORNADA_AMPLIAR,
         ]);
@@ -160,10 +161,96 @@ class OperacionUiPdvTest extends TestCase
         return $user;
     }
 
+    public function test_gerencia_recibe_permiso_equipo_gestionar_sin_jornada_propia(): void
+    {
+        $gerenteConVer = User::factory()->create(['name' => 'Gerente con ver']);
+        $gerenteConVer->givePermissionTo([
+            PuntoVentaModulo::PERMISO_ACCEDER,
+            PuntoVentaModulo::PERMISO_TURNOS_VER,
+            PuntoVentaModulo::PERMISO_OPERACION_EQUIPO_VER,
+            PuntoVentaModulo::PERMISO_OPERACION_EQUIPO_GESTIONAR,
+            PuntoVentaModulo::PERMISO_OPERACION_JORNADA_CERRAR_SUCURSAL,
+            PuntoVentaModulo::PERMISO_OPERACION_JORNADA_AMPLIAR,
+        ]);
+        $gerenteConVer->concederAccesoSucursal($this->sucursal, esPrincipal: true);
+        app(AlcancePdv::class)->establecerSucursalActiva($gerenteConVer, $this->sucursal->id);
+
+        $response = $this->actingAs($gerenteConVer)->get(route('punto_venta.operacion.index'));
+
+        $response->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('permisos.equipo_gestionar', true)
+                ->where('permisos.jornada_abrir', false)
+                ->where('capacidades.equipo_gestionar', true)
+                ->where('capacidades.atender', false)
+                ->where('capacidades.aparece_como_vendedor', false)
+            );
+    }
+
+    public function test_panel_vendedores_requiere_equipo_ver(): void
+    {
+        $this->actingAs($this->ventas)
+            ->get(route('punto_venta.operacion.vendedores.index'))
+            ->assertForbidden();
+    }
+
+    public function test_vendedor_recibe_capacidades_explicitas_en_operacion(): void
+    {
+        $response = $this->actingAs($this->ventas)->get(route('punto_venta.operacion.index'));
+
+        $response->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('capacidades.atender', true)
+                ->where('capacidades.aparece_como_vendedor', true)
+                ->where('capacidades.equipo_gestionar', false)
+                ->where('capacidades.equipo_ver', false)
+            );
+    }
+
+    public function test_vendedor_recibe_estado_vendedor_en_operacion(): void
+    {
+        $response = $this->actingAs($this->ventas)->get(route('punto_venta.operacion.index'));
+
+        $response->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('estado.estado_vendedor', 'no_activado')
+            );
+    }
+
+    public function test_vendedor_con_permisos_legados_de_jornada_conserva_estado_sin_gestion_propia(): void
+    {
+        $vendedorLegado = User::factory()->create(['name' => 'Vendedor legado']);
+        $vendedorLegado->givePermissionTo([
+            PuntoVentaModulo::PERMISO_ACCEDER,
+            PuntoVentaModulo::PERMISO_TURNOS_VER,
+            PuntoVentaModulo::PERMISO_TURNOS_ATENDER,
+            PuntoVentaModulo::PERMISO_OPERACION_JORNADA_ABRIR,
+            PuntoVentaModulo::PERMISO_OPERACION_JORNADA_CERRAR,
+            PuntoVentaModulo::PERMISO_OPERACION_PAUSA,
+        ]);
+        $vendedorLegado->concederAccesoSucursal($this->sucursal, esPrincipal: true);
+        app(AlcancePdv::class)->establecerSucursalActiva($vendedorLegado, $this->sucursal->id);
+
+        $this->actingAs($vendedorLegado)
+            ->get(route('punto_venta.operacion.index'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('permisos.jornada_abrir', true)
+                ->where('permisos.pausa', true)
+                ->where('estado.estado_vendedor', 'no_activado')
+                ->where('capacidades.atender', true)
+            );
+    }
+
     private function configurarHorario(): void
     {
-        $config = new HorarioCierreOperacionPdvConfig;
+        $config = app(HorarioCierreOperacionPdvConfig::class);
         $config->persistir($config->configuracionInicialPlaneada());
         Cache::forget(HorarioCierreOperacionPdvConfig::CACHE_KEY);
+    }
+
+    private function activarVendedor(User $vendedor): void
+    {
+        app(GestionarEquipoOperativoPdvService::class)->activar($this->gerencia, $vendedor, now());
     }
 }

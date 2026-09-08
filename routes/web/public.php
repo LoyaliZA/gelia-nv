@@ -18,6 +18,13 @@ Route::middleware('throttle:60,1')->group(function () {
     Route::get('/activos/consulta/{token}', [ActivoController::class, 'consultaPublica'])->name('activos.consulta.publica');
     Route::get('/activos/consulta/{token}/qr.svg', [ActivoController::class, 'consultaQr'])->name('activos.consulta.qr');
 
+    Route::get('/sala-turnos/t/{token}', [PantallaSalaPdvController::class, 'showPorToken'])
+        ->where('token', '[A-Za-z0-9]{16,64}')
+        ->name('sala_turnos.publica.token.show');
+    Route::get('/sala-turnos/t/{token}/estado', [PantallaSalaPdvController::class, 'estadoPorToken'])
+        ->where('token', '[A-Za-z0-9]{16,64}')
+        ->name('sala_turnos.publica.token.estado');
+
     Route::get('/sala-turnos/{sucursal}', [PantallaSalaPdvController::class, 'show'])
         ->whereNumber('sucursal')
         ->name('sala_turnos.publica.show');

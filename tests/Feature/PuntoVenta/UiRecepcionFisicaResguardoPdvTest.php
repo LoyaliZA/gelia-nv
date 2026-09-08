@@ -61,7 +61,7 @@ class UiRecepcionFisicaResguardoPdvTest extends TestCase
                 ->where('resguardo.id', $resguardo->id)
                 ->where('resguardo.version', 1)
                 ->where('resguardo.snapshot_folio', 'REM-REC-UI')
-                ->where('puede_recibir', true)
+                ->where('admite_recepcion', true)
                 ->has('almacenes', 1)
                 ->where('almacenes.0.id', $this->almacen->id)
                 ->has('catalogos.tipos_bulto')
@@ -83,19 +83,37 @@ class UiRecepcionFisicaResguardoPdvTest extends TestCase
             ->assertForbidden();
     }
 
-    public function test_formulario_recepcion_en_custodia_marca_no_disponible(): void
+    public function test_formulario_recepcion_en_custodia_con_pendientes_admite_complemento(): void
     {
         $resguardo = $this->crearResguardoPendiente([
             'estado' => ResguardoPdv::ESTADO_EN_CUSTODIA,
             'recepcion_fisica_at' => now(),
+            'cantidad_bultos_esperada' => 2,
         ]);
 
         $this->actingAs($this->usuario)
             ->get(route('punto_venta.resguardos.recepcion.create', $resguardo))
             ->assertOk()
             ->assertInertia(fn ($page) => $page
-                ->where('puede_recibir', false)
-                ->where('resguardo.estado', ResguardoPdv::ESTADO_EN_CUSTODIA));
+                ->where('admite_recepcion', true)
+                ->where('motivo_no_recepcion', null)
+                ->where('resguardo.estado', ResguardoPdv::ESTADO_EN_CUSTODIA)
+                ->where('resguardo.cantidad_bultos_pendiente', 2));
+    }
+
+    public function test_formulario_recepcion_sin_bultos_pendientes_marca_no_disponible(): void
+    {
+        $resguardo = $this->crearResguardoPendiente([
+            'cantidad_bultos_esperada' => 0,
+        ]);
+
+        $this->actingAs($this->usuario)
+            ->get(route('punto_venta.resguardos.recepcion.create', $resguardo))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('admite_recepcion', false)
+                ->where('motivo_no_recepcion', 'sin_bultos_pendientes')
+                ->where('resguardo.estado', ResguardoPdv::ESTADO_PENDIENTE_RECEPCION));
     }
 
     public function test_index_expone_permiso_recibir(): void

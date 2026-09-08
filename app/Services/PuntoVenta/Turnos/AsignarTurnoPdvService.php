@@ -15,6 +15,7 @@ class AsignarTurnoPdvService
 {
     public function __construct(
         private readonly ConsultaPersonaDisponiblePdv $consultaDisponible,
+        private readonly ProgramarAlertasPlazosAtencionTurnoPdvService $programarAlertas,
     ) {}
 
     /**
@@ -37,10 +38,7 @@ class AsignarTurnoPdvService
             return null;
         }
 
-        if (! in_array($turnoBloqueado->estado, [
-            TurnoPdv::ESTADO_EN_COLA,
-            TurnoPdv::ESTADO_EN_REATENCION,
-        ], true)) {
+        if ($turnoBloqueado->estado !== TurnoPdv::ESTADO_EN_COLA) {
             return null;
         }
 
@@ -62,7 +60,7 @@ class AsignarTurnoPdvService
         }
 
         $estadoAnterior = $turnoBloqueado->estado;
-        $esReatencion = $estadoAnterior === TurnoPdv::ESTADO_EN_REATENCION;
+        $esReatencion = false;
 
         $numeroSecuencia = (int) TurnoPdvAtencion::query()
             ->where('turno_id', $turnoBloqueado->id)
@@ -111,6 +109,8 @@ class AsignarTurnoPdvService
         ]);
 
         $turnoActualizado = $turnoBloqueado->fresh(['cliente', 'sucursal', 'altaPor', 'atencionActual']);
+
+        $this->programarAlertas->programarEsperaProximoVencer($atencion, $ahora);
 
         return [
             'turno' => $turnoActualizado,

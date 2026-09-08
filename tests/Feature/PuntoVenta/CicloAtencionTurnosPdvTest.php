@@ -78,6 +78,7 @@ class CicloAtencionTurnosPdvTest extends TestCase
         $this->vendedor->givePermissionTo([
             PuntoVentaModulo::PERMISO_ACCEDER,
             PuntoVentaModulo::PERMISO_TURNOS_CERRAR_ATENCION,
+            PuntoVentaModulo::PERMISO_TURNOS_ATENDER,
             PuntoVentaModulo::PERMISO_OPERACION_JORNADA_ABRIR,
             PuntoVentaModulo::PERMISO_OPERACION_JORNADA_CERRAR,
         ]);
@@ -232,12 +233,30 @@ class CicloAtencionTurnosPdvTest extends TestCase
         )->assertUnprocessable();
     }
 
+    public function test_transferencia_rechaza_destino_sin_permiso_atender(): void
+    {
+        $contexto = $this->crearTurnoAsignado();
+        $destino = User::factory()->create();
+        $destino->concederAccesoSucursal($this->sucursal, esPrincipal: true);
+
+        $this->actingAs($this->gerencia)->postJson(
+            route('punto_venta.turnos.transferir', $contexto['turno']),
+            [
+                'version' => $contexto['turno']->version,
+                'idempotency_key' => 'pdv:transfer:sin-atender',
+                'destino_user_id' => $destino->id,
+            ],
+        )->assertUnprocessable()
+            ->assertJsonValidationErrors(['destino_user_id']);
+    }
+
     public function test_transferencia_crea_nueva_atencion_y_emite_evento(): void
     {
         Event::fake([TurnoTransferido::class]);
 
         $contexto = $this->crearTurnoAsignado();
         $destino = User::factory()->create();
+        $destino->givePermissionTo(PuntoVentaModulo::PERMISO_TURNOS_ATENDER);
         $destino->concederAccesoSucursal($this->sucursal, esPrincipal: true);
 
         $this->actingAs($this->gerencia)->postJson(
@@ -260,12 +279,9 @@ class CicloAtencionTurnosPdvTest extends TestCase
         Event::assertDispatched(TurnoTransferido::class, 1);
     }
 
-    public function test_reatencion_dentro_de_ventana_y_fuera_por_job(): void
+    public function test_reatencion_dentro_de_ventana_requiere_asignacion_gerencial(): void
     {
         Event::fake([TurnoVentanaReatencionVencida::class]);
-
-        $otroVendedor = User::factory()->create();
-        $this->simularPersonasDisponibles([$otroVendedor]);
 
         $turno = TurnoPdv::factory()->create([
             'sucursal_id' => $this->sucursal->id,
@@ -282,10 +298,11 @@ class CicloAtencionTurnosPdvTest extends TestCase
             'fin_at' => now()->subHour(),
         ]);
 
-        app(MatchmakerTurnosPdvService::class)->ejecutar($this->sucursal->id, 'test.reatencion');
+        $asignados = app(MatchmakerTurnosPdvService::class)->ejecutar($this->sucursal->id, 'test.reatencion');
+        $this->assertSame(0, $asignados);
 
         $turno->refresh();
-        $this->assertSame(TurnoPdv::ESTADO_ASIGNADO, $turno->estado);
+        $this->assertSame(TurnoPdv::ESTADO_EN_REATENCION, $turno->estado);
         $this->assertSame($turno->folio, $turno->fresh()->folio);
 
         $turno->update([
@@ -424,6 +441,7 @@ class CicloAtencionTurnosPdvTest extends TestCase
         $otro->givePermissionTo([
             PuntoVentaModulo::PERMISO_ACCEDER,
             PuntoVentaModulo::PERMISO_TURNOS_CERRAR_ATENCION,
+            PuntoVentaModulo::PERMISO_TURNOS_ATENDER,
         ]);
         $otro->concederAccesoSucursal($this->sucursal, esPrincipal: true);
         app(AlcancePdv::class)->establecerSucursalActiva($otro, $this->sucursal->id);
@@ -504,6 +522,13 @@ class CicloAtencionTurnosPdvTest extends TestCase
                 public function esDisponible(User $user, int $sucursalId, bool $paraAltaNueva = false): bool
                 {
                     return $this->primeraDisponible($sucursalId, 'ventas')?->is($user) ?? false;
+                }
+
+                public function contarDisponibles(int $sucursalId, string $servicio): int
+                {
+                    $disponible = $this->primeraDisponible($sucursalId, $servicio);
+
+                    return $disponible instanceof User ? 1 : 0;
                 }
             }
         );

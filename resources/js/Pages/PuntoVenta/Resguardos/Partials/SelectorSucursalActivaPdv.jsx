@@ -43,7 +43,7 @@ export default function SelectorSucursalActivaPdv({
     }
 
     return (
-        <div className="space-y-1">
+        <div className="rounded-2xl border theme-border theme-surface shadow-sm px-3 py-2 space-y-1">
             <p className="text-[10px] md:text-[11px] font-bold theme-text-muted uppercase tracking-widest m-0 flex items-center gap-1.5 flex-wrap">
                 <MapPin className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--color-primario)' }} aria-hidden />
                 {multiples ? (

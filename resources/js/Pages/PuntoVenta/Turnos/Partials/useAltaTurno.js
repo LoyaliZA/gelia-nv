@@ -8,7 +8,7 @@ import {
     validarFormularioAltaTurno,
 } from './altaTurnoUtils';
 
-export default function useAltaTurno({ sesionId = 'actual', onExito } = {}) {
+export default function useAltaTurno({ sesionId = 'actual', onExito, bandeja = null } = {}) {
     const [enviando, setEnviando] = useState(false);
     const [error, setError] = useState(null);
     const [turnoCreado, setTurnoCreado] = useState(null);
@@ -30,7 +30,7 @@ export default function useAltaTurno({ sesionId = 'actual', onExito } = {}) {
             return { duplicado: true };
         }
 
-        const erroresLocales = validarFormularioAltaTurno({ modo, cliente, nombreLlamado });
+        const erroresLocales = validarFormularioAltaTurno({ modo, cliente, nombreLlamado, bandeja });
         if (Object.keys(erroresLocales).length > 0) {
             setError(Object.values(erroresLocales)[0]);
             return { validacion: erroresLocales };
@@ -63,16 +63,13 @@ export default function useAltaTurno({ sesionId = 'actual', onExito } = {}) {
         } catch (err) {
             const mensaje = mensajeErrorAltaTurno(err);
             setError(mensaje);
-
-            if (!err?.response) {
-                envioBloqueado.current = false;
-            }
+            envioBloqueado.current = false;
 
             return { error: mensaje, status: err?.response?.status };
         } finally {
             setEnviando(false);
         }
-    }, [enviando, renovarIdempotencia, onExito]);
+    }, [enviando, renovarIdempotencia, onExito, bandeja]);
 
     const reiniciar = useCallback(() => {
         setTurnoCreado(null);
@@ -86,7 +83,8 @@ export default function useAltaTurno({ sesionId = 'actual', onExito } = {}) {
         enviando,
         error,
         turnoCreado,
-        setError,
+        mostrarError: setError,
+        limpiarError: () => setError(null),
         reiniciar,
         idempotencyKey: idempotencyRef.current,
     };

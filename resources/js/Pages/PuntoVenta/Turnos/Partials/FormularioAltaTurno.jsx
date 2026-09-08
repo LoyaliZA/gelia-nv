@@ -1,7 +1,13 @@
-import React, { useState } from 'react';
-import { Loader2, Ticket } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { Loader2, Ticket, AlertTriangle } from 'lucide-react';
 import { geliaCardClass, THEME_BTN_PRIMARY } from '../../../../utils/geliaTheme';
 import BusquedaClienteTurno from './BusquedaClienteTurno';
+import {
+    buscarTurnoActivoClienteEnBandeja,
+    formularioListoParaEnviar,
+    mensajeClienteYaEnCola,
+    mensajeSucursalSinAltas,
+} from './altaTurnoUtils';
 import {
     BTN_SEGMENTO,
     BTN_SEGMENTO_ACTIVO,
@@ -12,9 +18,11 @@ import {
 export default function FormularioAltaTurno({
     permisos = {},
     catalogos = {},
+    bandeja = null,
+    sucursalDia = null,
     enviando = false,
-    error = null,
     onEnviar,
+    onMostrarError,
 }) {
     const [modo, setModo] = useState('cliente');
     const [cliente, setCliente] = useState(null);
@@ -24,12 +32,37 @@ export default function FormularioAltaTurno({
 
     const puedeMarcarPrioridad = Boolean(permisos.marcar_prioridad);
 
+    const turnoDuplicado = useMemo(() => (
+        modo === 'cliente' && cliente?.id
+            ? buscarTurnoActivoClienteEnBandeja(bandeja, cliente.id)
+            : null
+    ), [modo, cliente, bandeja]);
+
+    const avisoSucursal = mensajeSucursalSinAltas(sucursalDia);
+
+    const puedeEnviar = useMemo(() => formularioListoParaEnviar({
+        modo,
+        cliente,
+        nombreLlamado,
+        bandeja,
+        sucursalDia,
+    }), [modo, cliente, nombreLlamado, bandeja, sucursalDia]);
+
     const cambiarModo = (nuevoModo) => {
         setModo(nuevoModo);
         setCliente(null);
         setNombreLlamado('');
         setPrioridadAdultoMayor(false);
         setPrioridadDiscapacidad(false);
+    };
+
+    const seleccionarCliente = (clienteSeleccionado) => {
+        setCliente(clienteSeleccionado);
+
+        const turnoExistente = buscarTurnoActivoClienteEnBandeja(bandeja, clienteSeleccionado?.id);
+        if (turnoExistente) {
+            onMostrarError?.(mensajeClienteYaEnCola(turnoExistente));
+        }
     };
 
     const enviar = (event) => {
@@ -71,7 +104,7 @@ export default function FormularioAltaTurno({
             {modo === 'cliente' ? (
                 <BusquedaClienteTurno
                     clienteSeleccionado={cliente}
-                    onSeleccionar={setCliente}
+                    onSeleccionar={seleccionarCliente}
                     onLimpiar={() => setCliente(null)}
                     deshabilitado={enviando}
                 />
@@ -127,15 +160,16 @@ export default function FormularioAltaTurno({
                 </fieldset>
             )}
 
-            {error && (
-                <p className="text-sm font-semibold text-red-600 dark:text-red-300 m-0" role="alert">
-                    {error}
+            {avisoSucursal && (
+                <p className="text-xs font-semibold theme-text-muted m-0 flex items-start gap-2">
+                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" aria-hidden />
+                    {avisoSucursal}
                 </p>
             )}
 
             <button
                 type="submit"
-                disabled={enviando}
+                disabled={enviando || Boolean(turnoDuplicado) || !puedeEnviar}
                 className={`${THEME_BTN_PRIMARY} w-full min-h-[48px] inline-flex items-center justify-center gap-2`}
                 aria-label="Registrar turno de ventas"
             >

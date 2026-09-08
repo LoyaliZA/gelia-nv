@@ -7,6 +7,7 @@ use App\Events\PuntoVenta\JornadaAbierta;
 use App\Events\PuntoVenta\JornadaAmpliada;
 use App\Events\PuntoVenta\JornadaCerrada;
 use App\Events\PuntoVenta\JornadaCierreManual;
+use App\Events\PuntoVenta\JornadaReaperturaManual;
 use App\Models\ConfiguracionSistema;
 use App\Models\PuntoVenta\IntervaloOperativoPdv;
 use App\Models\PuntoVenta\JornadaPdv;
@@ -192,6 +193,32 @@ class JornadaDisponibilidadOperacionPdvTest extends TestCase
         Event::assertDispatched(JornadaAmpliada::class);
     }
 
+    public function test_cierre_manual_y_reapertura_restauran_altas(): void
+    {
+        Event::fake([JornadaCierreManual::class, JornadaReaperturaManual::class]);
+
+        $dia = SucursalDiaOperacionPdv::factory()->create([
+            'sucursal_id' => $this->sucursal->id,
+            'acepta_altas' => true,
+            'cierre_automatico_invalidado' => false,
+        ]);
+
+        $this->actingAs($this->gerencia)->postJson(
+            route('punto_venta.operacion.jornada.cerrar_sucursal'),
+            ['version' => $dia->version],
+        )->assertOk()->assertJsonPath('sucursal_dia.acepta_altas', false);
+
+        $dia->refresh();
+
+        $this->actingAs($this->gerencia)->postJson(
+            route('punto_venta.operacion.jornada.reabrir_sucursal'),
+            ['version' => $dia->version],
+        )->assertOk()->assertJsonPath('sucursal_dia.acepta_altas', true);
+
+        Event::assertDispatched(JornadaCierreManual::class);
+        Event::assertDispatched(JornadaReaperturaManual::class);
+    }
+
     public function test_consulta_estado_no_muta_jornada_ni_intervalos(): void
     {
         $this->actingAs($this->ventas)->postJson(route('punto_venta.operacion.jornada.abrir'))->assertOk();
@@ -245,6 +272,23 @@ class JornadaDisponibilidadOperacionPdvTest extends TestCase
         app(AbrirJornadaPdvService::class)->ejecutar($this->ventas, now());
 
         $this->assertTrue($servicio->esDisponible($this->ventas, $this->sucursal->id));
+    }
+
+    public function test_persona_disponible_no_requiere_cerrar_atencion(): void
+    {
+        $vendedor = User::factory()->create(['name' => 'Solo atender']);
+        $vendedor->givePermissionTo([
+            PuntoVentaModulo::PERMISO_ACCEDER,
+            PuntoVentaModulo::PERMISO_TURNOS_ATENDER,
+            PuntoVentaModulo::PERMISO_OPERACION_JORNADA_ABRIR,
+        ]);
+        $vendedor->concederAccesoSucursal($this->sucursal, esPrincipal: true);
+        app(AlcancePdv::class)->establecerSucursalActiva($vendedor, $this->sucursal->id);
+        app(AbrirJornadaPdvService::class)->ejecutar($vendedor, now());
+
+        $servicio = app(ConsultaPersonaDisponiblePdvService::class);
+
+        $this->assertTrue($servicio->esDisponible($vendedor, $this->sucursal->id));
     }
 
     public function test_persona_no_disponible_con_pausa_vigente(): void
@@ -333,6 +377,7 @@ class JornadaDisponibilidadOperacionPdvTest extends TestCase
             PuntoVentaModulo::PERMISO_ACCEDER,
             PuntoVentaModulo::PERMISO_TURNOS_VER,
             PuntoVentaModulo::PERMISO_TURNOS_CERRAR_ATENCION,
+            PuntoVentaModulo::PERMISO_TURNOS_ATENDER,
             PuntoVentaModulo::PERMISO_OPERACION_JORNADA_ABRIR,
             PuntoVentaModulo::PERMISO_OPERACION_JORNADA_CERRAR,
         ]);
@@ -360,8 +405,9 @@ class JornadaDisponibilidadOperacionPdvTest extends TestCase
     private function darPermisosAtencion(User $usuario): void
     {
         $usuario->givePermissionTo([
+            PuntoVentaModulo::PERMISO_ACCEDER,
             PuntoVentaModulo::PERMISO_TURNOS_VER,
-            PuntoVentaModulo::PERMISO_TURNOS_CERRAR_ATENCION,
+            PuntoVentaModulo::PERMISO_TURNOS_ATENDER,
         ]);
     }
 

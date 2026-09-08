@@ -35,6 +35,16 @@ class FormPublicUrl
         return self::base().'/tienda-evidencia/'.ltrim($codigo, '/');
     }
 
+    public static function salaTurnosShow(string $token): string
+    {
+        return self::base().'/sala-turnos/t/'.ltrim($token, '/');
+    }
+
+    public static function salaTurnosEstado(string $token): string
+    {
+        return self::salaTurnosShow($token).'/estado';
+    }
+
     public static function host(): ?string
     {
         $host = parse_url(self::base(), PHP_URL_HOST);

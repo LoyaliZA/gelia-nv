@@ -45,6 +45,7 @@ class UiTableroVentasPdvTest extends TestCase
             PuntoVentaModulo::PERMISO_ACCEDER,
             PuntoVentaModulo::PERMISO_TURNOS_VER,
             PuntoVentaModulo::PERMISO_TURNOS_CERRAR_ATENCION,
+            PuntoVentaModulo::PERMISO_TURNOS_ATENDER,
         ]);
         $this->vendedor->concederAccesoSucursal($this->sucursal, esPrincipal: true);
         app(AlcancePdv::class)->establecerSucursalActiva($this->vendedor, $this->sucursal->id);
@@ -71,14 +72,48 @@ class UiTableroVentasPdvTest extends TestCase
             ->assertOk()
             ->assertInertia(fn ($page) => $page
                 ->component('PuntoVenta/Turnos/Ventas', false)
-                ->where('permisos.ver', true)
+                ->where('permisos.atender', true)
                 ->where('permisos.cerrar_atencion', true)
+                ->where('capacidades.atender', true)
+                ->where('capacidades.aparece_como_vendedor', true)
                 ->where('sucursal_activa.id', $this->sucursal->id)
                 ->has('tablero.turno_asignado')
                 ->has('catalogos.motivos_cierre'));
     }
 
-    public function test_ventas_sin_permiso_ver(): void
+    public function test_ventas_sin_permiso_atender(): void
+    {
+        $usuario = User::factory()->create();
+        $usuario->givePermissionTo([
+            PuntoVentaModulo::PERMISO_ACCEDER,
+            PuntoVentaModulo::PERMISO_TURNOS_VER,
+            PuntoVentaModulo::PERMISO_TURNOS_ALTA,
+        ]);
+        $usuario->concederAccesoSucursal($this->sucursal, esPrincipal: true);
+        app(AlcancePdv::class)->establecerSucursalActiva($usuario, $this->sucursal->id);
+
+        $this->actingAs($usuario)
+            ->get(route('punto_venta.turnos.ventas'))
+            ->assertForbidden();
+    }
+
+    public function test_ventas_gerencia_sin_permiso_atender(): void
+    {
+        $gerente = User::factory()->create();
+        $gerente->givePermissionTo([
+            PuntoVentaModulo::PERMISO_ACCEDER,
+            PuntoVentaModulo::PERMISO_TURNOS_VER,
+            PuntoVentaModulo::PERMISO_OPERACION_EQUIPO_VER,
+        ]);
+        $gerente->concederAccesoSucursal($this->sucursal, esPrincipal: true);
+        app(AlcancePdv::class)->establecerSucursalActiva($gerente, $this->sucursal->id);
+
+        $this->actingAs($gerente)
+            ->get(route('punto_venta.turnos.ventas'))
+            ->assertForbidden();
+    }
+
+    public function test_ventas_sin_permiso_acceso(): void
     {
         $usuario = User::factory()->create();
         $usuario->givePermissionTo(PuntoVentaModulo::PERMISO_ACCEDER);

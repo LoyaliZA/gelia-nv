@@ -249,6 +249,9 @@ export default function ModalUsuarioForm({
                             procedencia={procedenciaActual}
                             onPlantillaPorPermisoChange={setPlantillaPorPermiso}
                             plantillaActiva={plantillaSeleccionada}
+                            sucursalesCatalogo={sucursales}
+                            sucursalIds={data.sucursales}
+                            sucursalPrincipalId={data.sucursal_principal_id}
                         />
                     </div>
                 )}

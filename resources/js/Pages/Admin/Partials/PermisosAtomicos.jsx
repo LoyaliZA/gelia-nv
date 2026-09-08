@@ -21,6 +21,7 @@ import {
     permisoCoincideBusqueda,
 } from '../../../utils/permisos';
 import PermisoOrigenIndicador, { LeyendaOrigenPermisos } from './PermisoOrigenIndicador';
+import ResumenCapacidadesPdv from './ResumenCapacidadesPdv';
 
 function MatrizPermisos({
     permisosDeModulo,
@@ -300,6 +301,9 @@ function SeccionesSidebarPermisos({
     modulosExpandidos,
     onToggleModulo,
     variant = 'default',
+    sucursalesCatalogo = [],
+    sucursalIds = [],
+    sucursalPrincipalId = null,
 }) {
     const secciones = useMemo(
         () => agruparModulosPorSeccionSidebar(permisosAgrupados),
@@ -322,6 +326,14 @@ function SeccionesSidebarPermisos({
                             </p>
                         )}
                     </header>
+                    {!keyPrefix && seccion.id === 'punto_venta' && (
+                        <ResumenCapacidadesPdv
+                            permisos={activos}
+                            sucursalesCatalogo={sucursalesCatalogo}
+                            sucursalIds={sucursalIds}
+                            sucursalPrincipalId={sucursalPrincipalId}
+                        />
+                    )}
                     <div className="space-y-2">
                         {seccion.modulos.map(({ modulo, permisos }) => {
                             const expandKey = `${keyPrefix}${modulo}`;
@@ -372,6 +384,9 @@ export default function PermisosAtomicos({
     procedencia = {},
     onPlantillaPorPermisoChange,
     plantillaActiva = '',
+    sucursalesCatalogo = [],
+    sucursalIds = [],
+    sucursalPrincipalId = null,
 }) {
     const [busquedaPermisos, setBusquedaPermisos] = useState('');
     const [modulosExpandidos, setModulosExpandidos] = useState({});
@@ -640,6 +655,9 @@ export default function PermisosAtomicos({
                     removidosSet={removidosSet}
                     modulosExpandidos={modulosExpandidos}
                     onToggleModulo={toggleModulo}
+                    sucursalesCatalogo={sucursalesCatalogo}
+                    sucursalIds={sucursalIds}
+                    sucursalPrincipalId={sucursalPrincipalId}
                 />
             )}
 

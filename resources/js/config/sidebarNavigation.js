@@ -38,6 +38,7 @@ import {
     Clock,
     BookOpen,
     Bot,
+    Monitor,
 } from 'lucide-react';
 
 import { ADMIN_MODULES, isAdminModuleAllowed, adminModuleHref } from './adminModules';
@@ -270,21 +271,37 @@ export function buildSidebarNavigation({ can, showAdminMenu, manualesHubVisible 
             href: () => routeHref('punto_venta.turnos.recepcion', '/punto-venta/turnos/recepcion'),
             active: (url) => url.startsWith('/punto-venta/turnos/recepcion'),
         },
+        can('punto_venta.acceder') && can('pdv.operacion.equipo_ver') && {
+            type: 'link',
+            id: 'punto_venta_vendedores',
+            label: 'Vendedores',
+            icon: Users,
+            href: () => routeHref('punto_venta.operacion.vendedores.index', '/punto-venta/operacion/vendedores'),
+            active: (url) => url.startsWith('/punto-venta/operacion/vendedores'),
+        },
         can('punto_venta.acceder') && can('pdv.turnos.ver') && {
             type: 'link',
             id: 'punto_venta_operacion',
             label: 'Operación',
             icon: Clock,
             href: () => routeHref('punto_venta.operacion.index', '/punto-venta/operacion'),
-            active: (url) => url.startsWith('/punto-venta/operacion'),
+            active: (url) => url.startsWith('/punto-venta/operacion') && !url.startsWith('/punto-venta/operacion/vendedores'),
         },
-        can('punto_venta.acceder') && can('pdv.turnos.ver') && {
+        can('punto_venta.acceder') && can('pdv.turnos.atender') && {
             type: 'link',
             id: 'punto_venta_turnos_ventas',
-            label: 'Tablero ventas',
+            label: 'Mi atención',
             icon: ClipboardList,
             href: () => routeHref('punto_venta.turnos.ventas', '/punto-venta/turnos/ventas'),
             active: (url) => url.startsWith('/punto-venta/turnos/ventas'),
+        },
+        can('punto_venta.acceder') && can('pdv.pantalla_sala.abrir') && {
+            type: 'link',
+            id: 'punto_venta_pantalla_sala',
+            label: 'Pantalla de sala',
+            icon: Monitor,
+            href: () => routeHref('punto_venta.pantalla_sala.index', '/punto-venta/pantalla-sala'),
+            active: (url) => url.startsWith('/punto-venta/pantalla-sala'),
         },
         can('punto_venta.acceder') && (
             can('pdv.turnos.ver')

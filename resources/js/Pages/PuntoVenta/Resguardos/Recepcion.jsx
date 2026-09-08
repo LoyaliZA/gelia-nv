@@ -11,6 +11,7 @@ import { BTN_SECONDARY, badgeEstadoResguardo } from './Partials/resguardosStyles
 import {
     cantidadBultosPendiente,
     cantidadBultosRecibida,
+    mensajeEstadoNoRecepcion,
     resguardoAdmiteRecepcion,
 } from './Partials/recepcionFisicaUtils';
 
@@ -19,10 +20,11 @@ export default function Recepcion({
     resguardo,
     almacenes = [],
     catalogos = {},
-    puede_recibir: puedeRecibir = false,
+    admite_recepcion: admiteRecepcion = false,
+    motivo_no_recepcion: motivoNoRecepcion = null,
 }) {
     const titulo = resguardo?.snapshot_folio || `Resguardo #${resguardo?.id}`;
-    const admiteRecepcion = resguardoAdmiteRecepcion(resguardo, puedeRecibir);
+    const admiteRecepcionFormulario = resguardoAdmiteRecepcion(resguardo, admiteRecepcion);
     const {
         enviar,
         enviando,
@@ -42,7 +44,7 @@ export default function Recepcion({
     return (
         <AppLayout auth={auth}>
             <Head title={`Recibir ${titulo} | Resguardos PDV`} />
-            <GeliaPageShell className="max-w-[720px] space-y-6">
+            <GeliaPageShell className="max-w-[720px] space-y-6" data-recepcion-movil-root>
                 <Link
                     href={route('punto_venta.resguardos.index', { bandeja: 'por_recibir' })}
                     className="inline-flex items-center gap-2 text-[10px] font-black uppercase theme-text-muted hover:theme-text-main"
@@ -75,10 +77,11 @@ export default function Recepcion({
                         onContinuar={continuarComplemento}
                         onDetalle={irADetalle}
                     />
-                ) : !admiteRecepcion ? (
+                ) : !admiteRecepcionFormulario ? (
                     <EstadoNoDisponible
                         resguardo={resguardo}
                         catalogos={catalogos}
+                        motivo={motivoNoRecepcion}
                         onDetalle={irADetalle}
                     />
                 ) : almacenes.length === 0 ? (
@@ -108,7 +111,7 @@ export default function Recepcion({
                     />
                 )}
 
-                {error && error.includes('modificó este resguardo') && admiteRecepcion && !exito && !llegadaParcial && (
+                {error && error.includes('modificó este resguardo') && admiteRecepcionFormulario && !exito && !llegadaParcial && (
                     <button
                         type="button"
                         onClick={recargarFormulario}
@@ -173,9 +176,12 @@ function ResultadoParcial({ resguardo, onContinuar, onDetalle }) {
     );
 }
 
-function EstadoNoDisponible({ resguardo, catalogos, onDetalle }) {
-    const etiqueta = resguardo.estado_etiqueta || catalogos.estados?.[resguardo.estado] || resguardo.estado;
-    const recepcionCompleta = resguardo.recepcion_completa === true;
+function EstadoNoDisponible({ resguardo, catalogos, motivo, onDetalle }) {
+    const { titulo, detalle } = mensajeEstadoNoRecepcion({
+        motivo,
+        resguardo,
+        catalogos,
+    });
 
     return (
         <div className={`${geliaCardClass()} p-5 space-y-3 border border-amber-500/30`}>
@@ -183,13 +189,11 @@ function EstadoNoDisponible({ resguardo, catalogos, onDetalle }) {
                 <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />
                 <div className="space-y-2">
                     <p className="text-sm font-black theme-text-main m-0">
-                        {recepcionCompleta
-                            ? 'Este resguardo ya recibió todos los bultos esperados.'
-                            : `No se puede recibir en estado «${etiqueta}».`}
+                        {titulo}
                     </p>
-                    {recepcionCompleta && (
+                    {detalle && (
                         <p className="text-sm theme-text-muted m-0">
-                            Si otra terminal completó la recepción, consulta el detalle actualizado.
+                            {detalle}
                         </p>
                     )}
                     <button type="button" onClick={onDetalle} className={BTN_SECONDARY}>

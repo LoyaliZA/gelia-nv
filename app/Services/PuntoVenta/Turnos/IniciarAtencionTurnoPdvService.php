@@ -19,6 +19,7 @@ class IniciarAtencionTurnoPdvService
     public function __construct(
         private readonly ResuelveAlcancePdv $alcance,
         private readonly PlazosTurnosPdvConfig $plazos,
+        private readonly ProgramarAlertasPlazosAtencionTurnoPdvService $programarAlertas,
     ) {}
 
     /**
@@ -77,6 +78,8 @@ class IniciarAtencionTurnoPdvService
 
             $plazos = $this->plazos->obtener();
             $disparo = $ahora->copy()->addMinutes($plazos['prorroga_minutos']);
+
+            $this->programarAlertas->programarProrrogaProximoVencer($atencion, $ahora);
 
             AlertaProrrogaAtencionTurnoPdvJob::dispatch($atencion->id)
                 ->delay($disparo);

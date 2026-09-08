@@ -137,7 +137,7 @@ class MatchmakerTurnosPdvTest extends TestCase
         Event::assertDispatched(TurnoAsignado::class, 1);
     }
 
-    public function test_asigna_turno_en_reatencion_y_emite_evento_reatencion(): void
+    public function test_matchmaker_no_asigna_turnos_en_reatencion(): void
     {
         Event::fake([TurnoReatencion::class, TurnoAsignado::class]);
 
@@ -159,26 +159,13 @@ class MatchmakerTurnosPdvTest extends TestCase
             'fin_at' => now()->subMinutes(30),
         ]);
 
-        app(MatchmakerTurnosPdvService::class)->ejecutar($this->sucursal->id, 'test.reatencion');
+        $asignados = app(MatchmakerTurnosPdvService::class)->ejecutar($this->sucursal->id, 'test.reatencion');
 
+        $this->assertSame(0, $asignados);
         $turno->refresh();
-        $this->assertSame(TurnoPdv::ESTADO_ASIGNADO, $turno->estado);
+        $this->assertSame(TurnoPdv::ESTADO_EN_REATENCION, $turno->estado);
 
-        $evento = TurnoPdvEvento::query()
-            ->where('turno_id', $turno->id)
-            ->where('tipo_evento', TurnoPdvEvento::TIPO_REATENCION)
-            ->first();
-
-        $this->assertNotNull($evento);
-        $this->assertSame(TurnoPdv::ESTADO_EN_REATENCION, $evento->estado_anterior);
-
-        $atencion = TurnoPdvAtencion::query()
-            ->where('turno_id', $turno->id)
-            ->whereNull('fin_at')
-            ->sole();
-        $this->assertSame(2, $atencion->numero_secuencia);
-
-        Event::assertDispatched(TurnoReatencion::class, 1);
+        Event::assertNotDispatched(TurnoReatencion::class);
         Event::assertNotDispatched(TurnoAsignado::class);
     }
 
@@ -351,6 +338,13 @@ class MatchmakerTurnosPdvTest extends TestCase
                 {
                     return $this->primeraDisponible($sucursalId, 'ventas')?->is($user) ?? false;
                 }
+
+                public function contarDisponibles(int $sucursalId, string $servicio): int
+                {
+                    $disponible = $this->primeraDisponible($sucursalId, $servicio);
+
+                    return $disponible instanceof User ? 1 : 0;
+                }
             }
         );
     }
@@ -377,6 +371,7 @@ class MatchmakerTurnosPdvTest extends TestCase
             PuntoVentaModulo::PERMISO_ACCEDER,
             PuntoVentaModulo::PERMISO_TURNOS_VER,
             PuntoVentaModulo::PERMISO_TURNOS_CERRAR_ATENCION,
+            PuntoVentaModulo::PERMISO_TURNOS_ATENDER,
             PuntoVentaModulo::PERMISO_OPERACION_JORNADA_ABRIR,
             PuntoVentaModulo::PERMISO_OPERACION_JORNADA_CERRAR,
             PuntoVentaModulo::PERMISO_OPERACION_PAUSA,

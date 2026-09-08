@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useCallback, useState } from 'react';
 import { Head } from '@inertiajs/react';
-import { Gem, Monitor } from 'lucide-react';
+import { Expand, Gem, Monitor } from 'lucide-react';
 import PdvSalaProvider from '@/Components/PuntoVenta/PdvSalaProvider';
 import { etiquetaServicioSala } from '@/utils/pantallaSalaUtils';
 
@@ -100,6 +100,24 @@ function ListaLlamadosRecientes({ llamados, llamadoActual }) {
 }
 
 export default function Sala({ estado_inicial: estadoInicial, sucursal_id: sucursalId, url_estado: urlEstado }) {
+    const [pantallaCompleta, setPantallaCompleta] = useState(false);
+
+    const alternarPantallaCompleta = useCallback(async () => {
+        if (typeof document === 'undefined') return;
+
+        try {
+            if (!document.fullscreenElement) {
+                await document.documentElement.requestFullscreen();
+                setPantallaCompleta(true);
+            } else {
+                await document.exitFullscreen();
+                setPantallaCompleta(false);
+            }
+        } catch {
+            setPantallaCompleta(Boolean(document.fullscreenElement));
+        }
+    }, []);
+
     return (
         <>
             <Head title={`Sala de espera | ${estadoInicial?.sucursal?.nombre ?? 'Punto de venta'}`} />
@@ -115,6 +133,17 @@ export default function Sala({ estado_inicial: estadoInicial, sucursal_id: sucur
                                 {estadoInicial?.sucursal?.nombre ?? 'Sucursal'}
                             </h1>
                         </div>
+                        <button
+                            type="button"
+                            onClick={alternarPantallaCompleta}
+                            className="inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-bold theme-surface"
+                            style={{ borderColor: 'color-mix(in srgb, var(--color-texto) 12%, transparent)' }}
+                            data-pdv-sala-pantalla-completa
+                            aria-pressed={pantallaCompleta}
+                        >
+                            <Expand className="w-4 h-4" aria-hidden />
+                            {pantallaCompleta ? 'Salir de pantalla completa' : 'Pantalla completa'}
+                        </button>
                     </header>
 
                     <PdvSalaProvider

@@ -18,6 +18,10 @@ import {
     referenciaCliente,
 } from './resguardosUtils';
 import { geliaCardClass } from '../../../../utils/geliaTheme';
+import {
+    cantidadBultosPendiente,
+    resguardoAdmiteRecepcion,
+} from './recepcionFisicaUtils';
 import AccionReponerVencidoResguardo from './AccionReponerVencidoResguardo';
 
 function BadgesResguardo({ resguardo, catalogos }) {
@@ -131,6 +135,11 @@ function TarjetaResguardo({
                         Cliente {referenciaCliente(resguardo)}
                     </p>
                     <FechasOperativasResguardo resguardo={resguardo} bandeja={bandeja} />
+                    {resguardoAdmiteRecepcion(resguardo) && cantidadBultosPendiente(resguardo) > 0 && (
+                        <p className="text-[10px] font-bold text-amber-700 dark:text-amber-300 m-0">
+                            {cantidadBultosPendiente(resguardo)} bulto{cantidadBultosPendiente(resguardo) === 1 ? '' : 's'} pendiente{cantidadBultosPendiente(resguardo) === 1 ? '' : 's'}
+                        </p>
+                    )}
                     </div>
                 </div>
                 <p className="text-[10px] font-black theme-text-muted m-0 shrink-0">
@@ -147,7 +156,7 @@ function TarjetaResguardo({
                         <Truck className="w-4 h-4" /> Entregar
                     </Link>
                 )}
-                {puedeRecibir && resguardo.estado === 'pendiente_recepcion' && (
+                {puedeRecibir && resguardoAdmiteRecepcion(resguardo) && (
                     <Link
                         href={route('punto_venta.resguardos.recepcion.create', resguardo.id)}
                         className={`${THEME_BTN_PRIMARY} w-full inline-flex items-center justify-center gap-2 min-h-[44px] text-[10px] font-black uppercase tracking-widest`}
@@ -228,7 +237,7 @@ function FilaTablaResguardo({
                             <Truck className="w-4 h-4" /> Entregar
                         </Link>
                     )}
-                    {puedeRecibir && resguardo.estado === 'pendiente_recepcion' && (
+                    {puedeRecibir && resguardoAdmiteRecepcion(resguardo) && (
                         <Link
                             href={route('punto_venta.resguardos.recepcion.create', resguardo.id)}
                             className={`${THEME_BTN_PRIMARY} inline-flex items-center gap-2 min-h-[44px] text-[10px] font-black uppercase tracking-widest`}

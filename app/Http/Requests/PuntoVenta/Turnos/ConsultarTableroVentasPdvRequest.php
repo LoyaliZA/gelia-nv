@@ -18,7 +18,7 @@ class ConsultarTableroVentasPdvRequest extends FormRequest
 
         return app(ResuelveAlcancePdv::class)->permiteConsultaPiso(
             $user,
-            PuntoVentaModulo::PERMISO_TURNOS_VER
+            PuntoVentaModulo::PERMISO_TURNOS_ATENDER
         );
     }
 

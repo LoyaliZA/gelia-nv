@@ -21,6 +21,7 @@ class TransferirTurnoPdvService
 
     public function __construct(
         private readonly ResuelveAlcancePdv $alcance,
+        private readonly ProgramarAlertasPlazosAtencionTurnoPdvService $programarAlertas,
     ) {}
 
     /**
@@ -102,6 +103,25 @@ class TransferirTurnoPdvService
             if ((int) $destino->id === (int) $atencionAnterior->user_id) {
                 throw ValidationException::withMessages([
                     'destino_user_id' => 'Debe elegir una persona distinta a quien atiende actualmente.',
+                ]);
+            }
+
+            if (! $this->alcance->tienePermisoPdv($destino, PuntoVentaModulo::PERMISO_TURNOS_ATENDER)) {
+                throw ValidationException::withMessages([
+                    'destino_user_id' => 'La persona destino no puede atender turnos en esta sucursal.',
+                ]);
+            }
+
+            $sucursalId = (int) $turnoBloqueado->sucursal_id;
+            $asignadoSucursal = $destino->sucursales()
+                ->where('sucursales.id', $sucursalId)
+                ->where('sucursales.activo', true)
+                ->where('sucursal_user.activo', true)
+                ->exists();
+
+            if (! $asignadoSucursal) {
+                throw ValidationException::withMessages([
+                    'destino_user_id' => 'La persona destino no está asignada a esta sucursal.',
                 ]);
             }
 
@@ -194,6 +214,8 @@ class TransferirTurnoPdvService
                 $evento,
                 (int) $turnoBloqueado->sucursal_id,
             );
+
+            $this->programarAlertas->programarEsperaProximoVencer($atencionNueva, $ahora);
 
             return [
                 'turno' => $turnoActualizado,

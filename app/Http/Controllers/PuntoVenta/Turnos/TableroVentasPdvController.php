@@ -8,6 +8,7 @@ use App\Http\Requests\PuntoVenta\Turnos\ConsultarTableroVentasPdvRequest;
 use App\Models\Sucursal;
 use App\Models\User;
 use App\Services\PuntoVenta\PuntoVentaModulo;
+use App\Services\PuntoVenta\SerializarCapacidadesPdvService;
 use App\Services\PuntoVenta\Turnos\ConsultaTableroVentasPdvService;
 use App\Support\PuntoVenta\Turnos\MotivosCierreAtencionTurnoPdv;
 use Illuminate\Http\JsonResponse;
@@ -20,6 +21,7 @@ class TableroVentasPdvController extends Controller
         ConsultarTableroVentasPdvRequest $request,
         ConsultaTableroVentasPdvService $consulta,
         ResuelveAlcancePdv $alcance,
+        SerializarCapacidadesPdvService $capacidades,
     ): Response|JsonResponse {
         /** @var User $user */
         $user = $request->user();
@@ -33,6 +35,7 @@ class TableroVentasPdvController extends Controller
         return Inertia::render('PuntoVenta/Turnos/Ventas', [
             'tablero' => fn () => $payload,
             'permisos' => fn () => $this->serializarPermisos($user, $alcance),
+            'capacidades' => fn () => $capacidades->serializar($user),
             'sucursal_activa' => fn () => $this->serializarSucursalActiva($user, $alcance),
             'sucursales_asignadas' => fn () => $this->serializarSucursalesAsignadas($user),
             'catalogos' => fn () => [
@@ -58,7 +61,7 @@ class TableroVentasPdvController extends Controller
     private function serializarPermisos(User $user, ResuelveAlcancePdv $alcance): array
     {
         return [
-            'ver' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_TURNOS_VER),
+            'atender' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_TURNOS_ATENDER),
             'cerrar_atencion' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_TURNOS_CERRAR_ATENCION),
             'transferir' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_TURNOS_TRANSFERIR),
         ];

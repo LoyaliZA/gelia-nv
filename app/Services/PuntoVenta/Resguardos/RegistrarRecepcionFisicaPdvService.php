@@ -75,6 +75,10 @@ class RegistrarRecepcionFisicaPdvService
                     return $reintento;
                 }
 
+                if ((int) $resguardo->cantidad_bultos_esperada < 1) {
+                    $resguardo = app(SincronizarCantidadBultosEsperadaResguardoPdvService::class)->ejecutar($resguardo);
+                }
+
                 $estadoAnterior = $resguardo->estado;
                 $this->assertVersionYEstado($resguardo, $versionEsperada);
                 $almacen = $this->resolverAlmacenUbicacion($resguardo, $almacenId);

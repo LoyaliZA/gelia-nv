@@ -26,7 +26,14 @@ final class SerializadorBandejaRecepcionTurnoPdv
     /**
      * @return array<string, mixed>
      */
-    public static function turnoAsignado(TurnoPdv $turno, CarbonInterface $ahora): array
+    /**
+     * @param  array{
+     *   espera_inicial_minutos: int,
+     *   prorroga_minutos: int,
+     *   ventana_reatencion_minutos: int
+     * }|null  $plazos
+     */
+    public static function turnoAsignado(TurnoPdv $turno, CarbonInterface $ahora, ?array $plazos = null): array
     {
         $atencion = $turno->relationLoaded('atencionActual')
             ? $turno->atencionActual
@@ -37,19 +44,30 @@ final class SerializadorBandejaRecepcionTurnoPdv
             [
                 'puede_baja_cola' => false,
                 'atencion' => $atencion instanceof TurnoPdvAtencion
-                    ? self::atencionResumen($atencion)
+                    ? self::atencionResumen($atencion, $plazos, $ahora)
                     : null,
             ],
         );
     }
 
     /**
+     * @param  array{
+     *   espera_inicial_minutos: int,
+     *   prorroga_minutos: int,
+     *   ventana_reatencion_minutos: int
+     * }|null  $plazos
      * @return array<string, mixed>
      */
-    private static function atencionResumen(TurnoPdvAtencion $atencion): array
+    private static function atencionResumen(TurnoPdvAtencion $atencion, ?array $plazos, CarbonInterface $ahora): array
     {
         $persona = $atencion->relationLoaded('user')
             ? $atencion->user
+            : null;
+
+        $inicioAt = $atencion->inicio_at;
+        $atencionInicioAt = $atencion->atencion_inicio_at;
+        $esperaExpiraAt = $plazos !== null
+            ? $inicioAt?->copy()->addMinutes($plazos['espera_inicial_minutos'])
             : null;
 
         return [
@@ -58,8 +76,13 @@ final class SerializadorBandejaRecepcionTurnoPdv
             'primer_nombre' => $persona instanceof User
                 ? self::primerNombre($persona->name)
                 : '—',
-            'inicio_at' => $atencion->inicio_at?->toIso8601String(),
-            'atencion_inicio_at' => $atencion->atencion_inicio_at?->toIso8601String(),
+            'inicio_at' => $inicioAt?->toIso8601String(),
+            'atencion_inicio_at' => $atencionInicioAt?->toIso8601String(),
+            'atencion_en_curso' => $atencionInicioAt !== null && $atencion->fin_at === null,
+            'espera_inicial_vencida' => $plazos !== null
+                && $atencionInicioAt === null
+                && $esperaExpiraAt !== null
+                && $ahora->greaterThanOrEqualTo($esperaExpiraAt),
         ];
     }
 
@@ -71,6 +94,7 @@ final class SerializadorBandejaRecepcionTurnoPdv
         return [
             'id' => $turno->id,
             'folio' => $turno->folio,
+            'cliente_id' => $turno->cliente_id,
             'estado' => $turno->estado,
             'servicio' => $turno->servicio,
             'sucursal_id' => $turno->sucursal_id,
@@ -80,6 +104,9 @@ final class SerializadorBandejaRecepcionTurnoPdv
             'prioridad_adulto_mayor' => (bool) $turno->prioridad_adulto_mayor,
             'prioridad_discapacidad' => (bool) $turno->prioridad_discapacidad,
             'alta_at' => $turno->alta_at?->toIso8601String(),
+            'espera_segundos' => $turno->alta_at !== null
+                ? max(0, (int) $turno->alta_at->diffInSeconds($ahora))
+                : null,
             'reatencion_expira_at' => $turno->reatencion_expira_at?->toIso8601String(),
             'reatencion_vigente' => $turno->estado === TurnoPdv::ESTADO_EN_REATENCION
                 && $turno->reatencion_expira_at !== null

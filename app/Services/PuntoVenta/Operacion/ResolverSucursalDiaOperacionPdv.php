@@ -11,6 +11,7 @@ final class ResolverSucursalDiaOperacionPdv
 {
     public function __construct(
         private readonly OperacionPdvConfig $config,
+        private readonly HorarioCierreOperacionPdvConfig $horario,
     ) {}
 
     public function obtenerOCrear(int $sucursalId, ?CarbonInterface $momento = null): SucursalDiaOperacionPdv
@@ -27,10 +28,12 @@ final class ResolverSucursalDiaOperacionPdv
         }
 
         try {
+            $aceptaAltas = ! $this->horario->estaAntesDeApertura($sucursalId, $momento ?? now());
+
             return SucursalDiaOperacionPdv::query()->create([
                 'sucursal_id' => $sucursalId,
                 'fecha_operativa' => $fechaOperativa,
-                'acepta_altas' => true,
+                'acepta_altas' => $aceptaAltas,
                 'cierre_automatico_invalidado' => false,
                 'version' => 1,
             ]);

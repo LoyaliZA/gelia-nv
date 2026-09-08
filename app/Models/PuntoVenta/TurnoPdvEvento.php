@@ -20,6 +20,10 @@ class TurnoPdvEvento extends Model
 
     public const TIPO_PRORROGA = 'atencion.prorroga';
 
+    public const TIPO_ESPERA_PROXIMO_VENCER = 'atencion.espera_proximo_vencer';
+
+    public const TIPO_PRORROGA_PROXIMO_VENCER = 'atencion.prorroga_proximo_vencer';
+
     public const TIPO_REATENCION = 'turno.reatencion';
 
     public const TIPO_VENTANA_REATENCION_VENCIDA = 'turno.ventana_reatencion_vencida';

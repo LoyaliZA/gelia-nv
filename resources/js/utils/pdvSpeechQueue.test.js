@@ -116,4 +116,24 @@ describe('pdvSpeechQueue', () => {
         cola.destruir();
         expect(cola.encolar(envelope('y'))).toBe(false);
     });
+
+    it('encola críticas antes que normales', () => {
+        const adaptador = crearAdaptadorVozSimulado();
+        let desbloqueado = false;
+        const cola = crearColaAnunciosTts({
+            adaptadorVoz: adaptador,
+            estaSilenciado: () => false,
+            audioDesbloqueado: () => desbloqueado,
+            resolverTexto: (envelope) => `Mensaje ${envelope.datos.folio}`,
+        });
+
+        cola.encolar(envelope('normal', { tipo: 'turno.alta' }));
+        cola.encolar(envelope('critica', { tipo: 'atencion.espera_proximo_vencer' }));
+
+        desbloqueado = true;
+        cola.marcarAudioDesbloqueado();
+
+        expect(adaptador.historial[0]).toContain('V-critica');
+        cola.destruir();
+    });
 });

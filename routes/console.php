@@ -48,6 +48,7 @@ Schedule::command('control-pedidos:evaluar-vencimiento-espera-preparacion')->hou
 Schedule::command('control-pedidos:reconciliar-traslados-preparacion')->hourly();
 Schedule::command('pdv:evaluar-vencimientos-resguardos')->hourly();
 Schedule::command('pdv:evaluar-cierre-horario-operacion')->everyFiveMinutes();
+Schedule::command('pdv:evaluar-apertura-horario-operacion')->everyFiveMinutes();
 
 // Hora de recordatorio desde config (si difiere de 11:00).
 try {

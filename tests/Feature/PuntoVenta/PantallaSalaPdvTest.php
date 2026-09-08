@@ -68,6 +68,8 @@ class PantallaSalaPdvTest extends TestCase
         $this->assertArrayNotHasKey('prioridad_adulto_mayor', $llamado);
         $this->assertArrayNotHasKey('prioridad_discapacidad', $llamado);
         $this->assertArrayNotHasKey('cliente_id', $llamado);
+        $this->assertArrayNotHasKey('telefono', $llamado);
+        $this->assertArrayNotHasKey('permisos', $llamado);
         $this->assertSame($turno->id, $llamado['turno_id']);
     }
 

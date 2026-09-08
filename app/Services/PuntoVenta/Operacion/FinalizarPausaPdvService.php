@@ -41,8 +41,18 @@ class FinalizarPausaPdvService
         );
 
         return DB::transaction(function () use ($actor, $sucursalId, $ahora): array {
+            return $this->finalizarParaUsuario((int) $actor->id, $sucursalId, $ahora, (int) $actor->id);
+        });
+    }
+
+    /**
+     * @return array{jornada: JornadaPdv, intervalo: IntervaloOperativoPdv, reintento: bool}
+     */
+    public function finalizarParaUsuario(int $userId, int $sucursalId, CarbonInterface $ahora, int $actorId): array
+    {
+        return DB::transaction(function () use ($userId, $sucursalId, $ahora, $actorId): array {
             $jornada = JornadaPdv::query()
-                ->where('user_id', $actor->id)
+                ->where('user_id', $userId)
                 ->where('sucursal_id', $sucursalId)
                 ->where('estado', EstadoJornadaPdv::Abierta)
                 ->lockForUpdate()
@@ -61,11 +71,14 @@ class FinalizarPausaPdvService
                 ->first();
 
             if ($intervaloAbierto?->tipo === TipoIntervaloOperativoPdv::EnPausa) {
-                $intervaloAbierto->update(['fin_at' => $ahora]);
+                $intervaloAbierto->update([
+                    'fin_at' => $ahora,
+                    'pausa_finalizada_por_id' => $actorId,
+                ]);
 
                 $intervaloDisponible = IntervaloOperativoPdv::query()->create([
                     'jornada_id' => $jornada->id,
-                    'user_id' => $actor->id,
+                    'user_id' => $userId,
                     'sucursal_id' => $sucursalId,
                     'tipo' => TipoIntervaloOperativoPdv::Disponible,
                     'inicio_at' => $ahora,
@@ -76,7 +89,7 @@ class FinalizarPausaPdvService
                     $jornada->fresh(),
                     $intervaloDisponible,
                     $sucursalId,
-                    (int) $actor->id,
+                    $actorId,
                 );
 
                 return [

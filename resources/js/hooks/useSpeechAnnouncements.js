@@ -15,6 +15,7 @@ export default function useSpeechAnnouncements({
     habilitado = true,
     silenciado: silenciadoControlado = null,
     adaptadorVoz: adaptadorInyectado = null,
+    resolverTexto = null,
 } = {}) {
     const [silenciadoInterno, setSilenciadoInterno] = useState(() => (
         silenciadoControlado === null ? leerSilencioTtsPdv() : Boolean(silenciadoControlado)
@@ -56,6 +57,7 @@ export default function useSpeechAnnouncements({
             estaSilenciado: () => silenciadoRef.current,
             audioDesbloqueado: () => audioDesbloqueadoRef.current,
             onEstado: (estado) => setEstadoTts(estado),
+            resolverTexto,
         });
         colaRef.current = cola;
 
@@ -71,7 +73,7 @@ export default function useSpeechAnnouncements({
             colaRef.current = null;
             adaptadorRef.current = null;
         };
-    }, [habilitado, adaptadorInyectado]);
+    }, [habilitado, adaptadorInyectado, resolverTexto]);
 
     useEffect(() => {
         if (!habilitado || audioDesbloqueado) return undefined;

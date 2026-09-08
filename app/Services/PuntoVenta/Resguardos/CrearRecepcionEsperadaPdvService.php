@@ -8,6 +8,7 @@ use App\Models\ControlPedidos\PedidoBma;
 use App\Models\PuntoVenta\ResguardoPdv;
 use App\Models\PuntoVenta\ResguardoPdvEvento;
 use App\Services\ControlPedidos\ValidarSucursalDestinoPedidoBma;
+use App\Support\PuntoVenta\Resguardos\CantidadBultosEsperadaResguardoPdv;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -90,7 +91,13 @@ class CrearRecepcionEsperadaPdvService
     {
         $clave = self::claveIdempotencia((int) $pedido->id, $sucursalId);
         $ahora = now();
-        $bultos = $this->cantidadBultosEsperada($pedido);
+        $bultos = CantidadBultosEsperadaResguardoPdv::desdePedido($pedido);
+
+        if ($bultos < 1) {
+            throw ValidationException::withMessages([
+                'bultos' => 'El pedido no tiene bultos o cajas registradas para recepción en sucursal.',
+            ]);
+        }
 
         $resguardo = ResguardoPdv::query()->create([
             'pedido_bma_id' => $pedido->id,
@@ -130,20 +137,5 @@ class CrearRecepcionEsperadaPdvService
         RecepcionEsperadaPdvCreada::dispatch($resguardo, (int) $pedido->id, $sucursalId);
 
         return $resguardo;
-    }
-
-    private function cantidadBultosEsperada(PedidoBma $pedido): int
-    {
-        $activas = $pedido->cajas
-            ->filter(fn ($caja) => method_exists($caja, 'estaActiva') ? $caja->estaActiva() : true)
-            ->count();
-
-        if ($activas > 0) {
-            return $activas;
-        }
-
-        $numero = (int) ($pedido->numero_cajas ?? 0);
-
-        return $numero > 0 ? $numero : 0;
     }
 }

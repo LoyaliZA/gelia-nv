@@ -5,7 +5,6 @@ namespace App\Services\PuntoVenta\Operacion;
 use App\Contracts\PuntoVenta\ConsultaPersonaDisponiblePdv;
 use App\Models\PuntoVenta\SucursalDiaOperacionPdv;
 use App\Models\User;
-use App\Services\PuntoVenta\PuntoVentaModulo;
 use App\Support\PuntoVenta\Operacion\EstadoJornadaPdv;
 use App\Support\PuntoVenta\Operacion\TipoIntervaloOperativoPdv;
 use Illuminate\Database\Eloquent\Builder;
@@ -14,6 +13,7 @@ class ConsultaPersonaDisponiblePdvService implements ConsultaPersonaDisponiblePd
 {
     public function __construct(
         private readonly OperacionPdvConfig $config,
+        private readonly ConsultaVendedoresElegiblesPdvService $vendedoresElegibles,
     ) {}
 
     public function primeraDisponible(int $sucursalId, string $servicio): ?User
@@ -28,6 +28,11 @@ class ConsultaPersonaDisponiblePdvService implements ConsultaPersonaDisponiblePd
             ->exists();
     }
 
+    public function contarDisponibles(int $sucursalId, string $servicio): int
+    {
+        return (int) $this->consultaBase($sucursalId, false)->count();
+    }
+
     /**
      * @return Builder<User>
      */
@@ -37,16 +42,7 @@ class ConsultaPersonaDisponiblePdvService implements ConsultaPersonaDisponiblePd
             return User::query()->whereRaw('1 = 0');
         }
 
-        return User::query()
-            ->permission([
-                PuntoVentaModulo::PERMISO_TURNOS_CERRAR_ATENCION,
-                PuntoVentaModulo::PERMISO_TURNOS_VER,
-            ])
-            ->whereHas('sucursales', function (Builder $query) use ($sucursalId): void {
-                $query->where('sucursales.id', $sucursalId)
-                    ->where('sucursales.activo', true)
-                    ->where('sucursal_user.activo', true);
-            })
+        return $this->vendedoresElegibles->query($sucursalId)
             ->whereHas('jornadasPdv', function (Builder $query) use ($sucursalId): void {
                 $query->where('sucursal_id', $sucursalId)
                     ->where('estado', EstadoJornadaPdv::Abierta);

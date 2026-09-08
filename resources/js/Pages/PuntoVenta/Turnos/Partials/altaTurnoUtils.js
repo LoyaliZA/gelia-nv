@@ -1,3 +1,5 @@
+import { debeRefrescarVistaPdv, PDV_VISTA_REALTIME } from '../../../../utils/pdvRealtimeMatrix';
+
 const STORAGE_IDEMPOTENCY = 'pdv:turno:alta:idempotency';
 
 export function claveIdempotenciaAltaTurno(sesionId = 'actual') {
@@ -41,12 +43,43 @@ export function armarPayloadAltaTurno({
     return payload;
 }
 
-export function validarFormularioAltaTurno({ modo, cliente, nombreLlamado }) {
+export function turnosVisiblesBandeja(bandeja) {
+    if (!bandeja) return [];
+
+    return [
+        ...(bandeja.en_cola ?? []),
+        ...(bandeja.asignados ?? []),
+    ];
+}
+
+export function buscarTurnoActivoClienteEnBandeja(bandeja, clienteId) {
+    if (!clienteId) return null;
+
+    const id = Number(clienteId);
+
+    return turnosVisiblesBandeja(bandeja).find(
+        (turno) => Number(turno.cliente_id) === id,
+    ) ?? null;
+}
+
+export function mensajeClienteYaEnCola(turno) {
+    const folio = turno?.folio ? ` (${turno.folio})` : '';
+    const estado = turno?.estado === 'ASIGNADO' ? 'asignado' : 'en cola';
+
+    return `Esta persona ya tiene un turno ${estado}${folio}. No es necesario registrarlo de nuevo.`;
+}
+
+export function validarFormularioAltaTurno({ modo, cliente, nombreLlamado, bandeja = null }) {
     const errores = {};
 
     if (modo === 'cliente') {
         if (!cliente?.id) {
             errores.cliente = 'Selecciona un cliente registrado o usa la opción visitante.';
+        } else {
+            const turnoExistente = buscarTurnoActivoClienteEnBandeja(bandeja, cliente.id);
+            if (turnoExistente) {
+                errores.cliente = mensajeClienteYaEnCola(turnoExistente);
+            }
         }
     } else if (modo === 'visitante') {
         const nombre = String(nombreLlamado || '').trim();
@@ -60,9 +93,49 @@ export function validarFormularioAltaTurno({ modo, cliente, nombreLlamado }) {
     return errores;
 }
 
+export function sucursalAceptaAltasTurno(sucursalDia) {
+    return sucursalDia?.acepta_altas !== false;
+}
+
+export function mensajeSucursalSinAltas(sucursalDia) {
+    if (sucursalAceptaAltasTurno(sucursalDia)) {
+        return null;
+    }
+
+    if (sucursalDia?.cierre_manual_at) {
+        return 'La sucursal ya no acepta altas nuevas (cierre manual de gerencia).';
+    }
+
+    return 'La sucursal ya no acepta altas nuevas.';
+}
+
+export function formularioListoParaEnviar({
+    modo,
+    cliente,
+    nombreLlamado,
+    bandeja = null,
+    sucursalDia = null,
+}) {
+    if (!sucursalAceptaAltasTurno(sucursalDia)) {
+        return false;
+    }
+
+    return Object.keys(validarFormularioAltaTurno({
+        modo,
+        cliente,
+        nombreLlamado,
+        bandeja,
+    })).length === 0;
+}
+
+export function debeRefrescarBandejaRecepcionPorEvento(envelope) {
+    return debeRefrescarVistaPdv(PDV_VISTA_REALTIME.recepcion, envelope);
+}
+
 export function mensajeErrorAltaTurno(err) {
     const status = err?.response?.status;
     const data = err?.response?.data;
+    const mensajeServidor = typeof data?.message === 'string' ? data.message : null;
 
     if (status === 422) {
         const errores = data?.errors;
@@ -70,7 +143,9 @@ export function mensajeErrorAltaTurno(err) {
             const primero = Object.values(errores).flat()[0];
             if (primero) return primero;
         }
-        return data?.message || 'Revisa los datos capturados.';
+        return mensajeServidor && !esMensajeSql(mensajeServidor)
+            ? mensajeServidor
+            : 'Revisa los datos capturados.';
     }
 
     if (status === 403) {
@@ -81,7 +156,15 @@ export function mensajeErrorAltaTurno(err) {
         return 'No se pudo conectar. Verifica la red e intenta de nuevo sin cerrar el formulario.';
     }
 
-    return data?.message || 'Ocurrió un error al registrar el turno.';
+    if (mensajeServidor && !esMensajeSql(mensajeServidor)) {
+        return mensajeServidor;
+    }
+
+    return 'Ocurrió un error al registrar el turno. Actualiza la bandeja e intenta de nuevo.';
+}
+
+function esMensajeSql(mensaje) {
+    return /SQLSTATE|Integrity constraint violation|Duplicate entry/i.test(mensaje);
 }
 
 export function etiquetaEstadoTurno(estado, catalogos = {}) {
