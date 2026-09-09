@@ -45,7 +45,8 @@ class ControlPedidosBitacoraTest extends TestCase
             $estatus->id,
             'Remisión de prueba.',
             AccionesHistorialPedidoBma::CARGA_REMISION,
-            ['ruta' => 'pedidos_bma/remisiones/1/demo.pdf', 'nombre' => 'demo.pdf']
+            ['ruta' => 'pedidos_bma/remisiones/1/demo.pdf', 'nombre' => 'demo.pdf'],
+            ['financiero' => ['total_mercancia' => '100.00', 'total_a_cobrar' => '100.00']]
         );
 
         $this->assertInstanceOf(PedidoBmaHistorialEstado::class, $row);
@@ -54,6 +55,8 @@ class ControlPedidosBitacoraTest extends TestCase
         $this->assertSame('pedidos_bma/remisiones/1/demo.pdf', $row->evidencia_ruta);
         $this->assertSame('demo.pdf', $row->evidencia_nombre);
         $this->assertSame($user->id, $row->usuario_id);
+        $this->assertIsArray($row->snapshot_json);
+        $this->assertSame('100.00', $row->snapshot_json['financiero']['total_mercancia'] ?? null);
         $this->assertDatabaseHas('pedido_bma_historial_estados', [
             'pedido_bma_id' => $pedido->id,
             'accion' => AccionesHistorialPedidoBma::CARGA_REMISION,

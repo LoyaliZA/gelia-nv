@@ -729,7 +729,32 @@ export const calcularTotalCobrar = (mercancia, envio, aplicaSeguro, costoSeguro,
 
 const round2 = (n) => Math.round(Number(n || 0) * 100) / 100;
 
-/** Espeja RegistrarPagoPedidoBmaService::calcularResumenCobertura. */
+/**
+ * Total a cubrir alineado con el desglose visible (mercancía + envío + reexp + seguro).
+ * Importar separarCostoEnvioDeReexpedicion / costoReexpedicionDeZona desde resolverReexpedicionForm.
+ */
+export const calcularTotalACubrirPedido = ({
+    totalMercancia = 0,
+    costoEnvio = 0,
+    costoReexpedicion = 0,
+    omiteEnvio = false,
+    aplicaSeguro = false,
+    costoSeguro = 0,
+    separarCostoEnvio = null,
+} = {}) => {
+    const merc = Number(totalMercancia || 0);
+    if (omiteEnvio) {
+        return round2(merc + (aplicaSeguro ? Number(costoSeguro || 0) : 0));
+    }
+    const rex = Number(costoReexpedicion || 0);
+    const envioFull = Number(costoEnvio || 0);
+    const base = typeof separarCostoEnvio === 'function'
+        ? Number(separarCostoEnvio(envioFull, rex)?.base ?? envioFull)
+        : envioFull;
+    return round2(merc + base + rex + (aplicaSeguro ? Number(costoSeguro || 0) : 0));
+};
+
+/** Espeja RegistrarPagoPedidoBmaService::calcularResumenCobertura (solo vista previa). */
 export const calcularResumenCoberturaPago = ({
     totalMercancia = 0,
     costoEnvio = 0,
@@ -737,6 +762,7 @@ export const calcularResumenCoberturaPago = ({
     costoSeguro = 0,
     saldoAFavorAplicado = 0,
     totalPagado = 0,
+    tolerancia = 0.44,
 } = {}) => {
     const totalACubrir = round2(Number(totalMercancia || 0) + Number(costoEnvio || 0) + (aplicaSeguro ? Number(costoSeguro || 0) : 0));
     const saf = round2(Math.max(0, Number(saldoAFavorAplicado || 0)));
@@ -745,24 +771,49 @@ export const calcularResumenCoberturaPago = ({
     const delta = round2(totalACobrar - pagado);
     const pendiente = Math.max(0, delta);
     const excedenteGenerado = Math.max(0, round2(-delta));
+    const tol = Number(tolerancia || 0);
     let cobertura = 'sin_pago';
     if (pagado <= 0 && saf <= 0) cobertura = 'sin_pago';
-    else if (pendiente > 0.01) cobertura = 'parcial';
-    else if (excedenteGenerado > 0.01) cobertura = 'con_excedente';
+    else if (pendiente > tol) cobertura = 'parcial';
+    else if (excedenteGenerado > tol) cobertura = 'con_excedente';
     else cobertura = 'cubierto';
     return {
         total_a_cubrir: totalACubrir,
         saldo_a_favor_aplicado: saf,
         total_a_cobrar: totalACobrar,
         total_pagado: pagado,
+        diferencia: delta,
         pendiente,
         excedente_generado: excedenteGenerado,
         cobertura,
+        cubierto: cobertura === 'cubierto' || cobertura === 'con_excedente',
         total_final: totalACubrir,
         saldos_aplicados: saf,
         total_recibido: pagado,
         excedente: excedenteGenerado,
         nuevo_saldo_sugerido: excedenteGenerado,
+    };
+};
+
+/**
+ * Combina resumen canónico del backend con totales recalculados desde el pedido visible.
+ * Preserva bloqueos/tolerancia del backend; evita arrastrar total_a_cubrir obsoleto.
+ */
+export const mezclarResumenCoberturaConPedido = (base, vivo) => {
+    if (!vivo) return base;
+    if (!base) return vivo;
+    return {
+        ...base,
+        ...vivo,
+        cobertura: base.cobertura ?? vivo.cobertura,
+        cubierto: base.cubierto ?? vivo.cubierto,
+        bloqueos: base.bloqueos ?? [],
+        tolerancia_aplicada: base.tolerancia_aplicada ?? base.tolerancia,
+        revision: base.revision ?? null,
+        fuentes_pago: base.fuentes_pago,
+        estado_pago: base.estado_pago,
+        diferencia: base.diferencia ?? vivo.diferencia,
+        pendiente: base.pendiente ?? vivo.pendiente,
     };
 };
 

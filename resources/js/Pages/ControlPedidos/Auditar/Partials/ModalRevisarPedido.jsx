@@ -435,6 +435,9 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                 aplicaSeguro={Boolean(pedido.aplica_seguro)}
                                 costoSeguro={pedido.costo_seguro}
                                 saldoAFavorAplicado={pedido.saldo_a_favor}
+                                omiteEnvio={Boolean(pedido.cliente_proporciona_guia || pedido.envio_por_cobrar)}
+                                zonas={catalogos?.zonas || []}
+                                zonaId={pedido.catalogo_zona_id ?? pedido.zona?.id}
                                 onResumenChange={(r) => {
                                     setResumenCobertura(r);
                                     setBloqueosPago(r?.bloqueos || []);

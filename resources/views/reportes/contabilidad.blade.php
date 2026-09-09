@@ -152,6 +152,134 @@
             border: 1px dashed #cbd5e1;
             border-radius: 8px;
         }
+        .section-title {
+            font-size: 10px;
+            font-weight: bold;
+            color: #334155;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            margin: 16px 0 8px;
+            padding-bottom: 4px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .charts-row {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 16px;
+        }
+        .charts-row td {
+            vertical-align: top;
+            width: 50%;
+            padding-right: 8px;
+        }
+        .charts-row td:last-child {
+            padding-right: 0;
+            padding-left: 8px;
+        }
+        .chart-wrap {
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 10px 12px 8px;
+            background-color: #f8fafc;
+        }
+        .chart-title {
+            font-size: 8px;
+            font-weight: bold;
+            color: #4f46e5;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+        .chart-caption {
+            font-size: 6.5px;
+            color: #94a3b8;
+            text-align: right;
+            margin-top: 4px;
+        }
+        .chart-bars-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .chart-bar-row td {
+            padding: 3px 0;
+            vertical-align: middle;
+            font-size: 7px;
+            color: #334155;
+        }
+        .chart-bar-label {
+            width: 22%;
+            padding-right: 6px;
+            color: #475569;
+            white-space: nowrap;
+        }
+        .chart-bar-track {
+            width: 48%;
+            padding-right: 6px;
+        }
+        .chart-bar-inner {
+            border: 1px solid #e2e8f0;
+            border-radius: 2px;
+            background-color: #ffffff;
+        }
+        .chart-bar-value {
+            width: 16%;
+            text-align: right;
+            font-weight: bold;
+            color: #0f172a;
+            white-space: nowrap;
+        }
+        .chart-bar-pct {
+            width: 8%;
+            text-align: right;
+            color: #94a3b8;
+            white-space: nowrap;
+        }
+        .chart-dona-layout {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .chart-dona-image {
+            width: 170px;
+            vertical-align: middle;
+            text-align: center;
+            padding-right: 12px;
+        }
+        .chart-dona-legend {
+            vertical-align: middle;
+        }
+        .chart-dona-legend-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .chart-dona-legend-table td {
+            padding: 3px 0;
+            font-size: 7px;
+            vertical-align: middle;
+        }
+        .chart-dona-swatch {
+            width: 10px;
+            height: 10px;
+            padding: 0;
+            line-height: 10px;
+            font-size: 1px;
+        }
+        .chart-dona-label {
+            padding-left: 6px;
+            color: #475569;
+        }
+        .chart-dona-value {
+            text-align: right;
+            font-weight: bold;
+            color: #0f172a;
+            padding-left: 10px;
+            white-space: nowrap;
+        }
+        .chart-dona-pct {
+            text-align: right;
+            color: #94a3b8;
+            padding-left: 6px;
+            width: 36px;
+            white-space: nowrap;
+        }
     </style>
 </head>
 <body>
@@ -192,6 +320,45 @@
             </td>
         </tr>
     </table>
+
+    @if(!empty($graficaPlataformasComparacion) || !empty($graficaPlataformasMayorIngreso) || !empty($graficaPlataformasMenorIngreso))
+        <div class="section-title">Ingresos por plataforma de pago</div>
+
+        @if(!empty($graficaPlataformasComparacion))
+            @include('reportes.partials.grafica_dona_plataformas', [
+                'grafica' => $graficaPlataformasComparacion,
+                'titulo' => 'Comparación total por plataforma',
+                'leyenda' => 'Distribución del ingreso total entre plataformas en el periodo filtrado',
+            ])
+        @endif
+
+        @if(!empty($graficaPlataformasMayorIngreso) || !empty($graficaPlataformasMenorIngreso))
+            <table class="charts-row">
+                <tr>
+                    <td>
+                        @if(!empty($graficaPlataformasMayorIngreso))
+                            @include('reportes.partials.grafica_barras_horizontal', [
+                                'grafica' => $graficaPlataformasMayorIngreso,
+                                'titulo' => 'Mayor ingreso',
+                                'anchoPista' => 120,
+                                'leyenda' => 'Top 5 plataformas · barra = % del ingreso total',
+                            ])
+                        @endif
+                    </td>
+                    <td>
+                        @if(!empty($graficaPlataformasMenorIngreso))
+                            @include('reportes.partials.grafica_barras_horizontal', [
+                                'grafica' => $graficaPlataformasMenorIngreso,
+                                'titulo' => 'Menor ingreso',
+                                'anchoPista' => 120,
+                                'leyenda' => 'Top 5 plataformas · barra = % del ingreso total',
+                            ])
+                        @endif
+                    </td>
+                </tr>
+            </table>
+        @endif
+    @endif
 
     @if($pedidos->isEmpty())
         <div class="no-records">

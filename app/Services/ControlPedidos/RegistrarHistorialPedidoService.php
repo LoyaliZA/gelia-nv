@@ -11,6 +11,7 @@ class RegistrarHistorialPedidoService
 {
     /**
      * @param  array{ruta?: ?string, nombre?: ?string}|null  $evidencia
+     * @param  array<string, mixed>|null  $snapshot
      */
     public function ejecutar(
         int $pedidoId,
@@ -20,6 +21,7 @@ class RegistrarHistorialPedidoService
         ?string $comentarios = null,
         ?string $accion = null,
         ?array $evidencia = null,
+        ?array $snapshot = null,
     ): PedidoBmaHistorialEstado {
         [$rol, $departamento] = $usuarioId
             ? $this->snapshotActor($usuarioId)
@@ -36,6 +38,7 @@ class RegistrarHistorialPedidoService
             'comentarios' => $comentarios,
             'evidencia_ruta' => $evidencia['ruta'] ?? null,
             'evidencia_nombre' => $evidencia['nombre'] ?? null,
+            'snapshot_json' => $snapshot,
         ]);
     }
 
@@ -53,6 +56,7 @@ class RegistrarHistorialPedidoService
 
     /**
      * @param  array{ruta?: ?string, nombre?: ?string}|null  $evidencia
+     * @param  array<string, mixed>|null  $snapshot
      */
     public function registrarTransicion(
         int $pedidoId,
@@ -62,6 +66,7 @@ class RegistrarHistorialPedidoService
         ?string $comentarios = null,
         ?string $accion = null,
         ?array $evidencia = null,
+        ?array $snapshot = null,
     ): PedidoBmaHistorialEstado {
         return $this->ejecutar(
             $pedidoId,
@@ -70,7 +75,8 @@ class RegistrarHistorialPedidoService
             $nuevo->id,
             $comentarios,
             $accion,
-            $evidencia
+            $evidencia,
+            $snapshot
         );
     }
 

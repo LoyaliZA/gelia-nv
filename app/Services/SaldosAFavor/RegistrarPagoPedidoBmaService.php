@@ -9,6 +9,7 @@ use App\Models\SaldosAFavor\SafMotivo;
 use App\Services\ControlPedidos\PagosPedidoBmaConfig;
 use App\Services\ControlPedidos\RegistrarHistorialPedidoService;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
+use App\Support\ControlPedidos\SnapshotHistorialPedidoBma;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -96,7 +97,8 @@ class RegistrarPagoPedidoBmaService
                         PedidoBmaPago::labelForma($forma) ?? 'sin método'
                     ),
                     AccionesHistorialPedidoBma::ALTA_EXHIBICION_PAGO,
-                    ['ruta' => $ruta, 'nombre' => $comprobante->getClientOriginalName()]
+                    ['ruta' => $ruta, 'nombre' => $comprobante->getClientOriginalName()],
+                    SnapshotHistorialPedidoBma::exhibicion($pago->fresh(['banco']), $pedido->fresh())
                 );
             }
 

@@ -12,9 +12,17 @@ import {
     badgeCoberturaPago,
     badgeRevisionPagoPedido,
     calcularResumenCoberturaPago,
+    calcularTotalACubrirPedido,
+    mezclarResumenCoberturaConPedido,
     mensajePagoFaltante,
 } from './pedidosBmaStyles';
+import {
+    costoReexpedicionDeZona,
+    separarCostoEnvioDeReexpedicion,
+} from './resolverReexpedicionForm';
 import { THEME_SELECT } from '../../../utils/geliaTheme';
+
+const round2 = (n) => Math.round(Number(n || 0) * 100) / 100;
 import InputMoneda from './InputMoneda';
 import ModalVistaPreviaDocumento, { MiniaturaDocumento } from './ModalVistaPreviaDocumento';
 import ModalMotivoRechazo from './ModalMotivoRechazo';
@@ -81,6 +89,10 @@ export default function SeccionPagosExhibicion({
     aplicaSeguro = null,
     costoSeguro = null,
     saldoAFavorAplicado = null,
+    omiteEnvio = false,
+    costoReexpedicion = null,
+    zonas = [],
+    zonaId = null,
 }) {
     const [resumen, setResumen] = useState(null);
     const [pagos, setPagos] = useState([]);
@@ -123,27 +135,45 @@ export default function SeccionPagosExhibicion({
         asignarComprobante(file);
     };
 
+    const rexAplicado = useMemo(() => {
+        if (costoReexpedicion != null) return Number(costoReexpedicion || 0);
+        if (zonaId != null && zonas?.length) return costoReexpedicionDeZona(zonas, zonaId);
+        return 0;
+    }, [costoReexpedicion, zonas, zonaId]);
+
     const mezclarResumenVivo = (base, listaPagos) => {
         const tieneTotalesVivos = totalMercancia != null || saldoAFavorAplicado != null;
         if (!tieneTotalesVivos) return base;
         const pagado = (listaPagos || [])
             .filter((p) => p.activo_para_cobertura !== false)
             .reduce((a, p) => a + Number(p.monto || 0), 0);
-        const vivo = calcularResumenCoberturaPago({
-            totalMercancia: totalMercancia ?? base?.total_a_cubrir ?? base?.total_final ?? 0,
-            costoEnvio: costoEnvio ?? 0,
+        const saf = saldoAFavorAplicado ?? base?.saldo_a_favor_aplicado ?? base?.saldos_aplicados ?? 0;
+        const totalACubrir = calcularTotalACubrirPedido({
+            totalMercancia: totalMercancia ?? 0,
+            costoEnvio: omiteEnvio ? 0 : (costoEnvio ?? 0),
+            costoReexpedicion: omiteEnvio ? 0 : rexAplicado,
+            omiteEnvio: Boolean(omiteEnvio),
             aplicaSeguro: Boolean(aplicaSeguro),
             costoSeguro: costoSeguro ?? 0,
-            saldoAFavorAplicado: saldoAFavorAplicado ?? base?.saldo_a_favor_aplicado ?? base?.saldos_aplicados ?? 0,
-            totalPagado: pagado,
+            separarCostoEnvio: separarCostoEnvioDeReexpedicion,
         });
-        return {
-            ...(base || {}),
-            ...vivo,
-            revision: base?.revision ?? null,
-            fuentes_pago: base?.fuentes_pago,
-            estado_pago: base?.estado_pago,
-        };
+        const envioParaCobertura = omiteEnvio
+            ? 0
+            : round2(Number(totalACubrir) - Number(totalMercancia ?? 0) - (aplicaSeguro ? Number(costoSeguro ?? 0) : 0));
+        const tolerancia = Number(base?.tolerancia_aplicada ?? base?.tolerancia ?? 0.44);
+        const vivo = calcularResumenCoberturaPago({
+            totalMercancia: totalMercancia ?? 0,
+            costoEnvio: envioParaCobertura,
+            aplicaSeguro: Boolean(aplicaSeguro),
+            costoSeguro: costoSeguro ?? 0,
+            saldoAFavorAplicado: saf,
+            totalPagado: pagado,
+            tolerancia,
+        });
+        vivo.total_a_cubrir = totalACubrir;
+        vivo.total_a_cobrar = Math.max(0, round2(totalACubrir - Number(saf || 0)));
+        vivo.total_final = totalACubrir;
+        return mezclarResumenCoberturaConPedido(base, vivo);
     };
 
     const emitirResumenLocal = (lista) => {
@@ -193,7 +223,7 @@ export default function SeccionPagosExhibicion({
         if (typeof onResumenChange === 'function') {
             onResumenChange(next, pagos);
         }
-    }, [totalMercancia, costoEnvio, aplicaSeguro, costoSeguro, saldoAFavorAplicado]);
+    }, [totalMercancia, costoEnvio, aplicaSeguro, costoSeguro, saldoAFavorAplicado, omiteEnvio, rexAplicado]);
 
     useEffect(() => {
         if (formasPago?.length) setFormas(formasPago);

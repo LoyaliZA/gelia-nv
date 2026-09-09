@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Services\ControlPedidos\Direcciones\CrearSnapshotDireccionPedido;
 use App\Services\SaldosAFavor\RegistrarPagoPedidoBmaService;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
+use App\Support\ControlPedidos\SnapshotHistorialPedidoBma;
 use App\Support\ControlPedidos\CamposIncorrectosPedidoBma;
 use App\Support\ControlPedidos\MaquinaEstadosPedidoBma;
 use App\Support\ControlPedidos\VisibilidadPedidoBma;
@@ -108,7 +109,12 @@ class EnviarPedidoBmaService
                 $estatusAnterior,
                 $estatusNuevo,
                 $comentario,
-                AccionesHistorialPedidoBma::ENVIO_AUXILIAR
+                AccionesHistorialPedidoBma::ENVIO_AUXILIAR,
+                null,
+                SnapshotHistorialPedidoBma::merge(
+                    SnapshotHistorialPedidoBma::financiero($pedido->fresh()),
+                    SnapshotHistorialPedidoBma::cobertura($pedido->fresh())
+                )
             );
 
             $pedido = $pedido->fresh(['cliente', 'estatus', 'documentos', 'almacen', 'banco', 'direccionVigente', 'vendedor']);

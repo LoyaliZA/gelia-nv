@@ -6,6 +6,7 @@ use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Models\ControlPedidos\PedidoBmaError;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
+use App\Support\ControlPedidos\SnapshotHistorialPedidoBma;
 use App\Support\ControlPedidos\CamposIncorrectosPedidoBma;
 use App\Support\ControlPedidos\VisibilidadPedidoBma;
 
@@ -83,7 +84,9 @@ class AvanzarColaErroresPedidoBmaService
             $estatusId,
             $estatusId,
             "Corrección ({$dueno}): {$correccion}",
-            AccionesHistorialPedidoBma::CORRECCION
+            AccionesHistorialPedidoBma::CORRECCION,
+            null,
+            SnapshotHistorialPedidoBma::financiero($pedido->fresh())
         );
     }
 

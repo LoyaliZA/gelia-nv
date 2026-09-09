@@ -10,6 +10,7 @@ use App\Support\ControlPedidos\CamposIncorrectosPedidoBma;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
+use App\Support\ControlPedidos\SnapshotHistorialPedidoBma;
 use App\Support\ControlPedidos\MaquinaEstadosPedidoBma;
 
 class ReportarErrorDatosPedidoBmaService
@@ -151,7 +152,12 @@ class ReportarErrorDatosPedidoBmaService
                 $estatusAnterior,
                 $estatusNuevo,
                 $comentario,
-                AccionesHistorialPedidoBma::ERROR_DATOS
+                AccionesHistorialPedidoBma::ERROR_DATOS,
+                null,
+                SnapshotHistorialPedidoBma::merge(
+                    SnapshotHistorialPedidoBma::errorReportado($campos, $detalle),
+                    SnapshotHistorialPedidoBma::financiero($pedido->fresh())
+                )
             );
 
             $pedido = $pedido->fresh([
@@ -252,7 +258,12 @@ class ReportarErrorDatosPedidoBmaService
                 $estatusId,
                 $estatusId,
                 $comentario,
-                AccionesHistorialPedidoBma::ERROR_DATOS
+                AccionesHistorialPedidoBma::ERROR_DATOS,
+                null,
+                SnapshotHistorialPedidoBma::merge(
+                    SnapshotHistorialPedidoBma::errorReportado($campos, $detalle),
+                    SnapshotHistorialPedidoBma::financiero($pedido->fresh())
+                )
             );
 
             $pedido = $pedido->fresh([

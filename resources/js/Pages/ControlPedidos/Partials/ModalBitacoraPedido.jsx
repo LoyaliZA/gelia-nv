@@ -1,29 +1,14 @@
 import React, { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, History, Paperclip } from 'lucide-react';
+import { X, History } from 'lucide-react';
 import {
-    badgeEstatusPedido,
-    formatearFechaHoraAuditoria,
     THEME_MODAL_OVERLAY,
     THEME_MODAL_SHELL,
 } from './pedidosBmaStyles';
 import EncabezadoFolioPedido from './EncabezadoFolioPedido';
 import ModalVistaPreviaDocumento from './ModalVistaPreviaDocumento';
 import ListaErroresPedido from './ListaErroresPedido';
-
-function labelEstatus(estatus) {
-    if (!estatus) return '—';
-    return estatus.nombre_visual || estatus.nombre || estatus.fase_ciclo || '—';
-}
-
-function labelAccion(h) {
-    return h.accion_etiqueta || h.accionEtiqueta || h.accion || h.comentarios || 'Movimiento';
-}
-
-function contextoActor(h) {
-    const partes = [h.rol, h.departamento].filter(Boolean);
-    return partes.length ? partes.join(' · ') : null;
-}
+import TarjetaEntradaBitacora from './TarjetaEntradaBitacora';
 
 export default function ModalBitacoraPedido({ abierto, onClose, pedido }) {
     const [docPreview, setDocPreview] = useState(null);
@@ -31,20 +16,41 @@ export default function ModalBitacoraPedido({ abierto, onClose, pedido }) {
     const historial = pedido?.historial || [];
     const errores = pedido?.errores || [];
 
-    const evidencias = useMemo(() => historial
-        .filter((h) => h.evidencia_ruta || h.evidenciaRuta)
-        .map((h) => {
+    const evidencias = useMemo(() => {
+        const docs = [];
+        historial.forEach((h) => {
             const ruta = h.evidencia_ruta || h.evidenciaRuta;
-            return {
-                id: `hist-${h.id}`,
-                url: `/storage/${ruta}`,
-                nombre_original: h.evidencia_nombre || h.evidenciaNombre || 'Evidencia',
-                tipo: 'evidencia_bitacora',
-                comentario: labelAccion(h),
-                autor: h.usuario,
-                created_at: h.created_at,
-            };
-        }), [historial]);
+            if (ruta) {
+                docs.push({
+                    id: `hist-${h.id}`,
+                    url: `/storage/${ruta}`,
+                    nombre_original: h.evidencia_nombre || h.evidenciaNombre || 'Evidencia',
+                    tipo: 'evidencia_bitacora',
+                    comentario: h.accion_etiqueta || h.accion,
+                    autor: h.usuario,
+                    created_at: h.created_at,
+                });
+            }
+            const snap = h.snapshot_json || h.snapshotJson;
+            (snap?.archivos || []).forEach((arch, i) => {
+                if (!arch?.ruta) return;
+                docs.push({
+                    id: `hist-${h.id}-snap-${i}`,
+                    url: `/storage/${arch.ruta}`,
+                    nombre_original: arch.nombre || arch.tipo || 'Archivo',
+                    tipo: arch.tipo || 'snapshot',
+                    mime_type: arch.mime_type,
+                    comentario: h.accion_etiqueta || h.accion,
+                });
+            });
+        });
+        return docs;
+    }, [historial]);
+
+    const abrirDoc = (doc) => {
+        const indice = evidencias.findIndex((d) => d.id === doc.id);
+        setDocPreview({ indice: indice >= 0 ? indice : 0 });
+    };
 
     if (!abierto || !pedido) return null;
 
@@ -81,70 +87,22 @@ export default function ModalBitacoraPedido({ abierto, onClose, pedido }) {
                             {errores.length > 0 ? 'Sin otros movimientos de estado_' : 'Sin movimientos registrados_'}
                         </p>
                     ) : (
-                        <div className="space-y-4">
+                        <div className="space-y-3">
                             <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted m-0">
-                                Movimientos de estado
+                                Movimientos de estado · expande cada tarjeta para ver captura de datos y archivos
                             </p>
                             {historial.map((h) => {
-                                const estatusNuevo = h.estatus_nuevo || h.estatusNuevo;
-                                const estatusAnterior = h.estatus_anterior || h.estatusAnterior;
-                                const badgeNuevo = badgeEstatusPedido(estatusNuevo);
-                                const badgeAnt = badgeEstatusPedido(estatusAnterior);
-                                const actor = contextoActor(h);
                                 const evidenciaRuta = h.evidencia_ruta || h.evidenciaRuta;
-                                const evidenciaNombre = h.evidencia_nombre || h.evidenciaNombre || 'Ver archivo';
-                                const accionLabel = labelAccion(h);
-                                const comentarioEsAccion = h.comentarios && h.comentarios === accionLabel;
                                 const idxEvidencia = evidencias.findIndex((d) => d.id === `hist-${h.id}`);
-
                                 return (
-                                    <div key={h.id} className="p-4 rounded-xl border theme-border theme-element">
-                                        <div className="flex justify-between items-start gap-2">
-                                            <p className="text-xs font-black uppercase theme-text-main m-0 leading-snug">
-                                                {accionLabel}
-                                            </p>
-                                            <span className="text-[9px] theme-text-muted font-bold shrink-0 font-mono">
-                                                {formatearFechaHoraAuditoria(h.created_at)}
-                                            </span>
-                                        </div>
-
-                                        <div className="flex flex-wrap items-center gap-1.5 mt-2">
-                                            {estatusAnterior ? (
-                                                <>
-                                                    <span className={badgeAnt.className} style={badgeAnt.style}>
-                                                        {badgeAnt.label}
-                                                    </span>
-                                                    <span className="text-[10px] theme-text-muted font-bold">→</span>
-                                                </>
-                                            ) : null}
-                                            <span className={badgeNuevo.className} style={badgeNuevo.style}>
-                                                {badgeNuevo.label || labelEstatus(estatusNuevo)}
-                                            </span>
-                                        </div>
-
-                                        <p className="text-[10px] font-bold theme-text-muted mt-2 m-0">
-                                            {h.usuario?.name || 'Usuario'}
-                                            {actor ? (
-                                                <span className="font-semibold opacity-80"> · {actor}</span>
-                                            ) : null}
-                                        </p>
-
-                                        {h.comentarios && !comentarioEsAccion ? (
-                                            <p className="text-xs theme-text-main mt-1 m-0">{h.comentarios}</p>
-                                        ) : null}
-
-                                        {evidenciaRuta ? (
-                                            <button
-                                                type="button"
-                                                onClick={() => setDocPreview({ indice: Math.max(idxEvidencia, 0) })}
-                                                className="inline-flex items-center gap-1 mt-2 text-[10px] font-bold uppercase outline-none"
-                                                style={{ color: 'var(--color-primario)' }}
-                                            >
-                                                <Paperclip className="w-3 h-3" />
-                                                {evidenciaNombre}
-                                            </button>
-                                        ) : null}
-                                    </div>
+                                    <TarjetaEntradaBitacora
+                                        key={h.id}
+                                        entrada={h}
+                                        onVerEvidencia={evidenciaRuta
+                                            ? () => setDocPreview({ indice: Math.max(idxEvidencia, 0) })
+                                            : null}
+                                        onVerArchivoSnapshot={abrirDoc}
+                                    />
                                 );
                             })}
                         </div>

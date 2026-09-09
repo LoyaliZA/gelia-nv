@@ -3,6 +3,7 @@ import {
     badgeCoberturaPago,
     formatearMoneda,
     etiquetaCostoEnvio,
+    calcularTotalACubrirPedido,
 } from '../../Partials/pedidosBmaStyles';
 import {
     costoReexpedicionDeZona,
@@ -11,9 +12,11 @@ import {
 
 const COLOR_EXITO = { color: 'var(--color-exito)' };
 const COLOR_INFO = { color: 'var(--color-info)' };
+const round2 = (n) => Math.round(Number(n || 0) * 100) / 100;
 
 /**
  * Resumen financiero canónico (backend). React no decide si puede validar.
+ * Los totales a cubrir/cobrar se derivan del pedido visible para evitar desfase (.40 vs .04).
  */
 export default function ResumenCoberturaPedido({
     resumen = null,
@@ -36,6 +39,26 @@ export default function ResumenCoberturaPedido({
         return Number(base || 0);
     }, [omiteEnvio, pedido?.costo_envio, costoReexpedicion]);
 
+    const totalACubrir = useMemo(
+        () => calcularTotalACubrirPedido({
+            totalMercancia: pedido?.total_mercancia,
+            costoEnvio: pedido?.costo_envio,
+            costoReexpedicion,
+            omiteEnvio,
+            aplicaSeguro: Boolean(pedido?.aplica_seguro),
+            costoSeguro: pedido?.costo_seguro,
+            separarCostoEnvio: separarCostoEnvioDeReexpedicion,
+        }),
+        [
+            pedido?.total_mercancia,
+            pedido?.costo_envio,
+            pedido?.aplica_seguro,
+            pedido?.costo_seguro,
+            costoReexpedicion,
+            omiteEnvio,
+        ],
+    );
+
     if (!resumen) {
         return (
             <div className="p-4 rounded-xl border theme-border theme-element">
@@ -44,20 +67,20 @@ export default function ResumenCoberturaPedido({
         );
     }
 
-    const totalACubrir = resumen.total_a_cubrir ?? resumen.total_final;
     const pagosValidos = resumen.pagos_validos ?? resumen.total_pagado ?? resumen.total_recibido;
     const saf = resumen.saldo_favor_aplicado ?? resumen.saldo_a_favor_aplicado ?? resumen.saldos_aplicados ?? 0;
-    const diferencia = resumen.diferencia ?? resumen.pendiente;
+    const totalACobrar = Math.max(0, round2(Number(totalACubrir) - Number(saf || 0)));
+    const diferencia = round2(Number(totalACobrar) - Number(pagosValidos || 0));
     const tolerancia = resumen.tolerancia_aplicada ?? resumen.tolerancia;
-    const totalACobrar = resumen.total_a_cobrar ?? pedido?.total_a_cobrar;
     const excedente = Number(resumen.excedente_generado ?? resumen.excedente ?? 0);
     const badgeCob = resumen.cobertura ? badgeCoberturaPago(resumen.cobertura) : null;
+    const desfaseResumen = Math.abs(Number(resumen.total_a_cubrir ?? 0) - Number(totalACubrir)) > 0.009;
 
     let estadoTexto = badgeCob?.label || '—';
     if (Array.isArray(bloqueos) && bloqueos.length > 0) {
         estadoTexto = bloqueos[0];
     } else if (resumen.cubierto === true) {
-        estadoTexto = Number(diferencia) > 0.009 && Number(tolerancia) > 0
+        estadoTexto = Math.abs(diferencia) > 0.009 && Number(tolerancia) > 0
             ? 'Dentro de tolerancia'
             : (badgeCob?.label || 'Cubierto');
     }
@@ -131,6 +154,11 @@ export default function ResumenCoberturaPedido({
                 {tolerancia != null && Number(tolerancia) > 0 && (
                     <p className="text-[10px] theme-text-muted font-bold m-0">
                         Tolerancia aplicada: {formatearMoneda(tolerancia)}
+                    </p>
+                )}
+                {desfaseResumen && (
+                    <p className="text-[10px] font-bold text-amber-700 dark:text-amber-400 m-0">
+                        Los totales mostrados siguen el desglose del pedido (mercancía + envío + seguro), no un monto histórico almacenado.
                     </p>
                 )}
                 {Array.isArray(bloqueos) && bloqueos.length > 1 && (

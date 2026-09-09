@@ -30,8 +30,21 @@ $assert(str_contains($migration, "'rol'"), 'migración añade rol');
 $assert(str_contains($migration, "'departamento'"), 'migración añade departamento');
 $assert(str_contains($migration, "'evidencia_ruta'"), 'migración añade evidencia_ruta');
 
+$snapMigration = file_get_contents(__DIR__.'/../../../database/migrations/2026_09_08_170000_add_snapshot_json_pedido_bma_historial.php');
+$assert(str_contains($snapMigration, 'snapshot_json'), 'migración añade snapshot_json');
+
 $assert(str_contains($model, "'accion'"), 'modelo fillable accion');
 $assert(str_contains($model, 'accion_etiqueta'), 'modelo appends accion_etiqueta');
+$assert(str_contains($model, 'snapshot_json'), 'modelo fillable snapshot_json');
+
+$helper = file_get_contents(__DIR__.'/../../../app/Support/ControlPedidos/SnapshotHistorialPedidoBma.php');
+$assert(str_contains($helper, 'function financiero'), 'helper snapshot financiero');
+$assert(str_contains($helper, 'function exhibicion'), 'helper snapshot exhibicion');
+
+$detalle = file_get_contents(__DIR__.'/../../../resources/js/Pages/ControlPedidos/Partials/DetalleSnapshotBitacora.jsx');
+$tarjeta = file_get_contents(__DIR__.'/../../../resources/js/Pages/ControlPedidos/Partials/TarjetaEntradaBitacora.jsx');
+$assert(str_contains($detalle, 'DetalleSnapshotBitacora'), 'componente detalle snapshot');
+$assert(str_contains($tarjeta, 'TarjetaEntradaBitacora'), 'tarjeta bitácora expandible');
 
 $assert(str_contains($writer, 'snapshotActor'), 'writer toma snapshot de actor');
 $assert(str_contains($writer, 'evidencia'), 'writer acepta evidencia');
@@ -41,10 +54,14 @@ $assert(str_contains($acciones, 'CARGA_REMISION'), 'acción carga remisión');
 $assert(str_contains($acciones, 'CORRECCION'), 'acción corrección');
 $assert(str_contains($acciones, 'REABRIR_ENVIO'), 'acción reabrir envío');
 
-$assert(str_contains($modal, 'accion_etiqueta') || str_contains($modal, 'accionEtiqueta'), 'modal muestra acción');
-$assert(str_contains($modal, 'estatus_anterior') || str_contains($modal, 'estatusAnterior'), 'modal muestra estado anterior');
-$assert(str_contains($modal, 'departamento'), 'modal muestra departamento/rol');
-$assert(str_contains($modal, 'evidencia_ruta') || str_contains($modal, 'evidenciaRuta'), 'modal link evidencia');
+$assert(str_contains($modal, 'TarjetaEntradaBitacora'), 'modal usa tarjetas expandibles');
+$assert(str_contains($tarjeta, 'estatus_anterior') || str_contains($tarjeta, 'estatusAnterior'), 'tarjeta muestra estado anterior');
+$assert(str_contains($tarjeta, 'departamento'), 'tarjeta muestra departamento/rol');
+$assert(
+    str_contains($modal, 'evidencia_ruta') || str_contains($modal, 'evidenciaRuta')
+    || str_contains($tarjeta, 'evidencia_ruta') || str_contains($tarjeta, 'evidenciaRuta'),
+    'UI link evidencia'
+);
 
 $assert(str_contains($remision, 'CARGA_REMISION'), 'remisión escribe historial');
 $assert(str_contains($guia, 'CARGA_GUIA_PDF'), 'PDF guía escribe historial');

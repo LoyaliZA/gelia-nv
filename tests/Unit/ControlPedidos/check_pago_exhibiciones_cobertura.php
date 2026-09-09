@@ -51,6 +51,12 @@ $checks = [
     ['Aprobar mensaje pago validado', str_contains(file_get_contents($root.'/app/Services/ControlPedidos/AprobarPedidoBmaService.php'), 'Valide el pago antes de aprobar')],
     ['Aprobar mensaje remision', str_contains(file_get_contents($root.'/app/Services/ControlPedidos/AprobarPedidoBmaService.php'), 'Adjunte la remisión PDF antes de aprobar')],
     ['JS calcularResumenCoberturaPago', str_contains($styles, 'calcularResumenCoberturaPago')],
+    ['JS calcularTotalACubrirPedido', str_contains($styles, 'calcularTotalACubrirPedido')],
+    ['JS mezclarResumenCoberturaConPedido', str_contains($styles, 'mezclarResumenCoberturaConPedido')],
+    ['ResumenCobertura usa calcularTotalACubrirPedido', str_contains(
+        file_get_contents($root.'/resources/js/Pages/ControlPedidos/Auditar/Partials/ResumenCoberturaPedido.jsx'),
+        'calcularTotalACubrirPedido'
+    )],
     ['JS mensajePagoFaltante', str_contains($styles, 'mensajePagoFaltante')],
     ['UI Total a cubrir', str_contains($seccion, 'Total a cubrir')],
     ['UI Total pagado por el cliente', str_contains($seccion, 'Total pagado por el cliente')],

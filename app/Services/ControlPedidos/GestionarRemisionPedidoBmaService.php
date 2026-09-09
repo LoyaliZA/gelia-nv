@@ -5,6 +5,7 @@ namespace App\Services\ControlPedidos;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Models\ControlPedidos\PedidoBmaDocumento;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
+use App\Support\ControlPedidos\SnapshotHistorialPedidoBma;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 
@@ -52,7 +53,11 @@ class GestionarRemisionPedidoBmaService
                     ? "Remisión sustituida: {$nombre} (anterior conservada en historial)"
                     : "Remisión adjuntada: {$nombre}",
                 AccionesHistorialPedidoBma::CARGA_REMISION,
-                ['ruta' => $ruta, 'nombre' => $nombre]
+                ['ruta' => $ruta, 'nombre' => $nombre],
+                SnapshotHistorialPedidoBma::merge(
+                    SnapshotHistorialPedidoBma::archivo('remision', $ruta, $nombre, $archivo->getMimeType()),
+                    SnapshotHistorialPedidoBma::financiero($pedido->fresh())
+                )
             );
 
             $this->resolverCamposAuxiliar($pedido, ['remision'], $usuarioId, "Remisión corregida: {$nombre}");

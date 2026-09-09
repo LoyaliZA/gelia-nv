@@ -5,6 +5,7 @@ namespace App\Services\SaldosAFavor;
 use App\Models\SaldosAFavor\PedidoBmaPago;
 use App\Services\ControlPedidos\RegistrarHistorialPedidoService;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
+use App\Support\ControlPedidos\SnapshotHistorialPedidoBma;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -105,6 +106,7 @@ class ActualizarPagoPedidoBmaService
                 $rutaNueva
             ) {
                 $antesRevision = $pago->estado_revision;
+                $montoAnterior = (float) $pago->monto;
                 $attrs = [
                     'monto' => $monto,
                     'forma_pago' => $forma,
@@ -147,6 +149,16 @@ class ActualizarPagoPedidoBmaService
                     if ($invalidaRevision) {
                         $comentario .= sprintf(' Revisión %s → pendiente.', $antesRevision);
                     }
+                    $pedidoFresh = $pedido->fresh();
+                    $snapshot = SnapshotHistorialPedidoBma::merge(
+                        SnapshotHistorialPedidoBma::exhibicion($pago->fresh(['banco']), $pedidoFresh),
+                        [
+                            'cambios' => [
+                                'monto_anterior' => number_format($montoAnterior, 2, '.', ''),
+                                'monto_nuevo' => number_format($monto, 2, '.', ''),
+                            ],
+                        ]
+                    );
                     $this->historial->ejecutar(
                         $pedido->id,
                         $usuarioId,
@@ -156,7 +168,8 @@ class ActualizarPagoPedidoBmaService
                         AccionesHistorialPedidoBma::EDICION_EXHIBICION_PAGO,
                         isset($attrs['ruta_archivo'])
                             ? ['ruta' => $attrs['ruta_archivo'], 'nombre' => $attrs['nombre_original'] ?? null]
-                            : null
+                            : null,
+                        $snapshot
                     );
                 }
 

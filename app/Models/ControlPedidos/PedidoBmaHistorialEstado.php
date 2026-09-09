@@ -25,6 +25,11 @@ class PedidoBmaHistorialEstado extends Model
         'comentarios',
         'evidencia_ruta',
         'evidencia_nombre',
+        'snapshot_json',
+    ];
+
+    protected $casts = [
+        'snapshot_json' => 'array',
     ];
 
     protected $appends = [

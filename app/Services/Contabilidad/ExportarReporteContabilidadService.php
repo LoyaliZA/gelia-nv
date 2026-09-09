@@ -3,6 +3,7 @@
 namespace App\Services\Contabilidad;
 
 use App\Models\Contabilidad\Pedido;
+use App\Support\ContabilidadReporteAssets;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
@@ -133,6 +134,9 @@ class ExportarReporteContabilidadService
                 'utilidad' => $utilidadNeta,
             ],
             'periodo' => $filtroMes . ' ' . $filtroAnio,
+            'graficaPlataformasComparacion' => ContabilidadReporteAssets::datosGraficaIngresosPlataforma($pedidos),
+            'graficaPlataformasMayorIngreso' => ContabilidadReporteAssets::datosGraficaIngresosPlataforma($pedidos, 5, 'desc'),
+            'graficaPlataformasMenorIngreso' => ContabilidadReporteAssets::datosGraficaIngresosPlataforma($pedidos, 5, 'asc'),
         ])->setPaper('a4', 'landscape');
 
         $nombreArchivo = 'reporte_contabilidad_' . now()->format('Y-m-d_His') . '.pdf';

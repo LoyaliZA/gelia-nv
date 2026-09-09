@@ -8,6 +8,7 @@ use App\Services\Reportes\PagosPedidos\RegistrarCierrePagoPedidoService;
 use App\Services\SaldosAFavor\CoberturaPagoPedidoBmaService;
 use App\Services\SaldosAFavor\RegistrarPagoPedidoBmaService;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
+use App\Support\ControlPedidos\SnapshotHistorialPedidoBma;
 use App\Support\ControlPedidos\CamposIncorrectosPedidoBma;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -105,7 +106,13 @@ class ValidarPagoPedidoBmaService
                 $pedido->estatus,
                 $pedido->estatus,
                 $comentario,
-                AccionesHistorialPedidoBma::VALIDACION_PAGO
+                AccionesHistorialPedidoBma::VALIDACION_PAGO,
+                null,
+                SnapshotHistorialPedidoBma::merge(
+                    SnapshotHistorialPedidoBma::financiero($pedido->fresh()),
+                    SnapshotHistorialPedidoBma::cobertura($pedido->fresh()),
+                    ['validacion' => ['diferencia' => $diferencia, 'tolerancia' => $tolerancia]]
+                )
             );
 
             $pedidoFresh = $pedido->fresh([
