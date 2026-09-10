@@ -2,10 +2,13 @@
 
 namespace App\Services\Tiendanube;
 
+use App\Exceptions\Tiendanube\TiendanubeApiContractException;
 use App\Models\Tiendanube\TiendanubeConfiguracion;
 use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
+use JsonException;
 use RuntimeException;
 
 class TiendanubeApiClient
@@ -53,7 +56,7 @@ class TiendanubeApiClient
 
     public function getStore(): array
     {
-        return $this->decode($this->client()->get('/store'));
+        return $this->decodeObject($this->client()->get('/store'));
     }
 
     /**
@@ -63,7 +66,7 @@ class TiendanubeApiClient
     {
         $perPage ??= (int) config('tiendanube.per_page', 50);
 
-        return $this->decodeList($this->client()->get('/categories', [
+        return $this->decodeCollection($this->client()->get('/categories', [
             'page' => $page,
             'per_page' => $perPage,
         ]));
@@ -76,7 +79,7 @@ class TiendanubeApiClient
     {
         $perPage ??= (int) config('tiendanube.per_page', 50);
 
-        return $this->decodeList($this->client()->get('/products', [
+        return $this->decodeCollection($this->client()->get('/products', [
             'page' => $page,
             'per_page' => $perPage,
         ]));
@@ -84,12 +87,28 @@ class TiendanubeApiClient
 
     public function getProduct(int $id): array
     {
-        return $this->decode($this->client()->get("/products/{$id}"));
+        return $this->decodeObject($this->client()->get("/products/{$id}"));
     }
 
     public function getCategory(int $id): array
     {
-        return $this->decode($this->client()->get("/categories/{$id}"));
+        return $this->decodeObject($this->client()->get("/categories/{$id}"));
+    }
+
+    /**
+     * @return array{estado: 'existe'|'ausente'|'indeterminado', recurso: ?array<string, mixed>, detalle: ?string}
+     */
+    public function consultarProducto(int $id): array
+    {
+        return $this->consultarRecurso("/products/{$id}");
+    }
+
+    /**
+     * @return array{estado: 'existe'|'ausente'|'indeterminado', recurso: ?array<string, mixed>, detalle: ?string}
+     */
+    public function consultarCategoria(int $id): array
+    {
+        return $this->consultarRecurso("/categories/{$id}");
     }
 
     /**
@@ -103,7 +122,7 @@ class TiendanubeApiClient
 
     public function getWebhook(int $id): array
     {
-        return $this->decode($this->client()->get("/webhooks/{$id}"));
+        return $this->decodeObject($this->client()->get("/webhooks/{$id}"));
     }
 
     /**
@@ -111,7 +130,7 @@ class TiendanubeApiClient
      */
     public function createWebhook(string $event, string $url): array
     {
-        return $this->decode($this->client()->post('/webhooks', [
+        return $this->decodeObject($this->client()->post('/webhooks', [
             'event' => $event,
             'url' => $url,
         ]));
@@ -122,7 +141,7 @@ class TiendanubeApiClient
      */
     public function updateWebhook(int $id, string $event, string $url): array
     {
-        return $this->decode($this->client()->put("/webhooks/{$id}", [
+        return $this->decodeObject($this->client()->put("/webhooks/{$id}", [
             'event' => $event,
             'url' => $url,
         ]));
@@ -139,7 +158,7 @@ class TiendanubeApiClient
      */
     public function createProduct(array $payload): array
     {
-        return $this->decode($this->client()->post('/products', $payload));
+        return $this->decodeObject($this->client()->post('/products', $payload));
     }
 
     /**
@@ -148,7 +167,7 @@ class TiendanubeApiClient
      */
     public function updateProduct(int $id, array $payload): array
     {
-        return $this->decode($this->client()->put("/products/{$id}", $payload));
+        return $this->decodeObject($this->client()->put("/products/{$id}", $payload));
     }
 
     /**
@@ -157,7 +176,7 @@ class TiendanubeApiClient
      */
     public function updateVariant(int $productId, int $variantId, array $payload): array
     {
-        return $this->decode($this->client()->put("/products/{$productId}/variants/{$variantId}", $payload));
+        return $this->decodeObject($this->client()->put("/products/{$productId}/variants/{$variantId}", $payload));
     }
 
     /**
@@ -166,12 +185,35 @@ class TiendanubeApiClient
      */
     public function createProductImage(int $productId, array $payload): array
     {
-        return $this->decode($this->client()->post("/products/{$productId}/images", $payload));
+        return $this->decodeObject($this->client()->post("/products/{$productId}/images", $payload));
     }
 
     public function deleteProductImage(int $productId, int $imageId): void
     {
-        $this->assertOk($this->client()->delete("/products/{$productId}/images/{$imageId}"));
+        $this->deleteProductImageResult($productId, $imageId);
+    }
+
+    /**
+     * @return 'ok'|'no_encontrado'
+     */
+    public function deleteProductImageResult(int $productId, int $imageId): string
+    {
+        try {
+            $response = $this->client()->delete("/products/{$productId}/images/{$imageId}");
+        } catch (RequestException $e) {
+            $response = $e->response;
+            if ($response && $response->status() === 404) {
+                return 'no_encontrado';
+            }
+            throw $this->excepcionDesdeRespuesta($response, $e);
+        }
+
+        if ($response->status() === 404) {
+            return 'no_encontrado';
+        }
+        $this->assertOk($response);
+
+        return 'ok';
     }
 
     /**
@@ -191,12 +233,91 @@ class TiendanubeApiClient
         return $all;
     }
 
-    private function decode(Response $response): array
+    /**
+     * @return array{estado: 'existe'|'ausente'|'indeterminado', recurso: ?array<string, mixed>, detalle: ?string}
+     */
+    private function consultarRecurso(string $path): array
+    {
+        try {
+            $response = $this->client()->get($path);
+        } catch (RequestException $e) {
+            $response = $e->response;
+            if (! $response) {
+                return ['estado' => 'indeterminado', 'recurso' => null, 'detalle' => $e->getMessage()];
+            }
+        } catch (\Throwable $e) {
+            return ['estado' => 'indeterminado', 'recurso' => null, 'detalle' => $e->getMessage()];
+        }
+
+        if ($response->status() === 404) {
+            return ['estado' => 'ausente', 'recurso' => null, 'detalle' => null];
+        }
+
+        if (! $response->successful()) {
+            return ['estado' => 'indeterminado', 'recurso' => null, 'detalle' => "HTTP {$response->status()}"];
+        }
+
+        try {
+            $recurso = $this->decodeObject($response);
+        } catch (TiendanubeApiContractException $e) {
+            return ['estado' => 'indeterminado', 'recurso' => null, 'detalle' => $e->getMessage()];
+        }
+
+        if (! isset($recurso['id']) || ! is_numeric($recurso['id']) || (int) $recurso['id'] < 1) {
+            return ['estado' => 'indeterminado', 'recurso' => null, 'detalle' => 'Objeto sin ID válido.'];
+        }
+
+        return ['estado' => 'existe', 'recurso' => $recurso, 'detalle' => null];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function decodeJson(Response $response): array
     {
         $this->assertOk($response);
-        $json = $response->json();
 
-        return is_array($json) ? $json : [];
+        try {
+            $json = json_decode($response->body(), true, 512, JSON_THROW_ON_ERROR);
+        } catch (JsonException $e) {
+            throw new TiendanubeApiContractException('Respuesta JSON inválida de Tiendanube.', 0, $e);
+        }
+
+        if (! is_array($json)) {
+            throw new TiendanubeApiContractException('Se esperaba un documento JSON de tipo objeto o lista.');
+        }
+
+        return $json;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function decodeObject(Response $response): array
+    {
+        $data = $this->decodeJson($response);
+
+        if ($data !== [] && array_is_list($data)) {
+            throw new TiendanubeApiContractException('Se esperaba un objeto JSON.');
+        }
+
+        return $data;
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function decodeCollection(Response $response): array
+    {
+        $data = $this->decodeList($response);
+
+        foreach ($data as $indice => $item) {
+            if (! is_array($item) || ! isset($item['id']) || ! is_numeric($item['id']) || (int) $item['id'] < 1) {
+                throw new TiendanubeApiContractException("Recurso de catálogo sin ID válido (índice {$indice}).");
+            }
+        }
+
+        return $data;
     }
 
     /**
@@ -204,9 +325,25 @@ class TiendanubeApiClient
      */
     private function decodeList(Response $response): array
     {
-        $data = $this->decode($response);
+        $data = $this->decodeJson($response);
 
-        return array_is_list($data) ? $data : [];
+        if (! array_is_list($data)) {
+            throw new TiendanubeApiContractException('Se esperaba una lista JSON.');
+        }
+
+        return $data;
+    }
+
+    private function excepcionDesdeRespuesta(?Response $response, \Throwable $prev): RuntimeException
+    {
+        if (! $response) {
+            return new RuntimeException('Tiendanube API: '.$prev->getMessage(), 0, $prev);
+        }
+
+        $json = $response->json();
+        $detalle = is_array($json) ? $this->formatearErrorApi($json) : (string) $response->body();
+
+        return new RuntimeException("Tiendanube API HTTP {$response->status()}: {$detalle}", 0, $prev);
     }
 
     private function assertOk(Response $response): void

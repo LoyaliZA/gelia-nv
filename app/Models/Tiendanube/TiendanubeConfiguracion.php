@@ -16,12 +16,14 @@ class TiendanubeConfiguracion extends Model
         'scopes',
         'store_name',
         'store_url',
+        'config_generation',
     ];
 
     protected function casts(): array
     {
         return [
             'store_id' => 'integer',
+            'config_generation' => 'integer',
         ];
     }
 

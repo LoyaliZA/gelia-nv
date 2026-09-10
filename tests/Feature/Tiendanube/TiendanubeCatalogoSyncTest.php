@@ -147,6 +147,95 @@ class TiendanubeCatalogoSyncTest extends TestCase
             'id' => 500,
             'producto_id' => 100,
         ]);
+        $this->assertSame(0, (int) $log->eliminados_productos);
+    }
+
+    public function test_respuesta_invalida_no_depura(): void
+    {
+        config([
+            'tiendanube.api_base' => 'https://api.tiendanube.com/v1',
+            'tiendanube.per_page' => 50,
+            'tiendanube.sync_prune_enabled' => true,
+        ]);
+
+        TiendanubeConfiguracion::obtener()->fill([
+            'store_id' => 8004291,
+            'app_id' => '37163',
+            'access_token' => Crypt::encryptString('token-test'),
+        ])->save();
+
+        TiendanubeProducto::query()->create([
+            'id' => 999,
+            'name' => ['es' => 'Debe permanecer'],
+            'published' => false,
+        ]);
+
+        Http::fake(function (\Illuminate\Http\Client\Request $request) {
+            if (str_contains($request->url(), '/categories')) {
+                return Http::response(['unexpected' => 'object'], 200);
+            }
+
+            return Http::response([], 200);
+        });
+
+        $log = TiendanubeSyncLog::create([
+            'tipo' => 'completo',
+            'estado' => 'pendiente',
+        ]);
+
+        try {
+            app(TiendanubeCatalogoSyncService::class)->sincronizar($log);
+            $this->fail('Se esperaba un error de contrato.');
+        } catch (\Throwable $e) {
+            $this->assertNotSame('', $e->getMessage());
+        }
+
+        $log->refresh();
+        $this->assertSame('error', $log->estado);
+        $this->assertDatabaseHas('tiendanube_productos', ['id' => 999]);
+        $this->assertSame(0, (int) $log->eliminados_productos);
+    }
+
+    public function test_item_sin_id_no_depura(): void
+    {
+        config([
+            'tiendanube.api_base' => 'https://api.tiendanube.com/v1',
+            'tiendanube.per_page' => 50,
+            'tiendanube.sync_prune_enabled' => true,
+        ]);
+
+        TiendanubeConfiguracion::obtener()->fill([
+            'store_id' => 8004291,
+            'app_id' => '37163',
+            'access_token' => Crypt::encryptString('token-test'),
+        ])->save();
+
+        TiendanubeCategoria::query()->create([
+            'id' => 10,
+            'name' => ['es' => 'Local'],
+        ]);
+
+        Http::fake(function (\Illuminate\Http\Client\Request $request) {
+            if (str_contains($request->url(), '/categories')) {
+                return Http::response([
+                    ['name' => ['es' => 'Sin ID']],
+                ], 200);
+            }
+
+            return Http::response([], 200);
+        });
+
+        $log = TiendanubeSyncLog::create(['tipo' => 'completo', 'estado' => 'pendiente']);
+
+        try {
+            app(TiendanubeCatalogoSyncService::class)->sincronizar($log);
+            $this->fail('Se esperaba un error de contrato.');
+        } catch (\Throwable $e) {
+            $this->assertStringContainsString('ID', $e->getMessage());
+        }
+
+        $this->assertDatabaseHas('tiendanube_categorias', ['id' => 10]);
+        $this->assertSame('error', $log->fresh()->estado);
     }
 
     public function test_sync_elimina_productos_y_categorias_huerfanos(): void
@@ -155,6 +244,8 @@ class TiendanubeCatalogoSyncTest extends TestCase
             'tiendanube.api_base' => 'https://api.tiendanube.com/v1',
             'tiendanube.per_page' => 50,
             'tiendanube.user_agent' => 'Gelianv',
+            'tiendanube.sync_prune_enabled' => true,
+            'tiendanube.sync_prune_confirm_threshold' => 50,
         ]);
 
         TiendanubeConfiguracion::obtener()->fill([
@@ -184,6 +275,37 @@ class TiendanubeCatalogoSyncTest extends TestCase
 
         Http::fake(function (\Illuminate\Http\Client\Request $request) {
             $url = $request->url();
+
+            if (preg_match('#/categories/(\d+)#', $url, $m)) {
+                $id = (int) $m[1];
+                if ($id === 888) {
+                    return Http::response(['code' => 404], 404);
+                }
+
+                return Http::response([
+                    'id' => $id,
+                    'name' => ['es' => 'Aromas'],
+                    'handle' => ['es' => 'aromas'],
+                    'parent' => null,
+                ], 200);
+            }
+
+            if (preg_match('#/products/(\d+)#', $url, $m)) {
+                $id = (int) $m[1];
+                if ($id === 999) {
+                    return Http::response(['code' => 404], 404);
+                }
+
+                return Http::response([
+                    'id' => $id,
+                    'name' => ['es' => 'Perfume Demo'],
+                    'handle' => ['es' => 'perfume-demo'],
+                    'published' => true,
+                    'images' => [],
+                    'variants' => [],
+                    'categories' => [10],
+                ], 200);
+            }
 
             if (str_contains($url, '/categories')) {
                 if (str_contains($url, 'page=1')) {

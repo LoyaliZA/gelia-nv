@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Link2, Plus, Trash2 } from 'lucide-react';
+import { Link2, Plus, RotateCw, Trash2 } from 'lucide-react';
 import { geliaCardClass } from '../../../utils/geliaTheme';
 
 export default function PanelWebhooks({
@@ -117,6 +117,29 @@ export default function PanelWebhooks({
             await cargar();
         } catch (err) {
             setError(err.message || 'Error al eliminar webhook.');
+        }
+    };
+
+    const reintentarEntrega = async (id) => {
+        if (!permisos.configurar) return;
+        setError(null);
+        setMensaje(null);
+        try {
+            const res = await fetch(route('tiendanube.webhooks.entregas.reintentar', id), {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': csrfToken(),
+                    Accept: 'application/json',
+                },
+            });
+            const data = await res.json();
+            if (!res.ok || !data.success) {
+                throw new Error(data.message || 'No se pudo reencolar la entrega.');
+            }
+            setMensaje(data.message);
+            await cargarEntregas();
+        } catch (err) {
+            setError(err.message || 'No se pudo reencolar la entrega.');
         }
     };
 
@@ -295,13 +318,16 @@ export default function PanelWebhooks({
                                 <th className="px-3 py-2">Evento</th>
                                 <th className="px-3 py-2">Recurso</th>
                                 <th className="px-3 py-2">Estado</th>
+                                <th className="px-3 py-2">Intentos</th>
+                                <th className="px-3 py-2">Próxima</th>
                                 <th className="px-3 py-2">Cuándo</th>
+                                <th className="px-3 py-2 w-12" />
                             </tr>
                         </thead>
                         <tbody>
                             {entregas.length === 0 && (
                                 <tr>
-                                    <td colSpan={4} className="px-3 py-4 text-xs theme-text-muted">
+                                    <td colSpan={7} className="px-3 py-4 text-xs theme-text-muted">
                                         Sin entregas recientes.
                                     </td>
                                 </tr>
@@ -312,10 +338,26 @@ export default function PanelWebhooks({
                                     <td className="px-3 py-2 text-xs theme-text-muted">{d.resource_id || '—'}</td>
                                     <td className="px-3 py-2 text-xs theme-text-main" title={d.error || undefined}>
                                         {d.status}
-                                        {d.error ? ' · err' : ''}
+                                        {d.error ? ` · ${d.error}` : ''}
+                                    </td>
+                                    <td className="px-3 py-2 text-xs theme-text-muted">{d.attempts ?? 0}</td>
+                                    <td className="px-3 py-2 text-xs theme-text-muted whitespace-nowrap">
+                                        {d.next_attempt_at ? new Date(d.next_attempt_at).toLocaleString() : '—'}
                                     </td>
                                     <td className="px-3 py-2 text-xs theme-text-muted whitespace-nowrap">
                                         {d.created_at ? new Date(d.created_at).toLocaleString() : '—'}
+                                    </td>
+                                    <td className="px-3 py-2">
+                                        {d.puede_reintentar && (
+                                            <button
+                                                type="button"
+                                                onClick={() => reintentarEntrega(d.id)}
+                                                className="p-2 rounded-lg theme-text-muted hover:theme-text-main"
+                                                title="Reintentar"
+                                            >
+                                                <RotateCw className="w-4 h-4" />
+                                            </button>
+                                        )}
                                     </td>
                                 </tr>
                             ))}

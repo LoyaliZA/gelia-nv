@@ -63,5 +63,12 @@ export function setStoredTiendanubeImportWidgetPos(pos) {
     );
 }
 
-export const ESTADOS_ACTIVOS = ['pendiente', 'en_proceso'];
-export const ESTADOS_TERMINALES = ['completado', 'error'];
+export const ESTADOS_ACTIVOS = [
+    'pendiente',
+    'en_proceso',
+    'validando',
+    'requiere_revision',
+    'lista',
+    'procesando',
+];
+export const ESTADOS_TERMINALES = ['completado', 'completado_con_incidencias', 'error'];

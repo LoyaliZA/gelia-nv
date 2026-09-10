@@ -21,7 +21,7 @@ async function resolveSku(sku) {
         headers: { Accept: 'application/json' },
     });
     if (!res.ok) {
-        return { sku, encontrado: false, producto_id: null, nombre: null, imagen_actual: null };
+        return { sku, estado: 'no_encontrado', encontrado: false, producto_id: null, nombre: null, imagen_actual: null, candidatos: [] };
     }
     return res.json();
 }
@@ -49,8 +49,11 @@ async function buildRow(file) {
         height: dims.height,
         parsed,
         resolved,
+        productoIdElegido: resolved?.producto_id || null,
+        solicitudClave: crypto.randomUUID?.() || `img-${Date.now()}-${rowSeq}`,
         status: 'pending',
         message: null,
+        operacionId: null,
     };
 }
 
@@ -136,9 +139,12 @@ export default function PanelVincularImagenes({
 
     const subir = async () => {
         if (!permisos.editar || !credencialesOk || uploading) return;
-        const listos = rows.filter((r) => r.resolved?.encontrado && r.resolved?.producto_id);
+        const listos = rows.filter((r) => {
+            const pid = r.productoIdElegido || (r.resolved?.encontrado ? r.resolved.producto_id : null);
+            return !!pid;
+        });
         if (!listos.length) {
-            setError('No hay archivos con SKU vinculado a un producto.');
+            setError('No hay archivos con SKU vinculado a un producto. Si el SKU está en más de un producto, elige el destino.');
             return;
         }
 
@@ -166,6 +172,37 @@ export default function PanelVincularImagenes({
                 if (!res.ok || !data.success) {
                     throw new Error(data.message || 'No se pudo iniciar la importación.');
                 }
+                const revisionRes = await fetch(route('tiendanube.imagenes.importar.revision', data.import_id), {
+                    headers: { Accept: 'application/json' },
+                });
+                if (revisionRes.ok) {
+                    const revision = await revisionRes.json();
+                    const items = (revision.items || [])
+                        .filter((item) => ['pendiente', 'requiere_seleccion'].includes(item.estado))
+                        .map((item) => {
+                            const row = listos.find((r) => r.filename === item.filename || r.file.name === item.filename);
+                            return {
+                                id: item.id,
+                                producto_id: row?.productoIdElegido || row?.resolved?.producto_id || item.producto_id,
+                                excluido: false,
+                            };
+                        });
+                    if (items.length) {
+                        const conf = await fetch(route('tiendanube.imagenes.importar.confirmar', data.import_id), {
+                            method: 'POST',
+                            headers: {
+                                'X-CSRF-TOKEN': csrfToken(),
+                                Accept: 'application/json',
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({ items }),
+                        });
+                        const confData = await conf.json();
+                        if (!conf.ok || !confData.success) {
+                            throw new Error(confData.message || 'No se pudo confirmar el lote.');
+                        }
+                    }
+                }
                 setBgImportId(data.import_id);
                 setBgPreview(data.preview || null);
                 setShowBgModal(true);
@@ -187,10 +224,11 @@ export default function PanelVincularImagenes({
                 body.append('reemplazar', reemplazar ? '1' : '0');
                 body.append('convertir_webp', convertirWebp ? '1' : '0');
                 body.append('modo_1280', modo1280);
+                body.append('solicitud_clave', row.solicitudClave || crypto.randomUUID());
                 if (row.parsed?.position) {
                     body.append('position', String(row.parsed.position));
                 }
-                const res = await fetch(route('tiendanube.productos.imagenes.store', row.resolved.producto_id), {
+                const res = await fetch(route('tiendanube.productos.imagenes.store', row.productoIdElegido || row.resolved.producto_id), {
                     method: 'POST',
                     headers: {
                         'X-CSRF-TOKEN': csrfToken(),
@@ -201,6 +239,15 @@ export default function PanelVincularImagenes({
                 const data = await res.json();
                 if (!res.ok || !data.success) {
                     throw new Error(data.message || 'Error al subir.');
+                }
+                if (data.parcial && data.operacion?.id) {
+                    setRows((prev) => prev.map((r) => (r.id === row.id ? {
+                        ...r,
+                        status: 'parcial',
+                        message: data.message || 'Carga parcial',
+                        operacionId: data.operacion.id,
+                    } : r)));
+                    continue;
                 }
                 setRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, status: 'ok', message: data.message || 'OK' } : r)));
             } catch (err) {
@@ -218,7 +265,7 @@ export default function PanelVincularImagenes({
         addFiles(e.dataTransfer.files);
     };
 
-    const listos = rows.filter((r) => r.resolved?.encontrado).length;
+    const listos = rows.filter((r) => r.productoIdElegido || r.resolved?.encontrado).length;
 
     return (
         <div className="space-y-4">
@@ -305,7 +352,8 @@ export default function PanelVincularImagenes({
                     </div>
                     <ul className="space-y-2 max-h-80 overflow-y-auto">
                         {rows.map((row) => {
-                            const ok = row.resolved?.encontrado;
+                            const ok = row.resolved?.encontrado || !!row.productoIdElegido;
+                            const ambiguo = row.resolved?.estado === 'ambiguo';
                             return (
                                 <li
                                     key={row.id}
@@ -325,8 +373,39 @@ export default function PanelVincularImagenes({
                                         </p>
                                         {ok ? (
                                             <p className="text-[10px] font-bold theme-text-main">
-                                                → {row.resolved.nombre} (#{row.resolved.producto_id})
+                                                → {row.resolved.nombre} (#{row.productoIdElegido || row.resolved.producto_id})
                                             </p>
+                                        ) : ambiguo ? (
+                                            <div className="space-y-1">
+                                                <p className="text-[10px] font-bold text-amber-600">
+                                                    SKU en más de un producto. Elige el destino.
+                                                </p>
+                                                <select
+                                                    className="w-full text-[10px] rounded-lg border theme-border bg-transparent px-2 py-1"
+                                                    value={row.productoIdElegido || ''}
+                                                    onChange={(e) => {
+                                                        const productoId = e.target.value ? Number(e.target.value) : null;
+                                                        const candidato = (row.resolved.candidatos || []).find((c) => c.producto_id === productoId);
+                                                        setRows((prev) => prev.map((r) => (r.id === row.id ? {
+                                                            ...r,
+                                                            productoIdElegido: productoId,
+                                                            resolved: {
+                                                                ...r.resolved,
+                                                                encontrado: !!productoId,
+                                                                producto_id: productoId,
+                                                                nombre: candidato?.nombre || r.resolved.nombre,
+                                                            },
+                                                        } : r)));
+                                                    }}
+                                                >
+                                                    <option value="">Elegir producto</option>
+                                                    {(row.resolved.candidatos || []).map((c) => (
+                                                        <option key={c.producto_id} value={c.producto_id}>
+                                                            {c.nombre} (#{c.producto_id})
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </div>
                                         ) : (
                                             <p className="text-[10px] font-bold text-amber-600">
                                                 {row.parsed
@@ -336,6 +415,48 @@ export default function PanelVincularImagenes({
                                         )}
                                         {row.status === 'ok' && (
                                             <p className="text-[10px] font-bold text-emerald-600">{row.message || 'OK'}</p>
+                                        )}
+                                        {row.status === 'parcial' && (
+                                            <div className="space-y-1">
+                                                <p className="text-[10px] font-bold text-amber-600">{row.message}</p>
+                                                {row.operacionId && (
+                                                    <button
+                                                        type="button"
+                                                        className="text-[10px] font-black uppercase underline theme-text-main"
+                                                        disabled={uploading}
+                                                        onClick={async () => {
+                                                            setUploading(true);
+                                                            try {
+                                                                const res = await fetch(route('tiendanube.imagen_operaciones.reconciliar', row.operacionId), {
+                                                                    method: 'POST',
+                                                                    headers: {
+                                                                        'X-CSRF-TOKEN': csrfToken(),
+                                                                        Accept: 'application/json',
+                                                                    },
+                                                                });
+                                                                const data = await res.json();
+                                                                if (!res.ok) throw new Error(data.message || 'No se pudo completar.');
+                                                                setRows((prev) => prev.map((r) => (r.id === row.id ? {
+                                                                    ...r,
+                                                                    status: data.parcial ? 'parcial' : 'ok',
+                                                                    message: data.message,
+                                                                    operacionId: data.operacion?.id || r.operacionId,
+                                                                } : r)));
+                                                            } catch (err) {
+                                                                setRows((prev) => prev.map((r) => (r.id === row.id ? {
+                                                                    ...r,
+                                                                    message: err.message,
+                                                                } : r)));
+                                                            } finally {
+                                                                setUploading(false);
+                                                                onChanged?.();
+                                                            }
+                                                        }}
+                                                    >
+                                                        Completar reemplazo
+                                                    </button>
+                                                )}
+                                            </div>
                                         )}
                                         {row.status === 'error' && (
                                             <p className="text-[10px] font-bold text-red-500">{row.message}</p>

@@ -3,6 +3,7 @@
 namespace Tests\Feature\Tiendanube;
 
 use App\Jobs\Tiendanube\ProcessTiendanubeWebhook;
+use App\Models\AuditoriaConfiguracion;
 use App\Models\Tiendanube\TiendanubeCategoria;
 use App\Models\Tiendanube\TiendanubeConfiguracion;
 use App\Models\Tiendanube\TiendanubeProducto;
@@ -10,11 +11,14 @@ use App\Models\Tiendanube\TiendanubeWebhookDelivery;
 use App\Models\User;
 use App\Services\Tiendanube\TiendanubeApiClient;
 use App\Services\Tiendanube\TiendanubeCatalogoSyncService;
+use App\Services\Tiendanube\TiendanubeOperacionTiendaService;
 use App\Services\Tiendanube\TiendanubePrivacyService;
+use App\Services\Tiendanube\TiendanubeWebhookInboxService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Str;
 use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
 
@@ -36,6 +40,8 @@ class TiendanubeWebhookTest extends TestCase
             'tiendanube.user_agent' => 'Gelianv',
             'tiendanube.app_secret' => $this->secret,
             'tiendanube.webhook_url' => $this->webhookUrl,
+            'tiendanube.store_id' => null,
+            'tiendanube.access_token' => null,
             'tiendanube.webhook_events' => [
                 'product/updated',
                 'product/created',
@@ -78,8 +84,36 @@ class TiendanubeWebhookTest extends TestCase
         (new ProcessTiendanubeWebhook($delivery->id))->handle(
             app(TiendanubeApiClient::class),
             app(TiendanubeCatalogoSyncService::class),
-            app(TiendanubePrivacyService::class)
+            app(TiendanubePrivacyService::class),
+            app(TiendanubeWebhookInboxService::class)
         );
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function productoApi(string $nombre): array
+    {
+        return [
+            'id' => 1948209,
+            'name' => ['es' => $nombre],
+            'description' => ['es' => '<p>Desc</p>'],
+            'handle' => ['es' => 'perfume-webhook'],
+            'brand' => 'Gelia',
+            'published' => true,
+            'seo_title' => 'SEO WH',
+            'seo_description' => 'SEO desc',
+            'images' => [],
+            'variants' => [
+                [
+                    'id' => 1,
+                    'sku' => 'SKU-WH-1',
+                    'price' => '100.00',
+                    'stock' => 5,
+                ],
+            ],
+            'categories' => [],
+        ];
     }
 
     public function test_receptor_rechaza_sin_firma(): void
@@ -129,7 +163,7 @@ class TiendanubeWebhookTest extends TestCase
         $this->assertDatabaseHas('tiendanube_webhook_deliveries', [
             'event' => 'product/updated',
             'resource_id' => '1948209',
-            'status' => 'received',
+            'status' => 'queued',
         ]);
 
         Queue::assertPushed(ProcessTiendanubeWebhook::class);
@@ -137,26 +171,7 @@ class TiendanubeWebhookTest extends TestCase
         $delivery = TiendanubeWebhookDelivery::query()->firstOrFail();
 
         Http::fake([
-            'api.tiendanube.com/v1/8004291/products/1948209' => Http::response([
-                'id' => 1948209,
-                'name' => ['es' => 'Perfume Webhook'],
-                'description' => ['es' => '<p>Desc</p>'],
-                'handle' => ['es' => 'perfume-webhook'],
-                'brand' => 'Gelia',
-                'published' => true,
-                'seo_title' => 'SEO WH',
-                'seo_description' => 'SEO desc',
-                'images' => [],
-                'variants' => [
-                    [
-                        'id' => 1,
-                        'sku' => 'SKU-WH-1',
-                        'price' => '100.00',
-                        'stock' => 5,
-                    ],
-                ],
-                'categories' => [],
-            ]),
+            'api.tiendanube.com/v1/8004291/products/1948209' => Http::response($this->productoApi('Perfume Webhook')),
         ]);
 
         $this->runDeliveryJob($delivery);
@@ -313,6 +328,221 @@ class TiendanubeWebhookTest extends TestCase
             ->assertJsonPath('entregas.0.status', 'processed');
     }
 
+    public function test_dos_cuerpos_identicos_se_persisten_y_el_espejo_refleja_el_estado_remoto_final(): void
+    {
+        Queue::fake();
+
+        $payload = [
+            'store_id' => 8004291,
+            'event' => 'product/updated',
+            'id' => 1948209,
+        ];
+
+        $this->postSignedWebhook($payload)->assertOk();
+        $this->postSignedWebhook($payload)->assertOk();
+
+        $this->assertSame(2, TiendanubeWebhookDelivery::query()->count());
+
+        $entregas = TiendanubeWebhookDelivery::query()->orderBy('id')->get();
+        Http::fake([
+            'api.tiendanube.com/v1/8004291/products/1948209' => Http::sequence()
+                ->push($this->productoApi('Primera version'))
+                ->push($this->productoApi('Version final')),
+        ]);
+
+        $this->runDeliveryJob($entregas[0]);
+        $this->runDeliveryJob($entregas[1]);
+
+        $this->assertSame('processed', $entregas[0]->fresh()->status);
+        $this->assertSame('processed', $entregas[1]->fresh()->status);
+        $this->assertSame('Version final', TiendanubeProducto::query()->find(1948209)?->name['es'] ?? null);
+    }
+
+    public function test_fallo_de_broker_deja_received_y_el_recuperador_reencola(): void
+    {
+        $inbox = app(TiendanubeWebhookInboxService::class);
+        $delivery = $inbox->persistReceived([
+            'store_id' => 8004291,
+            'event' => 'product/updated',
+            'id' => 1948209,
+        ], hash('sha256', 'cuerpo-identico'));
+
+        $dispatcher = \Mockery::mock(\Illuminate\Contracts\Bus\Dispatcher::class);
+        $dispatcher->shouldReceive('dispatch')->andThrow(new \RuntimeException('broker down'));
+        $dispatcher->shouldReceive('hasCommandHandler')->andReturn(false);
+        $this->app->instance(\Illuminate\Contracts\Bus\Dispatcher::class, $dispatcher);
+
+        $this->assertFalse($inbox->tryDispatch($delivery));
+        $this->assertSame('received', $delivery->fresh()->status);
+    }
+
+    public function test_recuperador_reencola_entregas_received(): void
+    {
+        Queue::fake();
+
+        $delivery = app(TiendanubeWebhookInboxService::class)->persistReceived([
+            'store_id' => 8004291,
+            'event' => 'product/updated',
+            'id' => 1948209,
+        ], hash('sha256', 'recuperar-received'));
+
+        $this->assertSame('received', $delivery->status);
+
+        $this->artisan('tiendanube:recuperar-webhooks')->assertSuccessful();
+        Queue::assertPushed(ProcessTiendanubeWebhook::class, fn (ProcessTiendanubeWebhook $job) => $job->deliveryId === $delivery->id);
+    }
+
+    public function test_solo_un_trabajador_adquiere_la_entrega(): void
+    {
+        $inbox = app(TiendanubeWebhookInboxService::class);
+        $delivery = $inbox->persistReceived([
+            'store_id' => 8004291,
+            'event' => 'product/updated',
+            'id' => 1948209,
+        ], hash('sha256', 'lease-test'));
+
+        $this->assertTrue($inbox->tryAcquire($delivery, (string) Str::uuid()));
+        $this->assertFalse($inbox->tryAcquire($delivery->fresh(), (string) Str::uuid()));
+        $this->assertSame('processing', $delivery->fresh()->status);
+
+        Http::fake([
+            'api.tiendanube.com/v1/8004291/products/1948209' => Http::response($this->productoApi('Unico')),
+        ]);
+
+        $this->runDeliveryJob($delivery);
+        $this->assertSame('processing', $delivery->fresh()->status);
+        $this->assertNull(TiendanubeProducto::query()->find(1948209));
+    }
+
+    public function test_lease_vencido_es_recuperable(): void
+    {
+        Queue::fake();
+
+        $delivery = TiendanubeWebhookDelivery::query()->create([
+            'store_id' => 8004291,
+            'event' => 'product/updated',
+            'resource_id' => '1948209',
+            'payload' => ['store_id' => 8004291, 'event' => 'product/updated', 'id' => 1948209],
+            'payload_hash' => hash('sha256', 'lease-vencido'),
+            'hmac_valid' => true,
+            'status' => 'processing',
+            'attempts' => 1,
+            'lease_token' => (string) Str::uuid(),
+            'lease_expires_at' => now()->subMinutes(10),
+        ]);
+
+        $this->artisan('tiendanube:recuperar-webhooks')->assertSuccessful();
+        Queue::assertPushed(ProcessTiendanubeWebhook::class, fn (ProcessTiendanubeWebhook $job) => $job->deliveryId === $delivery->id);
+    }
+
+    public function test_reintentos_agotados_marcan_failed(): void
+    {
+        config(['tiendanube.webhook_max_attempts' => 1]);
+
+        $delivery = app(TiendanubeWebhookInboxService::class)->persistReceived([
+            'store_id' => 8004291,
+            'event' => 'product/updated',
+            'id' => 1948209,
+        ], hash('sha256', 'fail-max'));
+
+        Http::fake([
+            'api.tiendanube.com/v1/8004291/products/1948209' => Http::response(['message' => 'down'], 500),
+        ]);
+
+        $this->runDeliveryJob($delivery);
+
+        $this->assertSame('failed', $delivery->fresh()->status);
+        $this->assertNotNull($delivery->fresh()->error);
+    }
+
+    public function test_error_recuperable_queda_retry_pending(): void
+    {
+        config(['tiendanube.webhook_max_attempts' => 5]);
+
+        $delivery = app(TiendanubeWebhookInboxService::class)->persistReceived([
+            'store_id' => 8004291,
+            'event' => 'product/updated',
+            'id' => 1948209,
+        ], hash('sha256', 'retry-pending'));
+
+        Http::fake([
+            'api.tiendanube.com/v1/8004291/products/1948209' => Http::response(['message' => 'down'], 500),
+        ]);
+
+        $this->runDeliveryJob($delivery);
+
+        $fresh = $delivery->fresh();
+        $this->assertSame('retry_pending', $fresh->status);
+        $this->assertNotNull($fresh->next_attempt_at);
+        $this->assertSame(1, $fresh->attempts);
+    }
+
+    public function test_trabajador_antiguo_no_finaliza_una_adquisicion_nueva(): void
+    {
+        $inbox = app(TiendanubeWebhookInboxService::class);
+        $delivery = $inbox->persistReceived([
+            'store_id' => 8004291,
+            'event' => 'product/updated',
+            'id' => 1948209,
+        ], hash('sha256', 'token-viejo'));
+
+        $tokenViejo = (string) Str::uuid();
+        $this->assertTrue($inbox->tryAcquire($delivery, $tokenViejo));
+
+        $delivery->forceFill([
+            'lease_expires_at' => now()->subMinute(),
+        ])->save();
+
+        $tokenNuevo = (string) Str::uuid();
+        $this->assertTrue($inbox->tryAcquire($delivery->fresh(), $tokenNuevo));
+        $this->assertFalse($inbox->markProcessed($delivery->fresh(), $tokenViejo));
+        $this->assertSame('processing', $delivery->fresh()->status);
+        $this->assertSame($tokenNuevo, $delivery->fresh()->lease_token);
+    }
+
+    public function test_reintento_manual_reencola_sin_marcar_procesado(): void
+    {
+        Permission::findOrCreate('tiendanube.ver', 'web');
+        Permission::findOrCreate('tiendanube.configurar', 'web');
+
+        $user = User::factory()->create();
+        $user->givePermissionTo(['tiendanube.ver', 'tiendanube.configurar']);
+
+        $delivery = TiendanubeWebhookDelivery::query()->create([
+            'store_id' => 8004291,
+            'event' => 'product/updated',
+            'resource_id' => '1948209',
+            'payload' => ['store_id' => 8004291, 'event' => 'product/updated', 'id' => 1948209],
+            'payload_hash' => hash('sha256', 'manual-retry'),
+            'hmac_valid' => true,
+            'status' => 'failed',
+            'error' => 'fallo previo',
+            'attempts' => 10,
+        ]);
+
+        Queue::fake();
+
+        $this->actingAs($user)
+            ->postJson(route('tiendanube.webhooks.entregas.reintentar', $delivery))
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('entrega.status', 'queued');
+
+        $fresh = $delivery->fresh();
+        $this->assertSame('queued', $fresh->status);
+        $this->assertSame(0, $fresh->attempts);
+        $this->assertNull($fresh->error);
+        $this->assertSame($user->id, $fresh->retried_by_user_id);
+        Queue::assertPushed(ProcessTiendanubeWebhook::class);
+        $this->assertNotSame('processed', $fresh->status);
+
+        $this->assertDatabaseHas('auditorias_configuraciones', [
+            'modulo' => 'Tiendanube',
+            'accion' => 'Reintento entrega webhook',
+        ]);
+        $this->assertNotNull(AuditoriaConfiguracion::query()->where('accion', 'Reintento entrega webhook')->first());
+    }
+
     public function test_aplicar_recomendados_crea_solo_faltantes(): void
     {
         $this->withoutMiddleware([
@@ -370,5 +600,33 @@ class TiendanubeWebhookTest extends TestCase
             ['product/created', 'app/uninstalled'],
             $created
         );
+    }
+
+    public function test_webhook_diferido_se_conserva_durante_sync_y_se_libera(): void
+    {
+        Queue::fake();
+
+        app(TiendanubeOperacionTiendaService::class)->adquirirExclusiva(
+            8004291,
+            TiendanubeOperacionTiendaService::TIPO_CATALOGO_SYNC,
+            1,
+            1
+        );
+
+        $this->postSignedWebhook([
+            'store_id' => 8004291,
+            'event' => 'product/updated',
+            'id' => 1948209,
+        ])->assertOk();
+
+        $delivery = TiendanubeWebhookDelivery::query()->firstOrFail();
+        $this->assertSame(TiendanubeWebhookDelivery::STATUS_DEFERRED, $delivery->status);
+        Queue::assertNothingPushed();
+
+        app(TiendanubeOperacionTiendaService::class)->liberar(8004291, null, 1);
+        app(TiendanubeWebhookInboxService::class)->liberarEntregasDiferidas(8004291);
+
+        $this->assertSame(TiendanubeWebhookDelivery::STATUS_QUEUED, $delivery->fresh()->status);
+        Queue::assertPushed(ProcessTiendanubeWebhook::class);
     }
 }

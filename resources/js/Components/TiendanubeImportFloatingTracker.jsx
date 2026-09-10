@@ -130,6 +130,11 @@ export default function TiendanubeImportFloatingTracker({ canView = false }) {
                                 `Carga Tiendanube #${data.id}: ${data.exitosos}/${data.total_archivos} OK.`,
                                 'success'
                             );
+                        } else if (data.estado === 'completado_con_incidencias') {
+                            emitToast(
+                                `Carga Tiendanube #${data.id} terminó con incidencias (${data.exitosos ?? 0} OK, ${data.fallidos ?? 0} fallidos).`,
+                                'error'
+                            );
                         } else {
                             emitToast(data.mensaje_error || `Carga Tiendanube #${data.id} falló.`, 'error');
                         }

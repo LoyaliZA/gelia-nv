@@ -1,7 +1,7 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\TiendanubeController;
+use Illuminate\Support\Facades\Route;
 
 Route::middleware(['can:tiendanube.ver'])
     ->prefix('tiendanube')
@@ -14,10 +14,14 @@ Route::middleware(['can:tiendanube.ver'])
         Route::post('/productos', [TiendanubeController::class, 'storeProducto'])->name('productos.store')->middleware('can:tiendanube.productos.editar');
         Route::put('/productos/{id}', [TiendanubeController::class, 'updateProducto'])->name('productos.update')->middleware('can:tiendanube.productos.editar');
         Route::post('/productos/{id}/imagenes', [TiendanubeController::class, 'storeImagen'])->name('productos.imagenes.store')->middleware('can:tiendanube.productos.editar');
+        Route::post('/imagen-operaciones/{id}/reconciliar', [TiendanubeController::class, 'reconciliarImagenOperacion'])->name('imagen_operaciones.reconciliar')->middleware('can:tiendanube.productos.editar');
         Route::get('/skus/resolver', [TiendanubeController::class, 'resolverSku'])->name('skus.resolver')->middleware('can:tiendanube.productos.editar');
         Route::post('/imagenes/importar', [TiendanubeController::class, 'importarImagenes'])->name('imagenes.importar')->middleware('can:tiendanube.productos.editar');
         Route::post('/imagenes/importar/archivos', [TiendanubeController::class, 'importarImagenesArchivos'])->name('imagenes.importar.archivos')->middleware('can:tiendanube.productos.editar');
         Route::get('/imagenes/importar/{id}', [TiendanubeController::class, 'progresoImportImagenes'])->name('imagenes.importar.progreso');
+        Route::get('/imagenes/importar/{id}/revision', [TiendanubeController::class, 'revisionImportImagenes'])->name('imagenes.importar.revision')->middleware('can:tiendanube.productos.editar');
+        Route::post('/imagenes/importar/{id}/revision', [TiendanubeController::class, 'confirmarImportImagenes'])->name('imagenes.importar.confirmar')->middleware('can:tiendanube.productos.editar');
+        Route::post('/imagenes/importar/{id}/reintentar', [TiendanubeController::class, 'reintentarImportImagenes'])->name('imagenes.importar.reintentar')->middleware('can:tiendanube.productos.editar');
         Route::get('/imagenes/importar/{id}/reporte', [TiendanubeController::class, 'reporteImportImagenes'])->name('imagenes.importar.reporte');
         Route::get('/imagenes/importar/{id}/reporte-dimensiones', [TiendanubeController::class, 'reporteImportDimensiones'])->name('imagenes.importar.reporte_dimensiones');
         Route::get('/imagenes/reporte-alertas', [TiendanubeController::class, 'reporteAlertasImagenes'])->name('imagenes.reporte_alertas');
@@ -27,6 +31,7 @@ Route::middleware(['can:tiendanube.ver'])
         Route::post('/catalogo/limpiar', [TiendanubeController::class, 'limpiarCatalogo'])->name('catalogo.limpiar')->middleware('can:tiendanube.configurar');
         Route::get('/webhooks', [TiendanubeController::class, 'listarWebhooks'])->name('webhooks.index')->middleware('can:tiendanube.configurar');
         Route::get('/webhooks/entregas', [TiendanubeController::class, 'listarEntregasWebhook'])->name('webhooks.entregas')->middleware('can:tiendanube.configurar');
+        Route::post('/webhooks/entregas/{delivery}/reintentar', [TiendanubeController::class, 'reintentarEntregaWebhook'])->name('webhooks.entregas.reintentar')->middleware('can:tiendanube.configurar');
         Route::post('/webhooks/aplicar-recomendados', [TiendanubeController::class, 'aplicarWebhooksRecomendados'])->name('webhooks.aplicar_recomendados')->middleware('can:tiendanube.configurar');
         Route::post('/webhooks', [TiendanubeController::class, 'crearWebhook'])->name('webhooks.store')->middleware('can:tiendanube.configurar');
         Route::put('/webhooks/{id}', [TiendanubeController::class, 'actualizarWebhook'])->name('webhooks.update')->middleware('can:tiendanube.configurar');
