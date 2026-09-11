@@ -2,6 +2,7 @@
 
 namespace App\Services\Tiendanube;
 
+use App\Exceptions\Tiendanube\TiendanubeApiException;
 use App\Models\Tiendanube\TiendanubeProducto;
 use App\Models\Tiendanube\TiendanubeProductoImagen;
 use App\Models\Tiendanube\TiendanubeProductoImagenOperacion;
@@ -371,17 +372,16 @@ class TiendanubeProductoImagenOperacionService
         try {
             $remote = $this->api->createProductImage((int) $op->producto_id, $preparado['payload']);
         } catch (ConnectionException $e) {
-            $op->update([
-                'estado' => TiendanubeProductoImagenOperacion::ESTADO_RESULTADO_INCIERTO,
-                'error' => 'La carga venció o se interrumpió. Consultando el catálogo remoto; no se repetirá el POST automáticamente. '.$e->getMessage(),
-            ]);
-            $this->intentarIdentificarImagenNueva($op);
-            $op->refresh();
-            if (! $op->imagen_nueva_id) {
-                throw new RuntimeException($op->error);
-            }
+            $this->marcarCargaInciertaYReconciliar($op, $e->getMessage());
 
             return;
+        } catch (TiendanubeApiException $e) {
+            if ($this->esCargaIncierta($e)) {
+                $this->marcarCargaInciertaYReconciliar($op, $e->getMessage());
+
+                return;
+            }
+            $this->marcarCargaFallida($op, $e);
         } catch (\Throwable $e) {
             $mensaje = $e->getMessage();
             if ($this->esErrorLimiteImagenes($mensaje)) {
@@ -568,6 +568,38 @@ class TiendanubeProductoImagenOperacionService
         }
 
         return array_values(array_unique($ids));
+    }
+
+    private function esCargaIncierta(TiendanubeApiException $e): bool
+    {
+        return $e->summary === 'connection_failed'
+            || in_array($e->statusCode, [0, 502, 503, 504], true);
+    }
+
+    private function marcarCargaInciertaYReconciliar(TiendanubeProductoImagenOperacion $op, string $detalle): void
+    {
+        $op->update([
+            'estado' => TiendanubeProductoImagenOperacion::ESTADO_RESULTADO_INCIERTO,
+            'error' => 'La carga venció o se interrumpió. Consultando el catálogo remoto; no se repetirá el POST automáticamente. '.$detalle,
+        ]);
+        $this->intentarIdentificarImagenNueva($op);
+        $op->refresh();
+        if (! $op->imagen_nueva_id) {
+            throw new RuntimeException($op->error);
+        }
+    }
+
+    private function marcarCargaFallida(TiendanubeProductoImagenOperacion $op, \Throwable $e): never
+    {
+        $mensaje = $e->getMessage();
+        if ($this->esErrorLimiteImagenes($mensaje)) {
+            $mensaje = 'Tiendanube rechazó la carga por límite de imágenes. No se eliminaron las anteriores. '.$mensaje;
+        }
+        $op->update([
+            'estado' => TiendanubeProductoImagenOperacion::ESTADO_FALLIDA,
+            'error' => $mensaje,
+        ]);
+        throw new RuntimeException($mensaje, 0, $e);
     }
 
     private function esErrorLimiteImagenes(string $mensaje): bool

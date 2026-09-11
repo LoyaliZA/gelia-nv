@@ -10,6 +10,7 @@ use App\Models\Tiendanube\TiendanubeSyncLog;
 use App\Models\User;
 use App\Services\Tiendanube\TiendanubeCatalogoSyncService;
 use App\Services\Tiendanube\TiendanubeOperacionTiendaService;
+use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
@@ -43,6 +44,12 @@ class TiendanubeCatalogoSyncProtegidoTest extends TestCase
 
         $this->user = User::factory()->create();
         $this->user->givePermissionTo(['tiendanube.ver', 'tiendanube.configurar', 'tiendanube.sincronizar']);
+
+        $this->withoutMiddleware([
+            PreventRequestForgery::class,
+            \Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class,
+            \Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class,
+        ]);
 
         TiendanubeConfiguracion::obtener()->fill([
             'store_id' => 8004291,
@@ -89,14 +96,9 @@ class TiendanubeCatalogoSyncProtegidoTest extends TestCase
 
         $log = TiendanubeSyncLog::create(['tipo' => 'completo', 'estado' => 'pendiente']);
 
-        try {
-            app(TiendanubeCatalogoSyncService::class)->sincronizar($log);
-            $this->fail('Se esperaba fallo de página intermedia.');
-        } catch (\Throwable $e) {
-            $this->assertNotSame('', $e->getMessage());
-        }
+        app(TiendanubeCatalogoSyncService::class)->sincronizar($log);
 
-        $this->assertSame('error', $log->fresh()->estado);
+        $this->assertSame('parcial', $log->fresh()->estado);
         $this->assertDatabaseHas('tiendanube_productos', ['id' => 777]);
         $this->assertDatabaseHas('tiendanube_productos', ['id' => 100]);
         $this->assertDatabaseHas('tiendanube_categorias', ['id' => 50]);

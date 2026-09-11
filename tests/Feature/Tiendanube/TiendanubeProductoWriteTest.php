@@ -36,6 +36,12 @@ class TiendanubeProductoWriteTest extends TestCase
             'tiendanube.user_agent' => 'Gelianv',
         ]);
 
+        $this->withoutMiddleware([
+            PreventRequestForgery::class,
+            \Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class,
+            \Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class,
+        ]);
+
         TiendanubeConfiguracion::obtener()->fill([
             'store_id' => 8004291,
             'app_id' => '37163',

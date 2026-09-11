@@ -9,10 +9,10 @@ return [
      * Precedencia de URL:
      * 1) TIENDANUBE_API_BASE si está definido (legado, sin store_id).
      * 2) si no: {api_host}/{api_version}/{store_id}.
-     * Versiones permitidas: v1, 2025-03. Default v1 hasta MIG-06.
+     * Versiones permitidas: v1, 2025-03. Default 2025-03 desde MIG-06.
      */
     'api_host' => env('TIENDANUBE_API_HOST', 'https://api.tiendanube.com'),
-    'api_version' => env('TIENDANUBE_API_VERSION', 'v1'),
+    'api_version' => env('TIENDANUBE_API_VERSION', '2025-03'),
     'api_base' => env('TIENDANUBE_API_BASE'),
     'user_agent' => env('TIENDANUBE_USER_AGENT', 'Gelianv'),
     'user_agent_contact' => env('TIENDANUBE_USER_AGENT_CONTACT'),

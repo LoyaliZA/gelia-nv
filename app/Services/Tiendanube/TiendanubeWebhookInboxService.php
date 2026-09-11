@@ -3,6 +3,7 @@
 namespace App\Services\Tiendanube;
 
 use App\Jobs\Tiendanube\ProcessTiendanubeWebhook;
+use App\Models\Tiendanube\TiendanubeConfiguracion;
 use App\Models\Tiendanube\TiendanubeWebhookDelivery;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -18,9 +19,11 @@ class TiendanubeWebhookInboxService
         $event = isset($payload['event']) && is_string($payload['event']) ? $payload['event'] : null;
         $resourceId = array_key_exists('id', $payload) ? (string) $payload['id'] : null;
         $storeId = isset($payload['store_id']) ? (int) $payload['store_id'] : null;
+        $generation = (int) (TiendanubeConfiguracion::obtener()->config_generation ?: 1);
 
         return TiendanubeWebhookDelivery::query()->create([
             'store_id' => $storeId,
+            'config_generation' => $generation,
             'event' => $event,
             'resource_id' => $resourceId,
             'payload' => $payload,

@@ -360,6 +360,7 @@ class TiendanubeApiClient
         $url = $path;
         $data = $query;
         $guard = 0;
+        $vistos = [];
 
         while (true) {
             // ponytail: tope de páginas para no seguir Link/page++ sin fin; upgrade: usar x-total-count.
@@ -377,14 +378,33 @@ class TiendanubeApiClient
             $chunk = $this->decodeListOrFail($response, $path);
             yield $chunk;
 
+            $nuevos = 0;
+            foreach ($chunk as $item) {
+                if (! is_array($item) || ! isset($item['id'])) {
+                    continue;
+                }
+                $id = (string) $item['id'];
+                if (! isset($vistos[$id])) {
+                    $vistos[$id] = true;
+                    $nuevos++;
+                }
+            }
+            // 2025-03 puede devolver páginas llenas repetidas si Link falta o page++ no avanza.
+            if ($chunk !== [] && $nuevos === 0) {
+                return;
+            }
+
             $next = $this->nextPageUrlFrom($response);
             if ($next !== null) {
-                $this->assertAllowedPaginationUrl($next);
                 if ($chunk === []) {
                     return;
                 }
-                $url = $next;
-                $data = [];
+                $target = $this->relativePaginationTarget($next);
+                if ($target['path'] === $url && $target['query'] === $data) {
+                    return;
+                }
+                $url = $target['path'];
+                $data = $target['query'];
 
                 continue;
             }
@@ -399,6 +419,24 @@ class TiendanubeApiClient
             $url = $path;
             $data = $query;
         }
+    }
+
+    /**
+     * @return array{path: string, query: array<string, mixed>}
+     */
+    private function relativePaginationTarget(string $next): array
+    {
+        $this->assertAllowedPaginationUrl($next);
+        $parts = parse_url($next);
+        $path = (string) ($parts['path'] ?? '');
+        $prefix = '/'.$this->configuredVersion().'/'.$this->config()->store_id;
+        if (str_starts_with($path, $prefix)) {
+            $path = substr($path, strlen($prefix)) ?: '/';
+        }
+        $query = [];
+        parse_str((string) ($parts['query'] ?? ''), $query);
+
+        return ['path' => $path, 'query' => $query];
     }
 
     public function nextPageUrlFrom(Response $response): ?string

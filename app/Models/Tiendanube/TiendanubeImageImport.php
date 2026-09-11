@@ -60,6 +60,8 @@ class TiendanubeImageImport extends Model
 
     protected $fillable = [
         'user_id',
+        'store_id',
+        'config_generation',
         'estado',
         'total_archivos',
         'procesados',
@@ -80,6 +82,8 @@ class TiendanubeImageImport extends Model
             'reemplazar_primera' => 'boolean',
             'convertir_webp' => 'boolean',
             'confirmado_at' => 'datetime',
+            'store_id' => 'integer',
+            'config_generation' => 'integer',
         ];
     }
 

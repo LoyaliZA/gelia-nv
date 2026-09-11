@@ -56,6 +56,19 @@ class ProcessTiendanubeWebhook implements ShouldQueue
             return;
         }
 
+        if (
+            $delivery->config_generation !== null
+            && (int) $delivery->config_generation !== (int) ($config->config_generation ?: 1)
+        ) {
+            $inbox->markIgnored(
+                $delivery,
+                $token,
+                'La generación de configuración cambió; el trabajo no se ejecutó.'
+            );
+
+            return;
+        }
+
         $lock = null;
 
         try {

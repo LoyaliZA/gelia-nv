@@ -2,6 +2,7 @@
 
 namespace App\Jobs\Tiendanube;
 
+use App\Models\Tiendanube\TiendanubeConfiguracion;
 use App\Models\Tiendanube\TiendanubeImageImport;
 use App\Services\Tiendanube\TiendanubeImageImportService;
 use Illuminate\Bus\Queueable;
@@ -30,6 +31,15 @@ class ProcessTiendanubeImageImportJob implements ShouldQueue
             return;
         }
 
+        if (! $this->generacionVigente($import)) {
+            $import->update([
+                'estado' => TiendanubeImageImport::ESTADO_ERROR,
+                'mensaje_error' => 'La generación de configuración cambió; el trabajo no se ejecutó.',
+            ]);
+
+            return;
+        }
+
         $service->procesar($import);
     }
 
@@ -44,5 +54,20 @@ class ProcessTiendanubeImageImportJob implements ShouldQueue
             'estado' => TiendanubeImageImport::ESTADO_ERROR,
             'mensaje_error' => $e?->getMessage() ?? 'Error desconocido en importación de imágenes.',
         ]);
+    }
+
+    private function generacionVigente(TiendanubeImageImport $import): bool
+    {
+        $config = TiendanubeConfiguracion::obtener();
+
+        if ($import->store_id && $config->store_id && (int) $import->store_id !== (int) $config->store_id) {
+            return false;
+        }
+
+        if ($import->config_generation !== null && (int) $import->config_generation !== (int) ($config->config_generation ?: 1)) {
+            return false;
+        }
+
+        return true;
     }
 }

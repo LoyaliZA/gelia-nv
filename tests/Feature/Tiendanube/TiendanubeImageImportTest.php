@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Tiendanube;
 
+use App\Jobs\Tiendanube\ProcessTiendanubeImageImportJob;
 use App\Models\Tiendanube\TiendanubeConfiguracion;
 use App\Models\Tiendanube\TiendanubeImageImport;
 use App\Models\Tiendanube\TiendanubeImageImportItem;
@@ -152,7 +153,7 @@ class TiendanubeImageImportTest extends TestCase
         );
         $item = $import->items()->first();
 
-        $this->assertSame('error', $item->estado);
+        $this->assertSame(TiendanubeImageImportItem::ESTADO_REQUIERE_SELECCION, $item->estado);
         $this->assertSame(TiendanubeImageImportService::MOTIVO_SKU_AMBIGUO, $item->motivo);
         $this->assertNull($item->producto_id);
         Http::assertNothingSent();
@@ -763,6 +764,28 @@ class TiendanubeImageImportTest extends TestCase
         $this->assertTrue(Storage::disk('local')->exists('tiendanube/imports/'.$activo->id.'/files/a.jpg'));
         $this->assertFalse(Storage::disk('local')->exists('tiendanube/imports/'.$viejo->id.'/files/a.jpg'));
         $this->assertDatabaseHas('tiendanube_image_imports', ['id' => $viejo->id, 'estado' => 'completado']);
+    }
+
+    public function test_job_aborta_si_generacion_o_tienda_cambio(): void
+    {
+        $import = TiendanubeImageImport::create([
+            'estado' => TiendanubeImageImport::ESTADO_LISTA,
+            'store_id' => 8004291,
+            'config_generation' => 1,
+            'total_archivos' => 1,
+        ]);
+
+        TiendanubeConfiguracion::obtener()->increment('config_generation');
+
+        Http::fake();
+
+        (new ProcessTiendanubeImageImportJob($import->id))->handle(
+            app(TiendanubeImageImportService::class)
+        );
+
+        $this->assertSame(TiendanubeImageImport::ESTADO_ERROR, $import->fresh()->estado);
+        $this->assertStringContainsString('generación', (string) $import->fresh()->mensaje_error);
+        Http::assertNothingSent();
     }
 
     /**

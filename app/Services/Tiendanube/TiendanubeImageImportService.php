@@ -54,8 +54,11 @@ class TiendanubeImageImportService
         $this->assertImportacionAdmisible();
 
         $opciones = OptimizarImagenTiendanubeService::normalizarOpciones($optImagen);
+        $config = TiendanubeConfiguracion::obtener();
         $import = TiendanubeImageImport::create([
             'user_id' => $user?->id,
+            'store_id' => $config->store_id,
+            'config_generation' => (int) ($config->config_generation ?: 1),
             'estado' => TiendanubeImageImport::ESTADO_VALIDANDO,
             'reemplazar_primera' => true,
             'convertir_webp' => $opciones['convertir_webp'],
@@ -98,8 +101,11 @@ class TiendanubeImageImportService
         $this->assertImportacionAdmisible();
 
         $opciones = OptimizarImagenTiendanubeService::normalizarOpciones($optImagen);
+        $config = TiendanubeConfiguracion::obtener();
         $import = TiendanubeImageImport::create([
             'user_id' => $user?->id,
+            'store_id' => $config->store_id,
+            'config_generation' => (int) ($config->config_generation ?: 1),
             'estado' => TiendanubeImageImport::ESTADO_VALIDANDO,
             'reemplazar_primera' => $reemplazarPrimera,
             'convertir_webp' => $opciones['convertir_webp'],

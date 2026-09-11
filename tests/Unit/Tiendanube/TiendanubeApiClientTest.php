@@ -180,6 +180,26 @@ class TiendanubeApiClientTest extends TestCase
         $this->assertSame([], $pages[1]);
     }
 
+    public function test_paginacion_corta_si_la_pagina_repite_ids(): void
+    {
+        $this->configureTiendanubeHttp([
+            'tiendanube.per_page' => 1,
+            'tiendanube.retry_sleep_ms' => 0,
+        ]);
+        $n = 0;
+        Http::fake(function () use (&$n) {
+            $n++;
+
+            return Http::response([['id' => 10, 'name' => ['es' => 'A']]], 200);
+        });
+
+        $pages = iterator_to_array(app(TiendanubeApiClient::class)->paginatePath('/products'));
+        $this->assertSame(2, $n);
+        $this->assertCount(2, $pages);
+        $this->assertSame(10, $pages[0][0]['id']);
+        $this->assertSame(10, $pages[1][0]['id']);
+    }
+
     public function test_paginacion_rechaza_link_de_host_ajeno(): void
     {
         Http::fake(function () {

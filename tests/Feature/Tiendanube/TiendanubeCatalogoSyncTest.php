@@ -243,10 +243,29 @@ class TiendanubeCatalogoSyncTest extends TestCase
     {
         Http::fake(function (\Illuminate\Http\Client\Request $request) use ($categorias, $productos, $ubicaciones) {
             $url = $request->url();
+            $path = rtrim((string) (parse_url($url, PHP_URL_PATH) ?: ''), '/');
             $query = [];
             parse_str((string) (parse_url($url, PHP_URL_QUERY) ?: ''), $query);
             $page1 = (int) ($query['page'] ?? 1) <= 1;
 
+            if (preg_match('#/categories/(\d+)$#', $path, $m)) {
+                foreach ($categorias as $cat) {
+                    if ((int) ($cat['id'] ?? 0) === (int) $m[1]) {
+                        return Http::response($cat, 200);
+                    }
+                }
+
+                return Http::response(['message' => 'Not Found', 'code' => 404], 404);
+            }
+            if (preg_match('#/products/(\d+)$#', $path, $m)) {
+                foreach ($productos as $prod) {
+                    if ((int) ($prod['id'] ?? 0) === (int) $m[1]) {
+                        return Http::response($prod, 200);
+                    }
+                }
+
+                return Http::response(['message' => 'Not Found', 'code' => 404], 404);
+            }
             if (str_contains($url, '/locations')) {
                 return Http::response($page1 ? $ubicaciones : [], 200);
             }

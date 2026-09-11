@@ -27,6 +27,7 @@ class TiendanubeWebhookDelivery extends Model
 
     protected $fillable = [
         'store_id',
+        'config_generation',
         'event',
         'resource_id',
         'payload',
@@ -50,6 +51,7 @@ class TiendanubeWebhookDelivery extends Model
     {
         return [
             'store_id' => 'integer',
+            'config_generation' => 'integer',
             'payload' => 'array',
             'hmac_valid' => 'boolean',
             'attempts' => 'integer',

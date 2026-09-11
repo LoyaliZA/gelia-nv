@@ -50,6 +50,12 @@ class TiendanubeWebhookTest extends TestCase
             ],
         ]);
 
+        $this->withoutMiddleware([
+            \Illuminate\Foundation\Http\Middleware\PreventRequestForgery::class,
+            \Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class,
+            \Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class,
+        ]);
+
         TiendanubeConfiguracion::obtener()->fill([
             'store_id' => 8004291,
             'app_id' => '37163',
@@ -629,5 +635,48 @@ class TiendanubeWebhookTest extends TestCase
 
         $this->assertSame(TiendanubeWebhookDelivery::STATUS_QUEUED, $delivery->fresh()->status);
         Queue::assertPushed(ProcessTiendanubeWebhook::class);
+    }
+
+    public function test_product_updated_con_store_id_ajeno_se_ignora(): void
+    {
+        Queue::fake();
+        Http::fake();
+
+        $this->postSignedWebhook([
+            'store_id' => 9999999,
+            'event' => 'product/updated',
+            'id' => 1948209,
+        ])->assertOk();
+
+        $delivery = TiendanubeWebhookDelivery::query()->firstOrFail();
+        $this->runDeliveryJob($delivery);
+
+        $this->assertSame('ignored', $delivery->fresh()->status);
+        $this->assertStringContainsString('store_id', (string) $delivery->fresh()->error);
+        $this->assertDatabaseMissing('tiendanube_productos', ['id' => 1948209]);
+        Http::assertNothingSent();
+    }
+
+    public function test_webhook_se_ignora_si_config_generation_cambio(): void
+    {
+        Queue::fake();
+        Http::fake();
+
+        $this->postSignedWebhook([
+            'store_id' => 8004291,
+            'event' => 'product/updated',
+            'id' => 1948209,
+        ])->assertOk();
+
+        $delivery = TiendanubeWebhookDelivery::query()->firstOrFail();
+        $this->assertSame(1, (int) $delivery->config_generation);
+
+        TiendanubeConfiguracion::obtener()->increment('config_generation');
+
+        $this->runDeliveryJob($delivery);
+
+        $this->assertSame('ignored', $delivery->fresh()->status);
+        $this->assertStringContainsString('generación', (string) $delivery->fresh()->error);
+        Http::assertNothingSent();
     }
 }
