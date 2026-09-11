@@ -18,6 +18,7 @@ class StoreTiendanubeProductoImagenRequest extends FormRequest
             'file' => ['nullable', 'file', 'required_without:src', 'max:10240', 'mimes:jpg,jpeg,png,gif,webp'],
             'position' => ['nullable', 'integer', 'min:1'],
             'reemplazar' => ['nullable', 'boolean'],
+            'solicitud_clave' => ['nullable', 'string', 'max:128'],
             'convertir_webp' => ['nullable', 'boolean'],
             'modo_1280' => ['nullable', 'string', 'in:none,fit,square'],
         ];

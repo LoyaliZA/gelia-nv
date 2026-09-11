@@ -2,8 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Jobs\Tiendanube\ProcessTiendanubeWebhook;
-use App\Models\Tiendanube\TiendanubeWebhookDelivery;
+use App\Services\Tiendanube\TiendanubeWebhookInboxService;
 use App\Services\Tiendanube\TiendanubeWebhookService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -12,8 +11,11 @@ use Symfony\Component\HttpFoundation\Response;
 
 class TiendanubeWebhookController extends Controller
 {
-    public function __invoke(Request $request, TiendanubeWebhookService $webhooks): Response|JsonResponse
-    {
+    public function __invoke(
+        Request $request,
+        TiendanubeWebhookService $webhooks,
+        TiendanubeWebhookInboxService $inbox
+    ): Response|JsonResponse {
         $rawBody = $request->getContent();
         $receivedSignature = $request->header('x-linkedstore-hmac-sha256');
 
@@ -43,27 +45,21 @@ class TiendanubeWebhookController extends Controller
             return response()->json(['message' => 'Invalid JSON payload.'], 400);
         }
 
-        $payloadHash = hash('sha256', $rawBody);
-        $existing = TiendanubeWebhookDelivery::query()->where('payload_hash', $payloadHash)->first();
-        if ($existing) {
-            return response()->json(['ok' => true, 'duplicate' => true], 200);
+        if (isset($payload['event']) && ! is_string($payload['event'])) {
+            return response()->json(['message' => 'Invalid webhook payload.'], 400);
         }
 
-        $event = isset($payload['event']) && is_string($payload['event']) ? $payload['event'] : null;
-        $resourceId = array_key_exists('id', $payload) ? (string) $payload['id'] : null;
-        $storeId = isset($payload['store_id']) ? (int) $payload['store_id'] : null;
+        if (array_key_exists('store_id', $payload) && ! is_numeric($payload['store_id'])) {
+            return response()->json(['message' => 'Invalid webhook payload.'], 400);
+        }
 
-        $delivery = TiendanubeWebhookDelivery::query()->create([
-            'store_id' => $storeId,
-            'event' => $event,
-            'resource_id' => $resourceId,
-            'payload' => $payload,
-            'payload_hash' => $payloadHash,
-            'hmac_valid' => true,
-            'status' => 'received',
-        ]);
+        try {
+            $delivery = $inbox->persistReceived($payload, hash('sha256', $rawBody));
+        } catch (\Throwable) {
+            return response()->json(['message' => 'Unable to persist webhook delivery.'], 503);
+        }
 
-        ProcessTiendanubeWebhook::dispatch($delivery->id);
+        $inbox->tryDispatch($delivery);
 
         return response()->json(['ok' => true], 200);
     }

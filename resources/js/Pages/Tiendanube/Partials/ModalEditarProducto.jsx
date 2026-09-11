@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Save } from 'lucide-react';
 import GeliaLoader from '../../../Components/GeliaLoader';
@@ -11,19 +11,59 @@ function textoIdioma(valor) {
     return valor.es || valor.es_MX || Object.values(valor)[0] || '';
 }
 
+function etiquetaValores(values) {
+    if (!Array.isArray(values) || values.length === 0) return '';
+    return values.map((x) => textoIdioma(x)).filter((t) => t && t !== '—').join(' / ');
+}
+
+function camposDesdeVariante(v) {
+    if (!v) {
+        return { sku: '', price: '', promotional_price: '', cost: '', stock: '', stock_unlimited: false, location_id: '', stock_management: false };
+    }
+    const managed = !!v.stock_management;
+    const nivel = v.stock_resumen?.niveles?.[0];
+    return {
+        sku: v.sku || '',
+        price: v.price ?? '',
+        promotional_price: v.promotional_price ?? '',
+        cost: v.cost ?? '',
+        stock: managed ? (v.stock ?? '') : '',
+        stock_unlimited: !managed,
+        location_id: nivel?.location_id || '',
+        stock_management: managed,
+    };
+}
+
+function varianteDirty(actual, baseline) {
+    if (!baseline) return false;
+    return ['sku', 'price', 'promotional_price', 'cost', 'stock'].some(
+        (k) => String(actual[k] ?? '') !== String(baseline[k] ?? '')
+    ) || Boolean(actual.stock_unlimited) !== Boolean(baseline.stock_unlimited);
+}
+
+function idsCategoriasOrdenados(ids) {
+    return [...ids].map(Number).sort((a, b) => a - b);
+}
+
+function categoriesChanged(current, baseline) {
+    const a = idsCategoriasOrdenados(current);
+    if (a.length !== baseline.length) return true;
+    return a.some((id, i) => id !== baseline[i]);
+}
+
+function etiquetaVariante(v) {
+    const valores = etiquetaValores(v.values);
+    return `#${v.id} · ${v.sku || 'sin SKU'}${valores ? ` · ${valores}` : ''}`;
+}
+
 const csrfToken = () => document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '';
 
 const inputClass = 'w-full theme-element border theme-border rounded-xl px-4 py-3 text-sm theme-text-main';
 const labelClass = 'block text-[10px] font-black uppercase tracking-widest theme-text-muted mb-2';
 
 export default function ModalEditarProducto({ producto, categorias = [], onClose, onSaved }) {
-    const variante = producto?.variantes?.[0] || {};
-    const ubicaciones = producto?.ubicaciones || [];
-    const niveles = variante.stock_resumen?.niveles || [];
-    const locInicial = ubicaciones.length === 1
-        ? ubicaciones[0].id
-        : (niveles.length === 1 ? niveles[0].location_id : (ubicaciones.find((u) => u.is_default)?.id || ''));
-    const nivelIni = niveles.find((n) => n.location_id === locInicial);
+    const variantes = producto?.variantes || [];
+    const unica = variantes.length === 1 ? variantes[0] : null;
     const [form, setForm] = useState({
         name: producto?.nombre || textoIdioma(producto?.name) || '',
         description: textoIdioma(producto?.description) || '',
@@ -36,14 +76,13 @@ export default function ModalEditarProducto({ producto, categorias = [], onClose
         seo_description: producto?.seo_description || '',
         tags: producto?.tags || '',
         categories: (producto?.categoria_ids || producto?.categorias?.map((c) => c.id) || []).map(Number),
-        sku: variante.sku || '',
-        price: variante.price ?? '',
-        promotional_price: variante.promotional_price ?? '',
-        cost: variante.cost ?? '',
-        stock: nivelIni ? (nivelIni.stock == null ? '' : String(nivelIni.stock)) : '',
-        location_id: locInicial,
-        stock_management: !!variante.stock_management,
     });
+    const [categoriesBaseline] = useState(() =>
+        idsCategoriasOrdenados(producto?.categoria_ids || producto?.categorias?.map((c) => c.id) || [])
+    );
+    const [selectedVariantId, setSelectedVariantId] = useState(unica ? unica.id : null);
+    const [variantForm, setVariantForm] = useState(() => camposDesdeVariante(unica));
+    const [variantBaseline, setVariantBaseline] = useState(() => camposDesdeVariante(unica));
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState(null);
     const [imageUrl, setImageUrl] = useState('');
@@ -51,8 +90,82 @@ export default function ModalEditarProducto({ producto, categorias = [], onClose
     const [imageMeta, setImageMeta] = useState(null);
     const [permitirVarias, setPermitirVarias] = useState(false);
     const [addingImage, setAddingImage] = useState(false);
+    const [parcialOperacion, setParcialOperacion] = useState(null);
+    const solicitudClaveFileRef = useRef(null);
+    const solicitudClaveUrlRef = useRef(null);
+
+    const varianteSeleccionada = variantes.find((v) => v.id === selectedVariantId) || unica || null;
+
+    const aplicarVariante = (v) => {
+        const campos = camposDesdeVariante(v);
+        setSelectedVariantId(v?.id ?? null);
+        setVariantForm(campos);
+        setVariantBaseline(campos);
+    };
+
+    const onCambiarVariante = (idRaw) => {
+        const id = idRaw === '' ? null : Number(idRaw);
+        if (id === selectedVariantId) return;
+        if (varianteDirty(variantForm, variantBaseline)) {
+            const ok = window.confirm('Hay cambios de variante sin guardar. ¿Descartarlos y cambiar de variante?');
+            if (!ok) return;
+        }
+        const v = variantes.find((item) => item.id === id) || null;
+        aplicarVariante(v);
+    };
+
+    const claveSolicitud = (ref) => {
+        if (!ref.current) {
+            ref.current = crypto.randomUUID();
+        }
+        return ref.current;
+    };
+
+    const aplicarRespuestaImagen = (data, claveRef, onOk) => {
+        if (data.parcial && data.operacion?.id) {
+            setParcialOperacion(data.operacion);
+            setError(data.message || 'Reemplazo incompleto: puede completar sin volver a subir la imagen.');
+            onSaved?.(false);
+            return;
+        }
+        claveRef.current = null;
+        setParcialOperacion(null);
+        onOk?.();
+        onSaved?.(false);
+    };
+
+    const completarReemplazo = async () => {
+        if (!parcialOperacion?.id) return;
+        setAddingImage(true);
+        setError(null);
+        try {
+            const res = await fetch(route('tiendanube.imagen_operaciones.reconciliar', parcialOperacion.id), {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': csrfToken(),
+                    Accept: 'application/json',
+                },
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.message || 'No se pudo completar el reemplazo.');
+            if (data.parcial) {
+                setParcialOperacion(data.operacion);
+                setError(data.message || 'Aún faltan imágenes anteriores por retirar.');
+                return;
+            }
+            setParcialOperacion(null);
+            solicitudClaveFileRef.current = null;
+            solicitudClaveUrlRef.current = null;
+            onSaved?.(false);
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setAddingImage(false);
+        }
+    };
 
     const setField = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
+    const setVariantField = (key, value) => setVariantForm((prev) => ({ ...prev, [key]: value }));
 
     const toggleCategory = (id) => {
         setForm((prev) => {
@@ -83,18 +196,40 @@ export default function ModalEditarProducto({ producto, categorias = [], onClose
         setSaving(true);
         setError(null);
         try {
-            const { stock, location_id, stock_management, ...rest } = form;
             const body = {
-                ...rest,
-                price: form.price === '' ? null : Number(form.price),
-                promotional_price: form.promotional_price === '' ? null : Number(form.promotional_price),
-                cost: form.cost === '' ? null : Number(form.cost),
+                ...form,
                 video_url: form.video_url || null,
             };
-            if (producto?.inventario?.escritura_habilitada && location_id) {
-                body.location_id = location_id;
-                body.stock = stock === '' ? null : Number(stock);
-                body.stock_management = !!stock_management;
+            if (categoriesChanged(form.categories, categoriesBaseline)) {
+                body.replace_categories = true;
+            } else {
+                delete body.categories;
+            }
+            if (selectedVariantId) {
+                body.variant_id = selectedVariantId;
+            }
+            if (variantes.length > 1 && varianteDirty(variantForm, variantBaseline) && !selectedVariantId) {
+                throw new Error('Selecciona una variante para guardar cambios de SKU, precio, promoción, costo o stock.');
+            }
+            if (selectedVariantId && varianteDirty(variantForm, variantBaseline)) {
+                body.sku = variantForm.sku || null;
+                body.price = variantForm.price === '' ? null : Number(variantForm.price);
+                body.promotional_price = variantForm.promotional_price === '' ? null : Number(variantForm.promotional_price);
+                body.cost = variantForm.cost === '' ? null : Number(variantForm.cost);
+                if (variantForm.stock_unlimited) {
+                    body.stock_unlimited = true;
+                } else if (String(variantForm.stock) !== String(variantBaseline.stock) || variantBaseline.stock_unlimited) {
+                    if (variantForm.stock !== '') {
+                        body.stock = Number(variantForm.stock);
+                    }
+                }
+                if (producto?.inventario?.escritura_habilitada && variantForm.location_id) {
+                    body.location_id = variantForm.location_id;
+                    delete body.stock_unlimited;
+                    if (variantForm.stock_management !== undefined) {
+                        body.stock_management = !!variantForm.stock_management;
+                    }
+                }
             }
             const res = await fetch(route('tiendanube.productos.update', producto.id), {
                 method: 'PUT',
@@ -106,8 +241,13 @@ export default function ModalEditarProducto({ producto, categorias = [], onClose
                 body: JSON.stringify(body),
             });
             const data = await res.json();
+            if (data.parcial && data.producto_actualizado) {
+                setError(data.message || 'El producto se actualizó, pero la variante no.');
+                onSaved?.(true);
+                return;
+            }
             if (!res.ok || !data.success) throw new Error(data.message || 'No se pudo guardar.');
-            onSaved?.(data.producto_id);
+            onSaved?.(false);
         } catch (err) {
             setError(err.message);
         } finally {
@@ -130,12 +270,12 @@ export default function ModalEditarProducto({ producto, categorias = [], onClose
                 body: JSON.stringify({
                     src: imageUrl.trim(),
                     reemplazar: !permitirVarias,
+                    solicitud_clave: claveSolicitud(solicitudClaveUrlRef),
                 }),
             });
             const data = await res.json();
             if (!res.ok || !data.success) throw new Error(data.message || 'No se pudo subir la imagen.');
-            setImageUrl('');
-            onSaved?.(producto.id);
+            aplicarRespuestaImagen(data, solicitudClaveUrlRef, () => setImageUrl(''));
         } catch (err) {
             setError(err.message);
         } finally {
@@ -151,6 +291,7 @@ export default function ModalEditarProducto({ producto, categorias = [], onClose
             const body = new FormData();
             body.append('file', imageFile);
             body.append('reemplazar', permitirVarias ? '0' : '1');
+            body.append('solicitud_clave', claveSolicitud(solicitudClaveFileRef));
             const res = await fetch(route('tiendanube.productos.imagenes.store', producto.id), {
                 method: 'POST',
                 headers: {
@@ -161,10 +302,11 @@ export default function ModalEditarProducto({ producto, categorias = [], onClose
             });
             const data = await res.json();
             if (!res.ok || !data.success) throw new Error(data.message || 'No se pudo subir la imagen.');
-            if (imageMeta?.preview) URL.revokeObjectURL(imageMeta.preview);
-            setImageFile(null);
-            setImageMeta(null);
-            onSaved?.(producto.id);
+            aplicarRespuestaImagen(data, solicitudClaveFileRef, () => {
+                if (imageMeta?.preview) URL.revokeObjectURL(imageMeta.preview);
+                setImageFile(null);
+                setImageMeta(null);
+            });
         } catch (err) {
             setError(err.message);
         } finally {
@@ -254,28 +396,96 @@ export default function ModalEditarProducto({ producto, categorias = [], onClose
                         </div>
                     )}
 
-                    <div className="pt-2 border-t theme-border">
-                        <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted mb-3">Variante virtual</p>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <div>
-                                <label className={labelClass}>SKU</label>
-                                <input className={inputClass} value={form.sku} onChange={(e) => setField('sku', e.target.value)} />
-                            </div>
-                            <div>
-                                <label className={labelClass}>Precio</label>
-                                <input className={inputClass} type="number" step="0.01" min="0" value={form.price} onChange={(e) => setField('price', e.target.value)} />
-                            </div>
-                            <div>
-                                <label className={labelClass}>Precio promo</label>
-                                <input className={inputClass} type="number" step="0.01" min="0" value={form.promotional_price} onChange={(e) => setField('promotional_price', e.target.value)} />
-                            </div>
-                            <div>
-                                <label className={labelClass}>Costo</label>
-                                <input className={inputClass} type="number" step="0.01" min="0" value={form.cost} onChange={(e) => setField('cost', e.target.value)} />
-                            </div>
+                    {variantes.length > 0 && (
+                        <div className="pt-2 border-t theme-border space-y-4">
+                            <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted">
+                                {variantes.length > 1 ? 'Variante' : 'Variante virtual'}
+                            </p>
+                            {variantes.length > 1 && (
+                                <div>
+                                    <label className={labelClass}>Seleccionar variante</label>
+                                    <select
+                                        className={inputClass}
+                                        value={selectedVariantId ?? ''}
+                                        onChange={(e) => onCambiarVariante(e.target.value)}
+                                    >
+                                        <option value="">Elegir variante…</option>
+                                        {variantes.map((v) => (
+                                            <option key={v.id} value={v.id}>
+                                                {etiquetaVariante(v)}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
+                            {varianteSeleccionada ? (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className={labelClass}>SKU</label>
+                                        <input className={inputClass} value={variantForm.sku} onChange={(e) => setVariantField('sku', e.target.value)} />
+                                    </div>
+                                    <div>
+                                        <label className={labelClass}>Stock</label>
+                                        <input
+                                            className={inputClass}
+                                            type="number"
+                                            min="0"
+                                            disabled={variantForm.stock_unlimited}
+                                            value={variantForm.stock_unlimited ? '' : variantForm.stock}
+                                            onChange={(e) => setVariantField('stock', e.target.value)}
+                                        />
+                                        <label className="mt-2 inline-flex items-center gap-2 text-[10px] font-bold theme-text-main">
+                                            <input
+                                                type="checkbox"
+                                                checked={variantForm.stock_unlimited}
+                                                onChange={(e) => setVariantField('stock_unlimited', e.target.checked)}
+                                            />
+                                            Stock ilimitado
+                                        </label>
+                                    </div>
+                                    <div>
+                                        <label className={labelClass}>Precio</label>
+                                        <input className={inputClass} type="number" step="0.01" min="0" value={variantForm.price} onChange={(e) => setVariantField('price', e.target.value)} />
+                                    </div>
+                                    <div>
+                                        <label className={labelClass}>Precio promo</label>
+                                        <input className={inputClass} type="number" step="0.01" min="0" value={variantForm.promotional_price} onChange={(e) => setVariantField('promotional_price', e.target.value)} />
+                                    </div>
+                                    <div>
+                                        <label className={labelClass}>Costo</label>
+                                        <input className={inputClass} type="number" step="0.01" min="0" value={variantForm.cost} onChange={(e) => setVariantField('cost', e.target.value)} />
+                                    </div>
+                                    {!!producto?.inventario?.escritura_habilitada && (
+                                        <div className="sm:col-span-2 space-y-3">
+                                            <label className={labelClass}>Ubicación de inventario</label>
+                                            <select
+                                                className={inputClass}
+                                                value={variantForm.location_id || ''}
+                                                onChange={(e) => setVariantField('location_id', e.target.value)}
+                                            >
+                                                <option value="">Seleccionar ubicación</option>
+                                                {(producto?.ubicaciones || []).map((u) => (
+                                                    <option key={u.id} value={u.id}>{u.nombre} ({u.id})</option>
+                                                ))}
+                                            </select>
+                                            <label className="flex items-center gap-2 text-xs font-bold theme-text-muted">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={!!variantForm.stock_management}
+                                                    onChange={(e) => setVariantField('stock_management', e.target.checked)}
+                                                />
+                                                Control de stock
+                                            </label>
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                variantes.length > 1 && (
+                                    <p className="text-xs theme-text-muted">Selecciona una variante para editar SKU, precio, promoción, costo o stock. Los datos del producto se pueden guardar sin selección.</p>
+                                )
+                            )}
                         </div>
-                        <InventarioEdicion producto={producto} form={form} setField={setField} setForm={setForm} />
-                    </div>
+                    )}
 
                     <div className="pt-2 border-t theme-border space-y-4">
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -337,6 +547,16 @@ export default function ModalEditarProducto({ producto, categorias = [], onClose
                     </div>
 
                     {error && <p className="text-xs font-bold text-red-500">{error}</p>}
+                    {parcialOperacion && (
+                        <button
+                            type="button"
+                            onClick={completarReemplazo}
+                            disabled={addingImage}
+                            className="px-4 py-2 rounded-xl text-[10px] font-black uppercase border theme-border theme-text-main disabled:opacity-50"
+                        >
+                            Completar reemplazo
+                        </button>
+                    )}
 
                     <div className="flex justify-end gap-2 pt-2">
                         <button type="button" onClick={onClose} className="px-5 py-3 rounded-xl text-xs font-black uppercase border theme-border theme-text-main">
@@ -350,74 +570,5 @@ export default function ModalEditarProducto({ producto, categorias = [], onClose
             </div>
         </div>,
         document.body
-    );
-}
-
-function InventarioEdicion({ producto, form, setField, setForm }) {
-    const variante = producto?.variantes?.[0] || {};
-    const resumen = variante.stock_resumen || {};
-    const ubicaciones = producto?.ubicaciones || [];
-    const niveles = resumen.niveles || [];
-    const escritura = !!producto?.inventario?.escritura_habilitada;
-    const total = resumen.ilimitado ? '∞' : (resumen.total != null ? String(resumen.total) : '—');
-
-    const onChangeLocation = (id) => {
-        const nivelSel = niveles.find((n) => n.location_id === id);
-        setForm((prev) => ({
-            ...prev,
-            location_id: id,
-            stock: nivelSel ? (nivelSel.stock == null ? '' : String(nivelSel.stock)) : '',
-        }));
-    };
-
-    return (
-        <div className="mt-4 space-y-3">
-            {!escritura && (
-                <p className="text-[10px] font-bold theme-text-muted">
-                    Location no disponible o sin lectura reciente: no se escribe stock plano.
-                </p>
-            )}
-            <div>
-                <label className={labelClass}>Stock total (resumen)</label>
-                <input className={inputClass} value={total} disabled readOnly />
-            </div>
-            <div>
-                <label className={labelClass}>Ubicación</label>
-                <select
-                    className={inputClass}
-                    disabled={!escritura}
-                    value={form.location_id}
-                    onChange={(e) => onChangeLocation(e.target.value)}
-                >
-                    <option value="">Seleccionar ubicación</option>
-                    {ubicaciones.map((u) => (
-                        <option key={u.id} value={u.id}>{u.nombre} ({u.id})</option>
-                    ))}
-                    {form.location_id && !ubicaciones.some((u) => u.id === form.location_id) && (
-                        <option value={form.location_id}>{form.location_id}</option>
-                    )}
-                </select>
-            </div>
-            <div>
-                <label className={labelClass}>Stock en ubicación (vacío = ilimitado)</label>
-                <input
-                    className={inputClass}
-                    type="number"
-                    min="0"
-                    value={form.stock}
-                    disabled={!escritura}
-                    onChange={(e) => setField('stock', e.target.value)}
-                />
-            </div>
-            <label className="flex items-center gap-2 text-xs font-bold theme-text-muted">
-                <input
-                    type="checkbox"
-                    disabled={!escritura}
-                    checked={!!form.stock_management}
-                    onChange={(e) => setField('stock_management', e.target.checked)}
-                />
-                Control de stock (intención explícita)
-            </label>
-        </div>
     );
 }

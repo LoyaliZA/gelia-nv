@@ -2,6 +2,7 @@
 
 namespace App\Services\Tiendanube;
 
+use App\Exceptions\Tiendanube\TiendanubeApiContractException;
 use App\Exceptions\Tiendanube\TiendanubeApiException;
 use App\Exceptions\Tiendanube\TiendanubeApiNotFoundException;
 use App\Exceptions\Tiendanube\TiendanubeApiPaymentRequiredException;
@@ -15,6 +16,7 @@ use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use InvalidArgumentException;
+use JsonException;
 use RuntimeException;
 use Throwable;
 
@@ -188,7 +190,7 @@ class TiendanubeApiClient
     {
         $perPage ??= (int) config('tiendanube.per_page', 50);
 
-        return $this->decodeList($this->send('GET', '/categories', [
+        return $this->decodeCollection($this->send('GET', '/categories', [
             'page' => $page,
             'per_page' => $perPage,
         ]));
@@ -201,7 +203,7 @@ class TiendanubeApiClient
     {
         $perPage ??= (int) config('tiendanube.per_page', 50);
 
-        return $this->decodeList($this->send('GET', '/products', [
+        return $this->decodeCollection($this->send('GET', '/products', [
             'page' => $page,
             'per_page' => $perPage,
         ]));
@@ -210,6 +212,22 @@ class TiendanubeApiClient
     public function getProduct(int $id): array
     {
         return $this->decode($this->send('GET', "/products/{$id}"));
+    }
+
+    /**
+     * @return array{estado: 'existe'|'ausente'|'indeterminado', recurso: ?array<string, mixed>, detalle: ?string}
+     */
+    public function consultarProducto(int $id): array
+    {
+        return $this->consultarRecurso("/products/{$id}");
+    }
+
+    /**
+     * @return array{estado: 'existe'|'ausente'|'indeterminado', recurso: ?array<string, mixed>, detalle: ?string}
+     */
+    public function consultarCategoria(int $id): array
+    {
+        return $this->consultarRecurso("/categories/{$id}");
     }
 
     /**
@@ -313,8 +331,21 @@ class TiendanubeApiClient
 
     public function deleteProductImage(int $productId, int $imageId): void
     {
-        $path = "/products/{$productId}/images/{$imageId}";
-        $this->assertOk($this->send('DELETE', $path), 'DELETE', $path);
+        $this->deleteProductImageResult($productId, $imageId);
+    }
+
+    /**
+     * @return 'ok'|'no_encontrado'
+     */
+    public function deleteProductImageResult(int $productId, int $imageId): string
+    {
+        try {
+            $this->send('DELETE', "/products/{$productId}/images/{$imageId}");
+        } catch (TiendanubeApiNotFoundException) {
+            return 'no_encontrado';
+        }
+
+        return 'ok';
     }
 
     /**
@@ -440,6 +471,26 @@ class TiendanubeApiClient
     }
 
     /**
+     * @return array{estado: 'existe'|'ausente'|'indeterminado', recurso: ?array<string, mixed>, detalle: ?string}
+     */
+    private function consultarRecurso(string $path): array
+    {
+        try {
+            $recurso = $this->decode($this->send('GET', $path));
+        } catch (TiendanubeApiNotFoundException) {
+            return ['estado' => 'ausente', 'recurso' => null, 'detalle' => null];
+        } catch (Throwable $e) {
+            return ['estado' => 'indeterminado', 'recurso' => null, 'detalle' => $e->getMessage()];
+        }
+
+        if (! isset($recurso['id']) || ! is_numeric($recurso['id']) || (int) $recurso['id'] < 1) {
+            return ['estado' => 'indeterminado', 'recurso' => null, 'detalle' => 'Objeto sin ID válido.'];
+        }
+
+        return ['estado' => 'existe', 'recurso' => $recurso, 'detalle' => null];
+    }
+
+    /**
      * @param  array<string, mixed>  $data
      */
     private function send(string $method, string $url, array $data = []): Response
@@ -510,9 +561,17 @@ class TiendanubeApiClient
 
     private function decode(Response $response): array
     {
-        $json = $response->json();
+        try {
+            $json = json_decode($response->body(), true, 512, JSON_THROW_ON_ERROR);
+        } catch (JsonException $e) {
+            throw new TiendanubeApiContractException('Respuesta JSON inválida de Tiendanube.', 0, $e);
+        }
 
-        return is_array($json) ? $json : [];
+        if (! is_array($json)) {
+            throw new TiendanubeApiContractException('Se esperaba un documento JSON de tipo objeto o lista.');
+        }
+
+        return $json;
     }
 
     /**
@@ -522,7 +581,27 @@ class TiendanubeApiClient
     {
         $data = $this->decode($response);
 
-        return array_is_list($data) ? $data : [];
+        if (! array_is_list($data)) {
+            throw new TiendanubeApiContractException('Se esperaba una lista JSON.');
+        }
+
+        return $data;
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function decodeCollection(Response $response): array
+    {
+        $data = $this->decodeList($response);
+
+        foreach ($data as $indice => $item) {
+            if (! is_array($item) || ! isset($item['id']) || ! is_numeric($item['id']) || (int) $item['id'] < 1) {
+                throw new TiendanubeApiContractException("Recurso de catálogo sin ID válido (índice {$indice}).");
+            }
+        }
+
+        return $data;
     }
 
     /**

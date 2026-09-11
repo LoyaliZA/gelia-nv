@@ -4,6 +4,7 @@ import AppLayout from '../../Layouts/AppLayout';
 import { geliaCardClass } from '../../utils/geliaTheme';
 import { ArrowLeft, FileSpreadsheet, Images, Search } from 'lucide-react';
 import { inertiaVisitUrl } from '../../utils/inertiaVisitUrl';
+import { ESTADOS_ACTIVOS } from '../../utils/tiendanubeImageImportTracker';
 import SeccionImagenes from './Partials/SeccionImagenes';
 import ModalReportesImagenes from './Partials/ModalReportesImagenes';
 
@@ -39,7 +40,7 @@ export default function Imagenes({
         if (!imageImportId) return undefined;
         let cancelled = false;
         let lastProcesados = -1;
-        const terminal = (estado) => estado && !['pendiente', 'en_proceso'].includes(estado);
+        const terminal = (estado) => estado && !ESTADOS_ACTIVOS.includes(estado);
 
         const poll = async () => {
             try {
@@ -204,7 +205,7 @@ export default function Imagenes({
                                 <input
                                     value={search}
                                     onChange={(e) => setSearch(e.target.value)}
-                                    placeholder="ID, SKU, marca…"
+                                    placeholder="Nombre, ID, SKU, marca…"
                                     className="w-full bg-transparent py-2.5 px-2 text-sm outline-none theme-text-main"
                                 />
                             </div>

@@ -8,6 +8,7 @@ import ModalHerramientas from './Partials/ModalHerramientas';
 import TablaProductos from './Partials/TablaProductos';
 import ModalDetalleProducto from './Partials/ModalDetalleProducto';
 import ModalCrearProducto from './Partials/ModalCrearProducto';
+import { ESTADOS_ACTIVOS as TN_IMPORT_ESTADOS_ACTIVOS } from '../../utils/tiendanubeImageImportTracker';
 
 export default function Index({
     auth,
@@ -56,7 +57,8 @@ export default function Index({
 
         let cancelled = false;
         let lastImportProcesados = -1;
-        const terminal = (estado) => estado && !['pendiente', 'en_proceso'].includes(estado);
+        const terminalSync = (estado) => estado && !['pendiente', 'en_proceso'].includes(estado);
+        const terminalImport = (estado) => estado && !TN_IMPORT_ESTADOS_ACTIVOS.includes(estado);
 
         const poll = async () => {
             try {
@@ -65,7 +67,7 @@ export default function Index({
                     const res = await fetch(route('tiendanube.progreso', syncLogId), { headers: { Accept: 'application/json' } });
                     if (res.ok) {
                         const data = await res.json();
-                        if (!terminal(data.estado)) done = false;
+                        if (!terminalSync(data.estado)) done = false;
                     }
                 }
                 if (imageImportId) {
@@ -75,11 +77,11 @@ export default function Index({
                     if (res.ok) {
                         const data = await res.json();
                         const proc = data.procesados ?? 0;
-                        if (proc !== lastImportProcesados && lastImportProcesados >= 0 && !terminal(data.estado)) {
+                        if (proc !== lastImportProcesados && lastImportProcesados >= 0 && !terminalImport(data.estado)) {
                             router.reload({ only: ['productos', 'totales'] });
                         }
                         lastImportProcesados = proc;
-                        if (!terminal(data.estado)) done = false;
+                        if (!terminalImport(data.estado)) done = false;
                     }
                 }
                 if (!cancelled && done) {
@@ -233,7 +235,7 @@ export default function Index({
                                 <input
                                     value={search}
                                     onChange={(e) => setSearch(e.target.value)}
-                                    placeholder="Buscar ID, SKU, SEO, marca…"
+                                    placeholder="Buscar nombre, ID, SKU, SEO, marca…"
                                     className="w-full bg-transparent py-2.5 px-2 text-sm outline-none theme-text-main"
                                 />
                             </div>

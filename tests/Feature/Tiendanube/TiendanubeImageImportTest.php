@@ -69,20 +69,40 @@ class TiendanubeImageImportTest extends TestCase
             'price' => 10,
         ]);
 
-        Http::fake([
-            'api.tiendanube.com/v1/8004291/products/100/images' => Http::response([
-                'id' => 555,
-                'src' => 'https://cdn.tiendanube.com/SKU123.webp',
-                'position' => 1,
-                'product_id' => 100,
-            ], 201),
-        ]);
+        Http::fake(function ($request) {
+            $path = parse_url($request->url(), PHP_URL_PATH) ?: '';
+            if ($request->method() === 'GET' && str_ends_with(rtrim($path, '/'), '/products/100')) {
+                return Http::response([
+                    'id' => 100,
+                    'name' => ['es' => 'Prod'],
+                    'published' => true,
+                    'images' => [],
+                    'variants' => [],
+                    'attributes' => [],
+                    'categories' => [],
+                ], 200);
+            }
+            if ($request->method() === 'POST' && str_contains($path, '/products/100/images')) {
+                return Http::response([
+                    'id' => 555,
+                    'src' => 'https://cdn.tiendanube.com/SKU123.webp',
+                    'position' => 1,
+                    'product_id' => 100,
+                ], 201);
+            }
+
+            return Http::response(['error' => $request->method().' '.$path], 500);
+        });
 
         $zip = $this->makeZip([
             'SKU123.webp' => 'fake-image-bytes',
         ]);
 
         $import = app(TiendanubeImageImportService::class)->iniciarDesdeZip($zip);
+        Http::assertNothingSent();
+        $this->assertSame('lista', $import->fresh()->estado);
+
+        $import = $this->confirmarImport($import);
 
         $this->assertSame('completado', $import->fresh()->estado);
         $this->assertSame(1, $import->fresh()->exitosos);
@@ -109,6 +129,7 @@ class TiendanubeImageImportTest extends TestCase
         $import->refresh();
 
         $this->assertSame(1, $import->fallidos);
+        $this->assertSame('completado_con_incidencias', $import->estado);
         $item = $import->items()->first();
         $this->assertSame('error', $item->estado);
         $this->assertSame(TiendanubeImageImportService::MOTIVO_SKU_NO_ENCONTRADO, $item->motivo);
@@ -217,14 +238,30 @@ class TiendanubeImageImportTest extends TestCase
             'price' => 1,
         ]);
 
-        Http::fake([
-            'api.tiendanube.com/v1/8004291/products/200/images' => Http::response([
-                'id' => 900,
-                'src' => 'https://cdn.example.com/x.jpg',
-                'position' => 2,
-                'product_id' => 200,
-            ], 201),
-        ]);
+        Http::fake(function ($request) {
+            $path = parse_url($request->url(), PHP_URL_PATH) ?: '';
+            if ($request->method() === 'GET' && str_ends_with(rtrim($path, '/'), '/products/200')) {
+                return Http::response([
+                    'id' => 200,
+                    'name' => ['es' => 'P'],
+                    'published' => true,
+                    'images' => [],
+                    'variants' => [],
+                    'attributes' => [],
+                    'categories' => [],
+                ], 200);
+            }
+            if ($request->method() === 'POST' && str_contains($path, '/products/200/images')) {
+                return Http::response([
+                    'id' => 900,
+                    'src' => 'https://cdn.example.com/x.jpg',
+                    'position' => 2,
+                    'product_id' => 200,
+                ], 201);
+            }
+
+            return Http::response(['error' => $request->method().' '.$path], 500);
+        });
 
         $zip = $this->makeZip([
             'ABC_2.jpg' => 'bytes',
@@ -233,6 +270,10 @@ class TiendanubeImageImportTest extends TestCase
         $import = app(TiendanubeImageImportService::class)->iniciarDesdeZip($zip);
         $item = $import->items()->first();
         $this->assertSame(2, $item->position);
+        $this->assertSame('lista', $import->estado);
+        Http::assertNothingSent();
+
+        $import = $this->confirmarImport($import);
         $this->assertSame('ok', $item->fresh()->estado);
 
         Http::assertSent(function ($request) {
@@ -270,6 +311,8 @@ class TiendanubeImageImportTest extends TestCase
         });
 
         $import = app(TiendanubeImageImportService::class)->iniciarDesdeZip($this->makeZip($files));
+        $this->assertSame('lista', $import->fresh()->estado);
+        $import = $this->confirmarImport($import);
         $import->refresh();
 
         $this->assertSame('completado', $import->estado);
@@ -341,13 +384,30 @@ class TiendanubeImageImportTest extends TestCase
             'price' => 1,
         ]);
 
-        Http::fake([
-            'api.tiendanube.com/v1/8004291/products/77/images' => Http::response([
-                'id' => 777,
-                'src' => 'https://cdn.example.com/FILE77.webp',
-                'position' => 1,
-            ], 201),
-        ]);
+        Http::fake(function ($request) {
+            $path = parse_url($request->url(), PHP_URL_PATH) ?: '';
+            if ($request->method() === 'GET' && str_ends_with(rtrim($path, '/'), '/products/77')) {
+                return Http::response([
+                    'id' => 77,
+                    'name' => ['es' => 'P'],
+                    'published' => true,
+                    'images' => [],
+                    'variants' => [],
+                    'attributes' => [],
+                    'categories' => [],
+                ], 200);
+            }
+            if ($request->method() === 'POST' && str_contains($path, '/products/77/images')) {
+                return Http::response([
+                    'id' => 777,
+                    'src' => 'https://cdn.example.com/FILE77.webp',
+                    'position' => 1,
+                    'product_id' => 77,
+                ], 201);
+            }
+
+            return Http::response(['error' => $request->method().' '.$path], 500);
+        });
 
         $png = base64_decode(
             'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
@@ -358,6 +418,9 @@ class TiendanubeImageImportTest extends TestCase
         $upload = new UploadedFile($path, 'FILE77.png', 'image/png', null, true);
 
         $import = app(TiendanubeImageImportService::class)->iniciarDesdeArchivos([$upload], null, true);
+        $this->assertSame('lista', $import->fresh()->estado);
+        Http::assertNothingSent();
+        $import = $this->confirmarImport($import);
         $import->refresh();
 
         $this->assertSame('completado', $import->estado);
@@ -501,6 +564,207 @@ class TiendanubeImageImportTest extends TestCase
             ->assertJsonPath('alertas_dimension', 1);
     }
 
+    public function test_sku_duplicado_en_productos_no_elige_el_primero(): void
+    {
+        TiendanubeProducto::create(['id' => 10, 'name' => ['es' => 'A'], 'published' => true]);
+        TiendanubeProducto::create(['id' => 20, 'name' => ['es' => 'B'], 'published' => true]);
+        TiendanubeProductoVariante::create(['id' => 1, 'producto_id' => 10, 'sku' => 'DUP', 'price' => 1]);
+        TiendanubeProductoVariante::create(['id' => 2, 'producto_id' => 20, 'sku' => 'DUP', 'price' => 1]);
+
+        Http::fake(function ($request) {
+            $path = parse_url($request->url(), PHP_URL_PATH) ?: '';
+            if ($request->method() === 'GET' && str_ends_with(rtrim($path, '/'), '/products/20')) {
+                return Http::response([
+                    'id' => 20,
+                    'name' => ['es' => 'B'],
+                    'published' => true,
+                    'images' => [],
+                    'variants' => [],
+                    'attributes' => [],
+                    'categories' => [],
+                ], 200);
+            }
+            if ($request->method() === 'POST' && str_contains($path, '/products/20/images')) {
+                return Http::response([
+                    'id' => 888,
+                    'src' => 'https://cdn.example.com/DUP.webp',
+                    'position' => 1,
+                    'product_id' => 20,
+                ], 201);
+            }
+
+            return Http::response(['error' => $request->method().' '.$path], 500);
+        });
+
+        $import = app(TiendanubeImageImportService::class)->iniciarDesdeZip(
+            $this->makeZip(['DUP.webp' => 'bytes'])
+        );
+
+        $this->assertSame('requiere_revision', $import->fresh()->estado);
+        $item = $import->items()->first();
+        $this->assertSame('requiere_seleccion', $item->estado);
+        $this->assertSame(TiendanubeImageImportService::MOTIVO_SKU_AMBIGUO, $item->motivo);
+        $this->assertNull($item->producto_id);
+        Http::assertNothingSent();
+
+        $import = app(TiendanubeImageImportService::class)->confirmarRevision($import->fresh(), [
+            ['id' => $item->id, 'producto_id' => 20, 'excluido' => false],
+        ]);
+
+        $this->assertSame('completado', $import->estado);
+        $this->assertSame(20, $item->fresh()->producto_id);
+        $this->assertDatabaseHas('tiendanube_producto_imagenes', [
+            'id' => 888,
+            'producto_id' => 20,
+        ]);
+        Http::assertSent(fn ($request) => $request->method() === 'POST' && str_contains($request->url(), '/products/20/images'));
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), '/products/10/images'));
+    }
+
+    public function test_zip_ruta_insegura_falla_sin_escribir_remoto(): void
+    {
+        Http::fake();
+
+        $import = app(TiendanubeImageImportService::class)->iniciarDesdeZip(
+            $this->makeZip(['../evil.jpg' => 'bytes'])
+        );
+        $import->refresh();
+
+        $this->assertSame('error', $import->estado);
+        $this->assertStringContainsString('ruta no permitida', (string) $import->mensaje_error);
+        $this->assertSame(0, $import->items()->count());
+        Http::assertNothingSent();
+    }
+
+    public function test_ceros_iniciales_en_nombre_de_archivo(): void
+    {
+        TiendanubeProducto::create(['id' => 30, 'name' => ['es' => 'Z'], 'published' => true]);
+        TiendanubeProductoVariante::create(['id' => 30, 'producto_id' => 30, 'sku' => '00123', 'price' => 1]);
+
+        Http::fake(function ($request) {
+            $path = parse_url($request->url(), PHP_URL_PATH) ?: '';
+            if ($request->method() === 'GET' && str_ends_with(rtrim($path, '/'), '/products/30')) {
+                return Http::response([
+                    'id' => 30,
+                    'name' => ['es' => 'Z'],
+                    'published' => true,
+                    'images' => [],
+                    'variants' => [],
+                    'attributes' => [],
+                    'categories' => [],
+                ], 200);
+            }
+            if ($request->method() === 'POST') {
+                return Http::response([
+                    'id' => 301,
+                    'src' => 'https://cdn.example.com/00123.webp',
+                    'position' => 1,
+                    'product_id' => 30,
+                ], 201);
+            }
+
+            return Http::response(['error' => $request->method().' '.$path], 500);
+        });
+
+        $import = app(TiendanubeImageImportService::class)->iniciarDesdeZip(
+            $this->makeZip(['00123.webp' => 'bytes'])
+        );
+        $this->assertSame('00123', $import->items()->first()->sku);
+        $import = $this->confirmarImport($import);
+        $this->assertSame('ok', $import->items()->first()->estado);
+    }
+
+    public function test_reintentar_solo_errores_de_carga(): void
+    {
+        TiendanubeProducto::create(['id' => 40, 'name' => ['es' => 'R'], 'published' => true]);
+        $import = TiendanubeImageImport::create([
+            'estado' => 'completado_con_incidencias',
+            'confirmado_at' => now(),
+            'total_archivos' => 2,
+            'procesados' => 2,
+            'exitosos' => 1,
+            'fallidos' => 1,
+            'extract_path' => 'tiendanube/imports/x/files',
+        ]);
+        $ok = TiendanubeImageImportItem::create([
+            'import_id' => $import->id,
+            'filename' => 'OK.webp',
+            'relative_path' => 'ok.webp',
+            'sku' => 'A',
+            'position' => 1,
+            'producto_id' => 40,
+            'estado' => 'ok',
+        ]);
+        $fail = TiendanubeImageImportItem::create([
+            'import_id' => $import->id,
+            'filename' => 'FAIL.webp',
+            'relative_path' => 'fail.webp',
+            'sku' => 'A',
+            'position' => 2,
+            'producto_id' => 40,
+            'estado' => 'error',
+            'motivo' => TiendanubeImageImportService::MOTIVO_ERROR_CARGA,
+            'mensaje' => 'timeout',
+        ]);
+
+        Storage::disk('local')->put($import->extract_path.'/fail.webp', 'bytes');
+
+        Http::fake(function ($request) {
+            $path = parse_url($request->url(), PHP_URL_PATH) ?: '';
+            if ($request->method() === 'GET' && str_ends_with(rtrim($path, '/'), '/products/40')) {
+                return Http::response([
+                    'id' => 40,
+                    'name' => ['es' => 'R'],
+                    'published' => true,
+                    'images' => [],
+                    'variants' => [],
+                    'attributes' => [],
+                    'categories' => [],
+                ], 200);
+            }
+            if ($request->method() === 'POST') {
+                return Http::response([
+                    'id' => 401,
+                    'src' => 'https://cdn.example.com/f.webp',
+                    'position' => 2,
+                    'product_id' => 40,
+                ], 201);
+            }
+
+            return Http::response(['error' => 'x'], 500);
+        });
+
+        $import = app(TiendanubeImageImportService::class)->reintentarFallidos($import);
+        $this->assertSame('ok', $ok->fresh()->estado);
+        $this->assertSame('ok', $fail->fresh()->estado);
+        $this->assertSame('completado', $import->fresh()->estado);
+    }
+
+    public function test_limpieza_no_toca_imports_activos(): void
+    {
+        $activo = TiendanubeImageImport::create([
+            'estado' => 'lista',
+            'extract_path' => 'tiendanube/imports/keep/files',
+        ]);
+        Storage::disk('local')->put('tiendanube/imports/'.$activo->id.'/files/a.jpg', 'x');
+
+        $viejo = TiendanubeImageImport::create([
+            'estado' => 'completado',
+            'extract_path' => 'tiendanube/imports/old/files',
+        ]);
+        $viejo->updated_at = now()->subDays(10);
+        $viejo->saveQuietly();
+        Storage::disk('local')->put('tiendanube/imports/'.$viejo->id.'/files/a.jpg', 'x');
+
+        config(['tiendanube.image_import_retention_days' => 7]);
+        $n = app(TiendanubeImageImportService::class)->limpiarTemporalesVencidos();
+
+        $this->assertSame(1, $n);
+        $this->assertTrue(Storage::disk('local')->exists('tiendanube/imports/'.$activo->id.'/files/a.jpg'));
+        $this->assertFalse(Storage::disk('local')->exists('tiendanube/imports/'.$viejo->id.'/files/a.jpg'));
+        $this->assertDatabaseHas('tiendanube_image_imports', ['id' => $viejo->id, 'estado' => 'completado']);
+    }
+
     /**
      * @param  array<string, string>  $files
      */
@@ -515,5 +779,20 @@ class TiendanubeImageImportTest extends TestCase
         $zip->close();
 
         return new UploadedFile($path, 'imagenes.zip', 'application/zip', null, true);
+    }
+
+    private function confirmarImport(TiendanubeImageImport $import): TiendanubeImageImport
+    {
+        $filas = $import->items()
+            ->whereIn('estado', ['pendiente', 'requiere_seleccion'])
+            ->get()
+            ->map(fn ($item) => [
+                'id' => $item->id,
+                'producto_id' => $item->producto_id,
+                'excluido' => false,
+            ])
+            ->all();
+
+        return app(TiendanubeImageImportService::class)->confirmarRevision($import->fresh(), $filas);
     }
 }

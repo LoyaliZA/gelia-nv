@@ -123,4 +123,25 @@ class TiendanubeCatalogoWipeTest extends TestCase
         $this->assertSame('token-secreto', TiendanubeConfiguracion::obtener()->accessTokenDecrypted());
         Queue::assertPushed(SyncTiendanubeCatalogoJob::class);
     }
+
+    public function test_limpiar_catalogo_bloqueado_durante_sync(): void
+    {
+        app(\App\Services\Tiendanube\TiendanubeOperacionTiendaService::class)->adquirirExclusiva(
+            111,
+            \App\Services\Tiendanube\TiendanubeOperacionTiendaService::TIPO_CATALOGO_SYNC,
+            1,
+            1
+        );
+
+        $request = Request::create('/tiendanube/catalogo/limpiar', 'POST', []);
+        $request->setUserResolver(fn () => $this->user);
+
+        $response = app(TiendanubeController::class)->limpiarCatalogo(
+            $request,
+            app(TiendanubeCatalogoWipeService::class)
+        );
+
+        $this->assertSame(409, $response->getStatusCode());
+        $this->assertSame(1, TiendanubeProducto::count());
+    }
 }

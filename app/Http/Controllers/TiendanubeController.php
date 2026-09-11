@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Exceptions\Tiendanube\TiendanubeActualizacionParcialException;
+use App\Exceptions\Tiendanube\TiendanubeOperacionConflictException;
 use App\Http\Requests\Tiendanube\StoreTiendanubeProductoImagenRequest;
 use App\Http\Requests\Tiendanube\StoreTiendanubeProductoRequest;
 use App\Http\Requests\Tiendanube\UpdateTiendanubeProductoRequest;
@@ -11,6 +13,7 @@ use App\Models\Tiendanube\TiendanubeConfiguracion;
 use App\Models\Tiendanube\TiendanubeImageImport;
 use App\Models\Tiendanube\TiendanubeProducto;
 use App\Models\Tiendanube\TiendanubeProductoImagen;
+use App\Models\Tiendanube\TiendanubeProductoImagenOperacion;
 use App\Models\Tiendanube\TiendanubeProductoVariante;
 use App\Models\Tiendanube\TiendanubeSyncLog;
 use App\Models\Tiendanube\TiendanubeUbicacion;
@@ -19,7 +22,12 @@ use App\Services\Tiendanube\OptimizarImagenTiendanubeService;
 use App\Services\Tiendanube\TiendanubeApiClient;
 use App\Services\Tiendanube\TiendanubeCatalogoWipeService;
 use App\Services\Tiendanube\TiendanubeImageImportService;
+use App\Services\Tiendanube\TiendanubeImageSkuResolverService;
+use App\Services\Tiendanube\TiendanubeOperacionTiendaService;
+use App\Services\Tiendanube\TiendanubeProductoImagenOperacionService;
 use App\Services\Tiendanube\TiendanubeProductoWriteService;
+use App\Services\Auditoria\RegistrarAuditoriaConfiguracionService;
+use App\Services\Tiendanube\TiendanubeWebhookInboxService;
 use App\Services\Tiendanube\TiendanubeWebhookService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -42,15 +50,7 @@ class TiendanubeController extends Controller
 
         $productos = TiendanubeProducto::query()
             ->with(['variantes', 'imagenes'])
-            ->when($query, function ($q) use ($query) {
-                $q->where(function ($inner) use ($query) {
-                    $inner->where('id', $query)
-                        ->orWhere('seo_title', 'LIKE', "%{$query}%")
-                        ->orWhere('brand', 'LIKE', "%{$query}%")
-                        ->orWhere('tags', 'LIKE', "%{$query}%")
-                        ->orWhereHas('variantes', fn ($v) => $v->where('sku', 'LIKE', "%{$query}%"));
-                });
-            })
+            ->when($query, fn ($q) => $q->buscarTextoCatalogo((string) $query, true))
             ->when($filtroAlertaImagenes, function ($q) {
                 $q->whereHas('imagenes', fn ($img) => $img->where('requiere_revision', true));
             })
@@ -130,14 +130,7 @@ class TiendanubeController extends Controller
 
         $productos = TiendanubeProducto::query()
             ->with(['variantes', 'imagenes'])
-            ->when($query, function ($q) use ($query) {
-                $q->where(function ($inner) use ($query) {
-                    $inner->where('id', $query)
-                        ->orWhere('seo_title', 'LIKE', "%{$query}%")
-                        ->orWhere('brand', 'LIKE', "%{$query}%")
-                        ->orWhereHas('variantes', fn ($v) => $v->where('sku', 'LIKE', "%{$query}%"));
-                });
-            })
+            ->when($query, fn ($q) => $q->buscarTextoCatalogo((string) $query, false))
             ->when($filtroAlertaImagenes, function ($q) {
                 $q->whereHas('imagenes', fn ($img) => $img->where('requiere_revision', true));
             })
@@ -213,6 +206,21 @@ class TiendanubeController extends Controller
         $cambioTienda = $storeAnterior && $storeNuevo && (int) $storeAnterior !== (int) $storeNuevo;
         $limpiar = $request->boolean('limpiar_catalogo');
 
+        $ops = app(TiendanubeOperacionTiendaService::class);
+
+        try {
+            if ($cambioTienda || $limpiar) {
+                $ops->assertAdmisible(
+                    $cambioTienda
+                        ? TiendanubeOperacionTiendaService::TIPO_CAMBIO_TIENDA
+                        : TiendanubeOperacionTiendaService::TIPO_CATALOGO_WIPE,
+                    $storeAnterior ? (int) $storeAnterior : null
+                );
+            }
+        } catch (TiendanubeOperacionConflictException $e) {
+            return $this->jsonTiendanubeError($e);
+        }
+
         if ($cambioTienda && ! $limpiar) {
             return response()->json([
                 'success' => false,
@@ -238,19 +246,24 @@ class TiendanubeController extends Controller
 
         $config->save();
 
+        if ($cambioTienda || $request->filled('access_token')) {
+            $config->increment('config_generation');
+            $config->refresh();
+        }
+
         $borrados = null;
         if ($limpiar) {
             $borrados = $wipe->wipe();
         }
 
         $syncLogId = null;
-        if ($limpiar && $request->boolean('iniciar_sync') && $config->credencialesConfiguradas() && ! TiendanubeSyncLog::activo()) {
-            $log = TiendanubeSyncLog::create([
-                'tipo' => 'completo',
-                'estado' => 'pendiente',
-            ]);
-            SyncTiendanubeCatalogoJob::dispatch($log->id);
-            $syncLogId = $log->id;
+        if ($limpiar && $request->boolean('iniciar_sync') && $config->credencialesConfiguradas()) {
+            try {
+                $log = $this->despacharSyncCompleto($config);
+                $syncLogId = $log->id;
+            } catch (TiendanubeOperacionConflictException $e) {
+                return $this->jsonTiendanubeError($e);
+            }
         }
 
         return response()->json([
@@ -277,6 +290,17 @@ class TiendanubeController extends Controller
         ]);
 
         $config = TiendanubeConfiguracion::obtener();
+        $ops = app(TiendanubeOperacionTiendaService::class);
+
+        try {
+            $ops->assertAdmisible(
+                TiendanubeOperacionTiendaService::TIPO_CATALOGO_WIPE,
+                $config->store_id ? (int) $config->store_id : null
+            );
+        } catch (TiendanubeOperacionConflictException $e) {
+            return $this->jsonTiendanubeError($e);
+        }
+
         $borrados = $wipe->wipe();
 
         $syncLogId = null;
@@ -288,20 +312,17 @@ class TiendanubeController extends Controller
                     'catalogo_borrado' => $borrados,
                 ], 422);
             }
-            if (TiendanubeSyncLog::activo()) {
+
+            try {
+                $log = $this->despacharSyncCompleto($config);
+                $syncLogId = $log->id;
+            } catch (TiendanubeOperacionConflictException $e) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Catálogo limpio, pero ya hay una sincronización en curso.',
                     'catalogo_borrado' => $borrados,
                 ], 409);
             }
-
-            $log = TiendanubeSyncLog::create([
-                'tipo' => 'completo',
-                'estado' => 'pendiente',
-            ]);
-            SyncTiendanubeCatalogoJob::dispatch($log->id);
-            $syncLogId = $log->id;
         }
 
         return response()->json([
@@ -357,9 +378,13 @@ class TiendanubeController extends Controller
         }
     }
 
-    public function sincronizar(TiendanubeWebhookService $webhooks): JsonResponse
+    public function sincronizar(Request $request, TiendanubeWebhookService $webhooks): JsonResponse
     {
         Gate::authorize('tiendanube.sincronizar');
+
+        $request->validate([
+            'confirmar_depuracion_masiva' => 'nullable|boolean',
+        ]);
 
         $config = TiendanubeConfiguracion::obtener();
         if (! $config->credencialesConfiguradas()) {
@@ -367,13 +392,6 @@ class TiendanubeController extends Controller
                 'success' => false,
                 'message' => 'Configura store_id y access_token antes de sincronizar.',
             ], 422);
-        }
-
-        if (TiendanubeSyncLog::activo()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Ya hay una sincronización en curso.',
-            ], 409);
         }
 
         try {
@@ -389,12 +407,14 @@ class TiendanubeController extends Controller
             ]);
         }
 
-        $log = TiendanubeSyncLog::create([
-            'tipo' => 'completo',
-            'estado' => 'pendiente',
-        ]);
-
-        SyncTiendanubeCatalogoJob::dispatch($log->id);
+        try {
+            $log = $this->despacharSyncCompleto($config, $request->boolean('confirmar_depuracion_masiva'));
+        } catch (TiendanubeOperacionConflictException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Ya hay una sincronización en curso.',
+            ], 409);
+        }
 
         return response()->json([
             'success' => true,
@@ -419,6 +439,10 @@ class TiendanubeController extends Controller
             'procesados_productos' => $log->procesados_productos,
             'eliminados_productos' => $log->eliminados_productos,
             'eliminados_categorias' => $log->eliminados_categorias,
+            'fase' => $log->fase,
+            'candidatos_productos' => $log->candidatos_productos,
+            'candidatos_categorias' => $log->candidatos_categorias,
+            'pendientes_confirmacion' => $log->pendientes_confirmacion,
             'porcentaje' => $log->progresoPorcentaje(),
             'mensaje_error' => $log->mensaje_error,
             'updated_at' => $log->updated_at?->toIso8601String(),
@@ -481,10 +505,7 @@ class TiendanubeController extends Controller
                 'producto_id' => $producto->id,
             ], 201);
         } catch (\Throwable $e) {
-            return response()->json([
-                'success' => false,
-                'message' => $e->getMessage(),
-            ], 400);
+            return $this->jsonTiendanubeError($e);
         }
     }
 
@@ -505,11 +526,16 @@ class TiendanubeController extends Controller
                 'message' => 'Producto actualizado en Tiendanube.',
                 'producto_id' => $producto->id,
             ]);
-        } catch (\Throwable $e) {
+        } catch (TiendanubeActualizacionParcialException $e) {
             return response()->json([
                 'success' => false,
+                'parcial' => true,
+                'producto_actualizado' => true,
+                'producto_id' => $e->producto?->id ?? $id,
                 'message' => $e->getMessage(),
-            ], 400);
+            ], 422);
+        } catch (\Throwable $e) {
+            return $this->jsonTiendanubeError($e);
         }
     }
 
@@ -520,20 +546,55 @@ class TiendanubeController extends Controller
         try {
             $reemplazar = $request->boolean('reemplazar', true);
 
-            $imagen = $write->agregarImagen(
+            $carga = $write->agregarImagen(
                 $id,
                 $request->input('src'),
                 $request->file('file'),
                 $request->filled('position') ? (int) $request->input('position') : null,
                 $reemplazar,
-                OptimizarImagenTiendanubeService::opcionesDesdeRequest($request)
+                OptimizarImagenTiendanubeService::opcionesDesdeRequest($request),
+                $request->input('solicitud_clave'),
+                $request->user()?->id
             );
+
+            $operacion = $carga->operacion;
+            $parcial = $operacion->esParcial();
+            $message = $parcial
+                ? 'Imagen cargada, pero no se pudieron retirar todas las anteriores. Puede completar el reemplazo sin volver a subir el archivo.'
+                : ($reemplazar ? 'Imagen reemplazada.' : 'Imagen agregada.');
 
             return response()->json([
                 'success' => true,
-                'message' => $reemplazar ? 'Imagen reemplazada.' : 'Imagen agregada.',
-                'imagen' => $imagen,
+                'parcial' => $parcial,
+                'message' => $message,
+                'imagen' => $carga->imagen,
+                'operacion' => $operacion->toApi(),
             ], 201);
+        } catch (\Throwable $e) {
+            return $this->jsonTiendanubeError($e);
+        }
+    }
+
+    public function reconciliarImagenOperacion(string $id, TiendanubeProductoImagenOperacionService $operaciones): JsonResponse
+    {
+        Gate::authorize('tiendanube.productos.editar');
+
+        $op = TiendanubeProductoImagenOperacion::query()->findOrFail($id);
+
+        try {
+            $carga = $operaciones->reconciliar($op);
+            $operacion = $carga->operacion;
+            $parcial = $operacion->esParcial();
+
+            return response()->json([
+                'success' => ! $parcial,
+                'parcial' => $parcial,
+                'message' => $parcial
+                    ? 'Aún faltan imágenes anteriores por retirar.'
+                    : 'Reemplazo completado.',
+                'imagen' => $carga->imagen,
+                'operacion' => $operacion->toApi(),
+            ]);
         } catch (\Throwable $e) {
             return response()->json([
                 'success' => false,
@@ -542,46 +603,22 @@ class TiendanubeController extends Controller
         }
     }
 
-    public function resolverSku(Request $request): JsonResponse
+    public function resolverSku(Request $request, TiendanubeImageSkuResolverService $resolver): JsonResponse
     {
         Gate::authorize('tiendanube.productos.editar');
 
         $sku = trim((string) $request->query('sku', ''));
-        if ($sku === '') {
-            return response()->json([
-                'sku' => '',
-                'encontrado' => false,
-                'producto_id' => null,
-                'nombre' => null,
-                'imagen_actual' => null,
-            ]);
-        }
-
-        $variante = TiendanubeProductoVariante::query()
-            ->with(['producto.imagenes'])
-            ->where('sku', $sku)
-            ->orderBy('id')
-            ->first();
-
-        if (! $variante || ! $variante->producto) {
-            return response()->json([
-                'sku' => $sku,
-                'encontrado' => false,
-                'producto_id' => null,
-                'nombre' => null,
-                'imagen_actual' => null,
-            ]);
-        }
-
-        $producto = $variante->producto;
-        $primera = $producto->imagenes->sortBy('position')->first();
+        $resolucion = $resolver->resolver($sku);
+        $primero = $resolucion['candidatos'][0] ?? null;
 
         return response()->json([
-            'sku' => $sku,
-            'encontrado' => true,
-            'producto_id' => $producto->id,
-            'nombre' => $producto->nombreVisible(),
-            'imagen_actual' => $primera?->src,
+            'sku' => $resolucion['sku'],
+            'estado' => $resolucion['estado'],
+            'encontrado' => $resolucion['estado'] === TiendanubeImageSkuResolverService::ESTADO_ENCONTRADO,
+            'producto_id' => $resolucion['producto_id'],
+            'nombre' => $primero['nombre'] ?? null,
+            'imagen_actual' => $primero['imagen_actual'] ?? null,
+            'candidatos' => $resolucion['candidatos'],
         ]);
     }
 
@@ -619,10 +656,7 @@ class TiendanubeController extends Controller
                 ] : null,
             ], 201);
         } catch (\Throwable $e) {
-            return response()->json([
-                'success' => false,
-                'message' => $e->getMessage(),
-            ], 400);
+            return $this->jsonTiendanubeError($e);
         }
     }
 
@@ -641,6 +675,9 @@ class TiendanubeController extends Controller
         $resumen = $import->resumenMotivos();
         $totalFallidos = $resumen['omitidos'] + $resumen['errores'];
 
+        $requiereRevision = $import->estado === TiendanubeImageImport::ESTADO_REQUIERE_REVISION
+            || $import->estado === TiendanubeImageImport::ESTADO_LISTA && ! $import->confirmado_at;
+
         return response()->json([
             'id' => $import->id,
             'estado' => $import->estado,
@@ -650,6 +687,8 @@ class TiendanubeController extends Controller
             'fallidos' => $import->fallidos,
             'porcentaje' => $import->progresoPorcentaje(),
             'mensaje_error' => $import->mensaje_error,
+            'confirmado_at' => $import->confirmado_at?->toIso8601String(),
+            'requiere_revision' => $requiereRevision,
             'resumen' => $resumen,
             'errores_total' => $totalFallidos,
             'alertas_dimension' => app(TiendanubeImageImportService::class)->contarAlertasDimension($import),
@@ -702,10 +741,73 @@ class TiendanubeController extends Controller
                 ],
             ], 201);
         } catch (\Throwable $e) {
+            return $this->jsonTiendanubeError($e);
+        }
+    }
+
+    public function revisionImportImagenes(int $id, TiendanubeImageImportService $service): JsonResponse
+    {
+        Gate::authorize('tiendanube.productos.editar');
+
+        $import = TiendanubeImageImport::findOrFail($id);
+
+        return response()->json([
+            'id' => $import->id,
+            'estado' => $import->estado,
+            'confirmado_at' => $import->confirmado_at?->toIso8601String(),
+            'reemplazar_primera' => (bool) $import->reemplazar_primera,
+            'items' => $service->filasRevision($import),
+        ]);
+    }
+
+    public function confirmarImportImagenes(Request $request, int $id, TiendanubeImageImportService $service): JsonResponse
+    {
+        Gate::authorize('tiendanube.productos.editar');
+
+        $request->validate([
+            'items' => ['required', 'array'],
+            'items.*.id' => ['required', 'integer'],
+            'items.*.producto_id' => ['nullable', 'integer'],
+            'items.*.excluido' => ['sometimes', 'boolean'],
+        ]);
+
+        try {
+            $import = $service->confirmarRevision(
+                TiendanubeImageImport::findOrFail($id),
+                $request->input('items', [])
+            );
+
             return response()->json([
-                'success' => false,
-                'message' => $e->getMessage(),
-            ], 400);
+                'success' => true,
+                'message' => $import->confirmado_at && in_array($import->estado, [
+                    TiendanubeImageImport::ESTADO_LISTA,
+                    TiendanubeImageImport::ESTADO_PROCESANDO,
+                ], true)
+                    ? 'Importación confirmada. Carga en segundo plano.'
+                    : 'Revisión guardada.',
+                'import_id' => $import->id,
+                'estado' => $import->estado,
+            ]);
+        } catch (\Throwable $e) {
+            return $this->jsonTiendanubeError($e);
+        }
+    }
+
+    public function reintentarImportImagenes(int $id, TiendanubeImageImportService $service): JsonResponse
+    {
+        Gate::authorize('tiendanube.productos.editar');
+
+        try {
+            $import = $service->reintentarFallidos(TiendanubeImageImport::findOrFail($id));
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Se reencolaron los errores recuperables.',
+                'import_id' => $import->id,
+                'estado' => $import->estado,
+            ]);
+        } catch (\Throwable $e) {
+            return $this->jsonTiendanubeError($e);
         }
     }
 
@@ -939,11 +1041,66 @@ class TiendanubeController extends Controller
         $entregas = TiendanubeWebhookDelivery::query()
             ->latest('id')
             ->limit(20)
-            ->get(['id', 'event', 'resource_id', 'status', 'error', 'created_at']);
+            ->get([
+                'id',
+                'event',
+                'resource_id',
+                'status',
+                'error',
+                'attempts',
+                'next_attempt_at',
+                'created_at',
+            ]);
 
         return response()->json([
             'success' => true,
-            'entregas' => $entregas,
+            'entregas' => $entregas->map(fn (TiendanubeWebhookDelivery $entrega) => [
+                'id' => $entrega->id,
+                'event' => $entrega->event,
+                'resource_id' => $entrega->resource_id,
+                'status' => $entrega->status,
+                'error' => $entrega->error,
+                'attempts' => $entrega->attempts,
+                'next_attempt_at' => $entrega->next_attempt_at,
+                'created_at' => $entrega->created_at,
+                'puede_reintentar' => $entrega->puedeReintentar(),
+            ]),
+        ]);
+    }
+
+    public function reintentarEntregaWebhook(
+        TiendanubeWebhookDelivery $delivery,
+        TiendanubeWebhookInboxService $inbox
+    ): JsonResponse {
+        Gate::authorize('tiendanube.configurar');
+
+        try {
+            $inbox->scheduleManualRetry($delivery, (int) auth()->id());
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 422);
+        }
+
+        RegistrarAuditoriaConfiguracionService::ejecutar(
+            'Tiendanube',
+            'Reintento entrega webhook',
+            [
+                'delivery_id' => $delivery->id,
+                'event' => $delivery->event,
+                'resource_id' => $delivery->resource_id,
+            ]
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Entrega reencolada.',
+            'entrega' => [
+                'id' => $delivery->id,
+                'status' => $delivery->status,
+                'puede_reintentar' => $delivery->puedeReintentar(),
+            ],
         ]);
     }
 
@@ -1074,5 +1231,54 @@ class TiendanubeController extends Controller
             'locations_probe' => $config->locations_probe,
             'escritura_habilitada' => $probeOk && $espejo,
         ];
+    }
+
+    private function despacharSyncCompleto(TiendanubeConfiguracion $config, bool $confirmarDepuracionMasiva = false): TiendanubeSyncLog
+    {
+        $ops = app(TiendanubeOperacionTiendaService::class);
+        $storeId = (int) $config->store_id;
+        $generation = (int) ($config->config_generation ?: 1);
+
+        $ops->assertAdmisible(TiendanubeOperacionTiendaService::TIPO_CATALOGO_SYNC, $storeId);
+
+        $log = TiendanubeSyncLog::create([
+            'tipo' => 'completo',
+            'estado' => 'pendiente',
+            'fase' => 'pendiente',
+            'store_id' => $storeId,
+            'config_generation' => $generation,
+            'confirmar_depuracion_masiva' => $confirmarDepuracionMasiva,
+        ]);
+
+        try {
+            $ops->adquirirExclusiva(
+                $storeId,
+                TiendanubeOperacionTiendaService::TIPO_CATALOGO_SYNC,
+                $log->id,
+                $generation
+            );
+        } catch (TiendanubeOperacionConflictException $e) {
+            $log->update([
+                'estado' => 'error',
+                'fase' => 'error',
+                'mensaje_error' => $e->getMessage(),
+            ]);
+
+            throw $e;
+        }
+
+        SyncTiendanubeCatalogoJob::dispatch($log->id);
+
+        return $log;
+    }
+
+    private function jsonTiendanubeError(\Throwable $e, int $default = 400): JsonResponse
+    {
+        $status = $e instanceof TiendanubeOperacionConflictException ? 409 : $default;
+
+        return response()->json([
+            'success' => false,
+            'message' => $e->getMessage(),
+        ], $status);
     }
 }

@@ -9,6 +9,7 @@ use App\Models\Tiendanube\TiendanubeProducto;
 use App\Models\Tiendanube\TiendanubeProductoImagen;
 use App\Models\Tiendanube\TiendanubeProductoVariante;
 use App\Models\Tiendanube\TiendanubeSyncLog;
+use App\Models\Tiendanube\TiendanubeSyncRecursoVisto;
 use App\Models\Tiendanube\TiendanubeUbicacion;
 use App\Models\Tiendanube\TiendanubeVarianteNivel;
 use Illuminate\Support\Facades\DB;
@@ -18,18 +19,24 @@ use Throwable;
 class TiendanubeCatalogoSyncService
 {
     public function __construct(
-        private TiendanubeApiClient $api
+        private TiendanubeApiClient $api,
+        private TiendanubeSyncRecursoVistoService $vistos,
+        private TiendanubeCatalogoPruneService $prune,
+        private TiendanubeOperacionTiendaService $operaciones
     ) {}
 
     public function sincronizar(TiendanubeSyncLog $log): void
     {
-        $log->update(['estado' => 'en_proceso', 'mensaje_error' => null]);
+        $log->update(['estado' => 'en_proceso', 'fase' => 'descargando_categorias', 'mensaje_error' => null]);
 
         try {
             $ubicaciones = $this->sincronizarUbicaciones();
             $categorias = $this->sincronizarCategorias($log);
+            $log->update(['fase' => 'descargando_productos']);
             $productos = $this->sincronizarProductos($log);
             $this->marcarMultiInventarioSiAplica();
+            $log->update(['fase' => 'confirmando_ausencias']);
+            $resultado = $this->prune->confirmarYDepurar($log, $this);
 
             $parcial = ! $categorias['completa'] || ! $productos['completa'];
             $motivos = array_values(array_filter([
@@ -40,13 +47,20 @@ class TiendanubeCatalogoSyncService
 
             $log->update([
                 'estado' => $parcial ? 'parcial' : 'completado',
+                'fase' => $parcial ? 'parcial' : 'completado',
                 'mensaje_error' => $parcial
                     ? 'Alcance parcial: '.implode(' | ', $motivos)
                     : null,
+                'eliminados_productos' => $resultado['eliminados_productos'],
+                'eliminados_categorias' => $resultado['eliminados_categorias'],
+                'pendientes_confirmacion' => $resultado['pendientes'],
             ]);
+
+            $this->vistos->limpiarPorRetencion();
         } catch (\Throwable $e) {
             $log->update([
                 'estado' => 'error',
+                'fase' => 'error',
                 'mensaje_error' => $e->getMessage(),
             ]);
 
@@ -62,7 +76,7 @@ class TiendanubeCatalogoSyncService
         $total = 0;
         $idsVistos = [];
 
-        $pagina = $this->recorrerColeccion('/categories', function (array $cat) use ($log, &$total, &$idsVistos): void {
+        $pagina = $this->recorrerColeccion('/categories', TiendanubeSyncRecursoVisto::TIPO_CATEGORIA, $log, function (array $cat) use ($log, &$total, &$idsVistos): void {
             if (! isset($cat['id'])) {
                 return;
             }
@@ -71,7 +85,7 @@ class TiendanubeCatalogoSyncService
             $total++;
             $log->update([
                 'procesados_categorias' => $total,
-                'total_categorias' => max($log->total_categorias, $total),
+                'total_categorias' => max((int) $log->total_categorias, $total),
             ]);
         });
 
@@ -79,12 +93,9 @@ class TiendanubeCatalogoSyncService
             throw $pagina['error'];
         }
 
-        $eliminados = $this->pruneCategorias($idsVistos, $pagina['completa']);
-
         $log->update([
             'total_categorias' => $total,
             'procesados_categorias' => $total,
-            'eliminados_categorias' => $eliminados,
         ]);
 
         return [
@@ -101,7 +112,7 @@ class TiendanubeCatalogoSyncService
         $total = 0;
         $idsVistos = [];
 
-        $pagina = $this->recorrerColeccion('/products', function (array $producto) use ($log, &$total, &$idsVistos): void {
+        $pagina = $this->recorrerColeccion('/products', TiendanubeSyncRecursoVisto::TIPO_PRODUCTO, $log, function (array $producto) use ($log, &$total, &$idsVistos): void {
             if (! isset($producto['id'])) {
                 return;
             }
@@ -110,7 +121,7 @@ class TiendanubeCatalogoSyncService
             $total++;
             $log->update([
                 'procesados_productos' => $total,
-                'total_productos' => max($log->total_productos, $total),
+                'total_productos' => max((int) $log->total_productos, $total),
             ]);
         });
 
@@ -118,12 +129,9 @@ class TiendanubeCatalogoSyncService
             throw $pagina['error'];
         }
 
-        $eliminados = $this->pruneProductos($idsVistos, $pagina['completa']);
-
         $log->update([
             'total_productos' => $total,
             'procesados_productos' => $total,
-            'eliminados_productos' => $eliminados,
         ]);
 
         return [
@@ -204,22 +212,36 @@ class TiendanubeCatalogoSyncService
      * @param  callable(array<string, mixed>): void  $onItem
      * @return array{completa: bool, paginas: int, error: ?Throwable}
      */
-    private function recorrerColeccion(string $path, callable $onItem): array
+    private function recorrerColeccion(string $path, string $tipo, TiendanubeSyncLog $log, callable $onItem): array
     {
         $paginas = 0;
         try {
             foreach ($this->api->paginatePath($path) as $chunk) {
+                $this->renovarLease($log);
                 $paginas++;
                 foreach ($chunk as $item) {
                     if (is_array($item)) {
                         $onItem($item);
                     }
                 }
+                $this->vistos->registrarPagina($log, $tipo, array_values(array_filter($chunk, 'is_array')));
             }
 
             return ['completa' => true, 'paginas' => $paginas, 'error' => null];
         } catch (Throwable $e) {
             return ['completa' => false, 'paginas' => $paginas, 'error' => $e];
+        }
+    }
+
+    private function renovarLease(TiendanubeSyncLog $log): void
+    {
+        if (! $log->store_id) {
+            return;
+        }
+
+        $token = $this->operaciones->tokenActivo((int) $log->store_id);
+        if ($token) {
+            $this->operaciones->renovar((int) $log->store_id, $token);
         }
     }
 
@@ -231,58 +253,6 @@ class TiendanubeCatalogoSyncService
         $detalle = $pagina['error']?->getMessage() ?? 'paginación incompleta';
 
         return "{$coleccion} (páginas vistas: {$pagina['paginas']}): {$detalle}";
-    }
-
-    /**
-     * @param  list<int>  $idsVistos
-     */
-    private function pruneProductos(array $idsVistos, bool $paginacionCompleta): int
-    {
-        if (! $this->debeDepurarColeccion($idsVistos, $paginacionCompleta)) {
-            return 0;
-        }
-
-        $ids = TiendanubeProducto::query()->whereNotIn('id', $idsVistos)->pluck('id');
-        if ($ids->isEmpty()) {
-            return 0;
-        }
-
-        TiendanubeProducto::whereIn('id', $ids)->delete();
-
-        return $ids->count();
-    }
-
-    /**
-     * @param  list<int>  $idsVistos
-     */
-    private function pruneCategorias(array $idsVistos, bool $paginacionCompleta): int
-    {
-        if (! $this->debeDepurarColeccion($idsVistos, $paginacionCompleta)) {
-            return 0;
-        }
-
-        $ids = TiendanubeCategoria::query()->whereNotIn('id', $idsVistos)->pluck('id');
-        if ($ids->isEmpty()) {
-            return 0;
-        }
-
-        TiendanubeCategoria::whereIn('id', $ids)->delete();
-
-        return $ids->count();
-    }
-
-    /**
-     * @param  list<int>  $idsVistos
-     */
-    private function debeDepurarColeccion(array $idsVistos, bool $paginacionCompleta): bool
-    {
-        if (! $paginacionCompleta || ! (bool) config('tiendanube.sync_prune_enabled', false)) {
-            return false;
-        }
-
-        $idsVistos = array_values(array_unique(array_filter($idsVistos)));
-
-        return $idsVistos !== [];
     }
 
     /**

@@ -2,12 +2,15 @@
 
 namespace App\Services\Tiendanube;
 
+use App\Exceptions\Tiendanube\TiendanubeActualizacionParcialException;
 use App\Exceptions\Tiendanube\TiendanubeApiException;
+use App\Exceptions\Tiendanube\TiendanubeApiNotFoundException;
 use App\Exceptions\Tiendanube\TiendanubeStockEscrituraBloqueadaException;
 use App\Models\Tiendanube\TiendanubeConfiguracion;
 use App\Models\Tiendanube\TiendanubeProducto;
 use App\Models\Tiendanube\TiendanubeProductoImagen;
 use App\Models\Tiendanube\TiendanubeProductoVariante;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\UploadedFile;
 use RuntimeException;
 use Throwable;
@@ -17,7 +20,8 @@ class TiendanubeProductoWriteService
     public function __construct(
         private TiendanubeApiClient $api,
         private TiendanubeCatalogoSyncService $sync,
-        private OptimizarImagenTiendanubeService $optimizarImagen
+        private TiendanubeProductoImagenOperacionService $imagenOperaciones,
+        private TiendanubeOperacionTiendaService $operaciones
     ) {}
 
     /**
@@ -25,17 +29,15 @@ class TiendanubeProductoWriteService
      */
     public function crear(array $datos): TiendanubeProducto
     {
+        $this->assertEscrituraAdmisible();
         $this->rechazarStockPlanoSiBloqueado($datos);
-
         $payload = $this->buildProductPayload($datos, forCreate: true);
 
         $variant = [
             'sku' => $datos['sku'] ?? null,
-            'price' => isset($datos['price']) && $datos['price'] !== '' && $datos['price'] !== null ? (string) $datos['price'] : null,
-            'promotional_price' => isset($datos['promotional_price']) && $datos['promotional_price'] !== '' && $datos['promotional_price'] !== null
-                ? (string) $datos['promotional_price']
-                : null,
-            'cost' => isset($datos['cost']) && $datos['cost'] !== '' && $datos['cost'] !== null ? (string) $datos['cost'] : null,
+            'price' => isset($datos['price']) ? (string) $datos['price'] : null,
+            'promotional_price' => isset($datos['promotional_price']) ? (string) $datos['promotional_price'] : null,
+            'cost' => isset($datos['cost']) ? (string) $datos['cost'] : null,
             'values' => [],
         ];
 
@@ -84,11 +86,11 @@ class TiendanubeProductoWriteService
         try {
             $this->aplicarInventarioSiCorresponde((int) $producto->id, $datos);
         } catch (Throwable $e) {
-            $this->releerProducto((int) $producto->id);
+            $this->refrescarProductoSiEsPosible((int) $producto->id);
             throw $e;
         }
 
-        return $this->releerProducto((int) $producto->id) ?? $producto;
+        return $this->refrescarProductoSiEsPosible((int) $producto->id) ?? $producto;
     }
 
     /**
@@ -96,60 +98,50 @@ class TiendanubeProductoWriteService
      */
     public function actualizar(int $tnProductId, array $datos): TiendanubeProducto
     {
+        $this->assertEscrituraAdmisible();
         $this->rechazarStockPlanoSiBloqueado($datos);
-
-        $fallo = null;
-
         $productoPayload = $this->buildProductPayload($datos, forCreate: false);
-        if ($productoPayload !== []) {
-            try {
+        $variantPayload = $this->buildVariantPayload($datos);
+        $variantId = null;
+        if ($variantPayload !== []) {
+            $variantId = $this->resolverVariantIdParaActualizacion(
+                $tnProductId,
+                $this->variantIdDesdeDatos($datos)
+            );
+        }
+
+        $productoActualizado = false;
+        try {
+            if ($productoPayload !== []) {
                 $this->api->updateProduct($tnProductId, $productoPayload);
-            } catch (Throwable $e) {
-                $fallo = $e;
+                $productoActualizado = true;
             }
-        }
-
-        if ($fallo === null) {
-            try {
-                $this->actualizarPreciosVariante($tnProductId, $datos);
-            } catch (Throwable $e) {
-                $fallo = $e;
+            if ($variantPayload !== [] && $variantId !== null) {
+                $this->api->updateVariant($tnProductId, $variantId, $variantPayload);
             }
-        }
+        } catch (Throwable $e) {
+            $espejo = $this->refrescarProductoSiEsPosible($tnProductId);
+            $mensaje = $this->mensajeFalloVariante($e, $variantId, $productoActualizado);
 
-        if ($fallo === null) {
-            try {
-                $this->aplicarInventarioSiCorresponde($tnProductId, $datos);
-            } catch (Throwable $e) {
-                $fallo = $e;
+            if ($productoActualizado && $variantPayload !== []) {
+                throw new TiendanubeActualizacionParcialException($mensaje, $espejo, $e);
             }
+
+            throw $espejo && $this->esHttp404($e)
+                ? new RuntimeException($mensaje, 0, $e)
+                : $e;
         }
 
-        $producto = $this->releerProducto($tnProductId);
-
-        if ($fallo !== null) {
-            throw $fallo;
+        try {
+            $this->aplicarInventarioSiCorresponde($tnProductId, $datos);
+        } catch (Throwable $e) {
+            $this->refrescarProductoSiEsPosible($tnProductId);
+            throw $e;
         }
 
-        if ($producto === null) {
-            throw new RuntimeException("No se pudo releer el producto {$tnProductId} tras la escritura.");
-        }
+        $remote = $this->api->getProduct($tnProductId);
 
-        return $producto;
-    }
-
-    public function eliminarTodasLasImagenes(int $tnProductId): void
-    {
-        $imagenes = TiendanubeProductoImagen::where('producto_id', $tnProductId)->get();
-
-        foreach ($imagenes as $imagen) {
-            try {
-                $this->api->deleteProductImage($tnProductId, (int) $imagen->id);
-            } catch (Throwable) {
-                // Continuar: la imagen puede ya no existir en TN
-            }
-            $imagen->delete();
-        }
+        return $this->sync->upsertProducto($remote);
     }
 
     /**
@@ -161,97 +153,22 @@ class TiendanubeProductoWriteService
         ?UploadedFile $file = null,
         ?int $position = null,
         bool $reemplazar = false,
-        array $optImagen = []
-    ): TiendanubeProductoImagen {
-        $idsAnteriores = $reemplazar
-            ? TiendanubeProductoImagen::where('producto_id', $tnProductId)->pluck('id')->map(fn ($id) => (int) $id)->all()
-            : [];
+        array $optImagen = [],
+        ?string $solicitudClave = null,
+        ?int $userId = null,
+    ): TiendanubeProductoImagenCarga {
+        $this->assertEscrituraAdmisible();
 
-        $payload = [];
-        $meta = [
-            'width' => null,
-            'height' => null,
-            'requiere_revision' => false,
-            'alerta_pequena' => false,
-            'alerta_no_cuadrada' => false,
-        ];
-        $cleanupPath = null;
-
-        if ($srcUrl) {
-            $payload['src'] = $srcUrl;
-        } elseif ($file) {
-            $opt = $this->optimizarImagen->ejecutar($file, $optImagen);
-            $bin = (string) file_get_contents($opt['path']);
-            $payload['attachment'] = base64_encode($bin);
-            $payload['filename'] = $opt['filename'];
-            $meta = [
-                'width' => $opt['output_width'] ?? $opt['width'],
-                'height' => $opt['output_height'] ?? $opt['height'],
-                'requiere_revision' => $opt['requiere_revision'],
-                'alerta_pequena' => $opt['alerta_pequena'],
-                'alerta_no_cuadrada' => $opt['alerta_no_cuadrada'],
-            ];
-            if ($opt['cleanup']) {
-                $cleanupPath = $opt['path'];
-            }
-        } else {
-            throw new RuntimeException('Indica una URL de imagen o un archivo.');
-        }
-
-        if ($position !== null) {
-            $payload['position'] = $position;
-        }
-
-        try {
-            try {
-                $remote = $this->api->createProductImage($tnProductId, $payload);
-            } catch (TiendanubeApiException $e) {
-                if (! $this->esPostIncierto($e)) {
-                    throw $e;
-                }
-                $remote = $this->reconciliarImagenCreada($tnProductId, $payload, $idsAnteriores, $position);
-                if ($remote === null) {
-                    throw new RuntimeException(
-                        'Carga de imagen incierta. Reconciliar antes de reintentar. No se borraron fotos anteriores.',
-                        0,
-                        $e
-                    );
-                }
-            }
-        } finally {
-            if ($cleanupPath && is_file($cleanupPath)) {
-                @unlink($cleanupPath);
-            }
-        }
-
-        $imgId = (int) ($remote['id'] ?? 0);
-        if ($imgId <= 0) {
-            throw new RuntimeException('Tiendanube no devolvió id de imagen.');
-        }
-
-        $srcCreate = $this->sync->truncateSeo($this->sync->localizedToString($remote['src'] ?? $srcUrl), 2048);
-        $src = $this->resolverSrcImagenPermanente($tnProductId, $imgId, $srcCreate);
-
-        $saved = TiendanubeProductoImagen::updateOrCreate(
-            ['id' => $imgId],
-            [
-                'producto_id' => $tnProductId,
-                'src' => $src,
-                'position' => (int) ($remote['position'] ?? $position ?? 1),
-                'alt' => $this->sync->truncateSeo($this->sync->localizedToString($remote['alt'] ?? null), 512),
-                'width' => $meta['width'],
-                'height' => $meta['height'],
-                'requiere_revision' => $meta['requiere_revision'],
-                'alerta_pequena' => $meta['alerta_pequena'],
-                'alerta_no_cuadrada' => $meta['alerta_no_cuadrada'],
-            ]
+        return $this->imagenOperaciones->ejecutar(
+            $tnProductId,
+            $srcUrl,
+            $file,
+            $position,
+            $reemplazar,
+            $optImagen,
+            $solicitudClave,
+            $userId
         );
-
-        if ($reemplazar && $idsAnteriores !== []) {
-            $this->borrarImagenesAnteriores($tnProductId, $idsAnteriores, $imgId);
-        }
-
-        return $saved;
     }
 
     /**
@@ -279,7 +196,7 @@ class TiendanubeProductoWriteService
     {
         try {
             $product = $this->api->getProduct($tnProductId);
-        } catch (Throwable) {
+        } catch (\Throwable) {
             return null;
         }
 
@@ -325,7 +242,7 @@ class TiendanubeProductoWriteService
 
             try {
                 $product = $this->api->getProduct($productoId);
-            } catch (Throwable) {
+            } catch (\Throwable) {
                 continue;
             }
 
@@ -397,14 +314,19 @@ class TiendanubeProductoWriteService
             $payload['requires_shipping'] = (bool) $datos['requires_shipping'];
         }
 
+        // Solo enviar categories si viene la clave y no está vacía por accidente en update
+        // (categories: [] borra todas en TN). En create vacío se omite.
         if (array_key_exists('categories', $datos) && is_array($datos['categories'])) {
             $ids = array_values(array_filter(array_map('intval', $datos['categories']), fn ($id) => $id > 0));
             if ($forCreate) {
                 if ($ids !== []) {
                     $payload['categories'] = $ids;
                 }
-            } elseif ($ids !== [] || ! empty($datos['replace_categories'])) {
-                $payload['categories'] = $ids;
+            } else {
+                // En update: reenviar IDs seleccionados; vacío solo si replace_categories
+                if ($ids !== [] || ! empty($datos['replace_categories'])) {
+                    $payload['categories'] = $ids;
+                }
             }
         }
 
@@ -428,41 +350,156 @@ class TiendanubeProductoWriteService
 
     /**
      * @param  array<string, mixed>  $datos
+     * @return array<string, mixed>
      */
-    private function actualizarPreciosVariante(int $tnProductId, array $datos): void
+    private function buildVariantPayload(array $datos): array
     {
-        $variantPayload = [];
+        $tieneCampos = false;
+        foreach (['sku', 'price', 'promotional_price', 'cost', 'stock', 'stock_unlimited'] as $campo) {
+            if (array_key_exists($campo, $datos)) {
+                $tieneCampos = true;
+                break;
+            }
+        }
+        if (! $tieneCampos) {
+            return [];
+        }
+
+        $payload = [];
 
         if (array_key_exists('sku', $datos)) {
-            $variantPayload['sku'] = $datos['sku'];
+            $payload['sku'] = $datos['sku'];
         }
         if (array_key_exists('price', $datos) && $datos['price'] !== null && $datos['price'] !== '') {
-            $variantPayload['price'] = (string) $datos['price'];
+            $payload['price'] = (string) $datos['price'];
         }
         if (array_key_exists('promotional_price', $datos)) {
-            $variantPayload['promotional_price'] = $datos['promotional_price'] === null || $datos['promotional_price'] === ''
+            $payload['promotional_price'] = $datos['promotional_price'] === null || $datos['promotional_price'] === ''
                 ? null
                 : (string) $datos['promotional_price'];
         }
         if (array_key_exists('cost', $datos) && $datos['cost'] !== null && $datos['cost'] !== '') {
-            $variantPayload['cost'] = (string) $datos['cost'];
-        }
-        if (array_key_exists('stock', $datos) && ! $this->usaInventarioPorUbicacion()) {
-            $variantPayload['stock'] = $datos['stock'] === null || $datos['stock'] === ''
-                ? ''
-                : (int) $datos['stock'];
+            $payload['cost'] = (string) $datos['cost'];
         }
 
-        if ($variantPayload === []) {
-            return;
+        // ponytail: con multi-inventario el stock plano va por location (MIG-03); si no, ilimitado = "".
+        if (! $this->usaInventarioPorUbicacion()) {
+            if (! empty($datos['stock_unlimited'])) {
+                $payload['stock'] = '';
+            } elseif (array_key_exists('stock', $datos) && $datos['stock'] !== null && $datos['stock'] !== '') {
+                $payload['stock'] = (int) $datos['stock'];
+            }
         }
 
-        $this->api->updateVariant($tnProductId, $this->resolverVariantId($tnProductId), $variantPayload);
+        return $payload;
     }
 
     /**
      * @param  array<string, mixed>  $datos
      */
+    private function variantIdDesdeDatos(array $datos): ?int
+    {
+        if (! array_key_exists('variant_id', $datos) || $datos['variant_id'] === null || $datos['variant_id'] === '') {
+            return null;
+        }
+
+        return (int) $datos['variant_id'];
+    }
+
+    private function resolverVariantIdParaActualizacion(int $tnProductId, ?int $variantId): int
+    {
+        if ($variantId !== null && $variantId > 0) {
+            $pertenece = TiendanubeProductoVariante::query()
+                ->where('producto_id', $tnProductId)
+                ->where('id', $variantId)
+                ->exists();
+            if (! $pertenece) {
+                throw new RuntimeException('La variante no pertenece a este producto.');
+            }
+
+            return $variantId;
+        }
+
+        $locales = TiendanubeProductoVariante::query()
+            ->where('producto_id', $tnProductId)
+            ->orderBy('id')
+            ->get();
+
+        if ($locales->count() === 1) {
+            return (int) $locales->first()->id;
+        }
+
+        if ($locales->count() > 1) {
+            throw new RuntimeException('Selecciona una variante para guardar cambios de SKU, precio, promoción, costo o stock.');
+        }
+
+        $remote = $this->api->getProduct($tnProductId);
+        $variants = $remote['variants'] ?? [];
+        if (! is_array($variants) || $variants === []) {
+            throw new RuntimeException("El producto {$tnProductId} no tiene variante virtual en Tiendanube.");
+        }
+
+        $ids = [];
+        foreach ($variants as $v) {
+            if (is_array($v) && isset($v['id'])) {
+                $ids[] = (int) $v['id'];
+            }
+        }
+
+        if (count($ids) === 1) {
+            return $ids[0];
+        }
+
+        throw new RuntimeException('El espejo local no tiene variantes. Sincroniza el catálogo y selecciona una variante.');
+    }
+
+    private function refrescarProductoSiEsPosible(int $tnProductId): ?TiendanubeProducto
+    {
+        try {
+            $remote = $this->api->getProduct($tnProductId);
+
+            return $this->sync->upsertProducto($remote);
+        } catch (Throwable) {
+            return TiendanubeProducto::query()->find($tnProductId);
+        }
+    }
+
+    private function esHttp404(Throwable $e): bool
+    {
+        if ($e instanceof TiendanubeApiNotFoundException) {
+            return true;
+        }
+        if ($e instanceof RequestException && $e->response?->status() === 404) {
+            return true;
+        }
+
+        return str_contains($e->getMessage(), 'HTTP 404')
+            || str_contains($e->getMessage(), 'status code 404');
+    }
+
+    private function mensajeFalloVariante(Throwable $e, ?int $variantId, bool $productoActualizado): string
+    {
+        if ($this->esHttp404($e)) {
+            return 'La variante'.($variantId ? " {$variantId}" : '').' ya no existe en Tiendanube. Se actualizó el listado; selecciona otra variante.';
+        }
+
+        if ($productoActualizado) {
+            return 'El producto se actualizó, pero la variante no: '.$e->getMessage();
+        }
+
+        return $e->getMessage();
+    }
+
+    private function assertEscrituraAdmisible(): void
+    {
+        $storeId = TiendanubeConfiguracion::obtener()->store_id;
+
+        $this->operaciones->assertAdmisible(
+            TiendanubeOperacionTiendaService::TIPO_PRODUCTO_WRITE,
+            $storeId ? (int) $storeId : null
+        );
+    }
+
     private function aplicarInventarioSiCorresponde(int $tnProductId, array $datos): void
     {
         if (! $this->usaInventarioPorUbicacion()) {
@@ -470,7 +507,10 @@ class TiendanubeProductoWriteService
         }
 
         $config = TiendanubeConfiguracion::obtener();
-        $variantId = $this->resolverVariantId($tnProductId);
+        $variantId = $this->resolverVariantIdParaActualizacion(
+            $tnProductId,
+            $this->variantIdDesdeDatos($datos)
+        );
 
         if (array_key_exists('stock', $datos)) {
             $locationId = isset($datos['location_id']) ? trim((string) $datos['location_id']) : '';
@@ -505,22 +545,6 @@ class TiendanubeProductoWriteService
         $this->api->updateVariant($payload->productId, $payload->variantId, $payload->toVariantApiPayload());
     }
 
-    private function resolverVariantId(int $tnProductId): int
-    {
-        $local = TiendanubeProductoVariante::where('producto_id', $tnProductId)->orderBy('id')->first();
-        if ($local) {
-            return (int) $local->id;
-        }
-
-        $remote = $this->api->getProduct($tnProductId);
-        $variants = $remote['variants'] ?? [];
-        if (! is_array($variants) || $variants === [] || ! isset($variants[0]['id'])) {
-            throw new RuntimeException("El producto {$tnProductId} no tiene variante virtual en Tiendanube.");
-        }
-
-        return (int) $variants[0]['id'];
-    }
-
     /**
      * @param  array<string, mixed>  $datos
      */
@@ -545,15 +569,6 @@ class TiendanubeProductoWriteService
         $config = TiendanubeConfiguracion::obtener();
 
         return (bool) $config->multi_inventario_activo || ($config->locations_probe ?? null) === 'ok';
-    }
-
-    private function releerProducto(int $tnProductId): ?TiendanubeProducto
-    {
-        try {
-            return $this->sync->upsertProducto($this->api->getProduct($tnProductId));
-        } catch (Throwable) {
-            return TiendanubeProducto::query()->find($tnProductId);
-        }
     }
 
     /**
@@ -594,69 +609,6 @@ class TiendanubeProductoWriteService
         }
 
         return null;
-    }
-
-    /**
-     * @param  array<string, mixed>  $payload
-     * @param  list<int>  $idsAnteriores
-     * @return array<string, mixed>|null
-     */
-    private function reconciliarImagenCreada(int $tnProductId, array $payload, array $idsAnteriores, ?int $position): ?array
-    {
-        try {
-            $product = $this->api->getProduct($tnProductId);
-        } catch (Throwable) {
-            return null;
-        }
-
-        $srcPedido = isset($payload['src']) ? (string) $payload['src'] : '';
-        $candidatas = [];
-        foreach ($product['images'] ?? [] as $img) {
-            if (! is_array($img) || ! isset($img['id'])) {
-                continue;
-            }
-            if (in_array((int) $img['id'], $idsAnteriores, true)) {
-                continue;
-            }
-            $candidatas[] = $img;
-        }
-
-        if ($srcPedido !== '') {
-            foreach ($candidatas as $img) {
-                $src = $this->sync->localizedToString($img['src'] ?? null) ?? '';
-                if ($src === $srcPedido || str_contains($src, $srcPedido) || str_contains($srcPedido, $src)) {
-                    return $img;
-                }
-            }
-        }
-
-        if ($position !== null) {
-            foreach ($candidatas as $img) {
-                if ((int) ($img['position'] ?? 0) === $position) {
-                    return $img;
-                }
-            }
-        }
-
-        return count($candidatas) === 1 ? $candidatas[0] : null;
-    }
-
-    /**
-     * @param  list<int>  $idsAnteriores
-     */
-    private function borrarImagenesAnteriores(int $tnProductId, array $idsAnteriores, int $nuevoId): void
-    {
-        foreach ($idsAnteriores as $oldId) {
-            if ($oldId === $nuevoId) {
-                continue;
-            }
-            try {
-                $this->api->deleteProductImage($tnProductId, $oldId);
-            } catch (Throwable) {
-                // Continuar: la imagen puede ya no existir en TN
-            }
-            TiendanubeProductoImagen::query()->where('id', $oldId)->delete();
-        }
     }
 
     private function esPostIncierto(TiendanubeApiException $e): bool

@@ -28,6 +28,7 @@ class TiendanubeCatalogoWipeService
             $counts['tiendanube_productos'] = $this->vaciar('tiendanube_productos');
             $counts['tiendanube_ubicaciones'] = $this->vaciar('tiendanube_ubicaciones');
             $counts['tiendanube_categorias'] = $this->vaciar('tiendanube_categorias');
+            $counts['tiendanube_sync_recursos_vistos'] = $this->vaciar('tiendanube_sync_recursos_vistos');
             $counts['tiendanube_sync_logs'] = $this->vaciar('tiendanube_sync_logs');
 
             return $counts;

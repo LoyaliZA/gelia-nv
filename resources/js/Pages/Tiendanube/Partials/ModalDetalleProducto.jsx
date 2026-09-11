@@ -200,8 +200,10 @@ export default function ModalDetalleProducto({ productoId, categorias = [], canE
                     producto={producto}
                     categorias={categorias}
                     onClose={() => setEditing(false)}
-                    onSaved={() => {
-                        setEditing(false);
+                    onSaved={(keepOpen) => {
+                        if (!keepOpen) {
+                            setEditing(false);
+                        }
                         load();
                         onChanged?.();
                     }}

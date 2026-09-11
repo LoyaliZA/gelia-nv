@@ -18,6 +18,7 @@ class TiendanubeConfiguracion extends Model
         'store_url',
         'locations_probe',
         'multi_inventario_activo',
+        'config_generation',
     ];
 
     protected function casts(): array
@@ -25,6 +26,7 @@ class TiendanubeConfiguracion extends Model
         return [
             'store_id' => 'integer',
             'multi_inventario_activo' => 'boolean',
+            'config_generation' => 'integer',
         ];
     }
 

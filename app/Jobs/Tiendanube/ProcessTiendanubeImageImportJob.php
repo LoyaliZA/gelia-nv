@@ -41,7 +41,7 @@ class ProcessTiendanubeImageImportJob implements ShouldQueue
         }
 
         $import->update([
-            'estado' => 'error',
+            'estado' => TiendanubeImageImport::ESTADO_ERROR,
             'mensaje_error' => $e?->getMessage() ?? 'Error desconocido en importación de imágenes.',
         ]);
     }
