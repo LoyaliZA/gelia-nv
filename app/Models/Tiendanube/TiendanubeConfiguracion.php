@@ -16,12 +16,15 @@ class TiendanubeConfiguracion extends Model
         'scopes',
         'store_name',
         'store_url',
+        'locations_probe',
+        'multi_inventario_activo',
     ];
 
     protected function casts(): array
     {
         return [
             'store_id' => 'integer',
+            'multi_inventario_activo' => 'boolean',
         ];
     }
 

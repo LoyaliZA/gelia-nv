@@ -11,7 +11,7 @@ use App\Models\User;
 use App\Services\Tiendanube\TiendanubeApiClient;
 use App\Services\Tiendanube\TiendanubeCatalogoSyncService;
 use App\Services\Tiendanube\TiendanubePrivacyService;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Support\RefreshDatabaseSafe;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
@@ -20,7 +20,7 @@ use Tests\TestCase;
 
 class TiendanubeWebhookTest extends TestCase
 {
-    use RefreshDatabase;
+    use RefreshDatabaseSafe;
 
     private string $secret = 'test-app-secret';
 
@@ -34,6 +34,7 @@ class TiendanubeWebhookTest extends TestCase
             'tiendanube.api_base' => 'https://api.tiendanube.com/v1',
             'tiendanube.per_page' => 50,
             'tiendanube.user_agent' => 'Gelianv',
+            'tiendanube.retry_sleep_ms' => 0,
             'tiendanube.app_secret' => $this->secret,
             'tiendanube.webhook_url' => $this->webhookUrl,
             'tiendanube.webhook_events' => [

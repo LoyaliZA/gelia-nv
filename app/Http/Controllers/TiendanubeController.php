@@ -13,6 +13,7 @@ use App\Models\Tiendanube\TiendanubeProducto;
 use App\Models\Tiendanube\TiendanubeProductoImagen;
 use App\Models\Tiendanube\TiendanubeProductoVariante;
 use App\Models\Tiendanube\TiendanubeSyncLog;
+use App\Models\Tiendanube\TiendanubeUbicacion;
 use App\Models\Tiendanube\TiendanubeWebhookDelivery;
 use App\Services\Tiendanube\OptimizarImagenTiendanubeService;
 use App\Services\Tiendanube\TiendanubeApiClient;
@@ -81,6 +82,8 @@ class TiendanubeController extends Controller
                 'store_url' => $config->store_url,
                 'credenciales_configuradas' => $config->credencialesConfiguradas(),
                 'tiene_token' => ! empty($config->accessTokenDecrypted()),
+                'locations_probe' => $config->locations_probe,
+                'multi_inventario_activo' => (bool) $config->multi_inventario_activo,
                 'webhook_url' => app(TiendanubeWebhookService::class)->webhookUrl(),
                 'webhook_events' => app(TiendanubeWebhookService::class)->eventosRecomendados(),
             ],
@@ -110,6 +113,8 @@ class TiendanubeController extends Controller
                 'sincronizar' => $user->can('tiendanube.sincronizar'),
                 'editar' => $user->can('tiendanube.productos.editar'),
             ],
+            'ubicaciones' => $this->ubicacionesActivas(),
+            'inventario' => $this->inventarioEstado($config),
         ]);
     }
 
@@ -318,7 +323,8 @@ class TiendanubeController extends Controller
         Gate::authorize('tiendanube.configurar');
 
         try {
-            $store = $api->getStore();
+            $probe = $api->probeReadOnly();
+            $store = $probe['store'];
             $config = TiendanubeConfiguracion::obtener();
             $config->fill([
                 'store_name' => $store['name']['es']
@@ -328,6 +334,7 @@ class TiendanubeController extends Controller
                     ?? $store['url_with_protocol']
                     ?? ($store['domains'][0] ?? null)
                     ?? $config->store_url,
+                'locations_probe' => $probe['checks']['locations'] ?? $config->locations_probe,
             ])->save();
 
             return response()->json([
@@ -338,6 +345,9 @@ class TiendanubeController extends Controller
                     'name' => $config->store_name,
                     'url' => $config->store_url,
                 ],
+                'api_version' => $probe['api_version'],
+                'api_host' => $probe['api_host'],
+                'checks' => $probe['checks'],
             ]);
         } catch (\Throwable $e) {
             return response()->json([
@@ -419,8 +429,10 @@ class TiendanubeController extends Controller
     {
         Gate::authorize('tiendanube.ver');
 
-        $producto = TiendanubeProducto::with(['imagenes', 'variantes', 'categorias'])
+        $producto = TiendanubeProducto::with(['imagenes', 'variantes.nivelesInventario.ubicacion', 'categorias'])
             ->findOrFail($id);
+
+        $config = TiendanubeConfiguracion::obtener();
 
         return response()->json([
             'id' => $producto->id,
@@ -441,13 +453,20 @@ class TiendanubeController extends Controller
             'synced_at' => $producto->synced_at?->toIso8601String(),
             'gelia_producto_id' => $producto->gelia_producto_id,
             'imagenes' => $producto->imagenes,
-            'variantes' => $producto->variantes,
+            'variantes' => $producto->variantes->map(function (TiendanubeProductoVariante $v) {
+                $row = $v->toArray();
+                $row['stock_resumen'] = $v->stockResumen();
+
+                return $row;
+            }),
             'categorias' => $producto->categorias->map(fn (TiendanubeCategoria $c) => [
                 'id' => $c->id,
                 'nombre' => $c->nombreVisible(),
                 'seo_title' => $c->seo_title,
             ]),
             'categoria_ids' => $producto->categorias->pluck('id')->values(),
+            'ubicaciones' => $this->ubicacionesActivas(),
+            'inventario' => $this->inventarioEstado($config),
         ]);
     }
 
@@ -1019,5 +1038,41 @@ class TiendanubeController extends Controller
                 'message' => $e->getMessage(),
             ], 400);
         }
+    }
+
+    /**
+     * @return list<array{id: string, nombre: string, is_default: bool}>
+     */
+    private function ubicacionesActivas(): array
+    {
+        return TiendanubeUbicacion::query()
+            ->where('activa', true)
+            ->orderBy('priority')
+            ->get()
+            ->map(fn (TiendanubeUbicacion $u) => [
+                'id' => $u->id,
+                'nombre' => $u->nombreVisible(),
+                'is_default' => $u->is_default,
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return array{multi_activo: bool, locations_probe: mixed, escritura_habilitada: bool}
+     */
+    private function inventarioEstado(TiendanubeConfiguracion $config): array
+    {
+        $probeOk = ($config->locations_probe ?? null) === 'ok';
+        $espejo = TiendanubeUbicacion::query()
+            ->where('activa', true)
+            ->whereNotNull('synced_at')
+            ->exists();
+
+        return [
+            'multi_activo' => (bool) $config->multi_inventario_activo,
+            'locations_probe' => $config->locations_probe,
+            'escritura_habilitada' => $probeOk && $espejo,
+        ];
     }
 }

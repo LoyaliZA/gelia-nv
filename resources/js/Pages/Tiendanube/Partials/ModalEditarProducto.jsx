@@ -18,6 +18,12 @@ const labelClass = 'block text-[10px] font-black uppercase tracking-widest theme
 
 export default function ModalEditarProducto({ producto, categorias = [], onClose, onSaved }) {
     const variante = producto?.variantes?.[0] || {};
+    const ubicaciones = producto?.ubicaciones || [];
+    const niveles = variante.stock_resumen?.niveles || [];
+    const locInicial = ubicaciones.length === 1
+        ? ubicaciones[0].id
+        : (niveles.length === 1 ? niveles[0].location_id : (ubicaciones.find((u) => u.is_default)?.id || ''));
+    const nivelIni = niveles.find((n) => n.location_id === locInicial);
     const [form, setForm] = useState({
         name: producto?.nombre || textoIdioma(producto?.name) || '',
         description: textoIdioma(producto?.description) || '',
@@ -34,7 +40,9 @@ export default function ModalEditarProducto({ producto, categorias = [], onClose
         price: variante.price ?? '',
         promotional_price: variante.promotional_price ?? '',
         cost: variante.cost ?? '',
-        stock: variante.stock ?? '',
+        stock: nivelIni ? (nivelIni.stock == null ? '' : String(nivelIni.stock)) : '',
+        location_id: locInicial,
+        stock_management: !!variante.stock_management,
     });
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState(null);
@@ -75,14 +83,19 @@ export default function ModalEditarProducto({ producto, categorias = [], onClose
         setSaving(true);
         setError(null);
         try {
+            const { stock, location_id, stock_management, ...rest } = form;
             const body = {
-                ...form,
+                ...rest,
                 price: form.price === '' ? null : Number(form.price),
                 promotional_price: form.promotional_price === '' ? null : Number(form.promotional_price),
                 cost: form.cost === '' ? null : Number(form.cost),
-                stock: form.stock === '' ? null : Number(form.stock),
                 video_url: form.video_url || null,
             };
+            if (producto?.inventario?.escritura_habilitada && location_id) {
+                body.location_id = location_id;
+                body.stock = stock === '' ? null : Number(stock);
+                body.stock_management = !!stock_management;
+            }
             const res = await fetch(route('tiendanube.productos.update', producto.id), {
                 method: 'PUT',
                 headers: {
@@ -249,10 +262,6 @@ export default function ModalEditarProducto({ producto, categorias = [], onClose
                                 <input className={inputClass} value={form.sku} onChange={(e) => setField('sku', e.target.value)} />
                             </div>
                             <div>
-                                <label className={labelClass}>Stock (vacío = ilimitado)</label>
-                                <input className={inputClass} type="number" min="0" value={form.stock} onChange={(e) => setField('stock', e.target.value)} />
-                            </div>
-                            <div>
                                 <label className={labelClass}>Precio</label>
                                 <input className={inputClass} type="number" step="0.01" min="0" value={form.price} onChange={(e) => setField('price', e.target.value)} />
                             </div>
@@ -265,6 +274,7 @@ export default function ModalEditarProducto({ producto, categorias = [], onClose
                                 <input className={inputClass} type="number" step="0.01" min="0" value={form.cost} onChange={(e) => setField('cost', e.target.value)} />
                             </div>
                         </div>
+                        <InventarioEdicion producto={producto} form={form} setField={setField} setForm={setForm} />
                     </div>
 
                     <div className="pt-2 border-t theme-border space-y-4">
@@ -340,5 +350,74 @@ export default function ModalEditarProducto({ producto, categorias = [], onClose
             </div>
         </div>,
         document.body
+    );
+}
+
+function InventarioEdicion({ producto, form, setField, setForm }) {
+    const variante = producto?.variantes?.[0] || {};
+    const resumen = variante.stock_resumen || {};
+    const ubicaciones = producto?.ubicaciones || [];
+    const niveles = resumen.niveles || [];
+    const escritura = !!producto?.inventario?.escritura_habilitada;
+    const total = resumen.ilimitado ? '∞' : (resumen.total != null ? String(resumen.total) : '—');
+
+    const onChangeLocation = (id) => {
+        const nivelSel = niveles.find((n) => n.location_id === id);
+        setForm((prev) => ({
+            ...prev,
+            location_id: id,
+            stock: nivelSel ? (nivelSel.stock == null ? '' : String(nivelSel.stock)) : '',
+        }));
+    };
+
+    return (
+        <div className="mt-4 space-y-3">
+            {!escritura && (
+                <p className="text-[10px] font-bold theme-text-muted">
+                    Location no disponible o sin lectura reciente: no se escribe stock plano.
+                </p>
+            )}
+            <div>
+                <label className={labelClass}>Stock total (resumen)</label>
+                <input className={inputClass} value={total} disabled readOnly />
+            </div>
+            <div>
+                <label className={labelClass}>Ubicación</label>
+                <select
+                    className={inputClass}
+                    disabled={!escritura}
+                    value={form.location_id}
+                    onChange={(e) => onChangeLocation(e.target.value)}
+                >
+                    <option value="">Seleccionar ubicación</option>
+                    {ubicaciones.map((u) => (
+                        <option key={u.id} value={u.id}>{u.nombre} ({u.id})</option>
+                    ))}
+                    {form.location_id && !ubicaciones.some((u) => u.id === form.location_id) && (
+                        <option value={form.location_id}>{form.location_id}</option>
+                    )}
+                </select>
+            </div>
+            <div>
+                <label className={labelClass}>Stock en ubicación (vacío = ilimitado)</label>
+                <input
+                    className={inputClass}
+                    type="number"
+                    min="0"
+                    value={form.stock}
+                    disabled={!escritura}
+                    onChange={(e) => setField('stock', e.target.value)}
+                />
+            </div>
+            <label className="flex items-center gap-2 text-xs font-bold theme-text-muted">
+                <input
+                    type="checkbox"
+                    disabled={!escritura}
+                    checked={!!form.stock_management}
+                    onChange={(e) => setField('stock_management', e.target.checked)}
+                />
+                Control de stock (intención explícita)
+            </label>
+        </div>
     );
 }

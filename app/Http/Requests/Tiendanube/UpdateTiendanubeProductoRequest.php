@@ -32,6 +32,8 @@ class UpdateTiendanubeProductoRequest extends FormRequest
             'promotional_price' => ['nullable', 'numeric', 'min:0'],
             'cost' => ['nullable', 'numeric', 'min:0'],
             'stock' => ['nullable'],
+            'location_id' => ['nullable', 'string', 'max:64'],
+            'stock_management' => ['sometimes', 'boolean'],
         ];
     }
 }

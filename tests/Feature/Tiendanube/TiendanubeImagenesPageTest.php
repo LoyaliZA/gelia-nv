@@ -6,14 +6,14 @@ use App\Models\Tiendanube\TiendanubeConfiguracion;
 use App\Models\Tiendanube\TiendanubeProducto;
 use App\Models\Tiendanube\TiendanubeProductoImagen;
 use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Support\RefreshDatabaseSafe;
 use Illuminate\Support\Facades\Crypt;
 use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
 
 class TiendanubeImagenesPageTest extends TestCase
 {
-    use RefreshDatabase;
+    use RefreshDatabaseSafe;
 
     protected function setUp(): void
     {

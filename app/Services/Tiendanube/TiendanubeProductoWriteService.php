@@ -2,11 +2,15 @@
 
 namespace App\Services\Tiendanube;
 
+use App\Exceptions\Tiendanube\TiendanubeApiException;
+use App\Exceptions\Tiendanube\TiendanubeStockEscrituraBloqueadaException;
+use App\Models\Tiendanube\TiendanubeConfiguracion;
 use App\Models\Tiendanube\TiendanubeProducto;
 use App\Models\Tiendanube\TiendanubeProductoImagen;
 use App\Models\Tiendanube\TiendanubeProductoVariante;
 use Illuminate\Http\UploadedFile;
 use RuntimeException;
+use Throwable;
 
 class TiendanubeProductoWriteService
 {
@@ -21,17 +25,21 @@ class TiendanubeProductoWriteService
      */
     public function crear(array $datos): TiendanubeProducto
     {
+        $this->rechazarStockPlanoSiBloqueado($datos);
+
         $payload = $this->buildProductPayload($datos, forCreate: true);
 
         $variant = [
             'sku' => $datos['sku'] ?? null,
-            'price' => isset($datos['price']) ? (string) $datos['price'] : null,
-            'promotional_price' => isset($datos['promotional_price']) ? (string) $datos['promotional_price'] : null,
-            'cost' => isset($datos['cost']) ? (string) $datos['cost'] : null,
+            'price' => isset($datos['price']) && $datos['price'] !== '' && $datos['price'] !== null ? (string) $datos['price'] : null,
+            'promotional_price' => isset($datos['promotional_price']) && $datos['promotional_price'] !== '' && $datos['promotional_price'] !== null
+                ? (string) $datos['promotional_price']
+                : null,
+            'cost' => isset($datos['cost']) && $datos['cost'] !== '' && $datos['cost'] !== null ? (string) $datos['cost'] : null,
             'values' => [],
         ];
 
-        if (array_key_exists('stock', $datos)) {
+        if (array_key_exists('stock', $datos) && ! $this->usaInventarioPorUbicacion()) {
             $variant['stock'] = $datos['stock'] === null || $datos['stock'] === ''
                 ? ''
                 : (int) $datos['stock'];
@@ -55,9 +63,32 @@ class TiendanubeProductoWriteService
             }
         }
 
-        $remote = $this->api->createProduct($payload);
+        try {
+            $remote = $this->api->createProduct($payload);
+        } catch (TiendanubeApiException $e) {
+            if (! $this->esPostIncierto($e)) {
+                throw $e;
+            }
+            $remote = $this->reconciliarCreacionProducto($datos);
+            if ($remote === null) {
+                throw new RuntimeException(
+                    'Creación incierta (timeout o respuesta ambigua). Reconciliar antes de reintentar. No repetir POST.',
+                    0,
+                    $e
+                );
+            }
+        }
 
-        return $this->sync->upsertProducto($remote);
+        $producto = $this->sync->upsertProducto($remote);
+
+        try {
+            $this->aplicarInventarioSiCorresponde((int) $producto->id, $datos);
+        } catch (Throwable $e) {
+            $this->releerProducto((int) $producto->id);
+            throw $e;
+        }
+
+        return $this->releerProducto((int) $producto->id) ?? $producto;
     }
 
     /**
@@ -65,45 +96,46 @@ class TiendanubeProductoWriteService
      */
     public function actualizar(int $tnProductId, array $datos): TiendanubeProducto
     {
+        $this->rechazarStockPlanoSiBloqueado($datos);
+
+        $fallo = null;
+
         $productoPayload = $this->buildProductPayload($datos, forCreate: false);
-
         if ($productoPayload !== []) {
-            $this->api->updateProduct($tnProductId, $productoPayload);
-        }
-
-        $variantFields = array_intersect_key($datos, array_flip(['sku', 'price', 'promotional_price', 'cost', 'stock']));
-        if ($variantFields !== []) {
-            $variantId = $this->resolverVariantId($tnProductId);
-            $variantPayload = [];
-
-            if (array_key_exists('sku', $variantFields)) {
-                $variantPayload['sku'] = $variantFields['sku'];
-            }
-            if (array_key_exists('price', $variantFields) && $variantFields['price'] !== null && $variantFields['price'] !== '') {
-                $variantPayload['price'] = (string) $variantFields['price'];
-            }
-            if (array_key_exists('promotional_price', $variantFields)) {
-                $variantPayload['promotional_price'] = $variantFields['promotional_price'] === null || $variantFields['promotional_price'] === ''
-                    ? null
-                    : (string) $variantFields['promotional_price'];
-            }
-            if (array_key_exists('cost', $variantFields) && $variantFields['cost'] !== null && $variantFields['cost'] !== '') {
-                $variantPayload['cost'] = (string) $variantFields['cost'];
-            }
-            if (array_key_exists('stock', $variantFields)) {
-                $variantPayload['stock'] = $variantFields['stock'] === null || $variantFields['stock'] === ''
-                    ? ''
-                    : (int) $variantFields['stock'];
-            }
-
-            if ($variantPayload !== []) {
-                $this->api->updateVariant($tnProductId, $variantId, $variantPayload);
+            try {
+                $this->api->updateProduct($tnProductId, $productoPayload);
+            } catch (Throwable $e) {
+                $fallo = $e;
             }
         }
 
-        $remote = $this->api->getProduct($tnProductId);
+        if ($fallo === null) {
+            try {
+                $this->actualizarPreciosVariante($tnProductId, $datos);
+            } catch (Throwable $e) {
+                $fallo = $e;
+            }
+        }
 
-        return $this->sync->upsertProducto($remote);
+        if ($fallo === null) {
+            try {
+                $this->aplicarInventarioSiCorresponde($tnProductId, $datos);
+            } catch (Throwable $e) {
+                $fallo = $e;
+            }
+        }
+
+        $producto = $this->releerProducto($tnProductId);
+
+        if ($fallo !== null) {
+            throw $fallo;
+        }
+
+        if ($producto === null) {
+            throw new RuntimeException("No se pudo releer el producto {$tnProductId} tras la escritura.");
+        }
+
+        return $producto;
     }
 
     public function eliminarTodasLasImagenes(int $tnProductId): void
@@ -113,7 +145,7 @@ class TiendanubeProductoWriteService
         foreach ($imagenes as $imagen) {
             try {
                 $this->api->deleteProductImage($tnProductId, (int) $imagen->id);
-            } catch (\Throwable) {
+            } catch (Throwable) {
                 // Continuar: la imagen puede ya no existir en TN
             }
             $imagen->delete();
@@ -131,9 +163,9 @@ class TiendanubeProductoWriteService
         bool $reemplazar = false,
         array $optImagen = []
     ): TiendanubeProductoImagen {
-        if ($reemplazar) {
-            $this->eliminarTodasLasImagenes($tnProductId);
-        }
+        $idsAnteriores = $reemplazar
+            ? TiendanubeProductoImagen::where('producto_id', $tnProductId)->pluck('id')->map(fn ($id) => (int) $id)->all()
+            : [];
 
         $payload = [];
         $meta = [
@@ -149,9 +181,9 @@ class TiendanubeProductoWriteService
             $payload['src'] = $srcUrl;
         } elseif ($file) {
             $opt = $this->optimizarImagen->ejecutar($file, $optImagen);
-            $payload['attachment'] = base64_encode((string) file_get_contents($opt['path']));
+            $bin = (string) file_get_contents($opt['path']);
+            $payload['attachment'] = base64_encode($bin);
             $payload['filename'] = $opt['filename'];
-            // Dimensiones = archivo subido (post-resize). Alertas siguen midiendo el original.
             $meta = [
                 'width' => $opt['output_width'] ?? $opt['width'],
                 'height' => $opt['output_height'] ?? $opt['height'],
@@ -171,7 +203,21 @@ class TiendanubeProductoWriteService
         }
 
         try {
-            $remote = $this->api->createProductImage($tnProductId, $payload);
+            try {
+                $remote = $this->api->createProductImage($tnProductId, $payload);
+            } catch (TiendanubeApiException $e) {
+                if (! $this->esPostIncierto($e)) {
+                    throw $e;
+                }
+                $remote = $this->reconciliarImagenCreada($tnProductId, $payload, $idsAnteriores, $position);
+                if ($remote === null) {
+                    throw new RuntimeException(
+                        'Carga de imagen incierta. Reconciliar antes de reintentar. No se borraron fotos anteriores.',
+                        0,
+                        $e
+                    );
+                }
+            }
         } finally {
             if ($cleanupPath && is_file($cleanupPath)) {
                 @unlink($cleanupPath);
@@ -201,6 +247,10 @@ class TiendanubeProductoWriteService
             ]
         );
 
+        if ($reemplazar && $idsAnteriores !== []) {
+            $this->borrarImagenesAnteriores($tnProductId, $idsAnteriores, $imgId);
+        }
+
         return $saved;
     }
 
@@ -229,7 +279,7 @@ class TiendanubeProductoWriteService
     {
         try {
             $product = $this->api->getProduct($tnProductId);
-        } catch (\Throwable) {
+        } catch (Throwable) {
             return null;
         }
 
@@ -275,7 +325,7 @@ class TiendanubeProductoWriteService
 
             try {
                 $product = $this->api->getProduct($productoId);
-            } catch (\Throwable) {
+            } catch (Throwable) {
                 continue;
             }
 
@@ -334,7 +384,11 @@ class TiendanubeProductoWriteService
         }
 
         if (array_key_exists('published', $datos)) {
-            $payload['published'] = (bool) $datos['published'];
+            if ($this->api->configuredVersion() === '2025-03') {
+                $payload['visibility'] = (bool) $datos['published'] ? 'visible' : 'hidden';
+            } else {
+                $payload['published'] = (bool) $datos['published'];
+            }
         }
         if (array_key_exists('free_shipping', $datos)) {
             $payload['free_shipping'] = (bool) $datos['free_shipping'];
@@ -343,19 +397,14 @@ class TiendanubeProductoWriteService
             $payload['requires_shipping'] = (bool) $datos['requires_shipping'];
         }
 
-        // Solo enviar categories si viene la clave y no está vacía por accidente en update
-        // (categories: [] borra todas en TN). En create vacío se omite.
         if (array_key_exists('categories', $datos) && is_array($datos['categories'])) {
             $ids = array_values(array_filter(array_map('intval', $datos['categories']), fn ($id) => $id > 0));
             if ($forCreate) {
                 if ($ids !== []) {
                     $payload['categories'] = $ids;
                 }
-            } else {
-                // En update: reenviar IDs seleccionados; vacío solo si replace_categories
-                if ($ids !== [] || ! empty($datos['replace_categories'])) {
-                    $payload['categories'] = $ids;
-                }
+            } elseif ($ids !== [] || ! empty($datos['replace_categories'])) {
+                $payload['categories'] = $ids;
             }
         }
 
@@ -377,6 +426,85 @@ class TiendanubeProductoWriteService
         return ['es' => $value];
     }
 
+    /**
+     * @param  array<string, mixed>  $datos
+     */
+    private function actualizarPreciosVariante(int $tnProductId, array $datos): void
+    {
+        $variantPayload = [];
+
+        if (array_key_exists('sku', $datos)) {
+            $variantPayload['sku'] = $datos['sku'];
+        }
+        if (array_key_exists('price', $datos) && $datos['price'] !== null && $datos['price'] !== '') {
+            $variantPayload['price'] = (string) $datos['price'];
+        }
+        if (array_key_exists('promotional_price', $datos)) {
+            $variantPayload['promotional_price'] = $datos['promotional_price'] === null || $datos['promotional_price'] === ''
+                ? null
+                : (string) $datos['promotional_price'];
+        }
+        if (array_key_exists('cost', $datos) && $datos['cost'] !== null && $datos['cost'] !== '') {
+            $variantPayload['cost'] = (string) $datos['cost'];
+        }
+        if (array_key_exists('stock', $datos) && ! $this->usaInventarioPorUbicacion()) {
+            $variantPayload['stock'] = $datos['stock'] === null || $datos['stock'] === ''
+                ? ''
+                : (int) $datos['stock'];
+        }
+
+        if ($variantPayload === []) {
+            return;
+        }
+
+        $this->api->updateVariant($tnProductId, $this->resolverVariantId($tnProductId), $variantPayload);
+    }
+
+    /**
+     * @param  array<string, mixed>  $datos
+     */
+    private function aplicarInventarioSiCorresponde(int $tnProductId, array $datos): void
+    {
+        if (! $this->usaInventarioPorUbicacion()) {
+            return;
+        }
+
+        $config = TiendanubeConfiguracion::obtener();
+        $variantId = $this->resolverVariantId($tnProductId);
+
+        if (array_key_exists('stock', $datos)) {
+            $locationId = isset($datos['location_id']) ? trim((string) $datos['location_id']) : '';
+            if ($locationId === '') {
+                throw TiendanubeStockEscrituraBloqueadaException::mig03();
+            }
+
+            $this->aplicarStock(TiendanubeStockPayload::fromArray([
+                'store_id' => (int) $config->store_id,
+                'product_id' => $tnProductId,
+                'variant_id' => $variantId,
+                'location_id' => $locationId,
+                'stock' => $datos['stock'],
+                'mode' => TiendanubeStockPayload::MODE_SET_LEVEL,
+            ]));
+        }
+
+        if (array_key_exists('stock_management', $datos)) {
+            $this->aplicarStock(TiendanubeStockPayload::fromArray([
+                'store_id' => (int) $config->store_id,
+                'product_id' => $tnProductId,
+                'variant_id' => $variantId,
+                'stock_management' => (bool) $datos['stock_management'],
+                'mode' => TiendanubeStockPayload::MODE_SET_STOCK_MANAGEMENT,
+            ]));
+        }
+    }
+
+    public function aplicarStock(TiendanubeStockPayload $payload): void
+    {
+        $payload->validate();
+        $this->api->updateVariant($payload->productId, $payload->variantId, $payload->toVariantApiPayload());
+    }
+
     private function resolverVariantId(int $tnProductId): int
     {
         $local = TiendanubeProductoVariante::where('producto_id', $tnProductId)->orderBy('id')->first();
@@ -391,5 +519,152 @@ class TiendanubeProductoWriteService
         }
 
         return (int) $variants[0]['id'];
+    }
+
+    /**
+     * @param  array<string, mixed>  $datos
+     */
+    private function rechazarStockPlanoSiBloqueado(array $datos): void
+    {
+        if (! array_key_exists('stock', $datos)) {
+            return;
+        }
+
+        if (! $this->usaInventarioPorUbicacion()) {
+            return;
+        }
+
+        $locationId = isset($datos['location_id']) ? trim((string) $datos['location_id']) : '';
+        if ($locationId === '') {
+            throw TiendanubeStockEscrituraBloqueadaException::mig03();
+        }
+    }
+
+    private function usaInventarioPorUbicacion(): bool
+    {
+        $config = TiendanubeConfiguracion::obtener();
+
+        return (bool) $config->multi_inventario_activo || ($config->locations_probe ?? null) === 'ok';
+    }
+
+    private function releerProducto(int $tnProductId): ?TiendanubeProducto
+    {
+        try {
+            return $this->sync->upsertProducto($this->api->getProduct($tnProductId));
+        } catch (Throwable) {
+            return TiendanubeProducto::query()->find($tnProductId);
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $datos
+     * @return array<string, mixed>|null
+     */
+    private function reconciliarCreacionProducto(array $datos): ?array
+    {
+        $sku = isset($datos['sku']) ? trim((string) $datos['sku']) : '';
+        if ($sku === '') {
+            return null;
+        }
+
+        $local = TiendanubeProductoVariante::query()->where('sku', $sku)->orderByDesc('id')->first();
+        if ($local) {
+            try {
+                return $this->api->getProduct((int) $local->producto_id);
+            } catch (Throwable) {
+                return null;
+            }
+        }
+
+        try {
+            $lista = $this->api->findProductsBySku($sku);
+        } catch (Throwable) {
+            return null;
+        }
+
+        foreach ($lista as $producto) {
+            if (! is_array($producto)) {
+                continue;
+            }
+            foreach ($producto['variants'] ?? [] as $v) {
+                if (is_array($v) && trim((string) ($v['sku'] ?? '')) === $sku) {
+                    return $producto;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @param  list<int>  $idsAnteriores
+     * @return array<string, mixed>|null
+     */
+    private function reconciliarImagenCreada(int $tnProductId, array $payload, array $idsAnteriores, ?int $position): ?array
+    {
+        try {
+            $product = $this->api->getProduct($tnProductId);
+        } catch (Throwable) {
+            return null;
+        }
+
+        $srcPedido = isset($payload['src']) ? (string) $payload['src'] : '';
+        $candidatas = [];
+        foreach ($product['images'] ?? [] as $img) {
+            if (! is_array($img) || ! isset($img['id'])) {
+                continue;
+            }
+            if (in_array((int) $img['id'], $idsAnteriores, true)) {
+                continue;
+            }
+            $candidatas[] = $img;
+        }
+
+        if ($srcPedido !== '') {
+            foreach ($candidatas as $img) {
+                $src = $this->sync->localizedToString($img['src'] ?? null) ?? '';
+                if ($src === $srcPedido || str_contains($src, $srcPedido) || str_contains($srcPedido, $src)) {
+                    return $img;
+                }
+            }
+        }
+
+        if ($position !== null) {
+            foreach ($candidatas as $img) {
+                if ((int) ($img['position'] ?? 0) === $position) {
+                    return $img;
+                }
+            }
+        }
+
+        return count($candidatas) === 1 ? $candidatas[0] : null;
+    }
+
+    /**
+     * @param  list<int>  $idsAnteriores
+     */
+    private function borrarImagenesAnteriores(int $tnProductId, array $idsAnteriores, int $nuevoId): void
+    {
+        foreach ($idsAnteriores as $oldId) {
+            if ($oldId === $nuevoId) {
+                continue;
+            }
+            try {
+                $this->api->deleteProductImage($tnProductId, $oldId);
+            } catch (Throwable) {
+                // Continuar: la imagen puede ya no existir en TN
+            }
+            TiendanubeProductoImagen::query()->where('id', $oldId)->delete();
+        }
+    }
+
+    private function esPostIncierto(TiendanubeApiException $e): bool
+    {
+        if ($e->statusCode === 0 || $e->summary === 'connection_failed') {
+            return true;
+        }
+
+        return in_array($e->statusCode, [502, 503, 504], true);
     }
 }

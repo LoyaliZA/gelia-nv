@@ -12,7 +12,7 @@ use App\Models\User;
 use App\Services\Tiendanube\TiendanubeImageImportService;
 use App\Services\Tiendanube\TiendanubeImageSkuParser;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Support\RefreshDatabaseSafe;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Http;
@@ -23,7 +23,7 @@ use ZipArchive;
 
 class TiendanubeImageImportTest extends TestCase
 {
-    use RefreshDatabase;
+    use RefreshDatabaseSafe;
 
     protected function setUp(): void
     {
@@ -32,6 +32,7 @@ class TiendanubeImageImportTest extends TestCase
         config([
             'tiendanube.api_base' => 'https://api.tiendanube.com/v1',
             'tiendanube.user_agent' => 'Gelianv',
+            'tiendanube.retry_sleep_ms' => 0,
         ]);
 
         Storage::fake('local');
@@ -113,6 +114,26 @@ class TiendanubeImageImportTest extends TestCase
         $this->assertSame(TiendanubeImageImportService::MOTIVO_SKU_NO_ENCONTRADO, $item->motivo);
         $this->assertStringContainsString('SKU no encontrado', (string) $item->mensaje);
 
+        Http::assertNothingSent();
+    }
+
+    public function test_import_sku_ambiguo_no_elige_primera(): void
+    {
+        Http::fake();
+
+        TiendanubeProducto::create(['id' => 10, 'name' => ['es' => 'A'], 'published' => true]);
+        TiendanubeProducto::create(['id' => 11, 'name' => ['es' => 'B'], 'published' => true]);
+        TiendanubeProductoVariante::create(['id' => 1, 'producto_id' => 10, 'sku' => 'DUP', 'price' => 1]);
+        TiendanubeProductoVariante::create(['id' => 2, 'producto_id' => 11, 'sku' => 'DUP', 'price' => 1]);
+
+        $import = app(TiendanubeImageImportService::class)->iniciarDesdeZip(
+            $this->makeZip(['DUP.webp' => 'bytes'])
+        );
+        $item = $import->items()->first();
+
+        $this->assertSame('error', $item->estado);
+        $this->assertSame(TiendanubeImageImportService::MOTIVO_SKU_AMBIGUO, $item->motivo);
+        $this->assertNull($item->producto_id);
         Http::assertNothingSent();
     }
 

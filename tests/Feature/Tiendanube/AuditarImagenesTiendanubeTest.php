@@ -5,13 +5,13 @@ namespace Tests\Feature\Tiendanube;
 use App\Models\Tiendanube\TiendanubeProducto;
 use App\Models\Tiendanube\TiendanubeProductoImagen;
 use App\Services\Tiendanube\AuditarImagenesTiendanubeService;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Support\RefreshDatabaseSafe;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class AuditarImagenesTiendanubeTest extends TestCase
 {
-    use RefreshDatabase;
+    use RefreshDatabaseSafe;
 
     public function test_auditar_mide_y_marca_alertas(): void
     {

@@ -9,7 +9,7 @@ use App\Models\Tiendanube\TiendanubeConfiguracion;
 use App\Models\Tiendanube\TiendanubeProducto;
 use App\Models\User;
 use App\Services\Tiendanube\TiendanubeCatalogoWipeService;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Support\RefreshDatabaseSafe;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Gate;
@@ -19,7 +19,7 @@ use Tests\TestCase;
 
 class TiendanubeCatalogoWipeTest extends TestCase
 {
-    use RefreshDatabase;
+    use RefreshDatabaseSafe;
 
     private User $user;
 

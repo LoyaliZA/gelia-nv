@@ -57,7 +57,7 @@ export default function PanelSync({
                 const data = await res.json();
                 if (cancelled) return;
                 setProgreso(data);
-                if (['completado', 'error'].includes(data.estado)) {
+                if (['completado', 'error', 'parcial'].includes(data.estado)) {
                     router.reload({ only: ['productos', 'totales', 'ultimosSyncs', 'procesoActivo'] });
                 }
             } catch {

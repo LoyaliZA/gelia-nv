@@ -10,6 +10,16 @@ function textoIdioma(valor) {
     return valor.es || valor.es_MX || Object.values(valor)[0] || '—';
 }
 
+function textoStock(v) {
+    const r = v.stock_resumen;
+    if (r?.ilimitado) return '∞';
+    if (r?.origen === 'niveles' && r.total != null) return String(r.total);
+    if (r?.total != null) return String(r.total);
+    if (!v.stock_management) return '∞';
+    if (v.stock == null) return '—';
+    return String(v.stock);
+}
+
 export default function ModalDetalleProducto({ productoId, categorias = [], canEdit = false, onClose, onChanged }) {
     const [producto, setProducto] = useState(null);
     const [error, setError] = useState(null);
@@ -163,7 +173,16 @@ export default function ModalDetalleProducto({ productoId, categorias = [], canE
                                                         {v.price != null ? `$${Number(v.price).toFixed(2)}` : '—'}
                                                     </td>
                                                     <td className="py-2 theme-text-muted">
-                                                        {v.stock_management ? (v.stock ?? 0) : '∞'}
+                                                        <div>{textoStock(v)}</div>
+                                                        {Array.isArray(v.stock_resumen?.niveles) && v.stock_resumen.niveles.length > 0 && (
+                                                            <ul className="mt-1 space-y-0.5 text-[10px] theme-text-muted">
+                                                                {v.stock_resumen.niveles.map((n) => (
+                                                                    <li key={n.location_id}>
+                                                                        {n.nombre} ({n.location_id}): {n.stock == null ? '∞' : n.stock}
+                                                                    </li>
+                                                                ))}
+                                                            </ul>
+                                                        )}
                                                     </td>
                                                 </tr>
                                             ))}

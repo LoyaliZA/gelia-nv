@@ -2,22 +2,27 @@
 
 namespace Tests\Feature\Tiendanube;
 
+use App\Exceptions\Tiendanube\TiendanubeStockEscrituraBloqueadaException;
 use App\Models\Tiendanube\TiendanubeConfiguracion;
 use App\Models\Tiendanube\TiendanubeProducto;
 use App\Models\Tiendanube\TiendanubeProductoImagen;
 use App\Models\Tiendanube\TiendanubeProductoVariante;
+use App\Models\Tiendanube\TiendanubeUbicacion;
+use App\Models\Tiendanube\TiendanubeVarianteNivel;
 use App\Models\User;
 use App\Services\Tiendanube\TiendanubeProductoWriteService;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Support\RefreshDatabaseSafe;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Http;
+use RuntimeException;
 use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
 
 class TiendanubeProductoWriteTest extends TestCase
 {
-    use RefreshDatabase;
+    use RefreshDatabaseSafe;
 
     protected function setUp(): void
     {
@@ -27,6 +32,7 @@ class TiendanubeProductoWriteTest extends TestCase
             'tiendanube.api_base' => 'https://api.tiendanube.com/v1',
             'tiendanube.per_page' => 50,
             'tiendanube.user_agent' => 'Gelianv',
+            'tiendanube.retry_sleep_ms' => 0,
         ]);
 
         TiendanubeConfiguracion::obtener()->fill([
@@ -40,38 +46,47 @@ class TiendanubeProductoWriteTest extends TestCase
 
     public function test_crear_producto_simple_upsert_espejo(): void
     {
-        Http::fake([
-            'api.tiendanube.com/v1/8004291/products' => Http::response([
-                'id' => 200,
-                'name' => ['es' => 'Nuevo Perfume'],
-                'description' => ['es' => '<p>Desc</p>'],
-                'handle' => ['es' => 'nuevo-perfume'],
-                'brand' => 'Gelia',
-                'published' => true,
-                'free_shipping' => false,
-                'requires_shipping' => true,
-                'seo_title' => 'SEO Nuevo',
-                'seo_description' => 'SEO desc',
-                'tags' => 'nuevo',
-                'attributes' => [],
-                'categories' => [],
-                'images' => [
-                    ['id' => 501, 'src' => 'https://cdn.example.com/nuevo.jpg', 'position' => 1, 'alt' => null],
+        $remote = [
+            'id' => 200,
+            'name' => ['es' => 'Nuevo Perfume'],
+            'description' => ['es' => '<p>Desc</p>'],
+            'handle' => ['es' => 'nuevo-perfume'],
+            'brand' => 'Gelia',
+            'published' => true,
+            'free_shipping' => false,
+            'requires_shipping' => true,
+            'seo_title' => 'SEO Nuevo',
+            'seo_description' => 'SEO desc',
+            'tags' => 'nuevo',
+            'attributes' => [],
+            'categories' => [],
+            'images' => [
+                ['id' => 501, 'src' => 'https://cdn.example.com/nuevo.jpg', 'position' => 1, 'alt' => null],
+            ],
+            'variants' => [
+                [
+                    'id' => 901,
+                    'sku' => 'SKU-NEW',
+                    'price' => '150.00',
+                    'promotional_price' => null,
+                    'cost' => '50.00',
+                    'stock' => 3,
+                    'stock_management' => true,
+                    'values' => [],
                 ],
-                'variants' => [
-                    [
-                        'id' => 901,
-                        'sku' => 'SKU-NEW',
-                        'price' => '150.00',
-                        'promotional_price' => null,
-                        'cost' => '50.00',
-                        'stock' => 3,
-                        'stock_management' => true,
-                        'values' => [],
-                    ],
-                ],
-            ], 201),
-        ]);
+            ],
+        ];
+
+        Http::fake(function (\Illuminate\Http\Client\Request $request) use ($remote) {
+            if ($request->method() === 'POST' && str_ends_with(rtrim(parse_url($request->url(), PHP_URL_PATH) ?: '', '/'), '/products')) {
+                return Http::response($remote, 201);
+            }
+            if ($request->method() === 'GET' && str_contains($request->url(), '/products/200')) {
+                return Http::response($remote, 200);
+            }
+
+            return Http::response(['error' => $request->method().' '.$request->url()], 500);
+        });
 
         $producto = app(TiendanubeProductoWriteService::class)->crear([
             'name' => 'Nuevo Perfume',
@@ -171,6 +186,33 @@ class TiendanubeProductoWriteTest extends TestCase
         $this->assertFalse($producto->published);
         $this->assertSame('NEW-SKU', $producto->fresh()->variantes()->first()->sku);
         $this->assertSame(250.0, (float) $producto->fresh()->variantes()->first()->price);
+    }
+
+    public function test_actualizar_stock_plano_bloqueado_si_multi_inventario(): void
+    {
+        TiendanubeConfiguracion::obtener()->fill([
+            'multi_inventario_activo' => true,
+        ])->save();
+
+        TiendanubeProducto::create([
+            'id' => 100,
+            'name' => ['es' => 'Viejo'],
+            'published' => true,
+        ]);
+        TiendanubeProductoVariante::create([
+            'id' => 900,
+            'producto_id' => 100,
+            'sku' => 'OLD-SKU',
+            'price' => 100,
+            'stock' => 1,
+            'stock_management' => true,
+        ]);
+
+        $this->expectException(TiendanubeStockEscrituraBloqueadaException::class);
+        app(TiendanubeProductoWriteService::class)->actualizar(100, [
+            'sku' => 'NEW-SKU',
+            'stock' => 5,
+        ]);
     }
 
     public function test_agregar_imagen_resuelve_src_temporal_via_get_product(): void
@@ -376,6 +418,7 @@ class TiendanubeProductoWriteTest extends TestCase
 
     public function test_endpoint_crear_requiere_permiso(): void
     {
+        $this->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\PreventRequestForgery::class);
         Permission::findOrCreate('tiendanube.ver', 'web');
         Permission::findOrCreate('tiendanube.productos.editar', 'web');
         $user = User::factory()->create();
@@ -386,8 +429,8 @@ class TiendanubeProductoWriteTest extends TestCase
 
         $user->givePermissionTo(['tiendanube.ver', 'tiendanube.productos.editar']);
 
-        Http::fake([
-            'api.tiendanube.com/v1/8004291/products' => Http::response([
+        Http::fake(function (\Illuminate\Http\Client\Request $request) {
+            $remote = [
                 'id' => 301,
                 'name' => ['es' => 'X'],
                 'published' => true,
@@ -397,8 +440,16 @@ class TiendanubeProductoWriteTest extends TestCase
                 'variants' => [
                     ['id' => 1, 'sku' => null, 'price' => null, 'stock' => null, 'stock_management' => false, 'values' => []],
                 ],
-            ], 201),
-        ]);
+            ];
+            if ($request->method() === 'POST' && str_ends_with(rtrim(parse_url($request->url(), PHP_URL_PATH) ?: '', '/'), '/products')) {
+                return Http::response($remote, 201);
+            }
+            if ($request->method() === 'GET' && str_contains($request->url(), '/products/301')) {
+                return Http::response($remote, 200);
+            }
+
+            return Http::response(['error' => $request->method().' '.$request->url()], 500);
+        });
 
         $this->actingAs($user)
             ->postJson(route('tiendanube.productos.store'), ['name' => 'X'])
@@ -450,9 +501,18 @@ class TiendanubeProductoWriteTest extends TestCase
         $this->assertDatabaseMissing('tiendanube_producto_imagenes', ['id' => 10]);
         $this->assertDatabaseMissing('tiendanube_producto_imagenes', ['id' => 11]);
 
+        Http::assertSent(fn ($r) => $r->method() === 'POST' && str_ends_with(parse_url($r->url(), PHP_URL_PATH) ?: '', '/images'));
         Http::assertSent(fn ($r) => $r->method() === 'DELETE' && str_contains($r->url(), '/images/10'));
         Http::assertSent(fn ($r) => $r->method() === 'DELETE' && str_contains($r->url(), '/images/11'));
-        Http::assertSent(fn ($r) => $r->method() === 'POST' && str_ends_with(parse_url($r->url(), PHP_URL_PATH) ?: '', '/images'));
+
+        $orden = [];
+        foreach (Http::recorded() as $pair) {
+            $orden[] = $pair[0]->method();
+        }
+        $this->assertLessThan(
+            array_search('DELETE', $orden, true),
+            array_search('POST', $orden, true)
+        );
 
         @unlink($path);
     }
@@ -536,5 +596,283 @@ class TiendanubeProductoWriteTest extends TestCase
         $this->assertSame(1, TiendanubeProductoImagen::where('producto_id', 100)->count());
         $this->assertDatabaseHas('tiendanube_producto_imagenes', ['id' => 2, 'producto_id' => 100]);
         $this->assertDatabaseMissing('tiendanube_producto_imagenes', ['id' => 1]);
+    }
+
+    public function test_actualizar_precio_no_envia_stock(): void
+    {
+        TiendanubeProducto::create(['id' => 100, 'name' => ['es' => 'P'], 'published' => true]);
+        TiendanubeProductoVariante::create([
+            'id' => 900,
+            'producto_id' => 100,
+            'sku' => 'SKU',
+            'price' => 10,
+            'stock' => 4,
+            'stock_management' => true,
+        ]);
+
+        Http::fake(function (\Illuminate\Http\Client\Request $request) {
+            if ($request->method() === 'PUT' && str_contains($request->url(), '/variants/900')) {
+                $this->assertArrayNotHasKey('stock', $request->data());
+                $this->assertArrayNotHasKey('inventory_levels', $request->data());
+                $this->assertSame('99', (string) ($request->data()['price'] ?? ''));
+
+                return Http::response(['id' => 900], 200);
+            }
+            if ($request->method() === 'GET') {
+                return Http::response([
+                    'id' => 100,
+                    'name' => ['es' => 'P'],
+                    'published' => true,
+                    'attributes' => [],
+                    'categories' => [],
+                    'images' => [],
+                    'variants' => [[
+                        'id' => 900,
+                        'sku' => 'SKU',
+                        'price' => '99.00',
+                        'stock' => 4,
+                        'stock_management' => true,
+                        'values' => [],
+                    ]],
+                ], 200);
+            }
+
+            return Http::response(['error' => $request->url()], 500);
+        });
+
+        app(TiendanubeProductoWriteService::class)->actualizar(100, ['price' => 99]);
+    }
+
+    public function test_quitar_promocion_envia_null(): void
+    {
+        TiendanubeProducto::create(['id' => 100, 'name' => ['es' => 'P'], 'published' => true]);
+        TiendanubeProductoVariante::create([
+            'id' => 900,
+            'producto_id' => 100,
+            'sku' => 'SKU',
+            'price' => 10,
+            'promotional_price' => 8,
+        ]);
+
+        Http::fake(function (\Illuminate\Http\Client\Request $request) {
+            if ($request->method() === 'PUT' && str_contains($request->url(), '/variants/900')) {
+                $this->assertArrayHasKey('promotional_price', $request->data());
+                $this->assertNull($request->data()['promotional_price']);
+
+                return Http::response(['id' => 900], 200);
+            }
+            if ($request->method() === 'GET') {
+                return Http::response([
+                    'id' => 100,
+                    'name' => ['es' => 'P'],
+                    'published' => true,
+                    'images' => [],
+                    'categories' => [],
+                    'variants' => [[
+                        'id' => 900, 'sku' => 'SKU', 'price' => '10.00',
+                        'promotional_price' => null, 'values' => [],
+                    ]],
+                ], 200);
+            }
+
+            return Http::response(['error' => $request->url()], 500);
+        });
+
+        app(TiendanubeProductoWriteService::class)->actualizar(100, ['promotional_price' => null]);
+    }
+
+    public function test_replace_categories_vacio_envia_array_vacio(): void
+    {
+        TiendanubeProducto::create(['id' => 100, 'name' => ['es' => 'P'], 'published' => true]);
+        TiendanubeProductoVariante::create(['id' => 900, 'producto_id' => 100, 'sku' => 'S']);
+
+        Http::fake(function (\Illuminate\Http\Client\Request $request) {
+            if ($request->method() === 'PUT' && str_ends_with(rtrim(parse_url($request->url(), PHP_URL_PATH) ?: '', '/'), '/products/100')) {
+                $this->assertSame([], $request->data()['categories']);
+
+                return Http::response(['id' => 100], 200);
+            }
+            if ($request->method() === 'GET') {
+                return Http::response([
+                    'id' => 100, 'name' => ['es' => 'P'], 'published' => true,
+                    'categories' => [], 'images' => [],
+                    'variants' => [['id' => 900, 'sku' => 'S', 'values' => []]],
+                ], 200);
+            }
+
+            return Http::response(['error' => $request->url()], 500);
+        });
+
+        app(TiendanubeProductoWriteService::class)->actualizar(100, [
+            'categories' => [],
+            'replace_categories' => true,
+        ]);
+    }
+
+    public function test_stock_por_ubicacion_a_no_incluye_b(): void
+    {
+        $locA = '01GQ2ZHK064BQRHGDB7CCV0Y6N';
+        $locB = '01GQ2ZHK064BQRHGDB7CCV0Y6B';
+
+        TiendanubeConfiguracion::obtener()->fill([
+            'locations_probe' => 'ok',
+            'multi_inventario_activo' => true,
+        ])->save();
+
+        TiendanubeProducto::create(['id' => 100, 'name' => ['es' => 'P'], 'published' => true]);
+        TiendanubeProductoVariante::create([
+            'id' => 900, 'producto_id' => 100, 'sku' => 'S', 'stock' => 10, 'stock_management' => true,
+        ]);
+        TiendanubeUbicacion::create([
+            'id' => $locA, 'store_id' => 8004291, 'name' => ['es' => 'A'],
+            'activa' => true, 'synced_at' => now(),
+        ]);
+        TiendanubeUbicacion::create([
+            'id' => $locB, 'store_id' => 8004291, 'name' => ['es' => 'B'],
+            'activa' => true, 'synced_at' => now(),
+        ]);
+        TiendanubeVarianteNivel::create([
+            'variante_id' => 900, 'ubicacion_id' => $locA, 'stock' => 3, 'synced_at' => now(),
+        ]);
+        TiendanubeVarianteNivel::create([
+            'variante_id' => 900, 'ubicacion_id' => $locB, 'stock' => 7, 'synced_at' => now(),
+        ]);
+
+        Http::fake(function (\Illuminate\Http\Client\Request $request) use ($locA) {
+            if ($request->method() === 'PUT' && str_contains($request->url(), '/variants/900')) {
+                $levels = $request->data()['inventory_levels'] ?? null;
+                $this->assertIsArray($levels);
+                $this->assertCount(1, $levels);
+                $this->assertSame($locA, $levels[0]['location_id']);
+                $this->assertSame(5, $levels[0]['stock']);
+                $this->assertArrayNotHasKey('stock', $request->data());
+                $this->assertArrayNotHasKey('price', $request->data());
+
+                return Http::response(['id' => 900], 200);
+            }
+            if ($request->method() === 'GET') {
+                return Http::response([
+                    'id' => 100, 'name' => ['es' => 'P'], 'published' => true,
+                    'images' => [], 'categories' => [],
+                    'variants' => [[
+                        'id' => 900, 'sku' => 'S', 'values' => [],
+                        'inventory_levels' => [
+                            ['location_id' => $locA, 'stock' => 5],
+                            ['location_id' => '01GQ2ZHK064BQRHGDB7CCV0Y6B', 'stock' => 7],
+                        ],
+                    ]],
+                ], 200);
+            }
+
+            return Http::response(['error' => $request->url()], 500);
+        });
+
+        app(TiendanubeProductoWriteService::class)->actualizar(100, [
+            'location_id' => $locA,
+            'stock' => 5,
+        ]);
+    }
+
+    public function test_visibility_2025_03_no_mezcla_published(): void
+    {
+        config([
+            'tiendanube.api_base' => '',
+            'tiendanube.api_host' => 'https://api.tiendanube.com',
+            'tiendanube.api_version' => '2025-03',
+        ]);
+
+        TiendanubeProducto::create(['id' => 100, 'name' => ['es' => 'P'], 'published' => true]);
+        TiendanubeProductoVariante::create(['id' => 900, 'producto_id' => 100, 'sku' => 'S']);
+
+        Http::fake(function (\Illuminate\Http\Client\Request $request) {
+            if ($request->method() === 'PUT' && str_contains($request->url(), '/2025-03/') && str_ends_with(rtrim(parse_url($request->url(), PHP_URL_PATH) ?: '', '/'), '/products/100')) {
+                $data = $request->data();
+                $this->assertSame('hidden', $data['visibility']);
+                $this->assertArrayNotHasKey('published', $data);
+
+                return Http::response(['id' => 100], 200);
+            }
+            if ($request->method() === 'GET') {
+                return Http::response([
+                    'id' => 100, 'name' => ['es' => 'P'], 'visibility' => 'hidden',
+                    'images' => [], 'categories' => [],
+                    'variants' => [['id' => 900, 'sku' => 'S', 'values' => []]],
+                ], 200);
+            }
+
+            return Http::response(['error' => $request->url()], 500);
+        });
+
+        app(TiendanubeProductoWriteService::class)->actualizar(100, ['published' => false]);
+    }
+
+    public function test_agregar_imagen_fallo_conserva_fotos(): void
+    {
+        TiendanubeProducto::create(['id' => 100, 'name' => ['es' => 'Prod'], 'published' => true]);
+        TiendanubeProductoImagen::create([
+            'id' => 10,
+            'producto_id' => 100,
+            'src' => 'https://cdn.example.com/old.jpg',
+            'position' => 1,
+        ]);
+
+        Http::fake([
+            'api.tiendanube.com/v1/8004291/products/100/images' => Http::response(['error' => 'fail'], 500),
+        ]);
+
+        try {
+            app(TiendanubeProductoWriteService::class)->agregarImagen(
+                100,
+                'https://cdn.example.com/nueva.jpg',
+                null,
+                null,
+                true
+            );
+            $this->fail('Debió fallar la carga');
+        } catch (RuntimeException) {
+            // esperado
+        }
+
+        $this->assertDatabaseHas('tiendanube_producto_imagenes', ['id' => 10, 'producto_id' => 100]);
+        Http::assertNotSent(fn ($r) => $r->method() === 'DELETE');
+    }
+
+    public function test_crear_timeout_reconcilia_por_sku_sin_repetir_post(): void
+    {
+        $remote = [
+            'id' => 440,
+            'name' => ['es' => 'Incerto'],
+            'published' => true,
+            'images' => [],
+            'categories' => [],
+            'variants' => [[
+                'id' => 441, 'sku' => 'SKU-INC', 'price' => '1.00', 'values' => [],
+            ]],
+        ];
+        $posts = 0;
+
+        Http::fake(function (\Illuminate\Http\Client\Request $request) use ($remote, &$posts) {
+            $path = rtrim(parse_url($request->url(), PHP_URL_PATH) ?: '', '/');
+            if ($request->method() === 'POST' && str_ends_with($path, '/products')) {
+                $posts++;
+                throw new ConnectionException('timeout');
+            }
+            if ($request->method() === 'GET' && str_contains($request->url(), 'sku=')) {
+                return Http::response([$remote], 200);
+            }
+            if ($request->method() === 'GET' && str_contains($request->url(), '/products/440')) {
+                return Http::response($remote, 200);
+            }
+
+            return Http::response(['error' => $request->url()], 500);
+        });
+
+        $producto = app(TiendanubeProductoWriteService::class)->crear([
+            'name' => 'Incerto',
+            'sku' => 'SKU-INC',
+        ]);
+
+        $this->assertSame(440, $producto->id);
+        $this->assertSame(1, $posts);
     }
 }

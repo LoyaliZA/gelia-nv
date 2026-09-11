@@ -19,6 +19,8 @@ class TiendanubeImageImportService
 
     public const MOTIVO_SKU_NO_ENCONTRADO = 'sku_no_encontrado';
 
+    public const MOTIVO_SKU_AMBIGUO = 'sku_ambiguo';
+
     public const MOTIVO_ARCHIVO_GRANDE = 'archivo_grande';
 
     public const MOTIVO_ERROR_CARGA = 'error_carga';
@@ -351,7 +353,25 @@ class TiendanubeImageImportService
                 continue;
             }
 
-            $variante = TiendanubeProductoVariante::where('sku', $parsed['sku'])->orderBy('id')->first();
+            $variantes = TiendanubeProductoVariante::where('sku', $parsed['sku'])->orderBy('id')->get();
+            if ($variantes->count() > 1) {
+                $items[] = [
+                    'import_id' => $import->id,
+                    'filename' => $parseName,
+                    'relative_path' => $relative,
+                    'sku' => $parsed['sku'],
+                    'position' => $parsed['position'],
+                    'producto_id' => null,
+                    'estado' => 'error',
+                    'motivo' => self::MOTIVO_SKU_AMBIGUO,
+                    'mensaje' => 'SKU ambiguo: hay más de una variante con el mismo código. No se elige la primera coincidencia.',
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ];
+
+                continue;
+            }
+            $variante = $variantes->first();
             if (! $variante) {
                 $items[] = [
                     'import_id' => $import->id,

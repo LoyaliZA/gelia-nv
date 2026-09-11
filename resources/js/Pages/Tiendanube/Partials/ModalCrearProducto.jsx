@@ -8,7 +8,10 @@ const csrfToken = () => document.querySelector('meta[name="csrf-token"]')?.getAt
 const inputClass = 'w-full theme-element border theme-border rounded-xl px-4 py-3 text-sm theme-text-main';
 const labelClass = 'block text-[10px] font-black uppercase tracking-widest theme-text-muted mb-2';
 
-export default function ModalCrearProducto({ categorias = [], onClose, onCreated }) {
+export default function ModalCrearProducto({ categorias = [], inventario = {}, ubicaciones = [], onClose, onCreated }) {
+    const escrituraHabilitada = !!inventario.escritura_habilitada;
+    const stockPlano = !escrituraHabilitada && inventario.locations_probe !== 'ok' && !inventario.multi_activo;
+    const defaultLoc = ubicaciones.length === 1 ? ubicaciones[0].id : '';
     const [form, setForm] = useState({
         name: '',
         description: '',
@@ -26,6 +29,7 @@ export default function ModalCrearProducto({ categorias = [], onClose, onCreated
         promotional_price: '',
         cost: '',
         stock: '',
+        location_id: defaultLoc,
         image_url: '',
     });
     const [saving, setSaving] = useState(false);
@@ -64,9 +68,16 @@ export default function ModalCrearProducto({ categorias = [], onClose, onCreated
                 price: form.price === '' ? null : Number(form.price),
                 promotional_price: form.promotional_price === '' ? null : Number(form.promotional_price),
                 cost: form.cost === '' ? null : Number(form.cost),
-                stock: form.stock === '' ? null : Number(form.stock),
                 image_urls: form.image_url.trim() ? [form.image_url.trim()] : [],
             };
+            if (escrituraHabilitada) {
+                if (form.location_id) {
+                    body.location_id = form.location_id;
+                    body.stock = form.stock === '' ? null : Number(form.stock);
+                }
+            } else if (stockPlano) {
+                body.stock = form.stock === '' ? null : Number(form.stock);
+            }
             const res = await fetch(route('tiendanube.productos.store'), {
                 method: 'POST',
                 headers: {
@@ -121,8 +132,30 @@ export default function ModalCrearProducto({ categorias = [], onClose, onCreated
                             <input className={inputClass} type="number" step="0.01" min="0" value={form.price} onChange={(e) => setField('price', e.target.value)} />
                         </div>
                         <div>
-                            <label className={labelClass}>Stock</label>
-                            <input className={inputClass} type="number" min="0" value={form.stock} onChange={(e) => setField('stock', e.target.value)} />
+                            <label className={labelClass}>Stock{escrituraHabilitada ? ' (ubicación)' : ''}</label>
+                            {escrituraHabilitada && (
+                                <select className={`${inputClass} mb-2`} value={form.location_id} onChange={(e) => setField('location_id', e.target.value)}>
+                                    <option value="">Seleccionar ubicación</option>
+                                    {ubicaciones.map((u) => (
+                                        <option key={u.id} value={u.id}>{u.nombre}</option>
+                                    ))}
+                                </select>
+                            )}
+                            <input
+                                className={inputClass}
+                                type="number"
+                                min="0"
+                                value={form.stock}
+                                onChange={(e) => setField('stock', e.target.value)}
+                                disabled={!escrituraHabilitada && !stockPlano}
+                                placeholder={escrituraHabilitada ? 'Vacío = ilimitado' : ''}
+                            />
+                            {!escrituraHabilitada && !stockPlano && (
+                                <p className="mt-1 text-[10px] font-bold theme-text-muted">Location no disponible: no se escribe stock plano.</p>
+                            )}
+                            {escrituraHabilitada && (
+                                <p className="mt-1 text-[10px] font-bold theme-text-muted">Vacío = ilimitado en esa ubicación. No se envía el total a la primera ubicación.</p>
+                            )}
                         </div>
                         <div>
                             <label className={labelClass}>SEO title</label>

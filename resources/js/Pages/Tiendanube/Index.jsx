@@ -21,6 +21,8 @@ export default function Index({
     categorias = [],
     filters,
     permisos,
+    ubicaciones = [],
+    inventario = {},
 }) {
     const [showConfig, setShowConfig] = useState(false);
     const [showHerramientas, setShowHerramientas] = useState(false);
@@ -279,6 +281,8 @@ export default function Index({
             {showCrear && (
                 <ModalCrearProducto
                     categorias={categorias}
+                    inventario={inventario}
+                    ubicaciones={ubicaciones}
                     onClose={() => setShowCrear(false)}
                     onCreated={(id) => {
                         setShowCrear(false);
