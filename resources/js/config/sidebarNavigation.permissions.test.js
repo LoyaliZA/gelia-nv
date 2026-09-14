@@ -148,6 +148,34 @@ describe('buildSidebarNavigation permissions', () => {
         expect(ids).not.toContain('punto_venta_pantalla_sala');
     });
 
+    it('usuario con tiendanube.ver ve catálogo y precios en vinculaciones', () => {
+        const tree = buildSidebarNavigation({
+            can: canWith(['tiendanube.ver']),
+            showAdminMenu: false,
+            manualesHubVisible: false,
+            geliaAiVisible: false,
+        });
+        const ids = collectLinkIds(tree);
+        expect(ids).toContain('tiendanube_catalogo');
+        expect(ids).toContain('tiendanube_precios');
+    });
+
+    it('marca activo precios sin resaltar catálogo en /tiendanube/precios', () => {
+        const tree = buildSidebarNavigation({
+            can: canWith(['tiendanube.ver']),
+            showAdminMenu: false,
+            manualesHubVisible: false,
+            geliaAiVisible: false,
+        });
+        const vinculaciones = tree.find((n) => n?.id === 'vinculaciones');
+        const tiendanube = vinculaciones?.children?.find((n) => n?.id === 'tiendanube');
+        const catalogo = tiendanube?.children?.find((n) => n?.id === 'tiendanube_catalogo');
+        const precios = tiendanube?.children?.find((n) => n?.id === 'tiendanube_precios');
+        expect(catalogo?.active?.('/tiendanube/precios')).toBe(false);
+        expect(precios?.active?.('/tiendanube/precios')).toBe(true);
+        expect(catalogo?.active?.('/tiendanube')).toBe(true);
+    });
+
     it('abre antecesores de una ruta anidada activa', () => {
         const tree = buildSidebarNavigation({
             can: canWith(['control_pedidos.ver_listado', 'control_pedidos.auditar'], true),

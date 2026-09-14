@@ -1,5 +1,13 @@
 <?php
 
+use App\Http\Controllers\Tiendanube\TiendanubePrecioCatalogoController;
+use App\Http\Controllers\Tiendanube\TiendanubePrecioCsvController;
+use App\Http\Controllers\Tiendanube\TiendanubePrecioEjecucionController;
+use App\Http\Controllers\Tiendanube\TiendanubePrecioFuentesController;
+use App\Http\Controllers\Tiendanube\TiendanubePrecioHistorialController;
+use App\Http\Controllers\Tiendanube\TiendanubePrecioLoteController;
+use App\Http\Controllers\Tiendanube\TiendanubePrecioReglasController;
+use App\Http\Controllers\Tiendanube\TiendanubePrecioSeleccionController;
 use App\Http\Controllers\TiendanubeController;
 use Illuminate\Support\Facades\Route;
 
@@ -37,4 +45,60 @@ Route::middleware(['can:tiendanube.ver'])
         Route::put('/webhooks/{id}', [TiendanubeController::class, 'actualizarWebhook'])->name('webhooks.update')->middleware('can:tiendanube.configurar');
         Route::delete('/webhooks/{id}', [TiendanubeController::class, 'eliminarWebhook'])->name('webhooks.destroy')->middleware('can:tiendanube.configurar');
         Route::post('/sincronizar', [TiendanubeController::class, 'sincronizar'])->name('sincronizar')->middleware('can:tiendanube.sincronizar');
+
+        Route::prefix('precios')->name('precios.')->group(function () {
+            Route::get('/', [TiendanubePrecioCatalogoController::class, 'index'])->name('index');
+            Route::get('/catalogo', [TiendanubePrecioCatalogoController::class, 'listar'])->name('catalogo.listar');
+            Route::post('/selecciones', [TiendanubePrecioSeleccionController::class, 'store'])->name('selecciones.store');
+            Route::get('/selecciones/{id}', [TiendanubePrecioSeleccionController::class, 'show'])->name('selecciones.show');
+            Route::patch('/selecciones/{id}', [TiendanubePrecioSeleccionController::class, 'update'])->name('selecciones.update');
+            Route::post('/selecciones/{id}/resolver', [TiendanubePrecioSeleccionController::class, 'resolver'])->name('selecciones.resolver');
+            Route::get('/fuentes', [TiendanubePrecioFuentesController::class, 'fuentes'])->name('fuentes');
+            Route::post('/fuentes/resolver', [TiendanubePrecioFuentesController::class, 'resolver'])->name('fuentes.resolver')->middleware('can:tiendanube.precios.ver');
+            Route::get('/variantes/resolver', [TiendanubePrecioFuentesController::class, 'resolverVariante'])->name('variantes.resolver')->middleware('can:tiendanube.precios.editar');
+            Route::post('/costos', [TiendanubePrecioFuentesController::class, 'storeCosto'])->name('costos.store')->middleware('can:tiendanube.precios.editar');
+            Route::post('/listas', [TiendanubePrecioFuentesController::class, 'storeLista'])->name('listas.store')->middleware('can:tiendanube.precios.editar');
+            Route::put('/listas/{id}', [TiendanubePrecioFuentesController::class, 'updateLista'])->name('listas.update')->middleware('can:tiendanube.precios.editar');
+            Route::post('/importar', [TiendanubePrecioFuentesController::class, 'importar'])->name('importar')->middleware('can:tiendanube.precios.importar');
+            Route::get('/importar/{id}/revision', [TiendanubePrecioFuentesController::class, 'revisionImport'])->name('importar.revision')->middleware('can:tiendanube.precios.importar');
+            Route::post('/importar/{id}/confirmar', [TiendanubePrecioFuentesController::class, 'confirmarImport'])->name('importar.confirmar')->middleware('can:tiendanube.precios.importar');
+            Route::get('/reglas', [TiendanubePrecioReglasController::class, 'index'])->name('reglas.index')->middleware('can:tiendanube.precios.reglas.ver');
+            Route::get('/reglas/listar', [TiendanubePrecioReglasController::class, 'listar'])->name('reglas.listar')->middleware('can:tiendanube.precios.reglas.ver');
+            Route::get('/reglas/metadatos', [TiendanubePrecioReglasController::class, 'metadatos'])->name('reglas.metadatos')->middleware('can:tiendanube.precios.reglas.ver');
+            Route::post('/reglas/previsualizar', [TiendanubePrecioReglasController::class, 'previsualizar'])->name('reglas.previsualizar')->middleware('can:tiendanube.precios.reglas.ver');
+            Route::get('/reglas/{id}', [TiendanubePrecioReglasController::class, 'show'])->name('reglas.show')->whereNumber('id')->middleware('can:tiendanube.precios.reglas.ver');
+            Route::get('/historial', [TiendanubePrecioHistorialController::class, 'index'])->name('historial.index')->middleware('can:tiendanube.precios.reglas.ver');
+            Route::get('/historial/operaciones', [TiendanubePrecioHistorialController::class, 'operaciones'])->name('historial.operaciones')->middleware('can:tiendanube.precios.reglas.ver');
+            Route::get('/historial/operaciones/{loteId}', [TiendanubePrecioHistorialController::class, 'show'])->name('historial.operaciones.show');
+            Route::post('/historial/operaciones/{loteId}/conciliar', [TiendanubePrecioHistorialController::class, 'conciliar'])->name('historial.conciliar')->middleware('can:tiendanube.precios.reglas.ver');
+            Route::post('/historial/operaciones/{loteId}/restaurar/preparar', [TiendanubePrecioHistorialController::class, 'prepararRestauracion'])->name('historial.restaurar.preparar')->middleware('can:tiendanube.precios.reglas.ver');
+            Route::post('/historial/operaciones/{loteId}/restaurar', [TiendanubePrecioHistorialController::class, 'restaurar'])->name('historial.restaurar')->middleware('can:tiendanube.precios.reglas.ver');
+            Route::post('/reglas', [TiendanubePrecioReglasController::class, 'store'])->name('reglas.store')->middleware('can:tiendanube.precios.reglas.administrar');
+            Route::put('/reglas/{id}', [TiendanubePrecioReglasController::class, 'update'])->name('reglas.update')->whereNumber('id')->middleware('can:tiendanube.precios.reglas.administrar');
+            Route::post('/reglas/{id}/duplicar', [TiendanubePrecioReglasController::class, 'duplicar'])->name('reglas.duplicar')->whereNumber('id')->middleware('can:tiendanube.precios.reglas.administrar');
+            Route::post('/reglas/{id}/archivar', [TiendanubePrecioReglasController::class, 'archivar'])->name('reglas.archivar')->whereNumber('id')->middleware('can:tiendanube.precios.reglas.administrar');
+            Route::post('/lotes', [TiendanubePrecioLoteController::class, 'store'])->name('lotes.store')->middleware('can:tiendanube.precios.reglas.ver');
+            Route::get('/lotes/{id}', [TiendanubePrecioLoteController::class, 'show'])->name('lotes.show');
+            Route::get('/lotes/{id}/items', [TiendanubePrecioLoteController::class, 'items'])->name('lotes.items');
+            Route::get('/lotes/{id}/progreso', [TiendanubePrecioLoteController::class, 'progreso'])->name('lotes.progreso');
+            Route::post('/lotes/{id}/simular', [TiendanubePrecioLoteController::class, 'simular'])->name('lotes.simular')->middleware('can:tiendanube.precios.reglas.ver');
+            Route::patch('/lotes/{id}/items/{itemId}', [TiendanubePrecioLoteController::class, 'actualizarItem'])->name('lotes.items.update')->whereNumber('itemId');
+            Route::post('/lotes/{id}/aprobar', [TiendanubePrecioLoteController::class, 'aprobar'])->name('lotes.aprobar')->middleware('can:tiendanube.precios.aprobar');
+            Route::post('/lotes/{id}/cancelar', [TiendanubePrecioLoteController::class, 'cancelar'])->name('lotes.cancelar');
+            Route::get('/csv-perfil', [TiendanubePrecioCsvController::class, 'perfil'])->name('csv_perfil.show');
+            Route::post('/csv-perfil/validar', [TiendanubePrecioCsvController::class, 'validarPerfil'])->name('csv_perfil.validar')->middleware('can:tiendanube.configurar');
+            Route::post('/catalogo/exportaciones-csv', [TiendanubePrecioCsvController::class, 'generarCatalogo'])->name('catalogo.exportaciones_csv')->middleware('can:tiendanube.precios.exportar');
+            Route::post('/lotes/{id}/exportaciones-csv', [TiendanubePrecioCsvController::class, 'generarLote'])->name('lotes.exportaciones_csv')->middleware('can:tiendanube.precios.exportar');
+            Route::get('/lotes/{id}/exportaciones-csv', [TiendanubePrecioCsvController::class, 'listarLote'])->name('lotes.exportaciones_csv.index')->middleware('can:tiendanube.precios.exportar');
+            Route::get('/lotes/{id}/reporte-revision', [TiendanubePrecioCsvController::class, 'reporteRevision'])->name('lotes.reporte_revision')->middleware('can:tiendanube.precios.exportar');
+            Route::get('/exportaciones-csv/{id}/descargar', [TiendanubePrecioCsvController::class, 'descargar'])->name('exportaciones_csv.descargar')->whereNumber('id')->middleware('can:tiendanube.precios.exportar');
+            Route::post('/exportaciones-csv/{id}/declarar-importacion', [TiendanubePrecioCsvController::class, 'declararImportacion'])->name('exportaciones_csv.declarar')->whereNumber('id')->middleware('can:tiendanube.precios.exportar');
+            Route::post('/lotes/{id}/aplicar', [TiendanubePrecioEjecucionController::class, 'aplicar'])->name('lotes.aplicar')->middleware('can:tiendanube.precios.aplicar');
+            Route::get('/lotes/{id}/ejecucion', [TiendanubePrecioEjecucionController::class, 'show'])->name('lotes.ejecucion');
+            Route::get('/ejecuciones/{ejecucionId}/items', [TiendanubePrecioEjecucionController::class, 'items'])->name('ejecuciones.items');
+            Route::post('/ejecuciones/{ejecucionId}/cancelar', [TiendanubePrecioEjecucionController::class, 'cancelar'])->name('ejecuciones.cancelar')->middleware('can:tiendanube.precios.aplicar');
+            Route::post('/ejecuciones/{ejecucionId}/items/{itemId}/reintentar', [TiendanubePrecioEjecucionController::class, 'reintentar'])->name('ejecuciones.items.reintentar')->whereNumber('itemId')->middleware('can:tiendanube.precios.aplicar');
+            Route::post('/ejecuciones/{ejecucionId}/items/{itemId}/verificar', [TiendanubePrecioEjecucionController::class, 'verificar'])->name('ejecuciones.items.verificar')->whereNumber('itemId')->middleware('can:tiendanube.precios.aplicar');
+            Route::get('/lotes/{id}/revision-aprobada', [TiendanubePrecioLoteController::class, 'revisionAprobada'])->name('lotes.revision_aprobada');
+        });
     });

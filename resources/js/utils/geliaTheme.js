@@ -42,3 +42,27 @@ export const GELIA_RESPONSIVE_GRID =
 
 export const GELIA_ADMIN_HUB_GRID =
     'grid w-full max-w-full min-w-0 items-stretch gap-[clamp(1rem,2.5vw,1.5rem)] grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4';
+
+/** Botón secundario con borde (acciones terciarias en módulos densos). */
+export const GELIA_BTN_OUTLINE =
+    'inline-flex items-center justify-center gap-2 rounded-xl border theme-border px-3 py-2 text-[10px] font-black uppercase tracking-widest theme-text-main theme-surface hover:bg-black/5 dark:hover:bg-white/5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
+
+/** Etiqueta compacta de estado. */
+export const GELIA_BADGE =
+    'inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-widest';
+
+/** Chip de filtro activo (solo lectura). */
+export const GELIA_CHIP =
+    'inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold border theme-border theme-element theme-text-main';
+
+/** Leyenda de fieldset en formularios modulares. */
+export const GELIA_FIELDSET_LEGEND =
+    'text-[10px] font-black uppercase tracking-widest theme-text-muted px-1';
+
+/** Botón conmutador (presets / filtros exclusivos). */
+export function geliaToggleBtnClass(active = false) {
+    return [
+        'rounded-lg border theme-border px-3 py-1.5 text-[10px] font-black uppercase tracking-widest transition-colors',
+        active ? 'text-white border-transparent' : 'theme-text-main theme-surface hover:bg-black/5 dark:hover:bg-white/5',
+    ].join(' ');
+}

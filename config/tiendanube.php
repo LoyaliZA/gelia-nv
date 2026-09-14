@@ -38,6 +38,15 @@ return [
     'image_import_max_total_uncompressed_bytes' => (int) env('TIENDANUBE_IMAGE_IMPORT_MAX_TOTAL_BYTES', 200 * 1024 * 1024),
     'image_import_retention_days' => (int) env('TIENDANUBE_IMAGE_IMPORT_RETENTION_DAYS', 7),
     'image_import_claim_seconds' => (int) env('TIENDANUBE_IMAGE_IMPORT_CLAIM_SECONDS', 600),
+    'precio_lote_sync_max' => (int) env('TIENDANUBE_PRECIO_LOTE_SYNC_MAX', 200),
+    'precio_lote_resolver_per_page' => (int) env('TIENDANUBE_PRECIO_LOTE_RESOLVER_PER_PAGE', 500),
+    'precios_aprobacion_habilitada' => filter_var(env('TIENDANUBE_PRECIOS_APROBACION_HABILITADA', true), FILTER_VALIDATE_BOOLEAN),
+    'precios_aplicacion_habilitada' => filter_var(env('TIENDANUBE_PRECIOS_APLICACION_HABILITADA', true), FILTER_VALIDATE_BOOLEAN),
+    'precios_restauracion_habilitada' => filter_var(env('TIENDANUBE_PRECIOS_RESTAURACION_HABILITADA', true), FILTER_VALIDATE_BOOLEAN),
+    'precio_ejecucion_lease_seconds' => (int) env('TIENDANUBE_PRECIO_EJECUCION_LEASE_SECONDS', 90),
+    'precio_ejecucion_item_max_intentos' => (int) env('TIENDANUBE_PRECIO_EJECUCION_ITEM_MAX_INTENTOS', 5),
+    'precio_ejecucion_batch' => (int) env('TIENDANUBE_PRECIO_EJECUCION_BATCH', 15),
+    'api_version_precios' => '2025-03',
     /*
      * Eventos registrables vía POST /webhooks de la API.
      * No incluir store/redact ni customers/*: son webhooks de privacidad (LGPD)

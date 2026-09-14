@@ -455,7 +455,18 @@ export function buildSidebarNavigation({ can, showAdminMenu, manualesHubVisible 
                     label: 'Catálogo',
                     icon: Package,
                     href: () => routeHref('tiendanube.index', '/tiendanube'),
-                    active: (url) => url.startsWith('/tiendanube'),
+                    active: (url) => {
+                        const path = url.split('?')[0];
+                        return path.startsWith('/tiendanube') && !path.startsWith('/tiendanube/precios');
+                    },
+                },
+                can('tiendanube.ver') && {
+                    type: 'link',
+                    id: 'tiendanube_precios',
+                    label: 'Precios',
+                    icon: DollarSign,
+                    href: () => routeHref('tiendanube.precios.index', '/tiendanube/precios'),
+                    active: (url) => url.split('?')[0].startsWith('/tiendanube/precios'),
                 },
             ],
         },
