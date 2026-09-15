@@ -34,7 +34,7 @@ export function foliosBultosRecibidos(resguardo) {
 
     if (Array.isArray(resguardo?.bultos)) {
         return resguardo.bultos
-            .filter((bulto) => bulto.estado === 'recibido')
+            .filter((bulto) => bulto.estado === 'recibido_gerente')
             .map((bulto) => String(bulto.folio || '').trim())
             .filter(Boolean);
     }
@@ -77,7 +77,7 @@ export function resguardoAdmiteRecepcion(resguardo, puedeRecibir = null) {
         return resguardo.puede_recibir;
     }
 
-    const estadoPermitido = ['pendiente_recepcion', 'en_custodia'].includes(resguardo?.estado);
+    const estadoPermitido = ['pendiente_recepcion', 'pendiente_custodia'].includes(resguardo?.estado);
 
     return estadoPermitido && cantidadBultosPendiente(resguardo) > 0;
 }
@@ -108,13 +108,14 @@ export function mensajeEstadoNoRecepcion({ motivo, resguardo, catalogos = {} }) 
 }
 
 export function resguardoAdmiteEntregaTotal(resguardo) {
-    if (typeof resguardo?.recepcion_completa === 'boolean') {
-        return resguardo.recepcion_completa;
+    if (typeof resguardo?.custodia_completa === 'boolean') {
+        return resguardo.custodia_completa;
     }
 
     const esperada = Number(resguardo?.cantidad_bultos_esperada) || 0;
+    const enCustodia = Number(resguardo?.cantidad_bultos_en_custodia) || 0;
 
-    return esperada > 0 && cantidadBultosRecibida(resguardo) >= esperada;
+    return esperada > 0 && enCustodia >= esperada;
 }
 
 export function validarFormularioRecepcion({
@@ -124,10 +125,6 @@ export function validarFormularioRecepcion({
     foliosRecibidos = [],
 }) {
     const errores = {};
-
-    if (!almacenId) {
-        errores.almacen_id = 'Selecciona la ubicación de custodia.';
-    }
 
     const pendiente = Number(cantidadPendiente) || 0;
     if (pendiente < 1) {
@@ -243,7 +240,6 @@ export function armarFormDataRecepcion({
     const form = new FormData();
     form.append('version', String(version));
     form.append('idempotency_key', idempotencyKey);
-    form.append('almacen_id', String(almacenId));
 
     bultos.forEach((bulto, indice) => {
         form.append(`bultos[${indice}][folio]`, String(bulto.folio).trim());

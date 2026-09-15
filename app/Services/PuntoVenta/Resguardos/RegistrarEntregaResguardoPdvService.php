@@ -386,7 +386,7 @@ class RegistrarEntregaResguardoPdvService
     {
         $idsEntregando = $bultosEntregables->pluck('id')->all();
         $recibidosRestantes = $resguardo->bultos
-            ->filter(fn (ResguardoPdvBulto $bulto) => $bulto->estado === ResguardoPdvBulto::ESTADO_RECIBIDO
+            ->filter(fn (ResguardoPdvBulto $bulto) => ResguardoPdvBulto::estaEnCustodiaOperativa($bulto->estado)
                 && ! in_array($bulto->id, $idsEntregando, true))
             ->count();
 
@@ -408,7 +408,7 @@ class RegistrarEntregaResguardoPdvService
     {
         $idsEntregando = $bultosEntregables->pluck('id')->all();
         $quedanEnCustodia = $resguardo->bultos
-            ->filter(fn (ResguardoPdvBulto $bulto) => $bulto->estado === ResguardoPdvBulto::ESTADO_RECIBIDO
+            ->filter(fn (ResguardoPdvBulto $bulto) => ResguardoPdvBulto::estaEnCustodiaOperativa($bulto->estado)
                 && ! in_array($bulto->id, $idsEntregando, true))
             ->isNotEmpty();
 
@@ -438,7 +438,7 @@ class RegistrarEntregaResguardoPdvService
     private function bultosEntregables(ResguardoPdv $resguardo)
     {
         return $resguardo->bultos
-            ->filter(fn (ResguardoPdvBulto $bulto) => $bulto->estado === ResguardoPdvBulto::ESTADO_RECIBIDO)
+            ->filter(fn (ResguardoPdvBulto $bulto) => ResguardoPdvBulto::estaEnCustodiaOperativa($bulto->estado))
             ->values();
     }
 

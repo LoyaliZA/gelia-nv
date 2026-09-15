@@ -54,7 +54,8 @@ class RecepcionParcialResguardoPdvTest extends TestCase
         $this->usuario->givePermissionTo([
             PuntoVentaModulo::PERMISO_ACCEDER,
             PuntoVentaModulo::PERMISO_RESGUARDOS_VER,
-            PuntoVentaModulo::PERMISO_RESGUARDOS_RECIBIR,
+            PuntoVentaModulo::PERMISO_RESGUARDOS_RECIBIR_GERENTE,
+            PuntoVentaModulo::PERMISO_RESGUARDOS_CONFIRMAR_CUSTODIA,
         ]);
         $this->usuario->concederAccesoSucursal($this->sucursal, esPrincipal: true);
     }
@@ -69,7 +70,7 @@ class RecepcionParcialResguardoPdvTest extends TestCase
             route('punto_venta.resguardos.recepcion', $resguardo),
             $this->payloadLlegada($resguardo, ['CJA-001'], 'pdv:rec:'.$resguardo->id.':llegada-1')
         )->assertOk()
-            ->assertJsonPath('resguardo.estado', ResguardoPdv::ESTADO_EN_CUSTODIA)
+            ->assertJsonPath('resguardo.estado', ResguardoPdv::ESTADO_PENDIENTE_RECEPCION)
             ->assertJsonPath('resguardo.recepcion_completa', false)
             ->assertJsonPath('resguardo.cantidad_bultos_recibida', 1)
             ->assertJsonPath('resguardo.cantidad_bultos_pendiente', 1)
@@ -86,6 +87,7 @@ class RecepcionParcialResguardoPdvTest extends TestCase
             route('punto_venta.resguardos.recepcion', $resguardo),
             $this->payloadLlegada($resguardo, ['CJA-002'], 'pdv:rec:'.$resguardo->id.':llegada-2')
         )->assertOk()
+            ->assertJsonPath('resguardo.estado', ResguardoPdv::ESTADO_PENDIENTE_CUSTODIA)
             ->assertJsonPath('resguardo.recepcion_completa', true)
             ->assertJsonPath('resguardo.cantidad_bultos_recibida', 2)
             ->assertJsonPath('resguardo.cantidad_bultos_pendiente', 0)
@@ -98,6 +100,30 @@ class RecepcionParcialResguardoPdvTest extends TestCase
             ResguardoPdvEvento::query()->orderByDesc('id')->first()->tipo_evento
         );
         Event::assertDispatchedTimes(RecepcionFisicaPdvCompletada::class, 2);
+
+        $this->actingAs($this->usuario)->putJson(
+            route('punto_venta.resguardos.custodia', $resguardo->fresh()),
+            [
+                'version' => (int) $resguardo->fresh()->version,
+                'idempotency_key' => 'pdv:custodia:'.$resguardo->id.':1',
+                'almacen_id' => $this->almacen->id,
+                'folios' => ['CJA-001'],
+            ]
+        )->assertOk()
+            ->assertJsonPath('resguardo.estado', ResguardoPdv::ESTADO_PENDIENTE_CUSTODIA)
+            ->assertJsonPath('resguardo.custodia_completa', false);
+
+        $this->actingAs($this->usuario)->putJson(
+            route('punto_venta.resguardos.custodia', $resguardo->fresh()),
+            [
+                'version' => (int) $resguardo->fresh()->version,
+                'idempotency_key' => 'pdv:custodia:'.$resguardo->id.':2',
+                'almacen_id' => $this->almacen->id,
+                'folios' => ['CJA-002'],
+            ]
+        )->assertOk()
+            ->assertJsonPath('resguardo.estado', ResguardoPdv::ESTADO_EN_CUSTODIA)
+            ->assertJsonPath('resguardo.custodia_completa', true);
     }
 
     public function test_rechaza_folio_duplicado_exceso_y_version_obsoleta(): void
@@ -149,7 +175,7 @@ class RecepcionParcialResguardoPdvTest extends TestCase
             $this->usuario,
             1,
             'pdv:rec:'.$resguardo->id.':race-a',
-            $this->almacen->id,
+            null,
             [$bulto],
         );
 
@@ -159,7 +185,7 @@ class RecepcionParcialResguardoPdvTest extends TestCase
                 $this->usuario,
                 2,
                 'pdv:rec:'.$resguardo->id.':race-b',
-                $this->almacen->id,
+                null,
                 [$bulto],
             );
             $this->fail('Debía rechazar el folio duplicado');
@@ -225,7 +251,6 @@ class RecepcionParcialResguardoPdvTest extends TestCase
         return [
             'version' => (int) $resguardo->version,
             'idempotency_key' => $clave,
-            'almacen_id' => $this->almacen->id,
             'bultos' => array_map(
                 fn (string $folio) => [
                     'folio' => $folio,

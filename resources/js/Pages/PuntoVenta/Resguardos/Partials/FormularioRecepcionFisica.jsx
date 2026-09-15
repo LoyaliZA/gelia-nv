@@ -76,7 +76,6 @@ export default function FormularioRecepcionFisica({
     const confirmarEnvio = async () => {
         setConfirmar(false);
         await onEnviar({
-            almacenId: almacenId ? Number(almacenId) : null,
             bultos,
             evidencias,
             cantidadPendiente,
@@ -97,27 +96,6 @@ export default function FormularioRecepcionFisica({
                         <CampoSoloLectura label="Pedido" value={resguardo.pedido.folio} />
                     )}
                 </div>
-            </div>
-
-            <div className={`${geliaCardClass()} p-5 space-y-4`}>
-                <h2 className="text-sm font-black uppercase tracking-widest theme-text-main m-0">Ubicación en sucursal</h2>
-                <label className="space-y-1.5 block">
-                    <span className="text-[9px] font-black uppercase tracking-widest theme-text-muted">Almacén de custodia</span>
-                    <select
-                        value={almacenId}
-                        onChange={(e) => setAlmacenId(e.target.value)}
-                        className={THEME_SELECT}
-                        required
-                        disabled={enviando}
-                    >
-                        <option value="">Seleccionar ubicación…</option>
-                        {almacenes.map((almacen) => (
-                            <option key={almacen.id} value={almacen.id}>
-                                {almacen.codigo} — {almacen.nombre}
-                            </option>
-                        ))}
-                    </select>
-                </label>
             </div>
 
             <div className={`${geliaCardClass()} p-5 space-y-4`}>

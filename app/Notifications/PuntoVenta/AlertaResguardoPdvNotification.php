@@ -16,6 +16,8 @@ class AlertaResguardoPdvNotification extends Notification implements ShouldQueue
 
     public const TIPO_RECEPCION_FISICA = 'pdv.resguardo.recepcion_fisica';
 
+    public const TIPO_CUSTODIA = 'pdv.resguardo.custodia';
+
     public const TIPO_INCIDENCIA = 'pdv.resguardo.incidencia';
 
     public const TIPO_ENTREGA = 'pdv.resguardo.entrega';

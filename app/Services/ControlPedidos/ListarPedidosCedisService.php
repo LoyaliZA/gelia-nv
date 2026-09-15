@@ -88,6 +88,7 @@ class ListarPedidosCedisService
             'errores.reportadoPor',
             'errores.corregidoPor',
             'direccionVigente',
+            'sucursalDestino',
             'tipoOperacionEnvio',
             'historial.usuario',
             'historial.estatusAnterior',
@@ -95,6 +96,10 @@ class ListarPedidosCedisService
             'complementos.documentos',
             'complementos.estatus',
             'complementos.cliente',
+            'complementos.bultosEmpaque.documentos',
+            'complementos.origen',
+            'complementos.sucursalDestino',
+            'bultosEmpaque.documentos',
         ];
     }
 

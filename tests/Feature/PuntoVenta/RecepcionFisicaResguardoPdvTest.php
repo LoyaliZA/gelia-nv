@@ -58,7 +58,7 @@ class RecepcionFisicaResguardoPdvTest extends TestCase
         $this->usuario->givePermissionTo([
             PuntoVentaModulo::PERMISO_ACCEDER,
             PuntoVentaModulo::PERMISO_RESGUARDOS_VER,
-            PuntoVentaModulo::PERMISO_RESGUARDOS_RECIBIR,
+            PuntoVentaModulo::PERMISO_RESGUARDOS_RECIBIR_GERENTE,
         ]);
         $this->usuario->concederAccesoSucursal($this->sucursal, esPrincipal: true);
     }
@@ -75,7 +75,6 @@ class RecepcionFisicaResguardoPdvTest extends TestCase
             [
                 'version' => 1,
                 'idempotency_key' => $clave,
-                'almacen_id' => $this->almacen->id,
                 'bultos' => [
                     ['folio' => 'CJA-001', 'tipo' => ResguardoPdvBulto::TIPO_CAJA, 'condicion' => 'bueno', 'piezas' => 1],
                     ['folio' => 'CJA-002', 'tipo' => ResguardoPdvBulto::TIPO_CAJA, 'condicion' => 'bueno', 'piezas' => 2],
@@ -87,9 +86,8 @@ class RecepcionFisicaResguardoPdvTest extends TestCase
         );
 
         $response->assertOk()
-            ->assertJsonPath('resguardo.estado', ResguardoPdv::ESTADO_EN_CUSTODIA)
+            ->assertJsonPath('resguardo.estado', ResguardoPdv::ESTADO_PENDIENTE_CUSTODIA)
             ->assertJsonPath('resguardo.version', 2)
-            ->assertJsonPath('resguardo.almacen_id', $this->almacen->id)
             ->assertJsonCount(2, 'resguardo.bultos');
 
         $resguardo->refresh();
@@ -115,7 +113,7 @@ class RecepcionFisicaResguardoPdvTest extends TestCase
             route('punto_venta.resguardos.recepcion', $resguardo),
             []
         )->assertUnprocessable()
-            ->assertJsonValidationErrors(['version', 'idempotency_key', 'almacen_id', 'bultos']);
+            ->assertJsonValidationErrors(['version', 'idempotency_key', 'bultos']);
 
         $sinRecibir = User::factory()->create();
         $sinRecibir->givePermissionTo([
@@ -167,7 +165,7 @@ class RecepcionFisicaResguardoPdvTest extends TestCase
             route('punto_venta.resguardos.recepcion', $resguardo->fresh()),
             $payload
         )->assertOk()
-            ->assertJsonPath('resguardo.estado', ResguardoPdv::ESTADO_EN_CUSTODIA);
+            ->assertJsonPath('resguardo.estado', ResguardoPdv::ESTADO_PENDIENTE_CUSTODIA);
 
         $this->assertSame(1, ResguardoPdvBulto::query()->count());
         $this->assertSame(1, ResguardoPdvEvento::query()->count());
@@ -211,7 +209,7 @@ class RecepcionFisicaResguardoPdvTest extends TestCase
                 $this->usuario,
                 1,
                 'pdv:rec:'.$resguardo->id.':rollback',
-                $this->almacen->id,
+                null,
                 [
                     ['folio' => 'CJA-ROLL', 'tipo' => ResguardoPdvBulto::TIPO_CAJA, 'condicion' => 'bueno'],
                 ],
@@ -240,7 +238,6 @@ class RecepcionFisicaResguardoPdvTest extends TestCase
         return [
             'version' => (int) $resguardo->version,
             'idempotency_key' => $clave ?? 'pdv:rec:'.$resguardo->id.':default',
-            'almacen_id' => $this->almacen->id,
             'bultos' => [
                 [
                     'folio' => 'CJA-'.$resguardo->id,

@@ -69,6 +69,13 @@ class ResponderPesajePedidoBmaService
             throw new \InvalidArgumentException('Debe revisar al menos un producto para la consulta de mercancía.');
         }
 
+        $numeroBultosTienda = $soloRevisiones
+            ? (int) ($revisionFisica['numero_cajas'] ?? 0)
+            : 0;
+        if ($soloRevisiones && $numeroBultosTienda < 1) {
+            throw new \InvalidArgumentException('Indique los bultos a preparar (aprox.).');
+        }
+
         foreach ($revisiones as $rev) {
             if (PedidoBmaRevisionProducto::requiereEvidencia($rev['estado_fisico'])
                 && $rev['evidencias'] === []
@@ -122,7 +129,8 @@ class ResponderPesajePedidoBmaService
         return DB::transaction(function () use (
             $pedido, $usuarioId, $lineas, $tipos,
             $estadoGeneral, $comentarioGeneral, $evidenciasGenerales, $evidenciasEnvios, $revisiones,
-            $soloRevisiones, $pesoAntes, $cajasAntes, $costoEnvioAntes, $esActualizacion, $revisionFisica
+            $soloRevisiones, $pesoAntes, $cajasAntes, $costoEnvioAntes, $esActualizacion, $revisionFisica,
+            $numeroBultosTienda
         ) {
             $pedido = PedidoBma::query()->lockForUpdate()->findOrFail($pedido->id);
 
@@ -228,7 +236,8 @@ class ResponderPesajePedidoBmaService
                 $datosPedido['peso_real_kg'] = null;
                 $datosPedido['peso_volumetrico_kg'] = null;
                 $datosPedido['peso_cobrado_guia_kg'] = null;
-                $datosPedido['numero_cajas'] = null;
+                // ponytail: en tienda reutiliza numero_cajas como bultos esperados en resguardos PDV (CantidadBultosEsperadaResguardoPdv).
+                $datosPedido['numero_cajas'] = $numeroBultosTienda;
                 $datosPedido['catalogo_tipo_caja_id'] = null;
             } else {
                 $datosPedido['peso_real_kg'] = round($pesoRealTotal, 4);
@@ -305,8 +314,9 @@ class ResponderPesajePedidoBmaService
 
             $detalleHist = $soloRevisiones
                 ? sprintf(
-                    'Consulta de mercancía respondida: %d producto(s), evidencia final del lote. Estado físico: %s.%s',
+                    'Consulta de mercancía respondida: %d producto(s), %d bulto(s) aprox., evidencia final del lote. Estado físico: %s.%s',
                     count($revisiones),
+                    $numeroBultosTienda,
                     PedidoBmaRevisionProducto::LABELS[$estadoGeneral] ?? $estadoGeneral,
                     $tieneSinExistencia
                         ? ' Sin existencias — pedido detenido hasta que Ventas elija acción.'

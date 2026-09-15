@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from '@inertiajs/react';
-import { Eye, AlertTriangle, PackageCheck, Truck } from 'lucide-react';
+import { Eye, AlertTriangle, PackageCheck } from 'lucide-react';
 import {
     badgeAntiguedad,
     badgeEstadoResguardo,
@@ -13,9 +13,12 @@ import {
     claseVistaTabla,
     claseVistaTarjetas,
     etiquetasClasificacionActivas,
+    guardarVistaPorRecibir,
+    leerVistaPorRecibir,
     mensajeVacioBandeja,
     plazosOperativosResguardo,
     referenciaCliente,
+    VISTA_RESGUARDOS_POR_RECIBIR,
 } from './resguardosUtils';
 import { geliaCardClass } from '../../../../utils/geliaTheme';
 import {
@@ -23,6 +26,9 @@ import {
     resguardoAdmiteRecepcion,
 } from './recepcionFisicaUtils';
 import AccionReponerVencidoResguardo from './AccionReponerVencidoResguardo';
+import TarjetaResguardoRecepcion from './TarjetaResguardoRecepcion';
+import SelectorVistaResguardos from './SelectorVistaResguardos';
+import { AccionEntregaResguardo } from './ModalEntregaResguardo';
 
 function BadgesResguardo({ resguardo, catalogos }) {
     const estadoEtiqueta = catalogos.estados?.[resguardo.estado] || resguardo.estado;
@@ -113,6 +119,7 @@ function TarjetaResguardo({
     seleccionado = false,
     onToggleSeleccion,
     onReponerExito,
+    onEntregaExito,
 }) {
     return (
         <div className={tarjetaResguardoClass(resguardo)}>
@@ -149,12 +156,10 @@ function TarjetaResguardo({
             <BadgesResguardo resguardo={resguardo} catalogos={catalogos} />
             <div className="flex flex-col gap-2">
                 {puedeEntregar && bandeja === 'en_custodia' && resguardo.estado === 'en_custodia' && !resguardo.entrega_bloqueada && (
-                    <Link
-                        href={route('punto_venta.resguardos.entrega.create', resguardo.id)}
-                        className={`${THEME_BTN_PRIMARY} w-full inline-flex items-center justify-center gap-2 min-h-[44px] text-[10px] font-black uppercase tracking-widest`}
-                    >
-                        <Truck className="w-4 h-4" /> Entregar
-                    </Link>
+                    <AccionEntregaResguardo
+                        resguardo={resguardo}
+                        onExito={onEntregaExito}
+                    />
                 )}
                 {puedeRecibir && resguardoAdmiteRecepcion(resguardo) && (
                     <Link
@@ -191,6 +196,7 @@ function FilaTablaResguardo({
     seleccionado = false,
     onToggleSeleccion,
     onReponerExito,
+    onEntregaExito,
 }) {
     const clasificaciones = etiquetasClasificacionActivas(resguardo, catalogos.antiguedades);
 
@@ -230,12 +236,11 @@ function FilaTablaResguardo({
             <td className="px-4 py-3 text-right">
                 <div className="flex flex-wrap justify-end gap-2">
                     {puedeEntregar && bandeja === 'en_custodia' && resguardo.estado === 'en_custodia' && !resguardo.entrega_bloqueada && (
-                        <Link
-                            href={route('punto_venta.resguardos.entrega.create', resguardo.id)}
-                            className={`${THEME_BTN_PRIMARY} inline-flex items-center gap-2 min-h-[44px] text-[10px] font-black uppercase tracking-widest`}
-                        >
-                            <Truck className="w-4 h-4" /> Entregar
-                        </Link>
+                        <AccionEntregaResguardo
+                            resguardo={resguardo}
+                            onExito={onEntregaExito}
+                            className="inline-flex"
+                        />
                     )}
                     {puedeRecibir && resguardoAdmiteRecepcion(resguardo) && (
                         <Link
@@ -270,13 +275,22 @@ export default function ListadoResguardos({
     hayFiltrosActivos = false,
     onLimpiarFiltros,
     puedeRecibir = false,
+    puedeConfirmarCustodia = false,
+    paso = 'gerente',
     puedeEntregar = false,
     idsSeleccionados = [],
     onToggleSeleccion,
     onReponerExito,
+    onEntregaExito,
 }) {
     const items = resguardos?.data || [];
     const seleccionable = puedeEntregar && bandeja === 'en_custodia' && Boolean(onToggleSeleccion);
+    const [vistaPorRecibir, setVistaPorRecibir] = useState(leerVistaPorRecibir);
+
+    const onCambiarVista = (nuevaVista) => {
+        setVistaPorRecibir(nuevaVista);
+        guardarVistaPorRecibir(nuevaVista);
+    };
 
     if (items.length === 0) {
         return (
@@ -293,27 +307,58 @@ export default function ListadoResguardos({
         );
     }
 
+    const claseTarjetas = claseVistaTarjetas(bandeja, vistaPorRecibir);
+    const claseTabla = claseVistaTabla(bandeja, vistaPorRecibir);
+    const usarTarjetasRecepcion = bandeja === 'por_recibir' && vistaPorRecibir === VISTA_RESGUARDOS_POR_RECIBIR.CARD;
+
     return (
         <div className={`${geliaCardClass()} overflow-hidden`}>
-            <div className={`${claseVistaTarjetas()} p-4 space-y-3`}>
+            {bandeja === 'por_recibir' && (
+                <div className="flex items-center justify-between gap-3 px-4 pt-4 pb-2 border-b theme-border">
+                    <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0">
+                        Pedidos a recibir
+                    </p>
+                    <SelectorVistaResguardos vista={vistaPorRecibir} onCambiar={onCambiarVista} />
+                </div>
+            )}
+
+            <div
+                className={`${claseTarjetas} ${
+                    usarTarjetasRecepcion
+                        ? 'p-3 sm:p-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 md:gap-4'
+                        : 'p-4 space-y-3'
+                }`}
+            >
                 {items.map((resguardo) => (
-                    <TarjetaResguardo
-                        key={resguardo.id}
-                        resguardo={resguardo}
-                        bandeja={bandeja}
-                        catalogos={catalogos}
-                        permisos={permisos}
-                        puedeRecibir={puedeRecibir}
-                        puedeEntregar={puedeEntregar}
-                        seleccionable={seleccionable && resguardo.estado === 'en_custodia' && !resguardo.entrega_bloqueada}
-                        seleccionado={idsSeleccionados.includes(resguardo.id)}
-                        onToggleSeleccion={onToggleSeleccion}
-                        onReponerExito={onReponerExito}
-                    />
+                    usarTarjetasRecepcion ? (
+                        <TarjetaResguardoRecepcion
+                            key={resguardo.id}
+                            resguardo={resguardo}
+                            catalogos={catalogos}
+                            puedeRecibir={puedeRecibir}
+                            puedeConfirmarCustodia={puedeConfirmarCustodia}
+                            paso={paso}
+                        />
+                    ) : (
+                        <TarjetaResguardo
+                            key={resguardo.id}
+                            resguardo={resguardo}
+                            bandeja={bandeja}
+                            catalogos={catalogos}
+                            permisos={permisos}
+                            puedeRecibir={puedeRecibir}
+                            puedeEntregar={puedeEntregar}
+                            seleccionable={seleccionable && resguardo.estado === 'en_custodia' && !resguardo.entrega_bloqueada}
+                            seleccionado={idsSeleccionados.includes(resguardo.id)}
+                            onToggleSeleccion={onToggleSeleccion}
+                            onReponerExito={onReponerExito}
+                            onEntregaExito={onEntregaExito}
+                        />
+                    )
                 ))}
             </div>
 
-            <div className={`${claseVistaTabla()} overflow-x-auto`}>
+            <div className={`${claseTabla} overflow-x-auto`}>
                 <table className="w-full border-collapse min-w-[900px]">
                     <thead>
                         <tr className="border-b-2 border-[var(--color-primario)]/30">
@@ -341,6 +386,7 @@ export default function ListadoResguardos({
                             seleccionado={idsSeleccionados.includes(resguardo.id)}
                             onToggleSeleccion={onToggleSeleccion}
                             onReponerExito={onReponerExito}
+                            onEntregaExito={onEntregaExito}
                         />
                         ))}
                     </tbody>

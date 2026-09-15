@@ -23,6 +23,8 @@ class PedidoBma extends Model
 {
     use BelongsToUsuario, SoftDeletes;
 
+    protected $appends = ['requiere_sucursal_destino'];
+
     protected $table = 'pedidos_bma';
 
     public const ESTATUS_ENVIO_COMPLETO = 'completo';
@@ -34,6 +36,16 @@ class PedidoBma extends Model
     public const ESTATUS_ENVIO_CONSOLIDADO = 'consolidado';
     public const ESTATUS_ENVIO_PENDIENTE_PESAJE = 'pendiente_pesaje';
     public const ESTATUS_ENVIO_PESAJE_LISTO = 'pesaje_listo';
+
+    public const ESTATUS_SUCURSAL_EN_TRANSITO = 'en_transito';
+
+    public const ESTATUS_SUCURSAL_RECEPCION_GERENTE_PARCIAL = 'recepcion_gerente_parcial';
+
+    public const ESTATUS_SUCURSAL_PENDIENTE_CUSTODIA = 'pendiente_custodia';
+
+    public const ESTATUS_SUCURSAL_CUSTODIA_PARCIAL = 'custodia_parcial';
+
+    public const ESTATUS_SUCURSAL_EN_CUSTODIA = 'en_custodia';
 
     public const MOTIVO_REPESAJE_ANEXO_PIEZAS = 'anexo_piezas';
     public const MOTIVO_REPESAJE_QUITA_PIEZAS = 'quita_piezas';
@@ -84,6 +96,7 @@ class PedidoBma extends Model
         'total_mercancia',
         'costo_envio',
         'estatus_envio',
+        'estatus_sucursal',
         'pesaje_solicitado_at',
         'pesaje_respondido_at',
         'pesaje_respondido_por_id',
@@ -493,6 +506,16 @@ class PedidoBma extends Model
     public function cajas(): HasMany
     {
         return $this->hasMany(PedidoBmaCaja::class, 'pedido_bma_id')->orderBy('orden');
+    }
+
+    public function bultosEmpaque(): HasMany
+    {
+        return $this->hasMany(PedidoBmaBultoEmpaque::class, 'pedido_bma_id')->orderBy('numero');
+    }
+
+    public function getRequiereSucursalDestinoAttribute(): bool
+    {
+        return $this->requiereSucursalDestino();
     }
 
     public function getCajasRecolectadasAttribute(): int

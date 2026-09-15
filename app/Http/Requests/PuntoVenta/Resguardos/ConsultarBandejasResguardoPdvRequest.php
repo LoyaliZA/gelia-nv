@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Services\PuntoVenta\PuntoVentaModulo;
 use App\Support\PuntoVenta\Resguardos\AntiguedadOperativaResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\BandejaResguardoPdv;
+use App\Support\PuntoVenta\Resguardos\EtiquetasResguardoPdv;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -34,12 +35,8 @@ class ConsultarBandejasResguardoPdvRequest extends FormRequest
         return [
             'bandeja' => ['sometimes', 'string', Rule::in(BandejaResguardoPdv::valores())],
             'q' => ['sometimes', 'nullable', 'string', 'max:120'],
-            'estado' => ['sometimes', 'nullable', 'string', Rule::in([
-                ResguardoPdv::ESTADO_PENDIENTE_RECEPCION,
-                ResguardoPdv::ESTADO_EN_CUSTODIA,
-                ResguardoPdv::ESTADO_ENTREGADO,
-                ResguardoPdv::ESTADO_DEVUELTO,
-            ])],
+            'paso' => ['sometimes', 'nullable', 'string', Rule::in(BandejaResguardoPdv::pasosPorRecibir())],
+            'estado' => ['sometimes', 'nullable', 'string', Rule::in(array_keys(EtiquetasResguardoPdv::estados()))],
             'antiguedad' => ['sometimes', 'nullable', 'string', Rule::in(AntiguedadOperativaResguardoPdv::valores())],
             'sucursal_id' => ['sometimes', 'nullable', 'integer', 'exists:sucursales,id'],
             'page' => ['sometimes', 'integer', 'min:1'],

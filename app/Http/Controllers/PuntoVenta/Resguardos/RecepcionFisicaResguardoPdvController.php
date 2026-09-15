@@ -27,7 +27,7 @@ class RecepcionFisicaResguardoPdvController extends Controller
             $user,
             (int) $datos['version'],
             (string) $datos['idempotency_key'],
-            (int) $datos['almacen_id'],
+            null,
             $datos['bultos'],
             $request->file('evidencias', []) ?? [],
         );

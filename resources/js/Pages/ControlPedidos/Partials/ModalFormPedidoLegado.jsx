@@ -2964,10 +2964,16 @@ export default function ModalFormPedidoLegado({
                                 <SeccionRevisionFisicaPedido
                                     pedido={pedido}
                                     onVerDoc={abrirVistaPrevia}
-                                    titulo="Revisión física CEDIS"
+                                    titulo={esConsultaMercancia ? 'Registro de productos CEDIS' : 'Revisión física CEDIS'}
                                     puedeAtender={Boolean(pedido?.puede_mutar)}
                                     puedeCancelar={Boolean(pedido?.puede_cancelar)}
                                 />
+                                {esConsultaMercancia && pedido?.numero_cajas != null && (
+                                    <div className="mt-3">
+                                        <p className="text-[9px] font-black uppercase theme-text-muted m-0">Bultos a preparar (Aprox)</p>
+                                        <p className="text-sm font-bold theme-text-main m-0 mt-0.5">{pedido.numero_cajas}</p>
+                                    </div>
+                                )}
                                 {!esConsultaMercancia && (
                                 <>
                                 {cajasPesaje.length > 0 ? (

@@ -43,6 +43,7 @@ class ResponderPesajePedidoBmaRequest extends FormRequest
 
         if ($soloRevisiones) {
             $rules['cajas'] = ['nullable', 'array'];
+            $rules['numero_cajas'] = ['required', 'integer', 'min:1', 'max:999'];
         } else {
             $rules['cajas'] = ['required', 'array', 'min:1'];
             $rules['cajas.*.catalogo_tipo_caja_id'] = ['required', 'integer', 'exists:catalogo_tipos_caja_pedido,id'];
@@ -70,6 +71,8 @@ class ResponderPesajePedidoBmaRequest extends FormRequest
             'cajas.*.uuid_operativo.uuid' => 'Recargue el pesaje e intente de nuevo (identidad de envío inválida).',
             'revisiones.required' => 'Revise al menos un producto.',
             'revisiones.min' => 'Revise al menos un producto.',
+            'numero_cajas.required' => 'Indique los bultos a preparar (aprox.).',
+            'numero_cajas.min' => 'Indique al menos un bulto.',
             'evidencias_generales.*.mimes' => 'La evidencia final debe ser imagen o PDF.',
         ];
     }

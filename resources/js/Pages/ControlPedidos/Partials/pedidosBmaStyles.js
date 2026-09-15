@@ -363,6 +363,17 @@ export const operacionEmpaqueDe = (pedido) => (
 
 export const complementosDe = (pedido) => pedido?.complementos || [];
 
+export const miembrosGrupoEmpaque = (pedido) => {
+    if (!pedido) return [];
+    return [pedido, ...complementosDe(pedido)];
+};
+
+export const pedidosRequierenBultosEmpaque = (pedido) => miembrosGrupoEmpaque(pedido).filter(
+    (p) => Boolean(p.requiere_sucursal_destino) && !p.es_resguardo,
+);
+
+export const empacarRequiereModalBultos = (pedido) => pedidosRequierenBultosEmpaque(pedido).length > 0;
+
 export const badgeConComplementos = (pedido) => {
     const n = complementosDe(pedido).length;
     if (n < 1) return null;

@@ -18,6 +18,7 @@ export default function AlertasCustodiaResguardo({
     bandeja = 'en_custodia',
     catalogos = {},
     metricas = {},
+    totalBandeja = 0,
     antiguedadActiva = '',
     onAntiguedad,
     antiguedadConfigurada = false,
@@ -25,6 +26,7 @@ export default function AlertasCustodiaResguardo({
 }) {
     const metricasVisibles = metricasAntiguedadClaves(bandeja, puedeVerVencidos);
     const titulo = TITULO_SECCION[bandeja] || 'Antigüedad operativa';
+    const todosActivos = !antiguedadActiva;
 
     return (
         <section className="space-y-3" aria-label={titulo}>
@@ -45,8 +47,30 @@ export default function AlertasCustodiaResguardo({
                         </p>
                     </div>
                 </div>
-            ) : metricasVisibles.length === 0 ? null : (
-                <div className={`grid grid-cols-1 gap-3 ${metricasVisibles.length > 1 ? 'sm:grid-cols-2' : ''}`}>
+            ) : (
+                <div
+                    className={`grid grid-cols-1 gap-3 ${
+                        metricasVisibles.length >= 2 ? 'sm:grid-cols-2 lg:grid-cols-3' : metricasVisibles.length === 1 ? 'sm:grid-cols-2' : ''
+                    }`}
+                    role="group"
+                    aria-label="Filtros de antigüedad"
+                >
+                    <button
+                        type="button"
+                        onClick={() => onAntiguedad?.('')}
+                        aria-pressed={todosActivos}
+                        className={`${geliaCardClass()} p-4 text-left transition-all hover:ring-1 hover:ring-[var(--color-primario)]/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primario)] ${
+                            todosActivos ? 'ring-2 ring-[var(--color-primario)]/40 bg-[var(--color-primario)]/10' : ''
+                        }`}
+                    >
+                        <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted m-0">
+                            Todos
+                        </p>
+                        <p className="text-2xl font-black m-0 mt-1 tabular-nums" style={{ color: 'var(--color-primario)' }}>
+                            {totalBandeja}
+                        </p>
+                    </button>
+
                     {metricasVisibles.map((key) => {
                         const { tone, ring, bg } = METRICAS_ANTIGUEDAD[key];
                         const activa = antiguedadActiva === key;

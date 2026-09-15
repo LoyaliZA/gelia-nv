@@ -204,7 +204,7 @@ class ConfirmarDevolucionResguardoPdvService
     private function bultosEnCustodia(ResguardoPdv $resguardo): Collection
     {
         return $resguardo->bultos
-            ->filter(fn (ResguardoPdvBulto $bulto) => $bulto->estado === ResguardoPdvBulto::ESTADO_RECIBIDO)
+            ->filter(fn (ResguardoPdvBulto $bulto) => ResguardoPdvBulto::estaEnCustodiaOperativa($bulto->estado))
             ->values();
     }
 

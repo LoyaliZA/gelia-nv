@@ -12,7 +12,9 @@ use App\Models\PuntoVenta\ResguardoPdvBulto;
 use App\Support\PuntoVenta\Resguardos\AntiguedadOperativaResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\BandejaResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\EstadoRecepcionResguardoPdv;
+use App\Support\PuntoVenta\Resguardos\EstadoResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\EtiquetasResguardoPdv;
+use App\Support\PuntoVenta\Resguardos\SerializadorBultosEmpaqueCedisPdv;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
@@ -146,7 +148,10 @@ class ConsultaBandejasResguardoPdvService
         $query = $this->queryAutorizadaExportacion($user);
 
         match ($bandeja) {
-            BandejaResguardoPdv::POR_RECIBIR => $query->where('estado', ResguardoPdv::ESTADO_PENDIENTE_RECEPCION),
+            BandejaResguardoPdv::POR_RECIBIR => $query->whereIn('estado', [
+                ResguardoPdv::ESTADO_PENDIENTE_RECEPCION,
+                ResguardoPdv::ESTADO_PENDIENTE_CUSTODIA,
+            ]),
             BandejaResguardoPdv::EN_CUSTODIA => $query->where('estado', ResguardoPdv::ESTADO_EN_CUSTODIA),
             BandejaResguardoPdv::INCIDENCIAS => $query->whereHas(
                 'incidencias',
@@ -163,7 +168,10 @@ class ConsultaBandejasResguardoPdvService
         $query = $this->queryAutorizada($user);
 
         match ($bandeja) {
-            BandejaResguardoPdv::POR_RECIBIR => $query->where('estado', ResguardoPdv::ESTADO_PENDIENTE_RECEPCION),
+            BandejaResguardoPdv::POR_RECIBIR => $query->whereIn('estado', [
+                ResguardoPdv::ESTADO_PENDIENTE_RECEPCION,
+                ResguardoPdv::ESTADO_PENDIENTE_CUSTODIA,
+            ]),
             BandejaResguardoPdv::EN_CUSTODIA => $query->where('estado', ResguardoPdv::ESTADO_EN_CUSTODIA),
             BandejaResguardoPdv::INCIDENCIAS => $query->whereHas(
                 'incidencias',
@@ -184,12 +192,18 @@ class ConsultaBandejasResguardoPdvService
                 'sucursal:id,nombre',
                 'cliente:id,numero_cliente,nombre',
                 'pedido:id,folio,folio_remision,cliente_id',
+                'pedido.bultosEmpaque.documentos',
             ])
             ->withCount([
                 'incidencias as incidencias_abiertas_count' => fn (Builder $q) => $q
                     ->where('estado', ResguardoPdvIncidencia::ESTADO_ABIERTA),
-                'bultos as bultos_recibidos_count' => fn (Builder $q) => $q
-                    ->where('estado', ResguardoPdvBulto::ESTADO_RECIBIDO),
+                'bultos as bultos_recibidos_gerente_count' => fn (Builder $q) => $q
+                    ->where('estado', ResguardoPdvBulto::ESTADO_RECIBIDO_GERENTE),
+                'bultos as bultos_en_custodia_count' => fn (Builder $q) => $q
+                    ->whereIn('estado', [
+                        ResguardoPdvBulto::ESTADO_EN_CUSTODIA,
+                        ResguardoPdvBulto::ESTADO_RECIBIDO,
+                    ]),
             ]);
 
         return $this->alcance->aplicarConsultaGlobal(
@@ -207,12 +221,18 @@ class ConsultaBandejasResguardoPdvService
                 'sucursal:id,nombre',
                 'cliente:id,numero_cliente,nombre',
                 'pedido:id,folio,folio_remision,cliente_id',
+                'pedido.bultosEmpaque.documentos',
             ])
             ->withCount([
                 'incidencias as incidencias_abiertas_count' => fn (Builder $q) => $q
                     ->where('estado', ResguardoPdvIncidencia::ESTADO_ABIERTA),
-                'bultos as bultos_recibidos_count' => fn (Builder $q) => $q
-                    ->where('estado', ResguardoPdvBulto::ESTADO_RECIBIDO),
+                'bultos as bultos_recibidos_gerente_count' => fn (Builder $q) => $q
+                    ->where('estado', ResguardoPdvBulto::ESTADO_RECIBIDO_GERENTE),
+                'bultos as bultos_en_custodia_count' => fn (Builder $q) => $q
+                    ->whereIn('estado', [
+                        ResguardoPdvBulto::ESTADO_EN_CUSTODIA,
+                        ResguardoPdvBulto::ESTADO_RECIBIDO,
+                    ]),
             ]);
 
         return $this->alcance->aplicarConsultaPiso(
@@ -256,9 +276,28 @@ class ConsultaBandejasResguardoPdvService
             }
         }
 
+        if ($bandeja === BandejaResguardoPdv::POR_RECIBIR) {
+            $this->aplicarFiltroPaso($query, (string) ($filtros['paso'] ?? BandejaResguardoPdv::PASO_GERENTE));
+        }
+
         if (! empty($filtros['q'])) {
             $this->aplicarBusqueda($query, (string) $filtros['q']);
         }
+    }
+
+    private function aplicarFiltroPaso(Builder $query, string $paso): void
+    {
+        $paso = in_array($paso, BandejaResguardoPdv::pasosPorRecibir(), true)
+            ? $paso
+            : BandejaResguardoPdv::PASO_GERENTE;
+
+        if ($paso === BandejaResguardoPdv::PASO_RECEPCIONISTA) {
+            $query->where('estado', ResguardoPdv::ESTADO_PENDIENTE_CUSTODIA);
+
+            return;
+        }
+
+        $query->where('estado', ResguardoPdv::ESTADO_PENDIENTE_RECEPCION);
     }
 
     /**
@@ -303,7 +342,7 @@ class ConsultaBandejasResguardoPdvService
         $total = 0;
 
         (clone $query)
-            ->select(['id', 'sucursal_id', 'estado', 'salida_cedis_at', 'recepcion_fisica_at', 'entrega_completada_at', 'devolucion_confirmada_at', 'vencido_repuesto_at'])
+            ->select(['id', 'sucursal_id', 'estado', 'salida_cedis_at', 'recepcion_fisica_at', 'custodia_confirmada_at', 'entrega_completada_at', 'devolucion_confirmada_at', 'vencido_repuesto_at'])
             ->orderBy('id')
             ->chunkById(200, function (Collection $resguardos) use ($clasificacion, &$total) {
                 foreach ($resguardos as $resguardo) {
@@ -467,7 +506,7 @@ class ConsultaBandejasResguardoPdvService
                 ->orderBy('salida_cedis_at')
                 ->orderBy('id'),
             BandejaResguardoPdv::EN_CUSTODIA => $query
-                ->orderBy('recepcion_fisica_at')
+                ->orderBy('custodia_confirmada_at')
                 ->orderBy('id'),
             BandejaResguardoPdv::INCIDENCIAS => $query
                 ->withMax(
@@ -506,23 +545,33 @@ class ConsultaBandejasResguardoPdvService
             }
         }
 
-        $cantidadRecibida = EstadoRecepcionResguardoPdv::cantidadRecibida($resguardo);
-        $cantidadPendiente = EstadoRecepcionResguardoPdv::cantidadPendiente($resguardo);
+        $cantidadRecibidaGerente = EstadoResguardoPdv::cantidadRecibidaGerente($resguardo);
+        $cantidadPendienteGerente = EstadoResguardoPdv::cantidadPendienteGerente($resguardo);
+        $cantidadEnCustodia = EstadoResguardoPdv::cantidadEnCustodia($resguardo);
+        $cantidadPendienteCustodia = EstadoResguardoPdv::cantidadPendienteCustodia($resguardo);
 
         return [
             'id' => $resguardo->id,
             'version' => (int) $resguardo->version,
             'estado' => $resguardo->estado,
+            'estado_etiqueta' => EtiquetasResguardoPdv::etiquetaEstado($resguardo->estado),
             'pedido_bma_id' => $resguardo->pedido_bma_id,
             'snapshot_folio' => $resguardo->snapshot_folio,
             'snapshot_cliente_nombre' => $resguardo->snapshot_cliente_nombre,
             'cantidad_bultos_esperada' => $resguardo->cantidad_bultos_esperada,
-            'cantidad_bultos_recibida' => $cantidadRecibida,
-            'cantidad_bultos_pendiente' => $cantidadPendiente,
-            'admite_recepcion' => EstadoRecepcionResguardoPdv::admiteRecepcion($resguardo),
-            'recepcion_completa' => EstadoRecepcionResguardoPdv::recepcionCompleta($resguardo),
+            'cantidad_bultos_recibida' => $cantidadRecibidaGerente,
+            'cantidad_bultos_pendiente' => $cantidadPendienteGerente,
+            'cantidad_bultos_en_custodia' => $cantidadEnCustodia,
+            'cantidad_bultos_pendiente_custodia' => $cantidadPendienteCustodia,
+            'admite_recepcion' => EstadoResguardoPdv::admiteRecepcionGerente($resguardo),
+            'admite_confirmacion_custodia' => EstadoResguardoPdv::admiteConfirmacionCustodia($resguardo),
+            'recepcion_completa' => EstadoResguardoPdv::recepcionGerenteCompleta($resguardo),
+            'custodia_completa' => EstadoResguardoPdv::custodiaCompleta($resguardo),
+            'puede_recibir' => EstadoResguardoPdv::admiteRecepcionGerente($resguardo),
+            'puede_confirmar_custodia' => EstadoResguardoPdv::admiteConfirmacionCustodia($resguardo),
             'salida_cedis_at' => $resguardo->salida_cedis_at?->toIso8601String(),
             'recepcion_fisica_at' => $resguardo->recepcion_fisica_at?->toIso8601String(),
+            'custodia_confirmada_at' => $resguardo->custodia_confirmada_at?->toIso8601String(),
             'vencido_repuesto_at' => $resguardo->vencido_repuesto_at?->toIso8601String(),
             'entrega_bloqueada' => $resguardo->entrega_bloqueada,
             'incidencias_abiertas_count' => (int) ($resguardo->incidencias_abiertas_count ?? 0),
@@ -544,6 +593,7 @@ class ConsultaBandejasResguardoPdvService
                 'folio' => $resguardo->pedido->folio,
                 'folio_remision' => $resguardo->pedido->folio_remision,
             ] : null,
+            'bultos_empaque_cedis' => SerializadorBultosEmpaqueCedisPdv::desdePedido($resguardo->pedido),
         ];
     }
 
@@ -557,6 +607,11 @@ class ConsultaBandejasResguardoPdvService
 
         return [
             'bandeja' => $bandeja,
+            'paso' => $bandeja === BandejaResguardoPdv::POR_RECIBIR
+                ? (in_array($filtros['paso'] ?? null, BandejaResguardoPdv::pasosPorRecibir(), true)
+                    ? $filtros['paso']
+                    : BandejaResguardoPdv::PASO_GERENTE)
+                : null,
             'q' => isset($filtros['q']) ? trim((string) $filtros['q']) : null,
             'estado' => $filtros['estado'] ?? null,
             'antiguedad' => $filtros['antiguedad'] ?? null,

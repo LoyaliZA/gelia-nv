@@ -14,6 +14,10 @@ final class PuntoVentaModulo
 
     public const PERMISO_RESGUARDOS_RECIBIR = 'pdv.resguardos.recibir';
 
+    public const PERMISO_RESGUARDOS_RECIBIR_GERENTE = 'pdv.resguardos.recibir_gerente';
+
+    public const PERMISO_RESGUARDOS_CONFIRMAR_CUSTODIA = 'pdv.resguardos.confirmar_custodia';
+
     public const PERMISO_RESGUARDOS_INCIDENCIA_FOLIO = 'pdv.resguardos.incidencia_folio';
 
     public const PERMISO_RESGUARDOS_INCIDENCIA_DANO = 'pdv.resguardos.incidencia_dano';
@@ -77,6 +81,8 @@ final class PuntoVentaModulo
             self::PERMISO_ACCEDER,
             self::PERMISO_RESGUARDOS_VER,
             self::PERMISO_RESGUARDOS_RECIBIR,
+            self::PERMISO_RESGUARDOS_RECIBIR_GERENTE,
+            self::PERMISO_RESGUARDOS_CONFIRMAR_CUSTODIA,
             self::PERMISO_RESGUARDOS_INCIDENCIA_FOLIO,
             self::PERMISO_RESGUARDOS_INCIDENCIA_DANO,
             self::PERMISO_RESGUARDOS_INCIDENCIA_FALTANTE,

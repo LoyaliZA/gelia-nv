@@ -16,8 +16,10 @@ use App\Services\ControlPedidos\MarcarEmpacadoPedidoBmaService;
 use App\Services\ControlPedidos\MarcarEnviadoPedidoBmaService;
 use App\Services\PuntoVenta\Resguardos\CrearRecepcionEsperadaPdvService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
@@ -33,6 +35,7 @@ class HandoffRecepcionEsperadaPdvTest extends TestCase
     {
         parent::setUp();
 
+        Storage::fake('public');
         $this->usuario = User::factory()->create();
         $this->seedCatalogosMinimos();
         $this->sucursal = Sucursal::factory()->create(['activo' => true]);
@@ -199,10 +202,31 @@ class HandoffRecepcionEsperadaPdvTest extends TestCase
 
         app(MarcarEmpacadoPedidoBmaService::class)->ejecutar(
             $pedido->fresh(['paqueteria', 'origen']),
-            $this->usuario->id
+            $this->usuario->id,
+            $this->payloadBultosEmpaque($pedido, max(1, (int) ($pedido->numero_cajas ?? 1)))
         );
 
         return $pedido->fresh(['estatus', 'origen', 'cajas', 'cliente']);
+    }
+
+    /**
+     * @return array<int, list<array{foto_bulto: UploadedFile, foto_ticket: UploadedFile}>>
+     */
+    private function payloadBultosEmpaque(PedidoBma $pedido, int $cantidad = 1): array
+    {
+        if (! $pedido->requiereSucursalDestino()) {
+            return [];
+        }
+
+        $filas = [];
+        for ($i = 0; $i < $cantidad; $i++) {
+            $filas[] = [
+                'foto_bulto' => UploadedFile::fake()->image("bulto-{$pedido->id}-{$i}.jpg"),
+                'foto_ticket' => UploadedFile::fake()->image("ticket-{$pedido->id}-{$i}.jpg"),
+            ];
+        }
+
+        return [(int) $pedido->id => $filas];
     }
 
     private function pedidoMostradorListoParaEnvioConCajas(int $n): PedidoBma

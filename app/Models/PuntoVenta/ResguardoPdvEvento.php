@@ -15,6 +15,10 @@ class ResguardoPdvEvento extends Model
 
     public const TIPO_RECEPCION_PARCIAL = 'resguardo.recepcion_parcial';
 
+    public const TIPO_CUSTODIA_COMPLETA = 'resguardo.custodia_completa';
+
+    public const TIPO_CUSTODIA_PARCIAL = 'resguardo.custodia_parcial';
+
     public const TIPO_INCIDENCIA_FOLIO_NO_ENCONTRADO = 'resguardo.incidencia_folio_no_encontrado';
 
     public const TIPO_INCIDENCIA_DANO = 'resguardo.incidencia_dano';

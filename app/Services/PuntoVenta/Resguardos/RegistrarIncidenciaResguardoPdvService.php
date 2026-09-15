@@ -326,7 +326,7 @@ class RegistrarIncidenciaResguardoPdvService
                 'folio' => $dato['folio'],
                 'codigo_etiqueta' => GeneradorCodigoEtiquetaResguardoPdv::generar(),
                 'tipo' => $dato['tipo'],
-                'estado' => ResguardoPdvBulto::ESTADO_RECIBIDO,
+                'estado' => ResguardoPdvBulto::ESTADO_RECIBIDO_GERENTE,
                 'recepcion_at' => $ahora,
                 'recepcion_por_id' => $actor->id,
                 'version' => 1,

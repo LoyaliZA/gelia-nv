@@ -27,11 +27,14 @@ $checks = [
     ['servicio flags unica/mejor', str_contains($servicio, 'unica_pieza') && str_contains($servicio, 'mejor_ejemplar')],
     ['servicio persiste sku', str_contains($servicio, "'sku' =>")],
     ['request estado_fisico_general opcional', str_contains($request, "'estado_fisico_general' => ['nullable'")],
-    ['UI revisión física', str_contains($modal, 'Revisión física de productos')],
+    ['UI registro productos tienda', str_contains($modal, 'Registro de productos')],
+    ['UI revisión física logística', str_contains($modal, 'Revisión física de productos')],
     ['UI sin Estado general', ! str_contains($modal, 'Estado general')],
     ['UI Única pieza', str_contains($modal, 'Única pieza')],
     ['UI Mejor ejemplar', str_contains($modal, 'Mejor ejemplar')],
     ['UI evidencia final tienda', str_contains($modal, 'Evidencia final del pedido')],
+    ['UI bultos a preparar tienda', str_contains($modal, 'Bultos a preparar (Aprox)')],
+    ['UI sucursal destino tienda', str_contains($modal, 'Sucursal destino')],
     ['UI fotos lote tienda', str_contains($modal, 'Fotos del lote (productos del pedido)')],
 ];
 

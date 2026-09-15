@@ -12,6 +12,7 @@ class RevertirEmpacadoPedidoBmaService
 {
     public function __construct(
         private RegistrarHistorialPedidoService $historialService,
+        private EliminarBultosEmpaquePedidoBmaService $eliminarBultosEmpaque,
     ) {}
 
     public function ejecutar(PedidoBma $pedido, int $usuarioId): PedidoBma
@@ -38,6 +39,10 @@ class RevertirEmpacadoPedidoBmaService
                 'empacado_at' => null,
                 'empacado_por_id' => null,
             ]);
+
+            if ($pedido->bultosEmpaque()->exists()) {
+                $this->eliminarBultosEmpaque->ejecutar($pedido);
+            }
 
             $this->historialService->registrarTransicion(
                 $pedido->id,

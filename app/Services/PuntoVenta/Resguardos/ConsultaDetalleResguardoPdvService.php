@@ -9,7 +9,8 @@ use App\Models\User;
 use App\Services\PuntoVenta\PuntoVentaModulo;
 use App\Support\PuntoVenta\Resguardos\EstadoRecepcionResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\EtiquetasResguardoPdv;
-use App\Support\PuntoVenta\Resguardos\SerializadorIncidenciaResguardoPdv;
+use App\Support\PuntoVenta\Resguardos\SerializadorBultosEmpaqueCedisPdv;
+use App\Support\PuntoVenta\Resguardos\SerializadorPedidoRevisionResguardoPdv;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 
 class ConsultaDetalleResguardoPdvService
@@ -38,6 +39,7 @@ class ConsultaDetalleResguardoPdvService
             'sucursal:id,nombre',
             'cliente:id,numero_cliente',
             'pedido:id,folio,folio_remision',
+            'pedido.bultosEmpaque.documentos',
             'bultos' => fn ($q) => $q->orderBy('folio')->orderBy('id'),
             'incidencias' => fn ($q) => $q
                 ->with([
@@ -55,6 +57,7 @@ class ConsultaDetalleResguardoPdvService
                 'sucursal:id,nombre',
                 'cliente:id,numero_cliente',
                 'pedido:id,folio,folio_remision',
+                'pedido.bultosEmpaque.documentos',
                 'bultos' => fn ($q) => $q->orderBy('folio')->orderBy('id'),
                 'incidencias' => fn ($q) => $q
                     ->with([
@@ -133,6 +136,7 @@ class ConsultaDetalleResguardoPdvService
                 'folio' => $resguardo->pedido->folio,
                 'folio_remision' => $resguardo->pedido->folio_remision,
             ] : null,
+            'pedido_revision' => SerializadorPedidoRevisionResguardoPdv::desdePedido($resguardo->pedido),
             'bultos' => $resguardo->bultos->map(fn ($bulto) => [
                 'id' => $bulto->id,
                 'folio' => $bulto->folio,
@@ -146,6 +150,7 @@ class ConsultaDetalleResguardoPdvService
                 ->map(fn ($incidencia) => SerializadorIncidenciaResguardoPdv::incidencia($incidencia))
                 ->values()
                 ->all(),
+            'bultos_empaque_cedis' => SerializadorBultosEmpaqueCedisPdv::desdePedido($resguardo->pedido),
         ];
     }
 

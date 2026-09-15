@@ -123,6 +123,7 @@ class ListarPedidosBmaService
         $pedido->setAttribute('pendiente_re_revision', MaquinaEstadosPedidoBma::esPendienteReRevision($pedido));
         $pedido->setAttribute('en_revision_ahora', RevisionEnCursoPedidoBma::activa($pedido->id));
         $pedido->setAttribute('progreso', $this->progreso->calcular($pedido));
+        app(AnexarEstatusSucursalPedidoBmaService::class)->ejecutar($pedido);
         $pedido->setAttribute('usa_preparacion_tienda', $pedido->usaPreparacionTienda());
         $pedido->setAttribute('tiene_traslado_cedis_pendiente', $pedido->tieneTrasladoCedisPendiente());
         $pedido->setAttribute('tiene_caratula_municipal_pendiente', $pedido->tieneCaratulaMunicipalPendiente());

@@ -17,8 +17,11 @@ class PedidoBmaDocumento extends Model
     public const TIPO_ANEXO_PIEZAS = 'anexo_piezas';
     public const TIPO_EVIDENCIA_PESAJE = 'evidencia_pesaje';
     public const TIPO_EVIDENCIA_CONDICION = 'evidencia_condicion';
+    public const TIPO_EVIDENCIA_BULTO_EMPAQUE = 'evidencia_bulto_empaque';
+    public const TIPO_EVIDENCIA_TICKET_BULTO_EMPAQUE = 'evidencia_ticket_bulto_empaque';
 
     public const RELACION_REVISION_GENERAL = 'revision_general';
+    public const RELACION_BULTO_EMPAQUE = 'bulto_empaque';
 
     public const RELACION_REVISION_PRODUCTO = 'revision_producto';
 

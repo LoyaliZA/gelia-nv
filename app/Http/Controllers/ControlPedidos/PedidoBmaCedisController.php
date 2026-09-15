@@ -4,6 +4,7 @@ namespace App\Http\Controllers\ControlPedidos;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ControlPedidos\ConfirmarStockSinExistenciaPedidoBmaRequest;
+use App\Http\Requests\ControlPedidos\MarcarEmpacadoPedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\MarcarEnviadoPedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\MarcarResguardoApartadoPedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\ReportarErrorDatosPedidoBmaRequest;
@@ -92,12 +93,19 @@ class PedidoBmaCedisController extends Controller
         ]);
     }
 
-    public function marcarEmpacado(PedidoBma $pedidoBma, MarcarEmpacadoPedidoBmaService $service): RedirectResponse
-    {
+    public function marcarEmpacado(
+        MarcarEmpacadoPedidoBmaRequest $request,
+        PedidoBma $pedidoBma,
+        MarcarEmpacadoPedidoBmaService $service
+    ): RedirectResponse {
         Gate::authorize('control_pedidos.cedis');
 
         try {
-            $service->ejecutar($pedidoBma, Auth::id());
+            $service->ejecutar(
+                $pedidoBma,
+                Auth::id(),
+                $request->bultosPorPedidoNormalizados()
+            );
         } catch (\InvalidArgumentException|\RuntimeException $e) {
             return redirect()->back()->with('error', $e->getMessage());
         }
@@ -232,6 +240,7 @@ class PedidoBmaCedisController extends Controller
                     'evidencias_generales' => $request->file('evidencias_generales', []),
                     'evidencias_envios' => $request->file('evidencias_envios', []),
                     'motivo_retiro' => $request->validated('motivo_retiro'),
+                    'numero_cajas' => $request->validated('numero_cajas'),
                     'revisiones' => collect($request->validated('revisiones') ?? [])->map(function (array $rev, int $i) use ($request) {
                         $files = $request->file("revisiones.{$i}.evidencias") ?? [];
 

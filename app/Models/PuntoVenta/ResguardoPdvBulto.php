@@ -26,6 +26,11 @@ class ResguardoPdvBulto extends Model
 
     public const ESTADO_ESPERADO = 'esperado';
 
+    public const ESTADO_RECIBIDO_GERENTE = 'recibido_gerente';
+
+    public const ESTADO_EN_CUSTODIA = 'en_custodia';
+
+    /** @deprecated Usar ESTADO_EN_CUSTODIA; se conserva para datos legados. */
     public const ESTADO_RECIBIDO = 'recibido';
 
     public const ESTADO_ENTREGADO = 'entregado';
@@ -43,6 +48,8 @@ class ResguardoPdvBulto extends Model
         'estado',
         'recepcion_at',
         'recepcion_por_id',
+        'custodia_at',
+        'custodia_por_id',
         'entrega_at',
         'devolucion_salida_at',
         'version',
@@ -52,6 +59,7 @@ class ResguardoPdvBulto extends Model
     {
         return [
             'recepcion_at' => 'datetime',
+            'custodia_at' => 'datetime',
             'entrega_at' => 'datetime',
             'devolucion_salida_at' => 'datetime',
             'version' => 'integer',
@@ -71,6 +79,19 @@ class ResguardoPdvBulto extends Model
     public function recepcionPor(): BelongsTo
     {
         return $this->belongsTo(User::class, 'recepcion_por_id');
+    }
+
+    public function custodiaPor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'custodia_por_id');
+    }
+
+    public static function estaEnCustodiaOperativa(string $estado): bool
+    {
+        return in_array($estado, [
+            self::ESTADO_EN_CUSTODIA,
+            self::ESTADO_RECIBIDO,
+        ], true);
     }
 
     public function entregas(): BelongsToMany

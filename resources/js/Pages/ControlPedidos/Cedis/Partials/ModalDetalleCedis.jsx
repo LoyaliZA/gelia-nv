@@ -13,6 +13,7 @@ import {
     esPedidoEmpacadoCedis,
     formatearMoneda,
     etiquetaAlmacen,
+    etiquetaSucursal,
     etiquetaCostoEnvio,
     formatearFechaHoraAuditoria,
     badgeEstadoFisico,
@@ -30,12 +31,14 @@ import {
     etiquetaEnvio,
     LABEL_NOTA_COMPRA_CAMPO,
     mostrarNotaCompraCedis,
+    empacarRequiereModalBultos,
 } from '../../Partials/pedidosBmaStyles';
 import EncabezadoFolioPedido from '../../Partials/EncabezadoFolioPedido';
 import DireccionPedidoResumen from '../../Partials/DireccionPedidoResumen';
 import { codigoDireccionCliente } from '../../Partials/codigoDireccionCliente';
 import ModalVistaPreviaDocumento, { MiniaturaDocumento } from '../../Partials/ModalVistaPreviaDocumento';
 import ModalConfirmarAccion from '../../Partials/ModalConfirmarAccion';
+import ModalMarcarEmpacadoBultos from './ModalMarcarEmpacadoBultos';
 import ModalAlertaPedido from '../../Partials/ModalAlertaPedido';
 import SeccionGuiaRastreo from '../../Partials/SeccionGuiaRastreo';
 import AvisoOperativoPedido from '../../Partials/AvisoOperativoPedido';
@@ -67,6 +70,7 @@ export default function ModalDetalleCedis({
     const [procesando, setProcesando] = useState(false);
     const [docPreview, setDocPreview] = useState(null);
     const [confirmacion, setConfirmacion] = useState(null);
+    const [modalEmpacarBultos, setModalEmpacarBultos] = useState(false);
     const [alerta, setAlerta] = useState({ abierto: false, tipo: 'success', titulo: '', mensaje: '' });
     const [reporteSinEx, setReporteSinEx] = useState({ descripcion: '', comentario: '' });
     const [seleccionEnvios, setSeleccionEnvios] = useState({});
@@ -79,6 +83,7 @@ export default function ModalDetalleCedis({
             setPedido(pedidoInicial);
             setProcesando(false);
             setConfirmacion(null);
+            setModalEmpacarBultos(false);
             setDocPreview(null);
             const pendientes = [...(pedidoInicial.cajas || [])]
                 .filter((c) => (c.estatus_recoleccion || 'pendiente') === 'pendiente');
@@ -95,6 +100,7 @@ export default function ModalDetalleCedis({
 
     if (!abierto || !pedido) return null;
 
+    const esTienda = pedido.origen?.requiere_logistica === false;
     const fase = pedido.estatus?.fase_ciclo;
     const badgeEmpaque = badgeEmpaqueSemantico(fase, pedido.es_resguardo, Boolean(pedido.resguardo_apartado_at));
     const badgeRetraso = pedido.guia_retraso ? badgeRetrasoGuia() : null;
@@ -437,6 +443,18 @@ export default function ModalDetalleCedis({
                         </section>
                         )}
 
+                        {esTienda ? (
+                        <section className={SECCION_WRAP}>
+                            <p className={SECCION}>Sucursal destino</p>
+                            <p className="text-sm font-bold theme-text-main m-0">
+                                {etiquetaSucursal(pedido.sucursal_destino || pedido.sucursalDestino || {
+                                    id: pedido.sucursal_destino_id,
+                                    nombre: pedido.sucursal_destino_nombre,
+                                    codigo: pedido.sucursal_destino_codigo,
+                                })}
+                            </p>
+                        </section>
+                        ) : (
                         <section className={SECCION_WRAP}>
                             <p className={SECCION}>Dirección de entrega</p>
                             <DireccionPedidoResumen
@@ -450,10 +468,11 @@ export default function ModalDetalleCedis({
                                 )}
                             />
                         </section>
+                        )}
 
                         {tieneRevisionFisica && (
                             <section className={SECCION_WRAP}>
-                                <p className={SECCION}>Revisión física</p>
+                                <p className={SECCION}>{esTienda ? 'Registro de productos' : 'Revisión física'}</p>
                                 <div className="space-y-3">
                                     {pedido.estado_fisico_general && badgeFisico && (
                                         <div className="flex flex-wrap items-center gap-2">
@@ -668,7 +687,7 @@ export default function ModalDetalleCedis({
                                 <Campo label="Tipo de pedido" value={pedido.origen?.nombre} />
                                 <Campo label="Almacén" value={etiquetaAlmacen(pedido.almacen)} />
                                 <Campo label="Paquetería" value={pedido.paqueteria?.nombre} />
-                                <Campo label="N° de envíos" value={pedido.numero_cajas} />
+                                <Campo label={esTienda ? 'Bultos a preparar (Aprox)' : 'N° de envíos'} value={pedido.numero_cajas} />
                                 <Campo label="Origen de la guía" value={etiquetaOrigenGuia(pedido)} />
                                 <Campo label="Tipo de guía" value={pedido.tipo_guia?.nombre} />
                                 <Campo label="Peso real" value={pedido.peso_real_kg != null ? `${pedido.peso_real_kg} kg` : null} />
@@ -859,7 +878,13 @@ export default function ModalDetalleCedis({
                         {puedeEmpacar && (
                             <button
                                 type="button"
-                                onClick={() => setConfirmacion('empacar')}
+                                onClick={() => {
+                                    if (empacarRequiereModalBultos(pedido)) {
+                                        setModalEmpacarBultos(true);
+                                    } else {
+                                        setConfirmacion('empacar');
+                                    }
+                                }}
                                 disabled={procesando}
                                 className={`${BTN_PRIMARY} flex items-center justify-center gap-2 outline-none disabled:opacity-50 min-h-[44px] w-full sm:w-auto sm:ml-auto`}
                             >
@@ -871,6 +896,15 @@ export default function ModalDetalleCedis({
             </div>
 
             <ModalVistaPreviaDocumento abierto={Boolean(docPreview)} documento={docPreview} onClose={() => setDocPreview(null)} />
+            <ModalMarcarEmpacadoBultos
+                abierto={modalEmpacarBultos}
+                pedido={pedido}
+                onClose={() => setModalEmpacarBultos(false)}
+                onExito={() => {
+                    setAlerta({ abierto: true, tipo: 'success', titulo: 'Empacado', mensaje: 'Pedido marcado como empacado.' });
+                    onClose();
+                }}
+            />
             <ModalConfirmarAccion
                 abierto={Boolean(cfgConfirm)}
                 titulo={cfgConfirm?.titulo}

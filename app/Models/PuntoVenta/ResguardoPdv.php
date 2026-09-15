@@ -23,6 +23,8 @@ class ResguardoPdv extends Model
 
     public const ESTADO_PENDIENTE_RECEPCION = 'pendiente_recepcion';
 
+    public const ESTADO_PENDIENTE_CUSTODIA = 'pendiente_custodia';
+
     public const ESTADO_EN_CUSTODIA = 'en_custodia';
 
     public const ESTADO_ENTREGADO = 'entregado';
@@ -40,6 +42,7 @@ class ResguardoPdv extends Model
         'cantidad_bultos_esperada',
         'salida_cedis_at',
         'recepcion_fisica_at',
+        'custodia_confirmada_at',
         'entrega_completada_at',
         'devolucion_confirmada_at',
         'vencido_repuesto_at',
@@ -56,6 +59,7 @@ class ResguardoPdv extends Model
             'cantidad_bultos_esperada' => 'integer',
             'salida_cedis_at' => 'datetime',
             'recepcion_fisica_at' => 'datetime',
+            'custodia_confirmada_at' => 'datetime',
             'entrega_completada_at' => 'datetime',
             'devolucion_confirmada_at' => 'datetime',
             'vencido_repuesto_at' => 'datetime',

@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import { router } from '@inertiajs/react';
 import {
@@ -11,7 +11,14 @@ import {
     esConflictoVersion,
 } from './entregaResguardoUtils';
 
-export default function useEntregaResguardo({ resguardoId, versionInicial, metodoValidacion }) {
+export default function useEntregaResguardo({
+    resguardoId,
+    versionInicial,
+    metodoValidacion,
+    modoModal = false,
+    onExitoModal,
+    onRecargarFormulario,
+}) {
     const [enviando, setEnviando] = useState(false);
     const [progreso, setProgreso] = useState(0);
     const [error, setError] = useState(null);
@@ -20,6 +27,12 @@ export default function useEntregaResguardo({ resguardoId, versionInicial, metod
     const versionRef = useRef(versionInicial);
     const envioBloqueado = useRef(false);
     const idempotencyRef = useRef(claveIdempotenciaEntrega(resguardoId));
+
+    useEffect(() => {
+        if (versionInicial) {
+            versionRef.current = versionInicial;
+        }
+    }, [versionInicial]);
 
     const enviar = useCallback(async ({
         relacion,
@@ -79,6 +92,9 @@ export default function useEntregaResguardo({ resguardoId, versionInicial, metod
             setExito(true);
             setResguardoResultado(data?.resguardo || null);
             limpiarClaveIdempotenciaEntrega(resguardoId);
+            if (modoModal) {
+                onExitoModal?.({ ok: true, resguardo: data?.resguardo, fase: 'exito' });
+            }
             return { ok: true, resguardo: data?.resguardo };
         } catch (err) {
             const mensaje = mensajeErrorEntrega(err);
@@ -98,23 +114,35 @@ export default function useEntregaResguardo({ resguardoId, versionInicial, metod
         } finally {
             setEnviando(false);
         }
-    }, [enviando, metodoValidacion, resguardoId]);
+    }, [enviando, metodoValidacion, resguardoId, modoModal, onExitoModal]);
 
     const irADetalle = useCallback(() => {
+        if (modoModal) {
+            onExitoModal?.({ accion: 'detalle', resguardoId });
+        }
         router.visit(route('punto_venta.resguardos.show', resguardoId), {
             preserveState: false,
         });
-    }, [resguardoId]);
+    }, [modoModal, onExitoModal, resguardoId]);
 
     const irABandeja = useCallback(() => {
+        if (modoModal) {
+            onExitoModal?.({ accion: 'bandeja' });
+        }
         router.visit(route('punto_venta.resguardos.index', { bandeja: 'en_custodia' }));
-    }, []);
+    }, [modoModal, onExitoModal]);
 
     const recargarFormulario = useCallback(() => {
-        router.reload({ only: ['resguardo', 'puede_entregar', 'motivo_no_entregable', 'catalogos'] });
+        if (modoModal && onRecargarFormulario) {
+            onRecargarFormulario();
+        } else {
+            router.reload({ only: ['resguardo', 'puede_entregar', 'motivo_no_entregable', 'catalogos'] });
+        }
         envioBloqueado.current = false;
         setError(null);
-    }, []);
+        setExito(false);
+        setResguardoResultado(null);
+    }, [modoModal, onRecargarFormulario]);
 
     return {
         enviar,

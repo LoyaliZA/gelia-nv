@@ -11,6 +11,8 @@ use App\Http\Controllers\PuntoVenta\Resguardos\EntregaResguardoPdvController;
 use App\Http\Controllers\PuntoVenta\Resguardos\EtiquetasResguardoPdvController;
 use App\Http\Controllers\PuntoVenta\Resguardos\FormularioEntregaMultipleResguardoPdvController;
 use App\Http\Controllers\PuntoVenta\Resguardos\FormularioEntregaResguardoPdvController;
+use App\Http\Controllers\PuntoVenta\Resguardos\ConfirmacionCustodiaResguardoPdvController;
+use App\Http\Controllers\PuntoVenta\Resguardos\FormularioConfirmacionCustodiaResguardoPdvController;
 use App\Http\Controllers\PuntoVenta\Resguardos\FormularioRecepcionFisicaResguardoPdvController;
 use App\Http\Controllers\PuntoVenta\Resguardos\RecepcionFisicaResguardoPdvController;
 use App\Http\Controllers\PuntoVenta\Resguardos\RegistrarIncidenciaResguardoPdvController;
@@ -57,13 +59,22 @@ Route::middleware(['pdv.piso', 'pdv.permiso:'.PuntoVentaModulo::PERMISO_RESGUARD
             ->name('etiquetas.descargar');
     });
 
-Route::middleware(['pdv.piso', 'pdv.permiso:'.PuntoVentaModulo::PERMISO_RESGUARDOS_RECIBIR])
+Route::middleware(['pdv.piso', 'pdv.permiso:'.PuntoVentaModulo::PERMISO_RESGUARDOS_RECIBIR_GERENTE])
     ->prefix('resguardos')
     ->name('resguardos.')
     ->group(function () {
         Route::get('/{resguardo}/recepcion', [FormularioRecepcionFisicaResguardoPdvController::class, 'show'])
             ->name('recepcion.create');
         Route::put('/{resguardo}/recepcion', RecepcionFisicaResguardoPdvController::class)->name('recepcion');
+    });
+
+Route::middleware(['pdv.piso', 'pdv.permiso:'.PuntoVentaModulo::PERMISO_RESGUARDOS_CONFIRMAR_CUSTODIA])
+    ->prefix('resguardos')
+    ->name('resguardos.')
+    ->group(function () {
+        Route::get('/{resguardo}/custodia', [FormularioConfirmacionCustodiaResguardoPdvController::class, 'show'])
+            ->name('custodia.create');
+        Route::put('/{resguardo}/custodia', ConfirmacionCustodiaResguardoPdvController::class)->name('custodia');
     });
 
 Route::middleware(['pdv.piso', 'pdv.permiso:'.PuntoVentaModulo::PERMISO_RESGUARDOS_ENTREGAR])

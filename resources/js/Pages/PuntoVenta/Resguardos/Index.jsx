@@ -47,6 +47,7 @@ export default function Index({
     });
 
     const [bandejaActiva, setBandejaActiva] = useState(filtros.bandeja || bandejaInicial || 'por_recibir');
+    const [pasoActivo, setPasoActivo] = useState(filtros.paso || 'gerente');
     const [busqueda, setBusqueda] = useState(filtros.q || '');
     const [estado, setEstado] = useState(filtros.estado || '');
     const [antiguedad, setAntiguedad] = useState(filtros.antiguedad || '');
@@ -55,6 +56,7 @@ export default function Index({
 
     useEffect(() => {
         setBandejaActiva(filtros.bandeja || bandejaInicial || 'por_recibir');
+        setPasoActivo(filtros.paso || 'gerente');
         setBusqueda(filtros.q || '');
         setEstado(filtros.estado || '');
         setAntiguedad(filtros.antiguedad || '');
@@ -62,6 +64,7 @@ export default function Index({
 
     const paramsActuales = (extra = {}) => paramsListadoResguardos({
         bandeja: bandejaActiva,
+        paso: bandejaActiva === 'por_recibir' ? pasoActivo : undefined,
         q: busqueda,
         estado,
         antiguedad,
@@ -214,11 +217,41 @@ export default function Index({
                     </div>
                 </div>
 
+                {bandejaRender === 'por_recibir' && (
+                    <div className={GELIA_SEGMENT_TABS_SCROLL}>
+                        <div className={`gelia-segment ${GELIA_SEGMENT_TABS_TRACK} p-1 shadow-sm`} role="tablist" aria-label="Paso de recepción">
+                            {[
+                                { id: 'gerente', etiqueta: 'Recepción gerente', visible: permisos.recibir },
+                                { id: 'recepcionista', etiqueta: 'Custodia recepción', visible: permisos.confirmar_custodia },
+                            ].filter((opcion) => opcion.visible).map(({ id, etiqueta }) => {
+                                const activa = pasoActivo === id;
+                                return (
+                                    <button
+                                        key={id}
+                                        type="button"
+                                        role="tab"
+                                        aria-selected={activa}
+                                        data-active={activa}
+                                        onClick={() => {
+                                            setPasoActivo(id);
+                                            recargar({ paso: id, page: 1 });
+                                        }}
+                                        className="gelia-segment-btn whitespace-nowrap"
+                                    >
+                                        {etiqueta}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
+
                 {(bandejaRender === 'en_custodia' || bandejaRender === 'por_recibir') && (
                     <AlertasCustodiaResguardo
                         bandeja={bandejaRender}
                         catalogos={catalogos}
                         metricas={metricasVista}
+                        totalBandeja={metricasVista?.[bandejaRender] ?? 0}
                         antiguedadActiva={antiguedad}
                         onAntiguedad={onAntiguedad}
                         antiguedadConfigurada={antiguedadConfigurada}
@@ -263,10 +296,13 @@ export default function Index({
                         hayFiltrosActivos={hayFiltrosActivos}
                         onLimpiarFiltros={onLimpiar}
                         puedeRecibir={Boolean(permisos.recibir)}
+                        puedeConfirmarCustodia={Boolean(permisos.confirmar_custodia)}
+                        paso={bandejaRender === 'por_recibir' ? pasoActivo : undefined}
                         puedeEntregar={Boolean(permisos.entregar)}
                         idsSeleccionados={idsSeleccionados}
                         onToggleSeleccion={permisos.entregar && bandejaRender === 'en_custodia' ? toggleSeleccion : undefined}
                         onReponerExito={() => recargar({ page: resguardosVista?.current_page || 1 })}
+                        onEntregaExito={() => recargar({ page: resguardosVista?.current_page || 1 })}
                     />
                 )}
 

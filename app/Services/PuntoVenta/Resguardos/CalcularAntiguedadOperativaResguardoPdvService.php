@@ -63,7 +63,7 @@ class CalcularAntiguedadOperativaResguardoPdvService
         }
 
         if ($this->admiteCustodia($resguardo)) {
-            $anclaCustodia = $resguardo->recepcion_fisica_at?->copy()->timezone($zona);
+            $anclaCustodia = $resguardo->custodia_confirmada_at?->copy()->timezone($zona);
             if ($anclaCustodia !== null) {
                 $fechaLimiteCustodia = $this->fechaLimiteDesdeAncla(
                     $anclaCustodia,
@@ -180,14 +180,13 @@ class CalcularAntiguedadOperativaResguardoPdvService
     private function admiteRezago(ResguardoPdv $resguardo): bool
     {
         return $resguardo->estado === ResguardoPdv::ESTADO_PENDIENTE_RECEPCION
-            && $resguardo->recepcion_fisica_at === null
             && $resguardo->salida_cedis_at !== null;
     }
 
     private function admiteCustodia(ResguardoPdv $resguardo): bool
     {
         return $resguardo->estado === ResguardoPdv::ESTADO_EN_CUSTODIA
-            && $resguardo->recepcion_fisica_at !== null
+            && $resguardo->custodia_confirmada_at !== null
             && $resguardo->entrega_completada_at === null
             && $resguardo->devolucion_confirmada_at === null;
     }

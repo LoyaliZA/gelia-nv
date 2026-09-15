@@ -4,7 +4,6 @@ namespace App\Services\PuntoVenta\Resguardos;
 
 use App\Contracts\PuntoVenta\ResuelveAlcancePdv;
 use App\Events\PuntoVenta\RecepcionFisicaPdvCompletada;
-use App\Models\Almacen;
 use App\Models\PuntoVenta\ResguardoPdv;
 use App\Models\PuntoVenta\ResguardoPdvBulto;
 use App\Models\PuntoVenta\ResguardoPdvEvento;
@@ -12,8 +11,8 @@ use App\Models\PuntoVenta\ResguardoPdvEvidencia;
 use App\Models\User;
 use App\Services\PuntoVenta\PuntoVentaModulo;
 use App\Support\PuntoVenta\Resguardos\EstadoRecepcionResguardoPdv;
+use App\Support\PuntoVenta\Resguardos\EstadoResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\GeneradorCodigoEtiquetaResguardoPdv;
-use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -31,6 +30,7 @@ class RegistrarRecepcionFisicaPdvService
 
     public function __construct(
         private readonly ResuelveAlcancePdv $alcance,
+        private readonly SincronizarEstatusSucursalPedidoBmaService $sincronizarEstatusSucursal,
     ) {}
 
     /**
@@ -42,13 +42,13 @@ class RegistrarRecepcionFisicaPdvService
         User $actor,
         int $versionEsperada,
         string $idempotencyKey,
-        int $almacenId,
+        ?int $almacenId,
         array $bultos,
         array $evidencias = [],
     ): ResguardoPdv {
         $this->alcance->asegurarMutacionPiso(
             $actor,
-            PuntoVentaModulo::PERMISO_RESGUARDOS_RECIBIR,
+            PuntoVentaModulo::PERMISO_RESGUARDOS_RECIBIR_GERENTE,
             (int) $resguardo->sucursal_id
         );
 
@@ -81,7 +81,6 @@ class RegistrarRecepcionFisicaPdvService
 
                 $estadoAnterior = $resguardo->estado;
                 $this->assertVersionYEstado($resguardo, $versionEsperada);
-                $almacen = $this->resolverAlmacenUbicacion($resguardo, $almacenId);
                 $bultosNormalizados = $this->normalizarBultosRecepcion($resguardo, $bultos);
 
                 $recibidosAntes = EstadoRecepcionResguardoPdv::cantidadRecibida($resguardo);
@@ -96,7 +95,7 @@ class RegistrarRecepcionFisicaPdvService
                             'folio' => $dato['folio'],
                             'codigo_etiqueta' => GeneradorCodigoEtiquetaResguardoPdv::generar(),
                             'tipo' => $dato['tipo'],
-                            'estado' => ResguardoPdvBulto::ESTADO_RECIBIDO,
+                            'estado' => ResguardoPdvBulto::ESTADO_RECIBIDO_GERENTE,
                             'recepcion_at' => $ahora,
                             'recepcion_por_id' => $actor->id,
                             'version' => 1,
@@ -113,9 +112,10 @@ class RegistrarRecepcionFisicaPdvService
                     ? ResguardoPdvEvento::TIPO_RECEPCION_COMPLETA
                     : ResguardoPdvEvento::TIPO_RECEPCION_PARCIAL;
 
+                $resguardo->load('bultos');
+                $nuevoEstado = EstadoResguardoPdv::resolverEstadoOperativo($resguardo);
                 $actualizacion = [
-                    'estado' => ResguardoPdv::ESTADO_EN_CUSTODIA,
-                    'almacen_id' => $almacen->id,
+                    'estado' => $nuevoEstado,
                     'version' => $resguardo->version + 1,
                 ];
                 if ($resguardo->recepcion_fisica_at === null) {
@@ -128,12 +128,11 @@ class RegistrarRecepcionFisicaPdvService
                         'resguardo_id' => $resguardo->id,
                         'tipo_evento' => $tipoEvento,
                         'estado_anterior' => $estadoAnterior,
-                        'estado_nuevo' => ResguardoPdv::ESTADO_EN_CUSTODIA,
+                        'estado_nuevo' => $resguardo->estado,
                         'actor_id' => $actor->id,
                         'ocurrido_at' => $ahora,
                         'snapshot_json' => [
-                            'almacen_id' => $almacen->id,
-                            'almacen_codigo' => $almacen->codigo,
+                            'paso' => 'gerente',
                             'bultos' => $bultosNormalizados,
                             'cantidad_llegada' => count($bultosNormalizados),
                             'cantidad_recibida' => $totalRecibida,
@@ -162,6 +161,7 @@ class RegistrarRecepcionFisicaPdvService
                 );
 
                 $resguardo = $resguardo->fresh(['bultos', 'almacen']);
+                $this->sincronizarEstatusSucursal->desdeResguardo($resguardo);
 
                 RecepcionFisicaPdvCompletada::dispatch(
                     $resguardo,
@@ -219,28 +219,6 @@ class RegistrarRecepcionFisicaPdvService
                 'estado' => 'El resguardo no admite recepción física desde su estado actual.',
             ]);
         }
-    }
-
-    private function resolverAlmacenUbicacion(ResguardoPdv $resguardo, int $almacenId): Almacen
-    {
-        $almacen = Almacen::query()->find($almacenId);
-        if (! $almacen instanceof Almacen) {
-            throw (new ModelNotFoundException)->setModel(Almacen::class, [$almacenId]);
-        }
-
-        if (! $almacen->activo) {
-            throw ValidationException::withMessages([
-                'almacen_id' => 'El almacén de ubicación no está activo.',
-            ]);
-        }
-
-        if ((int) $almacen->sucursal_id !== (int) $resguardo->sucursal_id) {
-            throw ValidationException::withMessages([
-                'almacen_id' => 'El almacén no pertenece a la sucursal del resguardo.',
-            ]);
-        }
-
-        return $almacen;
     }
 
     /**

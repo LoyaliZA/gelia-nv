@@ -12,7 +12,7 @@ class RegistrarRecepcionFisicaPdvRequest extends PdvOperacionPisoRequest
 {
     protected function permisoAccion(): string
     {
-        return PuntoVentaModulo::PERMISO_RESGUARDOS_RECIBIR;
+        return PuntoVentaModulo::PERMISO_RESGUARDOS_RECIBIR_GERENTE;
     }
 
     protected function sucursalIdRegistro(): ?int
@@ -30,7 +30,6 @@ class RegistrarRecepcionFisicaPdvRequest extends PdvOperacionPisoRequest
         return [
             'version' => ['required', 'integer', 'min:1'],
             'idempotency_key' => ['required', 'string', 'max:64'],
-            'almacen_id' => ['required', 'integer', 'exists:almacenes,id'],
             'bultos' => ['required', 'array', 'min:1'],
             'bultos.*.folio' => ['required', 'string', 'max:64'],
             'bultos.*.tipo' => ['required', 'string', Rule::in([

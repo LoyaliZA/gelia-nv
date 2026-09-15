@@ -10,6 +10,21 @@ final class BandejaResguardoPdv
 
     public const INCIDENCIAS = 'incidencias';
 
+    public const PASO_GERENTE = 'gerente';
+
+    public const PASO_RECEPCIONISTA = 'recepcionista';
+
+    /**
+     * @return list<string>
+     */
+    public static function pasosPorRecibir(): array
+    {
+        return [
+            self::PASO_GERENTE,
+            self::PASO_RECEPCIONISTA,
+        ];
+    }
+
     /**
      * @return list<string>
      */

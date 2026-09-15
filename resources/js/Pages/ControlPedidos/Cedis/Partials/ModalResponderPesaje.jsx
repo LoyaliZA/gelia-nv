@@ -14,6 +14,7 @@ import {
     badgeEstadoFisico,
     calcularPesoCobradoGuia,
     etiquetaAlmacen,
+    etiquetaSucursal,
     etiquetasInstanciaRevision,
     etiquetaEnvio,
 } from '../../Partials/pedidosBmaStyles';
@@ -328,6 +329,8 @@ export default function ModalResponderPesaje({
     const [evidenciasPorEnvio, setEvidenciasPorEnvio] = useState([slotEnvioVacio()]);
     /** Tienda (sin cajas): fotos del lote final, como el contenido de un envío en pesaje. */
     const [evidenciasLote, setEvidenciasLote] = useState(slotEnvioVacio());
+    /** Tienda: bultos a preparar (aprox.) — se guarda en numero_cajas para resguardos PDV. */
+    const [bultosAproximados, setBultosAproximados] = useState('');
     const loteUuidRef = useRef(nuevoUuid());
     const [revisiones, setRevisiones] = useState([]);
     const [galeria, setGaleria] = useState({ abierto: false, documentos: [], indice: 0 });
@@ -383,6 +386,7 @@ export default function ModalResponderPesaje({
         setSkuError('');
         setListaProductosAbierta(false);
         setBorradorMsg(null);
+        setBultosAproximados('');
         avisoPiezasRef.current = false;
     };
 
@@ -462,6 +466,9 @@ export default function ModalResponderPesaje({
                         });
                     }
                     if (draft.loteUuid) loteUuidRef.current = draft.loteUuid;
+                    if (draft.bultosAproximados != null && draft.bultosAproximados !== '') {
+                        setBultosAproximados(String(draft.bultosAproximados));
+                    }
                     setProcesando(false);
                     setAlerta({ abierto: false, tipo: 'error', titulo: '', mensaje: '' });
                     setGaleria({ abierto: false, documentos: [], indice: 0 });
@@ -540,6 +547,9 @@ export default function ModalResponderPesaje({
                         } else {
                             setBaselineConsulta(null);
                         }
+                        if (soloRevisiones && pedido.numero_cajas != null && pedido.numero_cajas !== '') {
+                            setBultosAproximados(String(pedido.numero_cajas));
+                        }
                         setProcesando(false);
                         setBorradorMsg(pedido.consulta_actualizacion_pendiente ? 'Precarga: respuesta anterior' : null);
                     } else {
@@ -594,6 +604,7 @@ export default function ModalResponderPesaje({
                 })),
                 evidenciasLote: { archivos: evidenciasLote.archivos || [] },
                 loteUuid: loteUuidRef.current,
+                bultosAproximados,
                 savedAt: new Date().toISOString(),
             };
             guardarBorradorPesaje(pedido.id, payload)
@@ -602,7 +613,7 @@ export default function ModalResponderPesaje({
         }, 700);
 
         return () => window.clearTimeout(timer);
-    }, [abierto, pedido?.id, envios, revisiones, evidenciasPorEnvio, evidenciasLote]);
+    }, [abierto, pedido?.id, envios, revisiones, evidenciasPorEnvio, evidenciasLote, bultosAproximados]);
 
     const anexarFotoRemota = (foto) => {
         if (!foto?.objetivo_uuid) return;
@@ -983,6 +994,16 @@ export default function ModalResponderPesaje({
             setAlerta({ abierto: true, tipo: 'error', titulo: 'Productos', mensaje: 'Revise al menos un producto.' });
             return;
         } else {
+            const bultos = Number(bultosAproximados);
+            if (bultosAproximados === '' || Number.isNaN(bultos) || bultos < 1) {
+                setAlerta({
+                    abierto: true,
+                    tipo: 'error',
+                    titulo: 'Bultos a preparar',
+                    mensaje: 'Indique cuántos bultos aproximados llevará el pedido.',
+                });
+                return;
+            }
             const hayLocal = evidenciasLote.archivos?.length;
             const hayRemota = evidenciasLote.previews?.some((p) => p.remoto);
             if (!hayLocal && !hayRemota) {
@@ -1075,6 +1096,7 @@ export default function ModalResponderPesaje({
         form.append('estado_fisico_general', estadoGeneralDerivado);
         form.append('comentario_fisico_general', '');
         if (soloRevisiones) {
+            form.append('numero_cajas', String(Number(bultosAproximados)));
             (evidenciasLote.archivos || []).forEach((f, j) => form.append(`evidencias_generales[${j}]`, f));
         }
         if (!soloRevisiones) {
@@ -1389,6 +1411,18 @@ export default function ModalResponderPesaje({
                             )}
                         </div>
 
+                        {soloRevisiones ? (
+                        <div className="space-y-2 p-4 rounded-xl border theme-border theme-element">
+                            <p className={`${SECCION} m-0`}>Sucursal destino</p>
+                            <p className="text-sm font-bold theme-text-main m-0">
+                                {etiquetaSucursal(pedido.sucursal_destino || pedido.sucursalDestino || {
+                                    id: pedido.sucursal_destino_id,
+                                    nombre: pedido.sucursal_destino_nombre,
+                                    codigo: pedido.sucursal_destino_codigo,
+                                })}
+                            </p>
+                        </div>
+                        ) : (
                         <div className="space-y-2 p-4 rounded-xl border theme-border theme-element">
                             <p className={`${SECCION} m-0`}>Dirección de entrega</p>
                             <DireccionPedidoResumen
@@ -1403,10 +1437,11 @@ export default function ModalResponderPesaje({
                                 )}
                             />
                         </div>
+                        )}
 
                         <div className="space-y-4 p-4 rounded-xl border theme-border theme-element">
                             <div className="flex items-center justify-between gap-2 flex-wrap">
-                                <p className={`${SECCION} m-0`}>Revisión física de productos</p>
+                                <p className={`${SECCION} m-0`}>{soloRevisiones ? 'Registro de productos' : 'Revisión física de productos'}</p>
                                 {borradorMsg && (
                                     <p className="text-[10px] font-black uppercase theme-text-muted m-0">{borradorMsg}</p>
                                 )}
@@ -1523,9 +1558,25 @@ export default function ModalResponderPesaje({
                         <div>
                             <label className={`${SECCION} m-0 mb-3`}>Evidencia final del pedido</label>
                             <p className="text-[10px] theme-text-muted font-bold m-0 mb-3">
-                                Sin cajas ni pesos: adjunte foto(s) de cómo quedan todos los productos juntos (igual que el lote de un envío en pesaje).
+                                Adjunte foto(s) de cómo quedan todos los productos juntos e indique los bultos a preparar.
                             </p>
                             <div className="p-4 rounded-xl border theme-border theme-element space-y-3">
+                                <div>
+                                    <label className={SECCION}>Bultos a preparar (Aprox)</label>
+                                    <input
+                                        type="number"
+                                        min={1}
+                                        max={999}
+                                        inputMode="numeric"
+                                        value={bultosAproximados}
+                                        onChange={(e) => setBultosAproximados(e.target.value)}
+                                        placeholder="Ej. 3"
+                                        className={`${THEME_INPUT} w-full py-3 min-h-[44px] max-w-[10rem]`}
+                                    />
+                                    <p className="text-[10px] theme-text-muted font-bold m-0 mt-1">
+                                        Cantidad aproximada de bultos en los que se empacará el pedido.
+                                    </p>
+                                </div>
                                 <GaleriaEvidencias
                                     archivos={evidenciasLote.archivos}
                                     previews={evidenciasLote.previews}

@@ -19,6 +19,7 @@ class CrearRecepcionEsperadaPdvService
 
     public function __construct(
         private ValidarSucursalDestinoPedidoBma $validarDestino,
+        private SincronizarEstatusSucursalPedidoBmaService $sincronizarEstatusSucursal,
     ) {}
 
     public static function claveIdempotencia(int $pedidoBmaId, int $sucursalId): string
@@ -133,6 +134,8 @@ class CrearRecepcionEsperadaPdvService
             ],
             'idempotency_key' => $clave,
         ]);
+
+        $this->sincronizarEstatusSucursal->marcarEnTransito($pedido);
 
         RecepcionEsperadaPdvCreada::dispatch($resguardo, (int) $pedido->id, $sucursalId);
 

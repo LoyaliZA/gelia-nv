@@ -23,6 +23,7 @@ import {
     validarPasoEvidencia,
     validarPasoReceptor,
 } from './entregaResguardoUtils';
+import PanelPedidoRevisionResguardo from './PanelPedidoRevisionResguardo';
 
 export default function FormularioEntregaResguardo({
     resguardo,
@@ -291,24 +292,30 @@ function IndicadorPasos({ pasoActual }) {
 }
 
 function PasoLocalizar({ resguardo }) {
+    const bultosEnCustodia = (resguardo.bultos || []).filter((bulto) => bulto.estado === 'recibido').length;
+
     return (
-        <div className={`${geliaCardClass()} p-5 space-y-4`}>
-            <h2 className="text-sm font-black uppercase tracking-widest theme-text-main m-0">Confirmar resguardo</h2>
-            <p className="text-sm theme-text-muted m-0">
-                Verifica que este sea el pedido correcto antes de continuar. Los datos provienen del snapshot operativo y no pueden modificarse aquí.
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <CampoSoloLectura label="Folio" value={resguardo.snapshot_folio || `#${resguardo.id}`} />
-                <CampoSoloLectura label="Cliente" value={resguardo.referencia_cliente} />
-                <CampoSoloLectura label="Bultos en custodia" value={resguardo.cantidad_bultos_en_custodia ?? bultosEnCustodia.length} />
-                <CampoSoloLectura label="Sucursal" value={resguardo.sucursal?.nombre} />
-                {resguardo.pedido?.folio && (
-                    <CampoSoloLectura label="Pedido" value={resguardo.pedido.folio} />
-                )}
-                {resguardo.pedido?.folio_remision && (
-                    <CampoSoloLectura label="Remisión" value={resguardo.pedido.folio_remision} />
-                )}
+        <div className="space-y-4">
+            <div className={`${geliaCardClass()} p-5 space-y-4`}>
+                <h2 className="text-sm font-black uppercase tracking-widest theme-text-main m-0">Confirmar resguardo</h2>
+                <p className="text-sm theme-text-muted m-0">
+                    Verifica que este sea el pedido correcto antes de continuar. Los datos provienen del snapshot operativo y no pueden modificarse aquí.
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <CampoSoloLectura label="Folio" value={resguardo.snapshot_folio || `#${resguardo.id}`} />
+                    <CampoSoloLectura label="Cliente" value={resguardo.referencia_cliente} />
+                    <CampoSoloLectura label="Bultos en custodia" value={resguardo.cantidad_bultos_en_custodia ?? bultosEnCustodia} />
+                    <CampoSoloLectura label="Sucursal" value={resguardo.sucursal?.nombre} />
+                    {resguardo.pedido?.folio && (
+                        <CampoSoloLectura label="Pedido" value={resguardo.pedido.folio} />
+                    )}
+                    {resguardo.pedido?.folio_remision && (
+                        <CampoSoloLectura label="Remisión" value={resguardo.pedido.folio_remision} />
+                    )}
+                </div>
             </div>
+
+            <PanelPedidoRevisionResguardo resguardo={resguardo} className="!p-4 sm:!p-5" />
         </div>
     );
 }

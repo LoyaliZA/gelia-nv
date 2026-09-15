@@ -23,24 +23,45 @@ class NotificarResguardoPdvService
             AlertaResguardoPdvNotification::TIPO_RECEPCION_ESPERADA,
             [
                 PuntoVentaModulo::PERMISO_RESGUARDOS_VER,
-                PuntoVentaModulo::PERMISO_RESGUARDOS_RECIBIR,
+                PuntoVentaModulo::PERMISO_RESGUARDOS_RECIBIR_GERENTE,
             ],
             'Recepción esperada',
             "Llegada programada del resguardo {$this->folio($resguardo)} a sucursal."
         );
     }
 
-    public function recepcionFisica(ResguardoPdv $resguardo, int $sucursalId, string $idempotencyKey): void
+    public function recepcionGerente(ResguardoPdv $resguardo, int $sucursalId, string $idempotencyKey): void
     {
         $this->enviar(
             $resguardo,
             $sucursalId,
             $idempotencyKey,
             AlertaResguardoPdvNotification::TIPO_RECEPCION_FISICA,
-            [PuntoVentaModulo::PERMISO_RESGUARDOS_VER],
-            'Recepción física',
-            "Resguardo {$this->folio($resguardo)} recibido y en custodia."
+            [
+                PuntoVentaModulo::PERMISO_RESGUARDOS_VER,
+                PuntoVentaModulo::PERMISO_RESGUARDOS_CONFIRMAR_CUSTODIA,
+            ],
+            'Recepción gerente',
+            "Resguardo {$this->folio($resguardo)} recibido por gerencia; pendiente confirmar custodia."
         );
+    }
+
+    public function custodiaConfirmada(ResguardoPdv $resguardo, int $sucursalId, string $idempotencyKey): void
+    {
+        $this->enviar(
+            $resguardo,
+            $sucursalId,
+            $idempotencyKey,
+            AlertaResguardoPdvNotification::TIPO_CUSTODIA,
+            [PuntoVentaModulo::PERMISO_RESGUARDOS_VER],
+            'Custodia confirmada',
+            "Resguardo {$this->folio($resguardo)} en custodia de recepción."
+        );
+    }
+
+    public function recepcionFisica(ResguardoPdv $resguardo, int $sucursalId, string $idempotencyKey): void
+    {
+        $this->recepcionGerente($resguardo, $sucursalId, $idempotencyKey);
     }
 
     public function incidencia(

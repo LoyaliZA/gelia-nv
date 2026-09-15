@@ -23,6 +23,29 @@ export function formatearFechaOperativa(value) {
     }
 }
 
+/** Formato compacto para tarjetas móviles: 15/SEP - 11:38 AM */
+export function formatearFechaCompacta(value) {
+    if (!value) return '—';
+    try {
+        const fecha = new Date(value);
+        const dia = fecha.toLocaleDateString('es-MX', { day: '2-digit' });
+        const mes = fecha.toLocaleDateString('es-MX', { month: 'short' }).replace('.', '').toUpperCase();
+        const hora = fecha.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: true });
+        return `${dia}/${mes} - ${hora}`;
+    } catch {
+        return '—';
+    }
+}
+
+export const TARJETA_RECEPCION_METRICA =
+    'flex items-center gap-2.5 rounded-xl border theme-border theme-element p-2.5 min-w-0';
+
+export const TARJETA_RECEPCION_ICONO =
+    'flex items-center justify-center w-9 h-9 rounded-lg shrink-0';
+
+export const TARJETA_RECEPCION_PIE =
+    'w-full min-h-[48px] rounded-xl border-2 font-black uppercase tracking-widest text-[10px] inline-flex items-center justify-center gap-2 transition-colors';
+
 export function badgeEstadoResguardo(estado) {
     const mapa = {
         pendiente_recepcion: 'bg-amber-500/15 text-amber-700 dark:text-amber-300',

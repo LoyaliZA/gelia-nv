@@ -14,9 +14,13 @@ class MarcarEmpacadoPedidoBmaService
         private RegistrarHistorialPedidoService $historialService,
         private NotificarPedidoBmaService $notificarService,
         private AvanzarColaErroresPedidoBmaService $colaErroresService,
+        private RegistrarBultosEmpaquePedidoBmaService $registrarBultosEmpaque,
     ) {}
 
-    public function ejecutar(PedidoBma $pedido, int $usuarioId): PedidoBma
+    /**
+     * @param  array<int, list<array{foto_bulto: \Illuminate\Http\UploadedFile, foto_ticket: \Illuminate\Http\UploadedFile}>>  $bultosPorPedido
+     */
+    public function ejecutar(PedidoBma $pedido, int $usuarioId, array $bultosPorPedido = []): PedidoBma
     {
         $pedido->loadMissing(['estatus', 'paqueteria', 'origen', 'complementos.estatus', 'complementos.paqueteria', 'complementos.origen']);
 
@@ -45,8 +49,26 @@ class MarcarEmpacadoPedidoBmaService
             $this->assertPuedeEmpacar($miembro);
         }
 
-        return DB::transaction(function () use ($aEmpacar, $raiz, $usuarioId) {
+        foreach ($aEmpacar as $miembro) {
+            $this->assertPuedeEmpacar($miembro);
+            if ($miembro->requiereSucursalDestino()) {
+                $bultos = $bultosPorPedido[(int) $miembro->id] ?? [];
+                if ($bultos === []) {
+                    throw new \InvalidArgumentException("Debe registrar bultos con evidencia para el pedido {$miembro->folio}.");
+                }
+            }
+        }
+
+        return DB::transaction(function () use ($aEmpacar, $raiz, $usuarioId, $bultosPorPedido) {
             foreach ($aEmpacar as $miembro) {
+                if ($miembro->requiereSucursalDestino()) {
+                    $this->registrarBultosEmpaque->ejecutar(
+                        $miembro,
+                        $usuarioId,
+                        $bultosPorPedido[(int) $miembro->id] ?? []
+                    );
+                }
+
                 $this->empacarUno(
                     $miembro->loadMissing(['estatus', 'paqueteria', 'origen']),
                     $usuarioId,
@@ -191,7 +213,8 @@ class MarcarEmpacadoPedidoBmaService
             'cliente', 'estatus', 'documentos', 'almacen', 'origen',
             'paqueteria', 'tipoGuia', 'tipoCaja', 'empacadoPor', 'incidenciaEmpaquePor',
             'complementos.documentos', 'complementos.estatus', 'complementos.cliente',
-            'principal', 'vendedor',
+            'complementos.bultosEmpaque.documentos', 'complementos.origen', 'complementos.sucursalDestino',
+            'principal', 'vendedor', 'bultosEmpaque.documentos', 'sucursalDestino',
         ];
     }
 }

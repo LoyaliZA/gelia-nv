@@ -8,7 +8,12 @@ final class CantidadBultosEsperadaResguardoPdv
 {
     public static function desdePedido(PedidoBma $pedido): int
     {
-        $pedido->loadMissing('cajas');
+        $pedido->loadMissing(['cajas', 'bultosEmpaque']);
+
+        $bultosEmpaque = $pedido->bultosEmpaque->count();
+        if ($bultosEmpaque > 0) {
+            return $bultosEmpaque;
+        }
 
         $activas = $pedido->cajas
             ->filter(fn ($caja) => method_exists($caja, 'estaActiva') ? $caja->estaActiva() : true)

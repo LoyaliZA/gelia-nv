@@ -1,6 +1,6 @@
 import React from 'react';
 import { Head, Link } from '@inertiajs/react';
-import { ArrowLeft, Package, AlertTriangle, PackageCheck, Truck, Printer } from 'lucide-react';
+import { ArrowLeft, Package, AlertTriangle, PackageCheck, Printer } from 'lucide-react';
 import AppLayout from '../../../Layouts/AppLayout';
 import GeliaPageShell from '../../../Components/GeliaPageShell';
 import { geliaCardClass } from '../../../utils/geliaTheme';
@@ -17,6 +17,8 @@ import {
     resguardoAdmiteRecepcion,
 } from './Partials/recepcionFisicaUtils';
 import { plazosOperativosResguardo } from './Partials/resguardosUtils';
+import PanelPedidoRevisionResguardo from './Partials/PanelPedidoRevisionResguardo';
+import { AccionEntregaResguardo } from './Partials/ModalEntregaResguardo';
 
 export default function Show({ auth, resguardo, timeline = [], catalogos = {}, permisos = {}, almacenes = [] }) {
     const titulo = resguardo?.snapshot_folio || `Resguardo #${resguardo?.id}`;
@@ -116,6 +118,8 @@ export default function Show({ auth, resguardo, timeline = [], catalogos = {}, p
                     )}
                 </div>
 
+                <PanelPedidoRevisionResguardo resguardo={resguardo} />
+
                 {resguardo.bultos?.length > 0 && (
                     <div className={`${geliaCardClass()} overflow-hidden`}>
                         <div className="p-4 border-b theme-border">
@@ -188,12 +192,11 @@ export default function Show({ auth, resguardo, timeline = [], catalogos = {}, p
                         && resguardo.estado === 'en_custodia'
                         && !resguardo.entrega_bloqueada
                         && resguardoAdmiteEntregaTotal(resguardo) && (
-                        <Link
-                            href={route('punto_venta.resguardos.entrega.create', resguardo.id)}
-                            className={`${THEME_BTN_PRIMARY} inline-flex items-center gap-2 min-h-[44px] px-5 text-[10px] font-black uppercase tracking-widest`}
-                        >
-                            <Truck className="w-4 h-4" /> Entregar
-                        </Link>
+                        <AccionEntregaResguardo
+                            resguardo={resguardo}
+                            variant="primary"
+                            className="inline-flex min-h-[44px] px-5"
+                        />
                     )}
                     {permisos.recibir && resguardoAdmiteRecepcion(resguardo) && (
                         <Link

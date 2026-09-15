@@ -2,13 +2,19 @@ import { describe, expect, it } from 'vitest';
 import {
     antiguedadValidaEnBandeja,
     antiguedadesVisiblesPorBandeja,
+    clasePieTarjetaRecepcion,
     claseVistaTabla,
     claseVistaTarjetas,
+    etiquetaEstadoRecepcion,
+    guardarVistaPorRecibir,
+    leerVistaPorRecibir,
     mensajeVacioBandeja,
     metricasAntiguedadClaves,
     paramsListadoResguardos,
     plazosOperativosResguardo,
     referenciaCliente,
+    titularResguardo,
+    VISTA_RESGUARDOS_POR_RECIBIR,
 } from './resguardosUtils';
 
 describe('resguardosUtils', () => {
@@ -38,9 +44,42 @@ describe('resguardosUtils', () => {
     });
 
     it('define vistas responsivas para tarjetas y tabla', () => {
-        expect(claseVistaTarjetas()).toContain('lg:hidden');
-        expect(claseVistaTabla()).toContain('hidden');
-        expect(claseVistaTabla()).toContain('lg:block');
+        expect(claseVistaTarjetas('en_custodia')).toContain('lg:hidden');
+        expect(claseVistaTabla('en_custodia')).toContain('hidden');
+        expect(claseVistaTabla('en_custodia')).toContain('lg:block');
+    });
+
+    it('permite alternar vista en por_recibir sin depender del breakpoint', () => {
+        expect(claseVistaTarjetas('por_recibir', VISTA_RESGUARDOS_POR_RECIBIR.CARD)).toBe('');
+        expect(claseVistaTabla('por_recibir', VISTA_RESGUARDOS_POR_RECIBIR.CARD)).toBe('hidden');
+        expect(claseVistaTarjetas('por_recibir', VISTA_RESGUARDOS_POR_RECIBIR.LISTA)).toBe('hidden');
+        expect(claseVistaTabla('por_recibir', VISTA_RESGUARDOS_POR_RECIBIR.LISTA)).toBe('');
+    });
+
+    it('persiste preferencia de vista por recibir', () => {
+        const storage = {};
+        globalThis.localStorage = {
+            getItem: (key) => storage[key] ?? null,
+            setItem: (key, value) => { storage[key] = value; },
+        };
+
+        expect(leerVistaPorRecibir()).toBe(VISTA_RESGUARDOS_POR_RECIBIR.CARD);
+        guardarVistaPorRecibir(VISTA_RESGUARDOS_POR_RECIBIR.LISTA);
+        expect(leerVistaPorRecibir()).toBe(VISTA_RESGUARDOS_POR_RECIBIR.LISTA);
+    });
+
+    it('arma titular y etiqueta de estado para tarjetas de recepción', () => {
+        expect(titularResguardo({
+            snapshot_cliente_nombre: 'Cliente Alfa',
+            cliente: { numero_cliente: '9' },
+        })).toBe('Cliente Alfa');
+
+        expect(etiquetaEstadoRecepcion({
+            clasificaciones: { rezagado: true },
+        }, { antiguedades: { rezagado: 'Rezagado' } })).toBe('Rezagado');
+
+        expect(clasePieTarjetaRecepcion({ clasificaciones: { rezagado: true } }))
+            .toContain('orange');
     });
 
     it('genera mensaje vacío según bandeja', () => {

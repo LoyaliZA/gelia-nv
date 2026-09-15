@@ -9,6 +9,8 @@ use App\Models\PuntoVenta\ResguardoPdvIncidencia;
 use App\Models\User;
 use App\Services\PuntoVenta\PuntoVentaModulo;
 use App\Support\PuntoVenta\Resguardos\EtiquetasResguardoPdv;
+use App\Support\PuntoVenta\Resguardos\SerializadorBultosEmpaqueCedisPdv;
+use App\Support\PuntoVenta\Resguardos\SerializadorPedidoRevisionResguardoPdv;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 
 class ConsultaFormularioEntregaResguardoPdvService
@@ -37,7 +39,11 @@ class ConsultaFormularioEntregaResguardoPdvService
         $resguardo->load([
             'sucursal:id,nombre',
             'cliente:id,numero_cliente',
-            'pedido:id,folio,folio_remision',
+            'pedido:id,folio,folio_remision,estado_fisico_general,comentario_fisico_general,tiene_observaciones_fisicas',
+            'pedido.revisionesProducto',
+            'pedido.documentos' => fn ($q) => $q->vigente()->orderBy('orden')->orderBy('id'),
+            'pedido.cajas' => fn ($q) => $q->orderBy('orden')->orderBy('id'),
+            'pedido.bultosEmpaque.documentos',
             'bultos' => fn ($q) => $q->orderBy('folio')->orderBy('id'),
             'incidencias' => fn ($q) => $q->orderByDesc('reportado_at')->orderByDesc('id'),
         ]);
@@ -88,7 +94,7 @@ class ConsultaFormularioEntregaResguardoPdvService
         }
 
         $bultosRecibidos = $resguardo->bultos
-            ->filter(fn ($bulto) => $bulto->estado === ResguardoPdvBulto::ESTADO_RECIBIDO);
+            ->filter(fn ($bulto) => ResguardoPdvBulto::estaEnCustodiaOperativa($bulto->estado));
 
         if ($bultosRecibidos->isEmpty()) {
             return [false, 'No hay bultos en custodia listos para entregar.'];
@@ -111,7 +117,7 @@ class ConsultaFormularioEntregaResguardoPdvService
             'referencia_cliente' => $this->referenciaCliente($resguardo),
             'cantidad_bultos_esperada' => $resguardo->cantidad_bultos_esperada,
             'cantidad_bultos_en_custodia' => $resguardo->bultos
-                ->filter(fn ($bulto) => $bulto->estado === ResguardoPdvBulto::ESTADO_RECIBIDO)
+                ->filter(fn ($bulto) => ResguardoPdvBulto::estaEnCustodiaOperativa($bulto->estado))
                 ->count(),
             'recepcion_fisica_at' => $resguardo->recepcion_fisica_at?->toIso8601String(),
             'entrega_bloqueada' => $resguardo->entrega_bloqueada,
@@ -138,6 +144,8 @@ class ConsultaFormularioEntregaResguardoPdvService
                 'estado' => $incidencia->estado,
                 'descripcion' => $incidencia->descripcion,
             ])->values()->all(),
+            'bultos_empaque_cedis' => SerializadorBultosEmpaqueCedisPdv::desdePedido($resguardo->pedido),
+            'pedido_revision' => SerializadorPedidoRevisionResguardoPdv::desdePedido($resguardo->pedido),
         ];
     }
 

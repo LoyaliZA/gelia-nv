@@ -44,7 +44,7 @@ class UiRecepcionFisicaResguardoPdvTest extends TestCase
         $this->usuario->givePermissionTo([
             PuntoVentaModulo::PERMISO_ACCEDER,
             PuntoVentaModulo::PERMISO_RESGUARDOS_VER,
-            PuntoVentaModulo::PERMISO_RESGUARDOS_RECIBIR,
+            PuntoVentaModulo::PERMISO_RESGUARDOS_RECIBIR_GERENTE,
         ]);
         $this->usuario->concederAccesoSucursal($this->sucursal, esPrincipal: true);
     }
@@ -83,11 +83,9 @@ class UiRecepcionFisicaResguardoPdvTest extends TestCase
             ->assertForbidden();
     }
 
-    public function test_formulario_recepcion_en_custodia_con_pendientes_admite_complemento(): void
+    public function test_formulario_recepcion_pendiente_admite_llegada_gerente(): void
     {
         $resguardo = $this->crearResguardoPendiente([
-            'estado' => ResguardoPdv::ESTADO_EN_CUSTODIA,
-            'recepcion_fisica_at' => now(),
             'cantidad_bultos_esperada' => 2,
         ]);
 
@@ -97,7 +95,7 @@ class UiRecepcionFisicaResguardoPdvTest extends TestCase
             ->assertInertia(fn ($page) => $page
                 ->where('admite_recepcion', true)
                 ->where('motivo_no_recepcion', null)
-                ->where('resguardo.estado', ResguardoPdv::ESTADO_EN_CUSTODIA)
+                ->where('resguardo.estado', ResguardoPdv::ESTADO_PENDIENTE_RECEPCION)
                 ->where('resguardo.cantidad_bultos_pendiente', 2));
     }
 
@@ -112,7 +110,7 @@ class UiRecepcionFisicaResguardoPdvTest extends TestCase
             ->assertOk()
             ->assertInertia(fn ($page) => $page
                 ->where('admite_recepcion', false)
-                ->where('motivo_no_recepcion', 'sin_bultos_pendientes')
+                ->where('motivo_no_recepcion', 'estado_invalido')
                 ->where('resguardo.estado', ResguardoPdv::ESTADO_PENDIENTE_RECEPCION));
     }
 

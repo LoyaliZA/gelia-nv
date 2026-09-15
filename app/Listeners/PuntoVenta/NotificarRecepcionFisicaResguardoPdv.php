@@ -18,7 +18,7 @@ class NotificarRecepcionFisicaResguardoPdv
             $clave = 'recepcion_fisica:'.$event->evento->id;
         }
 
-        $this->notificaciones->recepcionFisica(
+        $this->notificaciones->recepcionGerente(
             $event->resguardo,
             $event->sucursalId,
             $clave,

@@ -14,15 +14,17 @@ const path = typeof window !== 'undefined' ? window.location.pathname : '';
 const isPublicForm =
     path.startsWith('/direcciones-envio') || path.startsWith('/datos-fiscales') || path.startsWith('/cedis-evidencia');
 
-if (!isPublicForm) {
+if (!isPublicForm && !window.Echo) {
+    const useTls = (import.meta.env.VITE_REVERB_SCHEME ?? 'https') === 'https';
+
     window.Echo = new Echo({
         broadcaster: 'reverb',
         key: import.meta.env.VITE_REVERB_APP_KEY,
         wsHost: import.meta.env.VITE_REVERB_HOST,
         wsPort: import.meta.env.VITE_REVERB_PORT ?? 80,
         wssPort: import.meta.env.VITE_REVERB_PORT ?? 443,
-        forceTLS: (import.meta.env.VITE_REVERB_SCHEME ?? 'https') === 'https',
-        enabledTransports: ['ws', 'wss'],
+        forceTLS: useTls,
+        enabledTransports: useTls ? ['wss'] : ['ws'],
         authEndpoint: '/broadcasting/auth',
     });
 }

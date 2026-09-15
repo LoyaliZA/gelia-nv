@@ -51,6 +51,33 @@ class UiEntregaResguardoPdvTest extends TestCase
         $this->usuario->concederAccesoSucursal($this->sucursal, esPrincipal: true);
     }
 
+    public function test_formulario_entrega_responde_json_para_modal(): void
+    {
+        $resguardo = $this->crearResguardoEnCustodia();
+
+        $this->actingAs($this->usuario)
+            ->getJson(route('punto_venta.resguardos.entrega.create', $resguardo))
+            ->assertOk()
+            ->assertJsonPath('resguardo.id', $resguardo->id)
+            ->assertJsonPath('puede_entregar', true)
+            ->assertJsonStructure([
+                'resguardo' => ['id', 'bultos', 'bultos_empaque_cedis', 'pedido_revision'],
+                'catalogos' => ['relaciones', 'metodo_validacion'],
+            ]);
+    }
+
+    public function test_show_expone_pedido_revision_y_bultos_empaque(): void
+    {
+        $resguardo = $this->crearResguardoEnCustodia();
+
+        $this->actingAs($this->usuario)
+            ->get(route('punto_venta.resguardos.show', $resguardo))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->has('resguardo.bultos_empaque_cedis')
+                ->has('resguardo.pedido_revision'));
+    }
+
     public function test_formulario_entrega_renderiza_inertia_con_snapshot_y_bultos(): void
     {
         $resguardo = $this->crearResguardoEnCustodia();

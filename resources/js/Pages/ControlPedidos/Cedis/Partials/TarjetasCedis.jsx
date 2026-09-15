@@ -27,6 +27,8 @@ import EncabezadoFolioPedido from '../../Partials/EncabezadoFolioPedido';
 import BloqueVendedorPedido from '../../Partials/BloqueVendedorPedido';
 import BotonAccionCubico from '../../Partials/BotonAccionCubico';
 import ModalConfirmarAccion from '../../Partials/ModalConfirmarAccion';
+import ModalMarcarEmpacadoBultos from './ModalMarcarEmpacadoBultos';
+import { empacarRequiereModalBultos } from '../../Partials/pedidosBmaStyles';
 import ModalVistaPreviaDocumento from '../../Partials/ModalVistaPreviaDocumento';
 import BotonGuiaPdf from '../../Partials/BotonGuiaPdf';
 import AvisoOperativoPedido from '../../Partials/AvisoOperativoPedido';
@@ -117,7 +119,7 @@ function TarjetaPedido({
                     {pedido.consulta_actualizacion_pendiente || pedido.motivo_repesaje
                         ? `Actualización (${LABELS_MOTIVO_REPESAJE[pedido.motivo_repesaje] || pedido.motivo_repesaje || 'cambio'}). Revise el anexo/PDF y confirme.`
                         : (pedido.origen?.requiere_logistica === false
-                            ? 'Revise el PDF o foto, registre el estado de las piezas y la evidencia final del lote (sin cajas ni pesos).'
+                            ? 'Revise el PDF o foto, registre las piezas, los bultos a preparar (aprox.) y la evidencia final del lote.'
                             : 'Revise el PDF o foto del pedido y registre peso y cajas.')}
                 </AvisoOperativoPedido>
             )}
@@ -291,6 +293,7 @@ export default function TarjetasCedis({
     const puedeReabrir = permisos.includes('control_pedidos.reabrir') || auth?.user?.roles?.includes('Super Admin');
     const puedeEnviar = permisos.includes('control_pedidos.cedis.enviar') || auth?.user?.roles?.includes('Super Admin');
     const [confirmacion, setConfirmacion] = useState(null);
+    const [modalEmpacarBultos, setModalEmpacarBultos] = useState(null);
     const [docPreview, setDocPreview] = useState(null);
 
     const abrirDocumento = (docOrDocs, indice = 0) => {
@@ -303,6 +306,14 @@ export default function TarjetasCedis({
         }
     };
     const items = pedidos?.data || [];
+
+    const solicitarConfirmacion = (payload) => {
+        if (payload?.accion === 'empacar' && empacarRequiereModalBultos(payload.pedido)) {
+            setModalEmpacarBultos(payload.pedido);
+            return;
+        }
+        setConfirmacion(payload);
+    };
 
     const ejecutarConfirmacion = () => {
         const { accion, pedido } = confirmacion || {};
@@ -352,7 +363,7 @@ export default function TarjetasCedis({
                         onResponderPesaje={onResponderPesaje}
                         onReportarErrorDatos={onReportarErrorDatos}
                         onMarcarApartado={onMarcarApartado}
-                        onSolicitarConfirmacion={setConfirmacion}
+                        onSolicitarConfirmacion={solicitarConfirmacion}
                         onVerDocumento={abrirDocumento}
                         onBitacora={onBitacora}
                         puedeReabrir={puedeReabrir}
@@ -360,6 +371,11 @@ export default function TarjetasCedis({
                     />
                 ))}
             </div>
+            <ModalMarcarEmpacadoBultos
+                abierto={Boolean(modalEmpacarBultos)}
+                pedido={modalEmpacarBultos}
+                onClose={() => setModalEmpacarBultos(null)}
+            />
             <ModalConfirmarAccion
                 abierto={Boolean(cfgConfirm)}
                 titulo={cfgConfirm?.titulo}
