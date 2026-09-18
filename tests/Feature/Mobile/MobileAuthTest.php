@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Mobile;
 
+use App\Models\ConfiguracionUsuario;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\PersonalAccessToken;
@@ -31,7 +32,8 @@ class MobileAuthTest extends TestCase
             ->assertJsonPath('token_type', 'Bearer')
             ->assertJsonPath('device.device_uuid', '11111111-1111-1111-1111-111111111111')
             ->assertJsonPath('user.id', $user->id)
-            ->assertJsonStructure(['access_token', 'expires_at', 'scope_version', 'permissions']);
+            ->assertJsonPath('tema_visual', [])
+            ->assertJsonStructure(['access_token', 'expires_at', 'scope_version', 'permissions', 'tema_visual']);
 
         $this->assertDatabaseHas('mobile_devices', [
             'user_id' => $user->id,
@@ -75,6 +77,56 @@ class MobileAuthTest extends TestCase
             ->assertUnauthorized();
     }
 
+    public function test_login_y_me_incluyen_tema_visual_del_usuario(): void
+    {
+        $user = User::factory()->create(['password' => 'secret123']);
+        ConfiguracionUsuario::create([
+            'user_id' => $user->id,
+            'tema_visual' => [
+                'modo' => 'dark',
+                'color_nombre' => 'rosa',
+                'layout_sidebar_mobile' => 'mobile_bottom',
+            ],
+        ]);
+
+        $login = $this->postJson('/api/v1/mobile/login', [
+            'login' => $user->email,
+            'password' => 'secret123',
+            'device_uuid' => '33333333-3333-3333-3333-333333333333',
+        ])->assertOk();
+
+        $login
+            ->assertJsonPath('tema_visual.modo', 'dark')
+            ->assertJsonPath('tema_visual.color_nombre', 'rosa')
+            ->assertJsonPath('tema_visual.layout_sidebar_mobile', 'mobile_bottom');
+
+        $scopeVersion = $login->json('scope_version');
+        $token = $login->json('access_token');
+
+        $this->withToken($token)
+            ->getJson('/api/v1/mobile/me')
+            ->assertOk()
+            ->assertJsonPath('tema_visual.modo', 'dark')
+            ->assertJsonPath('tema_visual.color_nombre', 'rosa')
+            ->assertJsonPath('scope_version', $scopeVersion);
+
+        ConfiguracionUsuario::query()
+            ->where('user_id', $user->id)
+            ->update([
+                'tema_visual' => [
+                    'modo' => 'light',
+                    'color_nombre' => 'azul',
+                ],
+            ]);
+
+        $this->withToken($token)
+            ->getJson('/api/v1/mobile/me')
+            ->assertOk()
+            ->assertJsonPath('tema_visual.modo', 'light')
+            ->assertJsonPath('tema_visual.color_nombre', 'azul')
+            ->assertJsonPath('scope_version', $scopeVersion);
+    }
+
     public function test_me_y_logout(): void
     {
         $user = User::factory()->create(['password' => 'secret123']);
@@ -91,7 +143,8 @@ class MobileAuthTest extends TestCase
             ->getJson('/api/v1/mobile/me')
             ->assertOk()
             ->assertJsonPath('user.id', $user->id)
-            ->assertJsonPath('device.device_uuid', '22222222-2222-2222-2222-222222222222');
+            ->assertJsonPath('device.device_uuid', '22222222-2222-2222-2222-222222222222')
+            ->assertJsonStructure(['tema_visual', 'scope_version', 'permissions']);
 
         $this->withToken($token)
             ->postJson('/api/v1/mobile/logout')

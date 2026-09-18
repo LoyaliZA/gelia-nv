@@ -2,6 +2,7 @@
 
 namespace App\Services\Mobile;
 
+use App\Models\ConfiguracionUsuario;
 use App\Models\MobileDevice;
 use App\Models\MobileUserSyncState;
 use App\Models\User;
@@ -69,6 +70,7 @@ class MobileAuthService
             'scope_version' => $scopeVersion,
             'user' => $this->payloadUsuario($user),
             'permissions' => $user->getPermissionNames()->values()->all(),
+            'tema_visual' => $this->resolverTemaVisual($user),
             'device' => $this->payloadDispositivo($device),
         ];
     }
@@ -107,6 +109,7 @@ class MobileAuthService
             'user' => $this->payloadUsuario($user),
             'permissions' => $user->getPermissionNames()->values()->all(),
             'scope_version' => $this->scopeVersion->compute($user),
+            'tema_visual' => $this->resolverTemaVisual($user),
             'device' => $this->payloadDispositivo($device),
         ];
     }
@@ -142,5 +145,25 @@ class MobileAuthService
             'app_version' => $device->app_version,
             'last_seen_at' => optional($device->last_seen_at)?->toIso8601String(),
         ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function resolverTemaVisual(User $user): array
+    {
+        $configuracion = ConfiguracionUsuario::query()
+            ->where('user_id', $user->id)
+            ->value('tema_visual');
+
+        if (empty($configuracion)) {
+            return [];
+        }
+
+        if (is_string($configuracion)) {
+            return json_decode($configuracion, true) ?: [];
+        }
+
+        return is_array($configuracion) ? $configuracion : [];
     }
 }
