@@ -11,6 +11,7 @@ use App\Services\PuntoVenta\PuntoVentaModulo;
 use App\Support\PuntoVenta\Resguardos\EtiquetasResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\SerializadorBultosEmpaqueCedisPdv;
 use App\Support\PuntoVenta\Resguardos\SerializadorPedidoRevisionResguardoPdv;
+use App\Support\PuntoVenta\Resguardos\SerializadorRetiroPedidoResguardoPdv;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 
 class ConsultaFormularioEntregaResguardoPdvService
@@ -39,7 +40,7 @@ class ConsultaFormularioEntregaResguardoPdvService
         $resguardo->load([
             'sucursal:id,nombre',
             'cliente:id,numero_cliente',
-            'pedido:id,folio,folio_remision,estado_fisico_general,comentario_fisico_general,tiene_observaciones_fisicas',
+            'pedido:id,folio,folio_remision,envia_a_otra_persona,envia_otra_persona,estado_fisico_general,comentario_fisico_general,tiene_observaciones_fisicas',
             'pedido.revisionesProducto',
             'pedido.documentos' => fn ($q) => $q->vigente()->orderBy('orden')->orderBy('id'),
             'pedido.cajas' => fn ($q) => $q->orderBy('orden')->orderBy('id'),
@@ -108,13 +109,19 @@ class ConsultaFormularioEntregaResguardoPdvService
      */
     private function serializarResguardo(ResguardoPdv $resguardo): array
     {
+        $retiro = SerializadorRetiroPedidoResguardoPdv::desdeResguardo($resguardo);
+
         return [
             'id' => $resguardo->id,
             'estado' => $resguardo->estado,
             'estado_etiqueta' => EtiquetasResguardoPdv::etiquetaEstado($resguardo->estado),
             'version' => (int) $resguardo->version,
             'snapshot_folio' => $resguardo->snapshot_folio,
+            'snapshot_cliente_nombre' => $resguardo->snapshot_cliente_nombre,
             'referencia_cliente' => $this->referenciaCliente($resguardo),
+            'envia_a_otra_persona' => $retiro['envia_a_otra_persona'],
+            'envia_otra_persona' => $retiro['envia_otra_persona'],
+            'etiqueta_retiro' => $retiro['etiqueta_retiro'],
             'cantidad_bultos_esperada' => $resguardo->cantidad_bultos_esperada,
             'cantidad_bultos_en_custodia' => $resguardo->bultos
                 ->filter(fn ($bulto) => ResguardoPdvBulto::estaEnCustodiaOperativa($bulto->estado))
@@ -129,6 +136,8 @@ class ConsultaFormularioEntregaResguardoPdvService
                 'id' => $resguardo->pedido->id,
                 'folio' => $resguardo->pedido->folio,
                 'folio_remision' => $resguardo->pedido->folio_remision,
+                'envia_a_otra_persona' => (bool) $resguardo->pedido->envia_a_otra_persona,
+                'envia_otra_persona' => $resguardo->pedido->envia_otra_persona,
             ] : null,
             'bultos' => $resguardo->bultos->map(fn ($bulto) => [
                 'id' => $bulto->id,

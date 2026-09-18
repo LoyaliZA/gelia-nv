@@ -39,10 +39,26 @@ class NotificarResguardoPdvService
             AlertaResguardoPdvNotification::TIPO_RECEPCION_FISICA,
             [
                 PuntoVentaModulo::PERMISO_RESGUARDOS_VER,
-                PuntoVentaModulo::PERMISO_RESGUARDOS_CONFIRMAR_CUSTODIA,
+                PuntoVentaModulo::PERMISO_RESGUARDOS_RECIBIR_GERENTE,
             ],
             'Recepción gerente',
-            "Resguardo {$this->folio($resguardo)} recibido por gerencia; pendiente confirmar custodia."
+            "Resguardo {$this->folio($resguardo)} recibido por gerencia; pendiente pasar a recepción."
+        );
+    }
+
+    public function pasadoARecepcion(ResguardoPdv $resguardo, int $sucursalId, string $idempotencyKey): void
+    {
+        $this->enviar(
+            $resguardo,
+            $sucursalId,
+            $idempotencyKey,
+            AlertaResguardoPdvNotification::TIPO_RECEPCION_FISICA,
+            [
+                PuntoVentaModulo::PERMISO_RESGUARDOS_VER,
+                PuntoVentaModulo::PERMISO_RESGUARDOS_CONFIRMAR_CUSTODIA,
+            ],
+            'En recepción',
+            "Resguardo {$this->folio($resguardo)} listo para revisión en recepción."
         );
     }
 

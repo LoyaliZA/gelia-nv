@@ -71,5 +71,23 @@ class AsignarPermisosUsuarioService
         }
 
         app()[PermissionRegistrar::class]->forgetCachedPermissions();
+
+        self::notificarCambioAlcanceMovil($usuario, $existentesAntes, $permisosUnicos);
+    }
+
+    /**
+     * @param  array<int, string>  $antes
+     * @param  array<int, string>  $despues
+     */
+    private static function notificarCambioAlcanceMovil(User $usuario, array $antes, array $despues): void
+    {
+        $scope = app(\App\Services\Mobile\MobileScopeVersionService::class);
+        if (! $scope->permisosRelevantesCambiaron($antes, $despues)) {
+            return;
+        }
+
+        $scope->invalidarCacheUsuariosAccesoCompleto();
+        app(\App\Services\Mobile\MobileSyncBootstrapService::class)->invalidarDelUsuario($usuario);
+        app(\App\Services\Mobile\MobileSyncPublicationService::class)->notificar([$usuario->id], 0, true);
     }
 }

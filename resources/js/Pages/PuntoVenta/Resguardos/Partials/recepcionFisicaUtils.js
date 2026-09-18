@@ -77,9 +77,7 @@ export function resguardoAdmiteRecepcion(resguardo, puedeRecibir = null) {
         return resguardo.puede_recibir;
     }
 
-    const estadoPermitido = ['pendiente_recepcion', 'pendiente_custodia'].includes(resguardo?.estado);
-
-    return estadoPermitido && cantidadBultosPendiente(resguardo) > 0;
+    return resguardo?.estado === 'pendiente_recepcion' && cantidadBultosPendiente(resguardo) > 0;
 }
 
 export function mensajeEstadoNoRecepcion({ motivo, resguardo, catalogos = {} }) {
@@ -87,10 +85,12 @@ export function mensajeEstadoNoRecepcion({ motivo, resguardo, catalogos = {} }) 
         || catalogos.estados?.[resguardo?.estado]
         || resguardo?.estado;
 
-    if (motivo === 'recepcion_completa' || resguardo?.recepcion_completa === true) {
+    if (motivo === 'recepcion_completa' || resguardo?.recepcion_completa === true || resguardo?.estado === 'recibido') {
         return {
-            titulo: 'Este resguardo ya recibió todos los bultos esperados.',
-            detalle: 'Si otra terminal completó la recepción, consulta el detalle actualizado.',
+            titulo: 'Este resguardo ya fue recibido por gerencia.',
+            detalle: resguardo?.estado === 'recibido'
+                ? 'Pásalo a recepción cuando esté listo para revisión.'
+                : 'Si otra terminal completó la recepción, consulta el detalle actualizado.',
         };
     }
 

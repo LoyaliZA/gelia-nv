@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Camera, ImagePlus, Loader2, Plus, Trash2 } from 'lucide-react';
+import { Loader2, Plus, Trash2 } from 'lucide-react';
 import { geliaCardClass } from '../../../../utils/geliaTheme';
 import { THEME_BTN_PRIMARY } from '../../../../utils/geliaTheme';
 import ModalConfirmarAccion from '../../../ControlPedidos/Partials/ModalConfirmarAccion';
@@ -12,6 +12,8 @@ import {
     foliosBultosRecibidos,
     mensajeConfirmacionRecepcion,
 } from './recepcionFisicaUtils';
+import PanelPedidoRevisionResguardo from './PanelPedidoRevisionResguardo';
+import BotonesCapturaEvidencia from './BotonesCapturaEvidencia';
 
 export default function FormularioRecepcionFisica({
     resguardo,
@@ -97,6 +99,8 @@ export default function FormularioRecepcionFisica({
                     )}
                 </div>
             </div>
+
+            <PanelPedidoRevisionResguardo resguardo={resguardo} className="!p-4 sm:!p-5" />
 
             <div className={`${geliaCardClass()} p-5 space-y-4`}>
                 <div className="flex flex-wrap items-center justify-between gap-3">
@@ -197,38 +201,10 @@ export default function FormularioRecepcionFisica({
 
             <div className={`${geliaCardClass()} p-5 space-y-4`}>
                 <h2 className="text-sm font-black uppercase tracking-widest theme-text-main m-0">Evidencia fotográfica</h2>
-                <div className="flex flex-wrap gap-2">
-                    <label className={`${BTN_SECONDARY} inline-flex items-center gap-2 cursor-pointer min-h-[44px]`}>
-                        <Camera className="w-4 h-4" />
-                        Tomar foto
-                        <input
-                            type="file"
-                            accept="image/*"
-                            capture="environment"
-                            className="sr-only"
-                            disabled={enviando}
-                            onChange={(e) => {
-                                agregarEvidencias(e.target.files);
-                                e.target.value = '';
-                            }}
-                        />
-                    </label>
-                    <label className={`${BTN_SECONDARY} inline-flex items-center gap-2 cursor-pointer min-h-[44px]`}>
-                        <ImagePlus className="w-4 h-4" />
-                        Galería
-                        <input
-                            type="file"
-                            accept="image/*"
-                            multiple
-                            className="sr-only"
-                            disabled={enviando}
-                            onChange={(e) => {
-                                agregarEvidencias(e.target.files);
-                                e.target.value = '';
-                            }}
-                        />
-                    </label>
-                </div>
+                <BotonesCapturaEvidencia
+                    onAgregar={agregarEvidencias}
+                    deshabilitado={enviando}
+                />
                 {previews.length > 0 && (
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                         {previews.map((item, indice) => (

@@ -34,7 +34,7 @@ class RegistrarConfirmacionCustodiaPdvService
     ) {}
 
     /**
-     * @param  list<string>  $folios
+     * @param  list<array{folio: string, tipo?: string, condicion: string, piezas?: int}>  $bultos
      * @param  list<UploadedFile>  $evidencias
      */
     public function ejecutar(
@@ -43,7 +43,7 @@ class RegistrarConfirmacionCustodiaPdvService
         int $versionEsperada,
         string $idempotencyKey,
         int $almacenId,
-        array $folios,
+        array $bultos,
         array $evidencias = [],
     ): ResguardoPdv {
         $this->alcance->asegurarMutacionPiso(
@@ -61,7 +61,7 @@ class RegistrarConfirmacionCustodiaPdvService
                 $versionEsperada,
                 $idempotencyKey,
                 $almacenId,
-                $folios,
+                $bultos,
                 $evidencias,
                 &$pathsEscritos,
             ) {
@@ -77,20 +77,23 @@ class RegistrarConfirmacionCustodiaPdvService
 
                 $this->assertVersionYEstado($resguardo, $versionEsperada);
                 $almacen = $this->resolverAlmacenUbicacion($resguardo, $almacenId);
-                $foliosNormalizados = $this->normalizarFoliosCustodia($resguardo, $folios);
+                $bultosNormalizados = $this->normalizarBultosCustodia($resguardo, $bultos);
 
                 $estadoAnterior = $resguardo->estado;
                 $esperada = (int) $resguardo->cantidad_bultos_esperada;
                 $enCustodiaAntes = EstadoResguardoPdv::cantidadEnCustodia($resguardo);
                 $ahora = now();
 
-                foreach ($foliosNormalizados as $folio) {
-                    $bulto = $resguardo->bultos->firstWhere('folio', $folio);
+                foreach ($bultosNormalizados as $dato) {
+                    $bulto = $resguardo->bultos->firstWhere('folio', $dato['folio']);
                     if (! $bulto instanceof ResguardoPdvBulto) {
                         continue;
                     }
 
                     $bulto->update([
+                        'tipo' => $dato['tipo'],
+                        'piezas' => $dato['piezas'],
+                        'condicion' => $dato['condicion'],
                         'estado' => ResguardoPdvBulto::ESTADO_EN_CUSTODIA,
                         'custodia_at' => $ahora,
                         'custodia_por_id' => $actor->id,
@@ -128,8 +131,8 @@ class RegistrarConfirmacionCustodiaPdvService
                             'paso' => 'recepcionista',
                             'almacen_id' => $almacen->id,
                             'almacen_codigo' => $almacen->codigo,
-                            'folios' => $foliosNormalizados,
-                            'cantidad_confirmada' => count($foliosNormalizados),
+                            'bultos' => $bultosNormalizados,
+                            'cantidad_confirmada' => count($bultosNormalizados),
                             'cantidad_en_custodia' => $totalEnCustodia,
                             'cantidad_esperada' => $esperada,
                             'cantidad_pendiente_custodia' => EstadoResguardoPdv::cantidadPendienteCustodia($resguardo),
@@ -241,56 +244,82 @@ class RegistrarConfirmacionCustodiaPdvService
     }
 
     /**
-     * @param  list<string>  $folios
-     * @return list<string>
+     * @param  list<array{folio?: string, tipo?: string, condicion?: string, piezas?: int}>  $bultos
+     * @return list<array{folio: string, tipo: string, condicion: string, piezas: int}>
      */
-    private function normalizarFoliosCustodia(ResguardoPdv $resguardo, array $folios): array
+    private function normalizarBultosCustodia(ResguardoPdv $resguardo, array $bultos): array
     {
-        if ($folios === []) {
+        if ($bultos === []) {
             throw ValidationException::withMessages([
-                'folios' => 'Debe confirmar al menos un bulto en custodia.',
+                'bultos' => 'Debe confirmar al menos un bulto en custodia.',
             ]);
         }
 
         $pendientes = EstadoResguardoPdv::cantidadPendienteCustodia($resguardo);
-        if (count($folios) > $pendientes) {
+        if (count($bultos) > $pendientes) {
             throw ValidationException::withMessages([
-                'folios' => "Solo faltan {$pendientes} bulto(s) por confirmar en custodia.",
+                'bultos' => "Solo faltan {$pendientes} bulto(s) por confirmar en custodia.",
             ]);
         }
 
         $foliosUnicos = [];
         $normalizados = [];
 
-        foreach ($folios as $indice => $folio) {
-            $folio = trim((string) $folio);
+        foreach ($bultos as $indice => $dato) {
+            $folio = trim((string) ($dato['folio'] ?? ''));
             if ($folio === '') {
                 throw ValidationException::withMessages([
-                    "folios.{$indice}" => 'El folio del bulto es obligatorio.',
+                    "bultos.{$indice}.folio" => 'El folio del bulto es obligatorio.',
                 ]);
             }
 
             $bulto = $resguardo->bultos->firstWhere('folio', $folio);
             if (! $bulto instanceof ResguardoPdvBulto) {
                 throw ValidationException::withMessages([
-                    "folios.{$indice}" => 'El folio no corresponde a un bulto recibido por gerencia.',
+                    "bultos.{$indice}.folio" => 'El folio no corresponde a un bulto recibido por gerencia.',
                 ]);
             }
 
             if ($bulto->estado !== ResguardoPdvBulto::ESTADO_RECIBIDO_GERENTE) {
                 throw ValidationException::withMessages([
-                    "folios.{$indice}" => 'El bulto no está pendiente de confirmación en custodia.',
+                    "bultos.{$indice}.folio" => 'El bulto no está pendiente de confirmación en custodia.',
                 ]);
             }
 
             if (in_array($folio, $foliosUnicos, true)) {
                 throw ValidationException::withMessages([
-                    "folios.{$indice}" => 'Los folios deben ser únicos.',
+                    "bultos.{$indice}.folio" => 'Los folios deben ser únicos.',
+                ]);
+            }
+
+            $tipo = (string) ($dato['tipo'] ?? $bulto->tipo);
+            if (! in_array($tipo, [ResguardoPdvBulto::TIPO_CAJA, ResguardoPdvBulto::TIPO_BOLSA], true)) {
+                throw ValidationException::withMessages([
+                    "bultos.{$indice}.tipo" => 'El tipo de bulto no es válido.',
+                ]);
+            }
+
+            $condicion = trim((string) ($dato['condicion'] ?? ''));
+            if ($condicion === '') {
+                throw ValidationException::withMessages([
+                    "bultos.{$indice}.condicion" => 'La condición del bulto es obligatoria.',
+                ]);
+            }
+
+            $piezas = isset($dato['piezas']) ? (int) $dato['piezas'] : (int) $bulto->piezas;
+            if ($piezas < 1) {
+                throw ValidationException::withMessages([
+                    "bultos.{$indice}.piezas" => 'Las piezas deben ser al menos 1.',
                 ]);
             }
 
             $foliosUnicos[] = $folio;
-            $normalizados[] = $folio;
+            $normalizados[] = [
+                'folio' => $folio,
+                'tipo' => $tipo,
+                'condicion' => $condicion,
+                'piezas' => $piezas,
+            ];
         }
 
         return $normalizados;

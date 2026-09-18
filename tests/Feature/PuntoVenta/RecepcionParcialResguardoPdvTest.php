@@ -2,7 +2,6 @@
 
 namespace Tests\Feature\PuntoVenta;
 
-use App\Events\PuntoVenta\RecepcionFisicaPdvCompletada;
 use App\Models\Almacen;
 use App\Models\ConfiguracionSistema;
 use App\Models\PuntoVenta\ResguardoPdv;
@@ -11,11 +10,9 @@ use App\Models\PuntoVenta\ResguardoPdvEvento;
 use App\Models\Sucursal;
 use App\Models\User;
 use App\Services\PuntoVenta\PuntoVentaModulo;
-use App\Services\PuntoVenta\Resguardos\RegistrarRecepcionFisicaPdvService;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Event;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
@@ -60,205 +57,119 @@ class RecepcionParcialResguardoPdvTest extends TestCase
         $this->usuario->concederAccesoSucursal($this->sucursal, esPrincipal: true);
     }
 
-    public function test_dos_llegadas_completan_un_resguardo(): void
+    public function test_flujo_completo_recibido_en_recepcion_y_custodia(): void
     {
-        Event::fake([RecepcionFisicaPdvCompletada::class]);
-
         $resguardo = $this->crearResguardoPendiente(cantidadEsperada: 2);
 
         $this->actingAs($this->usuario)->putJson(
             route('punto_venta.resguardos.recepcion', $resguardo),
-            $this->payloadLlegada($resguardo, ['CJA-001'], 'pdv:rec:'.$resguardo->id.':llegada-1')
+            $this->payloadRecepcion($resguardo, 'pdv:rec:'.$resguardo->id.':1')
         )->assertOk()
-            ->assertJsonPath('resguardo.estado', ResguardoPdv::ESTADO_PENDIENTE_RECEPCION)
-            ->assertJsonPath('resguardo.recepcion_completa', false)
-            ->assertJsonPath('resguardo.cantidad_bultos_recibida', 1)
-            ->assertJsonPath('resguardo.cantidad_bultos_pendiente', 1)
-            ->assertJsonCount(1, 'resguardo.bultos');
-
-        $resguardo->refresh();
-        $this->assertSame(1, ResguardoPdvEvento::query()->count());
-        $this->assertSame(
-            ResguardoPdvEvento::TIPO_RECEPCION_PARCIAL,
-            ResguardoPdvEvento::query()->first()->tipo_evento
-        );
-
-        $this->actingAs($this->usuario)->putJson(
-            route('punto_venta.resguardos.recepcion', $resguardo),
-            $this->payloadLlegada($resguardo, ['CJA-002'], 'pdv:rec:'.$resguardo->id.':llegada-2')
-        )->assertOk()
-            ->assertJsonPath('resguardo.estado', ResguardoPdv::ESTADO_PENDIENTE_CUSTODIA)
-            ->assertJsonPath('resguardo.recepcion_completa', true)
-            ->assertJsonPath('resguardo.cantidad_bultos_recibida', 2)
-            ->assertJsonPath('resguardo.cantidad_bultos_pendiente', 0)
+            ->assertJsonPath('resguardo.estado', ResguardoPdv::ESTADO_RECIBIDO)
             ->assertJsonCount(2, 'resguardo.bultos');
 
-        $this->assertSame(2, ResguardoPdvBulto::query()->count());
-        $this->assertSame(2, ResguardoPdvEvento::query()->count());
-        $this->assertSame(
-            ResguardoPdvEvento::TIPO_RECEPCION_COMPLETA,
-            ResguardoPdvEvento::query()->orderByDesc('id')->first()->tipo_evento
-        );
-        Event::assertDispatchedTimes(RecepcionFisicaPdvCompletada::class, 2);
+        $resguardo->refresh();
+        $folios = $resguardo->bultos->pluck('folio')->all();
 
         $this->actingAs($this->usuario)->putJson(
-            route('punto_venta.resguardos.custodia', $resguardo->fresh()),
+            route('punto_venta.resguardos.pasar_recepcion', $resguardo),
             [
-                'version' => (int) $resguardo->fresh()->version,
-                'idempotency_key' => 'pdv:custodia:'.$resguardo->id.':1',
-                'almacen_id' => $this->almacen->id,
-                'folios' => ['CJA-001'],
+                'version' => (int) $resguardo->version,
+                'idempotency_key' => 'pdv:pasar:'.$resguardo->id.':1',
             ]
         )->assertOk()
-            ->assertJsonPath('resguardo.estado', ResguardoPdv::ESTADO_PENDIENTE_CUSTODIA)
-            ->assertJsonPath('resguardo.custodia_completa', false);
+            ->assertJsonPath('resguardo.estado', ResguardoPdv::ESTADO_EN_RECEPCION);
+
+        $this->assertSame(
+            ResguardoPdvEvento::TIPO_PASADO_A_RECEPCION,
+            ResguardoPdvEvento::query()->orderByDesc('id')->first()->tipo_evento
+        );
+
+        $resguardo->refresh();
 
         $this->actingAs($this->usuario)->putJson(
-            route('punto_venta.resguardos.custodia', $resguardo->fresh()),
+            route('punto_venta.resguardos.custodia', $resguardo),
             [
-                'version' => (int) $resguardo->fresh()->version,
+                'version' => (int) $resguardo->version,
+                'idempotency_key' => 'pdv:custodia:'.$resguardo->id.':1',
+                'almacen_id' => $this->almacen->id,
+                'bultos' => [
+                    [
+                        'folio' => $folios[0],
+                        'tipo' => ResguardoPdvBulto::TIPO_CAJA,
+                        'condicion' => 'bueno',
+                        'piezas' => 2,
+                    ],
+                ],
+            ]
+        )->assertOk()
+            ->assertJsonPath('resguardo.estado', ResguardoPdv::ESTADO_EN_RECEPCION)
+            ->assertJsonPath('resguardo.custodia_completa', false);
+
+        $resguardo->refresh();
+
+        $this->actingAs($this->usuario)->putJson(
+            route('punto_venta.resguardos.custodia', $resguardo),
+            [
+                'version' => (int) $resguardo->version,
                 'idempotency_key' => 'pdv:custodia:'.$resguardo->id.':2',
                 'almacen_id' => $this->almacen->id,
-                'folios' => ['CJA-002'],
+                'bultos' => [
+                    [
+                        'folio' => $folios[1],
+                        'tipo' => ResguardoPdvBulto::TIPO_CAJA,
+                        'condicion' => 'danado',
+                        'piezas' => 1,
+                    ],
+                ],
             ]
         )->assertOk()
             ->assertJsonPath('resguardo.estado', ResguardoPdv::ESTADO_EN_CUSTODIA)
             ->assertJsonPath('resguardo.custodia_completa', true);
+
+        $bulto = ResguardoPdvBulto::query()->where('folio', $folios[0])->first();
+        $this->assertSame(2, (int) $bulto->piezas);
+        $this->assertSame('bueno', $bulto->condicion);
     }
 
-    public function test_rechaza_folio_duplicado_exceso_y_version_obsoleta(): void
+    public function test_custodia_rechazada_si_no_esta_en_recepcion(): void
     {
-        $resguardo = $this->crearResguardoPendiente(cantidadEsperada: 2);
+        $resguardo = $this->crearResguardoPendiente();
 
         $this->actingAs($this->usuario)->putJson(
             route('punto_venta.resguardos.recepcion', $resguardo),
-            $this->payloadLlegada($resguardo, ['CJA-001'], 'pdv:rec:'.$resguardo->id.':ok')
+            $this->payloadRecepcion($resguardo, 'pdv:rec:'.$resguardo->id.':solo')
         )->assertOk();
 
+        $folio = $resguardo->fresh()->bultos->first()->folio;
+
         $this->actingAs($this->usuario)->putJson(
-            route('punto_venta.resguardos.recepcion', $resguardo->fresh()),
-            $this->payloadLlegada($resguardo->fresh(), ['CJA-001', 'CJA-002'], 'pdv:rec:'.$resguardo->id.':exceso')
+            route('punto_venta.resguardos.custodia', $resguardo->fresh()),
+            [
+                'version' => (int) $resguardo->fresh()->version,
+                'idempotency_key' => 'pdv:custodia:'.$resguardo->id.':prematura',
+                'almacen_id' => $this->almacen->id,
+                'bultos' => [
+                    [
+                        'folio' => $folio,
+                        'tipo' => ResguardoPdvBulto::TIPO_CAJA,
+                        'condicion' => 'bueno',
+                        'piezas' => 1,
+                    ],
+                ],
+            ]
         )->assertUnprocessable()
-            ->assertJsonValidationErrors(['bultos']);
-
-        $payloadDuplicado = $this->payloadLlegada($resguardo->fresh(), ['CJA-001'], 'pdv:rec:'.$resguardo->id.':dup');
-        $this->actingAs($this->usuario)->putJson(
-            route('punto_venta.resguardos.recepcion', $resguardo->fresh()),
-            $payloadDuplicado
-        )->assertUnprocessable()
-            ->assertJsonValidationErrors(['bultos.0.folio']);
-
-        $payloadVersion = $this->payloadLlegada($resguardo->fresh(), ['CJA-002'], 'pdv:rec:'.$resguardo->id.':ver');
-        $payloadVersion['version'] = 1;
-        $this->actingAs($this->usuario)->putJson(
-            route('punto_venta.resguardos.recepcion', $resguardo->fresh()),
-            $payloadVersion
-        )->assertUnprocessable()
-            ->assertJsonValidationErrors(['version']);
-    }
-
-    public function test_dos_terminales_agregan_el_mismo_bulto_solo_uno_efectivo(): void
-    {
-        Event::fake([RecepcionFisicaPdvCompletada::class]);
-
-        $resguardo = $this->crearResguardoPendiente(cantidadEsperada: 2);
-        $bulto = [
-            'folio' => 'CJA-RACE',
-            'tipo' => ResguardoPdvBulto::TIPO_CAJA,
-            'condicion' => 'bueno',
-        ];
-
-        $servicio = app(RegistrarRecepcionFisicaPdvService::class);
-
-        $servicio->ejecutar(
-            $resguardo,
-            $this->usuario,
-            1,
-            'pdv:rec:'.$resguardo->id.':race-a',
-            null,
-            [$bulto],
-        );
-
-        try {
-            $servicio->ejecutar(
-                $resguardo->fresh(['bultos']),
-                $this->usuario,
-                2,
-                'pdv:rec:'.$resguardo->id.':race-b',
-                null,
-                [$bulto],
-            );
-            $this->fail('Debía rechazar el folio duplicado');
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            $this->assertArrayHasKey('bultos.0.folio', $e->errors());
-        }
-
-        $this->assertSame(1, ResguardoPdvBulto::query()->where('folio', 'CJA-RACE')->count());
-        $this->assertSame(1, ResguardoPdvEvento::query()->count());
-        Event::assertDispatchedTimes(RecepcionFisicaPdvCompletada::class, 1);
-    }
-
-    public function test_historial_conserva_cada_llegada(): void
-    {
-        $resguardo = $this->crearResguardoPendiente(cantidadEsperada: 3);
-
-        foreach (['CJA-A', 'CJA-B', 'CJA-C'] as $indice => $folio) {
-            $this->actingAs($this->usuario)->putJson(
-                route('punto_venta.resguardos.recepcion', $resguardo->fresh()),
-                $this->payloadLlegada($resguardo->fresh(), [$folio], 'pdv:rec:'.$resguardo->id.':h-'.$indice)
-            )->assertOk();
-        }
-
-        $eventos = ResguardoPdvEvento::query()
-            ->where('resguardo_id', $resguardo->id)
-            ->orderBy('id')
-            ->get();
-
-        $this->assertCount(3, $eventos);
-        $this->assertSame(ResguardoPdvEvento::TIPO_RECEPCION_PARCIAL, $eventos[0]->tipo_evento);
-        $this->assertSame(ResguardoPdvEvento::TIPO_RECEPCION_PARCIAL, $eventos[1]->tipo_evento);
-        $this->assertSame(ResguardoPdvEvento::TIPO_RECEPCION_COMPLETA, $eventos[2]->tipo_evento);
-        $this->assertSame(['CJA-A'], array_column($eventos[0]->snapshot_json['bultos'], 'folio'));
-        $this->assertSame(['CJA-B'], array_column($eventos[1]->snapshot_json['bultos'], 'folio'));
-        $this->assertSame(['CJA-C'], array_column($eventos[2]->snapshot_json['bultos'], 'folio'));
-        $this->assertTrue($eventos[2]->snapshot_json['recepcion_completa']);
-    }
-
-    public function test_llegada_complementaria_rechazada_si_ya_esta_completo(): void
-    {
-        $resguardo = $this->crearResguardoPendiente(cantidadEsperada: 1);
-
-        $this->actingAs($this->usuario)->putJson(
-            route('punto_venta.resguardos.recepcion', $resguardo),
-            $this->payloadLlegada($resguardo, ['CJA-UNO'], 'pdv:rec:'.$resguardo->id.':full')
-        )->assertOk();
-
-        $this->actingAs($this->usuario)->putJson(
-            route('punto_venta.resguardos.recepcion', $resguardo->fresh()),
-            $this->payloadLlegada($resguardo->fresh(), ['CJA-EXTRA'], 'pdv:rec:'.$resguardo->id.':extra')
-        )->assertStatus(409);
-
-        $this->assertSame(1, ResguardoPdvBulto::query()->count());
-        $this->assertSame(1, ResguardoPdvEvento::query()->count());
+            ->assertJsonValidationErrors(['estado']);
     }
 
     /**
-     * @param  list<string>  $folios
      * @return array<string, mixed>
      */
-    private function payloadLlegada(ResguardoPdv $resguardo, array $folios, string $clave): array
+    private function payloadRecepcion(ResguardoPdv $resguardo, string $clave): array
     {
         return [
             'version' => (int) $resguardo->version,
             'idempotency_key' => $clave,
-            'bultos' => array_map(
-                fn (string $folio) => [
-                    'folio' => $folio,
-                    'tipo' => ResguardoPdvBulto::TIPO_CAJA,
-                    'condicion' => 'bueno',
-                ],
-                $folios
-            ),
         ];
     }
 

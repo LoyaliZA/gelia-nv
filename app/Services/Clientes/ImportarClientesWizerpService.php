@@ -15,6 +15,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
 use App\Notifications\AlertaLimiteCreditoSuperadoMasivoNotification;
+use App\Services\Mobile\MobileSyncPublicationService;
+use App\Services\Mobile\MobileSyncSuppression;
 
 class ImportarClientesWizerpService
 {
@@ -87,10 +89,12 @@ class ImportarClientesWizerpService
         Cache::put('import_clientes_en_curso', true, now()->addHours(2));
 
         $alertasLimiteExcedido = [];
+        $publicacionMovil = app(MobileSyncPublicationService::class);
 
         try {
+            MobileSyncSuppression::begin();
             foreach (array_chunk($filas, self::CHUNK_SIZE) as $chunk) {
-                DB::transaction(function () use ($chunk, $listas, $mapaVendedoras, $importaCodigoLista, &$reporteAscensos, &$marcadosInactivos, &$stats, &$alertasLimiteExcedido, &$erroresBatch, &$cambiosListaBatch, $importacionClienteId, $usuarioId) {
+                DB::transaction(function () use ($chunk, $listas, $mapaVendedoras, $importaCodigoLista, &$reporteAscensos, &$marcadosInactivos, &$stats, &$alertasLimiteExcedido, &$erroresBatch, &$cambiosListaBatch, $importacionClienteId, $usuarioId, $publicacionMovil) {
                     $historialBatch = [];
                     $numeros = array_values(array_unique(array_map(
                         fn (array $fila) => trim($fila['data']['numero_cliente']),
@@ -101,6 +105,14 @@ class ImportarClientesWizerpService
                         ->whereIn('numero_cliente', $numeros)
                         ->get()
                         ->keyBy('numero_cliente');
+
+                    $antesPorId = $clientesPorNumero->keyBy('id')->map(function (Cliente $cliente) {
+                        $copia = $cliente->replicate();
+                        $copia->id = $cliente->id;
+                        $copia->exists = true;
+
+                        return $copia;
+                    });
 
                     foreach ($chunk as $fila) {
                         $data = $fila['data'];
@@ -167,9 +179,15 @@ class ImportarClientesWizerpService
                             HistorialMontoCliente::insert($loteHistorial);
                         }
                     }
+
+                    $publicacionMovil->publishDiffColeccion(
+                        $antesPorId,
+                        $clientesPorNumero->filter(fn ($cliente) => $cliente instanceof Cliente && $cliente->id)->keyBy('id')
+                    );
                 });
             }
         } finally {
+            MobileSyncSuppression::end();
             Cache::forget('import_clientes_en_curso');
         }
 

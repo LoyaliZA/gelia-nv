@@ -28,7 +28,7 @@ class ConfirmacionCustodiaResguardoPdvController extends Controller
             (int) $datos['version'],
             (string) $datos['idempotency_key'],
             (int) $datos['almacen_id'],
-            $datos['folios'],
+            $datos['bultos'],
             $request->file('evidencias', []) ?? [],
         );
 

@@ -46,7 +46,7 @@ class EtiquetasQrResguardoPdvTest extends TestCase
         $this->usuario->givePermissionTo([
             PuntoVentaModulo::PERMISO_ACCEDER,
             PuntoVentaModulo::PERMISO_RESGUARDOS_VER,
-            PuntoVentaModulo::PERMISO_RESGUARDOS_RECIBIR,
+            PuntoVentaModulo::PERMISO_RESGUARDOS_RECIBIR_GERENTE,
         ]);
         $this->usuario->concederAccesoSucursal($this->sucursal, esPrincipal: true);
     }
@@ -60,11 +60,6 @@ class EtiquetasQrResguardoPdvTest extends TestCase
             [
                 'version' => 1,
                 'idempotency_key' => 'pdv:rec:'.$resguardo->id.':etiqueta',
-                'almacen_id' => $this->crearAlmacen()->id,
-                'bultos' => [
-                    ['folio' => 'CJA-A', 'tipo' => ResguardoPdvBulto::TIPO_CAJA, 'condicion' => 'bueno'],
-                    ['folio' => 'CJA-B', 'tipo' => ResguardoPdvBulto::TIPO_CAJA, 'condicion' => 'bueno'],
-                ],
             ]
         )->assertOk();
 

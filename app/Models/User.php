@@ -13,10 +13,11 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Spatie\Permission\Traits\HasRoles;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
 {
-    use HasFactory, Notifiable, HasRoles, SoftDeletes;
+    use HasApiTokens, HasFactory, Notifiable, HasRoles, SoftDeletes;
 
     // --- SECCIÓN: CAMPOS PERMITIDOS ---
     protected $fillable = [
@@ -288,6 +289,11 @@ class User extends Authenticatable
     public function mensajes(): HasMany
     {
         return $this->hasMany(Mensaje::class);
+    }
+
+    public function mobileDevices(): HasMany
+    {
+        return $this->hasMany(MobileDevice::class);
     }
 
     /**

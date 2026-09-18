@@ -49,23 +49,37 @@ class UiRecepcionFisicaResguardoPdvTest extends TestCase
         $this->usuario->concederAccesoSucursal($this->sucursal, esPrincipal: true);
     }
 
-    public function test_formulario_recepcion_renderiza_inertia_con_snapshot_y_almacenes(): void
+    public function test_formulario_recepcion_redirige_a_bandeja_con_modal(): void
     {
         $resguardo = $this->crearResguardoPendiente();
 
         $this->actingAs($this->usuario)
             ->get(route('punto_venta.resguardos.recepcion.create', $resguardo))
+            ->assertRedirect(route('punto_venta.resguardos.index', [
+                'bandeja' => 'por_recibir',
+                'recepcion' => $resguardo->id,
+            ]));
+    }
+
+    public function test_formulario_recepcion_responde_json_para_modal(): void
+    {
+        $resguardo = $this->crearResguardoPendiente();
+
+        $this->actingAs($this->usuario)
+            ->getJson(route('punto_venta.resguardos.recepcion.create', $resguardo))
             ->assertOk()
-            ->assertInertia(fn ($page) => $page
-                ->component('PuntoVenta/Resguardos/Recepcion', false)
-                ->where('resguardo.id', $resguardo->id)
-                ->where('resguardo.version', 1)
-                ->where('resguardo.snapshot_folio', 'REM-REC-UI')
-                ->where('admite_recepcion', true)
-                ->has('almacenes', 1)
-                ->where('almacenes.0.id', $this->almacen->id)
-                ->has('catalogos.tipos_bulto')
-                ->has('catalogos.condiciones_bulto'));
+            ->assertJsonPath('resguardo.id', $resguardo->id)
+            ->assertJsonPath('admite_recepcion', true)
+            ->assertJsonStructure([
+                'resguardo' => [
+                    'id',
+                    'bultos_empaque_cedis',
+                    'pedido_revision',
+                    'etiqueta_retiro',
+                    'envia_a_otra_persona',
+                ],
+                'catalogos' => ['estados'],
+            ]);
     }
 
     public function test_formulario_recepcion_sin_permiso_recibir(): void
@@ -90,13 +104,12 @@ class UiRecepcionFisicaResguardoPdvTest extends TestCase
         ]);
 
         $this->actingAs($this->usuario)
-            ->get(route('punto_venta.resguardos.recepcion.create', $resguardo))
+            ->getJson(route('punto_venta.resguardos.recepcion.create', $resguardo))
             ->assertOk()
-            ->assertInertia(fn ($page) => $page
-                ->where('admite_recepcion', true)
-                ->where('motivo_no_recepcion', null)
-                ->where('resguardo.estado', ResguardoPdv::ESTADO_PENDIENTE_RECEPCION)
-                ->where('resguardo.cantidad_bultos_pendiente', 2));
+            ->assertJsonPath('admite_recepcion', true)
+            ->assertJsonPath('motivo_no_recepcion', null)
+            ->assertJsonPath('resguardo.estado', ResguardoPdv::ESTADO_PENDIENTE_RECEPCION)
+            ->assertJsonPath('resguardo.cantidad_bultos_pendiente', 2);
     }
 
     public function test_formulario_recepcion_sin_bultos_pendientes_marca_no_disponible(): void
@@ -106,12 +119,11 @@ class UiRecepcionFisicaResguardoPdvTest extends TestCase
         ]);
 
         $this->actingAs($this->usuario)
-            ->get(route('punto_venta.resguardos.recepcion.create', $resguardo))
+            ->getJson(route('punto_venta.resguardos.recepcion.create', $resguardo))
             ->assertOk()
-            ->assertInertia(fn ($page) => $page
-                ->where('admite_recepcion', false)
-                ->where('motivo_no_recepcion', 'estado_invalido')
-                ->where('resguardo.estado', ResguardoPdv::ESTADO_PENDIENTE_RECEPCION));
+            ->assertJsonPath('admite_recepcion', false)
+            ->assertJsonPath('motivo_no_recepcion', 'estado_invalido')
+            ->assertJsonPath('resguardo.estado', ResguardoPdv::ESTADO_PENDIENTE_RECEPCION);
     }
 
     public function test_index_expone_permiso_recibir(): void

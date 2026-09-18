@@ -1,50 +1,42 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import { router } from '@inertiajs/react';
 import {
-    armarFormDataRecepcion,
     claveIdempotenciaRecepcion,
     limpiarClaveIdempotenciaRecepcion,
     mensajeErrorRecepcion,
-    validarFormularioRecepcion,
     esConflictoVersion,
 } from './recepcionFisicaUtils';
 
-export default function useRecepcionFisica({ resguardoId, versionInicial }) {
+export default function useRecepcionFisica({
+    resguardoId,
+    versionInicial,
+    modoModal = false,
+    onExitoModal,
+    onRecargarFormulario,
+}) {
     const [enviando, setEnviando] = useState(false);
     const [progreso, setProgreso] = useState(0);
     const [error, setError] = useState(null);
     const [exito, setExito] = useState(false);
-    const [llegadaParcial, setLlegadaParcial] = useState(null);
     const versionRef = useRef(versionInicial);
     const envioBloqueado = useRef(false);
     const idempotencyRef = useRef(claveIdempotenciaRecepcion(resguardoId));
+
+    useEffect(() => {
+        if (versionInicial) {
+            versionRef.current = versionInicial;
+        }
+    }, [versionInicial]);
 
     const renovarIdempotencia = useCallback(() => {
         limpiarClaveIdempotenciaRecepcion(resguardoId);
         idempotencyRef.current = claveIdempotenciaRecepcion(resguardoId);
     }, [resguardoId]);
 
-    const enviar = useCallback(async ({
-        almacenId,
-        bultos,
-        evidencias,
-        cantidadPendiente,
-        foliosRecibidos = [],
-    }) => {
+    const enviar = useCallback(async () => {
         if (envioBloqueado.current || enviando) {
             return { duplicado: true };
-        }
-
-        const erroresLocales = validarFormularioRecepcion({
-            almacenId,
-            bultos,
-            cantidadPendiente,
-            foliosRecibidos,
-        });
-        if (Object.keys(erroresLocales).length > 0) {
-            setError(Object.values(erroresLocales)[0]);
-            return { validacion: erroresLocales };
         }
 
         envioBloqueado.current = true;
@@ -52,22 +44,15 @@ export default function useRecepcionFisica({ resguardoId, versionInicial }) {
         setProgreso(0);
         setError(null);
 
-        const form = armarFormDataRecepcion({
-            version: versionRef.current,
-            idempotencyKey: idempotencyRef.current,
-            almacenId,
-            bultos,
-            evidencias,
-        });
-
         try {
-            const { data } = await axios.put(route('punto_venta.resguardos.recepcion', resguardoId), form, {
-                headers: { Accept: 'application/json' },
-                onUploadProgress: (event) => {
-                    if (!event.total) return;
-                    setProgreso(Math.round((event.loaded / event.total) * 100));
+            const { data } = await axios.put(
+                route('punto_venta.resguardos.recepcion', resguardoId),
+                {
+                    version: versionRef.current,
+                    idempotency_key: idempotencyRef.current,
                 },
-            });
+                { headers: { Accept: 'application/json' } },
+            );
 
             setProgreso(100);
             renovarIdempotencia();
@@ -78,14 +63,11 @@ export default function useRecepcionFisica({ resguardoId, versionInicial }) {
                 versionRef.current = resguardoActualizado.version;
             }
 
-            if (resguardoActualizado?.recepcion_completa) {
-                setExito(true);
-                setLlegadaParcial(null);
-                return { ok: true, completa: true, resguardo: resguardoActualizado };
+            setExito(true);
+            if (modoModal) {
+                onExitoModal?.({ ok: true, resguardo: resguardoActualizado, fase: 'exito' });
             }
-
-            setLlegadaParcial(resguardoActualizado);
-            return { ok: true, parcial: true, resguardo: resguardoActualizado };
+            return { ok: true, resguardo: resguardoActualizado };
         } catch (err) {
             const mensaje = mensajeErrorRecepcion(err);
             setError(mensaje);
@@ -100,26 +82,38 @@ export default function useRecepcionFisica({ resguardoId, versionInicial }) {
         } finally {
             setEnviando(false);
         }
-    }, [enviando, renovarIdempotencia, resguardoId]);
+    }, [enviando, modoModal, onExitoModal, renovarIdempotencia, resguardoId]);
 
     const irADetalle = useCallback(() => {
+        if (modoModal) {
+            onExitoModal?.({ accion: 'detalle', resguardoId });
+        }
         router.visit(route('punto_venta.resguardos.show', resguardoId));
-    }, [resguardoId]);
+    }, [modoModal, onExitoModal, resguardoId]);
 
     const irABandeja = useCallback(() => {
-        router.visit(route('punto_venta.resguardos.index', { bandeja: 'en_custodia' }));
-    }, []);
+        if (modoModal) {
+            onExitoModal?.({ accion: 'bandeja' });
+        }
+        router.visit(route('punto_venta.resguardos.index', { bandeja: 'por_recibir', paso: 'gerente' }));
+    }, [modoModal, onExitoModal]);
 
     const recargarFormulario = useCallback(() => {
-        router.reload({ only: ['resguardo', 'admite_recepcion', 'motivo_no_recepcion', 'almacenes'] });
+        if (modoModal && onRecargarFormulario) {
+            onRecargarFormulario();
+        } else {
+            router.reload({ only: ['resguardo', 'admite_recepcion', 'motivo_no_recepcion'] });
+        }
         envioBloqueado.current = false;
         setError(null);
-        setLlegadaParcial(null);
-    }, []);
+        setExito(false);
+    }, [modoModal, onRecargarFormulario]);
 
-    const continuarComplemento = useCallback(() => {
-        recargarFormulario();
-    }, [recargarFormulario]);
+    const reiniciarFlujo = useCallback(() => {
+        setExito(false);
+        setError(null);
+        envioBloqueado.current = false;
+    }, []);
 
     return {
         enviar,
@@ -127,12 +121,11 @@ export default function useRecepcionFisica({ resguardoId, versionInicial }) {
         progreso,
         error,
         exito,
-        llegadaParcial,
         setError,
         irADetalle,
         irABandeja,
         recargarFormulario,
-        continuarComplemento,
+        reiniciarFlujo,
         idempotencyKey: idempotencyRef.current,
     };
 }

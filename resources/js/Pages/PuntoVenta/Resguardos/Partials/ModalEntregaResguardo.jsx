@@ -6,7 +6,7 @@ import { geliaCardClass, THEME_BTN_PRIMARY, THEME_MODAL_OVERLAY, THEME_MODAL_SHE
 import FormularioEntregaResguardo from './FormularioEntregaResguardo';
 import useEntregaResguardo from './useEntregaResguardo';
 import useFormularioEntregaResguardo from './useFormularioEntregaResguardo';
-import { BTN_SECONDARY, badgeEstadoResguardo } from './resguardosStyles';
+import { BTN_ACCION_RECEPCION_TARJETA, BTN_SECONDARY, badgeEstadoResguardo } from './resguardosStyles';
 
 export default function ModalEntregaResguardo({
     abierto,
@@ -223,9 +223,11 @@ export function AccionEntregaResguardo({
     variant = 'primary',
 }) {
     const [modalAbierto, setModalAbierto] = useState(false);
-    const btnClass = variant === 'primary'
-        ? `${THEME_BTN_PRIMARY} w-full inline-flex items-center justify-center gap-2 min-h-[44px] text-[10px] font-black uppercase tracking-widest`
-        : `${BTN_SECONDARY} inline-flex items-center gap-2 min-h-[44px] text-[10px] font-black uppercase tracking-widest`;
+    const btnClass = variant === 'pie'
+        ? BTN_ACCION_RECEPCION_TARJETA
+        : variant === 'primary'
+            ? `${THEME_BTN_PRIMARY} w-full inline-flex items-center justify-center gap-2 min-h-[44px] text-[10px] font-black uppercase tracking-widest`
+            : `${BTN_SECONDARY} inline-flex items-center gap-2 min-h-[44px] text-[10px] font-black uppercase tracking-widest`;
 
     return (
         <>

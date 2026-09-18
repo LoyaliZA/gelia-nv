@@ -8,9 +8,11 @@ use App\Models\PuntoVenta\ResguardoPdvEvento;
 use App\Models\User;
 use App\Services\PuntoVenta\PuntoVentaModulo;
 use App\Support\PuntoVenta\Resguardos\EstadoRecepcionResguardoPdv;
+use App\Support\PuntoVenta\Resguardos\EstadoResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\EtiquetasResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\SerializadorBultosEmpaqueCedisPdv;
 use App\Support\PuntoVenta\Resguardos\SerializadorPedidoRevisionResguardoPdv;
+use App\Support\PuntoVenta\Resguardos\SerializadorRetiroPedidoResguardoPdv;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 
 class ConsultaDetalleResguardoPdvService
@@ -38,7 +40,7 @@ class ConsultaDetalleResguardoPdvService
         $resguardo->load([
             'sucursal:id,nombre',
             'cliente:id,numero_cliente',
-            'pedido:id,folio,folio_remision',
+            'pedido:id,folio,folio_remision,envia_a_otra_persona,envia_otra_persona',
             'pedido.bultosEmpaque.documentos',
             'bultos' => fn ($q) => $q->orderBy('folio')->orderBy('id'),
             'incidencias' => fn ($q) => $q
@@ -56,7 +58,7 @@ class ConsultaDetalleResguardoPdvService
             $resguardo->load([
                 'sucursal:id,nombre',
                 'cliente:id,numero_cliente',
-                'pedido:id,folio,folio_remision',
+                'pedido:id,folio,folio_remision,envia_a_otra_persona,envia_otra_persona',
                 'pedido.bultosEmpaque.documentos',
                 'bultos' => fn ($q) => $q->orderBy('folio')->orderBy('id'),
                 'incidencias' => fn ($q) => $q
@@ -100,6 +102,8 @@ class ConsultaDetalleResguardoPdvService
             }
         }
 
+        $retiro = SerializadorRetiroPedidoResguardoPdv::desdeResguardo($resguardo);
+
         return [
             'id' => $resguardo->id,
             'version' => (int) $resguardo->version,
@@ -107,11 +111,16 @@ class ConsultaDetalleResguardoPdvService
             'estado_etiqueta' => EtiquetasResguardoPdv::etiquetaEstado($resguardo->estado),
             'pedido_bma_id' => $resguardo->pedido_bma_id,
             'snapshot_folio' => $resguardo->snapshot_folio,
+            'snapshot_cliente_nombre' => $resguardo->snapshot_cliente_nombre,
+            'envia_a_otra_persona' => $retiro['envia_a_otra_persona'],
+            'envia_otra_persona' => $retiro['envia_otra_persona'],
+            'etiqueta_retiro' => $retiro['etiqueta_retiro'],
             'referencia_cliente' => $this->referenciaCliente($resguardo),
             'cantidad_bultos_esperada' => $resguardo->cantidad_bultos_esperada,
             'cantidad_bultos_recibida' => EstadoRecepcionResguardoPdv::cantidadRecibida($resguardo),
             'cantidad_bultos_pendiente' => EstadoRecepcionResguardoPdv::cantidadPendiente($resguardo),
             'admite_recepcion' => EstadoRecepcionResguardoPdv::admiteRecepcion($resguardo),
+            'admite_pasar_a_recepcion' => EstadoResguardoPdv::admitePasarARecepcion($resguardo),
             'recepcion_completa' => EstadoRecepcionResguardoPdv::recepcionCompleta($resguardo),
             'salida_cedis_at' => $resguardo->salida_cedis_at?->toIso8601String(),
             'recepcion_fisica_at' => $resguardo->recepcion_fisica_at?->toIso8601String(),

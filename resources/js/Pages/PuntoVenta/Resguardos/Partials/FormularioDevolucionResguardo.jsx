@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { Camera, ImagePlus, Loader2, Undo2 } from 'lucide-react';
+import { Loader2, Undo2 } from 'lucide-react';
+import BotonesCapturaEvidencia from './BotonesCapturaEvidencia';
 import ModalConfirmarAccion from '../../../ControlPedidos/Partials/ModalConfirmarAccion';
 import { geliaCardClass } from '../../../../utils/geliaTheme';
 import { THEME_BTN_PRIMARY } from '../../../../utils/geliaTheme';
@@ -121,39 +122,13 @@ export default function FormularioDevolucionResguardo({
                             <span className="text-[9px] font-black uppercase tracking-widest theme-text-muted">
                                 Evidencia fotográfica (opcional)
                             </span>
-                            <div className="flex flex-wrap gap-2">
-                                <label className={`${BTN_SECONDARY} inline-flex items-center gap-2 min-h-[44px] cursor-pointer`}>
-                                    <Camera className="w-4 h-4" />
-                                    Cámara / galería
-                                    <input
-                                        type="file"
-                                        accept="image/*"
-                                        capture="environment"
-                                        className="sr-only"
-                                        multiple
-                                        disabled={enviando}
-                                        onChange={(e) => {
-                                            agregarEvidencias(e.target.files);
-                                            e.target.value = '';
-                                        }}
-                                    />
-                                </label>
-                                <label className={`${BTN_SECONDARY} inline-flex items-center gap-2 min-h-[44px] cursor-pointer`}>
-                                    <ImagePlus className="w-4 h-4" />
-                                    Adjuntar imagen
-                                    <input
-                                        type="file"
-                                        accept="image/*"
-                                        className="sr-only"
-                                        multiple
-                                        disabled={enviando}
-                                        onChange={(e) => {
-                                            agregarEvidencias(e.target.files);
-                                            e.target.value = '';
-                                        }}
-                                    />
-                                </label>
-                            </div>
+                            <BotonesCapturaEvidencia
+                                onAgregar={agregarEvidencias}
+                                deshabilitado={enviando}
+                                etiquetaCamara="Cámara / galería"
+                                etiquetaGaleria="Adjuntar imagen"
+                                camaraMultiple
+                            />
                             {previews.length > 0 && (
                                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                                     {previews.map((preview, indice) => (

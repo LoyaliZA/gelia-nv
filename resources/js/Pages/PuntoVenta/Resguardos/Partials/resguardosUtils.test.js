@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
     antiguedadValidaEnBandeja,
     antiguedadesVisiblesPorBandeja,
+    claseGridTarjetasResguardo,
     clasePieTarjetaRecepcion,
     claseVistaTabla,
     claseVistaTarjetas,
+    etiquetaRetiroResguardo,
     etiquetaEstadoRecepcion,
     guardarVistaPorRecibir,
     leerVistaPorRecibir,
@@ -44,9 +46,11 @@ describe('resguardosUtils', () => {
     });
 
     it('define vistas responsivas para tarjetas y tabla', () => {
-        expect(claseVistaTarjetas('en_custodia')).toContain('lg:hidden');
-        expect(claseVistaTabla('en_custodia')).toContain('hidden');
-        expect(claseVistaTabla('en_custodia')).toContain('lg:block');
+        expect(claseVistaTarjetas('en_custodia')).toBe('');
+        expect(claseVistaTabla('en_custodia')).toBe('hidden');
+        expect(claseGridTarjetasResguardo('en_custodia')).toContain('grid');
+        expect(claseVistaTarjetas('incidencias')).toContain('lg:hidden');
+        expect(claseVistaTabla('incidencias')).toContain('lg:block');
     });
 
     it('permite alternar vista en por_recibir sin depender del breakpoint', () => {
@@ -68,11 +72,15 @@ describe('resguardosUtils', () => {
         expect(leerVistaPorRecibir()).toBe(VISTA_RESGUARDOS_POR_RECIBIR.LISTA);
     });
 
-    it('arma titular y etiqueta de estado para tarjetas de recepción', () => {
+    it('arma titular, retiro y etiqueta de estado para tarjetas de recepción', () => {
         expect(titularResguardo({
             snapshot_cliente_nombre: 'Cliente Alfa',
             cliente: { numero_cliente: '9' },
         })).toBe('Cliente Alfa');
+
+        expect(etiquetaRetiroResguardo({ etiqueta_retiro: 'Retira titular' })).toBe('Retira titular');
+        expect(etiquetaRetiroResguardo({ envia_a_otra_persona: true, envia_otra_persona: 'Ana' }))
+            .toBe('Recoge tercero autorizado: Ana');
 
         expect(etiquetaEstadoRecepcion({
             clasificaciones: { rezagado: true },

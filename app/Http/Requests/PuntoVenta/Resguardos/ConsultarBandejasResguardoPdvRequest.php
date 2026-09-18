@@ -41,6 +41,7 @@ class ConsultarBandejasResguardoPdvRequest extends FormRequest
             'sucursal_id' => ['sometimes', 'nullable', 'integer', 'exists:sucursales,id'],
             'page' => ['sometimes', 'integer', 'min:1'],
             'per_page' => ['sometimes', 'integer', 'min:1', 'max:50'],
+            'recepcion' => ['sometimes', 'nullable', 'integer', 'exists:pdv_resguardos,id'],
         ];
     }
 

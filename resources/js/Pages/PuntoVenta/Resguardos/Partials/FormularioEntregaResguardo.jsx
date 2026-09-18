@@ -3,13 +3,12 @@ import {
     AlertTriangle,
     ArrowLeft,
     ArrowRight,
-    Camera,
     CheckCircle2,
-    ImagePlus,
     Loader2,
     Trash2,
     UserCheck,
 } from 'lucide-react';
+import BotonesCapturaEvidencia from './BotonesCapturaEvidencia';
 import FirmaCanvas from '../../../../Components/Rh/FirmaCanvas';
 import ModalConfirmarAccion from '../../../ControlPedidos/Partials/ModalConfirmarAccion';
 import { geliaCardClass } from '../../../../utils/geliaTheme';
@@ -35,15 +34,21 @@ export default function FormularioEntregaResguardo({
     onCancelar,
 }) {
     const [pasoActual, setPasoActual] = useState('localizar');
-    const [relacion, setRelacion] = useState('titular');
-    const [nombreQuienRetira, setNombreQuienRetira] = useState('');
+    const [relacion, setRelacion] = useState(() => (
+        resguardo?.envia_a_otra_persona ? 'tercero' : 'titular'
+    ));
+    const [nombreQuienRetira, setNombreQuienRetira] = useState(() => (
+        resguardo?.envia_a_otra_persona
+            ? String(resguardo?.envia_otra_persona || '').trim()
+            : String(resguardo?.snapshot_cliente_nombre || '').trim()
+    ));
     const [observaciones, setObservaciones] = useState('');
     const [evidencias, setEvidencias] = useState([]);
     const [erroresPaso, setErroresPaso] = useState({});
     const [confirmar, setConfirmar] = useState(false);
     const firmaRef = useRef(null);
     const bultosEnCustodia = useMemo(
-        () => (resguardo.bultos || []).filter((bulto) => bulto.estado === 'recibido'),
+        () => (resguardo.bultos || []).filter((bulto) => ['en_custodia', 'recibido'].includes(bulto.estado)),
         [resguardo.bultos],
     );
     const [bultoIds, setBultoIds] = useState(() => bultosEnCustodia.map((bulto) => bulto.id));
@@ -292,7 +297,7 @@ function IndicadorPasos({ pasoActual }) {
 }
 
 function PasoLocalizar({ resguardo }) {
-    const bultosEnCustodia = (resguardo.bultos || []).filter((bulto) => bulto.estado === 'recibido').length;
+    const bultosEnCustodia = (resguardo.bultos || []).filter((bulto) => ['en_custodia', 'recibido'].includes(bulto.estado)).length;
 
     return (
         <div className="space-y-4">
@@ -303,7 +308,10 @@ function PasoLocalizar({ resguardo }) {
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <CampoSoloLectura label="Folio" value={resguardo.snapshot_folio || `#${resguardo.id}`} />
-                    <CampoSoloLectura label="Cliente" value={resguardo.referencia_cliente} />
+                    <CampoSoloLectura label="Cliente" value={resguardo.snapshot_cliente_nombre || resguardo.referencia_cliente} />
+                    {resguardo.etiqueta_retiro && (
+                        <CampoSoloLectura label="Quién retira (pedido)" value={resguardo.etiqueta_retiro} />
+                    )}
                     <CampoSoloLectura label="Bultos en custodia" value={resguardo.cantidad_bultos_en_custodia ?? bultosEnCustodia} />
                     <CampoSoloLectura label="Sucursal" value={resguardo.sucursal?.nombre} />
                     {resguardo.pedido?.folio && (
@@ -339,7 +347,7 @@ function PasoRevisar({ resguardo, catalogos, bultoIds, onBultoIds, errores, desh
                 </p>
                 <div className="space-y-2">
                     {(resguardo.bultos || []).map((bulto) => {
-                        const enCustodia = bulto.estado === 'recibido';
+                        const enCustodia = ['en_custodia', 'recibido'].includes(bulto.estado);
                         const seleccionado = bultoIds.includes(bulto.id);
                         return (
                             <label
@@ -493,38 +501,10 @@ export function PasoEvidencia({ firmaRef, previews, onAgregar, onQuitar, errores
 
             <div className={`${geliaCardClass()} p-5 space-y-4`}>
                 <h2 className="text-sm font-black uppercase tracking-widest theme-text-main m-0">Evidencia fotográfica (opcional)</h2>
-                <div className="flex flex-wrap gap-2">
-                    <label className={`${BTN_SECONDARY} inline-flex items-center gap-2 cursor-pointer min-h-[44px]`}>
-                        <Camera className="w-4 h-4" />
-                        Tomar foto
-                        <input
-                            type="file"
-                            accept="image/*"
-                            capture="environment"
-                            className="sr-only"
-                            disabled={deshabilitado}
-                            onChange={(e) => {
-                                onAgregar(e.target.files);
-                                e.target.value = '';
-                            }}
-                        />
-                    </label>
-                    <label className={`${BTN_SECONDARY} inline-flex items-center gap-2 cursor-pointer min-h-[44px]`}>
-                        <ImagePlus className="w-4 h-4" />
-                        Galería
-                        <input
-                            type="file"
-                            accept="image/*"
-                            multiple
-                            className="sr-only"
-                            disabled={deshabilitado}
-                            onChange={(e) => {
-                                onAgregar(e.target.files);
-                                e.target.value = '';
-                            }}
-                        />
-                    </label>
-                </div>
+                <BotonesCapturaEvidencia
+                    onAgregar={onAgregar}
+                    deshabilitado={deshabilitado}
+                />
                 {previews.length > 0 && (
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                         {previews.map((item, indice) => (

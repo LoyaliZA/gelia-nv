@@ -205,6 +205,12 @@ class GenerarListadoDesdeRutasService
                     case 'ListaBoutique':
                         $fila['Lista Boutique'] = round($pg * $multiplicadores['boutique'], 2);
                         break;
+                    case 'ListaTiendaNube':
+                        $fila['Lista TiendaNube'] = round($pg * $multiplicadores['tiendanube'], 2);
+                        break;
+                    case 'TiendaNubeMayoreo':
+                        $fila['TiendaNube Mayoreo'] = round($pg * $multiplicadores['tiendanubemayoreo'], 2);
+                        break;
                     case 'CostoFull': {
                         $plataformas = $pg * $multiplicadores['plataformas'];
                         $fila['Costo Full'] = round(PorcentajesListadoService::calcularCostoMeli(

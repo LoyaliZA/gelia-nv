@@ -77,23 +77,22 @@ final class EstadoResguardoPdv
 
     public static function admiteRecepcionGerente(ResguardoPdv $resguardo): bool
     {
-        if (! in_array($resguardo->estado, [
-            ResguardoPdv::ESTADO_PENDIENTE_RECEPCION,
-            ResguardoPdv::ESTADO_PENDIENTE_CUSTODIA,
-        ], true)) {
+        if ($resguardo->estado !== ResguardoPdv::ESTADO_PENDIENTE_RECEPCION) {
             return false;
         }
 
         return self::cantidadPendienteGerente($resguardo) > 0;
     }
 
+    public static function admitePasarARecepcion(ResguardoPdv $resguardo): bool
+    {
+        return $resguardo->estado === ResguardoPdv::ESTADO_RECIBIDO
+            && self::recepcionGerenteCompleta($resguardo);
+    }
+
     public static function admiteConfirmacionCustodia(ResguardoPdv $resguardo): bool
     {
-        if (! in_array($resguardo->estado, [
-            ResguardoPdv::ESTADO_PENDIENTE_RECEPCION,
-            ResguardoPdv::ESTADO_PENDIENTE_CUSTODIA,
-            ResguardoPdv::ESTADO_EN_CUSTODIA,
-        ], true)) {
+        if ($resguardo->estado !== ResguardoPdv::ESTADO_EN_RECEPCION) {
             return false;
         }
 
@@ -105,7 +104,14 @@ final class EstadoResguardoPdv
         if (in_array($resguardo->estado, [
             ResguardoPdv::ESTADO_ENTREGADO,
             ResguardoPdv::ESTADO_DEVUELTO,
+            ResguardoPdv::ESTADO_RECIBIDO,
+            ResguardoPdv::ESTADO_EN_RECEPCION,
         ], true)) {
+            if ($resguardo->estado === ResguardoPdv::ESTADO_EN_RECEPCION
+                && self::custodiaCompleta($resguardo)) {
+                return ResguardoPdv::ESTADO_EN_CUSTODIA;
+            }
+
             return $resguardo->estado;
         }
 
@@ -114,7 +120,7 @@ final class EstadoResguardoPdv
         }
 
         if (self::cantidadPendienteCustodia($resguardo) > 0) {
-            return ResguardoPdv::ESTADO_PENDIENTE_CUSTODIA;
+            return ResguardoPdv::ESTADO_EN_RECEPCION;
         }
 
         if (self::cantidadEnCustodia($resguardo) > 0) {
@@ -137,6 +143,23 @@ final class EstadoResguardoPdv
         return 'estado_invalido';
     }
 
+    public static function motivoNoPasarARecepcion(ResguardoPdv $resguardo): ?string
+    {
+        if (self::admitePasarARecepcion($resguardo)) {
+            return null;
+        }
+
+        if ($resguardo->estado === ResguardoPdv::ESTADO_EN_RECEPCION) {
+            return 'ya_en_recepcion';
+        }
+
+        if (! self::recepcionGerenteCompleta($resguardo)) {
+            return 'recepcion_gerente_incompleta';
+        }
+
+        return 'estado_invalido';
+    }
+
     public static function motivoNoConfirmacionCustodia(ResguardoPdv $resguardo): ?string
     {
         if (self::admiteConfirmacionCustodia($resguardo)) {
@@ -145,6 +168,10 @@ final class EstadoResguardoPdv
 
         if (self::custodiaCompleta($resguardo)) {
             return 'custodia_completa';
+        }
+
+        if ($resguardo->estado === ResguardoPdv::ESTADO_RECIBIDO) {
+            return 'pendiente_pasar_a_recepcion';
         }
 
         if (self::cantidadPendienteGerente($resguardo) > 0) {

@@ -28,6 +28,7 @@ export default function ModalEvidenciasBultosEmpaque({ abierto, onClose, bultos 
         <>
             <div
                 className={`${THEME_MODAL_OVERLAY} items-end sm:items-center py-0 sm:py-4`}
+                style={{ zIndex: 'calc(var(--gelia-z-modal) + 20)' }}
                 onClick={onClose}
             >
                 <div
@@ -106,6 +107,7 @@ export default function ModalEvidenciasBultosEmpaque({ abierto, onClose, bultos 
                     fotos={urls}
                     indiceInicial={lightbox}
                     onCerrar={() => setLightbox(null)}
+                    zIndex="calc(var(--gelia-z-modal) + 30)"
                 />
             )}
         </>,

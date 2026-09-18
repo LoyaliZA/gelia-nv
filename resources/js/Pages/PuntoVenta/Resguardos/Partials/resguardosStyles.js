@@ -1,7 +1,13 @@
-import { geliaCardClass } from '../../../../utils/geliaTheme';
+import { geliaCardClass, THEME_BTN_PRIMARY } from '../../../../utils/geliaTheme';
 
 export const BTN_SECONDARY =
-    'px-4 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest theme-element theme-border border outline-none disabled:opacity-50';
+    'px-4 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest theme-element theme-border border theme-text-main outline-none disabled:opacity-50';
+
+/** Botones «Tomar foto» / «Galería» en formularios de evidencia PDV. */
+export const BTN_CAPTURA_EVIDENCIA =
+    'inline-flex items-center justify-center gap-2 min-h-[44px] px-4 py-2.5 rounded-2xl border theme-border theme-element text-[10px] font-black uppercase tracking-widest theme-text-main outline-none cursor-pointer disabled:opacity-50 hover:border-[var(--color-primario)]/40';
+
+export const ICONO_CAPTURA_EVIDENCIA = 'w-4 h-4 shrink-0 text-[var(--color-primario)]';
 
 export const THEME_INPUT =
     'w-full rounded-2xl border theme-border theme-element px-4 py-3 text-sm font-semibold outline-none focus:border-[var(--color-primario)]';
@@ -46,9 +52,23 @@ export const TARJETA_RECEPCION_ICONO =
 export const TARJETA_RECEPCION_PIE =
     'w-full min-h-[48px] rounded-xl border-2 font-black uppercase tracking-widest text-[10px] inline-flex items-center justify-center gap-2 transition-colors';
 
+/** Acción principal 1-clic en tarjeta de recepción gerente. */
+export const BTN_ACCION_RECEPCION_TARJETA =
+    `${THEME_BTN_PRIMARY} w-full min-h-[48px] theme-btn-primary--compact !text-[10px] !tracking-widest`;
+
+/** Acción secundaria en tarjeta de recepción (p. ej. ver detalle). */
+export const BTN_SECUNDARIO_RECEPCION_TARJETA =
+    `${BTN_SECONDARY} w-full min-h-[48px] inline-flex items-center justify-center gap-2 no-underline hover:border-[var(--color-primario)]/40`;
+
+/** Barra inferior de acciones masivas gerente (fondo gris, texto blanco). */
+export const BTN_ACCION_MASIVA_GERENTE =
+    'w-full min-h-[52px] inline-flex items-center justify-center gap-2.5 rounded-sm bg-zinc-500 hover:bg-zinc-600 active:bg-zinc-700 text-white text-[11px] font-black uppercase tracking-[0.12em] outline-none transition-colors disabled:opacity-60 disabled:pointer-events-none';
+
 export function badgeEstadoResguardo(estado) {
     const mapa = {
         pendiente_recepcion: 'bg-amber-500/15 text-amber-700 dark:text-amber-300',
+        recibido: 'bg-lime-500/15 text-lime-700 dark:text-lime-300',
+        en_recepcion: 'bg-violet-500/15 text-violet-700 dark:text-violet-300',
         en_custodia: 'bg-sky-500/15 text-sky-700 dark:text-sky-300',
         entregado: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
         devuelto: 'bg-slate-500/15 text-slate-700 dark:text-slate-300',

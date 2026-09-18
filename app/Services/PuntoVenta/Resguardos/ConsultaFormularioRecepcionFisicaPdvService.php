@@ -3,12 +3,14 @@
 namespace App\Services\PuntoVenta\Resguardos;
 
 use App\Contracts\PuntoVenta\ResuelveAlcancePdv;
-use App\Models\Almacen;
 use App\Models\PuntoVenta\ResguardoPdv;
 use App\Models\User;
 use App\Services\PuntoVenta\PuntoVentaModulo;
 use App\Support\PuntoVenta\Resguardos\EstadoRecepcionResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\EtiquetasResguardoPdv;
+use App\Support\PuntoVenta\Resguardos\SerializadorBultosEmpaqueCedisPdv;
+use App\Support\PuntoVenta\Resguardos\SerializadorPedidoRevisionResguardoPdv;
+use App\Support\PuntoVenta\Resguardos\SerializadorRetiroPedidoResguardoPdv;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 
 class ConsultaFormularioRecepcionFisicaPdvService
@@ -19,13 +21,7 @@ class ConsultaFormularioRecepcionFisicaPdvService
     ) {}
 
     /**
-     * @return array{
-     *     resguardo: array<string, mixed>,
-     *     almacenes: list<array{id: int, codigo: string, nombre: string}>,
-     *     catalogos: array<string, mixed>,
-     *     admite_recepcion: bool,
-     *     motivo_no_recepcion: string|null
-     * }
+     * @return array<string, mixed>
      */
     public function obtener(User $user, ResguardoPdv $resguardo): array
     {
@@ -43,30 +39,17 @@ class ConsultaFormularioRecepcionFisicaPdvService
         $resguardo->load([
             'sucursal:id,nombre',
             'cliente:id,numero_cliente',
-            'pedido:id,folio,folio_remision',
+            'pedido:id,folio,folio_remision,envia_a_otra_persona,envia_otra_persona,estado_fisico_general,comentario_fisico_general,tiene_observaciones_fisicas,cantidad_piezas',
+            'pedido.revisionesProducto',
+            'pedido.documentos' => fn ($q) => $q->vigente()->orderBy('orden')->orderBy('id'),
+            'pedido.cajas' => fn ($q) => $q->orderBy('orden')->orderBy('id'),
+            'pedido.bultosEmpaque.documentos',
             'bultos' => fn ($q) => $q->orderBy('folio')->orderBy('id'),
         ]);
 
-        $almacenes = Almacen::query()
-            ->where('sucursal_id', $resguardo->sucursal_id)
-            ->where('activo', true)
-            ->orderBy('codigo')
-            ->orderBy('nombre')
-            ->get(['id', 'codigo', 'nombre'])
-            ->map(fn (Almacen $almacen) => [
-                'id' => $almacen->id,
-                'codigo' => $almacen->codigo,
-                'nombre' => $almacen->nombre,
-            ])
-            ->values()
-            ->all();
-
         return [
             'resguardo' => $this->serializarResguardo($resguardo),
-            'almacenes' => $almacenes,
             'catalogos' => [
-                'tipos_bulto' => EtiquetasResguardoPdv::tiposBulto(),
-                'condiciones_bulto' => EtiquetasResguardoPdv::condicionesBulto(),
                 'estados' => EtiquetasResguardoPdv::estados(),
             ],
             'admite_recepcion' => EstadoRecepcionResguardoPdv::admiteRecepcion($resguardo),
@@ -79,25 +62,24 @@ class ConsultaFormularioRecepcionFisicaPdvService
      */
     private function serializarResguardo(ResguardoPdv $resguardo): array
     {
+        $retiro = SerializadorRetiroPedidoResguardoPdv::desdeResguardo($resguardo);
+
         return [
             'id' => $resguardo->id,
             'estado' => $resguardo->estado,
             'estado_etiqueta' => EtiquetasResguardoPdv::etiquetaEstado($resguardo->estado),
             'version' => (int) $resguardo->version,
             'snapshot_folio' => $resguardo->snapshot_folio,
+            'snapshot_cliente_nombre' => $resguardo->snapshot_cliente_nombre,
             'referencia_cliente' => $this->referenciaCliente($resguardo),
             'cantidad_bultos_esperada' => $resguardo->cantidad_bultos_esperada,
             'cantidad_bultos_recibida' => EstadoRecepcionResguardoPdv::cantidadRecibida($resguardo),
             'cantidad_bultos_pendiente' => EstadoRecepcionResguardoPdv::cantidadPendiente($resguardo),
             'recepcion_completa' => EstadoRecepcionResguardoPdv::recepcionCompleta($resguardo),
             'salida_cedis_at' => $resguardo->salida_cedis_at?->toIso8601String(),
-            'bultos_recibidos' => EstadoRecepcionResguardoPdv::bultosRecibidos($resguardo)
-                ->map(fn ($bulto) => [
-                    'id' => $bulto->id,
-                    'folio' => $bulto->folio,
-                    'tipo' => $bulto->tipo,
-                    'recepcion_at' => $bulto->recepcion_at?->toIso8601String(),
-                ])->values()->all(),
+            'envia_a_otra_persona' => $retiro['envia_a_otra_persona'],
+            'envia_otra_persona' => $retiro['envia_otra_persona'],
+            'etiqueta_retiro' => $retiro['etiqueta_retiro'],
             'sucursal' => $resguardo->sucursal ? [
                 'id' => $resguardo->sucursal->id,
                 'nombre' => $resguardo->sucursal->nombre,
@@ -106,7 +88,11 @@ class ConsultaFormularioRecepcionFisicaPdvService
                 'id' => $resguardo->pedido->id,
                 'folio' => $resguardo->pedido->folio,
                 'folio_remision' => $resguardo->pedido->folio_remision,
+                'envia_a_otra_persona' => (bool) $resguardo->pedido->envia_a_otra_persona,
+                'envia_otra_persona' => $resguardo->pedido->envia_otra_persona,
             ] : null,
+            'bultos_empaque_cedis' => SerializadorBultosEmpaqueCedisPdv::desdePedido($resguardo->pedido),
+            'pedido_revision' => SerializadorPedidoRevisionResguardoPdv::desdePedido($resguardo->pedido),
         ];
     }
 

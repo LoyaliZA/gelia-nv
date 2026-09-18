@@ -27,9 +27,6 @@ class RecepcionFisicaResguardoPdvController extends Controller
             $user,
             (int) $datos['version'],
             (string) $datos['idempotency_key'],
-            null,
-            $datos['bultos'],
-            $request->file('evidencias', []) ?? [],
         );
 
         return response()->json([
@@ -43,11 +40,11 @@ class RecepcionFisicaResguardoPdvController extends Controller
                 'cantidad_bultos_recibida' => EstadoRecepcionResguardoPdv::cantidadRecibida($resguardo),
                 'cantidad_bultos_pendiente' => EstadoRecepcionResguardoPdv::cantidadPendiente($resguardo),
                 'recepcion_completa' => EstadoRecepcionResguardoPdv::recepcionCompleta($resguardo),
-                'almacen_id' => $resguardo->almacen_id,
                 'bultos' => $resguardo->bultos->map(fn ($bulto) => [
                     'id' => $bulto->id,
                     'folio' => $bulto->folio,
                     'tipo' => $bulto->tipo,
+                    'piezas' => (int) $bulto->piezas,
                     'estado' => $bulto->estado,
                     'recepcion_at' => $bulto->recepcion_at?->toIso8601String(),
                 ])->values()->all(),

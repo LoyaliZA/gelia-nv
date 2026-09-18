@@ -129,11 +129,10 @@ export default function FormularioReponerVencidoResguardo({
                 abierto={confirmar}
                 titulo="Confirmar reposición de vencido"
                 mensaje="El resguardo volverá a la bandeja principal sin reiniciar el plazo de custodia. La acción quedará registrada en auditoría."
-                confirmarTexto="Confirmar reposición"
-                cancelarTexto="Revisar"
-                onConfirmar={confirmarEnvio}
-                onCancelar={() => setConfirmar(false)}
-                procesando={enviando}
+                etiquetaConfirmar="Confirmar reposición"
+                variante="primary"
+                onClose={() => setConfirmar(false)}
+                onConfirm={confirmarEnvio}
             />
         </>
     );

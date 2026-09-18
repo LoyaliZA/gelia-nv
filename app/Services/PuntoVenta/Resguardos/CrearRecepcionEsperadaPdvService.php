@@ -116,6 +116,8 @@ class CrearRecepcionEsperadaPdvService
                 'folio_remision' => $pedido->folio_remision,
                 'sucursal_id' => $sucursalId,
                 'handoff' => self::HANDOFF,
+                'envia_a_otra_persona' => (bool) $pedido->envia_a_otra_persona,
+                'envia_otra_persona' => $pedido->envia_otra_persona,
             ],
             'version' => 1,
         ]);

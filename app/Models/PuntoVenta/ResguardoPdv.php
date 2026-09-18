@@ -23,7 +23,12 @@ class ResguardoPdv extends Model
 
     public const ESTADO_PENDIENTE_RECEPCION = 'pendiente_recepcion';
 
-    public const ESTADO_PENDIENTE_CUSTODIA = 'pendiente_custodia';
+    public const ESTADO_RECIBIDO = 'recibido';
+
+    public const ESTADO_EN_RECEPCION = 'en_recepcion';
+
+    /** @deprecated Usar ESTADO_EN_RECEPCION */
+    public const ESTADO_PENDIENTE_CUSTODIA = 'en_recepcion';
 
     public const ESTADO_EN_CUSTODIA = 'en_custodia';
 

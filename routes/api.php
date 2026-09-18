@@ -3,6 +3,8 @@
 use App\Http\Controllers\Api\V1\AuthTokenController;
 use App\Http\Controllers\Api\V1\ClienteExternoController;
 use App\Http\Controllers\Api\V1\HealthController;
+use App\Http\Controllers\Api\V1\Mobile\MobileAuthController;
+use App\Http\Controllers\Api\V1\Mobile\MobileSyncController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function () {
@@ -10,6 +12,25 @@ Route::prefix('v1')->group(function () {
 
     Route::middleware(['require.json'])->group(function () {
         Route::post('/auth/token', [AuthTokenController::class, 'store']);
+        Route::post('/mobile/login', [MobileAuthController::class, 'login']);
+    });
+
+    Route::prefix('mobile')->middleware([
+        'require.json',
+        'auth:sanctum',
+        'api.mobile',
+        'throttle:api-mobile',
+    ])->group(function () {
+        Route::post('/logout', [MobileAuthController::class, 'logout']);
+        Route::get('/me', [MobileAuthController::class, 'me']);
+
+        Route::middleware('mobile.sync')->group(function () {
+            Route::post('/sync/bootstrap', [MobileSyncController::class, 'storeBootstrap']);
+            Route::get('/sync/bootstrap', [MobileSyncController::class, 'showBootstrap']);
+            Route::post('/sync/bootstrap/complete', [MobileSyncController::class, 'completeBootstrap']);
+            Route::get('/sync/changes', [MobileSyncController::class, 'changes']);
+            Route::get('/sync/changes/head', [MobileSyncController::class, 'changesHead']);
+        });
     });
 
     Route::middleware([

@@ -157,8 +157,9 @@ export default function DetalleIncidenciaResguardo({
                 titulo="Confirmar resolución"
                 mensaje="La resolución quedará registrada de forma permanente. El reporte original no se modificará."
                 etiquetaConfirmar="Sí, resolver incidencia"
-                onConfirmar={confirmarResolucion}
-                onCancelar={() => setConfirmar(false)}
+                variante="primary"
+                onClose={() => setConfirmar(false)}
+                onConfirm={confirmarResolucion}
             />
         </article>
     );

@@ -28,8 +28,9 @@ final class EtiquetasResguardoPdv
     public static function estados(): array
     {
         return [
-            ResguardoPdv::ESTADO_PENDIENTE_RECEPCION => 'Pendiente de recepción gerente',
-            ResguardoPdv::ESTADO_PENDIENTE_CUSTODIA => 'Pendiente de custodia recepción',
+            ResguardoPdv::ESTADO_PENDIENTE_RECEPCION => 'Pendiente de recepción',
+            ResguardoPdv::ESTADO_RECIBIDO => 'Recibido',
+            ResguardoPdv::ESTADO_EN_RECEPCION => 'En recepción',
             ResguardoPdv::ESTADO_EN_CUSTODIA => 'En custodia',
             ResguardoPdv::ESTADO_ENTREGADO => 'Entregado',
             ResguardoPdv::ESTADO_DEVUELTO => 'Devuelto',
@@ -57,6 +58,7 @@ final class EtiquetasResguardoPdv
             ResguardoPdvEvento::TIPO_RECEPCION_ESPERADA_CREADA => 'Recepción esperada registrada',
             ResguardoPdvEvento::TIPO_RECEPCION_COMPLETA => 'Recepción completa',
             ResguardoPdvEvento::TIPO_RECEPCION_PARCIAL => 'Recepción parcial gerente',
+            ResguardoPdvEvento::TIPO_PASADO_A_RECEPCION => 'Pasado a recepción',
             ResguardoPdvEvento::TIPO_CUSTODIA_COMPLETA => 'Custodia completa',
             ResguardoPdvEvento::TIPO_CUSTODIA_PARCIAL => 'Custodia parcial',
             ResguardoPdvEvento::TIPO_INCIDENCIA_FOLIO_NO_ENCONTRADO => 'Incidencia: folio no encontrado',

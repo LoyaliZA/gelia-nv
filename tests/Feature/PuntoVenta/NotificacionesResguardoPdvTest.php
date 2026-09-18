@@ -47,6 +47,10 @@ class NotificacionesResguardoPdvTest extends TestCase
     {
         $resguardo = $this->crearResguardo();
         $destinatario = $this->usuarioConPermisos(
+            [PuntoVentaModulo::PERMISO_RESGUARDOS_RECIBIR_GERENTE],
+            $this->sucursal
+        );
+        $recepcionista = $this->usuarioConPermisos(
             [PuntoVentaModulo::PERMISO_RESGUARDOS_CONFIRMAR_CUSTODIA],
             $this->sucursal
         );
@@ -63,8 +67,34 @@ class NotificacionesResguardoPdvTest extends TestCase
         );
 
         $this->assertCount(1, $destinatario->fresh()->notifications);
+        $this->assertCount(0, $recepcionista->fresh()->notifications);
         $this->assertCount(0, $sinPermiso->fresh()->notifications);
         $this->assertCount(0, $otraSucursal->fresh()->notifications);
+    }
+
+    public function test_pasado_a_recepcion_notifica_recepcionistas(): void
+    {
+        $resguardo = $this->crearResguardo();
+        $recepcionista = $this->usuarioConPermisos(
+            [
+                PuntoVentaModulo::PERMISO_RESGUARDOS_VER,
+                PuntoVentaModulo::PERMISO_RESGUARDOS_CONFIRMAR_CUSTODIA,
+            ],
+            $this->sucursal
+        );
+        $gerente = $this->usuarioConPermisos(
+            [PuntoVentaModulo::PERMISO_RESGUARDOS_RECIBIR_GERENTE],
+            $this->sucursal
+        );
+
+        app(NotificarResguardoPdvService::class)->pasadoARecepcion(
+            $resguardo,
+            (int) $this->sucursal->id,
+            'pdv:pasar:test:1'
+        );
+
+        $this->assertCount(1, $recepcionista->fresh()->notifications);
+        $this->assertCount(0, $gerente->fresh()->notifications);
     }
 
     public function test_recepcion_esperada_incluye_quien_puede_recibir(): void
@@ -269,6 +299,10 @@ class NotificacionesResguardoPdvTest extends TestCase
     private function usuarioConPermisos(array $permisos, Sucursal $sucursal): User
     {
         app(\Spatie\Permission\PermissionRegistrar::class)->forgetCachedPermissions();
+
+        foreach ($permisos as $permiso) {
+            Permission::findOrCreate($permiso, 'web');
+        }
 
         $usuario = User::factory()->create();
         if ($permisos !== []) {

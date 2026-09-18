@@ -15,6 +15,7 @@ use App\Models\CatalogoHorarioEntrega;
 use App\Models\CatalogoHorarioTraspaso;
 use App\Models\CatalogoPorcentajeEscalonamientoLista;
 use App\Models\CatalogoPorcentajeListadoLista;
+use App\Services\Listados\PorcentajesListadoService;
 use App\Models\CatalogoBanco;
 use App\Models\CatalogoRegimenFiscal;
 use App\Models\CatalogoUsoCfdi;
@@ -285,22 +286,44 @@ class CatalogoController extends Controller
     }
 
     // --- 10. PORCENTAJES LISTADO (resurtido / export Excel) ---
-    public function storePorcentajeListado(Request $request) {
-        CatalogoPorcentajeListadoLista::create($request->validate([
+    public function storePorcentajeListado(Request $request, PorcentajesListadoService $porcentajesListado) {
+        $data = $request->validate([
             'catalogo_lista_descuento_id' => 'required|exists:catalogo_listas_descuento,id|unique:catalogo_porcentajes_listado_lista,catalogo_lista_descuento_id',
             'porcentaje_descuento' => 'required|numeric|min:0|max:100',
             'activo' => 'boolean',
-        ]));
+        ]);
+
+        CatalogoPorcentajeListadoLista::create($data);
+
+        $lista = CatalogoListaDescuento::find($data['catalogo_lista_descuento_id']);
+        if ($lista) {
+            $porcentajesListado->sincronizarCatalogoTiendanubeASettings(
+                $lista,
+                (float) $data['porcentaje_descuento']
+            );
+        }
+
         return back()->with('success', 'Porcentaje de listado registrado.');
     }
 
-    public function updatePorcentajeListado(Request $request, $id) {
+    public function updatePorcentajeListado(Request $request, $id, PorcentajesListadoService $porcentajesListado) {
         $porcentaje = CatalogoPorcentajeListadoLista::findOrFail($id);
-        $porcentaje->update($request->validate([
+        $data = $request->validate([
             'catalogo_lista_descuento_id' => 'required|exists:catalogo_listas_descuento,id|unique:catalogo_porcentajes_listado_lista,catalogo_lista_descuento_id,' . $id,
             'porcentaje_descuento' => 'required|numeric|min:0|max:100',
             'activo' => 'boolean',
-        ]));
+        ]);
+
+        $porcentaje->update($data);
+
+        $lista = CatalogoListaDescuento::find($data['catalogo_lista_descuento_id']);
+        if ($lista) {
+            $porcentajesListado->sincronizarCatalogoTiendanubeASettings(
+                $lista,
+                (float) $data['porcentaje_descuento']
+            );
+        }
+
         return back()->with('success', 'Porcentaje de listado actualizado.');
     }
 

@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { Camera, ImagePlus, Loader2, Plus } from 'lucide-react';
+import { Loader2, Plus } from 'lucide-react';
+import BotonesCapturaEvidencia from './BotonesCapturaEvidencia';
 import { geliaCardClass } from '../../../../utils/geliaTheme';
 import { THEME_BTN_PRIMARY } from '../../../../utils/geliaTheme';
 import ModalConfirmarAccion from '../../../ControlPedidos/Partials/ModalConfirmarAccion';
@@ -219,38 +220,11 @@ export default function FormularioIncidenciaResguardo({
                         <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0">
                             Evidencia fotográfica
                         </p>
-                        <div className="flex flex-wrap gap-2">
-                            <label className={`${BTN_SECONDARY} inline-flex items-center gap-2 min-h-[44px] cursor-pointer`}>
-                                <Camera className="w-4 h-4" />
-                                Cámara
-                                <input
-                                    type="file"
-                                    accept="image/*"
-                                    capture="environment"
-                                    className="sr-only"
-                                    disabled={enviando}
-                                    onChange={(e) => {
-                                        agregarEvidencias(e.target.files);
-                                        e.target.value = '';
-                                    }}
-                                />
-                            </label>
-                            <label className={`${BTN_SECONDARY} inline-flex items-center gap-2 min-h-[44px] cursor-pointer`}>
-                                <ImagePlus className="w-4 h-4" />
-                                Galería
-                                <input
-                                    type="file"
-                                    accept="image/*"
-                                    multiple
-                                    className="sr-only"
-                                    disabled={enviando}
-                                    onChange={(e) => {
-                                        agregarEvidencias(e.target.files);
-                                        e.target.value = '';
-                                    }}
-                                />
-                            </label>
-                        </div>
+                        <BotonesCapturaEvidencia
+                            onAgregar={agregarEvidencias}
+                            deshabilitado={enviando}
+                            etiquetaCamara="Cámara"
+                        />
                         {erroresLocales.evidencias && (
                             <p className="text-[10px] text-red-500 m-0">{erroresLocales.evidencias}</p>
                         )}
@@ -302,8 +276,9 @@ export default function FormularioIncidenciaResguardo({
                 titulo="Confirmar reporte de incidencia"
                 mensaje="El reporte quedará registrado y no podrá editarse. ¿Deseas continuar?"
                 etiquetaConfirmar="Sí, registrar incidencia"
-                onConfirmar={confirmarEnvio}
-                onCancelar={() => setConfirmar(false)}
+                variante="primary"
+                onClose={() => setConfirmar(false)}
+                onConfirm={confirmarEnvio}
             />
         </>
     );

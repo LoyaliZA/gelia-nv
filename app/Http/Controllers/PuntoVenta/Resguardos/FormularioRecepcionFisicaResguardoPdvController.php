@@ -7,9 +7,8 @@ use App\Models\PuntoVenta\ResguardoPdv;
 use App\Models\User;
 use App\Services\PuntoVenta\Resguardos\ConsultaFormularioRecepcionFisicaPdvService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Inertia\Inertia;
-use Inertia\Response;
 
 class FormularioRecepcionFisicaResguardoPdvController extends Controller
 {
@@ -17,7 +16,7 @@ class FormularioRecepcionFisicaResguardoPdvController extends Controller
         Request $request,
         ResguardoPdv $resguardo,
         ConsultaFormularioRecepcionFisicaPdvService $consulta,
-    ): Response|JsonResponse {
+    ): JsonResponse|RedirectResponse {
         /** @var User $user */
         $user = $request->user();
 
@@ -27,6 +26,9 @@ class FormularioRecepcionFisicaResguardoPdvController extends Controller
             return response()->json($payload);
         }
 
-        return Inertia::render('PuntoVenta/Resguardos/Recepcion', $payload);
+        return redirect()->route('punto_venta.resguardos.index', [
+            'bandeja' => 'por_recibir',
+            'recepcion' => $resguardo->id,
+        ]);
     }
 }

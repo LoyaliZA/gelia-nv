@@ -7,6 +7,11 @@ use Illuminate\Support\Facades\DB;
 
 class PorcentajesListadoService
 {
+    public const TIENDANUBE_SETTINGS_KEYS = [
+        'tiendanube' => 'pct_tiendanube',
+        'tiendanubemayoreo' => 'pct_tiendanubemayoreo',
+    ];
+
     public const MELI_DEFAULTS = [
         'meli_full_fijo_1' => 45.0,
         'meli_full_fijo_2' => 90.0,
@@ -46,6 +51,69 @@ class PorcentajesListadoService
         return $numerador / $denominador;
     }
 
+    public static function settingKeyParaListaTiendanube(string $nombreLista): ?string
+    {
+        $nombreUpper = strtoupper($nombreLista);
+
+        if (!str_contains($nombreUpper, 'TIENDANUBE')) {
+            return null;
+        }
+
+        if (str_contains($nombreUpper, 'MAYOREO')) {
+            return self::TIENDANUBE_SETTINGS_KEYS['tiendanubemayoreo'];
+        }
+
+        return self::TIENDANUBE_SETTINGS_KEYS['tiendanube'];
+    }
+
+    public function sincronizarSettingsTiendanubeACatalogo(array $settings): void
+    {
+        foreach (self::TIENDANUBE_SETTINGS_KEYS as $settingKey) {
+            if (!isset($settings[$settingKey]) || $settings[$settingKey] === '') {
+                continue;
+            }
+
+            $porcentaje = (float) $settings[$settingKey];
+            $esMayoreo = $settingKey === self::TIENDANUBE_SETTINGS_KEYS['tiendanubemayoreo'];
+
+            $listas = CatalogoListaDescuento::query()
+                ->where('activo', true)
+                ->whereRaw('UPPER(nombre) LIKE ?', ['%TIENDANUBE%'])
+                ->when($esMayoreo, fn ($q) => $q->whereRaw('UPPER(nombre) LIKE ?', ['%MAYOREO%']))
+                ->when(!$esMayoreo, fn ($q) => $q->whereRaw('UPPER(nombre) NOT LIKE ?', ['%MAYOREO%']))
+                ->get();
+
+            foreach ($listas as $lista) {
+                DB::table('catalogo_porcentajes_listado_lista')->updateOrInsert(
+                    ['catalogo_lista_descuento_id' => $lista->id],
+                    [
+                        'porcentaje_descuento' => $porcentaje,
+                        'activo' => true,
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]
+                );
+            }
+        }
+    }
+
+    public function sincronizarCatalogoTiendanubeASettings(CatalogoListaDescuento $lista, float $porcentaje): void
+    {
+        $settingKey = self::settingKeyParaListaTiendanube($lista->nombre);
+        if ($settingKey === null) {
+            return;
+        }
+
+        DB::table('gelia_settings')->updateOrInsert(
+            ['key' => $settingKey],
+            [
+                'value' => $porcentaje,
+                'created_at' => DB::raw('IFNULL(created_at, NOW())'),
+                'updated_at' => now(),
+            ]
+        );
+    }
+
     /**
      * Obtiene multiplicadores de precio para columnas de listados Excel.
      * Prioriza catálogo por lista; usa gelia_settings como respaldo para columnas auxiliares.
@@ -60,10 +128,12 @@ class PorcentajesListadoService
             'oro'            => (float) ($settings['pct_oro'] ?? 15.89),
             'diamante'       => (float) ($settings['pct_diamante'] ?? 17.65),
             'plataformas'    => (float) ($settings['pct_plataformas'] ?? 23.00),
-            'lista3'         => (float) ($settings['pct_lista3'] ?? 14.28),
-            'lista4'         => (float) ($settings['pct_lista4'] ?? 17.71),
-            'venta_especial' => (float) ($settings['pct_venta_especial'] ?? 25.00),
-            'boutique'       => (float) ($settings['pct_boutique'] ?? 25.00),
+            'lista3'             => (float) ($settings['pct_lista3'] ?? 14.28),
+            'lista4'             => (float) ($settings['pct_lista4'] ?? 17.71),
+            'venta_especial'     => (float) ($settings['pct_venta_especial'] ?? 25.00),
+            'boutique'           => (float) ($settings['pct_boutique'] ?? 25.00),
+            'tiendanube'         => (float) ($settings['pct_tiendanube'] ?? 17.65),
+            'tiendanubemayoreo'  => (float) ($settings['pct_tiendanubemayoreo'] ?? 22.00),
         ];
 
         $mapaKeywords = [
@@ -105,10 +175,12 @@ class PorcentajesListadoService
             'oro'            => 1 - ($porcentajes['oro'] / 100),
             'diamante'       => 1 - ($porcentajes['diamante'] / 100),
             'plataformas'    => 1 - ($porcentajes['plataformas'] / 100),
-            'lista3'         => 1 - ($porcentajes['lista3'] / 100),
-            'lista4'         => 1 - ($porcentajes['lista4'] / 100),
-            'venta_especial' => 1 - ($porcentajes['venta_especial'] / 100),
-            'boutique'       => 1 - ($porcentajes['boutique'] / 100),
+            'lista3'             => 1 - ($porcentajes['lista3'] / 100),
+            'lista4'             => 1 - ($porcentajes['lista4'] / 100),
+            'venta_especial'     => 1 - ($porcentajes['venta_especial'] / 100),
+            'boutique'           => 1 - ($porcentajes['boutique'] / 100),
+            'tiendanube'         => 1 - ($porcentajes['tiendanube'] / 100),
+            'tiendanubemayoreo'  => 1 - ($porcentajes['tiendanubemayoreo'] / 100),
             'divisor_costo'  => 1.3827,
             ...$meli,
         ];

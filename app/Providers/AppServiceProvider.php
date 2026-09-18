@@ -3,9 +3,12 @@
 namespace App\Providers;
 
 use App\Models\ApiAplicacion;
+use App\Models\Cliente;
+use App\Models\User;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\Gate;
@@ -178,6 +181,12 @@ class AppServiceProvider extends ServiceProvider
         
         // CONEXIÓN DEL NUEVO OBSERVADOR PARA CATÁLOGOS
         CatalogoListaDescuento::observe(CatalogoListaDescuentoObserver::class);
+        Cliente::observe(\App\Observers\ClienteObserver::class);
+
+        Broadcast::routes([
+            'middleware' => ['auth:sanctum'],
+            'prefix' => 'api',
+        ]);
 
         // EnviarWebPushTrasNotificacion se registra por discovery (App\Listeners).
         // NO usar Event::listen aquí: duplicaba cada push (2x blast).
@@ -220,6 +229,15 @@ class AppServiceProvider extends ServiceProvider
                 : 'api-ip:' . $request->ip();
 
             return Limit::perMinute($limite)->by($key);
+        });
+
+        RateLimiter::for('api-mobile', function (Request $request) {
+            $user = $request->user();
+            $key = $user instanceof User
+                ? 'api-mobile:'.$user->id
+                : 'api-mobile-ip:'.$request->ip();
+
+            return Limit::perMinute(60)->by($key);
         });
     }
 }

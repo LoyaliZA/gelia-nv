@@ -52,6 +52,7 @@ class BandejaResguardoPdvController extends Controller
             'operativa' => fn () => [
                 'antiguedad_configurada' => $consulta->antiguedadConfigurada(),
             ],
+            'recepcion_modal_id' => fn () => $request->integer('recepcion') ?: null,
         ]);
     }
 

@@ -31,6 +31,8 @@ class AromasListasController extends Controller
         'pct_lista4',
         'pct_venta_especial',
         'pct_boutique',
+        'pct_tiendanube',
+        'pct_tiendanubemayoreo',
         'meli_full_fijo_1',
         'meli_full_fijo_2',
         'meli_msi_fijo_1',
@@ -465,6 +467,12 @@ class AromasListasController extends Controller
                         case 'ListaBoutique':
                             $fila['Lista Boutique'] = round($pg * $multiplicadores['boutique'], 2);
                             break;
+                        case 'ListaTiendaNube':
+                            $fila['Lista TiendaNube'] = round($pg * $multiplicadores['tiendanube'], 2);
+                            break;
+                        case 'TiendaNubeMayoreo':
+                            $fila['TiendaNube Mayoreo'] = round($pg * $multiplicadores['tiendanubemayoreo'], 2);
+                            break;
                         case 'Plataformas':
                             $fila['Plataformas'] = round($pg * $multiplicadores['plataformas'], 2);
                             break;
@@ -767,6 +775,8 @@ class AromasListasController extends Controller
                     ]
                 );
             }
+
+            app(PorcentajesListadoService::class)->sincronizarSettingsTiendanubeACatalogo($configuraciones);
 
             return response()->json(['message' => 'Configuración global actualizada con éxito']);
         } catch (Exception $e) {

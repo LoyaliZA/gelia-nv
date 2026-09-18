@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 
-export default function LightboxFotos({ fotos = [], indiceInicial = 0, onCerrar }) {
+export default function LightboxFotos({ fotos = [], indiceInicial = 0, onCerrar, zIndex = 600 }) {
     const [indice, setIndice] = useState(indiceInicial);
     const [visible, setVisible] = useState(true);
 
@@ -42,7 +42,8 @@ export default function LightboxFotos({ fotos = [], indiceInicial = 0, onCerrar 
 
     return createPortal(
         <div
-            className={`fixed inset-0 z-[600] flex items-center justify-center p-4 bg-black/70 backdrop-blur-xl ${visible ? 'animate-fade-in' : 'opacity-0 transition-opacity duration-150'}`}
+            className={`fixed inset-0 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xl ${visible ? 'animate-fade-in' : 'opacity-0 transition-opacity duration-150'}`}
+            style={{ zIndex }}
             onClick={cerrar}
             role="dialog"
             aria-modal="true"

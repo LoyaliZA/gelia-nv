@@ -14,6 +14,7 @@ use App\Http\Controllers\PuntoVenta\Resguardos\FormularioEntregaResguardoPdvCont
 use App\Http\Controllers\PuntoVenta\Resguardos\ConfirmacionCustodiaResguardoPdvController;
 use App\Http\Controllers\PuntoVenta\Resguardos\FormularioConfirmacionCustodiaResguardoPdvController;
 use App\Http\Controllers\PuntoVenta\Resguardos\FormularioRecepcionFisicaResguardoPdvController;
+use App\Http\Controllers\PuntoVenta\Resguardos\PasarARecepcionResguardoPdvController;
 use App\Http\Controllers\PuntoVenta\Resguardos\RecepcionFisicaResguardoPdvController;
 use App\Http\Controllers\PuntoVenta\Resguardos\RegistrarIncidenciaResguardoPdvController;
 use App\Http\Controllers\PuntoVenta\Resguardos\ReponerVencidoResguardoPdvController;
@@ -66,6 +67,7 @@ Route::middleware(['pdv.piso', 'pdv.permiso:'.PuntoVentaModulo::PERMISO_RESGUARD
         Route::get('/{resguardo}/recepcion', [FormularioRecepcionFisicaResguardoPdvController::class, 'show'])
             ->name('recepcion.create');
         Route::put('/{resguardo}/recepcion', RecepcionFisicaResguardoPdvController::class)->name('recepcion');
+        Route::put('/{resguardo}/pasar-recepcion', PasarARecepcionResguardoPdvController::class)->name('pasar_recepcion');
     });
 
 Route::middleware(['pdv.piso', 'pdv.permiso:'.PuntoVentaModulo::PERMISO_RESGUARDOS_CONFIRMAR_CUSTODIA])

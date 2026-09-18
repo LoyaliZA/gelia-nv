@@ -45,6 +45,8 @@ class ResguardoPdvBulto extends Model
         'folio',
         'codigo_etiqueta',
         'tipo',
+        'piezas',
+        'condicion',
         'estado',
         'recepcion_at',
         'recepcion_por_id',
@@ -58,6 +60,7 @@ class ResguardoPdvBulto extends Model
     protected function casts(): array
     {
         return [
+            'piezas' => 'integer',
             'recepcion_at' => 'datetime',
             'custodia_at' => 'datetime',
             'entrega_at' => 'datetime',

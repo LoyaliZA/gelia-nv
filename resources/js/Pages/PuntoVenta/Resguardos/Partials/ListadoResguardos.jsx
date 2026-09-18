@@ -10,6 +10,7 @@ import {
 } from './resguardosStyles';
 import { THEME_BTN_PRIMARY } from '../../../../utils/geliaTheme';
 import {
+    claseGridTarjetasResguardo,
     claseVistaTabla,
     claseVistaTarjetas,
     etiquetasClasificacionActivas,
@@ -27,8 +28,11 @@ import {
 } from './recepcionFisicaUtils';
 import AccionReponerVencidoResguardo from './AccionReponerVencidoResguardo';
 import TarjetaResguardoRecepcion from './TarjetaResguardoRecepcion';
+import TarjetaResguardoEnCustodia from './TarjetaResguardoEnCustodia';
 import SelectorVistaResguardos from './SelectorVistaResguardos';
 import { AccionEntregaResguardo } from './ModalEntregaResguardo';
+import BotonConfirmarRecepcionResguardo from './BotonConfirmarRecepcionResguardo';
+import { resguardoSeleccionableGerente } from './recepcionGerenteApi';
 
 function BadgesResguardo({ resguardo, catalogos }) {
     const estadoEtiqueta = catalogos.estados?.[resguardo.estado] || resguardo.estado;
@@ -120,6 +124,7 @@ function TarjetaResguardo({
     onToggleSeleccion,
     onReponerExito,
     onEntregaExito,
+    onRecepcionExito,
 }) {
     return (
         <div className={tarjetaResguardoClass(resguardo)}>
@@ -162,12 +167,10 @@ function TarjetaResguardo({
                     />
                 )}
                 {puedeRecibir && resguardoAdmiteRecepcion(resguardo) && (
-                    <Link
-                        href={route('punto_venta.resguardos.recepcion.create', resguardo.id)}
-                        className={`${THEME_BTN_PRIMARY} w-full inline-flex items-center justify-center gap-2 min-h-[44px] text-[10px] font-black uppercase tracking-widest`}
-                    >
-                        <PackageCheck className="w-4 h-4" /> Recibir
-                    </Link>
+                    <BotonConfirmarRecepcionResguardo
+                        resguardo={resguardo}
+                        onExito={onRecepcionExito}
+                    />
                 )}
                 <AccionReponerVencidoResguardo
                     resguardo={resguardo}
@@ -197,6 +200,7 @@ function FilaTablaResguardo({
     onToggleSeleccion,
     onReponerExito,
     onEntregaExito,
+    onRecepcionExito,
 }) {
     const clasificaciones = etiquetasClasificacionActivas(resguardo, catalogos.antiguedades);
 
@@ -243,12 +247,11 @@ function FilaTablaResguardo({
                         />
                     )}
                     {puedeRecibir && resguardoAdmiteRecepcion(resguardo) && (
-                        <Link
-                            href={route('punto_venta.resguardos.recepcion.create', resguardo.id)}
-                            className={`${THEME_BTN_PRIMARY} inline-flex items-center gap-2 min-h-[44px] text-[10px] font-black uppercase tracking-widest`}
-                        >
-                            <PackageCheck className="w-4 h-4" /> Recibir
-                        </Link>
+                        <BotonConfirmarRecepcionResguardo
+                            resguardo={resguardo}
+                            onExito={onRecepcionExito}
+                            className="inline-flex w-auto"
+                        />
                     )}
                     <AccionReponerVencidoResguardo
                         resguardo={resguardo}
@@ -282,9 +285,12 @@ export default function ListadoResguardos({
     onToggleSeleccion,
     onReponerExito,
     onEntregaExito,
+    onRecepcionExito,
 }) {
     const items = resguardos?.data || [];
-    const seleccionable = puedeEntregar && bandeja === 'en_custodia' && Boolean(onToggleSeleccion);
+    const seleccionMasivaGerente = puedeRecibir && bandeja === 'por_recibir' && paso === 'gerente' && Boolean(onToggleSeleccion);
+    const seleccionableEntrega = puedeEntregar && bandeja === 'en_custodia' && Boolean(onToggleSeleccion);
+    const seleccionable = seleccionMasivaGerente || seleccionableEntrega;
     const [vistaPorRecibir, setVistaPorRecibir] = useState(leerVistaPorRecibir);
 
     const onCambiarVista = (nuevaVista) => {
@@ -310,25 +316,23 @@ export default function ListadoResguardos({
     const claseTarjetas = claseVistaTarjetas(bandeja, vistaPorRecibir);
     const claseTabla = claseVistaTabla(bandeja, vistaPorRecibir);
     const usarTarjetasRecepcion = bandeja === 'por_recibir' && vistaPorRecibir === VISTA_RESGUARDOS_POR_RECIBIR.CARD;
+    const usarTarjetasCustodia = bandeja === 'en_custodia';
+    const claseContenedorTarjetas = claseGridTarjetasResguardo(bandeja, vistaPorRecibir);
 
     return (
         <div className={`${geliaCardClass()} overflow-hidden`}>
-            {bandeja === 'por_recibir' && (
+            {(bandeja === 'por_recibir' || bandeja === 'en_custodia') && (
                 <div className="flex items-center justify-between gap-3 px-4 pt-4 pb-2 border-b theme-border">
                     <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0">
-                        Pedidos a recibir
+                        {bandeja === 'en_custodia' ? 'Resguardos en custodia' : 'Pedidos a recibir'}
                     </p>
-                    <SelectorVistaResguardos vista={vistaPorRecibir} onCambiar={onCambiarVista} />
+                    {bandeja === 'por_recibir' && (
+                        <SelectorVistaResguardos vista={vistaPorRecibir} onCambiar={onCambiarVista} />
+                    )}
                 </div>
             )}
 
-            <div
-                className={`${claseTarjetas} ${
-                    usarTarjetasRecepcion
-                        ? 'p-3 sm:p-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 md:gap-4'
-                        : 'p-4 space-y-3'
-                }`}
-            >
+            <div className={`${claseTarjetas} ${claseContenedorTarjetas}`}>
                 {items.map((resguardo) => (
                     usarTarjetasRecepcion ? (
                         <TarjetaResguardoRecepcion
@@ -338,6 +342,23 @@ export default function ListadoResguardos({
                             puedeRecibir={puedeRecibir}
                             puedeConfirmarCustodia={puedeConfirmarCustodia}
                             paso={paso}
+                            seleccionable={seleccionMasivaGerente && resguardoSeleccionableGerente(resguardo)}
+                            seleccionado={idsSeleccionados.includes(resguardo.id)}
+                            onToggleSeleccion={onToggleSeleccion}
+                            onRecepcionExito={onRecepcionExito}
+                        />
+                    ) : usarTarjetasCustodia ? (
+                        <TarjetaResguardoEnCustodia
+                            key={resguardo.id}
+                            resguardo={resguardo}
+                            catalogos={catalogos}
+                            permisos={permisos}
+                            puedeEntregar={puedeEntregar}
+                            seleccionable={seleccionableEntrega && resguardo.estado === 'en_custodia' && !resguardo.entrega_bloqueada}
+                            seleccionado={idsSeleccionados.includes(resguardo.id)}
+                            onToggleSeleccion={onToggleSeleccion}
+                            onReponerExito={onReponerExito}
+                            onEntregaExito={onEntregaExito}
                         />
                     ) : (
                         <TarjetaResguardo
@@ -348,11 +369,15 @@ export default function ListadoResguardos({
                             permisos={permisos}
                             puedeRecibir={puedeRecibir}
                             puedeEntregar={puedeEntregar}
-                            seleccionable={seleccionable && resguardo.estado === 'en_custodia' && !resguardo.entrega_bloqueada}
+                            seleccionable={
+                                (seleccionMasivaGerente && resguardoSeleccionableGerente(resguardo))
+                                || (seleccionableEntrega && resguardo.estado === 'en_custodia' && !resguardo.entrega_bloqueada)
+                            }
                             seleccionado={idsSeleccionados.includes(resguardo.id)}
                             onToggleSeleccion={onToggleSeleccion}
                             onReponerExito={onReponerExito}
                             onEntregaExito={onEntregaExito}
+                            onRecepcionExito={onRecepcionExito}
                         />
                     )
                 ))}
@@ -382,11 +407,15 @@ export default function ListadoResguardos({
                             permisos={permisos}
                             puedeRecibir={puedeRecibir}
                             puedeEntregar={puedeEntregar}
-                            seleccionable={seleccionable && resguardo.estado === 'en_custodia' && !resguardo.entrega_bloqueada}
+                            seleccionable={
+                                (seleccionMasivaGerente && resguardoSeleccionableGerente(resguardo))
+                                || (seleccionableEntrega && resguardo.estado === 'en_custodia' && !resguardo.entrega_bloqueada)
+                            }
                             seleccionado={idsSeleccionados.includes(resguardo.id)}
                             onToggleSeleccion={onToggleSeleccion}
                             onReponerExito={onReponerExito}
                             onEntregaExito={onEntregaExito}
+                            onRecepcionExito={onRecepcionExito}
                         />
                         ))}
                     </tbody>

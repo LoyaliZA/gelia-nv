@@ -122,6 +122,9 @@ export function claseVistaTarjetas(bandeja, vistaPorRecibir = VISTA_RESGUARDOS_P
     if (bandeja === 'por_recibir') {
         return vistaPorRecibir === VISTA_RESGUARDOS_POR_RECIBIR.CARD ? '' : 'hidden';
     }
+    if (bandeja === 'en_custodia') {
+        return '';
+    }
     return 'lg:hidden';
 }
 
@@ -129,13 +132,35 @@ export function claseVistaTabla(bandeja, vistaPorRecibir = VISTA_RESGUARDOS_POR_
     if (bandeja === 'por_recibir') {
         return vistaPorRecibir === VISTA_RESGUARDOS_POR_RECIBIR.LISTA ? '' : 'hidden';
     }
+    if (bandeja === 'en_custodia') {
+        return 'hidden';
+    }
     return 'hidden lg:block';
+}
+
+export function claseGridTarjetasResguardo(bandeja, vistaPorRecibir = VISTA_RESGUARDOS_POR_RECIBIR.CARD) {
+    const usaGrid = (bandeja === 'por_recibir' && vistaPorRecibir === VISTA_RESGUARDOS_POR_RECIBIR.CARD)
+        || bandeja === 'en_custodia';
+
+    return usaGrid
+        ? 'p-3 sm:p-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 md:gap-4'
+        : 'p-4 space-y-3';
 }
 
 export function titularResguardo(resguardo) {
     const nombre = String(resguardo?.snapshot_cliente_nombre || '').trim();
     if (nombre) return nombre;
     return referenciaCliente(resguardo);
+}
+
+export function etiquetaRetiroResguardo(resguardo) {
+    if (resguardo?.etiqueta_retiro) {
+        return resguardo.etiqueta_retiro;
+    }
+    if (resguardo?.envia_a_otra_persona) {
+        return `Recoge tercero autorizado: ${resguardo.envia_otra_persona}`;
+    }
+    return 'Retira el titular del pedido';
 }
 
 export function etiquetaEstadoRecepcion(resguardo, catalogos = {}, paso = 'gerente') {
@@ -145,16 +170,20 @@ export function etiquetaEstadoRecepcion(resguardo, catalogos = {}, paso = 'geren
 
     const esperada = resguardo?.cantidad_bultos_esperada ?? 0;
 
-    if (paso === 'recepcionista') {
+    if (resguardo?.estado === 'recibido') {
+        return catalogos.estados?.recibido || 'Recibido';
+    }
+
+    if (paso === 'recepcionista' || resguardo?.estado === 'en_recepcion') {
         const enCustodia = resguardo?.cantidad_bultos_en_custodia ?? 0;
         const pendienteCustodia = resguardo?.cantidad_bultos_pendiente_custodia ?? 0;
         if (pendienteCustodia > 0 && enCustodia > 0) {
             return `Custodia parcial (${enCustodia}/${esperada})`;
         }
         if (pendienteCustodia > 0) {
-            return `Pendiente custodia (${enCustodia}/${esperada})`;
+            return `En recepción (${enCustodia}/${esperada})`;
         }
-        return catalogos.estados?.pendiente_custodia || 'Pendiente de custodia';
+        return catalogos.estados?.en_recepcion || 'En recepción';
     }
 
     const pendiente = resguardo?.cantidad_bultos_pendiente ?? 0;

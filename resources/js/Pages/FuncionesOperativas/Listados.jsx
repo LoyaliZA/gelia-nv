@@ -25,6 +25,7 @@ import {
 const PCT_KEYS = [
     'pct_bronce', 'pct_plata', 'pct_oro', 'pct_diamante', 'pct_plataformas',
     'pct_lista3', 'pct_lista4', 'pct_venta_especial', 'pct_boutique',
+    'pct_tiendanube', 'pct_tiendanubemayoreo',
 ];
 
 const MELI_KEYS = [
@@ -40,6 +41,7 @@ const CONFIGURACION_POR_DEFECTO = {
     pct_diamante: 17.65, pct_plataformas: 23.00,
     pct_lista3: 14.28, pct_lista4: 17.71, pct_venta_especial: 25.00,
     pct_boutique: 25.00,
+    pct_tiendanube: 17.65, pct_tiendanubemayoreo: 22.00,
     meli_full_fijo_1: 45,
     meli_full_fijo_2: 90,
     meli_msi_fijo_1: 90,
@@ -56,6 +58,7 @@ const COLUMNAS_DISPONIBLES = [
     'Folio', 'SKU', 'Descripcion', 'Marca', 'Existencia', 'Almacen',
     'PG', 'Bronce', 'Plata', 'Oro', 'Diamante', 'Plataformas',
     'Lista3', 'Lista4', 'VentaEspecial', 'ListaBoutique',
+    'ListaTiendaNube', 'TiendaNubeMayoreo',
     'CostoFull', 'CostoMSI',
     'CostoCalculado', 'CostoWizerp'
 ];

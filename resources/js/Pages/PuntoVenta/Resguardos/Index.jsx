@@ -12,6 +12,7 @@ import BusquedaRapidaRecepcion from './Partials/BusquedaRapidaRecepcion';
 import AlertasCustodiaResguardo from './Partials/AlertasCustodiaResguardo';
 import SelectorSucursalActivaPdv from './Partials/SelectorSucursalActivaPdv';
 import useListadoResguardos from './Partials/useListadoResguardos';
+import BarraAccionesMasivasGerente from './Partials/BarraAccionesMasivasGerente';
 import { antiguedadValidaEnBandeja, paramsListadoResguardos } from './Partials/resguardosUtils';
 import PdvAlertProvider, { usePdvAlertReload } from '../../../Components/PuntoVenta/PdvAlertProvider';
 
@@ -181,7 +182,10 @@ export default function Index({
                     />
                 </GeliaTituloCard>
 
-                <BusquedaRapidaRecepcion puedeRecibir={Boolean(permisos.recibir)} />
+                <BusquedaRapidaRecepcion
+                    puedeRecibir={Boolean(permisos.recibir)}
+                    onRecepcionExito={() => recargar({ page: resguardosVista?.current_page || 1 })}
+                />
 
                 <div className={GELIA_SEGMENT_TABS_SCROLL}>
                     <div
@@ -300,9 +304,24 @@ export default function Index({
                         paso={bandejaRender === 'por_recibir' ? pasoActivo : undefined}
                         puedeEntregar={Boolean(permisos.entregar)}
                         idsSeleccionados={idsSeleccionados}
-                        onToggleSeleccion={permisos.entregar && bandejaRender === 'en_custodia' ? toggleSeleccion : undefined}
+                        onToggleSeleccion={
+                            (permisos.entregar && bandejaRender === 'en_custodia')
+                            || (permisos.recibir && bandejaRender === 'por_recibir' && pasoActivo === 'gerente')
+                                ? toggleSeleccion
+                                : undefined
+                        }
                         onReponerExito={() => recargar({ page: resguardosVista?.current_page || 1 })}
                         onEntregaExito={() => recargar({ page: resguardosVista?.current_page || 1 })}
+                        onRecepcionExito={() => recargar({ page: resguardosVista?.current_page || 1 })}
+                    />
+                )}
+
+                {Boolean(permisos.recibir) && bandejaRender === 'por_recibir' && pasoActivo === 'gerente' && idsSeleccionados.length > 0 && (
+                    <BarraAccionesMasivasGerente
+                        resguardos={resguardosVista?.data || []}
+                        idsSeleccionados={idsSeleccionados}
+                        onLimpiarSeleccion={() => setIdsSeleccionados([])}
+                        onExito={() => recargar({ page: resguardosVista?.current_page || 1 })}
                     />
                 )}
 
@@ -324,6 +343,7 @@ export default function Index({
                 )}
 
                 <GeliaPaginacion paginator={resguardosVista} onIrAPagina={onIrAPagina} />
+
                 </GeliaPageShell>
             </PdvAlertProvider>
         </AppLayout>

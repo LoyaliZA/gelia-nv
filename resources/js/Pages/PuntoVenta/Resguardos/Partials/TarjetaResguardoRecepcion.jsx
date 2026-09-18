@@ -1,20 +1,25 @@
 import React from 'react';
 import { Link } from '@inertiajs/react';
-import { Package, PackageCheck, RefreshCw, UserRound, Eye } from 'lucide-react';
+import { Package, RefreshCw, UserRound, Eye, UserCheck } from 'lucide-react';
 import {
     formatearFechaCompacta,
     TARJETA_RECEPCION_ICONO,
     TARJETA_RECEPCION_METRICA,
+    BTN_ACCION_RECEPCION_TARJETA,
+    BTN_SECUNDARIO_RECEPCION_TARJETA,
     TARJETA_RECEPCION_PIE,
     tarjetaResguardoClass,
 } from './resguardosStyles';
 import {
     clasePieTarjetaRecepcion,
     etiquetaEstadoRecepcion,
+    etiquetaRetiroResguardo,
     titularResguardo,
 } from './resguardosUtils';
 import { resguardoAdmiteRecepcion } from './recepcionFisicaUtils';
 import { ChipEvidenciasBultosEmpaque } from './ModalEvidenciasBultosEmpaque';
+import BotonConfirmarRecepcionResguardo, { BotonPasarARecepcionResguardo } from './BotonConfirmarRecepcionResguardo';
+import { AccionConfirmarCustodiaResguardo } from './ModalCustodiaResguardo';
 
 export default function TarjetaResguardoRecepcion({
     resguardo,
@@ -22,14 +27,22 @@ export default function TarjetaResguardoRecepcion({
     puedeRecibir = false,
     puedeConfirmarCustodia = false,
     paso = 'gerente',
+    seleccionable = false,
+    seleccionado = false,
+    onToggleSeleccion,
+    onRecepcionExito,
 }) {
     const folio = resguardo.snapshot_folio || `#${resguardo.id}`;
     const numeroCliente = resguardo.cliente?.numero_cliente ?? '—';
     const estadoEtiqueta = etiquetaEstadoRecepcion(resguardo, catalogos, paso);
     const pieClase = clasePieTarjetaRecepcion(resguardo);
-    const fechaReferencia = resguardo.salida_cedis_at;
     const esPasoRecepcionista = paso === 'recepcionista';
+    const fechaReferencia = esPasoRecepcionista
+        ? (resguardo.recepcion_fisica_at || resguardo.salida_cedis_at)
+        : resguardo.salida_cedis_at;
+    const etiquetaRetiro = etiquetaRetiroResguardo(resguardo);
     const admiteRecepcion = !esPasoRecepcionista && puedeRecibir && resguardoAdmiteRecepcion(resguardo);
+    const admitePasarARecepcion = !esPasoRecepcionista && puedeRecibir && Boolean(resguardo?.admite_pasar_a_recepcion ?? resguardo?.puede_pasar_a_recepcion);
     const admiteCustodia = esPasoRecepcionista && puedeConfirmarCustodia && Boolean(resguardo?.admite_confirmacion_custodia ?? resguardo?.puede_confirmar_custodia);
 
     const PieContenido = () => (
@@ -42,6 +55,16 @@ export default function TarjetaResguardoRecepcion({
     return (
         <article className={`${tarjetaResguardoClass(resguardo)} p-4 space-y-3`}>
             <header className="flex items-start justify-between gap-3 pb-3 border-b theme-border">
+                <div className="flex items-start gap-3 min-w-0">
+                {seleccionable && (
+                    <input
+                        type="checkbox"
+                        className="mt-1 h-5 w-5 shrink-0"
+                        checked={seleccionado}
+                        onChange={() => onToggleSeleccion?.(resguardo.id)}
+                        aria-label={`Seleccionar ${folio}`}
+                    />
+                )}
                 <div className="min-w-0">
                     <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted m-0">
                         Folio del paquete
@@ -53,6 +76,7 @@ export default function TarjetaResguardoRecepcion({
                     >
                         {folio}
                     </p>
+                </div>
                 </div>
                 {resguardo.sucursal?.nombre && (
                     <span className="shrink-0 inline-flex px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-wide bg-purple-500/15 text-purple-700 dark:text-purple-300 max-w-[40%] truncate">
@@ -74,6 +98,20 @@ export default function TarjetaResguardoRecepcion({
                     {titularResguardo(resguardo)}
                 </p>
             </div>
+
+            {esPasoRecepcionista && (
+                <div className="rounded-xl border theme-border theme-element p-3 space-y-1">
+                    <div className="flex items-center gap-2">
+                        <UserCheck className="w-4 h-4 shrink-0 text-[var(--color-primario)]" aria-hidden />
+                        <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted m-0">
+                            Quién retira
+                        </p>
+                    </div>
+                    <p className="text-sm font-bold theme-text-main m-0 break-words">
+                        {etiquetaRetiro}
+                    </p>
+                </div>
+            )}
 
             <div className="grid grid-cols-2 gap-2">
                 <div className={TARJETA_RECEPCION_METRICA}>
@@ -111,21 +149,24 @@ export default function TarjetaResguardoRecepcion({
 
             <div className="flex flex-col gap-2 pt-1">
                 {admiteRecepcion ? (
-                    <Link
-                        href={route('punto_venta.resguardos.recepcion.create', resguardo.id)}
-                        className={`${TARJETA_RECEPCION_PIE} ${pieClase} no-underline`}
-                    >
-                        <PackageCheck className="w-4 h-4 shrink-0" aria-hidden />
-                        <span>Recibir paquete</span>
-                    </Link>
+                    <BotonConfirmarRecepcionResguardo
+                        resguardo={resguardo}
+                        variant="pie"
+                        etiqueta="Confirmar recepción"
+                        onExito={onRecepcionExito}
+                    />
+                ) : admitePasarARecepcion ? (
+                    <BotonPasarARecepcionResguardo
+                        resguardo={resguardo}
+                        variant="pie"
+                        onExito={onRecepcionExito}
+                    />
                 ) : admiteCustodia ? (
-                    <Link
-                        href={route('punto_venta.resguardos.custodia.create', resguardo.id)}
-                        className={`${TARJETA_RECEPCION_PIE} ${pieClase} no-underline`}
-                    >
-                        <PackageCheck className="w-4 h-4 shrink-0" aria-hidden />
-                        <span>Confirmar custodia</span>
-                    </Link>
+                    <AccionConfirmarCustodiaResguardo
+                        resguardo={resguardo}
+                        className={BTN_ACCION_RECEPCION_TARJETA}
+                        onExito={onRecepcionExito}
+                    />
                 ) : (
                     <div className={`${TARJETA_RECEPCION_PIE} ${pieClase}`} aria-live="polite">
                         <PieContenido />
@@ -133,7 +174,7 @@ export default function TarjetaResguardoRecepcion({
                 )}
                 <Link
                     href={route('punto_venta.resguardos.show', resguardo.id)}
-                    className={`${TARJETA_RECEPCION_PIE} border theme-border theme-element theme-text-muted no-underline hover:border-[var(--color-primario)]/40`}
+                    className={BTN_SECUNDARIO_RECEPCION_TARJETA}
                 >
                     <Eye className="w-4 h-4 shrink-0" aria-hidden />
                     <span>Ver detalle</span>

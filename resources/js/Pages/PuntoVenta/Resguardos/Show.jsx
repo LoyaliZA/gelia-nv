@@ -1,6 +1,6 @@
 import React from 'react';
 import { Head, Link } from '@inertiajs/react';
-import { ArrowLeft, Package, AlertTriangle, PackageCheck, Printer } from 'lucide-react';
+import { ArrowLeft, Package, AlertTriangle, Printer } from 'lucide-react';
 import AppLayout from '../../../Layouts/AppLayout';
 import GeliaPageShell from '../../../Components/GeliaPageShell';
 import { geliaCardClass } from '../../../utils/geliaTheme';
@@ -19,6 +19,7 @@ import {
 import { plazosOperativosResguardo } from './Partials/resguardosUtils';
 import PanelPedidoRevisionResguardo from './Partials/PanelPedidoRevisionResguardo';
 import { AccionEntregaResguardo } from './Partials/ModalEntregaResguardo';
+import BotonConfirmarRecepcionResguardo, { BotonPasarARecepcionResguardo } from './Partials/BotonConfirmarRecepcionResguardo';
 
 export default function Show({ auth, resguardo, timeline = [], catalogos = {}, permisos = {}, almacenes = [] }) {
     const titulo = resguardo?.snapshot_folio || `Resguardo #${resguardo?.id}`;
@@ -199,12 +200,24 @@ export default function Show({ auth, resguardo, timeline = [], catalogos = {}, p
                         />
                     )}
                     {permisos.recibir && resguardoAdmiteRecepcion(resguardo) && (
+                        <BotonConfirmarRecepcionResguardo
+                            resguardo={resguardo}
+                            className="inline-flex min-h-[44px] px-5 w-auto"
+                            etiqueta="Confirmar recepción"
+                        />
+                    )}
+                    {permisos.recibir && (resguardo.admite_pasar_a_recepcion || resguardo.estado === 'recibido') && resguardo.estado === 'recibido' && (
+                        <BotonPasarARecepcionResguardo
+                            resguardo={resguardo}
+                            className="inline-flex min-h-[44px] px-5 w-auto"
+                        />
+                    )}
+                    {permisos.confirmar_custodia && resguardo.estado === 'en_recepcion' && (
                         <Link
-                            href={route('punto_venta.resguardos.recepcion.create', resguardo.id)}
+                            href={route('punto_venta.resguardos.custodia.create', resguardo.id)}
                             className={`${THEME_BTN_PRIMARY} inline-flex items-center gap-2 min-h-[44px] px-5 text-[10px] font-black uppercase tracking-widest`}
                         >
-                            <PackageCheck className="w-4 h-4" />
-                            {resguardo.estado === 'en_custodia' ? 'Recibir complemento' : 'Recibir físicamente'}
+                            Revisar en recepción
                         </Link>
                     )}
                     <Link href={route('punto_venta.resguardos.index')} className={`${BTN_SECONDARY} inline-flex items-center gap-2`}>

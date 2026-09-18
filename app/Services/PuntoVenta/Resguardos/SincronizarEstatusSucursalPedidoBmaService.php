@@ -54,6 +54,21 @@ class SincronizarEstatusSucursalPedidoBmaService
             return null;
         }
 
+        if ($resguardo->estado === ResguardoPdv::ESTADO_RECIBIDO) {
+            return EstatusSucursalPedidoBma::RECIBIDO;
+        }
+
+        if ($resguardo->estado === ResguardoPdv::ESTADO_EN_RECEPCION) {
+            $enCustodia = EstadoResguardoPdv::cantidadEnCustodia($resguardo);
+            $esperada = EstadoResguardoPdv::cantidadEsperada($resguardo);
+
+            if ($enCustodia > 0 && $enCustodia < $esperada) {
+                return EstatusSucursalPedidoBma::CUSTODIA_PARCIAL;
+            }
+
+            return EstatusSucursalPedidoBma::EN_RECEPCION;
+        }
+
         $esperada = EstadoResguardoPdv::cantidadEsperada($resguardo);
         $recibidaGerente = EstadoResguardoPdv::cantidadRecibidaGerente($resguardo);
         $enCustodia = EstadoResguardoPdv::cantidadEnCustodia($resguardo);
@@ -67,7 +82,7 @@ class SincronizarEstatusSucursalPedidoBmaService
         }
 
         if ($enCustodia === 0) {
-            return EstatusSucursalPedidoBma::PENDIENTE_CUSTODIA;
+            return EstatusSucursalPedidoBma::EN_RECEPCION;
         }
 
         if ($enCustodia < $esperada) {
