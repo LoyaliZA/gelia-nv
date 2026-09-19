@@ -30,6 +30,7 @@ export default function Login() {
         login: '',
         password: '',
         remember: true,
+        register_passkey: false,
     });
 
     const [isDarkMode, setIsDarkMode] = useState(false);
@@ -37,6 +38,7 @@ export default function Login() {
     const [passkeyProcessing, setPasskeyProcessing] = useState(false);
     const [passkeyError, setPasskeyError] = useState('');
     const [passkeyDisponible, setPasskeyDisponible] = useState(false);
+    const [modoRegistrarPasskey, setModoRegistrarPasskey] = useState(false);
 
     useEffect(() => {
         const savedTheme = localStorage.getItem('theme');
@@ -51,6 +53,18 @@ export default function Login() {
         const next = !isDarkMode;
         setIsDarkMode(next);
         applyLoginTheme(next);
+    };
+
+    const activarModoRegistrarPasskey = () => {
+        setModoRegistrarPasskey(true);
+        setData('register_passkey', true);
+        setPasskeyError('');
+    };
+
+    const cancelarModoRegistrarPasskey = () => {
+        setModoRegistrarPasskey(false);
+        setData('register_passkey', false);
+        setPasskeyError('');
     };
 
     const handleSubmit = (e) => {
@@ -69,6 +83,10 @@ export default function Login() {
             const result = await WebAuthnService.loginConPasskey(data.login.trim(), data.remember);
             router.visit(result.redirect || '/dashboard');
         } catch (error) {
+            if (error.code === 'sin_credenciales') {
+                activarModoRegistrarPasskey();
+                return;
+            }
             setPasskeyError(WebAuthnService.mensajeErrorPasskey(
                 error,
                 'No se pudo iniciar sesión con huella.'
@@ -146,6 +164,24 @@ export default function Login() {
                     </header>
 
                     <form onSubmit={handleSubmit} className="gelia-login-split__form-fields space-y-4 lg:space-y-5">
+                        {modoRegistrarPasskey && (
+                            <div
+                                className="p-4 rounded-2xl border theme-border theme-element space-y-3"
+                                style={{ backgroundColor: 'color-mix(in srgb, var(--color-primario) 8%, transparent)' }}
+                            >
+                                <p className="text-sm font-bold theme-text-main m-0 leading-relaxed">
+                                    Para usar huella en este equipo, confirma tu contraseña. Al entrar te pediremos registrar la huella.
+                                </p>
+                                <button
+                                    type="button"
+                                    onClick={cancelarModoRegistrarPasskey}
+                                    className="text-[10px] font-black uppercase tracking-widest theme-text-muted hover:theme-text-main outline-none"
+                                >
+                                    Cancelar
+                                </button>
+                            </div>
+                        )}
+
                         <div>
                             <label htmlFor="login" className="theme-label ml-1">
                                 Usuario o correo
@@ -218,13 +254,19 @@ export default function Login() {
                         >
                             {processing ? (
                                 <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                            ) : modoRegistrarPasskey ? (
+                                <Fingerprint className="w-4 h-4 shrink-0" />
                             ) : (
                                 <LogIn className="w-4 h-4 shrink-0" />
                             )}
-                            {processing ? 'Verificando…' : 'Iniciar sesión'}
+                            {processing
+                                ? 'Verificando…'
+                                : modoRegistrarPasskey
+                                    ? 'Iniciar sesión y registrar huella'
+                                    : 'Iniciar sesión'}
                         </button>
 
-                        {passkeyDisponible && (
+                        {passkeyDisponible && !modoRegistrarPasskey && (
                             <>
                                 <p className="text-center text-[10px] font-black uppercase tracking-widest theme-text-muted m-0">
                                     o

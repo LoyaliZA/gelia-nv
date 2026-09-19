@@ -21,8 +21,9 @@ class LoginController extends Controller
     public function store(Request $request, RegistrarAuditoriaAccesoService $auditoriaAcceso): RedirectResponse
     {
         $request->validate([
-            'login'    => ['required', 'string'],
+            'login' => ['required', 'string'],
             'password' => ['required'],
+            'register_passkey' => ['sometimes', 'boolean'],
         ]);
 
         $user = app(ResolverUsuarioLogin::class)->resolver($request->login);
@@ -31,6 +32,10 @@ class LoginController extends Controller
             $request->session()->regenerate();
 
             $auditoriaAcceso->registrarLogin($user, $request, $request->session()->getId());
+
+            if ($request->boolean('register_passkey') && config('webauthn.enabled')) {
+                $request->session()->flash('prompt_passkey_registration', true);
+            }
 
             return redirect()->intended(route('dashboard'));
         }

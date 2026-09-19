@@ -50,6 +50,16 @@ const WebAuthnService = {
         return typeof window !== 'undefined' && browserSupportsWebAuthn();
     },
 
+    nicknameEquipo() {
+        if (typeof window === 'undefined') {
+            return 'Este equipo';
+        }
+
+        return window.navigator.userAgentData?.platform
+            || window.navigator.platform
+            || 'Este equipo';
+    },
+
     async loginConPasskey(login, remember = true) {
         const { data: optionsJSON } = await axios.post('/api/v1/passkeys/login/options', {
             login,

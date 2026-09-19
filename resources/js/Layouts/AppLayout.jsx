@@ -40,6 +40,8 @@ import {
     resolveContentDensity,
 } from '../utils/contentDensity';
 import useWebPush from '@/hooks/useWebPush';
+import RegistrarPasskeyPrompt from '../Components/Auth/RegistrarPasskeyPrompt';
+import WebAuthnService from '../Services/WebAuthnService';
 import { GELIA_PREVENT_OVERFLOW_X } from '../utils/geliaTheme';
 import { STORAGE_FILTROS_ACTIVOS } from '../Pages/Activos/Partials/navegarListadoActivos';
 
@@ -58,12 +60,29 @@ const MOBILE_SIDEBAR_LAYOUT_BOTTOM = 'mobile_bottom';
 const MOBILE_SIDEBAR_LAYOUT_TOPBAR = 'mobile_topbar';
 
 export default function AppLayout({ children, fullScreen = false }) {
-    const { props: { auth, tonos_alertas = [] }, url } = usePage();
+    const { props: { auth, tonos_alertas = [], flash, webauthnEnabled }, url } = usePage();
     const pageKey = String(url || '').split('?')[0];
 
     const { needsPrompt, activarNotificaciones } = useWebPush(auth);
     const [promptDismissed, setPromptDismissed] = useState(false);
     const [promptBusy, setPromptBusy] = useState(false);
+    const [passkeyPromptOpen, setPasskeyPromptOpen] = useState(false);
+    const [passkeyRegistrada, setPasskeyRegistrada] = useState(false);
+
+    useEffect(() => {
+        if (flash?.prompt_passkey_registration && webauthnEnabled && WebAuthnService.soportado()) {
+            setPasskeyPromptOpen(true);
+        }
+    }, [flash?.prompt_passkey_registration, webauthnEnabled]);
+
+    useEffect(() => {
+        if (!passkeyRegistrada) {
+            return undefined;
+        }
+
+        const timer = window.setTimeout(() => setPasskeyRegistrada(false), 5000);
+        return () => window.clearTimeout(timer);
+    }, [passkeyRegistrada]);
 
     useEffect(() => {
         if (typeof window !== 'undefined' && !url.startsWith('/activos')) {
@@ -817,6 +836,20 @@ export default function AppLayout({ children, fullScreen = false }) {
 
                     <WooSyncFloatingTracker canView={canViewWooSync} canSync={canSyncWoo} />
                     <ImportacionAlmacenFloatingTracker canView={canViewImportacionAlmacen} canManage={canManageImportacionAlmacen} />
+                    <RegistrarPasskeyPrompt
+                        open={passkeyPromptOpen}
+                        onClose={() => setPasskeyPromptOpen(false)}
+                        onRegistered={() => setPasskeyRegistrada(true)}
+                    />
+                    {passkeyRegistrada && (
+                        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[10000] pointer-events-none">
+                            <div className="pointer-events-auto theme-surface theme-no-blur border theme-border shadow-2xl rounded-2xl px-5 py-3">
+                                <p className="text-sm font-bold text-green-600 m-0">
+                                    Huella registrada. Ya puedes entrar con huella en este equipo.
+                                </p>
+                            </div>
+                        </div>
+                    )}
                     <CobranzaReporteFloatingTracker canView={canViewCobranzaReportes} />
                     <TiendanubeImportFloatingTracker canView={canViewTiendanubeImport} />
                 </div>

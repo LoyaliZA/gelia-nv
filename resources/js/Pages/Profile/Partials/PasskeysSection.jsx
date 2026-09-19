@@ -42,9 +42,7 @@ export default function PasskeysSection() {
         setError('');
         setExito('');
         try {
-            const nickname = window.navigator.userAgentData?.platform
-                || window.navigator.platform
-                || 'Este equipo';
+            const nickname = WebAuthnService.nicknameEquipo();
             await WebAuthnService.registrarPasskey(`Huella en ${nickname}`);
             setExito('Passkey registrada. Ya puedes entrar con huella en este equipo.');
             await recargar();
@@ -112,7 +110,7 @@ export default function PasskeysSection() {
                 <p className="text-sm font-bold theme-text-muted m-0">Cargando passkeys…</p>
             ) : passkeys.length === 0 ? (
                 <p className="text-sm font-bold theme-text-muted m-0">
-                    Todavía no hay passkeys. Tras iniciar sesión con contraseña, registra la huella de este equipo.
+                    Todavía no hay passkeys. También puedes registrar la huella al pulsar «Entrar con huella» en el login.
                 </p>
             ) : (
                 <ul className="space-y-3 m-0 p-0 list-none">

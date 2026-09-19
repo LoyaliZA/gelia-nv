@@ -113,6 +113,7 @@ class HandleInertiaRequests extends Middleware
                 'enlace_direccion_url' => fn () => $request->session()->get('enlace_direccion_url'),
                 'enlace_fiscal_url' => fn () => $request->session()->get('enlace_fiscal_url'),
                 'factura_borrador_id' => fn () => $request->session()->get('factura_borrador_id'),
+                'prompt_passkey_registration' => fn () => $request->session()->get('prompt_passkey_registration'),
             ],
             'woocommerce_sync_activo' => fn () => ($user && $user->can('woocommerce.ver'))
                 ? WoocommerceSyncLog::activo()
