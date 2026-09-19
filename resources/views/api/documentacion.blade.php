@@ -146,5 +146,136 @@ Accept: application/json</pre>
         <li>Revise periódicamente la auditoría de uso desde el panel de administración.</li>
         <li>Use siempre HTTPS en producción.</li>
     </ul>
+
+    @if(!empty($mobile))
+        <h2>8. API móvil (apps nativas)</h2>
+        <p>{{ $mobile['introduccion'] ?? '' }}</p>
+
+        @if(!empty($mobile['requisitos_acceso']))
+            <h3>Requisitos de acceso</h3>
+            <ul>
+                @foreach($mobile['requisitos_acceso'] as $requisito)
+                    <li>{{ $requisito }}</li>
+                @endforeach
+            </ul>
+        @endif
+
+        <h3>Autenticación móvil</h3>
+        <p>Los tokens de <code>/auth/token</code> (aplicaciones externas) <strong>no</strong> funcionan en rutas <code>/mobile/*</code>. Use login de usuario:</p>
+        <pre>POST {{ $base_url }}/mobile/login
+Content-Type: application/json
+Accept: application/json
+
+{
+  "login": "usuario@ejemplo.com",
+  "password": "********",
+  "device_uuid": "11111111-1111-1111-1111-111111111111",
+  "device_name": "Mi teléfono",
+  "platform": "android",
+  "app_version": "1.0.0"
+}</pre>
+        <p>Respuesta (campos principales):</p>
+        <pre>{
+  "access_token": "...",
+  "token_type": "Bearer",
+  "expires_at": "2026-10-18T12:00:00+00:00",
+  "scope_version": "abc123...",
+  "user": { "id": 1, "name": "...", "username": "...", "email": "..." },
+  "permissions": ["mis_clientes.gestionar"],
+  "tema_visual": { "modo": "dark", "layout_sidebar_mobile": "mobile_bottom" },
+  "device": { "device_uuid": "...", "plataforma": "android" }
+}</pre>
+        <p>Encabezados en rutas protegidas y sincronización:</p>
+        <pre>Authorization: Bearer {access_token}
+Accept: application/json
+X-Mobile-Scope-Version: {scope_version}</pre>
+
+        @if(!empty($mobile['instrucciones']))
+            <h3>Instrucciones de sincronización</h3>
+            <ol>
+                @foreach($mobile['instrucciones'] as $instruccion)
+                    <li>{{ $instruccion }}</li>
+                @endforeach
+            </ol>
+        @endif
+
+        @if(!empty($mobile['flujo_sincronizacion']))
+            <h3>Flujo recomendado</h3>
+            <ol>
+                @foreach($mobile['flujo_sincronizacion'] as $paso)
+                    <li>{{ $paso }}</li>
+                @endforeach
+            </ol>
+        @endif
+
+        @if(!empty($mobile['endpoints']))
+            <h3>Endpoints móvil</h3>
+            <table>
+                <thead><tr><th>Método</th><th>Ruta</th><th>Auth</th><th>Descripción</th></tr></thead>
+                <tbody>
+                    @foreach($mobile['endpoints'] as $endpoint)
+                        <tr>
+                            <td><strong>{{ $endpoint['metodo'] }}</strong></td>
+                            <td><code>{{ $endpoint['ruta'] }}</code></td>
+                            <td>{{ ($endpoint['auth'] ?? true) ? 'Sí' : 'No' }}</td>
+                            <td>{{ $endpoint['descripcion'] }}</td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        @endif
+
+        @if(!empty($mobile['campos']))
+            <h3>Campos de cliente en sincronización</h3>
+            <p>Cada registro incluye <code>alcance</code> (<code>full</code>, <code>vendedor</code> o <code>none</code>) según permisos del usuario.</p>
+            @foreach($mobile['campos'] as $grupo)
+                <p><strong>Grupo {{ $grupo['grupo'] }}</strong> — {{ $grupo['permisos_requeridos'] }}</p>
+                <p><code>{{ implode(', ', $grupo['campos']) }}</code></p>
+            @endforeach
+        @endif
+
+        @if(!empty($mobile['eventos_cambio']))
+            <h3>Eventos de cambio (changes)</h3>
+            <ul>
+                @foreach($mobile['eventos_cambio'] as $evento)
+                    <li>{{ $evento }}</li>
+                @endforeach
+            </ul>
+        @endif
+
+        @if(!empty($mobile['evento_realtime']))
+            <h3>Notificaciones en tiempo real (Reverb)</h3>
+            <p>Canal: <code>{{ $mobile['evento_realtime']['canal'] ?? '' }}</code></p>
+            <p>Evento: <code>{{ $mobile['evento_realtime']['nombre'] ?? '' }}</code></p>
+            <p>Payload: <code>{{ $mobile['evento_realtime']['payload'] ?? '' }}</code></p>
+        @endif
+
+        @if(!empty($mobile['limites']))
+            <h3>Límites móvil</h3>
+            <ul>
+                @foreach($mobile['limites'] as $limite)
+                    <li>{{ $limite }}</li>
+                @endforeach
+            </ul>
+        @endif
+
+        @if(!empty($mobile['guias_cliente_http']))
+            <h3>Probar API móvil (Postman / Thunder)</h3>
+            @foreach($mobile['guias_cliente_http'] as $guia)
+                <h4>{{ $guia['nombre'] }}</h4>
+                <ol>
+                    @foreach($guia['pasos'] as $paso)
+                        <li>
+                            @if(str_starts_with($paso, '{'))
+                                <pre>{{ $paso }}</pre>
+                            @else
+                                {{ $paso }}
+                            @endif
+                        </li>
+                    @endforeach
+                </ol>
+            @endforeach
+        @endif
+    @endif
 </body>
 </html>

@@ -24,25 +24,30 @@ class MobileAuthService
      */
     public function login(array $datos, Request $request): ?array
     {
-        $user = User::query()
-            ->where('email', $datos['login'])
-            ->orWhere('username', $datos['login'])
-            ->orWhere('name', $datos['login'])
-            ->first();
+        $user = app(\App\Services\Auth\ResolverUsuarioLogin::class)->resolver($datos['login'] ?? null);
 
         if (! $user || ! Hash::check($datos['password'], $user->password)) {
             return null;
         }
 
+        return $this->emitirSesionMovil($user, $datos, $request);
+    }
+
+    /**
+     * @param  array{device_uuid: string, device_name?: string, platform?: string, app_version?: string}  $deviceData
+     * @return array<string, mixed>
+     */
+    public function emitirSesionMovil(User $user, array $deviceData, Request $request): array
+    {
         $device = MobileDevice::query()->updateOrCreate(
             [
                 'user_id' => $user->id,
-                'device_uuid' => $datos['device_uuid'],
+                'device_uuid' => $deviceData['device_uuid'],
             ],
             [
-                'nombre' => $datos['device_name'] ?? null,
-                'plataforma' => $datos['platform'] ?? null,
-                'app_version' => $datos['app_version'] ?? null,
+                'nombre' => $deviceData['device_name'] ?? null,
+                'plataforma' => $deviceData['platform'] ?? null,
+                'app_version' => $deviceData['app_version'] ?? null,
                 'last_seen_at' => now(),
                 'revocado_at' => null,
             ]

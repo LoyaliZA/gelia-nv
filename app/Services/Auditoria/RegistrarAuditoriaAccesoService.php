@@ -73,6 +73,14 @@ class RegistrarAuditoriaAccesoService
         return $cerradas;
     }
 
+    public function registrarEventoPuntual(User $user, Request $request, string $sessionId, string $motivo): AuditoriaAcceso
+    {
+        $acceso = $this->registrarLogin($user, $request, $sessionId);
+        $this->cerrarAcceso($acceso, $motivo);
+
+        return $acceso->refresh();
+    }
+
     public function actualizarActividad(string $sessionId): void
     {
         $cacheKey = "sesion_actividad:{$sessionId}";

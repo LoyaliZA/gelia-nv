@@ -5,6 +5,10 @@ use App\Http\Controllers\Api\V1\ClienteExternoController;
 use App\Http\Controllers\Api\V1\HealthController;
 use App\Http\Controllers\Api\V1\Mobile\MobileAuthController;
 use App\Http\Controllers\Api\V1\Mobile\MobileSyncController;
+use App\Http\Controllers\Api\V1\PasskeyController;
+use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
+use Illuminate\Cookie\Middleware\EncryptCookies;
+use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function () {
@@ -13,6 +17,30 @@ Route::prefix('v1')->group(function () {
     Route::middleware(['require.json'])->group(function () {
         Route::post('/auth/token', [AuthTokenController::class, 'store']);
         Route::post('/mobile/login', [MobileAuthController::class, 'login']);
+    });
+
+    $passkeySession = [
+        EncryptCookies::class,
+        AddQueuedCookiesToResponse::class,
+        StartSession::class,
+        'require.json',
+        'webauthn.enabled',
+    ];
+
+    Route::prefix('passkeys')->middleware(array_merge($passkeySession, ['throttle:passkeys-login']))->group(function () {
+        Route::post('/login/options', [PasskeyController::class, 'loginOptions']);
+        Route::post('/login/verify', [PasskeyController::class, 'loginVerify']);
+    });
+
+    Route::prefix('passkeys')->middleware(array_merge($passkeySession, [
+        'auth:sanctum',
+        'throttle:20,1',
+    ]))->group(function () {
+        Route::post('/register/options', [PasskeyController::class, 'registerOptions']);
+        Route::post('/register', [PasskeyController::class, 'register']);
+        Route::get('/', [PasskeyController::class, 'index']);
+        Route::patch('/{passkey}', [PasskeyController::class, 'update'])->where('passkey', '.*');
+        Route::delete('/{passkey}', [PasskeyController::class, 'destroy'])->where('passkey', '.*');
     });
 
     Route::prefix('mobile')->middleware([

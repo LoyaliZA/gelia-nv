@@ -65,6 +65,11 @@ class AppServiceProvider extends ServiceProvider
                 $app->make(\App\Services\GeliaAi\Acciones\GenerarListadoAccion::class),
             ]);
         });
+
+        $this->app->singleton(
+            \Laragear\WebAuthn\Contracts\WebAuthnChallengeRepository::class,
+            \App\Services\Auth\CacheWebAuthnChallengeRepository::class
+        );
     }
 
     /**
@@ -238,6 +243,15 @@ class AppServiceProvider extends ServiceProvider
                 : 'api-mobile-ip:'.$request->ip();
 
             return Limit::perMinute(60)->by($key);
+        });
+
+        RateLimiter::for('passkeys-login', function (Request $request) {
+            $login = strtolower(trim((string) $request->input('login', '')));
+
+            return [
+                Limit::perMinute(10)->by('passkeys-ip:'.$request->ip()),
+                Limit::perMinute(10)->by('passkeys-login:'.$login),
+            ];
         });
     }
 }

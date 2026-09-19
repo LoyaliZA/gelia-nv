@@ -22,6 +22,8 @@ abstract class TestCase extends BaseTestCase
             $app['db']->purge();
         }
 
+        $app['config']->set('webauthn.enabled', true);
+
         return $app;
     }
 }

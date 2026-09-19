@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { Head, useForm } from '@inertiajs/react';
-import { User, Lock, LogIn, Sun, Moon, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { Head, router, useForm, usePage } from '@inertiajs/react';
+import { User, Lock, LogIn, Sun, Moon, Eye, EyeOff, Loader2, Fingerprint } from 'lucide-react';
 import GeliaLogo from '../../Components/GeliaLogo';
+import WebAuthnService from '../../Services/WebAuthnService';
 
 const ACCENT_COLORS = {
     rosa: '#ec4899',
@@ -24,6 +25,7 @@ function applyLoginTheme(isDark) {
 }
 
 export default function Login() {
+    const { webauthnEnabled } = usePage().props;
     const { data, setData, post, processing, errors } = useForm({
         login: '',
         password: '',
@@ -32,6 +34,9 @@ export default function Login() {
 
     const [isDarkMode, setIsDarkMode] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
+    const [passkeyProcessing, setPasskeyProcessing] = useState(false);
+    const [passkeyError, setPasskeyError] = useState('');
+    const [passkeyDisponible, setPasskeyDisponible] = useState(false);
 
     useEffect(() => {
         const savedTheme = localStorage.getItem('theme');
@@ -39,7 +44,8 @@ export default function Login() {
         const isDark = savedTheme === 'dark' || (!savedTheme && systemPrefersDark);
         setIsDarkMode(isDark);
         applyLoginTheme(isDark);
-    }, []);
+        setPasskeyDisponible(Boolean(webauthnEnabled) && WebAuthnService.soportado());
+    }, [webauthnEnabled]);
 
     const toggleTheme = () => {
         const next = !isDarkMode;
@@ -50,6 +56,26 @@ export default function Login() {
     const handleSubmit = (e) => {
         e.preventDefault();
         post('/login');
+    };
+
+    const handlePasskeyLogin = async () => {
+        if (!data.login.trim()) {
+            setPasskeyError('Escribe tu usuario o correo para entrar con huella.');
+            return;
+        }
+        setPasskeyError('');
+        setPasskeyProcessing(true);
+        try {
+            const result = await WebAuthnService.loginConPasskey(data.login.trim(), data.remember);
+            router.visit(result.redirect || '/dashboard');
+        } catch (error) {
+            setPasskeyError(WebAuthnService.mensajeErrorPasskey(
+                error,
+                'No se pudo iniciar sesión con huella.'
+            ));
+        } finally {
+            setPasskeyProcessing(false);
+        }
     };
 
     return (
@@ -197,6 +223,33 @@ export default function Login() {
                             )}
                             {processing ? 'Verificando…' : 'Iniciar sesión'}
                         </button>
+
+                        {passkeyDisponible && (
+                            <>
+                                <p className="text-center text-[10px] font-black uppercase tracking-widest theme-text-muted m-0">
+                                    o
+                                </p>
+                                <button
+                                    type="button"
+                                    onClick={handlePasskeyLogin}
+                                    disabled={passkeyProcessing || processing}
+                                    className="theme-btn-primary w-full py-3.5 lg:py-4 disabled:hover:scale-100"
+                                    style={{ backgroundColor: 'transparent', color: 'var(--color-primario)', border: '2px solid var(--color-primario)' }}
+                                >
+                                    {passkeyProcessing ? (
+                                        <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                                    ) : (
+                                        <Fingerprint className="w-4 h-4 shrink-0" />
+                                    )}
+                                    {passkeyProcessing ? 'Esperando huella…' : 'Entrar con huella'}
+                                </button>
+                            </>
+                        )}
+                        {passkeyError && (
+                            <p className="text-red-500 text-[10px] font-bold mt-1.5 ml-1 uppercase" role="alert">
+                                {passkeyError}
+                            </p>
+                        )}
                     </form>
 
                     <p className="gelia-login-split__footer theme-text-muted text-center m-0">

@@ -4,9 +4,9 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Services\Auditoria\RegistrarAuditoriaAccesoService;
+use App\Services\Auth\ResolverUsuarioLogin;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use App\Models\User;
 use Inertia\Inertia;
 use Inertia\Response;
 use Illuminate\Http\RedirectResponse;
@@ -25,10 +25,7 @@ class LoginController extends Controller
             'password' => ['required'],
         ]);
 
-        $user = User::where('email', $request->login)
-                    ->orWhere('username', $request->login)
-                    ->orWhere('name', $request->login)
-                    ->first();
+        $user = app(ResolverUsuarioLogin::class)->resolver($request->login);
 
         if ($user && Auth::attempt(['email' => $user->email, 'password' => $request->password], $request->boolean('remember'))) {
             $request->session()->regenerate();

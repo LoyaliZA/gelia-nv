@@ -11,6 +11,7 @@ import AppLayout from '../../Layouts/AppLayout';
 import GeliaLoader from '../../Components/GeliaLoader';
 import GeliaLogo from '../../Components/GeliaLogo';
 import { geliaCardClass } from '../../utils/geliaTheme';
+import PasskeysSection from './Partials/PasskeysSection';
 import {
     compressImageToWebp,
     validateImageSource,
@@ -936,6 +937,8 @@ export default function MiPerfil({ perfilUsuario = {}, sesiones = [], sesiones_s
                         </>
                     )}
                 </section>
+
+                <PasskeysSection />
 
                 {/* --- Accesos rápidos --- */}
                 <section className={`${activeCardClass} p-8 md:p-10`}>

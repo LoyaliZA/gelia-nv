@@ -134,6 +134,7 @@ class HandleInertiaRequests extends Middleware
             'gelia_ai_visible' => fn () => $user
                 ? app(ResolverAccesoGeliaAi::class)->puedeUsar($user)
                 : false,
+            'webauthnEnabled' => (bool) config('webauthn.enabled'),
         ];
     }
 

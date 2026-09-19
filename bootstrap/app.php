@@ -49,6 +49,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'require.json' => \App\Http\Middleware\RequireJsonAccept::class,
             'api.mobile' => \App\Http\Middleware\AuthenticateMobileUser::class,
             'mobile.sync' => \App\Http\Middleware\EnsureMobileSyncScope::class,
+            'webauthn.enabled' => \App\Http\Middleware\EnsureWebAuthnEnabled::class,
             'pdv.piso' => \App\Http\Middleware\AsegurarSucursalActivaPdv::class,
             'pdv.modulo' => \App\Http\Middleware\AsegurarModuloPuntoVenta::class,
             'pdv.permiso' => \App\Http\Middleware\AsegurarPermisoPdv::class,

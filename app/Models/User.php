@@ -9,15 +9,19 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Spatie\Permission\Traits\HasRoles;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Laravel\Sanctum\HasApiTokens;
+use Laragear\WebAuthn\Contracts\WebAuthnAuthenticatable;
+use Laragear\WebAuthn\WebAuthnAuthentication;
+use Laragear\WebAuthn\WebAuthnData;
 
-class User extends Authenticatable
+class User extends Authenticatable implements WebAuthnAuthenticatable
 {
-    use HasApiTokens, HasFactory, Notifiable, HasRoles, SoftDeletes;
+    use HasApiTokens, HasFactory, Notifiable, HasRoles, SoftDeletes, WebAuthnAuthentication;
 
     // --- SECCIÓN: CAMPOS PERMITIDOS ---
     protected $fillable = [
@@ -294,6 +298,18 @@ class User extends Authenticatable
     public function mobileDevices(): HasMany
     {
         return $this->hasMany(MobileDevice::class);
+    }
+
+    public function webAuthnCredentials(): MorphMany
+    {
+        return $this->morphMany(WebauthnCredential::class, 'authenticatable');
+    }
+
+    public function webAuthnData(): WebAuthnData
+    {
+        $identificador = $this->email ?: $this->username ?: (string) $this->id;
+
+        return WebAuthnData::make($identificador, $this->name ?: $identificador);
     }
 
     /**

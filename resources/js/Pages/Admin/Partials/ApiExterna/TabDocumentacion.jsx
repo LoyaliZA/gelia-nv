@@ -1,5 +1,5 @@
 import React from 'react';
-import { Download, BookOpen, Terminal, AlertTriangle, Send } from 'lucide-react';
+import { Download, BookOpen, Terminal, AlertTriangle, Send, Smartphone } from 'lucide-react';
 
 export default function TabDocumentacion({ documentacion, baseUrl }) {
     const endpointsGenerales = documentacion.endpoints_generales || [];
@@ -7,6 +7,7 @@ export default function TabDocumentacion({ documentacion, baseUrl }) {
     const guiasClienteHttp = documentacion.guias_cliente_http || [];
     const recursos = documentacion.recursos || [];
     const codigosError = documentacion.codigos_error || [];
+    const mobile = documentacion.mobile || null;
 
     return (
         <div className="space-y-6">
@@ -126,6 +127,159 @@ export default function TabDocumentacion({ documentacion, baseUrl }) {
                             <p key={err.codigo}><strong>{err.codigo}</strong> — {err.descripcion}</p>
                         ))}
                     </div>
+                </div>
+            )}
+
+            {mobile && (
+                <div className="rounded-2xl theme-border border p-5 space-y-6">
+                    <h4 className="font-black uppercase flex items-center gap-2 text-sm">
+                        <Smartphone className="w-4 h-4" /> API móvil (apps nativas)
+                    </h4>
+                    <p className="text-sm theme-text-muted">{mobile.introduccion}</p>
+
+                    {(mobile.requisitos_acceso || []).length > 0 && (
+                        <div className="space-y-2">
+                            <h5 className="font-bold uppercase text-xs">Requisitos de acceso</h5>
+                            <ul className="text-xs theme-text-muted space-y-1 list-disc list-inside">
+                                {mobile.requisitos_acceso.map((texto) => (
+                                    <li key={texto}>{texto}</li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
+
+                    <div className="space-y-2 border-t theme-border pt-4">
+                        <h5 className="font-bold uppercase text-xs">Autenticación</h5>
+                        <p className="text-xs theme-text-muted">
+                            Los tokens de <code>/auth/token</code> no funcionan en <code>/mobile/*</code>.
+                            Use login de usuario con <code>device_uuid</code>.
+                        </p>
+                        <pre className="text-[10px] font-mono p-3 rounded-xl bg-black/5 dark:bg-white/5 overflow-x-auto whitespace-pre-wrap">
+{`POST ${baseUrl}/mobile/login
+Content-Type: application/json
+Accept: application/json
+
+{
+  "login": "usuario@ejemplo.com",
+  "password": "********",
+  "device_uuid": "11111111-1111-1111-1111-111111111111",
+  "platform": "android",
+  "app_version": "1.0.0"
+}`}
+                        </pre>
+                        <p className="text-xs theme-text-muted">
+                            Encabezados en sincronización: <code>Authorization: Bearer</code>,{' '}
+                            <code>Accept: application/json</code>, <code>X-Mobile-Scope-Version</code>
+                        </p>
+                    </div>
+
+                    {(mobile.instrucciones || []).length > 0 && (
+                        <div className="space-y-2 border-t theme-border pt-4">
+                            <h5 className="font-bold uppercase text-xs">Sincronización</h5>
+                            <ol className="text-xs theme-text-muted space-y-1 list-decimal list-inside">
+                                {mobile.instrucciones.map((texto) => (
+                                    <li key={texto}>{texto}</li>
+                                ))}
+                            </ol>
+                        </div>
+                    )}
+
+                    {(mobile.flujo_sincronizacion || []).length > 0 && (
+                        <div className="space-y-2 border-t theme-border pt-4">
+                            <h5 className="font-bold uppercase text-xs">Flujo recomendado</h5>
+                            <ol className="text-xs theme-text-muted space-y-1 list-decimal list-inside">
+                                {mobile.flujo_sincronizacion.map((texto) => (
+                                    <li key={texto}>{texto}</li>
+                                ))}
+                            </ol>
+                        </div>
+                    )}
+
+                    {(mobile.endpoints || []).length > 0 && (
+                        <div className="space-y-4 border-t theme-border pt-4">
+                            <h5 className="font-bold uppercase text-xs">Endpoints</h5>
+                            {mobile.endpoints.map((ep) => (
+                                <div key={`mobile-${ep.metodo}-${ep.ruta}`} className="space-y-2 pb-4 border-b theme-border last:border-0">
+                                    <p className="text-xs font-bold uppercase">
+                                        <span className="text-green-600">{ep.metodo}</span> {ep.ruta}
+                                        {ep.auth === false && <span className="ml-2 text-[10px] theme-text-muted">(pública)</span>}
+                                    </p>
+                                    <p className="text-xs theme-text-muted">{ep.descripcion}</p>
+                                    {ep.curl && (
+                                        <pre className="text-[10px] font-mono p-3 rounded-xl bg-black/5 dark:bg-white/5 overflow-x-auto whitespace-pre-wrap">{ep.curl}</pre>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {(mobile.campos || []).length > 0 && (
+                        <div className="space-y-3 border-t theme-border pt-4">
+                            <h5 className="font-bold uppercase text-xs">Campos de cliente</h5>
+                            <p className="text-xs theme-text-muted">
+                                Cada registro incluye <code>alcance</code> (<code>full</code>, <code>vendedor</code> o <code>none</code>).
+                            </p>
+                            {mobile.campos.map((grupo) => (
+                                <div key={grupo.grupo} className="text-xs theme-text-muted">
+                                    <p className="font-bold">Grupo {grupo.grupo} — {grupo.permisos_requeridos}</p>
+                                    <p className="font-mono text-[10px] break-all">{grupo.campos.join(', ')}</p>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {(mobile.eventos_cambio || []).length > 0 && (
+                        <div className="space-y-2 border-t theme-border pt-4">
+                            <h5 className="font-bold uppercase text-xs">Eventos de cambio</h5>
+                            <ul className="text-xs theme-text-muted space-y-1 list-disc list-inside">
+                                {mobile.eventos_cambio.map((texto) => (
+                                    <li key={texto}>{texto}</li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
+
+                    {mobile.evento_realtime && (
+                        <div className="space-y-1 border-t theme-border pt-4 text-xs theme-text-muted">
+                            <h5 className="font-bold uppercase text-xs">Tiempo real (Reverb)</h5>
+                            <p>Canal: <code>{mobile.evento_realtime.canal}</code></p>
+                            <p>Evento: <code>{mobile.evento_realtime.nombre}</code></p>
+                            <p>Payload: <code>{mobile.evento_realtime.payload}</code></p>
+                        </div>
+                    )}
+
+                    {(mobile.limites || []).length > 0 && (
+                        <div className="space-y-2 border-t theme-border pt-4">
+                            <h5 className="font-bold uppercase text-xs">Límites</h5>
+                            <ul className="text-xs theme-text-muted space-y-1 list-disc list-inside">
+                                {mobile.limites.map((texto) => (
+                                    <li key={texto}>{texto}</li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
+
+                    {(mobile.guias_cliente_http || []).length > 0 && (
+                        <div className="space-y-4 border-t theme-border pt-4">
+                            <h5 className="font-bold uppercase text-xs">Probar en Postman / Thunder</h5>
+                            {mobile.guias_cliente_http.map((guia) => (
+                                <div key={guia.nombre} className="space-y-2">
+                                    <p className="font-bold text-xs">{guia.nombre}</p>
+                                    <ol className="text-xs theme-text-muted space-y-1.5 list-decimal list-inside">
+                                        {(guia.pasos || []).map((paso) => (
+                                            <li key={paso} className={paso.startsWith('{') ? 'list-none ml-0' : ''}>
+                                                {paso.startsWith('{') ? (
+                                                    <pre className="mt-1 font-mono p-3 rounded-xl bg-black/5 dark:bg-white/5 overflow-x-auto whitespace-pre-wrap">{paso}</pre>
+                                                ) : (
+                                                    paso
+                                                )}
+                                            </li>
+                                        ))}
+                                    </ol>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
             )}
         </div>
