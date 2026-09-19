@@ -24,6 +24,7 @@ class DatabaseSeeder extends Seeder
             OrganizacionSeeder::class,
             ApiExternaSeeder::class,
             SesionConfiguracionSeeder::class,
+            WebAuthnConfiguracionSeeder::class,
         ]);
     }
 }
