@@ -50,16 +50,11 @@ class EnlacePantallaSalaPdvController extends Controller
         $user = $request->user();
 
         return response()->json(
-            $servicio->obtenerOGenerar(
-                $user,
-                (int) $request->integer('sucursal_id'),
-                now(),
-                $request->boolean('regenerar'),
-            ),
+            $servicio->obtenerEnlace($user, (int) $request->integer('sucursal_id'), now()),
         );
     }
 
-    public function revocar(
+    public function activar(
         GestionarEnlacePantallaSalaPdvRequest $request,
         GestionarEnlacePantallaSalaPdvService $servicio,
     ): JsonResponse {
@@ -67,7 +62,19 @@ class EnlacePantallaSalaPdvController extends Controller
         $user = $request->user();
 
         return response()->json(
-            $servicio->revocar($user, (int) $request->integer('sucursal_id'), now()),
+            $servicio->activar($user, (int) $request->integer('sucursal_id'), now()),
+        );
+    }
+
+    public function desactivar(
+        GestionarEnlacePantallaSalaPdvRequest $request,
+        GestionarEnlacePantallaSalaPdvService $servicio,
+    ): JsonResponse {
+        /** @var User $user */
+        $user = $request->user();
+
+        return response()->json(
+            $servicio->desactivar($user, (int) $request->integer('sucursal_id'), now()),
         );
     }
 

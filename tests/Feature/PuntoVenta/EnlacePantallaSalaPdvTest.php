@@ -43,6 +43,11 @@ class EnlacePantallaSalaPdvTest extends TestCase
         $this->activarModulo();
         $this->seedPermisos();
 
+        config([
+            'app.url' => 'https://gelianv.neobash.site',
+            'app.form_public_url' => 'https://form.neobash.site',
+        ]);
+
         $this->sucursal = Sucursal::factory()->create(['nombre' => 'Sucursal TV']);
         $this->otraSucursal = Sucursal::factory()->create(['nombre' => 'Otra Sucursal']);
         $this->autorizado = $this->crearUsuarioConPermiso(true);
@@ -58,10 +63,12 @@ class EnlacePantallaSalaPdvTest extends TestCase
 
         $response->assertOk()
             ->assertJsonPath('sucursal_id', $this->sucursal->id)
-            ->assertJsonStructure(['url', 'expira_en']);
+            ->assertJsonPath('enlace_activo', true)
+            ->assertJsonStructure(['url']);
 
         $url = (string) $response->json('url');
-        $this->assertStringContainsString('/sala-turnos/t/', $url);
+        $this->assertStringStartsWith('https://gelianv.neobash.site/sala-turnos/t/', $url);
+        $this->assertStringNotContainsString('form.neobash.site', $url);
         $this->assertDoesNotMatchRegularExpression(
             '#/sala-turnos/'.$this->sucursal->id.'(?:/|$)#',
             $url,
@@ -71,6 +78,37 @@ class EnlacePantallaSalaPdvTest extends TestCase
             'sucursal_id' => $this->sucursal->id,
             'estado' => PdvPantallaSalaToken::ESTADO_ACTIVA,
         ]);
+    }
+
+    public function test_segunda_solicitud_devuelve_la_misma_url(): void
+    {
+        $primero = $this->actingAs($this->autorizado)->postJson(
+            route('punto_venta.pantalla_sala.enlace.obtener'),
+            ['sucursal_id' => $this->sucursal->id],
+        )->assertOk();
+
+        $segundo = $this->actingAs($this->autorizado)->postJson(
+            route('punto_venta.pantalla_sala.enlace.obtener'),
+            ['sucursal_id' => $this->sucursal->id],
+        )->assertOk();
+
+        $this->assertSame($primero->json('url'), $segundo->json('url'));
+        $this->assertSame(1, PdvPantallaSalaToken::query()->where('sucursal_id', $this->sucursal->id)->count());
+    }
+
+    public function test_consultar_expone_url_permanente(): void
+    {
+        $this->actingAs($this->autorizado)->postJson(
+            route('punto_venta.pantalla_sala.enlace.obtener'),
+            ['sucursal_id' => $this->sucursal->id],
+        )->assertOk();
+
+        $this->actingAs($this->autorizado)->getJson(
+            route('punto_venta.pantalla_sala.enlace.estado', ['sucursal_id' => $this->sucursal->id]),
+        )
+            ->assertOk()
+            ->assertJsonPath('enlace_activo', true)
+            ->assertJsonStructure(['url']);
     }
 
     public function test_usuario_sin_permiso_no_obtiene_enlace(): void
@@ -89,36 +127,61 @@ class EnlacePantallaSalaPdvTest extends TestCase
         )->assertForbidden();
     }
 
-    public function test_regenerar_revoca_enlace_previo(): void
+    public function test_desactivar_mantiene_url_y_muestra_pantalla_inactiva(): void
     {
-        $primero = $this->actingAs($this->autorizado)->postJson(
-            route('punto_venta.pantalla_sala.enlace.obtener'),
+        $resultado = app(GestionarEnlacePantallaSalaPdvService::class)->obtenerEnlace(
+            $this->autorizado,
+            $this->sucursal->id,
+            now(),
+        );
+
+        preg_match('#/sala-turnos/t/([A-Za-z0-9]+)#', (string) $resultado['url'], $coincidencias);
+        $token = $coincidencias[1] ?? '';
+        $this->assertNotSame('', $token);
+
+        $this->actingAs($this->autorizado)->putJson(
+            route('punto_venta.pantalla_sala.enlace.desactivar'),
             ['sucursal_id' => $this->sucursal->id],
-        )->assertOk();
-
-        $hashPrimero = PdvPantallaSalaToken::query()
-            ->where('sucursal_id', $this->sucursal->id)
-            ->where('estado', PdvPantallaSalaToken::ESTADO_ACTIVA)
-            ->value('token_hash');
-
-        $this->actingAs($this->autorizado)->postJson(
-            route('punto_venta.pantalla_sala.enlace.obtener'),
-            ['sucursal_id' => $this->sucursal->id, 'regenerar' => true],
         )->assertOk()
-            ->assertJsonPath('regenerado', true);
+            ->assertJsonPath('enlace_activo', false)
+            ->assertJsonPath('url', $resultado['url']);
 
-        $this->assertDatabaseHas('pdv_pantalla_sala_tokens', [
-            'token_hash' => $hashPrimero,
-            'estado' => PdvPantallaSalaToken::ESTADO_REVOCADA,
-        ]);
+        $this->get(route('sala_turnos.publica.token.show', ['token' => $token]))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page->component('PuntoVenta/Pantallas/SalaInactiva', false));
 
-        $this->assertSame(1, PdvPantallaSalaToken::query()
-            ->where('sucursal_id', $this->sucursal->id)
-            ->where('estado', PdvPantallaSalaToken::ESTADO_ACTIVA)
-            ->count());
+        $this->getJson(route('sala_turnos.publica.token.estado', ['token' => $token]))
+            ->assertForbidden()
+            ->assertJsonPath('activa', false);
     }
 
-    public function test_revocar_enlace_no_afecta_otra_sucursal(): void
+    public function test_activar_restaura_pantalla_publica(): void
+    {
+        $servicio = app(GestionarEnlacePantallaSalaPdvService::class);
+        $resultado = $servicio->obtenerEnlace($this->autorizado, $this->sucursal->id, now());
+
+        preg_match('#/sala-turnos/t/([A-Za-z0-9]+)#', (string) $resultado['url'], $coincidencias);
+        $token = $coincidencias[1] ?? '';
+
+        $servicio->desactivar($this->autorizado, $this->sucursal->id, now());
+
+        $this->actingAs($this->autorizado)->putJson(
+            route('punto_venta.pantalla_sala.enlace.activar'),
+            ['sucursal_id' => $this->sucursal->id],
+        )->assertOk()
+            ->assertJsonPath('enlace_activo', true)
+            ->assertJsonPath('url', $resultado['url']);
+
+        $this->crearLlamadoActivo('V-0500', 'Cliente TV', 'Ana Vendedora');
+
+        $this->get(route('sala_turnos.publica.token.show', ['token' => $token]))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('PuntoVenta/Pantallas/Sala', false)
+                ->where('sucursal_id', $this->sucursal->id));
+    }
+
+    public function test_desactivar_no_afecta_otra_sucursal(): void
     {
         $otroAutorizado = $this->crearUsuarioConPermiso(true, $this->otraSucursal);
 
@@ -132,11 +195,10 @@ class EnlacePantallaSalaPdvTest extends TestCase
             ['sucursal_id' => $this->otraSucursal->id],
         )->assertOk();
 
-        $this->actingAs($this->autorizado)->deleteJson(
-            route('punto_venta.pantalla_sala.enlace.revocar'),
+        $this->actingAs($this->autorizado)->putJson(
+            route('punto_venta.pantalla_sala.enlace.desactivar'),
             ['sucursal_id' => $this->sucursal->id],
-        )->assertOk()
-            ->assertJsonPath('revocado', true);
+        )->assertOk();
 
         $this->assertDatabaseHas('pdv_pantalla_sala_tokens', [
             'sucursal_id' => $this->otraSucursal->id,
@@ -148,7 +210,7 @@ class EnlacePantallaSalaPdvTest extends TestCase
     {
         $this->crearLlamadoActivo('V-0500', 'Cliente TV', 'Ana Vendedora');
 
-        $resultado = app(GestionarEnlacePantallaSalaPdvService::class)->obtenerOGenerar(
+        $resultado = app(GestionarEnlacePantallaSalaPdvService::class)->obtenerEnlace(
             $this->autorizado,
             $this->sucursal->id,
             now(),
@@ -171,36 +233,18 @@ class EnlacePantallaSalaPdvTest extends TestCase
             ->assertJsonPath('sucursal.id', $this->sucursal->id);
     }
 
-    public function test_token_revocado_o_desconocido_falla_de_forma_segura(): void
+    public function test_token_desconocido_falla_de_forma_segura(): void
     {
         $this->get(route('sala_turnos.publica.token.show', ['token' => 'tokeninvalido123456']))
             ->assertNotFound();
 
         $this->getJson(route('sala_turnos.publica.token.estado', ['token' => 'tokeninvalido123456']))
             ->assertNotFound();
-
-        $resultado = app(GestionarEnlacePantallaSalaPdvService::class)->obtenerOGenerar(
-            $this->autorizado,
-            $this->sucursal->id,
-            now(),
-        );
-
-        preg_match('#/sala-turnos/t/([A-Za-z0-9]+)#', (string) $resultado['url'], $coincidencias);
-        $token = $coincidencias[1] ?? '';
-
-        app(GestionarEnlacePantallaSalaPdvService::class)->revocar(
-            $this->autorizado,
-            $this->sucursal->id,
-            now(),
-        );
-
-        $this->get(route('sala_turnos.publica.token.show', ['token' => $token]))
-            ->assertNotFound();
     }
 
     public function test_token_no_permite_cambiar_sucursal_manipulando_url(): void
     {
-        $resultado = app(GestionarEnlacePantallaSalaPdvService::class)->obtenerOGenerar(
+        $resultado = app(GestionarEnlacePantallaSalaPdvService::class)->obtenerEnlace(
             $this->autorizado,
             $this->sucursal->id,
             now(),

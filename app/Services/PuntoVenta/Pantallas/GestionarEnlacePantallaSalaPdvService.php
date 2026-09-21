@@ -8,7 +8,6 @@ use App\Models\User;
 use App\Services\PuntoVenta\PuntoVentaModulo;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\ValidationException;
 
 class GestionarEnlacePantallaSalaPdvService
 {
@@ -25,89 +24,125 @@ class GestionarEnlacePantallaSalaPdvService
     {
         $this->asegurarAutorizado($actor, $sucursalId);
 
-        $activo = $this->tokenActivo($sucursalId);
+        $registro = $this->registroCanonico($sucursalId);
 
-        return [
-            'sucursal_id' => $sucursalId,
-            'enlace_activo' => $activo instanceof PdvPantallaSalaToken,
-            'expira_en' => $activo?->expira_en?->toIso8601String(),
-            'ultimo_acceso_at' => $activo?->ultimo_acceso_at?->toIso8601String(),
-        ];
+        return $this->serializarRegistro($registro, $sucursalId);
     }
 
     /**
      * @return array<string, mixed>
      */
-    public function obtenerOGenerar(User $actor, int $sucursalId, CarbonInterface $ahora, bool $regenerar = false): array
+    public function obtenerEnlace(User $actor, int $sucursalId, CarbonInterface $ahora): array
     {
         $this->asegurarAutorizado($actor, $sucursalId);
 
-        return DB::transaction(function () use ($actor, $sucursalId, $ahora, $regenerar): array {
-            $activo = $this->tokenActivo($sucursalId, true);
+        return DB::transaction(function () use ($actor, $sucursalId, $ahora): array {
+            $registro = $this->registroCanonico($sucursalId, true);
 
-            if ($activo instanceof PdvPantallaSalaToken && ! $regenerar) {
-                throw ValidationException::withMessages([
-                    'enlace' => 'Ya existe un enlace activo para esta sucursal. Regenerar invalidará el acceso actual de la TV.',
-                ]);
-            }
+            if ($registro instanceof PdvPantallaSalaToken) {
+                if ($registro->estado !== PdvPantallaSalaToken::ESTADO_ACTIVA) {
+                    $registro->update(['estado' => PdvPantallaSalaToken::ESTADO_ACTIVA]);
+                    $this->auditoria->registrar(
+                        $sucursalId,
+                        $actor->id,
+                        'activacion',
+                        $ahora,
+                        ['token_id' => $registro->id],
+                        $registro->id,
+                    );
+                    $registro = $registro->fresh();
+                }
 
-            if ($activo instanceof PdvPantallaSalaToken) {
-                $this->revocarRegistro($activo, $actor, $ahora, 'regeneracion');
+                return $this->serializarRegistro($registro, $sucursalId);
             }
 
             $generado = $this->resolver->generarTokenPlano();
-            $vigenciaDias = max(1, (int) config('pdv_pantalla_sala.token.vigencia_dias', 365));
 
             $registro = PdvPantallaSalaToken::query()->create([
                 'sucursal_id' => $sucursalId,
+                'token_publico' => $generado['token'],
                 'token_hash' => $generado['hash'],
                 'estado' => PdvPantallaSalaToken::ESTADO_ACTIVA,
-                'expira_en' => $ahora->copy()->addDays($vigenciaDias),
+                'expira_en' => null,
                 'creado_por' => $actor->id,
             ]);
 
-            $tipo = $activo instanceof PdvPantallaSalaToken ? 'regeneracion' : 'generacion';
             $this->auditoria->registrar(
                 $sucursalId,
                 $actor->id,
-                $tipo,
+                'generacion',
                 $ahora,
                 ['token_id' => $registro->id],
                 $registro->id,
             );
 
-            return [
-                'sucursal_id' => $sucursalId,
-                'url' => $this->resolver->urlPublicaDesdeToken($generado['token']),
-                'expira_en' => $registro->expira_en?->toIso8601String(),
-                'regenerado' => $activo instanceof PdvPantallaSalaToken,
-            ];
+            return $this->serializarRegistro($registro, $sucursalId);
         });
     }
 
     /**
      * @return array<string, mixed>
      */
-    public function revocar(User $actor, int $sucursalId, CarbonInterface $ahora): array
+    public function activar(User $actor, int $sucursalId, CarbonInterface $ahora): array
     {
         $this->asegurarAutorizado($actor, $sucursalId);
 
         return DB::transaction(function () use ($actor, $sucursalId, $ahora): array {
-            $activo = $this->tokenActivo($sucursalId, true);
+            $registro = $this->registroCanonico($sucursalId, true);
 
-            if (! $activo instanceof PdvPantallaSalaToken) {
+            if (! $registro instanceof PdvPantallaSalaToken) {
+                return $this->obtenerEnlace($actor, $sucursalId, $ahora);
+            }
+
+            if ($registro->estado !== PdvPantallaSalaToken::ESTADO_ACTIVA) {
+                $registro->update(['estado' => PdvPantallaSalaToken::ESTADO_ACTIVA]);
+                $this->auditoria->registrar(
+                    $sucursalId,
+                    $actor->id,
+                    'activacion',
+                    $ahora,
+                    ['token_id' => $registro->id],
+                    $registro->id,
+                );
+                $registro = $registro->fresh();
+            }
+
+            return $this->serializarRegistro($registro, $sucursalId);
+        });
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function desactivar(User $actor, int $sucursalId, CarbonInterface $ahora): array
+    {
+        $this->asegurarAutorizado($actor, $sucursalId);
+
+        return DB::transaction(function () use ($actor, $sucursalId, $ahora): array {
+            $registro = $this->registroCanonico($sucursalId, true);
+
+            if (! $registro instanceof PdvPantallaSalaToken) {
                 return [
                     'sucursal_id' => $sucursalId,
-                    'revocado' => false,
+                    'enlace_activo' => false,
+                    'url' => null,
                 ];
             }
 
-            $this->revocarRegistro($activo, $actor, $ahora, 'revocacion_manual');
+            if ($registro->estado === PdvPantallaSalaToken::ESTADO_ACTIVA) {
+                $registro->update(['estado' => PdvPantallaSalaToken::ESTADO_INACTIVA]);
+                $this->auditoria->registrar(
+                    $sucursalId,
+                    $actor->id,
+                    'desactivacion',
+                    $ahora,
+                    ['token_id' => $registro->id],
+                    $registro->id,
+                );
+                $registro = $registro->fresh();
+            }
 
-            return [
-                'sucursal_id' => $sucursalId,
-                'revocado' => true,
-            ];
+            return $this->serializarRegistro($registro, $sucursalId);
         });
     }
 
@@ -120,16 +155,10 @@ class GestionarEnlacePantallaSalaPdvService
         );
     }
 
-    private function tokenActivo(int $sucursalId, bool $bloquear = false): ?PdvPantallaSalaToken
+    private function registroCanonico(int $sucursalId, bool $bloquear = false): ?PdvPantallaSalaToken
     {
         $query = PdvPantallaSalaToken::query()
-            ->where('sucursal_id', $sucursalId)
-            ->where('estado', PdvPantallaSalaToken::ESTADO_ACTIVA)
-            ->whereNull('revocado_en')
-            ->where(function ($q): void {
-                $q->whereNull('expira_en')->orWhere('expira_en', '>', now());
-            })
-            ->orderByDesc('id');
+            ->where('sucursal_id', $sucursalId);
 
         if ($bloquear) {
             $query->lockForUpdate();
@@ -137,29 +166,28 @@ class GestionarEnlacePantallaSalaPdvService
 
         $registro = $query->first();
 
-        return $registro instanceof PdvPantallaSalaToken && $registro->estaVigente()
-            ? $registro
-            : null;
+        return $registro instanceof PdvPantallaSalaToken ? $registro : null;
     }
 
-    private function revocarRegistro(
-        PdvPantallaSalaToken $registro,
-        User $actor,
-        CarbonInterface $ahora,
-        string $motivo,
-    ): void {
-        $registro->update([
-            'estado' => PdvPantallaSalaToken::ESTADO_REVOCADA,
-            'revocado_en' => $ahora,
-        ]);
+    /**
+     * @return array<string, mixed>
+     */
+    private function serializarRegistro(?PdvPantallaSalaToken $registro, int $sucursalId): array
+    {
+        if (! $registro instanceof PdvPantallaSalaToken) {
+            return [
+                'sucursal_id' => $sucursalId,
+                'enlace_activo' => false,
+                'url' => null,
+                'ultimo_acceso_at' => null,
+            ];
+        }
 
-        $this->auditoria->registrar(
-            (int) $registro->sucursal_id,
-            $actor->id,
-            'revocacion',
-            $ahora,
-            ['motivo' => $motivo],
-            $registro->id,
-        );
+        return [
+            'sucursal_id' => (int) $registro->sucursal_id,
+            'enlace_activo' => $registro->estado === PdvPantallaSalaToken::ESTADO_ACTIVA,
+            'url' => $this->resolver->urlPublicaDesdeToken((string) $registro->token_publico),
+            'ultimo_acceso_at' => $registro->ultimo_acceso_at?->toIso8601String(),
+        ];
     }
 }

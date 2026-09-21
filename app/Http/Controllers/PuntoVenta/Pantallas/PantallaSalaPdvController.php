@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\PuntoVenta\Pantallas;
 
+use App\Exceptions\PuntoVenta\PantallaSalaInactivaException;
 use App\Http\Controllers\Controller;
 use App\Services\PuntoVenta\Pantallas\ConsultaEstadoSalaPdvService;
 use App\Services\PuntoVenta\Pantallas\ResolverTokenPantallaSalaPdvService;
@@ -31,7 +32,11 @@ class PantallaSalaPdvController extends Controller
     ): Response {
         $this->asegurarModuloHabilitado($modulo);
 
-        $registro = $resolver->resolver($token, now(), true);
+        try {
+            $registro = $resolver->resolver($token, now(), true);
+        } catch (PantallaSalaInactivaException $e) {
+            return $this->renderSalaInactiva($e);
+        }
 
         return $this->renderSala(
             (int) $registro->sucursal_id,
@@ -58,7 +63,14 @@ class PantallaSalaPdvController extends Controller
     ): JsonResponse {
         $this->asegurarModuloHabilitado($modulo);
 
-        $registro = $resolver->resolver($token, now());
+        try {
+            $registro = $resolver->resolver($token, now());
+        } catch (PantallaSalaInactivaException) {
+            return response()->json([
+                'activa' => false,
+                'mensaje' => 'La pantalla de sala está desactivada.',
+            ], 403);
+        }
 
         return response()->json($consulta->payload((int) $registro->sucursal_id, now()));
     }
@@ -71,6 +83,13 @@ class PantallaSalaPdvController extends Controller
             'estado_inicial' => fn () => $estado,
             'sucursal_id' => $sucursalId,
             'url_estado' => $urlEstado,
+        ]);
+    }
+
+    private function renderSalaInactiva(PantallaSalaInactivaException $e): Response
+    {
+        return Inertia::render('PuntoVenta/Pantallas/SalaInactiva', [
+            'sucursal_id' => (int) $e->registro->sucursal_id,
         ]);
     }
 

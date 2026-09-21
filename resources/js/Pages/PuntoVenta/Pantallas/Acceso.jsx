@@ -17,7 +17,7 @@ export default function Acceso({
             <GeliaPageShell>
                 <GeliaTituloCard
                     titulo="Pantalla de sala"
-                    subtitulo="Genera un enlace revocable para mostrar turnos en una TV sin iniciar sesión."
+                    subtitulo="Enlace permanente por sucursal para la TV de turnos, sin iniciar sesión. Activa o desactiva la pantalla sin cambiar la URL."
                 />
 
                 <div className="space-y-4">

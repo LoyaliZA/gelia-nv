@@ -35,9 +35,14 @@ class FormPublicUrl
         return self::base().'/tienda-evidencia/'.ltrim($codigo, '/');
     }
 
+    public static function appBase(): string
+    {
+        return rtrim((string) config('app.url'), '/');
+    }
+
     public static function salaTurnosShow(string $token): string
     {
-        return self::base().'/sala-turnos/t/'.ltrim($token, '/');
+        return self::appBase().'/sala-turnos/t/'.ltrim($token, '/');
     }
 
     public static function salaTurnosEstado(string $token): string

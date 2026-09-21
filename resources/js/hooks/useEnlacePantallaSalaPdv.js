@@ -1,30 +1,6 @@
 import { useCallback, useState } from 'react';
 import axios from 'axios';
 
-const CLAVE_URL_LOCAL = 'pdv_pantalla_sala_url';
-
-function claveAlmacenamiento(sucursalId) {
-    return `${CLAVE_URL_LOCAL}:${sucursalId}`;
-}
-
-export function guardarUrlPantallaSalaLocal(sucursalId, url) {
-    if (!sucursalId || !url || typeof window === 'undefined') return;
-    try {
-        window.localStorage.setItem(claveAlmacenamiento(sucursalId), url);
-    } catch {
-        // ponytail: almacenamiento local opcional para reabrir sin regenerar
-    }
-}
-
-export function leerUrlPantallaSalaLocal(sucursalId) {
-    if (!sucursalId || typeof window === 'undefined') return null;
-    try {
-        return window.localStorage.getItem(claveAlmacenamiento(sucursalId));
-    } catch {
-        return null;
-    }
-}
-
 export default function useEnlacePantallaSalaPdv() {
     const [cargando, setCargando] = useState(false);
     const [error, setError] = useState(null);
@@ -50,7 +26,7 @@ export default function useEnlacePantallaSalaPdv() {
         }
     }, []);
 
-    const obtenerEnlace = useCallback(async (sucursalId, { regenerar = false } = {}) => {
+    const obtenerEnlace = useCallback(async (sucursalId) => {
         if (!sucursalId) return null;
 
         setCargando(true);
@@ -59,12 +35,8 @@ export default function useEnlacePantallaSalaPdv() {
         try {
             const { data } = await axios.post(route('punto_venta.pantalla_sala.enlace.obtener'), {
                 sucursal_id: sucursalId,
-                regenerar,
             });
-            if (data?.url) {
-                guardarUrlPantallaSalaLocal(sucursalId, data.url);
-            }
-            setEstadoEnlace({ ...data, enlace_activo: true });
+            setEstadoEnlace(data);
             return data;
         } catch (err) {
             const mensaje = err?.response?.data?.errors?.enlace?.[0]
@@ -77,23 +49,40 @@ export default function useEnlacePantallaSalaPdv() {
         }
     }, []);
 
-    const revocarEnlace = useCallback(async (sucursalId) => {
+    const activarEnlace = useCallback(async (sucursalId) => {
         if (!sucursalId) return null;
 
         setCargando(true);
         setError(null);
 
         try {
-            const { data } = await axios.delete(route('punto_venta.pantalla_sala.enlace.revocar'), {
-                data: { sucursal_id: sucursalId },
+            const { data } = await axios.put(route('punto_venta.pantalla_sala.enlace.activar'), {
+                sucursal_id: sucursalId,
             });
-            setEstadoEnlace({ sucursal_id: sucursalId, enlace_activo: false });
-            if (typeof window !== 'undefined') {
-                window.localStorage.removeItem(claveAlmacenamiento(sucursalId));
-            }
+            setEstadoEnlace(data);
             return data;
         } catch (err) {
-            setError(err?.response?.data?.message || 'No se pudo revocar el enlace.');
+            setError(err?.response?.data?.message || 'No se pudo activar la pantalla.');
+            return null;
+        } finally {
+            setCargando(false);
+        }
+    }, []);
+
+    const desactivarEnlace = useCallback(async (sucursalId) => {
+        if (!sucursalId) return null;
+
+        setCargando(true);
+        setError(null);
+
+        try {
+            const { data } = await axios.put(route('punto_venta.pantalla_sala.enlace.desactivar'), {
+                sucursal_id: sucursalId,
+            });
+            setEstadoEnlace(data);
+            return data;
+        } catch (err) {
+            setError(err?.response?.data?.message || 'No se pudo desactivar la pantalla.');
             return null;
         } finally {
             setCargando(false);
@@ -111,8 +100,8 @@ export default function useEnlacePantallaSalaPdv() {
         estadoEnlace,
         consultarEstado,
         obtenerEnlace,
-        revocarEnlace,
+        activarEnlace,
+        desactivarEnlace,
         abrirEnNuevaPestana,
-        leerUrlLocal: leerUrlPantallaSalaLocal,
     };
 }

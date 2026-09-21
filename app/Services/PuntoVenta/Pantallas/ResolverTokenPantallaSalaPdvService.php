@@ -2,6 +2,7 @@
 
 namespace App\Services\PuntoVenta\Pantallas;
 
+use App\Exceptions\PuntoVenta\PantallaSalaInactivaException;
 use App\Models\PuntoVenta\PdvPantallaSalaToken;
 use App\Support\FormPublicUrl;
 use Carbon\CarbonInterface;
@@ -22,11 +23,15 @@ final class ResolverTokenPantallaSalaPdvService
         }
 
         $registro = PdvPantallaSalaToken::query()
-            ->where('token_hash', hash('sha256', $tokenPlano))
+            ->where('token_publico', $tokenPlano)
             ->first();
 
-        if (! $registro instanceof PdvPantallaSalaToken || ! $registro->estaVigente()) {
+        if (! $registro instanceof PdvPantallaSalaToken) {
             throw new NotFoundHttpException();
+        }
+
+        if ($registro->estado !== PdvPantallaSalaToken::ESTADO_ACTIVA) {
+            throw new PantallaSalaInactivaException($registro);
         }
 
         $registro->update(['ultimo_acceso_at' => $ahora]);
@@ -67,7 +72,10 @@ final class ResolverTokenPantallaSalaPdvService
 
             $hash = hash('sha256', $token);
             $existe = PdvPantallaSalaToken::query()
-                ->where('token_hash', $hash)
+                ->where(function ($q) use ($hash, $token): void {
+                    $q->where('token_hash', $hash)
+                        ->orWhere('token_publico', $token);
+                })
                 ->exists();
 
             if (! $existe) {

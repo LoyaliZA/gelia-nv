@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ExternalLink, Loader2, Monitor, RefreshCw, ShieldOff } from 'lucide-react';
+import { Copy, ExternalLink, Loader2, Monitor, Power, PowerOff } from 'lucide-react';
 import ModalConfirmarAccion from '@/Pages/ControlPedidos/Partials/ModalConfirmarAccion';
 import { geliaCardClass, THEME_BTN_PRIMARY, THEME_BTN_SECONDARY } from '@/utils/geliaTheme';
-import useEnlacePantallaSalaPdv, { leerUrlPantallaSalaLocal } from '@/hooks/useEnlacePantallaSalaPdv';
+import useEnlacePantallaSalaPdv from '@/hooks/useEnlacePantallaSalaPdv';
 
 export default function AbrirPantallaSalaPdv({
     sucursalActiva = null,
@@ -19,61 +19,79 @@ export default function AbrirPantallaSalaPdv({
         estadoEnlace,
         consultarEstado,
         obtenerEnlace,
-        revocarEnlace,
+        activarEnlace,
+        desactivarEnlace,
         abrirEnNuevaPestana,
     } = useEnlacePantallaSalaPdv();
 
     const [modalConfirmar, setModalConfirmar] = useState(false);
-    const [modalRegenerar, setModalRegenerar] = useState(false);
+    const [modalDesactivar, setModalDesactivar] = useState(false);
     const [mensaje, setMensaje] = useState(null);
+    const [copiado, setCopiado] = useState(false);
 
     useEffect(() => {
         if (!sucursalId) return;
         consultarEstado(sucursalId);
     }, [sucursalId, consultarEstado]);
 
-    const intentarAbrir = useCallback(async (regenerar = false) => {
+    const asegurarEnlace = useCallback(async () => {
+        if (!sucursalId) return null;
+
+        if (estadoEnlace?.url) {
+            return estadoEnlace;
+        }
+
+        return obtenerEnlace(sucursalId);
+    }, [sucursalId, estadoEnlace, obtenerEnlace]);
+
+    const intentarAbrir = useCallback(async () => {
         if (!sucursalId) return;
 
         setMensaje(null);
 
-        if (!regenerar) {
-            const urlLocal = leerUrlPantallaSalaLocal(sucursalId);
-            if (urlLocal) {
-                abrirEnNuevaPestana(urlLocal);
-                onAbierta?.(urlLocal);
-                return;
-            }
-        }
-
         try {
-            const resultado = await obtenerEnlace(sucursalId, { regenerar });
+            const resultado = await asegurarEnlace();
             if (resultado?.url) {
                 abrirEnNuevaPestana(resultado.url);
                 onAbierta?.(resultado.url);
             }
-        } catch (err) {
-            if (err?.response?.status === 422) {
-                setModalRegenerar(true);
-            }
+        } catch {
+            // error ya expuesto en hook
         }
-    }, [sucursalId, obtenerEnlace, abrirEnNuevaPestana, onAbierta]);
+    }, [sucursalId, asegurarEnlace, abrirEnNuevaPestana, onAbierta]);
 
     const confirmarApertura = () => {
         setModalConfirmar(false);
-        intentarAbrir(false);
+        intentarAbrir();
     };
 
-    const confirmarRegeneracion = async () => {
-        setModalRegenerar(false);
-        await intentarAbrir(true);
-    };
-
-    const manejarRevocar = async () => {
+    const manejarActivar = async () => {
         if (!sucursalId) return;
-        const resultado = await revocarEnlace(sucursalId);
-        if (resultado?.revocado) {
-            setMensaje('Enlace revocado. La TV dejará de cargar en la siguiente visita.');
+        const resultado = await activarEnlace(sucursalId);
+        if (resultado?.enlace_activo) {
+            setMensaje('Pantalla activada. La TV puede seguir usando el mismo enlace.');
+        }
+    };
+
+    const confirmarDesactivacion = async () => {
+        setModalDesactivar(false);
+        if (!sucursalId) return;
+        const resultado = await desactivarEnlace(sucursalId);
+        if (resultado && !resultado.enlace_activo) {
+            setMensaje('Pantalla desactivada. El enlace permanece igual para reactivarla después.');
+        }
+    };
+
+    const copiarEnlace = async () => {
+        const url = estadoEnlace?.url;
+        if (!url || typeof navigator === 'undefined' || !navigator.clipboard) return;
+
+        try {
+            await navigator.clipboard.writeText(url);
+            setCopiado(true);
+            window.setTimeout(() => setCopiado(false), 2000);
+        } catch {
+            setMensaje('No se pudo copiar el enlace al portapapeles.');
         }
     };
 
@@ -86,6 +104,34 @@ export default function AbrirPantallaSalaPdv({
     }
 
     const enlaceActivo = Boolean(estadoEnlace?.enlace_activo);
+    const urlPermanente = estadoEnlace?.url ?? null;
+
+    const bloqueEnlace = urlPermanente && (
+        <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-wider theme-text-muted m-0">
+                Enlace permanente de la TV
+            </p>
+            <div className="flex flex-col sm:flex-row gap-2">
+                <input
+                    type="text"
+                    readOnly
+                    value={urlPermanente}
+                    className="flex-1 rounded-xl border px-3 py-2 text-sm theme-surface theme-text-main"
+                    style={{ borderColor: 'color-mix(in srgb, var(--color-texto) 12%, transparent)' }}
+                    data-pdv-pantalla-sala-url
+                />
+                <button
+                    type="button"
+                    className={`${THEME_BTN_SECONDARY} inline-flex items-center justify-center gap-2 shrink-0`}
+                    onClick={copiarEnlace}
+                    data-pdv-pantalla-sala-copiar
+                >
+                    <Copy className="w-4 h-4" aria-hidden />
+                    {copiado ? 'Copiado' : 'Copiar'}
+                </button>
+            </div>
+        </div>
+    );
 
     const contenidoAcciones = (
         <div className="flex flex-col sm:flex-row flex-wrap gap-3">
@@ -99,29 +145,40 @@ export default function AbrirPantallaSalaPdv({
                 {cargando ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> : <ExternalLink className="w-4 h-4" aria-hidden />}
                 Abrir pantalla de sala
             </button>
-            {enlaceActivo && (
-                <>
-                    <button
-                        type="button"
-                        className={`${THEME_BTN_SECONDARY} inline-flex items-center justify-center gap-2`}
-                        onClick={() => setModalRegenerar(true)}
-                        disabled={cargando}
-                        data-pdv-pantalla-sala-regenerar
-                    >
-                        <RefreshCw className="w-4 h-4" aria-hidden />
-                        Regenerar enlace
-                    </button>
-                    <button
-                        type="button"
-                        className={`${THEME_BTN_SECONDARY} inline-flex items-center justify-center gap-2`}
-                        onClick={manejarRevocar}
-                        disabled={cargando}
-                        data-pdv-pantalla-sala-revocar
-                    >
-                        <ShieldOff className="w-4 h-4" aria-hidden />
-                        Revocar enlace
-                    </button>
-                </>
+            {!urlPermanente && (
+                <button
+                    type="button"
+                    className={`${THEME_BTN_SECONDARY} inline-flex items-center justify-center gap-2`}
+                    onClick={() => obtenerEnlace(sucursalId)}
+                    disabled={cargando}
+                    data-pdv-pantalla-sala-provisionar
+                >
+                    Generar enlace permanente
+                </button>
+            )}
+            {urlPermanente && !enlaceActivo && (
+                <button
+                    type="button"
+                    className={`${THEME_BTN_SECONDARY} inline-flex items-center justify-center gap-2`}
+                    onClick={manejarActivar}
+                    disabled={cargando}
+                    data-pdv-pantalla-sala-activar
+                >
+                    <Power className="w-4 h-4" aria-hidden />
+                    Activar pantalla
+                </button>
+            )}
+            {urlPermanente && enlaceActivo && (
+                <button
+                    type="button"
+                    className={`${THEME_BTN_SECONDARY} inline-flex items-center justify-center gap-2`}
+                    onClick={() => setModalDesactivar(true)}
+                    disabled={cargando}
+                    data-pdv-pantalla-sala-desactivar
+                >
+                    <PowerOff className="w-4 h-4" aria-hidden />
+                    Desactivar pantalla
+                </button>
             )}
         </div>
     );
@@ -149,13 +206,13 @@ export default function AbrirPantallaSalaPdv({
                     onConfirm={confirmarApertura}
                 />
                 <ModalConfirmarAccion
-                    abierto={modalRegenerar}
-                    titulo="Regenerar enlace"
-                    mensaje="Ya existe un enlace activo. Regenerar invalidará el acceso actual de la TV y creará uno nuevo."
-                    etiquetaConfirmar="Regenerar y abrir"
+                    abierto={modalDesactivar}
+                    titulo="Desactivar pantalla"
+                    mensaje="La TV seguirá usando el mismo enlace, pero mostrará que la pantalla está desactivada hasta que la vuelvas a encender."
+                    etiquetaConfirmar="Desactivar"
                     variante="danger"
-                    onClose={() => setModalRegenerar(false)}
-                    onConfirm={confirmarRegeneracion}
+                    onClose={() => setModalDesactivar(false)}
+                    onConfirm={confirmarDesactivacion}
                 />
             </>
         );
@@ -170,7 +227,7 @@ export default function AbrirPantallaSalaPdv({
                         Pantalla de sala
                     </h2>
                     <p className="text-sm theme-text-muted m-0">
-                        Abre la vista pública de turnos para <strong>{nombreSucursal}</strong> en una TV sin sesión de usuario.
+                        Enlace permanente por sucursal para la TV de turnos, sin sesión de usuario.
                     </p>
                 </div>
             </div>
@@ -181,11 +238,15 @@ export default function AbrirPantallaSalaPdv({
                 </p>
             )}
 
-            {enlaceActivo && (
-                <p className="text-xs font-semibold m-0" style={{ color: 'var(--color-exito)' }}>
-                    Hay un enlace activo para esta sucursal.
+            {urlPermanente && (
+                <p className="text-xs font-semibold m-0" style={{ color: enlaceActivo ? 'var(--color-exito)' : 'var(--color-advertencia, #b45309)' }}>
+                    {enlaceActivo
+                        ? 'Pantalla activa para esta sucursal.'
+                        : 'Pantalla desactivada. El enlace permanece igual.'}
                 </p>
             )}
+
+            {bloqueEnlace}
 
             {error && (
                 <p className="text-sm m-0" style={{ color: 'var(--color-peligro)' }} role="alert">
@@ -211,13 +272,13 @@ export default function AbrirPantallaSalaPdv({
                 onConfirm={confirmarApertura}
             />
             <ModalConfirmarAccion
-                abierto={modalRegenerar}
-                titulo="Regenerar enlace"
-                mensaje="Ya existe un enlace activo. Regenerar invalidará el acceso actual de la TV y creará uno nuevo."
-                etiquetaConfirmar="Regenerar y abrir"
+                abierto={modalDesactivar}
+                titulo="Desactivar pantalla"
+                mensaje="La TV seguirá usando el mismo enlace, pero mostrará que la pantalla está desactivada hasta que la vuelvas a encender."
+                etiquetaConfirmar="Desactivar"
                 variante="danger"
-                onClose={() => setModalRegenerar(false)}
-                onConfirm={confirmarRegeneracion}
+                onClose={() => setModalDesactivar(false)}
+                onConfirm={confirmarDesactivacion}
             />
         </section>
     );

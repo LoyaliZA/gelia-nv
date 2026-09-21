@@ -18,7 +18,6 @@ class GestionarEnlacePantallaSalaPdvRequest extends FormRequest
     {
         return [
             'sucursal_id' => ['required', 'integer', 'min:1'],
-            'regenerar' => ['sometimes', 'boolean'],
         ];
     }
 }

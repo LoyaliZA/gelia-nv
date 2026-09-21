@@ -9,7 +9,6 @@ return [
     */
     'token' => [
         'longitud' => 32,
-        'vigencia_dias' => 365,
     ],
 
 ];

@@ -11,12 +11,15 @@ class PdvPantallaSalaToken extends Model
 {
     public const ESTADO_ACTIVA = 'activa';
 
+    public const ESTADO_INACTIVA = 'inactiva';
+
     public const ESTADO_REVOCADA = 'revocada';
 
     protected $table = 'pdv_pantalla_sala_tokens';
 
     protected $fillable = [
         'sucursal_id',
+        'token_publico',
         'token_hash',
         'estado',
         'expira_en',
@@ -46,18 +49,6 @@ class PdvPantallaSalaToken extends Model
 
     public function estaVigente(): bool
     {
-        if ($this->estado !== self::ESTADO_ACTIVA) {
-            return false;
-        }
-
-        if ($this->revocado_en !== null) {
-            return false;
-        }
-
-        if ($this->expira_en !== null && $this->expira_en->isPast()) {
-            return false;
-        }
-
-        return true;
+        return $this->estado === self::ESTADO_ACTIVA;
     }
 }

@@ -14,6 +14,8 @@ Route::middleware(['pdv.piso', 'pdv.permiso:'.PuntoVentaModulo::PERMISO_PANTALLA
             ->name('enlace.estado');
         Route::post('/enlace', [EnlacePantallaSalaPdvController::class, 'obtener'])
             ->name('enlace.obtener');
-        Route::delete('/enlace', [EnlacePantallaSalaPdvController::class, 'revocar'])
-            ->name('enlace.revocar');
+        Route::put('/enlace/activar', [EnlacePantallaSalaPdvController::class, 'activar'])
+            ->name('enlace.activar');
+        Route::put('/enlace/desactivar', [EnlacePantallaSalaPdvController::class, 'desactivar'])
+            ->name('enlace.desactivar');
     });
