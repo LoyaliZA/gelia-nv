@@ -68,11 +68,12 @@ class OperacionUiPdvTest extends TestCase
 
         $response->assertOk()
             ->assertInertia(fn (Assert $page) => $page
-                ->component('PuntoVenta/Operacion/Index', false)
+                ->component('PuntoVenta/Operacion/OperacionGeneral', false)
                 ->has('estado.servidor_at')
                 ->has('estado.intervalo.inicio_at')
-                ->has('estado.horario_cierre.hora_cierre')
                 ->has('estado.equipo')
+                ->has('estado.horario_cierre.hora_cierre')
+                ->has('permisos.equipo_ver')
                 ->where('estado.jornada.estado', 'ABIERTA')
                 ->where('estado.actividad', TipoIntervaloOperativoPdv::Disponible->value)
                 ->where('estado.estado_vendedor', 'disponible')
@@ -187,11 +188,11 @@ class OperacionUiPdvTest extends TestCase
             );
     }
 
-    public function test_panel_vendedores_requiere_equipo_ver(): void
+    public function test_panel_vendedores_redirige_a_operacion_general(): void
     {
         $this->actingAs($this->ventas)
             ->get(route('punto_venta.operacion.vendedores.index'))
-            ->assertForbidden();
+            ->assertRedirect(route('punto_venta.operacion.index'));
     }
 
     public function test_vendedor_recibe_capacidades_explicitas_en_operacion(): void

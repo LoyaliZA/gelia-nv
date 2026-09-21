@@ -1,5 +1,6 @@
 import React from 'react';
 import { Headphones, Pause, User } from 'lucide-react';
+import useToastAlCambiar from '../../../../hooks/useToastAlCambiar';
 import { geliaCardClass } from '../../../../utils/geliaTheme';
 import CronometroVisualOperacion from './CronometroVisualOperacion';
 import {
@@ -29,6 +30,8 @@ export default function TarjetaMiAtencion({
     const mostrarTurno = estadoVendedor === 'atendiendo' && turnoAsignado;
     const enPausa = estadoVendedor === 'en_retencion';
     const motivoPausa = estado?.pausa_motivo || estado?.intervalo?.motivo || null;
+
+    useToastAlCambiar(mensaje, 'info');
 
     return (
         <section className={`${geliaCardClass()} p-5 space-y-4`} aria-labelledby="mi-atencion-titulo">
@@ -68,10 +71,6 @@ export default function TarjetaMiAtencion({
                     {etiquetaEstado}
                 </span>
             </div>
-
-            {mensaje && (
-                <p className="text-sm font-semibold theme-text-main m-0">{mensaje}</p>
-            )}
 
             {enPausa && (
                 <div

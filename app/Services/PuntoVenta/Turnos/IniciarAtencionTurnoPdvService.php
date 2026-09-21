@@ -3,7 +3,6 @@
 namespace App\Services\PuntoVenta\Turnos;
 
 use App\Contracts\PuntoVenta\ResuelveAlcancePdv;
-use App\Jobs\PuntoVenta\Turnos\AlertaProrrogaAtencionTurnoPdvJob;
 use App\Models\PuntoVenta\TurnoPdv;
 use App\Models\PuntoVenta\TurnoPdvAtencion;
 use App\Models\User;
@@ -18,8 +17,7 @@ class IniciarAtencionTurnoPdvService
 
     public function __construct(
         private readonly ResuelveAlcancePdv $alcance,
-        private readonly PlazosTurnosPdvConfig $plazos,
-        private readonly ProgramarAlertasPlazosAtencionTurnoPdvService $programarAlertas,
+        private readonly AplicarInicioAtencionTurnoPdvService $inicioAtencion,
     ) {}
 
     /**
@@ -72,21 +70,11 @@ class IniciarAtencionTurnoPdvService
                 ];
             }
 
-            $atencion->update([
-                'atencion_inicio_at' => $ahora,
-            ]);
-
-            $plazos = $this->plazos->obtener();
-            $disparo = $ahora->copy()->addMinutes($plazos['prorroga_minutos']);
-
-            $this->programarAlertas->programarProrrogaProximoVencer($atencion, $ahora);
-
-            AlertaProrrogaAtencionTurnoPdvJob::dispatch($atencion->id)
-                ->delay($disparo);
+            $atencion = $this->inicioAtencion->ejecutar($atencion, $ahora);
 
             return [
                 'turno' => $turnoBloqueado->fresh(['cliente', 'sucursal', 'atencionActual']),
-                'atencion' => $atencion->fresh(),
+                'atencion' => $atencion,
             ];
         });
     }

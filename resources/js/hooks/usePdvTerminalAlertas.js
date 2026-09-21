@@ -4,16 +4,35 @@ import { crearCoordinadorAudioTerminalPdv } from '@/utils/pdvTerminalAudioLeader
 
 const STORAGE_KEY = 'pdv_terminal_alertas_id';
 
+function esUuidValido(valor) {
+    return typeof valor === 'string'
+        && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(valor);
+}
+
+function generarTerminalId() {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        return crypto.randomUUID();
+    }
+    // Fallback RFC4122 v4 (navegadores sin crypto.randomUUID).
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+        const r = (Math.random() * 16) | 0;
+        const n = c === 'x' ? r : ((r & 0x3) | 0x8);
+        return n.toString(16);
+    });
+}
+
 function leerTerminalId() {
     if (typeof window === 'undefined') return null;
     try {
         const existente = window.localStorage.getItem(STORAGE_KEY);
-        if (existente) return existente;
-        const nuevo = window.crypto?.randomUUID?.() || `${Date.now()}`;
+        if (existente && esUuidValido(existente)) {
+            return existente;
+        }
+        const nuevo = generarTerminalId();
         window.localStorage.setItem(STORAGE_KEY, nuevo);
         return nuevo;
     } catch {
-        return window.crypto?.randomUUID?.() || `${Date.now()}`;
+        return generarTerminalId();
     }
 }
 
@@ -106,23 +125,28 @@ export default function usePdvTerminalAlertas({
         }
     }, [habilitado, sucursalId, autorizado, refrescar]);
 
-    const liberar = useCallback(async (motivo = 'manual') => {
-        if (!habilitado || !sucursalId) return null;
+    const liberar = useCallback(async (motivo = 'manual', sucursalIdObjetivo = null) => {
+        const sucursalLiberar = sucursalIdObjetivo ?? sucursalId;
+        if (!habilitado || !sucursalLiberar) return null;
         setCargando(true);
         setError(null);
         try {
             const { data } = await axios.delete(urlTerminalAlertas('liberar'), {
                 data: {
-                    sucursal_id: sucursalId,
+                    sucursal_id: sucursalLiberar,
                     terminal_id: terminalIdRef.current,
                     motivo,
                 },
             });
-            setEstado(data?.estado || 'disponible');
-            setDesignacion(data?.designacion ?? null);
+            if (sucursalLiberar === sucursalId) {
+                setEstado(data?.estado || 'disponible');
+                setDesignacion(data?.designacion ?? null);
+            }
             return data;
         } catch (err) {
-            setError(err?.response?.data?.message || 'No se pudo liberar la terminal.');
+            if (sucursalLiberar === sucursalId) {
+                setError(err?.response?.data?.message || 'No se pudo liberar la terminal.');
+            }
             throw err;
         } finally {
             setCargando(false);
@@ -186,14 +210,25 @@ export default function usePdvTerminalAlertas({
     const terminalActivaRef = useRef(terminalActiva);
     terminalActivaRef.current = terminalActiva;
 
+    const sucursalIdAnteriorRef = useRef(sucursalId);
+    const liberarRef = useRef(liberar);
+    liberarRef.current = liberar;
+
     useEffect(() => {
-        return () => {
-            if (!habilitado || !sucursalId) return;
-            if (terminalActivaRef.current) {
-                liberar('cambio_sucursal').catch(() => {});
-            }
-        };
-    }, [sucursalId, habilitado, liberar]);
+        const sucursalAnterior = sucursalIdAnteriorRef.current;
+
+        if (
+            habilitado
+            && sucursalAnterior
+            && sucursalId
+            && sucursalAnterior !== sucursalId
+            && terminalActivaRef.current
+        ) {
+            liberarRef.current('cambio_sucursal', sucursalAnterior).catch(() => {});
+        }
+
+        sucursalIdAnteriorRef.current = sucursalId;
+    }, [sucursalId, habilitado]);
 
     return {
         terminalId: terminalIdRef.current,

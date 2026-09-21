@@ -199,6 +199,14 @@ export function puedeCerrarSucursal(estado, permisos) {
     );
 }
 
+export function puedeAbrirSucursalManualmente(estado, permisos) {
+    return Boolean(
+        permisos?.cerrar_sucursal
+        && estado?.sucursal_dia?.acepta_altas === false
+        && !estado?.sucursal_dia?.cierre_manual_at,
+    );
+}
+
 export function puedeReabrirSucursal(estado, permisos) {
     return Boolean(
         permisos?.cerrar_sucursal
@@ -224,12 +232,20 @@ export function mensajeAvisoSucursal(estado) {
             return 'La sucursal ya no acepta altas nuevas (cierre manual de gerencia). Puedes reabrirla desde esta pantalla.';
         }
         if (estado?.antes_de_apertura && estado?.horario_apertura?.hora_apertura) {
-            return `La sucursal abre a las ${estado.horario_apertura.hora_apertura}; los turnos se podrán registrar a partir de esa hora.`;
+            return `La sucursal abre a las ${estado.horario_apertura.hora_apertura}; puedes iniciar la jornada manualmente si gerencia debe prepararse antes.`;
         }
         if (estado?.cierre_programado?.vencido) {
             return 'La sucursal ya no acepta altas nuevas (horario de cierre alcanzado).';
         }
         return 'La sucursal ya no acepta altas nuevas.';
+    }
+
+    if (dia.origen_apertura === 'manual' && dia.apertura_manual_at) {
+        return 'La jornada se inició de forma manual. El inicio automático de hoy ya no se ejecuta.';
+    }
+
+    if (dia.origen_apertura === 'automatica') {
+        return 'La jornada se inició de forma automática según el horario configurado.';
     }
 
     if (dia.ampliacion_hasta_at) {
@@ -241,6 +257,34 @@ export function mensajeAvisoSucursal(estado) {
     }
 
     return null;
+}
+
+export function tipoAvisoSucursal(estado) {
+    if (estado?.sucursal_dia?.acepta_altas === false) {
+        return 'warning';
+    }
+
+    return 'info';
+}
+
+/**
+ * @returns {{ mensaje: string, tipo: 'info' | 'warning' } | null}
+ */
+export function avisoSucursalOperacion(estado) {
+    const mensaje = mensajeAvisoSucursal(estado);
+    if (!mensaje) return null;
+
+    return {
+        mensaje,
+        tipo: tipoAvisoSucursal(estado),
+    };
+}
+
+export function firmaAvisoSucursal(estado) {
+    const aviso = avisoSucursalOperacion(estado);
+    if (!aviso) return null;
+
+    return `${aviso.tipo}:${aviso.mensaje}`;
 }
 
 export function mensajeErrorOperacion(err, accion = 'operación') {
@@ -288,4 +332,11 @@ export function isoDesdeDatetimeLocal(valor) {
     const fecha = new Date(valor);
     if (!Number.isFinite(fecha.getTime())) return null;
     return fecha.toISOString();
+}
+
+export const PERMISO_PDV_EQUIPO_GESTIONAR = 'pdv.operacion.equipo_gestionar';
+
+export function puedeGestionarPlazosTurnosPdv({ capacidades = null, auth = null } = {}) {
+    if (capacidades?.equipo_gestionar) return true;
+    return auth?.user?.permissions?.includes(PERMISO_PDV_EQUIPO_GESTIONAR) ?? false;
 }

@@ -7,8 +7,10 @@ use App\Models\PuntoVenta\IntervaloOperativoPdv;
 use App\Models\PuntoVenta\JornadaPdv;
 use App\Models\PuntoVenta\TurnoPdvAtencion;
 use App\Models\User;
+use App\Services\PuntoVenta\Turnos\PlazosTurnosPdvConfig;
 use App\Support\PuntoVenta\Operacion\EstadoJornadaPdv;
 use App\Support\PuntoVenta\Operacion\EstadoVendedorOperacionPdv;
+use App\Support\PuntoVenta\Turnos\SerializadorTableroVentasPdv;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -18,6 +20,7 @@ class ConsultaEquipoOperativoPdvService
         private readonly OperacionPdvConfig $config,
         private readonly ResolverEstadoVendedorOperacionPdvService $resolverEstado,
         private readonly ConsultaVendedoresElegiblesPdvService $vendedoresElegibles,
+        private readonly PlazosTurnosPdvConfig $plazos,
     ) {}
 
     /**
@@ -68,8 +71,13 @@ class ConsultaEquipoOperativoPdvService
             ->get()
             ->keyBy('user_id');
 
+        $plazos = $this->plazos->obtenerOPredeterminado();
+
         $atencionesAbiertas = TurnoPdvAtencion::query()
-            ->with(['turno:id,folio,snapshot_nombre_llamado,snapshot_cliente_nombre,servicio'])
+            ->with([
+                'turno:id,folio,snapshot_nombre_llamado,snapshot_cliente_nombre,servicio',
+                'prorroga',
+            ])
             ->whereIn('user_id', $userIds)
             ->whereNull('fin_at')
             ->get()
@@ -82,6 +90,7 @@ class ConsultaEquipoOperativoPdvService
             $asistencias,
             $atencionesAbiertas,
             $ahora,
+            $plazos,
         ): array {
             $jornada = $jornadas->get($persona->id);
             $intervalo = $intervalos->get($persona->id);
@@ -108,7 +117,7 @@ class ConsultaEquipoOperativoPdvService
                 'pausa_motivo' => $estado === EstadoVendedorOperacionPdv::EnRetencion
                     ? $intervalo?->textoMotivoPausaCompleto()
                     : null,
-                'atencion_actual' => $this->serializarAtencionActual($atencionAbierta),
+                'atencion_actual' => $this->serializarAtencionActual($atencionAbierta, $plazos, $ahora),
                 'jornada' => $jornada instanceof JornadaPdv ? [
                     'estado' => $jornada->estado->value,
                     'version' => $jornada->version,
@@ -127,9 +136,16 @@ class ConsultaEquipoOperativoPdvService
     }
 
     /**
-     * @return array{folio: string, cliente: string|null, servicio: string|null}|null
+     * @param  array{
+     *   espera_inicial_minutos: int,
+     *   prorroga_minutos: int,
+     *   ventana_reatencion_minutos: int,
+     *   aviso_tolerancia_espera_minutos?: int,
+     *   aviso_tolerancia_prorroga_minutos?: int
+     * }  $plazos
+     * @return array<string, mixed>|null
      */
-    private function serializarAtencionActual(?TurnoPdvAtencion $atencion): ?array
+    private function serializarAtencionActual(?TurnoPdvAtencion $atencion, array $plazos, CarbonInterface $ahora): ?array
     {
         if ($atencion === null) {
             return null;
@@ -142,10 +158,13 @@ class ConsultaEquipoOperativoPdvService
 
         $cliente = $turno->snapshot_cliente_nombre ?: $turno->snapshot_nombre_llamado;
 
-        return [
-            'folio' => (string) $turno->folio,
-            'cliente' => $cliente !== null && $cliente !== '' ? (string) $cliente : null,
-            'servicio' => $turno->servicio !== null ? (string) $turno->servicio : null,
-        ];
+        return array_merge(
+            SerializadorTableroVentasPdv::atencion($atencion, $plazos, $ahora),
+            [
+                'folio' => (string) $turno->folio,
+                'cliente' => $cliente !== null && $cliente !== '' ? (string) $cliente : null,
+                'servicio' => $turno->servicio !== null ? (string) $turno->servicio : null,
+            ],
+        );
     }
 }

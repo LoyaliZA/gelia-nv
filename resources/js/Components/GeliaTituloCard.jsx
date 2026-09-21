@@ -21,37 +21,43 @@ export default function GeliaTituloCard({
 
     return (
         <header className={cardClass} style={style}>
-            <div className="min-w-0 flex-1 space-y-3">
-                {eyebrow && (
-                    <div className="flex items-center gap-3">
-                        <span
-                            className="h-1.5 w-8 md:w-12 rounded-full shrink-0"
-                            style={{ backgroundColor: 'var(--color-primario)' }}
-                            aria-hidden
-                        />
-                        <span className="text-[10px] font-black tracking-[0.2em] uppercase theme-text-muted drop-shadow-sm m-0">
-                            {eyebrow}
-                        </span>
+            <div className="min-w-0 flex-1">
+                <div className="space-y-3">
+                    {eyebrow && (
+                        <div className="flex items-center gap-3">
+                            <span
+                                className="h-1.5 w-8 md:w-12 rounded-full shrink-0"
+                                style={{ backgroundColor: 'var(--color-primario)' }}
+                                aria-hidden
+                            />
+                            <span className="text-[10px] font-black tracking-[0.2em] uppercase theme-text-muted drop-shadow-sm m-0">
+                                {eyebrow}
+                            </span>
+                        </div>
+                    )}
+
+                    <h1 className="text-3xl sm:text-4xl md:text-5xl font-black italic tracking-tighter uppercase theme-text-main leading-none m-0">
+                        {title}
+                        {titleHighlight != null && titleHighlight !== '' && (
+                            <>
+                                {' '}
+                                <span style={{ color: 'var(--color-primario)' }}>{titleHighlight}</span>
+                            </>
+                        )}
+                    </h1>
+
+                    {description && (
+                        <p className="text-[10px] md:text-[11px] font-bold theme-text-muted uppercase tracking-widest mt-1 m-0 max-w-2xl leading-relaxed">
+                            {description}
+                        </p>
+                    )}
+                </div>
+
+                {children && (
+                    <div className="mt-4 md:mt-5">
+                        {children}
                     </div>
                 )}
-
-                <h1 className="text-3xl sm:text-4xl md:text-5xl font-black italic tracking-tighter uppercase theme-text-main leading-none m-0">
-                    {title}
-                    {titleHighlight != null && titleHighlight !== '' && (
-                        <>
-                            {' '}
-                            <span style={{ color: 'var(--color-primario)' }}>{titleHighlight}</span>
-                        </>
-                    )}
-                </h1>
-
-                {description && (
-                    <p className="text-[10px] md:text-[11px] font-bold theme-text-muted uppercase tracking-widest mt-1 m-0 max-w-2xl leading-relaxed">
-                        {description}
-                    </p>
-                )}
-
-                {children}
             </div>
 
             {(Icon || aside) && (

@@ -1,11 +1,13 @@
 import React, { useMemo, useState } from 'react';
 import axios from 'axios';
 import { createPortal } from 'react-dom';
-import { AlertTriangle, Headphones, Loader2, Pause } from 'lucide-react';
+import { AlertTriangle, Loader2, Pause, RotateCcw } from 'lucide-react';
 import ModalConfirmarAccion from '../../../ControlPedidos/Partials/ModalConfirmarAccion';
 import { BTN_PRIMARY, BTN_SECONDARY, THEME_MODAL_OVERLAY, THEME_MODAL_SHELL, deferModalAction } from '../../../ControlPedidos/Partials/pedidosBmaStyles';
-import { geliaCardClass, THEME_BTN_PRIMARY, THEME_BTN_SECONDARY } from '../../../../utils/geliaTheme';
+import { geliaCardClass, THEME_BTN_PRIMARY } from '../../../../utils/geliaTheme';
 import CronometroVisualOperacion from './CronometroVisualOperacion';
+import MetricasAtencionCompacta from './MetricasAtencionCompacta';
+import ModalReatencionDesdeVendedorGerencia from './ModalReatencionDesdeVendedorGerencia';
 import {
     claseBadgeEstadoVendedor,
     esAccionPeligrosaEquipo,
@@ -16,6 +18,16 @@ import {
     inicialesNombre,
     mensajeErrorOperacion,
 } from './operacionUtils';
+
+const CLASE_BTN_TARJETA =
+    'w-full min-h-[44px] px-4 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest inline-flex items-center justify-center gap-2 disabled:opacity-50';
+
+function claseBotonAccion(accion) {
+    if (esAccionPeligrosaEquipo(accion)) {
+        return `theme-btn-danger ${CLASE_BTN_TARJETA}`;
+    }
+    return `${THEME_BTN_PRIMARY} ${CLASE_BTN_TARJETA}`;
+}
 
 const RUTAS_ACCION = {
     activar: 'punto_venta.operacion.equipo.activar',
@@ -32,6 +44,8 @@ export default function TarjetaVendedorGerencia({
     persona,
     servidorAt,
     puedeGestionar = false,
+    puedeAsignarReatencion = false,
+    reatenciones = [],
     motivosPausa = [],
     onActualizado,
     onConflicto,
@@ -39,6 +53,7 @@ export default function TarjetaVendedorGerencia({
 }) {
     const [accionPendiente, setAccionPendiente] = useState(null);
     const [modalPausaAbierto, setModalPausaAbierto] = useState(false);
+    const [modalReatencionAbierto, setModalReatencionAbierto] = useState(false);
     const [motivoPausaId, setMotivoPausaId] = useState('');
     const [motivoDetalle, setMotivoDetalle] = useState('');
     const [cargando, setCargando] = useState(false);
@@ -47,6 +62,13 @@ export default function TarjetaVendedorGerencia({
     const motivoSeleccionado = useMemo(
         () => motivosPausa.find((motivo) => String(motivo.id) === String(motivoPausaId)),
         [motivosPausa, motivoPausaId],
+    );
+
+    const clientesReatencion = useMemo(
+        () => (reatenciones ?? []).filter((turno) => (
+            (turno.candidatos ?? []).some((candidato) => Number(candidato.id) === Number(persona.id))
+        )),
+        [reatenciones, persona.id],
     );
 
     const ejecutarAccion = async (accion, payloadExtra = {}) => {
@@ -117,9 +139,14 @@ export default function TarjetaVendedorGerencia({
         : null;
 
     const acciones = puedeGestionar ? (persona.acciones ?? []) : [];
-    const mostrarAtencion = persona.estado_vendedor === 'atendiendo' && persona.atencion_actual;
+    const mostrarAtencion = Boolean(persona.atencion_actual);
     const mostrarCierrePendiente = persona.estado_vendedor === 'cierre_pendiente';
     const enPausa = persona.estado_vendedor === 'en_retencion';
+    const ocupado = persona.estado_vendedor === 'atendiendo';
+    const reatencionHabilitada = puedeAsignarReatencion
+        && Boolean(persona.recibe_turnos)
+        && !ocupado
+        && clientesReatencion.length > 0;
 
     return (
         <>
@@ -199,18 +226,10 @@ export default function TarjetaVendedorGerencia({
                 )}
 
                 {mostrarAtencion && (
-                    <div className="flex items-start gap-2 rounded-xl px-3 py-2 bg-black/5 dark:bg-white/5">
-                        <Headphones className="w-4 h-4 shrink-0 theme-text-muted mt-0.5" aria-hidden />
-                        <div className="min-w-0">
-                            <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0">Turno actual</p>
-                            <p className="text-sm font-black theme-text-main m-0 mt-1">{persona.atencion_actual.folio}</p>
-                            {persona.atencion_actual.cliente && (
-                                <p className="text-xs font-semibold theme-text-muted m-0 mt-1 truncate">
-                                    {persona.atencion_actual.cliente}
-                                </p>
-                            )}
-                        </div>
-                    </div>
+                    <MetricasAtencionCompacta
+                        atencion={persona.atencion_actual}
+                        servidorAt={servidorAt}
+                    />
                 )}
 
                 {persona.recibe_turnos && (
@@ -219,17 +238,29 @@ export default function TarjetaVendedorGerencia({
                     </p>
                 )}
 
-                {acciones.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mt-auto pt-1">
+                {(puedeAsignarReatencion || acciones.length > 0) && (
+                    <div className="grid grid-cols-2 gap-2 mt-auto pt-1">
+                        {puedeAsignarReatencion && (
+                            <button
+                                type="button"
+                                className={`${THEME_BTN_PRIMARY} ${CLASE_BTN_TARJETA}`}
+                                disabled={!reatencionHabilitada || cargando}
+                                title={tituloReatencion(ocupado, persona.recibe_turnos, clientesReatencion.length)}
+                                onClick={() => setModalReatencionAbierto(true)}
+                            >
+                                <RotateCcw className="w-4 h-4 shrink-0" aria-hidden />
+                                Reatención
+                            </button>
+                        )}
                         {acciones.map((accion) => (
                             <button
                                 key={accion}
                                 type="button"
-                                className={`${esAccionPeligrosaEquipo(accion) ? THEME_BTN_SECONDARY : THEME_BTN_PRIMARY} min-h-[40px] px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest inline-flex items-center gap-1.5`}
+                                className={claseBotonAccion(accion)}
                                 disabled={cargando}
                                 onClick={() => solicitarAccion(accion)}
                             >
-                                {cargando && <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden />}
+                                {cargando && <Loader2 className="w-4 h-4 shrink-0 animate-spin" aria-hidden />}
                                 {etiquetaAccionEquipo(accion)}
                             </button>
                         ))}
@@ -268,8 +299,32 @@ export default function TarjetaVendedorGerencia({
                 }}
                 onConfirm={confirmarPausa}
             />
+
+            <ModalReatencionDesdeVendedorGerencia
+                abierto={modalReatencionAbierto}
+                persona={persona}
+                turnos={clientesReatencion}
+                servidorAt={servidorAt}
+                onClose={() => setModalReatencionAbierto(false)}
+                onActualizado={onActualizado}
+                onConflicto={onConflicto}
+                onError={onError}
+            />
         </>
     );
+}
+
+function tituloReatencion(ocupado, recibeTurnos, cantidadClientes) {
+    if (ocupado) {
+        return 'No disponible: hay una atención en curso';
+    }
+    if (!recibeTurnos) {
+        return 'Solo se puede reatender con personal disponible';
+    }
+    if (cantidadClientes === 0) {
+        return 'No hay clientes en ventana de re-atención';
+    }
+    return 'Asignar un cliente en re-atención';
 }
 
 function mensajeConfirmacion(persona, accion) {

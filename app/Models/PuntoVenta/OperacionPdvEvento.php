@@ -10,6 +10,8 @@ class OperacionPdvEvento extends Model
 {
     public const TIPO_CIERRE_HORARIO = 'jornada.cierre_horario';
 
+    public const TIPO_APERTURA_MANUAL = 'jornada.apertura_manual';
+
     protected $table = 'pdv_operacion_eventos';
 
     protected $fillable = [

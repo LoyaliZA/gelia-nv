@@ -37,6 +37,8 @@ describe('pantallaSalaUtils', () => {
         expect(conLlamado[0].snapshot_nombre_llamado).toBe('María López');
         expect(conLlamado[0].prioridad_diamante).toBe(true);
         expect(conLlamado[0].prioridad_vip).toBeUndefined();
+        expect(conLlamado[0].atencion_primer_nombre).toBe('Ana');
+        expect(conLlamado[0].atencion_nombre).toBeNull();
 
         const sinLlamado = aplicarEventoSala(conLlamado, {
             event_id: 'turnos:atencion.cerrada:2',

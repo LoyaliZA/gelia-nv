@@ -5,11 +5,15 @@ import {
     etiquetaEstadoVendedor,
     etiquetaJornada,
     formatearUltimaActualizacion,
+    avisoSucursalOperacion,
+    firmaAvisoSucursal,
     mensajeAvisoSucursal,
+    tipoAvisoSucursal,
     mensajeErrorOperacion,
     mensajeMiAtencion,
     mostrarBandejaSinTurno,
     puedeAbrirJornada,
+    puedeAbrirSucursalManualmente,
     puedeCerrarJornada,
     puedeFinalizarPausa,
     puedeIniciarPausa,
@@ -111,6 +115,58 @@ describe('operacionUtils', () => {
 
         expect(puedeReabrirSucursal(estado, permisos)).toBe(true);
         expect(puedeReabrirSucursal({ sucursal_dia: { acepta_altas: true } }, permisos)).toBe(false);
+    });
+
+    it('permite iniciar jornada manual solo si aún no abre y no hay cierre manual', () => {
+        const permisos = { cerrar_sucursal: true };
+
+        expect(puedeAbrirSucursalManualmente({
+            sucursal_dia: { acepta_altas: false, cierre_manual_at: null },
+        }, permisos)).toBe(true);
+
+        expect(puedeAbrirSucursalManualmente({
+            sucursal_dia: { acepta_altas: true, origen_apertura: 'automatica' },
+        }, permisos)).toBe(false);
+
+        expect(puedeAbrirSucursalManualmente({
+            sucursal_dia: { acepta_altas: false, cierre_manual_at: '2026-09-04T19:00:00Z' },
+        }, permisos)).toBe(false);
+    });
+
+    it('aviso de jornada iniciada de forma manual', () => {
+        const aviso = mensajeAvisoSucursal({
+            sucursal_dia: {
+                acepta_altas: true,
+                origen_apertura: 'manual',
+                apertura_manual_at: '2026-09-21T13:00:00Z',
+            },
+        });
+
+        expect(aviso).toContain('manual');
+    });
+
+    it('clasifica aviso informativo y de advertencia', () => {
+        expect(tipoAvisoSucursal({
+            sucursal_dia: { acepta_altas: true, origen_apertura: 'automatica' },
+        })).toBe('info');
+
+        expect(tipoAvisoSucursal({
+            sucursal_dia: { acepta_altas: false },
+        })).toBe('warning');
+    });
+
+    it('firma de aviso evita repetir el mismo toast', () => {
+        const estado = {
+            sucursal_dia: { acepta_altas: true, origen_apertura: 'automatica' },
+        };
+
+        expect(avisoSucursalOperacion(estado)).toEqual({
+            mensaje: 'La jornada se inició de forma automática según el horario configurado.',
+            tipo: 'info',
+        });
+        expect(firmaAvisoSucursal(estado)).toBe(
+            'info:La jornada se inició de forma automática según el horario configurado.',
+        );
     });
 
     it('detecta conflicto de versión y error de red', () => {

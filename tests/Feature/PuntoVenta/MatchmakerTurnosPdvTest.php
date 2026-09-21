@@ -18,10 +18,12 @@ use App\Services\PuntoVenta\Operacion\FinalizarPausaPdvService;
 use App\Services\PuntoVenta\Operacion\IniciarPausaPdvService;
 use App\Services\PuntoVenta\PuntoVentaModulo;
 use App\Services\PuntoVenta\Turnos\MatchmakerTurnosPdvService;
+use App\Services\PuntoVenta\Turnos\PlazosTurnosPdvConfig;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Queue;
@@ -55,6 +57,37 @@ class MatchmakerTurnosPdvTest extends TestCase
         }
 
         $this->sucursal = Sucursal::factory()->create(['nombre' => 'Sucursal Matchmaker']);
+    }
+
+    public function test_inicio_atencion_automatico_al_asignar(): void
+    {
+        Event::fake([TurnoAsignado::class, TurnoReatencion::class]);
+        Queue::fake();
+
+        $config = new PlazosTurnosPdvConfig;
+        $plazos = array_merge($config->configuracionInicialAprobada(), [
+            'inicio_atencion_automatico' => true,
+        ]);
+        ConfiguracionSistema::query()->updateOrCreate(
+            ['clave' => PlazosTurnosPdvConfig::CLAVE],
+            [
+                'valor' => json_encode($plazos, JSON_UNESCAPED_UNICODE),
+                'tipo' => 'json',
+                'grupo' => 'PuntoVenta',
+            ]
+        );
+        Cache::forget(PlazosTurnosPdvConfig::CACHE_KEY);
+
+        $ventas = User::factory()->create(['name' => 'Vendedor Auto']);
+        $this->simularPersonasDisponibles([$ventas]);
+
+        $turno = $this->crearTurnoEnCola('Cliente auto', altaAt: now()->subMinute());
+
+        app(MatchmakerTurnosPdvService::class)->ejecutar($this->sucursal->id, 'test.auto');
+
+        $atencion = TurnoPdvAtencion::query()->sole();
+        $this->assertNotNull($atencion->atencion_inicio_at);
+        $this->assertSame($turno->id, $atencion->turno_id);
     }
 
     public function test_asigna_turno_prioritario_antes_que_normal_fifo(): void

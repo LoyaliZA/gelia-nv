@@ -7,6 +7,7 @@ import FormularioCustodiaBultos from './FormularioCustodiaBultos';
 import useConfirmacionCustodia from './useConfirmacionCustodia';
 import useFormularioCustodiaResguardo from './useFormularioCustodiaResguardo';
 import { BTN_SECONDARY, badgeEstadoResguardo } from './resguardosStyles';
+import useToastAlCambiar from '../../../../hooks/useToastAlCambiar';
 
 export default function ModalCustodiaResguardo({
     abierto,
@@ -55,6 +56,8 @@ export default function ModalCustodiaResguardo({
             reiniciar();
         };
     }, [abierto, resguardoId, cargar, reiniciar, reiniciarFlujo]);
+
+    useToastAlCambiar(errorCarga, 'error');
 
     if (!abierto) return null;
 
@@ -113,12 +116,9 @@ export default function ModalCustodiaResguardo({
                             </p>
                         </div>
                     ) : errorCarga ? (
-                        <div className={`${geliaCardClass()} p-5 border border-red-500/30 space-y-3`}>
-                            <div className="flex items-start gap-3">
-                                <AlertTriangle className="w-5 h-5 text-red-500 shrink-0" />
-                                <p className="text-sm font-semibold text-red-600 dark:text-red-300 m-0">{errorCarga}</p>
-                            </div>
-                            <button type="button" onClick={cargar} className={BTN_SECONDARY}>
+                        <div className={`${geliaCardClass()} p-5 space-y-3 text-center`}>
+                            <p className="text-sm theme-text-muted m-0">No se pudo cargar el formulario de custodia.</p>
+                            <button type="button" onClick={cargar} className={`${BTN_SECONDARY} w-full min-h-[44px]`}>
                                 Reintentar
                             </button>
                         </div>

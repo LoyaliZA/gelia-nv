@@ -7,6 +7,8 @@ export default function ListaEquipoGerencia({
     equipo = [],
     servidorAt,
     puedeGestionar = false,
+    puedeAsignarReatencion = false,
+    reatenciones = [],
     motivosPausa = [],
     onActualizado,
     onConflicto,
@@ -34,6 +36,8 @@ export default function ListaEquipoGerencia({
                         persona={persona}
                         servidorAt={servidorAt}
                         puedeGestionar={puedeGestionar}
+                        puedeAsignarReatencion={puedeAsignarReatencion}
+                        reatenciones={reatenciones}
                         motivosPausa={motivosPausa}
                         onActualizado={onActualizado}
                         onConflicto={onConflicto}

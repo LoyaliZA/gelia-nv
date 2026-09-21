@@ -129,6 +129,9 @@ class ConsultaEstadoOperativoPdvService
             'actividad' => $intervalo?->tipo?->value,
             'sucursal_dia' => [
                 'acepta_altas' => $dia?->acepta_altas ?? true,
+                'jornada_abierta' => (bool) ($dia?->acepta_altas ?? true),
+                'origen_apertura' => $this->origenApertura($dia, $horarioEfectivo),
+                'apertura_manual_at' => $dia?->apertura_manual_at?->toIso8601String(),
                 'cierre_manual_at' => $dia?->cierre_manual_at?->toIso8601String(),
                 'ampliacion_hasta_at' => $dia?->ampliacion_hasta_at?->toIso8601String(),
                 'cierre_automatico_invalidado' => (bool) ($dia?->cierre_automatico_invalidado ?? false),
@@ -154,6 +157,26 @@ class ConsultaEstadoOperativoPdvService
                 ? $intervalo?->textoMotivoPausaCompleto()
                 : null,
         ];
+    }
+
+    /**
+     * @param  array{hora_apertura: ?string, hora_cierre: ?string, zona_horaria: string}|null  $horario
+     */
+    private function origenApertura(?SucursalDiaOperacionPdv $dia, ?array $horario): ?string
+    {
+        if (! $dia instanceof SucursalDiaOperacionPdv || ! $dia->acepta_altas) {
+            return null;
+        }
+
+        if ($dia->apertura_manual_at !== null) {
+            return 'manual';
+        }
+
+        if (($horario['hora_apertura'] ?? null) === null) {
+            return 'sin_restriccion';
+        }
+
+        return 'automatica';
     }
 
     /**

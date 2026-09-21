@@ -144,10 +144,47 @@ class GestionEquipoOperativoPdvTest extends TestCase
             ])
             ->assertOk();
 
+        $jornada->refresh();
+        $this->assertSame(EstadoJornadaPdv::Cerrada, $jornada->estado);
+        $this->assertNull($jornada->jornada_activa_marcador);
+
         $miembro = collect(
             $this->actingAs($this->gerente)->getJson(route('punto_venta.operacion.datos'))->json('equipo')
         )->firstWhere('id', $this->vendedor->id);
         $this->assertSame('jornada_cerrada', $miembro['estado_vendedor']);
+    }
+
+    public function test_activar_no_falla_con_marcadores_obsoletos(): void
+    {
+        app(GestionarEquipoOperativoPdvService::class)->activar($this->gerente, $this->vendedor, now());
+        $jornada = JornadaPdv::query()->sole();
+
+        app(GestionarEquipoOperativoPdvService::class)->cerrarJornada(
+            $this->gerente,
+            $this->vendedor,
+            $jornada->version,
+            now(),
+        );
+
+        JornadaPdv::query()
+            ->whereKey($jornada->id)
+            ->update([
+                'jornada_activa_marcador' => '1',
+                'apertura_at' => now()->subDay(),
+            ]);
+
+        IntervaloOperativoPdv::query()
+            ->where('jornada_id', $jornada->id)
+            ->update(['intervalo_abierto_marcador' => '1']);
+
+        $this->actingAs($this->gerente)
+            ->postJson(route('punto_venta.operacion.equipo.activar', $this->vendedor))
+            ->assertOk();
+
+        $miembro = collect(
+            $this->actingAs($this->gerente)->getJson(route('punto_venta.operacion.datos'))->json('equipo')
+        )->firstWhere('id', $this->vendedor->id);
+        $this->assertSame('disponible', $miembro['estado_vendedor']);
     }
 
     public function test_vendedor_sin_permiso_gestionar_recibe_403(): void

@@ -55,7 +55,7 @@ describe('buildSidebarNavigation permissions', () => {
         expect(ids).not.toContain('control_pedidos_auditar');
     });
 
-    it('usuario con permiso equipo_ver ve enlace de vendedores', () => {
+    it('usuario con permiso equipo_ver ve Operación General', () => {
         const tree = buildSidebarNavigation({
             can: canWith(['punto_venta.acceder', 'pdv.operacion.equipo_ver']),
             showAdminMenu: false,
@@ -63,10 +63,12 @@ describe('buildSidebarNavigation permissions', () => {
             geliaAiVisible: false,
         });
         const ids = collectLinkIds(tree);
-        expect(ids).toContain('punto_venta_vendedores');
+        expect(ids).toContain('punto_venta_operacion_general');
+        expect(ids).not.toContain('punto_venta_vendedores');
+        expect(ids).not.toContain('punto_venta_operacion');
     });
 
-    it('usuario sin permiso equipo_ver no ve enlace de vendedores', () => {
+    it('usuario con permiso de turnos ve Operación General', () => {
         const tree = buildSidebarNavigation({
             can: canWith(['punto_venta.acceder', 'pdv.turnos.ver']),
             showAdminMenu: false,
@@ -74,7 +76,19 @@ describe('buildSidebarNavigation permissions', () => {
             geliaAiVisible: false,
         });
         const ids = collectLinkIds(tree);
+        expect(ids).toContain('punto_venta_operacion_general');
         expect(ids).not.toContain('punto_venta_vendedores');
+    });
+
+    it('usuario PDV sin turnos ni equipo no ve Operación General', () => {
+        const tree = buildSidebarNavigation({
+            can: canWith(['punto_venta.acceder', 'pdv.turnos.atender']),
+            showAdminMenu: false,
+            manualesHubVisible: false,
+            geliaAiVisible: false,
+        });
+        const ids = collectLinkIds(tree);
+        expect(ids).not.toContain('punto_venta_operacion_general');
     });
 
     it('usuario con permiso PDV ve enlace de resguardos', () => {

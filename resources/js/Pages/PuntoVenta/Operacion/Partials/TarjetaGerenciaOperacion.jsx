@@ -8,6 +8,7 @@ import {
     isoDesdeDatetimeLocal,
     mensajeErrorOperacion,
     puedeAmpliarHorario,
+    puedeAbrirSucursalManualmente,
     puedeCerrarSucursal,
     puedeConfigurarHorarioCierre,
     puedeReabrirSucursal,
@@ -24,6 +25,7 @@ export default function TarjetaGerenciaOperacion({
     const [cargando, setCargando] = useState(false);
     const [modalCierre, setModalCierre] = useState(false);
     const [modalReabrir, setModalReabrir] = useState(false);
+    const [modalApertura, setModalApertura] = useState(false);
     const [ampliacionLocal, setAmpliacionLocal] = useState('');
     const [horaApertura, setHoraApertura] = useState(estado?.horario_cierre?.hora_apertura || '');
     const [horaCierre, setHoraCierre] = useState(estado?.horario_cierre?.hora_cierre || '19:00');
@@ -54,8 +56,16 @@ export default function TarjetaGerenciaOperacion({
             setCargando(false);
             setModalCierre(false);
             setModalReabrir(false);
+            setModalApertura(false);
         }
     };
+
+    const abrirSucursal = () => ejecutar(
+        () => axios.post(route('punto_venta.operacion.jornada.abrir_sucursal'), {
+            version: estado?.sucursal_dia?.version,
+        }),
+        'inicio manual de jornada',
+    );
 
     const cerrarSucursal = () => ejecutar(
         () => axios.post(route('punto_venta.operacion.jornada.cerrar_sucursal'), {
@@ -97,6 +107,7 @@ export default function TarjetaGerenciaOperacion({
     );
 
     const mostrarGerencia = puedeCerrarSucursal(estado, permisos)
+        || puedeAbrirSucursalManualmente(estado, permisos)
         || puedeReabrirSucursal(estado, permisos)
         || puedeAmpliarHorario(estado, permisos)
         || puedeConfigurarHorarioCierre(permisos);
@@ -112,10 +123,12 @@ export default function TarjetaGerenciaOperacion({
                         Gerencia del día
                     </h2>
                     <p className="text-xs font-semibold theme-text-muted m-0 mt-1">
-                        Cierre manual y ampliación tienen prioridad sobre el cierre automático de hoy.
+                        El inicio o cierre manual tiene prioridad sobre el horario automático de hoy.
                     </p>
                 </div>
             </div>
+
+            <EstadoJornadaSucursal estado={estado} />
 
             {puedeConfigurarHorarioCierre(permisos) && (
                 <div className="space-y-3 rounded-2xl border theme-border p-4">
@@ -193,6 +206,17 @@ export default function TarjetaGerenciaOperacion({
                 </div>
             )}
 
+            {puedeAbrirSucursalManualmente(estado, permisos) && (
+                <button
+                    type="button"
+                    className={`${THEME_BTN_PRIMARY} w-full min-h-[44px] px-4 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest`}
+                    disabled={cargando}
+                    onClick={() => setModalApertura(true)}
+                >
+                    Iniciar jornada
+                </button>
+            )}
+
             {puedeReabrirSucursal(estado, permisos) && (
                 <button
                     type="button"
@@ -211,9 +235,18 @@ export default function TarjetaGerenciaOperacion({
                     disabled={cargando}
                     onClick={() => setModalCierre(true)}
                 >
-                    Cerrar sucursal (sin altas nuevas)
+                    Cerrar jornada
                 </button>
             )}
+
+            <ModalConfirmarAccion
+                abierto={modalApertura}
+                titulo="Iniciar jornada"
+                mensaje="La sucursal comenzará a aceptar altas nuevas de turnos. Si el horario automático aún no llega, ya no se ejecutará el inicio automático de hoy."
+                etiquetaConfirmar="Iniciar jornada"
+                onClose={() => setModalApertura(false)}
+                onConfirm={abrirSucursal}
+            />
 
             <ModalConfirmarAccion
                 abierto={modalReabrir}
@@ -234,5 +267,37 @@ export default function TarjetaGerenciaOperacion({
                 onConfirm={cerrarSucursal}
             />
         </section>
+    );
+}
+
+function EstadoJornadaSucursal({ estado }) {
+    const dia = estado?.sucursal_dia;
+    if (!dia) return null;
+
+    const abierta = dia.acepta_altas !== false;
+    let etiqueta = 'Cerrada';
+    let clase = 'bg-slate-500/15 theme-text-muted';
+
+    if (abierta) {
+        if (dia.origen_apertura === 'manual') {
+            etiqueta = 'Abierta (manual)';
+            clase = 'bg-sky-500/15 text-sky-700 dark:text-sky-300';
+        } else if (dia.origen_apertura === 'automatica') {
+            etiqueta = 'Abierta (automática)';
+            clase = 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300';
+        } else {
+            etiqueta = 'Abierta';
+            clase = 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300';
+        }
+    }
+
+    return (
+        <p className="text-xs font-semibold theme-text-muted m-0">
+            Jornada de sucursal:
+            {' '}
+            <span className={`inline-flex px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${clase}`}>
+                {etiqueta}
+            </span>
+        </p>
     );
 }

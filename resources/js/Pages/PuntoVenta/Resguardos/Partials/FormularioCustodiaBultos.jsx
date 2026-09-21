@@ -8,6 +8,7 @@ import { titularResguardo } from './resguardosUtils';
 import PanelPedidoRevisionResguardo from './PanelPedidoRevisionResguardo';
 import BotonesCapturaEvidencia from './BotonesCapturaEvidencia';
 import { ChipEvidenciasBultosEmpaque } from './ModalEvidenciasBultosEmpaque';
+import useToastAlCambiar from '../../../../hooks/useToastAlCambiar';
 
 function crearBultosIniciales(resguardo) {
     const pendientes = resguardo?.bultos_pendientes_custodia || [];
@@ -33,6 +34,8 @@ export default function FormularioCustodiaBultos({
     const [evidencias, setEvidencias] = useState([]);
     const [confirmar, setConfirmar] = useState(false);
     const [erroresLocales, setErroresLocales] = useState({});
+
+    useToastAlCambiar(error, 'error');
 
     const tiposBulto = catalogos.tipos_bulto || {};
     const condiciones = catalogos.condiciones_bulto || {};
@@ -222,10 +225,6 @@ export default function FormularioCustodiaBultos({
                     </div>
                 )}
             </div>
-
-            {error && (
-                <p className="text-sm font-semibold text-red-600 dark:text-red-300 m-0">{error}</p>
-            )}
 
             <button
                 type="submit"

@@ -1,9 +1,12 @@
 import React from 'react';
 import { Wifi, WifiOff } from 'lucide-react';
+import PdvIndicadorEstadoVivo from '@/Components/PuntoVenta/PdvIndicadorEstadoVivo';
+import { GELIA_ICON_BOX } from '@/utils/geliaTheme';
 import { formatearUltimaActualizacion } from '@/Pages/PuntoVenta/Operacion/Partials/operacionUtils';
 import {
     conexionDegradadaPdv,
     etiquetaConexionTiempoRealPdv,
+    mensajeConexionDegradadaPdv,
     PDV_ESTADO_CONEXION,
 } from '@/utils/pdvAlertQueueUtils';
 
@@ -12,6 +15,8 @@ export default function IndicadorConexionTiempoRealPdv({
     ultimaActualizacion = null,
     className = '',
     mostrarUltimaActualizacion = true,
+    variante = 'tarjeta',
+    onClick = null,
 }) {
     if (!estadoConexion) return null;
 
@@ -22,21 +27,38 @@ export default function IndicadorConexionTiempoRealPdv({
         ? formatearUltimaActualizacion(ultimaActualizacion)
         : null;
 
+    if (variante === 'icono') {
+        const conectado = estadoConexion === PDV_ESTADO_CONEXION.conectado;
+        return (
+            <PdvIndicadorEstadoVivo
+                icono={conectado ? Wifi : WifiOff}
+                etiqueta={conectado ? 'Tiempo real conectado' : mensajeConexionDegradadaPdv(estadoConexion)}
+                titulo={conectado ? 'En línea' : etiqueta}
+                tono={conectado ? 'exito' : (esReconectando ? 'aviso' : 'error')}
+                pulsando={degradada}
+                clickeable={degradada && typeof onClick === 'function'}
+                onClick={onClick}
+                dataAtributo={`conexion-${estadoConexion}`}
+            />
+        );
+    }
+
     return (
         <div
-            className={`flex items-center gap-2 rounded-2xl border theme-border theme-surface shadow-sm px-3 py-2.5 shrink-0 ${className}`}
+            className={`inline-flex items-center gap-2 shrink-0 ${className}`}
             role="status"
             aria-live="polite"
             data-pdv-indicador-conexion={estadoConexion}
         >
-            {degradada ? (
-                <WifiOff
-                    className={`w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 ${esReconectando ? 'animate-pulse' : ''}`}
-                    aria-hidden
-                />
-            ) : (
-                <Wifi className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" aria-hidden />
-            )}
+            <span className={`${GELIA_ICON_BOX} !p-2 !min-h-[36px] !min-w-[36px]`} aria-hidden>
+                {degradada ? (
+                    <WifiOff
+                        className={`w-4 h-4 theme-text-aviso ${esReconectando ? 'animate-pulse' : ''}`}
+                    />
+                ) : (
+                    <Wifi className="w-4 h-4 theme-text-exito" />
+                )}
+            </span>
             <div className="min-w-0">
                 <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0">Tiempo real</p>
                 <p className="text-sm font-black theme-text-main m-0">{etiqueta}</p>

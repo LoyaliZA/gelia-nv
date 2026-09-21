@@ -6,6 +6,7 @@ use App\Contracts\PuntoVenta\ResuelveAlcancePdv;
 use App\Models\PuntoVenta\TurnoPdv;
 use App\Models\User;
 use App\Services\PuntoVenta\PuntoVentaModulo;
+use App\Services\PuntoVenta\Turnos\PlazosTurnosPdvConfig;
 use App\Support\PuntoVenta\Operacion\EstadoVendedorOperacionPdv;
 use Carbon\CarbonInterface;
 
@@ -14,6 +15,7 @@ class ConsultaGestionVendedoresPdvService
     public function __construct(
         private readonly ResuelveAlcancePdv $alcance,
         private readonly ConsultaEquipoOperativoPdvService $equipo,
+        private readonly PlazosTurnosPdvConfig $plazos,
     ) {}
 
     /**
@@ -32,6 +34,7 @@ class ConsultaGestionVendedoresPdvService
                 'equipo' => [],
                 'resumen' => $this->resumenVacio(),
                 'clientes_en_fila' => 0,
+                'plazos_turnos' => $this->plazos->obtenerOPredeterminado(),
             ];
         }
 
@@ -53,6 +56,7 @@ class ConsultaGestionVendedoresPdvService
             'equipo' => $equipo,
             'resumen' => $this->calcularResumen($equipo),
             'clientes_en_fila' => $this->contarClientesEnFila($sucursalId),
+            'plazos_turnos' => $this->plazos->obtenerOPredeterminado(),
         ];
     }
 

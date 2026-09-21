@@ -10,11 +10,13 @@ import FiltrosResguardos from './Partials/FiltrosResguardos';
 import ListadoResguardos from './Partials/ListadoResguardos';
 import BusquedaRapidaRecepcion from './Partials/BusquedaRapidaRecepcion';
 import AlertasCustodiaResguardo from './Partials/AlertasCustodiaResguardo';
-import SelectorSucursalActivaPdv from './Partials/SelectorSucursalActivaPdv';
+import SelectorSucursalActivaPdv, { RELOAD_ONLY_RESGUARDOS } from '@/Components/PuntoVenta/SelectorSucursalActivaPdv';
 import useListadoResguardos from './Partials/useListadoResguardos';
 import BarraAccionesMasivasGerente from './Partials/BarraAccionesMasivasGerente';
 import { antiguedadValidaEnBandeja, paramsListadoResguardos } from './Partials/resguardosUtils';
 import PdvAlertProvider, { usePdvAlertReload } from '../../../Components/PuntoVenta/PdvAlertProvider';
+import PdvEncabezadoAlertasPdv from '../../../Components/PuntoVenta/PdvEncabezadoAlertasPdv';
+import useToastAlCambiar from '../../../hooks/useToastAlCambiar';
 
 const BANDEJAS = ['por_recibir', 'en_custodia', 'incidencias'];
 
@@ -46,6 +48,8 @@ export default function Index({
         metricas,
         bandeja: bandejaInicial || filtros.bandeja || 'por_recibir',
     });
+
+    useToastAlCambiar(error, 'error');
 
     const [bandejaActiva, setBandejaActiva] = useState(filtros.bandeja || bandejaInicial || 'por_recibir');
     const [pasoActivo, setPasoActivo] = useState(filtros.paso || 'gerente');
@@ -170,8 +174,11 @@ export default function Index({
                     titleHighlight="en sucursal"
                     icon={null}
                     aside={(
-                        <div className="p-2.5 rounded-xl theme-element border theme-border flex items-center justify-center shrink-0 self-start md:self-center">
-                            <Package className="w-5 h-5" style={{ color: 'var(--color-primario)' }} aria-hidden />
+                        <div className="flex items-center gap-2 shrink-0 self-start md:self-center">
+                            <PdvEncabezadoAlertasPdv />
+                            <div className="p-2.5 rounded-xl theme-element border theme-border flex items-center justify-center">
+                                <Package className="w-5 h-5" style={{ color: 'var(--color-primario)' }} aria-hidden />
+                            </div>
                         </div>
                     )}
                     className="!p-4 md:!p-5 lg:!p-6 !gap-3 md:!gap-4 [&_h1]:!text-2xl sm:[&_h1]:!text-3xl md:[&_h1]:!text-3xl"
@@ -179,6 +186,8 @@ export default function Index({
                     <SelectorSucursalActivaPdv
                         sucursalActiva={sucursalActiva}
                         sucursalesAsignadas={sucursalesAsignadas}
+                        variante="compacto"
+                        reloadOnly={RELOAD_ONLY_RESGUARDOS}
                     />
                 </GeliaTituloCard>
 
@@ -278,13 +287,6 @@ export default function Index({
                     hayFiltrosActivos={hayFiltrosActivos}
                     onLimpiar={onLimpiar}
                 />
-
-                {error && (
-                    <div className={`${geliaCardClass()} p-4 flex items-start gap-3 border border-red-500/30`}>
-                        <AlertTriangle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
-                        <p className="text-sm font-semibold text-red-600 dark:text-red-300 m-0">{error}</p>
-                    </div>
-                )}
 
                 {cargando && !resguardosVista?.data?.length ? (
                     <div className={`${geliaCardClass()} p-12 flex flex-col items-center gap-3`}>

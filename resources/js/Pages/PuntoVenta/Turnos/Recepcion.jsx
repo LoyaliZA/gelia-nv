@@ -5,20 +5,22 @@ import AppLayout from '../../../Layouts/AppLayout';
 import GeliaPageShell from '../../../Components/GeliaPageShell';
 import GeliaTituloCard from '../../../Components/GeliaTituloCard';
 import { geliaCardClass, THEME_BTN_PRIMARY } from '../../../utils/geliaTheme';
-import SelectorSucursalActivaPdv from '../Resguardos/Partials/SelectorSucursalActivaPdv';
+import SelectorSucursalActivaPdv from '@/Components/PuntoVenta/SelectorSucursalActivaPdv';
 import BandejaColaRecepcionTurno from './Partials/BandejaColaRecepcionTurno';
 import EncabezadoRecepcionTurno from './Partials/EncabezadoRecepcionTurno';
 import FormularioAltaTurno from './Partials/FormularioAltaTurno';
 import useAltaTurno from './Partials/useAltaTurno';
 import useBandejaRecepcionTurno from './Partials/useBandejaRecepcionTurno';
-import ModalErrorAltaTurno from './Partials/ModalErrorAltaTurno';
+import useToastAlCambiar from '../../../hooks/useToastAlCambiar';
+import { reportarMensajeOperacion } from '../../../utils/geliaToast';
 import {
     etiquetaEstadoTurno,
     etiquetasPrioridadTurno,
 } from './Partials/altaTurnoUtils';
 import { PDV_VISTA_REALTIME } from '../../../utils/pdvRealtimeMatrix';
 import { badgeEstadoTurno, badgePrioridadTurno } from './Partials/turnosStyles';
-import PdvAlertProvider, { usePdvAlertContext, usePdvAlertReload } from '../../../Components/PuntoVenta/PdvAlertProvider';
+import PdvAlertProvider, { usePdvAlertReload } from '../../../Components/PuntoVenta/PdvAlertProvider';
+import PdvEncabezadoAlertasPdv from '../../../Components/PuntoVenta/PdvEncabezadoAlertasPdv';
 
 export default function Recepcion({
     auth,
@@ -48,8 +50,6 @@ export default function Recepcion({
         error,
         turnoCreado,
         reiniciar,
-        mostrarError,
-        limpiarError,
     } = useAltaTurno({
         onExito: () => refrescarBandeja({ silencioso: true }),
         bandeja: puedeVerBandeja ? bandeja : null,
@@ -80,9 +80,7 @@ export default function Recepcion({
                     reiniciar={reiniciar}
                     enviar={enviar}
                     enviando={enviando}
-                    mostrarError={mostrarError}
                     error={error}
-                    limpiarError={limpiarError}
                 />
             </PdvAlertProvider>
         </AppLayout>
@@ -105,33 +103,27 @@ function RecepcionContenido({
     reiniciar,
     enviar,
     enviando,
-    mostrarError,
     error,
-    limpiarError,
 }) {
-    const { estadoConexion, ultimaActualizacionConfirmada } = usePdvAlertContext() ?? {};
+    useToastAlCambiar(error, 'error');
 
     return (
         <GeliaPageShell className="max-w-7xl space-y-4" data-recepcion-turno-root>
             <GeliaTituloCard
                 title="Recepción de turnos"
                 description="Registro y supervisión de fila en mostrador"
+                aside={<PdvEncabezadoAlertasPdv />}
                 icon={Ticket}
-            />
-
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            >
                 <SelectorSucursalActivaPdv
                     sucursalActiva={sucursalActiva}
                     sucursalesAsignadas={sucursalesAsignadas}
+                    variante="compacto"
                 />
-            </div>
+            </GeliaTituloCard>
 
             {puedeVerBandeja && (
-                <EncabezadoRecepcionTurno
-                    bandeja={bandeja}
-                    estadoConexion={estadoConexion}
-                    ultimaActualizacion={ultimaActualizacionConfirmada}
-                />
+                <EncabezadoRecepcionTurno bandeja={bandeja} />
             )}
 
             <div
@@ -159,7 +151,7 @@ function RecepcionContenido({
                                     sucursalDia={sucursalDia}
                                     enviando={enviando}
                                     onEnviar={enviar}
-                                    onMostrarError={mostrarError}
+                                    onMostrarError={reportarMensajeOperacion}
                                 />
                             )
                         ) : null}
@@ -183,11 +175,6 @@ function RecepcionContenido({
                 ) : null}
             </div>
 
-            <ModalErrorAltaTurno
-                abierto={Boolean(error)}
-                mensaje={error}
-                onClose={limpiarError}
-            />
         </GeliaPageShell>
     );
 }

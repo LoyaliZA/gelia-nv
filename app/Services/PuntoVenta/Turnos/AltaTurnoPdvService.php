@@ -4,6 +4,7 @@ namespace App\Services\PuntoVenta\Turnos;
 
 use App\Contracts\PuntoVenta\ResuelveAlcancePdv;
 use App\Events\PuntoVenta\TurnoCreado;
+use App\Events\PuntoVenta\TurnoVentanaReatencionVencida;
 use App\Models\Cliente;
 use App\Models\PuntoVenta\TurnoPdv;
 use App\Models\PuntoVenta\TurnoPdvEvento;
@@ -15,6 +16,7 @@ use App\Services\PuntoVenta\Operacion\ResolverSucursalDiaOperacionPdv;
 use App\Services\PuntoVenta\PuntoVentaModulo;
 use App\Support\PuntoVenta\Turnos\EstadosActivosTurnoPdv;
 use App\Support\PuntoVenta\Turnos\FolioTurnoGenerado;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
@@ -62,7 +64,9 @@ class AltaTurnoPdvService
                 return $reintento;
             }
 
+            $ahora = now();
             $cliente = $this->resolverCliente($clienteId);
+            $this->cerrarReatencionesVigentesPorNuevaAlta($sucursal->id, $cliente, $actor, $ahora);
             $this->assertSinTurnoActivo($sucursal->id, $cliente);
             $nombreParaLlamado = $this->resolverNombreLlamado($cliente, $nombreLlamado);
             $prioridades = $this->resolverPrioridades->resolver(
@@ -72,13 +76,13 @@ class AltaTurnoPdvService
             );
 
             $folio = $this->generarFolio->ejecutar($sucursal, TurnoPdv::SERVICIO_VENTAS);
-            $ahora = now();
 
             try {
                 $turno = TurnoPdv::query()->create([
                     'sucursal_id' => $sucursal->id,
                     'cliente_id' => $cliente?->id,
                     'folio' => $folio->folio,
+                    'fecha_operativa' => $folio->fechaOperativa,
                     'servicio' => TurnoPdv::SERVICIO_VENTAS,
                     'origen' => TurnoPdv::ORIGEN_RECEPCION,
                     'estado' => TurnoPdv::ESTADO_EN_COLA,
@@ -216,6 +220,60 @@ class AltaTurnoPdvService
         return $nombre;
     }
 
+    private function cerrarReatencionesVigentesPorNuevaAlta(
+        int $sucursalId,
+        ?Cliente $cliente,
+        User $actor,
+        CarbonInterface $ahora,
+    ): void {
+        if (! $cliente instanceof Cliente) {
+            return;
+        }
+
+        $turnos = TurnoPdv::query()
+            ->where('sucursal_id', $sucursalId)
+            ->where('cliente_id', $cliente->id)
+            ->where('estado', TurnoPdv::ESTADO_EN_REATENCION)
+            ->lockForUpdate()
+            ->get();
+
+        foreach ($turnos as $turno) {
+            $versionAnterior = (int) $turno->version;
+            $actualizado = TurnoPdv::query()
+                ->whereKey($turno->id)
+                ->where('version', $versionAnterior)
+                ->update([
+                    'estado' => TurnoPdv::ESTADO_CERRADO,
+                    'cerrado_at' => $ahora,
+                    'version' => $versionAnterior + 1,
+                ]);
+
+            if ($actualizado !== 1) {
+                continue;
+            }
+
+            $evento = TurnoPdvEvento::query()->create([
+                'turno_id' => $turno->id,
+                'tipo_evento' => TurnoPdvEvento::TIPO_VENTANA_REATENCION_VENCIDA,
+                'estado_anterior' => TurnoPdv::ESTADO_EN_REATENCION,
+                'estado_nuevo' => TurnoPdv::ESTADO_CERRADO,
+                'actor_id' => $actor->id,
+                'ocurrido_at' => $ahora,
+                'snapshot_json' => [
+                    'motivo' => 'nueva_alta_recepcion',
+                    'reatencion_expira_at' => $turno->reatencion_expira_at?->toIso8601String(),
+                ],
+                'idempotency_key' => 'pdv:reatencion-sustituida-alta:'.$turno->id,
+            ]);
+
+            TurnoVentanaReatencionVencida::dispatch(
+                $turno->fresh(['cliente', 'sucursal']),
+                $evento,
+                $sucursalId,
+            );
+        }
+    }
+
     private function assertSinTurnoActivo(int $sucursalId, ?Cliente $cliente): void
     {
         if (! $cliente instanceof Cliente) {
@@ -248,7 +306,7 @@ class AltaTurnoPdvService
         return TurnoPdv::query()
             ->where('sucursal_id', $sucursalId)
             ->where('cliente_id', $clienteId)
-            ->whereIn('estado', EstadosActivosTurnoPdv::valores())
+            ->whereIn('estado', EstadosActivosTurnoPdv::valoresQueBloqueanAlta())
             ->exists();
     }
 

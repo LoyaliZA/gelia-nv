@@ -1,6 +1,7 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
 import { AlertTriangle } from 'lucide-react';
+import { deferModalAction, THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from '../../../../utils/geliaTheme';
 
 export default function ModalErrorAltaTurno({
     abierto,
@@ -9,15 +10,22 @@ export default function ModalErrorAltaTurno({
 }) {
     if (!abierto || !mensaje) return null;
 
+    const cerrar = (event) => {
+        event?.stopPropagation?.();
+        deferModalAction(onClose);
+    };
+
     return createPortal(
         <div
-            className="fixed inset-0 z-[calc(var(--gelia-z-modal)+10)] flex items-end sm:items-center justify-center p-4 bg-black/50"
-            onClick={onClose}
+            className={`${THEME_MODAL_OVERLAY} items-end sm:items-center py-4`}
+            style={{ zIndex: 'calc(var(--gelia-z-modal) + 15)' }}
+            onClick={cerrar}
         >
             <div
-                className="theme-modal w-full max-w-md rounded-3xl p-6 space-y-5"
+                className={`${THEME_MODAL_SHELL} max-w-md w-full p-6 space-y-5 modal-pop`}
                 onClick={(event) => event.stopPropagation()}
                 role="alertdialog"
+                aria-modal="true"
                 aria-labelledby="modal-error-alta-turno-titulo"
                 aria-describedby="modal-error-alta-turno-mensaje"
             >
@@ -42,7 +50,7 @@ export default function ModalErrorAltaTurno({
                 <button
                     type="button"
                     className="theme-btn-primary w-full min-h-[44px] rounded-2xl text-[10px] font-black uppercase"
-                    onClick={onClose}
+                    onClick={cerrar}
                 >
                     Entendido
                 </button>

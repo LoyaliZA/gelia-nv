@@ -20,6 +20,7 @@ class TurnoPdvFactory extends Factory
         return [
             'sucursal_id' => Sucursal::factory(),
             'folio' => $folio,
+            'fecha_operativa' => now()->toDateString(),
             'servicio' => TurnoPdv::SERVICIO_VENTAS,
             'origen' => TurnoPdv::ORIGEN_RECEPCION,
             'estado' => TurnoPdv::ESTADO_EN_COLA,

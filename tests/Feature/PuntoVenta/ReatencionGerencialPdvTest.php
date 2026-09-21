@@ -75,7 +75,7 @@ class ReatencionGerencialPdvTest extends TestCase
         $this->activarVendedor($this->vendedorDestino);
 
         $response = $this->actingAs($this->gerente)
-            ->getJson(route('punto_venta.operacion.vendedores.datos'));
+            ->getJson(route('punto_venta.operacion.datos'));
 
         $response->assertOk()
             ->assertJsonCount(1, 'reatencion')
@@ -144,21 +144,46 @@ class ReatencionGerencialPdvTest extends TestCase
         $motivo = MotivoPausaPdv::query()->where('slug', 'comida')->firstOrFail();
         app(GestionarEquipoOperativoPdvService::class)->iniciarPausa(
             $this->gerente,
-            $this->vendedorDestino,
+            $this->vendedorAnterior,
             $motivo->id,
             null,
             now(),
-            'pdv:pausa:test-reatencion',
+            'pdv:pausa:test-reatencion-anterior',
         );
 
         $candidatos = collect(
             $this->actingAs($this->gerente)
-                ->getJson(route('punto_venta.operacion.vendedores.datos'))
+                ->getJson(route('punto_venta.operacion.datos'))
                 ->json('reatencion.0.candidatos')
         )->pluck('id');
 
         $this->assertFalse($candidatos->contains($this->vendedorAnterior->id));
-        $this->assertFalse($candidatos->contains($this->vendedorDestino->id));
+        $this->assertTrue($candidatos->contains($this->vendedorDestino->id));
+
+        app(GestionarEquipoOperativoPdvService::class)->finalizarPausa(
+            $this->gerente,
+            $this->vendedorAnterior,
+            now(),
+            'pdv:pausa:test-reatencion-anterior-fin',
+        );
+
+        app(GestionarEquipoOperativoPdvService::class)->iniciarPausa(
+            $this->gerente,
+            $this->vendedorDestino,
+            $motivo->id,
+            null,
+            now(),
+            'pdv:pausa:test-reatencion-destino',
+        );
+
+        $candidatosConDestinoPausado = collect(
+            $this->actingAs($this->gerente)
+                ->getJson(route('punto_venta.operacion.datos'))
+                ->json('reatencion.0.candidatos')
+        )->pluck('id');
+
+        $this->assertTrue($candidatosConDestinoPausado->contains($this->vendedorAnterior->id));
+        $this->assertFalse($candidatosConDestinoPausado->contains($this->vendedorDestino->id));
 
         $this->actingAs($this->gerente)->postJson(
             route('punto_venta.turnos.asignar_reatencion', $turno),
@@ -191,7 +216,7 @@ class ReatencionGerencialPdvTest extends TestCase
         ]);
 
         $this->actingAs($this->gerente)
-            ->getJson(route('punto_venta.operacion.vendedores.datos'))
+            ->getJson(route('punto_venta.operacion.datos'))
             ->assertOk()
             ->assertJsonCount(0, 'reatencion');
 
@@ -326,9 +351,10 @@ class ReatencionGerencialPdvTest extends TestCase
         )->assertForbidden();
     }
 
-    public function test_no_permite_asignar_al_vendedor_anterior(): void
+    public function test_no_permite_asignar_al_vendedor_anterior_cuando_hay_otro_disponible(): void
     {
         $this->activarVendedor($this->vendedorAnterior);
+        $this->activarVendedor($this->vendedorDestino);
         $turno = $this->crearTurnoEnReatencion($this->vendedorAnterior);
 
         $this->actingAs($this->gerente)->postJson(
@@ -340,6 +366,32 @@ class ReatencionGerencialPdvTest extends TestCase
             ],
         )->assertUnprocessable()
             ->assertJsonValidationErrors(['destino_user_id']);
+    }
+
+    public function test_permite_asignar_al_vendedor_anterior_cuando_es_el_unico_disponible(): void
+    {
+        Event::fake([TurnoReatencion::class]);
+
+        $this->activarVendedor($this->vendedorAnterior);
+        $turno = $this->crearTurnoEnReatencion($this->vendedorAnterior);
+
+        $response = $this->actingAs($this->gerente)->getJson(route('punto_venta.operacion.datos'));
+
+        $response->assertOk()
+            ->assertJsonPath('reatencion.0.candidatos.0.id', $this->vendedorAnterior->id);
+
+        $this->actingAs($this->gerente)->postJson(
+            route('punto_venta.turnos.asignar_reatencion', $turno),
+            [
+                'version' => $turno->version,
+                'destino_user_id' => $this->vendedorAnterior->id,
+                'idempotency_key' => 'pdv:reatencion:unico-vendedor',
+            ],
+        )->assertOk()
+            ->assertJsonPath('turno.estado', TurnoPdv::ESTADO_ASIGNADO)
+            ->assertJsonPath('atencion.user_id', $this->vendedorAnterior->id);
+
+        Event::assertDispatched(TurnoReatencion::class, 1);
     }
 
     private function activarVendedor(User $vendedor): void

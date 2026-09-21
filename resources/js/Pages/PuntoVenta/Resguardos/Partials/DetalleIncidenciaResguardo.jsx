@@ -9,6 +9,7 @@ import {
     formatearFechaOperativa,
     THEME_INPUT,
 } from './resguardosStyles';
+import useToastAlCambiar from '../../../../hooks/useToastAlCambiar';
 import {
     admiteResolucionIncidencia,
     incidenciaEstaResuelta,
@@ -55,6 +56,8 @@ export default function DetalleIncidenciaResguardo({
     };
 
     const errorVisible = errorResolucion || errorLocal;
+
+    useToastAlCambiar(errorVisible, 'error');
 
     return (
         <article className={`${geliaCardClass()} p-4 md:p-5 space-y-4`}>
@@ -129,9 +132,6 @@ export default function DetalleIncidenciaResguardo({
                                     disabled={enviandoResolucion}
                                 />
                             </label>
-                            {errorVisible && (
-                                <p className="text-sm text-red-600 dark:text-red-300 font-semibold m-0">{errorVisible}</p>
-                            )}
                             <button
                                 type="submit"
                                 className={`${THEME_BTN_PRIMARY} inline-flex items-center gap-2 min-h-[44px] px-5 text-[10px] font-black uppercase tracking-widest`}

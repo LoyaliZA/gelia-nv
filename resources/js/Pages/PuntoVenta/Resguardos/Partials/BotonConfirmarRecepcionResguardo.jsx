@@ -3,6 +3,7 @@ import { CheckCircle2, Loader2, Send } from 'lucide-react';
 import { THEME_BTN_PRIMARY } from '../../../../utils/geliaTheme';
 import { BTN_ACCION_RECEPCION_TARJETA } from './resguardosStyles';
 import { confirmarRecepcionGerente } from './recepcionGerenteApi';
+import useToastAlCambiar from '../../../../hooks/useToastAlCambiar';
 
 function clasesBoton({ variant, className }) {
     if (variant === 'pie') {
@@ -21,6 +22,8 @@ export default function BotonConfirmarRecepcionResguardo({
 }) {
     const [enviando, setEnviando] = useState(false);
     const [error, setError] = useState(null);
+
+    useToastAlCambiar(error, 'error');
 
     const confirmar = async () => {
         if (enviando) return;
@@ -55,7 +58,6 @@ export default function BotonConfirmarRecepcionResguardo({
                 )}
                 <span>{enviando ? 'Confirmando…' : etiqueta}</span>
             </button>
-            {error && <p className="text-xs text-red-600 dark:text-red-300 m-0 px-1">{error}</p>}
         </div>
     );
 }
@@ -69,6 +71,8 @@ export function BotonPasarARecepcionResguardo({
 }) {
     const [enviando, setEnviando] = useState(false);
     const [error, setError] = useState(null);
+
+    useToastAlCambiar(error, 'error');
 
     const enviar = async () => {
         if (enviando) return;
@@ -106,7 +110,6 @@ export function BotonPasarARecepcionResguardo({
                 )}
                 <span>{enviando ? 'Enviando…' : etiqueta}</span>
             </button>
-            {error && <p className="text-xs text-red-600 dark:text-red-300 m-0 px-1">{error}</p>}
         </div>
     );
 }

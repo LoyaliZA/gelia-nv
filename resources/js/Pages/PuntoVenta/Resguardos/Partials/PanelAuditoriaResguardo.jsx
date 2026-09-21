@@ -3,6 +3,7 @@ import axios from 'axios';
 import { Filter, RefreshCw } from 'lucide-react';
 import TimelineResguardo from './TimelineResguardo';
 import { BTN_SECONDARY } from './resguardosStyles';
+import useToastAlCambiar from '../../../../hooks/useToastAlCambiar';
 
 const estadoInicialFiltros = {
     tipo_evento: '',
@@ -65,6 +66,8 @@ export default function PanelAuditoriaResguardo({
         setFiltrosAplicados(estadoInicialFiltros);
         consultar(estadoInicialFiltros);
     };
+
+    useToastAlCambiar(error, 'error');
 
     return (
         <div className="space-y-4">
@@ -151,9 +154,6 @@ export default function PanelAuditoriaResguardo({
                     </button>
                 </div>
 
-                {error && (
-                    <p className="text-sm text-red-600 dark:text-red-300 font-semibold m-0">{error}</p>
-                )}
             </div>
 
             <TimelineResguardo eventos={timeline} soloLectura />

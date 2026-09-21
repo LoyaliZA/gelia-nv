@@ -2,8 +2,11 @@
 import { describe, expect, it } from 'vitest';
 import {
     debeAnunciarTtsPdv,
+    etiquetaAudioIndicadorPdv,
     mensajeTtsPdv,
+    PDV_TTS_ESTADO,
     PDV_TTS_TIPOS,
+    resolverEstadoTtsPdv,
     seleccionarVozPdv,
 } from './pdvSpeechUtils';
 
@@ -68,6 +71,23 @@ describe('pdvSpeechUtils', () => {
             },
         });
         expect(sinAtencion).toBe('Turno V-0400. Pedro Ruiz. Favor de atender.');
+    });
+
+    it('resuelve estado TTS inicial como bloqueado sin gesto previo', () => {
+        expect(resolverEstadoTtsPdv({
+            soportado: true,
+            silenciado: false,
+            audioDesbloqueado: false,
+        })).toBe(PDV_TTS_ESTADO.bloqueado);
+    });
+
+    it('no etiqueta bloqueado como audio no disponible', () => {
+        const bloqueado = etiquetaAudioIndicadorPdv(PDV_TTS_ESTADO.bloqueado);
+        const noSoportado = etiquetaAudioIndicadorPdv(PDV_TTS_ESTADO.no_soportado);
+
+        expect(bloqueado.titulo).toBe('Toca para activar audio');
+        expect(bloqueado.titulo).not.toMatch(/no disponible/i);
+        expect(noSoportado.titulo).toBe('Audio no disponible');
     });
 
     it('selecciona voz es-MX con fallback a español', () => {

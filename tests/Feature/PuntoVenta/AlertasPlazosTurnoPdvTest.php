@@ -15,6 +15,7 @@ use App\Services\PuntoVenta\Turnos\PlazosTurnosPdvConfig;
 use App\Support\PuntoVenta\Alertas\CatalogoAlertasTurnosPdv;
 use App\Support\PuntoVenta\Broadcast\PdvRealtimeMapper;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Event;
 use Tests\TestCase;
 
@@ -30,6 +31,7 @@ class AlertasPlazosTurnoPdvTest extends TestCase
             ['clave' => PlazosTurnosPdvConfig::CLAVE],
             ['valor' => json_encode((new PlazosTurnosPdvConfig)->configuracionInicialAprobada())],
         );
+        Cache::forget(PlazosTurnosPdvConfig::CACHE_KEY);
     }
 
     public function test_espera_proximo_vencer_emite_evento_realtime_sucursal(): void
@@ -96,5 +98,22 @@ class AlertasPlazosTurnoPdvTest extends TestCase
 
         $this->assertTrue($emitido);
         Event::assertDispatched(AtencionProrrogaProximoVencer::class);
+    }
+
+    public function test_persistir_incluye_tolerancias_de_aviso(): void
+    {
+        $config = app(PlazosTurnosPdvConfig::class);
+        $config->persistir([
+            'espera_inicial_minutos' => 8,
+            'prorroga_minutos' => 25,
+            'ventana_reatencion_minutos' => 60,
+            'aviso_tolerancia_espera_minutos' => 3,
+            'aviso_tolerancia_prorroga_minutos' => 4,
+        ]);
+
+        $plazos = $config->obtener();
+        $this->assertSame(8, $plazos['espera_inicial_minutos']);
+        $this->assertSame(3, $plazos['aviso_tolerancia_espera_minutos']);
+        $this->assertSame(4, $plazos['aviso_tolerancia_prorroga_minutos']);
     }
 }

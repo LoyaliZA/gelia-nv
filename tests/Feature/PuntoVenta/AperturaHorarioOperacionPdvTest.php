@@ -247,6 +247,26 @@ class AperturaHorarioOperacionPdvTest extends TestCase
         $this->assertGreaterThan(0, $resultado['omitidas']);
     }
 
+    public function test_no_dispara_apertura_automatica_si_ya_hubo_inicio_manual(): void
+    {
+        Event::fake([JornadaAperturaHorario::class]);
+        $this->configurarHorario([
+            'hora_apertura' => '08:00',
+            'hora_cierre' => '19:00',
+            'zona_horaria' => 'America/Mexico_City',
+        ]);
+
+        $antes = now('America/Mexico_City')->setTime(7, 30);
+        Carbon::setTestNow($antes);
+        $dia = app(ResolverSucursalDiaOperacionPdv::class)->obtenerOCrear($this->sucursal->id, $antes);
+        $dia->aplicaAperturaManual($this->recepcion, $antes);
+        $dia->save();
+
+        $despues = now('America/Mexico_City')->setTime(8, 5);
+        $this->assertFalse(app(AperturaHorarioSucursalPdvService::class)->ejecutar($this->sucursal->id, $despues));
+        Event::assertNotDispatched(JornadaAperturaHorario::class);
+    }
+
     /**
      * @param  array<string, mixed>  $datos
      */

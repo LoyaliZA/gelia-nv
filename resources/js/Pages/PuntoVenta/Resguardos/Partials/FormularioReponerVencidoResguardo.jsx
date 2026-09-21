@@ -9,6 +9,7 @@ import {
     validarFormularioReponerVencido,
 } from './reponerVencidoResguardoUtils';
 import { formatearFechaOperativa } from './resguardosStyles';
+import useToastAlCambiar from '../../../../hooks/useToastAlCambiar';
 
 export default function FormularioReponerVencidoResguardo({
     resguardo,
@@ -52,6 +53,9 @@ export default function FormularioReponerVencidoResguardo({
     };
 
     const contenedorClass = compacto ? 'space-y-3' : `${geliaCardClass()} p-4 md:p-5 space-y-4 border border-amber-500/20`;
+    const errorVisible = erroresLocales.motivo || error;
+
+    useToastAlCambiar(errorVisible, 'error');
 
     return (
         <>
@@ -96,11 +100,6 @@ export default function FormularioReponerVencidoResguardo({
                         placeholder="Describa por qué gerencia repone este vencido a la bandeja principal"
                         disabled={enviando}
                     />
-                    {(erroresLocales.motivo || error) && (
-                        <p className="text-sm text-red-600 dark:text-red-300 font-semibold m-0">
-                            {erroresLocales.motivo || error}
-                        </p>
-                    )}
                 </div>
 
                 <div className="flex flex-col sm:flex-row gap-2 sm:justify-end">

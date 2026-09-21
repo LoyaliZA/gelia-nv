@@ -55,6 +55,17 @@ describe('pdvRealtimeMatrix', () => {
         expect(debeRefrescarVistaPdv(PDV_VISTA_REALTIME.vendedor, asignado, { userId: 3 })).toBe(true);
     });
 
+    it('refresca vendedor con turno.asignado de sucursal si atencion.user_id coincide', () => {
+        const asignadoSucursal = envelope({
+            tipo: 'turno.asignado',
+            audiencia: 'sucursal',
+            datos: { atencion: { user_id: 3 } },
+        });
+
+        expect(debeRefrescarVistaPdv(PDV_VISTA_REALTIME.vendedor, asignadoSucursal, { userId: 3 })).toBe(true);
+        expect(debeRefrescarVistaPdv(PDV_VISTA_REALTIME.vendedor, asignadoSucursal, { userId: 9 })).toBe(false);
+    });
+
     it('expone claves estables de recarga por vista', () => {
         expect(claveRecargaVistaPdv(PDV_VISTA_REALTIME.gerencia)).toBe('pdv:recarga:gerencia');
     });

@@ -66,6 +66,7 @@ function userIdEnvelope(envelope) {
         datos.user_id
         ?? datos.jornada?.user_id
         ?? datos.intervalo?.user_id
+        ?? datos.atencion?.user_id
         ?? null,
     ) || null;
 }

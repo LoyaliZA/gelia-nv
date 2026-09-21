@@ -15,7 +15,7 @@ class AsignarTurnoPdvService
 {
     public function __construct(
         private readonly ConsultaPersonaDisponiblePdv $consultaDisponible,
-        private readonly ProgramarAlertasPlazosAtencionTurnoPdvService $programarAlertas,
+        private readonly AplicarPlazosAtencionNuevaTurnoPdvService $aplicarPlazos,
     ) {}
 
     /**
@@ -110,7 +110,7 @@ class AsignarTurnoPdvService
 
         $turnoActualizado = $turnoBloqueado->fresh(['cliente', 'sucursal', 'altaPor', 'atencionActual']);
 
-        $this->programarAlertas->programarEsperaProximoVencer($atencion, $ahora);
+        $atencion = $this->aplicarPlazos->ejecutar($atencion, $ahora);
 
         return [
             'turno' => $turnoActualizado,

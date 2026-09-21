@@ -9,6 +9,7 @@ use App\Models\PuntoVenta\TurnoPdvAtencion;
 use App\Models\User;
 use App\Services\PuntoVenta\Operacion\ConsultaVendedoresElegiblesPdvService;
 use App\Services\PuntoVenta\PuntoVentaModulo;
+use App\Support\PuntoVenta\Turnos\ResolverCandidatosReatencionTurnoPdv;
 use App\Support\PuntoVenta\Turnos\SerializadorBandejaReatencionPdv;
 use Carbon\CarbonInterface;
 
@@ -66,10 +67,10 @@ class ConsultaBandejaReatencionPdvService
                     ? (int) $atencionPrevia->user_id
                     : null;
 
-                $candidatos = array_values(array_filter(
+                $candidatos = ResolverCandidatosReatencionTurnoPdv::filtrar(
+                    $excluirId,
                     $candidatosBase,
-                    static fn (array $candidato): bool => $excluirId === null || $candidato['id'] !== $excluirId,
-                ));
+                );
 
                 return SerializadorBandejaReatencionPdv::turno(
                     $turno,

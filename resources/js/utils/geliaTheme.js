@@ -24,6 +24,22 @@ export const THEME_BTN_SECONDARY = 'theme-btn-secondary';
 export const THEME_MODAL_OVERLAY = 'gelia-modal-overlay animate-fade-in';
 export const THEME_MODAL_SHELL = 'gelia-modal-shell';
 
+/** Diferir cierre de modal para evitar que el clic atraviese al overlay padre. */
+export const deferModalAction = (fn, ms = 50) => {
+    if (typeof fn !== 'function') return;
+    window.setTimeout(fn, ms);
+};
+
+export const GELIA_ESTADO_VIVO_TONO = {
+    exito: 'gelia-estado-vivo--exito',
+    aviso: 'gelia-estado-vivo--aviso',
+    error: 'gelia-estado-vivo--error',
+    neutro: 'gelia-estado-vivo--neutro',
+};
+
+/** Contenedor squircle para iconos decorativos (títulos, filas, modales). */
+export const GELIA_ICON_BOX = 'gelia-icon-box theme-element border theme-border';
+
 export const GELIA_PAGE_SHELL = 'gelia-page-shell min-w-0 box-border';
 
 export const GELIA_PAGE_SECTION = 'w-full max-w-full min-w-0 box-border';

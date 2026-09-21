@@ -1,6 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import axios from 'axios';
-import { AlertTriangle, Loader2, RefreshCw, UserMinus } from 'lucide-react';
+import { Loader2, RefreshCw, UserMinus } from 'lucide-react';
 import { geliaCardClass, THEME_BTN_SECONDARY } from '../../../../utils/geliaTheme';
 import ModalBajaColaTurno from './ModalBajaColaTurno';
 import { etiquetaEstadoTurno } from './altaTurnoUtils';
@@ -19,6 +19,8 @@ import {
     puedeDarBajaCola,
     renovarClaveIdempotenciaOperacionTurno,
 } from './bandejaRecepcionUtils';
+import useToastAlCambiar from '../../../../hooks/useToastAlCambiar';
+import { reportarExitoOperacion, reportarInfoOperacion, reportarMensajeOperacion } from '../../../../utils/geliaToast';
 
 export default function BandejaColaRecepcionTurno({
     bandeja = null,
@@ -33,7 +35,8 @@ export default function BandejaColaRecepcionTurno({
 
     const [turnoBaja, setTurnoBaja] = useState(null);
     const [procesandoBaja, setProcesandoBaja] = useState(false);
-    const [mensajeAccion, setMensajeAccion] = useState(null);
+
+    useToastAlCambiar(error, 'error');
 
     const enCola = bandeja?.en_cola ?? [];
     const asignados = bandeja?.asignados ?? [];
@@ -41,9 +44,8 @@ export default function BandejaColaRecepcionTurno({
     const { enEspera, asignados: totalAsignados } = resumenBandejaRecepcion(bandeja);
 
     const manejarConflicto = useCallback(async () => {
-        setMensajeAccion('Otro terminal modificó el turno. Actualizando bandeja…');
+        reportarInfoOperacion('Otro terminal modificó el turno. Actualizando bandeja…');
         await refrescar?.({ silencioso: true });
-        setMensajeAccion(null);
         setTurnoBaja(null);
     }, [refrescar]);
 
@@ -51,7 +53,6 @@ export default function BandejaColaRecepcionTurno({
         if (!turnoBaja || procesandoBaja) return;
 
         setProcesandoBaja(true);
-        setMensajeAccion(null);
 
         try {
             await axios.post(
@@ -67,14 +68,14 @@ export default function BandejaColaRecepcionTurno({
 
             renovarClaveIdempotenciaOperacionTurno('baja-cola', turnoBaja.id);
             setTurnoBaja(null);
-            setMensajeAccion('Turno dado de baja correctamente.');
+            reportarExitoOperacion('Turno dado de baja correctamente.');
             await refrescar?.({ silencioso: true });
             onTurnoDadoDeBaja?.();
         } catch (err) {
             if (esConflictoVersionTurno(err)) {
                 await manejarConflicto();
             } else {
-                setMensajeAccion(mensajeErrorOperacionTurno(err, 'baja de cola'));
+                reportarMensajeOperacion(mensajeErrorOperacionTurno(err, 'baja de cola'));
             }
         } finally {
             setProcesandoBaja(false);
@@ -86,7 +87,11 @@ export default function BandejaColaRecepcionTurno({
     }
 
     return (
-        <section className="space-y-3 min-w-0" aria-labelledby="bandeja-cola-titulo" data-bandeja-cola-root>
+        <section
+            className={`${geliaCardClass()} p-5 space-y-4 min-w-0`}
+            aria-labelledby="bandeja-cola-titulo"
+            data-bandeja-cola-root
+        >
             <div className="flex flex-wrap items-center justify-between gap-2">
                 <h2 id="bandeja-cola-titulo" className="text-xs font-black uppercase tracking-widest theme-text-muted m-0">
                     Detalle de fila
@@ -101,19 +106,6 @@ export default function BandejaColaRecepcionTurno({
                     Actualizar
                 </button>
             </div>
-
-            {error && (
-                <div className={`${geliaCardClass()} p-3 flex items-start gap-2`}>
-                    <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" aria-hidden />
-                    <p className="text-xs font-semibold text-red-600 dark:text-red-400 m-0">{error}</p>
-                </div>
-            )}
-
-            {mensajeAccion && (
-                <div className={`${geliaCardClass()} p-3`}>
-                    <p className="text-xs font-semibold theme-text-muted m-0">{mensajeAccion}</p>
-                </div>
-            )}
 
             {cargando && vacia && !error && (
                 <div className={`${geliaCardClass()} p-4 text-center`}>
@@ -179,7 +171,7 @@ function ListaTurnos({
             <h3 className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0">{titulo}</h3>
             <ul className="space-y-1.5 m-0 p-0 list-none">
                 {turnos.map((turno) => (
-                    <li key={turno.id} className={`${geliaCardClass()} p-3`}>
+                    <li key={turno.id} className={`${geliaCardClass()} p-5`}>
                         <div className="grid grid-cols-[auto_1fr_auto] gap-x-3 gap-y-1 items-start">
                             <p className="text-sm font-black theme-text-main m-0 tabular-nums">{turno.folio}</p>
                             <p className="text-xs font-semibold theme-text-main m-0 truncate" title={turno.snapshot_nombre_llamado || undefined}>

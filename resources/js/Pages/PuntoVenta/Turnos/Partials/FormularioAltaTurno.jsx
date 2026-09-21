@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { Loader2, Ticket, AlertTriangle } from 'lucide-react';
+import { Loader2, Ticket } from 'lucide-react';
+import useToastAlCambiar from '../../../../hooks/useToastAlCambiar';
 import { geliaCardClass, THEME_BTN_PRIMARY } from '../../../../utils/geliaTheme';
 import BusquedaClienteTurno from './BusquedaClienteTurno';
 import {
@@ -39,6 +40,8 @@ export default function FormularioAltaTurno({
     ), [modo, cliente, bandeja]);
 
     const avisoSucursal = mensajeSucursalSinAltas(sucursalDia);
+
+    useToastAlCambiar(avisoSucursal, 'info');
 
     const puedeEnviar = useMemo(() => formularioListoParaEnviar({
         modo,
@@ -158,13 +161,6 @@ export default function FormularioAltaTurno({
                         <span className="text-sm font-semibold theme-text-main">Discapacidad / movilidad</span>
                     </label>
                 </fieldset>
-            )}
-
-            {avisoSucursal && (
-                <p className="text-xs font-semibold theme-text-muted m-0 flex items-start gap-2">
-                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" aria-hidden />
-                    {avisoSucursal}
-                </p>
             )}
 
             <button

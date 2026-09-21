@@ -4,10 +4,10 @@ namespace App\Http\Controllers\PuntoVenta\Operacion;
 
 use App\Contracts\PuntoVenta\ResuelveAlcancePdv;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\PuntoVenta\Operacion\ConsultaEstadoOperativoPdvRequest;
+use App\Http\Requests\PuntoVenta\Operacion\ConsultaOperacionGeneralPdvRequest;
 use App\Models\Sucursal;
 use App\Models\User;
-use App\Services\PuntoVenta\Operacion\ConsultaEstadoOperativoPdvService;
+use App\Services\PuntoVenta\Operacion\ConsultaOperacionGeneralPdvService;
 use App\Services\PuntoVenta\PuntoVentaModulo;
 use App\Services\PuntoVenta\SerializarCapacidadesPdvService;
 use Illuminate\Http\JsonResponse;
@@ -17,8 +17,8 @@ use Inertia\Response;
 class OperacionPdvController extends Controller
 {
     public function index(
-        ConsultaEstadoOperativoPdvRequest $request,
-        ConsultaEstadoOperativoPdvService $consulta,
+        ConsultaOperacionGeneralPdvRequest $request,
+        ConsultaOperacionGeneralPdvService $consulta,
         ResuelveAlcancePdv $alcance,
         SerializarCapacidadesPdvService $capacidades,
     ): Response|JsonResponse {
@@ -30,8 +30,10 @@ class OperacionPdvController extends Controller
             return response()->json($payload);
         }
 
-        return Inertia::render('PuntoVenta/Operacion/Index', [
+        return Inertia::render('PuntoVenta/Operacion/OperacionGeneral', [
             'estado' => fn () => $payload,
+            'reatencion' => fn () => $payload['reatencion'] ?? [],
+            'motivos_pausa' => fn () => $payload['motivos_pausa'] ?? [],
             'permisos' => fn () => $this->serializarPermisos($user, $alcance),
             'capacidades' => fn () => $capacidades->serializar($user),
             'sucursal_activa' => fn () => $this->serializarSucursalActiva($user, $alcance),
@@ -40,8 +42,8 @@ class OperacionPdvController extends Controller
     }
 
     public function datos(
-        ConsultaEstadoOperativoPdvRequest $request,
-        ConsultaEstadoOperativoPdvService $consulta,
+        ConsultaOperacionGeneralPdvRequest $request,
+        ConsultaOperacionGeneralPdvService $consulta,
     ): JsonResponse {
         /** @var User $user */
         $user = $request->user();
@@ -61,7 +63,10 @@ class OperacionPdvController extends Controller
             'pausa' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_OPERACION_PAUSA),
             'cerrar_sucursal' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_OPERACION_JORNADA_CERRAR_SUCURSAL),
             'ampliar' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_OPERACION_JORNADA_AMPLIAR),
+            'equipo_ver' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_OPERACION_EQUIPO_VER),
             'equipo_gestionar' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_OPERACION_EQUIPO_GESTIONAR),
+            'reatencion_asignar' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_TURNOS_REATENCION_ASIGNAR),
+            'pantalla_sala_abrir' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_PANTALLA_SALA_ABRIR),
         ];
     }
 

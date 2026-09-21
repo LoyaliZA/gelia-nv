@@ -17,7 +17,113 @@
 
 .theme-text-main { color: var(--theme-text-main); }
 .theme-text-muted { color: var(--theme-text-muted); }
+.theme-text-primario { color: var(--color-primario); }
+.theme-text-exito { color: var(--color-exito); }
+.theme-text-aviso { color: var(--color-aviso); }
+.theme-text-peligro { color: var(--color-peligro); }
+.theme-text-info { color: var(--color-info); }
 .theme-border { border-color: var(--theme-border); }
+
+/* Indicadores en vivo (estado de sistema, conexión, audio) */
+.gelia-estado-vivo {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.75rem;
+    border-width: 1px;
+    border-style: solid;
+    padding: 0.625rem;
+    min-height: 44px;
+    min-width: 44px;
+    flex-shrink: 0;
+    transition: opacity 0.2s ease;
+}
+
+.gelia-estado-vivo--clickeable {
+    cursor: pointer;
+}
+
+.gelia-estado-vivo--clickeable:hover {
+    opacity: 0.9;
+}
+
+.gelia-estado-vivo--deshabilitado {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.gelia-estado-vivo--pulsando {
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.gelia-estado-vivo--exito {
+    border-color: color-mix(in srgb, var(--color-exito) 40%, transparent);
+    background-color: color-mix(in srgb, var(--color-exito) 12%, transparent);
+    color: var(--color-exito);
+}
+
+.gelia-estado-vivo--aviso {
+    border-color: color-mix(in srgb, var(--color-aviso) 40%, transparent);
+    background-color: color-mix(in srgb, var(--color-aviso) 12%, transparent);
+    color: var(--color-aviso);
+}
+
+.gelia-estado-vivo--error {
+    border-color: color-mix(in srgb, var(--color-peligro) 40%, transparent);
+    background-color: color-mix(in srgb, var(--color-peligro) 12%, transparent);
+    color: var(--color-peligro);
+}
+
+.gelia-estado-vivo--neutro {
+    border-color: color-mix(in srgb, var(--theme-text-main) 15%, transparent);
+    background-color: color-mix(in srgb, var(--theme-text-main) 5%, transparent);
+    color: var(--theme-text-muted);
+}
+
+.gelia-estado-vivo__pulso {
+    position: absolute;
+    inset: 0;
+    border-radius: 0.75rem;
+    border-width: 2px;
+    border-style: solid;
+    border-color: inherit;
+    opacity: 0.3;
+    animation: ping 1s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+.gelia-icon-box {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    padding: 0.625rem;
+    min-height: 44px;
+    min-width: 44px;
+    border-radius: 0.75rem;
+    border-width: 1px;
+    border-style: solid;
+}
+
+.gelia-callout-aviso {
+    border-radius: 1rem;
+    border: 1px solid color-mix(in srgb, var(--color-aviso) 30%, transparent);
+    background-color: color-mix(in srgb, var(--color-aviso) 8%, transparent);
+    color: var(--theme-text-main);
+}
+
+.gelia-panel-suave {
+    border-radius: 1rem;
+    border: 1px solid var(--theme-border);
+    background-color: color-mix(in srgb, var(--theme-text-main) 5%, transparent);
+}
+
+.gelia-panel-primario {
+    border-radius: 0.75rem;
+    border: 1px solid color-mix(in srgb, var(--color-primario) 30%, transparent);
+    background-color: color-mix(in srgb, var(--color-primario) 8%, transparent);
+    color: var(--theme-text-main);
+}
 .theme-placeholder::placeholder { color: var(--theme-placeholder); }
 
 select.theme-element,
@@ -266,6 +372,10 @@ html.glass-active .theme-element:not(.theme-no-blur) {
     background-color: var(--theme-modal-overlay-bg);
     backdrop-filter: blur(var(--theme-modal-blur));
     -webkit-backdrop-filter: blur(var(--theme-modal-blur));
+}
+
+body > .gelia-modal-overlay {
+    z-index: calc(var(--gelia-z-toast) + 1);
 }
 
 @media (max-width: 767px) {

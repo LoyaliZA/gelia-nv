@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AlertTriangle } from 'lucide-react';
+import { deferModalAction, THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from '../../../../utils/geliaTheme';
+import { reportarMensajeOperacion } from '../../../../utils/geliaToast';
 import { THEME_INPUT } from '../../Resguardos/Partials/resguardosStyles';
 
 export default function ModalMotivosEsperaTurno({
@@ -12,31 +14,35 @@ export default function ModalMotivosEsperaTurno({
 }) {
     const [motivo, setMotivo] = useState('no_se_presento');
     const [motivoDetalle, setMotivoDetalle] = useState('');
-    const [error, setError] = useState(null);
-
     const motivos = catalogos?.motivos_cierre || [];
     const requiereDetalle = motivo === 'otro';
 
     const confirmar = () => {
         if (requiereDetalle && !motivoDetalle.trim()) {
-            setError('Indica el detalle cuando el motivo es "otro".');
+            reportarMensajeOperacion('Indica el detalle cuando el motivo es "otro".');
             return;
         }
-        setError(null);
         onConfirmar?.({ motivo, motivoDetalle: motivoDetalle.trim() || null });
     };
 
     if (!abierto) return null;
 
+    const cerrar = (event) => {
+        event?.stopPropagation?.();
+        deferModalAction(onClose);
+    };
+
     return createPortal(
         <div
-            className="fixed inset-0 z-[calc(var(--gelia-z-modal)+10)] flex items-end sm:items-center justify-center p-4 bg-black/50"
-            onClick={onClose}
+            className={`${THEME_MODAL_OVERLAY} items-end sm:items-center py-4`}
+            style={{ zIndex: 'calc(var(--gelia-z-modal) + 15)' }}
+            onClick={cerrar}
         >
             <div
-                className="theme-modal w-full max-w-md rounded-3xl p-6 space-y-5"
+                className={`${THEME_MODAL_SHELL} max-w-md w-full p-6 space-y-5 modal-pop`}
                 onClick={(e) => e.stopPropagation()}
                 role="dialog"
+                aria-modal="true"
                 aria-labelledby="modal-espera-titulo"
             >
                 <div className="flex items-start gap-3">
@@ -78,9 +84,6 @@ export default function ModalMotivosEsperaTurno({
                         </label>
                     )}
 
-                    {error && (
-                        <p className="text-xs font-bold text-red-600 dark:text-red-400 m-0">{error}</p>
-                    )}
                 </div>
 
                 <div className="flex flex-col gap-3">
@@ -96,7 +99,7 @@ export default function ModalMotivosEsperaTurno({
                         type="button"
                         className="min-h-[44px] rounded-2xl text-[10px] font-black uppercase theme-border theme-element theme-text-muted"
                         disabled={procesando}
-                        onClick={onClose}
+                        onClick={cerrar}
                     >
                         Cancelar
                     </button>

@@ -9,6 +9,7 @@ import {
     incidenciasOrdenadasCronologicamente,
     puedeRegistrarAlgunaIncidencia,
 } from './incidenciasResguardoUtils';
+import useToastAlCambiar from '../../../../hooks/useToastAlCambiar';
 
 export default function PanelIncidenciasResguardo({
     resguardo,
@@ -41,6 +42,8 @@ export default function PanelIncidenciasResguardo({
     const puedeRegistrar = puedeRegistrarAlgunaIncidencia(permisos, resguardo);
     const lista = incidenciasOrdenadasCronologicamente(incidencias);
     const sinIncidencias = lista.length === 0;
+
+    useToastAlCambiar(error, 'error');
 
     return (
         <div className="space-y-4">
@@ -77,10 +80,6 @@ export default function PanelIncidenciasResguardo({
                             setMostrarFormulario(false);
                         }}
                     />
-                )}
-
-                {error && !mostrarFormulario && (
-                    <p className="text-sm text-red-600 dark:text-red-300 font-semibold m-0">{error}</p>
                 )}
 
                 {conflictoVersion && (

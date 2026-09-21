@@ -14,6 +14,7 @@ import {
 } from './recepcionFisicaUtils';
 import PanelPedidoRevisionResguardo from './PanelPedidoRevisionResguardo';
 import BotonesCapturaEvidencia from './BotonesCapturaEvidencia';
+import useToastAlCambiar from '../../../../hooks/useToastAlCambiar';
 
 export default function FormularioRecepcionFisica({
     resguardo,
@@ -30,6 +31,8 @@ export default function FormularioRecepcionFisica({
     const [bultos, setBultos] = useState(() => crearBultosVacios(1, `llegada-${resguardo.id}`));
     const [evidencias, setEvidencias] = useState([]);
     const [confirmar, setConfirmar] = useState(false);
+
+    useToastAlCambiar(error, 'error');
 
     const tiposBulto = catalogos.tipos_bulto || {};
     const condiciones = catalogos.condiciones_bulto || {};
@@ -224,12 +227,6 @@ export default function FormularioRecepcionFisica({
                     </div>
                 )}
             </div>
-
-            {error && (
-                <div className={`${geliaCardClass()} p-4 border border-red-500/30`}>
-                    <p className="text-sm font-semibold text-red-600 dark:text-red-300 m-0">{error}</p>
-                </div>
-            )}
 
             {enviando && (
                 <div className={`${geliaCardClass()} p-4 space-y-2`}>

@@ -54,7 +54,12 @@ class GenerarFolioTurnoService
         string $fechaOperativa,
     ): FolioTurnoGenerado {
         return DB::transaction(function () use ($sucursalId, $servicio, $fechaOperativa): FolioTurnoGenerado {
-            $contador = $this->obtenerContadorBloqueado($sucursalId, $fechaOperativa, $servicio);
+            $contador = $this->sincronizarContadorConFoliosPersistidos(
+                $this->obtenerContadorBloqueado($sucursalId, $fechaOperativa, $servicio),
+                $sucursalId,
+                $servicio,
+                $fechaOperativa,
+            );
             $secuencia = $contador->ultimo_numero + 1;
 
             $contador->update([
@@ -104,6 +109,51 @@ class GenerarFolioTurnoService
                 ->lockForUpdate()
                 ->firstOrFail();
         }
+    }
+
+    private function sincronizarContadorConFoliosPersistidos(
+        ContadorFolioTurnoPdv $contador,
+        int $sucursalId,
+        string $servicio,
+        string $fechaOperativa,
+    ): ContadorFolioTurnoPdv {
+        $ultimaSecuenciaPersistida = $this->resolverUltimaSecuenciaPersistida(
+            $sucursalId,
+            $servicio,
+            $fechaOperativa,
+        );
+
+        if ($ultimaSecuenciaPersistida <= $contador->ultimo_numero) {
+            return $contador;
+        }
+
+        $contador->update([
+            'ultimo_numero' => $ultimaSecuenciaPersistida,
+            'version' => $contador->version + 1,
+        ]);
+
+        return $contador->fresh() ?? $contador;
+    }
+
+    private function resolverUltimaSecuenciaPersistida(
+        int $sucursalId,
+        string $servicio,
+        string $fechaOperativa,
+    ): int {
+        $prefijo = $this->config->prefijoFolio($servicio).TurnosPdvConfig::SEPARADOR_FOLIO;
+
+        return (int) TurnoPdv::query()
+            ->where('sucursal_id', $sucursalId)
+            ->whereDate('fecha_operativa', $fechaOperativa)
+            ->where('servicio', $servicio)
+            ->where('folio', 'like', $prefijo.'%')
+            ->pluck('folio')
+            ->map(static function (string $folio) use ($prefijo): int {
+                $secuencia = substr($folio, strlen($prefijo));
+
+                return is_numeric($secuencia) ? (int) $secuencia : 0;
+            })
+            ->max();
     }
 
     private function validarServicio(string $servicio): void

@@ -21,7 +21,7 @@ class TransferirTurnoPdvService
 
     public function __construct(
         private readonly ResuelveAlcancePdv $alcance,
-        private readonly ProgramarAlertasPlazosAtencionTurnoPdvService $programarAlertas,
+        private readonly AplicarPlazosAtencionNuevaTurnoPdvService $aplicarPlazos,
     ) {}
 
     /**
@@ -215,7 +215,7 @@ class TransferirTurnoPdvService
                 (int) $turnoBloqueado->sucursal_id,
             );
 
-            $this->programarAlertas->programarEsperaProximoVencer($atencionNueva, $ahora);
+            $atencionNueva = $this->aplicarPlazos->ejecutar($atencionNueva, $ahora);
 
             return [
                 'turno' => $turnoActualizado,

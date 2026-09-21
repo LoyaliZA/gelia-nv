@@ -3,6 +3,7 @@ import { Loader2, PackageCheck, Send } from 'lucide-react';
 import { geliaCardClass, THEME_BTN_SECONDARY } from '../../../../utils/geliaTheme';
 import { BTN_ACCION_MASIVA_GERENTE } from './resguardosStyles';
 import { confirmarRecepcionGerente, pasarARecepcionGerente } from './recepcionGerenteApi';
+import useToastAlCambiar from '../../../../hooks/useToastAlCambiar';
 
 export default function BarraAccionesMasivasGerente({
     resguardos = [],
@@ -13,6 +14,8 @@ export default function BarraAccionesMasivasGerente({
     const [procesando, setProcesando] = useState(false);
     const [progreso, setProgreso] = useState(null);
     const [error, setError] = useState(null);
+
+    useToastAlCambiar(error, 'error');
 
     const seleccionados = useMemo(
         () => resguardos.filter((r) => idsSeleccionados.includes(r.id)),
@@ -98,7 +101,6 @@ export default function BarraAccionesMasivasGerente({
                 )}
             </div>
 
-            {error && <p className="text-xs text-red-600 dark:text-red-300 m-0 px-4 py-2 border-t theme-border">{error}</p>}
         </div>
     );
 }

@@ -5,7 +5,10 @@ import { AlertTriangle, Loader2, MapPin, Store } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
 import GeliaPageShell from '../../Components/GeliaPageShell';
 import GeliaTituloCard from '../../Components/GeliaTituloCard';
-import { geliaCardClass, THEME_BTN_PRIMARY, THEME_SELECT } from '../../utils/geliaTheme';
+import { geliaCardClass, THEME_BTN_PRIMARY } from '../../utils/geliaTheme';
+import SelectorSucursalActivaPdv from '@/Components/PuntoVenta/SelectorSucursalActivaPdv';
+import useToastAlCambiar from '../../hooks/useToastAlCambiar';
+import { reportarMensajeOperacion } from '../../utils/geliaToast';
 
 export default function ConfigurarSucursal({
     auth,
@@ -21,9 +24,11 @@ export default function ConfigurarSucursal({
     const [guardando, setGuardando] = useState(false);
     const [error, setError] = useState(null);
 
+    useToastAlCambiar(error, 'error');
+
     const continuar = async () => {
         if (!sucursalId) {
-            setError('Selecciona una sucursal para continuar.');
+            reportarMensajeOperacion('Selecciona una sucursal para continuar.');
             return;
         }
 
@@ -101,32 +106,15 @@ export default function ConfigurarSucursal({
                                 </div>
                             </div>
 
-                            {sucursalesAsignadas.length > 1 ? (
-                                <label className="block space-y-2">
-                                    <span className="text-[10px] font-black uppercase tracking-widest theme-text-muted">
-                                        Sucursal activa
-                                    </span>
-                                    <select
-                                        value={sucursalId}
-                                        onChange={(e) => setSucursalId(e.target.value)}
-                                        disabled={guardando}
-                                        className={`${THEME_SELECT} w-full !py-3 !px-4 text-sm font-bold min-h-[48px]`}
-                                        aria-label="Seleccionar sucursal activa"
-                                    >
-                                        {sucursalesAsignadas.map(({ id, nombre }) => (
-                                            <option key={id} value={String(id)}>{nombre}</option>
-                                        ))}
-                                    </select>
-                                </label>
-                            ) : (
-                                <p className="text-sm font-bold theme-text-main m-0">
-                                    Sucursal: <span className="text-[var(--color-primario)]">{sucursalesAsignadas[0]?.nombre}</span>
-                                </p>
-                            )}
-
-                            {error && (
-                                <p className="text-xs font-semibold text-red-600 dark:text-red-300 m-0">{error}</p>
-                            )}
+                            <SelectorSucursalActivaPdv
+                                sucursalActiva={sucursalActiva}
+                                sucursalesAsignadas={sucursalesAsignadas}
+                                variante="pagina"
+                                value={sucursalId}
+                                onChange={setSucursalId}
+                                disabled={guardando}
+                                reloadOnly={null}
+                            />
 
                             <button
                                 type="button"

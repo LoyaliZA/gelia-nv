@@ -249,7 +249,7 @@ class PausaGerencialMotivosPdvTest extends TestCase
     public function test_vendedores_datos_incluye_motivos_activos(): void
     {
         $response = $this->actingAs($this->gerente)
-            ->getJson(route('punto_venta.operacion.vendedores.datos'));
+            ->getJson(route('punto_venta.operacion.datos'));
 
         $response->assertOk()
             ->assertJsonStructure([

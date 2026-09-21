@@ -21,7 +21,11 @@ class PantallaSalaPdvController extends Controller
     ): Response {
         $this->asegurarModuloHabilitado($modulo);
 
-        return $this->renderSala($sucursal, $consulta, route('sala_turnos.publica.estado', ['sucursal' => $sucursal]));
+        return $this->renderSala(
+            $sucursal,
+            $consulta,
+            route('sala_turnos.publica.estado', ['sucursal' => $sucursal], false),
+        );
     }
 
     public function showPorToken(
@@ -41,7 +45,7 @@ class PantallaSalaPdvController extends Controller
         return $this->renderSala(
             (int) $registro->sucursal_id,
             $consulta,
-            route('sala_turnos.publica.token.estado', ['token' => $token]),
+            route('sala_turnos.publica.token.estado', ['token' => $token], false),
         );
     }
 

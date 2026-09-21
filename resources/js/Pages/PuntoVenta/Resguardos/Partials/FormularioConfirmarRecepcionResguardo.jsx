@@ -3,6 +3,7 @@ import { Loader2, Package, UserRound } from 'lucide-react';
 import { geliaCardClass, THEME_BTN_PRIMARY } from '../../../../utils/geliaTheme';
 import { titularResguardo } from './resguardosUtils';
 import { ChipEvidenciasBultosEmpaque } from './ModalEvidenciasBultosEmpaque';
+import useToastAlCambiar from '../../../../hooks/useToastAlCambiar';
 
 function CampoSoloLectura({ label, value }) {
     return (
@@ -27,6 +28,8 @@ export default function FormularioConfirmarRecepcionResguardo({
         || (resguardo?.envia_a_otra_persona
             ? `Recoge tercero autorizado: ${resguardo.envia_otra_persona}`
             : 'Retira el titular del pedido');
+
+    useToastAlCambiar(error, 'error');
 
     const confirmarEnvio = async (e) => {
         e.preventDefault();
@@ -64,10 +67,6 @@ export default function FormularioConfirmarRecepcionResguardo({
                     Solo confirma que el paquete llegó a sucursal. El recepcionista revisará bultos y piezas después.
                 </p>
             </div>
-
-            {error && (
-                <p className="text-sm font-semibold text-red-600 dark:text-red-300 m-0">{error}</p>
-            )}
 
             <div className="flex flex-col sm:flex-row gap-2">
                 <button

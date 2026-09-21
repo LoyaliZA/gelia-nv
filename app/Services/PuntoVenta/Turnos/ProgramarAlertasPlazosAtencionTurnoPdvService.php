@@ -20,7 +20,8 @@ class ProgramarAlertasPlazosAtencionTurnoPdvService
         }
 
         $plazos = $this->plazos->obtener();
-        $avisoMinutos = max(1, (int) config('pdv_alertas.aviso_previo_minutos.espera_inicial', 1));
+        $avisoMinutos = max(1, (int) ($plazos['aviso_tolerancia_espera_minutos']
+            ?? config('pdv_alertas.aviso_previo_minutos.espera_inicial', 1)));
         $minutosHastaAviso = max(0, $plazos['espera_inicial_minutos'] - $avisoMinutos);
         $disparo = $referencia->copy()->addMinutes($minutosHastaAviso);
 
@@ -31,7 +32,8 @@ class ProgramarAlertasPlazosAtencionTurnoPdvService
     public function programarProrrogaProximoVencer(TurnoPdvAtencion $atencion, CarbonInterface $atencionInicioAt): void
     {
         $plazos = $this->plazos->obtener();
-        $avisoMinutos = max(1, (int) config('pdv_alertas.aviso_previo_minutos.prorroga', 2));
+        $avisoMinutos = max(1, (int) ($plazos['aviso_tolerancia_prorroga_minutos']
+            ?? config('pdv_alertas.aviso_previo_minutos.prorroga', 2)));
         $minutosHastaAviso = max(0, $plazos['prorroga_minutos'] - $avisoMinutos);
         $disparo = $atencionInicioAt->copy()->addMinutes($minutosHastaAviso);
 

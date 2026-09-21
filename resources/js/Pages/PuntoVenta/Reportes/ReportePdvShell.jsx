@@ -1,6 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import { Head, router } from '@inertiajs/react';
-import { AlertTriangle, BarChart3, Loader2 } from 'lucide-react';
+import { BarChart3, Loader2 } from 'lucide-react';
 import AppLayout from '../../../Layouts/AppLayout';
 import GeliaPageShell from '../../../Components/GeliaPageShell';
 import GeliaTituloCard from '../../../Components/GeliaTituloCard';
@@ -24,6 +24,8 @@ import {
     filtrosTurnosOperacionParaApi,
     paramsFiltrosReportePdv,
 } from './reportesPdvUtils';
+import useToastAlCambiar from '../../../hooks/useToastAlCambiar';
+import { reportarMensajeOperacion } from '../../../utils/geliaToast';
 
 export default function ReportePdvShell({
     tipo_reporte,
@@ -40,11 +42,12 @@ export default function ReportePdvShell({
 }) {
     const [filtrosLocales, setFiltrosLocales] = useState(() => estadoFiltrosDesdePayload(filtros, tipo_reporte));
     const [cargando, setCargando] = useState(false);
-    const [errorCliente, setErrorCliente] = useState(null);
+    const errorServidor = errors?.hasta || errors?.desde || errors?.franja || Object.values(errors || {})[0];
+
+    useToastAlCambiar(errorServidor, 'error');
 
     const navegar = useCallback((params) => {
         setCargando(true);
-        setErrorCliente(null);
         router.get(route(RUTAS_REPORTE_PDV[tipo_reporte]), paramsFiltrosReportePdv(params), {
             preserveState: true,
             replace: true,
@@ -73,7 +76,6 @@ export default function ReportePdvShell({
         navegar({});
     };
 
-    const errorServidor = errors?.hasta || errors?.desde || errors?.franja || Object.values(errors || {})[0];
     const sinDatos = secciones.every((sec) => {
         const ids = sec.metricas || [];
         return ids.length === 0;
@@ -147,13 +149,6 @@ export default function ReportePdvShell({
 
                     {renderFiltros()}
 
-                    {(errorServidor || errorCliente) && (
-                        <div className={geliaCardClass('p-4 flex items-start gap-3 border-red-500/30')}>
-                            <AlertTriangle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
-                            <p className="text-sm text-red-500 m-0">{errorServidor || errorCliente}</p>
-                        </div>
-                    )}
-
                     {cargando && (
                         <div className="flex items-center justify-center gap-2 py-8 theme-text-muted">
                             <Loader2 className="w-5 h-5 animate-spin" />
@@ -198,7 +193,7 @@ export default function ReportePdvShell({
                                 filtrosLocales={filtrosExportacion}
                                 puedeExportar={permisos.exportar}
                                 exportacionesRecientes={exportaciones_recientes}
-                                onError={setErrorCliente}
+                                onError={reportarMensajeOperacion}
                             />
                         </>
                     )}

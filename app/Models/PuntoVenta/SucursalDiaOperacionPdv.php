@@ -21,6 +21,8 @@ class SucursalDiaOperacionPdv extends Model
         'fecha_operativa',
         'hora_cierre',
         'acepta_altas',
+        'apertura_manual_at',
+        'apertura_manual_por_id',
         'cierre_manual_at',
         'cierre_manual_por_id',
         'cierre_automatico_invalidado',
@@ -34,6 +36,7 @@ class SucursalDiaOperacionPdv extends Model
         return [
             'fecha_operativa' => 'date',
             'acepta_altas' => 'boolean',
+            'apertura_manual_at' => 'datetime',
             'cierre_manual_at' => 'datetime',
             'cierre_automatico_invalidado' => 'boolean',
             'ampliacion_hasta_at' => 'datetime',
@@ -49,6 +52,11 @@ class SucursalDiaOperacionPdv extends Model
     public function sucursal(): BelongsTo
     {
         return $this->belongsTo(Sucursal::class);
+    }
+
+    public function aperturaManualPor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'apertura_manual_por_id');
     }
 
     public function cierreManualPor(): BelongsTo
@@ -72,6 +80,17 @@ class SucursalDiaOperacionPdv extends Model
     ): void {
         $this->acepta_altas = false;
         $this->hora_cierre = $horaCierreSnapshot;
+    }
+
+    public function aplicaAperturaManual(
+        User $actor,
+        ?\DateTimeInterface $ocurridoAt = null
+    ): void {
+        $ocurridoAt = $ocurridoAt ?? now();
+
+        $this->apertura_manual_at = $ocurridoAt;
+        $this->apertura_manual_por_id = $actor->id;
+        $this->acepta_altas = true;
     }
 
     public function aplicaCierreManual(

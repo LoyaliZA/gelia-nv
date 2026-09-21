@@ -53,6 +53,7 @@ final class PayloadTurnoPdvBroadcast
     public static function publico(TurnoPdv $turno, ?TurnoPdvAtencion $atencion = null): array
     {
         $persona = $atencion?->relationLoaded('user') ? $atencion->user : null;
+        $nombreCompleto = $persona instanceof User ? trim((string) $persona->name) : '';
 
         return [
             'turno_id' => $turno->id,
@@ -61,8 +62,9 @@ final class PayloadTurnoPdvBroadcast
             'estado' => $turno->estado,
             'prioridad_diamante' => (bool) $turno->prioridad_diamante,
             'snapshot_nombre_llamado' => $turno->snapshot_nombre_llamado,
-            'atencion_primer_nombre' => $persona instanceof User
-                ? self::primerNombre($persona->name)
+            'atencion_nombre' => $nombreCompleto !== '' ? $nombreCompleto : null,
+            'atencion_primer_nombre' => $nombreCompleto !== ''
+                ? self::primerNombre($nombreCompleto)
                 : null,
         ];
     }

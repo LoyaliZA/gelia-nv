@@ -207,6 +207,27 @@ class AltaTurnoPdvTest extends TestCase
         $this->assertSame(3, TurnoPdv::query()->where('sucursal_id', $this->sucursal->id)->count());
     }
 
+    public function test_permite_reutilizar_folio_en_nuevo_dia_operativo(): void
+    {
+        TurnoPdv::factory()->create([
+            'sucursal_id' => $this->sucursal->id,
+            'folio' => 'V-0001',
+            'fecha_operativa' => '2026-09-07',
+            'estado' => TurnoPdv::ESTADO_CERRADO,
+            'cerrado_at' => now()->subDays(14),
+        ]);
+
+        $response = $this->actingAs($this->recepcion)->postJson(
+            route('punto_venta.turnos.store'),
+            $this->payloadAlta(nombre: 'Nuevo dia', clave: 'pdv:turno:nuevo-dia-operativo')
+        );
+
+        $response->assertCreated()
+            ->assertJsonPath('turno.folio', 'V-0001');
+
+        $this->assertSame(2, TurnoPdv::query()->where('sucursal_id', $this->sucursal->id)->count());
+    }
+
     public function test_deniega_alta_sin_permiso_o_sin_sucursal_activa(): void
     {
         $sinPermiso = User::factory()->create();
@@ -375,21 +396,38 @@ class AltaTurnoPdvTest extends TestCase
         $this->assertSame(0, TurnoPdv::query()->count());
     }
 
-    public function test_rechaza_alta_con_turno_activo_en_reatencion(): void
+    public function test_alta_cierra_reatencion_previa_y_permite_nuevo_turno(): void
     {
+        Event::fake([TurnoCreado::class]);
+
         $cliente = $this->crearCliente('Cliente reatencion');
 
-        TurnoPdv::factory()->create([
+        $turnoPrevio = TurnoPdv::factory()->create([
             'sucursal_id' => $this->sucursal->id,
             'cliente_id' => $cliente->id,
             'estado' => TurnoPdv::ESTADO_EN_REATENCION,
+            'reatencion_expira_at' => now()->addHour(),
         ]);
 
-        $this->actingAs($this->recepcion)->postJson(
+        $response = $this->actingAs($this->recepcion)->postJson(
             route('punto_venta.turnos.store'),
-            $this->payloadAlta(clienteId: $cliente->id, clave: 'pdv:turno:reatencion-dup')
-        )->assertUnprocessable()
-            ->assertJsonValidationErrors(['cliente_id']);
+            $this->payloadAlta(clienteId: $cliente->id, clave: 'pdv:turno:reatencion-nueva-alta')
+        );
+
+        $response->assertCreated()
+            ->assertJsonPath('turno.cliente_id', $cliente->id)
+            ->assertJsonPath('turno.estado', TurnoPdv::ESTADO_EN_COLA);
+
+        $turnoPrevio->refresh();
+        $this->assertSame(TurnoPdv::ESTADO_CERRADO, $turnoPrevio->estado);
+        $this->assertNotNull($turnoPrevio->cerrado_at);
+        $this->assertSame(2, TurnoPdv::query()->where('cliente_id', $cliente->id)->count());
+        $this->assertTrue(
+            TurnoPdvEvento::query()
+                ->where('turno_id', $turnoPrevio->id)
+                ->where('tipo_evento', TurnoPdvEvento::TIPO_VENTANA_REATENCION_VENCIDA)
+                ->exists()
+        );
     }
 
     /**

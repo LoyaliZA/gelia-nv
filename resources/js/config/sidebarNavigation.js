@@ -271,21 +271,13 @@ export function buildSidebarNavigation({ can, showAdminMenu, manualesHubVisible 
             href: () => routeHref('punto_venta.turnos.recepcion', '/punto-venta/turnos/recepcion'),
             active: (url) => url.startsWith('/punto-venta/turnos/recepcion'),
         },
-        can('punto_venta.acceder') && can('pdv.operacion.equipo_ver') && {
+        can('punto_venta.acceder') && (can('pdv.turnos.ver') || can('pdv.operacion.equipo_ver')) && {
             type: 'link',
-            id: 'punto_venta_vendedores',
-            label: 'Vendedores',
-            icon: Users,
-            href: () => routeHref('punto_venta.operacion.vendedores.index', '/punto-venta/operacion/vendedores'),
-            active: (url) => url.startsWith('/punto-venta/operacion/vendedores'),
-        },
-        can('punto_venta.acceder') && can('pdv.turnos.ver') && {
-            type: 'link',
-            id: 'punto_venta_operacion',
-            label: 'Operación',
+            id: 'punto_venta_operacion_general',
+            label: 'Operación General',
             icon: Clock,
             href: () => routeHref('punto_venta.operacion.index', '/punto-venta/operacion'),
-            active: (url) => url.startsWith('/punto-venta/operacion') && !url.startsWith('/punto-venta/operacion/vendedores'),
+            active: (url) => url.startsWith('/punto-venta/operacion'),
         },
         can('punto_venta.acceder') && can('pdv.turnos.atender') && {
             type: 'link',

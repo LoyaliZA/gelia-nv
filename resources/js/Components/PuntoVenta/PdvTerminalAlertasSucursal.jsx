@@ -1,6 +1,6 @@
 import React from 'react';
 import { Loader2, Radio, RadioTower, ShieldAlert, WifiOff } from 'lucide-react';
-import { geliaCardClass } from '@/utils/geliaTheme';
+import { GELIA_BTN_OUTLINE, GELIA_ICON_BOX, geliaCardClass } from '@/utils/geliaTheme';
 import { reproducirTonoPdv } from '@/utils/pdvAlertasPrefs';
 import { mensajeTtsTerminalPdv } from '@/utils/pdvAlertasCatalog';
 
@@ -34,6 +34,7 @@ export default function PdvTerminalAlertasSucursal({
     silencioTerminal = false,
     estadoTts,
     onProbarVoz = null,
+    variante = 'tarjeta',
 }) {
     if (!terminal) return null;
 
@@ -81,24 +82,26 @@ export default function PdvTerminalAlertasSucursal({
 
     const Icono = icono;
 
+    const contenedorClass = variante === 'modal'
+        ? 'gelia-panel-suave p-4 space-y-3'
+        : geliaCardClass();
+
     return (
-        <section className={geliaCardClass()} data-pdv-terminal-alertas>
-            <div className="p-4 space-y-3">
+        <section className={contenedorClass} data-pdv-terminal-alertas>
+            <div className={variante === 'modal' ? 'space-y-3' : 'p-4 space-y-3'}>
                 <div className="flex items-start gap-3">
-                    <Icono className="w-5 h-5 shrink-0 mt-0.5" aria-hidden />
+                    <span className={GELIA_ICON_BOX} aria-hidden>
+                        <Icono className="w-4 h-4 theme-text-primario" />
+                    </span>
                     <div className="min-w-0">
-                        <p className="text-sm font-black uppercase tracking-widest m-0">{info.titulo}</p>
-                        <p className="text-xs opacity-70 m-0 mt-1 leading-snug">{info.detalle}</p>
+                        <p className="text-sm font-black uppercase tracking-widest theme-text-main m-0">{info.titulo}</p>
+                        <p className="text-xs theme-text-muted m-0 mt-1 leading-snug">{info.detalle}</p>
                     </div>
                 </div>
 
                 {terminalActiva && (
                     <p
-                        className="text-xs font-semibold m-0 rounded-xl border px-3 py-2"
-                        style={{
-                            borderColor: 'color-mix(in srgb, var(--color-primario) 30%, transparent)',
-                            backgroundColor: 'color-mix(in srgb, var(--color-primario) 8%, transparent)',
-                        }}
+                        className="gelia-panel-primario text-xs font-semibold m-0 px-3 py-2"
                         role="status"
                         data-pdv-terminal-activa
                     >
@@ -110,7 +113,7 @@ export default function PdvTerminalAlertasSucursal({
                     {puedeActivar && (
                         <button
                             type="button"
-                            className="px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest theme-element border theme-border min-h-[44px]"
+                            className={`${GELIA_BTN_OUTLINE} min-h-[44px]`}
                             disabled={cargando || estado === 'no_autorizada'}
                             onClick={() => activar()}
                         >
@@ -120,7 +123,7 @@ export default function PdvTerminalAlertasSucursal({
                     {puedeLiberar && (
                         <button
                             type="button"
-                            className="px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest opacity-80 min-h-[44px]"
+                            className={`${GELIA_BTN_OUTLINE} min-h-[44px] theme-text-muted`}
                             disabled={cargando}
                             onClick={() => liberar('manual')}
                         >
@@ -131,7 +134,7 @@ export default function PdvTerminalAlertasSucursal({
                         <>
                             <button
                                 type="button"
-                                className="px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest theme-element border theme-border min-h-[44px]"
+                                className={`${GELIA_BTN_OUTLINE} min-h-[44px]`}
                                 disabled={!prefsUsuario?.canales?.sonido || silencioTerminal}
                                 onClick={probarAudio}
                             >
@@ -139,7 +142,7 @@ export default function PdvTerminalAlertasSucursal({
                             </button>
                             <button
                                 type="button"
-                                className="px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest theme-element border theme-border min-h-[44px]"
+                                className={`${GELIA_BTN_OUTLINE} min-h-[44px]`}
                                 disabled={!prefsUsuario?.canales?.voz || silencioTerminal || estadoTts === 'bloqueado'}
                                 onClick={probarVoz}
                             >
@@ -150,7 +153,7 @@ export default function PdvTerminalAlertasSucursal({
                 </div>
 
                 {estadoTts === 'bloqueado' && terminalActiva && (
-                    <p className="text-xs opacity-80 m-0" role="status">
+                    <p className="text-xs theme-text-muted m-0" role="status">
                         Audio bloqueado por el navegador. Interactúa con la página; las alertas visuales continúan.
                     </p>
                 )}
@@ -163,7 +166,7 @@ export default function PdvTerminalAlertasSucursal({
                 )}
 
                 {error && (
-                    <p className="text-xs text-red-500 m-0" role="alert">{error}</p>
+                    <p className="text-xs theme-text-peligro m-0" role="alert">{error}</p>
                 )}
             </div>
         </section>

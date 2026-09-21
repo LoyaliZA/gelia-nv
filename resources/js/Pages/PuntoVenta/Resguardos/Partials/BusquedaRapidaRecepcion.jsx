@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import axios from 'axios';
-import { ScanLine, Loader2, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { ScanLine, Loader2 } from 'lucide-react';
+import useToastAlCambiar from '../../../../hooks/useToastAlCambiar';
 import ModalEscanearCodigo from '../../../../Components/Escanner/ModalEscanearCodigo';
 import { geliaCardClass, THEME_BTN_PRIMARY, THEME_BTN_SECONDARY } from '../../../../utils/geliaTheme';
 import { THEME_INPUT } from './resguardosStyles';
@@ -13,6 +14,9 @@ export default function BusquedaRapidaRecepcion({ puedeRecibir = false, onRecepc
     const [mensaje, setMensaje] = useState(null);
     const [exito, setExito] = useState(null);
     const [modalEscaneoAbierto, setModalEscaneoAbierto] = useState(false);
+
+    useToastAlCambiar(mensaje, 'info');
+    useToastAlCambiar(exito, 'success');
 
     if (!puedeRecibir) return null;
 
@@ -106,20 +110,6 @@ export default function BusquedaRapidaRecepcion({ puedeRecibir = false, onRecepc
                     {buscando ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> : 'Confirmar recepción'}
                 </button>
             </form>
-
-            {exito && (
-                <p className="text-xs font-bold text-emerald-700 dark:text-emerald-300 m-0 flex items-start gap-2">
-                    <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" aria-hidden />
-                    {exito}
-                </p>
-            )}
-
-            {mensaje && (
-                <p className="text-xs font-bold text-amber-700 dark:text-amber-300 m-0 flex items-start gap-2">
-                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" aria-hidden />
-                    {mensaje}
-                </p>
-            )}
 
             <ModalEscanearCodigo
                 abierto={modalEscaneoAbierto}

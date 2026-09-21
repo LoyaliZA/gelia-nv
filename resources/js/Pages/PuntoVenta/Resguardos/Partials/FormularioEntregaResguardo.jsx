@@ -23,6 +23,7 @@ import {
     validarPasoReceptor,
 } from './entregaResguardoUtils';
 import PanelPedidoRevisionResguardo from './PanelPedidoRevisionResguardo';
+import useToastAlCambiar from '../../../../hooks/useToastAlCambiar';
 
 export default function FormularioEntregaResguardo({
     resguardo,
@@ -47,6 +48,9 @@ export default function FormularioEntregaResguardo({
     const [erroresPaso, setErroresPaso] = useState({});
     const [confirmar, setConfirmar] = useState(false);
     const firmaRef = useRef(null);
+
+    useToastAlCambiar(error, 'error');
+
     const bultosEnCustodia = useMemo(
         () => (resguardo.bultos || []).filter((bulto) => ['en_custodia', 'recibido'].includes(bulto.estado)),
         [resguardo.bultos],
@@ -195,12 +199,6 @@ export default function FormularioEntregaResguardo({
                     cantidadBultos={bultoIds.length}
                     entregaParcial={entregaParcial}
                 />
-            )}
-
-            {error && (
-                <div className={`${geliaCardClass()} p-4 border border-red-500/30`}>
-                    <p className="text-sm font-semibold text-red-600 dark:text-red-300 m-0">{error}</p>
-                </div>
             )}
 
             {enviando && (

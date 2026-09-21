@@ -13,6 +13,7 @@ use App\Events\PuntoVenta\JornadaAbierta;
 use App\Events\PuntoVenta\JornadaAmpliada;
 use App\Events\PuntoVenta\JornadaCerrada;
 use App\Events\PuntoVenta\JornadaAperturaHorario;
+use App\Events\PuntoVenta\JornadaAperturaManual;
 use App\Events\PuntoVenta\JornadaCierreHorario;
 use App\Events\PuntoVenta\JornadaCierreManual;
 use App\Events\PuntoVenta\JornadaReaperturaManual;
@@ -56,6 +57,7 @@ final class PdvRealtimeMapper
             JornadaCerrada::class,
             JornadaCierreManual::class,
             JornadaReaperturaManual::class,
+            JornadaAperturaManual::class,
             JornadaAperturaHorario::class,
             JornadaCierreHorario::class,
             JornadaAmpliada::class,
@@ -109,6 +111,7 @@ final class PdvRealtimeMapper
             JornadaCerrada::class => $this->jornadaCerrada($event),
             JornadaCierreManual::class => $this->cierreManual($event),
             JornadaReaperturaManual::class => $this->reaperturaManual($event),
+            JornadaAperturaManual::class => $this->aperturaManual($event),
             JornadaAperturaHorario::class => $this->aperturaHorario($event),
             JornadaCierreHorario::class => $this->cierreHorario($event),
             JornadaAmpliada::class => $this->jornadaAmpliada($event),
@@ -165,19 +168,36 @@ final class PdvRealtimeMapper
      */
     private function turnoSoloSucursal(TurnoCreado $event): array
     {
-        return [[
-            'channels' => [CanalesPdv::sucursal($event->sucursalId)],
-            'envelope' => PdvRealtimeEnvelope::crear(
-                PayloadTurnoPdvBroadcast::eventIdDesdeEvento($event->evento),
-                TurnoPdvEvento::TIPO_ALTA,
-                'turnos',
-                'sucursal',
-                $event->sucursalId,
-                $event->turno->version,
-                PayloadTurnoPdvBroadcast::sucursal($event->turno),
-                $event->evento->ocurrido_at,
-            ),
-        ]];
+        $eventId = PayloadTurnoPdvBroadcast::eventIdDesdeEvento($event->evento);
+
+        return [
+            [
+                'channels' => [CanalesPdv::sucursal($event->sucursalId)],
+                'envelope' => PdvRealtimeEnvelope::crear(
+                    $eventId,
+                    TurnoPdvEvento::TIPO_ALTA,
+                    'turnos',
+                    'sucursal',
+                    $event->sucursalId,
+                    $event->turno->version,
+                    PayloadTurnoPdvBroadcast::sucursal($event->turno),
+                    $event->evento->ocurrido_at,
+                ),
+            ],
+            [
+                'channels' => [CanalesPdv::turnosPublico($event->sucursalId)],
+                'envelope' => PdvRealtimeEnvelope::crear(
+                    $eventId,
+                    TurnoPdvEvento::TIPO_ALTA,
+                    'turnos',
+                    'publico',
+                    $event->sucursalId,
+                    $event->turno->version,
+                    PayloadTurnoPdvBroadcast::publico($event->turno),
+                    $event->evento->ocurrido_at,
+                ),
+            ],
+        ];
     }
 
     /**
@@ -521,6 +541,25 @@ final class PdvRealtimeMapper
             'envelope' => PdvRealtimeEnvelope::crear(
                 PayloadOperacionPdvBroadcast::eventIdSucursalDia('jornada.reapertura_manual', $event->sucursalDia->id),
                 'jornada.reapertura_manual',
+                'operacion',
+                'sucursal',
+                $event->sucursalId,
+                $event->sucursalDia->version,
+                PayloadOperacionPdvBroadcast::sucursalDia($event->sucursalDia),
+            ),
+        ]];
+    }
+
+    /**
+     * @return list<array{channels: list<Channel>, envelope: array<string, mixed>}>
+     */
+    private function aperturaManual(JornadaAperturaManual $event): array
+    {
+        return [[
+            'channels' => [CanalesPdv::sucursal($event->sucursalId)],
+            'envelope' => PdvRealtimeEnvelope::crear(
+                PayloadOperacionPdvBroadcast::eventIdDesdeEvento($event->evento),
+                $event->evento->tipo_evento,
                 'operacion',
                 'sucursal',
                 $event->sucursalId,

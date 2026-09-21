@@ -15,4 +15,13 @@ final class EstadosActivosTurnoPdv
             TurnoPdv::ESTADO_EN_REATENCION,
         ];
     }
+
+    /** @return list<string> */
+    public static function valoresQueBloqueanAlta(): array
+    {
+        return [
+            TurnoPdv::ESTADO_EN_COLA,
+            TurnoPdv::ESTADO_ASIGNADO,
+        ];
+    }
 }

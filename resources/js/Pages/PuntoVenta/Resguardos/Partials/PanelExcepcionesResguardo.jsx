@@ -10,6 +10,7 @@ import {
     puedeConfirmarDevolucion,
     puedeCorregirResguardo,
 } from './devolucionCorreccionResguardoUtils';
+import useToastAlCambiar from '../../../../hooks/useToastAlCambiar';
 
 export default function PanelExcepcionesResguardo({
     resguardo,
@@ -34,6 +35,8 @@ export default function PanelExcepcionesResguardo({
         resguardoId: resguardo.id,
         versionInicial: resguardo.version,
     });
+
+    useToastAlCambiar(error, 'error');
 
     const puedeDevolucion = puedeConfirmarDevolucion(permisos, resguardo);
     const puedeCorreccion = puedeCorregirResguardo(permisos);
@@ -121,10 +124,6 @@ export default function PanelExcepcionesResguardo({
                         Actualizar
                     </button>
                 </div>
-            )}
-
-            {error && !formularioActivo && (
-                <p className="text-sm text-red-600 dark:text-red-300 font-semibold m-0">{error}</p>
             )}
 
             {formularioActivo === 'devolucion' && puedeDevolucion && (

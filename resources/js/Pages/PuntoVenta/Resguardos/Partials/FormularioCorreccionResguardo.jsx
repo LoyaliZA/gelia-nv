@@ -12,6 +12,7 @@ import {
     resumenImpactoCorreccion,
     validarFormularioCorreccion,
 } from './devolucionCorreccionResguardoUtils';
+import useToastAlCambiar from '../../../../hooks/useToastAlCambiar';
 
 export default function FormularioCorreccionResguardo({
     resguardo,
@@ -110,6 +111,8 @@ export default function FormularioCorreccionResguardo({
     };
 
     const errorVisible = error || Object.values(erroresLocales)[0];
+
+    useToastAlCambiar(errorVisible, 'error');
 
     if (tiposDisponibles.length === 0) {
         return null;
@@ -304,10 +307,6 @@ export default function FormularioCorreccionResguardo({
                             <p className="text-sm theme-text-main m-0 mt-1 whitespace-pre-wrap">{motivo.trim()}</p>
                         </div>
                     </section>
-                )}
-
-                {errorVisible && (
-                    <p className="text-sm text-red-600 dark:text-red-300 font-semibold m-0">{errorVisible}</p>
                 )}
 
                 {enviando && (

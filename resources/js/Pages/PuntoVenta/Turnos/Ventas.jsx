@@ -1,18 +1,20 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback } from 'react';
 import { Head } from '@inertiajs/react';
-import { AlertTriangle, Loader2, Headphones, RefreshCw, ShieldOff } from 'lucide-react';
+import { Loader2, Headphones, RefreshCw, ShieldOff } from 'lucide-react';
 import AppLayout from '../../../Layouts/AppLayout';
 import GeliaPageShell from '../../../Components/GeliaPageShell';
 import GeliaTituloCard from '../../../Components/GeliaTituloCard';
 import { geliaCardClass, THEME_BTN_PRIMARY } from '../../../utils/geliaTheme';
-import SelectorSucursalActivaPdv from '../Resguardos/Partials/SelectorSucursalActivaPdv';
+import SelectorSucursalActivaPdv from '@/Components/PuntoVenta/SelectorSucursalActivaPdv';
 import TarjetaTurnoVentas from './Partials/TarjetaTurnoVentas';
 import TarjetaMiAtencion from '../Operacion/Partials/TarjetaMiAtencion';
 import useTableroVentas from './Partials/useTableroVentas';
 import { mostrarBandejaSinTurno } from '../Operacion/Partials/operacionUtils';
-import PdvAlertProvider, { usePdvAlertContext, usePdvAlertReload } from '../../../Components/PuntoVenta/PdvAlertProvider';
-import IndicadorConexionTiempoRealPdv from '../../../Components/PuntoVenta/IndicadorConexionTiempoRealPdv';
+import PdvAlertProvider, { usePdvAlertReload } from '../../../Components/PuntoVenta/PdvAlertProvider';
+import PdvEncabezadoAlertasPdv from '../../../Components/PuntoVenta/PdvEncabezadoAlertasPdv';
 import { PDV_VISTA_REALTIME } from '../../../utils/pdvRealtimeMatrix';
+import useToastAlCambiar from '../../../hooks/useToastAlCambiar';
+import { reportarInfoOperacion, reportarMensajeOperacion } from '../../../utils/geliaToast';
 
 export default function Ventas({
     auth,
@@ -31,8 +33,6 @@ export default function Ventas({
         ahoraServidor,
     } = useTableroVentas({ tablero: tableroInicial });
 
-    const [mensajeAccion, setMensajeAccion] = useState(null);
-
     const turnoAsignado = tablero?.turno_asignado ?? null;
     const estadoVendedor = tablero?.estado_vendedor ?? null;
     const servidorAt = ahoraServidor();
@@ -42,14 +42,15 @@ export default function Ventas({
         pausa_motivo: tablero?.pausa_motivo,
     };
 
+    useToastAlCambiar(error, 'error');
+
     const aplicarRespuestaMutacion = useCallback(() => {
         refrescar({ silencioso: true });
     }, [refrescar]);
 
     const manejarConflicto = useCallback(async () => {
-        setMensajeAccion('Otro terminal modificó el turno. Actualizando atención…');
+        reportarInfoOperacion('Otro terminal modificó el turno. Actualizando atención…');
         await refrescar({ silencioso: true });
-        setMensajeAccion(null);
     }, [refrescar]);
 
     if (!puedeAtender) {
@@ -82,10 +83,8 @@ export default function Ventas({
                     estadoVendedor={estadoVendedor}
                     estadoAtencion={estadoAtencion}
                     servidorAt={servidorAt}
-                    mensajeAccion={mensajeAccion}
                     aplicarRespuestaMutacion={aplicarRespuestaMutacion}
                     manejarConflicto={manejarConflicto}
-                    onError={setMensajeAccion}
                     permisos={permisos}
                     catalogos={catalogos}
                     sucursalActiva={sucursalActiva}
@@ -106,35 +105,29 @@ function VentasContenido({
     estadoVendedor,
     estadoAtencion,
     servidorAt,
-    mensajeAccion,
     aplicarRespuestaMutacion,
     manejarConflicto,
-    onError,
     permisos,
     catalogos,
     sucursalActiva,
     sucursalesAsignadas,
 }) {
-    const { estadoConexion, ultimaActualizacionConfirmada } = usePdvAlertContext() ?? {};
-
     return (
                 <GeliaPageShell className="max-w-[720px] space-y-5" data-ventas-tablero-root>
                 <GeliaTituloCard
                     title="Mi atención"
                     description="Turno asignado y atención en curso"
+                    aside={<PdvEncabezadoAlertasPdv />}
                     icon={Headphones}
-                />
-
-                <SelectorSucursalActivaPdv
-                    sucursalActiva={sucursalActiva}
-                    sucursalesAsignadas={sucursalesAsignadas}
-                />
-
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                    <IndicadorConexionTiempoRealPdv
-                        estadoConexion={estadoConexion}
-                        ultimaActualizacion={ultimaActualizacionConfirmada || tablero?.servidor_at || servidorAt}
+                >
+                    <SelectorSucursalActivaPdv
+                        sucursalActiva={sucursalActiva}
+                        sucursalesAsignadas={sucursalesAsignadas}
+                        variante="compacto"
                     />
+                </GeliaTituloCard>
+
+                <div className="flex flex-wrap items-center justify-end gap-3">
                     <button
                         type="button"
                         className={`${THEME_BTN_PRIMARY} min-h-[44px] px-4 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest inline-flex items-center gap-2`}
@@ -145,19 +138,6 @@ function VentasContenido({
                         Actualizar
                     </button>
                 </div>
-
-                {error && (
-                    <div className={`${geliaCardClass()} p-4 flex items-start gap-3`}>
-                        <AlertTriangle className="w-5 h-5 text-red-500 shrink-0" aria-hidden />
-                        <p className="text-sm font-semibold text-red-600 dark:text-red-400 m-0">{error}</p>
-                    </div>
-                )}
-
-                {mensajeAccion && (
-                    <div className={`${geliaCardClass()} p-4`}>
-                        <p className="text-sm font-semibold theme-text-muted m-0">{mensajeAccion}</p>
-                    </div>
-                )}
 
                 {tablero && (
                     <TarjetaMiAtencion
@@ -190,7 +170,7 @@ function VentasContenido({
                         personasTransferencia={tablero?.personas_transferencia ?? []}
                         onActualizado={aplicarRespuestaMutacion}
                         onConflicto={manejarConflicto}
-                        onError={onError}
+                        onError={reportarMensajeOperacion}
                     />
                 )}
                 </GeliaPageShell>

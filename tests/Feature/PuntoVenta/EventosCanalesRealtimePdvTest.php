@@ -130,11 +130,13 @@ class EventosCanalesRealtimePdvTest extends TestCase
         $this->assertSame('Ana', $publico['payload']['datos']['atencion_primer_nombre']);
     }
 
-    public function test_turno_alta_solo_emite_canal_sucursal(): void
+    public function test_turno_alta_emite_canal_sucursal_y_publico(): void
     {
         $turno = TurnoPdv::factory()->create([
             'sucursal_id' => $this->sucursal->id,
             'estado' => TurnoPdv::ESTADO_EN_COLA,
+            'folio' => 'V-0101',
+            'snapshot_nombre_llamado' => 'Cliente Cola',
             'version' => 1,
         ]);
         $evento = TurnoPdvEvento::query()->create([
@@ -146,12 +148,18 @@ class EventosCanalesRealtimePdvTest extends TestCase
 
         TurnoCreado::dispatch($turno, $evento, (int) $this->sucursal->id);
 
-        $this->assertCount(1, $this->capturador->emisiones);
+        $this->assertCount(2, $this->capturador->emisiones);
         $this->assertSame(
             CanalesPdv::sucursal((int) $this->sucursal->id)->name,
             $this->capturador->emisiones[0]['channels'][0],
         );
         $this->assertSame(TurnoPdvEvento::TIPO_ALTA, $this->capturador->emisiones[0]['payload']['tipo']);
+
+        $publico = $this->emisionPorCanal(CanalesPdv::turnosPublico((int) $this->sucursal->id)->name);
+        $this->assertNotNull($publico);
+        $this->assertSame('publico', $publico['payload']['audiencia']);
+        $this->assertSame('V-0101', $publico['payload']['datos']['folio']);
+        $this->assertSame('Cliente Cola', $publico['payload']['datos']['snapshot_nombre_llamado']);
     }
 
     public function test_ventana_reatencion_vencida_emite_solo_canal_sucursal_con_payload_minimo(): void

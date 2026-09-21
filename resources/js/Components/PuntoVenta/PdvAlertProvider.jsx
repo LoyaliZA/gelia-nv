@@ -1,19 +1,16 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { usePage } from '@inertiajs/react';
-import { Volume2, VolumeX, WifiOff } from 'lucide-react';
+import { Volume2, VolumeX } from 'lucide-react';
 import usePdvRealtime from '@/hooks/usePdvRealtime';
 import usePdvAlertQueue from '@/hooks/usePdvAlertQueue';
 import useSpeechAnnouncements from '@/hooks/useSpeechAnnouncements';
 import usePdvAlertasPrefs from '@/hooks/usePdvAlertasPrefs';
 import usePdvTerminalAlertas from '@/hooks/usePdvTerminalAlertas';
-import PdvPreferenciasAlertas from '@/Components/PuntoVenta/PdvPreferenciasAlertas';
-import PdvTerminalAlertasSucursal from '@/Components/PuntoVenta/PdvTerminalAlertasSucursal';
 import WebPushService from '@/Services/WebPushService';
 import NotificationBrowserService from '@/Services/NotificationBrowserService';
 import {
     conexionDegradadaPdv,
     mensajeAlertaPdv,
-    mensajeConexionDegradadaPdv,
     PDV_ESTADO_CONEXION,
 } from '@/utils/pdvAlertQueueUtils';
 import { debeRefrescarVistaPdv, claveRecargaVistaPdv } from '@/utils/pdvRealtimeMatrix';
@@ -25,12 +22,10 @@ import {
     debeAnunciarVozPdv,
     debeReproducirSonidoPdv,
     debeReproducirTonoEventoPdv,
-    mensajeFallbackWebPushPdv,
-    PDV_PUSH_ESTADO,
     reproducirTonoPdv,
 } from '@/utils/pdvAlertasPrefs';
 import { mensajeTtsTerminalPdv } from '@/utils/pdvAlertasCatalog';
-import { mensajeTtsPersonalPdv, PDV_TTS_ESTADO } from '@/utils/pdvSpeechUtils';
+import { mensajeTtsPersonalPdv } from '@/utils/pdvSpeechUtils';
 import { resolverModoAudioPdv } from '@/utils/pdvAlertasAudiencia';
 
 const PdvAlertContext = createContext(null);
@@ -86,99 +81,6 @@ export function usePdvAlertReload({
     }, [ctx, vista, userId, dominio, refrescar, filtro, habilitado, resincronizar]);
 }
 
-function PdvConexionDegradadaBanner({ estadoConexion }) {
-    if (!conexionDegradadaPdv(estadoConexion)) return null;
-
-    const esReconectando = estadoConexion === PDV_ESTADO_CONEXION.conectando;
-
-    return (
-        <div
-            className="rounded-2xl border px-4 py-3 flex items-start gap-3 text-sm"
-            style={{
-                borderColor: 'color-mix(in srgb, var(--color-aviso) 35%, transparent)',
-                backgroundColor: 'color-mix(in srgb, var(--color-aviso) 12%, transparent)',
-                color: 'var(--color-texto)',
-            }}
-            role="status"
-            aria-live="polite"
-            data-pdv-conexion-degradada
-        >
-            <WifiOff className={`w-4 h-4 mt-0.5 shrink-0 ${esReconectando ? 'animate-pulse' : ''}`} aria-hidden />
-            <p className="leading-snug m-0">{mensajeConexionDegradadaPdv(estadoConexion)}</p>
-        </div>
-    );
-}
-
-function PdvTtsEstadoBanner({ estadoTts, silenciado, vozHabilitada }) {
-    if (!vozHabilitada || silenciado) return null;
-
-    if (estadoTts === PDV_TTS_ESTADO.bloqueado) {
-        return (
-            <div
-                className="rounded-2xl border px-4 py-2 text-xs"
-                style={{
-                    borderColor: 'color-mix(in srgb, var(--color-aviso) 30%, transparent)',
-                    backgroundColor: 'color-mix(in srgb, var(--color-aviso) 8%, transparent)',
-                    color: 'var(--color-texto)',
-                }}
-                role="status"
-                aria-live="polite"
-                data-pdv-tts-bloqueado
-            >
-                Audio no disponible. Las alertas visuales continúan activas.
-            </div>
-        );
-    }
-
-    if (estadoTts === PDV_TTS_ESTADO.no_soportado) {
-        return (
-            <div
-                className="rounded-2xl border px-4 py-2 text-xs opacity-80"
-                style={{
-                    borderColor: 'color-mix(in srgb, var(--color-texto) 12%, transparent)',
-                    color: 'var(--color-texto)',
-                }}
-                role="status"
-                data-pdv-tts-no-soportado
-            >
-                Este navegador no reproduce anuncios por voz. Las alertas visuales continúan activas.
-            </div>
-        );
-    }
-
-    return null;
-}
-
-function PdvPushFallbackBanner({ estadoPush, mensaje, onActivar, activando }) {
-    if (!mensaje) return null;
-
-    return (
-        <div
-            className="rounded-2xl border px-4 py-3 text-xs flex items-start gap-3"
-            style={{
-                borderColor: 'color-mix(in srgb, var(--color-aviso) 30%, transparent)',
-                backgroundColor: 'color-mix(in srgb, var(--color-aviso) 8%, transparent)',
-                color: 'var(--color-texto)',
-            }}
-            role="status"
-            aria-live="polite"
-            data-pdv-push-fallback-banner
-        >
-            <p className="leading-snug m-0 flex-1">{mensaje}</p>
-            {estadoPush === PDV_PUSH_ESTADO.pendiente && typeof onActivar === 'function' && (
-                <button
-                    type="button"
-                    className="shrink-0 text-[10px] font-black uppercase tracking-widest underline min-h-[44px]"
-                    disabled={activando}
-                    onClick={onActivar}
-                >
-                    {activando ? '…' : 'Activar'}
-                </button>
-            )}
-        </div>
-    );
-}
-
 function PdvTtsSilencioControl({ silenciado, alternarSilencio, ttsDisponible }) {
     if (!ttsDisponible) return null;
 
@@ -202,48 +104,11 @@ function PdvTtsSilencioControl({ silenciado, alternarSilencio, ttsDisponible }) 
     );
 }
 
-function PdvAlertQueueVisual({ cola, onDescartar }) {
-    if (!cola.length) return null;
-
-    return (
-        <div
-            className="fixed bottom-4 right-4 z-40 flex flex-col gap-2 max-w-sm w-[min(100vw-2rem,20rem)] pointer-events-none"
-            aria-live="polite"
-            aria-label="Actualizaciones recientes de punto de venta"
-            data-pdv-alerta-cola
-        >
-            {cola.map((alerta) => (
-                <div
-                    key={alerta.event_id}
-                    className="pointer-events-auto rounded-2xl border shadow-lg px-4 py-3 text-sm flex items-start gap-3 theme-surface"
-                    style={{ borderColor: 'color-mix(in srgb, var(--color-primario) 25%, transparent)' }}
-                >
-                    <div className="min-w-0 flex-1">
-                        <p className="font-semibold text-[11px] uppercase tracking-wide opacity-70">
-                            Tiempo real
-                        </p>
-                        <p className="mt-0.5 leading-snug">{alerta.mensaje}</p>
-                    </div>
-                    <button
-                        type="button"
-                        className="shrink-0 text-[10px] font-bold uppercase tracking-wider opacity-60 hover:opacity-100 min-h-[44px] px-2"
-                        onClick={() => onDescartar(alerta.event_id)}
-                        aria-label="Descartar alerta"
-                    >
-                        Cerrar
-                    </button>
-                </div>
-            ))}
-        </div>
-    );
-}
-
 export default function PdvAlertProvider({
     children,
     sucursalId = null,
     userId = null,
     habilitado = true,
-    mostrarCola = true,
     mostrarPreferencias = true,
 }) {
     const { auth, tonos_alertas: tonosAlertas = [], capacidades = {} } = usePage().props;
@@ -258,7 +123,7 @@ export default function PdvAlertProvider({
     });
     const [activandoPush, setActivandoPush] = useState(false);
 
-    const { cola, encolar, descartar, reiniciar } = usePdvAlertQueue();
+    const { encolar, reiniciar } = usePdvAlertQueue();
     const vozHabilitada = prefs.canalesEfectivos.voz;
     const audioAnunciadosRef = useRef(new Set());
 
@@ -285,6 +150,7 @@ export default function PdvAlertProvider({
         estadoTts,
         reiniciar: reiniciarTts,
         ttsDisponible,
+        desbloquearAudio,
     } = useSpeechAnnouncements({
         habilitado: habilitado && vozHabilitada,
         silenciado: prefs.silencioTerminal,
@@ -336,12 +202,11 @@ export default function PdvAlertProvider({
     }, [marcarActualizacionConfirmada]);
 
     const programarRecargasPorEvento = useCallback((envelope) => {
-        if (!eventIdsRecargaRef.current.marcar(envelope.event_id)) {
-            return;
-        }
-
         recargasRef.current.forEach(({ matcher, handler, clave }) => {
             if (!matcher(envelope)) return;
+
+            const idDedupe = `${envelope.event_id}:${clave || 'legacy'}`;
+            if (!eventIdsRecargaRef.current.marcar(idDedupe)) return;
 
             coordinadorRecargaRef.current.programar(clave, async () => {
                 try {
@@ -473,82 +338,60 @@ export default function PdvAlertProvider({
         }
     }, []);
 
-    const mensajePush = mensajeFallbackWebPushPdv(prefs.estadoPush);
+    const probarVozTerminal = useCallback(() => {
+        const demo = mensajeTtsTerminalPdv({
+            tipo: 'turno.alta',
+            datos: { folio: 'V-0001' },
+        });
+        if (demo) {
+            encolarTts({
+                event_id: `demo-terminal-${Date.now()}`,
+                tipo: 'turno.alta',
+                datos: { folio: 'V-0001' },
+            });
+        }
+    }, [encolarTts]);
 
     const valor = useMemo(() => ({
         estadoConexion,
         ultimaActualizacionConfirmada,
-        cola,
         registrarRecarga,
         registrarResincronizacion,
-        descartarAlerta: descartar,
+        resincronizar: resincronizarTodos,
         estadoTts,
         silenciado: prefs.silencioTerminal,
         alternarSilencioTts: prefs.alternarSilencioTerminal,
+        desbloquearAudio,
         ttsDisponible,
         prefs,
         estadoPush: prefs.estadoPush,
+        activarPush,
+        activandoPush,
+        terminal,
+        capacidades,
+        tonosAlertas,
+        probarVozTerminal,
     }), [
         estadoConexion,
         ultimaActualizacionConfirmada,
-        cola,
         registrarRecarga,
         registrarResincronizacion,
-        descartar,
+        resincronizarTodos,
         estadoTts,
         prefs,
         ttsDisponible,
+        desbloquearAudio,
+        activarPush,
+        activandoPush,
+        terminal,
+        capacidades,
+        tonosAlertas,
+        probarVozTerminal,
     ]);
 
     return (
         <PdvAlertContext.Provider value={valor}>
-            <div className="space-y-4">
-                <PdvConexionDegradadaBanner estadoConexion={estadoConexion} />
-                <PdvPushFallbackBanner
-                    estadoPush={prefs.estadoPush}
-                    mensaje={mensajePush}
-                    onActivar={activarPush}
-                    activando={activandoPush}
-                />
-                <PdvTtsEstadoBanner
-                    estadoTts={estadoTts}
-                    silenciado={prefs.silencioTerminal}
-                    vozHabilitada={prefs.prefsUsuario.canales.voz}
-                />
-                {mostrarPreferencias && (
-                    <>
-                        {capacidades?.alertas_sucursal && (
-                            <PdvTerminalAlertasSucursal
-                            terminal={terminal}
-                            tonosAlertas={tonosAlertas}
-                            prefsUsuario={prefs.prefsUsuario}
-                            silencioTerminal={prefs.silencioTerminal}
-                            estadoTts={estadoTts}
-                            onProbarVoz={() => {
-                                const demo = mensajeTtsTerminalPdv({
-                                    tipo: 'turno.alta',
-                                    datos: { folio: 'V-0001' },
-                                });
-                                if (demo) {
-                                    encolarTts({
-                                        event_id: `demo-terminal-${Date.now()}`,
-                                        tipo: 'turno.alta',
-                                        datos: { folio: 'V-0001' },
-                                    });
-                                }
-                            }}
-                            />
-                        )}
-                        <PdvPreferenciasAlertas
-                        prefs={prefs}
-                        tonosAlertas={tonosAlertas}
-                        estadoConexion={estadoConexion}
-                        estadoTts={estadoTts}
-                        onActivarPush={activarPush}
-                        activandoPush={activandoPush}
-                        />
-                    </>
-                )}
+            <div className="space-y-4" data-pdv-alert-provider data-mostrar-preferencias={mostrarPreferencias}>
                 {children}
             </div>
             <PdvTtsSilencioControl
@@ -556,9 +399,6 @@ export default function PdvAlertProvider({
                 alternarSilencio={prefs.alternarSilencioTerminal}
                 ttsDisponible={prefs.prefsUsuario.canales.sonido || prefs.prefsUsuario.canales.voz}
             />
-            {mostrarCola && (
-                <PdvAlertQueueVisual cola={cola} onDescartar={descartar} />
-            )}
         </PdvAlertContext.Provider>
     );
 }

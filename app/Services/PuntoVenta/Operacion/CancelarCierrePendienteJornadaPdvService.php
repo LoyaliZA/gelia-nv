@@ -49,6 +49,7 @@ class CancelarCierrePendienteJornadaPdvService
                 ->update([
                     'estado' => EstadoJornadaPdv::Abierta,
                     'cierre_at' => null,
+                    'jornada_activa_marcador' => $this->marcadorActivoParaEstado(EstadoJornadaPdv::Abierta),
                     'version' => $versionAnterior + 1,
                 ]);
 

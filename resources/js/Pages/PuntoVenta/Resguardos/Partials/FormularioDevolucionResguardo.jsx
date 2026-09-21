@@ -9,6 +9,7 @@ import {
     resumenImpactoDevolucion,
     validarFormularioDevolucion,
 } from './devolucionCorreccionResguardoUtils';
+import useToastAlCambiar from '../../../../hooks/useToastAlCambiar';
 
 export default function FormularioDevolucionResguardo({
     resguardo,
@@ -81,6 +82,8 @@ export default function FormularioDevolucionResguardo({
     };
 
     const errorVisible = error || Object.values(erroresLocales)[0];
+
+    useToastAlCambiar(errorVisible, 'error');
 
     return (
         <>
@@ -176,10 +179,6 @@ export default function FormularioDevolucionResguardo({
                             </p>
                         )}
                     </section>
-                )}
-
-                {errorVisible && (
-                    <p className="text-sm text-red-600 dark:text-red-300 font-semibold m-0">{errorVisible}</p>
                 )}
 
                 {enviando && (

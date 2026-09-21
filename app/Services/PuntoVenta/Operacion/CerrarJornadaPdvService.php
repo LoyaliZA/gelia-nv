@@ -115,6 +115,7 @@ class CerrarJornadaPdvService
                 ->update([
                     'estado' => $estadoDestino,
                     'cierre_at' => $ahora,
+                    'jornada_activa_marcador' => $this->marcadorActivoParaEstado($estadoDestino),
                     'version' => $versionAnterior + 1,
                 ]);
 
@@ -147,6 +148,6 @@ class CerrarJornadaPdvService
             ->where('jornada_id', $jornada->id)
             ->whereNull('fin_at')
             ->where('tipo', '!=', TipoIntervaloOperativoPdv::EnAtencion)
-            ->update(['fin_at' => $ahora]);
+            ->update(['fin_at' => $ahora, 'intervalo_abierto_marcador' => null]);
     }
 }

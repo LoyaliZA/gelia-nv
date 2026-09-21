@@ -5,6 +5,17 @@ export const PDV_SALA_TIPOS_LLAMADO = new Set([
     'turno.transferido',
 ]);
 
+/** Eventos que cambian cola, actual o historial y requieren refetch del estado. */
+export const PDV_SALA_TIPOS_REFETCH = new Set([
+    'turno.alta',
+    'turno.asignado',
+    'turno.baja_cola',
+    'atencion.cerrada',
+    'turno.transferido',
+    'turno.reatencion',
+    'turno.ventana_reatencion_vencida',
+]);
+
 /** Campos que no deben aparecer en payload/render de sala pública. */
 export const PDV_SALA_CAMPOS_PROHIBIDOS = [
     'prioridad_vip',
@@ -32,6 +43,9 @@ export function llamadoDesdeDatosPublicos(datos = {}, extra = {}) {
         estado: datos.estado ?? null,
         prioridad_diamante: Boolean(datos.prioridad_diamante),
         snapshot_nombre_llamado: String(datos.snapshot_nombre_llamado || '').trim() || null,
+        atencion_nombre: datos.atencion_nombre
+            ? String(datos.atencion_nombre).trim()
+            : null,
         atencion_primer_nombre: datos.atencion_primer_nombre
             ? String(datos.atencion_primer_nombre).trim()
             : null,
@@ -57,6 +71,38 @@ export function esEventoLlamadoSala(envelope) {
 
 export function esEventoQuitarLlamadoSala(envelope) {
     return String(envelope?.tipo || '') === 'atencion.cerrada';
+}
+
+export function esEventoRefetchSala(envelope) {
+    return PDV_SALA_TIPOS_REFETCH.has(String(envelope?.tipo || ''));
+}
+
+export function estadoSalaVacio() {
+    return {
+        sucursal: null,
+        tema: { color_primario: null },
+        llamados: [],
+        turno_actual: null,
+        proximos: [],
+        anteriores: [],
+        publicidad: [],
+        servidor_at: null,
+    };
+}
+
+export function normalizarEstadoSala(payload = {}) {
+    const llamados = fusionarEstadoSala(payload.llamados ?? [], []);
+
+    return {
+        sucursal: payload.sucursal ?? null,
+        tema: payload.tema ?? { color_primario: null },
+        llamados,
+        turno_actual: payload.turno_actual ?? llamadoActualSala(llamados),
+        proximos: Array.isArray(payload.proximos) ? payload.proximos : [],
+        anteriores: Array.isArray(payload.anteriores) ? payload.anteriores : [],
+        publicidad: Array.isArray(payload.publicidad) ? payload.publicidad : [],
+        servidor_at: payload.servidor_at ?? null,
+    };
 }
 
 export function aplicarEventoSala(llamados, envelope) {

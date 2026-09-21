@@ -5,6 +5,7 @@ import FormularioReponerVencidoResguardo from './FormularioReponerVencidoResguar
 import useReponerVencidoResguardo from './useReponerVencidoResguardo';
 import { BTN_SECONDARY } from './resguardosStyles';
 import { puedeReponerVencido } from './reponerVencidoResguardoUtils';
+import useToastAlCambiar from '../../../../hooks/useToastAlCambiar';
 
 export default function PanelReponerVencidoResguardo({ resguardo, permisos = {} }) {
     const [formularioActivo, setFormularioActivo] = useState(false);
@@ -21,6 +22,8 @@ export default function PanelReponerVencidoResguardo({ resguardo, permisos = {} 
         resguardoId: resguardo.id,
         versionInicial: resguardo.version,
     });
+
+    useToastAlCambiar(error, 'error');
 
     if (!puedeReponerVencido(permisos, resguardo)) {
         return null;
@@ -83,10 +86,6 @@ export default function PanelReponerVencidoResguardo({ resguardo, permisos = {} 
                         Actualizar
                     </button>
                 </div>
-            )}
-
-            {error && !formularioActivo && !ultimoEvento && (
-                <p className="text-sm text-red-600 dark:text-red-300 font-semibold m-0">{error}</p>
             )}
 
             {formularioActivo && (

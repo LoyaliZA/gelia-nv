@@ -73,6 +73,9 @@ class AbrirJornadaPdvService
                 ]);
             }
 
+            $this->limpiarMarcadorActivoObsoleto($userId, $sucursalId);
+            $this->limpiarIntervaloAbiertoObsoleto($userId, $sucursalId);
+
             try {
                 $jornada = JornadaPdv::query()->create([
                     'user_id' => $userId,
@@ -82,6 +85,9 @@ class AbrirJornadaPdvService
                     'version' => 1,
                 ]);
             } catch (UniqueConstraintViolationException) {
+                $this->limpiarMarcadorActivoObsoleto($userId, $sucursalId);
+                $this->limpiarIntervaloAbiertoObsoleto($userId, $sucursalId);
+
                 $recuperada = $this->jornadaActivaAbierta($userId, $sucursalId);
                 if ($recuperada instanceof JornadaPdv) {
                     $intervalo = IntervaloOperativoPdv::query()

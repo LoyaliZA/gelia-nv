@@ -248,10 +248,6 @@ export default function FormularioIncidenciaResguardo({
                     </div>
                 )}
 
-                {error && (
-                    <p className="text-sm text-red-600 dark:text-red-300 font-semibold m-0">{error}</p>
-                )}
-
                 {enviando && progreso > 0 && (
                     <p className="text-[10px] theme-text-muted font-bold m-0">Subiendo evidencia… {progreso}%</p>
                 )}

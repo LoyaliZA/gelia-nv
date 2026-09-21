@@ -5,11 +5,12 @@ import {
     guardarSilencioTtsPdv,
     leerSilencioTtsPdv,
     PDV_TTS_ESTADO,
+    resolverEstadoTtsPdv,
 } from '@/utils/pdvSpeechUtils';
 
 /**
  * Cola TTS serializada para eventos PDV aprobados.
- * El audio no confirma estados; solo anuncia. Fallback visual permanece en PdvAlertProvider.
+ * El audio no confirma estados; solo anuncia. Fallback visual vía toasts globales en AppLayout.
  */
 export default function useSpeechAnnouncements({
     habilitado = true,
@@ -61,11 +62,11 @@ export default function useSpeechAnnouncements({
         });
         colaRef.current = cola;
 
-        if (!adaptador.soportado()) {
-            setEstadoTts(PDV_TTS_ESTADO.no_soportado);
-        } else if (silenciadoRef.current) {
-            setEstadoTts(PDV_TTS_ESTADO.silenciado);
-        }
+        setEstadoTts(resolverEstadoTtsPdv({
+            soportado: adaptador.soportado(),
+            silenciado: silenciadoRef.current,
+            audioDesbloqueado: audioDesbloqueadoRef.current,
+        }));
 
         return () => {
             cola.destruir();
@@ -102,15 +103,11 @@ export default function useSpeechAnnouncements({
                 guardarSilencioTtsPdv(siguiente);
             }
             colaRef.current?.alternarSilencio(siguiente);
-            if (siguiente) {
-                setEstadoTts(PDV_TTS_ESTADO.silenciado);
-            } else if (!adaptadorRef.current?.soportado?.()) {
-                setEstadoTts(PDV_TTS_ESTADO.no_soportado);
-            } else if (!audioDesbloqueadoRef.current) {
-                setEstadoTts(PDV_TTS_ESTADO.bloqueado);
-            } else {
-                setEstadoTts(PDV_TTS_ESTADO.listo);
-            }
+            setEstadoTts(resolverEstadoTtsPdv({
+                soportado: Boolean(adaptadorRef.current?.soportado?.()),
+                silenciado: siguiente,
+                audioDesbloqueado: audioDesbloqueadoRef.current,
+            }));
             return siguiente;
         };
 
@@ -126,12 +123,19 @@ export default function useSpeechAnnouncements({
         colaRef.current?.reiniciar();
     }, []);
 
+    const desbloquearAudio = useCallback(() => {
+        if (audioDesbloqueadoRef.current) return;
+        setAudioDesbloqueado(true);
+        colaRef.current?.marcarAudioDesbloqueado();
+    }, []);
+
     return {
         encolar,
         silenciado,
         alternarSilencio,
         estadoTts,
         audioDesbloqueado,
+        desbloquearAudio,
         reiniciar,
         ttsDisponible: estadoTts !== PDV_TTS_ESTADO.no_soportado,
     };

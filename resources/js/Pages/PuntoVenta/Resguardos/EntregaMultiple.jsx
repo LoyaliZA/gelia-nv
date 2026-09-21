@@ -9,6 +9,7 @@ import { BTN_SECONDARY } from './Partials/resguardosStyles';
 import { PasoEvidencia, PasoReceptor } from './Partials/FormularioEntregaResguardo';
 import useEntregaMultiple from './Partials/useEntregaMultiple';
 import { validarPasoBultos, validarPasoEvidencia, validarPasoReceptor } from './Partials/entregaResguardoUtils';
+import useToastAlCambiar from '../../../hooks/useToastAlCambiar';
 
 function borradorInicial(resguardo) {
     const bultos = (resguardo.bultos || []).filter((bulto) => bulto.estado === 'recibido');
@@ -41,6 +42,8 @@ export default function EntregaMultiple({
         resguardos,
         metodoValidacion: catalogos.metodo_validacion || 'firma',
     });
+
+    useToastAlCambiar(error, 'error');
 
     const [indice, setIndice] = useState(0);
     const [fase, setFase] = useState('pedido');
@@ -238,12 +241,6 @@ export default function EntregaMultiple({
                                 </div>
                             );
                         })}
-                    </div>
-                )}
-
-                {error && (
-                    <div className={`${geliaCardClass()} p-4 border border-red-500/30`}>
-                        <p className="text-sm font-semibold text-red-600 dark:text-red-300 m-0">{error}</p>
                     </div>
                 )}
 

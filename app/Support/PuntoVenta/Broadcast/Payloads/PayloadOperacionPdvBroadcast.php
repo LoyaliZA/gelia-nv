@@ -67,6 +67,7 @@ final class PayloadOperacionPdvBroadcast
             'fecha_operativa' => $dia->fecha_operativa?->toDateString(),
             'hora_cierre' => $dia->hora_cierre,
             'acepta_altas' => (bool) $dia->acepta_altas,
+            'apertura_manual_at' => $dia->apertura_manual_at?->toIso8601String(),
             'ampliacion_hasta_at' => $dia->ampliacion_hasta_at?->toIso8601String(),
         ];
     }

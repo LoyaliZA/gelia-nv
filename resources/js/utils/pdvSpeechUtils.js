@@ -29,6 +29,38 @@ export const PDV_TTS_ESTADO = {
     no_soportado: 'no_soportado',
 };
 
+export function resolverEstadoTtsPdv({ soportado, silenciado, audioDesbloqueado }) {
+    if (!soportado) return PDV_TTS_ESTADO.no_soportado;
+    if (silenciado) return PDV_TTS_ESTADO.silenciado;
+    if (audioDesbloqueado) return PDV_TTS_ESTADO.listo;
+    return PDV_TTS_ESTADO.bloqueado;
+}
+
+export function etiquetaAudioIndicadorPdv(estadoTts, { silenciado = false, canalesActivos = true } = {}) {
+    if (!canalesActivos) {
+        return { titulo: 'Audio desactivado', etiqueta: 'Audio desactivado en preferencias' };
+    }
+    if (silenciado) {
+        return { titulo: 'Silenciado en este equipo', etiqueta: 'Terminal silenciado' };
+    }
+    if (estadoTts === PDV_TTS_ESTADO.listo) {
+        return { titulo: 'Audio activo', etiqueta: 'Audio listo' };
+    }
+    if (estadoTts === PDV_TTS_ESTADO.bloqueado) {
+        return {
+            titulo: 'Toca para activar audio',
+            etiqueta: 'Audio bloqueado por el navegador. Toca para activar.',
+        };
+    }
+    if (estadoTts === PDV_TTS_ESTADO.no_soportado) {
+        return {
+            titulo: 'Audio no disponible',
+            etiqueta: 'Este navegador no reproduce anuncios por voz',
+        };
+    }
+    return { titulo: 'Audio', etiqueta: 'Estado de audio' };
+}
+
 export function debeAnunciarTtsPersonalPdv(envelope) {
     const tipo = String(envelope?.tipo || '');
     if (!PDV_TTS_TIPOS.has(tipo)) return false;

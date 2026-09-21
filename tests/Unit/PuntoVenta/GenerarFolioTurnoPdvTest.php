@@ -128,6 +128,36 @@ class GenerarFolioTurnoPdvTest extends TestCase
         $this->assertSame(1, ContadorFolioTurnoPdv::query()->value('ultimo_numero'));
     }
 
+    public function test_recupera_contador_desincronizado_con_folios_persistidos(): void
+    {
+        $sucursal = Sucursal::factory()->create();
+        $fecha = now()->toDateString();
+
+        ContadorFolioTurnoPdv::query()->create([
+            'sucursal_id' => $sucursal->id,
+            'fecha_operativa' => $fecha,
+            'servicio' => TurnoPdv::SERVICIO_VENTAS,
+            'ultimo_numero' => 1,
+            'version' => 1,
+        ]);
+
+        TurnoPdv::factory()->create([
+            'sucursal_id' => $sucursal->id,
+            'folio' => 'V-0001',
+            'fecha_operativa' => $fecha,
+        ]);
+        TurnoPdv::factory()->create([
+            'sucursal_id' => $sucursal->id,
+            'folio' => 'V-0002',
+            'fecha_operativa' => $fecha,
+        ]);
+
+        $resultado = $this->service->ejecutar($sucursal, TurnoPdv::SERVICIO_VENTAS);
+
+        $this->assertSame('V-0003', $resultado->folio);
+        $this->assertSame(3, ContadorFolioTurnoPdv::query()->value('ultimo_numero'));
+    }
+
     public function test_rechaza_servicio_no_soportado(): void
     {
         $sucursal = Sucursal::factory()->create();

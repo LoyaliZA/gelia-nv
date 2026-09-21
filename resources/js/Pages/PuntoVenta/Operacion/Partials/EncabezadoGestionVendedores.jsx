@@ -1,8 +1,6 @@
 import React from 'react';
 import { Users } from 'lucide-react';
 import { geliaCardClass } from '../../../../utils/geliaTheme';
-import IndicadorConexionTiempoRealPdv from '../../../../Components/PuntoVenta/IndicadorConexionTiempoRealPdv';
-
 function MetricaResumen({ etiqueta, valor, destacado = false }) {
     return (
         <div
@@ -19,8 +17,7 @@ function MetricaResumen({ etiqueta, valor, destacado = false }) {
 export default function EncabezadoGestionVendedores({
     resumen = {},
     clientesEnFila = 0,
-    estadoConexion = null,
-    ultimaActualizacion = null,
+    clientesReatencion = 0,
 }) {
     const {
         configurados = 0,
@@ -35,19 +32,11 @@ export default function EncabezadoGestionVendedores({
             className={`${geliaCardClass()} p-4 space-y-3`}
             aria-labelledby="gestion-vendedores-resumen"
         >
-            <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-2 min-w-0">
-                    <Users className="w-4 h-4 theme-text-muted shrink-0" aria-hidden />
-                    <h2 id="gestion-vendedores-resumen" className="text-sm font-black uppercase tracking-widest theme-text-main m-0">
-                        Resumen del equipo
-                    </h2>
-                </div>
-                {estadoConexion && (
-                    <IndicadorConexionTiempoRealPdv
-                        estadoConexion={estadoConexion}
-                        ultimaActualizacion={ultimaActualizacion}
-                    />
-                )}
+            <div className="flex flex-wrap items-center gap-2">
+                <Users className="w-4 h-4 theme-text-muted shrink-0" aria-hidden />
+                <h2 id="gestion-vendedores-resumen" className="text-sm font-black uppercase tracking-widest theme-text-main m-0">
+                    Resumen del equipo
+                </h2>
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-2">
@@ -57,6 +46,7 @@ export default function EncabezadoGestionVendedores({
                 <MetricaResumen etiqueta="Atendiendo" valor={atendiendo} />
                 <MetricaResumen etiqueta="En pausa" valor={enPausa} />
                 <MetricaResumen etiqueta="Clientes en fila" valor={clientesEnFila} />
+                <MetricaResumen etiqueta="Re-atención" valor={clientesReatencion} />
             </div>
         </section>
     );

@@ -38,7 +38,7 @@ class CompletarCierreJornadaTrasAtencionPdvService
             IntervaloOperativoPdv::query()
                 ->where('jornada_id', $jornada->id)
                 ->whereNull('fin_at')
-                ->update(['fin_at' => $ahora]);
+                ->update(['fin_at' => $ahora, 'intervalo_abierto_marcador' => null]);
 
             $versionAnterior = (int) $jornada->version;
 
@@ -47,6 +47,7 @@ class CompletarCierreJornadaTrasAtencionPdvService
                 ->where('version', $versionAnterior)
                 ->update([
                     'estado' => EstadoJornadaPdv::Cerrada,
+                    'jornada_activa_marcador' => null,
                     'version' => $versionAnterior + 1,
                 ]);
         });
