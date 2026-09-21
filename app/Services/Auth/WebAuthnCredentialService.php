@@ -138,11 +138,16 @@ class WebAuthnCredentialService
             throw $this->credencialInvalida();
         }
 
+        // ponytail: Laragear validateId no decodifica userHandle base64url (16 bytes); con login
+        // ya resuelto basta validateUser + firma. Upgrade: pipe custom con Uuid::fromBytes().
+        $credencialTransporte = $datos['credential'];
+        unset($credencialTransporte['response']['userHandle']);
+
         try {
             $validation = $this->assertionValidator
-                ->send(new AssertionValidation(new JsonTransport($datos['credential']), $user))
+                ->send(new AssertionValidation(new JsonTransport($credencialTransporte), $user))
                 ->thenReturn();
-        } catch (ValidationException $e) {
+        } catch (ValidationException) {
             throw $this->credencialInvalida();
         }
 
