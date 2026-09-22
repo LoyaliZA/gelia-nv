@@ -667,11 +667,11 @@ export default function ModalResponderPesaje({
         }
         const poll = window.setInterval(async () => {
             try {
-                const { data } = await window.axios.get(route('control_pedidos.cedis.sesion_evidencia.show', pedido.id));
+                const { data, status } = await window.axios.get(route('control_pedidos.cedis.sesion_evidencia.show', pedido.id));
                 (data.fotos || []).forEach(anexarFotoRemota);
                 if (data.estado === 'activa') setCelularConectado(true);
             } catch {
-                // poll silencioso si Reverb no empuja
+                /* poll silencioso */
             }
         }, 4000);
         return () => {

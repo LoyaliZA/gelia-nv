@@ -33,7 +33,7 @@ export default function ModalAlertaPedido({ abierto, tipo = 'info', titulo, mens
     return createPortal(
         <div
             className={`${THEME_MODAL_OVERLAY} items-center py-4`}
-            style={{ zIndex: 'calc(var(--gelia-z-modal) + 20)' }}
+            style={{ zIndex: 'calc(var(--gelia-z-toast) + 2)' }}
             onClick={cerrar}
         >
             <div

@@ -110,7 +110,7 @@ export default function ModalVistaPreviaDocumento({
     return createPortal(
         <div
             className={`${THEME_MODAL_OVERLAY} items-start sm:items-center py-4 sm:py-6`}
-            style={{ zIndex: 'calc(var(--gelia-z-modal) + 20)' }}
+            style={{ zIndex: 'calc(var(--gelia-z-toast) + 2)' }}
             onClick={cerrar}
             role="dialog"
             aria-modal="true"
