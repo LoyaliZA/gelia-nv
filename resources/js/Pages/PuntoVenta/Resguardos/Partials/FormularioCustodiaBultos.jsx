@@ -4,7 +4,7 @@ import { geliaCardClass } from '../../../../utils/geliaTheme';
 import { THEME_BTN_PRIMARY } from '../../../../utils/geliaTheme';
 import ModalConfirmarAccion from '../../../ControlPedidos/Partials/ModalConfirmarAccion';
 import { BTN_SECONDARY, THEME_INPUT, THEME_SELECT } from './resguardosStyles';
-import { titularResguardo } from './resguardosUtils';
+import { titularResguardo, etiquetaRetiroResguardo } from './resguardosUtils';
 import PanelPedidoRevisionResguardo from './PanelPedidoRevisionResguardo';
 import BotonesCapturaEvidencia from './BotonesCapturaEvidencia';
 import { ChipEvidenciasBultosEmpaque } from './ModalEvidenciasBultosEmpaque';
@@ -40,10 +40,7 @@ export default function FormularioCustodiaBultos({
     const tiposBulto = catalogos.tipos_bulto || {};
     const condiciones = catalogos.condiciones_bulto || {};
     const titular = titularResguardo(resguardo);
-    const etiquetaRetiro = resguardo?.etiqueta_retiro
-        || (resguardo?.envia_a_otra_persona
-            ? `Recoge tercero autorizado: ${resguardo.envia_otra_persona}`
-            : 'Retira el titular del pedido');
+    const etiquetaRetiro = etiquetaRetiroResguardo(resguardo);
 
     const previews = useMemo(() => evidencias.map((archivo) => ({
         archivo,

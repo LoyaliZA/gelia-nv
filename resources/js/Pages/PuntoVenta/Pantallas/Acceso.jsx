@@ -6,7 +6,6 @@ import GeliaPageShell from '@/Components/GeliaPageShell';
 import GeliaTituloCard from '@/Components/GeliaTituloCard';
 import AbrirPantallaSalaPdv from '@/Components/PuntoVenta/AbrirPantallaSalaPdv';
 import SelectorSucursalActivaPdv from '@/Components/PuntoVenta/SelectorSucursalActivaPdv';
-import PlaylistPublicidadSalaPdv from './PlaylistPublicidadSalaPdv';
 
 export default function Acceso({
     auth,
@@ -33,8 +32,6 @@ export default function Acceso({
                     sucursalActiva={sucursalActiva}
                     sucursalesAsignadas={sucursalesAsignadas}
                 />
-
-                <PlaylistPublicidadSalaPdv sucursalActiva={sucursalActiva} />
             </GeliaPageShell>
         </AppLayout>
     );

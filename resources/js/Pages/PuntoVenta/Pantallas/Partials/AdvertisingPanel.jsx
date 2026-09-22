@@ -44,23 +44,41 @@ function FallbackInstitucional() {
     );
 }
 
+function siguienteIndice(playlist, desde, omitidos) {
+    if (!playlist.length) return -1;
+    let i = (desde + 1) % playlist.length;
+    const inicio = i;
+    while (omitidos.has(playlist[i]?.id)) {
+        i = (i + 1) % playlist.length;
+        if (i === inicio) return -1;
+    }
+    return i;
+}
+
 export default function AdvertisingPanel({ items = [] }) {
     const [index, setIndex] = useState(0);
     const [ciclo, setCiclo] = useState(0);
     const [progress, setProgress] = useState(0);
+    const [omitidos, setOmitidos] = useState(() => new Set());
     const videoRef = useRef(null);
-    const playlist = Array.isArray(items) ? items.filter((item) => item?.url) : [];
-    const actual = playlist[index] ?? null;
+    const preloadImg = useRef(null);
+    const playlist = Array.isArray(items) ? items.filter((item) => item?.url && !omitidos.has(item.id)) : [];
+    const actual = playlist[index] ?? playlist[0] ?? null;
 
     useEffect(() => {
         setIndex(0);
         setProgress(0);
-    }, [playlist.map((item) => item.id).join(',')]);
+        setOmitidos(new Set());
+    }, [items.map((item) => item.id).join(',')]);
+
+    useEffect(() => {
+        if (index >= playlist.length) setIndex(0);
+    }, [playlist.length, index]);
 
     useEffect(() => {
         if (!actual || actual.tipo === 'video') return undefined;
 
-        const duracionMs = Math.max(3, Number(actual.duracion_seg) || 8) * 1000;
+        const duracionMs = Math.max(3, Number(actual.duracion_seg) || 10) * 1000;
         const iniciado = performance.now();
         let frame;
 
@@ -68,33 +86,50 @@ export default function AdvertisingPanel({ items = [] }) {
             const elapsed = now - iniciado;
             setProgress(Math.min(1, elapsed / duracionMs));
             if (elapsed >= duracionMs) {
-            setIndex((prev) => (prev + 1) % playlist.length);
-            setCiclo((prev) => prev + 1);
-            setProgress(0);
-            return;
-        }
+                avanzar();
+                return;
+            }
             frame = window.requestAnimationFrame(tick);
         };
 
         frame = window.requestAnimationFrame(tick);
         return () => window.cancelAnimationFrame(frame);
-    }, [actual, ciclo, playlist.length]);
+    }, [actual?.id, ciclo, playlist.length]);
 
-    const manejarTiempoVideo = () => {
-        const video = videoRef.current;
-        if (!video) return;
-        const limite = Number(actual?.duracion_seg) > 0 ? Number(actual.duracion_seg) : video.duration;
-        if (!limite || Number.isNaN(limite)) return;
-        const elapsed = video.currentTime;
-        setProgress(Math.min(1, elapsed / limite));
-        if (elapsed >= limite - 0.05) {
-            setIndex((prev) => (prev + 1) % playlist.length);
-            setCiclo((prev) => prev + 1);
-            setProgress(0);
-        }
+    useEffect(() => {
+        const siguiente = playlist[(index + 1) % playlist.length];
+        if (!siguiente || siguiente.tipo === 'video') return undefined;
+        const img = new Image();
+        img.src = siguiente.url;
+        preloadImg.current = img;
+        return () => {
+            preloadImg.current = null;
+        };
+    }, [index, playlist]);
+
+    const avanzar = () => {
+        setIndex((prev) => {
+            const base = playlist.length ? playlist : (Array.isArray(items) ? items : []);
+            const ids = base.map((item) => item.id);
+            const actualId = actual?.id;
+            const desde = Math.max(0, ids.indexOf(actualId));
+            const next = siguienteIndice(base, desde, omitidos);
+            return next < 0 ? 0 : next;
+        });
+        setCiclo((prev) => prev + 1);
+        setProgress(0);
+    };
+
+    const omitir = (item) => {
+        if (!item?.id) return;
+        console.warn('Publicidad de sala omitida', item.id);
+        setOmitidos((prev) => new Set(prev).add(item.id));
+        setCiclo((prev) => prev + 1);
+        setProgress(0);
     };
 
     const objectFit = actual?.ajuste === 'contain' ? 'contain' : 'cover';
+    const siguienteVideo = playlist[(index + 1) % playlist.length];
 
     return (
         <section
@@ -114,12 +149,14 @@ export default function AdvertisingPanel({ items = [] }) {
                     autoPlay
                     muted
                     playsInline
-                    onTimeUpdate={manejarTiempoVideo}
-                    onEnded={() => {
-                        setIndex((prev) => (prev + 1) % playlist.length);
-                        setCiclo((prev) => prev + 1);
-                        setProgress(0);
+                    preload="auto"
+                    onTimeUpdate={() => {
+                        const video = videoRef.current;
+                        if (!video?.duration) return;
+                        setProgress(Math.min(1, video.currentTime / video.duration));
                     }}
+                    onEnded={avanzar}
+                    onError={() => omitir(actual)}
                 />
             ) : (
                 <img
@@ -128,9 +165,13 @@ export default function AdvertisingPanel({ items = [] }) {
                     alt=""
                     className="h-full w-full"
                     style={{ objectFit }}
+                    onError={() => omitir(actual)}
                 />
             )}
-            <MediaProgress items={playlist} index={index} progress={progress} />
+            {siguienteVideo?.tipo === 'video' ? (
+                <video src={siguienteVideo.url} preload="metadata" className="hidden" muted />
+            ) : null}
+            <MediaProgress items={playlist} index={Math.min(index, Math.max(0, playlist.length - 1))} progress={progress} />
         </section>
     );
 }

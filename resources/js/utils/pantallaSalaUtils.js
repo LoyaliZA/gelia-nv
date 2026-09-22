@@ -14,6 +14,7 @@ export const PDV_SALA_TIPOS_REFETCH = new Set([
     'turno.transferido',
     'turno.reatencion',
     'turno.ventana_reatencion_vencida',
+    'publicidad.actualizada',
 ]);
 
 /** Campos que no deben aparecer en payload/render de sala pública. */

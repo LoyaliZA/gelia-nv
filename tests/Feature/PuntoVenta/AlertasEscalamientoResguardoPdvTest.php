@@ -99,11 +99,11 @@ class AlertasEscalamientoResguardoPdvTest extends TestCase
             'salida_cedis_at' => Carbon::parse('2026-07-01 10:00:00'),
         ]);
         $receptor = $this->usuarioConPermisos(
-            [PuntoVentaModulo::PERMISO_RESGUARDOS_RECIBIR],
+            [PuntoVentaModulo::PERMISO_RESGUARDOS_VER_REZAGADOS],
             $this->sucursal
         );
         $otraSucursal = $this->usuarioConPermisos(
-            [PuntoVentaModulo::PERMISO_RESGUARDOS_RECIBIR],
+            [PuntoVentaModulo::PERMISO_RESGUARDOS_VER_REZAGADOS],
             $this->otraSucursal
         );
 
@@ -127,6 +127,7 @@ class AlertasEscalamientoResguardoPdvTest extends TestCase
         $resguardo = $this->crearResguardo([
             'estado' => ResguardoPdv::ESTADO_EN_CUSTODIA,
             'recepcion_fisica_at' => Carbon::parse('2026-08-06 10:00:00', 'America/Mexico_City'),
+            'custodia_confirmada_at' => Carbon::parse('2026-08-06 10:00:00', 'America/Mexico_City'),
         ]);
         $operador = $this->usuarioConPermisos(
             [PuntoVentaModulo::PERMISO_RESGUARDOS_VER],
@@ -154,15 +155,17 @@ class AlertasEscalamientoResguardoPdvTest extends TestCase
         $this->usuarioConPermisos([PuntoVentaModulo::PERMISO_RESGUARDOS_VER], $this->sucursal);
         $this->usuarioConPermisos([PuntoVentaModulo::PERMISO_RESGUARDOS_VER_VENCIDOS], $this->sucursal);
         $this->usuarioConPermisos([PuntoVentaModulo::PERMISO_RESGUARDOS_REPONER_VENCIDO], $this->sucursal);
-        $this->usuarioConPermisos([PuntoVentaModulo::PERMISO_RESGUARDOS_RECIBIR], $this->sucursal);
+        $this->usuarioConPermisos([PuntoVentaModulo::PERMISO_RESGUARDOS_VER_REZAGADOS], $this->sucursal);
 
         $this->crearResguardo([
             'estado' => ResguardoPdv::ESTADO_EN_CUSTODIA,
             'recepcion_fisica_at' => Carbon::parse('2026-07-01 10:00:00'),
+            'custodia_confirmada_at' => Carbon::parse('2026-07-01 10:00:00'),
         ]);
         $this->crearResguardo([
             'estado' => ResguardoPdv::ESTADO_EN_CUSTODIA,
             'recepcion_fisica_at' => Carbon::parse('2026-08-06 10:00:00', 'America/Mexico_City'),
+            'custodia_confirmada_at' => Carbon::parse('2026-08-06 10:00:00', 'America/Mexico_City'),
         ]);
         $this->crearResguardo([
             'estado' => ResguardoPdv::ESTADO_PENDIENTE_RECEPCION,
@@ -182,7 +185,7 @@ class AlertasEscalamientoResguardoPdvTest extends TestCase
         $this->assertSame(0, $segunda['proximos']);
 
         $totalNotificaciones = \Illuminate\Notifications\DatabaseNotification::query()->count();
-        $this->assertSame(6, $totalNotificaciones);
+        $this->assertSame(5, $totalNotificaciones);
     }
 
     public function test_entregado_y_devuelto_no_reciben_alertas_del_job(): void
@@ -286,7 +289,11 @@ class AlertasEscalamientoResguardoPdvTest extends TestCase
 
         $usuario = User::factory()->create();
         if ($permisos !== []) {
-            $usuario->givePermissionTo($permisos);
+            $modelos = array_map(
+                fn (string $permiso) => Permission::findOrCreate($permiso, 'web'),
+                $permisos
+            );
+            $usuario->givePermissionTo($modelos);
         }
         $usuario->concederAccesoSucursal($sucursal, esPrincipal: true);
 
@@ -303,6 +310,8 @@ class AlertasEscalamientoResguardoPdvTest extends TestCase
 
     private function seedPermisos(): void
     {
+        app(\Spatie\Permission\PermissionRegistrar::class)->forgetCachedPermissions();
+
         foreach (PuntoVentaModulo::permisosIniciales() as $permiso) {
             Permission::findOrCreate($permiso, 'web');
         }

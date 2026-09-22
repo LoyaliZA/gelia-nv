@@ -42,7 +42,9 @@ final class SerializadorRetiroPedidoResguardoPdv
             'envia_otra_persona' => $nombreTercero,
             'etiqueta_retiro' => $enviaTercero && $nombreTercero
                 ? "Recoge tercero autorizado: {$nombreTercero}"
-                : 'Retira el titular del pedido',
+                : ($resguardo->pedido_bma_id
+                    ? 'Retira el titular del pedido'
+                    : 'Retira la persona titular'),
         ];
     }
 }

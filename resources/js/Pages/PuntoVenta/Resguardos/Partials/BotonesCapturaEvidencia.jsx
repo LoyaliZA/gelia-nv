@@ -9,6 +9,8 @@ export default function BotonesCapturaEvidencia({
     etiquetaGaleria = 'Galería',
     camaraMultiple = false,
     galeriaMultiple = true,
+    acceptCamara = 'image/*',
+    acceptGaleria = 'image/*',
     className = '',
 }) {
     const manejarArchivos = (archivos) => {
@@ -22,7 +24,7 @@ export default function BotonesCapturaEvidencia({
                 {etiquetaCamara}
                 <input
                     type="file"
-                    accept="image/*"
+                    accept={acceptCamara}
                     capture="environment"
                     multiple={camaraMultiple}
                     className="sr-only"
@@ -38,7 +40,7 @@ export default function BotonesCapturaEvidencia({
                 {etiquetaGaleria}
                 <input
                     type="file"
-                    accept="image/*"
+                    accept={acceptGaleria}
                     multiple={galeriaMultiple}
                     className="sr-only"
                     disabled={deshabilitado}

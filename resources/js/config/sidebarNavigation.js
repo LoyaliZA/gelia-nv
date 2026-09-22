@@ -39,6 +39,7 @@ import {
     BookOpen,
     Bot,
     Monitor,
+    Images,
 } from 'lucide-react';
 
 import { ADMIN_MODULES, isAdminModuleAllowed, adminModuleHref } from './adminModules';
@@ -294,6 +295,14 @@ export function buildSidebarNavigation({ can, showAdminMenu, manualesHubVisible 
             icon: Monitor,
             href: () => routeHref('punto_venta.pantalla_sala.index', '/punto-venta/pantalla-sala'),
             active: (url) => url.startsWith('/punto-venta/pantalla-sala'),
+        },
+        can('punto_venta.acceder') && can('pdv.publicidad.ver') && {
+            type: 'link',
+            id: 'punto_venta_publicidad',
+            label: 'Publicidad',
+            icon: Images,
+            href: () => routeHref('punto_venta.publicidad.index', '/punto-venta/publicidad'),
+            active: (url) => url.startsWith('/punto-venta/publicidad'),
         },
         can('punto_venta.acceder') && (
             can('pdv.turnos.ver')

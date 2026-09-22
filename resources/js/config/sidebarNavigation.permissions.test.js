@@ -162,6 +162,28 @@ describe('buildSidebarNavigation permissions', () => {
         expect(ids).not.toContain('punto_venta_pantalla_sala');
     });
 
+    it('usuario con permiso publicidad.ver ve enlace Publicidad', () => {
+        const tree = buildSidebarNavigation({
+            can: canWith(['punto_venta.acceder', 'pdv.publicidad.ver']),
+            showAdminMenu: false,
+            manualesHubVisible: false,
+            geliaAiVisible: false,
+        });
+        const ids = collectLinkIds(tree);
+        expect(ids).toContain('punto_venta_publicidad');
+    });
+
+    it('usuario sin permiso publicidad.ver no ve enlace Publicidad', () => {
+        const tree = buildSidebarNavigation({
+            can: canWith(['punto_venta.acceder', 'pdv.pantalla_sala.abrir']),
+            showAdminMenu: false,
+            manualesHubVisible: false,
+            geliaAiVisible: false,
+        });
+        const ids = collectLinkIds(tree);
+        expect(ids).not.toContain('punto_venta_publicidad');
+    });
+
     it('usuario con tiendanube.ver ve catálogo y precios en vinculaciones', () => {
         const tree = buildSidebarNavigation({
             can: canWith(['tiendanube.ver']),

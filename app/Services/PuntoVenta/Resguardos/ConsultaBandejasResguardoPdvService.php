@@ -15,6 +15,7 @@ use App\Support\PuntoVenta\Resguardos\EstadoRecepcionResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\EstadoResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\EtiquetasResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\SerializadorBultosEmpaqueCedisPdv;
+use App\Support\PuntoVenta\Resguardos\SerializadorRegistroManualResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\SerializadorRetiroPedidoResguardoPdv;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -85,7 +86,7 @@ class ConsultaBandejasResguardoPdvService
         $metricas = [];
         foreach (BandejaResguardoPdv::valores() as $bandeja) {
             $query = $this->queryBandeja($user, $bandeja);
-            $this->aplicarFiltrosComunes($query, $user, $filtrosBase, $bandeja, aplicarAntiguedad: false, excluirVencidos: false);
+            $this->aplicarFiltrosComunes($query, $user, $filtrosBase, $bandeja, aplicarAntiguedad: false, excluirVencidos: false, excluirRezagados: false);
             $metricas[$bandeja] = $query->count();
         }
 
@@ -196,6 +197,7 @@ class ConsultaBandejasResguardoPdvService
                 'cliente:id,numero_cliente,nombre',
                 'pedido:id,folio,folio_remision,cliente_id,envia_a_otra_persona,envia_otra_persona',
                 'pedido.bultosEmpaque.documentos',
+                'evidencias',
             ])
             ->withCount([
                 'incidencias as incidencias_abiertas_count' => fn (Builder $q) => $q
@@ -225,6 +227,7 @@ class ConsultaBandejasResguardoPdvService
                 'cliente:id,numero_cliente,nombre',
                 'pedido:id,folio,folio_remision,cliente_id,envia_a_otra_persona,envia_otra_persona',
                 'pedido.bultosEmpaque.documentos',
+                'evidencias',
             ])
             ->withCount([
                 'incidencias as incidencias_abiertas_count' => fn (Builder $q) => $q
@@ -255,6 +258,7 @@ class ConsultaBandejasResguardoPdvService
         string $bandeja,
         bool $aplicarAntiguedad = true,
         bool $excluirVencidos = true,
+        bool $excluirRezagados = true,
     ): void {
         $this->validarSucursalFiltro($user, $filtros['sucursal_id'] ?? null);
 
@@ -268,6 +272,14 @@ class ConsultaBandejasResguardoPdvService
                 && ! $this->alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_VER_VENCIDOS)) {
                 $this->restringirIdsPorEvaluacion($query, function (ResguardoPdv $resguardo) {
                     return ! $this->antiguedad->debeExcluirDeVistaPrincipal($resguardo);
+                });
+            }
+
+            if ($excluirRezagados
+                && $bandeja === BandejaResguardoPdv::POR_RECIBIR
+                && ! $this->alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_VER_REZAGADOS)) {
+                $this->restringirIdsPorEvaluacion($query, function (ResguardoPdv $resguardo) {
+                    return ! $this->antiguedad->debeExcluirRezagadoDeVistaPrincipal($resguardo);
                 });
             }
 
@@ -323,14 +335,14 @@ class ConsultaBandejasResguardoPdvService
         ];
 
         $queryRezagado = $this->queryBandeja($user, BandejaResguardoPdv::POR_RECIBIR);
-        $this->aplicarFiltrosComunes($queryRezagado, $user, $filtrosBase, BandejaResguardoPdv::POR_RECIBIR, aplicarAntiguedad: false, excluirVencidos: false);
+        $this->aplicarFiltrosComunes($queryRezagado, $user, $filtrosBase, BandejaResguardoPdv::POR_RECIBIR, aplicarAntiguedad: false, excluirVencidos: false, excluirRezagados: false);
         $metricas[AntiguedadOperativaResguardoPdv::REZAGADO] = $this->contarPorClasificacion(
             $queryRezagado,
             AntiguedadOperativaResguardoPdv::REZAGADO
         );
 
         $queryCustodia = $this->queryBandeja($user, BandejaResguardoPdv::EN_CUSTODIA);
-        $this->aplicarFiltrosComunes($queryCustodia, $user, $filtrosBase, BandejaResguardoPdv::EN_CUSTODIA, aplicarAntiguedad: false, excluirVencidos: false);
+        $this->aplicarFiltrosComunes($queryCustodia, $user, $filtrosBase, BandejaResguardoPdv::EN_CUSTODIA, aplicarAntiguedad: false, excluirVencidos: false, excluirRezagados: false);
         $metricas[AntiguedadOperativaResguardoPdv::PROXIMO_A_VENCER] = $this->contarPorClasificacion(
             $queryCustodia,
             AntiguedadOperativaResguardoPdv::PROXIMO_A_VENCER
@@ -381,6 +393,7 @@ class ConsultaBandejasResguardoPdvService
                 'estado',
                 'salida_cedis_at',
                 'recepcion_fisica_at',
+                'custodia_confirmada_at',
                 'entrega_completada_at',
                 'devolucion_confirmada_at',
                 'vencido_repuesto_at',
@@ -407,6 +420,7 @@ class ConsultaBandejasResguardoPdvService
         string $bandeja,
         bool $aplicarAntiguedad = true,
         bool $excluirVencidos = true,
+        bool $excluirRezagados = true,
     ): void {
         $this->validarSucursalFiltroExportacion($filtros['sucursal_id'] ?? null);
 
@@ -424,6 +438,14 @@ class ConsultaBandejasResguardoPdvService
                 && ! $this->alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_VER_VENCIDOS)) {
                 $this->restringirIdsPorEvaluacion($query, function (ResguardoPdv $resguardo) {
                     return ! $this->antiguedad->debeExcluirDeVistaPrincipal($resguardo);
+                });
+            }
+
+            if ($excluirRezagados
+                && $bandeja === BandejaResguardoPdv::POR_RECIBIR
+                && ! $this->alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_VER_REZAGADOS)) {
+                $this->restringirIdsPorEvaluacion($query, function (ResguardoPdv $resguardo) {
+                    return ! $this->antiguedad->debeExcluirRezagadoDeVistaPrincipal($resguardo);
                 });
             }
 
@@ -606,6 +628,7 @@ class ConsultaBandejasResguardoPdvService
                 'folio_remision' => $resguardo->pedido->folio_remision,
             ] : null,
             'bultos_empaque_cedis' => SerializadorBultosEmpaqueCedisPdv::desdePedido($resguardo->pedido),
+            'registro_manual' => SerializadorRegistroManualResguardoPdv::desdeResguardo($resguardo),
         ];
     }
 

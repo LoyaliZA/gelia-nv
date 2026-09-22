@@ -148,7 +148,7 @@ class RegistrarEntregaResguardoPdvService
                 'tipo' => $bulto->tipo,
             ])->values()->all(),
             'integracion_cp' => [
-                'estado' => $entregaCompleta ? 'pendiente' : 'omitida',
+                'estado' => $this->estadoIntegracionCp($resguardo, $entregaCompleta),
                 'idempotency_key' => $idempotencyKey,
                 'intentos' => 0,
             ],
@@ -377,6 +377,15 @@ class RegistrarEntregaResguardoPdvService
         });
 
         return $seleccionados->values();
+    }
+
+    private function estadoIntegracionCp(ResguardoPdv $resguardo, bool $entregaCompleta): string
+    {
+        if (! $entregaCompleta || (int) ($resguardo->pedido_bma_id ?? 0) < 1) {
+            return 'omitida';
+        }
+
+        return 'pendiente';
     }
 
     /**

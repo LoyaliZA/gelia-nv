@@ -11,7 +11,9 @@ use App\Support\PuntoVenta\Resguardos\EstadoRecepcionResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\EstadoResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\EtiquetasResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\SerializadorBultosEmpaqueCedisPdv;
+use App\Support\PuntoVenta\Resguardos\SerializadorIncidenciaResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\SerializadorPedidoRevisionResguardoPdv;
+use App\Support\PuntoVenta\Resguardos\SerializadorRegistroManualResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\SerializadorRetiroPedidoResguardoPdv;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 
@@ -42,6 +44,7 @@ class ConsultaDetalleResguardoPdvService
             'cliente:id,numero_cliente',
             'pedido:id,folio,folio_remision,envia_a_otra_persona,envia_otra_persona',
             'pedido.bultosEmpaque.documentos',
+            'evidencias',
             'bultos' => fn ($q) => $q->orderBy('folio')->orderBy('id'),
             'incidencias' => fn ($q) => $q
                 ->with([
@@ -60,6 +63,7 @@ class ConsultaDetalleResguardoPdvService
                 'cliente:id,numero_cliente',
                 'pedido:id,folio,folio_remision,envia_a_otra_persona,envia_otra_persona',
                 'pedido.bultosEmpaque.documentos',
+                'evidencias',
                 'bultos' => fn ($q) => $q->orderBy('folio')->orderBy('id'),
                 'incidencias' => fn ($q) => $q
                     ->with([
@@ -160,6 +164,7 @@ class ConsultaDetalleResguardoPdvService
                 ->values()
                 ->all(),
             'bultos_empaque_cedis' => SerializadorBultosEmpaqueCedisPdv::desdePedido($resguardo->pedido),
+            'registro_manual' => SerializadorRegistroManualResguardoPdv::desdeResguardo($resguardo),
         ];
     }
 

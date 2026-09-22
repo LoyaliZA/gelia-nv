@@ -30,9 +30,9 @@ class InformarEntregaResguardoPdvService
 
         $pedidoId = (int) ($resguardo->pedido_bma_id ?? $entrega->pedido_bma_id);
         if ($pedidoId < 1) {
-            $this->registrarFallo($entrega, 'El resguardo no está vinculado a un pedido BMA.');
+            $this->marcarIntegracionOmitida($entrega);
 
-            return false;
+            return true;
         }
 
         try {
@@ -123,6 +123,23 @@ class InformarEntregaResguardoPdvService
             $entrega->nombre_quien_retira,
             $relacion
         );
+    }
+
+    private function marcarIntegracionOmitida(ResguardoPdvEntrega $entrega): void
+    {
+        $snapshot = $entrega->snapshot_json ?? [];
+        $integracion = $snapshot['integracion_cp'] ?? [];
+        if (($integracion['estado'] ?? null) === 'omitida') {
+            return;
+        }
+
+        $integracion['estado'] = 'omitida';
+        $integracion['idempotency_key'] = $entrega->idempotency_key;
+        $integracion['omitida_at'] = now()->toIso8601String();
+        $integracion['ultimo_error'] = null;
+        $snapshot['integracion_cp'] = $integracion;
+
+        $entrega->update(['snapshot_json' => $snapshot]);
     }
 
     private function marcarIntegracionCompletada(ResguardoPdvEntrega $entrega): void

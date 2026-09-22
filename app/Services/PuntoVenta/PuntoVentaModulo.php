@@ -28,6 +28,8 @@ final class PuntoVentaModulo
 
     public const PERMISO_RESGUARDOS_VER_VENCIDOS = 'pdv.resguardos.ver_vencidos';
 
+    public const PERMISO_RESGUARDOS_VER_REZAGADOS = 'pdv.resguardos.ver_rezagados';
+
     public const PERMISO_RESGUARDOS_REPONER_VENCIDO = 'pdv.resguardos.reponer_vencido';
 
     public const PERMISO_RESGUARDOS_AUTORIZAR_ENTREGA_INCIDENCIA = 'pdv.resguardos.autorizar_entrega_incidencia';
@@ -72,6 +74,16 @@ final class PuntoVentaModulo
 
     public const PERMISO_PANTALLA_SALA_ABRIR = 'pdv.pantalla_sala.abrir';
 
+    public const PERMISO_PUBLICIDAD_VER = 'pdv.publicidad.ver';
+
+    public const PERMISO_PUBLICIDAD_CREAR = 'pdv.publicidad.crear';
+
+    public const PERMISO_PUBLICIDAD_EDITAR = 'pdv.publicidad.editar';
+
+    public const PERMISO_PUBLICIDAD_ELIMINAR = 'pdv.publicidad.eliminar';
+
+    public const PERMISO_PUBLICIDAD_ORDENAR = 'pdv.publicidad.ordenar';
+
     /**
      * @return list<string>
      */
@@ -88,6 +100,7 @@ final class PuntoVentaModulo
             self::PERMISO_RESGUARDOS_INCIDENCIA_FALTANTE,
             self::PERMISO_RESGUARDOS_ENTREGAR,
             self::PERMISO_RESGUARDOS_VER_VENCIDOS,
+            self::PERMISO_RESGUARDOS_VER_REZAGADOS,
             self::PERMISO_RESGUARDOS_REPONER_VENCIDO,
             self::PERMISO_RESGUARDOS_AUTORIZAR_ENTREGA_INCIDENCIA,
             self::PERMISO_RESGUARDOS_CONFIRMAR_DEVOLUCION,
@@ -109,6 +122,11 @@ final class PuntoVentaModulo
             self::PERMISO_TURNOS_REATENCION_ASIGNAR,
             self::PERMISO_TURNOS_ALERTAS_SUCURSAL,
             self::PERMISO_PANTALLA_SALA_ABRIR,
+            self::PERMISO_PUBLICIDAD_VER,
+            self::PERMISO_PUBLICIDAD_CREAR,
+            self::PERMISO_PUBLICIDAD_EDITAR,
+            self::PERMISO_PUBLICIDAD_ELIMINAR,
+            self::PERMISO_PUBLICIDAD_ORDENAR,
             AlcancePdv::PERMISO_ALCANCE_GLOBAL,
             self::PERMISO_REPORTES_EXPORTAR,
         ];

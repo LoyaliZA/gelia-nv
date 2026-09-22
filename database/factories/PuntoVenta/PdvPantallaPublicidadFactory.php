@@ -18,7 +18,7 @@ class PdvPantallaPublicidadFactory extends Factory
             'sucursal_id' => null,
             'tipo' => PdvPantallaPublicidad::TIPO_IMAGEN,
             'ruta' => 'pdv/pantalla-publicidad/ejemplo.jpg',
-            'duracion_seg' => 8,
+            'duracion_seg' => 10,
             'ajuste' => PdvPantallaPublicidad::AJUSTE_COVER,
             'orden' => 0,
             'activa' => true,

@@ -17,7 +17,7 @@ final class BultosEsperadosResguardoPdv
         $resguardo->loadMissing(['pedido.bultosEmpaque']);
         $pedido = $resguardo->pedido;
         $cantidad = max(1, (int) $resguardo->cantidad_bultos_esperada);
-        $piezasTotales = max($cantidad, (int) ($pedido?->cantidad_piezas ?? $cantidad));
+        $piezasTotales = max($cantidad, self::piezasTotalesEsperadas($resguardo, $pedido, $cantidad));
         $piezasPorBulto = self::repartirPiezas($piezasTotales, $cantidad);
 
         if ($pedido instanceof PedidoBma && $pedido->bultosEmpaque->isNotEmpty()) {
@@ -47,6 +47,18 @@ final class BultosEsperadosResguardoPdv
                 'numero_cedis' => null,
             ];
         }, range(0, $cantidad - 1));
+    }
+
+    private static function piezasTotalesEsperadas(ResguardoPdv $resguardo, ?PedidoBma $pedido, int $cantidadBultos): int
+    {
+        if ($pedido instanceof PedidoBma) {
+            return max($cantidadBultos, (int) ($pedido->cantidad_piezas ?? $cantidadBultos));
+        }
+
+        $snapshot = is_array($resguardo->snapshot_json) ? $resguardo->snapshot_json : [];
+        $piezasManual = (int) ($snapshot['cantidad_piezas'] ?? 0);
+
+        return $piezasManual > 0 ? max($cantidadBultos, $piezasManual) : $cantidadBultos;
     }
 
     /**

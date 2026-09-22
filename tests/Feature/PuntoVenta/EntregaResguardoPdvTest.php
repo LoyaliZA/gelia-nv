@@ -311,9 +311,14 @@ class EntregaResguardoPdvTest extends TestCase
 
     public function test_fallo_integracion_no_revierte_entrega_confirmada(): void
     {
-        $resguardo = $this->crearResguardoEnCustodia();
+        $pedido = $this->crearPedidoEnviado();
+        $entregado = CatalogoEstatusPedido::porFase(CatalogoEstatusPedido::FASE_ENTREGADO);
+        $pedido->update(['catalogo_estatus_pedido_id' => $entregado->id]);
+
+        $resguardo = $this->crearResguardoEnCustodia($pedido);
         $entrega = ResguardoPdvEntrega::query()->create([
             'resguardo_id' => $resguardo->id,
+            'pedido_bma_id' => $pedido->id,
             'relacion' => ResguardoPdvEntrega::RELACION_TITULAR,
             'nombre_quien_retira' => 'Titular',
             'entregado_por_id' => $this->usuario->id,

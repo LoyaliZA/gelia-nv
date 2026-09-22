@@ -122,6 +122,10 @@ export default function PdvSalaProvider({
     }, [urlEstado]);
 
     const manejarEvento = useCallback((envelope) => {
+        if (String(envelope?.tipo || '') === 'publicidad.actualizada') {
+            refrescarEstado();
+            return;
+        }
         setEstadoSala((actual) => {
             const llamados = aplicarEventoSala(actual.llamados, envelope);
             return {

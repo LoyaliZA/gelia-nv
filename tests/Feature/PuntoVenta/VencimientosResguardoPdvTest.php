@@ -54,6 +54,8 @@ class VencimientosResguardoPdvTest extends TestCase
 
     public function test_filtro_rezagado_aplica_con_plazos_configurados(): void
     {
+        $this->usuario->givePermissionTo(PuntoVentaModulo::PERMISO_RESGUARDOS_VER_REZAGADOS);
+
         $rezagado = $this->crearResguardo([
             'estado' => ResguardoPdv::ESTADO_PENDIENTE_RECEPCION,
             'salida_cedis_at' => Carbon::parse('2026-07-01 10:00:00'),
@@ -80,16 +82,44 @@ class VencimientosResguardoPdvTest extends TestCase
         $this->assertFalse($ids->contains($reciente->id));
     }
 
+    public function test_por_recibir_excluye_rezagados_sin_permiso(): void
+    {
+        $reciente = $this->crearResguardo([
+            'estado' => ResguardoPdv::ESTADO_PENDIENTE_RECEPCION,
+            'salida_cedis_at' => Carbon::parse('2026-08-27 10:00:00'),
+            'snapshot_folio' => 'REM-REC-001',
+        ]);
+        $rezagado = $this->crearResguardo([
+            'estado' => ResguardoPdv::ESTADO_PENDIENTE_RECEPCION,
+            'salida_cedis_at' => Carbon::parse('2026-07-01 10:00:00'),
+            'snapshot_folio' => 'REM-REZ-002',
+        ]);
+
+        $response = $this->actingAs($this->usuario)->getJson(route('punto_venta.resguardos.listado', [
+            'bandeja' => BandejaResguardoPdv::POR_RECIBIR,
+        ]));
+
+        $response->assertOk()
+            ->assertJsonPath('resguardos.total', 1)
+            ->assertJsonPath('resguardos.data.0.id', $reciente->id)
+            ->assertJsonPath('metricas.rezagado', 1);
+
+        $ids = collect($response->json('resguardos.data'))->pluck('id');
+        $this->assertFalse($ids->contains($rezagado->id));
+    }
+
     public function test_en_custodia_excluye_vencidos_sin_permiso(): void
     {
         $vigente = $this->crearResguardo([
             'estado' => ResguardoPdv::ESTADO_EN_CUSTODIA,
             'recepcion_fisica_at' => Carbon::parse('2026-08-27 10:00:00'),
+            'custodia_confirmada_at' => Carbon::parse('2026-08-27 10:00:00'),
             'snapshot_folio' => 'REM-VIG-001',
         ]);
         $vencido = $this->crearResguardo([
             'estado' => ResguardoPdv::ESTADO_EN_CUSTODIA,
             'recepcion_fisica_at' => Carbon::parse('2026-07-01 10:00:00'),
+            'custodia_confirmada_at' => Carbon::parse('2026-07-01 10:00:00'),
             'snapshot_folio' => 'REM-VEN-002',
         ]);
 
@@ -111,6 +141,7 @@ class VencimientosResguardoPdvTest extends TestCase
         $entregado = $this->crearResguardo([
             'estado' => ResguardoPdv::ESTADO_ENTREGADO,
             'recepcion_fisica_at' => Carbon::parse('2026-07-01 10:00:00'),
+            'custodia_confirmada_at' => Carbon::parse('2026-07-01 10:00:00'),
             'entrega_completada_at' => Carbon::parse('2026-08-01 10:00:00'),
         ]);
 
@@ -130,6 +161,7 @@ class VencimientosResguardoPdvTest extends TestCase
         $vencido = $this->crearResguardo([
             'estado' => ResguardoPdv::ESTADO_EN_CUSTODIA,
             'recepcion_fisica_at' => Carbon::parse('2026-07-01 10:00:00'),
+            'custodia_confirmada_at' => Carbon::parse('2026-07-01 10:00:00'),
         ]);
         $rezagado = $this->crearResguardo([
             'estado' => ResguardoPdv::ESTADO_PENDIENTE_RECEPCION,
@@ -166,6 +198,7 @@ class VencimientosResguardoPdvTest extends TestCase
         $resguardo = $this->crearResguardo([
             'estado' => ResguardoPdv::ESTADO_EN_CUSTODIA,
             'recepcion_fisica_at' => Carbon::parse('2026-07-01 10:00:00'),
+            'custodia_confirmada_at' => Carbon::parse('2026-07-01 10:00:00'),
         ]);
 
         $this->actingAs($this->usuario)
@@ -201,5 +234,7 @@ class VencimientosResguardoPdvTest extends TestCase
         foreach (PuntoVentaModulo::permisosIniciales() as $permiso) {
             Permission::findOrCreate($permiso, 'web');
         }
+
+        app(\Spatie\Permission\PermissionRegistrar::class)->forgetCachedPermissions();
     }
 }

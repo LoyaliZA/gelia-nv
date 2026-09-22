@@ -67,8 +67,10 @@ class UiBandejasResguardoPdvTest extends TestCase
                 ->has('catalogos.bandejas')
                 ->has('catalogos.estados')
                 ->has('permisos.ver_vencidos')
+                ->has('permisos.ver_rezagados')
                 ->where('sucursal_activa.nombre', 'Sucursal Norte')
-                ->where('operativa.antiguedad_configurada', true));
+                ->where('operativa.antiguedad_configurada', true)
+                ->where('operativa.registro_manual', false));
     }
 
     public function test_index_json_sigue_disponible(): void

@@ -106,6 +106,13 @@ class CalcularAntiguedadOperativaResguardoPdvService
         return (bool) $evaluacion['clasificaciones'][AntiguedadOperativaResguardoPdv::VENCIDO];
     }
 
+    public function debeExcluirRezagadoDeVistaPrincipal(ResguardoPdv $resguardo, ?Carbon $ahora = null): bool
+    {
+        $evaluacion = $this->evaluar($resguardo, $ahora);
+
+        return (bool) $evaluacion['clasificaciones'][AntiguedadOperativaResguardoPdv::REZAGADO];
+    }
+
     /**
      * @param  array<string, mixed>  $config
      */

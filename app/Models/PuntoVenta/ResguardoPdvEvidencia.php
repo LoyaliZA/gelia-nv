@@ -12,6 +12,12 @@ class ResguardoPdvEvidencia extends Model
 
     public const TIPO_FIRMA = 'firma';
 
+    public const TIPO_ARCHIVO = 'archivo';
+
+    public const USO_TICKET = 'ticket';
+
+    public const USO_PAQUETE = 'paquete';
+
     protected $table = 'pdv_resguardo_evidencias';
 
     protected $fillable = [

@@ -81,6 +81,8 @@ describe('resguardosUtils', () => {
         expect(etiquetaRetiroResguardo({ etiqueta_retiro: 'Retira titular' })).toBe('Retira titular');
         expect(etiquetaRetiroResguardo({ envia_a_otra_persona: true, envia_otra_persona: 'Ana' }))
             .toBe('Recoge tercero autorizado: Ana');
+        expect(etiquetaRetiroResguardo({ pedido_bma_id: 12 })).toBe('Retira el titular del pedido');
+        expect(etiquetaRetiroResguardo({})).toBe('Retira la persona titular');
 
         expect(etiquetaEstadoRecepcion({
             clasificaciones: { rezagado: true },
@@ -104,7 +106,8 @@ describe('resguardosUtils', () => {
             vencido: 'Vencido',
         };
 
-        expect(metricasAntiguedadClaves('por_recibir')).toEqual(['rezagado']);
+        expect(metricasAntiguedadClaves('por_recibir')).toEqual([]);
+        expect(metricasAntiguedadClaves('por_recibir', false, true)).toEqual(['rezagado']);
         expect(metricasAntiguedadClaves('en_custodia', false)).toEqual(['proximo_a_vencer']);
         expect(metricasAntiguedadClaves('en_custodia', true)).toEqual(['proximo_a_vencer', 'vencido']);
 
@@ -112,7 +115,8 @@ describe('resguardosUtils', () => {
         expect(antiguedadValidaEnBandeja('por_recibir', 'vencido')).toBe(false);
         expect(antiguedadValidaEnBandeja('en_custodia', 'proximo_a_vencer')).toBe(true);
 
-        expect(antiguedadesVisiblesPorBandeja('por_recibir', catalogo, true)).toEqual([['rezagado', 'Rezagado']]);
+        expect(antiguedadesVisiblesPorBandeja('por_recibir', catalogo, false, false)).toEqual([]);
+        expect(antiguedadesVisiblesPorBandeja('por_recibir', catalogo, false, true)).toEqual([['rezagado', 'Rezagado']]);
         expect(antiguedadesVisiblesPorBandeja('en_custodia', catalogo, false)).toEqual([
             ['proximo_a_vencer', 'Próximo a vencer'],
         ]);

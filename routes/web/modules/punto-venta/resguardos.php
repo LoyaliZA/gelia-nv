@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\PuntoVenta\Resguardos\BuscarProductoRegistroManualResguardoPdvController;
 use App\Http\Controllers\PuntoVenta\Resguardos\ExportacionResguardoPdvController;
 use App\Http\Controllers\PuntoVenta\Resguardos\AuditoriaResguardoPdvController;
 use App\Http\Controllers\PuntoVenta\Resguardos\BandejaResguardoPdvController;
@@ -17,6 +18,7 @@ use App\Http\Controllers\PuntoVenta\Resguardos\FormularioRecepcionFisicaResguard
 use App\Http\Controllers\PuntoVenta\Resguardos\PasarARecepcionResguardoPdvController;
 use App\Http\Controllers\PuntoVenta\Resguardos\RecepcionFisicaResguardoPdvController;
 use App\Http\Controllers\PuntoVenta\Resguardos\RegistrarIncidenciaResguardoPdvController;
+use App\Http\Controllers\PuntoVenta\Resguardos\RegistrarResguardoManualPdvController;
 use App\Http\Controllers\PuntoVenta\Resguardos\ReponerVencidoResguardoPdvController;
 use App\Http\Controllers\PuntoVenta\Resguardos\ResolverIncidenciaResguardoPdvController;
 use App\Services\PuntoVenta\AlcancePdv;
@@ -52,6 +54,9 @@ Route::middleware(['pdv.piso', 'pdv.permiso:'.PuntoVentaModulo::PERMISO_RESGUARD
     ->group(function () {
         Route::get('/', [BandejaResguardoPdvController::class, 'index'])->name('index');
         Route::get('/listado', [BandejaResguardoPdvController::class, 'listado'])->name('listado');
+        Route::get('/productos/buscar', BuscarProductoRegistroManualResguardoPdvController::class)
+            ->middleware('pdv.permiso:'.PuntoVentaModulo::PERMISO_RESGUARDOS_RECIBIR_GERENTE)
+            ->name('productos.buscar');
         Route::get('/etiquetas/resolver/{codigo}', [EtiquetasResguardoPdvController::class, 'resolver'])
             ->name('etiquetas.resolver');
         Route::get('/{resguardo}/auditoria', AuditoriaResguardoPdvController::class)->name('auditoria');
@@ -64,6 +69,7 @@ Route::middleware(['pdv.piso', 'pdv.permiso:'.PuntoVentaModulo::PERMISO_RESGUARD
     ->prefix('resguardos')
     ->name('resguardos.')
     ->group(function () {
+        Route::post('/', RegistrarResguardoManualPdvController::class)->name('store');
         Route::get('/{resguardo}/recepcion', [FormularioRecepcionFisicaResguardoPdvController::class, 'show'])
             ->name('recepcion.create');
         Route::put('/{resguardo}/recepcion', RecepcionFisicaResguardoPdvController::class)->name('recepcion');

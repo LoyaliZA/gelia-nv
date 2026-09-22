@@ -23,8 +23,9 @@ export default function AlertasCustodiaResguardo({
     onAntiguedad,
     antiguedadConfigurada = false,
     puedeVerVencidos = false,
+    puedeVerRezagados = false,
 }) {
-    const metricasVisibles = metricasAntiguedadClaves(bandeja, puedeVerVencidos);
+    const metricasVisibles = metricasAntiguedadClaves(bandeja, puedeVerVencidos, puedeVerRezagados);
     const titulo = TITULO_SECCION[bandeja] || 'Antigüedad operativa';
     const todosActivos = !antiguedadActiva;
 

@@ -26,6 +26,7 @@ const ETIQUETAS_POR_CLAVE = {
     'control_pedidos.ventas.autosave_debounce_ms': 'Retardo de autoguardado (ms)',
     'control_pedidos.ventas.max_reintentos_autosave': 'Reintentos de autoguardado',
     'control_pedidos.plazos_retraso': 'Plazos de retraso de pedidos',
+    'pdv.resguardos.registro_manual': 'Registro manual de resguardos en sucursal',
 };
 
 export const ETIQUETAS_CATEGORIA = {

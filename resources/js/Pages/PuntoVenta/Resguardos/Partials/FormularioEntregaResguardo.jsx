@@ -420,7 +420,7 @@ export function PasoReceptor({
                 <h2 className="text-sm font-black uppercase tracking-widest theme-text-main m-0">Quien retira</h2>
             </div>
             <p className="text-sm theme-text-muted m-0">
-                Indica si retira el titular del pedido o un tercero autorizado. Solo se solicita nombre y firma; no se capturan identificaciones oficiales.
+                Indica si retira la persona titular o un tercero autorizado. Solo se solicita nombre y firma; no se capturan identificaciones oficiales.
             </p>
 
             <fieldset className="space-y-2 border-0 p-0 m-0">

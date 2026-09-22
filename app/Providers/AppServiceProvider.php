@@ -58,6 +58,18 @@ class AppServiceProvider extends ServiceProvider
             \App\Services\PuntoVenta\Operacion\ConsultaPersonaDisponiblePdvService::class
         );
 
+        $this->app->singleton(
+            \App\Contracts\Medios\AlmacenObjetosMedio::class,
+            function ($app) {
+                $driver = (string) config('medios.driver', 'r2');
+                if ($app->environment('testing') || $driver === 'fake') {
+                    return new \App\Services\Medios\AlmacenObjetosMedioFake;
+                }
+
+                return $app->make(\App\Services\Medios\AlmacenObjetosMedioR2::class);
+            }
+        );
+
         $this->app->singleton(\App\Services\GeliaAi\Acciones\AccionRegistry::class, function ($app) {
             return new \App\Services\GeliaAi\Acciones\AccionRegistry([
                 $app->make(\App\Services\GeliaAi\Acciones\ImportarCostosAccion::class),

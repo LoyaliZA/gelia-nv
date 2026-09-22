@@ -9,6 +9,8 @@ use App\Models\Sucursal;
 use App\Models\User;
 use App\Services\PuntoVenta\PuntoVentaModulo;
 use App\Services\PuntoVenta\Resguardos\ConsultaBandejasResguardoPdvService;
+use App\Services\PuntoVenta\Resguardos\RegistroManualResguardoPdvConfig;
+use App\Support\PuntoVenta\Resguardos\DepartamentosOrigenResguardoManualPdv;
 use App\Support\PuntoVenta\Resguardos\EtiquetasResguardoPdv;
 use Illuminate\Http\JsonResponse;
 use Inertia\Inertia;
@@ -20,6 +22,7 @@ class BandejaResguardoPdvController extends Controller
         ConsultarBandejasResguardoPdvRequest $request,
         ConsultaBandejasResguardoPdvService $consulta,
         ResuelveAlcancePdv $alcance,
+        RegistroManualResguardoPdvConfig $registroManual,
     ): Response|JsonResponse {
         /** @var User $user */
         $user = $request->user();
@@ -39,9 +42,13 @@ class BandejaResguardoPdvController extends Controller
                 'bandejas' => EtiquetasResguardoPdv::bandejas(),
                 'estados' => EtiquetasResguardoPdv::estados(),
                 'antiguedades' => EtiquetasResguardoPdv::antiguedades(),
+                'origenes_pedido' => $registroManual->estaActivo()
+                    ? DepartamentosOrigenResguardoManualPdv::serializar()
+                    : [],
             ],
             'permisos' => fn () => [
                 'ver_vencidos' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_VER_VENCIDOS),
+                'ver_rezagados' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_VER_REZAGADOS),
                 'reponer_vencido' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_REPONER_VENCIDO),
                 'recibir' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_RECIBIR_GERENTE),
                 'confirmar_custodia' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_CONFIRMAR_CUSTODIA),
@@ -51,6 +58,7 @@ class BandejaResguardoPdvController extends Controller
             'sucursales_asignadas' => fn () => $this->serializarSucursalesAsignadas($user),
             'operativa' => fn () => [
                 'antiguedad_configurada' => $consulta->antiguedadConfigurada(),
+                'registro_manual' => $registroManual->estaActivo(),
             ],
             'recepcion_modal_id' => fn () => $request->integer('recepcion') ?: null,
         ]);

@@ -14,6 +14,7 @@ export default function FiltrosResguardos({
     onAntiguedad,
     catalogos = {},
     puedeVerVencidos = false,
+    puedeVerRezagados = false,
     antiguedadConfigurada = false,
     cargando = false,
     hayFiltrosActivos = false,
@@ -24,6 +25,7 @@ export default function FiltrosResguardos({
         bandeja,
         catalogos.antiguedades || {},
         puedeVerVencidos,
+        puedeVerRezagados,
     );
 
     const mostrarEstado = bandeja !== 'por_recibir';

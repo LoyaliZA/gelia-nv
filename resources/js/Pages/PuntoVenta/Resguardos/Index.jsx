@@ -11,6 +11,7 @@ import ListadoResguardos from './Partials/ListadoResguardos';
 import BusquedaRapidaRecepcion from './Partials/BusquedaRapidaRecepcion';
 import AlertasCustodiaResguardo from './Partials/AlertasCustodiaResguardo';
 import SelectorSucursalActivaPdv, { RELOAD_ONLY_RESGUARDOS } from '@/Components/PuntoVenta/SelectorSucursalActivaPdv';
+import AccionRegistrarResguardoManual from './Partials/AccionRegistrarResguardoManual';
 import useListadoResguardos from './Partials/useListadoResguardos';
 import BarraAccionesMasivasGerente from './Partials/BarraAccionesMasivasGerente';
 import { antiguedadValidaEnBandeja, paramsListadoResguardos } from './Partials/resguardosUtils';
@@ -33,6 +34,7 @@ export default function Index({
     operativa = {},
 }) {
     const antiguedadConfigurada = Boolean(operativa.antiguedad_configurada);
+    const puedeRegistrarManual = Boolean(operativa.registro_manual) && Boolean(permisos.recibir);
 
     const {
         resguardos: resguardosVista,
@@ -176,6 +178,11 @@ export default function Index({
                     aside={(
                         <div className="flex items-center gap-2 shrink-0 self-start md:self-center">
                             <PdvEncabezadoAlertasPdv />
+                            <AccionRegistrarResguardoManual
+                                habilitado={puedeRegistrarManual}
+                                origenes={catalogos.origenes_pedido || []}
+                                onExito={() => recargar({ bandeja: 'por_recibir', paso: 'gerente', page: 1 })}
+                            />
                             <div className="p-2.5 rounded-xl theme-element border theme-border flex items-center justify-center">
                                 <Package className="w-5 h-5" style={{ color: 'var(--color-primario)' }} aria-hidden />
                             </div>
@@ -259,7 +266,7 @@ export default function Index({
                     </div>
                 )}
 
-                {(bandejaRender === 'en_custodia' || bandejaRender === 'por_recibir') && (
+                {(bandejaRender === 'en_custodia' || (bandejaRender === 'por_recibir' && Boolean(permisos.ver_rezagados))) && (
                     <AlertasCustodiaResguardo
                         bandeja={bandejaRender}
                         catalogos={catalogos}
@@ -269,6 +276,7 @@ export default function Index({
                         onAntiguedad={onAntiguedad}
                         antiguedadConfigurada={antiguedadConfigurada}
                         puedeVerVencidos={Boolean(permisos.ver_vencidos)}
+                        puedeVerRezagados={Boolean(permisos.ver_rezagados)}
                     />
                 )}
 
@@ -282,6 +290,7 @@ export default function Index({
                     onAntiguedad={onAntiguedad}
                     catalogos={catalogos}
                     puedeVerVencidos={Boolean(permisos.ver_vencidos)}
+                    puedeVerRezagados={Boolean(permisos.ver_rezagados)}
                     antiguedadConfigurada={antiguedadConfigurada}
                     cargando={cargando}
                     hayFiltrosActivos={hayFiltrosActivos}

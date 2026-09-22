@@ -1,7 +1,7 @@
 import React from 'react';
 import { Loader2, Package, UserRound } from 'lucide-react';
 import { geliaCardClass, THEME_BTN_PRIMARY } from '../../../../utils/geliaTheme';
-import { titularResguardo } from './resguardosUtils';
+import { titularResguardo, etiquetaRetiroResguardo } from './resguardosUtils';
 import { ChipEvidenciasBultosEmpaque } from './ModalEvidenciasBultosEmpaque';
 import useToastAlCambiar from '../../../../hooks/useToastAlCambiar';
 
@@ -24,10 +24,7 @@ export default function FormularioConfirmarRecepcionResguardo({
     const cantidadBultos = resguardo?.cantidad_bultos_esperada ?? 0;
     const bultosCedis = resguardo?.bultos_empaque_cedis || [];
     const titular = titularResguardo(resguardo);
-    const etiquetaRetiro = resguardo?.etiqueta_retiro
-        || (resguardo?.envia_a_otra_persona
-            ? `Recoge tercero autorizado: ${resguardo.envia_otra_persona}`
-            : 'Retira el titular del pedido');
+    const etiquetaRetiro = etiquetaRetiroResguardo(resguardo);
 
     useToastAlCambiar(error, 'error');
 

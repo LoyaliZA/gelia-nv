@@ -102,6 +102,10 @@ export default function Show({ auth, resguardo, timeline = [], catalogos = {}, p
                         ))}
                     </div>
 
+                    {resguardo.registro_manual && (
+                        <PanelRegistroManual registro={resguardo.registro_manual} />
+                    )}
+
                     {resguardo.pedido && (
                         <p className="text-[10px] theme-text-muted font-bold m-0">
                             Pedido {resguardo.pedido.folio || resguardo.pedido.id}
@@ -234,6 +238,83 @@ function DetalleCampo({ label, value }) {
         <div className="rounded-2xl border theme-border p-3">
             <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted m-0">{label}</p>
             <p className="text-sm font-black theme-text-main m-0 mt-1">{value ?? '—'}</p>
+        </div>
+    );
+}
+
+function evidenciaPorUso(registro, uso) {
+    return (registro?.evidencias || []).find((item) => item.uso === uso) || null;
+}
+
+function MiniaturaEvidencia({ evidencia, etiqueta }) {
+    if (!evidencia) {
+        return <DetalleCampo label={etiqueta} value="Sin archivo" />;
+    }
+
+    const esImagen = String(evidencia.mime_type || '').startsWith('image/') && evidencia.ruta_publica;
+
+    return (
+        <div className="rounded-2xl border theme-border p-3 space-y-2">
+            <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted m-0">{etiqueta}</p>
+            {esImagen ? (
+                <a href={evidencia.ruta_publica} target="_blank" rel="noreferrer" className="block">
+                    <img
+                        src={evidencia.ruta_publica}
+                        alt={etiqueta}
+                        className="w-full h-28 object-cover rounded-xl"
+                    />
+                </a>
+            ) : (
+                <a
+                    href={evidencia.ruta_publica}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-sm font-bold theme-text-primario"
+                >
+                    {evidencia.nombre_original || 'Ver archivo'}
+                </a>
+            )}
+        </div>
+    );
+}
+
+function PanelRegistroManual({ registro }) {
+    const piezas = Array.isArray(registro.piezas) ? registro.piezas : [];
+
+    return (
+        <div className="space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <DetalleCampo label="Área de origen" value={registro.origen_nombre} />
+                <DetalleCampo label="Piezas" value={registro.cantidad_piezas} />
+            </div>
+            {registro.observaciones && (
+                <div className="rounded-2xl border theme-border p-3">
+                    <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted m-0">Observaciones</p>
+                    <p className="text-sm font-semibold theme-text-main m-0 mt-1 whitespace-pre-wrap">{registro.observaciones}</p>
+                </div>
+            )}
+            {piezas.length > 0 && (
+                <div className="rounded-2xl border theme-border overflow-hidden">
+                    <div className="px-3 py-2 border-b theme-border">
+                        <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted m-0">Piezas registradas</p>
+                    </div>
+                    <ul className="m-0 p-0 list-none divide-y theme-border">
+                        {piezas.map((pieza) => (
+                            <li key={`${pieza.producto_id}-${pieza.sku}`} className="px-3 py-2 flex items-center justify-between gap-3">
+                                <span className="min-w-0">
+                                    <span className="block text-sm font-bold theme-text-main truncate">{pieza.descripcion}</span>
+                                    <span className="block text-xs theme-text-muted">{pieza.sku || 'Sin SKU'}</span>
+                                </span>
+                                <span className="text-sm font-black theme-text-main tabular-nums">{pieza.cantidad}</span>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            )}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <MiniaturaEvidencia evidencia={evidenciaPorUso(registro, 'ticket')} etiqueta="Ticket" />
+                <MiniaturaEvidencia evidencia={evidenciaPorUso(registro, 'paquete')} etiqueta="Paquete" />
+            </div>
         </div>
     );
 }

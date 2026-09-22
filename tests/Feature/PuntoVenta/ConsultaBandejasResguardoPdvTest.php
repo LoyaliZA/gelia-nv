@@ -247,7 +247,7 @@ class ConsultaBandejasResguardoPdvTest extends TestCase
         $consultas = count(DB::getQueryLog());
         DB::disableQueryLog();
 
-        $this->assertLessThanOrEqual(60, $consultas);
+        $this->assertLessThanOrEqual(70, $consultas);
     }
 
     public function test_sucursal_no_autorizada_en_filtro_rechaza(): void

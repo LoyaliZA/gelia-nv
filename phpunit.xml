@@ -37,5 +37,6 @@
         <env name="WEBAUTHN_ENABLED" value="true"/>
         <env name="WEBAUTHN_RP_ID" value="gelianv.neobash.site"/>
         <env name="WEBAUTHN_ORIGINS" value="https://gelianv.neobash.site,http://localhost"/>
+        <env name="MEDIOS_DRIVER" value="fake"/>
     </php>
 </phpunit>

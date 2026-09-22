@@ -49,16 +49,24 @@ export function antiguedadValidaEnBandeja(bandeja, antiguedad) {
     return claves.includes(antiguedad);
 }
 
-export function antiguedadesVisiblesPorBandeja(bandeja, catalogoAntiguedades = {}, puedeVerVencidos = false) {
+export function antiguedadesVisiblesPorBandeja(
+    bandeja,
+    catalogoAntiguedades = {},
+    puedeVerVencidos = false,
+    puedeVerRezagados = false,
+) {
     const claves = ANTIGUEDAD_POR_BANDEJA[bandeja] || [];
     return Object.entries(catalogoAntiguedades)
         .filter(([clave]) => claves.includes(clave))
-        .filter(([clave]) => clave !== 'vencido' || puedeVerVencidos);
+        .filter(([clave]) => clave !== 'vencido' || puedeVerVencidos)
+        .filter(([clave]) => clave !== 'rezagado' || puedeVerRezagados);
 }
 
-export function metricasAntiguedadClaves(bandeja, puedeVerVencidos = false) {
+export function metricasAntiguedadClaves(bandeja, puedeVerVencidos = false, puedeVerRezagados = false) {
     const claves = ANTIGUEDAD_POR_BANDEJA[bandeja] || [];
-    return claves.filter((clave) => clave !== 'vencido' || puedeVerVencidos);
+    return claves
+        .filter((clave) => clave !== 'vencido' || puedeVerVencidos)
+        .filter((clave) => clave !== 'rezagado' || puedeVerRezagados);
 }
 
 /**
@@ -160,7 +168,9 @@ export function etiquetaRetiroResguardo(resguardo) {
     if (resguardo?.envia_a_otra_persona) {
         return `Recoge tercero autorizado: ${resguardo.envia_otra_persona}`;
     }
-    return 'Retira el titular del pedido';
+    return resguardo?.pedido_bma_id
+        ? 'Retira el titular del pedido'
+        : 'Retira la persona titular';
 }
 
 export function etiquetaEstadoRecepcion(resguardo, catalogos = {}, paso = 'gerente') {

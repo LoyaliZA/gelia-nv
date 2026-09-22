@@ -50,6 +50,7 @@ Schedule::command('control-pedidos:reconciliar-traslados-preparacion')->hourly()
 Schedule::command('pdv:evaluar-vencimientos-resguardos')->hourly();
 Schedule::command('pdv:evaluar-cierre-horario-operacion')->everyFiveMinutes();
 Schedule::command('pdv:evaluar-apertura-horario-operacion')->everyFiveMinutes();
+Schedule::command('medios:limpiar-cargas')->hourly();
 Schedule::command('tiendanube:recuperar-webhooks')->everyMinute();
 Schedule::command('tiendanube:limpiar-imports-imagenes')->dailyAt('04:00');
 

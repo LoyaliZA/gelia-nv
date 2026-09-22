@@ -27,6 +27,7 @@ class EstructuraRutasPermisosPdvTest extends TestCase
     public function test_rutas_registradas_con_prefijo_y_nombres_consistentes(): void
     {
         $this->assertTrue(Route::has('punto_venta.resguardos.index'));
+        $this->assertTrue(Route::has('punto_venta.resguardos.store'));
         $this->assertTrue(Route::has('punto_venta.sucursal_activa.establecer'));
         $this->assertTrue(Route::has('punto_venta.alcance.configurar'));
         $this->assertTrue(Route::has('punto_venta.resguardos.listado'));

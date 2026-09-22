@@ -181,10 +181,7 @@ class NotificarResguardoPdvService
             $sucursalId,
             $idempotencyKey,
             AlertaResguardoPdvNotification::TIPO_ESCALAMIENTO,
-            [
-                PuntoVentaModulo::PERMISO_RESGUARDOS_RECIBIR,
-                PuntoVentaModulo::PERMISO_RESGUARDOS_VER,
-            ],
+            [PuntoVentaModulo::PERMISO_RESGUARDOS_VER_REZAGADOS],
             'Escalamiento por rezago',
             "Resguardo {$this->folio($resguardo)} lleva demasiado tiempo sin recepción física.",
             ['escalamiento_contexto' => 'rezagado'],

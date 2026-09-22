@@ -19,6 +19,7 @@ use App\Events\PuntoVenta\JornadaCierreManual;
 use App\Events\PuntoVenta\JornadaReaperturaManual;
 use App\Events\PuntoVenta\PausaFinalizada;
 use App\Events\PuntoVenta\PausaIniciada;
+use App\Events\PuntoVenta\PublicidadPdvActualizada;
 use App\Events\PuntoVenta\RecepcionEsperadaPdvCreada;
 use App\Events\PuntoVenta\RecepcionFisicaPdvCompletada;
 use App\Events\PuntoVenta\TurnoAsignado;
@@ -26,6 +27,7 @@ use App\Events\PuntoVenta\TurnoCreado;
 use App\Events\PuntoVenta\TurnoReatencion;
 use App\Events\PuntoVenta\TurnoTransferido;
 use App\Events\PuntoVenta\TurnoVentanaReatencionVencida;
+use App\Models\PuntoVenta\PdvPantallaSalaToken;
 use App\Models\PuntoVenta\TurnoPdvEvento;
 use App\Support\PuntoVenta\Broadcast\Payloads\PayloadOperacionPdvBroadcast;
 use App\Support\PuntoVenta\Broadcast\Payloads\PayloadResguardoPdvBroadcast;
@@ -64,6 +66,7 @@ final class PdvRealtimeMapper
             PausaIniciada::class,
             PausaFinalizada::class,
             EquipoAsistenciaActualizada::class,
+            PublicidadPdvActualizada::class,
         ];
     }
 
@@ -118,6 +121,7 @@ final class PdvRealtimeMapper
             PausaIniciada::class => $this->pausa($event, 'pausa.iniciada'),
             PausaFinalizada::class => $this->pausa($event, 'pausa.finalizada'),
             EquipoAsistenciaActualizada::class => $this->equipoAsistenciaActualizada($event),
+            PublicidadPdvActualizada::class => $this->publicidadActualizada($event),
             default => [],
         };
     }
@@ -668,6 +672,44 @@ final class PdvRealtimeMapper
                 ],
             ),
         ]];
+    }
+
+    /**
+     * @return list<array{channels: list<Channel>, envelope: array<string, mixed>}>
+     */
+    private function publicidadActualizada(PublicidadPdvActualizada $event): array
+    {
+        $ids = [$event->sucursalContextoId];
+        if ($event->esGlobal()) {
+            $ids = array_merge(
+                $ids,
+                PdvPantallaSalaToken::query()
+                    ->where('estado', PdvPantallaSalaToken::ESTADO_ACTIVA)
+                    ->pluck('sucursal_id')
+                    ->all(),
+            );
+        }
+
+        $transmisiones = [];
+        foreach (array_unique(array_map('intval', $ids)) as $sucursalId) {
+            if ($sucursalId < 1) {
+                continue;
+            }
+            $transmisiones[] = [
+                'channels' => [CanalesPdv::turnosPublico($sucursalId)],
+                'envelope' => PdvRealtimeEnvelope::crear(
+                    'publicidad.actualizada:'.$sucursalId.':'.($event->publicidadId ?? '0').':'.uniqid('', true),
+                    'publicidad.actualizada',
+                    'publicidad',
+                    'publico',
+                    $sucursalId,
+                    1,
+                    ['publicidad_id' => $event->publicidadId],
+                ),
+            ];
+        }
+
+        return $transmisiones;
     }
 
     private function atencionConPersona(\App\Models\PuntoVenta\TurnoPdvAtencion $atencion): \App\Models\PuntoVenta\TurnoPdvAtencion
