@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\V1\AuthTokenController;
 use App\Http\Controllers\Api\V1\ClienteExternoController;
 use App\Http\Controllers\Api\V1\HealthController;
 use App\Http\Controllers\Api\V1\Mobile\MobileAuthController;
+use App\Http\Controllers\Api\V1\Mobile\MobileNotificationController;
 use App\Http\Controllers\Api\V1\Mobile\MobileSyncController;
 use App\Http\Controllers\Api\V1\PasskeyController;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
@@ -51,6 +52,9 @@ Route::prefix('v1')->group(function () {
     ])->group(function () {
         Route::post('/logout', [MobileAuthController::class, 'logout']);
         Route::get('/me', [MobileAuthController::class, 'me']);
+        Route::get('/notifications', [MobileNotificationController::class, 'index']);
+        Route::patch('/notifications/read-all', [MobileNotificationController::class, 'markAllAsRead']);
+        Route::patch('/notifications/{notification}/read', [MobileNotificationController::class, 'markAsRead']);
 
         Route::middleware('mobile.sync')->group(function () {
             Route::post('/sync/bootstrap', [MobileSyncController::class, 'storeBootstrap']);
