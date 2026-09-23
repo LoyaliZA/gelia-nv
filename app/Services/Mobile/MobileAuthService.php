@@ -134,6 +134,10 @@ class MobileAuthService
             'name' => $user->name,
             'username' => $user->username,
             'email' => $user->email,
+            'foto_perfil' => $user->foto_perfil,
+            'foto_perfil_url' => $user->foto_perfil
+                ? url('/storage/'.$user->foto_perfil)
+                : null,
         ];
     }
 

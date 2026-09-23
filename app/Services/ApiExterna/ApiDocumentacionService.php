@@ -139,6 +139,13 @@ class ApiDocumentacionService
                     'curl' => "curl -s \"{$baseUrl}/mobile/me\" -H \"Authorization: Bearer {TOKEN}\" -H \"Accept: application/json\"",
                 ],
                 [
+                    'metodo' => 'PATCH',
+                    'ruta' => '/mobile/profile',
+                    'auth' => true,
+                    'descripcion' => 'Actualiza preferencias visuales (tema_visual) y foto de perfil. JSON para tema_visual/remove_foto; multipart POST para foto_perfil.',
+                    'curl' => "curl -s -X PATCH \"{$baseUrl}/mobile/profile\" {$authHeaders} \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\"tema_visual\":{\"modo\":\"dark\",\"color_nombre\":\"rosa\"}}'",
+                ],
+                [
                     'metodo' => 'POST',
                     'ruta' => '/passkeys/login/options',
                     'auth' => false,

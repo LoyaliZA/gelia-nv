@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\V1\AuthTokenController;
 use App\Http\Controllers\Api\V1\ClienteExternoController;
 use App\Http\Controllers\Api\V1\HealthController;
 use App\Http\Controllers\Api\V1\Mobile\MobileAuthController;
+use App\Http\Controllers\Api\V1\Mobile\MobileProfileController;
 use App\Http\Controllers\Api\V1\Mobile\MobileSyncController;
 use App\Http\Controllers\Api\V1\PasskeyController;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
@@ -51,6 +52,7 @@ Route::prefix('v1')->group(function () {
     ])->group(function () {
         Route::post('/logout', [MobileAuthController::class, 'logout']);
         Route::get('/me', [MobileAuthController::class, 'me']);
+        Route::match(['patch', 'post'], '/profile', [MobileProfileController::class, 'update']);
 
         Route::middleware('mobile.sync')->group(function () {
             Route::post('/sync/bootstrap', [MobileSyncController::class, 'storeBootstrap']);
