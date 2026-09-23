@@ -108,6 +108,16 @@ class User extends Authenticatable implements WebAuthnAuthenticatable
         return null;
     }
 
+    /** Departamento de origen para solicitudes y flujos operativos. */
+    public function departamentoOrigenId(): ?int
+    {
+        $this->loadMissing(['departamento', 'departamentos', 'area.departamento']);
+
+        return $this->departamentoParaBranding()?->id
+            ?? $this->departamentos->first()?->id
+            ?? $this->area?->departamento_id;
+    }
+
     // Quiénes son los gerentes de este usuario
     public function gerentes()
     {

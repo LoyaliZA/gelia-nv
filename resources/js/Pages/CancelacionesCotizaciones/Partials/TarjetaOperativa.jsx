@@ -1,6 +1,6 @@
 import React from 'react';
-import { User, Calendar, Hash, FileText, Landmark, Ban, MoreVertical, CheckCircle2, XCircle, Building2 } from 'lucide-react';
-import { ESTADO_BADGE, tipoOperativoDeProceso } from './operativasStyles';
+import { User, Calendar, Hash, FileText, Landmark, Ban, MoreVertical, CheckCircle2, XCircle } from 'lucide-react';
+import { ESTADO_BADGE, DEPARTAMENTO_BADGE, tipoOperativoDeProceso } from './operativasStyles';
 import { geliaCardClass } from '../../../utils/geliaTheme';
 import FeedbackResolucion from './FeedbackResolucion';
 
@@ -17,7 +17,10 @@ export default function TarjetaOperativa({ solicitud, auth, onMenu, onAprobar, o
     const estadoId = solicitud.catalogo_estado_solicitud_id ?? solicitud.estado?.id;
     const estadoNombre = solicitud.estado?.nombre || '—';
     const subtipo = tipoOperativoDeProceso(solicitud.proceso);
-    const deptoLabel = solicitud.departamento?.codigo || solicitud.departamento?.nombre || null;
+    const deptoLabel = solicitud.vendedor?.departamento?.nombre
+        || solicitud.departamento?.nombre
+        || solicitud.departamento?.codigo
+        || null;
 
     return (
         <article
@@ -27,6 +30,14 @@ export default function TarjetaOperativa({ solicitud, auth, onMenu, onAprobar, o
         >
             <div className="flex flex-wrap items-start justify-between gap-3 mb-4 min-w-0">
                 <div className="min-w-0 flex-1">
+                    {deptoLabel && (
+                        <span
+                            className={`inline-flex items-center px-2.5 py-1 rounded-lg text-[9px] font-black uppercase border mb-1.5 ${DEPARTAMENTO_BADGE}`}
+                            style={{ color: 'var(--color-primario)' }}
+                        >
+                            {deptoLabel}
+                        </span>
+                    )}
                     <p className="text-[10px] font-mono font-black uppercase tracking-widest mb-1 m-0" style={{ color: 'var(--color-primario)' }}>
                         FOL-{solicitud.id}
                     </p>
@@ -53,11 +64,6 @@ export default function TarjetaOperativa({ solicitud, auth, onMenu, onAprobar, o
             </div>
 
             <div className="flex flex-wrap gap-2 mb-4">
-                {deptoLabel && (
-                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[9px] font-black uppercase theme-element border theme-border">
-                        <Building2 className="w-3 h-3 shrink-0" style={{ color: 'var(--color-primario)' }} /> {deptoLabel}
-                    </span>
-                )}
                 {solicitud.numero_remision && (
                     <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[9px] font-black uppercase theme-element border theme-border">
                         <Hash className="w-3 h-3 shrink-0" style={{ color: 'var(--color-primario)' }} /> Rem. {solicitud.numero_remision}

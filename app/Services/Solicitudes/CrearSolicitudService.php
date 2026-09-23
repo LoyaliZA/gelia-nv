@@ -24,8 +24,8 @@ class CrearSolicitudService
             $estadoPendiente = CatalogoEstadoSolicitud::where('nombre', 'Pendiente')->firstOrFail();
 
             // 1. Obtención del Departamento de Origen
-            $vendedor = User::with(['departamentos', 'area.departamento'])->find($vendedorId);
-            $departamentoOrigenId = $this->resolverDepartamentoOrigen($vendedor);
+            $vendedor = User::with(['departamento', 'departamentos', 'area.departamento'])->find($vendedorId);
+            $departamentoOrigenId = $vendedor?->departamentoOrigenId();
 
             // 2. Procesamiento de la Evidencia
             $evidenciaPath = null;
@@ -168,19 +168,6 @@ class CrearSolicitudService
 
             return $solicitud;
         });
-    }
-
-    private function resolverDepartamentoOrigen(?User $vendedor): ?int
-    {
-        if (!$vendedor) {
-            return null;
-        }
-
-        if ($vendedor->departamentos->isNotEmpty()) {
-            return $vendedor->departamentos->first()->id;
-        }
-
-        return $vendedor->area?->departamento_id;
     }
 
     private function aplicaCompraEnTienda(?\App\Models\CatalogoProceso $proceso, array $datos): bool

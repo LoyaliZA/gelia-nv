@@ -14,7 +14,7 @@ class ListarSolicitudesOperativasService
     {
         $query = SolicitudTag::with([
             'cliente',
-            'vendedor',
+            'vendedor.departamento',
             'departamento',
             'proceso',
             'estado',

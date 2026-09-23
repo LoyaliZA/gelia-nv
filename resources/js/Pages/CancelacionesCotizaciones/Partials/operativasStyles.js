@@ -16,6 +16,8 @@ export const ESTADO_BADGE = {
     4: 'bg-red-500/15 text-red-600 border-red-500/30',
 };
 
+export const DEPARTAMENTO_BADGE = 'bg-[var(--color-primario)]/15 border-[var(--color-primario)]/30';
+
 export const BTN_PRIMARY = `${THEME_BTN_PRIMARY} theme-btn-primary--compact`;
 export const BTN_SECONDARY = `${THEME_BTN_SECONDARY} theme-btn-primary--compact`;
 
