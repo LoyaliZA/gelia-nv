@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\V1\AuthTokenController;
 use App\Http\Controllers\Api\V1\ClienteExternoController;
 use App\Http\Controllers\Api\V1\HealthController;
 use App\Http\Controllers\Api\V1\Mobile\MobileAuthController;
+use App\Http\Controllers\Api\V1\Mobile\MobileClienteController;
 use App\Http\Controllers\Api\V1\Mobile\MobileProfileController;
 use App\Http\Controllers\Api\V1\Mobile\MobileSyncController;
 use App\Http\Controllers\Api\V1\PasskeyController;
@@ -53,6 +54,8 @@ Route::prefix('v1')->group(function () {
         Route::post('/logout', [MobileAuthController::class, 'logout']);
         Route::get('/me', [MobileAuthController::class, 'me']);
         Route::match(['patch', 'post'], '/profile', [MobileProfileController::class, 'update']);
+        Route::get('/clientes', [MobileClienteController::class, 'index']);
+        Route::get('/clientes/{numeroCliente}', [MobileClienteController::class, 'show']);
 
         Route::middleware('mobile.sync')->group(function () {
             Route::post('/sync/bootstrap', [MobileSyncController::class, 'storeBootstrap']);
