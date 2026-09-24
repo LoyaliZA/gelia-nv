@@ -2,9 +2,9 @@
 
 namespace App\Http\Requests\PuntoVenta\Resguardos;
 
-use App\Contracts\PuntoVenta\ResuelveAlcancePdv;
+use App\Models\PuntoVenta\ResguardoPdv;
 use App\Models\User;
-use App\Services\PuntoVenta\PuntoVentaModulo;
+use App\Support\PuntoVenta\Resguardos\AutorizacionConsultaResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\EtiquetasResguardoPdv;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -18,10 +18,12 @@ class ConsultarAuditoriaResguardoPdvRequest extends FormRequest
             return false;
         }
 
-        return app(ResuelveAlcancePdv::class)->permiteConsultaPiso(
-            $user,
-            PuntoVentaModulo::PERMISO_RESGUARDOS_VER
-        );
+        $resguardo = $this->route('resguardo');
+        if (! $resguardo instanceof ResguardoPdv) {
+            return false;
+        }
+
+        return app(AutorizacionConsultaResguardoPdv::class)->permiteDetalleResguardo($user, $resguardo);
     }
 
     /**

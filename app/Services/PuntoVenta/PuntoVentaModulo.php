@@ -38,6 +38,8 @@ final class PuntoVentaModulo
 
     public const PERMISO_RESGUARDOS_CORREGIR = 'pdv.resguardos.corregir';
 
+    public const PERMISO_RESGUARDOS_VER_HISTORIAL_ENTREGAS = 'pdv.resguardos.ver_historial_entregas';
+
     public const PERMISO_REPORTES_EXPORTAR = 'pdv.reportes.exportar';
 
     public const PERMISO_TURNOS_VER = 'pdv.turnos.ver';
@@ -105,6 +107,7 @@ final class PuntoVentaModulo
             self::PERMISO_RESGUARDOS_AUTORIZAR_ENTREGA_INCIDENCIA,
             self::PERMISO_RESGUARDOS_CONFIRMAR_DEVOLUCION,
             self::PERMISO_RESGUARDOS_CORREGIR,
+            self::PERMISO_RESGUARDOS_VER_HISTORIAL_ENTREGAS,
             self::PERMISO_TURNOS_VER,
             self::PERMISO_TURNOS_ALTA,
             self::PERMISO_TURNOS_MARCAR_PRIORIDAD,

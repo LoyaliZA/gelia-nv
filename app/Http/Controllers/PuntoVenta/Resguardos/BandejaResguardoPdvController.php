@@ -61,6 +61,11 @@ class BandejaResguardoPdvController extends Controller
                 'registro_manual' => $registroManual->estaActivo(),
             ],
             'recepcion_modal_id' => fn () => $request->integer('recepcion') ?: null,
+            'detalle_modal_id' => fn () => $request->integer('detalle') ?: null,
+            'puede_ver_historial_entregas' => fn () => $alcance->tienePermisoPdv(
+                $user,
+                PuntoVentaModulo::PERMISO_RESGUARDOS_VER_HISTORIAL_ENTREGAS
+            ),
         ]);
     }
 

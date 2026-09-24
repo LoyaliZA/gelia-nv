@@ -95,7 +95,7 @@ class CrearResguardoManualPdvService
                 $origen = DepartamentosOrigenResguardoManualPdv::encontrarActivo($origenId);
                 if ($origen === null) {
                     throw ValidationException::withMessages([
-                        'origen_id' => 'Seleccione un área de origen válida (Aromas o Bellaroma).',
+                        'origen_id' => 'Seleccione un área de origen válida.',
                     ]);
                 }
 
@@ -130,6 +130,8 @@ class CrearResguardoManualPdvService
                             'origen_nombre' => $origen->nombre,
                             'departamento_id' => $origen->id,
                             'departamento_nombre' => $origen->nombre,
+                            'registrado_por_id' => $actor->id,
+                            'registrado_por_nombre' => trim((string) $actor->name) ?: null,
                             'observaciones' => $observaciones,
                             'cantidad_piezas' => $cantidadPiezas,
                             'piezas' => $piezas,

@@ -277,6 +277,7 @@ export const DESCRIPCIONES_PERMISOS = {
     'pdv.resguardos.autorizar_entrega_incidencia': 'Permite autorizar entrega con incidencia abierta.',
     'pdv.resguardos.confirmar_devolucion': 'Permite confirmar la devolución de mercancía en custodia.',
     'pdv.resguardos.corregir': 'Permite aplicar correcciones administrativas auditadas sobre resguardos.',
+    'pdv.resguardos.ver_historial_entregas': 'Permite consultar el historial de resguardos entregados en piso (solo lectura).',
     'pdv.turnos.ver': 'Permite consultar la cola y turnos de la sucursal activa.',
     'pdv.turnos.alta': 'Permite dar de alta turnos en recepción.',
     'pdv.turnos.marcar_prioridad': 'Permite marcar prioridad de adulto mayor o discapacidad en el alta.',
@@ -346,6 +347,7 @@ export const ETIQUETAS_PERMISOS = {
     'pdv.resguardos.autorizar_entrega_incidencia': 'autorizar entrega con incidencia',
     'pdv.resguardos.confirmar_devolucion': 'confirmar devolución',
     'pdv.resguardos.corregir': 'corregir resguardo',
+    'pdv.resguardos.ver_historial_entregas': 'historial entregas',
     'pdv.turnos.ver': 'ver turnos',
     'pdv.turnos.alta': 'alta de turno',
     'pdv.turnos.marcar_prioridad': 'marcar prioridad',
@@ -1237,6 +1239,7 @@ export const SUBMODULOS_UI_POR_MODULO = {
                 'pdv.resguardos.autorizar_entrega_incidencia',
                 'pdv.resguardos.confirmar_devolucion',
                 'pdv.resguardos.corregir',
+                'pdv.resguardos.ver_historial_entregas',
             ],
         },
         {

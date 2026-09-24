@@ -11,6 +11,7 @@ use App\Services\PuntoVenta\PuntoVentaModulo;
 use App\Models\PuntoVenta\ResguardoPdvBulto;
 use App\Support\PuntoVenta\Resguardos\AntiguedadOperativaResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\BandejaResguardoPdv;
+use App\Support\PuntoVenta\Resguardos\BusquedaResguardoPdvQuery;
 use App\Support\PuntoVenta\Resguardos\EstadoRecepcionResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\EstadoResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\EtiquetasResguardoPdv;
@@ -198,6 +199,7 @@ class ConsultaBandejasResguardoPdvService
                 'pedido:id,folio,folio_remision,cliente_id,envia_a_otra_persona,envia_otra_persona',
                 'pedido.bultosEmpaque.documentos',
                 'evidencias',
+                'eventoRegistroManual.actor:id,name,username',
             ])
             ->withCount([
                 'incidencias as incidencias_abiertas_count' => fn (Builder $q) => $q
@@ -228,6 +230,7 @@ class ConsultaBandejasResguardoPdvService
                 'pedido:id,folio,folio_remision,cliente_id,envia_a_otra_persona,envia_otra_persona',
                 'pedido.bultosEmpaque.documentos',
                 'evidencias',
+                'eventoRegistroManual.actor:id,name,username',
             ])
             ->withCount([
                 'incidencias as incidencias_abiertas_count' => fn (Builder $q) => $q
@@ -495,36 +498,7 @@ class ConsultaBandejasResguardoPdvService
 
     private function aplicarBusqueda(Builder $query, string $termino): void
     {
-        $termino = trim($termino);
-        if ($termino === '') {
-            return;
-        }
-
-        $like = '%'.$termino.'%';
-
-        $query->where(function (Builder $q) use ($like, $termino) {
-            $q->where('snapshot_folio', 'like', $like)
-                ->orWhere('snapshot_cliente_nombre', 'like', $like)
-                ->orWhereHas('bultos', function (Builder $bultos) use ($termino) {
-                    $bultos->where('codigo_etiqueta', $termino)
-                        ->orWhere('folio', 'like', '%'.$termino.'%');
-                })
-                ->orWhereHas('pedido', function (Builder $pedido) use ($like, $termino) {
-                    $pedido->where('folio', 'like', $like)
-                        ->orWhere('folio_remision', 'like', $like);
-
-                    if (is_numeric($termino)) {
-                        $pedido->orWhere('id', (int) $termino);
-                    }
-                })
-                ->orWhereHas('cliente', function (Builder $cliente) use ($like, $termino) {
-                    $cliente->where('nombre', 'like', $like);
-
-                    if (is_numeric($termino)) {
-                        $cliente->orWhere('numero_cliente', 'like', $like);
-                    }
-                });
-        });
+        BusquedaResguardoPdvQuery::aplicar($query, $termino);
     }
 
     private function aplicarOrdenBandeja(Builder $query, string $bandeja): void

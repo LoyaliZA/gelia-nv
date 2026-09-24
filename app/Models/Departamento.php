@@ -17,10 +17,12 @@ class Departamento extends Model
         'logo_key_claro',
         'logo_key_oscuro',
         'activo',
+        'visible_origen_resguardo_pdv',
     ];
 
     protected $casts = [
         'activo' => 'boolean',
+        'visible_origen_resguardo_pdv' => 'boolean',
     ];
 
     // --- SECCIÓN: RELACIONES ---

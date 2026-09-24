@@ -18,7 +18,13 @@ class OrganizacionSeeder extends Seeder
         ];
 
         foreach ($estructura as $deptoNombre => $areas) {
-            $depto = Departamento::updateOrCreate(['nombre' => $deptoNombre], ['activo' => true]);
+            $depto = Departamento::updateOrCreate(
+                ['nombre' => $deptoNombre],
+                [
+                    'activo' => true,
+                    'visible_origen_resguardo_pdv' => in_array($deptoNombre, ['Aromas', 'Bellaroma'], true),
+                ]
+            );
             
             foreach ($areas as $areaNombre) {
                 Area::updateOrCreate([

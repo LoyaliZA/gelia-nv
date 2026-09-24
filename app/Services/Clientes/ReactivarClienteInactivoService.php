@@ -53,11 +53,11 @@ class ReactivarClienteInactivoService
     {
         $listas = CatalogoListaDescuento::where('activo', true)->orderByDesc('monto_requerido')->get();
 
-        return app(EscalonamientoService::class)->resolverListaPorMontoId($monto, $listas);
+        return app(EscalonamientoService::class)->resolverListaPorAcumuladoNetoId($monto, $listas);
     }
 
     private function determinarListaPorMonto(float $monto, $listas): int
     {
-        return app(EscalonamientoService::class)->resolverListaPorMontoId($monto, $listas);
+        return app(EscalonamientoService::class)->resolverListaPorAcumuladoNetoId($monto, $listas);
     }
 }

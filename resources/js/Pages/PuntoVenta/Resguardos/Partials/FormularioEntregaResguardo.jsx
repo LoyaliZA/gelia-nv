@@ -47,7 +47,18 @@ export default function FormularioEntregaResguardo({
     const [evidencias, setEvidencias] = useState([]);
     const [erroresPaso, setErroresPaso] = useState({});
     const [confirmar, setConfirmar] = useState(false);
+    const [firmaDataUrlGuardada, setFirmaDataUrlGuardada] = useState(null);
     const firmaRef = useRef(null);
+
+    const persistirFirmaCapturada = () => {
+        if (!firmaRef.current?.hasStroke?.()) return;
+        const url = firmaRef.current.getDataUrl?.();
+        if (url) setFirmaDataUrlGuardada(url);
+    };
+
+    const tieneFirmaParaEnvio = () => Boolean(firmaDataUrlGuardada) || Boolean(firmaRef.current?.hasStroke?.());
+
+    const obtenerFirmaDataUrl = () => firmaDataUrlGuardada || firmaRef.current?.getDataUrl?.() || null;
 
     useToastAlCambiar(error, 'error');
 
@@ -96,7 +107,8 @@ export default function FormularioEntregaResguardo({
         }
 
         if (pasoActual === 'evidencia') {
-            const errores = validarPasoEvidencia({ tieneFirma: firmaRef.current?.hasStroke?.() });
+            persistirFirmaCapturada();
+            const errores = validarPasoEvidencia({ tieneFirma: tieneFirmaParaEnvio() });
             if (Object.keys(errores).length > 0) {
                 setErroresPaso(errores);
                 return;
@@ -110,14 +122,18 @@ export default function FormularioEntregaResguardo({
     const retroceder = () => {
         setErroresPaso({});
         const anterior = PASOS_ENTREGA[indiceActual - 1];
+        if (anterior?.id === 'evidencia') {
+            setFirmaDataUrlGuardada(null);
+        }
         if (anterior) setPasoActual(anterior.id);
     };
 
     const solicitarConfirmacion = () => {
+        persistirFirmaCapturada();
         const errores = {
             ...validarPasoBultos({ bultoIds }),
             ...validarPasoReceptor({ relacion, nombreQuienRetira }),
-            ...validarPasoEvidencia({ tieneFirma: firmaRef.current?.hasStroke?.() }),
+            ...validarPasoEvidencia({ tieneFirma: tieneFirmaParaEnvio() }),
         };
         if (Object.keys(errores).length > 0) {
             setErroresPaso(errores);
@@ -128,7 +144,8 @@ export default function FormularioEntregaResguardo({
 
     const confirmarEnvio = async () => {
         setConfirmar(false);
-        const firmaDataUrl = firmaRef.current?.getDataUrl?.();
+        persistirFirmaCapturada();
+        const firmaDataUrl = obtenerFirmaDataUrl();
         await onEnviar({
             relacion,
             nombreQuienRetira,
@@ -198,6 +215,7 @@ export default function FormularioEntregaResguardo({
                     cantidadEvidencias={evidencias.length}
                     cantidadBultos={bultoIds.length}
                     entregaParcial={entregaParcial}
+                    errores={erroresPaso}
                 />
             )}
 
@@ -535,10 +553,21 @@ function PasoConfirmar({
     cantidadEvidencias,
     cantidadBultos,
     entregaParcial,
+    errores = {},
 }) {
     return (
         <div className={`${geliaCardClass()} p-5 space-y-4 border-2 border-[var(--color-primario)]/30`}>
             <h2 className="text-sm font-black uppercase tracking-widest theme-text-main m-0">Resumen antes de confirmar</h2>
+            {(errores.firma || errores.bulto_ids) && (
+                <div className="space-y-1">
+                    {errores.firma && (
+                        <p className="text-xs font-bold text-red-600 dark:text-red-300 m-0">{errores.firma}</p>
+                    )}
+                    {errores.bulto_ids && (
+                        <p className="text-xs font-bold text-red-600 dark:text-red-300 m-0">{errores.bulto_ids}</p>
+                    )}
+                </div>
+            )}
             <p className="text-sm theme-text-muted m-0">
                 {entregaParcial
                     ? 'Al confirmar, solo los bultos seleccionados se entregan. El resguardo permanece en custodia.'

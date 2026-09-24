@@ -8,6 +8,7 @@ import useConfirmacionCustodia from './useConfirmacionCustodia';
 import useFormularioCustodiaResguardo from './useFormularioCustodiaResguardo';
 import { BTN_SECONDARY, badgeEstadoResguardo } from './resguardosStyles';
 import useToastAlCambiar from '../../../../hooks/useToastAlCambiar';
+import { abrirDetalleResguardoModal } from './resguardoDetalleModalBridge';
 
 export default function ModalCustodiaResguardo({
     abierto,
@@ -123,11 +124,11 @@ export default function ModalCustodiaResguardo({
                             </button>
                         </div>
                     ) : exito ? (
-                        <ResultadoExito onDetalle={() => router.visit(route('punto_venta.resguardos.show', resguardoId))} />
+                        <ResultadoExito onDetalle={() => abrirDetalleResguardoModal(resguardoId)} />
                     ) : !admiteConfirmacion ? (
                         <EstadoNoDisponible
                             motivo={motivoNoConfirmacion}
-                            onDetalle={() => router.visit(route('punto_venta.resguardos.show', resguardoId))}
+                            onDetalle={() => abrirDetalleResguardoModal(resguardoId)}
                         />
                     ) : resguardo ? (
                         almacenes.length === 0 ? (

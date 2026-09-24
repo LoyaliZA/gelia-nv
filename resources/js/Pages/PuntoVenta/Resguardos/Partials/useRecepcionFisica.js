@@ -7,6 +7,7 @@ import {
     mensajeErrorRecepcion,
     esConflictoVersion,
 } from './recepcionFisicaUtils';
+import { abrirDetalleResguardoModal } from './resguardoDetalleModalBridge';
 
 export default function useRecepcionFisica({
     resguardoId,
@@ -88,7 +89,7 @@ export default function useRecepcionFisica({
         if (modoModal) {
             onExitoModal?.({ accion: 'detalle', resguardoId });
         }
-        router.visit(route('punto_venta.resguardos.show', resguardoId));
+        abrirDetalleResguardoModal(resguardoId);
     }, [modoModal, onExitoModal, resguardoId]);
 
     const irABandeja = useCallback(() => {

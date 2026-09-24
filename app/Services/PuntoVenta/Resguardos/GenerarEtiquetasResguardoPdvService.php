@@ -7,7 +7,7 @@ use App\Models\PuntoVenta\ResguardoPdv;
 use App\Models\PuntoVenta\ResguardoPdvBulto;
 use App\Models\PuntoVenta\ResguardoPdvEvento;
 use App\Models\User;
-use App\Services\PuntoVenta\PuntoVentaModulo;
+use App\Support\PuntoVenta\Resguardos\AutorizacionConsultaResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\GeneradorCodigoEtiquetaResguardoPdv;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Barryvdh\DomPDF\PDF as DomPdfInstance;
@@ -30,6 +30,7 @@ class GenerarEtiquetasResguardoPdvService
 
     public function __construct(
         private readonly ResuelveAlcancePdv $alcance,
+        private readonly AutorizacionConsultaResguardoPdv $autorizacion,
     ) {}
 
     /**
@@ -40,7 +41,7 @@ class GenerarEtiquetasResguardoPdvService
         User $actor,
         ?array $bultoIds = null,
     ): DomPdfInstance {
-        $this->alcance->asegurarConsultaPiso($actor, PuntoVentaModulo::PERMISO_RESGUARDOS_VER);
+        $this->autorizacion->asegurarDetalleResguardo($actor, $resguardo);
 
         $activaId = $this->alcance->sucursalActivaId($actor);
         if ($activaId === null || (int) $resguardo->sucursal_id !== $activaId) {

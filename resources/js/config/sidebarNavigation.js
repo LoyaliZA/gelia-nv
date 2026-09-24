@@ -40,6 +40,7 @@ import {
     Bot,
     Monitor,
     Images,
+    History,
 } from 'lucide-react';
 
 import { ADMIN_MODULES, isAdminModuleAllowed, adminModuleHref } from './adminModules';
@@ -262,7 +263,16 @@ export function buildSidebarNavigation({ can, showAdminMenu, manualesHubVisible 
             label: 'Resguardos',
             icon: Shield,
             href: () => routeHref('punto_venta.resguardos.index', '/punto-venta/resguardos'),
-            active: (url) => url.startsWith('/punto-venta/resguardos'),
+            active: (url) => url.startsWith('/punto-venta/resguardos')
+                && !url.startsWith('/punto-venta/resguardos/entregados'),
+        },
+        can('punto_venta.acceder') && can('pdv.resguardos.ver_historial_entregas') && {
+            type: 'link',
+            id: 'punto_venta_resguardos_entregados',
+            label: 'Historial de entregas',
+            icon: History,
+            href: () => routeHref('punto_venta.resguardos.entregados.index', '/punto-venta/resguardos/entregados'),
+            active: (url) => url.startsWith('/punto-venta/resguardos/entregados'),
         },
         can('punto_venta.acceder') && (can('pdv.turnos.ver') || can('pdv.turnos.alta')) && {
             type: 'link',

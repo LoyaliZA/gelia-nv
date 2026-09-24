@@ -74,7 +74,9 @@ class AlertaResguardoPdvNotification extends Notification implements ShouldQueue
             'resguardo_id' => $this->resguardoId,
             'folio' => $this->folio,
             'sucursal_id' => $this->sucursalId,
-            'url' => '/punto-venta/resguardos/'.$this->resguardoId,
+            'url' => $this->tipoAlerta === self::TIPO_ENTREGA
+                ? '/punto-venta/resguardos/entregados?detalle='.$this->resguardoId
+                : '/punto-venta/resguardos/'.$this->resguardoId,
             'idempotency_key' => $this->idempotencyKey,
             'fecha' => now()->toDateTimeString(),
         ], $this->extras);

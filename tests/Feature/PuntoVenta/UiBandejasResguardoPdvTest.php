@@ -100,13 +100,15 @@ class UiBandejasResguardoPdvTest extends TestCase
 
         $this->actingAs($this->usuario)
             ->get(route('punto_venta.resguardos.show', $resguardo))
+            ->assertRedirect(route('punto_venta.resguardos.index', ['detalle' => $resguardo->id], absolute: false));
+
+        $this->actingAs($this->usuario)
+            ->getJson(route('punto_venta.resguardos.show', $resguardo))
             ->assertOk()
-            ->assertInertia(fn ($page) => $page
-                ->component('PuntoVenta/Resguardos/Show', false)
-                ->where('resguardo.id', $resguardo->id)
-                ->where('resguardo.snapshot_folio', 'REM-DET-001')
-                ->has('timeline', 1)
-                ->where('timeline.0.tipo_evento', ResguardoPdvEvento::TIPO_RECEPCION_ESPERADA_CREADA));
+            ->assertJsonPath('resguardo.id', $resguardo->id)
+            ->assertJsonPath('resguardo.snapshot_folio', 'REM-DET-001')
+            ->assertJsonCount(1, 'timeline')
+            ->assertJsonPath('timeline.0.tipo_evento', ResguardoPdvEvento::TIPO_RECEPCION_ESPERADA_CREADA);
     }
 
     public function test_show_otra_sucursal_devuelve_404(): void
@@ -143,14 +145,14 @@ class UiBandejasResguardoPdvTest extends TestCase
         ]);
 
         $this->actingAs($this->usuario)
-            ->get(route('punto_venta.resguardos.show', $resguardo))
+            ->getJson(route('punto_venta.resguardos.show', $resguardo))
             ->assertOk()
-            ->assertInertia(fn ($page) => $page
-                ->component('PuntoVenta/Resguardos/Show', false)
-                ->has('resguardo.clasificaciones')
-                ->has('resguardo.fecha_limite_custodia')
-                ->where('resguardo.antiguedad_configurada', true)
-                ->has('catalogos.antiguedades'));
+            ->assertJsonPath('resguardo.id', $resguardo->id)
+            ->assertJsonStructure([
+                'resguardo' => ['clasificaciones', 'fecha_limite_custodia', 'antiguedad_configurada'],
+                'catalogos' => ['antiguedades'],
+            ])
+            ->assertJsonPath('resguardo.antiguedad_configurada', true);
     }
 
     /**

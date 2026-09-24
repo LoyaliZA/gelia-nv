@@ -202,12 +202,11 @@ class VencimientosResguardoPdvTest extends TestCase
         ]);
 
         $this->actingAs($this->usuario)
-            ->get(route('punto_venta.resguardos.show', $resguardo))
+            ->getJson(route('punto_venta.resguardos.show', $resguardo))
             ->assertOk()
-            ->assertInertia(fn ($page) => $page
-                ->where('resguardo.clasificaciones.vencido', true)
-                ->where('resguardo.antiguedad_configurada', true)
-                ->has('resguardo.clasificaciones_etiquetas', 1));
+            ->assertJsonPath('resguardo.clasificaciones.vencido', true)
+            ->assertJsonPath('resguardo.antiguedad_configurada', true)
+            ->assertJsonCount(1, 'resguardo.clasificaciones_etiquetas');
     }
 
     /**

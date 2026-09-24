@@ -1,5 +1,4 @@
 import React from 'react';
-import { Link } from '@inertiajs/react';
 import { Package, RefreshCw, UserRound, Eye, UserCheck } from 'lucide-react';
 import {
     formatearFechaCompacta,
@@ -20,6 +19,8 @@ import { resguardoAdmiteRecepcion } from './recepcionFisicaUtils';
 import { ChipEvidenciasBultosEmpaque } from './ModalEvidenciasBultosEmpaque';
 import BotonConfirmarRecepcionResguardo, { BotonPasarARecepcionResguardo } from './BotonConfirmarRecepcionResguardo';
 import { AccionConfirmarCustodiaResguardo } from './ModalCustodiaResguardo';
+import MetaRegistroManualTarjeta from './MetaRegistroManualTarjeta';
+import { abrirDetalleResguardoModal } from './resguardoDetalleModalBridge';
 
 export default function TarjetaResguardoRecepcion({
     resguardo,
@@ -78,11 +79,7 @@ export default function TarjetaResguardoRecepcion({
                     </p>
                 </div>
                 </div>
-                {resguardo.sucursal?.nombre && (
-                    <span className="shrink-0 inline-flex px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-wide bg-purple-500/15 text-purple-700 dark:text-purple-300 max-w-[40%] truncate">
-                        {resguardo.sucursal.nombre}
-                    </span>
-                )}
+                <MetaRegistroManualTarjeta resguardo={resguardo} />
             </header>
 
             <div className="space-y-1">
@@ -172,13 +169,14 @@ export default function TarjetaResguardoRecepcion({
                         <PieContenido />
                     </div>
                 )}
-                <Link
-                    href={route('punto_venta.resguardos.show', resguardo.id)}
+                <button
+                    type="button"
+                    onClick={() => abrirDetalleResguardoModal(resguardo.id, resguardo)}
                     className={BTN_SECUNDARIO_RECEPCION_TARJETA}
                 >
                     <Eye className="w-4 h-4 shrink-0" aria-hidden />
                     <span>Ver detalle</span>
-                </Link>
+                </button>
             </div>
         </article>
     );

@@ -125,7 +125,10 @@ class NotificarResguardoPdvService
             $sucursalId,
             $idempotencyKey,
             AlertaResguardoPdvNotification::TIPO_ENTREGA,
-            [PuntoVentaModulo::PERMISO_RESGUARDOS_VER],
+            [
+                PuntoVentaModulo::PERMISO_RESGUARDOS_VER,
+                PuntoVentaModulo::PERMISO_RESGUARDOS_VER_HISTORIAL_ENTREGAS,
+            ],
             'Entrega completada',
             "Resguardo {$this->folio($resguardo)} entregado al cliente."
         );

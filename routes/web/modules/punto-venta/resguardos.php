@@ -7,6 +7,7 @@ use App\Http\Controllers\PuntoVenta\Resguardos\BandejaResguardoPdvController;
 use App\Http\Controllers\PuntoVenta\Resguardos\ConfirmarDevolucionResguardoPdvController;
 use App\Http\Controllers\PuntoVenta\Resguardos\CorregirResguardoPdvController;
 use App\Http\Controllers\PuntoVenta\Resguardos\DetalleResguardoPdvController;
+use App\Http\Controllers\PuntoVenta\Resguardos\EvidenciaResguardoPdvController;
 use App\Http\Controllers\PuntoVenta\Resguardos\EntregaMultipleResguardoPdvController;
 use App\Http\Controllers\PuntoVenta\Resguardos\EntregaResguardoPdvController;
 use App\Http\Controllers\PuntoVenta\Resguardos\EtiquetasResguardoPdvController;
@@ -15,6 +16,7 @@ use App\Http\Controllers\PuntoVenta\Resguardos\FormularioEntregaResguardoPdvCont
 use App\Http\Controllers\PuntoVenta\Resguardos\ConfirmacionCustodiaResguardoPdvController;
 use App\Http\Controllers\PuntoVenta\Resguardos\FormularioConfirmacionCustodiaResguardoPdvController;
 use App\Http\Controllers\PuntoVenta\Resguardos\FormularioRecepcionFisicaResguardoPdvController;
+use App\Http\Controllers\PuntoVenta\Resguardos\HistorialEntregadosResguardoPdvController;
 use App\Http\Controllers\PuntoVenta\Resguardos\PasarARecepcionResguardoPdvController;
 use App\Http\Controllers\PuntoVenta\Resguardos\RecepcionFisicaResguardoPdvController;
 use App\Http\Controllers\PuntoVenta\Resguardos\RegistrarIncidenciaResguardoPdvController;
@@ -48,6 +50,14 @@ Route::middleware(['pdv.piso', 'pdv.permiso:'.PuntoVentaModulo::PERMISO_RESGUARD
             ->name('entregas_multiples.store');
     });
 
+Route::middleware(['pdv.piso', 'pdv.permiso:'.PuntoVentaModulo::PERMISO_RESGUARDOS_VER_HISTORIAL_ENTREGAS])
+    ->prefix('resguardos/entregados')
+    ->name('resguardos.entregados.')
+    ->group(function () {
+        Route::get('/', [HistorialEntregadosResguardoPdvController::class, 'index'])->name('index');
+        Route::get('/listado', [HistorialEntregadosResguardoPdvController::class, 'listado'])->name('listado');
+    });
+
 Route::middleware(['pdv.piso', 'pdv.permiso:'.PuntoVentaModulo::PERMISO_RESGUARDOS_VER])
     ->prefix('resguardos')
     ->name('resguardos.')
@@ -59,10 +69,18 @@ Route::middleware(['pdv.piso', 'pdv.permiso:'.PuntoVentaModulo::PERMISO_RESGUARD
             ->name('productos.buscar');
         Route::get('/etiquetas/resolver/{codigo}', [EtiquetasResguardoPdvController::class, 'resolver'])
             ->name('etiquetas.resolver');
+    });
+
+Route::middleware(['pdv.piso', 'pdv.resguardos.lectura'])
+    ->prefix('resguardos')
+    ->name('resguardos.')
+    ->group(function () {
         Route::get('/{resguardo}/auditoria', AuditoriaResguardoPdvController::class)->name('auditoria');
-        Route::get('/{resguardo}', [DetalleResguardoPdvController::class, 'show'])->name('show');
+        Route::get('/{resguardo}/evidencias/{evidencia}', [EvidenciaResguardoPdvController::class, 'show'])
+            ->name('evidencias.show');
         Route::get('/{resguardo}/etiquetas', [EtiquetasResguardoPdvController::class, 'descargar'])
             ->name('etiquetas.descargar');
+        Route::get('/{resguardo}', [DetalleResguardoPdvController::class, 'show'])->name('show');
     });
 
 Route::middleware(['pdv.piso', 'pdv.permiso:'.PuntoVentaModulo::PERMISO_RESGUARDOS_RECIBIR_GERENTE])

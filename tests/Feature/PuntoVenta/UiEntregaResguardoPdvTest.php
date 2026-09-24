@@ -71,11 +71,11 @@ class UiEntregaResguardoPdvTest extends TestCase
         $resguardo = $this->crearResguardoEnCustodia();
 
         $this->actingAs($this->usuario)
-            ->get(route('punto_venta.resguardos.show', $resguardo))
+            ->getJson(route('punto_venta.resguardos.show', $resguardo))
             ->assertOk()
-            ->assertInertia(fn ($page) => $page
-                ->has('resguardo.bultos_empaque_cedis')
-                ->has('resguardo.pedido_revision'));
+            ->assertJsonStructure([
+                'resguardo' => ['bultos_empaque_cedis', 'pedido_revision'],
+            ]);
     }
 
     public function test_formulario_entrega_renderiza_inertia_con_snapshot_y_bultos(): void
@@ -152,9 +152,12 @@ class UiEntregaResguardoPdvTest extends TestCase
 
         $this->actingAs($this->usuario)
             ->get(route('punto_venta.resguardos.show', $resguardo))
+            ->assertRedirect(route('punto_venta.resguardos.index', ['detalle' => $resguardo->id], absolute: false));
+
+        $this->actingAs($this->usuario)
+            ->getJson(route('punto_venta.resguardos.show', $resguardo))
             ->assertOk()
-            ->assertInertia(fn ($page) => $page
-                ->where('permisos.entregar', true));
+            ->assertJsonPath('permisos.entregar', true);
     }
 
     public function test_formulario_entrega_multiple_requiere_dos_resguardos_entregables(): void

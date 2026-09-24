@@ -404,9 +404,11 @@ export default function EjercicioEscalonamientoPanel({ listas, variant = 'page' 
                                                 <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/35 flex gap-2.5 items-start">
                                                     <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                                                     <p className="text-sm font-bold text-amber-900 dark:text-amber-200 leading-snug m-0">
-                                                        No asciende a {analisis.listaCasiAlcanzada.nombre.replace('MAYOREO ', '')}.
-                                                        Faltan {fmtMontoEscalonamiento(analisis.faltanteBrutoCasi)} brutos
-                                                        (umbral {fmtMontoEscalonamiento(analisis.umbralEfectivoCasi)})
+                                                        Solicitud provisional a {analisis.listaCasiAlcanzada.nombre.replace('MAYOREO ', '')};
+                                                        el neto estimado queda {fmtMontoEscalonamiento(analisis.faltanteNetoCasi)} bajo el mínimo.
+                                                        {analisis.faltanteBrutoCasi > 0 && (
+                                                            <> Sube la cotización ~{fmtMontoEscalonamiento(analisis.faltanteBrutoCasi)} brutos.</>
+                                                        )}
                                                     </p>
                                                 </div>
                                             )}

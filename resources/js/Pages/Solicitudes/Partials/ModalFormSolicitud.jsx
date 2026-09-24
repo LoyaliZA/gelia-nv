@@ -486,20 +486,19 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                                                 <p className="text-[11px] font-black uppercase tracking-widest theme-text-muted mb-3 m-0">Resumen de montos</p>
                                                 <div className="space-y-1">
                                                     <FilaMontoEscalonamiento
-                                                        etiqueta="Historial de compra"
+                                                        etiqueta="Acumulado pagado anterior"
                                                         valor={analisisFinanciero.montoHistorico}
                                                     />
                                                     <FilaMontoEscalonamiento
-                                                        etiqueta="Monto bruto (cotización)"
+                                                        etiqueta="Cotización base (nueva compra)"
                                                         valor={analisisFinanciero.montoCotizado}
                                                         destacado
                                                     />
                                                     <FilaMontoEscalonamiento
-                                                        etiqueta="Total proyectado (bruto)"
+                                                        etiqueta="Suma para solicitud provisional"
                                                         valor={analisisFinanciero.totalProyectadoBruto}
                                                         valorClassName={
-                                                            analisisFinanciero.listaAnticipada
-                                                            && analisisFinanciero.totalProyectadoBruto >= (analisisFinanciero.umbralEfectivoAnticipada || 0)
+                                                            analisisFinanciero.listaProvisional
                                                                 ? 'text-emerald-600 dark:text-emerald-400 font-black text-base'
                                                                 : ''
                                                         }
@@ -516,26 +515,27 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                                             {analisisFinanciero.listaAnticipada && analisisFinanciero.montoCotizado > 0 && (
                                                 <div className="pt-4 border-t-2 border-dashed theme-border space-y-3">
                                                     <FilaMontoEscalonamiento
-                                                        etiqueta={`Monto tentativo final (${analisisFinanciero.porcentajeDescuento.toFixed(2)}% desc.)`}
+                                                        etiqueta={`Pago neto estimado (${analisisFinanciero.porcentajeDescuento.toFixed(2)}% desc.)`}
                                                         valor={analisisFinanciero.montoFinalTentativo}
                                                         valorClassName="text-base font-black theme-text-main"
                                                     />
-                                                    <div className={`flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 py-3.5 px-4 rounded-xl border-2 ${
-                                                        analisisFinanciero.mantieneListaAnticipada
-                                                            ? 'border-emerald-500/40 bg-emerald-500/10'
-                                                            : 'border-amber-500/40 bg-amber-500/10'
-                                                    }`}>
-                                                        <span className="text-sm font-black theme-text-main uppercase tracking-wide leading-snug">
-                                                            Total pago final esperado
-                                                        </span>
-                                                        <span className={`text-2xl font-black tabular-nums ${
+                                                    <FilaMontoEscalonamiento
+                                                        etiqueta="Acumulado neto estimado"
+                                                        valor={analisisFinanciero.totalProyectadoNeto}
+                                                        valorClassName={
                                                             analisisFinanciero.mantieneListaAnticipada
-                                                                ? 'text-emerald-600 dark:text-emerald-400'
-                                                                : 'text-amber-600 dark:text-amber-400'
-                                                        }`}>
-                                                            {fmtMonto(analisisFinanciero.totalProyectadoNeto)}
-                                                        </span>
-                                                    </div>
+                                                                ? 'text-emerald-600 dark:text-emerald-400 font-black text-base'
+                                                                : 'text-amber-600 dark:text-amber-400 font-black text-base'
+                                                        }
+                                                    />
+                                                    {analisisFinanciero.listaConfirmacionEstimada
+                                                        && analisisFinanciero.listaProvisional
+                                                        && analisisFinanciero.listaConfirmacionEstimada.id !== analisisFinanciero.listaProvisional.id && (
+                                                        <p className="text-xs font-semibold text-amber-700 dark:text-amber-400 m-0 px-1">
+                                                            Lista provisional: {analisisFinanciero.listaProvisional.nombre}.
+                                                            Con este pago estimado se confirmaría: {analisisFinanciero.listaConfirmacionEstimada.nombre}.
+                                                        </p>
+                                                    )}
                                                 </div>
                                             )}
                                         </div>
@@ -557,11 +557,15 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                                                         <div className="p-4 rounded-xl bg-amber-500/10 border-2 border-amber-500/30 flex gap-3 items-start">
                                                             <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
                                                             <p className="text-sm font-bold text-amber-800 dark:text-amber-300 leading-relaxed m-0">
-                                                                No asciende a <span className="font-black">{analisisFinanciero.listaCasiAlcanzada.nombre}</span>.
-                                                                Faltan <span className="font-black tabular-nums">{fmtMonto(analisisFinanciero.faltanteBrutoCasi)}</span> brutos
-                                                                (umbral efectivo {fmtMonto(analisisFinanciero.umbralEfectivoCasi)}).
-                                                                Queda en <span className="font-black">{analisisFinanciero.listaAnticipada?.nombre || 'lista actual'}</span>.
-                                                                Informa al cliente antes de continuar.
+                                                                Puedes solicitar <span className="font-black">{analisisFinanciero.listaCasiAlcanzada.nombre}</span> de forma provisional,
+                                                                pero el pago neto estimado quedaría{' '}
+                                                                <span className="font-black tabular-nums">{fmtMonto(analisisFinanciero.faltanteNetoCasi)}</span> por debajo del mínimo neto.
+                                                                {analisisFinanciero.faltanteBrutoCasi > 0 && (
+                                                                    <> Ajusta la cotización en al menos{' '}
+                                                                        <span className="font-black tabular-nums">{fmtMonto(analisisFinanciero.faltanteBrutoCasi)}</span> brutos.</>
+                                                                )}
+                                                                Con este pago se estimaría:{' '}
+                                                                <span className="font-black">{analisisFinanciero.listaConfirmacionEstimada?.nombre || analisisFinanciero.listaAnticipada?.nombre || 'lista actual'}</span>.
                                                             </p>
                                                         </div>
                                                     )}

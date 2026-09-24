@@ -9,12 +9,12 @@ use App\Models\PuntoVenta\ResguardoPdv;
 use App\Models\User;
 use App\Services\PuntoVenta\PuntoVentaModulo;
 use App\Services\PuntoVenta\Resguardos\ConsultaDetalleResguardoPdvService;
+use App\Support\PuntoVenta\Resguardos\AutorizacionConsultaResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\CorreccionResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\EtiquetasResguardoPdv;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Inertia\Inertia;
-use Inertia\Response;
 
 class DetalleResguardoPdvController extends Controller
 {
@@ -23,20 +23,45 @@ class DetalleResguardoPdvController extends Controller
         ResguardoPdv $resguardo,
         ConsultaDetalleResguardoPdvService $consulta,
         ResuelveAlcancePdv $alcance,
-    ): Response|JsonResponse {
+        AutorizacionConsultaResguardoPdv $autorizacion,
+    ): JsonResponse|RedirectResponse {
         /** @var User $user */
         $user = $request->user();
 
         $payload = $consulta->obtener($user, $resguardo);
+        $meta = $this->metaDetalle($resguardo, $user, $alcance, $autorizacion);
 
         if ($request->expectsJson()) {
-            return response()->json($payload);
+            return response()->json(array_merge($payload, $meta, [
+                'modo_auditoria' => $autorizacion->soloHistorialEntregados($user),
+            ]));
         }
 
-        return Inertia::render('PuntoVenta/Resguardos/Show', [
-            'resguardo' => $payload['resguardo'],
-            'timeline' => $payload['timeline'],
-            'catalogos' => fn () => [
+        $rutaListado = $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_VER)
+            ? 'punto_venta.resguardos.index'
+            : 'punto_venta.resguardos.entregados.index';
+
+        return redirect()->route($rutaListado, [
+            'detalle' => $resguardo->id,
+        ]);
+    }
+
+    /**
+     * @return array{catalogos: array<string, mixed>, almacenes: list<array{id: int, codigo: string, nombre: string}>, permisos: array<string, bool>}
+     */
+    private function metaDetalle(
+        ResguardoPdv $resguardo,
+        User $user,
+        ResuelveAlcancePdv $alcance,
+        AutorizacionConsultaResguardoPdv $autorizacion,
+    ): array {
+        $soloHistorial = $autorizacion->soloHistorialEntregados($user);
+        $puedeOperar = ! $soloHistorial && $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_VER);
+        $puedeVerEtiquetas = $puedeOperar
+            || ($soloHistorial && $resguardo->estado === ResguardoPdv::ESTADO_ENTREGADO);
+
+        return [
+            'catalogos' => [
                 'estados' => EtiquetasResguardoPdv::estados(),
                 'antiguedades' => EtiquetasResguardoPdv::antiguedades(),
                 'eventos' => EtiquetasResguardoPdv::eventos(),
@@ -46,20 +71,21 @@ class DetalleResguardoPdvController extends Controller
                 'condiciones_bulto' => EtiquetasResguardoPdv::condicionesBulto(),
                 'tipos_correccion' => CorreccionResguardoPdv::etiquetas(),
             ],
-            'almacenes' => fn () => $this->serializarAlmacenes($resguardo, $user, $alcance),
-            'permisos' => fn () => [
-                'ver_etiquetas' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_VER),
-                'recibir' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_RECIBIR),
-                'entregar' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_ENTREGAR),
-                'incidencia_folio' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_INCIDENCIA_FOLIO),
-                'incidencia_dano' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_INCIDENCIA_DANO),
-                'incidencia_faltante' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_INCIDENCIA_FALTANTE),
-                'autorizar_incidencia' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_AUTORIZAR_ENTREGA_INCIDENCIA),
-                'confirmar_devolucion' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_CONFIRMAR_DEVOLUCION),
-                'reponer_vencido' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_REPONER_VENCIDO),
-                'corregir' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_CORREGIR),
+            'almacenes' => $this->serializarAlmacenes($resguardo, $user, $alcance),
+            'permisos' => [
+                'ver_etiquetas' => $puedeVerEtiquetas,
+                'recibir' => $puedeOperar && $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_RECIBIR),
+                'entregar' => $puedeOperar && $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_ENTREGAR),
+                'confirmar_custodia' => $puedeOperar && $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_CONFIRMAR_CUSTODIA),
+                'incidencia_folio' => $puedeOperar && $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_INCIDENCIA_FOLIO),
+                'incidencia_dano' => $puedeOperar && $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_INCIDENCIA_DANO),
+                'incidencia_faltante' => $puedeOperar && $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_INCIDENCIA_FALTANTE),
+                'autorizar_incidencia' => $puedeOperar && $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_AUTORIZAR_ENTREGA_INCIDENCIA),
+                'confirmar_devolucion' => $puedeOperar && $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_CONFIRMAR_DEVOLUCION),
+                'reponer_vencido' => $puedeOperar && $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_REPONER_VENCIDO),
+                'corregir' => $puedeOperar && $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_CORREGIR),
             ],
-        ]);
+        ];
     }
 
     /**

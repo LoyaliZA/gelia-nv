@@ -57,11 +57,12 @@ class EscalonamientoService
     }
 
     /**
-     * Lista más alta cuyo umbral efectivo (monto_requerido / (1 − %)) es ≤ $monto.
+     * Lista más alta cuyo umbral bruto efectivo (monto_requerido / (1 − %)) es ≤ $monto acumulado bruto.
+     * Solo para cotización / recomendación bruta; no usar con pagos netos confirmados.
      *
      * @param  Collection<int, CatalogoListaDescuento>|array  $catalogoListas
      */
-    public function resolverListaPorMonto(float $monto, Collection|array $catalogoListas): ?CatalogoListaDescuento
+    public function resolverListaPorMontoBrutoAcumulado(float $monto, Collection|array $catalogoListas): ?CatalogoListaDescuento
     {
         $listasValidas = $this->filtrarListasValidas($catalogoListas);
 
@@ -69,11 +70,55 @@ class EscalonamientoService
     }
 
     /**
+     * @deprecated Use resolverListaPorMontoBrutoAcumulado or resolverListaPorAcumuladoNeto según el significado del monto.
+     *
+     * @param  Collection<int, CatalogoListaDescuento>|array  $catalogoListas
+     */
+    public function resolverListaPorMonto(float $monto, Collection|array $catalogoListas): ?CatalogoListaDescuento
+    {
+        return $this->resolverListaPorMontoBrutoAcumulado($monto, $catalogoListas);
+    }
+
+    /**
+     * Lista más alta cuyo monto_requerido (neto) es ≤ $acumuladoPagado.
+     *
+     * @param  Collection<int, CatalogoListaDescuento>|array  $catalogoListas
+     */
+    public function resolverListaPorAcumuladoNeto(float $acumuladoPagado, Collection|array $catalogoListas): ?CatalogoListaDescuento
+    {
+        return $this->buscarListaCalificadaPorCatalogo(
+            $this->filtrarListasValidas($catalogoListas),
+            round($acumuladoPagado, 2)
+        );
+    }
+
+    /**
+     * @param  Collection<int, CatalogoListaDescuento>|array  $catalogoListas
+     */
+    public function resolverListaPorAcumuladoNetoId(float $acumuladoPagado, Collection|array $catalogoListas): int
+    {
+        $lista = $this->resolverListaPorAcumuladoNeto($acumuladoPagado, $catalogoListas);
+        if ($lista) {
+            return (int) $lista->id;
+        }
+
+        $pg = collect($catalogoListas)->first(
+            fn ($l) => strtoupper((string) $l->nombre) === 'PUBLICO GENERAL'
+        );
+
+        if ($pg) {
+            return (int) $pg->id;
+        }
+
+        return (int) (CatalogoListaDescuento::where('nombre', 'PUBLICO GENERAL')->value('id') ?? 1);
+    }
+
+    /**
      * @param  Collection<int, CatalogoListaDescuento>|array  $catalogoListas
      */
     public function resolverListaPorMontoId(float $monto, Collection|array $catalogoListas): int
     {
-        $lista = $this->resolverListaPorMonto($monto, $catalogoListas);
+        $lista = $this->resolverListaPorMontoBrutoAcumulado($monto, $catalogoListas);
         if ($lista) {
             return (int) $lista->id;
         }
@@ -105,20 +150,31 @@ class EscalonamientoService
         $totalProyectadoBruto = round($montoHistorico + $montoCotizado, 2);
 
         $listaCalificadaBruto = $this->buscarListaCalificadaPorCatalogo($listasValidas, $totalProyectadoBruto);
-        $listaCalificadaEfectiva = $this->resolverListaPorMonto($totalProyectadoBruto, $listasValidas);
+        $listaCalificadaEfectiva = $this->resolverListaPorMontoBrutoAcumulado($totalProyectadoBruto, $listasValidas);
 
         $requisitoActual = $requisitoListaActual ?? 0;
-        $esAscenso = $listaCalificadaEfectiva
-            && (float) $listaCalificadaEfectiva->monto_requerido > $requisitoActual;
+        $listaProvisional = $listaCalificadaBruto;
+        $esAscenso = $listaProvisional
+            && (float) $listaProvisional->monto_requerido > $requisitoActual;
 
-        $listaAnticipada = $listaCalificadaEfectiva;
-        $porcentajeDescuento = $this->obtenerPorcentajeLista($listaAnticipada);
+        $listaParaDescuento = $listaSolicitadaId
+            ? $listas->firstWhere('id', $listaSolicitadaId)
+            : null;
+        if (! $listaParaDescuento && $esAscenso && $listaProvisional) {
+            $listaParaDescuento = $listaProvisional;
+        }
+        if (! $listaParaDescuento) {
+            $listaParaDescuento = $listaCalificadaEfectiva;
+        }
+
+        $listaAnticipada = $listaProvisional ?: $listaCalificadaEfectiva;
+        $porcentajeDescuento = $this->obtenerPorcentajeLista($listaParaDescuento);
         $umbralEfectivoAnticipada = $listaAnticipada ? $this->umbralEfectivo($listaAnticipada) : 0.0;
 
         $montoFinalTentativo = $this->calcularMontoFinalTentativo($montoCotizado, $porcentajeDescuento);
         $totalProyectadoNeto = round($montoHistorico + $montoFinalTentativo, 2);
 
-        $listaCalificadaNeto = $this->resolverListaPorMonto($totalProyectadoNeto, $listasValidas);
+        $listaCalificadaNeto = $this->resolverListaPorAcumuladoNeto($totalProyectadoNeto, $listasValidas);
 
         $listaSiguienteEfectiva = $this->buscarListaSiguientePorUmbralEfectivo($listasValidas, $totalProyectadoBruto);
         $porcentajeListaSiguiente = $listaSiguienteEfectiva
@@ -144,22 +200,27 @@ class EscalonamientoService
         $faltanteBrutoCasi = 0.0;
         $umbralEfectivoCasi = 0.0;
 
-        if ($listaCalificadaBruto
-            && (!$listaCalificadaEfectiva
-                || (float) $listaCalificadaBruto->monto_requerido > (float) $listaCalificadaEfectiva->monto_requerido)
+        $faltanteNetoCasi = 0.0;
+        if ($listaProvisional
+            && $listaCalificadaNeto
+            && (float) $listaProvisional->monto_requerido > (float) $listaCalificadaNeto->monto_requerido
         ) {
             $casiAlcanzaSiguiente = true;
-            $listaCasiAlcanzada = $listaCalificadaBruto;
-            $umbralEfectivoCasi = $this->umbralEfectivo($listaCalificadaBruto);
-            $faltanteBrutoCasi = max(0, round($umbralEfectivoCasi - $totalProyectadoBruto, 2));
+            $listaCasiAlcanzada = $listaProvisional;
+            $umbralEfectivoCasi = $this->umbralEfectivo($listaProvisional);
+            $faltanteNetoCasi = max(0, round((float) $listaProvisional->monto_requerido - $totalProyectadoNeto, 2));
+            $faltanteBrutoCasi = $this->calcularMontoBrutoNecesario(
+                $faltanteNetoCasi,
+                $this->obtenerPorcentajeLista($listaProvisional)
+            );
         }
 
-        $mantieneListaAnticipada = $listaAnticipada
-            ? $totalProyectadoBruto >= $umbralEfectivoAnticipada
+        $mantieneListaAnticipada = $listaProvisional
+            ? $totalProyectadoNeto >= (float) $listaProvisional->monto_requerido
             : true;
 
         $listaSolicitadaIdEfectivo = $listaSolicitadaId
-            ?: ($esAscenso && $listaCalificadaEfectiva ? (int) $listaCalificadaEfectiva->id : null);
+            ?: ($esAscenso && $listaProvisional ? (int) $listaProvisional->id : null);
 
         $desgloseListas = $listasValidas
             ->sortBy(fn ($l) => (float) $l->monto_requerido)
@@ -201,7 +262,10 @@ class EscalonamientoService
             'casi_alcanza_siguiente' => $casiAlcanzaSiguiente,
             'lista_casi_alcanzada' => $listaCasiAlcanzada,
             'faltante_bruto_casi' => $faltanteBrutoCasi,
+            'faltante_neto_casi' => $faltanteNetoCasi,
             'umbral_efectivo_casi' => $umbralEfectivoCasi,
+            'lista_provisional' => $listaProvisional,
+            'lista_confirmacion_estimada' => $listaCalificadaNeto,
             // Compat: mismo significado que casi_alcanza_siguiente
             'bruto_califica_neto_no' => $casiAlcanzaSiguiente,
             'es_ascenso' => $esAscenso,

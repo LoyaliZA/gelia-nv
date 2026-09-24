@@ -264,12 +264,11 @@ class CancelacionPedidoResguardoPdvTest extends TestCase
         app(RecibirCancelacionPedidoResguardoPdvService::class)->ejecutar($pedido, $this->gerente->id);
 
         $this->actingAs($this->operador)
-            ->get(route('punto_venta.resguardos.show', $resguardo))
+            ->getJson(route('punto_venta.resguardos.show', $resguardo))
             ->assertOk()
-            ->assertInertia(fn ($page) => $page
-                ->where('resguardo.entrega_bloqueada', true)
-                ->where('resguardo.cancelacion_recibida', true)
-                ->where('resguardo.estado', ResguardoPdv::ESTADO_EN_CUSTODIA));
+            ->assertJsonPath('resguardo.entrega_bloqueada', true)
+            ->assertJsonPath('resguardo.cancelacion_recibida', true)
+            ->assertJsonPath('resguardo.estado', ResguardoPdv::ESTADO_EN_CUSTODIA);
     }
 
     /**

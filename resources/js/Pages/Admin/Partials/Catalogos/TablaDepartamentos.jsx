@@ -19,6 +19,7 @@ export default function TablaDepartamentos({ datos = [], logosDisponibles = [] }
     const { data, setData, post, put, processing, reset, errors } = useForm({
         nombre: '',
         activo: true,
+        visible_origen_resguardo_pdv: false,
         logo_key_claro: defaultClaro,
         logo_key_oscuro: defaultOscuro,
     });
@@ -32,6 +33,7 @@ export default function TablaDepartamentos({ datos = [], logosDisponibles = [] }
         setData({
             nombre: '',
             activo: true,
+            visible_origen_resguardo_pdv: false,
             logo_key_claro: defaultClaro,
             logo_key_oscuro: defaultOscuro,
         });
@@ -43,6 +45,7 @@ export default function TablaDepartamentos({ datos = [], logosDisponibles = [] }
         setData({
             nombre: item.nombre,
             activo: item.activo,
+            visible_origen_resguardo_pdv: Boolean(item.visible_origen_resguardo_pdv),
             logo_key_claro: item.logo_key_claro || defaultClaro,
             logo_key_oscuro: item.logo_key_oscuro || defaultOscuro,
         });
@@ -92,6 +95,7 @@ export default function TablaDepartamentos({ datos = [], logosDisponibles = [] }
                             <th className="px-6 py-4 text-left text-[9px] font-black theme-text-muted uppercase tracking-widest">Logos_</th>
                             <th className="px-6 py-4 text-left text-[9px] font-black theme-text-muted uppercase tracking-widest">Nombre / ID_</th>
                             <th className="px-6 py-4 text-left text-[9px] font-black theme-text-muted uppercase tracking-widest">Status_</th>
+                            <th className="px-6 py-4 text-left text-[9px] font-black theme-text-muted uppercase tracking-widest">Resguardo PDV_</th>
                             <th className="px-6 py-4 text-right text-[9px] font-black theme-text-muted uppercase tracking-widest">Acciones_</th>
                         </tr>
                     </thead>
@@ -124,6 +128,11 @@ export default function TablaDepartamentos({ datos = [], logosDisponibles = [] }
                                     <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest ${item.activo ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-red-500/10 text-red-600 dark:text-red-400'}`}>
                                         <span className={`w-1.5 h-1.5 rounded-full ${item.activo ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`} />
                                         {item.activo ? 'Activo' : 'Inactivo'}
+                                    </span>
+                                </td>
+                                <td className="px-6 py-5">
+                                    <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest ${item.visible_origen_resguardo_pdv ? 'bg-sky-500/10 text-sky-700 dark:text-sky-300' : 'bg-zinc-500/10 theme-text-muted'}`}>
+                                        {item.visible_origen_resguardo_pdv ? 'Origen resguardo' : 'Oculto'}
                                     </span>
                                 </td>
                                 <td className="px-6 py-5 text-right">
@@ -221,6 +230,25 @@ export default function TablaDepartamentos({ datos = [], logosDisponibles = [] }
                                     </p>
                                 </div>
                                 <button type="button" onClick={() => setData('activo', !data.activo)} className="gelia-switch shrink-0 scale-125 origin-right shadow-sm" data-active={data.activo}>
+                                    <div className="gelia-switch-thumb shadow-md" />
+                                </button>
+                            </div>
+
+                            <div className="flex items-center justify-between p-4 rounded-2xl border theme-border bg-black/5 dark:bg-white/5">
+                                <div>
+                                    <p className="text-sm font-black theme-text-main m-0">Origen en resguardos PDV_</p>
+                                    <p className="text-[10px] font-bold theme-text-muted uppercase tracking-widest mt-0.5 m-0">
+                                        {data.visible_origen_resguardo_pdv
+                                            ? 'Visible al registrar resguardo manual'
+                                            : 'No aparece en el selector de origen'}
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setData('visible_origen_resguardo_pdv', !data.visible_origen_resguardo_pdv)}
+                                    className="gelia-switch shrink-0 scale-125 origin-right shadow-sm"
+                                    data-active={data.visible_origen_resguardo_pdv}
+                                >
                                     <div className="gelia-switch-thumb shadow-md" />
                                 </button>
                             </div>

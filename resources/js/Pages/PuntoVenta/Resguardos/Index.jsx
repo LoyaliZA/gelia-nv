@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Head, router } from '@inertiajs/react';
-import { Package, Loader2, AlertTriangle, Truck } from 'lucide-react';
+import { Head, Link, router } from '@inertiajs/react';
+import { Package, Loader2, AlertTriangle, Truck, History } from 'lucide-react';
 import AppLayout from '../../../Layouts/AppLayout';
 import GeliaPageShell from '../../../Components/GeliaPageShell';
 import GeliaTituloCard from '../../../Components/GeliaTituloCard';
@@ -12,9 +12,11 @@ import BusquedaRapidaRecepcion from './Partials/BusquedaRapidaRecepcion';
 import AlertasCustodiaResguardo from './Partials/AlertasCustodiaResguardo';
 import SelectorSucursalActivaPdv, { RELOAD_ONLY_RESGUARDOS } from '@/Components/PuntoVenta/SelectorSucursalActivaPdv';
 import AccionRegistrarResguardoManual from './Partials/AccionRegistrarResguardoManual';
+import ModalDetalleResguardo from './Partials/ModalDetalleResguardo';
 import useListadoResguardos from './Partials/useListadoResguardos';
 import BarraAccionesMasivasGerente from './Partials/BarraAccionesMasivasGerente';
 import { antiguedadValidaEnBandeja, paramsListadoResguardos } from './Partials/resguardosUtils';
+import { useDetalleResguardoModalBridge } from './Partials/resguardoDetalleModalBridge';
 import PdvAlertProvider, { usePdvAlertReload } from '../../../Components/PuntoVenta/PdvAlertProvider';
 import PdvEncabezadoAlertasPdv from '../../../Components/PuntoVenta/PdvEncabezadoAlertasPdv';
 import useToastAlCambiar from '../../../hooks/useToastAlCambiar';
@@ -32,6 +34,8 @@ export default function Index({
     sucursal_activa: sucursalActiva = null,
     sucursales_asignadas: sucursalesAsignadas = [],
     operativa = {},
+    detalle_modal_id: detalleModalIdInicial = null,
+    puede_ver_historial_entregas: puedeVerHistorialEntregas = false,
 }) {
     const antiguedadConfigurada = Boolean(operativa.antiguedad_configurada);
     const puedeRegistrarManual = Boolean(operativa.registro_manual) && Boolean(permisos.recibir);
@@ -59,7 +63,28 @@ export default function Index({
     const [estado, setEstado] = useState(filtros.estado || '');
     const [antiguedad, setAntiguedad] = useState(filtros.antiguedad || '');
     const [idsSeleccionados, setIdsSeleccionados] = useState([]);
+    const [detalleResguardoId, setDetalleResguardoId] = useState(null);
+    const [detalleResguardoResumen, setDetalleResguardoResumen] = useState(null);
     const debounceBusqueda = useRef(null);
+
+    const abrirDetalleResguardo = useCallback((id, resumen = null) => {
+        setDetalleResguardoId(id);
+        setDetalleResguardoResumen(resumen);
+    }, []);
+
+    const cerrarDetalleResguardo = useCallback(() => {
+        setDetalleResguardoId(null);
+        setDetalleResguardoResumen(null);
+    }, []);
+
+    useDetalleResguardoModalBridge(abrirDetalleResguardo);
+
+    useEffect(() => {
+        if (!detalleModalIdInicial) {
+            return;
+        }
+        abrirDetalleResguardo(detalleModalIdInicial);
+    }, [detalleModalIdInicial, abrirDetalleResguardo]);
 
     useEffect(() => {
         setBandejaActiva(filtros.bandeja || bandejaInicial || 'por_recibir');
@@ -178,6 +203,14 @@ export default function Index({
                     aside={(
                         <div className="flex items-center gap-2 shrink-0 self-start md:self-center">
                             <PdvEncabezadoAlertasPdv />
+                            {puedeVerHistorialEntregas && (
+                                <Link
+                                    href={route('punto_venta.resguardos.entregados.index')}
+                                    className="inline-flex items-center gap-2 min-h-[44px] px-4 rounded-xl border theme-border text-[10px] font-black uppercase tracking-widest theme-text-main hover:theme-element"
+                                >
+                                    <History className="w-4 h-4" /> Historial entregas
+                                </Link>
+                            )}
                             <AccionRegistrarResguardoManual
                                 habilitado={puedeRegistrarManual}
                                 origenes={catalogos.origenes_pedido || []}
@@ -326,6 +359,14 @@ export default function Index({
                         onRecepcionExito={() => recargar({ page: resguardosVista?.current_page || 1 })}
                     />
                 )}
+
+                <ModalDetalleResguardo
+                    abierto={detalleResguardoId != null}
+                    resguardoId={detalleResguardoId}
+                    resguardoResumen={detalleResguardoResumen}
+                    onClose={cerrarDetalleResguardo}
+                    onAccionExito={() => recargar({ page: resguardosVista?.current_page || 1 }, { silencioso: true })}
+                />
 
                 {Boolean(permisos.recibir) && bandejaRender === 'por_recibir' && pasoActivo === 'gerente' && idsSeleccionados.length > 0 && (
                     <BarraAccionesMasivasGerente

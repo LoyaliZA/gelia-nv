@@ -6,7 +6,7 @@ use App\Contracts\PuntoVenta\ResuelveAlcancePdv;
 use App\Models\PuntoVenta\ResguardoPdv;
 use App\Models\PuntoVenta\ResguardoPdvEvento;
 use App\Models\User;
-use App\Services\PuntoVenta\PuntoVentaModulo;
+use App\Support\PuntoVenta\Resguardos\AutorizacionConsultaResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\EstadoRecepcionResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\EstadoResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\EtiquetasResguardoPdv;
@@ -25,6 +25,7 @@ class ConsultaDetalleResguardoPdvService
         private readonly PlazosCustodiaResguardoPdvConfig $plazos,
         private readonly ConsultaAuditoriaResguardoPdvService $auditoria,
         private readonly SincronizarCantidadBultosEsperadaResguardoPdvService $sincronizarCantidadBultos,
+        private readonly AutorizacionConsultaResguardoPdv $autorizacion,
     ) {}
 
     /**
@@ -32,7 +33,7 @@ class ConsultaDetalleResguardoPdvService
      */
     public function obtener(User $user, ResguardoPdv $resguardo): array
     {
-        $this->alcance->asegurarConsultaPiso($user, PuntoVentaModulo::PERMISO_RESGUARDOS_VER);
+        $this->autorizacion->asegurarDetalleResguardo($user, $resguardo);
 
         $activaId = $this->alcance->sucursalActivaId($user);
         if ($activaId === null || (int) $resguardo->sucursal_id !== $activaId) {
@@ -45,6 +46,7 @@ class ConsultaDetalleResguardoPdvService
             'pedido:id,folio,folio_remision,envia_a_otra_persona,envia_otra_persona',
             'pedido.bultosEmpaque.documentos',
             'evidencias',
+            'eventoRegistroManual.actor:id,name,username',
             'bultos' => fn ($q) => $q->orderBy('folio')->orderBy('id'),
             'incidencias' => fn ($q) => $q
                 ->with([
@@ -64,6 +66,7 @@ class ConsultaDetalleResguardoPdvService
                 'pedido:id,folio,folio_remision,envia_a_otra_persona,envia_otra_persona',
                 'pedido.bultosEmpaque.documentos',
                 'evidencias',
+                'eventoRegistroManual.actor:id,name,username',
                 'bultos' => fn ($q) => $q->orderBy('folio')->orderBy('id'),
                 'incidencias' => fn ($q) => $q
                     ->with([

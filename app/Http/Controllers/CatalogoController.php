@@ -105,6 +105,7 @@ class CatalogoController extends Controller
         Departamento::create($request->validate([
             'nombre' => 'required|string|max:255',
             'activo' => 'boolean',
+            'visible_origen_resguardo_pdv' => 'boolean',
             'logo_key_claro' => ['nullable', 'string', 'max:64', Rule::in($keys)],
             'logo_key_oscuro' => ['nullable', 'string', 'max:64', Rule::in($keys)],
         ]));
@@ -116,6 +117,7 @@ class CatalogoController extends Controller
         Departamento::findOrFail($id)->update($request->validate([
             'nombre' => 'required|string|max:255',
             'activo' => 'boolean',
+            'visible_origen_resguardo_pdv' => 'boolean',
             'logo_key_claro' => ['nullable', 'string', 'max:64', Rule::in($keys)],
             'logo_key_oscuro' => ['nullable', 'string', 'max:64', Rule::in($keys)],
         ]));

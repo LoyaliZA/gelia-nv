@@ -197,18 +197,25 @@ class SolicitudController extends Controller
                         ->orderByDesc('monto_requerido')
                         ->get();
                     $escalonamientoSvc = app(EscalonamientoService::class);
-                    $listaCalificada = $escalonamientoSvc->resolverListaPorMonto($totalProyectado, $listasActivas);
+                    $listaCalificada = $escalonamientoSvc->resolverListaPorAcumuladoNeto($totalProyectado, $listasActivas);
 
                     if ($listaCalificada) {
                         // 2. Evaluación de Downgrade (Falta de Pago)
                         if ($solicitud->catalogo_lista_descuento_id) {
                             $listaSolicitada = $listasActivas->firstWhere('id', $solicitud->catalogo_lista_descuento_id)
                                 ?? CatalogoListaDescuento::with('porcentajeEscalonamiento')->find($solicitud->catalogo_lista_descuento_id);
-                            $umbralSolicitada = $listaSolicitada
-                                ? $escalonamientoSvc->umbralEfectivo($listaSolicitada)
+                            $montoRequeridoNeto = $listaSolicitada
+                                ? (float) $listaSolicitada->monto_requerido
                                 : 0.0;
-                            if ($listaSolicitada && $totalProyectado < $umbralSolicitada) {
-                                $mensajeAuditoria = "ALERTA DE PAGO: Pago final de $" . number_format($montoFinal, 2) . " es insuficiente para la lista {$listaSolicitada->nombre}. El cliente califica para: {$listaCalificada->nombre}.";
+                            if ($listaSolicitada && $totalProyectado < $montoRequeridoNeto) {
+                                $faltanteNeto = round($montoRequeridoNeto - $totalProyectado, 2);
+                                $mensajeAuditoria = "ALERTA DE PAGO: Acumulado neto proyectado de $"
+                                    . number_format($totalProyectado, 2)
+                                    . " es insuficiente para la lista {$listaSolicitada->nombre} (mínimo neto $"
+                                    . number_format($montoRequeridoNeto, 2)
+                                    . ", faltan $"
+                                    . number_format($faltanteNeto, 2)
+                                    . "). El cliente califica para: {$listaCalificada->nombre}.";
                                 $estadoNuevoId = $idIncorrecta;
                                 $esAlertaFaltaPago = true;
                             }
@@ -313,7 +320,7 @@ class SolicitudController extends Controller
                     ->orderByDesc('monto_requerido')
                     ->get();
                 $listaCalificada = app(EscalonamientoService::class)
-                    ->resolverListaPorMonto($totalProyectado, $listasActivas);
+                    ->resolverListaPorAcumuladoNeto($totalProyectado, $listasActivas);
 
                 if ($listaCalificada) {
                     $solicitud->catalogo_lista_descuento_id = $listaCalificada->id;

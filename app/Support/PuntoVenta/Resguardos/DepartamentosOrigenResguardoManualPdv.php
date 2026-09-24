@@ -8,19 +8,11 @@ use Illuminate\Support\Collection;
 
 final class DepartamentosOrigenResguardoManualPdv
 {
-    /** @var list<string> */
-    public const NOMBRES = ['Aromas', 'Bellaroma'];
-
     public static function query(): Builder
     {
         return Departamento::query()
             ->where('activo', true)
-            ->where(function (Builder $query): void {
-                foreach (self::NOMBRES as $nombre) {
-                    $query->orWhere('nombre', $nombre)
-                        ->orWhere('nombre', 'like', $nombre.' %');
-                }
-            })
+            ->where('visible_origen_resguardo_pdv', true)
             ->orderBy('nombre');
     }
 

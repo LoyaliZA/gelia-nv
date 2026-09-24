@@ -78,29 +78,47 @@ class EscalonamientoServiceUmbralEfectivoTest extends TestCase
         $this->assertEquals(5155.67, $this->svc->umbralEfectivo($plata));
     }
 
-    public function test_resolver_5098_queda_en_bronce_no_plata(): void
+    public function test_resolver_bruto_5098_queda_en_bronce_no_plata(): void
     {
-        $lista = $this->svc->resolverListaPorMonto(5098.0, $this->listas);
+        $lista = $this->svc->resolverListaPorMontoBrutoAcumulado(5098.0, $this->listas);
         $this->assertSame('MAYOREO BRONCE', $lista->nombre);
     }
 
-    public function test_resolver_5107_alcanza_plata(): void
+    public function test_resolver_bruto_5107_alcanza_plata(): void
     {
-        $lista = $this->svc->resolverListaPorMonto(5107.0, $this->listas);
+        $lista = $this->svc->resolverListaPorMontoBrutoAcumulado(5107.0, $this->listas);
         $this->assertSame('MAYOREO PLATA', $lista->nombre);
     }
 
-    public function test_evaluar_cotizacion_5098_casi_alcanza_sin_ascenso_plata(): void
+    public function test_resolver_neto_5100_18_califica_plata_fol_1476(): void
+    {
+        $lista = $this->svc->resolverListaPorAcumuladoNeto(5100.18, $this->listas);
+        $this->assertSame('MAYOREO PLATA', $lista->nombre);
+    }
+
+    public function test_resolver_neto_5000_99_no_califica_plata(): void
+    {
+        $lista = $this->svc->resolverListaPorAcumuladoNeto(5000.99, $this->listas);
+        $this->assertSame('MAYOREO BRONCE', $lista->nombre);
+    }
+
+    public function test_resolver_neto_5001_califica_plata(): void
+    {
+        $lista = $this->svc->resolverListaPorAcumuladoNeto(5001.0, $this->listas);
+        $this->assertSame('MAYOREO PLATA', $lista->nombre);
+    }
+
+    public function test_evaluar_cotizacion_5098_casi_alcanza_sin_confirmar_plata(): void
     {
         $resultado = $this->svc->evaluar(0.0, 5098.0, null, $this->listas, 0.0);
 
+        $this->assertSame('MAYOREO PLATA', $resultado['lista_provisional']->nombre);
         $this->assertSame('MAYOREO BRONCE', $resultado['lista_calificada_efectiva']->nombre);
-        $this->assertSame('MAYOREO BRONCE', $resultado['lista_anticipada']->nombre);
         $this->assertTrue($resultado['casi_alcanza_siguiente']);
         $this->assertSame('MAYOREO PLATA', $resultado['lista_casi_alcanzada']->nombre);
-        $this->assertEquals(5.06, $resultado['faltante_bruto_casi']);
+        $this->assertEquals(4.96, $resultado['faltante_neto_casi']);
         $this->assertTrue($resultado['es_ascenso']);
-        $this->assertEquals(2, $resultado['lista_solicitada_id_efectivo']);
+        $this->assertSame('MAYOREO PLATA', $resultado['lista_provisional']->nombre);
     }
 
     public function test_evaluar_cotizacion_5107_plata_estable(): void
@@ -112,5 +130,15 @@ class EscalonamientoServiceUmbralEfectivoTest extends TestCase
         $this->assertTrue($resultado['es_ascenso']);
         $this->assertEquals(2.0, $resultado['porcentaje_descuento']);
         $this->assertEquals(5004.86, $resultado['monto_final_tentativo']);
+    }
+
+    public function test_evaluar_cotizacion_5204_13_provisional_plata_neto_estable(): void
+    {
+        $resultado = $this->svc->evaluar(0.0, 5204.13, null, $this->listas, 0.0);
+
+        $this->assertSame('MAYOREO PLATA', $resultado['lista_provisional']->nombre);
+        $this->assertSame('MAYOREO PLATA', $resultado['lista_confirmacion_estimada']->nombre);
+        $this->assertTrue($resultado['mantiene_lista_anticipada']);
+        $this->assertEquals(5100.05, $resultado['monto_final_tentativo']);
     }
 }

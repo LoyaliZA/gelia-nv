@@ -1,5 +1,4 @@
 import React from 'react';
-import { Link } from '@inertiajs/react';
 import { AlertTriangle, Clock, Eye, Package, UserRound } from 'lucide-react';
 import {
     badgeAntiguedad,
@@ -17,6 +16,8 @@ import {
 import { ChipEvidenciasBultosEmpaque } from './ModalEvidenciasBultosEmpaque';
 import { AccionEntregaResguardo } from './ModalEntregaResguardo';
 import AccionReponerVencidoResguardo from './AccionReponerVencidoResguardo';
+import MetaRegistroManualTarjeta from './MetaRegistroManualTarjeta';
+import { abrirDetalleResguardoModal } from './resguardoDetalleModalBridge';
 
 function claseTextoPlazo(clasificacion) {
     if (clasificacion === 'vencido') return 'text-red-700 dark:text-red-300';
@@ -72,11 +73,7 @@ export default function TarjetaResguardoEnCustodia({
                         </p>
                     </div>
                 </div>
-                {resguardo.sucursal?.nombre && (
-                    <span className="shrink-0 inline-flex px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-wide bg-purple-500/15 text-purple-700 dark:text-purple-300 max-w-[40%] truncate">
-                        {resguardo.sucursal.nombre}
-                    </span>
-                )}
+                <MetaRegistroManualTarjeta resguardo={resguardo} />
             </header>
 
             <div className="space-y-1">
@@ -176,13 +173,14 @@ export default function TarjetaResguardoEnCustodia({
                     permisos={permisos}
                     onExito={onReponerExito}
                 />
-                <Link
-                    href={route('punto_venta.resguardos.show', resguardo.id)}
+                <button
+                    type="button"
+                    onClick={() => abrirDetalleResguardoModal(resguardo.id, resguardo)}
                     className={BTN_SECUNDARIO_RECEPCION_TARJETA}
                 >
                     <Eye className="w-4 h-4 shrink-0" aria-hidden />
                     <span>Ver detalle</span>
-                </Link>
+                </button>
             </div>
         </article>
     );

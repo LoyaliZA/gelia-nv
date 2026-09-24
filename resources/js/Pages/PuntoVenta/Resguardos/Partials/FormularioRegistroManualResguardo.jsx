@@ -224,7 +224,7 @@ export default function FormularioRegistroManualResguardo({
                         disabled={enviando}
                         className={`${THEME_SELECT} min-h-[44px]`}
                     >
-                        <option value="">Aromas o Bellaroma</option>
+                        <option value="">Seleccione unidad de origen</option>
                         {origenes.map((origen) => (
                             <option key={origen.id} value={origen.id}>{origen.nombre}</option>
                         ))}

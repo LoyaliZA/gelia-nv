@@ -1,4 +1,4 @@
-import { geliaCardClass, THEME_BTN_PRIMARY } from '../../../../utils/geliaTheme';
+import { geliaCardClass, THEME_BTN_PRIMARY, THEME_INPUT as GELIA_THEME_INPUT } from '../../../../utils/geliaTheme';
 
 export const BTN_SECONDARY =
     'px-4 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest theme-element theme-border border theme-text-main outline-none disabled:opacity-50';
@@ -9,8 +9,9 @@ export const BTN_CAPTURA_EVIDENCIA =
 
 export const ICONO_CAPTURA_EVIDENCIA = 'w-4 h-4 shrink-0 text-[var(--color-primario)]';
 
+/** Extiende el input global (color/placeholder vía --theme-text-main) con el radio PDV resguardos. */
 export const THEME_INPUT =
-    'w-full rounded-2xl border theme-border theme-element px-4 py-3 text-sm font-semibold outline-none focus:border-[var(--color-primario)]';
+    `${GELIA_THEME_INPUT} rounded-2xl px-4 py-3 text-sm font-semibold focus:border-[var(--color-primario)]`;
 
 export const THEME_SELECT = `${THEME_INPUT} appearance-none`;
 

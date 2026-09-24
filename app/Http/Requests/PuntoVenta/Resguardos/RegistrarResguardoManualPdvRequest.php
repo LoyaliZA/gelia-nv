@@ -50,7 +50,7 @@ class RegistrarResguardoManualPdvRequest extends PdvOperacionPisoRequest
                 'integer',
                 function (string $attribute, mixed $value, \Closure $fail): void {
                     if (DepartamentosOrigenResguardoManualPdv::encontrarActivo((int) $value) === null) {
-                        $fail('Seleccione un área de origen (Aromas o Bellaroma).');
+                        $fail('Seleccione un área de origen válida.');
                     }
                 },
             ],

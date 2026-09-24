@@ -53,6 +53,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'pdv.piso' => \App\Http\Middleware\AsegurarSucursalActivaPdv::class,
             'pdv.modulo' => \App\Http\Middleware\AsegurarModuloPuntoVenta::class,
             'pdv.permiso' => \App\Http\Middleware\AsegurarPermisoPdv::class,
+            'pdv.resguardos.lectura' => \App\Http\Middleware\AsegurarLecturaResguardoPdv::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

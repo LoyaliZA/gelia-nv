@@ -65,11 +65,11 @@ class RegistroManualResguardoPdvTest extends TestCase
         $this->cliente = $this->crearCliente();
         $this->origen = Departamento::query()->firstOrCreate(
             ['nombre' => 'Aromas'],
-            ['activo' => true]
+            ['activo' => true, 'visible_origen_resguardo_pdv' => true]
         );
         Departamento::query()->firstOrCreate(
             ['nombre' => 'Bellaroma'],
-            ['activo' => true]
+            ['activo' => true, 'visible_origen_resguardo_pdv' => true]
         );
     }
 
@@ -123,6 +123,7 @@ class RegistroManualResguardoPdvTest extends TestCase
         $this->assertTrue((bool) ($resguardo->snapshot_json['envia_a_otra_persona'] ?? false));
         $this->assertSame('Persona autorizada', $resguardo->snapshot_json['envia_otra_persona'] ?? null);
         $this->assertSame('Aromas', $resguardo->snapshot_json['origen_nombre'] ?? null);
+        $this->assertSame(trim((string) $this->usuario->name), $resguardo->snapshot_json['registrado_por_nombre'] ?? null);
         $this->assertSame($this->origen->id, (int) ($resguardo->snapshot_json['departamento_id'] ?? 0));
         $this->assertSame('Paquete histórico', $resguardo->snapshot_json['observaciones'] ?? null);
         $this->assertSame(4, (int) ($resguardo->snapshot_json['cantidad_piezas'] ?? 0));
@@ -139,6 +140,32 @@ class RegistroManualResguardoPdvTest extends TestCase
                 ->get()
                 ->contains(fn (ResguardoPdvEvidencia $evidencia) => ($evidencia->metadata_json['uso'] ?? null) === ResguardoPdvEvidencia::USO_TICKET)
         );
+
+        $ticket = ResguardoPdvEvidencia::query()
+            ->where('resguardo_id', $resguardo->id)
+            ->get()
+            ->first(fn (ResguardoPdvEvidencia $evidencia) => ($evidencia->metadata_json['uso'] ?? null) === ResguardoPdvEvidencia::USO_TICKET);
+        $this->assertNotNull($ticket);
+
+        $detalle = $this->actingAs($this->usuario)
+            ->getJson(route('punto_venta.resguardos.show', $resguardo))
+            ->assertOk()
+            ->json('resguardo.registro_manual');
+
+        $this->assertNotNull($detalle);
+        $this->assertSame('Aromas', $detalle['departamento_nombre'] ?? null);
+        $this->assertSame(trim((string) $this->usuario->name), $detalle['registrado_por'] ?? null);
+        $urlTicket = collect($detalle['evidencias'] ?? [])
+            ->firstWhere('uso', ResguardoPdvEvidencia::USO_TICKET)['ruta_publica'] ?? null;
+        $this->assertSame(
+            route('punto_venta.resguardos.evidencias.show', ['resguardo' => $resguardo->id, 'evidencia' => $ticket->id]),
+            $urlTicket
+        );
+
+        $this->actingAs($this->usuario)
+            ->get($urlTicket)
+            ->assertOk()
+            ->assertHeader('content-type', 'image/jpeg');
 
         $esperados = BultosEsperadosResguardoPdv::desdeResguardo($resguardo);
         $this->assertSame(4, array_sum(array_column($esperados, 'piezas')));

@@ -276,7 +276,7 @@ class AjustarMontoPorSolicitudService
             ->orderByDesc('monto_requerido')
             ->get();
 
-        $listaCalificada = $this->escalonamiento->resolverListaPorMonto((float) $cliente->monto_venta_actual, $listas);
+        $listaCalificada = $this->escalonamiento->resolverListaPorAcumuladoNeto((float) $cliente->monto_venta_actual, $listas);
         $cliente->lista_actual_id = $listaCalificada ? $listaCalificada->id : null;
     }
 

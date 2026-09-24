@@ -10,6 +10,7 @@ import {
     validarFormularioEntrega,
     esConflictoVersion,
 } from './entregaResguardoUtils';
+import { abrirDetalleResguardoModal } from './resguardoDetalleModalBridge';
 
 export default function useEntregaResguardo({
     resguardoId,
@@ -120,9 +121,7 @@ export default function useEntregaResguardo({
         if (modoModal) {
             onExitoModal?.({ accion: 'detalle', resguardoId });
         }
-        router.visit(route('punto_venta.resguardos.show', resguardoId), {
-            preserveState: false,
-        });
+        abrirDetalleResguardoModal(resguardoId);
     }, [modoModal, onExitoModal, resguardoId]);
 
     const irABandeja = useCallback(() => {

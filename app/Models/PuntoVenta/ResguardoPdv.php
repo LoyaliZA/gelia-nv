@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class ResguardoPdv extends Model
 {
@@ -102,6 +103,18 @@ class ResguardoPdv extends Model
     public function eventos(): HasMany
     {
         return $this->hasMany(ResguardoPdvEvento::class, 'resguardo_id');
+    }
+
+    public function eventoRegistroManual(): HasOne
+    {
+        return $this->hasOne(ResguardoPdvEvento::class, 'resguardo_id')
+            ->ofMany(
+                ['id' => 'min'],
+                fn ($query) => $query->where(
+                    'tipo_evento',
+                    ResguardoPdvEvento::TIPO_REGISTRO_MANUAL_CREADO
+                )
+            );
     }
 
     public function evidencias(): HasMany

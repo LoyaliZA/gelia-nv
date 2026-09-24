@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { Link } from '@inertiajs/react';
 import { Eye, AlertTriangle, PackageCheck } from 'lucide-react';
 import {
     badgeAntiguedad,
@@ -33,6 +32,11 @@ import SelectorVistaResguardos from './SelectorVistaResguardos';
 import { AccionEntregaResguardo } from './ModalEntregaResguardo';
 import BotonConfirmarRecepcionResguardo from './BotonConfirmarRecepcionResguardo';
 import { resguardoSeleccionableGerente } from './recepcionGerenteApi';
+import { abrirDetalleResguardoModal } from './resguardoDetalleModalBridge';
+
+function abrirDetalle(resguardoId, resguardo) {
+    abrirDetalleResguardoModal(resguardoId, resguardo);
+}
 
 function BadgesResguardo({ resguardo, catalogos }) {
     const estadoEtiqueta = catalogos.estados?.[resguardo.estado] || resguardo.estado;
@@ -177,12 +181,13 @@ function TarjetaResguardo({
                     permisos={permisos}
                     onExito={onReponerExito}
                 />
-                <Link
-                    href={route('punto_venta.resguardos.show', resguardo.id)}
+                <button
+                    type="button"
+                    onClick={() => abrirDetalle(resguardo.id, resguardo)}
                     className={`${BTN_SECONDARY} w-full inline-flex items-center justify-center gap-2`}
                 >
                     <Eye className="w-4 h-4" /> Ver detalle
-                </Link>
+                </button>
             </div>
         </div>
     );
@@ -258,12 +263,13 @@ function FilaTablaResguardo({
                         permisos={permisos}
                         onExito={onReponerExito}
                     />
-                    <Link
-                        href={route('punto_venta.resguardos.show', resguardo.id)}
+                    <button
+                        type="button"
+                        onClick={() => abrirDetalle(resguardo.id, resguardo)}
                         className={`${BTN_SECONDARY} inline-flex items-center gap-2`}
                     >
                         <Eye className="w-4 h-4" /> Detalle
-                    </Link>
+                    </button>
                 </div>
             </td>
         </tr>

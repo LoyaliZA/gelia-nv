@@ -443,6 +443,6 @@ class ProcesarFilaClienteAction
 
     private function determinarListaPorMonto(float $monto, $listas): int
     {
-        return app(EscalonamientoService::class)->resolverListaPorMontoId($monto, $listas);
+        return app(EscalonamientoService::class)->resolverListaPorAcumuladoNetoId($monto, $listas);
     }
 }

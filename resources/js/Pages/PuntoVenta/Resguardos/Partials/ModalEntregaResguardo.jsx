@@ -8,6 +8,7 @@ import useEntregaResguardo from './useEntregaResguardo';
 import useFormularioEntregaResguardo from './useFormularioEntregaResguardo';
 import { BTN_ACCION_RECEPCION_TARJETA, BTN_SECONDARY, badgeEstadoResguardo } from './resguardosStyles';
 import useToastAlCambiar from '../../../../hooks/useToastAlCambiar';
+import { abrirDetalleResguardoModal } from './resguardoDetalleModalBridge';
 
 export default function ModalEntregaResguardo({
     abierto,
@@ -257,7 +258,7 @@ export function AccionEntregaResguardo({
 }
 
 export function irADetalleResguardo(resguardoId) {
-    router.visit(route('punto_venta.resguardos.show', resguardoId), { preserveState: false });
+    abrirDetalleResguardoModal(resguardoId);
 }
 
 export function irABandejaCustodiaResguardo() {

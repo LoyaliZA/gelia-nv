@@ -141,15 +141,15 @@ export default function BusquedaProductoResguardo({
             )}
 
             {lineas.length > 0 && (
-                <ul className="space-y-2 m-0 p-0 list-none">
+                <ul className="space-y-2 m-0 p-0 list-none w-full max-w-full">
                     {lineas.map((linea) => (
                         <li
                             key={linea.producto_id}
-                            className="rounded-2xl border theme-border theme-element p-3 flex items-center gap-3"
+                            className="rounded-2xl border theme-border theme-element p-3 flex items-center gap-2 sm:gap-3 w-full max-w-full overflow-hidden"
                         >
-                            <div className="min-w-0 flex-1">
+                            <div className="min-w-0 flex-1 overflow-hidden">
                                 <p className="text-sm font-bold theme-text-main m-0 truncate">{linea.descripcion}</p>
-                                <p className="text-xs font-semibold theme-text-muted m-0">{linea.sku || 'Sin SKU'}</p>
+                                <p className="text-xs font-semibold theme-text-muted m-0 truncate">{linea.sku || 'Sin SKU'}</p>
                             </div>
                             <input
                                 type="number"
@@ -158,14 +158,15 @@ export default function BusquedaProductoResguardo({
                                 value={linea.cantidad}
                                 disabled={deshabilitado}
                                 onChange={(event) => onCambiarCantidad?.(linea.producto_id, event.target.value)}
-                                className={`${THEME_INPUT} w-20 min-h-[44px] text-center`}
+                                className={`${THEME_INPUT} min-h-[44px] text-center shrink-0 tabular-nums`}
+                                style={{ width: '4.25rem', maxWidth: '4.25rem' }}
                                 aria-label={`Cantidad de ${linea.descripcion}`}
                             />
                             <button
                                 type="button"
                                 onClick={() => onQuitar?.(linea.producto_id)}
                                 disabled={deshabilitado}
-                                className={`${THEME_BTN_SECONDARY} min-h-[44px] min-w-[44px] p-2 inline-flex items-center justify-center`}
+                                className={`${THEME_BTN_SECONDARY} min-h-[44px] min-w-[44px] p-2 inline-flex items-center justify-center shrink-0`}
                                 aria-label={`Quitar ${linea.descripcion}`}
                             >
                                 <X className="w-4 h-4" />

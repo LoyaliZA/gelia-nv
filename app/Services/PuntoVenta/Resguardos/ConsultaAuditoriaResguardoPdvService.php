@@ -9,8 +9,10 @@ use App\Models\PuntoVenta\ResguardoPdvEvento;
 use App\Models\PuntoVenta\ResguardoPdvEvidencia;
 use App\Models\User;
 use App\Services\PuntoVenta\PuntoVentaModulo;
+use App\Support\PuntoVenta\Resguardos\AutorizacionConsultaResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\EtiquetasResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\TraductorMetadataEventoResguardoPdv;
+use App\Support\PuntoVenta\Resguardos\UrlEvidenciaResguardoPdv;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Collection;
@@ -19,6 +21,7 @@ class ConsultaAuditoriaResguardoPdvService
 {
     public function __construct(
         private readonly ResuelveAlcancePdv $alcance,
+        private readonly AutorizacionConsultaResguardoPdv $autorizacion,
     ) {}
 
     /**
@@ -142,7 +145,7 @@ class ConsultaAuditoriaResguardoPdvService
 
     private function asegurarAccesoPiso(User $user, ResguardoPdv $resguardo): void
     {
-        $this->alcance->asegurarConsultaPiso($user, PuntoVentaModulo::PERMISO_RESGUARDOS_VER);
+        $this->autorizacion->asegurarDetalleResguardo($user, $resguardo);
 
         $activaId = $this->alcance->sucursalActivaId($user);
         if ($activaId === null || (int) $resguardo->sucursal_id !== $activaId) {
@@ -344,9 +347,7 @@ class ConsultaAuditoriaResguardoPdvService
             'tipo' => $evidencia->tipo,
             'nombre_original' => $evidencia->nombre_original,
             'capturado_at' => $evidencia->capturado_at?->toIso8601String(),
-            'ruta_publica' => $evidencia->tipo === ResguardoPdvEvidencia::TIPO_FIRMA
-                ? null
-                : '/storage/'.$evidencia->ruta_interna,
+            'ruta_publica' => UrlEvidenciaResguardoPdv::url($evidencia),
         ];
     }
 

@@ -104,6 +104,17 @@ describe('buildSidebarNavigation permissions', () => {
         expect(puntoVenta?.label).toBe('Punto de venta');
     });
 
+    it('usuario con permiso historial entregas ve enlace dedicado', () => {
+        const tree = buildSidebarNavigation({
+            can: canWith(['punto_venta.acceder', 'pdv.resguardos.ver_historial_entregas']),
+            showAdminMenu: false,
+            manualesHubVisible: false,
+            geliaAiVisible: false,
+        });
+        const ids = collectLinkIds(tree);
+        expect(ids).toContain('punto_venta_resguardos_entregados');
+    });
+
     it('usuario sin permiso PDV no ve enlace de resguardos', () => {
         const tree = buildSidebarNavigation({
             can: canWith(['control_pedidos.ver_listado']),
