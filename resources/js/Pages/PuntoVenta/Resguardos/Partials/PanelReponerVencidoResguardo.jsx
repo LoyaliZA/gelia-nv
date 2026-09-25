@@ -33,7 +33,7 @@ export default function PanelReponerVencidoResguardo({ resguardo, permisos = {} 
         <div className={`${geliaCardClass()} p-5 md:p-6 space-y-4`}>
             <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
-                    <RotateCcw className="w-5 h-5 text-amber-500 shrink-0" />
+                    <RotateCcw className="w-5 h-5 text-[var(--color-aviso)] shrink-0" />
                     <h2 className="text-sm font-black uppercase tracking-widest theme-text-main m-0">
                         Custodia vencida
                     </h2>
@@ -58,9 +58,9 @@ export default function PanelReponerVencidoResguardo({ resguardo, permisos = {} 
             </p>
 
             {ultimoEvento && (
-                <div className="rounded-2xl border border-emerald-500/30 p-4 space-y-2">
+                <div className="rounded-2xl border border-[color-mix(in_srgb,var(--color-exito)_35%,transparent)] p-4 space-y-2">
                     <div className="flex items-center gap-2">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                        <CheckCircle2 className="w-4 h-4 text-[var(--color-exito)] shrink-0" />
                         <p className="text-[9px] font-black uppercase tracking-widest theme-text-main m-0">
                             Vencido repuesto
                         </p>
@@ -73,7 +73,7 @@ export default function PanelReponerVencidoResguardo({ resguardo, permisos = {} 
             )}
 
             {conflictoVersion && (
-                <div className="rounded-2xl border border-amber-500/30 p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+                <div className="rounded-2xl border border-[color-mix(in_srgb,var(--color-aviso)_35%,transparent)] p-4 flex flex-col sm:flex-row sm:items-center gap-3">
                     <p className="text-sm theme-text-main m-0 flex-1">
                         Otro usuario modificó este resguardo. Actualiza los datos antes de continuar.
                     </p>

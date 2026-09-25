@@ -162,54 +162,113 @@ function toAppPath(url) {
     return url;
 }
 
+function pathOnly(url) {
+    const app = toAppPath(url);
+    if (!app) return null;
+    const path = app.split('?')[0].replace(/\/$/, '');
+    return path || '/';
+}
+
+/** Listados de módulo: si la url guardada es solo eso, se puede precisar con el id del registro. */
+function esListadoGenerico(url, bases) {
+    if (!url) return true;
+    return bases.includes(pathOnly(url));
+}
+
+function busquedaCobranza(payload) {
+    if (payload.clientes_busqueda) return String(payload.clientes_busqueda);
+    if (payload.numero_cliente) return String(payload.numero_cliente);
+    const cliente = payload.cliente;
+    if (!cliente || cliente === 'Varios Clientes' || cliente === 'Carga Credibox') return null;
+    return String(cliente);
+}
+
+const UUID_NOTIFICACION = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function esIdNotificacionPersistida(id) {
+    return typeof id === 'string' && UUID_NOTIFICACION.test(id);
+}
+
+/** Acuse de lectura. No bloquea la navegación si la red falla. */
+export async function marcarNotificacionLeida(id) {
+    if (!esIdNotificacionPersistida(id) || typeof window === 'undefined' || typeof route !== 'function') return;
+    const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+    try {
+        await fetch(route('notifications.read', id), {
+            method: 'POST',
+            credentials: 'same-origin',
+            signal: AbortSignal.timeout(4000),
+            headers: {
+                Accept: 'application/json',
+                'X-CSRF-TOKEN': token,
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+        });
+    } catch {
+        /* la visita sigue aunque el acuse no llegue */
+    }
+}
+
+export function confirmarSalidaSiHayCambios() {
+    if (typeof document === 'undefined' || !document.querySelector('[data-gelia-unsaved-form="1"]')) {
+        return true;
+    }
+    return window.confirm(
+        'Tienes un formulario abierto con cambios sin guardar. Si continúas, se perderán. ¿Salir de todas formas?'
+    );
+}
+
 /** Resuelve la ruta interna al hacer clic en una notificación del centro de alertas. */
 export function resolveNotificationDestination(notification = {}) {
     const payload = normalizeNotificationPayload(notification);
+    const explicita = payload.url ? toAppPath(payload.url) : null;
 
-    if (payload.modulo === 'cobranza') {
-        let destino = '/auto-cobranza';
-        if (payload.clientes_busqueda) {
-            destino += `?q=${payload.clientes_busqueda}`;
-        }
-        return destino;
+    if (payload.ticket_id && esListadoGenerico(explicita, ['/soporte/agente/tickets', '/soporte/mis-tickets'])) {
+        const portal = explicita && pathOnly(explicita).includes('/mis-tickets')
+            ? '/soporte/mis-tickets'
+            : '/soporte/agente/tickets';
+        return `${portal}/${payload.ticket_id}`;
     }
 
-    if (payload.url) {
-        return toAppPath(payload.url);
-    }
-
-    if (payload.conversacion_id) {
+    if (payload.conversacion_id && esListadoGenerico(explicita, ['/mensajeria'])) {
         return `/mensajeria?conversacion=${payload.conversacion_id}`;
     }
 
-    if (payload.solicitud_id) {
-        return `/solicitudes?folio=${payload.solicitud_id}`;
+    if (payload.solicitud_id && esListadoGenerico(explicita, ['/solicitudes'])) {
+        return `/solicitudes?q=${encodeURIComponent(payload.solicitud_id)}`;
     }
 
-    if (payload.activo_id) {
+    if (payload.activo_id && esListadoGenerico(explicita, ['/activos'])) {
         return `/activos/${payload.activo_id}`;
     }
 
-    if (payload.ticket_id) {
-        return toAppPath(payload.url) || '/soporte/agente/tickets';
-    }
-
-    if (payload.modulo === 'facturas' && payload.folio) {
-        return `/facturas?folio=${payload.folio}`;
+    if (payload.modulo === 'facturas' && payload.folio && esListadoGenerico(explicita, ['/facturas'])) {
+        return `/facturas?q=${encodeURIComponent(payload.folio)}`;
     }
 
     if (payload.modulo === 'traspasos') {
         if (payload.tipo === 'listo_cedis') {
             return '/traspasos/cedis';
         }
-        if (payload.folio) {
-            return `/traspasos?folio=${payload.folio}`;
+        if (payload.folio && esListadoGenerico(explicita, ['/traspasos'])) {
+            return `/traspasos?folio=${encodeURIComponent(payload.folio)}`;
         }
     }
 
-    if (payload.modulo === 'control_pedidos' || payload.pedido_bma_id) {
-        return toAppPath(payload.url) || '/control-pedidos';
+    if (payload.modulo === 'cobranza') {
+        if (explicita && !esListadoGenerico(explicita, ['/auto-cobranza'])) {
+            return explicita;
+        }
+        const q = busquedaCobranza(payload);
+        return q ? `/auto-cobranza?q=${encodeURIComponent(q)}` : '/auto-cobranza';
     }
+
+    if ((payload.modulo === 'control_pedidos' || payload.pedido_bma_id) && esListadoGenerico(explicita, ['/control-pedidos'])) {
+        const q = payload.folio || payload.pedido_bma_id;
+        return q ? `/control-pedidos?q=${encodeURIComponent(q)}` : '/control-pedidos';
+    }
+
+    if (explicita) return explicita;
 
     if (payload.modulo === 'woocommerce') {
         return '/woocommerce';

@@ -61,45 +61,90 @@ export const BTN_ACCION_RECEPCION_TARJETA =
 export const BTN_SECUNDARIO_RECEPCION_TARJETA =
     `${BTN_SECONDARY} w-full min-h-[48px] inline-flex items-center justify-center gap-2 no-underline hover:border-[var(--color-primario)]/40`;
 
-/** Barra inferior de acciones masivas gerente (fondo gris, texto blanco). */
+/** Tono semántico de Gelia. Claro y oscuro salen de las variables del tema. */
+export const TONO_PELIGRO = 'bg-[color-mix(in_srgb,var(--color-peligro)_15%,transparent)] text-[var(--color-peligro)]';
+export const TONO_AVISO = 'bg-[color-mix(in_srgb,var(--color-aviso)_15%,transparent)] text-[var(--color-aviso)]';
+export const TONO_EXITO = 'bg-[color-mix(in_srgb,var(--color-exito)_15%,transparent)] text-[var(--color-exito)]';
+export const TONO_INFO = 'bg-[color-mix(in_srgb,var(--color-info)_15%,transparent)] text-[var(--color-info)]';
+export const TONO_PRIMARIO = 'bg-[color-mix(in_srgb,var(--color-primario)_15%,transparent)] text-[var(--color-primario)]';
+export const TONO_NEUTRO = 'bg-[color-mix(in_srgb,var(--theme-text-main)_6%,transparent)] theme-text-muted';
+
+export const TEXTO_PELIGRO = 'text-[var(--color-peligro)]';
+export const TEXTO_AVISO = 'text-[var(--color-aviso)]';
+export const TEXTO_EXITO = 'text-[var(--color-exito)]';
+export const TEXTO_INFO = 'text-[var(--color-info)]';
+export const TEXTO_PRIMARIO = 'text-[var(--color-primario)]';
+
+export const BORDE_AVISO = 'border-[color-mix(in_srgb,var(--color-aviso)_35%,transparent)]';
+export const BORDE_EXITO = 'border-[color-mix(in_srgb,var(--color-exito)_35%,transparent)]';
+export const BORDE_INFO = 'border-[color-mix(in_srgb,var(--color-info)_35%,transparent)]';
+export const BORDE_PRIMARIO = 'border-[color-mix(in_srgb,var(--color-primario)_35%,transparent)]';
+
+export const FONDO_AVISO = 'bg-[color-mix(in_srgb,var(--color-aviso)_10%,transparent)]';
+export const FONDO_PELIGRO = 'bg-[color-mix(in_srgb,var(--color-peligro)_10%,transparent)]';
+export const FONDO_PRIMARIO = 'bg-[color-mix(in_srgb,var(--color-primario)_8%,transparent)]';
+
+export const ANILLO_AVISO = 'ring-[color-mix(in_srgb,var(--color-aviso)_45%,transparent)]';
+export const ANILLO_PELIGRO = 'ring-[color-mix(in_srgb,var(--color-peligro)_45%,transparent)]';
+
+export const BADGE_BASE = 'inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-wide';
+
+export const ICONO_METRICA_INFO = `${TARJETA_RECEPCION_ICONO} ${TONO_INFO}`;
+export const ICONO_METRICA_EXITO = `${TARJETA_RECEPCION_ICONO} ${TONO_EXITO}`;
+
+/** Barra inferior de acciones masivas. Usa el botón principal del tema. */
 export const BTN_ACCION_MASIVA_GERENTE =
-    'w-full min-h-[52px] inline-flex items-center justify-center gap-2.5 rounded-sm bg-zinc-500 hover:bg-zinc-600 active:bg-zinc-700 text-white text-[11px] font-black uppercase tracking-[0.12em] outline-none transition-colors disabled:opacity-60 disabled:pointer-events-none';
+    `${THEME_BTN_PRIMARY} theme-btn-primary--compact w-full min-h-[52px] !text-[11px] !tracking-[0.12em] disabled:opacity-60 disabled:pointer-events-none`;
+
+export function claseTextoPlazo(clasificacion) {
+    if (clasificacion === 'vencido') return `font-bold ${TEXTO_PELIGRO}`;
+    if (clasificacion === 'rezagado' || clasificacion === 'proximo_a_vencer') return `font-bold ${TEXTO_AVISO}`;
+    return 'theme-text-muted';
+}
 
 export function badgeEstadoResguardo(estado) {
     const mapa = {
-        pendiente_recepcion: 'bg-amber-500/15 text-amber-700 dark:text-amber-300',
-        recibido: 'bg-lime-500/15 text-lime-700 dark:text-lime-300',
-        en_recepcion: 'bg-violet-500/15 text-violet-700 dark:text-violet-300',
-        en_custodia: 'bg-sky-500/15 text-sky-700 dark:text-sky-300',
-        entregado: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
-        devuelto: 'bg-slate-500/15 text-slate-700 dark:text-slate-300',
+        pendiente_recepcion: TONO_AVISO,
+        recibido: TONO_EXITO,
+        en_recepcion: TONO_INFO,
+        en_custodia: TONO_INFO,
+        entregado: TONO_EXITO,
+        devuelto: TONO_NEUTRO,
     };
-    return mapa[estado] || 'bg-black/5 dark:bg-white/10 theme-text-muted';
+    return mapa[estado] || TONO_NEUTRO;
 }
 
 export function badgeEstadoIncidencia(estado) {
     const mapa = {
-        abierta: 'bg-amber-500/15 text-amber-700 dark:text-amber-300',
-        autorizada: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
-        cerrada: 'bg-slate-500/15 text-slate-700 dark:text-slate-300',
+        abierta: TONO_AVISO,
+        autorizada: TONO_EXITO,
+        cerrada: TONO_NEUTRO,
     };
-    return mapa[estado] || 'bg-black/5 dark:bg-white/10 theme-text-muted';
+    return mapa[estado] || TONO_NEUTRO;
 }
 
 export function badgeAntiguedad(clave) {
     const mapa = {
-        rezagado: 'bg-orange-500/15 text-orange-700 dark:text-orange-300',
-        proximo_a_vencer: 'bg-amber-500/15 text-amber-700 dark:text-amber-300',
-        vencido: 'bg-red-500/15 text-red-700 dark:text-red-300',
+        rezagado: TONO_AVISO,
+        proximo_a_vencer: TONO_AVISO,
+        vencido: TONO_PELIGRO,
     };
-    return mapa[clave] || 'bg-black/5 dark:bg-white/10 theme-text-muted';
+    return mapa[clave] || TONO_NEUTRO;
+}
+
+export function tonoAlertaAntiguedad(clave) {
+    if (clave === 'vencido') {
+        return { tone: TEXTO_PELIGRO, ring: ANILLO_PELIGRO, bg: FONDO_PELIGRO };
+    }
+    return { tone: TEXTO_AVISO, ring: ANILLO_AVISO, bg: FONDO_AVISO };
 }
 
 export function tarjetaResguardoClass(resguardo) {
     const base = `${geliaCardClass()} p-4 space-y-3`;
-    if (resguardo?.clasificaciones?.vencido) return `${base} ring-1 ring-red-500/30`;
-    if (resguardo?.clasificaciones?.proximo_a_vencer) return `${base} ring-1 ring-amber-500/30`;
-    if (resguardo?.clasificaciones?.rezagado) return `${base} ring-1 ring-orange-500/30`;
-    if ((resguardo?.incidencias_abiertas_count || 0) > 0) return `${base} ring-1 ring-purple-500/30`;
+    if (resguardo?.clasificaciones?.vencido) return `${base} ring-1 ${ANILLO_PELIGRO}`;
+    if (resguardo?.clasificaciones?.proximo_a_vencer || resguardo?.clasificaciones?.rezagado) {
+        return `${base} ring-1 ${ANILLO_AVISO}`;
+    }
+    if ((resguardo?.incidencias_abiertas_count || 0) > 0) return `${base} ring-1 ${ANILLO_AVISO}`;
     return base;
 }

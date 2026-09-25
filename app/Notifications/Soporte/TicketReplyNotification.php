@@ -87,7 +87,9 @@ class TicketReplyNotification extends Notification implements ShouldQueue, Shoul
             'mensaje' => $mensajePersonalizado,
             'mensaje_visible' => $mensajePersonalizado,
             'mensaje_voz' => $mensajePersonalizado,
-            'url' => $this->isAgentReply ? '/soporte/mis-tickets' : '/soporte/agente/tickets',
+            'url' => $this->isAgentReply
+                ? '/soporte/mis-tickets/'.$ticket->id
+                : '/soporte/agente/tickets/'.$ticket->id,
             'modulo' => 'soporte',
             'is_agent_reply' => $this->isAgentReply,
             'autor' => $this->interaccion->user->name ?? null,

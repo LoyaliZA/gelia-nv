@@ -1,8 +1,9 @@
 import React from 'react';
 import { UserRound } from 'lucide-react';
+import { TONO_PRIMARIO } from './resguardosStyles';
 
 const ETIQUETA_AREA_ORIGEN =
-    'inline-flex max-w-full px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-wide bg-purple-500/15 text-purple-700 dark:text-purple-300 truncate';
+    `inline-flex max-w-full px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-wide truncate ${TONO_PRIMARIO}`;
 
 export default function MetaRegistroManualTarjeta({ resguardo }) {
     const registro = resguardo?.registro_manual;

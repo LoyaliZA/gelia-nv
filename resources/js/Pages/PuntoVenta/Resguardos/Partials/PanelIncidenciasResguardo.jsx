@@ -50,7 +50,7 @@ export default function PanelIncidenciasResguardo({
             <div className={`${geliaCardClass()} p-5 md:p-6 space-y-4`}>
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="flex items-center gap-2">
-                        <AlertTriangle className="w-5 h-5 text-purple-500 shrink-0" />
+                        <AlertTriangle className="w-5 h-5 text-[var(--color-aviso)] shrink-0" />
                         <h2 className="text-sm font-black uppercase tracking-widest theme-text-main m-0">
                             Incidencias
                         </h2>
@@ -83,7 +83,7 @@ export default function PanelIncidenciasResguardo({
                 )}
 
                 {conflictoVersion && (
-                    <div className="rounded-2xl border border-amber-500/30 p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+                    <div className="rounded-2xl border border-[color-mix(in_srgb,var(--color-aviso)_35%,transparent)] p-4 flex flex-col sm:flex-row sm:items-center gap-3">
                         <p className="text-sm theme-text-main m-0 flex-1">
                             Otro usuario modificó este resguardo. Actualiza los datos antes de continuar.
                         </p>

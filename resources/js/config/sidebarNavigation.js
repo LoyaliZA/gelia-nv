@@ -342,13 +342,6 @@ export function buildSidebarNavigation({ can, showAdminMenu, manualesHubVisible 
             icon: User,
             children: comercialChildren,
         },
-        logisticaChildren.length > 0 && {
-            type: 'group',
-            id: 'logistica',
-            label: 'Logística',
-            icon: Truck,
-            children: logisticaChildren,
-        },
     ].filter(Boolean);
 
     const herramientasChildren = [
@@ -638,6 +631,13 @@ export function buildSidebarNavigation({ can, showAdminMenu, manualesHubVisible 
             label: 'Operaciones',
             icon: Briefcase,
             children: operacionesChildren,
+        },
+        logisticaChildren.length > 0 && {
+            type: 'group',
+            id: 'logistica',
+            label: 'Logística',
+            icon: Truck,
+            children: logisticaChildren,
         },
         puntoVentaChildren.length > 0 && {
             type: 'group',

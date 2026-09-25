@@ -18,9 +18,11 @@ import TiendanubeImportFloatingTracker from '../Components/TiendanubeImportFloat
 import {
     resolveAlertasPrefs,
     getTipoAlerta,
+    marcarNotificacionLeida,
     normalizeNotificationPayload,
     resolveNotificationDestination,
     resolveNotificationVoiceMessage,
+    confirmarSalidaSiHayCambios,
     shouldTriggerChannel,
     MENSAJERIA_TIPO_ALERTA,
 } from '../utils/alertasPrefs';
@@ -90,6 +92,21 @@ export default function AppLayout({ children, fullScreen = false }) {
         }
     }, [url]);
 
+    useEffect(() => {
+        if (typeof window === 'undefined') return undefined;
+        const params = new URLSearchParams(window.location.search);
+        const id = params.get('gelia_notif');
+        if (!id) return undefined;
+        params.delete('gelia_notif');
+        const qs = params.toString();
+        const clean = `${window.location.pathname}${qs ? `?${qs}` : ''}${window.location.hash}`;
+        window.history.replaceState(window.history.state, '', clean);
+        void marcarNotificacionLeida(id).then(() => {
+            window.dispatchEvent(new CustomEvent('notification-dismissed', { detail: { id } }));
+        });
+        return undefined;
+    }, [url]);
+
     const [contentDensityMode, setContentDensityMode] = useState(() =>
         resolveContentDensity(auth?.tema_visual || {}).modo
     );
@@ -121,13 +138,12 @@ export default function AppLayout({ children, fullScreen = false }) {
     };
 
     const navigateFromNotification = useCallback((notification) => {
-        if (typeof document !== 'undefined' && document.querySelector('[data-gelia-unsaved-form="1"]')) {
-            const salir = window.confirm(
-                'Tienes un formulario abierto con cambios sin guardar. Si continúas, se perderán. ¿Salir de todas formas?'
-            );
-            if (!salir) return;
-        }
-        router.visit(resolveNotificationDestination(notification));
+        if (!confirmarSalidaSiHayCambios()) return;
+        const id = notification?.id;
+        window.dispatchEvent(new CustomEvent('notification-dismissed', { detail: { id } }));
+        void marcarNotificacionLeida(id).then(() => {
+            router.visit(resolveNotificationDestination(notification));
+        });
     }, []);
 
     const reloadAuthSilencioso = useCallback(() => {
@@ -152,12 +168,7 @@ export default function AppLayout({ children, fullScreen = false }) {
 
     const handleToastClick = useCallback((toast) => {
         if (toast.conversacionId) {
-            if (typeof document !== 'undefined' && document.querySelector('[data-gelia-unsaved-form="1"]')) {
-                const salir = window.confirm(
-                    'Tienes un formulario abierto con cambios sin guardar. Si continúas, se perderán. ¿Salir de todas formas?'
-                );
-                if (!salir) return;
-            }
+            if (!confirmarSalidaSiHayCambios()) return;
             abrirConversacionDesdeNotificacion(toast.conversacionId);
         } else if (toast.notification) {
             navigateFromNotification(toast.notification);
@@ -685,21 +696,21 @@ export default function AppLayout({ children, fullScreen = false }) {
                             onClick={openMobileSidebar}
                             aria-label="Abrir menú de navegación"
                         >
-                            <Menu className="w-5 h-5" style={{ color: 'var(--color-primario)' }} />
+                            <Menu className="w-5 h-5" aria-hidden />
                         </button>
                         <Link
                             href={route('dashboard')}
                             className="gelia-mobile-topbar__brand"
                             aria-label="Panel principal"
                         >
-                            <GeliaLogo variant="sparkle" className="w-9 h-9 drop-shadow-sm" />
+                            <GeliaLogo variant="sparkle" className="w-8 h-8" />
                         </Link>
                         <div className="gelia-mobile-topbar__actions">
                             <NotificationBell iconButtonClassName="gelia-mobile-topbar__icon-btn" />
                             <MensajeriaWidget iconButtonClassName="gelia-mobile-topbar__icon-btn" />
                             <Link
                                 href={typeof route === 'function' ? route('profile.index') : '/perfil'}
-                                className="gelia-mobile-topbar__icon-btn overflow-hidden"
+                                className="gelia-mobile-topbar__avatar"
                                 aria-label="Perfil"
                             >
                                 {auth?.user?.foto_perfil ? (

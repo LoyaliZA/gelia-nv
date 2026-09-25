@@ -8,8 +8,21 @@ import { THEME_INPUT } from './resguardosStyles';
 import { extraerFolioEscaneado } from './recepcionFisicaUtils';
 import { confirmarRecepcionGerente } from './recepcionGerenteApi';
 
-export default function BusquedaRapidaRecepcion({ puedeRecibir = false, onRecepcionExito }) {
-    const [codigo, setCodigo] = useState('');
+export default function BusquedaRapidaRecepcion({
+    puedeRecibir = false,
+    onRecepcionExito,
+    variante = 'tarjeta',
+    valor,
+    onValor,
+    onAplicarFiltro,
+}) {
+    const [codigoInterno, setCodigoInterno] = useState('');
+    const controlado = valor !== undefined;
+    const codigo = controlado ? valor : codigoInterno;
+    const setCodigo = (siguiente) => {
+        if (controlado) onValor?.(siguiente);
+        else setCodigoInterno(siguiente);
+    };
     const [buscando, setBuscando] = useState(false);
     const [mensaje, setMensaje] = useState(null);
     const [exito, setExito] = useState(null);
@@ -20,8 +33,8 @@ export default function BusquedaRapidaRecepcion({ puedeRecibir = false, onRecepc
 
     if (!puedeRecibir) return null;
 
-    const buscarYConfirmar = async (valor) => {
-        const folio = extraerFolioEscaneado(valor);
+    const buscarYConfirmar = async (captura) => {
+        const folio = extraerFolioEscaneado(captura);
         if (!folio) {
             setExito(null);
             setMensaje('Ingresa o escanea un folio, remisión o código de barras.');
@@ -43,12 +56,14 @@ export default function BusquedaRapidaRecepcion({ puedeRecibir = false, onRecepc
             );
 
             if (coincidencias.length === 0) {
-                setMensaje('No se encontró un resguardo pendiente de recepción con ese código.');
+                onAplicarFiltro?.(folio);
+                setMensaje('No se encontró un resguardo pendiente de recepción con ese código. El listado quedó filtrado.');
                 return;
             }
 
             if (coincidencias.length > 1) {
-                setMensaje('Hay varios resguardos con ese criterio. Refina la búsqueda o elige uno del listado.');
+                onAplicarFiltro?.(folio);
+                setMensaje('Hay varios resguardos con ese criterio. El listado quedó filtrado para elegir uno.');
                 return;
             }
 
@@ -75,12 +90,17 @@ export default function BusquedaRapidaRecepcion({ puedeRecibir = false, onRecepc
         buscarYConfirmar(codigo);
     };
 
+    const embebida = variante === 'embebida';
+    const contenedor = embebida ? 'space-y-3' : `${geliaCardClass()} p-4 md:p-5 space-y-3`;
+
     return (
-        <div className={`${geliaCardClass()} p-4 md:p-5 space-y-3`}>
-            <div className="flex items-center gap-2">
-                <ScanLine className="w-4 h-4 shrink-0" style={{ color: 'var(--color-primario)' }} aria-hidden />
-                <h2 className="text-xs font-black uppercase tracking-widest theme-text-main m-0">Recepción rápida</h2>
-            </div>
+        <div className={contenedor}>
+            {!embebida && (
+                <div className="flex items-center gap-2">
+                    <ScanLine className="w-4 h-4 shrink-0 text-[var(--color-primario)]" aria-hidden />
+                    <h2 className="text-xs font-black uppercase tracking-widest theme-text-main m-0">Recepción rápida</h2>
+                </div>
+            )}
 
             <form onSubmit={onSubmit} className="flex flex-col lg:flex-row gap-2 lg:items-stretch">
                 <input
@@ -88,7 +108,7 @@ export default function BusquedaRapidaRecepcion({ puedeRecibir = false, onRecepc
                     value={codigo}
                     onChange={(e) => setCodigo(e.target.value)}
                     placeholder="Folio, remisión o código de barras"
-                    aria-label="Buscar y confirmar resguardo"
+                    aria-label="Buscar resguardo para recepción"
                     disabled={buscando}
                     className={`${THEME_INPUT} flex-1 min-w-0 min-h-[48px]`}
                     autoComplete="off"

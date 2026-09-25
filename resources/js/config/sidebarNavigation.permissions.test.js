@@ -53,6 +53,10 @@ describe('buildSidebarNavigation permissions', () => {
         const ids = collectLinkIds(tree);
         expect(ids).toContain('control_pedidos_registrar');
         expect(ids).not.toContain('control_pedidos_auditar');
+        const logistica = tree.find((n) => n?.id === 'logistica');
+        const operaciones = tree.find((n) => n?.id === 'operaciones');
+        expect(logistica?.label).toBe('Logística');
+        expect(operaciones).toBeFalsy();
     });
 
     it('usuario con permiso equipo_ver ve Operación General', () => {

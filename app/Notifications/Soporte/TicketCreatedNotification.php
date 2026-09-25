@@ -73,7 +73,7 @@ class TicketCreatedNotification extends Notification implements ShouldQueue, Sho
             'mensaje' => $mensajePersonalizado,
             'mensaje_visible' => $mensajePersonalizado,
             'mensaje_voz' => $mensajePersonalizado,
-            'url' => '/soporte/agente/tickets',
+            'url' => '/soporte/agente/tickets/'.$this->ticket->id,
             'modulo' => 'soporte',
             'usuario_solicitante' => $this->ticket->user->name ?? null,
             'modulo_ticket' => $this->ticket->modulo->nombre ?? null,

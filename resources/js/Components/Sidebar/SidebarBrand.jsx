@@ -1,9 +1,9 @@
 import React from 'react';
 import { Link } from '@inertiajs/react';
-import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { PanelLeftClose, PanelLeftOpen, X } from 'lucide-react';
 import GeliaLogo from '../GeliaLogo';
 
-export default function SidebarBrand({ collapsed = false, onToggleCollapse, showToggle = true }) {
+export default function SidebarBrand({ collapsed = false, onToggleCollapse, showToggle = true, onClose }) {
     return (
         <div className={`gelia-pro-sidebar__brand ${collapsed ? 'gelia-pro-sidebar__brand--collapsed' : ''}`}>
             <div className="gelia-pro-sidebar__brand-main">
@@ -20,7 +20,16 @@ export default function SidebarBrand({ collapsed = false, onToggleCollapse, show
                     <p className="gelia-pro-sidebar__brand-subtitle">GELIA NV</p>
                 </div>
             </div>
-            {showToggle && (
+            {onClose ? (
+                <button
+                    type="button"
+                    className="gelia-pro-sidebar__toggle"
+                    onClick={onClose}
+                    aria-label="Cerrar menú"
+                >
+                    <X className="w-4 h-4" aria-hidden />
+                </button>
+            ) : showToggle && (
                 <button
                     type="button"
                     className="gelia-pro-sidebar__toggle gelia-pro-sidebar__tooltip"

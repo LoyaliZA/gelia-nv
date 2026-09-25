@@ -39,9 +39,15 @@ class AlertaCobranza extends Notification implements ShouldQueue, ShouldBroadcas
 
     private function payload(): array
     {
+        $numero = $this->alerta->cliente->numero_cliente ?? null;
+        $nombre = $this->alerta->cliente->nombre ?? null;
+        $busqueda = $numero ?: $nombre;
+
         return [
             'alerta_cobranza_id' => $this->alerta->id,
-            'cliente' => $this->alerta->cliente->nombre ?? null,
+            'cliente' => $nombre,
+            'numero_cliente' => $numero,
+            'url' => $busqueda ? '/auto-cobranza?q='.rawurlencode((string) $busqueda) : '/auto-cobranza',
             'dias_atraso' => $this->alerta->dias_atraso,
             'monto' => $this->alerta->factura->monto ?? 0,
             'tipo' => $this->alerta->tipo ?? 'cobranza_vencimiento',

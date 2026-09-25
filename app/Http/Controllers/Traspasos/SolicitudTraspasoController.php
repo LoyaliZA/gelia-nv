@@ -12,6 +12,7 @@ use App\Models\CatalogoEstadoSolicitud;
 use App\Models\CatalogoHorarioTraspaso;
 use App\Models\SolicitudTraspaso;
 use App\Models\User;
+use App\Services\Traspasos\AlmacenesOrigenTraspasoService;
 use App\Services\Traspasos\CrearSolicitudTraspasoService;
 use App\Services\Traspasos\EliminarSolicitudTraspasoService;
 use App\Services\Traspasos\ListarSolicitudesTraspasoService;
@@ -29,11 +30,12 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class SolicitudTraspasoController extends Controller
 {
-    public function index(Request $request, ListarSolicitudesTraspasoService $listarService): Response
+    public function index(Request $request, ListarSolicitudesTraspasoService $listarService, AlmacenesOrigenTraspasoService $almacenesOrigen): Response
     {
         Gate::authorize('traspasos.ver_listado');
 
-        $traspasos = $listarService->ejecutar(Auth::user(), $request->all());
+        $user = Auth::user();
+        $traspasos = $listarService->ejecutar($user, $request->all());
 
         $vendedores = User::permission('traspasos.crear')
             ->orderBy('name')
@@ -44,6 +46,19 @@ class SolicitudTraspasoController extends Controller
             ->orderBy('nombre')
             ->get(['id', 'codigo', 'nombre']);
 
+        $sucursalSolicitante = null;
+        $almacenesOrigenLista = collect();
+        if ($user->can('traspasos.crear')) {
+            try {
+                $sucursal = $almacenesOrigen->resolverSucursalSolicitante($user);
+                $sucursalSolicitante = $sucursal->only(['id', 'codigo', 'nombre']);
+                $almacenesOrigenLista = $almacenesOrigen->almacenesPermitidosParaSucursal($sucursal);
+            } catch (\Illuminate\Validation\ValidationException) {
+                $sucursalSolicitante = null;
+                $almacenesOrigenLista = collect();
+            }
+        }
+
         $horarios = CatalogoHorarioTraspaso::where('activo', true)
             ->orderBy('orden')
             ->get(['id', 'nombre', 'hora_inicio', 'hora_fin', 'dias_para_entrega', 'descripcion']);
@@ -53,6 +68,8 @@ class SolicitudTraspasoController extends Controller
             'filtros' => $request->all(),
             'vendedores' => $vendedores,
             'almacenes' => $almacenes,
+            'almacenesOrigen' => $almacenesOrigenLista,
+            'sucursalSolicitante' => $sucursalSolicitante,
             'horarios' => $horarios,
             'estados' => CatalogoEstadoSolicitud::orderBy('id')->get(['id', 'nombre']),
         ]);
@@ -86,8 +103,11 @@ class SolicitudTraspasoController extends Controller
             'estado:id,nombre',
             'cliente:id,numero_cliente,nombre',
             'almacenOrigen:id,codigo,nombre',
+            'sucursalSolicitante:id,codigo,nombre',
             'horario:id,nombre,dias_para_entrega,descripcion',
             'productos:id,solicitud_traspaso_id,producto_id,sku,descripcion,piezas',
+            'productos.revisiones.registradoPor:id,name',
+            'revisionesProducto.registradoPor:id,name',
             'respondidaPor:id,name',
             'auditorias.usuario:id,name',
             'auditorias.estadoNuevo:id,nombre',
@@ -125,7 +145,16 @@ class SolicitudTraspasoController extends Controller
             $datos['evidencia_respuesta'] = $request->file('evidencia_respuesta');
         }
 
-        $responderService->ejecutar($traspaso, $datos, Auth::user());
+        $revisionesInput = collect($request->validated('revisiones') ?? [])->map(function (array $rev, int $i) use ($request) {
+            $files = $request->file("revisiones.{$i}.evidencias") ?? [];
+
+            return [
+                ...$rev,
+                'evidencias' => is_array($files) ? $files : ($files ? [$files] : []),
+            ];
+        })->all();
+
+        $responderService->ejecutar($traspaso, $datos, Auth::user(), $revisionesInput);
 
         event(new SolicitudTraspasoActualizada(
             solicitudId: $traspaso->id,

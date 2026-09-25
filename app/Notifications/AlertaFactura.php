@@ -57,7 +57,7 @@ class AlertaFactura extends Notification implements ShouldQueue, ShouldBroadcast
             ->greeting('Hola, ' . $notifiable->name . '!')
             ->line($this->titulo)
             ->line($this->mensajeVisible)
-            ->action('Ver solicitud de factura', url('/facturas?folio=' . $this->solicitud->folio));
+            ->action('Ver solicitud de factura', url('/facturas?q=' . rawurlencode($this->solicitud->folio)));
     }
 
     public function toDatabase(object $notifiable): array
@@ -86,6 +86,7 @@ class AlertaFactura extends Notification implements ShouldQueue, ShouldBroadcast
             'vendedora' => $this->solicitud->vendedor->name ?? null,
             'fecha' => now()->toDateTimeString(),
             'modulo' => 'facturas',
+            'url' => '/facturas?q='.rawurlencode((string) $this->solicitud->folio),
         ];
     }
 

@@ -70,9 +70,9 @@ export default function ResumenRecepcionParcial({ resguardo, catalogos = {} }) {
 
 function CantidadResumen({ label, value, destacado = false, alerta = false }) {
     const claseValor = alerta
-        ? 'text-amber-600 dark:text-amber-300'
+        ? 'text-[var(--color-aviso)]'
         : destacado
-            ? 'text-emerald-600 dark:text-emerald-300'
+            ? 'text-[var(--color-exito)]'
             : 'theme-text-main';
 
     return (

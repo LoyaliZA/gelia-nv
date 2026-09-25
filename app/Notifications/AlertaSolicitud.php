@@ -73,7 +73,7 @@ class AlertaSolicitud extends Notification implements ShouldQueue, ShouldBroadca
 
     public function toMail(object $notifiable): MailMessage
     {
-        $url = url('/solicitudes?folio=' . $this->solicitud->id);
+        $url = url('/solicitudes?q=' . $this->solicitud->id);
         $proceso = $this->nombreProceso();
 
         $mail = (new MailMessage)
@@ -120,6 +120,7 @@ class AlertaSolicitud extends Notification implements ShouldQueue, ShouldBroadca
             'estado' => $this->solicitud->estado->nombre ?? null,
             'vendedora' => $this->solicitud->vendedor->name ?? null,
             'fecha' => now()->toDateTimeString(),
+            'url' => '/solicitudes?q='.$this->solicitud->id,
         ], $this->extras);
     }
 

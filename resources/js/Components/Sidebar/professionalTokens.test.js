@@ -34,26 +34,25 @@ describe('professional sidebar collapse animation', () => {
         expect(css).not.toContain('--gelia-pro-width');
     });
 
-    it('no morpha rail/track/filas durante collapsing (clip del aside)', () => {
+    it('el track sigue al aside y el morph del rail corre con data-collapsed, no después', () => {
+        expect(css).toContain('width: 100%;');
+        expect(css).toContain('min-width: 0;');
         expect(css).not.toContain("[data-anim='collapsing'] .gelia-pro-sidebar__track");
-        expect(css).not.toContain("[data-anim='collapsing'] .gelia-pro-sidebar__brand {");
-        expect(css).not.toContain("[data-anim='collapsing'] .gelia-pro-sidebar__nav");
-        expect(css).not.toContain("[data-anim='collapsing'] .gelia-pro-sidebar__utilities");
-        expect(css).toContain("[data-anim='settling']");
-        expect(css).toContain("[data-collapsed='true']:not([data-anim])");
-        expect(css).toContain('--gelia-pro-settle-duration');
+        expect(css).toContain("--gelia-pro-settle-duration: var(--gelia-pro-duration)");
+        expect(css).toContain(".gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__row");
+        expect(css).toContain(".gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__brand {");
     });
 
-    it('morph de filas en settling, no en collapsing, y sin padding !important', () => {
-        expect(css).toContain("[data-anim='settling'] .gelia-pro-sidebar__row-label");
+    it('cierra el hueco de las etiquetas desde el inicio del colapso, sin padding !important', () => {
+        expect(css).toContain(".gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__row-label");
         expect(css).not.toContain('padding: 0 !important');
-        expect(css).not.toMatch(/\[data-anim='settling'\][^{]*justify-content:\s*center/);
+        expect(css).not.toMatch(/\[data-collapsed='true'\][^{]*justify-content:\s*center/);
     });
 
-    it('apila brand/utilities en settling con altura interpolable', () => {
+    it('apila brand/utilities con altura interpolable en cuanto está contraído', () => {
         for (const part of ['__brand', '__utilities']) {
             expect(css).toMatch(
-                new RegExp(`\\[data-anim='settling'\\], \\[data-collapsed='true'\\]:not\\(\\[data-anim\\]\\)\\) \\.gelia-pro-sidebar${part} \\{`)
+                new RegExp(`\\[data-collapsed='true'\\] \\.gelia-pro-sidebar${part} \\{`)
             );
         }
         expect(css).toContain('height: var(--gelia-pro-brand-rail-height)');

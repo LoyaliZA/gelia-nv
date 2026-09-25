@@ -81,6 +81,7 @@ class AlertaActivo extends Notification implements ShouldQueue, ShouldBroadcast
             'mensaje' => $this->mensajeVisible,
             'mensaje_visible' => $this->mensajeVisible,
             'modulo' => 'activos',
+            'url' => '/activos/'.$this->activo->id,
             'nombre_activo' => $this->activo->nombre,
             'tipo_activo' => $this->activo->tipo?->nombre,
             'departamento' => $this->activo->departamento?->nombre,

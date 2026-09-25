@@ -7,18 +7,42 @@ import ModalImportarCatalogo from '@/Components/Catalogos/ModalImportarCatalogo'
 import { IMPORTACION_CATALOGOS } from '@/config/importacionCatalogos';
 import { THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from '@/utils/geliaTheme';
 
-export default function TablaSucursales({ datos = [] }) {
+export default function TablaSucursales({ datos = [], almacenesTraspaso = [] }) {
     const [modalAbierto, setModalAbierto] = useState(false);
     const [modalEliminar, setModalEliminar] = useState(false);
     const [modalImportar, setModalImportar] = useState(false);
     const [itemActual, setItemActual] = useState(null);
-    const { data, setData, post, put, processing, reset, errors } = useForm({ codigo: '', nombre: '', activo: true });
+    const { data, setData, post, put, processing, reset, errors } = useForm({
+        codigo: '',
+        nombre: '',
+        activo: true,
+        almacen_origen_traspaso_ids: [],
+    });
 
-    const abrirNuevo = () => { setItemActual(null); reset(); setModalAbierto(true); };
+    const abrirNuevo = () => {
+        setItemActual(null);
+        reset();
+        setData('almacen_origen_traspaso_ids', []);
+        setModalAbierto(true);
+    };
     const abrirEditar = (item) => {
         setItemActual(item);
-        setData({ codigo: item.codigo, nombre: item.nombre, activo: item.activo });
+        setData({
+            codigo: item.codigo,
+            nombre: item.nombre,
+            activo: item.activo,
+            almacen_origen_traspaso_ids: item.almacen_origen_traspaso_ids || [],
+        });
         setModalAbierto(true);
+    };
+    const toggleAlmacen = (id) => {
+        const ids = data.almacen_origen_traspaso_ids || [];
+        const n = Number(id);
+        if (ids.includes(n)) {
+            setData('almacen_origen_traspaso_ids', ids.filter((x) => x !== n));
+        } else {
+            setData('almacen_origen_traspaso_ids', [...ids, n]);
+        }
     };
     const handleSubmit = (e) => {
         e.preventDefault();
@@ -26,6 +50,8 @@ export default function TablaSucursales({ datos = [] }) {
         const ruta = itemActual ? route('admin.catalogos.sucursales.update', itemActual.id) : route('admin.catalogos.sucursales.store');
         accion(ruta, { onSuccess: () => { setModalAbierto(false); reset(); } });
     };
+
+    const countOrigenes = (item) => (item.almacen_origen_traspaso_ids || []).length;
 
     return (
         <div>
@@ -54,6 +80,7 @@ export default function TablaSucursales({ datos = [] }) {
                     <thead>
                         <tr className="border-b-2 border-[var(--color-primario)]/30">
                             <th className="px-6 py-4 text-left text-[9px] font-black uppercase theme-text-muted">Código / Nombre</th>
+                            <th className="px-6 py-4 text-left text-[9px] font-black uppercase theme-text-muted">Orígenes traspaso</th>
                             <th className="px-6 py-4 text-left text-[9px] font-black uppercase theme-text-muted">Status</th>
                             <th className="px-6 py-4 text-right text-[9px] font-black uppercase theme-text-muted">Acciones</th>
                         </tr>
@@ -64,6 +91,11 @@ export default function TablaSucursales({ datos = [] }) {
                                 <td className="px-6 py-5">
                                     <p className="text-sm font-black uppercase theme-text-main">{item.nombre}</p>
                                     <p className="text-[9px] theme-text-muted font-bold">{item.codigo}</p>
+                                </td>
+                                <td className="px-6 py-5">
+                                    <span className={`text-[10px] font-black uppercase ${countOrigenes(item) === 0 ? 'text-amber-600' : 'theme-text-main'}`}>
+                                        {countOrigenes(item)} almacén(es)
+                                    </span>
                                 </td>
                                 <td className="px-6 py-5 text-[10px] font-bold theme-text-main">{item.activo ? 'Activo' : 'Inactivo'}</td>
                                 <td className="px-6 py-5 text-right">
@@ -77,7 +109,7 @@ export default function TablaSucursales({ datos = [] }) {
             </div>
             {modalAbierto && createPortal(
                 <div className={THEME_MODAL_OVERLAY} onClick={() => setModalAbierto(false)}>
-                    <div className={`${THEME_MODAL_SHELL} max-w-md p-8 modal-pop`} onClick={(e) => e.stopPropagation()}>
+                    <div className={`${THEME_MODAL_SHELL} max-w-lg p-8 modal-pop max-h-[90dvh] overflow-y-auto`} onClick={(e) => e.stopPropagation()}>
                         <h3 className="text-xl font-black italic uppercase theme-text-main mb-6">{itemActual ? 'Editar' : 'Nueva'} Sucursal</h3>
                         <form onSubmit={handleSubmit} className="space-y-4">
                             <div>
@@ -93,6 +125,24 @@ export default function TablaSucursales({ datos = [] }) {
                                 <input type="checkbox" checked={data.activo} onChange={(e) => setData('activo', e.target.checked)} />
                                 <span className="text-sm font-bold theme-text-main">Activo</span>
                             </label>
+                            <div>
+                                <p className="text-[10px] font-black uppercase theme-text-muted mb-2">Almacenes origen permitidos (traspasos)</p>
+                                <div className="max-h-48 overflow-y-auto space-y-2 border theme-border rounded-xl p-3">
+                                    {almacenesTraspaso.length === 0 && (
+                                        <p className="text-xs theme-text-muted m-0">No hay almacenes visibles en traspasos.</p>
+                                    )}
+                                    {almacenesTraspaso.map((a) => (
+                                        <label key={a.id} className="flex items-center gap-2 text-xs font-bold theme-text-main">
+                                            <input
+                                                type="checkbox"
+                                                checked={(data.almacen_origen_traspaso_ids || []).includes(a.id)}
+                                                onChange={() => toggleAlmacen(a.id)}
+                                            />
+                                            {a.codigo} — {a.nombre}
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
                             <button type="submit" className="w-full py-3 text-white rounded-xl font-black uppercase text-[11px]" style={{ backgroundColor: 'var(--color-primario)' }}><Save className="w-4 h-4 inline mr-2" />Guardar</button>
                         </form>
                     </div>

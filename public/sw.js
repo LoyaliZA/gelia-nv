@@ -40,8 +40,12 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
     event.notification.close();
 
-    const url = event.notification.data?.url || '/dashboard';
-    const destino = new URL(url, self.location.origin).href;
+    const data = event.notification.data || {};
+    const destinoUrl = new URL(data.url || '/dashboard', self.location.origin);
+    if (data.notification_id) {
+        destinoUrl.searchParams.set('gelia_notif', data.notification_id);
+    }
+    const destino = destinoUrl.href;
 
     event.waitUntil(
         clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {

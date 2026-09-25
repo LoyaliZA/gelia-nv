@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\PuntoVenta\ResguardoPdv;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Almacen extends Model
@@ -35,6 +36,16 @@ class Almacen extends Model
     public function sucursal(): BelongsTo
     {
         return $this->belongsTo(Sucursal::class);
+    }
+
+    public function sucursalesOrigenTraspaso(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            Sucursal::class,
+            'sucursal_almacen_origen_traspaso',
+            'almacen_id',
+            'sucursal_id'
+        )->withTimestamps();
     }
 
     public function resguardosPdv(): HasMany

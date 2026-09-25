@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronUp } from 'lucide-react';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import SidebarUserMenu from './SidebarUserMenu';
 
 function buildUserMenuStyle(rect) {
@@ -26,6 +26,7 @@ function buildUserMenuStyle(rect) {
 export default function SidebarUserPanel({
     user,
     collapsed = false,
+    inline = false,
     userMenuOpen,
     userButtonRef,
     userMenuRef,
@@ -95,15 +96,61 @@ export default function SidebarUserPanel({
 
     const menu = (
         <SidebarUserMenu
-            open={userMenuOpen}
+            open={inline || userMenuOpen}
             menuRef={userMenuRef}
             onClose={onCloseMenu}
             isDarkMode={isDarkMode}
             toggleTheme={toggleTheme}
-            className={collapsed ? 'gelia-pro-sidebar__user-menu--flyout' : ''}
-            style={collapsed ? menuStyle || undefined : undefined}
+            className={inline
+                ? 'gelia-pro-sidebar__user-menu--inline'
+                : (collapsed ? 'gelia-pro-sidebar__user-menu--flyout' : '')}
+            style={!inline && collapsed ? menuStyle || undefined : undefined}
         />
     );
+
+    if (inline) {
+        return (
+            <div
+                className="gelia-pro-sidebar__user gelia-pro-sidebar__user--inline"
+                data-open={userMenuOpen ? 'true' : 'false'}
+            >
+                <button
+                    ref={setBtnRef}
+                    type="button"
+                    className="gelia-pro-sidebar__user-id"
+                    aria-expanded={userMenuOpen}
+                    aria-haspopup="menu"
+                    aria-label="Menú de perfil"
+                    onClick={onToggleMenu}
+                >
+                    <span className="gelia-pro-sidebar__avatar" aria-hidden>
+                        {user?.foto_perfil ? (
+                            <img src={`/storage/${user.foto_perfil}`} alt="" />
+                        ) : (
+                            (displayName.charAt(0) || 'U').toUpperCase()
+                        )}
+                    </span>
+                    <span className="gelia-pro-sidebar__user-meta">
+                        <span className="gelia-pro-sidebar__user-name">{displayName}</span>
+                        <span className="gelia-pro-sidebar__user-role">{roleLabel}</span>
+                    </span>
+                    <ChevronDown
+                        className={`gelia-pro-sidebar__user-id-chevron ${userMenuOpen ? 'gelia-pro-sidebar__user-id-chevron--open' : ''}`}
+                        aria-hidden
+                    />
+                </button>
+                <div
+                    className={`gelia-pro-sidebar__collapse ${userMenuOpen ? 'gelia-pro-sidebar__collapse--open' : ''}`}
+                    aria-hidden={!userMenuOpen}
+                    inert={!userMenuOpen}
+                >
+                    <div className="gelia-pro-sidebar__collapse-inner">
+                        {menu}
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="gelia-pro-sidebar__user">

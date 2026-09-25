@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Package, Boxes, Warehouse, User, Calendar, Copy, Check } from 'lucide-react';
 import { THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from '../../../utils/geliaTheme';
+import { BTN_CERRAR_MODAL, TEXTO_AVISO } from './traspasosStyles';
 import FeedbackResolucionTraspaso from './FeedbackResolucionTraspaso';
 
 function formatearFecha(valor) {
@@ -58,7 +59,7 @@ function BotonCopiarTexto({ texto, label }) {
             title={copiado ? 'Copiado' : `Copiar ${label}`}
             aria-label={copiado ? 'Copiado' : `Copiar ${label}`}
         >
-            {copiado ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+            {copiado ? <Check className="w-3.5 h-3.5 theme-text-exito" /> : <Copy className="w-3.5 h-3.5" />}
         </button>
     );
 }
@@ -75,10 +76,10 @@ export default function ModalDetalleTraspaso({ traspaso, onClose }) {
                 style={{ fontFamily: 'var(--font-principal)' }}
                 onClick={(e) => e.stopPropagation()}
             >
-                <div className="p-6 md:p-8 flex justify-between items-start gap-3 border-b theme-border bg-black/5 dark:bg-white/5 shrink-0">
+                <div className="p-6 md:p-8 flex justify-between items-start gap-3 border-b theme-border gelia-panel-suave shrink-0">
                     <div className="min-w-0">
                         <h3 className="text-lg md:text-xl font-black uppercase italic tracking-tighter theme-text-main flex items-center gap-2 m-0">
-                            <Package className="w-5 h-5 shrink-0" style={{ color: 'var(--color-primario)' }} />
+                            <Package className="w-5 h-5 shrink-0 theme-text-primario" />
                             Detalle de traspaso
                         </h3>
                         <p className="text-sm theme-text-muted mt-2 font-bold m-0">
@@ -95,7 +96,7 @@ export default function ModalDetalleTraspaso({ traspaso, onClose }) {
                     <button
                         type="button"
                         onClick={onClose}
-                        className="p-2 rounded-full theme-element theme-text-muted hover:theme-text-main shrink-0"
+                        className={`${BTN_CERRAR_MODAL} shrink-0`}
                     >
                         <X className="w-5 h-5" />
                     </button>
@@ -104,7 +105,7 @@ export default function ModalDetalleTraspaso({ traspaso, onClose }) {
                 <div className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar">
                     <div className="flex flex-col gap-6">
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                            <div className="p-4 border theme-border rounded-xl bg-white/50 dark:bg-black/20">
+                            <div className="p-4 border theme-border rounded-xl gelia-panel-suave">
                                 <span className="block text-xs uppercase tracking-widest theme-text-muted font-black mb-1">
                                     Total piezas
                                 </span>
@@ -112,7 +113,7 @@ export default function ModalDetalleTraspaso({ traspaso, onClose }) {
                                     {traspaso.total_piezas}
                                 </span>
                             </div>
-                            <div className="p-4 border theme-border rounded-xl bg-white/50 dark:bg-black/20">
+                            <div className="p-4 border theme-border rounded-xl gelia-panel-suave">
                                 <span className="block text-xs uppercase tracking-widest theme-text-muted font-black mb-1">
                                     Líneas
                                 </span>
@@ -120,7 +121,7 @@ export default function ModalDetalleTraspaso({ traspaso, onClose }) {
                                     {productos.length}
                                 </span>
                             </div>
-                            <div className="p-4 border theme-border rounded-xl bg-white/50 dark:bg-black/20">
+                            <div className="p-4 border theme-border rounded-xl gelia-panel-suave">
                                 <span className="block text-xs uppercase tracking-widest theme-text-muted font-black mb-1">
                                     Estado
                                 </span>
@@ -136,6 +137,11 @@ export default function ModalDetalleTraspaso({ traspaso, onClose }) {
                             <span className="inline-flex items-center gap-1.5">
                                 <User className="w-4 h-4" /> {traspaso.vendedor?.name}
                             </span>
+                            {traspaso.sucursal_solicitante?.nombre && (
+                                <span className="inline-flex items-center gap-1.5">
+                                    {traspaso.sucursal_solicitante.nombre}
+                                </span>
+                            )}
                             <span className="inline-flex items-center gap-1.5">
                                 <Warehouse className="w-4 h-4" /> {traspaso.almacen_origen?.nombre || '—'}
                             </span>
@@ -159,11 +165,13 @@ export default function ModalDetalleTraspaso({ traspaso, onClose }) {
 
                             <div className="space-y-2">
                                 {productos.map((p) => {
-                                    const detalle = p.detalle_dano || p.detalleDano;
+                                    const incidencias = (p.revisiones || []).filter(
+                                        (r) => ['regular', 'malo', 'danado', 'sin_existencia'].includes(r.estado_fisico),
+                                    );
                                     return (
                                     <div
                                         key={p.id}
-                                        className="rounded-lg border theme-border px-4 py-3 bg-black/[0.02] dark:bg-white/[0.02]"
+                                        className="rounded-lg border theme-border px-4 py-3 gelia-panel-suave"
                                     >
                                         <div className="flex items-start justify-between gap-3">
                                             <div className="min-w-0 space-y-1.5">
@@ -179,11 +187,11 @@ export default function ModalDetalleTraspaso({ traspaso, onClose }) {
                                                     </p>
                                                     <BotonCopiarTexto texto={p.descripcion} label="nombre" />
                                                 </div>
-                                                {detalle && (
-                                                    <p className="text-[10px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400 m-0">
-                                                        Detalle/daño CEDIS: {detalle.motivo}
+                                                {incidencias.map((rev) => (
+                                                    <p key={rev.id} className={`${TEXTO_AVISO} font-black uppercase tracking-widest m-0`}>
+                                                        Revisión {rev.momento}: {rev.comentario || rev.estado_fisico}
                                                     </p>
-                                                )}
+                                                ))}
                                             </div>
                                             <span
                                                 className="text-xl font-black shrink-0 tabular-nums"

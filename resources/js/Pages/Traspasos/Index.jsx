@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Head, router } from '@inertiajs/react';
 import { Plus, Loader2 } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
@@ -67,6 +67,8 @@ export default function Index({
     filtros = {},
     vendedores = [],
     almacenes = [],
+    almacenesOrigen = [],
+    sucursalSolicitante = null,
     horarios = [],
     estados = [],
 }) {
@@ -83,6 +85,7 @@ export default function Index({
     const [filtroVendedor, setFiltroVendedor] = useState(filtros.vendedor_id || '');
     const [filtroAlmacen, setFiltroAlmacen] = useState(filtros.almacen_origen_id || '');
 
+    const detalleDesdeEnlaceRef = useRef(false);
     const [modalForm, setModalForm] = useState(false);
     const [modalDetalle, setModalDetalle] = useState(null);
     const [modalBitacora, setModalBitacora] = useState(null);
@@ -92,6 +95,17 @@ export default function Index({
         estadoId: null,
         modo: 'responder',
     });
+
+    useEffect(() => {
+        if (detalleDesdeEnlaceRef.current || !filtros.folio) return;
+        const filas = traspasos?.data || [];
+        const folio = String(filtros.folio);
+        const exacto = filas.find((t) => String(t.folio) === folio || String(t.id) === folio);
+        const traspaso = exacto || (filas.length === 1 ? filas[0] : null);
+        if (!traspaso) return;
+        detalleDesdeEnlaceRef.current = true;
+        setModalDetalle(traspaso);
+    }, [filtros.folio, traspasos]);
 
     useEffect(() => {
         setTabActiva(filtros.tab || 'TODAS');
@@ -320,7 +334,8 @@ export default function Index({
 
             {modalForm && (
                 <ModalFormTraspaso
-                    almacenes={almacenes}
+                    almacenes={almacenesOrigen?.length ? almacenesOrigen : almacenes}
+                    sucursalSolicitante={sucursalSolicitante}
                     horarios={horarios}
                     onClose={() => setModalForm(false)}
                     onExito={recargarTrasAccion}

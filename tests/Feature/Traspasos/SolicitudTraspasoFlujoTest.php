@@ -9,7 +9,8 @@ use App\Models\Cliente;
 use App\Models\Departamento;
 use App\Models\Producto;
 use App\Models\SolicitudTraspaso;
-use App\Models\SolicitudTraspasoDetalleDano;
+use App\Models\SolicitudTraspasoRevisionProducto;
+use App\Models\Sucursal;
 use App\Models\User;
 use App\Notifications\AlertaTraspaso;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -30,6 +31,7 @@ class SolicitudTraspasoFlujoTest extends TestCase
     private User $otroVendedor;
     private Departamento $departamento;
     private Almacen $almacen;
+    private Sucursal $sucursal;
     private Cliente $cliente;
     private Producto $productoA;
     private Producto $productoB;
@@ -91,6 +93,13 @@ class SolicitudTraspasoFlujoTest extends TestCase
             'visible_en_traspasos' => true,
         ]);
 
+        $this->sucursal = Sucursal::factory()->create(['nombre' => 'Sucursal Test']);
+        $this->sucursal->almacenesOrigenTraspaso()->sync([$this->almacen->id]);
+
+        foreach ([$this->vendedor, $this->otroVendedor] as $usuario) {
+            $usuario->concederAccesoSucursal($this->sucursal, esPrincipal: true);
+        }
+
         $lista = CatalogoListaDescuento::create([
             'nombre' => 'PUBLICO GENERAL',
             'monto_requerido' => 0,
@@ -130,6 +139,7 @@ class SolicitudTraspasoFlujoTest extends TestCase
         $this->assertSame(5, $solicitud->total_piezas);
         $this->assertCount(2, $solicitud->productos);
         $this->assertSame($this->vendedor->id, $solicitud->vendedor_id);
+        $this->assertSame($this->sucursal->id, $solicitud->sucursal_solicitante_id);
 
         Notification::assertSentTo($this->encargada, AlertaTraspaso::class, function (AlertaTraspaso $n) {
             return $n->tipoAlerta === 'nueva';
@@ -138,17 +148,19 @@ class SolicitudTraspasoFlujoTest extends TestCase
         $idRespondida = CatalogoEstadoSolicitud::idDe('Respondida');
 
         $this->actingAs($this->encargada)
-            ->put(route('traspasos.actualizar_estado', $solicitud->id), [
+            ->put(route('traspasos.actualizar_estado', $solicitud->id), array_merge([
                 'catalogo_estado_solicitud_id' => $idRespondida,
                 'folio_traspaso' => 'EXT-999',
                 'motivo' => 'Traspaso generado',
                 'evidencia_respuesta' => UploadedFile::fake()->image('captura.jpg'),
-            ])
+            ], $this->payloadRevisiones($solicitud)))
             ->assertRedirect();
 
         $solicitud->refresh();
         $this->assertSame('EXT-999', $solicitud->folio_traspaso);
         $this->assertSame($idRespondida, $solicitud->catalogo_estado_solicitud_id);
+        $this->assertSame('bueno', $solicitud->estado_fisico_general_origen);
+        $this->assertSame(5, SolicitudTraspasoRevisionProducto::where('momento', 'origen')->count());
         $this->assertNotEmpty($solicitud->evidencia_respuesta_path);
         $this->assertSame('Traspaso generado', $solicitud->motivo_respuesta);
 
@@ -237,7 +249,7 @@ class SolicitudTraspasoFlujoTest extends TestCase
             );
     }
 
-    public function test_cedis_notificado_solo_tras_respuesta_y_puede_confirmar_o_reportar_dano(): void
+    public function test_cedis_notificado_solo_tras_respuesta_y_puede_confirmar_con_revisiones(): void
     {
         Notification::fake();
         Storage::fake('public');
@@ -260,18 +272,14 @@ class SolicitudTraspasoFlujoTest extends TestCase
 
         $solicitud = SolicitudTraspaso::with('productos')->first();
         $idRespondida = CatalogoEstadoSolicitud::idDe('Respondida');
-        $lineaA = $solicitud->productos->firstWhere('producto_id', $this->productoA->id);
-        $lineaB = $solicitud->productos->firstWhere('producto_id', $this->productoB->id);
-        $this->assertNotNull($lineaA);
-        $this->assertNotNull($lineaB);
 
         $this->actingAs($this->encargada)
-            ->put(route('traspasos.actualizar_estado', $solicitud->id), [
+            ->put(route('traspasos.actualizar_estado', $solicitud->id), array_merge([
                 'catalogo_estado_solicitud_id' => $idRespondida,
                 'folio_traspaso' => 'EXT-CEDIS-1',
                 'motivo' => 'Listo para CEDIS',
                 'evidencia_respuesta' => UploadedFile::fake()->image('captura.jpg'),
-            ])
+            ], $this->payloadRevisiones($solicitud)))
             ->assertRedirect();
 
         Notification::assertSentTo($cedis, AlertaTraspaso::class, function (AlertaTraspaso $n) {
@@ -291,55 +299,38 @@ class SolicitudTraspasoFlujoTest extends TestCase
                 ->where('traspasos.data.0.folio', $solicitud->folio)
             );
 
-        // Reportar detalle/daño solo en producto A
         $this->actingAs($cedis)
-            ->post(route('traspasos.cedis.detalle_dano', $solicitud->id), [
-                'solicitud_traspaso_producto_id' => $lineaA->id,
-                'motivo' => 'Rayadura visible en empaque',
-                'fotos' => [UploadedFile::fake()->image('dano.jpg')],
-            ])
-            ->assertRedirect();
-
-        $solicitud->refresh();
-        $this->assertSame($idRespondida, $solicitud->catalogo_estado_solicitud_id);
-        $this->assertTrue($solicitud->tiene_detalle_dano);
-
-        $detalleA = SolicitudTraspasoDetalleDano::query()
-            ->where('solicitud_traspaso_producto_id', $lineaA->id)
-            ->first();
-        $this->assertNotNull($detalleA);
-        $this->assertSame('Rayadura visible en empaque', $detalleA->motivo);
-        $this->assertNotEmpty($detalleA->paths);
-        $this->assertSame($solicitud->id, $detalleA->solicitud_traspaso_id);
-
-        $this->assertNull(
-            SolicitudTraspasoDetalleDano::query()
-                ->where('solicitud_traspaso_producto_id', $lineaB->id)
-                ->first()
-        );
-
-        Notification::assertSentTo($this->vendedor, AlertaTraspaso::class, function (AlertaTraspaso $n) {
-            return $n->tipoAlerta === 'detalle_dano_cedis';
-        });
-        Notification::assertSentTo($this->encargada, AlertaTraspaso::class, function (AlertaTraspaso $n) {
-            return $n->tipoAlerta === 'detalle_dano_cedis';
-        });
-
-        // Confirmar OK permitido aunque exista detalle/daño en una línea
-        $this->actingAs($cedis)
-            ->put(route('traspasos.cedis.confirmar', $solicitud->id))
+            ->post(route('traspasos.cedis.confirmar', $solicitud->id), $this->payloadRevisiones($solicitud))
             ->assertRedirect();
 
         $solicitud->refresh();
         $this->assertSame(CatalogoEstadoSolicitud::idDe('Verificada'), $solicitud->catalogo_estado_solicitud_id);
-        $this->assertTrue($solicitud->tiene_detalle_dano);
+        $this->assertSame('bueno', $solicitud->estado_fisico_general_cedis);
+        $this->assertSame(3, SolicitudTraspasoRevisionProducto::where('momento', 'cedis')->count());
 
-        // Segundo confirmar es idempotente (no 422)
         $this->actingAs($cedis)
-            ->put(route('traspasos.cedis.confirmar', $solicitud->id))
+            ->post(route('traspasos.cedis.confirmar', $solicitud->id), $this->payloadRevisiones($solicitud))
             ->assertRedirect();
-        $solicitud->refresh();
-        $this->assertSame(CatalogoEstadoSolicitud::idDe('Verificada'), $solicitud->catalogo_estado_solicitud_id);
+    }
+
+    /** @return array<string, mixed> */
+    private function payloadRevisiones(SolicitudTraspaso $solicitud): array
+    {
+        $solicitud->loadMissing('productos');
+        $revisiones = [];
+        foreach ($solicitud->productos as $linea) {
+            for ($p = 0; $p < (int) $linea->piezas; $p++) {
+                $revisiones[] = [
+                    'solicitud_traspaso_producto_id' => $linea->id,
+                    'producto_id' => $linea->producto_id,
+                    'sku' => $linea->sku,
+                    'descripcion_producto' => "{$linea->sku} — {$linea->descripcion}",
+                    'estado_fisico' => 'bueno',
+                ];
+            }
+        }
+
+        return ['revisiones' => $revisiones];
     }
 
     private function crearProducto(array $attrs = []): Producto

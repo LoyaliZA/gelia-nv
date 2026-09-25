@@ -38,7 +38,7 @@ export default function ModalEvidenciasBultosEmpaque({ abierto, onClose, bultos 
                     <div className="p-4 border-b theme-border flex justify-between items-start gap-3 shrink-0">
                         <div>
                             <h2 className="text-base font-black italic uppercase theme-text-main m-0 flex items-center gap-2">
-                                <ImageIcon className="w-4 h-4 text-sky-600" />
+                                <ImageIcon className="w-4 h-4 text-[var(--color-info)]" />
                                 Evidencias CEDIS
                             </h2>
                             {folio && (
@@ -133,7 +133,7 @@ export function ChipEvidenciasBultosEmpaque({ bultos = [], folio = '', className
                         <img src={miniatura} alt="" className="w-full h-full object-cover" />
                     </span>
                 ) : (
-                    <span className="w-10 h-10 rounded-lg bg-sky-500/15 text-sky-700 dark:text-sky-300 shrink-0 inline-flex items-center justify-center">
+                    <span className="w-10 h-10 rounded-lg bg-[color-mix(in_srgb,var(--color-info)_15%,transparent)] text-[var(--color-info)] shrink-0 inline-flex items-center justify-center">
                         <ImageIcon className="w-4 h-4" aria-hidden />
                     </span>
                 )}

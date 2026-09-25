@@ -251,7 +251,12 @@ export default function Catalogos({
                                 <TablaDepartamentos datos={f(departamentos)} logosDisponibles={logos_disponibles} />
                             )}
                             {tabActiva === 'areas' && <TablaAreas datos={f(areas)} departamentos={departamentos} />}
-                            {tabActiva === 'sucursales' && <TablaSucursales datos={f(sucursales)} />}
+                            {tabActiva === 'sucursales' && (
+                                <TablaSucursales
+                                    datos={f(sucursales)}
+                                    almacenesTraspaso={(almacenes || []).filter((a) => a.visible_en_traspasos && a.activo !== false)}
+                                />
+                            )}
                             {tabActiva === 'tipos_almacen' && <TablaTiposAlmacen datos={f(tipos_almacen)} />}
                             {tabActiva === 'almacenes' && <TablaAlmacenes datos={f(almacenes)} sucursales={sucursales} tipos_almacen={tipos_almacen} />}
                             {tabActiva === 'marcas_producto' && <TablaMarcasProducto datos={f(marcas_producto)} />}

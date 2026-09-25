@@ -140,7 +140,7 @@ export default function FormularioCustodiaBultos({
                         ))}
                     </select>
                     {erroresLocales.almacen_id && (
-                        <p className="text-xs text-red-600 m-0">{erroresLocales.almacen_id}</p>
+                        <p className="text-xs text-[var(--color-peligro)] m-0">{erroresLocales.almacen_id}</p>
                     )}
                 </label>
             </div>

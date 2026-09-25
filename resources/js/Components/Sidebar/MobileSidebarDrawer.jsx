@@ -60,6 +60,7 @@ export default function MobileSidebarDrawer({
                         collapsed={collapsed}
                         onToggleCollapse={onToggleCollapse}
                         showToggle={!asDrawer}
+                        onClose={asDrawer ? onClose : undefined}
                     />
                     <SidebarTree
                         url={url}
@@ -75,6 +76,7 @@ export default function MobileSidebarDrawer({
                     <SidebarUserPanel
                         user={user}
                         collapsed={structuralCollapsed}
+                        inline={asDrawer}
                         userMenuOpen={userMenuOpen}
                         userButtonRef={userButtonRef}
                         userMenuRef={userMenuRef}

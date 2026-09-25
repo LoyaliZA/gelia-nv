@@ -1369,12 +1369,19 @@ export const SECCIONES_SIDEBAR_PERMISOS = [
     {
         id: 'operaciones',
         label: 'Operaciones',
-        descripcion: 'Solicitudes, comercial y logística (gestión de pedidos)',
+        descripcion: 'Solicitudes y comercial',
         modulos: [
             'solicitudes',
             'cancelaciones_cotizaciones',
             'traspasos',
             'mis_clientes',
+        ],
+    },
+    {
+        id: 'logistica',
+        label: 'Logística',
+        descripcion: 'Cotizador, mapa logístico y gestión de pedidos',
+        modulos: [
             'entregas',
             'control_pedidos',
         ],

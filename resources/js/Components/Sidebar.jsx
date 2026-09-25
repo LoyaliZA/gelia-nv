@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
 import { Link, useForm, usePage } from '@inertiajs/react';
 import {
-    Menu, X, Moon, Sun, ArrowLeft,
+    Menu, X, Moon, Sun, ArrowLeft, ChevronDown,
     Settings2, LogOut,
     User, Sparkles,
 } from 'lucide-react';
@@ -187,6 +187,7 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
     const [isMenuClosing, setIsMenuClosing] = useState(false);
     const [isHovered, setIsHovered] = useState(false);
     const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+    const [mobileAccountOpen, setMobileAccountOpen] = useState(false);
     const [isProfileMenuClosing, setIsProfileMenuClosing] = useState(false);
     const isMobile = isMobileViewport;
     const closeTimerRef = useRef(null);
@@ -432,7 +433,8 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
     const isFloatCornerLayout = !isFixed && !isMobileMode;
 
     // 1. Contenedor Base: solo ocupa el espacio del sidebar; nunca bloquear toda la pantalla
-    let navClasses = 'fixed z-[200] flex pointer-events-none sidebar-mount ';
+    const mobileDrawerLift = mobileDrawerMode && isMenuVisible;
+    let navClasses = `fixed ${mobileDrawerLift ? 'z-[208]' : 'z-[200]'} flex pointer-events-none sidebar-mount `;
     if (isFloatCornerLayout) {
         navClasses += 'h-auto w-auto max-h-none overflow-visible ';
     } else if (isFixedVertical) {
@@ -675,6 +677,7 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
                         </div>
                     </div>
 
+                    {!mobileDrawerMode && (
                     <div
                         ref={profileMenuShellRef}
                         role="menu"
@@ -710,6 +713,7 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
                             </div>
                         </div>
                     </div>
+                    )}
 
                     <div
                         ref={accessMenuShellRef}
@@ -718,8 +722,21 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
                     >
                         <div className="sidebar-menu-grid-inner overflow-hidden min-h-0 h-auto">
                             <div
-                                className={`sidebar-menu-content gelia-sidebar-access-panel p-5 flex flex-col min-h-0 max-h-full overflow-hidden h-auto w-full max-w-full ${isFixedVertical ? 'pt-10' : ''}`}
+                                className={`sidebar-menu-content gelia-sidebar-access-panel flex flex-col min-h-0 max-h-full overflow-hidden h-auto w-full max-w-full ${mobileDrawerMode ? 'gelia-sidebar-drawer-panel' : `p-5 ${isFixedVertical ? 'pt-10' : ''}`}`}
                             >
+                                {mobileDrawerMode && (
+                                    <div className="gelia-sidebar-drawer-head">
+                                        <p className="gelia-sidebar-drawer-head__title">Menú</p>
+                                        <button
+                                            type="button"
+                                            className="gelia-sidebar-drawer-head__close"
+                                            onClick={closeMobileMenu}
+                                            aria-label="Cerrar menú"
+                                        >
+                                            <X className="w-4 h-4" aria-hidden />
+                                        </button>
+                                    </div>
+                                )}
                                 <div className="gelia-sidebar-access-scroll flex-1 min-h-0 overflow-y-auto overflow-x-hidden custom-scrollbar">
                                     <SidebarNavMenu
                                         url={url}
@@ -732,19 +749,92 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
                                     />
                                 </div>
 
-                                <div className="gelia-sidebar-access-footer shrink-0 pt-6 pb-2 px-2">
-                                    <button
-                                        onClick={() => {
-                                            localStorage.clear();
-                                            post(route('logout'));
-                                        }}
-                                        className="flex items-center w-full px-6 py-4 rounded-3xl transition-all theme-element border border-transparent hover:border-red-500 hover:shadow-md outline-none group"
-                                    >
-                                        <LogOut className="w-4 h-4 mr-4 text-red-500 group-hover:text-red-600 transition-colors" />
-                                        <span className="gelia-sidebar-access-footer-label text-red-500 group-hover:text-red-600 transition-colors">
-                                            Cerrar Sesión_
-                                        </span>
-                                    </button>
+                                <div
+                                    className={mobileDrawerMode ? 'gelia-sidebar-mobile-account' : 'gelia-sidebar-access-footer shrink-0 pt-6 pb-2 px-2'}
+                                    data-open={mobileDrawerMode && mobileAccountOpen ? 'true' : 'false'}
+                                >
+                                    {mobileDrawerMode && (
+                                        <button
+                                            type="button"
+                                            className="gelia-sidebar-mobile-account__id"
+                                            aria-expanded={mobileAccountOpen}
+                                            aria-label="Menú de perfil"
+                                            onClick={() => setMobileAccountOpen((open) => !open)}
+                                        >
+                                            <span className="gelia-sidebar-mobile-account__avatar" aria-hidden>
+                                                {user?.foto_perfil ? (
+                                                    <img src={`/storage/${user.foto_perfil}`} alt="" />
+                                                ) : (
+                                                    (user?.name?.charAt(0) || 'U').toUpperCase()
+                                                )}
+                                            </span>
+                                            <span className="gelia-sidebar-mobile-account__meta">
+                                                <span className="gelia-sidebar-mobile-account__name">{user?.name || 'Usuario'}</span>
+                                                <span className="gelia-sidebar-mobile-account__role">{user?.roles?.[0] || user?.puesto || user?.departamento || 'Colaborador'}</span>
+                                            </span>
+                                            <ChevronDown className={`gelia-sidebar-mobile-account__chevron ${mobileAccountOpen ? 'gelia-sidebar-mobile-account__chevron--open' : ''}`} aria-hidden />
+                                        </button>
+                                    )}
+                                    {mobileDrawerMode ? (
+                                        <div
+                                            className={`gelia-pro-sidebar__collapse ${mobileAccountOpen ? 'gelia-pro-sidebar__collapse--open' : ''}`}
+                                            aria-hidden={!mobileAccountOpen}
+                                            inert={!mobileAccountOpen}
+                                        >
+                                            <div className="gelia-pro-sidebar__collapse-inner">
+                                                <nav className="gelia-sidebar-mobile-account__links" aria-label="Cuenta">
+                                                    {PROFILE_MENU_ITEMS.map((item) => {
+                                                        const IconComponent = item.icon;
+                                                        return (
+                                                            <SidebarNavLeafLink
+                                                                key={item.id}
+                                                                href={profileMenuHref(item)}
+                                                                active={isRouteActive(item.path)}
+                                                                onClick={closeMobileMenu}
+                                                                icon={IconComponent}
+                                                                label={item.label}
+                                                                paddingClass="pl-3"
+                                                                role="menuitem"
+                                                            />
+                                                        );
+                                                    })}
+                                                    <button
+                                                        type="button"
+                                                        className="gelia-sidebar-mobile-account__theme"
+                                                        onClick={toggleTheme}
+                                                    >
+                                                        {isDarkMode ? <Sun className="w-3.5 h-3.5" aria-hidden /> : <Moon className="w-3.5 h-3.5" aria-hidden />}
+                                                        <span>{isDarkMode ? 'Tema claro' : 'Tema oscuro'}</span>
+                                                    </button>
+                                                </nav>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        localStorage.clear();
+                                                        post(route('logout'));
+                                                    }}
+                                                    className="gelia-sidebar-mobile-account__logout"
+                                                >
+                                                    <LogOut className="w-3.5 h-3.5" />
+                                                    <span>Cerrar sesión</span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                localStorage.clear();
+                                                post(route('logout'));
+                                            }}
+                                            className="flex items-center w-full px-6 py-4 rounded-3xl transition-all theme-element border border-transparent hover:border-red-500 hover:shadow-md outline-none group"
+                                        >
+                                            <LogOut className="w-4 h-4 mr-4 text-red-500 group-hover:text-red-600 transition-colors" />
+                                            <span className="gelia-sidebar-access-footer-label text-red-500 group-hover:text-red-600 transition-colors">
+                                                Cerrar Sesión_
+                                            </span>
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                         </div>

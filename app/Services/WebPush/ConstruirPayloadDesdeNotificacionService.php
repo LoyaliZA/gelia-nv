@@ -26,8 +26,62 @@ class ConstruirPayloadDesdeNotificacionService
 
     private function resolverUrl(array $data): string
     {
-        if (! empty($data['url'])) {
-            return str_starts_with($data['url'], 'http') ? $data['url'] : url($data['url']);
+        $explicita = $this->rutaExplicita($data['url'] ?? null);
+
+        if (! empty($data['ticket_id']) && $this->esListado($explicita, ['/soporte/agente/tickets', '/soporte/mis-tickets'])) {
+            $portal = ($explicita && str_contains((string) parse_url($explicita, PHP_URL_PATH), '/mis-tickets'))
+                ? '/soporte/mis-tickets'
+                : '/soporte/agente/tickets';
+
+            return url($portal.'/'.$data['ticket_id']);
+        }
+
+        if (! empty($data['conversacion_id']) && $this->esListado($explicita, ['/mensajeria'])) {
+            return url('/mensajeria?conversacion='.$data['conversacion_id']);
+        }
+
+        if (! empty($data['solicitud_id']) && $this->esListado($explicita, ['/solicitudes'])) {
+            return url('/solicitudes?q='.$data['solicitud_id']);
+        }
+
+        if (! empty($data['activo_id']) && $this->esListado($explicita, ['/activos'])) {
+            return url('/activos/'.$data['activo_id']);
+        }
+
+        if (($data['modulo'] ?? null) === 'facturas' && ! empty($data['folio']) && $this->esListado($explicita, ['/facturas'])) {
+            return url('/facturas?q='.rawurlencode((string) $data['folio']));
+        }
+
+        if (($data['modulo'] ?? null) === 'traspasos') {
+            if (($data['tipo'] ?? null) === 'listo_cedis') {
+                return url('/traspasos/cedis');
+            }
+            if (! empty($data['folio']) && $this->esListado($explicita, ['/traspasos'])) {
+                return url('/traspasos?folio='.rawurlencode((string) $data['folio']));
+            }
+        }
+
+        if (($data['modulo'] ?? null) === 'cobranza') {
+            if ($explicita && ! $this->esListado($explicita, ['/auto-cobranza'])) {
+                return $explicita;
+            }
+            $q = $data['clientes_busqueda'] ?? $data['numero_cliente'] ?? null;
+            if (! $q && ! empty($data['cliente']) && ! in_array($data['cliente'], ['Varios Clientes', 'Carga Credibox'], true)) {
+                $q = $data['cliente'];
+            }
+
+            return $q ? url('/auto-cobranza?q='.rawurlencode((string) $q)) : url('/auto-cobranza');
+        }
+
+        if ((($data['modulo'] ?? null) === 'control_pedidos' || ! empty($data['pedido_bma_id']))
+            && $this->esListado($explicita, ['/control-pedidos'])) {
+            $q = $data['folio'] ?? $data['pedido_bma_id'] ?? null;
+
+            return $q ? url('/control-pedidos?q='.rawurlencode((string) $q)) : url('/control-pedidos');
+        }
+
+        if ($explicita) {
+            return $explicita;
         }
 
         if (! empty($data['turno_id']) && ($data['modulo'] ?? null) === 'punto_venta') {
@@ -38,24 +92,31 @@ class ConstruirPayloadDesdeNotificacionService
             return url('/punto-venta/resguardos/'.$data['resguardo_id']);
         }
 
-        if (!empty($data['conversacion_id'])) {
-            return url('/mensajeria?conversacion=' . $data['conversacion_id']);
-        }
-
-        if (!empty($data['solicitud_id'])) {
-            return url('/solicitudes?folio=' . $data['solicitud_id']);
-        }
-
-        if (!empty($data['activo_id'])) {
-            return url('/activos');
-        }
-
-        if (!empty($data['ticket_id'])) {
-            $url = $data['url'] ?? '/soporte/mis-tickets';
-            return str_starts_with($url, 'http') ? $url : url($url);
-        }
-
         return url('/dashboard');
+    }
+
+    private function rutaExplicita(mixed $url): ?string
+    {
+        if (! is_string($url) || $url === '') {
+            return null;
+        }
+
+        return str_starts_with($url, 'http://') || str_starts_with($url, 'https://') ? $url : url($url);
+    }
+
+    /**
+     * @param  array<int, string>  $bases
+     */
+    private function esListado(?string $url, array $bases): bool
+    {
+        if ($url === null || $url === '') {
+            return true;
+        }
+
+        $path = parse_url($url, PHP_URL_PATH) ?: $url;
+        $path = rtrim((string) $path, '/') ?: '/';
+
+        return in_array($path, $bases, true);
     }
 
     private function resolverTag(array $data): string
@@ -108,17 +169,22 @@ class ConstruirPayloadDesdeNotificacionService
      */
     private function resolverDataPush(array $data): array
     {
+        $notificationId = $data['notification_id'] ?? null;
+
         if (($data['modulo'] ?? null) !== 'punto_venta') {
             return $data;
         }
 
-        return array_filter([
+        $filtrado = array_filter([
             'tipo' => $data['tipo'] ?? null,
             'turno_id' => $data['turno_id'] ?? null,
             'resguardo_id' => $data['resguardo_id'] ?? null,
             'folio' => $data['folio'] ?? null,
             'sucursal_id' => $data['sucursal_id'] ?? null,
             'url' => $data['url'] ?? null,
+            'notification_id' => $notificationId,
         ], fn ($valor) => $valor !== null && $valor !== '');
+
+        return $filtrado;
     }
 }

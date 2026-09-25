@@ -10,6 +10,7 @@ export default function ModalConfiguracion({ configuracion, margenes, users, onC
         iva: configuracion?.iva || 1.16,
         consumer_key: '',
         consumer_secret: '',
+        integration_token: '',
         notified_users: configuracion?.notified_user_ids || [],
         mapeo_precios: {
             sku: configuracion?.mapeo_precios?.sku || 'SKU',
@@ -24,6 +25,7 @@ export default function ModalConfiguracion({ configuracion, margenes, users, onC
     const [busqueda, setBusqueda] = useState('');
     const [probandoConexion, setProbandoConexion] = useState(false);
     const [resultadoConexion, setResultadoConexion] = useState(null);
+    const [errorGuardado, setErrorGuardado] = useState(null);
 
     const csrfToken = () => document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '';
 
@@ -43,6 +45,7 @@ export default function ModalConfiguracion({ configuracion, margenes, users, onC
                     store_url: data.store_url,
                     consumer_key: data.consumer_key || undefined,
                     consumer_secret: data.consumer_secret || undefined,
+                    integration_token: data.integration_token || undefined,
                 }),
             });
 
@@ -65,12 +68,18 @@ export default function ModalConfiguracion({ configuracion, margenes, users, onC
 
     const submit = async (e) => {
         e.preventDefault();
+        setErrorGuardado(null);
         const response = await fetch(route('woocommerce.configuracion.update'), {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken(), Accept: 'application/json' },
             body: JSON.stringify(data),
         });
-        if (response.ok) onClose();
+        if (response.ok) {
+            onClose();
+            return;
+        }
+        const result = await response.json().catch(() => ({}));
+        setErrorGuardado(result.message || 'No se pudo guardar la configuración.');
     };
 
     const filteredUsers = users.filter((u) =>
@@ -110,6 +119,18 @@ export default function ModalConfiguracion({ configuracion, margenes, users, onC
                                 placeholder="Dejar en blanco para conservar..." className="w-full bg-transparent py-3 px-3 text-sm theme-text-main outline-none" />
                         </div>
                     </div>
+                    <div className="md:col-span-2">
+                        <label className="block text-[10px] font-black uppercase tracking-widest theme-text-muted mb-2">Token de identificación</label>
+                        <div className="flex items-center theme-element border theme-border rounded-xl px-4">
+                            <Key className="w-4 h-4 theme-text-muted shrink-0" />
+                            <input type="password" value={data.integration_token} onChange={(e) => setData('integration_token', e.target.value)}
+                                placeholder="Dejar en blanco para conservar..." className="w-full bg-transparent py-3 px-3 text-sm theme-text-main outline-none" />
+                        </div>
+                        <p className="text-[10px] theme-text-muted font-bold mt-2">
+                            Opcional. Se envía en el header X-Gelia-Integration-Token para que la tienda reconozca a Gelia.
+                            {configuracion?.token_identificacion_configurado ? ' Hay un token guardado.' : ''}
+                        </p>
+                    </div>
 
                     <div className="md:col-span-2 flex flex-col sm:flex-row sm:items-center gap-3">
                         <button
@@ -122,7 +143,7 @@ export default function ModalConfiguracion({ configuracion, margenes, users, onC
                             Probar conexión API
                         </button>
                         <p className="text-[10px] theme-text-muted font-bold">
-                            Usa los valores del formulario; si dejas key/secret vacíos, se prueban las credenciales guardadas.
+                            Usa los valores del formulario. Si key, secret o token quedan vacíos, se prueban los guardados. La URL debe ser HTTPS.
                         </p>
                     </div>
 
@@ -215,6 +236,12 @@ export default function ModalConfiguracion({ configuracion, margenes, users, onC
                         </div>
                         {errors.notified_users && <p className="text-red-500 text-xs mt-1">{errors.notified_users}</p>}
                     </div>
+
+                    {errorGuardado && (
+                        <div className="md:col-span-2 p-3 rounded-xl text-xs font-bold bg-red-500/10 border border-red-500/20 text-red-500">
+                            {errorGuardado}
+                        </div>
+                    )}
 
                     <div className="md:col-span-2 flex justify-end gap-3 pt-4 border-t theme-border">
                         <button type="button" onClick={onClose} className="px-6 py-3 rounded-xl text-xs font-black uppercase border theme-border theme-text-main">Cancelar</button>

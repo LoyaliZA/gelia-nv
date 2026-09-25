@@ -8,14 +8,14 @@ import GeliaPaginacion from '../../../Components/GeliaPaginacion';
 import { geliaCardClass, GELIA_SEGMENT_TABS_SCROLL, GELIA_SEGMENT_TABS_TRACK, THEME_BTN_PRIMARY } from '../../../utils/geliaTheme';
 import FiltrosResguardos from './Partials/FiltrosResguardos';
 import ListadoResguardos from './Partials/ListadoResguardos';
-import BusquedaRapidaRecepcion from './Partials/BusquedaRapidaRecepcion';
 import AlertasCustodiaResguardo from './Partials/AlertasCustodiaResguardo';
 import SelectorSucursalActivaPdv, { RELOAD_ONLY_RESGUARDOS } from '@/Components/PuntoVenta/SelectorSucursalActivaPdv';
 import AccionRegistrarResguardoManual from './Partials/AccionRegistrarResguardoManual';
 import ModalDetalleResguardo from './Partials/ModalDetalleResguardo';
 import useListadoResguardos from './Partials/useListadoResguardos';
 import BarraAccionesMasivasGerente from './Partials/BarraAccionesMasivasGerente';
-import { antiguedadValidaEnBandeja, paramsListadoResguardos } from './Partials/resguardosUtils';
+import { antiguedadValidaEnBandeja, metricasAntiguedadClaves, paramsListadoResguardos } from './Partials/resguardosUtils';
+import { resguardoSeleccionableGerente } from './Partials/recepcionGerenteApi';
 import { useDetalleResguardoModalBridge } from './Partials/resguardoDetalleModalBridge';
 import PdvAlertProvider, { usePdvAlertReload } from '../../../Components/PuntoVenta/PdvAlertProvider';
 import PdvEncabezadoAlertasPdv from '../../../Components/PuntoVenta/PdvEncabezadoAlertasPdv';
@@ -93,6 +93,17 @@ export default function Index({
         setEstado(filtros.estado || '');
         setAntiguedad(filtros.antiguedad || '');
     }, [filtros, bandejaInicial]);
+
+    useEffect(() => {
+        if (bandejaActiva !== 'por_recibir') return;
+        const visibles = [];
+        if (permisos.recibir) visibles.push('gerente');
+        if (permisos.confirmar_custodia) visibles.push('recepcionista');
+        if (!visibles.length || visibles.includes(pasoActivo)) return;
+        const siguiente = visibles[0];
+        setPasoActivo(siguiente);
+        recargarRef.current({ paso: siguiente, page: 1 });
+    }, [bandejaActiva, pasoActivo, permisos.recibir, permisos.confirmar_custodia]);
 
     const paramsActuales = (extra = {}) => paramsListadoResguardos({
         bandeja: bandejaActiva,
@@ -176,6 +187,30 @@ export default function Index({
     const hayFiltrosActivos = Boolean(busqueda || estado || antiguedad);
 
     const bandejaRender = bandejaVista || bandejaActiva;
+    const puedeConfirmarEscaneo = Boolean(permisos.recibir)
+        && bandejaRender === 'por_recibir'
+        && pasoActivo === 'gerente';
+    const antiguedadEnTarjetas = antiguedadConfigurada
+        && metricasAntiguedadClaves(
+            bandejaRender,
+            Boolean(permisos.ver_vencidos),
+            Boolean(permisos.ver_rezagados),
+        ).length > 0;
+
+    const idsSeleccionablesPagina = useMemo(() => {
+        const data = resguardosVista?.data || [];
+        if (Boolean(permisos.recibir) && bandejaRender === 'por_recibir' && pasoActivo === 'gerente') {
+            return data.filter(resguardoSeleccionableGerente).map((item) => item.id);
+        }
+        if (Boolean(permisos.entregar) && bandejaRender === 'en_custodia') {
+            return data
+                .filter((item) => item.estado === 'en_custodia' && !item.entrega_bloqueada)
+                .map((item) => item.id);
+        }
+        return [];
+    }, [resguardosVista, permisos.recibir, permisos.entregar, bandejaRender, pasoActivo]);
+    const paginaSeleccionada = idsSeleccionablesPagina.length > 0
+        && idsSeleccionablesPagina.every((id) => idsSeleccionados.includes(id));
 
     const metricasBandeja = useMemo(() => (
         BANDEJAS.map((clave) => ({
@@ -231,11 +266,6 @@ export default function Index({
                     />
                 </GeliaTituloCard>
 
-                <BusquedaRapidaRecepcion
-                    puedeRecibir={Boolean(permisos.recibir)}
-                    onRecepcionExito={() => recargar({ page: resguardosVista?.current_page || 1 })}
-                />
-
                 <div className={GELIA_SEGMENT_TABS_SCROLL}>
                     <div
                         className={`gelia-segment ${GELIA_SEGMENT_TABS_TRACK} p-1 shadow-sm`}
@@ -270,35 +300,6 @@ export default function Index({
                     </div>
                 </div>
 
-                {bandejaRender === 'por_recibir' && (
-                    <div className={GELIA_SEGMENT_TABS_SCROLL}>
-                        <div className={`gelia-segment ${GELIA_SEGMENT_TABS_TRACK} p-1 shadow-sm`} role="tablist" aria-label="Paso de recepción">
-                            {[
-                                { id: 'gerente', etiqueta: 'Recepción gerente', visible: permisos.recibir },
-                                { id: 'recepcionista', etiqueta: 'Custodia recepción', visible: permisos.confirmar_custodia },
-                            ].filter((opcion) => opcion.visible).map(({ id, etiqueta }) => {
-                                const activa = pasoActivo === id;
-                                return (
-                                    <button
-                                        key={id}
-                                        type="button"
-                                        role="tab"
-                                        aria-selected={activa}
-                                        data-active={activa}
-                                        onClick={() => {
-                                            setPasoActivo(id);
-                                            recargar({ paso: id, page: 1 });
-                                        }}
-                                        className="gelia-segment-btn whitespace-nowrap"
-                                    >
-                                        {etiqueta}
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    </div>
-                )}
-
                 {(bandejaRender === 'en_custodia' || (bandejaRender === 'por_recibir' && Boolean(permisos.ver_rezagados))) && (
                     <AlertasCustodiaResguardo
                         bandeja={bandejaRender}
@@ -328,6 +329,9 @@ export default function Index({
                     cargando={cargando}
                     hayFiltrosActivos={hayFiltrosActivos}
                     onLimpiar={onLimpiar}
+                    puedeConfirmarEscaneo={puedeConfirmarEscaneo}
+                    ocultarAntiguedad={antiguedadEnTarjetas}
+                    onRecepcionExito={() => recargar({ page: resguardosVista?.current_page || 1 })}
                 />
 
                 {cargando && !resguardosVista?.data?.length ? (
@@ -346,6 +350,11 @@ export default function Index({
                         puedeRecibir={Boolean(permisos.recibir)}
                         puedeConfirmarCustodia={Boolean(permisos.confirmar_custodia)}
                         paso={bandejaRender === 'por_recibir' ? pasoActivo : undefined}
+                        onPaso={(id) => {
+                            setPasoActivo(id);
+                            recargar({ paso: id, page: 1 });
+                            setIdsSeleccionados([]);
+                        }}
                         puedeEntregar={Boolean(permisos.entregar)}
                         idsSeleccionados={idsSeleccionados}
                         onToggleSeleccion={
@@ -373,6 +382,8 @@ export default function Index({
                         resguardos={resguardosVista?.data || []}
                         idsSeleccionados={idsSeleccionados}
                         onLimpiarSeleccion={() => setIdsSeleccionados([])}
+                        onSeleccionarPagina={() => setIdsSeleccionados(idsSeleccionablesPagina)}
+                        paginaSeleccionada={paginaSeleccionada}
                         onExito={() => recargar({ page: resguardosVista?.current_page || 1 })}
                     />
                 )}
@@ -382,6 +393,15 @@ export default function Index({
                         <p className="text-sm font-bold theme-text-main m-0">
                             {idsSeleccionados.length} seleccionado{idsSeleccionados.length === 1 ? '' : 's'} para entrega conjunta
                         </p>
+                        <div className="flex flex-col sm:flex-row gap-2">
+                        <button
+                            type="button"
+                            onClick={() => setIdsSeleccionados(idsSeleccionablesPagina)}
+                            disabled={paginaSeleccionada || idsSeleccionablesPagina.length === 0}
+                            className="min-h-[48px] px-4 rounded-xl border theme-border text-[10px] font-black uppercase tracking-widest theme-text-main disabled:opacity-50"
+                        >
+                            Seleccionar página
+                        </button>
                         <button
                             type="button"
                             onClick={irAEntregaMultiple}
@@ -391,6 +411,7 @@ export default function Index({
                             <Truck className="w-4 h-4" />
                             Entregar seleccionados
                         </button>
+                        </div>
                     </div>
                 )}
 

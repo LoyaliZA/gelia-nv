@@ -2,12 +2,12 @@
 
 :root {
     --gelia-pro-ease: cubic-bezier(0.22, 1, 0.36, 1);
-    /* Clip del aside. Interior no morpha aquí. */
+    /* Ancho del aside. El interior morpha en el mismo intervalo. */
     --gelia-pro-duration: 0.38s;
     --gelia-pro-collapse-duration: 0.2s;
     --gelia-pro-label-duration: 0.18s;
-    /* Morph card → cuadrado de icono (fase settling). */
-    --gelia-pro-settle-duration: 0.22s;
+    /* Mismo reloj que el ancho: el rail termina con el cierre, no en una fase posterior. */
+    --gelia-pro-settle-duration: var(--gelia-pro-duration);
     /* Alturas explícitas de brand/utilities: `auto` no interpola y el paso fila→columna
        desplazaba todo el nav en un frame. ponytail: derivadas del contenido real
        (logo 2rem, toggle 2.25rem, botón de utilidad 2.875rem); si cambia el tamaño de
@@ -19,7 +19,7 @@
     --gelia-pro-utilities-rail-height: calc(2 * var(--gelia-pro-utility-btn-size) + 0.375rem + 1rem + 1px);
 }
 
-/* Clip durante collapsing: track expanded; aside recorta. Settling morpha el card a icono. */
+/* El track sigue al aside. Un ancho fijo expandido obligaba a reacomodar todo al final. */
 .gelia-pro-sidebar {
     position: fixed;
     inset-block: 0;
@@ -46,16 +46,11 @@
 .gelia-pro-sidebar__track {
     display: flex;
     flex-direction: column;
-    width: var(--gelia-sidebar-expanded-width);
-    min-width: var(--gelia-sidebar-expanded-width);
+    width: 100%;
+    min-width: 0;
     height: 100%;
     min-height: 0;
     flex: 1 1 auto;
-}
-
-.gelia-pro-sidebar:is([data-anim='settling'], [data-collapsed='true']:not([data-anim])) .gelia-pro-sidebar__track {
-    width: var(--gelia-sidebar-collapsed-width);
-    min-width: var(--gelia-sidebar-collapsed-width);
 }
 
 .gelia-pro-sidebar__brand-text,
@@ -615,13 +610,13 @@
     pointer-events: none;
 }
 
-.gelia-pro-sidebar[data-anim='settling'] .gelia-pro-sidebar__brand-text,
-.gelia-pro-sidebar[data-anim='settling'] .gelia-pro-sidebar__row-label,
-.gelia-pro-sidebar[data-anim='settling'] .gelia-pro-sidebar__row-chevron,
-.gelia-pro-sidebar[data-anim='settling'] .gelia-pro-sidebar__header,
-.gelia-pro-sidebar[data-anim='settling'] .gelia-pro-sidebar__badge,
-.gelia-pro-sidebar[data-anim='settling'] .gelia-pro-sidebar__user-meta,
-.gelia-pro-sidebar[data-anim='settling'] .gelia-pro-sidebar__user-chevron {
+.gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__brand-text,
+.gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__row-label,
+.gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__row-chevron,
+.gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__header,
+.gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__badge,
+.gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__user-meta,
+.gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__user-chevron {
     max-width: 0;
     min-width: 0;
     flex: 0 0 0;
@@ -630,7 +625,7 @@
     overflow: hidden;
 }
 
-.gelia-pro-sidebar[data-anim='settling'] .gelia-pro-sidebar__header {
+.gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__header {
     max-height: 0;
 }
 
@@ -671,7 +666,7 @@
 }
 
 /* Morph card → icono (settling) y rail asentado. Sin justify-content/margin:auto (no interpolan). */
-.gelia-pro-sidebar:is([data-anim='settling'], [data-collapsed='true']:not([data-anim])) .gelia-pro-sidebar__row--root {
+.gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__row--root {
     border-color: transparent;
     background: transparent;
     width: 2.5rem;
@@ -684,13 +679,13 @@
     gap: 0;
 }
 
-.gelia-pro-sidebar:is([data-anim='settling'], [data-collapsed='true']:not([data-anim])) .gelia-pro-sidebar__row--root:hover,
-.gelia-pro-sidebar:is([data-anim='settling'], [data-collapsed='true']:not([data-anim])) .gelia-pro-sidebar__row--root.gelia-pro-sidebar__row--flyout-open {
+.gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__row--root:hover,
+.gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__row--root.gelia-pro-sidebar__row--flyout-open {
     background: color-mix(in srgb, var(--color-primario) 12%, transparent);
 }
 
-.gelia-pro-sidebar:is([data-anim='settling'], [data-collapsed='true']:not([data-anim])) .gelia-pro-sidebar__row,
-.gelia-pro-sidebar:is([data-anim='settling'], [data-collapsed='true']:not([data-anim])) .gelia-pro-sidebar__link {
+.gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__row,
+.gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__link {
     align-items: center;
     width: 2.5rem;
     min-width: 2.5rem;
@@ -703,35 +698,35 @@
     gap: 0;
 }
 
-.gelia-pro-sidebar:is([data-anim='settling'], [data-collapsed='true']:not([data-anim])) .gelia-pro-sidebar__row-icon {
+.gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__row-icon {
     margin: 0;
     width: 1.125rem;
     height: 1.125rem;
     flex-shrink: 0;
 }
 
-.gelia-pro-sidebar:is([data-anim='settling'], [data-collapsed='true']:not([data-anim])) .gelia-pro-sidebar__row--active {
+.gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__row--active {
     background: color-mix(in srgb, var(--color-primario) 14%, transparent);
 }
 
-.gelia-pro-sidebar:is([data-anim='settling'], [data-collapsed='true']:not([data-anim])) .gelia-pro-sidebar__nav {
+.gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__nav {
     display: flex;
     flex-direction: column;
     gap: 0.25rem;
     padding-inline: 0.375rem;
 }
 
-.gelia-pro-sidebar:is([data-anim='settling'], [data-collapsed='true']:not([data-anim])) .gelia-pro-sidebar__group {
+.gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__group {
     width: 100%;
     display: flex;
     flex-direction: column;
 }
 
-.gelia-pro-sidebar:is([data-anim='settling'], [data-collapsed='true']:not([data-anim])) .gelia-pro-sidebar__user {
+.gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__user {
     padding-inline: 0.375rem;
 }
 
-.gelia-pro-sidebar:is([data-anim='settling'], [data-collapsed='true']:not([data-anim])) .gelia-pro-sidebar__user-btn {
+.gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__user-btn {
     width: 2.5rem;
     min-width: 2.5rem;
     height: 2.5rem;
@@ -740,20 +735,20 @@
     gap: 0;
 }
 
-.gelia-pro-sidebar:is([data-anim='settling'], [data-collapsed='true']:not([data-anim])) .gelia-pro-sidebar__avatar {
+.gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__avatar {
     width: 2rem;
     height: 2rem;
     font-size: 0.8125rem;
 }
 
-/* Brand/utilities pasan a columna en settling, no en el frame final: `flex-direction` no
-   interpola, pero la altura sí, y el recorte revela el apilado en vez de empujar el nav de golpe. */
+/* Brand/utilities pasan a columna junto con el cierre. `flex-direction` no interpola;
+   la altura sí, y el recorte revela el apilado mientras el ancho todavía se mueve. */
 .gelia-pro-sidebar[data-anim] .gelia-pro-sidebar__brand,
 .gelia-pro-sidebar[data-anim] .gelia-pro-sidebar__utilities {
     overflow: hidden;
 }
 
-.gelia-pro-sidebar:is([data-anim='settling'], [data-collapsed='true']:not([data-anim])) .gelia-pro-sidebar__brand {
+.gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__brand {
     flex-direction: column;
     align-items: center;
     justify-content: center;
@@ -762,12 +757,12 @@
     height: var(--gelia-pro-brand-rail-height);
 }
 
-.gelia-pro-sidebar:is([data-anim='settling'], [data-collapsed='true']:not([data-anim])) .gelia-pro-sidebar__brand-main {
+.gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__brand-main {
     flex: 0;
     justify-content: center;
 }
 
-.gelia-pro-sidebar:is([data-anim='settling'], [data-collapsed='true']:not([data-anim])) .gelia-pro-sidebar__toggle {
+.gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__toggle {
     margin: 0;
 }
 
@@ -776,7 +771,7 @@
     animation: geliaProLabelIn var(--gelia-pro-settle-duration) var(--gelia-pro-ease) both;
 }
 
-.gelia-pro-sidebar:is([data-anim='settling'], [data-collapsed='true']:not([data-anim])) .gelia-pro-sidebar__utilities {
+.gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__utilities {
     flex-direction: column;
     align-items: center;
     justify-content: center;
@@ -785,7 +780,7 @@
     height: var(--gelia-pro-utilities-rail-height);
 }
 
-.gelia-pro-sidebar:is([data-anim='settling'], [data-collapsed='true']:not([data-anim])) .gelia-pro-sidebar__utilities > * {
+.gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__utilities > * {
     display: flex;
     justify-content: center;
 }
@@ -903,7 +898,7 @@
     min-height: 0;
 }
 
-.gelia-pro-sidebar:is([data-anim='settling'], [data-collapsed='true']:not([data-anim])) .gelia-pro-flyout__body .gelia-pro-sidebar__row--root {
+.gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-flyout__body .gelia-pro-sidebar__row--root {
     width: 100%;
     min-width: 0;
     height: auto;
@@ -912,7 +907,7 @@
     padding: 0.125rem 0.625rem;
 }
 
-.gelia-pro-sidebar:is([data-anim='settling'], [data-collapsed='true']:not([data-anim])) .gelia-pro-flyout__body .gelia-pro-sidebar__link {
+.gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-flyout__body .gelia-pro-sidebar__link {
     width: 100%;
     min-width: 0;
     height: auto;
@@ -921,11 +916,11 @@
     padding: 0 0.625rem;
 }
 
-/* Drawer móvil */
+/* Drawer móvil: hoja a altura completa, por encima de la topbar. */
 .gelia-pro-sidebar-backdrop {
     position: fixed;
     inset: 0;
-    z-index: calc(var(--gelia-z-sidebar) - 1);
+    z-index: calc(var(--gelia-z-sidebar) + 7);
     background: var(--theme-modal-overlay-bg);
     opacity: 0;
     pointer-events: none;
@@ -938,24 +933,128 @@
 .gelia-pro-sidebar-backdrop--open {
     opacity: 1;
     pointer-events: auto;
-    backdrop-filter: blur(2px);
+    backdrop-filter: blur(8px);
 }
 
 .gelia-pro-sidebar--drawer {
-    transform: translateX(calc(-100% - 0.5rem));
+    z-index: calc(var(--gelia-z-sidebar) + 8);
+    transform: translateX(calc(-100% - 0.75rem));
     transition:
         transform 0.34s var(--gelia-pro-ease),
         box-shadow 0.34s var(--gelia-pro-ease);
-    width: min(var(--gelia-sidebar-mobile-width), calc(100vw - 2rem));
-    top: var(--gelia-mobile-topbar-height);
-    height: calc(100dvh - var(--gelia-mobile-topbar-height));
-    max-height: calc(100dvh - var(--gelia-mobile-topbar-height));
+    width: min(22rem, 88vw);
+    top: 0;
+    height: 100dvh;
+    max-height: 100dvh;
+    border-inline-end: 0;
+    border-start-end-radius: 1.25rem;
+    border-end-end-radius: 1.25rem;
+    padding-top: env(safe-area-inset-top, 0px);
     box-shadow: none;
 }
 
 .gelia-pro-sidebar--drawer[data-open='true'] {
     transform: translateX(0);
-    box-shadow: var(--theme-shadow-modal);
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.22);
+}
+
+.gelia-pro-sidebar--drawer .gelia-pro-sidebar__brand {
+    height: auto;
+    min-height: 3.5rem;
+    padding: 0.875rem 0.875rem 0.75rem;
+}
+
+.gelia-pro-sidebar--drawer .gelia-pro-sidebar__brand-subtitle {
+    display: none;
+}
+
+.gelia-pro-sidebar--drawer .gelia-pro-sidebar__nav {
+    padding: 0.375rem 0.625rem 0.5rem;
+    overscroll-behavior: contain;
+}
+
+.gelia-pro-sidebar--drawer .gelia-pro-sidebar__user--inline {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+    margin: 0 0.625rem max(0.625rem, env(safe-area-inset-bottom, 0px));
+    padding: 0.25rem;
+    border: 1px solid var(--theme-border);
+    border-radius: 1rem;
+    border-block-start: 1px solid var(--theme-border);
+    background: color-mix(in srgb, var(--theme-element-bg) 88%, transparent);
+    overflow: hidden;
+}
+
+.gelia-pro-sidebar--drawer .gelia-pro-sidebar__user-id {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    width: 100%;
+    min-height: 3rem;
+    padding: 0.375rem 0.5rem;
+    border: 0;
+    border-radius: 0.75rem;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    text-align: start;
+}
+
+.gelia-pro-sidebar--drawer .gelia-pro-sidebar__user-id:hover,
+.gelia-pro-sidebar--drawer .gelia-pro-sidebar__user-id:focus-visible {
+    background: color-mix(in srgb, currentColor 6%, transparent);
+}
+
+.gelia-pro-sidebar--drawer .gelia-pro-sidebar__user-id:focus-visible {
+    outline: 2px solid var(--color-primario);
+    outline-offset: 1px;
+}
+
+.gelia-pro-sidebar__user-id-chevron {
+    width: 1rem;
+    height: 1rem;
+    margin-inline-start: auto;
+    flex-shrink: 0;
+    opacity: 0.55;
+    transition: transform var(--gelia-pro-collapse-duration) var(--gelia-pro-ease), opacity 0.18s ease;
+}
+
+.gelia-pro-sidebar__user--inline[data-open='true'] .gelia-pro-sidebar__user-id-chevron {
+    transform: rotate(180deg);
+}
+
+.gelia-pro-sidebar--drawer .gelia-pro-sidebar__user--inline[data-open='true'] .gelia-pro-sidebar__user-id {
+    background: color-mix(in srgb, var(--theme-element-bg) 94%, var(--theme-surface-bg));
+}
+
+.gelia-pro-sidebar__user-menu--inline {
+    position: static;
+    inset: auto;
+    width: auto;
+    max-height: none;
+    margin: 0;
+    padding: 0.125rem;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    transform: none;
+    animation: none;
+}
+
+.gelia-pro-sidebar__user-menu--inline a,
+.gelia-pro-sidebar__user-menu--inline button {
+    min-height: 2.75rem;
+}
+
+.gelia-pro-sidebar__user-menu--inline .gelia-pro-sidebar__user-menu-item--danger {
+    margin-top: 0.25rem;
+    border-top: 1px solid var(--theme-border);
+    border-radius: 0.5rem;
 }
 
 @media (prefers-reduced-motion: reduce) {

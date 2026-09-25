@@ -63,6 +63,8 @@ class AlertaAumentoCreditoNotification extends Notification implements ShouldQue
         return [
             'cliente_id' => $this->cliente->id,
             'cliente' => $this->cliente->nombre,
+            'numero_cliente' => $this->cliente->numero_cliente,
+            'url' => '/auto-cobranza?q='.rawurlencode((string) ($this->cliente->numero_cliente ?: $this->cliente->nombre)),
             'monto_anterior' => $this->montoAnterior,
             'monto_nuevo' => $this->montoNuevo,
             'tipo' => 'aumento_credito',

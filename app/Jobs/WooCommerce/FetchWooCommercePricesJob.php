@@ -44,16 +44,14 @@ class FetchWooCommercePricesJob implements ShouldQueue
 
             $baseUrl = $this->getWooBaseUrl() . '/wp-json/wc/v3/products';
 
-            $response = $this->getWooClient('GeliaSystem-FetchBot/1.0')
+            $response = $this->getWooClient()
                 ->get($baseUrl, [
                     'per_page' => 100,
                     'page' => $this->page,
                     '_fields' => 'id,sku,regular_price,sale_price',
                 ]);
 
-            if (!$response->successful()) {
-                throw new \Exception('Error en la API de WooCommerce: ' . $response->body());
-            }
+            $this->afirmarRespuestaWoo($response);
 
             $productosWoo = $response->json();
             if (empty($productosWoo)) {
@@ -73,14 +71,15 @@ class FetchWooCommercePricesJob implements ShouldQueue
             }
 
             if (count($productosWoo) === 100) {
-                self::dispatch($this->syncLogId, $this->page + 1);
+                self::dispatch($this->syncLogId, $this->page + 1)
+                    ->delay(now()->addSeconds($this->segundosPausaEntrePeticiones()));
 
                 return;
             }
 
             $this->finalizarFetch($log);
         } catch (\Exception $e) {
-            $log->update(['estado' => 'error', 'mensaje_error' => $e->getMessage()]);
+            $log->update(['estado' => 'error', 'mensaje_error' => $this->redactarSecretosWoo($e->getMessage())]);
             throw $e;
         }
     }
@@ -92,7 +91,7 @@ class FetchWooCommercePricesJob implements ShouldQueue
             return;
         }
 
-        $mensaje = $exception?->getMessage() ?? 'El proceso fue interrumpido (timeout o error del worker).';
+        $mensaje = $exception ? $this->redactarSecretosWoo($exception->getMessage()) : 'El proceso fue interrumpido (timeout o error del worker).';
         $log->update([
             'estado' => 'interrumpido',
             'mensaje_error' => $mensaje,
@@ -143,8 +142,6 @@ class FetchWooCommercePricesJob implements ShouldQueue
                 $this->avanzarProgreso($log);
             }
         }
-
-        $this->aplicarLatenciaSegura();
     }
 
     private function avanzarProgreso(WoocommerceSyncLog $log): void

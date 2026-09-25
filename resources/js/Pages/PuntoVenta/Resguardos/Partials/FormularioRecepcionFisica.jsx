@@ -135,7 +135,7 @@ export default function FormularioRecepcionFisica({
                                     <button
                                         type="button"
                                         onClick={() => quitarBultoLlegada(indice)}
-                                        className="text-[10px] font-black uppercase text-red-600 dark:text-red-300 min-h-[44px] px-2"
+                                        className="text-[10px] font-black uppercase text-[var(--color-peligro)] min-h-[44px] px-2"
                                         disabled={enviando}
                                     >
                                         Quitar

@@ -11,12 +11,16 @@ use Illuminate\Support\Facades\DB;
 class ConfirmarTraspasoCedisService
 {
     public function __construct(
-        private NotificarTraspasoService $notificar
+        private NotificarTraspasoService $notificar,
+        private GuardarRevisionesTraspasoService $revisionesTraspaso
     ) {}
 
-    public function ejecutar(SolicitudTraspaso $solicitud, User $usuario): SolicitudTraspaso
+    /**
+     * @param  list<array<string, mixed>>  $revisionesInput
+     */
+    public function ejecutar(SolicitudTraspaso $solicitud, User $usuario, array $revisionesInput = []): SolicitudTraspaso
     {
-        return DB::transaction(function () use ($solicitud, $usuario) {
+        return DB::transaction(function () use ($solicitud, $usuario, $revisionesInput) {
             $idRespondida = CatalogoEstadoSolicitud::idDe('Respondida');
             $idVerificada = CatalogoEstadoSolicitud::idDe('Verificada');
 
@@ -39,8 +43,20 @@ class ConfirmarTraspasoCedisService
                 abort(422, 'Solo se pueden confirmar solicitudes en estado Respondida.');
             }
 
+            $locked->loadMissing('productos');
+            $normalizadas = $this->revisionesTraspaso->normalizarRevisiones($locked, $revisionesInput);
+            $estadoGeneralCedis = $this->revisionesTraspaso->persistir(
+                $locked,
+                \App\Models\SolicitudTraspasoRevisionProducto::MOMENTO_CEDIS,
+                $normalizadas,
+                $usuario
+            );
+
             $estadoAnterior = $locked->catalogo_estado_solicitud_id;
-            $locked->update(['catalogo_estado_solicitud_id' => $idVerificada]);
+            $locked->update([
+                'catalogo_estado_solicitud_id' => $idVerificada,
+                'estado_fisico_general_cedis' => $estadoGeneralCedis,
+            ]);
 
             AuditoriaSolicitudTraspaso::create([
                 'solicitud_traspaso_id' => $locked->id,

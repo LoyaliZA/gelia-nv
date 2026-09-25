@@ -1,7 +1,7 @@
 import React from 'react';
 import {
     Package, User, Calendar, Eye, CheckCircle2, XCircle, Trash2,
-    AlertTriangle, Clock, History,
+    AlertTriangle, Clock, History, Building2,
 } from 'lucide-react';
 import { geliaCardClass } from '../../../utils/geliaTheme';
 import { puedePermiso } from '../../../utils/permisos';
@@ -88,6 +88,12 @@ export default function TarjetaTraspaso({
                         <User className="w-3.5 h-3.5 shrink-0" />
                         <span className="truncate">{traspaso.vendedor?.name}</span>
                     </p>
+                    {traspaso.sucursal_solicitante?.nombre && (
+                        <p className="text-xs theme-text-muted mt-1 font-bold m-0 inline-flex items-center gap-1.5">
+                            <Building2 className="w-3.5 h-3.5 shrink-0" />
+                            <span className="truncate">{traspaso.sucursal_solicitante.nombre}</span>
+                        </p>
+                    )}
                 </div>
                 <div className="p-2 rounded-xl shrink-0" style={{ backgroundColor: 'color-mix(in srgb, var(--color-primario) 12%, transparent)', color: 'var(--color-primario)' }}>
                     <Package className="w-5 h-5" />

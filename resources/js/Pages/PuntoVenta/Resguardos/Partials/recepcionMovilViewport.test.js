@@ -118,7 +118,7 @@ describe('recepcion móvil viewport 375px (REM-06)', () => {
 
         const escanear = buscarControlPorTexto(contenedor, 'Escanear');
         assertTargetTactil(escanear, 'Escanear');
-        assertTargetTactil(buscarControlPorTexto(contenedor, 'Continuar recepción'), 'Continuar recepción');
+        assertTargetTactil(buscarControlPorTexto(contenedor, 'Confirmar recepción'), 'Confirmar recepción');
 
         assertSinOverflowHorizontal(contenedor);
     });

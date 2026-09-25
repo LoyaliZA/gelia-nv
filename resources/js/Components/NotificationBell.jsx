@@ -1,10 +1,17 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Bell, BellRing, CheckCircle2, AlertCircle, X, MailOpen } from 'lucide-react';
 import { usePage, router } from '@inertiajs/react';
 import NotificationBrowserService from '@/Services/NotificationBrowserService';
 import WebPushService from '@/Services/WebPushService';
-import { ALERTAS_TIPOS, resolveNotificationDestination } from '@/utils/alertasPrefs';
+import {
+    ALERTAS_TIPOS,
+    confirmarSalidaSiHayCambios,
+    getTipoAlerta,
+    marcarNotificacionLeida,
+    normalizeNotificationPayload,
+    resolveNotificationDestination,
+} from '@/utils/alertasPrefs';
 
 const ordenarPorFecha = (lista) =>
     [...lista].sort((a, b) => {
@@ -27,9 +34,23 @@ export function NotificationCountBadge({ count, className = '-top-1.5 -right-1.5
     );
 }
 
+function firmaAlerta(notification) {
+    const payload = normalizeNotificationPayload(notification);
+    const entidad = payload.solicitud_id
+        || payload.activo_id
+        || payload.pedido_bma_id
+        || payload.ticket_id
+        || payload.resguardo_id
+        || payload.conversacion_id
+        || payload.folio
+        || '';
+    return `${payload.tipo || ''}:${entidad}`;
+}
+
 export default function NotificationBell({ notifications: propNotifications = [], iconButtonClassName = '' }) {
     const { auth } = usePage().props;
     const [isOpen, setIsOpen] = useState(false);
+    const descartadasRef = useRef(new Set());
 
     const fuenteServidor = auth?.notificaciones?.length > 0
         ? auth.notificaciones
@@ -37,7 +58,8 @@ export default function NotificationBell({ notifications: propNotifications = []
 
     const [notifications, setNotifications] = useState(() => ordenarPorFecha(fuenteServidor || []));
 
-    const unreadCount = notifications.filter(n => !n.read_at).length;
+    const visibles = notifications.filter((n) => !n.read_at && !descartadasRef.current.has(String(n.id)));
+    const unreadCount = visibles.length;
 
     useEffect(() => {
         if (isOpen) document.body.style.overflow = 'hidden';
@@ -64,11 +86,16 @@ export default function NotificationBell({ notifications: propNotifications = []
 
         setNotifications(prev => {
             const registroMap = new Map();
-            (base || []).forEach(n => { if (n?.id) registroMap.set(n.id, n); });
+            const firmasServidor = new Set();
+            (base || []).forEach(n => {
+                if (!n?.id || descartadasRef.current.has(String(n.id))) return;
+                registroMap.set(n.id, n);
+                firmasServidor.add(firmaAlerta(n));
+            });
             prev.forEach(n => {
-                if (n?.id && String(n.id).startsWith('live-') && !registroMap.has(n.id)) {
-                    registroMap.set(n.id, n);
-                }
+                if (!n?.id || !String(n.id).startsWith('live-') || registroMap.has(n.id)) return;
+                if (descartadasRef.current.has(String(n.id)) || firmasServidor.has(firmaAlerta(n))) return;
+                registroMap.set(n.id, n);
             });
             return ordenarPorFecha(Array.from(registroMap.values()));
         });
@@ -104,14 +131,31 @@ export default function NotificationBell({ notifications: propNotifications = []
             });
         };
 
+        const handleDismissed = (event) => {
+            const id = event.detail?.id;
+            if (!id) return;
+            descartadasRef.current.add(String(id));
+            setNotifications(prev => prev.filter((item) => String(item.id) !== String(id)));
+        };
+
         window.addEventListener('notification-received', handleNotificationReceived);
-        return () => window.removeEventListener('notification-received', handleNotificationReceived);
+        window.addEventListener('notification-dismissed', handleDismissed);
+        return () => {
+            window.removeEventListener('notification-received', handleNotificationReceived);
+            window.removeEventListener('notification-dismissed', handleDismissed);
+        };
     }, []);
 
     const handleNotificationClick = (n) => {
+        if (!confirmarSalidaSiHayCambios()) return;
         const destino = resolveNotificationDestination(n);
-        router.visit(destino);
+        if (n?.id) descartadasRef.current.add(String(n.id));
+        setNotifications(prev => prev.filter((item) => item.id !== n.id));
         setIsOpen(false);
+        window.dispatchEvent(new CustomEvent('notification-dismissed', { detail: { id: n?.id } }));
+        void marcarNotificacionLeida(n?.id).then(() => {
+            router.visit(destino);
+        });
     };
 
     const handleLimpiarBandeja = () => {
@@ -182,8 +226,8 @@ export default function NotificationBell({ notifications: propNotifications = []
                         </div>
 
                         <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-3">
-                            {notifications.length > 0 ? notifications.map((n, i) => {
-                                const tipo = n.type || n.data?.tipo;
+                            {visibles.length > 0 ? visibles.map((n, i) => {
+                                const tipo = n.data?.tipo || getTipoAlerta(n);
                                 const esResumen = n.data?.total_vencidos !== undefined || n.data?.total_activos !== undefined;
                                 const isError = tipo === 'pago_rechazado' || tipo === 'rechazada' || tipo === 'alerta_pago_insuficiente' || tipo === 'cancelada' || tipo === 'activo_baja' || tipo === 'activo_vencimiento' || esResumen;
                                 const iconColor = isError ? 'text-red-500' : 'text-[var(--color-primario)]';

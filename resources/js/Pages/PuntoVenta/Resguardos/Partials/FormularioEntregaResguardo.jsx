@@ -298,7 +298,7 @@ function IndicadorPasos({ pasoActual }) {
                                 activo
                                     ? 'bg-[var(--color-primario)]/15 text-[var(--color-primario)]'
                                     : completado
-                                        ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                                        ? 'bg-[color-mix(in_srgb,var(--color-exito)_15%,transparent)] text-[var(--color-exito)]'
                                         : 'theme-text-muted bg-black/[0.03] dark:bg-white/[0.03]'
                             }`}
                         >
@@ -393,14 +393,14 @@ function PasoRevisar({ resguardo, catalogos, bultoIds, onBultoIds, errores, desh
                     })}
                 </div>
                 {errores.bulto_ids && (
-                    <p className="text-xs font-bold text-red-600 dark:text-red-300 m-0">{errores.bulto_ids}</p>
+                    <p className="text-xs font-bold text-[var(--color-peligro)] m-0">{errores.bulto_ids}</p>
                 )}
             </div>
 
             {(resguardo.incidencias || []).length > 0 && (
-                <div className={`${geliaCardClass()} p-5 space-y-3 border border-amber-500/30`}>
+                <div className={`${geliaCardClass()} p-5 space-y-3 border border-[color-mix(in_srgb,var(--color-aviso)_35%,transparent)]`}>
                     <div className="flex items-center gap-2">
-                        <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />
+                        <AlertTriangle className="w-5 h-5 text-[var(--color-aviso)] shrink-0" />
                         <h2 className="text-sm font-black uppercase tracking-widest theme-text-main m-0">Incidencias registradas</h2>
                     </div>
                     {resguardo.incidencias.map((incidencia) => (
@@ -465,7 +465,7 @@ export function PasoReceptor({
                     ))}
                 </div>
                 {errores.relacion && (
-                    <p className="text-xs font-bold text-red-600 dark:text-red-300 m-0">{errores.relacion}</p>
+                    <p className="text-xs font-bold text-[var(--color-peligro)] m-0">{errores.relacion}</p>
                 )}
             </fieldset>
 
@@ -483,7 +483,7 @@ export function PasoReceptor({
                     placeholder={relacion === 'tercero' ? 'Nombre del tercero autorizado' : 'Nombre del titular'}
                 />
                 {errores.nombre_quien_retira && (
-                    <p className="text-xs font-bold text-red-600 dark:text-red-300 m-0">{errores.nombre_quien_retira}</p>
+                    <p className="text-xs font-bold text-[var(--color-peligro)] m-0">{errores.nombre_quien_retira}</p>
                 )}
             </label>
 
@@ -511,7 +511,7 @@ export function PasoEvidencia({ firmaRef, previews, onAgregar, onQuitar, errores
                 <p className="text-sm theme-text-muted m-0">La firma es obligatoria para validar la entrega.</p>
                 <FirmaCanvas ref={firmaRef} label="Firma de quien retira" height={200} />
                 {errores.firma && (
-                    <p className="text-xs font-bold text-red-600 dark:text-red-300 m-0">{errores.firma}</p>
+                    <p className="text-xs font-bold text-[var(--color-peligro)] m-0">{errores.firma}</p>
                 )}
             </div>
 
@@ -561,10 +561,10 @@ function PasoConfirmar({
             {(errores.firma || errores.bulto_ids) && (
                 <div className="space-y-1">
                     {errores.firma && (
-                        <p className="text-xs font-bold text-red-600 dark:text-red-300 m-0">{errores.firma}</p>
+                        <p className="text-xs font-bold text-[var(--color-peligro)] m-0">{errores.firma}</p>
                     )}
                     {errores.bulto_ids && (
-                        <p className="text-xs font-bold text-red-600 dark:text-red-300 m-0">{errores.bulto_ids}</p>
+                        <p className="text-xs font-bold text-[var(--color-peligro)] m-0">{errores.bulto_ids}</p>
                     )}
                 </div>
             )}
@@ -592,7 +592,7 @@ function PasoConfirmar({
                 )}
             </div>
             {relacion === 'tercero' && (
-                <p className="text-[10px] font-bold text-amber-700 dark:text-amber-300 m-0 flex items-start gap-2">
+                <p className="text-[10px] font-bold text-[var(--color-aviso)] m-0 flex items-start gap-2">
                     <AlertTriangle className="w-4 h-4 shrink-0" />
                     Entrega a tercero autorizado. Verifica identidad conforme al procedimiento de sucursal.
                 </p>

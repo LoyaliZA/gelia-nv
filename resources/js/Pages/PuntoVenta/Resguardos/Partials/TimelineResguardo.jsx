@@ -1,18 +1,18 @@
 import React from 'react';
 import { History, Link2, FileImage } from 'lucide-react';
 import { geliaCardClass } from '../../../../utils/geliaTheme';
-import { formatearFechaOperativa } from './resguardosStyles';
+import { TONO_AVISO, TONO_EXITO, TONO_INFO, TONO_NEUTRO, TONO_PRIMARIO, formatearFechaOperativa } from './resguardosStyles';
 
 const badgeCategoria = (categoria) => {
     const mapa = {
-        recepcion: 'bg-blue-500/10 text-blue-600 dark:text-blue-300',
-        incidencia: 'bg-purple-500/10 text-purple-600 dark:text-purple-300',
-        entrega: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-300',
-        devolucion: 'bg-amber-500/10 text-amber-700 dark:text-amber-300',
-        correccion: 'bg-orange-500/10 text-orange-600 dark:text-orange-300',
-        integracion: 'bg-cyan-500/10 text-cyan-700 dark:text-cyan-300',
-        sistema: 'bg-slate-500/10 theme-text-muted',
-        operacion: 'bg-slate-500/10 theme-text-muted',
+        recepcion: TONO_INFO,
+        incidencia: TONO_AVISO,
+        entrega: TONO_EXITO,
+        devolucion: TONO_AVISO,
+        correccion: TONO_PRIMARIO,
+        integracion: TONO_INFO,
+        sistema: TONO_NEUTRO,
+        operacion: TONO_NEUTRO,
     };
 
     return mapa[categoria] || mapa.operacion;
@@ -94,7 +94,7 @@ export default function TimelineResguardo({ eventos = [], soloLectura = true }) 
                                                 href={evidencia.ruta_publica}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
-                                                className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-blue-500 hover:text-blue-600"
+                                                className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-[var(--color-info)] hover:opacity-80"
                                             >
                                                 <FileImage className="w-3 h-3" />
                                                 {evidencia.nombre_original || 'Ver evidencia'}

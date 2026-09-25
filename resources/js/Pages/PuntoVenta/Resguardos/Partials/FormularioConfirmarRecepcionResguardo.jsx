@@ -58,8 +58,8 @@ export default function FormularioConfirmarRecepcionResguardo({
                 </div>
             )}
 
-            <div className={`${geliaCardClass()} p-4 flex items-start gap-3 border border-sky-500/20`}>
-                <UserRound className="w-5 h-5 text-sky-600 shrink-0 mt-0.5" />
+            <div className={`${geliaCardClass()} p-4 flex items-start gap-3 border border-[color-mix(in_srgb,var(--color-info)_35%,transparent)]`}>
+                <UserRound className="w-5 h-5 text-[var(--color-info)] shrink-0 mt-0.5" />
                 <p className="text-sm theme-text-muted m-0">
                     Solo confirma que el paquete llegó a sucursal. El recepcionista revisará bultos y piezas después.
                 </p>

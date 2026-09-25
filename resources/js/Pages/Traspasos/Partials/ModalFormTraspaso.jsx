@@ -5,6 +5,13 @@ import axios from 'axios';
 import { X, Plus, Trash2, Package, Send } from 'lucide-react';
 import SelectorProducto from '../../../Components/Almacenes/SelectorProducto';
 import { THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from '../../../utils/geliaTheme';
+import {
+    BTN_CERRAR_MODAL,
+    MODAL_BODY,
+    MODAL_HEADER,
+    TEXTO_AVISO,
+    TEXTO_ERROR,
+} from './traspasosStyles';
 
 function estimarEntrega(horarios = []) {
     const ahora = new Date();
@@ -27,7 +34,7 @@ function estimarEntrega(horarios = []) {
     return { horario: match, fecha: fecha.toISOString().slice(0, 10) };
 }
 
-export default function ModalFormTraspaso({ onClose, almacenes = [], horarios = [], onExito }) {
+export default function ModalFormTraspaso({ onClose, almacenes = [], horarios = [], sucursalSolicitante = null, onExito }) {
     const [infoCliente, setInfoCliente] = useState(null);
     const [listaClientes, setListaClientes] = useState([]);
     const [mostrarDropdown, setMostrarDropdown] = useState(false);
@@ -141,18 +148,33 @@ export default function ModalFormTraspaso({ onClose, almacenes = [], horarios = 
                 style={{ maxHeight: 'calc(100dvh - 2rem)' }}
                 onClick={(e) => e.stopPropagation()}
             >
-                <div className="p-5 md:p-6 border-b theme-border flex justify-between items-start gap-3 shrink-0">
+                <div className={MODAL_HEADER}>
                     <div className="flex items-center gap-3 min-w-0">
-                        <Package className="w-7 h-7 shrink-0" style={{ color: 'var(--color-primario)' }} />
+                        <Package className="w-7 h-7 shrink-0 theme-text-primario" />
                         <div>
                             <h2 className="text-lg font-black italic theme-text-main uppercase m-0">Nueva Solicitud de Traspaso_</h2>
                             <p className="text-[10px] font-bold theme-text-muted uppercase tracking-widest mt-1 m-0">Piezas desde almacén origen</p>
+                            {sucursalSolicitante?.nombre && (
+                                <p className="text-[10px] font-black uppercase theme-text-main mt-1 m-0">
+                                    Sucursal: {sucursalSolicitante.nombre}
+                                </p>
+                            )}
+                            {!sucursalSolicitante && (
+                                <p className={`${TEXTO_AVISO} mt-1 m-0`}>
+                                    Sin sucursal asignada — no podrá crear traspasos.
+                                </p>
+                            )}
+                            {sucursalSolicitante && almacenes.length === 0 && (
+                                <p className={`${TEXTO_AVISO} mt-1 m-0`}>
+                                    Sin almacenes origen configurados para su sucursal.
+                                </p>
+                            )}
                         </div>
                     </div>
-                    <button type="button" onClick={onClose} className="p-2 theme-text-muted rounded-full hover:bg-black/5 dark:hover:bg-white/5"><X className="w-5 h-5" /></button>
+                    <button type="button" onClick={onClose} className={BTN_CERRAR_MODAL} aria-label="Cerrar"><X className="w-5 h-5" /></button>
                 </div>
 
-                <form onSubmit={enviar} className="gelia-modal-body p-5 md:p-6 overflow-y-auto custom-scrollbar flex-1 min-h-0 space-y-6">
+                <form onSubmit={enviar} className={`${MODAL_BODY} space-y-6`}>
                     <div className="relative space-y-2">
                         <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Número de cliente</label>
                         <input
@@ -166,7 +188,7 @@ export default function ModalFormTraspaso({ onClose, almacenes = [], horarios = 
                         {infoCliente && (
                             <p className="text-xs font-bold theme-text-main m-0">{infoCliente.numero_cliente} — {infoCliente.nombre}</p>
                         )}
-                        {errors.numero_cliente && <p className="text-xs text-red-500">{errors.numero_cliente}</p>}
+                        {errors.numero_cliente && <p className={TEXTO_ERROR}>{errors.numero_cliente}</p>}
                         {mostrarDropdown && (
                             <div className="absolute z-20 left-0 right-0 mt-1 max-h-56 overflow-y-auto rounded-xl border theme-border theme-element shadow-lg">
                                 {buscandoCliente ? (
@@ -198,7 +220,7 @@ export default function ModalFormTraspaso({ onClose, almacenes = [], horarios = 
                                 <option key={a.id} value={a.id}>{a.codigo} — {a.nombre}</option>
                             ))}
                         </select>
-                        {errors.almacen_origen_id && <p className="text-xs text-red-500">{errors.almacen_origen_id}</p>}
+                        {errors.almacen_origen_id && <p className={TEXTO_ERROR}>{errors.almacen_origen_id}</p>}
                     </div>
 
                     {estimacion && (
@@ -262,7 +284,7 @@ export default function ModalFormTraspaso({ onClose, almacenes = [], horarios = 
                                             <td className="px-3 py-2 text-xs font-bold theme-text-main">{p.descripcion}</td>
                                             <td className="px-3 py-2 text-xs font-black text-right theme-text-main">{p.piezas}</td>
                                             <td className="px-3 py-2 text-right">
-                                                <button type="button" onClick={() => quitarProducto(idx)} className="p-1 theme-text-muted hover:text-red-500">
+                                                <button type="button" onClick={() => quitarProducto(idx)} className="p-1 theme-text-muted hover:theme-text-peligro">
                                                     <Trash2 className="w-3.5 h-3.5" />
                                                 </button>
                                             </td>
@@ -272,10 +294,14 @@ export default function ModalFormTraspaso({ onClose, almacenes = [], horarios = 
                             </table>
                         </div>
                         <p className="text-sm font-black theme-text-main m-0 text-right">Total piezas: {totalPiezas}</p>
-                        {errors.productos && <p className="text-xs text-red-500">{errors.productos}</p>}
+                        {errors.productos && <p className={TEXTO_ERROR}>{errors.productos}</p>}
                     </div>
 
-                    <button type="submit" disabled={processing} className="theme-btn-primary w-full !py-3">
+                    <button
+                        type="submit"
+                        disabled={processing || !sucursalSolicitante || almacenes.length === 0}
+                        className="theme-btn-primary w-full !py-3"
+                    >
                         <Send className="w-4 h-4" /> {processing ? 'Enviando…' : 'Solicitar traspaso'}
                     </button>
                 </form>

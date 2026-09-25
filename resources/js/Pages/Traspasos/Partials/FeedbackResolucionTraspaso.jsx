@@ -2,31 +2,44 @@ import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { CheckCircle2, AlertOctagon, AlertTriangle, FileText, Camera, X } from 'lucide-react';
 import { THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from '../../../utils/geliaTheme';
+import {
+    BTN_CERRAR_MODAL,
+    META_BLOQUE_EXITO,
+    MODAL_HEADER,
+    PANEL_INCIDENCIA,
+    PANEL_RESPUESTA_EXITO,
+    PANEL_RESPUESTA_PELIGRO,
+    TITULO_SECCION_AVISO,
+    TITULO_SECCION_EXITO,
+    TITULO_SECCION_PELIGRO,
+} from './traspasosStyles';
 
 function urlEvidencia(traspaso) {
     if (!traspaso?.tiene_evidencia_respuesta && !traspaso?.evidencia_respuesta_path) return null;
     return route('traspasos.evidencia', traspaso.id);
 }
 
+const ESTADOS_INCIDENCIA = ['regular', 'malo', 'danado', 'sin_existencia'];
+
 function lineasConDetalle(traspaso) {
-    return (traspaso.productos || [])
-        .map((p) => {
-            const detalle = p.detalle_dano || p.detalleDano;
-            if (!detalle) return null;
-            const paths = detalle.paths || [];
-            return {
-                id: p.id,
+    const lineas = [];
+    for (const p of traspaso.productos || []) {
+        for (const rev of p.revisiones || []) {
+            if (!ESTADOS_INCIDENCIA.includes(rev.estado_fisico)) continue;
+            const paths = rev.evidencia_paths || [];
+            lineas.push({
+                id: rev.id,
                 sku: p.sku,
                 descripcion: p.descripcion,
-                motivo: (detalle.motivo || '').trim(),
-                autor: detalle.reportado_por?.name || detalle.reportadoPor?.name || 'CEDIS',
-                fotos: paths.map((_, i) => route('traspasos.detalle_dano_foto', [detalle.id, i])),
-            };
-        })
-        .filter(Boolean);
-}
+                motivo: (rev.comentario || rev.estado_fisico || '').trim(),
+                autor: rev.registrado_por?.name || rev.registradoPor?.name || 'Operación',
+                fotos: paths.map((_, i) => route('traspasos.revision_foto', [rev.id, i])),
+            });
+        }
+    }
 
-const bloqueMeta = 'inline-flex flex-col gap-0.5 px-3 py-2 rounded-xl border border-emerald-500/40 bg-emerald-500/15 dark:bg-emerald-500/20 min-w-0';
+    return lineas;
+}
 
 const VisorEvidenciaHover = ({ url, etiqueta = 'Ver captura' }) => {
     const [isHovered, setIsHovered] = useState(false);
@@ -34,15 +47,15 @@ const VisorEvidenciaHover = ({ url, etiqueta = 'Ver captura' }) => {
 
     return (
         <div
-            className={`${bloqueMeta} cursor-pointer hover:border-emerald-500 transition-colors`}
+            className={`${META_BLOQUE_EXITO} cursor-pointer hover:border-[color-mix(in_srgb,var(--color-exito)_55%,transparent)] transition-colors`}
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
         >
-            <span className="text-[9px] font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-300 m-0 inline-flex items-center gap-1">
+            <span className={`${TITULO_SECCION_EXITO} m-0 inline-flex items-center gap-1`}>
                 <Camera className="w-3 h-3 shrink-0" /> Evidencia
             </span>
             <span className="inline-flex items-center gap-2 mt-0.5">
-                <img src={url} className="w-8 h-8 object-cover rounded-lg shadow-sm border border-emerald-500/30" alt="Miniatura" />
+                <img src={url} className="w-8 h-8 object-cover rounded-lg shadow-sm border border-[color-mix(in_srgb,var(--color-exito)_30%,transparent)]" alt="Miniatura" />
                 <span className="text-sm font-black theme-text-main leading-tight">{etiqueta}</span>
             </span>
             {isHovered && createPortal(
@@ -72,7 +85,7 @@ const VisorFotoDano = ({ url }) => {
             <img
                 src={url}
                 alt="Detalle/daño"
-                className="w-14 h-14 object-cover rounded-xl border border-amber-500/40 shadow-sm"
+                className="w-14 h-14 object-cover rounded-xl border border-[color-mix(in_srgb,var(--color-aviso)_40%,transparent)] shadow-sm"
             />
             {isHovered && createPortal(
                 <div className={`${THEME_MODAL_OVERLAY} items-center justify-center pointer-events-none`}>
@@ -86,11 +99,11 @@ const VisorFotoDano = ({ url }) => {
 
 function BloqueLineaDano({ linea }) {
     return (
-        <div className="p-3 rounded-2xl border border-amber-500/25 bg-amber-500/10 flex flex-col gap-2">
+        <div className={PANEL_INCIDENCIA}>
             <div className="flex items-start gap-2">
-                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-500" />
+                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 theme-text-aviso" />
                 <div className="min-w-0 flex-1">
-                    <p className="text-[9px] font-black uppercase tracking-widest text-amber-700 dark:text-amber-300 m-0 mb-1">
+                    <p className={`${TITULO_SECCION_AVISO} m-0 mb-1`}>
                         Detalle/daño · {linea.sku} — {linea.descripcion}
                     </p>
                     <p className="text-[9px] font-bold theme-text-muted m-0 mb-1">
@@ -121,15 +134,15 @@ function ModalDetallesDano({ traspaso, lineas, onClose }) {
                 className={`${THEME_MODAL_SHELL} w-full max-w-lg max-h-[92dvh] flex flex-col rounded-t-3xl sm:rounded-3xl`}
                 onClick={(e) => e.stopPropagation()}
             >
-                <div className="p-5 border-b theme-border flex justify-between items-start gap-3 shrink-0">
+                <div className={MODAL_HEADER}>
                     <div className="min-w-0">
                         <h2 className="text-lg font-black italic uppercase theme-text-main m-0 flex items-center gap-2">
-                            <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />
+                            <AlertTriangle className="w-5 h-5 shrink-0 theme-text-aviso" />
                             Detalles / daños
                         </h2>
                         <p className="text-xs theme-text-muted font-bold mt-1 m-0">{traspaso.folio} · {lineas.length} productos</p>
                     </div>
-                    <button type="button" onClick={onClose} className="p-3 rounded-2xl theme-element border theme-border outline-none" aria-label="Cerrar">
+                    <button type="button" onClick={onClose} className={BTN_CERRAR_MODAL} aria-label="Cerrar">
                         <X className="w-5 h-5" />
                     </button>
                 </div>
@@ -170,10 +183,10 @@ export default function FeedbackResolucionTraspaso({ traspaso }) {
     if (!esError && !esAprobada && !tieneDano) return null;
     if (!folio && !motivo && !urlEvid && lineasDano.length === 0) return null;
 
-    const colorContenedor = esError ? 'bg-red-500/10 border-red-500/25' : 'bg-emerald-500/10 border-emerald-500/25';
+    const panelRespuesta = esError ? PANEL_RESPUESTA_PELIGRO : PANEL_RESPUESTA_EXITO;
+    const tituloRespuesta = esError ? TITULO_SECCION_PELIGRO : TITULO_SECCION_EXITO;
     const Icono = esError ? AlertOctagon : CheckCircle2;
-    const colorIcono = esError ? 'text-red-500' : 'text-emerald-500';
-    const colorTexto = esError ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400';
+    const iconoRespuesta = esError ? 'theme-text-peligro' : 'theme-text-exito';
     const titulo = esError
         ? (autor ? `Error reportado por ${autor}` : 'Corrección requerida')
         : (autor ? `Respuesta de ${autor}` : 'Respuesta');
@@ -181,19 +194,19 @@ export default function FeedbackResolucionTraspaso({ traspaso }) {
     return (
         <div className="flex flex-col gap-2">
             {(esError || esAprobada) && (folio || motivo || urlEvid) && (
-                <div className={`p-3 rounded-2xl border flex flex-col gap-2 ${colorContenedor}`}>
+                <div className={panelRespuesta}>
                     <div className="flex items-start gap-2 min-w-0">
-                        <Icono className={`w-4 h-4 shrink-0 mt-0.5 ${colorIcono}`} />
+                        <Icono className={`w-4 h-4 shrink-0 mt-0.5 ${iconoRespuesta}`} />
                         <div className="flex-1 min-w-0">
-                            <p className={`text-[9px] font-black uppercase tracking-widest mb-1.5 m-0 ${colorTexto}`}>
+                            <p className={`${tituloRespuesta} mb-1.5 m-0`}>
                                 {titulo}
                             </p>
 
                             {(folio || urlEvid) && (
                                 <div className="flex flex-wrap items-stretch gap-2">
                                     {folio && (
-                                        <div className={bloqueMeta}>
-                                            <span className="text-[9px] font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-300 m-0 inline-flex items-center gap-1">
+                                        <div className={META_BLOQUE_EXITO}>
+                                            <span className={`${TITULO_SECCION_EXITO} m-0 inline-flex items-center gap-1`}>
                                                 <FileText className="w-3 h-3 shrink-0" /> Folio de respuesta
                                             </span>
                                             <span className="text-base md:text-lg font-black tracking-wide theme-text-main m-0 break-all leading-tight">
@@ -221,12 +234,12 @@ export default function FeedbackResolucionTraspaso({ traspaso }) {
                 <button
                     type="button"
                     onClick={() => setModalDanos(true)}
-                    className="w-full p-3 rounded-2xl border border-amber-500/25 bg-amber-500/10 text-left outline-none hover:border-amber-500/50 transition-colors"
+                    className={`w-full ${PANEL_INCIDENCIA} text-left outline-none hover:border-[color-mix(in_srgb,var(--color-aviso)_55%,transparent)] transition-colors`}
                 >
                     <span className="flex items-start gap-2">
-                        <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-500" />
+                        <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 theme-text-aviso" />
                         <span className="min-w-0">
-                            <span className="block text-[9px] font-black uppercase tracking-widest text-amber-700 dark:text-amber-300 mb-1">
+                            <span className={`block ${TITULO_SECCION_AVISO} mb-1`}>
                                 {lineasDano.length} productos con detalle/daño
                             </span>
                             <span className="block text-xs font-bold theme-text-main">

@@ -123,9 +123,10 @@ describe('agruparModulosPorSeccionSidebar', () => {
             usuarios: [{ name: 'usuarios.gestionar' }],
         };
         const secciones = agruparModulosPorSeccionSidebar(agrupados);
-        expect(secciones.map((s) => s.id)).toEqual(['operaciones', 'finanzas', 'sistema']);
+        expect(secciones.map((s) => s.id)).toEqual(['logistica', 'finanzas', 'sistema']);
         expect(secciones[0].modulos[0].modulo).toBe('control_pedidos');
         expect(secciones[0].modulos[0].label).toBe('Gestión de pedidos');
+        expect(secciones[0].label).toBe('Logística');
         expect(secciones[1].label).toBe('Finanzas');
         expect(secciones[1].modulos.map((m) => m.modulo)).toEqual(['facturas', 'saldos_favor']);
         expect(secciones.some((s) => s.id === 'otros')).toBe(false);

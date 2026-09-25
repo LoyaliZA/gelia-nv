@@ -45,12 +45,12 @@ describe('resguardosUtils', () => {
         expect(referenciaCliente({ snapshot_folio: 'REM-777' })).toBe('REM-777');
     });
 
-    it('define vistas responsivas para tarjetas y tabla', () => {
-        expect(claseVistaTarjetas('en_custodia')).toBe('');
-        expect(claseVistaTabla('en_custodia')).toBe('hidden');
-        expect(claseGridTarjetasResguardo('en_custodia')).toContain('grid');
-        expect(claseVistaTarjetas('incidencias')).toContain('lg:hidden');
-        expect(claseVistaTabla('incidencias')).toContain('lg:block');
+    it('define vistas de tarjetas y lista en todas las bandejas', () => {
+        expect(claseVistaTarjetas('en_custodia', VISTA_RESGUARDOS_POR_RECIBIR.CARD)).toBe('');
+        expect(claseVistaTabla('en_custodia', VISTA_RESGUARDOS_POR_RECIBIR.CARD)).toBe('hidden');
+        expect(claseVistaTarjetas('incidencias', VISTA_RESGUARDOS_POR_RECIBIR.LISTA)).toBe('hidden');
+        expect(claseVistaTabla('incidencias', VISTA_RESGUARDOS_POR_RECIBIR.LISTA)).toBe('');
+        expect(claseGridTarjetasResguardo('en_custodia', VISTA_RESGUARDOS_POR_RECIBIR.CARD)).toContain('grid');
     });
 
     it('permite alternar vista en por_recibir sin depender del breakpoint', () => {
@@ -89,7 +89,7 @@ describe('resguardosUtils', () => {
         }, { antiguedades: { rezagado: 'Rezagado' } })).toBe('Rezagado');
 
         expect(clasePieTarjetaRecepcion({ clasificaciones: { rezagado: true } }))
-            .toContain('orange');
+            .toContain('--color-aviso');
     });
 
     it('genera mensaje vacío según bandeja', () => {

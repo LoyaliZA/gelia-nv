@@ -56,6 +56,7 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
     const [modalCompletarEnvio, setModalCompletarEnvio] = useState({ abierto: false, pedido: null });
     const [modalCargarGuia, setModalCargarGuia] = useState({ abierto: false, pedido: null });
     const [alerta, setAlerta] = useState({ abierto: false, tipo: 'success', titulo: '', mensaje: '' });
+    const detalleDesdeEnlaceRef = useRef(false);
     const debounceBusqueda = useRef(null);
     const refrescoPendiente = useRef(false);
     const flashMostradoRef = useRef(null);
@@ -72,6 +73,17 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
             setAlerta({ abierto: true, tipo: 'error', titulo: 'Error', mensaje: flash.error });
         }
     }, [flash?.success, flash?.error, modalForm.abierto]);
+
+    useEffect(() => {
+        if (detalleDesdeEnlaceRef.current || !filtros.q) return;
+        const filas = pedidos?.data || [];
+        const q = String(filtros.q);
+        const exacto = filas.find((p) => String(p.folio) === q || String(p.folio_remision) === q || String(p.id) === q);
+        const pedido = exacto || (filas.length === 1 ? filas[0] : null);
+        if (!pedido) return;
+        detalleDesdeEnlaceRef.current = true;
+        setModalDetalle({ abierto: true, pedido });
+    }, [filtros.q, pedidos]);
 
     useEffect(() => {
         const filas = pedidosVista?.data || [];

@@ -117,7 +117,13 @@ class AdminController extends Controller
             'bancos' => CatalogoBanco::orderBy('nombre')->get(),
             'tipos_activo' => CatalogoTipoActivo::orderBy('nombre')->get(),
             'categorias_activo' => CatalogoCategoriaActivo::orderBy('nombre')->get(),
-            'sucursales' => Sucursal::orderBy('nombre')->get(),
+            'sucursales' => Sucursal::with(['almacenesOrigenTraspaso:id,codigo,nombre'])
+                ->orderBy('nombre')
+                ->get()
+                ->map(fn (Sucursal $s) => [
+                    ...$s->toArray(),
+                    'almacen_origen_traspaso_ids' => $s->almacenesOrigenTraspaso->pluck('id')->all(),
+                ]),
             'tipos_almacen' => CatalogoTipoAlmacen::orderBy('nombre')->get(),
             'marcas_producto' => CatalogoMarcaProducto::orderBy('nombre')->get(),
             'almacenes' => Almacen::with(['sucursal', 'tipoAlmacen'])->orderBy('nombre')->get(),
@@ -751,6 +757,10 @@ class AdminController extends Controller
     {
         $notificacion = auth()->user()->notifications()->findOrFail($id);
         $notificacion->markAsRead();
+
+        if (request()->expectsJson()) {
+            return response()->noContent();
+        }
 
         return back();
     }

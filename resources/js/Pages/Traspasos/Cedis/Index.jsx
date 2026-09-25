@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Head, router } from '@inertiajs/react';
 import {
-    Warehouse, Package, CheckCircle2, User, Calendar, Boxes,
+    Warehouse, Package, CheckCircle2, User, Calendar, Building2,
 } from 'lucide-react';
 import AppLayout from '../../../Layouts/AppLayout';
 import GeliaPaginacion from '../../../Components/GeliaPaginacion';
@@ -10,8 +10,8 @@ import { geliaCardClass } from '../../../utils/geliaTheme';
 import { recargarModuloInertia } from '../../../utils/recargarModuloInertia';
 import useSolicitudRealtime from '../../../hooks/useSolicitudRealtime';
 import FeedbackResolucionTraspaso from '../Partials/FeedbackResolucionTraspaso';
-import ModalDetalleDanoCedis from './Partials/ModalDetalleDanoCedis';
-import ModalRevisarProductosCedis from './Partials/ModalRevisarProductosCedis';
+import { BADGE_INCIDENCIA } from '../Partials/traspasosStyles';
+import ModalRecepcionCedis from './Partials/ModalRecepcionCedis';
 
 const PROPS = ['traspasos', 'filtros'];
 
@@ -24,10 +24,9 @@ function formatearFecha(valor) {
     });
 }
 
-function TarjetaCedis({ traspaso, onRevisar, onConfirmar, confirmandoId }) {
+function TarjetaCedis({ traspaso, onRecepcionar }) {
     const productos = traspaso.productos || [];
-    const conDetalle = productos.filter((p) => p.detalle_dano || p.detalleDano).length;
-    const ocupado = confirmandoId === traspaso.id;
+    const tieneDetalle = Boolean(traspaso.tiene_detalle_dano);
 
     return (
         <article
@@ -49,15 +48,21 @@ function TarjetaCedis({ traspaso, onRevisar, onConfirmar, confirmandoId }) {
                                 Gestión de pedido
                             </span>
                         )}
-                        {conDetalle > 0 && (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest border bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30">
-                                {conDetalle} con detalle
+                        {tieneDetalle && (
+                            <span className={BADGE_INCIDENCIA}>
+                                Con incidencias en revisión
                             </span>
                         )}
                     </div>
                     <h3 className="text-base font-bold theme-text-main leading-snug m-0 break-words">
                         {traspaso.cliente?.numero_cliente} — {traspaso.cliente?.nombre}
                     </h3>
+                    {traspaso.sucursal_solicitante?.nombre && (
+                        <p className="text-xs theme-text-muted mt-1 font-bold m-0 inline-flex items-center gap-1.5">
+                            <Building2 className="w-3.5 h-3.5 shrink-0" />
+                            {traspaso.sucursal_solicitante.nombre}
+                        </p>
+                    )}
                     {traspaso.tarea_preparacion?.pedido && (
                         <p className="text-xs theme-text-muted mt-1 font-bold m-0">
                             Pedido {traspaso.tarea_preparacion.pedido.folio_remision || traspaso.tarea_preparacion.pedido.folio}
@@ -105,24 +110,15 @@ function TarjetaCedis({ traspaso, onRevisar, onConfirmar, confirmandoId }) {
                 <FeedbackResolucionTraspaso traspaso={traspaso} />
             </div>
 
-            <div className="pt-4 mt-auto space-y-2">
+            <div className="pt-4 mt-auto">
                 <button
                     type="button"
-                    onClick={() => onRevisar(traspaso)}
-                    className="w-full py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest inline-flex items-center justify-center gap-2 outline-none border theme-border theme-element theme-text-main"
-                >
-                    <Boxes className="w-4 h-4" />
-                    Revisar productos ({productos.length})
-                </button>
-                <button
-                    type="button"
-                    disabled={ocupado}
-                    onClick={() => onConfirmar(traspaso)}
-                    className="w-full py-4 rounded-2xl text-white text-sm font-black uppercase tracking-widest inline-flex items-center justify-center gap-2 outline-none disabled:opacity-50"
+                    onClick={() => onRecepcionar(traspaso)}
+                    className="w-full py-4 rounded-2xl text-white text-sm font-black uppercase tracking-widest inline-flex items-center justify-center gap-2 outline-none"
                     style={{ backgroundColor: 'var(--color-primario)' }}
                 >
                     <CheckCircle2 className="w-5 h-5" />
-                    {ocupado ? 'Confirmando…' : 'Confirmar OK'}
+                    Revisar y confirmar recepción
                 </button>
             </div>
         </article>
@@ -131,35 +127,13 @@ function TarjetaCedis({ traspaso, onRevisar, onConfirmar, confirmandoId }) {
 
 export default function Index({ auth, traspasos }) {
     const lista = traspasos?.data || [];
-    const [modalRevisar, setModalRevisar] = useState(null);
-    const [modalDano, setModalDano] = useState(null);
-    const [confirmandoId, setConfirmandoId] = useState(null);
+    const [modalRecepcion, setModalRecepcion] = useState(null);
     const [ocultos, setOcultos] = useState(() => new Set());
 
     useSolicitudRealtime('solicitudes.traspasos', '.solicitud-traspaso.actualizada', PROPS, auth);
 
     const visibles = lista.filter((t) => !ocultos.has(t.id));
     const recargar = () => recargarModuloInertia(PROPS);
-
-    const confirmar = (traspaso) => {
-        if (confirmandoId) return;
-        if (!window.confirm(`¿Confirmar recepción OK de ${traspaso.folio}?`)) return;
-        setConfirmandoId(traspaso.id);
-        router.put(route('traspasos.cedis.confirmar', traspaso.id), {}, {
-            preserveScroll: true,
-            onSuccess: () => {
-                setOcultos((prev) => new Set(prev).add(traspaso.id));
-                recargar();
-            },
-            onFinish: () => setConfirmandoId(null),
-        });
-    };
-
-    const reportarDesdeRevision = (producto) => {
-        if (!modalRevisar) return;
-        setModalDano({ traspaso: modalRevisar, producto });
-        setModalRevisar(null);
-    };
 
     return (
         <AppLayout>
@@ -177,7 +151,7 @@ export default function Index({ auth, traspasos }) {
                         Traspasos <span style={{ color: 'var(--color-primario)' }}>CEDIS</span>
                     </h1>
                     <p className="text-sm theme-text-muted font-bold mt-3 m-0 max-w-2xl">
-                        Solo solicitudes respondidas. Confirma OK o revisa productos para reportar detalle/daño.
+                        Escanee y confirme el estado de cada pieza (OK por defecto), como en el pesaje CEDIS.
                     </p>
                 </header>
 
@@ -191,9 +165,7 @@ export default function Index({ auth, traspasos }) {
                             <TarjetaCedis
                                 key={t.id}
                                 traspaso={t}
-                                onRevisar={setModalRevisar}
-                                onConfirmar={confirmar}
-                                confirmandoId={confirmandoId}
+                                onRecepcionar={setModalRecepcion}
                             />
                         ))}
                     </div>
@@ -211,20 +183,14 @@ export default function Index({ auth, traspasos }) {
                 )}
             </GeliaPageShell>
 
-            {modalRevisar && (
-                <ModalRevisarProductosCedis
-                    traspaso={modalRevisar}
-                    onClose={() => setModalRevisar(null)}
-                    onReportarProducto={reportarDesdeRevision}
-                />
-            )}
-
-            {modalDano && (
-                <ModalDetalleDanoCedis
-                    traspaso={modalDano.traspaso}
-                    producto={modalDano.producto}
-                    onClose={() => setModalDano(null)}
-                    onExito={recargar}
+            {modalRecepcion && (
+                <ModalRecepcionCedis
+                    traspaso={modalRecepcion}
+                    onClose={() => setModalRecepcion(null)}
+                    onExito={() => {
+                        setOcultos((prev) => new Set(prev).add(modalRecepcion.id));
+                        recargar();
+                    }}
                 />
             )}
         </AppLayout>

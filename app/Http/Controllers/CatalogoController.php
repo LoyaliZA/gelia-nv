@@ -362,9 +362,15 @@ class CatalogoController extends Controller
             'codigo' => 'required|string|max:20|unique:sucursales,codigo',
             'nombre' => 'required|string|max:255',
             'activo' => 'boolean',
+            'almacen_origen_traspaso_ids' => 'nullable|array',
+            'almacen_origen_traspaso_ids.*' => 'integer|exists:almacenes,id',
         ]);
         $data['nombre'] = $normalizador->texto($data['nombre']);
+        $almacenIds = $data['almacen_origen_traspaso_ids'] ?? [];
+        unset($data['almacen_origen_traspaso_ids']);
         $sucursal = Sucursal::create($data);
+        app(\App\Services\Traspasos\SincronizarAlmacenesOrigenTraspasoSucursalService::class)
+            ->ejecutar($sucursal, $almacenIds);
         app(RegistrarAuditoriaAlmacenService::class)->catalogoCrud('creado', 'sucursal', $sucursal->id, $sucursal->codigo);
         return back()->with('success', 'Sucursal registrada.');
     }
@@ -374,10 +380,16 @@ class CatalogoController extends Controller
             'codigo' => 'required|string|max:20|unique:sucursales,codigo,' . $id,
             'nombre' => 'required|string|max:255',
             'activo' => 'boolean',
+            'almacen_origen_traspaso_ids' => 'nullable|array',
+            'almacen_origen_traspaso_ids.*' => 'integer|exists:almacenes,id',
         ]);
         $data['nombre'] = $normalizador->texto($data['nombre']);
+        $almacenIds = $data['almacen_origen_traspaso_ids'] ?? [];
+        unset($data['almacen_origen_traspaso_ids']);
         $sucursal = Sucursal::findOrFail($id);
         $sucursal->update($data);
+        app(\App\Services\Traspasos\SincronizarAlmacenesOrigenTraspasoSucursalService::class)
+            ->ejecutar($sucursal, $almacenIds);
         app(RegistrarAuditoriaAlmacenService::class)->catalogoCrud('actualizado', 'sucursal', $sucursal->id, $sucursal->codigo);
         return back()->with('success', 'Sucursal actualizada.');
     }

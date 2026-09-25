@@ -106,11 +106,13 @@ export const VISTA_RESGUARDOS_POR_RECIBIR = {
     LISTA: 'lista',
 };
 
+const STORAGE_VISTA = 'pdv_resguardos_vista';
 const STORAGE_VISTA_POR_RECIBIR = 'pdv_resguardos_vista_por_recibir';
 
 export function leerVistaPorRecibir() {
     try {
-        const guardada = globalThis.localStorage?.getItem(STORAGE_VISTA_POR_RECIBIR);
+        const guardada = globalThis.localStorage?.getItem(STORAGE_VISTA)
+            || globalThis.localStorage?.getItem(STORAGE_VISTA_POR_RECIBIR);
         if (guardada === VISTA_RESGUARDOS_POR_RECIBIR.LISTA) return VISTA_RESGUARDOS_POR_RECIBIR.LISTA;
     } catch {
         // ponytail: sin localStorage seguimos con tarjetas por defecto
@@ -120,37 +122,22 @@ export function leerVistaPorRecibir() {
 
 export function guardarVistaPorRecibir(vista) {
     try {
-        globalThis.localStorage?.setItem(STORAGE_VISTA_POR_RECIBIR, vista);
+        globalThis.localStorage?.setItem(STORAGE_VISTA, vista);
     } catch {
         // ponytail: preferencia no crítica
     }
 }
 
-export function claseVistaTarjetas(bandeja, vistaPorRecibir = VISTA_RESGUARDOS_POR_RECIBIR.CARD) {
-    if (bandeja === 'por_recibir') {
-        return vistaPorRecibir === VISTA_RESGUARDOS_POR_RECIBIR.CARD ? '' : 'hidden';
-    }
-    if (bandeja === 'en_custodia') {
-        return '';
-    }
-    return 'lg:hidden';
+export function claseVistaTarjetas(_bandeja, vista = VISTA_RESGUARDOS_POR_RECIBIR.CARD) {
+    return vista === VISTA_RESGUARDOS_POR_RECIBIR.CARD ? '' : 'hidden';
 }
 
-export function claseVistaTabla(bandeja, vistaPorRecibir = VISTA_RESGUARDOS_POR_RECIBIR.CARD) {
-    if (bandeja === 'por_recibir') {
-        return vistaPorRecibir === VISTA_RESGUARDOS_POR_RECIBIR.LISTA ? '' : 'hidden';
-    }
-    if (bandeja === 'en_custodia') {
-        return 'hidden';
-    }
-    return 'hidden lg:block';
+export function claseVistaTabla(_bandeja, vista = VISTA_RESGUARDOS_POR_RECIBIR.CARD) {
+    return vista === VISTA_RESGUARDOS_POR_RECIBIR.LISTA ? '' : 'hidden';
 }
 
-export function claseGridTarjetasResguardo(bandeja, vistaPorRecibir = VISTA_RESGUARDOS_POR_RECIBIR.CARD) {
-    const usaGrid = (bandeja === 'por_recibir' && vistaPorRecibir === VISTA_RESGUARDOS_POR_RECIBIR.CARD)
-        || bandeja === 'en_custodia';
-
-    return usaGrid
+export function claseGridTarjetasResguardo(_bandeja, vista = VISTA_RESGUARDOS_POR_RECIBIR.CARD) {
+    return vista === VISTA_RESGUARDOS_POR_RECIBIR.CARD
         ? 'p-3 sm:p-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 md:gap-4'
         : 'p-4 space-y-3';
 }
@@ -205,13 +192,16 @@ export function etiquetaEstadoRecepcion(resguardo, catalogos = {}, paso = 'geren
 }
 
 export function clasePieTarjetaRecepcion(resguardo) {
+    if (resguardo?.clasificaciones?.vencido) {
+        return 'border-[color-mix(in_srgb,var(--color-peligro)_50%,transparent)] text-[var(--color-peligro)] bg-[color-mix(in_srgb,var(--color-peligro)_10%,transparent)]';
+    }
     if (resguardo?.clasificaciones?.rezagado) {
-        return 'border-orange-500/50 text-orange-600 dark:text-orange-300 bg-orange-500/10';
+        return 'border-[color-mix(in_srgb,var(--color-aviso)_50%,transparent)] text-[var(--color-aviso)] bg-[color-mix(in_srgb,var(--color-aviso)_10%,transparent)]';
     }
     const pendiente = resguardo?.cantidad_bultos_pendiente ?? 0;
     const recibida = resguardo?.cantidad_bultos_recibida ?? 0;
     if (pendiente > 0 && recibida > 0) {
-        return 'border-amber-500/50 text-amber-600 dark:text-amber-300 bg-amber-500/10';
+        return 'border-[color-mix(in_srgb,var(--color-aviso)_50%,transparent)] text-[var(--color-aviso)] bg-[color-mix(in_srgb,var(--color-aviso)_10%,transparent)]';
     }
     return 'border-[var(--color-primario)]/50 text-[var(--color-primario)] bg-[var(--color-primario)]/5';
 }

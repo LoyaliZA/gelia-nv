@@ -53,8 +53,13 @@ class EnviarWebPushTrasNotificacion
 
         if ($response instanceof Model) {
             $data = $response->getAttribute('data');
+            if (! is_array($data)) {
+                return null;
+            }
 
-            return is_array($data) ? $data : null;
+            $data['notification_id'] = (string) $response->getKey();
+
+            return $data;
         }
 
         return null;

@@ -169,7 +169,7 @@ export default function ModalRecepcionResguardo({
 function ResultadoExito({ onDetalle, onBandeja }) {
     return (
         <div className={`${geliaCardClass()} p-8 text-center space-y-4`}>
-            <CheckCircle2 className="w-12 h-12 mx-auto text-emerald-500" />
+            <CheckCircle2 className="w-12 h-12 mx-auto text-[var(--color-exito)]" />
             <div className="space-y-2">
                 <h3 className="text-lg font-black uppercase theme-text-main m-0">Recepción confirmada</h3>
                 <p className="text-sm theme-text-muted m-0">
@@ -196,9 +196,9 @@ function EstadoNoDisponible({ resguardo, catalogos, motivo, onDetalle }) {
     });
 
     return (
-        <div className={`${geliaCardClass()} p-5 space-y-3 border border-amber-500/30`}>
+        <div className={`${geliaCardClass()} p-5 space-y-3 border border-[color-mix(in_srgb,var(--color-aviso)_35%,transparent)]`}>
             <div className="flex items-start gap-3">
-                <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />
+                <AlertTriangle className="w-5 h-5 text-[var(--color-aviso)] shrink-0" />
                 <div className="space-y-2">
                     <p className="text-sm font-black theme-text-main m-0">{titulo}</p>
                     {detalle && (

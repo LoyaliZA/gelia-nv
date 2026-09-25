@@ -13,6 +13,7 @@ class WoocommerceConfiguracion extends Model
         'store_url',
         'consumer_key',
         'consumer_secret',
+        'integration_token',
         'iva',
         'notified_users',
         'mapeo_precios',
@@ -83,9 +84,30 @@ class WoocommerceConfiguracion extends Model
         }
     }
 
+    public function integrationTokenDecrypted(): ?string
+    {
+        if (! $this->integration_token) {
+            return null;
+        }
+
+        try {
+            return Crypt::decryptString($this->integration_token);
+        } catch (\Exception) {
+            return null;
+        }
+    }
+
+    public function tokenIdentificacionConfigurado(): bool
+    {
+        $token = $this->integrationTokenDecrypted();
+
+        return $token !== null && $token !== '';
+    }
+
     public function credencialesConfiguradas(): bool
     {
         return !empty($this->store_url)
+            && str_starts_with(strtolower((string) $this->store_url), 'https://')
             && !empty($this->consumerKeyDecrypted())
             && !empty($this->consumerSecretDecrypted());
     }

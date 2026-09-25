@@ -94,9 +94,9 @@ export default function DetalleIncidenciaResguardo({
             </section>
 
             {resuelta ? (
-                <section className="rounded-2xl border border-emerald-500/30 p-4 space-y-2">
+                <section className="rounded-2xl border border-[color-mix(in_srgb,var(--color-exito)_35%,transparent)] p-4 space-y-2">
                     <div className="flex items-center gap-2">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                        <CheckCircle2 className="w-4 h-4 text-[var(--color-exito)] shrink-0" />
                         <p className="text-[9px] font-black uppercase tracking-widest theme-text-main m-0">Resolución</p>
                     </div>
                     <p className="text-sm theme-text-main m-0 whitespace-pre-wrap">

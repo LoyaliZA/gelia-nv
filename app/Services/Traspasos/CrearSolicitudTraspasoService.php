@@ -2,7 +2,6 @@
 
 namespace App\Services\Traspasos;
 
-use App\Models\Almacen;
 use App\Models\AuditoriaSolicitudTraspaso;
 use App\Models\CatalogoEstadoSolicitud;
 use App\Models\CatalogoHorarioTraspaso;
@@ -17,7 +16,8 @@ use Illuminate\Validation\ValidationException;
 class CrearSolicitudTraspasoService
 {
     public function __construct(
-        private NotificarTraspasoService $notificar
+        private NotificarTraspasoService $notificar,
+        private AlmacenesOrigenTraspasoService $almacenesOrigen
     ) {}
 
     public function ejecutar(array $datos, int $vendedorId): SolicitudTraspaso
@@ -29,20 +29,13 @@ class CrearSolicitudTraspasoService
             $departamentoId = $vendedor->departamentos->first()?->id
                 ?? $vendedor->area?->departamento_id;
 
+            $sucursalSolicitante = $this->almacenesOrigen->resolverSucursalSolicitante($vendedor);
+            $almacen = $this->almacenesOrigen->assertAlmacenPermitido($vendedor, (int) $datos['almacen_origen_id']);
+
             $cliente = Cliente::where('numero_cliente', $datos['numero_cliente'])->first();
             if (! $cliente) {
                 throw ValidationException::withMessages([
                     'numero_cliente' => 'Debe seleccionar un cliente válido del catálogo.',
-                ]);
-            }
-
-            $almacen = Almacen::where('id', $datos['almacen_origen_id'])
-                ->where('activo', true)
-                ->where('visible_en_traspasos', true)
-                ->first();
-            if (! $almacen) {
-                throw ValidationException::withMessages([
-                    'almacen_origen_id' => 'El almacén origen no está disponible para traspasos.',
                 ]);
             }
 
@@ -90,6 +83,7 @@ class CrearSolicitudTraspasoService
                 'folio' => SolicitudTraspaso::generarFolio(),
                 'vendedor_id' => $vendedorId,
                 'departamento_id' => $departamentoId,
+                'sucursal_solicitante_id' => $sucursalSolicitante->id,
                 'cliente_id' => $cliente->id,
                 'almacen_origen_id' => $almacen->id,
                 'catalogo_estado_solicitud_id' => $estadoPendiente->id,
@@ -118,6 +112,7 @@ class CrearSolicitudTraspasoService
                     'total_piezas' => $totalPiezas,
                     'lineas' => count($lineasNormalizadas),
                     'almacen_origen_id' => $almacen->id,
+                    'sucursal_solicitante_id' => $sucursalSolicitante->id,
                     'fecha_entrega_estimada' => $fechaEstimada,
                 ],
             ]);

@@ -20,12 +20,15 @@ class SolicitudTraspaso extends Model
         'origen_codigo',
         'vendedor_id',
         'departamento_id',
+        'sucursal_solicitante_id',
         'cliente_id',
         'almacen_origen_id',
         'catalogo_estado_solicitud_id',
         'catalogo_horario_traspaso_id',
         'fecha_entrega_estimada',
         'total_piezas',
+        'estado_fisico_general_origen',
+        'estado_fisico_general_cedis',
         'folio_traspaso',
         'evidencia_respuesta_path',
         'motivo_respuesta',
@@ -56,6 +59,11 @@ class SolicitudTraspaso extends Model
     public function departamento(): BelongsTo
     {
         return $this->belongsTo(Departamento::class, 'departamento_id');
+    }
+
+    public function sucursalSolicitante(): BelongsTo
+    {
+        return $this->belongsTo(Sucursal::class, 'sucursal_solicitante_id');
     }
 
     public function cliente(): BelongsTo
@@ -98,9 +106,10 @@ class SolicitudTraspaso extends Model
         return $this->origen_codigo === 'GESTION_PEDIDO' || $this->tarea_preparacion_id !== null;
     }
 
-    public function detallesDano(): HasMany
+    public function revisionesProducto(): HasMany
     {
-        return $this->hasMany(SolicitudTraspasoDetalleDano::class, 'solicitud_traspaso_id');
+        return $this->hasMany(SolicitudTraspasoRevisionProducto::class, 'solicitud_traspaso_id')
+            ->orderBy('orden');
     }
 
     public function auditorias(): HasMany
@@ -115,21 +124,17 @@ class SolicitudTraspaso extends Model
 
     public function getTieneDetalleDanoAttribute(): bool
     {
-        if ($this->relationLoaded('detallesDano')) {
-            return $this->detallesDano->isNotEmpty();
+        $estadosConDetalle = ['regular', 'malo', 'danado', 'sin_existencia'];
+
+        if ($this->relationLoaded('revisionesProducto')) {
+            return $this->revisionesProducto->contains(
+                fn ($r) => in_array($r->estado_fisico, $estadosConDetalle, true)
+            );
         }
 
-        // Solo confiar en productos si cada línea ya trae detalleDano eager-loaded;
-        // si no, un exists() evita falsos negativos tras refresh/with('productos').
-        if (
-            $this->relationLoaded('productos')
-            && $this->productos->isNotEmpty()
-            && $this->productos->every(fn ($p) => $p->relationLoaded('detalleDano'))
-        ) {
-            return $this->productos->contains(fn ($p) => $p->detalleDano !== null);
-        }
-
-        return $this->detallesDano()->exists();
+        return $this->revisionesProducto()
+            ->whereIn('estado_fisico', $estadosConDetalle)
+            ->exists();
     }
 
     public static function generarFolio(): string

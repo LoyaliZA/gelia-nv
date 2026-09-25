@@ -89,11 +89,11 @@ export default function FormularioDevolucionResguardo({
         <>
             <form
                 onSubmit={pasoRevision ? (e) => { e.preventDefault(); solicitarConfirmacion(); } : solicitarRevision}
-                className={`${geliaCardClass()} p-5 space-y-4 border border-amber-500/25`}
+                className={`${geliaCardClass()} p-5 space-y-4 border border-[color-mix(in_srgb,var(--color-aviso)_35%,transparent)]`}
             >
                 <div className="space-y-2">
                     <h3 className="text-sm font-black uppercase tracking-widest theme-text-main m-0 flex items-center gap-2">
-                        <Undo2 className="w-4 h-4 text-amber-500 shrink-0" />
+                        <Undo2 className="w-4 h-4 text-[var(--color-aviso)] shrink-0" />
                         Confirmar devolución física
                     </h3>
                     <p className="text-sm theme-text-muted m-0">
@@ -152,7 +152,7 @@ export default function FormularioDevolucionResguardo({
                         </div>
                     </>
                 ) : (
-                    <section className="rounded-2xl border border-amber-500/30 p-4 space-y-3 bg-amber-500/5">
+                    <section className="rounded-2xl border border-[color-mix(in_srgb,var(--color-aviso)_35%,transparent)] p-4 space-y-3 bg-[color-mix(in_srgb,var(--color-aviso)_8%,transparent)]">
                         <p className="text-[9px] font-black uppercase tracking-widest theme-text-main m-0">
                             Resumen de impacto operativo
                         </p>

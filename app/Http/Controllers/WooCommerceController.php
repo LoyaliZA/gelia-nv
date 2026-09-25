@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Jobs\WooCommerce\FetchWooCommercePricesJob;
+use App\Jobs\WooCommerce\OcultarProductosWooCommerceJob;
 use App\Jobs\WooCommerce\UpdateWooCommercePricesJob;
 use App\Models\User;
 use App\Models\Woocommerce\WoocommerceConfiguracion;
@@ -19,7 +20,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -67,6 +67,7 @@ class WooCommerceController extends Controller
                 'store_url' => $config->store_url,
                 'iva' => $config->iva,
                 'credenciales_configuradas' => $config->credencialesConfiguradas(),
+                'token_identificacion_configurado' => $config->tokenIdentificacionConfigurado(),
                 'notified_user_ids' => $config->notified_users ?? [],
                 'mapeo_precios' => $config->mapeoPreciosEfectivo(),
             ],
@@ -95,13 +96,14 @@ class WooCommerceController extends Controller
         Gate::authorize('woocommerce.configurar');
 
         $request->validate([
-            'store_url' => 'nullable|url',
+            'store_url' => ['nullable', 'url', 'starts_with:https://'],
             'iva' => 'required|numeric|min:1',
             'margenes' => 'required|array',
             'notified_users' => 'nullable|array',
             'notified_users.*' => 'integer|exists:users,id',
             'consumer_key' => 'nullable|string',
             'consumer_secret' => 'nullable|string',
+            'integration_token' => 'nullable|string',
             'mapeo_precios' => 'nullable|array',
             'mapeo_precios.sku' => 'required_with:mapeo_precios|string',
             'mapeo_precios.precio_base' => 'required_with:mapeo_precios|string',
@@ -123,6 +125,9 @@ class WooCommerceController extends Controller
         if ($request->filled('consumer_secret')) {
             $datos['consumer_secret'] = Crypt::encryptString($request->consumer_secret);
         }
+        if ($request->filled('integration_token')) {
+            $datos['integration_token'] = Crypt::encryptString($request->integration_token);
+        }
 
         $config->update($datos);
 
@@ -141,9 +146,10 @@ class WooCommerceController extends Controller
         Gate::authorize('woocommerce.configurar');
 
         $request->validate([
-            'store_url' => 'nullable|url',
+            'store_url' => ['nullable', 'url', 'starts_with:https://'],
             'consumer_key' => 'nullable|string',
             'consumer_secret' => 'nullable|string',
+            'integration_token' => 'nullable|string',
         ]);
 
         $config = WoocommerceConfiguracion::obtener();
@@ -154,6 +160,9 @@ class WooCommerceController extends Controller
         $secret = $request->filled('consumer_secret')
             ? $request->consumer_secret
             : $config->consumerSecretDecrypted();
+        $token = $request->filled('integration_token')
+            ? $request->integration_token
+            : $config->integrationTokenDecrypted();
 
         if (empty($url) || empty($key) || empty($secret)) {
             return response()->json([
@@ -162,32 +171,33 @@ class WooCommerceController extends Controller
             ], 422);
         }
 
+        if (! str_starts_with(strtolower($url), 'https://')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'La URL de la tienda debe usar HTTPS.',
+            ], 422);
+        }
+
         try {
-            $response = Http::withHeaders([
-                'User-Agent' => 'GeliaSystem-ConnectionTest/1.0',
-                'Accept' => 'application/json',
-                'X-Requested-With' => 'XMLHttpRequest',
-            ])
-                ->withBasicAuth($key, $secret)
-                ->timeout(30)
+            $response = $this->clienteWoo($key, $secret, $token, 30)
                 ->get("{$url}/wp-json/wc/v3/products", [
                     'per_page' => 1,
                     '_fields' => 'id,sku',
                 ]);
 
-            if (in_array($response->status(), [403, 429, 503])) {
+            if (in_array($response->status(), [403, 429, 503], true)) {
                 return response()->json([
                     'success' => false,
                     'message' => "Bloqueo de seguridad detectado (HTTP {$response->status()}).",
                 ], 400);
             }
 
-            if (!$response->successful()) {
+            if (! $response->successful()) {
                 $mensaje = $response->json('message') ?? $response->body();
 
                 return response()->json([
                     'success' => false,
-                    'message' => "Error HTTP {$response->status()}: {$mensaje}",
+                    'message' => $this->redactarSecretosWoo("Error HTTP {$response->status()}: {$mensaje}", [$key, $secret, $token]),
                 ], 400);
             }
 
@@ -198,7 +208,7 @@ class WooCommerceController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => $e->getMessage(),
+                'message' => $this->redactarSecretosWoo($e->getMessage(), [$key, $secret, $token]),
             ], 500);
         }
     }
@@ -568,7 +578,7 @@ class WooCommerceController extends Controller
         try {
             $url = $this->urlProductoWoo($producto);
 
-            $response = $this->getWooClient('GeliaSystem-SingleTest/1.0')->get($url);
+            $response = $this->getWooClient()->get($url);
 
             $this->validateSecurityResponse($response);
             $data = $response->json();
@@ -604,7 +614,7 @@ class WooCommerceController extends Controller
         $producto = WoocommerceProduct::findOrFail($id);
         $url = $this->urlProductoWoo($producto);
 
-        $response = $this->getWooClient('GeliaSystem-Admin/1.0')->put($url, [
+        $response = $this->getWooClient()->put($url, [
             'regular_price' => (string) $request->precio_normal,
             'sale_price' => (string) $request->precio_rebajado,
         ]);
@@ -618,39 +628,34 @@ class WooCommerceController extends Controller
             return response()->json(['success' => true, 'message' => 'Precio sincronizado en WooCommerce y GELIANV.']);
         }
 
-        return response()->json(['success' => false, 'message' => $response->json('message', 'Error desconocido en API')], 400);
+        return response()->json(['success' => false, 'message' => $this->redactarSecretosWoo((string) $response->json('message', 'Error desconocido en API'))], 400);
     }
 
     public function emergenciaOcultar(Request $request): JsonResponse
     {
         Gate::authorize('woocommerce.emergencia');
 
-        $ids = $request->input('productos_ids', []);
-        if (empty($ids)) {
+        $ids = array_values(array_filter(
+            $request->input('productos_ids', []),
+            fn ($id) => $id !== null && $id !== ''
+        ));
+
+        if ($ids === []) {
             return response()->json(['error' => 'No hay productos seleccionados'], 400);
         }
 
-        $errores = 0;
-        foreach ($ids as $id) {
-            $prod = WoocommerceProduct::find($id);
-            if (!$prod) {
-                continue;
-            }
-
-            $url = $prod->tipo === 'variation'
-                ? "{$this->getWooBaseUrl()}/wp-json/wc/v3/products/{$prod->parent_id}/variations/{$prod->id}"
-                : "{$this->getWooBaseUrl()}/wp-json/wc/v3/products/{$prod->id}";
-
-            $response = $this->getWooClient('GeliaSystem-Admin/1.0')->put($url, ['status' => 'draft']);
-            if (!$response->successful()) {
-                $errores++;
-            }
-            usleep(300000);
+        if (! WoocommerceConfiguracion::obtener()->credencialesConfiguradas()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Configura las credenciales de WooCommerce con una URL HTTPS.',
+            ], 422);
         }
+
+        OcultarProductosWooCommerceJob::dispatch($ids);
 
         return response()->json([
             'success' => true,
-            'message' => "Proceso de emergencia completado. Errores detectados: {$errores}",
+            'message' => 'Ocultación encolada. Se enviará un lote a la vez, con una pausa entre peticiones.',
         ]);
     }
 

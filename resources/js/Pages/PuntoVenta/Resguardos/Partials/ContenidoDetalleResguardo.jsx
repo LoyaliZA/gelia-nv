@@ -113,7 +113,7 @@ export default function ContenidoDetalleResguardo({
                 )}
 
                 {resguardo.entrega_bloqueada && (
-                    <p className="text-[10px] font-black uppercase text-red-600 dark:text-red-300 m-0 flex items-center gap-2">
+                    <p className="text-[10px] font-black uppercase text-[var(--color-peligro)] m-0 flex items-center gap-2">
                         <AlertTriangle className="w-4 h-4 shrink-0" />
                         {resguardo.cancelacion_recibida
                             ? 'Pedido cancelado. Entrega bloqueada; se requiere devolución al origen.'

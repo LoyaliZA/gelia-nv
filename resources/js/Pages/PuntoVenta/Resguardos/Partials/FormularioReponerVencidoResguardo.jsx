@@ -52,7 +52,7 @@ export default function FormularioReponerVencidoResguardo({
         }
     };
 
-    const contenedorClass = compacto ? 'space-y-3' : `${geliaCardClass()} p-4 md:p-5 space-y-4 border border-amber-500/20`;
+    const contenedorClass = compacto ? 'space-y-3' : `${geliaCardClass()} p-4 md:p-5 space-y-4 border border-[color-mix(in_srgb,var(--color-aviso)_35%,transparent)]`;
     const errorVisible = erroresLocales.motivo || error;
 
     useToastAlCambiar(errorVisible, 'error');
@@ -62,7 +62,7 @@ export default function FormularioReponerVencidoResguardo({
             <form onSubmit={solicitarConfirmacion} className={contenedorClass}>
                 {!compacto && (
                     <div className="flex items-start gap-3">
-                        <RotateCcw className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+                        <RotateCcw className="w-5 h-5 text-[var(--color-aviso)] shrink-0 mt-0.5" />
                         <div className="min-w-0 space-y-1">
                             <p className="text-sm font-black uppercase tracking-widest theme-text-main m-0">
                                 Reponer a bandeja principal

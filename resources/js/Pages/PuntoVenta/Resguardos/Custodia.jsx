@@ -41,7 +41,7 @@ export default function Custodia({
 
                 {exito ? (
                     <div className={`${geliaCardClass()} p-6 text-center space-y-3`}>
-                        <PackageCheck className="w-10 h-10 mx-auto text-emerald-500" />
+                        <PackageCheck className="w-10 h-10 mx-auto text-[var(--color-exito)]" />
                         <p className="font-black m-0">Custodia registrada correctamente.</p>
                         <Link href={route('punto_venta.resguardos.show', resguardo.id)} className={THEME_BTN_PRIMARY}>Ver detalle</Link>
                     </div>

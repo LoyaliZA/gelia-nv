@@ -5,6 +5,7 @@ import {
     shouldTriggerMensajeriaVoz,
     shouldTriggerChannel,
     MENSAJERIA_TIPO_ALERTA,
+    resolveNotificationDestination,
 } from './alertasPrefs';
 
 describe('fechaFiltro', () => {
@@ -46,5 +47,47 @@ describe('alertasPrefs voz', () => {
         };
         expect(shouldTriggerMensajeriaVoz(prefs)).toBe(true);
         expect(shouldTriggerChannel(prefs, MENSAJERIA_TIPO_ALERTA, 'sonido')).toBe(true);
+    });
+});
+
+describe('resolveNotificationDestination', () => {
+    it('abre la solicitud por búsqueda y no el listado genérico', () => {
+        expect(resolveNotificationDestination({
+            data: { solicitud_id: 42, tipo: 'nueva' },
+        })).toBe('/solicitudes?q=42');
+    });
+
+    it('abre la factura por folio', () => {
+        expect(resolveNotificationDestination({
+            modulo: 'facturas',
+            folio: 'FAC-9',
+        })).toBe('/facturas?q=FAC-9');
+    });
+
+    it('abre el ticket y no el listado de soporte', () => {
+        expect(resolveNotificationDestination({
+            ticket_id: 9,
+            url: '/soporte/mis-tickets',
+        })).toBe('/soporte/mis-tickets/9');
+    });
+
+    it('abre el pedido cuando la url guardada es el módulo', () => {
+        expect(resolveNotificationDestination({
+            modulo: 'control_pedidos',
+            folio: 'PED-1',
+            url: '/control-pedidos',
+        })).toBe('/control-pedidos?q=PED-1');
+    });
+
+    it('conserva el enlace concreto de punto de venta', () => {
+        expect(resolveNotificationDestination({
+            modulo: 'punto_venta',
+            resguardo_id: 15,
+            url: '/punto-venta/resguardos/15',
+        })).toBe('/punto-venta/resguardos/15');
+    });
+
+    it('cae al dashboard si no hay destino', () => {
+        expect(resolveNotificationDestination({})).toBe('/dashboard');
     });
 });

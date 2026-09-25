@@ -37,6 +37,16 @@ class Sucursal extends Model
         return $this->hasMany(Almacen::class);
     }
 
+    public function almacenesOrigenTraspaso(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            Almacen::class,
+            'sucursal_almacen_origen_traspaso',
+            'sucursal_id',
+            'almacen_id'
+        )->withTimestamps();
+    }
+
     public function resguardosPdv(): HasMany
     {
         return $this->hasMany(ResguardoPdv::class);

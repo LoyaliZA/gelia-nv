@@ -2,12 +2,7 @@ import React from 'react';
 import { Settings2 } from 'lucide-react';
 import { geliaCardClass } from '../../../../utils/geliaTheme';
 import { metricasAntiguedadClaves } from './resguardosUtils';
-
-const METRICAS_ANTIGUEDAD = {
-    rezagado: { tone: 'text-orange-600', ring: 'ring-orange-500/40', bg: 'bg-orange-500/10' },
-    proximo_a_vencer: { tone: 'text-amber-600', ring: 'ring-amber-500/40', bg: 'bg-amber-500/10' },
-    vencido: { tone: 'text-red-600', ring: 'ring-red-500/40', bg: 'bg-red-500/10' },
-};
+import { tonoAlertaAntiguedad } from './resguardosStyles';
 
 const TITULO_SECCION = {
     por_recibir: 'Recepción rezagada',
@@ -73,7 +68,7 @@ export default function AlertasCustodiaResguardo({
                     </button>
 
                     {metricasVisibles.map((key) => {
-                        const { tone, ring, bg } = METRICAS_ANTIGUEDAD[key];
+                        const { tone, ring, bg } = tonoAlertaAntiguedad(key);
                         const activa = antiguedadActiva === key;
                         return (
                             <button

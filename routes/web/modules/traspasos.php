@@ -14,13 +14,12 @@ Route::prefix('traspasos')->name('traspasos.')->group(function () {
         ->name('cedis.')
         ->group(function () {
             Route::get('/', [TraspasoCedisController::class, 'index'])->name('index');
-            Route::put('/{traspaso}/confirmar', [TraspasoCedisController::class, 'confirmar'])->name('confirmar');
-            Route::post('/{traspaso}/detalle-dano', [TraspasoCedisController::class, 'reportarDetalleDano'])->name('detalle_dano');
+            Route::post('/{traspaso}/confirmar', [TraspasoCedisController::class, 'confirmar'])->name('confirmar');
         });
 
-    Route::get('/detalle-dano/{detalleDano}/{indice}', [TraspasoCedisController::class, 'fotoDetalleDano'])
+    Route::get('/revisiones/{revision}/{indice}', [TraspasoCedisController::class, 'fotoRevision'])
         ->whereNumber('indice')
-        ->name('detalle_dano_foto');
+        ->name('revision_foto');
 
     Route::middleware(['can:traspasos.ver_listado'])->group(function () {
         Route::get('/', [SolicitudTraspasoController::class, 'index'])->name('index');

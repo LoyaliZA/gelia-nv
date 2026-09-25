@@ -4,13 +4,12 @@ namespace App\Http\Controllers\Traspasos;
 
 use App\Events\SolicitudTraspasoActualizada;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Traspasos\ReportarDetalleDanoTraspasoRequest;
+use App\Http\Requests\Traspasos\ConfirmarTraspasoCedisRequest;
 use App\Models\CatalogoEstadoSolicitud;
 use App\Models\SolicitudTraspaso;
-use App\Models\SolicitudTraspasoDetalleDano;
+use App\Models\SolicitudTraspasoRevisionProducto;
 use App\Services\Traspasos\ConfirmarTraspasoCedisService;
 use App\Services\Traspasos\ListarSolicitudesTraspasoService;
-use App\Services\Traspasos\ReportarDetalleDanoTraspasoService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -35,6 +34,7 @@ class TraspasoCedisController extends Controller
     }
 
     public function confirmar(
+        ConfirmarTraspasoCedisRequest $request,
         SolicitudTraspaso $traspaso,
         ConfirmarTraspasoCedisService $service,
         ListarSolicitudesTraspasoService $listarService
@@ -51,8 +51,22 @@ class TraspasoCedisController extends Controller
             abort(403);
         }
 
+        $revisionesInput = collect($request->validated('revisiones') ?? [])->map(function (array $rev, int $i) use ($request) {
+            $files = $request->file("revisiones.{$i}.evidencias") ?? [];
+
+            return [
+                ...$rev,
+                'evidencias' => is_array($files) ? $files : ($files ? [$files] : []),
+            ];
+        })->all();
+
         $estadoAntes = (int) $traspaso->catalogo_estado_solicitud_id;
-        $fresh = $service->ejecutar($traspaso, $user);
+
+        try {
+            $fresh = $service->ejecutar($traspaso, $user, $revisionesInput);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            throw $e;
+        }
 
         if ($estadoAntes !== (int) $fresh->catalogo_estado_solicitud_id) {
             event(new SolicitudTraspasoActualizada(
@@ -67,42 +81,8 @@ class TraspasoCedisController extends Controller
         return redirect()->back()->with('success', 'Recepción confirmada por CEDIS.');
     }
 
-    public function reportarDetalleDano(
-        ReportarDetalleDanoTraspasoRequest $request,
-        SolicitudTraspaso $traspaso,
-        ReportarDetalleDanoTraspasoService $service,
-        ListarSolicitudesTraspasoService $listarService
-    ): RedirectResponse {
-        if (! $listarService->usuarioPuedeVer(Auth::user(), $traspaso)) {
-            abort(403);
-        }
-
-        $fotos = $request->file('fotos', []);
-        if (! is_array($fotos)) {
-            $fotos = $fotos ? [$fotos] : [];
-        }
-
-        $service->ejecutar(
-            $traspaso,
-            Auth::user(),
-            (int) $request->validated('solicitud_traspaso_producto_id'),
-            $request->validated('motivo'),
-            array_values($fotos)
-        );
-
-        event(new SolicitudTraspasoActualizada(
-            solicitudId: $traspaso->id,
-            accion: 'actualizada',
-            porUsuarioId: Auth::id(),
-            vendedorId: $traspaso->vendedor_id,
-            departamentoId: $traspaso->departamento_id,
-        ));
-
-        return redirect()->back()->with('success', 'Detalle/daño reportado.');
-    }
-
-    public function fotoDetalleDano(
-        SolicitudTraspasoDetalleDano $detalleDano,
+    public function fotoRevision(
+        SolicitudTraspasoRevisionProducto $revision,
         int $indice,
         ListarSolicitudesTraspasoService $listarService
     ): StreamedResponse {
@@ -111,12 +91,12 @@ class TraspasoCedisController extends Controller
             abort(403);
         }
 
-        $traspaso = $detalleDano->solicitud;
+        $traspaso = $revision->solicitud;
         if (! $traspaso || ! $listarService->usuarioPuedeVer($user, $traspaso)) {
             abort(403);
         }
 
-        $paths = $detalleDano->paths ?? [];
+        $paths = $revision->evidencia_paths ?? [];
         $path = $paths[$indice] ?? null;
         if (! $path || ! Storage::disk('public')->exists($path)) {
             abort(404);

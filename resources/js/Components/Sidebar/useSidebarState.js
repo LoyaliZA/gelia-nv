@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 const SIDEBAR_MODE_STORAGE_KEY = 'theme_sidebar_mode';
 /** Fallback si no llega transitionend (debe ≥ --gelia-pro-duration). */
 const ANIM_FALLBACK_MS = 450;
-/** Morph card → icono tras el clip. Debe cubrir --gelia-pro-settle-duration. */
+/** Reservado. El cierre morpha el rail junto con el ancho; no hay fase posterior. */
 const SETTLE_MS = 260;
 
 /** Contraído asentado: no unmount mid-`collapsing`/`settling`. */
@@ -117,7 +117,7 @@ export default function useSidebarState({
                 finishAnim();
                 return;
             }
-            bindWidthTransitionEnd(sidebar, { settle: isCollapsed });
+            bindWidthTransitionEnd(sidebar, { settle: false });
         });
     }, [onModePersist, bindWidthTransitionEnd, finishAnim]);
 

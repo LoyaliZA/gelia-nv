@@ -13,12 +13,13 @@ use Illuminate\Support\Facades\Storage;
 class ResponderSolicitudTraspasoService
 {
     public function __construct(
-        private NotificarTraspasoService $notificar
+        private NotificarTraspasoService $notificar,
+        private GuardarRevisionesTraspasoService $revisionesTraspaso
     ) {}
 
-    public function ejecutar(SolicitudTraspaso $solicitud, array $datos, User $usuario): SolicitudTraspaso
+    public function ejecutar(SolicitudTraspaso $solicitud, array $datos, User $usuario, array $revisionesInput = []): SolicitudTraspaso
     {
-        return DB::transaction(function () use ($solicitud, $datos, $usuario) {
+        return DB::transaction(function () use ($solicitud, $datos, $usuario, $revisionesInput) {
             $estadoAnteriorId = $solicitud->catalogo_estado_solicitud_id;
             $estadoNuevoId = (int) $datos['catalogo_estado_solicitud_id'];
             $idIncorrecta = CatalogoEstadoSolicitud::idDe('Incorrecta');
@@ -37,6 +38,16 @@ class ResponderSolicitudTraspasoService
             } else {
                 $updates['motivo_incorrecta'] = null;
                 $updates['folio_traspaso'] = $datos['folio_traspaso'] ?? null;
+
+                $solicitud->loadMissing('productos');
+                $normalizadas = $this->revisionesTraspaso->normalizarRevisiones($solicitud, $revisionesInput);
+                $estadoGeneral = $this->revisionesTraspaso->persistir(
+                    $solicitud,
+                    \App\Models\SolicitudTraspasoRevisionProducto::MOMENTO_ORIGEN,
+                    $normalizadas,
+                    $usuario
+                );
+                $updates['estado_fisico_general_origen'] = $estadoGeneral;
             }
 
             if (isset($datos['evidencia_respuesta']) && $datos['evidencia_respuesta'] instanceof UploadedFile && $datos['evidencia_respuesta']->isValid()) {

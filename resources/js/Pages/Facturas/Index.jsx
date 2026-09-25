@@ -39,12 +39,24 @@ export default function Index({ auth, facturas, metricas, filtros, vendedores, e
     const [modalForm, setModalForm] = useState({ abierto: false, modoEdicion: false, factura: null });
     const [modalRespuesta, setModalRespuesta] = useState({ abierto: false, factura: null, estadoId: null, modo: 'emitir' });
     const [modalExpediente, setModalExpediente] = useState({ abierto: false, factura: null });
+    const expedienteDesdeEnlaceRef = useRef(false);
     const modalFormRef = useRef(modalForm);
     useEffect(() => { modalFormRef.current = modalForm; });
 
     useEffect(() => {
         setTabActiva(filtros.tab || 'TODAS');
     }, [filtros.tab]);
+
+    useEffect(() => {
+        if (expedienteDesdeEnlaceRef.current || !filtros.q) return;
+        const filas = facturas?.data || [];
+        const q = String(filtros.q);
+        const exacta = filas.find((f) => String(f.folio) === q || String(f.id) === q);
+        const factura = exacta || (filas.length === 1 ? filas[0] : null);
+        if (!factura) return;
+        expedienteDesdeEnlaceRef.current = true;
+        setModalExpediente({ abierto: true, factura });
+    }, [filtros.q, facturas]);
 
     const refrescarFacturaModalAbierta = useCallback(async (solicitudId) => {
         const abierto = modalFormRef.current;

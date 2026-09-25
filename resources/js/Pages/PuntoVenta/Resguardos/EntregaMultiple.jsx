@@ -156,7 +156,7 @@ export default function EntregaMultiple({
 
                 {exito ? (
                     <div className={`${geliaCardClass()} p-8 text-center space-y-4`}>
-                        <CheckCircle2 className="w-12 h-12 mx-auto text-emerald-500" />
+                        <CheckCircle2 className="w-12 h-12 mx-auto text-[var(--color-exito)]" />
                         <h2 className="text-lg font-black uppercase theme-text-main m-0">Operación registrada</h2>
                         <p className="text-sm theme-text-muted m-0">
                             Se registró la entrega de {resultados.length || resguardos.length} pedido(s). Cada pedido conserva su propia firma.
@@ -166,9 +166,9 @@ export default function EntregaMultiple({
                         </button>
                     </div>
                 ) : !puedeEntregar ? (
-                    <div className={`${geliaCardClass()} p-5 space-y-3 border border-amber-500/30`}>
+                    <div className={`${geliaCardClass()} p-5 space-y-3 border border-[color-mix(in_srgb,var(--color-aviso)_35%,transparent)]`}>
                         <div className="flex items-start gap-3">
-                            <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />
+                            <AlertTriangle className="w-5 h-5 text-[var(--color-aviso)] shrink-0" />
                             <p className="text-sm font-black theme-text-main m-0">
                                 {motivoNoEntregable || 'No se puede completar la entrega múltiple con la selección actual.'}
                             </p>
@@ -198,7 +198,7 @@ export default function EntregaMultiple({
                                 </label>
                             ))}
                             {erroresPaso.bulto_ids && (
-                                <p className="text-xs font-bold text-red-600 dark:text-red-300 m-0">{erroresPaso.bulto_ids}</p>
+                                <p className="text-xs font-bold text-[var(--color-peligro)] m-0">{erroresPaso.bulto_ids}</p>
                             )}
                         </div>
                         <PasoReceptor

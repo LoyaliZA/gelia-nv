@@ -92,7 +92,7 @@ class AlertaPedidoBma extends Notification implements ShouldQueue, ShouldBroadca
 
     public function toMail(object $notifiable): MailMessage
     {
-        $url = $this->extras['url'] ?? url('/control-pedidos');
+        $url = url($this->urlAccion());
 
         return (new MailMessage)
             ->subject("GELIA · Control de pedidos · {$this->folio()}")
@@ -127,9 +127,20 @@ class AlertaPedidoBma extends Notification implements ShouldQueue, ShouldBroadca
             'proceso' => 'Control de pedidos',
             'vendedora' => $this->pedido->vendedor->name ?? null,
             'fecha' => now()->toDateTimeString(),
-            'url' => $this->extras['url'] ?? '/control-pedidos',
             'modulo' => 'control_pedidos',
-        ], $this->extras);
+        ], $this->extras, [
+            'url' => $this->urlAccion(),
+        ]);
+    }
+
+    private function urlAccion(): string
+    {
+        $url = $this->extras['url'] ?? null;
+        if (is_string($url) && $url !== '' && $url !== '/control-pedidos') {
+            return $url;
+        }
+
+        return '/control-pedidos?q='.rawurlencode($this->folio());
     }
 
     private function folio(): string

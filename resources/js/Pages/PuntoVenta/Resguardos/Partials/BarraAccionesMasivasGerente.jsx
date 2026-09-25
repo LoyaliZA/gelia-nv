@@ -10,6 +10,8 @@ export default function BarraAccionesMasivasGerente({
     idsSeleccionados = [],
     onExito,
     onLimpiarSeleccion,
+    onSeleccionarPagina,
+    paginaSeleccionada = false,
 }) {
     const [procesando, setProcesando] = useState(false);
     const [progreso, setProgreso] = useState(null);
@@ -66,23 +68,35 @@ export default function BarraAccionesMasivasGerente({
                         </span>
                     )}
                 </p>
-                <button
-                    type="button"
-                    onClick={onLimpiarSeleccion}
-                    disabled={procesando}
-                    className={`${THEME_BTN_SECONDARY} text-[10px] font-black uppercase tracking-widest min-h-[40px] px-4`}
-                >
-                    Limpiar
-                </button>
+                <div className="flex flex-wrap gap-2">
+                    {onSeleccionarPagina && (
+                        <button
+                            type="button"
+                            onClick={onSeleccionarPagina}
+                            disabled={procesando || paginaSeleccionada}
+                            className={`${THEME_BTN_SECONDARY} text-[10px] font-black uppercase tracking-widest min-h-[40px] px-4`}
+                        >
+                            Seleccionar página
+                        </button>
+                    )}
+                    <button
+                        type="button"
+                        onClick={onLimpiarSeleccion}
+                        disabled={procesando}
+                        className={`${THEME_BTN_SECONDARY} text-[10px] font-black uppercase tracking-widest min-h-[40px] px-4`}
+                    >
+                        Limpiar
+                    </button>
+                </div>
             </div>
 
-            <div className="flex flex-col">
+            <div className="flex flex-col gap-2 p-3">
                 {pendientes.length > 0 && (
                     <button
                         type="button"
                         disabled={procesando}
                         onClick={() => ejecutarLote(pendientes, confirmarRecepcionGerente)}
-                        className={`${BTN_ACCION_MASIVA_GERENTE} rounded-none border-b border-white/10`}
+                        className={BTN_ACCION_MASIVA_GERENTE}
                     >
                         {procesando ? <Loader2 className="w-4 h-4 animate-spin" /> : <PackageCheck className="w-4 h-4 stroke-[2]" />}
                         Confirmar recepción ({pendientes.length})

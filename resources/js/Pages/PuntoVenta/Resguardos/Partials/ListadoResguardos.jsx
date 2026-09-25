@@ -1,13 +1,16 @@
 import React, { useState } from 'react';
-import { Eye, AlertTriangle, PackageCheck } from 'lucide-react';
+import { Eye } from 'lucide-react';
 import {
-    badgeAntiguedad,
+    GELIA_SEGMENT_TABS_SCROLL,
+    GELIA_SEGMENT_TABS_TRACK,
+    geliaCardClass,
+} from '../../../../utils/geliaTheme';
+import {
     badgeEstadoResguardo,
-    formatearFechaOperativa,
-    tarjetaResguardoClass,
     BTN_SECONDARY,
+    claseTextoPlazo,
+    formatearFechaOperativa,
 } from './resguardosStyles';
-import { THEME_BTN_PRIMARY } from '../../../../utils/geliaTheme';
 import {
     claseGridTarjetasResguardo,
     claseVistaTabla,
@@ -18,16 +21,10 @@ import {
     mensajeVacioBandeja,
     plazosOperativosResguardo,
     referenciaCliente,
-    VISTA_RESGUARDOS_POR_RECIBIR,
 } from './resguardosUtils';
-import { geliaCardClass } from '../../../../utils/geliaTheme';
-import {
-    cantidadBultosPendiente,
-    resguardoAdmiteRecepcion,
-} from './recepcionFisicaUtils';
+import { resguardoAdmiteRecepcion } from './recepcionFisicaUtils';
 import AccionReponerVencidoResguardo from './AccionReponerVencidoResguardo';
-import TarjetaResguardoRecepcion from './TarjetaResguardoRecepcion';
-import TarjetaResguardoEnCustodia from './TarjetaResguardoEnCustodia';
+import TarjetaResguardoOperativa from './TarjetaResguardoOperativa';
 import SelectorVistaResguardos from './SelectorVistaResguardos';
 import { AccionEntregaResguardo } from './ModalEntregaResguardo';
 import BotonConfirmarRecepcionResguardo from './BotonConfirmarRecepcionResguardo';
@@ -36,45 +33,6 @@ import { abrirDetalleResguardoModal } from './resguardoDetalleModalBridge';
 
 function abrirDetalle(resguardoId, resguardo) {
     abrirDetalleResguardoModal(resguardoId, resguardo);
-}
-
-function BadgesResguardo({ resguardo, catalogos }) {
-    const estadoEtiqueta = catalogos.estados?.[resguardo.estado] || resguardo.estado;
-    const clasificaciones = Object.entries(resguardo.clasificaciones || {})
-        .filter(([, activa]) => activa)
-        .map(([clave]) => ({ clave, etiqueta: catalogos.antiguedades?.[clave] || clave }));
-
-    return (
-        <div className="flex flex-wrap gap-1.5">
-            <span className={`inline-flex px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-wide ${badgeEstadoResguardo(resguardo.estado)}`}>
-                {estadoEtiqueta}
-            </span>
-            {clasificaciones.map(({ clave, etiqueta }) => (
-                <span key={clave} className={`inline-flex px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-wide ${badgeAntiguedad(clave)}`}>
-                    {etiqueta}
-                </span>
-            ))}
-            {(resguardo.incidencias_abiertas_count || 0) > 0 && (
-                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-wide bg-purple-500/15 text-purple-700 dark:text-purple-300">
-                    <AlertTriangle className="w-3 h-3" />
-                    {resguardo.incidencias_abiertas_count} incidencia{resguardo.incidencias_abiertas_count === 1 ? '' : 's'}
-                </span>
-            )}
-            {resguardo.entrega_bloqueada && (
-                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-wide bg-red-500/15 text-red-700 dark:text-red-300">
-                    <AlertTriangle className="w-3 h-3" />
-                    Entrega bloqueada
-                </span>
-            )}
-        </div>
-    );
-}
-
-function claseTextoPlazo(clasificacion) {
-    if (clasificacion === 'vencido') return 'font-bold text-red-700 dark:text-red-300';
-    if (clasificacion === 'rezagado') return 'font-bold text-orange-700 dark:text-orange-300';
-    if (clasificacion === 'proximo_a_vencer') return 'font-bold text-amber-700 dark:text-amber-300';
-    return 'theme-text-muted';
 }
 
 function FechasOperativasResguardo({ resguardo, bandeja }) {
@@ -113,83 +71,6 @@ function FechasOperativasResguardo({ resguardo, bandeja }) {
         <p className="text-[10px] theme-text-muted m-0">
             Salida CEDIS: {formatearFechaOperativa(resguardo.salida_cedis_at)}
         </p>
-    );
-}
-
-function TarjetaResguardo({
-    resguardo,
-    bandeja,
-    catalogos,
-    permisos = {},
-    puedeRecibir,
-    puedeEntregar,
-    seleccionable = false,
-    seleccionado = false,
-    onToggleSeleccion,
-    onReponerExito,
-    onEntregaExito,
-    onRecepcionExito,
-}) {
-    return (
-        <div className={tarjetaResguardoClass(resguardo)}>
-            <div className="flex items-start justify-between gap-3">
-                <div className="flex items-start gap-3 min-w-0">
-                    {seleccionable && (
-                        <input
-                            type="checkbox"
-                            className="mt-1 h-5 w-5 shrink-0"
-                            checked={seleccionado}
-                            onChange={() => onToggleSeleccion?.(resguardo.id)}
-                            aria-label={`Seleccionar ${resguardo.snapshot_folio || `resguardo ${resguardo.id}`} para entrega conjunta`}
-                        />
-                    )}
-                    <div className="min-w-0 space-y-1">
-                    <p className="text-sm font-black theme-text-main m-0 truncate">
-                        {resguardo.snapshot_folio || `Resguardo #${resguardo.id}`}
-                    </p>
-                    <p className="text-[10px] font-bold theme-text-muted m-0">
-                        Cliente {referenciaCliente(resguardo)}
-                    </p>
-                    <FechasOperativasResguardo resguardo={resguardo} bandeja={bandeja} />
-                    {resguardoAdmiteRecepcion(resguardo) && cantidadBultosPendiente(resguardo) > 0 && (
-                        <p className="text-[10px] font-bold text-amber-700 dark:text-amber-300 m-0">
-                            {cantidadBultosPendiente(resguardo)} bulto{cantidadBultosPendiente(resguardo) === 1 ? '' : 's'} pendiente{cantidadBultosPendiente(resguardo) === 1 ? '' : 's'}
-                        </p>
-                    )}
-                    </div>
-                </div>
-                <p className="text-[10px] font-black theme-text-muted m-0 shrink-0">
-                    {resguardo.cantidad_bultos_esperada} bulto{resguardo.cantidad_bultos_esperada === 1 ? '' : 's'}
-                </p>
-            </div>
-            <BadgesResguardo resguardo={resguardo} catalogos={catalogos} />
-            <div className="flex flex-col gap-2">
-                {puedeEntregar && bandeja === 'en_custodia' && resguardo.estado === 'en_custodia' && !resguardo.entrega_bloqueada && (
-                    <AccionEntregaResguardo
-                        resguardo={resguardo}
-                        onExito={onEntregaExito}
-                    />
-                )}
-                {puedeRecibir && resguardoAdmiteRecepcion(resguardo) && (
-                    <BotonConfirmarRecepcionResguardo
-                        resguardo={resguardo}
-                        onExito={onRecepcionExito}
-                    />
-                )}
-                <AccionReponerVencidoResguardo
-                    resguardo={resguardo}
-                    permisos={permisos}
-                    onExito={onReponerExito}
-                />
-                <button
-                    type="button"
-                    onClick={() => abrirDetalle(resguardo.id, resguardo)}
-                    className={`${BTN_SECONDARY} w-full inline-flex items-center justify-center gap-2`}
-                >
-                    <Eye className="w-4 h-4" /> Ver detalle
-                </button>
-            </div>
-        </div>
     );
 }
 
@@ -244,7 +125,7 @@ function FilaTablaResguardo({
             </td>
             <td className="px-4 py-3 text-right">
                 <div className="flex flex-wrap justify-end gap-2">
-                    {puedeEntregar && bandeja === 'en_custodia' && resguardo.estado === 'en_custodia' && !resguardo.entrega_bloqueada && (
+                    {puedeEntregar && resguardo.estado === 'en_custodia' && !resguardo.entrega_bloqueada && (
                         <AccionEntregaResguardo
                             resguardo={resguardo}
                             onExito={onEntregaExito}
@@ -286,6 +167,7 @@ export default function ListadoResguardos({
     puedeRecibir = false,
     puedeConfirmarCustodia = false,
     paso = 'gerente',
+    onPaso,
     puedeEntregar = false,
     idsSeleccionados = [],
     onToggleSeleccion,
@@ -304,88 +186,88 @@ export default function ListadoResguardos({
         guardarVistaPorRecibir(nuevaVista);
     };
 
-    if (items.length === 0) {
-        return (
-            <div className={`${geliaCardClass()} p-10 md:p-16 text-center space-y-3`}>
-                <p className="text-sm theme-text-muted font-bold uppercase tracking-widest m-0">
-                    {mensajeVacioBandeja(bandeja, catalogos.bandejas, hayFiltrosActivos)}
-                </p>
-                {hayFiltrosActivos && onLimpiarFiltros && (
-                    <button type="button" onClick={onLimpiarFiltros} className={`${BTN_SECONDARY} text-xs`}>
-                        Limpiar filtros
-                    </button>
-                )}
-            </div>
-        );
-    }
-
     const claseTarjetas = claseVistaTarjetas(bandeja, vistaPorRecibir);
     const claseTabla = claseVistaTabla(bandeja, vistaPorRecibir);
-    const usarTarjetasRecepcion = bandeja === 'por_recibir' && vistaPorRecibir === VISTA_RESGUARDOS_POR_RECIBIR.CARD;
-    const usarTarjetasCustodia = bandeja === 'en_custodia';
     const claseContenedorTarjetas = claseGridTarjetasResguardo(bandeja, vistaPorRecibir);
+    const tituloBandeja = bandeja === 'en_custodia'
+        ? 'Resguardos en custodia'
+        : bandeja === 'incidencias'
+            ? 'Resguardos con incidencias'
+            : 'Pedidos a recibir';
+    const pasos = [
+        { id: 'gerente', etiqueta: 'Recepción gerente', visible: puedeRecibir },
+        { id: 'recepcionista', etiqueta: 'Custodia recepción', visible: puedeConfirmarCustodia },
+    ].filter((opcion) => opcion.visible);
+    const mostrarPaso = bandeja === 'por_recibir' && pasos.length > 1;
 
     return (
         <div className={`${geliaCardClass()} overflow-hidden`}>
-            {(bandeja === 'por_recibir' || bandeja === 'en_custodia') && (
-                <div className="flex items-center justify-between gap-3 px-4 pt-4 pb-2 border-b theme-border">
+            <div className="flex flex-col gap-3 px-4 pt-4 pb-3 border-b theme-border">
+                <div className="flex items-center justify-between gap-3">
                     <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0">
-                        {bandeja === 'en_custodia' ? 'Resguardos en custodia' : 'Pedidos a recibir'}
+                        {tituloBandeja}
                     </p>
-                    {bandeja === 'por_recibir' && (
-                        <SelectorVistaResguardos vista={vistaPorRecibir} onCambiar={onCambiarVista} />
+                    <SelectorVistaResguardos vista={vistaPorRecibir} onCambiar={onCambiarVista} />
+                </div>
+                {mostrarPaso && (
+                    <div className={GELIA_SEGMENT_TABS_SCROLL}>
+                        <div className={`gelia-segment ${GELIA_SEGMENT_TABS_TRACK} p-1`} role="tablist" aria-label="Paso de recepción">
+                            {pasos.map(({ id, etiqueta }) => {
+                                const activa = paso === id;
+                                return (
+                                    <button
+                                        key={id}
+                                        type="button"
+                                        role="tab"
+                                        aria-selected={activa}
+                                        data-active={activa}
+                                        onClick={() => onPaso?.(id)}
+                                        className="gelia-segment-btn whitespace-nowrap"
+                                    >
+                                        {etiqueta}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {items.length === 0 ? (
+                <div className="p-10 md:p-16 text-center space-y-3">
+                    <p className="text-sm theme-text-muted font-bold uppercase tracking-widest m-0">
+                        {mensajeVacioBandeja(bandeja, catalogos.bandejas, hayFiltrosActivos)}
+                    </p>
+                    {hayFiltrosActivos && onLimpiarFiltros && (
+                        <button type="button" onClick={onLimpiarFiltros} className={`${BTN_SECONDARY} text-xs`}>
+                            Limpiar filtros
+                        </button>
                     )}
                 </div>
-            )}
-
+            ) : (
+            <>
             <div className={`${claseTarjetas} ${claseContenedorTarjetas}`}>
                 {items.map((resguardo) => (
-                    usarTarjetasRecepcion ? (
-                        <TarjetaResguardoRecepcion
-                            key={resguardo.id}
-                            resguardo={resguardo}
-                            catalogos={catalogos}
-                            puedeRecibir={puedeRecibir}
-                            puedeConfirmarCustodia={puedeConfirmarCustodia}
-                            paso={paso}
-                            seleccionable={seleccionMasivaGerente && resguardoSeleccionableGerente(resguardo)}
-                            seleccionado={idsSeleccionados.includes(resguardo.id)}
-                            onToggleSeleccion={onToggleSeleccion}
-                            onRecepcionExito={onRecepcionExito}
-                        />
-                    ) : usarTarjetasCustodia ? (
-                        <TarjetaResguardoEnCustodia
-                            key={resguardo.id}
-                            resguardo={resguardo}
-                            catalogos={catalogos}
-                            permisos={permisos}
-                            puedeEntregar={puedeEntregar}
-                            seleccionable={seleccionableEntrega && resguardo.estado === 'en_custodia' && !resguardo.entrega_bloqueada}
-                            seleccionado={idsSeleccionados.includes(resguardo.id)}
-                            onToggleSeleccion={onToggleSeleccion}
-                            onReponerExito={onReponerExito}
-                            onEntregaExito={onEntregaExito}
-                        />
-                    ) : (
-                        <TarjetaResguardo
-                            key={resguardo.id}
-                            resguardo={resguardo}
-                            bandeja={bandeja}
-                            catalogos={catalogos}
-                            permisos={permisos}
-                            puedeRecibir={puedeRecibir}
-                            puedeEntregar={puedeEntregar}
-                            seleccionable={
-                                (seleccionMasivaGerente && resguardoSeleccionableGerente(resguardo))
-                                || (seleccionableEntrega && resguardo.estado === 'en_custodia' && !resguardo.entrega_bloqueada)
-                            }
-                            seleccionado={idsSeleccionados.includes(resguardo.id)}
-                            onToggleSeleccion={onToggleSeleccion}
-                            onReponerExito={onReponerExito}
-                            onEntregaExito={onEntregaExito}
-                            onRecepcionExito={onRecepcionExito}
-                        />
-                    )
+                    <TarjetaResguardoOperativa
+                        key={resguardo.id}
+                        resguardo={resguardo}
+                        bandeja={bandeja}
+                        catalogos={catalogos}
+                        permisos={permisos}
+                        puedeRecibir={puedeRecibir}
+                        puedeConfirmarCustodia={puedeConfirmarCustodia}
+                        puedeEntregar={puedeEntregar}
+                        paso={paso}
+                        seleccionable={
+                            (seleccionMasivaGerente && resguardoSeleccionableGerente(resguardo))
+                            || (seleccionableEntrega && resguardo.estado === 'en_custodia' && !resguardo.entrega_bloqueada)
+                        }
+                        seleccionado={idsSeleccionados.includes(resguardo.id)}
+                        onToggleSeleccion={onToggleSeleccion}
+                        onRecepcionExito={onRecepcionExito}
+                        onEntregaExito={onEntregaExito}
+                        onReponerExito={onReponerExito}
+                    />
                 ))}
             </div>
 
@@ -427,6 +309,8 @@ export default function ListadoResguardos({
                     </tbody>
                 </table>
             </div>
+            </>
+            )}
         </div>
     );
 }

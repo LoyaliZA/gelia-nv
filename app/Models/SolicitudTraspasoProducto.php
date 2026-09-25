@@ -4,7 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class SolicitudTraspasoProducto extends Model
 {
@@ -35,8 +35,8 @@ class SolicitudTraspasoProducto extends Model
         return $this->belongsTo(Producto::class, 'producto_id');
     }
 
-    public function detalleDano(): HasOne
+    public function revisiones(): HasMany
     {
-        return $this->hasOne(SolicitudTraspasoDetalleDano::class, 'solicitud_traspaso_producto_id');
+        return $this->hasMany(SolicitudTraspasoRevisionProducto::class, 'solicitud_traspaso_producto_id');
     }
 }

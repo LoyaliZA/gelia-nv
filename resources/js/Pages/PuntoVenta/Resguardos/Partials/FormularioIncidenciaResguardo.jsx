@@ -120,7 +120,7 @@ export default function FormularioIncidenciaResguardo({
                         ))}
                     </select>
                     {erroresLocales.tipo && (
-                        <p className="text-[10px] text-red-500 m-0">{erroresLocales.tipo}</p>
+                        <p className="text-[10px] text-[var(--color-peligro)] m-0">{erroresLocales.tipo}</p>
                     )}
                 </label>
 
@@ -138,7 +138,7 @@ export default function FormularioIncidenciaResguardo({
                         disabled={enviando}
                     />
                     {erroresLocales.descripcion && (
-                        <p className="text-[10px] text-red-500 m-0">{erroresLocales.descripcion}</p>
+                        <p className="text-[10px] text-[var(--color-peligro)] m-0">{erroresLocales.descripcion}</p>
                     )}
                 </label>
 
@@ -167,7 +167,7 @@ export default function FormularioIncidenciaResguardo({
                                 ))}
                             </select>
                             {erroresLocales.almacen_id && (
-                                <p className="text-[10px] text-red-500 m-0">{erroresLocales.almacen_id}</p>
+                                <p className="text-[10px] text-[var(--color-peligro)] m-0">{erroresLocales.almacen_id}</p>
                             )}
                         </label>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -182,7 +182,7 @@ export default function FormularioIncidenciaResguardo({
                                     disabled={enviando}
                                 />
                                 {erroresLocales.bulto_folio && (
-                                    <p className="text-[10px] text-red-500 m-0">{erroresLocales.bulto_folio}</p>
+                                    <p className="text-[10px] text-[var(--color-peligro)] m-0">{erroresLocales.bulto_folio}</p>
                                 )}
                             </label>
                             <label className="space-y-1.5 block">
@@ -226,7 +226,7 @@ export default function FormularioIncidenciaResguardo({
                             etiquetaCamara="Cámara"
                         />
                         {erroresLocales.evidencias && (
-                            <p className="text-[10px] text-red-500 m-0">{erroresLocales.evidencias}</p>
+                            <p className="text-[10px] text-[var(--color-peligro)] m-0">{erroresLocales.evidencias}</p>
                         )}
                         {previews.length > 0 && (
                             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
