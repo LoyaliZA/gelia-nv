@@ -114,6 +114,25 @@ class MobileClienteSearchTest extends TestCase
             ->assertJsonPath('data.id', $cliente->id);
     }
 
+    public function test_show_acepta_numero_de_un_digito(): void
+    {
+        $vendedor = $this->usuarioMovil(['mis_clientes.gestionar']);
+        $lista = $this->lista();
+        $cliente = Cliente::create([
+            'numero_cliente' => '7',
+            'nombre' => 'Cliente Corto',
+            'lista_actual_id' => $lista->id,
+            'vendedor_id' => $vendedor->id,
+            'vendedor_original_id' => $vendedor->id,
+        ]);
+
+        $this->withHeaders($this->headers($vendedor))
+            ->getJson('/api/v1/mobile/clientes/7')
+            ->assertOk()
+            ->assertJsonPath('data.id', $cliente->id)
+            ->assertJsonPath('data.numero_cliente', '7');
+    }
+
     public function test_show_devuelve_404_fuera_de_alcance(): void
     {
         $vendedor = $this->usuarioMovil(['mis_clientes.gestionar']);

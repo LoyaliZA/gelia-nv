@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Activos\ActivoController;
+use App\Http\Controllers\Auth\AndroidAssetLinksController;
 use App\Http\Controllers\Clientes\Direcciones\SolicitudDireccionPublicaController;
 use App\Http\Controllers\ControlPedidos\PedidoBmaEvidenciaPublicaController;
 use App\Http\Controllers\ControlPedidos\PedidoBmaEvidenciaTiendaPublicaController;
@@ -13,6 +14,9 @@ use App\Http\Middleware\HardenSolicitudDireccionPublica;
 Route::get('/', function () {
     return redirect()->route('login');
 });
+
+Route::get('/.well-known/assetlinks.json', AndroidAssetLinksController::class)
+    ->name('well-known.assetlinks');
 
 Route::middleware('throttle:60,1')->group(function () {
     Route::get('/activos/consulta/{token}', [ActivoController::class, 'consultaPublica'])->name('activos.consulta.publica');

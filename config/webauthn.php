@@ -19,6 +19,14 @@ return [
 
     'origins' => env('WEBAUTHN_ORIGINS', $appUrl),
 
+    'android' => [
+        'package_name' => env('WEBAUTHN_ANDROID_PACKAGE', 'mx.neobash.gelianv'),
+        'sha256_cert_fingerprints' => array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string) env('WEBAUTHN_ANDROID_SHA256_CERT_FINGERPRINTS', ''))
+        ))),
+    ],
+
     'challenge' => [
         'bytes' => 16,
         'timeout' => 120,

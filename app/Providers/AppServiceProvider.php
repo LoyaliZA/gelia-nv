@@ -152,6 +152,9 @@ class AppServiceProvider extends ServiceProvider
             // Ignorar errores durante la carga inicial o migraciones si la tabla no existe
             \Illuminate\Support\Facades\Log::error('AppServiceProvider config load error: ' . $e->getMessage());
         }
+
+        \App\Support\WebAuthn\PasskeyOrigins::apply();
+
         // 1. Forzar HTTPS cuando la app pública es https (o env production).
         // Evita links de paginación/Inertia en http:// detrás de Cloudflare/proxy → HttpNetworkError.
         $appUrl = (string) config('app.url');
@@ -253,6 +256,11 @@ class AppServiceProvider extends ServiceProvider
             $key = $user instanceof User
                 ? 'api-mobile:'.$user->id
                 : 'api-mobile-ip:'.$request->ip();
+
+            // El bootstrap pagina ~70 veces. Un tope de 60/min lo cortaba cerca de los 6000 clientes.
+            if (str_contains($request->path(), 'api/v1/mobile/sync')) {
+                return Limit::perMinute(180)->by($key.':sync');
+            }
 
             return Limit::perMinute(60)->by($key);
         });

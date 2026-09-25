@@ -101,6 +101,8 @@ class MobileSyncChangesTest extends TestCase
 
         $this->assertSame(1, $delta['first_seq']);
         $this->assertSame($head['max_seq'], $delta['next_cursor']);
+        $this->assertArrayHasKey('authorized_total', $delta);
+        $this->assertGreaterThanOrEqual(1, $delta['authorized_total']);
         $ids = collect($delta['events'])->pluck('aggregate_id')->all();
         $this->assertContains($propio->id, $ids);
         $this->assertCount(1, $delta['events']);

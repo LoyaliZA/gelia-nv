@@ -13,7 +13,8 @@ class MobileSyncChangesService
     public function __construct(
         protected MobileSyncPublicationService $publicaciones,
         protected MobileClienteSerializerService $serializer,
-        protected MobileScopeVersionService $scopeVersion
+        protected MobileScopeVersionService $scopeVersion,
+        protected MobileClienteAlcanceService $alcance
     ) {}
 
     /**
@@ -24,6 +25,7 @@ class MobileSyncChangesService
         return [
             'max_seq' => $this->publicaciones->maxSeq(),
             'scope_version' => $this->scopeVersion->compute($user),
+            'authorized_total' => $this->authorizedTotal($user),
         ];
     }
 
@@ -62,6 +64,7 @@ class MobileSyncChangesService
                 'last_seq' => null,
                 'next_cursor' => $cursor,
                 'has_more' => false,
+                'authorized_total' => $this->authorizedTotal($user),
                 'events' => [],
             ];
         }
@@ -92,6 +95,7 @@ class MobileSyncChangesService
             'last_seq' => $lastSeq,
             'next_cursor' => $lastSeq,
             'has_more' => $ventana->count() === $limit && $lastSeq < $maxSeq,
+            'authorized_total' => $this->authorizedTotal($user),
             'events' => $events,
         ];
     }
@@ -126,6 +130,11 @@ class MobileSyncChangesService
         }
 
         return $evento;
+    }
+
+    private function authorizedTotal(User $user): int
+    {
+        return $this->alcance->queryPara($user)->count();
     }
 
     private function actualizarEstado(MobileDevice $device, string $scopeVersion): void

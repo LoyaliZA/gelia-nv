@@ -66,6 +66,11 @@ class MobileClienteController extends Controller
             return response()->json(['message' => 'Acceso denegado.'], 403);
         }
 
+        $numeroCliente = trim($numeroCliente);
+        if ($numeroCliente === '') {
+            return response()->json(['message' => 'Cliente no encontrado.'], 404);
+        }
+
         $cliente = Cliente::with(['listaDescuento', 'vendedor', 'tipo'])
             ->where('numero_cliente', $numeroCliente)
             ->first();
