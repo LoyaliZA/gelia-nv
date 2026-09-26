@@ -66,7 +66,7 @@ class ImportarInventariosAccion implements AccionGeliaAi
         $guess = is_array($meta['guess_mapping'] ?? null) ? $meta['guess_mapping'] : [];
         $mapping = array_merge($guess, $mapping);
 
-        foreach (['sku', 'descripcion', 'existencia'] as $req) {
+        foreach (['sku', 'folio', 'descripcion', 'existencia'] as $req) {
             if (empty($mapping[$req])) {
                 throw new RuntimeException("Falta mapping.{$req} (no se pudo detectar en headers).");
             }

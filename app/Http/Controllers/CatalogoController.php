@@ -29,6 +29,7 @@ use App\Models\CatalogoCategoriaProducto;
 use Illuminate\Support\Facades\DB;
 use App\Services\Catalogos\ImportarCatalogoAlmacenService;
 use App\Services\Catalogos\PlantillaImportacionCatalogoService;
+use App\Services\Almacenes\GuardarAlmacenService;
 use App\Services\Almacenes\RegistrarAuditoriaAlmacenService;
 use App\Services\Almacenes\NormalizarTextoImportacionService;
 use App\Models\ControlPedidos\CatalogoEstatusPedido;
@@ -460,7 +461,7 @@ class CatalogoController extends Controller
     }
 
     // --- 15. ALMACENES ---
-    public function storeAlmacen(Request $request, NormalizarTextoImportacionService $normalizador) {
+    public function storeAlmacen(Request $request, GuardarAlmacenService $guardar) {
         $data = $request->validate([
             'codigo' => 'required|string|max:50|unique:almacenes,codigo',
             'nombre' => 'required|string|max:255',
@@ -471,13 +472,11 @@ class CatalogoController extends Controller
             'visible_en_traspasos' => 'boolean',
             'permite_busqueda_productos' => 'boolean',
         ]);
-        $data['nombre'] = $normalizador->texto($data['nombre']);
-        $almacen = Almacen::create($data);
-        app(RegistrarAuditoriaAlmacenService::class)->catalogoCrud('creado', 'almacen', $almacen->id, $almacen->codigo);
+        $guardar->crear($data);
         return back()->with('success', 'Almacén registrado.');
     }
 
-    public function updateAlmacen(Request $request, $id, NormalizarTextoImportacionService $normalizador) {
+    public function updateAlmacen(Request $request, $id, GuardarAlmacenService $guardar) {
         $data = $request->validate([
             'codigo' => 'required|string|max:50|unique:almacenes,codigo,' . $id,
             'nombre' => 'required|string|max:255',
@@ -488,10 +487,8 @@ class CatalogoController extends Controller
             'visible_en_traspasos' => 'boolean',
             'permite_busqueda_productos' => 'boolean',
         ]);
-        $data['nombre'] = $normalizador->texto($data['nombre']);
         $almacen = Almacen::findOrFail($id);
-        $almacen->update($data);
-        app(RegistrarAuditoriaAlmacenService::class)->catalogoCrud('actualizado', 'almacen', $almacen->id, $almacen->codigo);
+        $guardar->actualizar($almacen, $data);
         return back()->with('success', 'Almacén actualizado.');
     }
 

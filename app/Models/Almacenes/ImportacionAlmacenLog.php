@@ -19,22 +19,34 @@ class ImportacionAlmacenLog extends Model
         'archivo_ruta',
         'archivo_normalizado',
         'mapping',
+        'operaciones',
         'total_filas',
         'procesados',
         'importados',
         'actualizados',
         'omitidos',
+        'productos_creados',
+        'productos_actualizados',
+        'asignaciones_creadas',
+        'costos_creados',
+        'costos_actualizados',
+        'cantidades_actualizadas',
+        'sin_cambios',
         'estado',
         'mensaje_error',
         'reporte_errores_token',
         'payload',
+        'archivo_hash',
+        'resumen_simulacion',
     ];
 
     protected function casts(): array
     {
         return [
             'mapping' => 'array',
+            'operaciones' => 'array',
             'payload' => 'array',
+            'resumen_simulacion' => 'array',
         ];
     }
 
@@ -83,6 +95,18 @@ class ImportacionAlmacenLog extends Model
 
     public static function marcarZombieSiAplica(self $log): void
     {
+        if ($log->estado === 'pendiente'
+            && (int) $log->total_filas === 0
+            && $log->updated_at
+            && $log->updated_at->lt(now()->subMinutes(5))) {
+            $log->update([
+                'estado' => 'interrumpido',
+                'mensaje_error' => 'La importación no arrancó (revisa que el worker de colas esté activo). Puedes cancelarla desde el indicador flotante.',
+            ]);
+
+            return;
+        }
+
         if ($log->estado !== 'en_proceso') {
             return;
         }
@@ -121,6 +145,7 @@ class ImportacionAlmacenLog extends Model
             'inventarios' => 'Importación de inventario',
             'costos' => 'Importación de costos',
             'ventas' => 'Importación de ventas',
+            'hub' => 'Importación unificada',
             default => 'Importación de almacén',
         };
     }
@@ -131,6 +156,13 @@ class ImportacionAlmacenLog extends Model
             'importados' => $this->importados,
             'actualizados' => $this->actualizados,
             'omitidos' => $this->omitidos,
+            'productos_creados' => $this->productos_creados,
+            'productos_actualizados' => $this->productos_actualizados,
+            'asignaciones_creadas' => $this->asignaciones_creadas,
+            'costos_creados' => $this->costos_creados,
+            'costos_actualizados' => $this->costos_actualizados,
+            'cantidades_actualizadas' => $this->cantidades_actualizadas,
+            'sin_cambios' => $this->sin_cambios,
             'errores_detalle' => $this->errores()
                 ->orderBy('fila')
                 ->limit(50)

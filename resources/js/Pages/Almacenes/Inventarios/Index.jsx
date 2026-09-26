@@ -1,31 +1,32 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Head, router, useForm } from '@inertiajs/react';
+import { Head, Link, router, useForm } from '@inertiajs/react';
 import { Boxes, Plus, Edit2, Trash2, Save, Search, Upload } from 'lucide-react';
 import AppLayout from '@/Layouts/AppLayout';
 import GeliaPaginacion from '@/Components/GeliaPaginacion';
 import GeliaLoader from '@/Components/GeliaLoader';
-import WizardImportacionCatalogo from '@/Components/Almacenes/WizardImportacionCatalogo';
 import EncabezadoOrdenable from '@/Components/Almacenes/EncabezadoOrdenable';
 import SelectorProducto from '@/Components/Almacenes/SelectorProducto';
-import { IMPORTACION_CATALOGOS } from '@/config/importacionCatalogos';
 import { geliaCardClass, THEME_BTN_PRIMARY, THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from '@/utils/geliaTheme';
 
 const CAMPOS_CANTIDAD = ['existencia', 'apartado', 'transito_oc', 'transito_ot', 'minimo', 'maximo'];
 
-function cantidadEntera(valor) {
-    if (valor === '' || valor === null || valor === undefined) return '';
-    return String(Math.max(0, Math.trunc(Number(valor))));
+function formatearCantidad(valor) {
+    if (valor === null || valor === undefined || valor === '') return '';
+    const n = Number(valor);
+    if (Number.isNaN(n)) return '';
+    const redondeado = Math.max(0, Math.round(n * 1000) / 1000);
+    return String(redondeado);
 }
 
 function mostrarCantidad(valor) {
-    if (valor === null || valor === undefined || valor === '') return '—';
-    return String(Math.max(0, Math.trunc(Number(valor))));
+    if (valor === null || valor === undefined || valor === '') return 'Sin dato';
+    const texto = formatearCantidad(valor);
+    return texto === '' ? 'Sin dato' : texto;
 }
 
 export default function Index({ auth, inventarios, sucursales, almacenes, filtros }) {
     const [modalAbierto, setModalAbierto] = useState(false);
-    const [showWizard, setShowWizard] = useState(false);
     const [itemActual, setItemActual] = useState(null);
     const [sucursalId, setSucursalId] = useState(filtros?.sucursal_id || '');
     const [almacenId, setAlmacenId] = useState(filtros?.almacen_id || '');
@@ -92,12 +93,12 @@ export default function Index({ auth, inventarios, sucursales, almacenes, filtro
             producto_id: item.producto_id,
             almacen_id: item.almacen_id,
             ubicacion: item.ubicacion || '',
-            existencia: cantidadEntera(item.existencia) || 0,
-            apartado: cantidadEntera(item.apartado) || 0,
-            transito_oc: cantidadEntera(item.transito_oc) || 0,
-            transito_ot: cantidadEntera(item.transito_ot) || 0,
-            minimo: cantidadEntera(item.minimo),
-            maximo: cantidadEntera(item.maximo),
+            existencia: formatearCantidad(item.existencia) || 0,
+            apartado: formatearCantidad(item.apartado) || 0,
+            transito_oc: formatearCantidad(item.transito_oc) || 0,
+            transito_ot: formatearCantidad(item.transito_ot) || 0,
+            minimo: formatearCantidad(item.minimo),
+            maximo: formatearCantidad(item.maximo),
         });
         setModalAbierto(true);
     };
@@ -115,7 +116,7 @@ export default function Index({ auth, inventarios, sucursales, almacenes, filtro
 
     return (
         <AppLayout auth={auth}>
-            <Head title="Inventarios" />
+            <Head title="Inventarios de referencia" />
             <GeliaLoader isVisible={processing} message="Guardando inventario_" />
 
             <div className="max-w-[1400px] mx-auto p-4 md:p-8 space-y-6">
@@ -124,14 +125,18 @@ export default function Index({ auth, inventarios, sucursales, almacenes, filtro
                         <div>
                             <h1 className="text-2xl font-black italic uppercase theme-text-main flex items-center gap-3">
                                 <Boxes className="w-7 h-7" style={{ color: 'var(--color-primario)' }} />
-                                Inventarios
+                                Inventarios de referencia
                             </h1>
+                            <p className="text-[11px] font-bold theme-text-muted mt-2 max-w-2xl">
+                                Cantidades de referencia: GELIA-NV no las descuenta automáticamente por venta ni las publica como stock confirmado.
+                                Los costos mostrados aquí son solo referencia del almacén; la gestión detallada está en Costos.
+                            </p>
                         </div>
                         <div className="flex gap-2">
                             {puedeImportar && (
-                                <button onClick={() => setShowWizard(true)} className={`${THEME_BTN_PRIMARY} theme-btn-primary--compact`}>
+                                <Link href={route('almacenes.importaciones.index', { preset: 'inventario' })} className={`${THEME_BTN_PRIMARY} theme-btn-primary--compact inline-flex items-center gap-2`}>
                                     <Upload className="w-4 h-4" /> Importar
-                                </button>
+                                </Link>
                             )}
                             {puedeGestionar && (
                                 <button onClick={abrirNuevo} className={`${THEME_BTN_PRIMARY} theme-btn-primary--compact`}>
@@ -249,7 +254,7 @@ export default function Index({ auth, inventarios, sucursales, almacenes, filtro
                                             onKeyDown={(e) => {
                                                 if (['e', 'E', '+', '-', '.', ','].includes(e.key)) e.preventDefault();
                                             }}
-                                            onChange={(e) => setData(field, cantidadEntera(e.target.value))}
+                                            onChange={(e) => setData(field, formatearCantidad(e.target.value))}
                                             className="theme-input w-full mt-1 px-3 py-2 text-sm font-bold"
                                         />
                                     </div>
@@ -267,13 +272,6 @@ export default function Index({ auth, inventarios, sucursales, almacenes, filtro
                 document.body
             )}
 
-            {showWizard && (
-                <WizardImportacionCatalogo
-                    config={IMPORTACION_CATALOGOS.inventarios}
-                    almacenes={almacenes}
-                    onClose={() => setShowWizard(false)}
-                />
-            )}
         </AppLayout>
     );
 }

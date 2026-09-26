@@ -16,7 +16,9 @@ use App\Models\NotaOlfativa;
 use App\Models\Producto;
 use App\Models\TipoProducto;
 use App\Models\UnidadMedida;
+use App\Services\Almacenes\GuardarArchivoVistaPreviaImportacionService;
 use App\Services\Almacenes\IniciarImportacionAlmacenService;
+use App\Services\Almacenes\LeerEncabezadosArchivoImportacionService;
 use App\Services\Almacenes\RegistrarAuditoriaAlmacenService;
 use App\Services\Catalogos\PlantillaImportacionCatalogoService;
 use App\Services\Productos\ArmarFichaProductoService;
@@ -238,25 +240,19 @@ class ProductoController extends Controller
         return $plantillaService->descargar('productos');
     }
 
-    public function importPreview(Request $request)
-    {
+    public function importPreview(
+        Request $request,
+        GuardarArchivoVistaPreviaImportacionService $vistaPrevia,
+        LeerEncabezadosArchivoImportacionService $encabezados,
+    ) {
         $request->validate([
             'archivo' => 'required|file|mimes:csv,xlsx,xls',
         ]);
 
-        $file = $request->file('archivo');
-        $extension = $file->getClientOriginalExtension();
-        $path = $file->storeAs('temp', 'import_productos_preview.'.$extension);
-
-        $headers = [];
-        $rows = (new FastExcel)->import(Storage::path($path));
-        foreach ($rows as $row) {
-            $headers = array_keys($row);
-            break;
-        }
+        $path = $vistaPrevia->guardar((int) $request->user()->id, $request->file('archivo'));
 
         return response()->json([
-            'headers' => $headers,
+            'headers' => $encabezados->ejecutar($path),
             'file_path' => $path,
         ]);
     }

@@ -1,14 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Head, router, useForm } from '@inertiajs/react';
+import { Head, Link, router, useForm } from '@inertiajs/react';
 import { Package, Plus, Edit2, Trash2, X, Save, Search, Upload } from 'lucide-react';
 import AppLayout from '@/Layouts/AppLayout';
 import GeliaPaginacion from '@/Components/GeliaPaginacion';
 import GeliaLoader from '@/Components/GeliaLoader';
-import WizardImportacionCatalogo from '@/Components/Almacenes/WizardImportacionCatalogo';
 import EncabezadoOrdenable from '@/Components/Almacenes/EncabezadoOrdenable';
 import InputConEscanner from '@/Components/Escanner/InputConEscanner';
-import { IMPORTACION_CATALOGOS } from '@/config/importacionCatalogos';
 import { geliaCardClass, THEME_BTN_PRIMARY, THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from '@/utils/geliaTheme';
 
 function normalizarSku(valor) {
@@ -18,7 +16,6 @@ function normalizarSku(valor) {
 
 export default function Index({ auth, productos, marcas, categorias, tipos = [], atributos = [], atributos_por_categoria = {}, extensiones_por_categoria = {}, unidades = [], fases_olfativas = [], notas_olfativas = [], canales = [], filtros }) {
     const [modalAbierto, setModalAbierto] = useState(false);
-    const [showWizard, setShowWizard] = useState(false);
     const [itemActual, setItemActual] = useState(null);
     const [busqueda, setBusqueda] = useState(filtros?.q || '');
     const [relacionSku, setRelacionSku] = useState('');
@@ -308,9 +305,9 @@ export default function Index({ auth, productos, marcas, categorias, tipos = [],
                         </div>
                         {puedeGestionar && (
                             <div className="flex gap-2">
-                                <button onClick={() => setShowWizard(true)} className="theme-element border theme-border theme-btn-primary--compact px-4 py-2 rounded-xl font-black uppercase text-xs flex items-center gap-2 theme-text-main">
+                                <Link href={route('almacenes.importaciones.index', { preset: 'productos' })} className="theme-element border theme-border theme-btn-primary--compact px-4 py-2 rounded-xl font-black uppercase text-xs flex items-center gap-2 theme-text-main">
                                     <Upload className="w-4 h-4" /> Importar
-                                </button>
+                                </Link>
                                 <button onClick={abrirNuevo} className={`${THEME_BTN_PRIMARY} theme-btn-primary--compact`}>
                                     <Plus className="w-4 h-4" /> Nuevo Producto
                                 </button>
@@ -669,12 +666,6 @@ export default function Index({ auth, productos, marcas, categorias, tipos = [],
                 document.body
             )}
 
-            {showWizard && (
-                <WizardImportacionCatalogo
-                    config={IMPORTACION_CATALOGOS.productos}
-                    onClose={() => setShowWizard(false)}
-                />
-            )}
         </AppLayout>
     );
 }

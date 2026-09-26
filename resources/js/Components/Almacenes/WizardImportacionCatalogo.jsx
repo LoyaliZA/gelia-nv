@@ -6,6 +6,7 @@ import { startImportacionAlmacenTracking } from '@/utils/importacionAlmacenTrack
 import { THEME_MODAL_OVERLAY, THEME_MODAL_SHELL, THEME_BTN_PRIMARY } from '@/utils/geliaTheme';
 import InstruccionesImportacion from '@/Components/Catalogos/InstruccionesImportacion';
 import ImportacionResumenModal from '@/Components/Almacenes/ImportacionResumenModal';
+import SelectorSucursalAlmacen from '@/Components/Almacenes/SelectorSucursalAlmacen';
 import { X, UploadCloud, FileSpreadsheet, AlertTriangle, ArrowRight } from 'lucide-react';
 
 function autoMapearHeaders(headers, mapping) {
@@ -28,10 +29,11 @@ function autoMapearHeaders(headers, mapping) {
     return newMapping;
 }
 
-export default function WizardImportacionCatalogo({ config, almacenes = [], onClose }) {
+export default function WizardImportacionCatalogo({ config, almacenes = [], sucursales = [], onClose }) {
     const { flash } = usePage().props;
     const [step, setStep] = useState(1);
     const [file, setFile] = useState(null);
+    const [sucursalId, setSucursalId] = useState('');
     const [almacenId, setAlmacenId] = useState('');
     const [headers, setHeaders] = useState([]);
     const [filePath, setFilePath] = useState('');
@@ -54,8 +56,8 @@ export default function WizardImportacionCatalogo({ config, almacenes = [], onCl
     };
 
     const handleUpload = async () => {
-        if (!file || (config.requiereAlmacen && !almacenId)) {
-            setError(config.requiereAlmacen ? 'Selecciona un almacén y un archivo.' : 'Selecciona un archivo.');
+        if (!file || (config.requiereAlmacen && (!sucursalId || !almacenId))) {
+            setError(config.requiereAlmacen ? 'Selecciona sucursal, almacén y un archivo.' : 'Selecciona un archivo.');
             return;
         }
         setError('');
@@ -160,13 +162,17 @@ export default function WizardImportacionCatalogo({ config, almacenes = [], onCl
                                 </button>
                             </div>
                             {config.requiereAlmacen && (
-                                <div>
-                                    <label className="text-[10px] font-black uppercase theme-text-muted">Almacén destino</label>
-                                    <select value={almacenId} onChange={(e) => setAlmacenId(e.target.value)} className="theme-input w-full mt-2 px-4 py-3 font-bold text-[11px] uppercase">
-                                        <option value="">Selecciona...</option>
-                                        {almacenes.map((a) => <option key={a.id} value={a.id}>{a.codigo} - {a.nombre}</option>)}
-                                    </select>
-                                </div>
+                                <SelectorSucursalAlmacen
+                                    sucursales={sucursales}
+                                    almacenes={almacenes}
+                                    sucursalId={sucursalId}
+                                    almacenId={almacenId}
+                                    onSucursalChange={setSucursalId}
+                                    onAlmacenChange={setAlmacenId}
+                                    requiereAlmacen
+                                    requiereSucursal={sucursales.length > 0}
+                                    className="theme-input w-full mt-2 px-4 py-3 font-bold text-[11px] uppercase"
+                                />
                             )}
                             <label className="flex flex-col items-center justify-center w-full h-28 border-2 border-dashed theme-border rounded-xl cursor-pointer theme-element">
                                 <UploadCloud className="w-8 h-8 theme-text-muted mb-2" />
@@ -203,7 +209,7 @@ export default function WizardImportacionCatalogo({ config, almacenes = [], onCl
                         <button
                             type="button"
                             onClick={handleUpload}
-                            disabled={loading || !file || (config.requiereAlmacen && !almacenId)}
+                            disabled={loading || !file || (config.requiereAlmacen && (!almacenId || (sucursales.length > 0 && !sucursalId)))}
                             className={`${THEME_BTN_PRIMARY} w-full py-3 disabled:opacity-50`}
                         >
                             {loading ? 'Leyendo...' : 'Siguiente: Mapear'}

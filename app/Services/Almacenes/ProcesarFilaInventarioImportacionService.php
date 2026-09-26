@@ -32,8 +32,6 @@ class ProcesarFilaInventarioImportacionService
 
         $this->sincronizarCostoSiAplica($row, $mapping, $producto->id, $almacenId);
 
-        $producto->update(['activo' => true]);
-
         return ['accion' => $resultado['accion']];
     }
 

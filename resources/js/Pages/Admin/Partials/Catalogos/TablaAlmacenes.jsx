@@ -7,7 +7,16 @@ import ModalImportarCatalogo from '@/Components/Catalogos/ModalImportarCatalogo'
 import { IMPORTACION_CATALOGOS } from '@/config/importacionCatalogos';
 import { THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from '@/utils/geliaTheme';
 
-export default function TablaAlmacenes({ datos = [], sucursales = [], tipos_almacen = [] }) {
+export default function TablaAlmacenes({
+    datos = [],
+    sucursales = [],
+    tipos_almacen = [],
+    mostrarImportar = true,
+    mostrarEliminar = true,
+    puedeGestionar = true,
+    rutas = { store: 'admin.catalogos.almacenes.store', update: 'admin.catalogos.almacenes.update', destroy: 'admin.catalogos.almacenes.destroy' },
+    sucursalIdPorDefecto = '',
+}) {
     const [modalAbierto, setModalAbierto] = useState(false);
     const [modalEliminar, setModalEliminar] = useState(false);
     const [modalImportar, setModalImportar] = useState(false);
@@ -16,7 +25,14 @@ export default function TablaAlmacenes({ datos = [], sucursales = [], tipos_alma
         codigo: '', nombre: '', sucursal_id: '', tipo_almacen_id: '', activo: true, visible_en_pedidos: false, visible_en_traspasos: false, permite_busqueda_productos: true,
     });
 
-    const abrirNuevo = () => { setItemActual(null); reset(); setModalAbierto(true); };
+    const abrirNuevo = () => {
+        setItemActual(null);
+        reset();
+        if (sucursalIdPorDefecto) {
+            setData('sucursal_id', sucursalIdPorDefecto);
+        }
+        setModalAbierto(true);
+    };
     const abrirEditar = (item) => {
         setItemActual(item);
         setData({
@@ -34,7 +50,7 @@ export default function TablaAlmacenes({ datos = [], sucursales = [], tipos_alma
     const handleSubmit = (e) => {
         e.preventDefault();
         const accion = itemActual ? put : post;
-        const ruta = itemActual ? route('admin.catalogos.almacenes.update', itemActual.id) : route('admin.catalogos.almacenes.store');
+        const ruta = itemActual ? route(rutas.update, itemActual.id) : route(rutas.store);
         accion(ruta, { onSuccess: () => { setModalAbierto(false); reset(); } });
     };
 
@@ -43,10 +59,14 @@ export default function TablaAlmacenes({ datos = [], sucursales = [], tipos_alma
             <GeliaLoader isVisible={processing} message="Guardando almacén_" />
             <div className="p-6 border-b theme-border flex justify-between flex-wrap gap-4">
                 <h2 className="text-xl font-black italic uppercase m-0 flex items-center gap-2 theme-text-main"><Boxes className="w-5 h-5" /> Almacenes_</h2>
-                <div className="flex gap-2">
-                    <button type="button" onClick={() => setModalImportar(true)} className="flex items-center gap-2 px-5 py-3 rounded-2xl font-black uppercase text-xs theme-element border theme-border"><Upload className="w-4 h-4" /> Importar</button>
-                    <button onClick={abrirNuevo} className="px-6 py-3 rounded-2xl text-white font-black uppercase text-xs" style={{ backgroundColor: 'var(--color-primario)' }}><Plus className="w-4 h-4 inline" /> Nuevo</button>
-                </div>
+                {puedeGestionar && (
+                    <div className="flex gap-2">
+                        {mostrarImportar && (
+                            <button type="button" onClick={() => setModalImportar(true)} className="flex items-center gap-2 px-5 py-3 rounded-2xl font-black uppercase text-xs theme-element border theme-border"><Upload className="w-4 h-4" /> Importar</button>
+                        )}
+                        <button type="button" onClick={abrirNuevo} className="px-6 py-3 rounded-2xl text-white font-black uppercase text-xs" style={{ backgroundColor: 'var(--color-primario)' }}><Plus className="w-4 h-4 inline" /> Nuevo</button>
+                    </div>
+                )}
             </div>
             <table className="w-full">
                 <thead><tr className="border-b theme-border text-[9px] font-black uppercase theme-text-muted"><th className="px-6 py-3 text-left">Código / Nombre</th><th className="px-6 py-3 text-left">Sucursal</th><th className="px-6 py-3 text-left">Tipo</th><th className="px-6 py-3 text-left">Pedidos</th><th className="px-6 py-3 text-left">Traspasos</th><th className="px-6 py-3 text-left">Búsqueda</th><th className="px-6 py-3 text-right">Acciones</th></tr></thead>
@@ -72,8 +92,14 @@ export default function TablaAlmacenes({ datos = [], sucursales = [], tipos_alma
                                 </span>
                             </td>
                             <td className="px-6 py-4 text-right">
-                                <button onClick={() => abrirEditar(item)} className="p-2 theme-element border theme-border rounded-xl mr-2"><Edit2 className="w-4 h-4" /></button>
-                                <button onClick={() => { setItemActual(item); setModalEliminar(true); }} className="p-2 theme-element border theme-border rounded-xl"><Trash2 className="w-4 h-4" /></button>
+                                {puedeGestionar && (
+                                    <>
+                                        <button type="button" onClick={() => abrirEditar(item)} className="p-2 theme-element border theme-border rounded-xl mr-2"><Edit2 className="w-4 h-4" /></button>
+                                        {mostrarEliminar && rutas.destroy && (
+                                            <button type="button" onClick={() => { setItemActual(item); setModalEliminar(true); }} className="p-2 theme-element border theme-border rounded-xl"><Trash2 className="w-4 h-4" /></button>
+                                        )}
+                                    </>
+                                )}
                             </td>
                         </tr>
                     ))}
@@ -86,8 +112,8 @@ export default function TablaAlmacenes({ datos = [], sucursales = [], tipos_alma
                         <form onSubmit={handleSubmit} className="space-y-4">
                             <input required value={data.codigo} onChange={(e) => setData('codigo', e.target.value)} placeholder="Código *" className="theme-input w-full px-4 py-3 font-bold" />
                             <input required value={data.nombre} onChange={(e) => setData('nombre', e.target.value)} placeholder="Nombre *" className="theme-input w-full px-4 py-3 font-bold" />
-                            <select value={data.sucursal_id} onChange={(e) => setData('sucursal_id', e.target.value)} className="theme-input w-full px-4 py-3 font-bold">
-                                <option value="">Sucursal</option>
+                            <select required={rutas.store === 'almacenes.catalogo.store'} value={data.sucursal_id} onChange={(e) => setData('sucursal_id', e.target.value)} className="theme-input w-full px-4 py-3 font-bold">
+                                <option value="">Sucursal *</option>
                                 {sucursales.map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
                             </select>
                             <select value={data.tipo_almacen_id} onChange={(e) => setData('tipo_almacen_id', e.target.value)} className="theme-input w-full px-4 py-3 font-bold">
@@ -109,7 +135,7 @@ export default function TablaAlmacenes({ datos = [], sucursales = [], tipos_alma
                     <div className={`${THEME_MODAL_SHELL} p-8 text-center modal-pop`} onClick={(e) => e.stopPropagation()}>
                         <AlertTriangle className="w-10 h-10 text-red-500 mx-auto mb-4" />
                         <p className="theme-text-main mb-4">¿Eliminar «{itemActual?.nombre}»?</p>
-                        <button onClick={() => router.delete(route('admin.catalogos.almacenes.destroy', itemActual.id), { onSuccess: () => setModalEliminar(false) })} className="px-6 py-3 bg-red-600 text-white rounded-xl font-black uppercase text-[10px]">Eliminar</button>
+                        <button type="button" onClick={() => router.delete(route(rutas.destroy, itemActual.id), { onSuccess: () => setModalEliminar(false) })} className="px-6 py-3 bg-red-600 text-white rounded-xl font-black uppercase text-[10px]">Eliminar</button>
                     </div>
                 </div>, document.body
             )}

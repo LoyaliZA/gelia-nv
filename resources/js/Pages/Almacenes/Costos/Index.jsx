@@ -1,19 +1,16 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Head, router, useForm } from '@inertiajs/react';
+import { Head, Link, router, useForm } from '@inertiajs/react';
 import { DollarSign, Plus, Edit2, Trash2, Save, Search, UploadCloud } from 'lucide-react';
 import AppLayout from '@/Layouts/AppLayout';
 import GeliaPaginacion from '@/Components/GeliaPaginacion';
 import GeliaLoader from '@/Components/GeliaLoader';
 import EncabezadoOrdenable from '@/Components/Almacenes/EncabezadoOrdenable';
 import SelectorProducto from '@/Components/Almacenes/SelectorProducto';
-import WizardImportacionCatalogo from '@/Components/Almacenes/WizardImportacionCatalogo';
-import { IMPORTACION_CATALOGOS } from '@/config/importacionCatalogos';
 import { geliaCardClass, THEME_BTN_PRIMARY, THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from '@/utils/geliaTheme';
 
 export default function Index({ auth, costos, sucursales, almacenes, filtros }) {
     const [modalAbierto, setModalAbierto] = useState(false);
-    const [wizardImportacion, setWizardImportacion] = useState(false);
     const [itemActual, setItemActual] = useState(null);
     const [sucursalId, setSucursalId] = useState(filtros?.sucursal_id || '');
     const [almacenId, setAlmacenId] = useState(filtros?.almacen_id || '');
@@ -108,13 +105,16 @@ export default function Index({ auth, costos, sucursales, almacenes, filtros }) 
                                 <DollarSign className="w-7 h-7" style={{ color: 'var(--color-primario)' }} />
                                 Costos por Almacén
                             </h1>
+                            <p className="text-[11px] font-bold theme-text-muted mt-2 max-w-2xl">
+                                El precio de venta aquí es referencia del almacén; no actualiza automáticamente TiendaNube ni listas comerciales.
+                            </p>
                         </div>
                         {(puedeGestionar || puedeImportar) && (
                             <div className="flex flex-wrap gap-2">
                                 {puedeImportar && (
-                                    <button onClick={() => setWizardImportacion(true)} className="px-4 py-2 text-[10px] font-black uppercase theme-element border theme-border rounded-xl flex items-center gap-2 theme-text-main">
+                                    <Link href={route('almacenes.importaciones.index', { preset: 'costos' })} className="px-4 py-2 text-[10px] font-black uppercase theme-element border theme-border rounded-xl flex items-center gap-2 theme-text-main">
                                         <UploadCloud className="w-4 h-4" /> Importar
-                                    </button>
+                                    </Link>
                                 )}
                                 {puedeGestionar && (
                                     <button onClick={abrirNuevo} className={`${THEME_BTN_PRIMARY} theme-btn-primary--compact`}>
@@ -138,6 +138,8 @@ export default function Index({ auth, costos, sucursales, almacenes, filtros }) 
                             <button type="submit" className={`${THEME_BTN_PRIMARY} theme-btn-primary--compact`}><Search className="w-4 h-4" /></button>
                         </form>
                         <button onClick={() => aplicarFiltros({ page: 1 })} className="px-4 py-2 text-[10px] font-black uppercase theme-element border theme-border rounded-xl">Filtrar</button>
+                        <button type="button" onClick={() => aplicarFiltros({ filtro: 'costo_cero', page: 1 })} className="px-4 py-2 text-[10px] font-black uppercase theme-element border theme-border rounded-xl">Costo cero</button>
+                        <Link href={route('almacenes.cobertura.index', { costo: 'sin', almacen_id: almacenId || undefined })} className="px-4 py-2 text-[10px] font-black uppercase theme-element border theme-border rounded-xl">Sin costo (cobertura)</Link>
                     </div>
                 </header>
 
@@ -190,14 +192,6 @@ export default function Index({ auth, costos, sucursales, almacenes, filtros }) 
                     {lista.length > 0 && <GeliaPaginacion paginator={costos} onIrAPagina={(p) => aplicarFiltros({ page: p })} embedded />}
                 </div>
             </div>
-
-            {wizardImportacion && (
-                <WizardImportacionCatalogo
-                    config={IMPORTACION_CATALOGOS.costos}
-                    almacenes={almacenes}
-                    onClose={() => setWizardImportacion(false)}
-                />
-            )}
 
             {modalAbierto && createPortal(
                 <div className={THEME_MODAL_OVERLAY} onClick={() => setModalAbierto(false)}>

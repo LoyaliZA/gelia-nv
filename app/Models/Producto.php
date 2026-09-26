@@ -94,6 +94,11 @@ class Producto extends Model
         return $this->hasMany(ProductoCosto::class);
     }
 
+    public function asignacionesAlmacen(): HasMany
+    {
+        return $this->hasMany(ProductoAlmacen::class);
+    }
+
     public function getCostoAttribute(): float
     {
         $costo = $this->relationLoaded('costos')

@@ -44,7 +44,7 @@ TXT;
         return <<<'TXT'
 Inventario (Almacenes): stock por producto+almacén (existencia, apartado, disponible=existencia-apartado).
 Buscar por SKU, descripción, código de barras o folio. Filtrar por almacén/sucursal en la UI.
-GELIA consulta existencias; con permiso almacenes.costos.ver también puede reportar costo y precio_venta del catálogo.
+GELIA consulta existencias de referencia (no stock confirmado para venta); con permiso almacenes.costos.ver también puede reportar costo y precio_venta de referencia por almacén. Importaciones unificadas en /almacenes/importaciones.
 GELIA no crea ni ajusta inventario. No inventa precios.
 Permisos: almacenes.inventarios.ver, almacenes.costos.ver (precios).
 TXT;

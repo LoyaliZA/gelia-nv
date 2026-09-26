@@ -25,12 +25,14 @@ class ProcesarFilaInventarioImportacionServiceTest extends TestCase
         $svc->ejecutar(
             [
                 'sku' => 'SOLOPV',
+                'folio' => '800001',
                 'descripcion' => 'Solo precio',
                 'existencia' => '5',
                 'precio_venta' => '88.5',
             ],
             [
                 'sku' => 'sku',
+                'folio' => 'folio',
                 'descripcion' => 'descripcion',
                 'existencia' => 'existencia',
                 'precio_venta' => 'precio_venta',

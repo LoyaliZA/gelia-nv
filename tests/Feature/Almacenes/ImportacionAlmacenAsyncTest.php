@@ -8,7 +8,10 @@ use App\Models\Almacenes\ImportacionAlmacenLog;
 use App\Models\Inventario;
 use App\Models\Producto;
 use App\Models\ProductoCosto;
+use App\Models\Sucursal;
 use App\Models\User;
+use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
+use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Queue;
@@ -23,9 +26,15 @@ class ImportacionAlmacenAsyncTest extends TestCase
 
     protected User $usuario;
 
+    protected Sucursal $sucursalOperable;
+
     protected function setUp(): void
     {
         parent::setUp();
+        $this->withoutMiddleware([
+            ValidateCsrfToken::class,
+            PreventRequestForgery::class,
+        ]);
 
         foreach ([
             'gestion_interna.productos.ver',
@@ -46,6 +55,9 @@ class ImportacionAlmacenAsyncTest extends TestCase
             'almacenes.inventarios.importar',
             'almacenes.costos.importar',
         ]);
+
+        $this->sucursalOperable = Sucursal::factory()->create(['nombre' => 'Sucursal Test Import']);
+        $this->usuario->concederAccesoSucursal($this->sucursalOperable, esPrincipal: true);
     }
 
     public function test_iniciar_importacion_productos_despacha_job_y_devuelve_log_id(): void
@@ -58,6 +70,7 @@ class ImportacionAlmacenAsyncTest extends TestCase
             'file_path' => $tempPath,
             'mapping' => [
                 'sku' => 'sku',
+                'folio' => 'folio',
                 'descripcion' => 'descripcion',
             ],
         ]);
@@ -79,16 +92,15 @@ class ImportacionAlmacenAsyncTest extends TestCase
 
     public function test_job_procesa_lote_de_productos_y_completa_log(): void
     {
-        $tempPath = $this->crearArchivoTemporalProductos();
-        Storage::makeDirectory('importaciones_almacenes/1');
-        $persistente = 'importaciones_almacenes/1/source.csv';
-        Storage::move($tempPath, $persistente);
+        $persistente = 'importaciones_almacenes/job-test/source.csv';
+        Storage::put($persistente, "folio,sku,descripcion\n100201,IMP001,Producto Uno\n100202,IMP002,Producto Dos\n");
+        $this->assertTrue(Storage::exists($persistente));
 
         $log = ImportacionAlmacenLog::create([
             'user_id' => $this->usuario->id,
             'tipo' => 'productos',
             'archivo_ruta' => $persistente,
-            'mapping' => ['sku' => 'sku', 'descripcion' => 'descripcion'],
+            'mapping' => ['sku' => 'sku', 'folio' => 'folio', 'descripcion' => 'descripcion'],
             'estado' => 'pendiente',
         ]);
 
@@ -98,6 +110,7 @@ class ImportacionAlmacenAsyncTest extends TestCase
             app(\App\Services\Almacenes\ProcesarFilaProductoImportacionService::class),
             app(\App\Services\Almacenes\ProcesarFilaInventarioImportacionService::class),
             app(\App\Services\Almacenes\ProcesarFilaCostoImportacionService::class),
+            app(\App\Services\Almacenes\ProcesarFilaImportacionHubService::class),
             app(\App\Services\Almacenes\FinalizarImportacionAlmacenAsyncService::class),
         );
 
@@ -146,6 +159,7 @@ class ImportacionAlmacenAsyncTest extends TestCase
             app(\App\Services\Almacenes\ProcesarFilaProductoImportacionService::class),
             app(\App\Services\Almacenes\ProcesarFilaInventarioImportacionService::class),
             app(\App\Services\Almacenes\ProcesarFilaCostoImportacionService::class),
+            app(\App\Services\Almacenes\ProcesarFilaImportacionHubService::class),
             app(\App\Services\Almacenes\FinalizarImportacionAlmacenAsyncService::class),
         );
 
@@ -185,6 +199,7 @@ class ImportacionAlmacenAsyncTest extends TestCase
             app(\App\Services\Almacenes\ProcesarFilaProductoImportacionService::class),
             app(\App\Services\Almacenes\ProcesarFilaInventarioImportacionService::class),
             app(\App\Services\Almacenes\ProcesarFilaCostoImportacionService::class),
+            app(\App\Services\Almacenes\ProcesarFilaImportacionHubService::class),
             app(\App\Services\Almacenes\FinalizarImportacionAlmacenAsyncService::class),
         );
 
@@ -202,7 +217,7 @@ class ImportacionAlmacenAsyncTest extends TestCase
             'user_id' => $this->usuario->id,
             'tipo' => 'productos',
             'archivo_ruta' => 'importaciones_almacenes/x/source.csv',
-            'mapping' => ['sku' => 'sku', 'descripcion' => 'descripcion'],
+            'mapping' => ['sku' => 'sku', 'folio' => 'folio', 'descripcion' => 'descripcion'],
             'total_filas' => 100,
             'procesados' => 40,
             'estado' => 'en_proceso',
@@ -222,7 +237,7 @@ class ImportacionAlmacenAsyncTest extends TestCase
             'user_id' => $this->usuario->id,
             'tipo' => 'productos',
             'archivo_ruta' => 'importaciones_almacenes/x/source.csv',
-            'mapping' => ['sku' => 'sku', 'descripcion' => 'descripcion'],
+            'mapping' => ['sku' => 'sku', 'folio' => 'folio', 'descripcion' => 'descripcion'],
             'estado' => 'en_proceso',
         ]);
 
@@ -242,8 +257,8 @@ class ImportacionAlmacenAsyncTest extends TestCase
         Queue::fake();
         $almacen = $this->crearAlmacen();
 
-        $contenido = "SKU,Descripcion,Existencia,Costo,Precio\nT001,Test,5,12.5,99\n";
-        $path = 'temp/import_inv_cost_' . Str::uuid() . '.csv';
+        $contenido = "Folio,SKU,Descripcion,Existencia,Costo,Precio\n100301,T001,Test,5,12.5,99\n";
+        $path = 'importaciones/'.$this->usuario->id.'/import_inv_cost_'.Str::uuid().'.csv';
         Storage::put($path, $contenido);
 
         $request = Request::create('/almacenes/inventarios/import-iniciar', 'POST', [
@@ -251,6 +266,7 @@ class ImportacionAlmacenAsyncTest extends TestCase
             'almacen_id' => $almacen->id,
             'mapping' => [
                 'sku' => 'SKU',
+                'folio' => 'Folio',
                 'descripcion' => 'Descripcion',
                 'existencia' => 'Existencia',
                 'costo' => 'Costo',
@@ -270,7 +286,7 @@ class ImportacionAlmacenAsyncTest extends TestCase
     public function test_job_inventarios_con_costo_crea_producto_costos(): void
     {
         $almacen = $this->crearAlmacen();
-        $csv = "SKU,Descripcion,Existencia,Costo,Precio\nINVCOST1,Prod Costo,3,15.25,40.00\n";
+        $csv = "Folio,SKU,Descripcion,Existencia,Costo,Precio\n100401,INVCOST1,Prod Costo,3,15.25,40.00\n";
         $persistente = 'importaciones_almacenes/invcost/source.csv';
         Storage::put($persistente, $csv);
 
@@ -281,6 +297,7 @@ class ImportacionAlmacenAsyncTest extends TestCase
             'archivo_ruta' => $persistente,
             'mapping' => [
                 'sku' => 'SKU',
+                'folio' => 'Folio',
                 'descripcion' => 'Descripcion',
                 'existencia' => 'Existencia',
                 'costo' => 'Costo',
@@ -295,6 +312,7 @@ class ImportacionAlmacenAsyncTest extends TestCase
             app(\App\Services\Almacenes\ProcesarFilaProductoImportacionService::class),
             app(\App\Services\Almacenes\ProcesarFilaInventarioImportacionService::class),
             app(\App\Services\Almacenes\ProcesarFilaCostoImportacionService::class),
+            app(\App\Services\Almacenes\ProcesarFilaImportacionHubService::class),
             app(\App\Services\Almacenes\FinalizarImportacionAlmacenAsyncService::class),
         );
 
@@ -310,8 +328,8 @@ class ImportacionAlmacenAsyncTest extends TestCase
 
     private function crearArchivoTemporalProductos(): string
     {
-        $contenido = "sku,descripcion\nIMP001,Producto Uno\nIMP002,Producto Dos\n";
-        $path = 'temp/import_test_' . Str::uuid() . '.csv';
+        $contenido = "folio,sku,descripcion\n100101,IMP001,Producto Uno\n100102,IMP002,Producto Dos\n";
+        $path = 'importaciones/'.$this->usuario->id.'/import_test_'.Str::uuid().'.csv';
         Storage::put($path, $contenido);
 
         return $path;
@@ -339,6 +357,7 @@ class ImportacionAlmacenAsyncTest extends TestCase
         return Almacen::create([
             'codigo' => 'ALM' . $n,
             'nombre' => 'Almacén Test ' . $n,
+            'sucursal_id' => $this->sucursalOperable->id,
             'activo' => true,
         ]);
     }

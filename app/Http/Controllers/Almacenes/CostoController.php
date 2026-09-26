@@ -5,20 +5,19 @@ namespace App\Http\Controllers\Almacenes;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Almacenes\StoreCostoRequest;
 use App\Http\Requests\Almacenes\UpdateCostoRequest;
-use App\Models\Almacen;
 use App\Models\ProductoCosto;
-use App\Models\Sucursal;
+use App\Services\Almacenes\AlcanceAlmacenesService;
 use App\Support\Almacenes\OrdenamientoListadoAlmacen;
+use App\Services\Almacenes\GuardarArchivoVistaPreviaImportacionService;
 use App\Services\Almacenes\IniciarImportacionAlmacenService;
+use App\Services\Almacenes\LeerEncabezadosArchivoImportacionService;
 use App\Services\Almacenes\RegistrarAuditoriaAlmacenService;
 use App\Services\Catalogos\PlantillaImportacionCatalogoService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
-use Rap2hpoutre\FastExcel\FastExcel;
 
 class CostoController extends Controller
 {
@@ -26,24 +25,37 @@ class CostoController extends Controller
         private readonly RegistrarAuditoriaAlmacenService $auditoria,
     ) {}
 
-    public function index(Request $request): Response
+    public function index(Request $request, AlcanceAlmacenesService $alcance): Response
     {
+        $user = $request->user();
         $query = ProductoCosto::with([
             'producto.marca',
             'producto.categoria',
             'almacen.sucursal',
         ]);
 
+        $alcance->restringirPorAlmacenSucursalOperable($query, $user);
+
         if ($sucursalId = $request->query('sucursal_id')) {
+            $alcance->asegurarSucursalOperable($user, (int) $sucursalId);
             $query->whereHas('almacen', fn ($q) => $q->where('sucursal_id', $sucursalId));
         }
 
         if ($almacenId = $request->query('almacen_id')) {
+            $alcance->asegurarAlmacenOperable($user, (int) $almacenId);
             $query->where('almacen_id', $almacenId);
         }
 
         if ($busqueda = $request->query('q')) {
             $query->whereHas('producto', fn ($q) => $q->buscarPorTexto($busqueda));
+        }
+
+        if ($request->query('filtro') === 'costo_cero') {
+            $query->where('costo', 0);
+        }
+
+        if ($request->query('filtro') === 'sin_precio') {
+            $query->whereNull('precio_venta');
         }
 
         OrdenamientoListadoAlmacen::costos(
@@ -52,11 +64,14 @@ class CostoController extends Controller
             $request->query('dir'),
         );
 
+        $sucursales = $alcance->sucursalesOperables($user);
+
         return Inertia::render('Almacenes/Costos/Index', [
             'costos' => $query->paginate(50)->withQueryString(),
-            'sucursales' => Sucursal::where('activo', true)->orderBy('nombre')->get(),
-            'almacenes' => Almacen::with('sucursal')->where('activo', true)->orderBy('nombre')->get(),
-            'filtros' => $request->only(['sucursal_id', 'almacen_id', 'q', 'sort', 'dir']),
+            'sucursales' => $sucursales,
+            'almacenes' => $alcance->almacenesOperables($user),
+            'filtros' => $request->only(['sucursal_id', 'almacen_id', 'q', 'sort', 'dir', 'filtro']),
+            'sin_sucursales_operables' => $sucursales->isEmpty(),
         ]);
     }
 
@@ -104,26 +119,22 @@ class CostoController extends Controller
         return $plantillaService->descargar('costos');
     }
 
-    public function importPreview(Request $request): JsonResponse
-    {
+    public function importPreview(
+        Request $request,
+        GuardarArchivoVistaPreviaImportacionService $vistaPrevia,
+        LeerEncabezadosArchivoImportacionService $encabezados,
+        AlcanceAlmacenesService $alcance,
+    ): JsonResponse {
         $request->validate([
             'archivo' => 'required|file|mimes:csv,xlsx,xls',
             'almacen_id' => 'required|exists:almacenes,id',
         ]);
+        $alcance->asegurarAlmacenOperable($request->user(), (int) $request->almacen_id);
 
-        $file = $request->file('archivo');
-        $extension = $file->getClientOriginalExtension();
-        $path = $file->storeAs('temp', 'import_costos_preview.' . $extension);
-
-        $headers = [];
-        $rows = (new FastExcel)->import(Storage::path($path));
-        foreach ($rows as $row) {
-            $headers = array_keys($row);
-            break;
-        }
+        $path = $vistaPrevia->guardar((int) $request->user()->id, $request->file('archivo'));
 
         return response()->json([
-            'headers' => $headers,
+            'headers' => $encabezados->ejecutar($path),
             'file_path' => $path,
             'almacen_id' => $request->almacen_id,
         ]);

@@ -6,9 +6,11 @@ use App\Models\Almacenes\ImportacionAlmacenLog;
 use App\Services\Almacenes\FinalizarImportacionAlmacenAsyncService;
 use App\Services\Almacenes\LeerFilasImportacionAlmacenService;
 use App\Services\Almacenes\ProcesarFilaCostoImportacionService;
+use App\Services\Almacenes\ProcesarFilaImportacionHubService;
 use App\Services\Almacenes\ProcesarFilaInventarioImportacionService;
 use App\Services\Almacenes\ProcesarFilaProductoImportacionService;
 use App\Services\Almacenes\ProcesarFilaVentaImportacionService;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -36,6 +38,7 @@ class ImportarAlmacenCatalogoJob implements ShouldQueue
         ProcesarFilaProductoImportacionService $procesadorProducto,
         ProcesarFilaInventarioImportacionService $procesadorInventario,
         ProcesarFilaCostoImportacionService $procesadorCosto,
+        ProcesarFilaImportacionHubService $procesadorHub,
         FinalizarImportacionAlmacenAsyncService $finalizador,
     ): void {
         $log = ImportacionAlmacenLog::find($this->logId);
@@ -75,7 +78,18 @@ class ImportarAlmacenCatalogoJob implements ShouldQueue
 
             $lote = $lector->leerLote($log, $this->offset, self::BATCH_SIZE);
             $mapping = $log->mapping ?? [];
-            $stats = ['importados' => 0, 'actualizados' => 0, 'omitidos' => 0];
+            $stats = [
+                'importados' => 0,
+                'actualizados' => 0,
+                'omitidos' => 0,
+                'productos_creados' => 0,
+                'productos_actualizados' => 0,
+                'asignaciones_creadas' => 0,
+                'costos_creados' => 0,
+                'costos_actualizados' => 0,
+                'cantidades_actualizadas' => 0,
+                'sin_cambios' => 0,
+            ];
 
             foreach ($lote['filas'] as $item) {
                 if ($log->fresh()->estado === 'cancelado') {
@@ -87,9 +101,29 @@ class ImportarAlmacenCatalogoJob implements ShouldQueue
                 $referencia = trim((string) ($row[$mapping['sku']] ?? ''));
 
                 try {
-                    $resultado = $this->procesarFila($log, $row, $mapping, $procesadorProducto, $procesadorInventario, $procesadorCosto);
-                    $clave = $resultado['accion'] === 'importado' ? 'importados' : 'actualizados';
-                    $stats[$clave]++;
+                    $resultado = DB::transaction(fn () => $this->procesarFila(
+                        $log,
+                        $row,
+                        $mapping,
+                        $procesadorProducto,
+                        $procesadorInventario,
+                        $procesadorCosto,
+                        $procesadorHub,
+                    ));
+
+                    if ($log->tipo === 'hub') {
+                        foreach (['productos_creados', 'productos_actualizados', 'asignaciones_creadas', 'costos_creados', 'costos_actualizados', 'cantidades_actualizadas', 'sin_cambios'] as $k) {
+                            $stats[$k] += (int) ($resultado[$k] ?? 0);
+                        }
+                        if (($resultado['accion'] ?? '') === 'omitido') {
+                            $stats['omitidos']++;
+                        } else {
+                            $stats['actualizados']++;
+                        }
+                    } else {
+                        $clave = $resultado['accion'] === 'importado' ? 'importados' : 'actualizados';
+                        $stats[$clave]++;
+                    }
                 } catch (Throwable $e) {
                     $stats['omitidos']++;
                     $finalizador->registrarError($log, $numeroFila, $referencia ?: '—', 'general', $e->getMessage());
@@ -101,6 +135,11 @@ class ImportarAlmacenCatalogoJob implements ShouldQueue
             $log->increment('importados', $stats['importados']);
             $log->increment('actualizados', $stats['actualizados']);
             $log->increment('omitidos', $stats['omitidos']);
+            foreach (['productos_creados', 'productos_actualizados', 'asignaciones_creadas', 'costos_creados', 'costos_actualizados', 'cantidades_actualizadas', 'sin_cambios'] as $k) {
+                if ($stats[$k] > 0) {
+                    $log->increment($k, $stats[$k]);
+                }
+            }
 
             $nuevoOffset = $this->offset + $procesadosEnLote;
             $log = $log->fresh();
@@ -132,8 +171,15 @@ class ImportarAlmacenCatalogoJob implements ShouldQueue
         ProcesarFilaProductoImportacionService $procesadorProducto,
         ProcesarFilaInventarioImportacionService $procesadorInventario,
         ProcesarFilaCostoImportacionService $procesadorCosto,
+        ProcesarFilaImportacionHubService $procesadorHub,
     ): array {
         return match ($log->tipo) {
+            'hub' => $procesadorHub->ejecutar(
+                $row,
+                $mapping,
+                $log->almacen_id ? (int) $log->almacen_id : null,
+                $log->operaciones ?? [],
+            ),
             'productos' => $procesadorProducto->ejecutar($row, $mapping),
             'inventarios' => $procesadorInventario->ejecutar($row, $mapping, (int) $log->almacen_id),
             'costos' => $procesadorCosto->ejecutar($row, $mapping, (int) $log->almacen_id),

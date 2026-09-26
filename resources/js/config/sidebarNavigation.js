@@ -411,11 +411,43 @@ export function buildSidebarNavigation({ can, showAdminMenu, manualesHubVisible 
         },
     ].filter(Boolean);
 
+    const puedeAlmacenes = can('almacenes.inventarios.ver') || can('almacenes.costos.ver')
+        || can('gestion_interna.productos.ver') || can('almacenes.productos.ver') || can('catalogos.gestionar');
+    const puedeImportarAlmacen = can('gestion_interna.productos.importar') || can('gestion_interna.productos.gestionar')
+        || can('almacenes.inventarios.importar') || can('almacenes.costos.importar') || can('catalogos.gestionar');
+
     const almacenesChildren = [
+        puedeAlmacenes && {
+            type: 'link',
+            id: 'almacenes_resumen',
+            label: 'Resumen',
+            icon: Warehouse,
+            href: () => routeHref('almacenes.index', '/almacenes'),
+            active: (url) => {
+                const path = url.split('?')[0];
+                return path === '/almacenes' || path === '/almacenes/';
+            },
+        },
+        (can('almacenes.inventarios.ver') || can('almacenes.costos.ver') || can('catalogos.gestionar')) && {
+            type: 'link',
+            id: 'almacenes_catalogo',
+            label: 'Almacenes por sucursal',
+            icon: Warehouse,
+            href: () => routeHref('almacenes.catalogo.index', '/almacenes/catalogo'),
+            active: (url) => url.startsWith('/almacenes/catalogo'),
+        },
+        (can('almacenes.inventarios.ver') || can('catalogos.gestionar')) && {
+            type: 'link',
+            id: 'almacenes_cobertura',
+            label: 'Cobertura',
+            icon: Layers,
+            href: () => routeHref('almacenes.cobertura.index', '/almacenes/cobertura'),
+            active: (url) => url.startsWith('/almacenes/cobertura'),
+        },
         (can('almacenes.inventarios.ver') || can('catalogos.gestionar')) && {
             type: 'link',
             id: 'almacenes_inventarios',
-            label: 'Inventarios',
+            label: 'Inventarios de referencia',
             icon: Boxes,
             href: () => routeHref('almacenes.inventarios.index', '/almacenes/inventarios'),
             active: (url) => url.startsWith('/almacenes/inventarios'),
@@ -427,6 +459,30 @@ export function buildSidebarNavigation({ can, showAdminMenu, manualesHubVisible 
             icon: DollarSign,
             href: () => routeHref('almacenes.costos.index', '/almacenes/costos'),
             active: (url) => url.startsWith('/almacenes/costos'),
+        },
+        puedeImportarAlmacen && {
+            type: 'link',
+            id: 'almacenes_importaciones',
+            label: 'Importaciones',
+            icon: FileSpreadsheet,
+            href: () => routeHref('almacenes.importaciones.index', '/almacenes/importaciones'),
+            active: (url) => url.startsWith('/almacenes/importaciones'),
+        },
+        (can('gestion_interna.productos.ver') || can('almacenes.productos.ver') || can('catalogos.gestionar')) && {
+            type: 'link',
+            id: 'almacenes_productos_gi',
+            label: 'Productos',
+            icon: Package,
+            href: () => routeHref('gestion_interna.productos.index', '/gestion-interna/productos'),
+            active: (url) => url.startsWith('/gestion-interna/productos'),
+        },
+        can('catalogos.gestionar') && {
+            type: 'link',
+            id: 'almacenes_config_catalogos',
+            label: 'Configuración',
+            icon: Settings,
+            href: () => routeHref('admin.catalogos', '/admin/catalogos'),
+            active: (url) => url.startsWith('/admin/catalogos'),
         },
     ].filter(Boolean);
 

@@ -4,6 +4,7 @@ namespace App\Services\Almacenes;
 
 use App\Jobs\Almacenes\ImportarAlmacenCatalogoJob;
 use App\Models\Almacenes\ImportacionAlmacenLog;
+use App\Support\Almacenes\ReglasFichaProductoImportacion;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
@@ -12,6 +13,8 @@ class IniciarImportacionAlmacenService
 {
     public function __construct(
         private readonly LeerFilasImportacionAlmacenService $lector,
+        private readonly GuardarArchivoVistaPreviaImportacionService $vistaPrevia,
+        private readonly AlcanceAlmacenesService $alcance,
     ) {}
 
     /**
@@ -22,11 +25,12 @@ class IniciarImportacionAlmacenService
         $rules = [
             'file_path' => 'required|string',
             'mapping' => 'required|array',
-            'mapping.sku' => 'required|string',
         ];
 
         if ($tipo === 'productos') {
-            $rules['mapping.descripcion'] = 'required|string';
+            $rules = array_merge($rules, ReglasFichaProductoImportacion::reglasValidacionMapping());
+        } else {
+            $rules['mapping.sku'] = 'required|string';
         }
 
         if ($tipo === 'ventas') {
@@ -39,7 +43,7 @@ class IniciarImportacionAlmacenService
         if (in_array($tipo, ['inventarios', 'costos'], true)) {
             $rules['almacen_id'] = 'required|exists:almacenes,id';
             if ($tipo === 'inventarios') {
-                $rules['mapping.descripcion'] = 'required|string';
+                $rules = array_merge($rules, ReglasFichaProductoImportacion::reglasValidacionMapping());
                 $rules['mapping.existencia'] = 'required|string';
             }
         }
@@ -53,8 +57,15 @@ class IniciarImportacionAlmacenService
             $mapping = [];
         }
 
+        $userId = (int) $request->user()->id;
+        $this->vistaPrevia->assertPerteneceAlUsuario($validated['file_path'], $userId);
+
+        if (isset($validated['almacen_id'])) {
+            $this->alcance->asegurarAlmacenOperable($request->user(), (int) $validated['almacen_id']);
+        }
+
         return $this->ejecutarDesdeRuta(
-            $request->user()->id,
+            $userId,
             $tipo,
             $validated['file_path'],
             $mapping,
@@ -75,7 +86,7 @@ class IniciarImportacionAlmacenService
         ?int $almacenId = null,
         bool $conservarOrigen = false,
     ): array {
-        if (! str_starts_with($tempPath, 'temp/')) {
+        if (! str_starts_with($tempPath, 'importaciones/')) {
             throw ValidationException::withMessages([
                 'file_path' => 'Ruta de archivo temporal inválida.',
             ]);

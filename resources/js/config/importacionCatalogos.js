@@ -64,7 +64,7 @@ export const IMPORTACION_CATALOGOS = {
         wizard: true,
         requiereAlmacen: false,
         columnas: [
-            { key: 'folio', label: 'Folio', requerido: false, nota: 'Número de folio existente; si se omite se genera uno nuevo' },
+            { key: 'folio', label: 'Folio', requerido: true, nota: 'Identificador de negocio del producto; debe coincidir para actualizar' },
             { key: 'sku', label: 'SKU', requerido: true, nota: 'Sin ceros a la izquierda' },
             { key: 'descripcion', label: 'Descripción', requerido: true },
             { key: 'marca', label: 'Marca', requerido: false, nota: 'Debe existir previamente en catálogos; no se crea automáticamente' },
@@ -77,7 +77,7 @@ export const IMPORTACION_CATALOGOS = {
             folio: '', sku: '', descripcion: '', marca: '', categoria: '', codigo_barras: '', peso: '', activo: '',
         },
         labels: {
-            folio: 'Folio',
+            folio: 'Folio *',
             sku: 'SKU *',
             descripcion: 'Descripción *',
             marca: 'Marca',
@@ -86,9 +86,9 @@ export const IMPORTACION_CATALOGOS = {
             peso: 'Peso (kg)',
             activo: 'Activo',
         },
-        required: ['sku', 'descripcion'],
+        required: ['sku', 'folio', 'descripcion'],
         notas: [
-            'Incluye el folio si el producto ya tiene uno asignado en tu sistema anterior.',
+            'Folio y descripción son obligatorios en cada fila.',
             'Marca y categoría deben existir previamente en catálogos; no se crean automáticamente.',
             'Descripción y textos se guardan en MAYÚSCULAS.',
             'Código de barras vacío → se usa el SKU.',
@@ -105,7 +105,7 @@ export const IMPORTACION_CATALOGOS = {
         wizard: true,
         requiereAlmacen: true,
         columnas: [
-            { key: 'folio', label: 'Folio', requerido: false, nota: 'Conserva el folio del producto si ya existe' },
+            { key: 'folio', label: 'Folio', requerido: true, nota: 'Identificador del producto en el catálogo' },
             { key: 'sku', label: 'SKU', requerido: true },
             { key: 'descripcion', label: 'Descripción', requerido: true },
             { key: 'categoria', label: 'Categoría', requerido: false, nota: 'Debe existir previamente en catálogos' },
@@ -119,7 +119,7 @@ export const IMPORTACION_CATALOGOS = {
             folio: '', sku: '', descripcion: '', categoria: '', marca: '', existencia: '', costo: '', costo_reposicion: '', precio_venta: '',
         },
         labels: {
-            folio: 'Folio',
+            folio: 'Folio *',
             sku: 'SKU del Producto *',
             descripcion: 'Descripción *',
             categoria: 'Categoría',
@@ -129,10 +129,10 @@ export const IMPORTACION_CATALOGOS = {
             costo_reposicion: 'Costo Reposición',
             precio_venta: 'Precio Venta',
         },
-        required: ['sku', 'descripcion', 'existencia'],
+        required: ['sku', 'folio', 'descripcion', 'existencia'],
         notas: [
             'Selecciona el almacén destino antes de subir el archivo.',
-            'Incluye el folio para conservar la numeración de productos existentes.',
+            'Folio y descripción son obligatorios en cada fila del archivo.',
             'Marca y categoría deben existir previamente en catálogos; no se crean automáticamente.',
             'Descripción y textos se guardan en MAYÚSCULAS.',
             'Código de barras vacío → se usa el SKU.',

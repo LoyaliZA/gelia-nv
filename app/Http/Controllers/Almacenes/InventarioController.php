@@ -5,20 +5,19 @@ namespace App\Http\Controllers\Almacenes;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Almacenes\StoreInventarioRequest;
 use App\Http\Requests\Almacenes\UpdateInventarioRequest;
-use App\Models\Almacen;
 use App\Models\Inventario;
-use App\Models\Sucursal;
+use App\Services\Almacenes\AlcanceAlmacenesService;
 use App\Support\Almacenes\OrdenamientoListadoAlmacen;
+use App\Services\Almacenes\GuardarArchivoVistaPreviaImportacionService;
 use App\Services\Almacenes\IniciarImportacionAlmacenService;
+use App\Services\Almacenes\LeerEncabezadosArchivoImportacionService;
 use App\Services\Almacenes\RegistrarAuditoriaAlmacenService;
 use App\Services\Catalogos\PlantillaImportacionCatalogoService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
-use Rap2hpoutre\FastExcel\FastExcel;
 
 class InventarioController extends Controller
 {
@@ -26,8 +25,9 @@ class InventarioController extends Controller
         private readonly RegistrarAuditoriaAlmacenService $auditoria,
     ) {}
 
-    public function index(Request $request): Response
+    public function index(Request $request, AlcanceAlmacenesService $alcance): Response
     {
+        $user = $request->user();
         $query = Inventario::query()
             ->select('inventarios.*')
             ->leftJoin('producto_costos', function ($join) {
@@ -45,11 +45,15 @@ class InventarioController extends Controller
                 'almacen.tipoAlmacen',
             ]);
 
+        $alcance->restringirPorAlmacenSucursalOperable($query, $user);
+
         if ($sucursalId = $request->query('sucursal_id')) {
+            $alcance->asegurarSucursalOperable($user, (int) $sucursalId);
             $query->whereHas('almacen', fn ($q) => $q->where('sucursal_id', $sucursalId));
         }
 
         if ($almacenId = $request->query('almacen_id')) {
+            $alcance->asegurarAlmacenOperable($user, (int) $almacenId);
             $query->where('almacen_id', $almacenId);
         }
 
@@ -63,11 +67,14 @@ class InventarioController extends Controller
             $request->query('dir'),
         );
 
+        $sucursales = $alcance->sucursalesOperables($user);
+
         return Inertia::render('Almacenes/Inventarios/Index', [
             'inventarios' => $query->paginate(50)->withQueryString(),
-            'sucursales' => Sucursal::where('activo', true)->orderBy('nombre')->get(),
-            'almacenes' => Almacen::with(['sucursal', 'tipoAlmacen'])->where('activo', true)->orderBy('nombre')->get(),
+            'sucursales' => $sucursales,
+            'almacenes' => $alcance->almacenesOperables($user),
             'filtros' => $request->only(['sucursal_id', 'almacen_id', 'q', 'sort', 'dir']),
+            'sin_sucursales_operables' => $sucursales->isEmpty(),
         ]);
     }
 
@@ -106,25 +113,22 @@ class InventarioController extends Controller
         return back()->with('success', 'Registro de inventario eliminado.');
     }
 
-    public function importPreview(Request $request)
-    {
+    public function importPreview(
+        Request $request,
+        GuardarArchivoVistaPreviaImportacionService $vistaPrevia,
+        LeerEncabezadosArchivoImportacionService $encabezados,
+        AlcanceAlmacenesService $alcance,
+    ) {
         $request->validate([
             'archivo' => 'required|file|mimes:csv,xlsx,xls',
             'almacen_id' => 'required|exists:almacenes,id',
         ]);
+        $alcance->asegurarAlmacenOperable($request->user(), (int) $request->almacen_id);
 
-        $file = $request->file('archivo');
-        $path = $file->storeAs('temp', 'import_preview.' . $file->getClientOriginalExtension());
-
-        $headers = [];
-        $rows = (new FastExcel)->import(Storage::path($path));
-        foreach ($rows as $row) {
-            $headers = array_keys($row);
-            break;
-        }
+        $path = $vistaPrevia->guardar((int) $request->user()->id, $request->file('archivo'));
 
         return response()->json([
-            'headers' => $headers,
+            'headers' => $encabezados->ejecutar($path),
             'file_path' => $path,
             'almacen_id' => $request->almacen_id,
         ]);

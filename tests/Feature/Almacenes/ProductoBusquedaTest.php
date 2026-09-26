@@ -6,6 +6,7 @@ use App\Models\Almacen;
 use App\Models\Inventario;
 use App\Models\Producto;
 use App\Models\ProductoCosto;
+use App\Models\Sucursal;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
@@ -17,6 +18,8 @@ class ProductoBusquedaTest extends TestCase
     use RefreshDatabase;
 
     protected User $usuario;
+
+    protected Sucursal $sucursalOperable;
 
     protected function setUp(): void
     {
@@ -37,6 +40,9 @@ class ProductoBusquedaTest extends TestCase
             'almacenes.inventarios.ver',
             'almacenes.costos.ver',
         ]);
+
+        $this->sucursalOperable = Sucursal::factory()->create(['nombre' => 'Sucursal Busqueda']);
+        $this->usuario->concederAccesoSucursal($this->sucursalOperable, esPrincipal: true);
     }
 
     public function test_buscar_por_sku_descripcion_codigo_barras_y_folio(): void
@@ -167,6 +173,7 @@ class ProductoBusquedaTest extends TestCase
         return Almacen::create([
             'codigo' => 'ALM' . $n,
             'nombre' => 'Almacén Test ' . $n,
+            'sucursal_id' => $this->sucursalOperable->id,
             'activo' => true,
         ]);
     }
