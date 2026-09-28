@@ -5,6 +5,7 @@ namespace Tests\Feature\Mobile;
 use App\Models\ConfiguracionUsuario;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Routing\Middleware\ThrottleRequests;
 use Laravel\Sanctum\PersonalAccessToken;
 use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
@@ -12,6 +13,12 @@ use Tests\TestCase;
 class MobileAuthTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->withoutMiddleware([ThrottleRequests::class]);
+    }
 
     public function test_login_emite_token_por_dispositivo(): void
     {

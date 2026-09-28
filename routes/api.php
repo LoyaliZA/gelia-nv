@@ -18,7 +18,8 @@ Route::prefix('v1')->group(function () {
 
     Route::middleware(['require.json'])->group(function () {
         Route::post('/auth/token', [AuthTokenController::class, 'store']);
-        Route::post('/mobile/login', [MobileAuthController::class, 'login']);
+        Route::post('/mobile/login', [MobileAuthController::class, 'login'])
+            ->middleware('throttle:mobile-login');
     });
 
     $passkeySession = [

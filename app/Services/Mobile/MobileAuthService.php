@@ -15,7 +15,8 @@ class MobileAuthService
 {
     public function __construct(
         protected MobileScopeVersionService $scopeVersion,
-        protected RegistrarAuditoriaAccesoService $auditoriaAcceso
+        protected RegistrarAuditoriaAccesoService $auditoriaAcceso,
+        protected MobileDeviceRevocationService $revocacionDispositivos
     ) {}
 
     /**
@@ -35,10 +36,14 @@ class MobileAuthService
 
     /**
      * @param  array{device_uuid: string, device_name?: string, platform?: string, app_version?: string}  $deviceData
-     * @return array<string, mixed>
+     * @return array<string, mixed>|null
      */
-    public function emitirSesionMovil(User $user, array $deviceData, Request $request): array
+    public function emitirSesionMovil(User $user, array $deviceData, Request $request): ?array
     {
+        if ($this->revocacionDispositivos->dispositivoRevocado($user, $deviceData['device_uuid'])) {
+            return null;
+        }
+
         $device = MobileDevice::query()->updateOrCreate(
             [
                 'user_id' => $user->id,

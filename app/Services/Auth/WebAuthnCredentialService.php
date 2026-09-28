@@ -162,7 +162,12 @@ class WebAuthnCredentialService
         $client = $datos['client'] ?? 'web';
 
         if ($client === 'mobile') {
-            return $this->mobileAuth->emitirSesionMovil($user, $datos, $request);
+            $sesion = $this->mobileAuth->emitirSesionMovil($user, $datos, $request);
+            if ($sesion === null) {
+                throw $this->credencialInvalida();
+            }
+
+            return $sesion;
         }
 
         Auth::login($user, (bool) ($datos['remember'] ?? true));

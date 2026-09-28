@@ -1008,6 +1008,8 @@ class AdminController extends Controller
         ];
 
         DB::transaction(function () use ($user, $suffix, $oldData, $request) {
+            app(\App\Services\Mobile\MobileDeviceRevocationService::class)->revocarTodosParaUsuario($user);
+
             $user->update([
                 'email' => $user->email . $suffix,
                 'username' => $user->username . $suffix,

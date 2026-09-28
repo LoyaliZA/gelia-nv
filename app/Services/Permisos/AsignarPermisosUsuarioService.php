@@ -29,6 +29,7 @@ class AsignarPermisosUsuarioService
 
         $usuario->loadMissing('permissions');
         $existentesAntes = $usuario->permissions->pluck('name')->all();
+        $relevantesEfectivosAntes = self::permisosRelevantesEfectivos($usuario);
 
         $permisosUnicos = collect($permisos)->unique()->values()->all();
         $usuario->syncPermissions($permisosUnicos);
@@ -72,7 +73,24 @@ class AsignarPermisosUsuarioService
 
         app()[PermissionRegistrar::class]->forgetCachedPermissions();
 
-        self::notificarCambioAlcanceMovil($usuario, $existentesAntes, $permisosUnicos);
+        $usuario->unsetRelation('permissions');
+        $usuario->unsetRelation('roles');
+        self::notificarCambioAlcanceMovil($usuario, $relevantesEfectivosAntes, self::permisosRelevantesEfectivos($usuario));
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private static function permisosRelevantesEfectivos(User $usuario): array
+    {
+        $scope = app(\App\Services\Mobile\MobileScopeVersionService::class);
+
+        return $usuario->getAllPermissions()
+            ->pluck('name')
+            ->intersect($scope->relevantPermissions())
+            ->sort()
+            ->values()
+            ->all();
     }
 
     /**
@@ -81,10 +99,11 @@ class AsignarPermisosUsuarioService
      */
     private static function notificarCambioAlcanceMovil(User $usuario, array $antes, array $despues): void
     {
-        $scope = app(\App\Services\Mobile\MobileScopeVersionService::class);
-        if (! $scope->permisosRelevantesCambiaron($antes, $despues)) {
+        if ($antes === $despues) {
             return;
         }
+
+        $scope = app(\App\Services\Mobile\MobileScopeVersionService::class);
 
         $scope->invalidarCacheUsuariosAccesoCompleto();
         app(\App\Services\Mobile\MobileSyncBootstrapService::class)->invalidarDelUsuario($usuario);

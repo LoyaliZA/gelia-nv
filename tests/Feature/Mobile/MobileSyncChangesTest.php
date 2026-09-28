@@ -13,6 +13,8 @@ use App\Services\Clientes\ImportarClientesWizerpService;
 use App\Services\Mobile\MobileScopeVersionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Routing\Middleware\ThrottleRequests;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Queue;
 use Spatie\Permission\Models\Permission;
@@ -21,6 +23,72 @@ use Tests\TestCase;
 class MobileSyncChangesTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Cache::flush();
+        $this->withoutMiddleware([ThrottleRequests::class]);
+    }
+
+    public function test_cambio_de_vendedor_no_cambia_scope_version(): void
+    {
+        $vendedorA = $this->usuarioMovil(['mis_clientes.gestionar']);
+        $vendedorB = $this->usuarioMovil(['mis_clientes.gestionar']);
+        $lista = $this->lista();
+        $scope = app(MobileScopeVersionService::class);
+
+        $hashAntes = $scope->compute($vendedorA);
+
+        Cliente::create([
+            'numero_cliente' => '99',
+            'nombre' => 'Cliente reasignado',
+            'lista_actual_id' => $lista->id,
+            'vendedor_id' => $vendedorA->id,
+            'vendedor_original_id' => $vendedorA->id,
+        ]);
+
+        $cliente = Cliente::query()->where('numero_cliente', '99')->firstOrFail();
+        $cliente->update([
+            'vendedor_id' => $vendedorB->id,
+            'vendedor_original_id' => $vendedorB->id,
+        ]);
+
+        $this->assertSame($hashAntes, $scope->compute($vendedorA->fresh()));
+    }
+
+    public function test_evento_revoked_no_incluye_data_del_cliente(): void
+    {
+        $vendedorA = $this->usuarioMovil(['mis_clientes.gestionar']);
+        $vendedorB = $this->usuarioMovil(['mis_clientes.gestionar']);
+        $lista = $this->lista();
+
+        $cliente = Cliente::create([
+            'numero_cliente' => '88',
+            'nombre' => 'Cliente revocado',
+            'lista_actual_id' => $lista->id,
+            'vendedor_id' => $vendedorA->id,
+            'vendedor_original_id' => $vendedorA->id,
+            'rfc' => 'XAXX010101000',
+        ]);
+
+        $cliente->update([
+            'vendedor_id' => $vendedorB->id,
+            'vendedor_original_id' => $vendedorB->id,
+        ]);
+
+        $token = $this->token($vendedorA);
+        $headers = $this->headers($vendedorA, $token);
+
+        $delta = $this->withHeaders($headers)
+            ->getJson('/api/v1/mobile/sync/changes?cursor=0')
+            ->assertOk()
+            ->json();
+
+        $revocado = collect($delta['events'])->first(fn (array $event) => $event['operation'] === 'revoked');
+        $this->assertNotNull($revocado);
+        $this->assertArrayNotHasKey('data', $revocado);
+    }
 
     public function test_cambio_de_vendedor_emite_grant_y_revoke(): void
     {

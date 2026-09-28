@@ -8,8 +8,12 @@ use App\Http\Controllers\ControlPedidos\PedidoBmaEvidenciaPublicaController;
 use App\Http\Controllers\ControlPedidos\PedidoBmaEvidenciaTiendaPublicaController;
 use App\Http\Controllers\Facturas\DatosFiscalesPublicosController;
 use App\Http\Controllers\PuntoVenta\Pantallas\PantallaSalaPdvController;
+use App\Http\Controllers\PrivacidadAppController;
 use App\Http\Controllers\TiendanubeWebhookController;
 use App\Http\Middleware\HardenSolicitudDireccionPublica;
+
+Route::get('/privacidad-app', [PrivacidadAppController::class, 'show'])
+    ->name('privacidad.app');
 
 Route::get('/', function () {
     return redirect()->route('login');

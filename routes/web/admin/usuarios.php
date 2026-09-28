@@ -1,12 +1,15 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\{AdminController, Auth\RegistroController};
+use App\Http\Controllers\{AdminController, Admin\MobileDeviceController, Auth\RegistroController};
 
 Route::middleware(['can:usuarios.gestionar'])->group(function () {
     Route::get('/usuarios', [AdminController::class, 'usuarios'])->name('usuarios');
     Route::post('/usuarios', [AdminController::class, 'storeUsuario'])->name('usuarios.store');
     Route::put('/usuarios/{user}', [AdminController::class, 'updateUsuario'])->name('usuarios.update');
+    Route::get('/usuarios/{user}/dispositivos-moviles', [MobileDeviceController::class, 'index'])->name('usuarios.mobile_devices.index');
+    Route::post('/usuarios/{user}/dispositivos-moviles/{mobileDevice}/revocar', [MobileDeviceController::class, 'revocar'])->name('usuarios.mobile_devices.revocar');
+    Route::post('/usuarios/{user}/dispositivos-moviles/{mobileDevice}/rehabilitar', [MobileDeviceController::class, 'rehabilitar'])->name('usuarios.mobile_devices.rehabilitar');
 
     Route::put('/roles/{role}/permisos-heredados', [AdminController::class, 'updateRolePermisosHerencia'])->name('roles.permisos.update');
     Route::post('/roles/grupos', [AdminController::class, 'storeGrupoPredefinido'])->name('roles.grupos.store');

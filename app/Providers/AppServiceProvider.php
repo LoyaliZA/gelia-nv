@@ -273,5 +273,14 @@ class AppServiceProvider extends ServiceProvider
                 Limit::perMinute(10)->by('passkeys-login:'.$login),
             ];
         });
+
+        RateLimiter::for('mobile-login', function (Request $request) {
+            $login = strtolower(trim((string) $request->input('login', '')));
+
+            return [
+                Limit::perMinute(10)->by('mobile-login-ip:'.$request->ip()),
+                Limit::perMinute(10)->by('mobile-login:'.$login),
+            ];
+        });
     }
 }

@@ -4,8 +4,6 @@ namespace App\Services\Mobile;
 
 use App\Models\User;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\DB;
-use Spatie\Permission\Models\Permission;
 
 class MobileScopeVersionService
 {
@@ -46,12 +44,7 @@ class MobileScopeVersionService
      */
     private function nombresPermisos(User $user)
     {
-        $ids = DB::table('model_has_permissions')
-            ->where('model_id', $user->id)
-            ->where('model_type', $user->getMorphClass())
-            ->pluck('permission_id');
-
-        return Permission::query()->whereIn('id', $ids)->pluck('name');
+        return $user->getAllPermissions()->pluck('name');
     }
 
     public function permisosRelevantesCambiaron(array $antes, array $despues): bool
