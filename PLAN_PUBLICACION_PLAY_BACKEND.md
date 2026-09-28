@@ -1,6 +1,6 @@
 # GELIA-NV: fases del backend para publicar la app móvil
 
-Revisión del repositorio `LoyaliZA/gelia-nv`, `main` en `c7994ee`, 28 de septiembre de 2026. Esta guía describe trabajo pendiente; no certifica cumplimiento ni cambia el código. Acompañar con el [plan móvil](https://github.com/LoyaliZA/gelia-nv-mobile/blob/main/PLAN_PUBLICACION_PLAY_MOBILE.md) una vez integrado allí.
+Revisión del repositorio `LoyaliZA/gelia-nv`, `main` en `c7994ee`, 28 de septiembre de 2026. Esta guía describe trabajo pendiente; no certifica cumplimiento ni cambia el código. Acompañar con el [plan móvil](https://github.com/LoyaliZA/gelia-nv-mobile/pull/4).
 
 ## Estado real que conviene conservar
 
