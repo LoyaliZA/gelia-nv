@@ -91,8 +91,15 @@ async function putConReintentos(url, body, contentType, signal) {
                 signal,
             });
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            return res.headers.get('ETag') || res.headers.get('etag') || `"part-${i}"`;
+            const etag = res.headers.get('ETag') || res.headers.get('etag') || '';
+            // #region agent log
+            fetch('http://localhost:7634/ingest/db3bc9d8-cf9a-45df-8a63-1cd24f6cf8f8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'598012'},body:JSON.stringify({sessionId:'598012',runId:'post-fix',hypothesisId:'C',location:'mediaUploader.js:put',message:'put ok',data:{status:res.status,tieneEtag:etag!=='',bytes:body?.size||body?.byteLength||0},timestamp:Date.now()})}).catch(()=>{});
+            // #endregion
+            return etag || `"part-${i}"`;
         } catch (err) {
+            // #region agent log
+            fetch('http://localhost:7634/ingest/db3bc9d8-cf9a-45df-8a63-1cd24f6cf8f8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'598012'},body:JSON.stringify({sessionId:'598012',runId:'post-fix',hypothesisId:'C',location:'mediaUploader.js:put',message:'put fallo',data:{error:String(err?.message||err),name:err?.name||''},timestamp:Date.now()})}).catch(()=>{});
+            // #endregion
             ultimo = err;
             if (err?.name === 'AbortError') throw err;
             if (i === MAX_REINTENTOS) break;

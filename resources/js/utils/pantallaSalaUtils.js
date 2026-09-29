@@ -91,6 +91,34 @@ export function estadoSalaVacio() {
     };
 }
 
+function urlFirmadaVigente(url, margenSeg = 3600) {
+    try {
+        const params = new URL(url).searchParams;
+        const expira = Number(params.get('X-Amz-Expires'));
+        const fecha = params.get('X-Amz-Date') || '';
+        const match = fecha.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/);
+        if (!expira || !match) return false;
+        const inicio = Date.parse(`${match[1]}-${match[2]}-${match[3]}T${match[4]}:${match[5]}:${match[6]}Z`);
+        return Number.isFinite(inicio) && (inicio + expira * 1000) - Date.now() > margenSeg * 1000;
+    } catch {
+        return false;
+    }
+}
+
+/** Conserva la URL firmada en reproducción y adopta piezas nuevas o firmas por vencer. */
+export function fusionarPublicidadSala(actual = [], siguiente = []) {
+    const previas = new Map((Array.isArray(actual) ? actual : []).map((item) => [item.id, item]));
+
+    return (Array.isArray(siguiente) ? siguiente : []).map((item) => {
+        const previa = previas.get(item.id);
+        if (previa?.url && urlFirmadaVigente(previa.url)) {
+            return { ...item, url: previa.url };
+        }
+
+        return item;
+    });
+}
+
 export function normalizarEstadoSala(payload = {}) {
     const llamados = fusionarEstadoSala(payload.llamados ?? [], []);
 

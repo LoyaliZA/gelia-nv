@@ -21,7 +21,8 @@ final class AlmacenObjetosMedioFake implements AlmacenObjetosMedio
 
     public function iniciarMultipart(string $objectKey, string $contentType): string
     {
-        $uploadId = 'fake-upload-'.bin2hex(random_bytes(8));
+        // Misma longitud que un UploadId real de R2, para que el alta choque si la columna vuelve a 255.
+        $uploadId = 'fake-upload-'.str_repeat('a', 331);
         $this->objetos[$objectKey] = [
             'size' => 0,
             'contentType' => $contentType,

@@ -72,6 +72,12 @@ export default function ModalEditarDatosFiscales({
     const usoBloqueado = esRegimenSueldosSalarios(data.regimen_fiscal);
 
     useEffect(() => {
+        // #region agent log
+        fetch('http://localhost:7634/ingest/db3bc9d8-cf9a-45df-8a63-1cd24f6cf8f8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d55549'},body:JSON.stringify({sessionId:'d55549',runId:'pre-fix',hypothesisId:'B-C',location:'ModalEditarDatosFiscales.jsx:mount',message:'catalogos recibidos en el modal',data:{regimen:catalogos?.regimen_fiscal?.length??0,uso:catalogos?.uso_cfdi?.length??0},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
+    }, [catalogos]);
+
+    useEffect(() => {
         const forzado = usoCfdiParaRegimen(data.regimen_fiscal);
         if (forzado && data.uso_factura !== forzado) {
             setData('uso_factura', forzado);

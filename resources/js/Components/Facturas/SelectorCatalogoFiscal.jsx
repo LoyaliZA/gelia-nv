@@ -65,11 +65,27 @@ export default function SelectorCatalogoFiscal({
         };
     }, [abierto]);
 
+    useLayoutEffect(() => {
+        if (!abierto || !coords) return undefined;
+        const panel = panelRef.current;
+        const overlay = document.querySelector('body > .gelia-modal-overlay');
+        const panelZ = panel ? Number(getComputedStyle(panel).zIndex) : null;
+        const overlayZ = overlay ? Number(getComputedStyle(overlay).zIndex) : null;
+        const rect = panel?.getBoundingClientRect();
+        // #region agent log
+        fetch('http://localhost:7634/ingest/db3bc9d8-cf9a-45df-8a63-1cd24f6cf8f8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d55549'},body:JSON.stringify({sessionId:'d55549',runId:'pre-fix',hypothesisId:'A-B-D',location:'SelectorCatalogoFiscal.jsx:panel',message:'listbox vs modal overlay',data:{opciones:opciones.length,filtradas:filtradas.length,panelZ,overlayZ,listBehindOverlay:panelZ!=null&&overlayZ!=null?panelZ<overlayZ:null,top:rect?Math.round(rect.top):null,bottom:rect?Math.round(rect.bottom):null,height:rect?Math.round(rect.height):null,viewportH:window.innerHeight},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
+        return undefined;
+    }, [abierto, coords, opciones.length, filtradas.length]);
+
     useEffect(() => {
         if (!abierto) return undefined;
         const onDoc = (e) => {
             const t = e.target;
             if (rootRef.current?.contains(t) || panelRef.current?.contains(t)) return;
+            // #region agent log
+            fetch('http://localhost:7634/ingest/db3bc9d8-cf9a-45df-8a63-1cd24f6cf8f8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d55549'},body:JSON.stringify({sessionId:'d55549',runId:'pre-fix',hypothesisId:'E',location:'SelectorCatalogoFiscal.jsx:outside',message:'listbox closed by outside pointer',data:{tag:t?.tagName||null,role:t?.getAttribute?.('role')||null,overlay:Boolean(t?.closest?.('.gelia-modal-overlay'))},timestamp:Date.now()})}).catch(()=>{});
+            // #endregion
             setAbierto(false);
             setBusqueda('');
         };
@@ -112,8 +128,8 @@ export default function SelectorCatalogoFiscal({
                     top: coords.top,
                     left: coords.left,
                     width: coords.width,
-                    // Above gelia-modal (9500), below toast (10000)
-                    zIndex: 'calc(var(--gelia-z-modal) + 10)',
+                    // body > .gelia-modal-overlay is toast+1 (10001); the list must sit above it
+                    zIndex: 'calc(var(--gelia-z-toast) + 2)',
                 }}
                 role="listbox"
             >

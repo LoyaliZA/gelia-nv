@@ -39,20 +39,46 @@ class GestionarCargaMedioService
         $ttl = (int) config('medios.ttl_url_seg');
 
         $esMultipart = $tamano > $umbral;
-        $carga = MedioCarga::query()->create([
-            'uuid' => (string) Str::uuid(),
-            'r2_upload_id' => $esMultipart ? $this->almacen->iniciarMultipart($objectKey, $mime) : null,
-            'object_key' => $objectKey,
-            'nombre_original' => $nombre,
-            'mime_type' => $mime,
-            'tamano_bytes' => $tamano,
-            'upload_type' => $esMultipart ? MedioCarga::TIPO_MULTIPART : MedioCarga::TIPO_SINGLE,
-            'chunk_size' => $esMultipart ? $chunk : null,
-            'estado' => MedioCarga::ESTADO_PENDING,
-            'proposito' => $proposito,
-            'subido_por' => $actor->id,
-            'expires_at' => now()->addMinutes((int) config('medios.expires_carga_min')),
-        ]);
+        $uploadId = $esMultipart ? $this->almacen->iniciarMultipart($objectKey, $mime) : null;
+        try {
+            $carga = MedioCarga::query()->create([
+                'uuid' => (string) Str::uuid(),
+                'r2_upload_id' => $uploadId,
+                'object_key' => $objectKey,
+                'nombre_original' => $nombre,
+                'mime_type' => $mime,
+                'tamano_bytes' => $tamano,
+                'upload_type' => $esMultipart ? MedioCarga::TIPO_MULTIPART : MedioCarga::TIPO_SINGLE,
+                'chunk_size' => $esMultipart ? $chunk : null,
+                'estado' => MedioCarga::ESTADO_PENDING,
+                'proposito' => $proposito,
+                'subido_por' => $actor->id,
+                'expires_at' => now()->addMinutes((int) config('medios.expires_carga_min')),
+            ]);
+        } catch (\Throwable $e) {
+            $this->trazaCarga('iniciar no guardo la sesion', [
+                'upload_type' => $esMultipart ? 'multipart' : 'single',
+                'upload_id_len' => strlen((string) $uploadId),
+                'size' => $tamano,
+                'error' => $e->getMessage(),
+            ], 'A');
+            if (is_string($uploadId) && $uploadId !== '') {
+                try {
+                    $this->almacen->abortarMultipart($objectKey, $uploadId);
+                } catch (\Throwable) {
+                    // ponytail: si el alta falla, se aborta la sesión R2; un abort fallido no tapa el error original
+                }
+            }
+            throw $e;
+        }
+
+        $this->trazaCarga('iniciar ok', [
+            'carga_id' => $carga->id,
+            'upload_type' => $carga->upload_type,
+            'upload_id_len' => strlen((string) $uploadId),
+            'size' => $tamano,
+            'chunk' => $chunk,
+        ], 'A');
 
         if ($this->almacen instanceof AlmacenObjetosMedioFake) {
             $this->almacen->registrarTamano($objectKey, $tamano);
@@ -103,6 +129,12 @@ class GestionarCargaMedioService
             ];
         }
 
+        $this->trazaCarga('urls de partes', [
+            'carga_id' => $carga->id,
+            'pedidas' => count($partNumbers),
+            'entregadas' => count($partes),
+        ], 'B');
+
         return ['parts' => $partes];
     }
 
@@ -152,7 +184,14 @@ class GestionarCargaMedioService
             $this->almacen->registrarTamano($carga->object_key, (int) $carga->tamano_bytes);
         }
 
-        if (! $this->almacen->existe($carga->object_key)) {
+        $existe = $this->almacen->existe($carga->object_key);
+        $this->trazaCarga('completar', [
+            'carga_id' => $carga->id,
+            'upload_type' => $carga->upload_type,
+            'existe' => $existe,
+            'partes' => $carga->upload_type === MedioCarga::TIPO_MULTIPART ? count($datos['parts'] ?? []) : 0,
+        ], 'C');
+        if (! $existe) {
             $carga->update(['estado' => MedioCarga::ESTADO_FAILED]);
             throw new UnprocessableEntityHttpException('El archivo no se encontró en el almacén.');
         }
@@ -325,5 +364,26 @@ class GestionarCargaMedioService
         usort($normalizadas, static fn (array $a, array $b): int => $a['PartNumber'] <=> $b['PartNumber']);
 
         return $normalizadas;
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function trazaCarga(string $message, array $data, string $hypothesisId): void
+    {
+        // #region agent log
+        $linea = json_encode([
+            'sessionId' => '598012',
+            'runId' => 'post-fix',
+            'hypothesisId' => $hypothesisId,
+            'location' => 'GestionarCargaMedioService',
+            'message' => $message,
+            'data' => $data,
+            'timestamp' => (int) round(microtime(true) * 1000),
+        ], JSON_UNESCAPED_UNICODE);
+        if (is_string($linea)) {
+            @file_put_contents('/var/www/html/.cursor/debug-598012.log', $linea."\n", FILE_APPEND);
+        }
+        // #endregion
     }
 }

@@ -30,7 +30,7 @@ return new class extends Migration
             $table->id();
             $table->uuid('uuid')->unique();
             $table->foreignId('medio_id')->nullable()->constrained('medios')->nullOnDelete();
-            $table->string('r2_upload_id')->nullable();
+            $table->string('r2_upload_id', 1024)->nullable();
             $table->string('object_key');
             $table->string('nombre_original');
             $table->string('mime_type', 127);

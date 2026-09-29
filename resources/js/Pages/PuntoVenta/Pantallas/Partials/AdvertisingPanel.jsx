@@ -69,7 +69,7 @@ export default function AdvertisingPanel({ items = [] }) {
         setIndex(0);
         setProgress(0);
         setOmitidos(new Set());
-    }, [items.map((item) => item.id).join(',')]);
+    }, [items.map((item) => `${item.id}:${item.url}`).join('|')]);
 
     useEffect(() => {
         if (index >= playlist.length) setIndex(0);

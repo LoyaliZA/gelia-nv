@@ -26,7 +26,7 @@ class GestionarPublicidadPdvRequest extends FormRequest
             'alcance' => [$esAlta ? 'required' : 'nullable', Rule::in(['global', 'sucursal'])],
             'ajuste' => ['nullable', Rule::in([PdvPantallaPublicidad::AJUSTE_COVER, PdvPantallaPublicidad::AJUSTE_CONTAIN])],
             'activa' => ['nullable', 'boolean'],
-            'duracion_seg' => ['nullable', 'integer', 'min:3', 'max:300'],
+            'duracion_seg' => ['nullable', 'integer', 'min:3', 'max:65535'],
             'vigente_desde' => ['nullable', 'date'],
             'vigente_hasta' => ['nullable', 'date', 'after_or_equal:vigente_desde'],
         ];

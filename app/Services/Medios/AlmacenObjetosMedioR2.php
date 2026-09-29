@@ -104,7 +104,7 @@ final class AlmacenObjetosMedioR2 implements AlmacenObjetosMedio
     public function urlLectura(string $objectKey, int $ttlSeg): string
     {
         $base = $this->urlPublica();
-        if ($base !== '') {
+        if ($base !== '' && ! $this->apuntaAlApi($base)) {
             return $base.'/'.ltrim($objectKey, '/');
         }
 
@@ -163,5 +163,21 @@ final class AlmacenObjetosMedioR2 implements AlmacenObjetosMedio
         }
 
         return rtrim((string) (config('filesystems.disks.'.config('medios.disk', 'r2').'.url') ?? ''), '/');
+    }
+
+    private function apuntaAlApi(string $url): bool
+    {
+        $host = strtolower((string) parse_url($url, PHP_URL_HOST));
+        if ($host === '') {
+            return true;
+        }
+
+        $endpoint = (string) (config('filesystems.disks.'.config('medios.disk', 'r2').'.endpoint') ?? '');
+        $hostApi = strtolower((string) parse_url($endpoint, PHP_URL_HOST));
+        if ($hostApi !== '' && ($host === $hostApi || str_ends_with($host, '.'.$hostApi))) {
+            return true;
+        }
+
+        return str_ends_with($host, '.r2.cloudflarestorage.com');
     }
 }

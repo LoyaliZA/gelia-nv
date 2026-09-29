@@ -18,6 +18,7 @@ import {
     esEventoLlamadoSala,
     esEventoRefetchSala,
     fusionarEstadoSala,
+    fusionarPublicidadSala,
     llamadoActualSala,
     normalizarEstadoSala,
 } from '@/utils/pantallaSalaUtils';
@@ -110,6 +111,7 @@ export default function PdvSalaProvider({
                 const llamados = fusionarEstadoSala(siguiente.llamados, actual.llamados);
                 return {
                     ...siguiente,
+                    publicidad: fusionarPublicidadSala(actual.publicidad, siguiente.publicidad),
                     llamados,
                     turno_actual: siguiente.turno_actual ?? llamadoActualSala(llamados),
                 };
@@ -149,6 +151,14 @@ export default function PdvSalaProvider({
     useEffect(() => {
         setEstadoSala(normalizarEstadoSala(estadoInicial));
     }, [estadoInicial]);
+
+    useEffect(() => {
+        if (!urlEstado) return undefined;
+        const timer = window.setInterval(() => {
+            refrescarEstado();
+        }, 60_000);
+        return () => window.clearInterval(timer);
+    }, [urlEstado, refrescarEstado]);
 
     const conexionPrevRef = useRef(estadoConexion);
 

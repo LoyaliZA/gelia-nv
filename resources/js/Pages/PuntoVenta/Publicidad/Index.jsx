@@ -45,9 +45,13 @@ function TarjetaPublicidad({
         >
             <div className="flex gap-3">
                 {item.tipo === 'video' ? (
-                    <div className="h-20 w-28 shrink-0 overflow-hidden rounded-xl theme-surface flex items-center justify-center text-xs font-bold theme-text-muted">
-                        Video
-                    </div>
+                    <video
+                        src={item.url}
+                        muted
+                        playsInline
+                        preload="metadata"
+                        className="h-20 w-28 shrink-0 rounded-xl bg-black object-cover"
+                    />
                 ) : (
                     <img src={item.url} alt="" className="h-20 w-28 shrink-0 rounded-xl object-cover" />
                 )}

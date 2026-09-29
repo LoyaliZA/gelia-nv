@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
     aplicarEventoSala,
     fusionarEstadoSala,
+    fusionarPublicidadSala,
     llamadoActualSala,
     payloadSalaSinDatosSensibles,
     PDV_SALA_CAMPOS_PROHIBIDOS,
@@ -126,5 +127,35 @@ describe('pantallaSalaUtils', () => {
         });
         expect(limpio.snapshot_nombre_llamado).toBe('Cliente');
         expect(limpio.nested.telefono).toBeUndefined();
+    });
+
+    it('conserva la firma vigente y adopta piezas nuevas o URLs sin firma', () => {
+        const firma = (expiraSeg) => {
+            const inicio = new Date(Date.now() - 60_000);
+            const pad = (n) => String(n).padStart(2, '0');
+            const fecha = `${inicio.getUTCFullYear()}${pad(inicio.getUTCMonth() + 1)}${pad(inicio.getUTCDate())}T${pad(inicio.getUTCHours())}${pad(inicio.getUTCMinutes())}${pad(inicio.getUTCSeconds())}Z`;
+            return `https://bucket.example/a.png?X-Amz-Date=${fecha}&X-Amz-Expires=${expiraSeg + 60}`;
+        };
+        const vigente = firma(7200);
+        const porVencer = firma(30);
+
+        const fusion = fusionarPublicidadSala(
+            [
+                { id: 1, url: vigente },
+                { id: 2, url: 'https://api.example/plano.png' },
+                { id: 3, url: porVencer },
+            ],
+            [
+                { id: 1, url: 'https://bucket.example/nueva-1' },
+                { id: 2, url: 'https://bucket.example/nueva-2' },
+                { id: 3, url: 'https://bucket.example/nueva-3' },
+                { id: 4, url: 'https://bucket.example/nueva-4' },
+            ],
+        );
+
+        expect(fusion.find((item) => item.id === 1)?.url).toBe(vigente);
+        expect(fusion.find((item) => item.id === 2)?.url).toBe('https://bucket.example/nueva-2');
+        expect(fusion.find((item) => item.id === 3)?.url).toBe('https://bucket.example/nueva-3');
+        expect(fusion.find((item) => item.id === 4)?.url).toBe('https://bucket.example/nueva-4');
     });
 });
