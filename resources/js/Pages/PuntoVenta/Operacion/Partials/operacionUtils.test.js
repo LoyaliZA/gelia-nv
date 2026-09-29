@@ -26,6 +26,7 @@ describe('operacionUtils', () => {
         expect(etiquetaJornada('ABIERTA')).toBe('Abierta');
         expect(etiquetaActividad('en_pausa')).toBe('En pausa');
         expect(etiquetaEstadoVendedor('en_retencion')).toBe('En pausa');
+        expect(etiquetaEstadoVendedor('en_espera')).toBe('En espera');
     });
 
     it('mensajes de mi atención por estado', () => {
@@ -161,11 +162,11 @@ describe('operacionUtils', () => {
         };
 
         expect(avisoSucursalOperacion(estado)).toEqual({
-            mensaje: 'La jornada se inició de forma automática según el horario configurado.',
+            mensaje: 'La sucursal está abierta de forma automática según el horario configurado.',
             tipo: 'info',
         });
         expect(firmaAvisoSucursal(estado)).toBe(
-            'info:La jornada se inició de forma automática según el horario configurado.',
+            'info:La sucursal está abierta de forma automática según el horario configurado.',
         );
     });
 

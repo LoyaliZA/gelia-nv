@@ -16,6 +16,7 @@ const ETIQUETAS_ESTADO_VENDEDOR = {
     no_activado: 'No activado',
     no_llego: 'No llegó',
     disponible: 'Disponible',
+    en_espera: 'En espera',
     atendiendo: 'Atendiendo',
     en_retencion: 'En pausa',
     cierre_pendiente: 'Cierre pendiente',
@@ -26,6 +27,7 @@ const CLASES_ESTADO_VENDEDOR = {
     no_activado: 'bg-slate-500/15 theme-text-muted',
     no_llego: 'bg-red-500/15 text-red-700 dark:text-red-300',
     disponible: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
+    en_espera: 'bg-amber-500/15 text-amber-700 dark:text-amber-300',
     atendiendo: 'bg-sky-500/15 text-sky-700 dark:text-sky-300',
     en_retencion: 'bg-amber-500/15 text-amber-700 dark:text-amber-300',
     cierre_pendiente: 'bg-amber-500/15 text-amber-700 dark:text-amber-300',
@@ -57,6 +59,8 @@ export function mensajeMiAtencion(estadoVendedor) {
             return 'Gerencia registró que no llegaste hoy. Contacta a tu supervisor si hay un error.';
         case 'disponible':
             return 'Estás disponible. Recibirás una alerta cuando se te asigne un cliente.';
+        case 'en_espera':
+            return 'Terminaste un turno. Espera unos segundos antes de recibir el siguiente.';
         case 'atendiendo':
             return null;
         case 'en_retencion':
@@ -232,7 +236,7 @@ export function mensajeAvisoSucursal(estado) {
             return 'La sucursal ya no acepta altas nuevas (cierre manual de gerencia). Puedes reabrirla desde esta pantalla.';
         }
         if (estado?.antes_de_apertura && estado?.horario_apertura?.hora_apertura) {
-            return `La sucursal abre a las ${estado.horario_apertura.hora_apertura}; puedes iniciar la jornada manualmente si gerencia debe prepararse antes.`;
+            return `La sucursal abre a las ${estado.horario_apertura.hora_apertura}; puedes abrir la sucursal manualmente si gerencia debe prepararse antes.`;
         }
         if (estado?.cierre_programado?.vencido) {
             return 'La sucursal ya no acepta altas nuevas (horario de cierre alcanzado).';
@@ -241,11 +245,11 @@ export function mensajeAvisoSucursal(estado) {
     }
 
     if (dia.origen_apertura === 'manual' && dia.apertura_manual_at) {
-        return 'La jornada se inició de forma manual. El inicio automático de hoy ya no se ejecuta.';
+        return 'La sucursal está abierta de forma manual. El inicio automático de hoy ya no se ejecuta.';
     }
 
     if (dia.origen_apertura === 'automatica') {
-        return 'La jornada se inició de forma automática según el horario configurado.';
+        return 'La sucursal está abierta de forma automática según el horario configurado.';
     }
 
     if (dia.ampliacion_hasta_at) {

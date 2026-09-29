@@ -15,6 +15,7 @@ class CierreHorarioSucursalPdvService
     public function __construct(
         private readonly ResolverSucursalDiaOperacionPdv $sucursalDia,
         private readonly ResolverUmbralCierreSucursalPdv $umbral,
+        private readonly CerrarEquipoAlCerrarSucursalPdvService $cerrarEquipo,
     ) {}
 
     public function ejecutar(int $sucursalId, CarbonInterface $ahora): bool
@@ -78,6 +79,8 @@ class CierreHorarioSucursalPdvService
             } catch (UniqueConstraintViolationException) {
                 return false;
             }
+
+            $this->cerrarEquipo->cerrarEquipoDelDia($sucursalId, $ahora, 0);
 
             $diaPendiente = $dia->fresh();
 

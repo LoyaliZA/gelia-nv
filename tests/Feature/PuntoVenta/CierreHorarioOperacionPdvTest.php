@@ -223,28 +223,45 @@ class CierreHorarioOperacionPdvTest extends TestCase
         );
     }
 
-    public function test_no_mutar_jornadas_ni_turnos_existentes(): void
+    public function test_cierre_horario_cierra_jornada_libre_y_conserva_la_cola(): void
     {
         $this->configurarHorario(['hora_cierre' => '19:00', 'zona_horaria' => 'America/Mexico_City']);
 
-        $vendedor = User::factory()->create();
-        $vendedor->concederAccesoSucursal($this->sucursal, esPrincipal: true);
-        app(AlcancePdv::class)->establecerSucursalActiva($vendedor, $this->sucursal->id);
+        $libre = User::factory()->create();
+        $ocupado = User::factory()->create();
+        $ahora = now('America/Mexico_City')->setTime(19, 1);
 
-        $jornada = JornadaPdv::factory()->create([
-            'user_id' => $vendedor->id,
+        $jornadaLibre = JornadaPdv::factory()->create([
+            'user_id' => $libre->id,
             'sucursal_id' => $this->sucursal->id,
             'estado' => EstadoJornadaPdv::Abierta,
+            'apertura_at' => $ahora->copy()->subHour(),
+        ]);
+        $jornadaOcupada = JornadaPdv::factory()->create([
+            'user_id' => $ocupado->id,
+            'sucursal_id' => $this->sucursal->id,
+            'estado' => EstadoJornadaPdv::Abierta,
+            'apertura_at' => $ahora->copy()->subHour(),
         ]);
 
         $turno = TurnoPdv::factory()->create([
             'sucursal_id' => $this->sucursal->id,
+            'estado' => TurnoPdv::ESTADO_EN_COLA,
+        ]);
+        $turnoAsignado = TurnoPdv::factory()->create([
+            'sucursal_id' => $this->sucursal->id,
+            'estado' => TurnoPdv::ESTADO_ASIGNADO,
+        ]);
+        \App\Models\PuntoVenta\TurnoPdvAtencion::factory()->create([
+            'turno_id' => $turnoAsignado->id,
+            'user_id' => $ocupado->id,
+            'fin_at' => null,
         ]);
 
-        app(CierreHorarioSucursalPdvService::class)
-            ->ejecutar($this->sucursal->id, now('America/Mexico_City')->setTime(19, 1));
+        app(CierreHorarioSucursalPdvService::class)->ejecutar($this->sucursal->id, $ahora);
 
-        $this->assertSame(EstadoJornadaPdv::Abierta, $jornada->fresh()->estado);
+        $this->assertSame(EstadoJornadaPdv::Cerrada, $jornadaLibre->fresh()->estado);
+        $this->assertSame(EstadoJornadaPdv::CerradaConAtencion, $jornadaOcupada->fresh()->estado);
         $this->assertSame(TurnoPdv::ESTADO_EN_COLA, $turno->fresh()->estado);
     }
 

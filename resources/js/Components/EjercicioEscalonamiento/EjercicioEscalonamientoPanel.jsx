@@ -377,7 +377,7 @@ export default function EjercicioEscalonamientoPanel({ listas, variant = 'page' 
                                         <div className={colNivelesClass}>
                                             <PanelSeccion
                                                 titulo="Desglose Plata · Oro · Diamante"
-                                                subtitulo="Simulación con umbral efectivo (monto_requerido ÷ (1 − %)) por lista"
+                                                subtitulo="El porcentaje es el descuento adicional sobre la lista que el cliente ya tiene"
                                             >
                                                 <div className={gridDesgloseClass}>
                                                     {desgloseNiveles.map(item => (

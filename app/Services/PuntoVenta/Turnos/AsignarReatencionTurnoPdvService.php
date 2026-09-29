@@ -8,6 +8,7 @@ use App\Models\PuntoVenta\TurnoPdv;
 use App\Models\PuntoVenta\TurnoPdvAtencion;
 use App\Models\PuntoVenta\TurnoPdvEvento;
 use App\Models\User;
+use App\Services\PuntoVenta\Operacion\ConsultaPersonaDisponiblePdvService;
 use App\Services\PuntoVenta\Operacion\ConsultaVendedoresElegiblesPdvService;
 use App\Services\PuntoVenta\PuntoVentaModulo;
 use App\Support\PuntoVenta\Turnos\ResolverCandidatosReatencionTurnoPdv;
@@ -132,6 +133,13 @@ class AsignarReatencionTurnoPdvService
             if (! $this->vendedoresElegibles->esElegible($destino, $sucursalId)) {
                 throw ValidationException::withMessages([
                     'destino_user_id' => 'La persona destino no es elegible en esta sucursal.',
+                ]);
+            }
+
+            if ($this->consultaDisponible instanceof ConsultaPersonaDisponiblePdvService
+                && ! $this->consultaDisponible->sucursalAceptaAltas($sucursalId, $ahora)) {
+                throw ValidationException::withMessages([
+                    'sucursal' => 'La sucursal ya no acepta turnos.',
                 ]);
             }
 

@@ -32,6 +32,12 @@ const CAMPOS = [
         etiqueta: 'Ventana de reatención',
         ayuda: 'Minutos para reasignar a un cliente después de cerrar la atención.',
     },
+    {
+        clave: 'cooldown_segundos',
+        etiqueta: 'Espera entre turnos',
+        ayuda: 'Segundos que gerencia define antes de que el vendedor pueda recibir otro turno.',
+        min: 0,
+    },
 ];
 
 function valoresDesde(plazos) {
@@ -41,6 +47,7 @@ function valoresDesde(plazos) {
         aviso_tolerancia_espera_minutos: String(plazos?.aviso_tolerancia_espera_minutos ?? 1),
         aviso_tolerancia_prorroga_minutos: String(plazos?.aviso_tolerancia_prorroga_minutos ?? 2),
         ventana_reatencion_minutos: String(plazos?.ventana_reatencion_minutos ?? 90),
+        cooldown_segundos: String(plazos?.cooldown_segundos ?? 10),
         inicio_atencion_automatico: Boolean(plazos?.inicio_atencion_automatico),
     };
 }
@@ -98,6 +105,7 @@ export default function ConfiguracionPlazosTurnosPdv({
         plazos?.aviso_tolerancia_espera_minutos,
         plazos?.aviso_tolerancia_prorroga_minutos,
         plazos?.ventana_reatencion_minutos,
+        plazos?.cooldown_segundos,
         plazos?.inicio_atencion_automatico,
     ]);
 
@@ -112,6 +120,7 @@ export default function ConfiguracionPlazosTurnosPdv({
                 aviso_tolerancia_espera_minutos: Number(valores.aviso_tolerancia_espera_minutos),
                 aviso_tolerancia_prorroga_minutos: Number(valores.aviso_tolerancia_prorroga_minutos),
                 ventana_reatencion_minutos: Number(valores.ventana_reatencion_minutos),
+                cooldown_segundos: Number(valores.cooldown_segundos),
                 inicio_atencion_automatico: valores.inicio_atencion_automatico,
             });
             setValores(valoresDesde(data?.plazos_turnos));
@@ -174,7 +183,7 @@ export default function ConfiguracionPlazosTurnosPdv({
                 </button>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
                 {CAMPOS.map((campo) => {
                     const deshabilitado = inicioAutomatico && campo.soloEsperaManual;
 
@@ -185,7 +194,7 @@ export default function ConfiguracionPlazosTurnosPdv({
                             </span>
                             <input
                                 type="number"
-                                min="1"
+                                min={campo.min ?? 1}
                                 className={`${THEME_INPUT} w-full min-h-[44px]`}
                                 value={valores[campo.clave]}
                                 disabled={deshabilitado}

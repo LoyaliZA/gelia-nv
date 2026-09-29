@@ -21,7 +21,8 @@ class PlazosTurnosPdvConfig
      *   ventana_reatencion_minutos: int,
      *   aviso_tolerancia_espera_minutos: int,
      *   aviso_tolerancia_prorroga_minutos: int,
-     *   inicio_atencion_automatico: bool
+     *   inicio_atencion_automatico: bool,
+     *   cooldown_segundos: int
      * }
      */
     public function configuracionInicialAprobada(): array
@@ -33,6 +34,7 @@ class PlazosTurnosPdvConfig
             'aviso_tolerancia_espera_minutos' => max(1, (int) config('pdv_alertas.aviso_previo_minutos.espera_inicial', 1)),
             'aviso_tolerancia_prorroga_minutos' => max(1, (int) config('pdv_alertas.aviso_previo_minutos.prorroga', 2)),
             'inicio_atencion_automatico' => false,
+            'cooldown_segundos' => 10,
         ];
     }
 
@@ -49,7 +51,8 @@ class PlazosTurnosPdvConfig
      *   ventana_reatencion_minutos: int,
      *   aviso_tolerancia_espera_minutos: int,
      *   aviso_tolerancia_prorroga_minutos: int,
-     *   inicio_atencion_automatico: bool
+     *   inicio_atencion_automatico: bool,
+     *   cooldown_segundos: int
      * }
      */
     public function persistir(array $datos): array
@@ -62,7 +65,7 @@ class PlazosTurnosPdvConfig
                 'valor' => json_encode($normalizado, JSON_UNESCAPED_UNICODE),
                 'tipo' => 'json',
                 'grupo' => 'PuntoVenta',
-                'descripcion' => 'Plazos de espera inicial, prórroga, tolerancias de aviso y ventana de reatención de turnos PDV',
+                'descripcion' => 'Plazos de espera inicial, prórroga, tolerancias de aviso, ventana de reatención y espera entre turnos PDV',
             ]
         );
 
@@ -78,7 +81,8 @@ class PlazosTurnosPdvConfig
      *   ventana_reatencion_minutos: int,
      *   aviso_tolerancia_espera_minutos: int,
      *   aviso_tolerancia_prorroga_minutos: int,
-     *   inicio_atencion_automatico: bool
+     *   inicio_atencion_automatico: bool,
+     *   cooldown_segundos: int
      * }
      */
     public function obtener(): array
@@ -99,7 +103,8 @@ class PlazosTurnosPdvConfig
      *   ventana_reatencion_minutos: int,
      *   aviso_tolerancia_espera_minutos: int,
      *   aviso_tolerancia_prorroga_minutos: int,
-     *   inicio_atencion_automatico: bool
+     *   inicio_atencion_automatico: bool,
+     *   cooldown_segundos: int
      * }
      */
     public function obtenerOPredeterminado(): array
@@ -119,7 +124,8 @@ class PlazosTurnosPdvConfig
      *   ventana_reatencion_minutos: int,
      *   aviso_tolerancia_espera_minutos: int,
      *   aviso_tolerancia_prorroga_minutos: int,
-     *   inicio_atencion_automatico: bool
+     *   inicio_atencion_automatico: bool,
+     *   cooldown_segundos: int
      * }
      */
     private function normalizar(array $datos): array
@@ -130,6 +136,19 @@ class PlazosTurnosPdvConfig
             if ($clave === 'inicio_atencion_automatico') {
                 if (array_key_exists($clave, $datos)) {
                     $base[$clave] = filter_var($datos[$clave], FILTER_VALIDATE_BOOLEAN);
+                }
+
+                continue;
+            }
+
+            if ($clave === 'cooldown_segundos') {
+                if (! array_key_exists($clave, $datos) || ! is_numeric($datos[$clave])) {
+                    continue;
+                }
+
+                $valor = (int) $datos[$clave];
+                if ($valor >= 0) {
+                    $base[$clave] = $valor;
                 }
 
                 continue;
@@ -155,7 +174,8 @@ class PlazosTurnosPdvConfig
      *   ventana_reatencion_minutos: int,
      *   aviso_tolerancia_espera_minutos: int,
      *   aviso_tolerancia_prorroga_minutos: int,
-     *   inicio_atencion_automatico: bool
+     *   inicio_atencion_automatico: bool,
+     *   cooldown_segundos: int
      * }
      */
     private function leerFila(): array

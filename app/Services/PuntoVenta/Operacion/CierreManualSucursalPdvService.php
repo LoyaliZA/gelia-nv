@@ -16,6 +16,7 @@ class CierreManualSucursalPdvService
     public function __construct(
         private readonly ResuelveAlcancePdv $alcance,
         private readonly ResolverSucursalDiaOperacionPdv $sucursalDia,
+        private readonly CerrarEquipoAlCerrarSucursalPdvService $cerrarEquipo,
     ) {}
 
     public function ejecutar(User $actor, int $versionEsperada, CarbonInterface $ahora): SucursalDiaOperacionPdv
@@ -49,6 +50,8 @@ class CierreManualSucursalPdvService
             $dia->aplicaCierreManual($actor, $ahora);
             $dia->version = (int) $dia->version + 1;
             $dia->save();
+
+            $this->cerrarEquipo->cerrarEquipoDelDia($sucursalId, $ahora, (int) $actor->id);
 
             JornadaCierreManual::dispatch($dia->fresh(), $sucursalId, (int) $actor->id);
 

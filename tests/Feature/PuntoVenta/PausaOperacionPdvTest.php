@@ -7,6 +7,7 @@ use App\Events\PuntoVenta\PausaIniciada;
 use App\Models\ConfiguracionSistema;
 use App\Models\PuntoVenta\IntervaloOperativoPdv;
 use App\Models\PuntoVenta\JornadaPdv;
+use App\Models\PuntoVenta\SucursalDiaOperacionPdv;
 use App\Models\PuntoVenta\TurnoPdvAtencion;
 use App\Models\Sucursal;
 use App\Models\User;
@@ -48,6 +49,11 @@ class PausaOperacionPdvTest extends TestCase
         $this->seedPermisos();
 
         $this->sucursal = Sucursal::factory()->create(['nombre' => 'Sucursal Pausa']);
+        SucursalDiaOperacionPdv::factory()->create([
+            'sucursal_id' => $this->sucursal->id,
+            'fecha_operativa' => now()->toDateString(),
+            'acepta_altas' => true,
+        ]);
         $this->ventas = $this->crearVendedor('Vendedor Pausa');
     }
 

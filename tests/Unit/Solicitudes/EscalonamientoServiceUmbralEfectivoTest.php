@@ -132,6 +132,49 @@ class EscalonamientoServiceUmbralEfectivoTest extends TestCase
         $this->assertEquals(5004.86, $resultado['monto_final_tentativo']);
     }
 
+    public function test_cliente_oro_hacia_diamante_aplica_solo_2_por_ciento_adicional(): void
+    {
+        $resultado = $this->svc->evaluar(76836.61, 15101.62, null, $this->listas, 30001.0);
+
+        $this->assertSame('MAYOREO DIAMANTE', $resultado['lista_anticipada']->nombre);
+        $this->assertEquals(2.0, $resultado['porcentaje_descuento']);
+        $this->assertEquals(14799.59, $resultado['monto_final_tentativo']);
+    }
+
+    public function test_descuento_adicional_toma_los_porcentajes_del_catalogo(): void
+    {
+        $listas = collect([
+            new CatalogoListaDescuento([
+                'id' => 5,
+                'nombre' => 'MAYOREO DIAMANTE',
+                'monto_requerido' => 80001.00,
+                'porcentaje_descuento' => 9.00,
+                'activo' => true,
+            ]),
+            new CatalogoListaDescuento([
+                'id' => 4,
+                'nombre' => 'MAYOREO ORO',
+                'monto_requerido' => 30001.00,
+                'porcentaje_descuento' => 5.00,
+                'activo' => true,
+            ]),
+            new CatalogoListaDescuento([
+                'id' => 3,
+                'nombre' => 'MAYOREO PLATA',
+                'monto_requerido' => 5001.00,
+                'porcentaje_descuento' => 1.50,
+                'activo' => true,
+            ]),
+        ]);
+
+        $oro = $listas->firstWhere('nombre', 'MAYOREO ORO');
+        $resultado = $this->svc->evaluar(90000.0, 1000.0, null, $listas, 30001.0, $oro);
+
+        $this->assertSame('MAYOREO DIAMANTE', $resultado['lista_anticipada']->nombre);
+        $this->assertEquals(4.0, $resultado['porcentaje_descuento']);
+        $this->assertEquals(960.0, $resultado['monto_final_tentativo']);
+    }
+
     public function test_evaluar_cotizacion_5204_13_provisional_plata_neto_estable(): void
     {
         $resultado = $this->svc->evaluar(0.0, 5204.13, null, $this->listas, 0.0);

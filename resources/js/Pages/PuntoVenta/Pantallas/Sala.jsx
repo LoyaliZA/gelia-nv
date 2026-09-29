@@ -35,7 +35,7 @@ export default function Sala({ estado_inicial: estadoInicial, sucursal_id: sucur
             >
                 {(ctx) => (
                     <div
-                        className="flex h-dvh min-w-[1280px] flex-col gap-3 overflow-hidden p-4 theme-surface theme-text-main"
+                        className="flex h-dvh w-full min-w-0 flex-col gap-2 overflow-hidden p-2 theme-surface theme-text-main sm:gap-3 sm:p-3 lg:p-4 [@media(max-height:760px)]:gap-1.5 [@media(max-height:760px)]:p-2"
                         style={{ backgroundColor: 'var(--bg-app, var(--theme-surface-bg))' }}
                     >
                         <TemaSala colorHex={ctx.tema?.color_primario ?? estadoInicial?.tema?.color_primario} />
@@ -43,7 +43,7 @@ export default function Sala({ estado_inicial: estadoInicial, sucursal_id: sucur
                             sucursalNombre={ctx.sucursal?.nombre ?? estadoInicial?.sucursal?.nombre}
                             estadoConexion={ctx.estadoConexion}
                         />
-                        <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,67fr)_minmax(20rem,33fr)] gap-4">
+                        <div className="grid min-h-0 min-w-0 flex-1 grid-cols-1 grid-rows-[auto_minmax(0,1fr)] gap-2 overflow-hidden min-[1100px]:grid-cols-[minmax(0,1.65fr)_minmax(16rem,0.95fr)] min-[1100px]:grid-rows-1 min-[1100px]:gap-4">
                             <AdvertisingPanel items={ctx.publicidad} />
                             <QueuePanel
                                 turnoActual={ctx.turnoActual}

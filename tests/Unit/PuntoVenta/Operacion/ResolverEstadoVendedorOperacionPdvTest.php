@@ -102,6 +102,33 @@ class ResolverEstadoVendedorOperacionPdvTest extends TestCase
         $this->assertTrue($estado->recibeTurnos());
     }
 
+    public function test_cooldown_vigente_es_en_espera_y_no_recibe_turnos(): void
+    {
+        $jornada = JornadaPdv::factory()->create([
+            'estado' => EstadoJornadaPdv::Abierta,
+            'disponible_desde' => now()->addSeconds(10),
+        ]);
+
+        $estado = $this->resolver->resolver(
+            $jornada->sucursal_id,
+            $jornada,
+            null,
+            false,
+            null,
+            now(),
+        );
+
+        $this->assertSame(EstadoVendedorOperacionPdv::EnEspera, $estado);
+        $this->assertFalse($estado->recibeTurnos());
+
+        $cronometro = $this->resolver->serializarCronometro($estado, $jornada, null);
+        $this->assertSame('restante', $cronometro['modo']);
+        $this->assertSame(
+            ['desactivar', 'pausa_iniciar', 'cerrar_jornada'],
+            $this->resolver->accionesDisponibles($estado),
+        );
+    }
+
     public function test_pausa_es_en_retencion(): void
     {
         $jornada = JornadaPdv::factory()->create([

@@ -7,6 +7,7 @@ use App\Models\PuntoVenta\IntervaloOperativoPdv;
 use App\Models\PuntoVenta\JornadaPdv;
 use App\Models\PuntoVenta\MotivoPausaPdv;
 use App\Models\PuntoVenta\OperacionGestionAuditoriaPdv;
+use App\Models\PuntoVenta\SucursalDiaOperacionPdv;
 use App\Models\PuntoVenta\TurnoPdvAtencion;
 use App\Models\Sucursal;
 use App\Models\User;
@@ -53,6 +54,11 @@ class PausaGerencialMotivosPdvTest extends TestCase
         $this->seedPermisos();
 
         $this->sucursal = Sucursal::factory()->create(['nombre' => 'Sucursal Pausa Motivos']);
+        SucursalDiaOperacionPdv::factory()->create([
+            'sucursal_id' => $this->sucursal->id,
+            'fecha_operativa' => now()->toDateString(),
+            'acepta_altas' => true,
+        ]);
         $this->otraSucursal = Sucursal::factory()->create(['nombre' => 'Sucursal Remota']);
         $this->vendedor = $this->crearVendedor('Vendedor Motivos');
         $this->gerente = $this->crearGerente('Gerente Motivos');

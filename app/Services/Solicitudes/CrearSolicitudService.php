@@ -55,15 +55,11 @@ class CrearSolicitudService
                 $clienteEscalon = Cliente::find($clienteId);
                 if ($clienteEscalon) {
                     $listasEscalon = CatalogoListaDescuento::with('porcentajeEscalonamiento')->where('activo', true)->get();
-                    $listaActualEscalon = $clienteEscalon->lista_actual_id
-                        ? $listasEscalon->firstWhere('id', $clienteEscalon->lista_actual_id)
-                        : null;
-                    $escalon = app(EscalonamientoService::class)->evaluar(
-                        (float) ($clienteEscalon->monto_venta_actual ?? 0),
+                    $escalon = app(EscalonamientoService::class)->evaluarCompraCliente(
+                        $clienteEscalon,
                         $montoCotizado,
                         $listaDescuentoId ? (int) $listaDescuentoId : null,
-                        $listasEscalon,
-                        $listaActualEscalon ? (float) $listaActualEscalon->monto_requerido : 0.0
+                        $listasEscalon
                     );
 
                     if ($escalon['es_ascenso'] && $escalon['lista_calificada_efectiva']) {

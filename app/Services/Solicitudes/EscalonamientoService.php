@@ -3,6 +3,7 @@
 namespace App\Services\Solicitudes;
 
 use App\Models\CatalogoListaDescuento;
+use App\Models\Cliente;
 use Illuminate\Support\Collection;
 
 class EscalonamientoService
@@ -26,6 +27,42 @@ class EscalonamientoService
         }
 
         return (float) $pct->porcentaje_descuento;
+    }
+
+    /**
+     * Descuento de la compra nueva: lo que falta para llegar al porcentaje de la lista destino
+     * respecto al porcentaje que el cliente ya tiene. Ambos salen del catálogo de listas.
+     */
+    public function porcentajeAplicado(?CatalogoListaDescuento $listaDestino, ?CatalogoListaDescuento $listaActual): float
+    {
+        return max(0, round(
+            $this->obtenerPorcentajeLista($listaDestino) - $this->obtenerPorcentajeLista($listaActual),
+            2
+        ));
+    }
+
+    /**
+     * @param  Collection<int, CatalogoListaDescuento>|array  $catalogoListas
+     */
+    public function evaluarCompraCliente(
+        Cliente $cliente,
+        float $montoCotizado,
+        ?int $listaSolicitadaId,
+        Collection|array $catalogoListas
+    ): array {
+        $listas = collect($catalogoListas);
+        $listaActual = $cliente->lista_actual_id
+            ? $listas->firstWhere('id', (int) $cliente->lista_actual_id)
+            : null;
+
+        return $this->evaluar(
+            (float) ($cliente->monto_venta_actual ?? 0),
+            $montoCotizado,
+            $listaSolicitadaId,
+            $listas,
+            $listaActual ? (float) $listaActual->monto_requerido : 0.0,
+            $listaActual
+        );
     }
 
     public function calcularMontoFinalTentativo(float $montoCotizado, float $porcentajeDescuento): float
@@ -142,7 +179,8 @@ class EscalonamientoService
         float $montoCotizado,
         ?int $listaSolicitadaId,
         Collection|array $catalogoListas,
-        ?float $requisitoListaActual = null
+        ?float $requisitoListaActual = null,
+        ?CatalogoListaDescuento $listaActual = null
     ): array {
         $listas = collect($catalogoListas);
         $listasValidas = $this->filtrarListasValidas($listas);
@@ -168,7 +206,12 @@ class EscalonamientoService
         }
 
         $listaAnticipada = $listaProvisional ?: $listaCalificadaEfectiva;
-        $porcentajeDescuento = $this->obtenerPorcentajeLista($listaParaDescuento);
+        if (! $listaActual) {
+            $listaActual = collect($catalogoListas)->first(
+                fn ($l) => abs((float) $l->monto_requerido - (float) $requisitoActual) < 0.009
+            );
+        }
+        $porcentajeDescuento = $this->porcentajeAplicado($listaParaDescuento, $listaActual);
         $umbralEfectivoAnticipada = $listaAnticipada ? $this->umbralEfectivo($listaAnticipada) : 0.0;
 
         $montoFinalTentativo = $this->calcularMontoFinalTentativo($montoCotizado, $porcentajeDescuento);
@@ -211,7 +254,7 @@ class EscalonamientoService
             $faltanteNetoCasi = max(0, round((float) $listaProvisional->monto_requerido - $totalProyectadoNeto, 2));
             $faltanteBrutoCasi = $this->calcularMontoBrutoNecesario(
                 $faltanteNetoCasi,
-                $this->obtenerPorcentajeLista($listaProvisional)
+                $this->porcentajeAplicado($listaProvisional, $listaActual)
             );
         }
 

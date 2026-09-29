@@ -43,6 +43,11 @@ class ResolverEstadoVendedorOperacionPdvService
                     return EstadoVendedorOperacionPdv::EnRetencion;
                 }
 
+                $referencia = $ahora ?? now();
+                if ($jornada->disponible_desde !== null && $referencia->lt($jornada->disponible_desde)) {
+                    return EstadoVendedorOperacionPdv::EnEspera;
+                }
+
                 return EstadoVendedorOperacionPdv::Disponible;
             }
 
@@ -64,6 +69,7 @@ class ResolverEstadoVendedorOperacionPdvService
             EstadoVendedorOperacionPdv::NoActivado => ['activar', 'no_llego'],
             EstadoVendedorOperacionPdv::NoLlego => ['activar'],
             EstadoVendedorOperacionPdv::Disponible => ['desactivar', 'pausa_iniciar', 'cerrar_jornada'],
+            EstadoVendedorOperacionPdv::EnEspera => ['desactivar', 'pausa_iniciar', 'cerrar_jornada'],
             EstadoVendedorOperacionPdv::Atendiendo => ['cerrar_jornada'],
             EstadoVendedorOperacionPdv::EnRetencion => ['pausa_finalizar', 'desactivar', 'cerrar_jornada'],
             EstadoVendedorOperacionPdv::CierrePendiente => ['cancelar_cierre_pendiente'],
@@ -85,6 +91,15 @@ class ResolverEstadoVendedorOperacionPdvService
                 'etiqueta' => 'Tiempo en pausa',
                 'referencia_at' => $intervalo->inicio_at->toIso8601String(),
                 'modo' => 'transcurrido',
+            ];
+        }
+
+        if ($estado === EstadoVendedorOperacionPdv::EnEspera
+            && $jornada?->disponible_desde !== null) {
+            return [
+                'etiqueta' => 'Espera para el siguiente turno',
+                'referencia_at' => $jornada->disponible_desde->toIso8601String(),
+                'modo' => 'restante',
             ];
         }
 

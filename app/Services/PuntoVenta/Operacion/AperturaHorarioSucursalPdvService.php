@@ -17,10 +17,15 @@ class AperturaHorarioSucursalPdvService
     public function __construct(
         private readonly ResolverSucursalDiaOperacionPdv $sucursalDia,
         private readonly ResolverUmbralAperturaSucursalPdv $umbral,
+        private readonly CerrarEquipoAlCerrarSucursalPdvService $cerrarEquipo,
     ) {}
 
     public function ejecutar(int $sucursalId, CarbonInterface $ahora): bool
     {
+        DB::transaction(function () use ($sucursalId, $ahora): void {
+            $this->cerrarEquipo->cerrarJornadasDeDiasAnteriores($sucursalId, $ahora, 0);
+        });
+
         $diaReferencia = $this->sucursalDia->obtenerOCrear($sucursalId, $ahora);
         $evaluacion = $this->umbral->evaluar($sucursalId, $diaReferencia, $ahora);
 

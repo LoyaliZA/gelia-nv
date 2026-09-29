@@ -20,6 +20,7 @@ class AperturaManualSucursalPdvService
     public function __construct(
         private readonly ResuelveAlcancePdv $alcance,
         private readonly ResolverSucursalDiaOperacionPdv $sucursalDia,
+        private readonly CerrarEquipoAlCerrarSucursalPdvService $cerrarEquipo,
     ) {}
 
     public function ejecutar(User $actor, int $versionEsperada, CarbonInterface $ahora): SucursalDiaOperacionPdv
@@ -47,6 +48,8 @@ class AperturaManualSucursalPdvService
             &$eventoPendiente,
         ): SucursalDiaOperacionPdv {
             $dia = $this->bloquearDia($sucursalId, $ahora);
+
+            $this->cerrarEquipo->cerrarJornadasDeDiasAnteriores($sucursalId, $ahora, (int) $actor->id);
 
             if ((int) $dia->version !== $versionEsperada) {
                 throw ValidationException::withMessages([

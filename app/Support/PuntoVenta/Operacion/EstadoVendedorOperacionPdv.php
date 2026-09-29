@@ -10,6 +10,8 @@ enum EstadoVendedorOperacionPdv: string
 
     case Disponible = 'disponible';
 
+    case EnEspera = 'en_espera';
+
     case Atendiendo = 'atendiendo';
 
     case EnRetencion = 'en_retencion';
@@ -29,6 +31,7 @@ enum EstadoVendedorOperacionPdv: string
             self::NoActivado => 'No activado',
             self::NoLlego => 'No llegó',
             self::Disponible => 'Disponible',
+            self::EnEspera => 'En espera',
             self::Atendiendo => 'Atendiendo',
             self::EnRetencion => 'En pausa',
             self::CierrePendiente => 'Cierre pendiente',

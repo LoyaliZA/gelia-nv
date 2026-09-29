@@ -19,10 +19,15 @@ class EjecutarMatchmakerTurnosPdvJob implements ShouldBeUnique, ShouldQueue
     public function __construct(
         public int $sucursalId,
         public string $origenDisparador,
+        public ?string $uniqueSuffix = null,
     ) {}
 
     public function uniqueId(): string
     {
+        if ($this->uniqueSuffix !== null && $this->uniqueSuffix !== '') {
+            return 'pdv-matchmaker:'.$this->sucursalId.':'.$this->uniqueSuffix;
+        }
+
         return 'pdv-matchmaker:'.$this->sucursalId;
     }
 

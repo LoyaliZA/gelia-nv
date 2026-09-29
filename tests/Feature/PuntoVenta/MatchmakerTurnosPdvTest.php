@@ -7,6 +7,7 @@ use App\Events\PuntoVenta\TurnoAsignado;
 use App\Events\PuntoVenta\TurnoReatencion;
 use App\Jobs\PuntoVenta\Turnos\EjecutarMatchmakerTurnosPdvJob;
 use App\Models\ConfiguracionSistema;
+use App\Models\PuntoVenta\SucursalDiaOperacionPdv;
 use App\Models\PuntoVenta\TurnoPdv;
 use App\Models\PuntoVenta\TurnoPdvAtencion;
 use App\Models\PuntoVenta\TurnoPdvEvento;
@@ -265,6 +266,7 @@ class MatchmakerTurnosPdvTest extends TestCase
     {
         Event::fake([TurnoAsignado::class]);
 
+        $this->abrirSucursal();
         $ventas = $this->crearVendedorOperacion('Vendedor Jornada');
         $turno = $this->crearTurnoEnCola('Esperando jornada');
 
@@ -280,6 +282,7 @@ class MatchmakerTurnosPdvTest extends TestCase
     {
         Event::fake([TurnoAsignado::class]);
 
+        $this->abrirSucursal();
         $ventas = $this->crearVendedorOperacion('Vendedor Pausa');
         app(AbrirJornadaPdvService::class)->ejecutar($ventas, now());
         app(IniciarPausaPdvService::class)->ejecutar($ventas, now());
@@ -380,6 +383,15 @@ class MatchmakerTurnosPdvTest extends TestCase
                 }
             }
         );
+    }
+
+    private function abrirSucursal(): void
+    {
+        SucursalDiaOperacionPdv::factory()->create([
+            'sucursal_id' => $this->sucursal->id,
+            'fecha_operativa' => now()->toDateString(),
+            'acepta_altas' => true,
+        ]);
     }
 
     private function crearTurnoEnCola(

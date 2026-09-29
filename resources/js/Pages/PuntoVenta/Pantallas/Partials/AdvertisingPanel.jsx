@@ -38,10 +38,18 @@ function FallbackInstitucional() {
         >
             <GeliaLogo variant="sparkle" className="h-28 w-28" />
             <p className="px-8 text-center text-xl font-black uppercase tracking-[0.18em] theme-text-main">
-                Una atención más humana, es posible.
+                La mejor atención, es posible.
             </p>
         </div>
     );
+}
+
+function activarSonidoVideo(video, sonidoActivo) {
+    if (!video) return;
+    video.muted = !sonidoActivo;
+    if (!sonidoActivo) return;
+    video.volume = window.speechSynthesis?.speaking ? 0.12 : 1;
+    video.play().catch(() => {});
 }
 
 function siguienteIndice(playlist, desde, omitidos) {
@@ -60,6 +68,7 @@ export default function AdvertisingPanel({ items = [] }) {
     const [ciclo, setCiclo] = useState(0);
     const [progress, setProgress] = useState(0);
     const [omitidos, setOmitidos] = useState(() => new Set());
+    const [sonidoActivo, setSonidoActivo] = useState(false);
     const videoRef = useRef(null);
     const preloadImg = useRef(null);
     const playlist = Array.isArray(items) ? items.filter((item) => item?.url && !omitidos.has(item.id)) : [];
@@ -74,6 +83,43 @@ export default function AdvertisingPanel({ items = [] }) {
     useEffect(() => {
         if (index >= playlist.length) setIndex(0);
     }, [playlist.length, index]);
+
+    useEffect(() => {
+        if (sonidoActivo) return undefined;
+
+        const activar = () => {
+            setSonidoActivo(true);
+            activarSonidoVideo(videoRef.current, true);
+        };
+
+        ['click', 'touchstart', 'keydown'].forEach((evento) => {
+            window.addEventListener(evento, activar, { once: true, capture: true });
+        });
+
+        return () => {
+            ['click', 'touchstart', 'keydown'].forEach((evento) => {
+                window.removeEventListener(evento, activar, { capture: true });
+            });
+        };
+    }, [sonidoActivo]);
+
+    useEffect(() => {
+        const video = videoRef.current;
+        if (!video || actual?.tipo !== 'video') return undefined;
+
+        activarSonidoVideo(video, sonidoActivo);
+
+        if (!sonidoActivo) return undefined;
+
+        const ajustarVolumen = () => {
+            const hablando = Boolean(window.speechSynthesis?.speaking);
+            video.volume = hablando ? 0.12 : 1;
+        };
+
+        ajustarVolumen();
+        const timer = window.setInterval(ajustarVolumen, 200);
+        return () => window.clearInterval(timer);
+    }, [sonidoActivo, actual?.id, actual?.tipo]);
 
     useEffect(() => {
         if (!actual || actual.tipo === 'video') return undefined;
@@ -148,7 +194,7 @@ export default function AdvertisingPanel({ items = [] }) {
 
     return (
         <section
-            className="relative h-full min-h-0 overflow-hidden rounded-[2.5rem] border theme-border theme-surface"
+            className="relative min-h-[10rem] overflow-hidden rounded-[1.5rem] border theme-border theme-surface max-[1099px]:h-[34vh] min-[1100px]:h-full min-[1100px]:min-h-0 min-[1100px]:rounded-[2.5rem]"
             style={{ boxShadow: 'var(--theme-shadow-card)' }}
             data-pdv-sala-publicidad
         >
@@ -162,7 +208,7 @@ export default function AdvertisingPanel({ items = [] }) {
                     style={{ objectFit }}
                     src={actual.url}
                     autoPlay
-                    muted
+                    muted={!sonidoActivo}
                     playsInline
                     preload="auto"
                     onTimeUpdate={() => {

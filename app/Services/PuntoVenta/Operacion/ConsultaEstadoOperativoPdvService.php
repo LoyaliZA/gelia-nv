@@ -128,8 +128,8 @@ class ConsultaEstadoOperativoPdvService
             ] : null,
             'actividad' => $intervalo?->tipo?->value,
             'sucursal_dia' => [
-                'acepta_altas' => $dia?->acepta_altas ?? true,
-                'jornada_abierta' => (bool) ($dia?->acepta_altas ?? true),
+                'acepta_altas' => (bool) ($dia?->acepta_altas ?? false),
+                'jornada_abierta' => (bool) ($dia?->acepta_altas ?? false),
                 'origen_apertura' => $this->origenApertura($dia, $horarioEfectivo),
                 'apertura_manual_at' => $dia?->apertura_manual_at?->toIso8601String(),
                 'cierre_manual_at' => $dia?->cierre_manual_at?->toIso8601String(),

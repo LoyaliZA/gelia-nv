@@ -53,6 +53,11 @@ class ReatencionGerencialPdvTest extends TestCase
         $this->seedPlazos();
 
         $this->sucursal = Sucursal::factory()->create(['nombre' => 'Sucursal Reatención']);
+        \App\Models\PuntoVenta\SucursalDiaOperacionPdv::factory()->create([
+            'sucursal_id' => $this->sucursal->id,
+            'fecha_operativa' => now()->toDateString(),
+            'acepta_altas' => true,
+        ]);
         $this->vendedorAnterior = $this->crearVendedor('Vendedor Anterior');
         $this->vendedorDestino = $this->crearVendedor('Vendedor Destino');
         $this->gerente = $this->crearGerente('Gerente Reatención');

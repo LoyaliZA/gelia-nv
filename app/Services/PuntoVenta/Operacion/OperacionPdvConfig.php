@@ -29,4 +29,12 @@ final class OperacionPdvConfig
 
         return $referencia->timezone($zona)->toDateString();
     }
+
+    public function inicioDiaOperativo(int $sucursalId, ?CarbonInterface $momento = null): Carbon
+    {
+        $zona = $this->zonaHorariaOperativa($sucursalId);
+        $fecha = $this->fechaOperativa($sucursalId, $momento);
+
+        return Carbon::parse($fecha, $zona)->startOfDay()->timezone((string) config('app.timezone'));
+    }
 }

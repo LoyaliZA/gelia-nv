@@ -23,6 +23,7 @@ class JornadaPdv extends Model
         'estado',
         'apertura_at',
         'cierre_at',
+        'disponible_desde',
         'jornada_activa_marcador',
         'version',
     ];
@@ -33,6 +34,7 @@ class JornadaPdv extends Model
             'estado' => EstadoJornadaPdv::class,
             'apertura_at' => 'datetime',
             'cierre_at' => 'datetime',
+            'disponible_desde' => 'datetime',
             'version' => 'integer',
         ];
     }

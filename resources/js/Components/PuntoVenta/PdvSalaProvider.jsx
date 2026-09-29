@@ -58,7 +58,7 @@ function PdvSalaAudioDesbloqueo({ visible }) {
                 </span>
                 <span className="text-lg font-bold theme-text-main">Toca para activar anuncios</span>
                 <span className="text-sm theme-text-muted">
-                    El navegador requiere una interacción inicial para reproducir voz y timbre.
+                    El navegador requiere un toque inicial para emitir el audio del video y los anuncios de turnos.
                 </span>
             </span>
         </button>
@@ -206,9 +206,10 @@ export default function PdvSalaProvider({
         refrescarEstado,
     ]);
 
-    const mostrarDesbloqueo = ttsDisponible
-        && !audioDesbloqueado
-        && estadoTts === PDV_TTS_ESTADO.bloqueado;
+    const hayVideo = estadoSala.publicidad.some((item) => item?.tipo === 'video' && item?.url);
+    const mostrarDesbloqueo = !audioDesbloqueado && (
+        estadoTts === PDV_TTS_ESTADO.bloqueado || hayVideo
+    );
 
     return (
         <div data-pdv-sala-provider className="contents">

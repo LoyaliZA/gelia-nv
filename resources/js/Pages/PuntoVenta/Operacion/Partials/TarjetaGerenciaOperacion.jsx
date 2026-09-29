@@ -235,7 +235,7 @@ export default function TarjetaGerenciaOperacion({
                     disabled={cargando}
                     onClick={() => setModalCierre(true)}
                 >
-                    Cerrar jornada
+                    Cerrar sucursal
                 </button>
             )}
 
@@ -260,7 +260,7 @@ export default function TarjetaGerenciaOperacion({
             <ModalConfirmarAccion
                 abierto={modalCierre}
                 titulo="Cierre manual del día"
-                mensaje="La sucursal dejará de aceptar altas nuevas. Este cierre manual invalida el automático de hoy. No elimina la cola ni corta atenciones en curso."
+                mensaje="La sucursal dejará de aceptar altas. Quien no está atendiendo sale de la jornada. Quien atiende termina su turno y queda fuera. La cola no se cancela."
                 etiquetaConfirmar="Confirmar cierre"
                 variante="danger"
                 onClose={() => setModalCierre(false)}
@@ -293,7 +293,7 @@ function EstadoJornadaSucursal({ estado }) {
 
     return (
         <p className="text-xs font-semibold theme-text-muted m-0">
-            Jornada de sucursal:
+            Sucursal:
             {' '}
             <span className={`inline-flex px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${clase}`}>
                 {etiqueta}

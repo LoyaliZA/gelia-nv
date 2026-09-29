@@ -171,6 +171,7 @@ class AbrirJornadaPdvService
 
             $jornada->estado = EstadoJornadaPdv::Abierta;
             $jornada->cierre_at = null;
+            $jornada->disponible_desde = null;
             $jornada->version = (int) $jornada->version + 1;
             $jornada->save();
 

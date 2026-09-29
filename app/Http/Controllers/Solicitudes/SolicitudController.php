@@ -384,6 +384,8 @@ class SolicitudController extends Controller
 
         $listaDescuentoId = $request->catalogo_lista_descuento_id;
         $montoCotizado = (float) ($request->monto_cotizado ?? 0);
+        $montoFinalTentativo = null;
+        $totalProyectadoNeto = null;
 
         if ($compraSoloTag) {
             $listaDescuentoId = null;
@@ -391,6 +393,24 @@ class SolicitudController extends Controller
         } elseif ($compraEnTienda) {
             $listaDescuentoId = CrearSolicitudService::buscarListaBronce()?->id;
             $montoCotizado = 0;
+        } elseif ($montoCotizado > 0 && $solicitud->cliente_id) {
+            $clienteEscalon = Cliente::find($solicitud->cliente_id);
+            if ($clienteEscalon) {
+                $listasEscalon = CatalogoListaDescuento::with('porcentajeEscalonamiento')->where('activo', true)->get();
+                $escalon = app(EscalonamientoService::class)->evaluarCompraCliente(
+                    $clienteEscalon,
+                    $montoCotizado,
+                    $listaDescuentoId ? (int) $listaDescuentoId : null,
+                    $listasEscalon
+                );
+
+                if ($escalon['es_ascenso'] && $escalon['lista_calificada_efectiva']) {
+                    $listaDescuentoId = (int) $escalon['lista_calificada_efectiva']->id;
+                }
+
+                $montoFinalTentativo = $escalon['monto_final_tentativo'];
+                $totalProyectadoNeto = $escalon['total_proyectado_neto'];
+            }
         }
 
         DB::transaction(function () use (
@@ -401,7 +421,9 @@ class SolicitudController extends Controller
             $compraEnTienda,
             $compraSoloTag,
             $listaDescuentoId,
-            $montoCotizado
+            $montoCotizado,
+            $montoFinalTentativo,
+            $totalProyectadoNeto
         ) {
             $solicitud->update([
                 'monto_cotizado' => $montoCotizado,
@@ -411,6 +433,8 @@ class SolicitudController extends Controller
                 'observaciones_vendedor' => $request->observaciones_vendedor,
                 'compra_en_tienda' => $compraEnTienda,
                 'compra_en_tienda_solo_tag' => $compraSoloTag,
+                'monto_final_tentativo' => $montoFinalTentativo,
+                'total_proyectado_neto' => $totalProyectadoNeto,
                 'catalogo_estado_solicitud_id' => $idPendiente,
                 'motivo_incorrecta' => null,
             ]);

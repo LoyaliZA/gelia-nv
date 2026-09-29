@@ -24,6 +24,7 @@ class ActualizarPlazosTurnosPdvRequest extends PdvOperacionPisoRequest
             'aviso_tolerancia_espera_minutos' => ['required', 'integer', 'min:1', 'max:60'],
             'aviso_tolerancia_prorroga_minutos' => ['required', 'integer', 'min:1', 'max:60'],
             'inicio_atencion_automatico' => ['required', 'boolean'],
+            'cooldown_segundos' => ['sometimes', 'integer', 'min:0', 'max:3600'],
         ];
     }
 
@@ -34,7 +35,8 @@ class ActualizarPlazosTurnosPdvRequest extends PdvOperacionPisoRequest
      *   ventana_reatencion_minutos: int,
      *   aviso_tolerancia_espera_minutos: int,
      *   aviso_tolerancia_prorroga_minutos: int,
-     *   inicio_atencion_automatico: bool
+     *   inicio_atencion_automatico: bool,
+     *   cooldown_segundos?: int
      * }
      */
     public function payloadOperacion(): array
@@ -48,6 +50,9 @@ class ActualizarPlazosTurnosPdvRequest extends PdvOperacionPisoRequest
             'aviso_tolerancia_espera_minutos' => (int) $datos['aviso_tolerancia_espera_minutos'],
             'aviso_tolerancia_prorroga_minutos' => (int) $datos['aviso_tolerancia_prorroga_minutos'],
             'inicio_atencion_automatico' => (bool) $datos['inicio_atencion_automatico'],
+            ...(array_key_exists('cooldown_segundos', $datos)
+                ? ['cooldown_segundos' => (int) $datos['cooldown_segundos']]
+                : []),
         ];
     }
 }

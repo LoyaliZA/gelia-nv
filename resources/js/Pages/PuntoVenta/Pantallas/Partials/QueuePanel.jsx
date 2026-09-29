@@ -28,7 +28,7 @@ function EncabezadoTarjeta({ titulo, badge, badgeTono = 'muted' }) {
 function CurrentTurnCard({ turno }) {
     return (
         <article
-            className="flex min-h-0 flex-1 flex-col rounded-[1.75rem] border theme-border theme-surface p-4"
+            className="@container flex min-h-0 flex-1 flex-col rounded-2xl border theme-border theme-surface p-3 sm:rounded-[1.75rem] sm:p-4"
             data-pdv-sala-llamado-actual
             aria-live="polite"
         >
@@ -46,11 +46,11 @@ function CurrentTurnCard({ turno }) {
             ) : (
                 <div
                     key={turno.turno_id}
-                    className="grid min-h-0 flex-1 grid-cols-[minmax(0,1.2fr)_auto_minmax(0,0.9fr)] items-center gap-3"
+                    className="grid min-h-0 flex-1 grid-cols-1 items-center gap-3 @md:grid-cols-[minmax(0,1.2fr)_auto_minmax(0,0.9fr)]"
                     style={{ animation: 'gelia-page-reveal 420ms ease' }}
                 >
                     <div className="min-h-0 min-w-0">
-                        <p className="text-[clamp(2.4rem,4.2vw,4.4rem)] font-black leading-none tracking-tight theme-text-main" data-pdv-sala-folio>
+                        <p className="text-[clamp(1.75rem,6cqi,4.4rem)] font-black leading-none tracking-tight theme-text-main" data-pdv-sala-folio>
                             {turno.folio}
                         </p>
                         <NombreAjustable
@@ -62,7 +62,7 @@ function CurrentTurnCard({ turno }) {
                             {turno.snapshot_nombre_llamado}
                         </NombreAjustable>
                     </div>
-                    <span className="h-16 w-px self-center" style={{ backgroundColor: 'var(--theme-border)' }} aria-hidden />
+                    <span className="hidden h-16 w-px self-center @md:block" style={{ backgroundColor: 'var(--theme-border)' }} aria-hidden />
                     <div className="min-w-0">
                         <UserRound className="mb-2 h-6 w-6 theme-text-primario" aria-hidden />
                         <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted">
@@ -80,18 +80,18 @@ function CurrentTurnCard({ turno }) {
 
 function UpcomingTurnsCard({ turnos }) {
     return (
-        <article className="flex min-h-0 flex-[0.85] flex-col rounded-[1.75rem] border theme-border theme-surface p-4">
+        <article className="flex min-h-0 flex-[0.85] flex-col rounded-2xl border theme-border theme-surface p-3 sm:rounded-[1.75rem] sm:p-4">
             <EncabezadoTarjeta titulo="Próximos turnos" badge="En espera" />
             {!turnos.length ? (
                 <p className="flex flex-1 items-center justify-center text-sm theme-text-muted">
                     No hay clientes en espera.
                 </p>
             ) : (
-                <ul className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden">
+                <ul className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
                     {turnos.map((turno) => (
                         <li
                             key={turno.turno_id}
-                            className="flex min-h-0 items-center justify-between gap-3 rounded-2xl theme-element px-3 py-2"
+                            className="flex shrink-0 items-center justify-between gap-3 rounded-2xl theme-element px-3 py-2"
                         >
                             <div className="min-w-0">
                                 <p className="text-lg font-black theme-text-main">{turno.folio}</p>
@@ -110,16 +110,16 @@ function UpcomingTurnsCard({ turnos }) {
 
 function PreviousTurnsCard({ turnos }) {
     return (
-        <article className="flex min-h-0 flex-[0.75] flex-col rounded-[1.75rem] border theme-border theme-surface p-4">
+        <article className="flex min-h-0 flex-[0.75] flex-col rounded-2xl border theme-border theme-surface p-3 sm:rounded-[1.75rem] sm:p-4">
             <EncabezadoTarjeta titulo="Turnos anteriores" badge="Ya atendidos" />
             {!turnos.length ? (
                 <p className="flex flex-1 items-center justify-center text-sm theme-text-muted">
                     Aún no hay turnos atendidos.
                 </p>
             ) : (
-                <ul className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden">
+                <ul className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
                     {turnos.map((turno) => (
-                        <li key={turno.turno_id} className="rounded-2xl theme-element px-3 py-2">
+                        <li key={turno.turno_id} className="shrink-0 rounded-2xl theme-element px-3 py-2">
                             <div className="flex items-start justify-between gap-2">
                                 <p className="text-sm font-black theme-text-main">{turno.folio}</p>
                                 <p className="text-sm font-bold tabular-nums theme-text-main">{turno.hora}</p>
@@ -140,7 +140,7 @@ function PreviousTurnsCard({ turnos }) {
 
 export default function QueuePanel({ turnoActual, proximos = [], anteriores = [] }) {
     return (
-        <aside className="flex h-full min-h-0 flex-col gap-3" data-pdv-sala-cola>
+        <aside className="flex h-full min-h-0 flex-col gap-2 sm:gap-3" data-pdv-sala-cola>
             <div className="flex items-center gap-2 px-1">
                 <Megaphone className="h-4 w-4 theme-text-primario" aria-hidden />
                 <span className="text-[10px] font-black uppercase tracking-[0.2em] theme-text-muted">

@@ -197,17 +197,12 @@ class StoreSolicitudRequest extends FormRequest
 
                 if ($montoCotizado > 0) {
                     $listas = CatalogoListaDescuento::with('porcentajeEscalonamiento')->where('activo', true)->get();
-                    $listaActual = $cliente->lista_actual_id
-                        ? $listas->firstWhere('id', $cliente->lista_actual_id)
-                        : null;
-                    $requisitoActual = $listaActual ? (float) $listaActual->monto_requerido : 0;
 
-                    $escalonamiento = app(EscalonamientoService::class)->evaluar(
-                        $montoVentaActual,
+                    $escalonamiento = app(EscalonamientoService::class)->evaluarCompraCliente(
+                        $cliente,
                         $montoCotizado,
                         $listaSolicitadaId ? (int) $listaSolicitadaId : null,
-                        $listas,
-                        $requisitoActual
+                        $listas
                     );
 
                     if (!empty($escalonamiento['casi_alcanza_siguiente'])
