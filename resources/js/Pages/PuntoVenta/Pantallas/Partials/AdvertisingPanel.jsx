@@ -107,17 +107,32 @@ export default function AdvertisingPanel({ items = [] }) {
         };
     }, [index, playlist]);
 
+    const indiceSiguiente = () => {
+        const base = playlist.length ? playlist : (Array.isArray(items) ? items : []);
+        const ids = base.map((item) => item.id);
+        const desde = Math.max(0, ids.indexOf(actual?.id));
+
+        return { base, desde, next: siguienteIndice(base, desde, omitidos) };
+    };
+
     const avanzar = () => {
-        setIndex((prev) => {
-            const base = playlist.length ? playlist : (Array.isArray(items) ? items : []);
-            const ids = base.map((item) => item.id);
-            const actualId = actual?.id;
-            const desde = Math.max(0, ids.indexOf(actualId));
-            const next = siguienteIndice(base, desde, omitidos);
-            return next < 0 ? 0 : next;
-        });
+        const { next } = indiceSiguiente();
+        setIndex(next < 0 ? 0 : next);
         setCiclo((prev) => prev + 1);
         setProgress(0);
+    };
+
+    const alTerminar = () => {
+        const video = videoRef.current;
+        const { desde, next } = indiceSiguiente();
+        if (next === desde && video) {
+            video.currentTime = 0;
+            video.play().catch(() => omitir(actual));
+            setProgress(0);
+            setCiclo((prev) => prev + 1);
+            return;
+        }
+        avanzar();
     };
 
     const omitir = (item) => {
@@ -155,7 +170,7 @@ export default function AdvertisingPanel({ items = [] }) {
                         if (!video?.duration) return;
                         setProgress(Math.min(1, video.currentTime / video.duration));
                     }}
-                    onEnded={avanzar}
+                    onEnded={alTerminar}
                     onError={() => omitir(actual)}
                 />
             ) : (
