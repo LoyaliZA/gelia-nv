@@ -290,6 +290,148 @@ class PublicidadPdvTest extends TestCase
         $this->assertSame(2, $a->fresh()->orden);
     }
 
+    public function test_estados_de_vigencia_no_llegan_a_la_tv_salvo_la_activa(): void
+    {
+        $programada = PdvPantallaPublicidad::factory()->create([
+            'sucursal_id' => $this->sucursal->id,
+            'medio_id' => Medio::factory(),
+            'activa' => true,
+            'vigente_desde' => now()->addDay(),
+        ]);
+        $activa = PdvPantallaPublicidad::factory()->create([
+            'sucursal_id' => $this->sucursal->id,
+            'medio_id' => Medio::factory(),
+            'activa' => true,
+            'vigente_desde' => now()->subHour(),
+            'vigente_hasta' => now()->addHour(),
+        ]);
+        $expirada = PdvPantallaPublicidad::factory()->create([
+            'sucursal_id' => $this->sucursal->id,
+            'medio_id' => Medio::factory(),
+            'activa' => true,
+            'vigente_hasta' => now()->subMinute(),
+        ]);
+        $deshabilitada = PdvPantallaPublicidad::factory()->create([
+            'sucursal_id' => $this->sucursal->id,
+            'medio_id' => Medio::factory(),
+            'activa' => false,
+            'vigente_desde' => now()->subDay(),
+            'vigente_hasta' => now()->addDay(),
+        ]);
+
+        $items = collect($this->actingAs($this->autorizado)->getJson(
+            route('punto_venta.publicidad.items', ['sucursal_id' => $this->sucursal->id]),
+        )->assertOk()->json('items'));
+
+        $this->assertSame('programada', $items->firstWhere('id', $programada->id)['estado']);
+        $this->assertSame('activa', $items->firstWhere('id', $activa->id)['estado']);
+        $this->assertSame('expirada', $items->firstWhere('id', $expirada->id)['estado']);
+        $this->assertSame('deshabilitada', $items->firstWhere('id', $deshabilitada->id)['estado']);
+
+        $this->getJson(route('sala_turnos.publica.estado', ['sucursal' => $this->sucursal->id]))
+            ->assertOk()
+            ->assertJsonCount(1, 'publicidad')
+            ->assertJsonPath('publicidad.0.id', $activa->id);
+    }
+
+    public function test_orden_rechaza_ids_duplicados_o_incompletos(): void
+    {
+        $a = PdvPantallaPublicidad::factory()->create([
+            'sucursal_id' => $this->sucursal->id,
+            'medio_id' => Medio::factory(),
+            'orden' => 1,
+        ]);
+        $b = PdvPantallaPublicidad::factory()->create([
+            'sucursal_id' => $this->sucursal->id,
+            'medio_id' => Medio::factory(),
+            'orden' => 2,
+        ]);
+
+        $this->actingAs($this->autorizado)->patchJson(route('punto_venta.publicidad.ordenar'), [
+            'sucursal_id' => $this->sucursal->id,
+            'ids' => [$a->id, $a->id],
+        ])->assertUnprocessable();
+
+        $this->actingAs($this->autorizado)->patchJson(route('punto_venta.publicidad.ordenar'), [
+            'sucursal_id' => $this->sucursal->id,
+            'ids' => [$a->id],
+        ])->assertUnprocessable();
+
+        $this->assertSame(1, $a->fresh()->orden);
+        $this->assertSame(2, $b->fresh()->orden);
+    }
+
+    public function test_duracion_de_imagen_no_acepta_mas_de_300_segundos(): void
+    {
+        $medio = Medio::factory()->create();
+        $item = PdvPantallaPublicidad::factory()->create([
+            'sucursal_id' => $this->sucursal->id,
+            'medio_id' => $medio->id,
+            'tipo' => PdvPantallaPublicidad::TIPO_IMAGEN,
+            'duracion_seg' => 10,
+        ]);
+
+        $this->actingAs($this->autorizado)->patchJson(route('punto_venta.publicidad.update', $item->id), [
+            'sucursal_id' => $this->sucursal->id,
+            'duracion_seg' => 301,
+        ])->assertUnprocessable();
+
+        $this->assertSame(10, $item->fresh()->duracion_seg);
+    }
+
+    public function test_depuracion_respeta_conservacion_referencias_y_es_idempotente(): void
+    {
+        Event::fake([PublicidadPdvActualizada::class]);
+        $compartido = Medio::factory()->create([
+            'ruta_local' => 'pdv/pantalla-publicidad/compartido.jpg',
+        ]);
+        Storage::disk('public')->put($compartido->ruta_local, 'demo');
+        $unico = Medio::factory()->create([
+            'ruta_local' => 'pdv/pantalla-publicidad/unico.jpg',
+        ]);
+        Storage::disk('public')->put($unico->ruta_local, 'demo');
+
+        $conservar = PdvPantallaPublicidad::factory()->create([
+            'sucursal_id' => $this->sucursal->id,
+            'medio_id' => $compartido->id,
+            'ruta' => $compartido->ruta_local,
+            'vigente_hasta' => now()->subDays(2),
+            'eliminar_automaticamente' => true,
+            'eliminar_programado_at' => now()->addDays(28),
+        ]);
+        $listaParaBorrar = PdvPantallaPublicidad::factory()->create([
+            'sucursal_id' => $this->sucursal->id,
+            'medio_id' => $compartido->id,
+            'ruta' => $compartido->ruta_local,
+            'vigente_hasta' => now()->subDays(40),
+            'eliminar_automaticamente' => true,
+            'eliminar_programado_at' => now()->subMinute(),
+        ]);
+        $sinCompartir = PdvPantallaPublicidad::factory()->create([
+            'sucursal_id' => $this->sucursal->id,
+            'medio_id' => $unico->id,
+            'ruta' => $unico->ruta_local,
+            'vigente_hasta' => now()->subDays(40),
+            'eliminar_automaticamente' => true,
+            'eliminar_programado_at' => now()->subMinute(),
+        ]);
+
+        $this->artisan('pdv:depurar-publicidad')->assertSuccessful();
+
+        $this->assertNotNull($conservar->fresh());
+        $this->assertNull($listaParaBorrar->fresh());
+        $this->assertNull($sinCompartir->fresh());
+        Storage::disk('public')->assertExists($compartido->ruta_local);
+        Storage::disk('public')->assertMissing($unico->ruta_local);
+        $this->assertSame(Medio::ESTADO_DELETED, $unico->fresh()->estado);
+        $this->assertNotSame(Medio::ESTADO_DELETED, $compartido->fresh()->estado);
+        Event::assertDispatched(PublicidadPdvActualizada::class);
+
+        $this->artisan('pdv:depurar-publicidad')->assertSuccessful();
+        $this->assertNotNull($conservar->fresh());
+        Storage::disk('public')->assertExists($compartido->ruta_local);
+    }
+
     public function test_sin_permiso_crear_no_inicia_carga(): void
     {
         $soloVer = $this->crearUsuario([

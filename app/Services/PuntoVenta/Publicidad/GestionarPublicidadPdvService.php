@@ -9,7 +9,6 @@ use App\Models\PuntoVenta\PdvPantallaPublicidad;
 use App\Models\User;
 use App\Services\PuntoVenta\Pantallas\ConsultaPlaylistPantallaSalaPdvService;
 use App\Services\PuntoVenta\PuntoVentaModulo;
-use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
@@ -19,6 +18,7 @@ class GestionarPublicidadPdvService
     public function __construct(
         private readonly ResuelveAlcancePdv $alcance,
         private readonly ConsultaPlaylistPantallaSalaPdvService $consulta,
+        private readonly EliminarPublicidadPdvService $eliminarPublicidad,
     ) {}
 
     /**
@@ -42,7 +42,7 @@ class GestionarPublicidadPdvService
         $tipo = $medio->tipo;
         $maxOrden = (int) PdvPantallaPublicidad::query()->max('orden');
 
-        $item = PdvPantallaPublicidad::query()->create([
+        $item = new PdvPantallaPublicidad([
             'sucursal_id' => ($datos['alcance'] ?? 'sucursal') === 'global' ? null : $sucursalId,
             'medio_id' => $medio->id,
             'tipo' => $tipo,
@@ -58,6 +58,8 @@ class GestionarPublicidadPdvService
             'nombre_original' => $medio->nombre_original,
             'creado_por' => $actor->id,
         ]);
+        $this->sincronizarEliminacion($item, $datos);
+        $item->save();
 
         $this->notificar($sucursalId, $item);
 
@@ -74,6 +76,7 @@ class GestionarPublicidadPdvService
         $item = $this->localizar($sucursalId, $publicidadId);
 
         $tipo = $item->tipo;
+        $diasPrevios = $this->diasConservacion($item);
         if (array_key_exists('alcance', $datos)) {
             $item->sucursal_id = $datos['alcance'] === 'global' ? null : $sucursalId;
         }
@@ -92,6 +95,7 @@ class GestionarPublicidadPdvService
         if (array_key_exists('vigente_hasta', $datos)) {
             $item->vigente_hasta = $datos['vigente_hasta'] ?: null;
         }
+        $this->sincronizarEliminacion($item, $datos, $diasPrevios);
         $item->save();
         $this->notificar($sucursalId, $item);
 
@@ -105,6 +109,23 @@ class GestionarPublicidadPdvService
     public function ordenar(User $actor, int $sucursalId, array $ids): array
     {
         $this->asegurar($actor, PuntoVentaModulo::PERMISO_PUBLICIDAD_ORDENAR, $sucursalId);
+        $ids = array_map(static fn ($id): int => (int) $id, $ids);
+        if (count($ids) !== count(array_unique($ids))) {
+            throw new UnprocessableEntityHttpException('El orden contiene identificadores duplicados.');
+        }
+        $esperados = PdvPantallaPublicidad::query()
+            ->where(function ($query) use ($sucursalId): void {
+                $query->whereNull('sucursal_id')->orWhere('sucursal_id', $sucursalId);
+            })
+            ->pluck('id')
+            ->map(static fn ($id): int => (int) $id)
+            ->sort()
+            ->values()
+            ->all();
+        $recibidos = collect($ids)->sort()->values()->all();
+        if ($esperados !== $recibidos) {
+            throw new UnprocessableEntityHttpException('El orden debe incluir exactamente las piezas de esta sucursal.');
+        }
         $orden = 1;
         foreach ($ids as $id) {
             $item = $this->localizar($sucursalId, (int) $id);
@@ -123,21 +144,7 @@ class GestionarPublicidadPdvService
     {
         $this->asegurar($actor, PuntoVentaModulo::PERMISO_PUBLICIDAD_ELIMINAR, $sucursalId);
         $item = $this->localizar($sucursalId, $publicidadId);
-        $medioId = $item->medio_id;
-        $item->delete();
-
-        if ($medioId) {
-            $referencias = PdvPantallaPublicidad::query()->where('medio_id', $medioId)->count();
-            if ($referencias === 0) {
-                $medio = Medio::query()->find($medioId);
-                if ($medio instanceof Medio) {
-                    if (filled($medio->ruta_local)) {
-                        Storage::disk(PdvPantallaPublicidad::DISK)->delete($medio->ruta_local);
-                    }
-                    $medio->update(['estado' => Medio::ESTADO_DELETED]);
-                }
-            }
-        }
+        $this->eliminarPublicidad->eliminarRegistro($item);
 
         $this->notificar($sucursalId, null);
 
@@ -176,6 +183,58 @@ class GestionarPublicidadPdvService
         }
 
         return $medio;
+    }
+
+    /**
+     * @param  array<string, mixed>  $datos
+     */
+    private function sincronizarEliminacion(PdvPantallaPublicidad $item, array $datos, int $diasPrevios = 30): void
+    {
+        $tocaPolitica = array_key_exists('eliminar_automaticamente', $datos)
+            || array_key_exists('conservar_dias', $datos);
+        $tocaFin = array_key_exists('vigente_hasta', $datos);
+        if (! $tocaPolitica && ! $tocaFin) {
+            return;
+        }
+
+        $auto = array_key_exists('eliminar_automaticamente', $datos)
+            ? filter_var($datos['eliminar_automaticamente'], FILTER_VALIDATE_BOOLEAN)
+            : (bool) $item->eliminar_automaticamente;
+
+        if (! $auto) {
+            $item->eliminar_automaticamente = false;
+            $item->eliminar_programado_at = null;
+
+            return;
+        }
+
+        if ($item->vigente_hasta === null) {
+            throw new UnprocessableEntityHttpException('La eliminación automática requiere una fecha de fin.');
+        }
+
+        $dias = array_key_exists('conservar_dias', $datos)
+            ? (int) $datos['conservar_dias']
+            : $diasPrevios;
+        $programado = $item->vigente_hasta->copy()->addDays($dias);
+        if (! $programado->gt($item->vigente_hasta)) {
+            throw new UnprocessableEntityHttpException('La eliminación debe ser posterior al fin de vigencia.');
+        }
+
+        $item->eliminar_automaticamente = true;
+        $item->eliminar_programado_at = $programado;
+    }
+
+    private function diasConservacion(PdvPantallaPublicidad $item): int
+    {
+        if ($item->eliminar_programado_at && $item->vigente_hasta) {
+            $segundos = $item->eliminar_programado_at->getTimestamp() - $item->vigente_hasta->getTimestamp();
+            $dias = (int) round($segundos / 86400);
+            if (in_array($dias, [7, 30, 60, 90], true)) {
+                return $dias;
+            }
+        }
+
+        return 30;
     }
 
     private function duracionPara(string $tipo, mixed $duracion): ?int

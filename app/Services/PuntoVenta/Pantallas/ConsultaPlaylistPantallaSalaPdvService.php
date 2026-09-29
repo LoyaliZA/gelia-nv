@@ -79,6 +79,9 @@ final class ConsultaPlaylistPantallaSalaPdvService
             'mime_type' => $medio?->mime_type,
             'estado' => $item->estadoCalculado($ahora),
             'medio_id' => $item->medio_id,
+            'eliminar_automaticamente' => (bool) $item->eliminar_automaticamente,
+            'eliminar_programado_at' => $item->eliminar_programado_at?->timezone(config('app.timezone'))->format('Y-m-d\\TH:i'),
+            'conservar_dias' => $this->conservarDias($item),
         ];
     }
 
@@ -94,6 +97,17 @@ final class ConsultaPlaylistPantallaSalaPdvService
             'duracion_seg' => $item->duracion_seg,
             'ajuste' => $item->ajuste,
         ];
+    }
+
+    private function conservarDias(PdvPantallaPublicidad $item): ?int
+    {
+        if (! $item->eliminar_automaticamente || $item->vigente_hasta === null || $item->eliminar_programado_at === null) {
+            return null;
+        }
+
+        $segundos = $item->eliminar_programado_at->getTimestamp() - $item->vigente_hasta->getTimestamp();
+
+        return (int) round($segundos / 86400);
     }
 
     private function reproducible(PdvPantallaPublicidad $item): bool

@@ -19,7 +19,7 @@ class OrdenarPublicidadPdvRequest extends FormRequest
         return [
             'sucursal_id' => ['required', 'integer', 'min:1'],
             'ids' => ['required', 'array', 'min:1'],
-            'ids.*' => ['integer', 'min:1'],
+            'ids.*' => ['integer', 'min:1', 'distinct'],
         ];
     }
 }

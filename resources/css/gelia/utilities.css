@@ -78,11 +78,21 @@
 
 html,
 body,
+.gelia-app-shell,
+.gelia-page-shell,
+.gelia-modal-overlay,
+.gelia-titulo-card,
 input,
 select,
 textarea,
 button,
 nav,
-a {
+a,
+h1,
+h2,
+h3,
+h4,
+label,
+p {
     font-family: var(--font-principal) !important;
 }

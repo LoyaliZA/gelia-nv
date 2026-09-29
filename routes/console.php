@@ -48,6 +48,7 @@ Schedule::command('control-pedidos:recordatorio-vencimiento-preparacion-tienda')
 Schedule::command('control-pedidos:evaluar-vencimiento-espera-preparacion')->hourly();
 Schedule::command('control-pedidos:reconciliar-traslados-preparacion')->hourly();
 Schedule::command('pdv:evaluar-vencimientos-resguardos')->hourly();
+Schedule::command('pdv:depurar-publicidad')->dailyAt('02:40');
 Schedule::command('pdv:evaluar-cierre-horario-operacion')->everyFiveMinutes();
 Schedule::command('pdv:evaluar-apertura-horario-operacion')->everyFiveMinutes();
 Schedule::command('medios:limpiar-cargas')->hourly();

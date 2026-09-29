@@ -26,9 +26,27 @@ class GestionarPublicidadPdvRequest extends FormRequest
             'alcance' => [$esAlta ? 'required' : 'nullable', Rule::in(['global', 'sucursal'])],
             'ajuste' => ['nullable', Rule::in([PdvPantallaPublicidad::AJUSTE_COVER, PdvPantallaPublicidad::AJUSTE_CONTAIN])],
             'activa' => ['nullable', 'boolean'],
-            'duracion_seg' => ['nullable', 'integer', 'min:3', 'max:65535'],
+            'duracion_seg' => ['nullable', 'integer', 'min:3', 'max:300'],
             'vigente_desde' => ['nullable', 'date'],
             'vigente_hasta' => ['nullable', 'date', 'after_or_equal:vigente_desde'],
+            'eliminar_automaticamente' => ['nullable', 'boolean'],
+            'conservar_dias' => ['nullable', 'integer', Rule::in([7, 30, 60, 90])],
         ];
+    }
+
+    public function withValidator($validator): void
+    {
+        $validator->after(function ($validator): void {
+            $auto = filter_var($this->input('eliminar_automaticamente'), FILTER_VALIDATE_BOOLEAN);
+            if (! $auto) {
+                return;
+            }
+            if (! $this->filled('vigente_hasta')) {
+                $validator->errors()->add('vigente_hasta', 'La eliminación automática requiere una fecha de fin.');
+            }
+            if (! $this->filled('conservar_dias')) {
+                $validator->errors()->add('conservar_dias', 'Indica cuántos días conservar la pieza.');
+            }
+        });
     }
 }

@@ -49,6 +49,8 @@ class PdvPantallaPublicidad extends Model
         'activa',
         'vigente_desde',
         'vigente_hasta',
+        'eliminar_automaticamente',
+        'eliminar_programado_at',
         'nombre_original',
         'creado_por',
     ];
@@ -63,6 +65,8 @@ class PdvPantallaPublicidad extends Model
             'activa' => 'boolean',
             'vigente_desde' => 'datetime',
             'vigente_hasta' => 'datetime',
+            'eliminar_automaticamente' => 'boolean',
+            'eliminar_programado_at' => 'datetime',
         ];
     }
 
