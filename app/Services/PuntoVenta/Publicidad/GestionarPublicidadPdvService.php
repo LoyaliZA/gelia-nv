@@ -9,6 +9,7 @@ use App\Models\PuntoVenta\PdvPantallaPublicidad;
 use App\Models\User;
 use App\Services\PuntoVenta\Pantallas\ConsultaPlaylistPantallaSalaPdvService;
 use App\Services\PuntoVenta\PuntoVentaModulo;
+use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
@@ -45,7 +46,7 @@ class GestionarPublicidadPdvService
             'sucursal_id' => ($datos['alcance'] ?? 'sucursal') === 'global' ? null : $sucursalId,
             'medio_id' => $medio->id,
             'tipo' => $tipo,
-            'ruta' => $medio->object_key,
+            'ruta' => $medio->ruta_local,
             'duracion_seg' => $this->duracionPara($tipo, $datos['duracion_seg'] ?? $medio->duracion_seg),
             'ajuste' => $datos['ajuste'] ?? PdvPantallaPublicidad::AJUSTE_COVER,
             'orden' => $maxOrden + 1,
@@ -130,8 +131,10 @@ class GestionarPublicidadPdvService
             if ($referencias === 0) {
                 $medio = Medio::query()->find($medioId);
                 if ($medio instanceof Medio) {
+                    if (filled($medio->ruta_local)) {
+                        Storage::disk(PdvPantallaPublicidad::DISK)->delete($medio->ruta_local);
+                    }
                     $medio->update(['estado' => Medio::ESTADO_DELETED]);
-                    // ponytail: no borrar R2 aquí; limpieza física puede reutilizarse en otro anuncio mientras existan filas
                 }
             }
         }
@@ -165,7 +168,7 @@ class GestionarPublicidadPdvService
     private function medioListo(int $medioId): Medio
     {
         $medio = Medio::query()->whereKey($medioId)->first();
-        if (! $medio instanceof Medio || $medio->estado !== Medio::ESTADO_READY) {
+        if (! $medio instanceof Medio || $medio->estado !== Medio::ESTADO_READY || ! filled($medio->ruta_local)) {
             throw new UnprocessableEntityHttpException('El archivo multimedia no está listo.');
         }
         if ($medio->proposito !== Medio::PROPOSITO_PDV_PUBLICIDAD) {

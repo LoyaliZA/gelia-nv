@@ -21,6 +21,7 @@ class MedioFactory extends Factory
             'uuid' => $uuid,
             'nombre_original' => 'promo.jpg',
             'object_key' => 'advertising/media/2026/09/'.$uuid.'/promo.jpg',
+            'ruta_local' => 'pdv/pantalla-publicidad/'.$uuid.'.jpg',
             'mime_type' => 'image/jpeg',
             'extension' => 'jpg',
             'tamano_bytes' => 12000,
@@ -36,6 +37,7 @@ class MedioFactory extends Factory
         return $this->state(fn () => [
             'nombre_original' => 'promo.mp4',
             'object_key' => 'advertising/media/2026/09/'.Str::uuid().'/promo.mp4',
+            'ruta_local' => 'pdv/pantalla-publicidad/'.Str::uuid().'.mp4',
             'mime_type' => 'video/mp4',
             'extension' => 'mp4',
             'tamano_bytes' => 5_000_000,

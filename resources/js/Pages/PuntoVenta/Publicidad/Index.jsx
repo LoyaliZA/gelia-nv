@@ -13,6 +13,34 @@ import { etiquetaEstadoPublicidad, formatearDuracionSeg, formatearTamanoBytes } 
 import { subirMedioDirecto } from '@/utils/medios/mediaUploader';
 
 const ACCEPT = 'image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime';
+const ESPERA_MEDIO_MS = 2000;
+const ESPERA_MEDIO_TOPE_MS = 15 * 60 * 1000;
+
+function etiquetaCarga(estado) {
+    if (estado === 'registrando') return 'Registrando';
+    if (estado === 'subido') return 'Subido';
+    return 'Subiendo';
+}
+
+function esperar(ms) {
+    return new Promise((resolve) => {
+        setTimeout(resolve, ms);
+    });
+}
+
+async function esperarMedioListo(mediaId, estadoInicial) {
+    if (estadoInicial === 'ready') return;
+    const inicio = Date.now();
+    while (Date.now() - inicio < ESPERA_MEDIO_TOPE_MS) {
+        const { data } = await axios.get(route('medios.estado', mediaId));
+        if (data.estado === 'ready') return;
+        if (data.estado === 'failed') {
+            throw new Error('No se pudo registrar el archivo.');
+        }
+        await esperar(ESPERA_MEDIO_MS);
+    }
+    throw new Error('El archivo sigue registrándose. Intenta de nuevo en unos minutos.');
+}
 
 function TarjetaPublicidad({
     item,
@@ -200,9 +228,12 @@ export default function Index({
                     proposito: 'pdv_publicidad',
                     pausedRef,
                     onProgress: (p) => {
-                        setProgresos((prev) => prev.map((row) => (row.key === key ? { ...row, ...p, nombre: file.name } : row)));
+                        setProgresos((prev) => prev.map((row) => (row.key === key ? { ...row, ...p, estado: 'subiendo', nombre: file.name } : row)));
                     },
                 });
+                setProgresos((prev) => prev.map((row) => (row.key === key ? { ...row, estado: 'registrando', pct: 0, partes: null } : row)));
+                await esperarMedioListo(medio.media_id, medio.estado);
+                setProgresos((prev) => prev.map((row) => (row.key === key ? { ...row, estado: 'subido' } : row)));
                 const { data } = await axios.post(route('punto_venta.publicidad.store'), {
                     sucursal_id: sucursalId,
                     medio_id: medio.media_id,
@@ -214,7 +245,7 @@ export default function Index({
                 reportarExitoOperacion(`${file.name} se agregó a la playlist.`);
             } catch (err) {
                 const primerError = Object.values(err?.response?.data?.errors || {})[0]?.[0];
-                reportarMensajeOperacion(primerError || err?.response?.data?.message || `No se pudo cargar ${file.name}.`);
+                reportarMensajeOperacion(primerError || err?.response?.data?.message || err?.message || `No se pudo cargar ${file.name}.`);
             } finally {
                 setProgresos((prev) => prev.filter((p) => p.key !== key));
             }
@@ -338,7 +369,7 @@ export default function Index({
                                     >
                                         <ImagePlus className="h-8 w-8 theme-text-primario" />
                                         <span className="font-bold theme-text-main">Arrastra imágenes o videos</span>
-                                        <span className="text-sm theme-text-muted">JPEG, PNG, WEBP, MP4, WEBM o MOV. La carga va directo al almacén, sin pasar por el servidor de la app.</span>
+                                        <span className="text-sm theme-text-muted">JPEG, PNG, WEBP, MP4, WEBM o MOV.</span>
                                         <input
                                             type="file"
                                             accept={acepta}
@@ -358,7 +389,7 @@ export default function Index({
                                             </button>
                                             {progresos.map((p) => (
                                                 <p key={p.key} className="text-sm theme-text-muted m-0">
-                                                    {p.nombre}: {p.estado} {p.pct ? `· ${p.pct}%` : ''} {p.partes ? `· ${p.partes}` : ''}
+                                                    {p.nombre}: {etiquetaCarga(p.estado)} {p.estado === 'subiendo' && p.pct ? `· ${p.pct}%` : ''} {p.estado === 'subiendo' && p.partes ? `· ${p.partes}` : ''}
                                                 </p>
                                             ))}
                                         </div>

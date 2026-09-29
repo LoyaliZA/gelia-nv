@@ -29,4 +29,6 @@ interface AlmacenObjetosMedio
     public function urlLectura(string $objectKey, int $ttlSeg): string;
 
     public function eliminar(string $objectKey): void;
+
+    public function volcar(string $objectKey, string $rutaAbsoluta): void;
 }

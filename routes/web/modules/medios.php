@@ -3,6 +3,8 @@
 use App\Http\Controllers\Medios\CargaMedioController;
 use Illuminate\Support\Facades\Route;
 
+Route::get('medios/{medio}', [CargaMedioController::class, 'estadoMedio'])->name('medios.estado');
+
 Route::prefix('medios/cargas')->name('medios.cargas.')->group(function () {
     Route::post('/', [CargaMedioController::class, 'iniciar'])->name('iniciar');
     Route::post('/{carga}/partes', [CargaMedioController::class, 'partes'])->name('partes');

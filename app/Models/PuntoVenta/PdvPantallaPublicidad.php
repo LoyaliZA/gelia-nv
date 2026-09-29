@@ -2,7 +2,6 @@
 
 namespace App\Models\PuntoVenta;
 
-use App\Contracts\Medios\AlmacenObjetosMedio;
 use App\Models\Medios\Medio;
 use App\Models\Sucursal;
 use App\Models\User;
@@ -106,11 +105,12 @@ class PdvPantallaPublicidad extends Model
     public function urlPublica(): ?string
     {
         $medio = $this->medio;
-        if ($medio instanceof Medio && $medio->estado === Medio::ESTADO_READY && $medio->object_key) {
-            return app(AlmacenObjetosMedio::class)->urlLectura(
-                $medio->object_key,
-                (int) config('medios.ttl_lectura_seg'),
-            );
+        if ($medio instanceof Medio) {
+            if ($medio->estado === Medio::ESTADO_READY && filled($medio->ruta_local)) {
+                return Storage::disk(self::DISK)->url($medio->ruta_local);
+            }
+
+            return null;
         }
 
         if ($this->ruta === null || $this->ruta === '') {

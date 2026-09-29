@@ -3,6 +3,7 @@
 namespace App\Services\Medios;
 
 use App\Contracts\Medios\AlmacenObjetosMedio;
+use RuntimeException;
 
 final class AlmacenObjetosMedioFake implements AlmacenObjetosMedio
 {
@@ -82,6 +83,21 @@ final class AlmacenObjetosMedioFake implements AlmacenObjetosMedio
     public function eliminar(string $objectKey): void
     {
         unset($this->objetos[$objectKey]);
+    }
+
+    public function volcar(string $objectKey, string $rutaAbsoluta): void
+    {
+        if (! array_key_exists($objectKey, $this->objetos)) {
+            throw new RuntimeException('El objeto no está en el almacén.');
+        }
+
+        $directorio = dirname($rutaAbsoluta);
+        if (! is_dir($directorio)) {
+            mkdir($directorio, 0755, true);
+        }
+
+        $tamano = (int) ($this->objetos[$objectKey]['size'] ?? 0);
+        file_put_contents($rutaAbsoluta, str_repeat("\0", $tamano));
     }
 
     public function registrarTamano(string $objectKey, int $tamano): void

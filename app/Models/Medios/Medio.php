@@ -35,6 +35,7 @@ class Medio extends Model
         'uuid',
         'nombre_original',
         'object_key',
+        'ruta_local',
         'mime_type',
         'extension',
         'tamano_bytes',

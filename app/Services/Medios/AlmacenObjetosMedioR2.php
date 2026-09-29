@@ -124,6 +124,20 @@ final class AlmacenObjetosMedioR2 implements AlmacenObjetosMedio
         ]);
     }
 
+    public function volcar(string $objectKey, string $rutaAbsoluta): void
+    {
+        $directorio = dirname($rutaAbsoluta);
+        if (! is_dir($directorio)) {
+            mkdir($directorio, 0755, true);
+        }
+
+        $this->cliente()->getObject([
+            'Bucket' => $this->bucket(),
+            'Key' => $objectKey,
+            'SaveAs' => $rutaAbsoluta,
+        ]);
+    }
+
     private function cliente(): S3Client
     {
         if ($this->cliente instanceof S3Client) {

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Medios\CompletarCargaMedioRequest;
 use App\Http\Requests\Medios\IniciarCargaMedioRequest;
 use App\Http\Requests\Medios\PartesCargaMedioRequest;
+use App\Models\Medios\Medio;
 use App\Models\Medios\MedioCarga;
 use App\Models\User;
 use App\Services\Medios\GestionarCargaMedioService;
@@ -53,6 +54,14 @@ class CargaMedioController extends Controller
         $user = $request->user();
 
         return response()->json($servicio->completar($user, (int) $carga->id, $request->validated()));
+    }
+
+    public function estadoMedio(Medio $medio, GestionarCargaMedioService $servicio): JsonResponse
+    {
+        /** @var User $user */
+        $user = request()->user();
+
+        return response()->json($servicio->estadoMedio($user, (int) $medio->id));
     }
 
     public function cancelar(MedioCarga $carga, GestionarCargaMedioService $servicio): JsonResponse

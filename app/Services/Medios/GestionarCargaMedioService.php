@@ -3,6 +3,7 @@
 namespace App\Services\Medios;
 
 use App\Contracts\Medios\AlmacenObjetosMedio;
+use App\Jobs\Medios\MaterializarMedioLocalJob;
 use App\Models\Medios\Medio;
 use App\Models\Medios\MedioCarga;
 use App\Models\User;
@@ -217,7 +218,7 @@ class GestionarCargaMedioService
             'tamano_bytes' => $carga->tamano_bytes,
             'duracion_seg' => $duracion > 0 ? $duracion : null,
             'tipo' => $tipo,
-            'estado' => Medio::ESTADO_READY,
+            'estado' => Medio::ESTADO_PROCESSING,
             'proposito' => $carga->proposito,
             'creado_por' => $actor->id,
         ]);
@@ -227,6 +228,9 @@ class GestionarCargaMedioService
             'estado' => MedioCarga::ESTADO_COMPLETED,
         ]);
 
+        MaterializarMedioLocalJob::dispatch($medio->id);
+        $medio->refresh();
+
         return [
             'media_id' => $medio->id,
             'uuid' => $medio->uuid,
@@ -235,7 +239,27 @@ class GestionarCargaMedioService
             'tamano_bytes' => $medio->tamano_bytes,
             'duracion_seg' => $medio->duracion_seg,
             'mime_type' => $medio->mime_type,
-            'url' => $this->almacen->urlLectura($medio->object_key, (int) config('medios.ttl_lectura_seg')),
+            'estado' => $medio->estado,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function estadoMedio(User $actor, int $medioId): array
+    {
+        $medio = Medio::query()->whereKey($medioId)->first();
+        if (! $medio instanceof Medio) {
+            throw new NotFoundHttpException('Archivo no encontrado.');
+        }
+        $this->asegurarProposito($actor, (string) $medio->proposito);
+        if ((int) $medio->creado_por !== (int) $actor->id && ! $actor->hasRole('Super Admin')) {
+            throw new AccessDeniedHttpException('El archivo no pertenece a esta cuenta.');
+        }
+
+        return [
+            'media_id' => $medio->id,
+            'estado' => $medio->estado,
         ];
     }
 
@@ -335,7 +359,6 @@ class GestionarCargaMedioService
     }
 
     /**
-     * @param  mixed  $partes
      * @return list<array{PartNumber: int, ETag: string}>
      */
     private function normalizarPartes(mixed $partes): array

@@ -2,18 +2,23 @@
 
 namespace Tests\Feature\PuntoVenta;
 
+use App\Contracts\Medios\AlmacenObjetosMedio;
 use App\Events\PuntoVenta\PublicidadPdvActualizada;
+use App\Jobs\Medios\MaterializarMedioLocalJob;
 use App\Models\ConfiguracionSistema;
 use App\Models\Medios\Medio;
 use App\Models\PuntoVenta\PdvPantallaPublicidad;
 use App\Models\Sucursal;
 use App\Models\User;
+use App\Services\Medios\AlmacenObjetosMedioFake;
+use App\Services\Medios\MaterializarMedioLocalService;
 use App\Services\PuntoVenta\AlcancePdv;
 use App\Services\PuntoVenta\PuntoVentaModulo;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
@@ -33,6 +38,7 @@ class PublicidadPdvTest extends TestCase
     {
         parent::setUp();
         $this->withoutVite();
+        Storage::fake('public');
         Role::findOrCreate('Super Admin', 'web');
         $this->withoutMiddleware([
             ValidateCsrfToken::class,
@@ -135,7 +141,12 @@ class PublicidadPdvTest extends TestCase
 
         $medio = $this->actingAs($this->autorizado)->postJson(
             route('medios.cargas.completar', $init['media_upload_id']),
-        )->assertOk()->json();
+        )->assertOk()->assertJsonPath('estado', Medio::ESTADO_READY)->json();
+
+        $guardado = Medio::query()->findOrFail($medio['media_id']);
+        $this->assertNotNull($guardado->ruta_local);
+        Storage::disk('public')->assertExists($guardado->ruta_local);
+        $this->assertFalse(app(AlmacenObjetosMedio::class)->existe($guardado->object_key));
 
         $this->actingAs($this->autorizado)->postJson(route('punto_venta.publicidad.store'), [
             'sucursal_id' => $this->sucursal->id,
@@ -189,7 +200,72 @@ class PublicidadPdvTest extends TestCase
         $this->actingAs($this->autorizado)->postJson(
             route('medios.cargas.completar', $init['media_upload_id']),
             ['parts' => [['part_number' => 1, 'etag' => '"abc"']], 'duration_seconds' => 12],
-        )->assertOk()->assertJsonPath('tipo', 'video')->assertJsonPath('duracion_seg', 12);
+        )->assertOk()
+            ->assertJsonPath('tipo', 'video')
+            ->assertJsonPath('duracion_seg', 12)
+            ->assertJsonPath('estado', Medio::ESTADO_READY);
+    }
+
+    public function test_job_copia_correcta_borra_el_objeto(): void
+    {
+        $medio = Medio::factory()->create([
+            'estado' => Medio::ESTADO_PROCESSING,
+            'ruta_local' => null,
+            'tamano_bytes' => 32,
+            'object_key' => 'advertising/media/job/ok.jpg',
+        ]);
+        $almacen = app(AlmacenObjetosMedio::class);
+        $this->assertInstanceOf(AlmacenObjetosMedioFake::class, $almacen);
+        $almacen->registrarTamano($medio->object_key, 32);
+
+        (new MaterializarMedioLocalJob($medio->id))->handle(app(MaterializarMedioLocalService::class));
+
+        $medio->refresh();
+        $this->assertSame(Medio::ESTADO_READY, $medio->estado);
+        $this->assertNotNull($medio->ruta_local);
+        Storage::disk('public')->assertExists($medio->ruta_local);
+        $this->assertFalse($almacen->existe($medio->object_key));
+    }
+
+    public function test_job_tamano_distinto_deja_failed_y_conserva_el_objeto(): void
+    {
+        $medio = Medio::factory()->create([
+            'estado' => Medio::ESTADO_PROCESSING,
+            'ruta_local' => null,
+            'tamano_bytes' => 64,
+            'object_key' => 'advertising/media/job/mal.jpg',
+        ]);
+        $almacen = app(AlmacenObjetosMedio::class);
+        $this->assertInstanceOf(AlmacenObjetosMedioFake::class, $almacen);
+        $almacen->registrarTamano($medio->object_key, 10);
+
+        (new MaterializarMedioLocalJob($medio->id))->handle(app(MaterializarMedioLocalService::class));
+
+        $medio->refresh();
+        $this->assertSame(Medio::ESTADO_FAILED, $medio->estado);
+        $this->assertNull($medio->ruta_local);
+        $this->assertTrue($almacen->existe($medio->object_key));
+        Storage::disk('public')->assertMissing('pdv/pantalla-publicidad/'.$medio->uuid.'.jpg');
+    }
+
+    public function test_eliminar_ultimo_anuncio_borra_el_archivo_local(): void
+    {
+        $medio = Medio::factory()->create([
+            'ruta_local' => 'pdv/pantalla-publicidad/quitar.jpg',
+        ]);
+        Storage::disk('public')->put($medio->ruta_local, 'demo');
+        $item = PdvPantallaPublicidad::factory()->create([
+            'sucursal_id' => $this->sucursal->id,
+            'medio_id' => $medio->id,
+            'ruta' => $medio->ruta_local,
+        ]);
+
+        $this->actingAs($this->autorizado)->deleteJson(
+            route('punto_venta.publicidad.destroy', $item->id).'?sucursal_id='.$this->sucursal->id,
+        )->assertOk();
+
+        Storage::disk('public')->assertMissing($medio->ruta_local);
+        $this->assertSame(Medio::ESTADO_DELETED, $medio->fresh()->estado);
     }
 
     public function test_ordenar_persiste_prioridad(): void
