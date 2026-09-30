@@ -14,6 +14,7 @@ class MobileDevice extends Model
         'nombre',
         'plataforma',
         'app_version',
+        'sucursal_activa_id',
         'last_seen_at',
         'revocado_at',
     ];
@@ -29,6 +30,11 @@ class MobileDevice extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function sucursalActiva(): BelongsTo
+    {
+        return $this->belongsTo(Sucursal::class, 'sucursal_activa_id');
     }
 
     public function syncState(): HasOne

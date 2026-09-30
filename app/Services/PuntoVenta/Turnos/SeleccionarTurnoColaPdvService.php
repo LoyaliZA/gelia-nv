@@ -3,9 +3,14 @@
 namespace App\Services\PuntoVenta\Turnos;
 
 use App\Models\PuntoVenta\TurnoPdv;
+use App\Services\PuntoVenta\Operacion\OperacionPdvConfig;
 
 class SeleccionarTurnoColaPdvService
 {
+    public function __construct(
+        private readonly OperacionPdvConfig $operacion,
+    ) {}
+
     /**
      * Siguiente turno pendiente de asignación en la sucursal.
      *
@@ -18,6 +23,7 @@ class SeleccionarTurnoColaPdvService
             ->where('sucursal_id', $sucursalId)
             ->where('servicio', $servicio)
             ->where('estado', TurnoPdv::ESTADO_EN_COLA)
+            ->whereDate('fecha_operativa', $this->operacion->fechaOperativa($sucursalId))
             ->whereNull('atencion_actual_id')
             ->orderByRaw(
                 'CASE WHEN prioridad_adulto_mayor = 1'

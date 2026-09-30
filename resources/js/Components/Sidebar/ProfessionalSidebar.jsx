@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo } from 'react';
 import { usePage } from '@inertiajs/react';
 import { hasAnyAdminModuleAccess } from '../../config/adminModules';
 import useSidebarState from './useSidebarState';
@@ -37,12 +37,13 @@ export default function ProfessionalSidebar({
         isMobile: isMobileViewport,
     });
 
-    const can = (permission) => {
-        const isSuperAdmin = user?.roles?.includes('Super Admin');
-        return isSuperAdmin || permissions?.includes(permission);
-    };
+    const isSuperAdmin = user?.roles?.includes('Super Admin');
+    const can = useCallback(
+        (permission) => isSuperAdmin || permissions?.includes(permission),
+        [isSuperAdmin, permissions]
+    );
 
-    const showAdminMenu = hasAnyAdminModuleAccess(can);
+    const showAdminMenu = useMemo(() => hasAnyAdminModuleAccess(can), [can]);
 
     useEffect(() => {
         closeDrawer();

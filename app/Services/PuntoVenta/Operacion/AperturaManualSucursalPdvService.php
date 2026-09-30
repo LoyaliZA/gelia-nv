@@ -50,6 +50,7 @@ class AperturaManualSucursalPdvService
             $dia = $this->bloquearDia($sucursalId, $ahora);
 
             $this->cerrarEquipo->cerrarJornadasDeDiasAnteriores($sucursalId, $ahora, (int) $actor->id);
+            $this->cerrarEquipo->retirarColaDeDiasAnteriores($sucursalId, $ahora);
 
             if ((int) $dia->version !== $versionEsperada) {
                 throw ValidationException::withMessages([

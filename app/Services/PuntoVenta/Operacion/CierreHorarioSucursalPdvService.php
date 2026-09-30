@@ -81,6 +81,11 @@ class CierreHorarioSucursalPdvService
             }
 
             $this->cerrarEquipo->cerrarEquipoDelDia($sucursalId, $ahora, 0);
+            $this->cerrarEquipo->retirarColaDeFecha(
+                $sucursalId,
+                $dia->fecha_operativa->toDateString(),
+                $ahora,
+            );
 
             $diaPendiente = $dia->fresh();
 

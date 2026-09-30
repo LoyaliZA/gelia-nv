@@ -21,6 +21,7 @@ use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Schedule;
@@ -243,8 +244,8 @@ class AperturaHorarioOperacionPdvTest extends TestCase
         $resultado = $evaluador->ejecutar();
 
         $this->assertGreaterThan(0, $resultado['evaluadas']);
-        $this->assertSame(0, $resultado['encoladas']);
-        $this->assertGreaterThan(0, $resultado['omitidas']);
+        $this->assertGreaterThan(0, $resultado['encoladas']);
+        $this->assertSame(0, $resultado['omitidas']);
     }
 
     public function test_no_dispara_apertura_automatica_si_ya_hubo_inicio_manual(): void
@@ -291,6 +292,6 @@ class AperturaHorarioOperacionPdvTest extends TestCase
             ]
         );
 
-        \Illuminate\Support\Facades\Cache::forget(HorarioCierreOperacionPdvConfig::CACHE_KEY);
+        Cache::forget(HorarioCierreOperacionPdvConfig::CACHE_KEY);
     }
 }

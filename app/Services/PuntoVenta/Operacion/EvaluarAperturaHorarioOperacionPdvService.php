@@ -33,7 +33,7 @@ class EvaluarAperturaHorarioOperacionPdvService
                 foreach ($sucursales as $sucursal) {
                     $evaluadas++;
                     $horario = $this->horario->resolverParaSucursal((int) $sucursal->id);
-                    if ($horario === null || $horario['hora_apertura'] === null) {
+                    if ($horario === null) {
                         $omitidas++;
 
                         continue;

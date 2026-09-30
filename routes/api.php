@@ -7,7 +7,11 @@ use App\Http\Controllers\Api\V1\Mobile\MobileAuthController;
 use App\Http\Controllers\Api\V1\Mobile\MobileClienteController;
 use App\Http\Controllers\Api\V1\Mobile\MobileProfileController;
 use App\Http\Controllers\Api\V1\Mobile\MobileSyncController;
+use App\Http\Controllers\Api\V1\Mobile\PuntoVenta\ContextoPuntoVentaMobileController;
+use App\Http\Controllers\Api\V1\Mobile\PuntoVenta\ResguardoPdvMobileController;
+use App\Http\Controllers\Api\V1\Mobile\PuntoVenta\TurnoPdvMobileController;
 use App\Http\Controllers\Api\V1\PasskeyController;
+use App\Services\PuntoVenta\PuntoVentaModulo;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Session\Middleware\StartSession;
@@ -65,6 +69,42 @@ Route::prefix('v1')->group(function () {
             Route::get('/sync/changes', [MobileSyncController::class, 'changes']);
             Route::get('/sync/changes/head', [MobileSyncController::class, 'changesHead']);
         });
+
+        Route::prefix('punto-venta')->middleware('mobile.pdv')->group(function () {
+            Route::get('/contexto', [ContextoPuntoVentaMobileController::class, 'show']);
+            Route::put('/sucursal-activa', [ContextoPuntoVentaMobileController::class, 'establecerSucursal']);
+
+            Route::middleware('mobile.pdv:operacion')->group(function () {
+                Route::get('/resguardos', [ResguardoPdvMobileController::class, 'index'])
+                    ->middleware('pdv.permiso:'.PuntoVentaModulo::PERMISO_RESGUARDOS_VER);
+                Route::get('/resguardos/productos/buscar', [ResguardoPdvMobileController::class, 'buscarProductos'])
+                    ->middleware('pdv.permiso:'.PuntoVentaModulo::PERMISO_RESGUARDOS_RECIBIR_GERENTE);
+                Route::post('/resguardos', [ResguardoPdvMobileController::class, 'store'])
+                    ->middleware('pdv.permiso:'.PuntoVentaModulo::PERMISO_RESGUARDOS_RECIBIR_GERENTE);
+                Route::get('/resguardos/{resguardo}', [ResguardoPdvMobileController::class, 'show'])
+                    ->middleware('pdv.permiso:'.PuntoVentaModulo::PERMISO_RESGUARDOS_VER);
+                Route::put('/resguardos/{resguardo}/recepcion', [ResguardoPdvMobileController::class, 'recepcion'])
+                    ->middleware('pdv.permiso:'.PuntoVentaModulo::PERMISO_RESGUARDOS_RECIBIR_GERENTE);
+                Route::put('/resguardos/{resguardo}/pasar-recepcion', [ResguardoPdvMobileController::class, 'pasarRecepcion'])
+                    ->middleware('pdv.permiso:'.PuntoVentaModulo::PERMISO_RESGUARDOS_RECIBIR_GERENTE);
+
+                Route::get('/turnos/recepcion', [TurnoPdvMobileController::class, 'recepcion'])
+                    ->middleware('pdv.permiso:'.PuntoVentaModulo::PERMISO_TURNOS_VER);
+                Route::post('/turnos', [TurnoPdvMobileController::class, 'store'])
+                    ->middleware('pdv.permiso:'.PuntoVentaModulo::PERMISO_TURNOS_ALTA);
+            });
+        });
+    });
+
+    Route::prefix('mobile/punto-venta')->middleware([
+        'auth:sanctum',
+        'api.mobile',
+        'throttle:api-mobile',
+        'mobile.pdv',
+        'mobile.pdv:operacion',
+        'pdv.permiso:'.PuntoVentaModulo::PERMISO_RESGUARDOS_ENTREGAR,
+    ])->group(function () {
+        Route::put('/resguardos/{resguardo}/entrega', [ResguardoPdvMobileController::class, 'entrega']);
     });
 
     Route::middleware([

@@ -5,7 +5,6 @@ namespace App\Services\PuntoVenta\Operacion;
 use App\Events\PuntoVenta\JornadaAperturaHorario;
 use App\Models\PuntoVenta\OperacionPdvEvento;
 use App\Models\PuntoVenta\SucursalDiaOperacionPdv;
-use Carbon\Carbon;
 use Carbon\CarbonInterface;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
@@ -24,6 +23,7 @@ class AperturaHorarioSucursalPdvService
     {
         DB::transaction(function () use ($sucursalId, $ahora): void {
             $this->cerrarEquipo->cerrarJornadasDeDiasAnteriores($sucursalId, $ahora, 0);
+            $this->cerrarEquipo->retirarColaDeDiasAnteriores($sucursalId, $ahora);
         });
 
         $diaReferencia = $this->sucursalDia->obtenerOCrear($sucursalId, $ahora);

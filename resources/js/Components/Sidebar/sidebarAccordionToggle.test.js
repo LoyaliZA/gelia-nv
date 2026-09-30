@@ -42,13 +42,20 @@ describe('computeExclusiveGroupToggle', () => {
 });
 
 describe('mergeRouteOpenGroups', () => {
-    const roots = ['inicio', 'operaciones', 'finanzas'];
+    it('abre ancestros de la ruta sin cerrar secciones abiertas manualmente', () => {
+        const prev = { punto_venta: false, finanzas: true };
+        const routeIds = new Set(['inicio', 'punto_venta']);
+        const next = mergeRouteOpenGroups(prev, routeIds);
+        expect(next.finanzas).toBe(true);
+        expect(next.punto_venta).toBe(true);
+        expect(next.inicio).toBe(true);
+    });
 
-    it('deja solo una raíz si la ruta abre varias', () => {
+    it('marca abiertos todos los ids de la ruta', () => {
         const prev = {};
         const routeIds = new Set(['inicio', 'operaciones', 'logistica']);
-        const next = mergeRouteOpenGroups(prev, routeIds, roots);
-        expect(next.inicio).toBe(false);
+        const next = mergeRouteOpenGroups(prev, routeIds);
+        expect(next.inicio).toBe(true);
         expect(next.operaciones).toBe(true);
         expect(next.logistica).toBe(true);
     });

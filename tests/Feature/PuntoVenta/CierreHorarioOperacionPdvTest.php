@@ -9,9 +9,9 @@ use App\Models\PuntoVenta\JornadaPdv;
 use App\Models\PuntoVenta\OperacionPdvEvento;
 use App\Models\PuntoVenta\SucursalDiaOperacionPdv;
 use App\Models\PuntoVenta\TurnoPdv;
+use App\Models\PuntoVenta\TurnoPdvAtencion;
 use App\Models\Sucursal;
 use App\Models\User;
-use App\Services\PuntoVenta\AlcancePdv;
 use App\Services\PuntoVenta\Operacion\CierreHorarioSucursalPdvService;
 use App\Services\PuntoVenta\Operacion\EvaluarCierreHorarioOperacionPdvService;
 use App\Services\PuntoVenta\Operacion\HorarioCierreOperacionPdvConfig;
@@ -19,6 +19,7 @@ use App\Services\PuntoVenta\PuntoVentaModulo;
 use App\Support\PuntoVenta\Operacion\EstadoJornadaPdv;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Schedule;
@@ -209,7 +210,7 @@ class CierreHorarioOperacionPdvTest extends TestCase
         ConfiguracionSistema::query()
             ->where('clave', HorarioCierreOperacionPdvConfig::CLAVE)
             ->delete();
-        \Illuminate\Support\Facades\Cache::forget(HorarioCierreOperacionPdvConfig::CACHE_KEY);
+        Cache::forget(HorarioCierreOperacionPdvConfig::CACHE_KEY);
 
         $servicio = app(CierreHorarioSucursalPdvService::class);
 
@@ -223,7 +224,7 @@ class CierreHorarioOperacionPdvTest extends TestCase
         );
     }
 
-    public function test_cierre_horario_cierra_jornada_libre_y_conserva_la_cola(): void
+    public function test_cierre_horario_cierra_jornada_libre_y_retira_la_cola_del_dia(): void
     {
         $this->configurarHorario(['hora_cierre' => '19:00', 'zona_horaria' => 'America/Mexico_City']);
 
@@ -252,7 +253,7 @@ class CierreHorarioOperacionPdvTest extends TestCase
             'sucursal_id' => $this->sucursal->id,
             'estado' => TurnoPdv::ESTADO_ASIGNADO,
         ]);
-        \App\Models\PuntoVenta\TurnoPdvAtencion::factory()->create([
+        TurnoPdvAtencion::factory()->create([
             'turno_id' => $turnoAsignado->id,
             'user_id' => $ocupado->id,
             'fin_at' => null,
@@ -262,7 +263,8 @@ class CierreHorarioOperacionPdvTest extends TestCase
 
         $this->assertSame(EstadoJornadaPdv::Cerrada, $jornadaLibre->fresh()->estado);
         $this->assertSame(EstadoJornadaPdv::CerradaConAtencion, $jornadaOcupada->fresh()->estado);
-        $this->assertSame(TurnoPdv::ESTADO_EN_COLA, $turno->fresh()->estado);
+        $this->assertSame(TurnoPdv::ESTADO_CERRADO, $turno->fresh()->estado);
+        $this->assertSame(TurnoPdv::ESTADO_ASIGNADO, $turnoAsignado->fresh()->estado);
     }
 
     public function test_comando_programado_y_evaluador_encolan_jobs(): void
@@ -304,6 +306,6 @@ class CierreHorarioOperacionPdvTest extends TestCase
             ]
         );
 
-        \Illuminate\Support\Facades\Cache::forget(HorarioCierreOperacionPdvConfig::CACHE_KEY);
+        Cache::forget(HorarioCierreOperacionPdvConfig::CACHE_KEY);
     }
 }

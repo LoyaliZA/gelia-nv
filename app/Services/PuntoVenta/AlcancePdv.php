@@ -3,6 +3,7 @@
 namespace App\Services\PuntoVenta;
 
 use App\Contracts\PuntoVenta\ResuelveAlcancePdv;
+use App\Models\MobileDevice;
 use App\Models\Sucursal;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -45,12 +46,57 @@ final class AlcancePdv implements ResuelveAlcancePdv
             return null;
         }
 
+        $device = $this->dispositivoMovilDeLaPeticion();
+        if ($device instanceof MobileDevice) {
+            return $this->sucursalActivaMovil($user, $operables, $device);
+        }
+
         $sesionId = session(self::SESSION_SUCURSAL_ACTIVA);
 
         if (is_numeric($sesionId) && $operables->contains((int) $sesionId)) {
             return (int) $sesionId;
         }
 
+        return $this->sucursalFallback($user, $operables);
+    }
+
+    public function establecerSucursalActiva(User $user, int $sucursalId): void
+    {
+        if (! $this->idsSucursalesOperables($user)->contains($sucursalId)) {
+            throw new AuthorizationException('No tiene acceso operable a esa sucursal.');
+        }
+
+        $device = $this->dispositivoMovilDeLaPeticion();
+        if ($device instanceof MobileDevice) {
+            if ((int) $device->sucursal_activa_id !== $sucursalId) {
+                $device->forceFill(['sucursal_activa_id' => $sucursalId])->save();
+            }
+
+            return;
+        }
+
+        session([self::SESSION_SUCURSAL_ACTIVA => $sucursalId]);
+    }
+
+    /**
+     * @param  Collection<int, int>  $operables
+     */
+    private function sucursalActivaMovil(User $user, Collection $operables, MobileDevice $device): ?int
+    {
+        $guardada = $device->sucursal_activa_id;
+
+        if (is_numeric($guardada) && $operables->contains((int) $guardada)) {
+            return (int) $guardada;
+        }
+
+        return $this->sucursalFallback($user, $operables);
+    }
+
+    /**
+     * @param  Collection<int, int>  $operables
+     */
+    private function sucursalFallback(User $user, Collection $operables): ?int
+    {
         $principal = $user->sucursalPrincipal();
         if ($principal instanceof Sucursal && $operables->contains($principal->id)) {
             return $principal->id;
@@ -63,13 +109,15 @@ final class AlcancePdv implements ResuelveAlcancePdv
         return null;
     }
 
-    public function establecerSucursalActiva(User $user, int $sucursalId): void
+    private function dispositivoMovilDeLaPeticion(): ?MobileDevice
     {
-        if (! $this->idsSucursalesOperables($user)->contains($sucursalId)) {
-            throw new AuthorizationException('No tiene acceso operable a esa sucursal.');
+        if (! app()->bound('request')) {
+            return null;
         }
 
-        session([self::SESSION_SUCURSAL_ACTIVA => $sucursalId]);
+        $device = request()->attributes->get('mobile_device');
+
+        return $device instanceof MobileDevice ? $device : null;
     }
 
     public function tieneAlcanceGlobal(User $user): bool

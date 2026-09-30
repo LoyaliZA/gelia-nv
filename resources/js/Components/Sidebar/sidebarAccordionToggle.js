@@ -34,22 +34,15 @@ export function computeExclusiveGroupToggle(prev, id, rootGroupIds, depth = 0) {
 }
 
 /**
- * Al sincronizar por ruta: mantener ancestros abiertos pero solo una raíz activa.
+ * Al sincronizar por ruta: abrir ancestros de la página activa sin cerrar secciones
+ * que el usuario abrió manualmente (el acordeón exclusivo aplica solo en toggle).
  */
-export function mergeRouteOpenGroups(prev, routeOpenIds, rootGroupIds) {
+export function mergeRouteOpenGroups(prev, routeOpenIds) {
     const next = { ...prev };
-    const routeRoots = rootGroupIds.filter((id) => routeOpenIds.has(id));
 
     routeOpenIds.forEach((id) => {
         next[id] = true;
     });
-
-    if (routeRoots.length > 1) {
-        const keepRoot = routeRoots[routeRoots.length - 1];
-        rootGroupIds.forEach((rootId) => {
-            if (rootId !== keepRoot) next[rootId] = false;
-        });
-    }
 
     return next;
 }

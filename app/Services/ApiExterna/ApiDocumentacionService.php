@@ -3,7 +3,6 @@
 namespace App\Services\ApiExterna;
 
 use App\Models\ApiRecurso;
-use Illuminate\Support\Collection;
 
 class ApiDocumentacionService
 {
@@ -13,7 +12,7 @@ class ApiDocumentacionService
 
     public function construirDatos(): array
     {
-        $baseUrl = rtrim(config('app.url'), '/') . '/api/v1';
+        $baseUrl = rtrim(config('app.url'), '/').'/api/v1';
 
         $recursos = ApiRecurso::with('campos')
             ->where('activo', true)
@@ -90,12 +89,12 @@ class ApiDocumentacionService
      */
     private function construirMobile(string $baseUrl, int $tokenExpiracionDias): array
     {
-        $authHeaders = "-H \"Authorization: Bearer {TOKEN}\" -H \"Accept: application/json\" -H \"X-Mobile-Scope-Version: {SCOPE_VERSION}\"";
+        $authHeaders = '-H "Authorization: Bearer {TOKEN}" -H "Accept: application/json" -H "X-Mobile-Scope-Version: {SCOPE_VERSION}"';
         $campos = config('mobile.campos', []);
         $permisosCampos = config('mobile.permisos_campos', []);
 
         return [
-            'introduccion' => 'API para apps móviles nativas. Autenticación por usuario del sistema (no por aplicación externa). Incluye sincronización incremental de clientes con bootstrap paginado y eventos de cambio.',
+            'introduccion' => 'API para apps móviles nativas. Autenticación por usuario del sistema (no por aplicación externa). Incluye sincronización incremental de clientes y la operación de piso de resguardos y turnos sobre la sucursal principal del usuario o la sucursal activa guardada en el dispositivo.',
             'requisitos_acceso' => [
                 'El usuario debe tener el permiso clientes.ver (alcance completo) o mis_clientes.gestionar (solo clientes asignados como vendedor).',
                 'Cada dispositivo se identifica con device_uuid (UUID v4). Un login nuevo en el mismo dispositivo revoca el token anterior.',
@@ -215,6 +214,83 @@ class ApiDocumentacionService
                     'descripcion' => 'Eventos incrementales. Query: cursor (default 0), limit (máx. '.config('mobile.changes_page_size', 200).').',
                     'curl' => "curl -s \"{$baseUrl}/mobile/sync/changes?cursor=0&limit=200\" {$authHeaders}",
                 ],
+                [
+                    'metodo' => 'GET',
+                    'ruta' => '/mobile/punto-venta/contexto',
+                    'auth' => true,
+                    'descripcion' => 'Sucursal activa, sucursales operables y permisos de piso. Requiere punto_venta.acceder y el módulo habilitado. Si no hay sucursal activa, sucursal_activa es null.',
+                    'curl' => "curl -s \"{$baseUrl}/mobile/punto-venta/contexto\" {$authHeaders}",
+                ],
+                [
+                    'metodo' => 'PUT',
+                    'ruta' => '/mobile/punto-venta/sucursal-activa',
+                    'auth' => true,
+                    'descripcion' => 'Guarda la sucursal activa del dispositivo. Body: sucursal_id. Debe estar entre las sucursales operables del usuario. Las operaciones de resguardo y turno usan esta sucursal; si no hay una guardada, usan la principal o la única operable.',
+                    'curl' => "curl -s -X PUT \"{$baseUrl}/mobile/punto-venta/sucursal-activa\" {$authHeaders} \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\"sucursal_id\":1}'",
+                ],
+                [
+                    'metodo' => 'GET',
+                    'ruta' => '/mobile/punto-venta/resguardos',
+                    'auth' => true,
+                    'descripcion' => 'Bandeja de resguardos de la sucursal activa. Permiso pdv.resguardos.ver. Query: bandeja (por_recibir, en_custodia, incidencias), q, paso, estado, antiguedad, page, per_page. antiguedad=rezagado exige pdv.resguardos.ver_rezagados. Sin sucursal resoluble responde 409 sucursal_activa_requerida.',
+                    'curl' => "curl -s \"{$baseUrl}/mobile/punto-venta/resguardos?bandeja=por_recibir&antiguedad=rezagado\" {$authHeaders}",
+                ],
+                [
+                    'metodo' => 'GET',
+                    'ruta' => '/mobile/punto-venta/resguardos/{id}',
+                    'auth' => true,
+                    'descripcion' => 'Detalle y línea de tiempo del resguardo en la sucursal activa. Permiso pdv.resguardos.ver.',
+                    'curl' => "curl -s \"{$baseUrl}/mobile/punto-venta/resguardos/1\" {$authHeaders}",
+                ],
+                [
+                    'metodo' => 'GET',
+                    'ruta' => '/mobile/punto-venta/resguardos/productos/buscar',
+                    'auth' => true,
+                    'descripcion' => 'Búsqueda de productos para el alta manual. Permiso pdv.resguardos.recibir_gerente. Query q (mínimo 2 caracteres). Requiere el registro manual habilitado.',
+                    'curl' => "curl -s \"{$baseUrl}/mobile/punto-venta/resguardos/productos/buscar?q=aroma\" {$authHeaders}",
+                ],
+                [
+                    'metodo' => 'POST',
+                    'ruta' => '/mobile/punto-venta/resguardos',
+                    'auth' => true,
+                    'descripcion' => 'Crea un resguardo manual en la sucursal activa. Permiso pdv.resguardos.recibir_gerente. Multipart: idempotency_key, cliente_id, folio, origen_id, cantidad_bultos_esperada, archivo_ticket, foto_paquete; opcionales envia_a_otra_persona, envia_otra_persona, observaciones, cantidad_piezas.',
+                    'curl' => "curl -s -X POST \"{$baseUrl}/mobile/punto-venta/resguardos\" {$authHeaders} \\\n  -F \"idempotency_key=pdv:man:tablet-1\" \\\n  -F \"cliente_id=1\" \\\n  -F \"folio=REM-001\" \\\n  -F \"origen_id=1\" \\\n  -F \"cantidad_bultos_esperada=1\" \\\n  -F \"archivo_ticket=@ticket.jpg\" \\\n  -F \"foto_paquete=@paquete.jpg\"",
+                ],
+                [
+                    'metodo' => 'PUT',
+                    'ruta' => '/mobile/punto-venta/resguardos/{id}/recepcion',
+                    'auth' => true,
+                    'descripcion' => 'Recepción física del resguardo (confirmación de gerencia). Permiso pdv.resguardos.recibir_gerente. Body JSON: version, idempotency_key.',
+                    'curl' => "curl -s -X PUT \"{$baseUrl}/mobile/punto-venta/resguardos/1/recepcion\" {$authHeaders} \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\"version\":1,\"idempotency_key\":\"pdv:rec:1:tablet\"}'",
+                ],
+                [
+                    'metodo' => 'PUT',
+                    'ruta' => '/mobile/punto-venta/resguardos/{id}/pasar-recepcion',
+                    'auth' => true,
+                    'descripcion' => 'Pasa el resguardo de gerencia a recepción. Permiso pdv.resguardos.recibir_gerente. Body JSON: version, idempotency_key.',
+                    'curl' => "curl -s -X PUT \"{$baseUrl}/mobile/punto-venta/resguardos/1/pasar-recepcion\" {$authHeaders} \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\"version\":2,\"idempotency_key\":\"pdv:paso:1:tablet\"}'",
+                ],
+                [
+                    'metodo' => 'PUT',
+                    'ruta' => '/mobile/punto-venta/resguardos/{id}/entrega',
+                    'auth' => true,
+                    'descripcion' => 'Entrega el resguardo y registra la firma. Permiso pdv.resguardos.entregar. Multipart: version, idempotency_key, relacion (titular|tercero), nombre_quien_retira, metodo_validacion=firma, firma (imagen); opcionales observaciones, evidencias[] y bulto_ids[]. Envíe Accept: application/json.',
+                    'curl' => "curl -s -X PUT \"{$baseUrl}/mobile/punto-venta/resguardos/1/entrega\" {$authHeaders} \\\n  -F \"version=1\" \\\n  -F \"idempotency_key=pdv:ent:1:tablet\" \\\n  -F \"relacion=titular\" \\\n  -F \"nombre_quien_retira=Persona titular\" \\\n  -F \"metodo_validacion=firma\" \\\n  -F \"firma=@firma.png\"",
+                ],
+                [
+                    'metodo' => 'GET',
+                    'ruta' => '/mobile/punto-venta/turnos/recepcion',
+                    'auth' => true,
+                    'descripcion' => 'Bandeja de recepción de turnos de la sucursal activa: en cola y asignados. Permiso pdv.turnos.ver.',
+                    'curl' => "curl -s \"{$baseUrl}/mobile/punto-venta/turnos/recepcion\" {$authHeaders}",
+                ],
+                [
+                    'metodo' => 'POST',
+                    'ruta' => '/mobile/punto-venta/turnos',
+                    'auth' => true,
+                    'descripcion' => 'Registra un turno de atención en la sucursal activa. Permiso pdv.turnos.alta. Body JSON: idempotency_key y cliente_id o nombre_llamado. Prioridades de adulto mayor o discapacidad exigen pdv.turnos.marcar_prioridad.',
+                    'curl' => "curl -s -X POST \"{$baseUrl}/mobile/punto-venta/turnos\" {$authHeaders} \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\"idempotency_key\":\"pdv:turno:tablet-1\",\"nombre_llamado\":\"Persona en recepción\"}'",
+                ],
             ],
             'respuesta_login' => [
                 'access_token' => 'Token Bearer (ability mobile)',
@@ -268,7 +344,7 @@ class ApiDocumentacionService
             return [];
         }
 
-        $authHeaders = "-H \"Authorization: Bearer {TOKEN}\" -H \"Accept: application/json\"";
+        $authHeaders = '-H "Authorization: Bearer {TOKEN}" -H "Accept: application/json"';
         $endpoints = [];
 
         if ($recurso->lectura_habilitada) {
@@ -340,7 +416,7 @@ class ApiDocumentacionService
                 'nombre' => 'Postman',
                 'pasos' => [
                     'Cree una colección llamada «GELIANV API v1».',
-                    'En la colección → pestaña Variables, agregue: base_url = ' . $baseUrl,
+                    'En la colección → pestaña Variables, agregue: base_url = '.$baseUrl,
                     'En la colección → pestaña Authorization deje «No Auth» (el token se configura por petición o vía script).',
                     'En la colección → pestaña Headers agregue siempre: Accept = application/json',
                     'Petición 1 — Health: método GET, URL {{base_url}}/health (sin autenticación). Debe responder 200 con {"status":"ok",...}.',
@@ -358,15 +434,15 @@ class ApiDocumentacionService
                 'pasos' => [
                     'Instale la extensión «Thunder Client» en VS Code.',
                     'Abra Thunder Client → New Request.',
-                    'Petición 1 — Health: GET ' . $baseUrl . '/health. Sin headers extra. Send → debe ver status 200.',
-                    'Petición 2 — Token: POST ' . $baseUrl . '/auth/token',
+                    'Petición 1 — Health: GET '.$baseUrl.'/health. Sin headers extra. Send → debe ver status 200.',
+                    'Petición 2 — Token: POST '.$baseUrl.'/auth/token',
                     'En Headers agregue: Accept = application/json y Content-Type = application/json',
                     'En Body → JSON pegue: {"client_id":"SU_CLIENT_ID","client_secret":"SU_CLIENT_SECRET"}',
                     'Envíe y copie access_token de la respuesta.',
                     'Menú Env → agregue variable access_token con el valor copiado (o use {{access_token}} en peticiones).',
                     'Peticiones protegidas: pestaña Auth → Bearer → pegue el token o use {{access_token}}',
                     'Headers obligatorios en cada petición: Accept = application/json',
-                    'Ejemplo listar clientes: GET ' . $baseUrl . '/clientes?page=1&per_page=25 con Auth Bearer.',
+                    'Ejemplo listar clientes: GET '.$baseUrl.'/clientes?page=1&per_page=25 con Auth Bearer.',
                     'Guarde las peticiones en una colección «GELIANV API v1» para reutilizarlas.',
                 ],
             ],

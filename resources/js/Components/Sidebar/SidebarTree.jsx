@@ -65,7 +65,7 @@ export default function SidebarTree({
     const [openGroups, setOpenGroups] = useState(() => {
         const ids = collectOpenGroupIdsForUrl(tree, url);
         const initial = Object.fromEntries([...ids].map((id) => [id, true]));
-        return mergeRouteOpenGroups(initial, ids, collectRootGroupIds(tree));
+        return mergeRouteOpenGroups(initial, ids);
     });
 
     const [flyout, setFlyout] = useState(null);
@@ -76,8 +76,9 @@ export default function SidebarTree({
 
     useEffect(() => {
         const ids = collectOpenGroupIdsForUrl(tree, url);
-        setOpenGroups((prev) => mergeRouteOpenGroups(prev, ids, rootGroupIds));
-    }, [url, tree, rootGroupIds]);
+        setOpenGroups((prev) => mergeRouteOpenGroups(prev, ids));
+        // tree se lee del render en el que cambió url; no re-sincronizar en cada rebuild del menú.
+    }, [url]);
 
     useEffect(() => {
         setFlyout(null);

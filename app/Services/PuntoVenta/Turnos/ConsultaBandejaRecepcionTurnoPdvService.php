@@ -6,6 +6,7 @@ use App\Contracts\PuntoVenta\ConsultaPersonaDisponiblePdv;
 use App\Contracts\PuntoVenta\ResuelveAlcancePdv;
 use App\Models\PuntoVenta\TurnoPdv;
 use App\Models\User;
+use App\Services\PuntoVenta\Operacion\OperacionPdvConfig;
 use App\Services\PuntoVenta\PuntoVentaModulo;
 use App\Support\PuntoVenta\Turnos\SerializadorBandejaRecepcionTurnoPdv;
 use Carbon\CarbonInterface;
@@ -18,6 +19,7 @@ class ConsultaBandejaRecepcionTurnoPdvService
         private readonly ResuelveAlcancePdv $alcance,
         private readonly ConsultaPersonaDisponiblePdv $consultaDisponible,
         private readonly PlazosTurnosPdvConfig $plazos,
+        private readonly OperacionPdvConfig $operacion,
     ) {}
 
     /**
@@ -98,6 +100,7 @@ class ConsultaBandejaRecepcionTurnoPdvService
             ->where('sucursal_id', $sucursalId)
             ->where('servicio', TurnoPdv::SERVICIO_VENTAS)
             ->where('estado', TurnoPdv::ESTADO_EN_COLA)
+            ->whereDate('fecha_operativa', $this->fechaOperativa($sucursalId))
             ->whereNull('atencion_actual_id')
             ->orderByRaw(
                 'CASE WHEN prioridad_adulto_mayor = 1'
@@ -125,5 +128,10 @@ class ConsultaBandejaRecepcionTurnoPdvService
             ->orderBy('id')
             ->limit(100)
             ->get();
+    }
+
+    private function fechaOperativa(int $sucursalId): string
+    {
+        return $this->operacion->fechaOperativa($sucursalId);
     }
 }

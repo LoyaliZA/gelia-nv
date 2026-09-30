@@ -1,11 +1,34 @@
 <?php
 
+use App\Http\Middleware\ActualizarActividadSesion;
+use App\Http\Middleware\AsegurarLecturaResguardoPdv;
+use App\Http\Middleware\AsegurarModuloPuntoVenta;
+use App\Http\Middleware\AsegurarPermisoPdv;
+use App\Http\Middleware\AsegurarSucursalActivaPdv;
+use App\Http\Middleware\AuthenticateApiApplication;
+use App\Http\Middleware\AuthenticateMobileUser;
+use App\Http\Middleware\CheckApiResourcePermission;
+use App\Http\Middleware\EnsureMobilePuntoVenta;
+use App\Http\Middleware\EnsureMobileSyncScope;
+use App\Http\Middleware\EnsureWebAuthnEnabled;
+use App\Http\Middleware\HandleInertiaRequests;
+use App\Http\Middleware\LogApiRequest;
+use App\Http\Middleware\RequireJsonAccept;
+use App\Http\Middleware\RestrictFormHostname;
 use App\Support\FormPublicUrl;
+use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
+use Spatie\Permission\Middleware\PermissionMiddleware;
+use Spatie\Permission\Middleware\RoleMiddleware;
+use Spatie\Permission\Middleware\RoleOrPermissionMiddleware;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
+use Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -31,34 +54,35 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
 
         $middleware->web(prepend: [
-            \App\Http\Middleware\RestrictFormHostname::class,
+            RestrictFormHostname::class,
         ]);
 
         $middleware->web(append: [
-            \App\Http\Middleware\HandleInertiaRequests::class,
-            \App\Http\Middleware\ActualizarActividadSesion::class,
+            HandleInertiaRequests::class,
+            ActualizarActividadSesion::class,
         ]);
 
         $middleware->alias([
-            'role' => \Spatie\Permission\Middleware\RoleMiddleware::class,
-            'permission' => \Spatie\Permission\Middleware\PermissionMiddleware::class,
-            'role_or_permission' => \Spatie\Permission\Middleware\RoleOrPermissionMiddleware::class,
-            'api.app' => \App\Http\Middleware\AuthenticateApiApplication::class,
-            'log.api' => \App\Http\Middleware\LogApiRequest::class,
-            'api.resource' => \App\Http\Middleware\CheckApiResourcePermission::class,
-            'require.json' => \App\Http\Middleware\RequireJsonAccept::class,
-            'api.mobile' => \App\Http\Middleware\AuthenticateMobileUser::class,
-            'mobile.sync' => \App\Http\Middleware\EnsureMobileSyncScope::class,
-            'webauthn.enabled' => \App\Http\Middleware\EnsureWebAuthnEnabled::class,
-            'pdv.piso' => \App\Http\Middleware\AsegurarSucursalActivaPdv::class,
-            'pdv.modulo' => \App\Http\Middleware\AsegurarModuloPuntoVenta::class,
-            'pdv.permiso' => \App\Http\Middleware\AsegurarPermisoPdv::class,
-            'pdv.resguardos.lectura' => \App\Http\Middleware\AsegurarLecturaResguardoPdv::class,
+            'role' => RoleMiddleware::class,
+            'permission' => PermissionMiddleware::class,
+            'role_or_permission' => RoleOrPermissionMiddleware::class,
+            'api.app' => AuthenticateApiApplication::class,
+            'log.api' => LogApiRequest::class,
+            'api.resource' => CheckApiResourcePermission::class,
+            'require.json' => RequireJsonAccept::class,
+            'api.mobile' => AuthenticateMobileUser::class,
+            'mobile.pdv' => EnsureMobilePuntoVenta::class,
+            'mobile.sync' => EnsureMobileSyncScope::class,
+            'webauthn.enabled' => EnsureWebAuthnEnabled::class,
+            'pdv.piso' => AsegurarSucursalActivaPdv::class,
+            'pdv.modulo' => AsegurarModuloPuntoVenta::class,
+            'pdv.permiso' => AsegurarPermisoPdv::class,
+            'pdv.resguardos.lectura' => AsegurarLecturaResguardoPdv::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
 
-        $exceptions->render(function (\Illuminate\Auth\AuthenticationException $e, \Illuminate\Http\Request $request) {
+        $exceptions->render(function (AuthenticationException $e, Request $request) {
             if (! $request->is('api/v1/*')) {
                 return null;
             }
@@ -66,7 +90,7 @@ return Application::configure(basePath: dirname(__DIR__))
             return response()->json(['message' => 'No autorizado.'], 401);
         });
 
-        $exceptions->respond(function (Response $response, \Throwable $exception, \Illuminate\Http\Request $request) {
+        $exceptions->respond(function (Response $response, Throwable $exception, Request $request) {
             if ($response->getStatusCode() !== 419) {
                 return $response;
             }
@@ -78,7 +102,7 @@ return Application::configure(basePath: dirname(__DIR__))
             return $response;
         });
 
-        $exceptions->render(function (\Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException $e, \Illuminate\Http\Request $request) {
+        $exceptions->render(function (MethodNotAllowedHttpException $e, Request $request) {
             if (! $request->isMethod('GET') && ! $request->isMethod('HEAD')) {
                 return null;
             }
@@ -106,16 +130,16 @@ return Application::configure(basePath: dirname(__DIR__))
             return redirect($destino);
         });
 
-        $exceptions->render(function (\Throwable $e, \Illuminate\Http\Request $request) {
+        $exceptions->render(function (Throwable $e, Request $request) {
             if (! $request->header('X-Inertia')) {
                 return null;
             }
 
-            if ($e instanceof \Illuminate\Validation\ValidationException) {
+            if ($e instanceof ValidationException) {
                 return null;
             }
 
-            $status = $e instanceof \Symfony\Component\HttpKernel\Exception\HttpExceptionInterface
+            $status = $e instanceof HttpExceptionInterface
                 ? $e->getStatusCode()
                 : 500;
 
@@ -123,7 +147,7 @@ return Application::configure(basePath: dirname(__DIR__))
                 return null;
             }
 
-            return \Inertia\Inertia::render('Error', [
+            return Inertia::render('Error', [
                 'status' => $status,
                 'returnUrl' => $request->headers->get('referer'),
             ])
