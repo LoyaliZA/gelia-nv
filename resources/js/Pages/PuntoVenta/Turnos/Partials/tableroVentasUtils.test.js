@@ -15,7 +15,7 @@ import {
 } from './tableroVentasUtils';
 
 describe('tableroVentasUtils', () => {
-    const permisos = { cerrar_atencion: true };
+    const permisos = { iniciar_atencion: true, cerrar_atencion: true };
 
     it('detecta etiquetas de prioridad', () => {
         const etiquetas = etiquetasPrioridadDesdeTurno({

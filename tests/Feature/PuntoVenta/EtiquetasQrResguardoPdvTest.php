@@ -46,7 +46,7 @@ class EtiquetasQrResguardoPdvTest extends TestCase
         $this->usuario->givePermissionTo([
             PuntoVentaModulo::PERMISO_ACCEDER,
             PuntoVentaModulo::PERMISO_RESGUARDOS_VER,
-            PuntoVentaModulo::PERMISO_RESGUARDOS_RECIBIR_GERENTE,
+            PuntoVentaModulo::PERMISO_RESGUARDOS_CONFIRMAR_LLEGADA,
         ]);
         $this->usuario->concederAccesoSucursal($this->sucursal, esPrincipal: true);
     }

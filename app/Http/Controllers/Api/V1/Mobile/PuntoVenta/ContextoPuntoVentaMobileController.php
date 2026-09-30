@@ -7,22 +7,30 @@ use App\Models\Sucursal;
 use App\Models\User;
 use App\Services\PuntoVenta\AlcancePdv;
 use App\Services\PuntoVenta\PuntoVentaModulo;
+use App\Services\PuntoVenta\Resguardos\RegistroManualResguardoPdvConfig;
+use App\Support\PuntoVenta\Resguardos\DepartamentosOrigenResguardoManualPdv;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class ContextoPuntoVentaMobileController extends Controller
 {
-    public function show(Request $request, AlcancePdv $alcance): JsonResponse
-    {
+    public function show(
+        Request $request,
+        AlcancePdv $alcance,
+        RegistroManualResguardoPdvConfig $registroManual,
+    ): JsonResponse {
         /** @var User $user */
         $user = $request->user();
 
-        return response()->json($this->payload($user, $alcance));
+        return response()->json($this->payload($user, $alcance, $registroManual));
     }
 
-    public function establecerSucursal(Request $request, AlcancePdv $alcance): JsonResponse
-    {
+    public function establecerSucursal(
+        Request $request,
+        AlcancePdv $alcance,
+        RegistroManualResguardoPdvConfig $registroManual,
+    ): JsonResponse {
         /** @var User $user */
         $user = $request->user();
 
@@ -36,14 +44,17 @@ class ContextoPuntoVentaMobileController extends Controller
             return response()->json(['message' => $exception->getMessage()], 403);
         }
 
-        return response()->json($this->payload($user, $alcance));
+        return response()->json($this->payload($user, $alcance, $registroManual));
     }
 
     /**
      * @return array<string, mixed>
      */
-    private function payload(User $user, AlcancePdv $alcance): array
-    {
+    private function payload(
+        User $user,
+        AlcancePdv $alcance,
+        RegistroManualResguardoPdvConfig $registroManual,
+    ): array {
         $user->loadMissing('sucursales');
 
         $operables = $user->sucursales
@@ -57,13 +68,20 @@ class ContextoPuntoVentaMobileController extends Controller
             ->values();
 
         $activaId = $alcance->sucursalActivaId($user);
+        $registroManualActivo = $registroManual->estaActivo();
 
         return [
             'sucursal_activa' => $operables->firstWhere('id', $activaId),
             'sucursales_operables' => $operables->all(),
+            'registro_manual' => $registroManualActivo,
+            'origenes' => $registroManualActivo
+                ? DepartamentosOrigenResguardoManualPdv::serializar()
+                : [],
             'permisos' => [
                 'resguardos_ver' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_VER),
-                'resguardos_recibir_gerente' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_RECIBIR_GERENTE),
+                'resguardos_registrar_manual' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_REGISTRAR_MANUAL),
+                'resguardos_confirmar_llegada' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_CONFIRMAR_LLEGADA),
+                'resguardos_enviar_a_custodia' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_ENVIAR_A_CUSTODIA),
                 'resguardos_entregar' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_ENTREGAR),
                 'resguardos_ver_rezagados' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_VER_REZAGADOS),
                 'turnos_ver' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_TURNOS_VER),

@@ -9,6 +9,6 @@ class ConsultarPlazosTurnosPdvRequest extends PdvOperacionPisoRequest
 {
     protected function permisoAccion(): string
     {
-        return PuntoVentaModulo::PERMISO_OPERACION_EQUIPO_GESTIONAR;
+        return PuntoVentaModulo::PERMISO_OPERACION_PLAZOS_TURNOS;
     }
 }

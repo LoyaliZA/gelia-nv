@@ -18,7 +18,7 @@ class AutorizacionAlcancePdvHttpTest extends TestCase
 {
     use RefreshDatabase;
 
-    private const PERMISO_PISO = 'pdv.resguardos.recibir';
+    private const PERMISO_PISO = 'pdv.resguardos.confirmar_llegada';
 
     protected function setUp(): void
     {
@@ -91,6 +91,6 @@ class PdvOperacionPisoRequestStub extends PdvOperacionPisoRequest
 {
     protected function permisoAccion(): string
     {
-        return 'pdv.resguardos.recibir';
+        return 'pdv.resguardos.confirmar_llegada';
     }
 }

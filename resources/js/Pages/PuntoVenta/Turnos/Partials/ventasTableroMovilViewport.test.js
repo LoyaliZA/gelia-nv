@@ -72,7 +72,7 @@ describe('tablero ventas viewport móvil', () => {
         const contenedor = montar(createElement(TarjetaTurnoVentas, {
             turno: turnoBase,
             servidorAt: '2026-09-04T12:00:00Z',
-            permisos: { cerrar_atencion: true, transferir: false },
+            permisos: { iniciar_atencion: true, cerrar_atencion: true, transferir: false },
             catalogos,
             personasTransferencia: [],
             onActualizado: vi.fn(),

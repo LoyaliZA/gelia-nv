@@ -38,7 +38,7 @@ class RegistrarRecepcionFisicaPdvService
     ): ResguardoPdv {
         $this->alcance->asegurarMutacionPiso(
             $actor,
-            PuntoVentaModulo::PERMISO_RESGUARDOS_RECIBIR_GERENTE,
+            PuntoVentaModulo::PERMISO_RESGUARDOS_CONFIRMAR_LLEGADA,
             (int) $resguardo->sucursal_id
         );
 

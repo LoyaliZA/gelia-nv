@@ -208,7 +208,7 @@ export default function ContenidoDetalleResguardo({
                         onExito={onAccionExito}
                     />
                 )}
-                {permisos.recibir && resguardoAdmiteRecepcion(resguardo) && (
+                {permisos.confirmar_llegada && resguardoAdmiteRecepcion(resguardo) && (
                     <BotonConfirmarRecepcionResguardo
                         resguardo={resguardo}
                         className="inline-flex min-h-[44px] px-5 w-auto"
@@ -216,7 +216,7 @@ export default function ContenidoDetalleResguardo({
                         onExito={onAccionExito}
                     />
                 )}
-                {permisos.recibir && (resguardo.admite_pasar_a_recepcion || resguardo.estado === 'recibido') && resguardo.estado === 'recibido' && (
+                {permisos.enviar_a_custodia && (resguardo.admite_pasar_a_recepcion || resguardo.estado === 'recibido') && resguardo.estado === 'recibido' && (
                     <BotonPasarARecepcionResguardo
                         resguardo={resguardo}
                         className="inline-flex min-h-[44px] px-5 w-auto"

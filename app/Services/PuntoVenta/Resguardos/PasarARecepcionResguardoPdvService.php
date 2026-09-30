@@ -29,7 +29,7 @@ class PasarARecepcionResguardoPdvService
     ): ResguardoPdv {
         $this->alcance->asegurarMutacionPiso(
             $actor,
-            PuntoVentaModulo::PERMISO_RESGUARDOS_RECIBIR_GERENTE,
+            PuntoVentaModulo::PERMISO_RESGUARDOS_ENVIAR_A_CUSTODIA,
             (int) $resguardo->sucursal_id
         );
 

@@ -25,7 +25,7 @@ class ConsultaFormularioRecepcionFisicaPdvService
      */
     public function obtener(User $user, ResguardoPdv $resguardo): array
     {
-        $this->alcance->asegurarConsultaPiso($user, PuntoVentaModulo::PERMISO_RESGUARDOS_RECIBIR_GERENTE);
+        $this->alcance->asegurarConsultaPiso($user, PuntoVentaModulo::PERMISO_RESGUARDOS_CONFIRMAR_LLEGADA);
 
         $activaId = $this->alcance->sucursalActivaId($user);
         if ($activaId === null || (int) $resguardo->sucursal_id !== $activaId) {

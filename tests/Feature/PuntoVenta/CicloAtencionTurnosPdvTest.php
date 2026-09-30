@@ -77,6 +77,7 @@ class CicloAtencionTurnosPdvTest extends TestCase
 
         $this->vendedor->givePermissionTo([
             PuntoVentaModulo::PERMISO_ACCEDER,
+            PuntoVentaModulo::PERMISO_TURNOS_INICIAR_ATENCION,
             PuntoVentaModulo::PERMISO_TURNOS_CERRAR_ATENCION,
             PuntoVentaModulo::PERMISO_TURNOS_ATENDER,
             PuntoVentaModulo::PERMISO_OPERACION_JORNADA_ABRIR,
@@ -440,6 +441,7 @@ class CicloAtencionTurnosPdvTest extends TestCase
         $otro = User::factory()->create();
         $otro->givePermissionTo([
             PuntoVentaModulo::PERMISO_ACCEDER,
+            PuntoVentaModulo::PERMISO_TURNOS_INICIAR_ATENCION,
             PuntoVentaModulo::PERMISO_TURNOS_CERRAR_ATENCION,
             PuntoVentaModulo::PERMISO_TURNOS_ATENDER,
         ]);

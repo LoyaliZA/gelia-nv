@@ -39,7 +39,7 @@ class CrearResguardoManualPdvService
 
         $this->alcance->asegurarMutacionPiso(
             $actor,
-            PuntoVentaModulo::PERMISO_RESGUARDOS_RECIBIR_GERENTE,
+            PuntoVentaModulo::PERMISO_RESGUARDOS_REGISTRAR_MANUAL,
             $sucursalId
         );
 

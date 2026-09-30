@@ -50,6 +50,12 @@ export async function pasarARecepcionGerente(resguardo) {
     }
 }
 
-export function resguardoSeleccionableGerente(resguardo) {
-    return resguardo?.estado === 'pendiente_recepcion' || resguardo?.estado === 'recibido';
+export function resguardoSeleccionableGerente(resguardo, opciones = {}) {
+    const confirmarLlegada = opciones.confirmarLlegada ?? true;
+    const enviarACustodia = opciones.enviarACustodia ?? true;
+
+    if (confirmarLlegada && resguardo?.estado === 'pendiente_recepcion') return true;
+    if (enviarACustodia && resguardo?.estado === 'recibido') return true;
+
+    return false;
 }

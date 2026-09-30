@@ -62,6 +62,7 @@ class TableroVentasPdvController extends Controller
     {
         return [
             'atender' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_TURNOS_ATENDER),
+            'iniciar_atencion' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_TURNOS_INICIAR_ATENCION),
             'cerrar_atencion' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_TURNOS_CERRAR_ATENCION),
             'transferir' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_TURNOS_TRANSFERIR),
         ];

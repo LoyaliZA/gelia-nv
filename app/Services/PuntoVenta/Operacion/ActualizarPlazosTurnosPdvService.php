@@ -42,7 +42,7 @@ class ActualizarPlazosTurnosPdvService
 
         $this->alcance->asegurarMutacionPiso(
             $actor,
-            PuntoVentaModulo::PERMISO_OPERACION_EQUIPO_GESTIONAR,
+            PuntoVentaModulo::PERMISO_OPERACION_PLAZOS_TURNOS,
             $sucursalId,
         );
 

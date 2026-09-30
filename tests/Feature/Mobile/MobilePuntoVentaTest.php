@@ -59,7 +59,9 @@ class MobilePuntoVentaTest extends TestCase
         $this->usuario->givePermissionTo([
             PuntoVentaModulo::PERMISO_ACCEDER,
             PuntoVentaModulo::PERMISO_RESGUARDOS_VER,
-            PuntoVentaModulo::PERMISO_RESGUARDOS_RECIBIR_GERENTE,
+            PuntoVentaModulo::PERMISO_RESGUARDOS_REGISTRAR_MANUAL,
+            PuntoVentaModulo::PERMISO_RESGUARDOS_CONFIRMAR_LLEGADA,
+            PuntoVentaModulo::PERMISO_RESGUARDOS_ENVIAR_A_CUSTODIA,
             PuntoVentaModulo::PERMISO_RESGUARDOS_ENTREGAR,
             PuntoVentaModulo::PERMISO_RESGUARDOS_VER_REZAGADOS,
             PuntoVentaModulo::PERMISO_TURNOS_VER,
@@ -76,7 +78,49 @@ class MobilePuntoVentaTest extends TestCase
             ->assertOk()
             ->assertJsonPath('sucursal_activa.id', $this->principal->id)
             ->assertJsonPath('permisos.resguardos_ver', true)
-            ->assertJsonPath('permisos.turnos_alta', true);
+            ->assertJsonPath('permisos.turnos_alta', true)
+            ->assertJsonPath('registro_manual', false)
+            ->assertJsonPath('origenes', []);
+    }
+
+    public function test_contexto_expone_el_registro_manual_y_solo_origenes_validos(): void
+    {
+        $this->activarRegistroManual();
+
+        $visible = Departamento::query()->firstOrCreate(
+            ['nombre' => 'Aromas móvil'],
+            ['activo' => true, 'visible_origen_resguardo_pdv' => true]
+        );
+        $visible->forceFill([
+            'activo' => true,
+            'visible_origen_resguardo_pdv' => true,
+        ])->save();
+
+        $oculto = Departamento::query()->firstOrCreate(
+            ['nombre' => 'Origen oculto móvil'],
+            ['activo' => true, 'visible_origen_resguardo_pdv' => false]
+        );
+        $oculto->forceFill(['visible_origen_resguardo_pdv' => false])->save();
+
+        $inactivo = Departamento::query()->firstOrCreate(
+            ['nombre' => 'Origen inactivo móvil'],
+            ['activo' => false, 'visible_origen_resguardo_pdv' => true]
+        );
+        $inactivo->forceFill([
+            'activo' => false,
+            'visible_origen_resguardo_pdv' => true,
+        ])->save();
+
+        $respuesta = $this->conToken($this->token())
+            ->getJson('/api/v1/mobile/punto-venta/contexto')
+            ->assertOk()
+            ->assertJsonPath('registro_manual', true);
+
+        $origenes = collect($respuesta->json('origenes'));
+        $this->assertTrue($origenes->contains(fn (array $origen): bool => $origen['id'] === $visible->id
+            && $origen['nombre'] === 'Aromas móvil'));
+        $this->assertFalse($origenes->contains(fn (array $origen): bool => $origen['id'] === $oculto->id));
+        $this->assertFalse($origenes->contains(fn (array $origen): bool => $origen['id'] === $inactivo->id));
     }
 
     public function test_establece_sucursal_activa_del_dispositivo_y_rechaza_una_no_operable(): void

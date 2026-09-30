@@ -10,7 +10,7 @@ class PasarARecepcionResguardoPdvRequest extends PdvOperacionPisoRequest
 {
     protected function permisoAccion(): string
     {
-        return PuntoVentaModulo::PERMISO_RESGUARDOS_RECIBIR_GERENTE;
+        return PuntoVentaModulo::PERMISO_RESGUARDOS_ENVIAR_A_CUSTODIA;
     }
 
     protected function sucursalIdRegistro(): ?int

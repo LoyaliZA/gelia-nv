@@ -110,7 +110,7 @@ export function esConflictoVersionTurno(err) {
 }
 
 export function puedeIniciarAtencion(turno, permisos) {
-    if (!permisos?.cerrar_atencion || !turno?.atencion) return false;
+    if (!permisos?.iniciar_atencion || !turno?.atencion) return false;
     return !turno.atencion.atencion_en_curso;
 }
 

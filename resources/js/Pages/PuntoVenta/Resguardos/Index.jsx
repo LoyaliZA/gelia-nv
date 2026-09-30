@@ -38,7 +38,10 @@ export default function Index({
     puede_ver_historial_entregas: puedeVerHistorialEntregas = false,
 }) {
     const antiguedadConfigurada = Boolean(operativa.antiguedad_configurada);
-    const puedeRegistrarManual = Boolean(operativa.registro_manual) && Boolean(permisos.recibir);
+    const puedeRegistrarManual = Boolean(operativa.registro_manual) && Boolean(permisos.registrar_manual);
+    const puedeConfirmarLlegada = Boolean(permisos.confirmar_llegada);
+    const puedeEnviarACustodia = Boolean(permisos.enviar_a_custodia);
+    const puedePasoLlegada = puedeConfirmarLlegada || puedeEnviarACustodia;
 
     const {
         resguardos: resguardosVista,
@@ -97,13 +100,13 @@ export default function Index({
     useEffect(() => {
         if (bandejaActiva !== 'por_recibir') return;
         const visibles = [];
-        if (permisos.recibir) visibles.push('gerente');
+        if (puedePasoLlegada) visibles.push('gerente');
         if (permisos.confirmar_custodia) visibles.push('recepcionista');
         if (!visibles.length || visibles.includes(pasoActivo)) return;
         const siguiente = visibles[0];
         setPasoActivo(siguiente);
         recargarRef.current({ paso: siguiente, page: 1 });
-    }, [bandejaActiva, pasoActivo, permisos.recibir, permisos.confirmar_custodia]);
+    }, [bandejaActiva, pasoActivo, puedePasoLlegada, permisos.confirmar_custodia]);
 
     const paramsActuales = (extra = {}) => paramsListadoResguardos({
         bandeja: bandejaActiva,
@@ -187,7 +190,7 @@ export default function Index({
     const hayFiltrosActivos = Boolean(busqueda || estado || antiguedad);
 
     const bandejaRender = bandejaVista || bandejaActiva;
-    const puedeConfirmarEscaneo = Boolean(permisos.recibir)
+    const puedeConfirmarEscaneo = puedeConfirmarLlegada
         && bandejaRender === 'por_recibir'
         && pasoActivo === 'gerente';
     const antiguedadEnTarjetas = antiguedadConfigurada
@@ -199,8 +202,11 @@ export default function Index({
 
     const idsSeleccionablesPagina = useMemo(() => {
         const data = resguardosVista?.data || [];
-        if (Boolean(permisos.recibir) && bandejaRender === 'por_recibir' && pasoActivo === 'gerente') {
-            return data.filter(resguardoSeleccionableGerente).map((item) => item.id);
+        if (puedePasoLlegada && bandejaRender === 'por_recibir' && pasoActivo === 'gerente') {
+            return data.filter((item) => resguardoSeleccionableGerente(item, {
+                confirmarLlegada: puedeConfirmarLlegada,
+                enviarACustodia: puedeEnviarACustodia,
+            })).map((item) => item.id);
         }
         if (Boolean(permisos.entregar) && bandejaRender === 'en_custodia') {
             return data
@@ -208,7 +214,7 @@ export default function Index({
                 .map((item) => item.id);
         }
         return [];
-    }, [resguardosVista, permisos.recibir, permisos.entregar, bandejaRender, pasoActivo]);
+    }, [resguardosVista, puedePasoLlegada, puedeConfirmarLlegada, puedeEnviarACustodia, permisos.entregar, bandejaRender, pasoActivo]);
     const paginaSeleccionada = idsSeleccionablesPagina.length > 0
         && idsSeleccionablesPagina.every((id) => idsSeleccionados.includes(id));
 
@@ -347,7 +353,8 @@ export default function Index({
                         permisos={permisos}
                         hayFiltrosActivos={hayFiltrosActivos}
                         onLimpiarFiltros={onLimpiar}
-                        puedeRecibir={Boolean(permisos.recibir)}
+                        puedeConfirmarLlegada={puedeConfirmarLlegada}
+                        puedeEnviarACustodia={puedeEnviarACustodia}
                         puedeConfirmarCustodia={Boolean(permisos.confirmar_custodia)}
                         paso={bandejaRender === 'por_recibir' ? pasoActivo : undefined}
                         onPaso={(id) => {
@@ -359,7 +366,7 @@ export default function Index({
                         idsSeleccionados={idsSeleccionados}
                         onToggleSeleccion={
                             (permisos.entregar && bandejaRender === 'en_custodia')
-                            || (permisos.recibir && bandejaRender === 'por_recibir' && pasoActivo === 'gerente')
+                            || (puedePasoLlegada && bandejaRender === 'por_recibir' && pasoActivo === 'gerente')
                                 ? toggleSeleccion
                                 : undefined
                         }
@@ -377,10 +384,12 @@ export default function Index({
                     onAccionExito={() => recargar({ page: resguardosVista?.current_page || 1 }, { silencioso: true })}
                 />
 
-                {Boolean(permisos.recibir) && bandejaRender === 'por_recibir' && pasoActivo === 'gerente' && idsSeleccionados.length > 0 && (
+                {puedePasoLlegada && bandejaRender === 'por_recibir' && pasoActivo === 'gerente' && idsSeleccionados.length > 0 && (
                     <BarraAccionesMasivasGerente
                         resguardos={resguardosVista?.data || []}
                         idsSeleccionados={idsSeleccionados}
+                        puedeConfirmarLlegada={puedeConfirmarLlegada}
+                        puedeEnviarACustodia={puedeEnviarACustodia}
                         onLimpiarSeleccion={() => setIdsSeleccionados([])}
                         onSeleccionarPagina={() => setIdsSeleccionados(idsSeleccionablesPagina)}
                         paginaSeleccionada={paginaSeleccionada}

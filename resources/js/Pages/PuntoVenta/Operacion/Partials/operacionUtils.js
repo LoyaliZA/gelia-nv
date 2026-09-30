@@ -338,9 +338,9 @@ export function isoDesdeDatetimeLocal(valor) {
     return fecha.toISOString();
 }
 
-export const PERMISO_PDV_EQUIPO_GESTIONAR = 'pdv.operacion.equipo_gestionar';
+export const PERMISO_PDV_PLAZOS_TURNOS = 'pdv.operacion.plazos_turnos';
 
 export function puedeGestionarPlazosTurnosPdv({ capacidades = null, auth = null } = {}) {
-    if (capacidades?.equipo_gestionar) return true;
-    return auth?.user?.permissions?.includes(PERMISO_PDV_EQUIPO_GESTIONAR) ?? false;
+    if (capacidades?.plazos_turnos) return true;
+    return auth?.user?.permissions?.includes(PERMISO_PDV_PLAZOS_TURNOS) ?? false;
 }

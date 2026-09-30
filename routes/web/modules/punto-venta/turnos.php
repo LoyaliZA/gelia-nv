@@ -39,7 +39,7 @@ Route::middleware(['pdv.piso'])
     ->name('turnos.')
     ->group(function () {
         Route::post('/{turno}/iniciar-atencion', IniciarAtencionTurnoPdvController::class)
-            ->middleware('pdv.permiso:'.PuntoVentaModulo::PERMISO_TURNOS_CERRAR_ATENCION)
+            ->middleware('pdv.permiso:'.PuntoVentaModulo::PERMISO_TURNOS_INICIAR_ATENCION)
             ->name('iniciar_atencion');
 
         Route::post('/{turno}/cerrar-atencion', CerrarAtencionTurnoPdvController::class)

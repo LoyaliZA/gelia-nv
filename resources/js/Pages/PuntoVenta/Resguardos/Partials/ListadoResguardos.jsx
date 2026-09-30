@@ -27,7 +27,7 @@ import AccionReponerVencidoResguardo from './AccionReponerVencidoResguardo';
 import TarjetaResguardoOperativa from './TarjetaResguardoOperativa';
 import SelectorVistaResguardos from './SelectorVistaResguardos';
 import { AccionEntregaResguardo } from './ModalEntregaResguardo';
-import BotonConfirmarRecepcionResguardo from './BotonConfirmarRecepcionResguardo';
+import BotonConfirmarRecepcionResguardo, { BotonPasarARecepcionResguardo } from './BotonConfirmarRecepcionResguardo';
 import { resguardoSeleccionableGerente } from './recepcionGerenteApi';
 import { abrirDetalleResguardoModal } from './resguardoDetalleModalBridge';
 
@@ -79,7 +79,8 @@ function FilaTablaResguardo({
     bandeja,
     catalogos,
     permisos = {},
-    puedeRecibir,
+    puedeConfirmarLlegada = false,
+    puedeEnviarACustodia = false,
     puedeEntregar,
     seleccionable = false,
     seleccionado = false,
@@ -132,8 +133,15 @@ function FilaTablaResguardo({
                             className="inline-flex"
                         />
                     )}
-                    {puedeRecibir && resguardoAdmiteRecepcion(resguardo) && (
+                    {puedeConfirmarLlegada && resguardoAdmiteRecepcion(resguardo) && (
                         <BotonConfirmarRecepcionResguardo
+                            resguardo={resguardo}
+                            onExito={onRecepcionExito}
+                            className="inline-flex w-auto"
+                        />
+                    )}
+                    {puedeEnviarACustodia && resguardo.estado === 'recibido' && (
+                        <BotonPasarARecepcionResguardo
                             resguardo={resguardo}
                             onExito={onRecepcionExito}
                             className="inline-flex w-auto"
@@ -164,7 +172,8 @@ export default function ListadoResguardos({
     permisos = {},
     hayFiltrosActivos = false,
     onLimpiarFiltros,
-    puedeRecibir = false,
+    puedeConfirmarLlegada = false,
+    puedeEnviarACustodia = false,
     puedeConfirmarCustodia = false,
     paso = 'gerente',
     onPaso,
@@ -176,7 +185,8 @@ export default function ListadoResguardos({
     onRecepcionExito,
 }) {
     const items = resguardos?.data || [];
-    const seleccionMasivaGerente = puedeRecibir && bandeja === 'por_recibir' && paso === 'gerente' && Boolean(onToggleSeleccion);
+    const puedePasoLlegada = puedeConfirmarLlegada || puedeEnviarACustodia;
+    const seleccionMasivaGerente = puedePasoLlegada && bandeja === 'por_recibir' && paso === 'gerente' && Boolean(onToggleSeleccion);
     const seleccionableEntrega = puedeEntregar && bandeja === 'en_custodia' && Boolean(onToggleSeleccion);
     const seleccionable = seleccionMasivaGerente || seleccionableEntrega;
     const [vistaPorRecibir, setVistaPorRecibir] = useState(leerVistaPorRecibir);
@@ -195,7 +205,7 @@ export default function ListadoResguardos({
             ? 'Resguardos con incidencias'
             : 'Pedidos a recibir';
     const pasos = [
-        { id: 'gerente', etiqueta: 'Recepción gerente', visible: puedeRecibir },
+        { id: 'gerente', etiqueta: 'Confirmar llegada', visible: puedePasoLlegada },
         { id: 'recepcionista', etiqueta: 'Custodia recepción', visible: puedeConfirmarCustodia },
     ].filter((opcion) => opcion.visible);
     const mostrarPaso = bandeja === 'por_recibir' && pasos.length > 1;
@@ -254,12 +264,16 @@ export default function ListadoResguardos({
                         bandeja={bandeja}
                         catalogos={catalogos}
                         permisos={permisos}
-                        puedeRecibir={puedeRecibir}
+                        puedeConfirmarLlegada={puedeConfirmarLlegada}
+                        puedeEnviarACustodia={puedeEnviarACustodia}
                         puedeConfirmarCustodia={puedeConfirmarCustodia}
                         puedeEntregar={puedeEntregar}
                         paso={paso}
                         seleccionable={
-                            (seleccionMasivaGerente && resguardoSeleccionableGerente(resguardo))
+                            (seleccionMasivaGerente && resguardoSeleccionableGerente(resguardo, {
+                                confirmarLlegada: puedeConfirmarLlegada,
+                                enviarACustodia: puedeEnviarACustodia,
+                            }))
                             || (seleccionableEntrega && resguardo.estado === 'en_custodia' && !resguardo.entrega_bloqueada)
                         }
                         seleccionado={idsSeleccionados.includes(resguardo.id)}
@@ -293,10 +307,14 @@ export default function ListadoResguardos({
                             bandeja={bandeja}
                             catalogos={catalogos}
                             permisos={permisos}
-                            puedeRecibir={puedeRecibir}
+                            puedeConfirmarLlegada={puedeConfirmarLlegada}
+                            puedeEnviarACustodia={puedeEnviarACustodia}
                             puedeEntregar={puedeEntregar}
                             seleccionable={
-                                (seleccionMasivaGerente && resguardoSeleccionableGerente(resguardo))
+                                (seleccionMasivaGerente && resguardoSeleccionableGerente(resguardo, {
+                                confirmarLlegada: puedeConfirmarLlegada,
+                                enviarACustodia: puedeEnviarACustodia,
+                            }))
                                 || (seleccionableEntrega && resguardo.estado === 'en_custodia' && !resguardo.entrega_bloqueada)
                             }
                             seleccionado={idsSeleccionados.includes(resguardo.id)}

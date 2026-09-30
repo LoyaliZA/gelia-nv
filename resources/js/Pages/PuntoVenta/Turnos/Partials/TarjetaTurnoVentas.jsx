@@ -50,10 +50,10 @@ export default function TarjetaTurnoVentas({
     const horaCierrePrevia = formatearHoraLocal(turno?.atencion_previa?.cierre_at);
 
     useEffect(() => {
-        if (estadoUi === 'espera_vencida' && permisos?.cerrar_atencion) {
+        if (estadoUi === 'espera_vencida' && (permisos?.iniciar_atencion || permisos?.cerrar_atencion)) {
             setModalEspera(true);
         }
-    }, [estadoUi, permisos?.cerrar_atencion, turno?.id]);
+    }, [estadoUi, permisos?.iniciar_atencion, permisos?.cerrar_atencion, turno?.id]);
 
     const manejarConflicto = useCallback((err) => {
         if (esConflictoVersionTurno(err)) {
@@ -229,7 +229,7 @@ export default function TarjetaTurnoVentas({
                 )}
             </div>
 
-            {permisos?.cerrar_atencion && (
+            {(permisos?.iniciar_atencion || permisos?.cerrar_atencion || permisos?.transferir) && (
                 <div className="flex flex-col sm:flex-row gap-3">
                     {puedeIniciarAtencion(turno, permisos) && (
                         <button

@@ -283,6 +283,7 @@ class GestionVendedoresPdvTest extends TestCase
             PuntoVentaModulo::PERMISO_ACCEDER,
             PuntoVentaModulo::PERMISO_OPERACION_EQUIPO_VER,
             PuntoVentaModulo::PERMISO_OPERACION_EQUIPO_GESTIONAR,
+            PuntoVentaModulo::PERMISO_OPERACION_PLAZOS_TURNOS,
         ]);
         $user->concederAccesoSucursal($this->sucursal, esPrincipal: true);
         app(AlcancePdv::class)->establecerSucursalActiva($user, $this->sucursal->id);

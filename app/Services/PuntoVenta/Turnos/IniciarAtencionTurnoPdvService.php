@@ -31,7 +31,7 @@ class IniciarAtencionTurnoPdvService
     ): array {
         $this->alcance->asegurarMutacionPiso(
             $actor,
-            PuntoVentaModulo::PERMISO_TURNOS_CERRAR_ATENCION,
+            PuntoVentaModulo::PERMISO_TURNOS_INICIAR_ATENCION,
             (int) $turno->sucursal_id,
         );
 

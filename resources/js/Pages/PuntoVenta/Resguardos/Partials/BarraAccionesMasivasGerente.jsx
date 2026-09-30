@@ -8,6 +8,8 @@ import useToastAlCambiar from '../../../../hooks/useToastAlCambiar';
 export default function BarraAccionesMasivasGerente({
     resguardos = [],
     idsSeleccionados = [],
+    puedeConfirmarLlegada = false,
+    puedeEnviarACustodia = false,
     onExito,
     onLimpiarSeleccion,
     onSeleccionarPagina,
@@ -91,7 +93,7 @@ export default function BarraAccionesMasivasGerente({
             </div>
 
             <div className="flex flex-col gap-2 p-3">
-                {pendientes.length > 0 && (
+                {puedeConfirmarLlegada && pendientes.length > 0 && (
                     <button
                         type="button"
                         disabled={procesando}
@@ -102,7 +104,7 @@ export default function BarraAccionesMasivasGerente({
                         Confirmar recepción ({pendientes.length})
                     </button>
                 )}
-                {recibidos.length > 0 && (
+                {puedeEnviarACustodia && recibidos.length > 0 && (
                     <button
                         type="button"
                         disabled={procesando}

@@ -76,11 +76,11 @@ Route::middleware(['pdv.piso'])
             ->name('configuracion.horario_cierre');
 
         Route::get('/configuracion/plazos-turnos', ConsultarPlazosTurnosPdvController::class)
-            ->middleware('pdv.permiso:'.PuntoVentaModulo::PERMISO_OPERACION_EQUIPO_GESTIONAR)
+            ->middleware('pdv.permiso:'.PuntoVentaModulo::PERMISO_OPERACION_PLAZOS_TURNOS)
             ->name('configuracion.plazos_turnos.consultar');
 
         Route::put('/configuracion/plazos-turnos', ActualizarPlazosTurnosPdvController::class)
-            ->middleware('pdv.permiso:'.PuntoVentaModulo::PERMISO_OPERACION_EQUIPO_GESTIONAR)
+            ->middleware('pdv.permiso:'.PuntoVentaModulo::PERMISO_OPERACION_PLAZOS_TURNOS)
             ->name('configuracion.plazos_turnos');
 
         Route::post('/equipo/{user}/activar', [GestionEquipoPdvController::class, 'activar'])

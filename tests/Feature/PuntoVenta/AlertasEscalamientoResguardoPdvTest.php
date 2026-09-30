@@ -67,7 +67,7 @@ class AlertasEscalamientoResguardoPdvTest extends TestCase
             $this->sucursal
         );
         $sinPermiso = $this->usuarioConPermisos(
-            [PuntoVentaModulo::PERMISO_RESGUARDOS_RECIBIR],
+            [PuntoVentaModulo::PERMISO_RESGUARDOS_CONFIRMAR_LLEGADA],
             $this->sucursal
         );
 

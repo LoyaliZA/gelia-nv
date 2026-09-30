@@ -12,9 +12,11 @@ final class PuntoVentaModulo
 
     public const PERMISO_RESGUARDOS_VER = 'pdv.resguardos.ver';
 
-    public const PERMISO_RESGUARDOS_RECIBIR = 'pdv.resguardos.recibir';
+    public const PERMISO_RESGUARDOS_REGISTRAR_MANUAL = 'pdv.resguardos.registrar_manual';
 
-    public const PERMISO_RESGUARDOS_RECIBIR_GERENTE = 'pdv.resguardos.recibir_gerente';
+    public const PERMISO_RESGUARDOS_CONFIRMAR_LLEGADA = 'pdv.resguardos.confirmar_llegada';
+
+    public const PERMISO_RESGUARDOS_ENVIAR_A_CUSTODIA = 'pdv.resguardos.enviar_a_custodia';
 
     public const PERMISO_RESGUARDOS_CONFIRMAR_CUSTODIA = 'pdv.resguardos.confirmar_custodia';
 
@@ -50,6 +52,8 @@ final class PuntoVentaModulo
 
     public const PERMISO_TURNOS_BAJA_COLA = 'pdv.turnos.baja_cola';
 
+    public const PERMISO_TURNOS_INICIAR_ATENCION = 'pdv.turnos.iniciar_atencion';
+
     public const PERMISO_TURNOS_CERRAR_ATENCION = 'pdv.turnos.cerrar_atencion';
 
     public const PERMISO_TURNOS_ATENDER = 'pdv.turnos.atender';
@@ -67,6 +71,8 @@ final class PuntoVentaModulo
     public const PERMISO_OPERACION_PAUSA = 'pdv.operacion.pausa';
 
     public const PERMISO_OPERACION_EQUIPO_GESTIONAR = 'pdv.operacion.equipo_gestionar';
+
+    public const PERMISO_OPERACION_PLAZOS_TURNOS = 'pdv.operacion.plazos_turnos';
 
     public const PERMISO_OPERACION_EQUIPO_VER = 'pdv.operacion.equipo_ver';
 
@@ -94,8 +100,9 @@ final class PuntoVentaModulo
         return [
             self::PERMISO_ACCEDER,
             self::PERMISO_RESGUARDOS_VER,
-            self::PERMISO_RESGUARDOS_RECIBIR,
-            self::PERMISO_RESGUARDOS_RECIBIR_GERENTE,
+            self::PERMISO_RESGUARDOS_REGISTRAR_MANUAL,
+            self::PERMISO_RESGUARDOS_CONFIRMAR_LLEGADA,
+            self::PERMISO_RESGUARDOS_ENVIAR_A_CUSTODIA,
             self::PERMISO_RESGUARDOS_CONFIRMAR_CUSTODIA,
             self::PERMISO_RESGUARDOS_INCIDENCIA_FOLIO,
             self::PERMISO_RESGUARDOS_INCIDENCIA_DANO,
@@ -112,6 +119,7 @@ final class PuntoVentaModulo
             self::PERMISO_TURNOS_ALTA,
             self::PERMISO_TURNOS_MARCAR_PRIORIDAD,
             self::PERMISO_TURNOS_BAJA_COLA,
+            self::PERMISO_TURNOS_INICIAR_ATENCION,
             self::PERMISO_TURNOS_CERRAR_ATENCION,
             self::PERMISO_TURNOS_ATENDER,
             self::PERMISO_TURNOS_TRANSFERIR,
@@ -121,6 +129,7 @@ final class PuntoVentaModulo
             self::PERMISO_OPERACION_JORNADA_AMPLIAR,
             self::PERMISO_OPERACION_PAUSA,
             self::PERMISO_OPERACION_EQUIPO_GESTIONAR,
+            self::PERMISO_OPERACION_PLAZOS_TURNOS,
             self::PERMISO_OPERACION_EQUIPO_VER,
             self::PERMISO_TURNOS_REATENCION_ASIGNAR,
             self::PERMISO_TURNOS_ALERTAS_SUCURSAL,

@@ -78,15 +78,15 @@ Route::prefix('v1')->group(function () {
                 Route::get('/resguardos', [ResguardoPdvMobileController::class, 'index'])
                     ->middleware('pdv.permiso:'.PuntoVentaModulo::PERMISO_RESGUARDOS_VER);
                 Route::get('/resguardos/productos/buscar', [ResguardoPdvMobileController::class, 'buscarProductos'])
-                    ->middleware('pdv.permiso:'.PuntoVentaModulo::PERMISO_RESGUARDOS_RECIBIR_GERENTE);
+                    ->middleware('pdv.permiso:'.PuntoVentaModulo::PERMISO_RESGUARDOS_REGISTRAR_MANUAL);
                 Route::post('/resguardos', [ResguardoPdvMobileController::class, 'store'])
-                    ->middleware('pdv.permiso:'.PuntoVentaModulo::PERMISO_RESGUARDOS_RECIBIR_GERENTE);
+                    ->middleware('pdv.permiso:'.PuntoVentaModulo::PERMISO_RESGUARDOS_REGISTRAR_MANUAL);
                 Route::get('/resguardos/{resguardo}', [ResguardoPdvMobileController::class, 'show'])
                     ->middleware('pdv.permiso:'.PuntoVentaModulo::PERMISO_RESGUARDOS_VER);
                 Route::put('/resguardos/{resguardo}/recepcion', [ResguardoPdvMobileController::class, 'recepcion'])
-                    ->middleware('pdv.permiso:'.PuntoVentaModulo::PERMISO_RESGUARDOS_RECIBIR_GERENTE);
+                    ->middleware('pdv.permiso:'.PuntoVentaModulo::PERMISO_RESGUARDOS_CONFIRMAR_LLEGADA);
                 Route::put('/resguardos/{resguardo}/pasar-recepcion', [ResguardoPdvMobileController::class, 'pasarRecepcion'])
-                    ->middleware('pdv.permiso:'.PuntoVentaModulo::PERMISO_RESGUARDOS_RECIBIR_GERENTE);
+                    ->middleware('pdv.permiso:'.PuntoVentaModulo::PERMISO_RESGUARDOS_ENVIAR_A_CUSTODIA);
 
                 Route::get('/turnos/recepcion', [TurnoPdvMobileController::class, 'recepcion'])
                     ->middleware('pdv.permiso:'.PuntoVentaModulo::PERMISO_TURNOS_VER);

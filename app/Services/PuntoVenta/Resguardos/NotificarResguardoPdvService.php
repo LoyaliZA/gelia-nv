@@ -23,7 +23,7 @@ class NotificarResguardoPdvService
             AlertaResguardoPdvNotification::TIPO_RECEPCION_ESPERADA,
             [
                 PuntoVentaModulo::PERMISO_RESGUARDOS_VER,
-                PuntoVentaModulo::PERMISO_RESGUARDOS_RECIBIR_GERENTE,
+                PuntoVentaModulo::PERMISO_RESGUARDOS_CONFIRMAR_LLEGADA,
             ],
             'Recepción esperada',
             "Llegada programada del resguardo {$this->folio($resguardo)} a sucursal."
@@ -39,10 +39,10 @@ class NotificarResguardoPdvService
             AlertaResguardoPdvNotification::TIPO_RECEPCION_FISICA,
             [
                 PuntoVentaModulo::PERMISO_RESGUARDOS_VER,
-                PuntoVentaModulo::PERMISO_RESGUARDOS_RECIBIR_GERENTE,
+                PuntoVentaModulo::PERMISO_RESGUARDOS_ENVIAR_A_CUSTODIA,
             ],
-            'Recepción gerente',
-            "Resguardo {$this->folio($resguardo)} recibido por gerencia; pendiente pasar a recepción."
+            'Llegada confirmada',
+            "Resguardo {$this->folio($resguardo)} llegó a sucursal; pendiente enviarlo a revisión de bultos."
         );
     }
 

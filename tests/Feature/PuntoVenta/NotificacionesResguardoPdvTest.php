@@ -47,7 +47,7 @@ class NotificacionesResguardoPdvTest extends TestCase
     {
         $resguardo = $this->crearResguardo();
         $destinatario = $this->usuarioConPermisos(
-            [PuntoVentaModulo::PERMISO_RESGUARDOS_RECIBIR_GERENTE],
+            [PuntoVentaModulo::PERMISO_RESGUARDOS_ENVIAR_A_CUSTODIA],
             $this->sucursal
         );
         $recepcionista = $this->usuarioConPermisos(
@@ -83,7 +83,7 @@ class NotificacionesResguardoPdvTest extends TestCase
             $this->sucursal
         );
         $gerente = $this->usuarioConPermisos(
-            [PuntoVentaModulo::PERMISO_RESGUARDOS_RECIBIR_GERENTE],
+            [PuntoVentaModulo::PERMISO_RESGUARDOS_ENVIAR_A_CUSTODIA],
             $this->sucursal
         );
 
@@ -101,7 +101,7 @@ class NotificacionesResguardoPdvTest extends TestCase
     {
         $resguardo = $this->crearResguardo();
         $receptor = $this->usuarioConPermisos(
-            [PuntoVentaModulo::PERMISO_RESGUARDOS_RECIBIR_GERENTE],
+            [PuntoVentaModulo::PERMISO_RESGUARDOS_CONFIRMAR_LLEGADA],
             $this->sucursal
         );
 
@@ -124,7 +124,7 @@ class NotificacionesResguardoPdvTest extends TestCase
             $this->sucursal
         );
         $sinPermiso = $this->usuarioConPermisos(
-            [PuntoVentaModulo::PERMISO_RESGUARDOS_RECIBIR],
+            [PuntoVentaModulo::PERMISO_RESGUARDOS_CONFIRMAR_LLEGADA],
             $this->sucursal
         );
 

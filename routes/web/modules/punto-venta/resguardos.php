@@ -65,7 +65,7 @@ Route::middleware(['pdv.piso', 'pdv.permiso:'.PuntoVentaModulo::PERMISO_RESGUARD
         Route::get('/', [BandejaResguardoPdvController::class, 'index'])->name('index');
         Route::get('/listado', [BandejaResguardoPdvController::class, 'listado'])->name('listado');
         Route::get('/productos/buscar', BuscarProductoRegistroManualResguardoPdvController::class)
-            ->middleware('pdv.permiso:'.PuntoVentaModulo::PERMISO_RESGUARDOS_RECIBIR_GERENTE)
+            ->middleware('pdv.permiso:'.PuntoVentaModulo::PERMISO_RESGUARDOS_REGISTRAR_MANUAL)
             ->name('productos.buscar');
         Route::get('/etiquetas/resolver/{codigo}', [EtiquetasResguardoPdvController::class, 'resolver'])
             ->name('etiquetas.resolver');
@@ -83,14 +83,26 @@ Route::middleware(['pdv.piso', 'pdv.resguardos.lectura'])
         Route::get('/{resguardo}', [DetalleResguardoPdvController::class, 'show'])->name('show');
     });
 
-Route::middleware(['pdv.piso', 'pdv.permiso:'.PuntoVentaModulo::PERMISO_RESGUARDOS_RECIBIR_GERENTE])
+Route::middleware(['pdv.piso', 'pdv.permiso:'.PuntoVentaModulo::PERMISO_RESGUARDOS_REGISTRAR_MANUAL])
     ->prefix('resguardos')
     ->name('resguardos.')
     ->group(function () {
         Route::post('/', RegistrarResguardoManualPdvController::class)->name('store');
+    });
+
+Route::middleware(['pdv.piso', 'pdv.permiso:'.PuntoVentaModulo::PERMISO_RESGUARDOS_CONFIRMAR_LLEGADA])
+    ->prefix('resguardos')
+    ->name('resguardos.')
+    ->group(function () {
         Route::get('/{resguardo}/recepcion', [FormularioRecepcionFisicaResguardoPdvController::class, 'show'])
             ->name('recepcion.create');
         Route::put('/{resguardo}/recepcion', RecepcionFisicaResguardoPdvController::class)->name('recepcion');
+    });
+
+Route::middleware(['pdv.piso', 'pdv.permiso:'.PuntoVentaModulo::PERMISO_RESGUARDOS_ENVIAR_A_CUSTODIA])
+    ->prefix('resguardos')
+    ->name('resguardos.')
+    ->group(function () {
         Route::put('/{resguardo}/pasar-recepcion', PasarARecepcionResguardoPdvController::class)->name('pasar_recepcion');
     });
 

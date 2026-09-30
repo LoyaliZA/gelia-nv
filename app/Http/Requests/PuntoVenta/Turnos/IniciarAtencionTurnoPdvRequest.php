@@ -8,7 +8,7 @@ class IniciarAtencionTurnoPdvRequest extends TurnoPdvMutacionRequest
 {
     protected function permisoAccion(): string
     {
-        return PuntoVentaModulo::PERMISO_TURNOS_CERRAR_ATENCION;
+        return PuntoVentaModulo::PERMISO_TURNOS_INICIAR_ATENCION;
     }
 
     /**

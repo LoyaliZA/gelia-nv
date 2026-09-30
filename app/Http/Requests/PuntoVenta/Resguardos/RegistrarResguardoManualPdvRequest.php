@@ -12,7 +12,7 @@ class RegistrarResguardoManualPdvRequest extends PdvOperacionPisoRequest
 {
     protected function permisoAccion(): string
     {
-        return PuntoVentaModulo::PERMISO_RESGUARDOS_RECIBIR_GERENTE;
+        return PuntoVentaModulo::PERMISO_RESGUARDOS_REGISTRAR_MANUAL;
     }
 
     public function authorize(): bool

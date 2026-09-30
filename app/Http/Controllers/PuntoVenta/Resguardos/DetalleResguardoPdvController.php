@@ -74,7 +74,8 @@ class DetalleResguardoPdvController extends Controller
             'almacenes' => $this->serializarAlmacenes($resguardo, $user, $alcance),
             'permisos' => [
                 'ver_etiquetas' => $puedeVerEtiquetas,
-                'recibir' => $puedeOperar && $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_RECIBIR),
+                'confirmar_llegada' => $puedeOperar && $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_CONFIRMAR_LLEGADA),
+                'enviar_a_custodia' => $puedeOperar && $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_ENVIAR_A_CUSTODIA),
                 'entregar' => $puedeOperar && $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_ENTREGAR),
                 'confirmar_custodia' => $puedeOperar && $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_CONFIRMAR_CUSTODIA),
                 'incidencia_folio' => $puedeOperar && $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_INCIDENCIA_FOLIO),

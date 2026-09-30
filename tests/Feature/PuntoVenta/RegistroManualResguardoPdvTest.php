@@ -58,7 +58,7 @@ class RegistroManualResguardoPdvTest extends TestCase
         $this->usuario->givePermissionTo([
             PuntoVentaModulo::PERMISO_ACCEDER,
             PuntoVentaModulo::PERMISO_RESGUARDOS_VER,
-            PuntoVentaModulo::PERMISO_RESGUARDOS_RECIBIR_GERENTE,
+            PuntoVentaModulo::PERMISO_RESGUARDOS_REGISTRAR_MANUAL,
             PuntoVentaModulo::PERMISO_RESGUARDOS_ENTREGAR,
         ]);
         $this->usuario->concederAccesoSucursal($this->sucursal, esPrincipal: true);
@@ -270,7 +270,7 @@ class RegistroManualResguardoPdvTest extends TestCase
             ->assertInertia(fn ($page) => $page
                 ->component('PuntoVenta/Resguardos/Index', false)
                 ->where('operativa.registro_manual', false)
-                ->where('permisos.recibir', true)
+                ->where('permisos.registrar_manual', true)
                 ->where('catalogos.origenes_pedido', []));
 
         $this->activarRegistroManual();
