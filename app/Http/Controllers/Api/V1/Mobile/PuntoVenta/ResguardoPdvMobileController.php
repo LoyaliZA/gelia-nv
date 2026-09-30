@@ -5,10 +5,15 @@ namespace App\Http\Controllers\Api\V1\Mobile\PuntoVenta;
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\PuntoVenta\Resguardos\BandejaResguardoPdvController;
 use App\Http\Controllers\PuntoVenta\Resguardos\BuscarProductoRegistroManualResguardoPdvController;
+use App\Http\Controllers\PuntoVenta\Resguardos\ConfirmacionCustodiaResguardoPdvController;
 use App\Http\Controllers\PuntoVenta\Resguardos\EntregaResguardoPdvController;
+use App\Http\Controllers\PuntoVenta\Resguardos\FormularioConfirmacionCustodiaResguardoPdvController;
 use App\Http\Controllers\PuntoVenta\Resguardos\PasarARecepcionResguardoPdvController;
 use App\Http\Controllers\PuntoVenta\Resguardos\RecepcionFisicaResguardoPdvController;
 use App\Http\Controllers\PuntoVenta\Resguardos\RegistrarResguardoManualPdvController;
+use App\Http\Requests\PuntoVenta\Resguardos\RegistrarConfirmacionCustodiaPdvRequest;
+use App\Services\PuntoVenta\Resguardos\ConsultaFormularioConfirmacionCustodiaPdvService;
+use App\Services\PuntoVenta\Resguardos\RegistrarConfirmacionCustodiaPdvService;
 use App\Http\Requests\PuntoVenta\Resguardos\ConsultarBandejasResguardoPdvRequest;
 use App\Http\Requests\PuntoVenta\Resguardos\PasarARecepcionResguardoPdvRequest;
 use App\Http\Requests\PuntoVenta\Resguardos\RegistrarEntregaResguardoPdvRequest;
@@ -91,6 +96,26 @@ class ResguardoPdvMobileController extends Controller
         PasarARecepcionResguardoPdvController $web,
     ): JsonResponse {
         return $web($request, $resguardo, $servicio);
+    }
+
+    public function formularioCustodia(
+        Request $request,
+        ResguardoPdv $resguardo,
+        ConsultaFormularioConfirmacionCustodiaPdvService $consulta,
+        FormularioConfirmacionCustodiaResguardoPdvController $formulario,
+    ): JsonResponse {
+        $response = $formulario->show($request, $resguardo, $consulta);
+
+        return $response instanceof JsonResponse ? $response : abort(500);
+    }
+
+    public function custodia(
+        RegistrarConfirmacionCustodiaPdvRequest $request,
+        ResguardoPdv $resguardo,
+        RegistrarConfirmacionCustodiaPdvService $registrar,
+        ConfirmacionCustodiaResguardoPdvController $confirmacion,
+    ): JsonResponse {
+        return $confirmacion($request, $resguardo, $registrar);
     }
 
     public function entrega(

@@ -82,6 +82,7 @@ class ContextoPuntoVentaMobileController extends Controller
                 'resguardos_registrar_manual' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_REGISTRAR_MANUAL),
                 'resguardos_confirmar_llegada' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_CONFIRMAR_LLEGADA),
                 'resguardos_enviar_a_custodia' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_ENVIAR_A_CUSTODIA),
+                'resguardos_confirmar_custodia' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_CONFIRMAR_CUSTODIA),
                 'resguardos_entregar' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_ENTREGAR),
                 'resguardos_ver_rezagados' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_VER_REZAGADOS),
                 'turnos_ver' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_TURNOS_VER),

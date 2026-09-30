@@ -87,6 +87,10 @@ Route::prefix('v1')->group(function () {
                     ->middleware('pdv.permiso:'.PuntoVentaModulo::PERMISO_RESGUARDOS_CONFIRMAR_LLEGADA);
                 Route::put('/resguardos/{resguardo}/pasar-recepcion', [ResguardoPdvMobileController::class, 'pasarRecepcion'])
                     ->middleware('pdv.permiso:'.PuntoVentaModulo::PERMISO_RESGUARDOS_ENVIAR_A_CUSTODIA);
+                Route::get('/resguardos/{resguardo}/custodia', [ResguardoPdvMobileController::class, 'formularioCustodia'])
+                    ->middleware('pdv.permiso:'.PuntoVentaModulo::PERMISO_RESGUARDOS_CONFIRMAR_CUSTODIA);
+                Route::put('/resguardos/{resguardo}/custodia', [ResguardoPdvMobileController::class, 'custodia'])
+                    ->middleware('pdv.permiso:'.PuntoVentaModulo::PERMISO_RESGUARDOS_CONFIRMAR_CUSTODIA);
 
                 Route::get('/turnos/recepcion', [TurnoPdvMobileController::class, 'recepcion'])
                     ->middleware('pdv.permiso:'.PuntoVentaModulo::PERMISO_TURNOS_VER);
