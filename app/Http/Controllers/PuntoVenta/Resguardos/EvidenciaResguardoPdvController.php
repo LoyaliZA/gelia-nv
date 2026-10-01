@@ -27,10 +27,6 @@ class EvidenciaResguardoPdvController extends Controller
 
         $this->asegurarAcceso($user, $resguardo, $evidencia, $alcance, $autorizacion);
 
-        if ($evidencia->tipo === ResguardoPdvEvidencia::TIPO_FIRMA) {
-            abort(404);
-        }
-
         $disco = Storage::disk('local');
         if (! $disco->exists($evidencia->ruta_interna)) {
             abort(404);

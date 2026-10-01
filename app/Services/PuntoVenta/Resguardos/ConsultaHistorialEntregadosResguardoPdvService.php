@@ -10,6 +10,8 @@ use App\Services\PuntoVenta\PuntoVentaModulo;
 use App\Support\PuntoVenta\Resguardos\AutorizacionConsultaResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\BusquedaResguardoPdvQuery;
 use App\Support\PuntoVenta\Resguardos\EtiquetasResguardoPdv;
+use App\Support\PuntoVenta\Resguardos\UrlEvidenciaResguardoPdv;
+use App\Models\PuntoVenta\ResguardoPdvEvidencia;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
@@ -68,7 +70,10 @@ class ConsultaHistorialEntregadosResguardoPdvService
                 'cliente:id,numero_cliente,nombre',
                 'pedido:id,folio,folio_remision',
                 'entregas' => fn ($q) => $q
-                    ->with('entregadoPor:id,name,username')
+                    ->with([
+                        'entregadoPor:id,name,username',
+                        'evidencias' => fn ($ev) => $ev->orderBy('capturado_at')->orderBy('id'),
+                    ])
                     ->orderByDesc('entregado_at')
                     ->orderByDesc('id')
                     ->limit(1),
@@ -146,6 +151,9 @@ class ConsultaHistorialEntregadosResguardoPdvService
         $relacion = (string) $entrega->relacion;
         $entregadoPor = $entrega->entregadoPor;
 
+        $firma = $entrega->evidencias
+            ->first(fn (ResguardoPdvEvidencia $evidencia) => $evidencia->tipo === ResguardoPdvEvidencia::TIPO_FIRMA);
+
         return [
             'id' => $entrega->id,
             'relacion' => $relacion,
@@ -157,6 +165,21 @@ class ConsultaHistorialEntregadosResguardoPdvService
                 'name' => $entregadoPor->name,
                 'username' => $entregadoPor->username,
             ] : null,
+            'firma_entrega' => $firma ? $this->serializarEvidenciaEntrega($firma) : null,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function serializarEvidenciaEntrega(ResguardoPdvEvidencia $evidencia): array
+    {
+        return [
+            'id' => $evidencia->id,
+            'tipo' => $evidencia->tipo,
+            'nombre_original' => $evidencia->nombre_original,
+            'mime_type' => $evidencia->mime_type,
+            'ruta_publica' => UrlEvidenciaResguardoPdv::url($evidencia),
         ];
     }
 

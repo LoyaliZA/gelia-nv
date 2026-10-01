@@ -17,6 +17,7 @@ import { plazosOperativosResguardo } from './resguardosUtils';
 import PanelPedidoRevisionResguardo from './PanelPedidoRevisionResguardo';
 import { AccionEntregaResguardo } from './ModalEntregaResguardo';
 import BotonConfirmarRecepcionResguardo, { BotonPasarARecepcionResguardo } from './BotonConfirmarRecepcionResguardo';
+import MiniaturaEvidenciaResguardo, { GaleriaEvidenciasResguardo } from './MiniaturaEvidenciaResguardo';
 
 export default function ContenidoDetalleResguardo({
     resguardo,
@@ -123,6 +124,10 @@ export default function ContenidoDetalleResguardo({
             </div>
 
             <PanelPedidoRevisionResguardo resguardo={resguardo} />
+
+            {resguardo.ultima_entrega && (
+                <PanelEntregaCompletada entrega={resguardo.ultima_entrega} />
+            )}
 
             {resguardo.bultos?.length > 0 && (
                 <div className={`${geliaCardClass()} overflow-hidden`}>
@@ -270,28 +275,43 @@ function MiniaturaEvidencia({ evidencia, etiqueta }) {
         return <DetalleCampo label={etiqueta} value="Sin archivo" />;
     }
 
-    const esImagen = String(evidencia.mime_type || '').startsWith('image/') && evidencia.ruta_publica;
-
     return (
         <div className="rounded-2xl border theme-border p-3 space-y-2">
             <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted m-0">{etiqueta}</p>
-            {esImagen ? (
-                <a href={evidencia.ruta_publica} target="_blank" rel="noreferrer" className="block">
-                    <img
-                        src={evidencia.ruta_publica}
-                        alt={etiqueta}
-                        className="w-full h-28 object-cover rounded-xl"
-                    />
-                </a>
-            ) : (
-                <a
-                    href={evidencia.ruta_publica}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-sm font-bold theme-text-primario"
-                >
-                    {evidencia.nombre_original || 'Ver archivo'}
-                </a>
+            <MiniaturaEvidenciaResguardo evidencia={evidencia} etiqueta="" tamano="md" />
+        </div>
+    );
+}
+
+function PanelEntregaCompletada({ entrega }) {
+    const fotos = entrega.evidencias_fotograficas || [];
+    const firma = entrega.firma_entrega;
+
+    return (
+        <div className={`${geliaCardClass()} p-5 md:p-6 space-y-4`}>
+            <h3 className="text-sm font-black uppercase tracking-widest theme-text-main m-0">Entrega registrada</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                <DetalleCampo label="Quién retiró" value={entrega.nombre_quien_retira} />
+                <DetalleCampo label="Relación" value={entrega.relacion_etiqueta || entrega.relacion} />
+                <DetalleCampo label="Fecha de entrega" value={formatearFechaOperativa(entrega.entregado_at)} />
+            </div>
+            {firma && (
+                <div className="space-y-2">
+                    <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted m-0">Firma de entrega</p>
+                    <div className="max-w-xs">
+                        <MiniaturaEvidenciaResguardo
+                            evidencia={firma}
+                            etiqueta="Firma de entrega"
+                            tamano="lg"
+                        />
+                    </div>
+                </div>
+            )}
+            {fotos.length > 0 && (
+                <div className="space-y-2">
+                    <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted m-0">Evidencias de entrega</p>
+                    <GaleriaEvidenciasResguardo evidencias={fotos} />
+                </div>
             )}
         </div>
     );

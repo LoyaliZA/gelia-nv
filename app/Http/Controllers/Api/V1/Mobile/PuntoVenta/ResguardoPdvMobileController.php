@@ -6,12 +6,23 @@ use App\Http\Controllers\Controller;
 use App\Http\Controllers\PuntoVenta\Resguardos\BandejaResguardoPdvController;
 use App\Http\Controllers\PuntoVenta\Resguardos\BuscarProductoRegistroManualResguardoPdvController;
 use App\Http\Controllers\PuntoVenta\Resguardos\ConfirmacionCustodiaResguardoPdvController;
+use App\Http\Controllers\PuntoVenta\Resguardos\ConfirmarDevolucionResguardoPdvController;
 use App\Http\Controllers\PuntoVenta\Resguardos\EntregaResguardoPdvController;
+use App\Http\Controllers\PuntoVenta\Resguardos\EtiquetasResguardoPdvController;
 use App\Http\Controllers\PuntoVenta\Resguardos\FormularioConfirmacionCustodiaResguardoPdvController;
+use App\Http\Controllers\PuntoVenta\Resguardos\HistorialEntregadosResguardoPdvController;
 use App\Http\Controllers\PuntoVenta\Resguardos\PasarARecepcionResguardoPdvController;
 use App\Http\Controllers\PuntoVenta\Resguardos\RecepcionFisicaResguardoPdvController;
+use App\Http\Controllers\PuntoVenta\Resguardos\RegistrarIncidenciaResguardoPdvController;
 use App\Http\Controllers\PuntoVenta\Resguardos\RegistrarResguardoManualPdvController;
+use App\Http\Controllers\PuntoVenta\Resguardos\ReponerVencidoResguardoPdvController;
+use App\Http\Controllers\PuntoVenta\Resguardos\ResolverIncidenciaResguardoPdvController;
+use App\Http\Requests\PuntoVenta\Resguardos\ConfirmarDevolucionResguardoPdvRequest;
+use App\Http\Requests\PuntoVenta\Resguardos\ConsultarHistorialEntregadosResguardoPdvRequest;
 use App\Http\Requests\PuntoVenta\Resguardos\RegistrarConfirmacionCustodiaPdvRequest;
+use App\Http\Requests\PuntoVenta\Resguardos\RegistrarIncidenciaResguardoPdvRequest;
+use App\Http\Requests\PuntoVenta\Resguardos\ReponerVencidoResguardoPdvRequest;
+use App\Http\Requests\PuntoVenta\Resguardos\ResolverIncidenciaResguardoPdvRequest;
 use App\Services\PuntoVenta\Resguardos\ConsultaFormularioConfirmacionCustodiaPdvService;
 use App\Services\PuntoVenta\Resguardos\RegistrarConfirmacionCustodiaPdvService;
 use App\Http\Requests\PuntoVenta\Resguardos\ConsultarBandejasResguardoPdvRequest;
@@ -19,16 +30,24 @@ use App\Http\Requests\PuntoVenta\Resguardos\PasarARecepcionResguardoPdvRequest;
 use App\Http\Requests\PuntoVenta\Resguardos\RegistrarEntregaResguardoPdvRequest;
 use App\Http\Requests\PuntoVenta\Resguardos\RegistrarRecepcionFisicaPdvRequest;
 use App\Http\Requests\PuntoVenta\Resguardos\RegistrarResguardoManualPdvRequest;
+use App\Models\Almacen;
 use App\Models\PuntoVenta\ResguardoPdv;
+use App\Models\PuntoVenta\ResguardoPdvIncidencia;
 use App\Models\User;
 use App\Services\PuntoVenta\AlcancePdv;
 use App\Services\PuntoVenta\PuntoVentaModulo;
+use App\Services\PuntoVenta\Resguardos\ConfirmarDevolucionResguardoPdvService;
 use App\Services\PuntoVenta\Resguardos\ConsultaBandejasResguardoPdvService;
 use App\Services\PuntoVenta\Resguardos\ConsultaDetalleResguardoPdvService;
+use App\Services\PuntoVenta\Resguardos\ConsultaHistorialEntregadosResguardoPdvService;
 use App\Services\PuntoVenta\Resguardos\CrearResguardoManualPdvService;
 use App\Services\PuntoVenta\Resguardos\PasarARecepcionResguardoPdvService;
 use App\Services\PuntoVenta\Resguardos\RegistrarEntregaResguardoPdvService;
+use App\Services\PuntoVenta\Resguardos\RegistrarIncidenciaResguardoPdvService;
 use App\Services\PuntoVenta\Resguardos\RegistrarRecepcionFisicaPdvService;
+use App\Services\PuntoVenta\Resguardos\ReponerVencidoResguardoPdvService;
+use App\Services\PuntoVenta\Resguardos\ResolverEtiquetaResguardoPdvService;
+use App\Services\PuntoVenta\Resguardos\ResolverIncidenciaResguardoPdvService;
 use App\Services\PuntoVenta\Resguardos\RegistroManualResguardoPdvConfig;
 use App\Support\PuntoVenta\Resguardos\AntiguedadOperativaResguardoPdv;
 use Illuminate\Http\JsonResponse;
@@ -50,6 +69,11 @@ class ResguardoPdvMobileController extends Controller
             abort(403, 'No tiene permiso para consultar resguardos rezagados.');
         }
 
+        if ($request->input('antiguedad') === AntiguedadOperativaResguardoPdv::VENCIDO
+            && ! $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_VER_VENCIDOS)) {
+            abort(403, 'No tiene permiso para consultar resguardos vencidos.');
+        }
+
         return $bandeja->listado($request, $consulta);
     }
 
@@ -57,11 +81,29 @@ class ResguardoPdvMobileController extends Controller
         Request $request,
         ResguardoPdv $resguardo,
         ConsultaDetalleResguardoPdvService $consulta,
+        AlcancePdv $alcance,
     ): JsonResponse {
         /** @var User $user */
         $user = $request->user();
 
-        return response()->json($consulta->obtener($user, $resguardo));
+        $payload = $consulta->obtener($user, $resguardo);
+        $payload['almacenes'] = $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_INCIDENCIA_DANO)
+            ? Almacen::query()
+                ->where('sucursal_id', $resguardo->sucursal_id)
+                ->where('activo', true)
+                ->orderBy('codigo')
+                ->orderBy('nombre')
+                ->get(['id', 'codigo', 'nombre'])
+                ->map(fn (Almacen $almacen) => [
+                    'id' => $almacen->id,
+                    'codigo' => $almacen->codigo,
+                    'nombre' => $almacen->nombre,
+                ])
+                ->values()
+                ->all()
+            : [];
+
+        return response()->json($payload);
     }
 
     public function buscarProductos(
@@ -125,5 +167,59 @@ class ResguardoPdvMobileController extends Controller
         EntregaResguardoPdvController $web,
     ): JsonResponse {
         return $web($request, $resguardo, $registrar);
+    }
+
+    public function historialEntregados(
+        ConsultarHistorialEntregadosResguardoPdvRequest $request,
+        ConsultaHistorialEntregadosResguardoPdvService $consulta,
+        HistorialEntregadosResguardoPdvController $web,
+    ): JsonResponse {
+        return $web->listado($request, $consulta);
+    }
+
+    public function resolverEtiqueta(
+        Request $request,
+        string $codigo,
+        ResolverEtiquetaResguardoPdvService $resolver,
+        EtiquetasResguardoPdvController $web,
+    ): JsonResponse {
+        return $web->resolver($request, $codigo, $resolver);
+    }
+
+    public function registrarIncidencia(
+        RegistrarIncidenciaResguardoPdvRequest $request,
+        ResguardoPdv $resguardo,
+        RegistrarIncidenciaResguardoPdvService $registrar,
+        RegistrarIncidenciaResguardoPdvController $web,
+    ): JsonResponse {
+        return $web($request, $resguardo, $registrar);
+    }
+
+    public function resolverIncidencia(
+        ResolverIncidenciaResguardoPdvRequest $request,
+        ResguardoPdv $resguardo,
+        ResguardoPdvIncidencia $incidenciaResguardo,
+        ResolverIncidenciaResguardoPdvService $resolver,
+        ResolverIncidenciaResguardoPdvController $web,
+    ): JsonResponse {
+        return $web($request, $resguardo, $incidenciaResguardo, $resolver);
+    }
+
+    public function devolucion(
+        ConfirmarDevolucionResguardoPdvRequest $request,
+        ResguardoPdv $resguardo,
+        ConfirmarDevolucionResguardoPdvService $confirmar,
+        ConfirmarDevolucionResguardoPdvController $web,
+    ): JsonResponse {
+        return $web($request, $resguardo, $confirmar);
+    }
+
+    public function reponerVencido(
+        ReponerVencidoResguardoPdvRequest $request,
+        ResguardoPdv $resguardo,
+        ReponerVencidoResguardoPdvService $reponer,
+        ReponerVencidoResguardoPdvController $web,
+    ): JsonResponse {
+        return $web($request, $resguardo, $reponer);
     }
 }

@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
 import { Filter, RefreshCw } from 'lucide-react';
 import TimelineResguardo from './TimelineResguardo';
-import { BTN_SECONDARY } from './resguardosStyles';
+import { BTN_SECONDARY, THEME_INPUT, THEME_SELECT } from './resguardosStyles';
 import useToastAlCambiar from '../../../../hooks/useToastAlCambiar';
 
 const estadoInicialFiltros = {
@@ -71,7 +71,7 @@ export default function PanelAuditoriaResguardo({
 
     return (
         <div className="space-y-4">
-            <div className="rounded-2xl border theme-border p-4 md:p-5 space-y-4">
+            <div className={`rounded-2xl border theme-border theme-element p-4 md:p-5 space-y-4`}>
                 <div className="flex flex-wrap items-center gap-2">
                     <Filter className="w-4 h-4 theme-text-muted" />
                     <h2 className="text-sm font-black uppercase tracking-widest theme-text-main m-0">
@@ -94,7 +94,7 @@ export default function PanelAuditoriaResguardo({
                         <select
                             value={filtros.tipo_evento}
                             onChange={(e) => setFiltros((prev) => ({ ...prev, tipo_evento: e.target.value }))}
-                            className="w-full rounded-xl border theme-border bg-transparent px-3 py-2 text-sm min-h-[44px]"
+                            className={`${THEME_SELECT} w-full min-h-[44px]`}
                         >
                             <option value="">Todos</option>
                             {Object.entries(catalogosAuditoria.eventos || catalogos.eventos || {}).map(([clave, etiqueta]) => (
@@ -107,7 +107,7 @@ export default function PanelAuditoriaResguardo({
                         <select
                             value={filtros.categoria}
                             onChange={(e) => setFiltros((prev) => ({ ...prev, categoria: e.target.value }))}
-                            className="w-full rounded-xl border theme-border bg-transparent px-3 py-2 text-sm min-h-[44px]"
+                            className={`${THEME_SELECT} w-full min-h-[44px]`}
                         >
                             <option value="">Todas</option>
                             {Object.entries(catalogosAuditoria.categorias || {}).map(([clave, etiqueta]) => (
@@ -121,7 +121,7 @@ export default function PanelAuditoriaResguardo({
                             type="date"
                             value={filtros.desde}
                             onChange={(e) => setFiltros((prev) => ({ ...prev, desde: e.target.value }))}
-                            className="w-full rounded-xl border theme-border bg-transparent px-3 py-2 text-sm min-h-[44px]"
+                            className={`${THEME_INPUT} w-full min-h-[44px]`}
                         />
                     </label>
                     <label className="space-y-1">
@@ -130,7 +130,7 @@ export default function PanelAuditoriaResguardo({
                             type="date"
                             value={filtros.hasta}
                             onChange={(e) => setFiltros((prev) => ({ ...prev, hasta: e.target.value }))}
-                            className="w-full rounded-xl border theme-border bg-transparent px-3 py-2 text-sm min-h-[44px]"
+                            className={`${THEME_INPUT} w-full min-h-[44px]`}
                         />
                     </label>
                 </div>

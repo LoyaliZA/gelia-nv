@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Package, Ticket, ImageIcon } from 'lucide-react';
-import { THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from '../../../ControlPedidos/Partials/pedidosBmaStyles';
+import { THEME_MODAL_OVERLAY, THEME_MODAL_SHELL, THEME_BTN_SECONDARY } from '../../../../utils/geliaTheme';
 import LightboxFotos from '../../../Activos/Partials/LightboxFotos';
 
 function urlsDesdeBultos(bultos = []) {
@@ -50,7 +50,7 @@ export default function ModalEvidenciasBultosEmpaque({ abierto, onClose, bultos 
                         <button
                             type="button"
                             onClick={onClose}
-                            className="p-2 min-h-[44px] min-w-[44px] rounded-full theme-text-muted outline-none inline-flex items-center justify-center"
+                            className={`${THEME_BTN_SECONDARY} p-2 min-h-[44px] min-w-[44px] shrink-0`}
                             aria-label="Cerrar"
                         >
                             <X className="w-5 h-5" />
@@ -70,8 +70,8 @@ export default function ModalEvidenciasBultosEmpaque({ abierto, onClose, bultos 
                                             onClick={() => abrirFoto(bulto.foto_bulto.url)}
                                             className="rounded-xl overflow-hidden border theme-border aspect-[4/3] relative group outline-none"
                                         >
-                                            <img src={bulto.foto_bulto.url} alt={`Bulto ${bulto.numero}`} className="w-full h-full object-cover" />
-                                            <span className="absolute bottom-0 inset-x-0 bg-black/55 text-white text-[9px] font-black uppercase tracking-widest py-1.5 flex items-center justify-center gap-1">
+                                            <img src={bulto.foto_bulto.url} alt={`Bulto ${bulto.numero}`} className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-110 group-active:scale-110" />
+                                            <span className="absolute bottom-0 inset-x-0 bg-[color-mix(in_srgb,var(--theme-text-main)_75%,transparent)] text-[var(--theme-element-bg)] text-[9px] font-black uppercase tracking-widest py-1.5 flex items-center justify-center gap-1">
                                                 <Package className="w-3 h-3" /> Bulto
                                             </span>
                                         </button>
@@ -86,8 +86,8 @@ export default function ModalEvidenciasBultosEmpaque({ abierto, onClose, bultos 
                                             onClick={() => abrirFoto(bulto.foto_ticket.url)}
                                             className="rounded-xl overflow-hidden border theme-border aspect-[4/3] relative group outline-none"
                                         >
-                                            <img src={bulto.foto_ticket.url} alt={`Ticket bulto ${bulto.numero}`} className="w-full h-full object-cover" />
-                                            <span className="absolute bottom-0 inset-x-0 bg-black/55 text-white text-[9px] font-black uppercase tracking-widest py-1.5 flex items-center justify-center gap-1">
+                                            <img src={bulto.foto_ticket.url} alt={`Ticket bulto ${bulto.numero}`} className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-110 group-active:scale-110" />
+                                            <span className="absolute bottom-0 inset-x-0 bg-[color-mix(in_srgb,var(--theme-text-main)_75%,transparent)] text-[var(--theme-element-bg)] text-[9px] font-black uppercase tracking-widest py-1.5 flex items-center justify-center gap-1">
                                                 <Ticket className="w-3 h-3" /> Ticket
                                             </span>
                                         </button>
@@ -129,8 +129,8 @@ export function ChipEvidenciasBultosEmpaque({ bultos = [], folio = '', className
                 className={`w-full flex items-center gap-2 rounded-xl border theme-border p-2 min-h-[44px] text-left outline-none hover:border-[var(--color-primario)]/40 transition-colors ${className}`}
             >
                 {miniatura ? (
-                    <span className="w-10 h-10 rounded-lg overflow-hidden border theme-border shrink-0">
-                        <img src={miniatura} alt="" className="w-full h-full object-cover" />
+                    <span className="w-10 h-10 rounded-lg overflow-hidden border theme-border shrink-0 group/chip">
+                        <img src={miniatura} alt="" className="w-full h-full object-cover transition-transform duration-200 group-hover/chip:scale-110" />
                     </span>
                 ) : (
                     <span className="w-10 h-10 rounded-lg bg-[color-mix(in_srgb,var(--color-info)_15%,transparent)] text-[var(--color-info)] shrink-0 inline-flex items-center justify-center">

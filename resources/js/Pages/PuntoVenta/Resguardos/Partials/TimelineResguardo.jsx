@@ -1,7 +1,8 @@
 import React from 'react';
-import { History, Link2, FileImage } from 'lucide-react';
+import { History, Link2 } from 'lucide-react';
 import { geliaCardClass } from '../../../../utils/geliaTheme';
 import { TONO_AVISO, TONO_EXITO, TONO_INFO, TONO_NEUTRO, TONO_PRIMARIO, formatearFechaOperativa } from './resguardosStyles';
+import { GaleriaEvidenciasResguardo } from './MiniaturaEvidenciaResguardo';
 
 const badgeCategoria = (categoria) => {
     const mapa = {
@@ -86,28 +87,7 @@ export default function TimelineResguardo({ eventos = [], soloLectura = true }) 
                             </dl>
                         )}
                         {evento.evidencias?.length > 0 && (
-                            <ul className="mt-2 space-y-1 m-0 p-0 list-none">
-                                {evento.evidencias.map((evidencia) => (
-                                    <li key={evidencia.id}>
-                                        {evidencia.ruta_publica ? (
-                                            <a
-                                                href={evidencia.ruta_publica}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-[var(--color-info)] hover:opacity-80"
-                                            >
-                                                <FileImage className="w-3 h-3" />
-                                                {evidencia.nombre_original || 'Ver evidencia'}
-                                            </a>
-                                        ) : (
-                                            <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest theme-text-muted">
-                                                <FileImage className="w-3 h-3" />
-                                                {evidencia.tipo === 'firma' ? 'Firma capturada' : (evidencia.nombre_original || 'Evidencia')}
-                                            </span>
-                                        )}
-                                    </li>
-                                ))}
-                            </ul>
+                            <GaleriaEvidenciasResguardo evidencias={evento.evidencias} className="mt-2" />
                         )}
                     </li>
                 ))}

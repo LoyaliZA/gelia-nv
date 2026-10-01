@@ -10,7 +10,8 @@ import SelectorSucursalActivaPdv from '@/Components/PuntoVenta/SelectorSucursalA
 import FiltrosHistorialEntregados from './Partials/FiltrosHistorialEntregados';
 import ModalDetalleResguardo from './Partials/ModalDetalleResguardo';
 import useHistorialEntregadosResguardo from './Partials/useHistorialEntregadosResguardo';
-import { formatearFechaOperativa } from './Partials/resguardosStyles';
+import { BTN_SECONDARY, formatearFechaOperativa } from './Partials/resguardosStyles';
+import MiniaturaEvidenciaResguardo from './Partials/MiniaturaEvidenciaResguardo';
 import useToastAlCambiar from '../../../hooks/useToastAlCambiar';
 
 export default function Entregados({
@@ -109,7 +110,7 @@ export default function Entregados({
                             {puedeVerBandeja && (
                                 <Link
                                     href={route('punto_venta.resguardos.index')}
-                                    className="inline-flex items-center gap-2 min-h-[44px] px-4 rounded-xl border theme-border text-[10px] font-black uppercase tracking-widest theme-text-main hover:theme-element"
+                                    className={`${BTN_SECONDARY} inline-flex items-center gap-2 min-h-[44px] px-4 no-underline`}
                                 >
                                     <ClipboardList className="w-4 h-4" /> Bandeja operativa
                                 </Link>
@@ -161,7 +162,7 @@ export default function Entregados({
                             <table className="w-full border-collapse min-w-[720px]">
                                 <thead>
                                     <tr className="border-b theme-border">
-                                        {['Folio', 'Cliente', 'Entrega completada', 'Quien retiró', 'Bultos', ''].map((col) => (
+                                        {['Folio', 'Cliente', 'Entrega completada', 'Quien retiró', 'Firma', 'Bultos', ''].map((col) => (
                                             <th
                                                 key={col || 'accion'}
                                                 className="px-4 py-3 text-left text-[9px] font-black uppercase tracking-widest theme-text-muted"
@@ -190,6 +191,19 @@ export default function Entregados({
                                                     <span className="block text-[10px]">{fila.ultima_entrega.relacion_etiqueta}</span>
                                                 )}
                                             </td>
+                                            <td className="px-4 py-3">
+                                                {fila.ultima_entrega?.firma_entrega ? (
+                                                    <div className="w-24">
+                                                        <MiniaturaEvidenciaResguardo
+                                                            evidencia={fila.ultima_entrega.firma_entrega}
+                                                            etiqueta=""
+                                                            tamano="sm"
+                                                        />
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-sm theme-text-muted">—</span>
+                                                )}
+                                            </td>
                                             <td className="px-4 py-3 text-sm theme-text-muted">
                                                 {fila.cantidad_bultos_esperada}
                                             </td>
@@ -197,7 +211,7 @@ export default function Entregados({
                                                 <button
                                                     type="button"
                                                     onClick={() => setDetalleResguardoId(fila.id)}
-                                                    className="inline-flex items-center gap-2 min-h-[40px] px-3 rounded-xl border theme-border text-[10px] font-black uppercase tracking-widest theme-text-main hover:theme-element"
+                                                    className={`${BTN_SECONDARY} inline-flex items-center gap-2 min-h-[40px] px-3 text-[10px]`}
                                                 >
                                                     <Eye className="w-4 h-4" /> Ver detalle
                                                 </button>

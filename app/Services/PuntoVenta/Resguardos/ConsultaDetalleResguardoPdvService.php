@@ -15,6 +15,9 @@ use App\Support\PuntoVenta\Resguardos\SerializadorIncidenciaResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\SerializadorPedidoRevisionResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\SerializadorRegistroManualResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\SerializadorRetiroPedidoResguardoPdv;
+use App\Support\PuntoVenta\Resguardos\UrlEvidenciaResguardoPdv;
+use App\Models\PuntoVenta\ResguardoPdvEvidencia;
+use App\Models\PuntoVenta\ResguardoPdvEntrega;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 
 class ConsultaDetalleResguardoPdvService
@@ -56,6 +59,13 @@ class ConsultaDetalleResguardoPdvService
                 ])
                 ->orderByDesc('reportado_at')
                 ->orderByDesc('id'),
+            'entregas' => fn ($q) => $q
+                ->with([
+                    'evidencias' => fn ($ev) => $ev->orderBy('capturado_at')->orderBy('id'),
+                ])
+                ->orderByDesc('entregado_at')
+                ->orderByDesc('id')
+                ->limit(1),
         ]);
 
         if ((int) $resguardo->cantidad_bultos_esperada < 1) {
@@ -76,6 +86,13 @@ class ConsultaDetalleResguardoPdvService
                     ])
                     ->orderByDesc('reportado_at')
                     ->orderByDesc('id'),
+                'entregas' => fn ($q) => $q
+                    ->with([
+                        'evidencias' => fn ($ev) => $ev->orderBy('capturado_at')->orderBy('id'),
+                    ])
+                    ->orderByDesc('entregado_at')
+                    ->orderByDesc('id')
+                    ->limit(1),
             ]);
         }
 
@@ -173,6 +190,53 @@ class ConsultaDetalleResguardoPdvService
                 ->all(),
             'bultos_empaque_cedis' => SerializadorBultosEmpaqueCedisPdv::desdePedido($resguardo->pedido),
             'registro_manual' => SerializadorRegistroManualResguardoPdv::desdeResguardo($resguardo),
+            'ultima_entrega' => $this->serializarUltimaEntrega($resguardo),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function serializarUltimaEntrega(ResguardoPdv $resguardo): ?array
+    {
+        if ($resguardo->estado !== ResguardoPdv::ESTADO_ENTREGADO) {
+            return null;
+        }
+
+        $entrega = $resguardo->entregas->first();
+        if (! $entrega instanceof ResguardoPdvEntrega) {
+            return null;
+        }
+
+        $relaciones = EtiquetasResguardoPdv::relacionesEntrega();
+        $relacion = (string) $entrega->relacion;
+        $firma = $entrega->evidencias
+            ->first(fn (ResguardoPdvEvidencia $evidencia) => $evidencia->tipo === ResguardoPdvEvidencia::TIPO_FIRMA);
+
+        return [
+            'id' => $entrega->id,
+            'relacion' => $relacion,
+            'relacion_etiqueta' => $relaciones[$relacion] ?? $relacion,
+            'nombre_quien_retira' => $entrega->nombre_quien_retira,
+            'entregado_at' => $entrega->entregado_at?->toIso8601String(),
+            'firma_entrega' => $firma ? [
+                'id' => $firma->id,
+                'tipo' => $firma->tipo,
+                'nombre_original' => $firma->nombre_original,
+                'mime_type' => $firma->mime_type,
+                'ruta_publica' => UrlEvidenciaResguardoPdv::url($firma),
+            ] : null,
+            'evidencias_fotograficas' => $entrega->evidencias
+                ->filter(fn (ResguardoPdvEvidencia $evidencia) => $evidencia->tipo === ResguardoPdvEvidencia::TIPO_FOTO)
+                ->map(fn (ResguardoPdvEvidencia $evidencia) => [
+                    'id' => $evidencia->id,
+                    'tipo' => $evidencia->tipo,
+                    'nombre_original' => $evidencia->nombre_original,
+                    'mime_type' => $evidencia->mime_type,
+                    'ruta_publica' => UrlEvidenciaResguardoPdv::url($evidencia),
+                ])
+                ->values()
+                ->all(),
         ];
     }
 

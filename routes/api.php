@@ -78,6 +78,10 @@ Route::prefix('v1')->group(function () {
             Route::middleware('mobile.pdv:operacion')->group(function () {
                 Route::get('/resguardos', [ResguardoPdvMobileController::class, 'index'])
                     ->middleware('pdv.permiso:'.PuntoVentaModulo::PERMISO_RESGUARDOS_VER);
+                Route::get('/resguardos/entregados', [ResguardoPdvMobileController::class, 'historialEntregados'])
+                    ->middleware('pdv.permiso:'.PuntoVentaModulo::PERMISO_RESGUARDOS_VER_HISTORIAL_ENTREGAS);
+                Route::get('/resguardos/etiquetas/resolver/{codigo}', [ResguardoPdvMobileController::class, 'resolverEtiqueta'])
+                    ->middleware('pdv.permiso:'.PuntoVentaModulo::PERMISO_RESGUARDOS_VER);
                 Route::get('/resguardos/productos/buscar', [ResguardoPdvMobileController::class, 'buscarProductos'])
                     ->middleware('pdv.permiso:'.PuntoVentaModulo::PERMISO_RESGUARDOS_REGISTRAR_MANUAL);
                 Route::post('/resguardos', [ResguardoPdvMobileController::class, 'store'])
@@ -96,6 +100,12 @@ Route::prefix('v1')->group(function () {
                     ->middleware('pdv.permiso:'.PuntoVentaModulo::PERMISO_RESGUARDOS_CONFIRMAR_CUSTODIA);
                 Route::put('/resguardos/{resguardo}/custodia', [ResguardoPdvMobileController::class, 'custodia'])
                     ->middleware('pdv.permiso:'.PuntoVentaModulo::PERMISO_RESGUARDOS_CONFIRMAR_CUSTODIA);
+                Route::post('/resguardos/{resguardo}/incidencias', [ResguardoPdvMobileController::class, 'registrarIncidencia']);
+                Route::put('/resguardos/{resguardo}/incidencias/{incidenciaResguardo}/resolver', [ResguardoPdvMobileController::class, 'resolverIncidencia']);
+                Route::put('/resguardos/{resguardo}/devolucion', [ResguardoPdvMobileController::class, 'devolucion'])
+                    ->middleware('pdv.permiso:'.PuntoVentaModulo::PERMISO_RESGUARDOS_CONFIRMAR_DEVOLUCION);
+                Route::put('/resguardos/{resguardo}/reponer-vencido', [ResguardoPdvMobileController::class, 'reponerVencido'])
+                    ->middleware('pdv.permiso:'.PuntoVentaModulo::PERMISO_RESGUARDOS_REPONER_VENCIDO);
 
                 Route::get('/turnos/recepcion', [TurnoPdvMobileController::class, 'recepcion'])
                     ->middleware('pdv.permiso:'.PuntoVentaModulo::PERMISO_TURNOS_VER);

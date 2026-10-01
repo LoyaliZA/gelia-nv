@@ -346,6 +346,7 @@ class ConsultaAuditoriaResguardoPdvService
             'id' => $evidencia->id,
             'tipo' => $evidencia->tipo,
             'nombre_original' => $evidencia->nombre_original,
+            'mime_type' => $evidencia->mime_type,
             'capturado_at' => $evidencia->capturado_at?->toIso8601String(),
             'ruta_publica' => UrlEvidenciaResguardoPdv::url($evidencia),
         ];
