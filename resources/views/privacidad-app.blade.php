@@ -202,25 +202,15 @@
     <section aria-labelledby="conservacion">
         <h2 id="conservacion">8. Conservación y eliminación</h2>
         <p>Conservamos los datos mientras la cuenta o la relación de servicio permanezca activa y durante el tiempo necesario para cumplir las finalidades descritas, mantener la trazabilidad de operaciones, atender disputas, proteger la seguridad y cumplir obligaciones legales o contractuales. La duración concreta puede depender de las políticas de la organización responsable y del tipo de operación.</p>
-        <p>Cuando la información deja de ser necesaria, se elimina o anonimiza de manera razonable. Una solicitud de eliminación de cuenta comprende los datos asociados que GELIA-NV deba borrar, salvo los registros que deban conservarse por una obligación legal, seguridad, prevención de fraude, ejercicio o defensa de derechos, o la integridad de registros empresariales. En esos casos se limitará su uso y se conservarán únicamente durante el periodo aplicable.</p>
-        <p>Desinstalar la app elimina sus datos locales del dispositivo, pero no constituye una solicitud de eliminación de la cuenta o de los registros alojados en el servidor.</p>
+        <p>Las cuentas son internas y son administradas directamente por la organización que las crea. Cuando una persona deja de requerir acceso, un administrador autorizado puede desactivar o eliminar la cuenta conforme a los procedimientos internos y a las necesidades de conservación de la organización. Los registros operativos pueden mantenerse cuando sean necesarios para auditoría, seguridad, prevención de fraude, cumplimiento de obligaciones, integridad de los registros empresariales o ejercicio y defensa de derechos.</p>
+        <p>La app elimina del dispositivo la sesión y el catálogo local al cerrar sesión, cambiar de usuario o revocarse el acceso. Desinstalar la app también elimina sus datos locales, pero no elimina automáticamente la cuenta interna ni los registros almacenados en el servidor. GELIA-NV no promete la eliminación automática de datos en un plazo de 90 días.</p>
     </section>
 
     <section aria-labelledby="derechos">
-        <h2 id="derechos">9. Derechos y solicitudes de privacidad</h2>
-        <p>De acuerdo con la legislación aplicable, la persona titular puede solicitar acceso, rectificación, cancelación o eliminación, oposición al tratamiento, limitación, portabilidad cuando corresponda, o revocar un consentimiento. También puede solicitar información sobre el tratamiento y presentar una queja ante la autoridad competente.</p>
-        <p>Para proteger la información, antes de atender una solicitud podremos pedir datos razonables para verificar la identidad y la relación con la organización correspondiente.</p>
-        <div class="contact">
-            <strong>Cómo presentar una solicitud</strong>
-            <ul>
-                <li>Usuarios con cuenta: mediante el administrador de GELIA-NV o el responsable de privacidad de la organización que proporcionó la cuenta.</li>
-                @if ($privacyEmail)
-                    <li>Contacto de privacidad de GELIA-NV: <a href="mailto:{{ $privacyEmail }}">{{ $privacyEmail }}</a>.</li>
-                @endif
-                <li>La solicitud debe indicar nombre, organización, cuenta relacionada, derecho que desea ejercer y una descripción suficiente para localizar los datos.</li>
-            </ul>
-        </div>
-        <p>GELIA-NV no permite crear cuentas desde la app ni ofrece autoservicio de registro. Por ello, la baja, corrección o eliminación de una cuenta interna se tramita con el administrador de la organización o mediante el contacto anterior. Cuando proceda una solicitud de eliminación, la simple desactivación del acceso no sustituirá la eliminación de los datos que legal y operativamente deban borrarse.</p>
+        <h2 id="derechos">9. Administración interna y derechos de privacidad</h2>
+        <p>GELIA-NV no permite crear cuentas desde la app y tampoco ofrece dentro de ella un formulario, enlace público o función de autoservicio para solicitar la eliminación de cuentas o datos. La aplicación se limita a autenticar cuentas de trabajo creadas previamente y administradas por la organización correspondiente.</p>
+        <p>Las altas, bajas, correcciones, desactivaciones y reglas de conservación de las cuentas internas se gestionan mediante los procedimientos administrativos de la organización que proporcionó el acceso. Las consultas sobre información laboral, clientes u operaciones deben dirigirse al administrador interno o al responsable de privacidad de dicha organización.</p>
+        <p>Lo anterior no limita los derechos que la legislación aplicable reconozca a las personas titulares. La organización responsable deberá atender las solicitudes que reciba por sus canales internos y podrá verificar la identidad y la relación con la cuenta antes de actuar.</p>
     </section>
 
     <section aria-labelledby="menores">
@@ -246,7 +236,7 @@
             @if ($privacyEmail)
                 <strong>Correo de privacidad:</strong> <a href="mailto:{{ $privacyEmail }}">{{ $privacyEmail }}</a><br>
             @endif
-            <strong>Canal adicional:</strong> administrador de GELIA-NV de la organización que proporcionó la cuenta.
+            <strong>Consultas sobre cuentas y datos internos:</strong> administrador de GELIA-NV de la organización que proporcionó la cuenta. Este canal pertenece a la gestión interna de la organización y no constituye una función de eliminación ofrecida por la aplicación.
         </p>
     </section>
 
