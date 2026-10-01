@@ -11,8 +11,8 @@ final class SerializadorBultosEmpaqueCedisPdv
     /**
      * @return list<array{
      *     numero: int,
-     *     foto_bulto: array{url: string, nombre_original: string|null}|null,
-     *     foto_ticket: array{url: string, nombre_original: string|null}|null
+     *     foto_bulto: array{id: int, url: string, nombre_original: string|null}|null,
+     *     foto_ticket: array{id: int, url: string, nombre_original: string|null}|null
      * }>
      */
     public static function desdePedido(?PedidoBma $pedido): array
@@ -33,8 +33,8 @@ final class SerializadorBultosEmpaqueCedisPdv
     /**
      * @return array{
      *     numero: int,
-     *     foto_bulto: array{url: string, nombre_original: string|null}|null,
-     *     foto_ticket: array{url: string, nombre_original: string|null}|null
+     *     foto_bulto: array{id: int, url: string, nombre_original: string|null}|null,
+     *     foto_ticket: array{id: int, url: string, nombre_original: string|null}|null
      * }
      */
     private static function serializarBulto(int $numero, Collection $documentos): array
@@ -54,7 +54,7 @@ final class SerializadorBultosEmpaqueCedisPdv
     }
 
     /**
-     * @return array{url: string, nombre_original: string|null}|null
+     * @return array{id: int, url: string, nombre_original: string|null}|null
      */
     private static function serializarDocumento(?PedidoBmaDocumento $documento): ?array
     {
@@ -63,6 +63,7 @@ final class SerializadorBultosEmpaqueCedisPdv
         }
 
         return [
+            'id' => $documento->id,
             'url' => $documento->url,
             'nombre_original' => $documento->nombre_original,
         ];

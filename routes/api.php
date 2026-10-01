@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\V1\Mobile\MobileAuthController;
 use App\Http\Controllers\Api\V1\Mobile\MobileClienteController;
 use App\Http\Controllers\Api\V1\Mobile\MobileProfileController;
 use App\Http\Controllers\Api\V1\Mobile\MobileSyncController;
+use App\Http\Controllers\Api\V1\Mobile\PuntoVenta\ArchivoResguardoPdvMobileController;
 use App\Http\Controllers\Api\V1\Mobile\PuntoVenta\ContextoPuntoVentaMobileController;
 use App\Http\Controllers\Api\V1\Mobile\PuntoVenta\ResguardoPdvMobileController;
 use App\Http\Controllers\Api\V1\Mobile\PuntoVenta\TurnoPdvMobileController;
@@ -82,6 +83,10 @@ Route::prefix('v1')->group(function () {
                 Route::post('/resguardos', [ResguardoPdvMobileController::class, 'store'])
                     ->middleware('pdv.permiso:'.PuntoVentaModulo::PERMISO_RESGUARDOS_REGISTRAR_MANUAL);
                 Route::get('/resguardos/{resguardo}', [ResguardoPdvMobileController::class, 'show'])
+                    ->middleware('pdv.permiso:'.PuntoVentaModulo::PERMISO_RESGUARDOS_VER);
+                Route::get('/resguardos/{resguardo}/archivos/evidencias/{evidencia}', [ArchivoResguardoPdvMobileController::class, 'evidencia'])
+                    ->middleware('pdv.permiso:'.PuntoVentaModulo::PERMISO_RESGUARDOS_VER);
+                Route::get('/resguardos/{resguardo}/archivos/documentos/{documento}', [ArchivoResguardoPdvMobileController::class, 'documento'])
                     ->middleware('pdv.permiso:'.PuntoVentaModulo::PERMISO_RESGUARDOS_VER);
                 Route::put('/resguardos/{resguardo}/recepcion', [ResguardoPdvMobileController::class, 'recepcion'])
                     ->middleware('pdv.permiso:'.PuntoVentaModulo::PERMISO_RESGUARDOS_CONFIRMAR_LLEGADA);
