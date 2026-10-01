@@ -2,20 +2,21 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\FiltraFilasDemo;
 use App\Models\PuntoVenta\ResguardoPdv;
 use App\Models\PuntoVenta\TurnoPdv;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Carbon;
 
 class Cliente extends Model
 {
-    use SoftDeletes;
+    use FiltraFilasDemo, SoftDeletes;
 
     protected $fillable = [
         'numero_cliente',
@@ -32,6 +33,7 @@ class Cliente extends Model
         'monto_venta_actual',
         'es_heredado',
         'es_inactivo',
+        'es_demo',
         'catalogo_tipo_cliente_id',
         'lista_bloqueada', // <-- NUEVO CAMPO PARA CONTROLAR BLOQUEO DE LISTA
         'monto_credito_autorizado',
@@ -59,6 +61,7 @@ class Cliente extends Model
         'monto_venta_actual' => 'decimal:2',
         'es_heredado' => 'boolean',
         'es_inactivo' => 'boolean',
+        'es_demo' => 'boolean',
         'lista_bloqueada' => 'boolean',
         'monto_credito_autorizado' => 'decimal:2',
         'dias_credito' => 'integer',

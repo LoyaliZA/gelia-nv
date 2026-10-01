@@ -4,15 +4,19 @@ namespace App\Services\PuntoVenta\Resguardos;
 
 use App\Contracts\PuntoVenta\ResuelveAlcancePdv;
 use App\Models\Cliente;
+use App\Models\Producto;
 use App\Models\PuntoVenta\ResguardoPdv;
 use App\Models\PuntoVenta\ResguardoPdvEvento;
 use App\Models\PuntoVenta\ResguardoPdvEvidencia;
+use App\Models\Sucursal;
 use App\Models\User;
 use App\Services\PuntoVenta\PuntoVentaModulo;
 use App\Support\PuntoVenta\Resguardos\DepartamentosOrigenResguardoManualPdv;
+use App\Support\PuntoVenta\Resguardos\RutaAlmacenamientoResguardoPdv;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
@@ -28,7 +32,7 @@ class CrearResguardoManualPdvService
 
     public function ejecutar(User $actor, array $datos): ResguardoPdv
     {
-        if (! $this->config->estaActivo()) {
+        if (! $this->config->estaActivoPara($actor)) {
             throw new AuthorizationException('El registro manual de resguardos no está habilitado.');
         }
 
@@ -55,6 +59,7 @@ class CrearResguardoManualPdvService
         $observaciones = $datos['observaciones'] ?? null;
         $cantidadPiezas = $datos['cantidad_piezas'] ?? null;
         $piezas = is_array($datos['piezas'] ?? null) ? $datos['piezas'] : [];
+        $this->assertAlcanceDemo($actor, $sucursalId, $datos, $piezas);
         $archivoTicket = $datos['archivo_ticket'] ?? null;
         $fotoPaquete = $datos['foto_paquete'] ?? null;
 
@@ -116,6 +121,7 @@ class CrearResguardoManualPdvService
                         'estado' => ResguardoPdv::ESTADO_PENDIENTE_RECEPCION,
                         'cantidad_bultos_esperada' => $cantidadBultos,
                         'salida_cedis_at' => $ahora,
+                        'es_demo' => (bool) $actor->es_demo,
                         'snapshot_folio' => $folio,
                         'snapshot_cliente_nombre' => $cliente->nombre,
                         'snapshot_json' => [
@@ -205,10 +211,10 @@ class CrearResguardoManualPdvService
         UploadedFile $archivo,
         string $uso,
         int $actorId,
-        \Illuminate\Support\Carbon $capturadoAt,
+        Carbon $capturadoAt,
         array &$pathsEscritos,
     ): void {
-        $ruta = $archivo->store("pdv/resguardos/{$resguardo->id}/registro-manual", 'local');
+        $ruta = $archivo->store(RutaAlmacenamientoResguardoPdv::prefijo($resguardo, 'registro-manual'), 'local');
         $pathsEscritos[] = $ruta;
 
         $mime = (string) $archivo->getMimeType();
@@ -256,6 +262,39 @@ class CrearResguardoManualPdvService
         }
 
         return ResguardoPdv::query()->find($evento->resguardo_id);
+    }
+
+    /**
+     * @param  array<string, mixed>  $datos
+     * @param  list<array<string, mixed>>  $piezas
+     */
+    private function assertAlcanceDemo(User $actor, int $sucursalId, array $datos, array $piezas): void
+    {
+        if (! $actor->es_demo) {
+            return;
+        }
+
+        if (isset($datos['sucursal_id']) && (int) $datos['sucursal_id'] !== $sucursalId) {
+            throw ValidationException::withMessages([
+                'sucursal_id' => 'La sucursal no corresponde al alcance de la cuenta.',
+            ]);
+        }
+
+        $sucursalDemo = Sucursal::query()->whereKey($sucursalId)->where('es_demo', true)->exists();
+        if (! $sucursalDemo) {
+            throw ValidationException::withMessages([
+                'sucursal_id' => 'La sucursal no corresponde al alcance de la cuenta.',
+            ]);
+        }
+
+        foreach ($piezas as $pieza) {
+            $productoId = (int) ($pieza['producto_id'] ?? 0);
+            if ($productoId < 1 || ! Producto::query()->whereKey($productoId)->where('es_demo', true)->exists()) {
+                throw ValidationException::withMessages([
+                    'piezas' => 'Seleccione productos del catálogo de demostración.',
+                ]);
+            }
+        }
     }
 
     private function assertFolioAbiertoUnico(int $sucursalId, string $folio): void

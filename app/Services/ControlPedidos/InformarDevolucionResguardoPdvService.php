@@ -18,6 +18,10 @@ class InformarDevolucionResguardoPdvService
 
     public function ejecutar(ResguardoPdv $resguardo, ResguardoPdvEvento $evento, int $actorId): bool
     {
+        if ($resguardo->es_demo) {
+            return true;
+        }
+
         if ($this->integracionCompletada($evento)) {
             return true;
         }

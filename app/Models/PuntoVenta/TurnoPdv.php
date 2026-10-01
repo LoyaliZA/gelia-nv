@@ -3,6 +3,7 @@
 namespace App\Models\PuntoVenta;
 
 use App\Models\Cliente;
+use App\Models\Concerns\FiltraFilasDemo;
 use App\Models\Sucursal;
 use App\Models\User;
 use Database\Factories\PuntoVenta\TurnoPdvFactory;
@@ -13,7 +14,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class TurnoPdv extends Model
 {
-    use HasFactory;
+    use FiltraFilasDemo, HasFactory;
 
     public const ESTADO_EN_COLA = 'EN_COLA';
 
@@ -57,6 +58,7 @@ class TurnoPdv extends Model
         'baja_motivo_detalle',
         'atencion_actual_id',
         'version',
+        'es_demo',
     ];
 
     protected function casts(): array
@@ -73,6 +75,7 @@ class TurnoPdv extends Model
             'reatencion_expira_at' => 'datetime',
             'baja_at' => 'datetime',
             'version' => 'integer',
+            'es_demo' => 'boolean',
         ];
     }
 

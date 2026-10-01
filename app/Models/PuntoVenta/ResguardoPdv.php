@@ -4,6 +4,7 @@ namespace App\Models\PuntoVenta;
 
 use App\Models\Almacen;
 use App\Models\Cliente;
+use App\Models\Concerns\FiltraFilasDemo;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Models\Sucursal;
 use Database\Factories\PuntoVenta\ResguardoPdvFactory;
@@ -15,7 +16,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class ResguardoPdv extends Model
 {
-    use HasFactory;
+    use FiltraFilasDemo, HasFactory;
 
     protected static function newFactory(): ResguardoPdvFactory
     {
@@ -57,6 +58,7 @@ class ResguardoPdv extends Model
         'snapshot_cliente_nombre',
         'snapshot_json',
         'version',
+        'es_demo',
     ];
 
     protected function casts(): array
@@ -72,6 +74,7 @@ class ResguardoPdv extends Model
             'entrega_bloqueada' => 'boolean',
             'snapshot_json' => 'array',
             'version' => 'integer',
+            'es_demo' => 'boolean',
         ];
     }
 

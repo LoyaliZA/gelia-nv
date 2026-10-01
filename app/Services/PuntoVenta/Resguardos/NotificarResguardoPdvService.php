@@ -7,6 +7,7 @@ use App\Models\PuntoVenta\ResguardoPdvIncidencia;
 use App\Models\User;
 use App\Notifications\PuntoVenta\AlertaResguardoPdvNotification;
 use App\Services\PuntoVenta\PuntoVentaModulo;
+use App\Support\Demo\FilaDemo;
 use App\Support\PuntoVenta\Resguardos\EtiquetasResguardoPdv;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
@@ -220,6 +221,10 @@ class NotificarResguardoPdvService
         string $mensaje,
         array $extras = [],
     ): void {
+        if (FilaDemo::es($resguardo)) {
+            return;
+        }
+
         try {
             $claveNotificacion = $this->claveNotificacion($tipoAlerta, $idempotencyKey);
             $destinatarios = $this->resolverDestinatarios($sucursalId, $permisos);

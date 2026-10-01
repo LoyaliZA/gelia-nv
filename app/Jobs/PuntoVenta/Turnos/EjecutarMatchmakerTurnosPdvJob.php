@@ -2,6 +2,8 @@
 
 namespace App\Jobs\PuntoVenta\Turnos;
 
+use App\Models\Scopes\EsDemoScope;
+use App\Models\Sucursal;
 use App\Services\PuntoVenta\Turnos\MatchmakerTurnosPdvService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
@@ -33,6 +35,11 @@ class EjecutarMatchmakerTurnosPdvJob implements ShouldBeUnique, ShouldQueue
 
     public function handle(MatchmakerTurnosPdvService $matchmaker): void
     {
+        $sucursal = Sucursal::withoutGlobalScope(EsDemoScope::class)->find($this->sucursalId);
+        if ($sucursal?->es_demo) {
+            return;
+        }
+
         $matchmaker->ejecutar($this->sucursalId, $this->origenDisparador);
     }
 }

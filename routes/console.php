@@ -1,8 +1,11 @@
 <?php
 
+use App\Services\ControlPedidos\PreparacionTiendaConfig;
 use Illuminate\Foundation\Inspiring;
-use Illuminate\Support\Facades\Schedule;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schedule;
 use Illuminate\Support\Facades\Schema;
 
 Artisan::command('inspire', function () {
@@ -24,15 +27,16 @@ Schedule::command('activos:notificar-pendientes-firma')->dailyAt('12:00');
 $horariosCobranza = ['10:00', '12:00'];
 try {
     if (Schema::hasTable('cobranza_configuraciones')) {
-        $configuracionHorarios = \Illuminate\Support\Facades\Cache::rememberForever('cobranza_horarios', function () {
-            $config = \Illuminate\Support\Facades\DB::table('cobranza_configuraciones')->where('llave', 'horarios_alertas')->first();
+        $configuracionHorarios = Cache::rememberForever('cobranza_horarios', function () {
+            $config = DB::table('cobranza_configuraciones')->where('llave', 'horarios_alertas')->first();
+
             return $config ? json_decode($config->valor, true) : ['10:00', '12:00'];
         });
         if (is_array($configuracionHorarios)) {
             $horariosCobranza = $configuracionHorarios;
         }
     }
-} catch (\Exception $e) {
+} catch (Exception $e) {
     // Si hay error (ej. migración no corrida), usar default
 }
 
@@ -48,6 +52,7 @@ Schedule::command('control-pedidos:recordatorio-vencimiento-preparacion-tienda')
 Schedule::command('control-pedidos:evaluar-vencimiento-espera-preparacion')->hourly();
 Schedule::command('control-pedidos:reconciliar-traslados-preparacion')->hourly();
 Schedule::command('pdv:evaluar-vencimientos-resguardos')->hourly();
+Schedule::command('demo:reset')->dailyAt('03:10')->when(fn () => (bool) config('demo.reset_automatico'));
 Schedule::command('pdv:depurar-publicidad')->dailyAt('02:40');
 Schedule::command('pdv:evaluar-cierre-horario-operacion')->everyFiveMinutes();
 Schedule::command('pdv:evaluar-apertura-horario-operacion')->everyFiveMinutes();
@@ -57,14 +62,14 @@ Schedule::command('tiendanube:limpiar-imports-imagenes')->dailyAt('04:00');
 
 // Hora de recordatorio desde config (si difiere de 11:00).
 try {
-    $horaRecordatorio = \Illuminate\Support\Facades\Cache::remember('cp_prep_hora_recordatorio', 300, function () {
-        $cfg = app(\App\Services\ControlPedidos\PreparacionTiendaConfig::class);
+    $horaRecordatorio = Cache::remember('cp_prep_hora_recordatorio', 300, function () {
+        $cfg = app(PreparacionTiendaConfig::class);
 
         return $cfg->recordatorioHoraLocal();
     });
     if (is_string($horaRecordatorio) && preg_match('/^\d{2}:\d{2}$/', $horaRecordatorio) && $horaRecordatorio !== '11:00') {
         Schedule::command('control-pedidos:recordatorio-vencimiento-preparacion-tienda')->dailyAt($horaRecordatorio);
     }
-} catch (\Throwable $e) {
+} catch (Throwable $e) {
     // Migración/config aún no disponible.
 }

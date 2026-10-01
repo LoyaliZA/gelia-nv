@@ -43,6 +43,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        $this->app->singleton(\App\Services\Demo\AlcanceDemo::class);
+
         $this->app->singleton(
             \App\Contracts\PuntoVenta\ResuelveAlcancePdv::class,
             \App\Services\PuntoVenta\AlcancePdv::class

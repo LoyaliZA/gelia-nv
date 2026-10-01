@@ -4,6 +4,7 @@ namespace App\Http\Controllers\PuntoVenta\Resguardos;
 
 use App\Http\Controllers\Controller;
 use App\Models\Producto;
+use App\Models\User;
 use App\Services\PuntoVenta\Resguardos\RegistroManualResguardoPdvConfig;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -15,7 +16,8 @@ class BuscarProductoRegistroManualResguardoPdvController extends Controller
         Request $request,
         RegistroManualResguardoPdvConfig $config,
     ): JsonResponse {
-        if (! $config->estaActivo()) {
+        $actor = $request->user();
+        if (! $config->estaActivoPara($actor instanceof User ? $actor : null)) {
             throw new AccessDeniedHttpException('El registro manual de resguardos no está habilitado.');
         }
 

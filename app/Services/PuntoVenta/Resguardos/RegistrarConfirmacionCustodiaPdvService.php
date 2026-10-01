@@ -12,9 +12,11 @@ use App\Models\PuntoVenta\ResguardoPdvEvidencia;
 use App\Models\User;
 use App\Services\PuntoVenta\PuntoVentaModulo;
 use App\Support\PuntoVenta\Resguardos\EstadoResguardoPdv;
+use App\Support\PuntoVenta\Resguardos\RutaAlmacenamientoResguardoPdv;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
@@ -334,7 +336,7 @@ class RegistrarConfirmacionCustodiaPdvService
         ResguardoPdvEvento $evento,
         array $evidencias,
         int $actorId,
-        \Illuminate\Support\Carbon $capturadoAt,
+        Carbon $capturadoAt,
         array &$pathsEscritos,
     ): void {
         $archivos = array_values(array_filter(
@@ -343,7 +345,7 @@ class RegistrarConfirmacionCustodiaPdvService
         ));
 
         foreach ($archivos as $archivo) {
-            $ruta = $archivo->store("pdv/resguardos/{$resguardo->id}", 'local');
+            $ruta = $archivo->store(RutaAlmacenamientoResguardoPdv::prefijo($resguardo), 'local');
             $pathsEscritos[] = $ruta;
 
             ResguardoPdvEvidencia::query()->create([

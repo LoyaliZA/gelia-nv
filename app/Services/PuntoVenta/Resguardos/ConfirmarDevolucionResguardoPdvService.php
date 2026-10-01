@@ -10,8 +10,10 @@ use App\Models\PuntoVenta\ResguardoPdvEvento;
 use App\Models\PuntoVenta\ResguardoPdvEvidencia;
 use App\Models\User;
 use App\Services\PuntoVenta\PuntoVentaModulo;
+use App\Support\PuntoVenta\Resguardos\RutaAlmacenamientoResguardoPdv;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -217,7 +219,7 @@ class ConfirmarDevolucionResguardoPdvService
         ResguardoPdvEvento $evento,
         array $evidencias,
         int $actorId,
-        \Illuminate\Support\Carbon $capturadoAt,
+        Carbon $capturadoAt,
         array &$pathsEscritos,
     ): void {
         $archivos = array_values(array_filter(
@@ -226,7 +228,7 @@ class ConfirmarDevolucionResguardoPdvService
         ));
 
         foreach ($archivos as $archivo) {
-            $ruta = $archivo->store("pdv/resguardos/{$resguardo->id}/devoluciones", 'local');
+            $ruta = $archivo->store(RutaAlmacenamientoResguardoPdv::prefijo($resguardo, 'devoluciones'), 'local');
             $pathsEscritos[] = $ruta;
 
             ResguardoPdvEvidencia::query()->create([

@@ -5,6 +5,7 @@ namespace App\Services\PuntoVenta\Turnos;
 use App\Jobs\PuntoVenta\Turnos\AlertaEsperaProximoVencerTurnoPdvJob;
 use App\Jobs\PuntoVenta\Turnos\AlertaProrrogaProximoVencerTurnoPdvJob;
 use App\Models\PuntoVenta\TurnoPdvAtencion;
+use App\Support\Demo\FilaDemo;
 use Carbon\CarbonInterface;
 
 class ProgramarAlertasPlazosAtencionTurnoPdvService
@@ -15,7 +16,7 @@ class ProgramarAlertasPlazosAtencionTurnoPdvService
 
     public function programarEsperaProximoVencer(TurnoPdvAtencion $atencion, CarbonInterface $referencia): void
     {
-        if ($atencion->inicio_at === null) {
+        if (FilaDemo::atencionEsDemo($atencion) || $atencion->inicio_at === null) {
             return;
         }
 
@@ -31,6 +32,10 @@ class ProgramarAlertasPlazosAtencionTurnoPdvService
 
     public function programarProrrogaProximoVencer(TurnoPdvAtencion $atencion, CarbonInterface $atencionInicioAt): void
     {
+        if (FilaDemo::atencionEsDemo($atencion)) {
+            return;
+        }
+
         $plazos = $this->plazos->obtener();
         $avisoMinutos = max(1, (int) ($plazos['aviso_tolerancia_prorroga_minutos']
             ?? config('pdv_alertas.aviso_previo_minutos.prorroga', 2)));

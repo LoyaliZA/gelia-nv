@@ -11,6 +11,10 @@ class SincronizarEstatusSucursalPedidoBmaService
 {
     public function desdeResguardo(ResguardoPdv $resguardo): void
     {
+        if ($resguardo->es_demo) {
+            return;
+        }
+
         $pedidoId = (int) ($resguardo->pedido_bma_id ?? 0);
         if ($pedidoId < 1) {
             return;

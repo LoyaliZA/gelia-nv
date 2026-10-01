@@ -7,6 +7,7 @@ use App\Models\PuntoVenta\TurnoPdv;
 use App\Models\PuntoVenta\TurnoPdvAtencion;
 use App\Models\PuntoVenta\TurnoPdvEvento;
 use App\Models\PuntoVenta\TurnoPdvProrroga;
+use App\Support\Demo\FilaDemo;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
 
@@ -28,7 +29,7 @@ class AlertaProrrogaAtencionTurnoPdvService
                 ->lockForUpdate()
                 ->first();
 
-            if (! $atencion instanceof TurnoPdvAtencion) {
+            if (! $atencion instanceof TurnoPdvAtencion || FilaDemo::atencionEsDemo($atencion)) {
                 return false;
             }
 

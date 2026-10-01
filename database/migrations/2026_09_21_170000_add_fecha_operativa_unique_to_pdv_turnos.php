@@ -1,9 +1,9 @@
 <?php
 
-use App\Models\PuntoVenta\TurnoPdv;
 use App\Services\PuntoVenta\Turnos\TurnosPdvConfig;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -17,17 +17,19 @@ return new class extends Migration
 
         $config = app(TurnosPdvConfig::class);
 
-        TurnoPdv::query()
+        DB::table('pdv_turnos')
             ->select(['id', 'sucursal_id', 'snapshot_json', 'alta_at'])
             ->orderBy('id')
             ->chunkById(200, function ($turnos) use ($config): void {
                 foreach ($turnos as $turno) {
-                    $snapshot = is_array($turno->snapshot_json) ? $turno->snapshot_json : [];
+                    $snapshot = json_decode((string) $turno->snapshot_json, true);
+                    $snapshot = is_array($snapshot) ? $snapshot : [];
                     $fechaOperativa = $snapshot['fecha_operativa'] ?? null;
 
                     if (! is_string($fechaOperativa) || $fechaOperativa === '') {
                         $zona = $config->zonaHorariaOperativa((int) $turno->sucursal_id);
-                        $fechaOperativa = $turno->alta_at?->copy()->timezone($zona)->toDateString()
+                        $alta = $turno->alta_at ? Carbon::parse($turno->alta_at) : null;
+                        $fechaOperativa = $alta?->copy()->timezone($zona)->toDateString()
                             ?? now($zona)->toDateString();
                     }
 

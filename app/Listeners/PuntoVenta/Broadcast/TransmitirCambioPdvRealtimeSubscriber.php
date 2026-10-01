@@ -28,11 +28,27 @@ final class TransmitirCambioPdvRealtimeSubscriber
 
     public function handle(object $event): void
     {
+        if ($this->eventoEsDemo($event)) {
+            return;
+        }
+
         foreach ($this->mapper->transmisiones($event) as $transmision) {
             broadcast(new CambioPdvBroadcast(
                 $transmision['channels'],
                 $transmision['envelope'],
             ));
         }
+    }
+
+    private function eventoEsDemo(object $event): bool
+    {
+        foreach (['resguardo', 'turno'] as $propiedad) {
+            $modelo = $event->{$propiedad} ?? null;
+            if (is_object($modelo) && (bool) ($modelo->es_demo ?? false)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

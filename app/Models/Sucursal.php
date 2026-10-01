@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\FiltraFilasDemo;
 use App\Models\PuntoVenta\ContadorFolioTurnoPdv;
 use App\Models\PuntoVenta\IntervaloOperativoPdv;
 use App\Models\PuntoVenta\JornadaPdv;
@@ -15,7 +16,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Sucursal extends Model
 {
-    use HasFactory;
+    use FiltraFilasDemo, HasFactory;
 
     protected $table = 'sucursales';
 
@@ -23,12 +24,14 @@ class Sucursal extends Model
         'codigo',
         'nombre',
         'activo',
+        'es_demo',
     ];
 
     protected function casts(): array
     {
         return [
             'activo' => 'boolean',
+            'es_demo' => 'boolean',
         ];
     }
 

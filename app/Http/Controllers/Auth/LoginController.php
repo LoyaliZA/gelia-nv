@@ -3,13 +3,14 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Http\Middleware\DenegarPanelWebUsuarioDemo;
 use App\Services\Auditoria\RegistrarAuditoriaAccesoService;
 use App\Services\Auth\ResolverUsuarioLogin;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 use Inertia\Response;
-use Illuminate\Http\RedirectResponse;
 
 class LoginController extends Controller
 {
@@ -32,6 +33,18 @@ class LoginController extends Controller
             $request->session()->regenerate();
 
             $auditoriaAcceso->registrarLogin($user, $request, $request->session()->getId());
+
+            if ($user->es_demo) {
+                $sessionId = $request->session()->getId();
+                $auditoriaAcceso->registrarCierre($sessionId, 'logout');
+                Auth::logout();
+                $request->session()->invalidate();
+                $request->session()->regenerateToken();
+
+                return back()->withErrors([
+                    'login' => DenegarPanelWebUsuarioDemo::MENSAJE,
+                ])->onlyInput('login');
+            }
 
             if ($request->boolean('register_passkey') && config('webauthn.enabled')) {
                 $request->session()->flash('prompt_passkey_registration', true);

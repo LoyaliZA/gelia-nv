@@ -8,15 +8,18 @@ use App\Http\Middleware\AsegurarSucursalActivaPdv;
 use App\Http\Middleware\AuthenticateApiApplication;
 use App\Http\Middleware\AuthenticateMobileUser;
 use App\Http\Middleware\CheckApiResourcePermission;
+use App\Http\Middleware\DenegarPanelWebUsuarioDemo;
 use App\Http\Middleware\EnsureMobilePuntoVenta;
 use App\Http\Middleware\EnsureMobileSyncScope;
 use App\Http\Middleware\EnsureWebAuthnEnabled;
+use App\Http\Middleware\FijarAlcanceDemo;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\LogApiRequest;
 use App\Http\Middleware\RequireJsonAccept;
 use App\Http\Middleware\RestrictFormHostname;
 use App\Support\FormPublicUrl;
 use Illuminate\Auth\AuthenticationException;
+use Illuminate\Contracts\Auth\Middleware\AuthenticatesRequests;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -58,9 +61,20 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
 
         $middleware->web(append: [
+            FijarAlcanceDemo::class,
+            DenegarPanelWebUsuarioDemo::class,
             HandleInertiaRequests::class,
             ActualizarActividadSesion::class,
         ]);
+
+        $middleware->api(append: [
+            FijarAlcanceDemo::class,
+        ]);
+
+        $middleware->appendToPriorityList(
+            AuthenticatesRequests::class,
+            FijarAlcanceDemo::class,
+        );
 
         $middleware->alias([
             'role' => RoleMiddleware::class,

@@ -6,6 +6,7 @@ use App\Events\PuntoVenta\AtencionEsperaProximoVencer;
 use App\Models\PuntoVenta\TurnoPdv;
 use App\Models\PuntoVenta\TurnoPdvAtencion;
 use App\Models\PuntoVenta\TurnoPdvEvento;
+use App\Support\Demo\FilaDemo;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
 
@@ -27,7 +28,7 @@ class AlertaEsperaProximoVencerTurnoPdvService
                 ->lockForUpdate()
                 ->first();
 
-            if (! $atencion instanceof TurnoPdvAtencion) {
+            if (! $atencion instanceof TurnoPdvAtencion || FilaDemo::atencionEsDemo($atencion)) {
                 return false;
             }
 

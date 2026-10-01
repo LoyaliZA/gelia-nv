@@ -3,25 +3,25 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Foundation\Auth\User as Authenticatable;
-use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
-use Spatie\Permission\Traits\HasRoles;
-use Illuminate\Database\Eloquent\SoftDeletes;
-use Laravel\Sanctum\HasApiTokens;
 use Laragear\WebAuthn\Contracts\WebAuthnAuthenticatable;
 use Laragear\WebAuthn\WebAuthnAuthentication;
 use Laragear\WebAuthn\WebAuthnData;
+use Laravel\Sanctum\HasApiTokens;
+use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable implements WebAuthnAuthenticatable
 {
-    use HasApiTokens, HasFactory, Notifiable, HasRoles, SoftDeletes, WebAuthnAuthentication;
+    use HasApiTokens, HasFactory, HasRoles, Notifiable, SoftDeletes, WebAuthnAuthentication;
 
     // --- SECCIÓN: CAMPOS PERMITIDOS ---
     protected $fillable = [
@@ -40,6 +40,7 @@ class User extends Authenticatable implements WebAuthnAuthenticatable
         'area_id',
         'departamento_id',
         'excluir_asignacion_tickets',
+        'es_demo',
     ];
 
     protected $hidden = [
@@ -55,6 +56,7 @@ class User extends Authenticatable implements WebAuthnAuthenticatable
             'password' => 'hashed',
             'fecha_nacimiento' => 'date',
             'excluir_asignacion_tickets' => 'boolean',
+            'es_demo' => 'boolean',
         ];
     }
 
@@ -135,6 +137,7 @@ class User extends Authenticatable implements WebAuthnAuthenticatable
         return $this->belongsToMany(RhColaborador::class, 'gerente_rh_colaborador', 'gerente_user_id', 'rh_colaborador_id')
             ->withTimestamps();
     }
+
     // Listas creadas por el usuario
     public function customLists()
     {

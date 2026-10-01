@@ -7,6 +7,7 @@ use App\Models\MobileDevice;
 use App\Models\MobileUserSyncState;
 use App\Models\User;
 use App\Services\Auditoria\RegistrarAuditoriaAccesoService;
+use App\Services\Auth\ResolverUsuarioLogin;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Laravel\Sanctum\PersonalAccessToken;
@@ -25,7 +26,7 @@ class MobileAuthService
      */
     public function login(array $datos, Request $request): ?array
     {
-        $user = app(\App\Services\Auth\ResolverUsuarioLogin::class)->resolver($datos['login'] ?? null);
+        $user = app(ResolverUsuarioLogin::class)->resolver($datos['login'] ?? null);
 
         if (! $user || ! Hash::check($datos['password'], $user->password)) {
             return null;
@@ -78,6 +79,7 @@ class MobileAuthService
             'token_type' => 'Bearer',
             'expires_at' => $expira->toIso8601String(),
             'scope_version' => $scopeVersion,
+            'es_demo' => (bool) $user->es_demo,
             'user' => $this->payloadUsuario($user),
             'permissions' => $user->getPermissionNames()->values()->all(),
             'tema_visual' => $this->resolverTemaVisual($user),
@@ -119,6 +121,7 @@ class MobileAuthService
             'user' => $this->payloadUsuario($user),
             'permissions' => $user->getPermissionNames()->values()->all(),
             'scope_version' => $this->scopeVersion->compute($user),
+            'es_demo' => (bool) $user->es_demo,
             'tema_visual' => $this->resolverTemaVisual($user),
             'device' => $this->payloadDispositivo($device),
         ];

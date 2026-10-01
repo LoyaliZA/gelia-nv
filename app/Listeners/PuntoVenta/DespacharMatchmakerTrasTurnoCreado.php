@@ -10,6 +10,10 @@ class DespacharMatchmakerTrasTurnoCreado
 {
     public function handle(TurnoCreado $event): void
     {
+        if ($event->turno->es_demo) {
+            return;
+        }
+
         EjecutarMatchmakerTurnosPdvJob::dispatch(
             $event->sucursalId,
             TurnoPdvEvento::TIPO_ALTA,

@@ -12,8 +12,11 @@ use App\Models\PuntoVenta\ResguardoPdvEvidencia;
 use App\Models\PuntoVenta\ResguardoPdvIncidencia;
 use App\Models\User;
 use App\Services\PuntoVenta\PuntoVentaModulo;
+use App\Support\PuntoVenta\Resguardos\RutaAlmacenamientoResguardoPdv;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
@@ -343,7 +346,7 @@ class RegistrarEntregaResguardoPdvService
 
     /**
      * @param  list<int>|null  $bultoIds
-     * @return \Illuminate\Support\Collection<int, ResguardoPdvBulto>
+     * @return Collection<int, ResguardoPdvBulto>
      */
     private function resolverBultosSeleccionados(ResguardoPdv $resguardo, ?array $bultoIds)
     {
@@ -389,7 +392,7 @@ class RegistrarEntregaResguardoPdvService
     }
 
     /**
-     * @param  \Illuminate\Support\Collection<int, ResguardoPdvBulto>  $bultosEntregables
+     * @param  Collection<int, ResguardoPdvBulto>  $bultosEntregables
      */
     private function entregaCompletaElPedido(ResguardoPdv $resguardo, $bultosEntregables): bool
     {
@@ -411,7 +414,7 @@ class RegistrarEntregaResguardoPdvService
     }
 
     /**
-     * @param  \Illuminate\Support\Collection<int, ResguardoPdvBulto>  $bultosEntregables
+     * @param  Collection<int, ResguardoPdvBulto>  $bultosEntregables
      */
     private function estadoTrasEntregaParcial(ResguardoPdv $resguardo, $bultosEntregables): string
     {
@@ -442,7 +445,7 @@ class RegistrarEntregaResguardoPdvService
     }
 
     /**
-     * @return \Illuminate\Support\Collection<int, ResguardoPdvBulto>
+     * @return Collection<int, ResguardoPdvBulto>
      */
     private function bultosEntregables(ResguardoPdv $resguardo)
     {
@@ -460,7 +463,7 @@ class RegistrarEntregaResguardoPdvService
         ResguardoPdvEvento $evento,
         UploadedFile $firma,
         int $actorId,
-        \Illuminate\Support\Carbon $capturadoAt,
+        Carbon $capturadoAt,
         array &$pathsEscritos,
     ): void {
         if (! $firma->isValid()) {
@@ -469,7 +472,7 @@ class RegistrarEntregaResguardoPdvService
             ]);
         }
 
-        $ruta = $firma->store("pdv/resguardos/{$resguardo->id}/entregas", 'local');
+        $ruta = $firma->store(RutaAlmacenamientoResguardoPdv::prefijo($resguardo, 'entregas'), 'local');
         $pathsEscritos[] = $ruta;
 
         ResguardoPdvEvidencia::query()->create([
@@ -499,7 +502,7 @@ class RegistrarEntregaResguardoPdvService
         ResguardoPdvEvento $evento,
         array $evidencias,
         int $actorId,
-        \Illuminate\Support\Carbon $capturadoAt,
+        Carbon $capturadoAt,
         array &$pathsEscritos,
     ): void {
         $archivos = array_values(array_filter(
@@ -508,7 +511,7 @@ class RegistrarEntregaResguardoPdvService
         ));
 
         foreach ($archivos as $archivo) {
-            $ruta = $archivo->store("pdv/resguardos/{$resguardo->id}/entregas", 'local');
+            $ruta = $archivo->store(RutaAlmacenamientoResguardoPdv::prefijo($resguardo, 'entregas'), 'local');
             $pathsEscritos[] = $ruta;
 
             ResguardoPdvEvidencia::query()->create([

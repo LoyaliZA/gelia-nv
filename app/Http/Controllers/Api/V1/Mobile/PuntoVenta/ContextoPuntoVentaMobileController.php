@@ -38,6 +38,17 @@ class ContextoPuntoVentaMobileController extends Controller
             'sucursal_id' => ['required', 'integer'],
         ]);
 
+        if ($user->es_demo) {
+            $operables = $alcance->idsSucursalesOperables($user);
+            $sucursalId = (int) $datos['sucursal_id'];
+            if ($operables->count() !== 1 || (int) $operables->first() !== $sucursalId) {
+                return response()->json([
+                    'message' => 'La cuenta de demostración opera solo en su sucursal.',
+                    'code' => 'sucursal_demo_fija',
+                ], 422);
+            }
+        }
+
         try {
             $alcance->establecerSucursalActiva($user, (int) $datos['sucursal_id']);
         } catch (AuthorizationException $exception) {
@@ -68,7 +79,7 @@ class ContextoPuntoVentaMobileController extends Controller
             ->values();
 
         $activaId = $alcance->sucursalActivaId($user);
-        $registroManualActivo = $registroManual->estaActivo();
+        $registroManualActivo = $registroManual->estaActivoPara($user);
 
         return [
             'sucursal_activa' => $operables->firstWhere('id', $activaId),

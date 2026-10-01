@@ -4,6 +4,7 @@ namespace App\Services\PuntoVenta\Turnos;
 
 use App\Jobs\PuntoVenta\Turnos\AlertaProrrogaAtencionTurnoPdvJob;
 use App\Models\PuntoVenta\TurnoPdvAtencion;
+use App\Support\Demo\FilaDemo;
 use Carbon\CarbonInterface;
 
 class AplicarInicioAtencionTurnoPdvService
@@ -27,6 +28,10 @@ class AplicarInicioAtencionTurnoPdvService
 
         $plazos = $this->plazos->obtener();
         $disparo = $ahora->copy()->addMinutes($plazos['prorroga_minutos']);
+
+        if (FilaDemo::atencionEsDemo($atencion)) {
+            return $atencion;
+        }
 
         $this->programarAlertas->programarProrrogaProximoVencer($atencion, $ahora);
 

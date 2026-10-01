@@ -2,7 +2,10 @@
 
 namespace App\Services\Mobile;
 
+use App\Models\Cliente;
+use App\Models\Scopes\EsDemoScope;
 use App\Models\User;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 
 class MobileScopeVersionService
@@ -21,9 +24,21 @@ class MobileScopeVersionService
 
         $payload = [
             'permisos' => array_values(array_unique($permisos)),
+            'es_demo' => (bool) $user->es_demo,
             'field_policy_version' => (int) config('mobile.field_policy_version', 1),
             'serializer_version' => (int) config('mobile.serializer_version', 1),
         ];
+
+        if ($user->es_demo) {
+            $huella = Cliente::withoutGlobalScope(EsDemoScope::class)
+                ->where('es_demo', true)
+                ->selectRaw('COUNT(*) as total, MAX(updated_at) as marca')
+                ->first();
+            $payload['demo_clientes'] = [
+                'total' => (int) ($huella->total ?? 0),
+                'marca' => $huella->marca ?? null,
+            ];
+        }
 
         return hash('sha256', json_encode($payload));
     }
@@ -40,7 +55,7 @@ class MobileScopeVersionService
     }
 
     /**
-     * @return \Illuminate\Support\Collection<int, string>
+     * @return Collection<int, string>
      */
     private function nombresPermisos(User $user)
     {

@@ -4,9 +4,11 @@ namespace App\Http\Requests\PuntoVenta\Resguardos;
 
 use App\Http\Requests\PuntoVenta\PdvOperacionPisoRequest;
 use App\Models\Producto;
+use App\Models\User;
 use App\Services\PuntoVenta\PuntoVentaModulo;
 use App\Services\PuntoVenta\Resguardos\RegistroManualResguardoPdvConfig;
 use App\Support\PuntoVenta\Resguardos\DepartamentosOrigenResguardoManualPdv;
+use Illuminate\Validation\ValidationException;
 
 class RegistrarResguardoManualPdvRequest extends PdvOperacionPisoRequest
 {
@@ -17,7 +19,8 @@ class RegistrarResguardoManualPdvRequest extends PdvOperacionPisoRequest
 
     public function authorize(): bool
     {
-        if (! app(RegistroManualResguardoPdvConfig::class)->estaActivo()) {
+        $actor = $this->user();
+        if (! app(RegistroManualResguardoPdvConfig::class)->estaActivoPara($actor instanceof User ? $actor : null)) {
             return false;
         }
 
@@ -119,7 +122,9 @@ class RegistrarResguardoManualPdvRequest extends PdvOperacionPisoRequest
             $productoId = (int) ($fila['producto_id'] ?? 0);
             $producto = $productos->get($productoId);
             if ($producto === null) {
-                continue;
+                throw ValidationException::withMessages([
+                    'piezas' => 'Seleccione productos del catálogo autorizado.',
+                ]);
             }
 
             $normalizadas[] = [

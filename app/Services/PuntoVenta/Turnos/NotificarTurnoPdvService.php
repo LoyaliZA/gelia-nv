@@ -17,6 +17,10 @@ class NotificarTurnoPdvService
         TurnoPdvEvento $evento,
         int $sucursalId,
     ): void {
+        if ($turno->es_demo) {
+            return;
+        }
+
         $tipoEvento = $evento->tipo_evento;
 
         if (! in_array($tipoEvento, [

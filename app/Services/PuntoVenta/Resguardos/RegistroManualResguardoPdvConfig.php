@@ -3,6 +3,7 @@
 namespace App\Services\PuntoVenta\Resguardos;
 
 use App\Models\ConfiguracionSistema;
+use App\Models\User;
 
 class RegistroManualResguardoPdvConfig
 {
@@ -21,5 +22,14 @@ class RegistroManualResguardoPdvConfig
         }
 
         return filter_var($valor, FILTER_VALIDATE_BOOLEAN);
+    }
+
+    public function estaActivoPara(?User $user): bool
+    {
+        if ($user instanceof User && $user->es_demo) {
+            return true;
+        }
+
+        return $this->estaActivo();
     }
 }

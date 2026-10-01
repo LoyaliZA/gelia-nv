@@ -14,9 +14,11 @@ use App\Models\User;
 use App\Support\PuntoVenta\Resguardos\EstadoRecepcionResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\GeneradorCodigoEtiquetaResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\IncidenciaResguardoPdv;
+use App\Support\PuntoVenta\Resguardos\RutaAlmacenamientoResguardoPdv;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
@@ -289,7 +291,7 @@ class RegistrarIncidenciaResguardoPdvService
         ?int $bultoId,
         ?array $bultoNuevo,
         ?int $almacenId,
-        \Illuminate\Support\Carbon $ahora,
+        Carbon $ahora,
     ): ?ResguardoPdvBulto {
         if ($bultoId !== null) {
             $bulto = ResguardoPdvBulto::query()
@@ -447,7 +449,7 @@ class RegistrarIncidenciaResguardoPdvService
         ?ResguardoPdvBulto $bulto,
         array $evidencias,
         int $actorId,
-        \Illuminate\Support\Carbon $capturadoAt,
+        Carbon $capturadoAt,
         array &$pathsEscritos,
     ): void {
         $archivos = array_values(array_filter(
@@ -456,7 +458,7 @@ class RegistrarIncidenciaResguardoPdvService
         ));
 
         foreach ($archivos as $archivo) {
-            $ruta = $archivo->store("pdv/resguardos/{$resguardo->id}", 'local');
+            $ruta = $archivo->store(RutaAlmacenamientoResguardoPdv::prefijo($resguardo), 'local');
             $pathsEscritos[] = $ruta;
 
             ResguardoPdvEvidencia::query()->create([

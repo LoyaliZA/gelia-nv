@@ -2,6 +2,7 @@
 
 namespace App\Services\Auth;
 
+use App\Http\Middleware\DenegarPanelWebUsuarioDemo;
 use App\Models\MobileDevice;
 use App\Models\User;
 use App\Models\WebauthnCredential;
@@ -10,8 +11,8 @@ use App\Services\Mobile\MobileAuthService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
-use Laragear\WebAuthn\Assertion\Creator\AssertionCreator;
 use Laragear\WebAuthn\Assertion\Creator\AssertionCreation;
+use Laragear\WebAuthn\Assertion\Creator\AssertionCreator;
 use Laragear\WebAuthn\Assertion\Validator\AssertionValidation;
 use Laragear\WebAuthn\Assertion\Validator\AssertionValidator;
 use Laragear\WebAuthn\Attestation\Creator\AttestationCreation;
@@ -160,6 +161,12 @@ class WebAuthnCredentialService
         $credential->forceFill(['last_used_at' => now()])->save();
 
         $client = $datos['client'] ?? 'web';
+
+        if ($user->es_demo && $client !== 'mobile') {
+            throw ValidationException::withMessages([
+                'login' => DenegarPanelWebUsuarioDemo::MENSAJE,
+            ]);
+        }
 
         if ($client === 'mobile') {
             $sesion = $this->mobileAuth->emitirSesionMovil($user, $datos, $request);

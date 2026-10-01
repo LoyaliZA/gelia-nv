@@ -81,6 +81,7 @@ class AltaTurnoPdvService
                 $turno = TurnoPdv::query()->create([
                     'sucursal_id' => $sucursal->id,
                     'cliente_id' => $cliente?->id,
+                    'es_demo' => (bool) $actor->es_demo,
                     'folio' => $folio->folio,
                     'fecha_operativa' => $folio->fechaOperativa,
                     'servicio' => TurnoPdv::SERVICIO_VENTAS,
@@ -181,6 +182,12 @@ class AltaTurnoPdvService
         $sucursal = Sucursal::query()->find($sucursalId);
         if (! $sucursal instanceof Sucursal) {
             throw (new ModelNotFoundException)->setModel(Sucursal::class, [$sucursalId]);
+        }
+
+        if ((bool) $actor->es_demo !== (bool) $sucursal->es_demo) {
+            throw ValidationException::withMessages([
+                'sucursal' => 'La sucursal no corresponde al alcance de la cuenta.',
+            ]);
         }
 
         return $sucursal;
