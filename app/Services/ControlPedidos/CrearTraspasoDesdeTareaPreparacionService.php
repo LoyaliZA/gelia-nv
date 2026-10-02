@@ -11,6 +11,7 @@ use App\Models\SolicitudTraspaso;
 use App\Models\SolicitudTraspasoProducto;
 use App\Models\User;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
+use App\Support\ControlPedidos\DesgloseSkuPreparacion;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -45,8 +46,16 @@ class CrearTraspasoDesdeTareaPreparacionService
             return $porTarea->load(['productos', 'estado', 'almacenOrigen', 'cliente']);
         }
 
-        if ($tarea->productos->isEmpty()) {
-            throw ValidationException::withMessages(['productos' => 'La tarea no tiene productos para trasladar.']);
+        $faltanteSku = DesgloseSkuPreparacion::mensaje($tarea);
+        if ($faltanteSku !== null) {
+            throw ValidationException::withMessages(['productos' => $faltanteSku]);
+        }
+
+        $conPiezas = $tarea->productos->filter(fn ($p) => (int) $p->cantidad_encontrada > 0)->values();
+        if ($conPiezas->isEmpty()) {
+            throw ValidationException::withMessages([
+                'productos' => 'No hay unidades encontradas para trasladar.',
+            ]);
         }
 
         $pedido = $tarea->pedido;
@@ -59,7 +68,7 @@ class CrearTraspasoDesdeTareaPreparacionService
             throw ValidationException::withMessages(['almacen_id' => 'Almacén de origen inválido.']);
         }
 
-        return DB::transaction(function () use ($tarea, $usuario, $pedido, $almacen) {
+        return DB::transaction(function () use ($tarea, $usuario, $pedido, $almacen, $conPiezas) {
             $pedido->loadMissing(['vendedor.departamentos', 'vendedor.area.departamento', 'estatus', 'cliente']);
 
             $estadoPendiente = CatalogoEstadoSolicitud::where('nombre', 'Pendiente')->firstOrFail();
@@ -68,7 +77,7 @@ class CrearTraspasoDesdeTareaPreparacionService
                 ? now()->startOfDay()->addDays((int) $horario->dias_para_entrega)->toDateString()
                 : now()->toDateString();
 
-            $totalPiezas = (int) $tarea->productos->sum(fn ($p) => max(1, (int) ($p->cantidad_encontrada ?? $p->cantidad_solicitada)));
+            $totalPiezas = (int) $conPiezas->sum(fn ($p) => (int) $p->cantidad_encontrada);
 
             $intento = (int) $tarea->intento_traslado + 1;
 
@@ -84,16 +93,17 @@ class CrearTraspasoDesdeTareaPreparacionService
                 'catalogo_estado_solicitud_id' => $estadoPendiente->id,
                 'catalogo_horario_traspaso_id' => $horario?->id,
                 'fecha_entrega_estimada' => $fechaEstimada,
-                'total_piezas' => max(1, $totalPiezas),
+                'total_piezas' => $totalPiezas,
             ]);
 
-            foreach ($tarea->productos as $p) {
+            foreach ($conPiezas as $p) {
                 SolicitudTraspasoProducto::query()->create([
                     'solicitud_traspaso_id' => $solicitud->id,
+                    'pedido_bma_origen_id' => $p->pedido_bma_origen_id ?: $pedido->id,
                     'producto_id' => $p->producto_id,
-                    'sku' => $p->sku ?: ('SNAP-'.$p->id),
+                    'sku' => $p->sku,
                     'descripcion' => $p->descripcion_snapshot,
-                    'piezas' => max(1, (int) ($p->cantidad_encontrada ?? $p->cantidad_solicitada)),
+                    'piezas' => (int) $p->cantidad_encontrada,
                 ]);
             }
 

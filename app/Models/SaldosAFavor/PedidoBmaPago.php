@@ -47,6 +47,7 @@ class PedidoBmaPago extends Model
         'efectivo',
         'tarjeta',
         'otro',
+        'credito',
     ];
 
     /**
@@ -60,6 +61,21 @@ class PedidoBmaPago extends Model
         'efectivo' => false,
         'tarjeta' => false,
         'otro' => false,
+        'credito' => false,
+    ];
+
+    /**
+     * Crédito comercial no lleva voucher; el resto de formas sí.
+     *
+     * @var array<string, bool>
+     */
+    public const REQUIERE_COMPROBANTE = [
+        'transferencia' => true,
+        'deposito' => true,
+        'efectivo' => true,
+        'tarjeta' => true,
+        'otro' => true,
+        'credito' => false,
     ];
 
     /** @var array<string, string> */
@@ -69,6 +85,7 @@ class PedidoBmaPago extends Model
         'efectivo' => 'Efectivo',
         'tarjeta' => 'Tarjeta',
         'otro' => 'Otro',
+        'credito' => 'CREDITO',
     ];
 
     protected $table = 'pedido_bma_pagos';
@@ -116,6 +133,11 @@ class PedidoBmaPago extends Model
         return ClasificacionIngresoBancario::formaRequiereBanco($formaPago);
     }
 
+    public static function formaRequiereComprobante(?string $formaPago): bool
+    {
+        return ClasificacionIngresoBancario::formaRequiereComprobante($formaPago);
+    }
+
     public static function labelForma(?string $formaPago): ?string
     {
         if ($formaPago === null || $formaPago === '') {
@@ -125,7 +147,7 @@ class PedidoBmaPago extends Model
         return self::LABELS_FORMA_PAGO[$formaPago] ?? $formaPago;
     }
 
-    /** @return list<array{codigo: string, label: string, requiere_banco: bool, clasificacion?: string, clasificacion_label?: string, cuenta_ingreso_bancario?: bool}> */
+    /** @return list<array{codigo: string, label: string, requiere_banco: bool, requiere_comprobante?: bool, clasificacion?: string, clasificacion_label?: string, cuenta_ingreso_bancario?: bool}> */
     public static function formasPagoCatalogo(): array
     {
         return ClasificacionIngresoBancario::catalogoFormasPago();

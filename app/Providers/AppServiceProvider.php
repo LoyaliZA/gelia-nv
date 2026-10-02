@@ -204,6 +204,7 @@ class AppServiceProvider extends ServiceProvider
         // CONEXIÓN DEL NUEVO OBSERVADOR PARA CATÁLOGOS
         CatalogoListaDescuento::observe(CatalogoListaDescuentoObserver::class);
         Cliente::observe(\App\Observers\ClienteObserver::class);
+        PedidoBmaTareaPreparacion::observe(\App\Observers\PedidoBmaTareaPreparacionCaratulaObserver::class);
 
         Broadcast::routes([
             'middleware' => ['auth:sanctum'],

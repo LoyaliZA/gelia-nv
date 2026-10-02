@@ -43,7 +43,7 @@ import ResumenCoberturaPedido from './ResumenCoberturaPedido';
 import DatosGeneralesAuditoria from './DatosGeneralesAuditoria';
 import TotalesEnviosAuditoria from './TotalesEnviosAuditoria';
 import BarraAccionesRevision from './BarraAccionesRevision';
-import { THEME_INPUT } from '../../../../utils/geliaTheme';
+import { THEME_INPUT, THEME_SELECT } from '../../../../utils/geliaTheme';
 
 const SECCION = `${THEME_LABEL} mb-3 block`;
 const SECCION_WRAP = 'border-b theme-border pb-6 last:border-0';
@@ -88,6 +88,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
     const [liberarCapturaAbierto, setLiberarCapturaAbierto] = useState(false);
     const [alerta, setAlerta] = useState({ abierto: false, tipo: 'success', titulo: '', mensaje: '' });
     const [folioRemision, setFolioRemision] = useState('');
+    const [tipoReferencia, setTipoReferencia] = useState('PEDIDO');
     const [rechazoPagos, setRechazoPagos] = useState({ abierto: false, ids: [], motivo: '' });
     const [bloqueosPago, setBloqueosPago] = useState([]);
     const [resumenCobertura, setResumenCobertura] = useState(null);
@@ -240,13 +241,14 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
     const guardarFolioRemision = () => {
         const limpio = folioRemision.trim();
         if (!limpio) {
-            setAlerta({ abierto: true, tipo: 'error', titulo: 'Folio', mensaje: 'Indique el folio de pedido (Wizerp).' });
+            setAlerta({ abierto: true, tipo: 'error', titulo: 'Folio', mensaje: 'Indique el folio.' });
             return;
         }
         if (limpio === String(pedido.folio_remision || '')) return;
         setProcesando(true);
         router.put(route('control_pedidos.auditar.folio_remision.update', pedido.id), {
             folio_remision: limpio,
+            tipo_referencia: tipoReferencia,
         }, {
             preserveScroll: true,
             onFinish: () => setProcesando(false),
@@ -635,14 +637,24 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                             <p className={SECCION}>{(anexoPendiente || puedeAnexar || (pedido.anexos_envio || []).length > 0) ? '6' : '5'}. Remisión</p>
                             {esPendiente && (
                                 <div className="mb-4">
-                                    <p className="text-[9px] font-black uppercase theme-text-muted m-0">Folio de pedido (WizeRP)</p>
+                                    <p className="text-[9px] font-black uppercase theme-text-muted m-0">Folio</p>
                                     <div className="flex gap-2 mt-0.5">
+                                        <select
+                                            value={tipoReferencia}
+                                            onChange={(e) => setTipoReferencia(e.target.value)}
+                                            className={`${THEME_SELECT} py-2 text-sm shrink-0`}
+                                        >
+                                            <option value="COTIZACION">Cotización</option>
+                                            <option value="PEDIDO">Pedido</option>
+                                            <option value="REMISION">Remisión</option>
+                                            <option value="OTRO">Otro</option>
+                                        </select>
                                         <input
                                             type="text"
                                             value={folioRemision}
                                             onChange={(e) => setFolioRemision(e.target.value)}
                                             className={`${THEME_INPUT} w-full py-2 text-sm`}
-                                            placeholder="Folio Wizerp..."
+                                            placeholder="Folio..."
                                         />
                                         <button
                                             type="button"

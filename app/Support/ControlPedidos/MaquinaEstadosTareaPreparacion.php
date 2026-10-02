@@ -27,6 +27,7 @@ final class MaquinaEstadosTareaPreparacion
             PedidoBmaTareaPreparacion::ESTADO_PENDIENTE,
         ],
         PedidoBmaTareaPreparacion::ESTADO_RESPONDIDA => [
+            PedidoBmaTareaPreparacion::ESTADO_LISTA_PARA_CARATULA,
             PedidoBmaTareaPreparacion::ESTADO_LIBERACION_SOLICITADA,
             PedidoBmaTareaPreparacion::ESTADO_LIBERADA,
         ],

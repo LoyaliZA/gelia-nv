@@ -175,4 +175,24 @@ class BlindarPagoTotalPedidoTest extends TestCase
         $this->assertEquals(1000.0, $resumen['pendiente']);
         $this->assertEquals(0.0, $resumen['excedente_generado']);
     }
+
+    public function test_credito_se_registra_sin_comprobante_ni_banco_y_cubre_el_pedido(): void
+    {
+        $pedido = $this->pedidoStub();
+
+        $pago = app(RegistrarPagoPedidoBmaService::class)->handle(
+            $pedido,
+            ['monto' => 1000, 'forma_pago' => 'credito'],
+            null,
+            $this->user->id
+        );
+
+        $this->assertSame('credito', $pago->forma_pago);
+        $this->assertNull($pago->catalogo_banco_id);
+        $this->assertNull($pago->ruta_archivo);
+        $this->assertFalse(PedidoBmaPago::formaRequiereBanco('credito'));
+        $this->assertFalse(PedidoBmaPago::formaRequiereComprobante('credito'));
+
+        app(RegistrarPagoPedidoBmaService::class)->assertCubiertoParaEnviar($pedido->fresh());
+    }
 }

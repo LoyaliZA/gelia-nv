@@ -29,6 +29,7 @@ class SolicitarCancelacionOperativaService
         private FinalizarCancelacionOperativaService $finalizarService,
         private RegistrarHistorialPedidoService $historialService,
         private NotificarPedidoBmaService $notificarService,
+        private RegistrarCierreApartadoService $cierreApartado,
     ) {}
 
     /**
@@ -137,6 +138,15 @@ class SolicitarCancelacionOperativaService
                 }
 
                 $hayPendienteFisica = true;
+            }
+
+            foreach ($tareas as $tarea) {
+                $this->cierreApartado->porCancelacion(
+                    $tarea,
+                    $usuario,
+                    CancelarPedidoBmaService::MOTIVOS[$motivo].($comentario !== '' ? ' '.$comentario : ''),
+                    'cancelacion:'.$cancelacion->id.':'.$tarea->id
+                );
             }
 
             $cancelacion->update([

@@ -11,6 +11,12 @@ import TarjetasTienda from './Partials/TarjetasTienda';
 import ModalAlertaPedido from '../Partials/ModalAlertaPedido';
 import useListadoDiscreto from '../Partials/useListadoDiscreto';
 
+const ORIGEN_TABLERO = {
+    CALL_CENTER: 'Call Center',
+    BELLAROMA: 'Bellaroma',
+    SIN_ORIGEN: 'Sin origen',
+};
+
 const KPI_CONFIG = [
     { key: 'pendientes', label: 'Pendientes', tab: 'PENDIENTES', icon: Clock, color: '#F97316' },
     { key: 'en_atencion', label: 'En atención', tab: 'EN_ATENCION', icon: Package, color: '#0EA5E9' },
@@ -21,9 +27,18 @@ const KPI_CONFIG = [
     { key: 'rechazadas_cedis', label: 'Rechazadas CEDIS', tab: 'RECHAZADAS_CEDIS', icon: Undo2, color: '#EF4444' },
     { key: 'respondidas_hoy', label: 'Respondidas hoy', tab: 'RESPONDIDAS_HOY', icon: CheckCircle2, color: '#22C55E' },
     { key: 'pendientes_liberacion', label: 'Liberación', tab: 'PENDIENTES_LIBERACION', icon: Store, color: '#EAB308' },
+    { key: 'devolucion_pendiente', label: 'Devolución', tab: 'DEVOLUCION_PENDIENTE', icon: Undo2, color: '#F59E0B' },
+    { key: 'historial_devueltas', label: 'Devueltas', tab: 'HISTORIAL_DEVUELTAS', icon: CheckCircle2, color: '#71717A' },
 ];
 
-export default function Index({ auth, tareas, metricas = {}, filtros = {} }) {
+export default function Index({
+    auth,
+    tareas,
+    metricas = {},
+    cola_estados_cuenta = { total: 0, casos: [] },
+    origenes_solicitud = [],
+    filtros = {},
+}) {
     const { flash } = usePage().props;
     const {
         tareas: tareasVista,
@@ -39,6 +54,19 @@ export default function Index({ auth, tareas, metricas = {}, filtros = {} }) {
 
     const [tabActiva, setTabActiva] = useState(filtros.tab || 'PENDIENTES');
     const [busqueda, setBusqueda] = useState(filtros.q || '');
+    const [origenSolicitud, setOrigenSolicitud] = useState(filtros.origen_solicitud || '');
+    const [prioridadMd, setPrioridadMd] = useState(
+        filtros.prioridad_md === true || filtros.prioridad_md === '1' ? '1'
+            : filtros.prioridad_md === false || filtros.prioridad_md === '0' ? '0' : ''
+    );
+
+    const paramsListado = (extra = {}) => ({
+        tab: tabActiva,
+        q: busqueda || undefined,
+        origen_solicitud: origenSolicitud || undefined,
+        prioridad_md: prioridadMd === '' ? undefined : prioridadMd,
+        ...extra,
+    });
     const [alerta, setAlerta] = useState({ abierto: false, tipo: 'success', titulo: '', mensaje: '' });
     const debounceBusqueda = useRef(null);
 
@@ -53,10 +81,10 @@ export default function Index({ auth, tareas, metricas = {}, filtros = {} }) {
     useEffect(() => {
         const interval = setInterval(() => {
             if (cargando) return;
-            cargar({ tab: tabActiva, q: busqueda || undefined, page: tareasVista?.current_page || 1 }, { silencioso: true });
+            cargar(paramsListado({ page: tareasVista?.current_page || 1 }), { silencioso: true });
         }, 15000);
         return () => clearInterval(interval);
-    }, [cargando, tabActiva, busqueda, tareasVista?.current_page, cargar]);
+    }, [cargando, tabActiva, busqueda, origenSolicitud, prioridadMd, tareasVista?.current_page, cargar]);
 
     useEffect(() => {
         if (filtros.tarea && tareasVista?.data?.length) {
@@ -67,19 +95,29 @@ export default function Index({ auth, tareas, metricas = {}, filtros = {} }) {
 
     const onTabChange = (tab) => {
         setTabActiva(tab);
-        cargar({ tab, q: busqueda || undefined, page: 1 });
+        cargar(paramsListado({ tab, page: 1 }));
     };
 
     const onBuscar = (valor) => {
         setBusqueda(valor);
         clearTimeout(debounceBusqueda.current);
         debounceBusqueda.current = setTimeout(() => {
-            cargar({ tab: tabActiva, q: valor || undefined, page: 1 });
+            cargar(paramsListado({ q: valor || undefined, page: 1 }));
         }, 350);
     };
 
+    const onOrigenChange = (valor) => {
+        setOrigenSolicitud(valor);
+        cargar(paramsListado({ origen_solicitud: valor || undefined, page: 1 }));
+    };
+
+    const onPrioridadMdChange = (valor) => {
+        setPrioridadMd(valor);
+        cargar(paramsListado({ prioridad_md: valor === '' ? undefined : valor, page: 1 }));
+    };
+
     const onActualizar = () => {
-        cargar({ tab: tabActiva, q: busqueda || undefined, page: tareasVista?.current_page || 1 });
+        cargar(paramsListado({ page: tareasVista?.current_page || 1 }));
     };
 
     return (
@@ -99,6 +137,36 @@ export default function Index({ auth, tareas, metricas = {}, filtros = {} }) {
                         Bandeja de recolección local y traslado a CEDIS
                     </p>
                 </header>
+
+                {cola_estados_cuenta?.total > 0 && (
+                    <div className={`${geliaCardClass()} p-3 md:p-4 border border-amber-500/30 bg-amber-500/5`} role="status">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-amber-800 dark:text-amber-200 m-0">
+                            Estados de cuenta en Caja (informativo)
+                        </p>
+                        <p className="text-sm theme-text-muted font-bold mt-1 m-0">
+                            {cola_estados_cuenta.total} caso(s) con comprobante pendiente de conciliar.
+                            La separación en Tienda puede continuar.
+                        </p>
+                    </div>
+                )}
+
+                {metricasVista?.observabilidad_origen && (
+                    <div className={`${geliaCardClass()} p-3 md:p-4 hidden md:block`}>
+                        <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0 mb-2">
+                            Activas por origen
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                            {Object.entries(metricasVista.observabilidad_origen).map(([k, n]) => (
+                                <span key={k} className="text-xs font-bold px-2 py-1 rounded-lg theme-element border theme-border">
+                                    {ORIGEN_TABLERO[k] || k}: {n}
+                                </span>
+                            ))}
+                            <span className="text-xs font-bold px-2 py-1 rounded-lg theme-element border theme-border">
+                                MD: {metricasVista.prioridad_md_activas ?? 0}
+                            </span>
+                        </div>
+                    </div>
+                )}
 
                 <div className="md:hidden -mx-1 overflow-x-auto snap-x snap-mandatory flex gap-2 pb-1" role="tablist" aria-label="Estado de preparación">
                     {KPI_CONFIG.map(({ key, label, tab, icon: Icon, color }) => {
@@ -157,13 +225,18 @@ export default function Index({ auth, tareas, metricas = {}, filtros = {} }) {
                     <FiltrosTienda
                         tabActiva={tabActiva}
                         busqueda={busqueda}
+                        origenSolicitud={origenSolicitud}
+                        prioridadMd={prioridadMd}
+                        origenesSolicitud={origenes_solicitud}
                         onTabChange={onTabChange}
                         onBuscar={onBuscar}
+                        onOrigenChange={onOrigenChange}
+                        onPrioridadMdChange={onPrioridadMdChange}
                         onActualizar={onActualizar}
                         metricas={metricasVista}
                         tareas={tareasVista}
                         buscando={cargando}
-                        onIrAPagina={(page) => cargar({ tab: tabActiva, q: busqueda || undefined, page })}
+                        onIrAPagina={(page) => cargar(paramsListado({ page }))}
                     />
                 </div>
 

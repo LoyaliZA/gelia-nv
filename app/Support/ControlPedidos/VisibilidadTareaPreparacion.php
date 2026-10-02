@@ -3,6 +3,7 @@
 namespace App\Support\ControlPedidos;
 
 use App\Models\ControlPedidos\PedidoBma;
+use App\Models\ControlPedidos\PedidoBmaCumplimientoFisico;
 use App\Models\ControlPedidos\PedidoBmaCaratula;
 use App\Models\ControlPedidos\PedidoBmaTareaPreparacion;
 use App\Models\User;
@@ -64,6 +65,7 @@ final class VisibilidadTareaPreparacion
             'fecha_limite' => $tarea->fecha_limite?->toIso8601String(),
             'solicitada_at' => $tarea->solicitada_at?->toIso8601String(),
             'atendida_at' => $tarea->atendida_at?->toIso8601String(),
+            'tiempo_atencion' => self::tiempoAtencion($tarea),
             'observaciones_solicitud' => $tarea->observaciones_solicitud,
             'observaciones_respuesta' => $tarea->observaciones_respuesta,
             'modalidad' => $tarea->modalidad ? [
@@ -82,7 +84,12 @@ final class VisibilidadTareaPreparacion
                 'id' => $pedido->id,
                 'folio' => $pedido->folio,
                 'folio_remision' => $pedido->folio_remision,
-                'cliente_nombre' => $pedido->cliente?->nombre_comercial ?: $pedido->cliente?->nombre,
+                'folio_visible' => \App\Models\ControlPedidos\PedidoBmaReferencia::visible($pedido)['folio'],
+                'folio_etiqueta' => \App\Models\ControlPedidos\PedidoBmaReferencia::visible($pedido)['etiqueta'],
+                'contacto_nombre' => $pedido->contacto_nombre_snapshot,
+                'prioridad_md' => (bool) $pedido->prioridad_md,
+                'origen_solicitud' => $pedido->origen_solicitud,
+                'cliente_nombre' => $pedido->cliente?->nombre_comercial ?: $pedido->cliente?->nombre ?: $pedido->contacto_nombre_snapshot,
                 'cantidad_piezas' => $pedido->cantidad_piezas,
             ] : null,
             'responsable' => $tarea->asignadaA ? [
@@ -91,6 +98,7 @@ final class VisibilidadTareaPreparacion
             ] : null,
             'productos' => $tarea->productos->map(fn ($p) => [
                 'id' => $p->id,
+                'pedido_bma_origen_id' => $p->pedido_bma_origen_id,
                 'sku' => $p->sku,
                 'descripcion_snapshot' => $p->descripcion_snapshot,
                 'cantidad_solicitada' => $p->cantidad_solicitada,
@@ -139,7 +147,85 @@ final class VisibilidadTareaPreparacion
                 'destinatario_nombre' => $caratula->destinatario_nombre,
             ] : null,
             'progreso_caratula' => self::progresoCaratula($tarea),
+            'apartado' => self::payloadApartado($tarea),
         ];
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private static function payloadApartado(PedidoBmaTareaPreparacion $tarea): ?array
+    {
+        if (! $tarea->exists) {
+            return null;
+        }
+        if (! $tarea->relationLoaded('cumplimientoFisico')) {
+            $tarea->load('cumplimientoFisico');
+        }
+        $apartado = $tarea->cumplimientoFisico;
+        if (! $apartado) {
+            return null;
+        }
+
+        return [
+            'estado' => $apartado->estado,
+            'estado_label' => PedidoBmaCumplimientoFisico::LABELS[$apartado->estado] ?? $apartado->estado,
+            'cantidad' => (int) $apartado->cantidad,
+            'ubicacion' => $apartado->ubicacion,
+            'vence_at' => $apartado->vence_at?->toIso8601String(),
+            'version' => (int) $apartado->version,
+            'prorroga_aplicada' => (bool) $apartado->prorroga_aplicada,
+            'condicion_cobro' => $apartado->condicion_cobro,
+            'pago_confirmado_at' => $apartado->pago_confirmado_at?->toIso8601String(),
+            'folio_operacion' => $apartado->folio_operacion,
+            'salida_autorizada_at' => $apartado->salida_autorizada_at?->toIso8601String(),
+            'entregada_at' => $apartado->entregada_at?->toIso8601String(),
+            'receptor_nombre' => $apartado->receptor_nombre,
+            'resguardo_pdv_id' => $apartado->resguardo_pdv_id,
+            'entrega_pdv_id' => $apartado->entrega_pdv_id,
+            'bultos_salida' => $apartado->bultos_salida,
+            'empacado_at' => $apartado->empacado_at?->toIso8601String(),
+            'despachada_at' => $apartado->despachada_at?->toIso8601String(),
+            'vendedor_id' => $tarea->pedido?->vendedor_id,
+            'inventario_sincronizado' => false,
+            'aviso' => 'Apartado físico operativo. No descuenta ni sincroniza el inventario.',
+        ];
+    }
+
+    /**
+     * @return array{minutos: ?int, etiqueta: string, en_curso: bool}
+     */
+    public static function tiempoAtencion(PedidoBmaTareaPreparacion $tarea): array
+    {
+        $inicio = $tarea->solicitada_at;
+        if (! $inicio) {
+            return ['minutos' => null, 'etiqueta' => '—', 'en_curso' => false];
+        }
+
+        $terminales = [
+            PedidoBmaTareaPreparacion::ESTADO_RESPONDIDA,
+            PedidoBmaTareaPreparacion::ESTADO_RECIBIDA_CEDIS,
+            PedidoBmaTareaPreparacion::ESTADO_LIBERADA,
+            PedidoBmaTareaPreparacion::ESTADO_CANCELADA,
+        ];
+        $fin = $tarea->atendida_at;
+        $enCurso = ! in_array($tarea->estado, $terminales, true);
+        if ($fin === null && ! $enCurso) {
+            $fin = $tarea->recibida_cedis_at ?? $tarea->enviada_cedis_at;
+        }
+        if ($fin === null && $enCurso) {
+            $fin = now();
+        }
+        if ($fin === null) {
+            return ['minutos' => null, 'etiqueta' => '—', 'en_curso' => $enCurso];
+        }
+
+        $minutos = max(0, (int) $inicio->diffInMinutes($fin));
+        $horas = intdiv($minutos, 60);
+        $resto = $minutos % 60;
+        $etiqueta = $horas > 0 ? "{$horas} h {$resto} min" : "{$minutos} min";
+
+        return ['minutos' => $minutos, 'etiqueta' => $etiqueta, 'en_curso' => $enCurso];
     }
 
     public static function enmascararTelefono(?string $tel): ?string

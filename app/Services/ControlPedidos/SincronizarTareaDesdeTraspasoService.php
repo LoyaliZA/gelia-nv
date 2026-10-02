@@ -19,6 +19,7 @@ class SincronizarTareaDesdeTraspasoService
         private TransicionEstadoTareaPreparacionService $transicionService,
         private RegistrarHistorialPedidoService $historialService,
         private NotificarPedidoBmaService $notificarService,
+        private RegistrarEventoTraspasoPreparacionService $eventosTraspaso,
     ) {}
 
     public function desdeConfirmacion(SolicitudTraspaso $solicitud, User $usuario): ?PedidoBmaTareaPreparacion
@@ -176,6 +177,12 @@ class SincronizarTareaDesdeTraspasoService
                 true,
                 ['url' => '/control-pedidos?q='.urlencode((string) ($pedido->folio_remision ?: $pedido->folio ?: $pedido->id))]
             );
+
+            if ($recibida) {
+                $this->eventosTraspaso->recibidoCedis($tarea, $solicitud, $usuario);
+            } else {
+                $this->eventosTraspaso->rechazadoCedis($tarea, $solicitud, $usuario, $motivo);
+            }
 
             return $tarea->fresh(['modalidad', 'solicitudTraspaso', 'productos']);
         });

@@ -169,7 +169,7 @@ class CamposIncorrectosPedidoBma
         'pagos' => 'Pagos / exhibición',
         'envio_tienda' => 'Envío de tienda',
         'remision' => 'Remisión PDF',
-        'folio_remision' => 'Folio de remisión',
+        'folio_remision' => 'Folio',
         'pago_validado' => 'Validación de pago',
         'anexo_envio' => 'Anexo de envío',
         'empaque' => 'Empaque',

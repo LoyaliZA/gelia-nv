@@ -254,6 +254,9 @@ class ListarPedidosBmaService
             $query->where(function (Builder $q) use ($termino) {
                 $q->where('folio', 'like', "%{$termino}%")
                     ->orWhere('folio_remision', 'like', "%{$termino}%")
+                    ->orWhere('contacto_nombre_snapshot', 'like', "%{$termino}%")
+                    ->orWhere('contacto_telefono_snapshot', 'like', "%{$termino}%")
+                    ->orWhereHas('referencias', fn (Builder $r) => $r->where('folio', 'like', "%{$termino}%"))
                     ->orWhereHas('cliente', function (Builder $c) use ($termino) {
                         $c->where('nombre', 'like', "%{$termino}%")
                             ->orWhere('numero_cliente', 'like', "%{$termino}%");

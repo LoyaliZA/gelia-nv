@@ -49,7 +49,7 @@ Schedule::command('sesiones:sincronizar-expiradas')->everyFifteenMinutes();
 Schedule::command('saldos-favor:vencer-creditos')->dailyAt('01:15');
 Schedule::command('saldos-favor:notificar-vencimientos')->dailyAt('01:30');
 Schedule::command('control-pedidos:recordatorio-vencimiento-preparacion-tienda')->dailyAt('11:00');
-Schedule::command('control-pedidos:evaluar-vencimiento-espera-preparacion')->hourly();
+Schedule::command('control-pedidos:evaluar-vencimiento-apartado-fisico')->hourly();
 Schedule::command('control-pedidos:reconciliar-traslados-preparacion')->hourly();
 Schedule::command('pdv:evaluar-vencimientos-resguardos')->hourly();
 Schedule::command('demo:reset')->dailyAt('03:10')->when(fn () => (bool) config('demo.reset_automatico'));

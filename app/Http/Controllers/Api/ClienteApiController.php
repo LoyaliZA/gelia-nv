@@ -28,6 +28,7 @@ class ClienteApiController extends Controller
             'es_inactivo',
             'lista_actual_id',
             'monto_venta_actual',
+            'monto_credito_autorizado',
         ];
 
         if ($conFiscales) {
@@ -58,6 +59,9 @@ class ClienteApiController extends Controller
                 'lista_actual_id' => $cliente->lista_actual_id,
                 'lista_actual' => $cliente->listaDescuento->nombre ?? 'Sin Lista',
                 'monto_venta_actual' => (float) $cliente->monto_venta_actual,
+                'monto_credito_autorizado' => $cliente->monto_credito_autorizado !== null
+                    ? (float) $cliente->monto_credito_autorizado
+                    : null,
             ];
 
             if ($conFiscales) {

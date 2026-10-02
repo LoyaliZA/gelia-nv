@@ -3,6 +3,7 @@
 namespace App\Services\ControlPedidos;
 
 use App\Models\ControlPedidos\PedidoBmaCaratula;
+use App\Models\ControlPedidos\PedidoBmaCumplimientoFisico;
 use App\Models\ControlPedidos\PedidoBmaTareaPreparacion;
 use App\Models\User;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
@@ -16,12 +17,14 @@ class ConfirmarCaratulaColocadaService
         private RegistrarHistorialPedidoService $historialService,
         private NotificarPedidoBmaService $notificarService,
         private ResponderPreparacionTiendaService $responderService,
+        private AsegurarCumplimientoFisicoService $asegurarCumplimiento,
     ) {}
 
     public function ejecutar(
         PedidoBmaTareaPreparacion $tarea,
         User $usuario,
         ?int $versionEsperada = null,
+        ?int $caratulaId = null,
     ): PedidoBmaTareaPreparacion {
         if (! $usuario->can('control_pedidos.tienda.confirmar_caratula')) {
             throw new \RuntimeException('No tiene permiso para confirmar colocación de carátula.');
@@ -36,10 +39,26 @@ class ConfirmarCaratulaColocadaService
                 ]);
             }
 
-            $caratula = $tarea->caratulas()
+            $vigente = $tarea->caratulas()
                 ->where('estado', PedidoBmaCaratula::ESTADO_GENERADA)
                 ->orderByDesc('version')
                 ->first();
+
+            if ($caratulaId !== null) {
+                $caratula = $tarea->caratulas()->whereKey($caratulaId)->first();
+                if (! $caratula || $caratula->estado !== PedidoBmaCaratula::ESTADO_GENERADA) {
+                    throw ValidationException::withMessages([
+                        'caratula_id' => 'La carátula indicada no está disponible para colocar.',
+                    ]);
+                }
+                if (! $vigente || (int) $vigente->id !== (int) $caratula->id) {
+                    throw ValidationException::withMessages([
+                        'caratula_id' => 'No puede confirmar una versión obsoleta. Regeneré la carátula vigente.',
+                    ]);
+                }
+            } else {
+                $caratula = $vigente;
+            }
 
             if (! $caratula || ! $caratula->ruta_pdf) {
                 throw ValidationException::withMessages([
@@ -66,6 +85,17 @@ class ConfirmarCaratulaColocadaService
             );
 
             $this->responderService->aplicarSincronizacionPedido($tarea, $usuario->id);
+
+            $tarea->loadMissing('productos');
+            $cumplimiento = $this->asegurarCumplimiento->ejecutar($tarea);
+            $cantidad = (int) $tarea->productos->sum(fn ($p) => (int) $p->cantidad_encontrada);
+            if ($cumplimiento->estado === PedidoBmaCumplimientoFisico::ESTADO_POR_SEPARAR && $cantidad > 0) {
+                $cumplimiento->update([
+                    'estado' => PedidoBmaCumplimientoFisico::ESTADO_SEPARADA,
+                    'cantidad' => $cantidad,
+                    'version' => $cumplimiento->version + 1,
+                ]);
+            }
 
             $pedido = $tarea->pedido()->with(['cliente', 'vendedor', 'estatus'])->first();
             $this->historialService->ejecutar(

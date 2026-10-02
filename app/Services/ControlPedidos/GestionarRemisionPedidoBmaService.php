@@ -70,7 +70,7 @@ class GestionarRemisionPedidoBmaService
         });
     }
 
-    public function actualizarFolioRemision(PedidoBma $pedido, string $folio, int $usuarioId): PedidoBma
+    public function actualizarFolioRemision(PedidoBma $pedido, string $folio, int $usuarioId, string $tipo = \App\Models\ControlPedidos\PedidoBmaReferencia::TIPO_PEDIDO): PedidoBma
     {
         if (! $pedido->esAuditablePorAuxiliar()) {
             throw new \RuntimeException('Solo se puede corregir el folio en pedidos pendientes de revisión.');
@@ -78,12 +78,19 @@ class GestionarRemisionPedidoBmaService
 
         $folio = trim($folio);
         if ($folio === '') {
-            throw new \InvalidArgumentException('Indique el folio de pedido (Wizerp).');
+            throw new \InvalidArgumentException('Indique el folio.');
         }
 
-        return DB::transaction(function () use ($pedido, $folio, $usuarioId) {
+        if (! in_array($tipo, \App\Models\ControlPedidos\PedidoBmaReferencia::TIPOS, true) || $tipo === \App\Models\ControlPedidos\PedidoBmaReferencia::TIPO_SIN_CLASIFICAR) {
+            $tipo = \App\Models\ControlPedidos\PedidoBmaReferencia::TIPO_PEDIDO;
+        }
+
+        return DB::transaction(function () use ($pedido, $folio, $usuarioId, $tipo) {
             $antes = (string) ($pedido->folio_remision ?? '');
-            $pedido->update(['folio_remision' => $folio]);
+            if ($tipo === \App\Models\ControlPedidos\PedidoBmaReferencia::TIPO_REMISION) {
+                $pedido->update(['folio_remision' => $folio]);
+            }
+            \App\Models\ControlPedidos\PedidoBmaReferencia::registrar($pedido, $tipo, $folio, $usuarioId);
 
             $estatusId = $pedido->catalogo_estatus_pedido_id;
             $this->historialService->ejecutar(

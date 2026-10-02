@@ -14,6 +14,8 @@ class PedidoBmaDocumento extends Model
     public const TIPO_GUIA = 'guia';
     public const TIPO_EVIDENCIA_APARTADO = 'evidencia_apartado';
     public const TIPO_PDF_PEDIDO = 'pdf_pedido';
+
+    public const TIPO_COTIZACION = 'cotizacion';
     public const TIPO_ANEXO_PIEZAS = 'anexo_piezas';
     public const TIPO_EVIDENCIA_PESAJE = 'evidencia_pesaje';
     public const TIPO_EVIDENCIA_CONDICION = 'evidencia_condicion';

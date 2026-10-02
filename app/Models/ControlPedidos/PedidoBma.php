@@ -59,9 +59,35 @@ class PedidoBma extends Model
         self::MOTIVO_REPESAJE_OTRO,
     ];
 
+    public const ORIGEN_SOLICITUD_CALL_CENTER = 'CALL_CENTER';
+
+    public const ORIGEN_SOLICITUD_BELLAROMA = 'BELLAROMA';
+
+    public const ORIGENES_SOLICITUD = [
+        self::ORIGEN_SOLICITUD_CALL_CENTER,
+        self::ORIGEN_SOLICITUD_BELLAROMA,
+    ];
+
+    public const DOCUMENTO_INICIAL_COTIZACION = 'COTIZACION';
+
+    public const DOCUMENTO_INICIAL_PEDIDO = 'PEDIDO';
+
+    public const DOCUMENTO_INICIAL_OTRO = 'OTRO';
+
+    public const DOCUMENTOS_INICIALES = [
+        self::DOCUMENTO_INICIAL_COTIZACION,
+        self::DOCUMENTO_INICIAL_PEDIDO,
+        self::DOCUMENTO_INICIAL_OTRO,
+    ];
+
     protected $fillable = [
         'folio',
         'folio_remision',
+        'origen_solicitud',
+        'documento_inicial',
+        'contacto_nombre_snapshot',
+        'contacto_telefono_snapshot',
+        'prioridad_md',
         'fecha',
         'vendedor_id',
         'cliente_id',
@@ -176,6 +202,7 @@ class PedidoBma extends Model
         'total_a_cobrar' => 'decimal:2',
         'numero_cajas' => 'integer',
         'cantidad_piezas' => 'integer',
+        'prioridad_md' => 'boolean',
     ];
 
     public function vendedor(): BelongsTo
@@ -206,6 +233,11 @@ class PedidoBma extends Model
     public function origen(): BelongsTo
     {
         return $this->belongsTo(CatalogoOrigenPedido::class, 'origen_id');
+    }
+
+    public function referencias(): HasMany
+    {
+        return $this->hasMany(PedidoBmaReferencia::class, 'pedido_bma_id')->orderByDesc('id');
     }
 
     public function tipoOperacionEnvio(): BelongsTo
@@ -668,6 +700,23 @@ class PedidoBma extends Model
     public function tienePdfPedido(): bool
     {
         return $this->pdfPedido()->exists();
+    }
+
+    public function cotizaciones(): HasMany
+    {
+        return $this->hasMany(PedidoBmaDocumento::class, 'pedido_bma_id')
+            ->where('tipo', PedidoBmaDocumento::TIPO_COTIZACION)
+            ->orderBy('orden');
+    }
+
+    public function tieneSoporteSolicitud(): bool
+    {
+        return $this->documentos()
+            ->whereIn('tipo', [
+                PedidoBmaDocumento::TIPO_PDF_PEDIDO,
+                PedidoBmaDocumento::TIPO_COTIZACION,
+            ])
+            ->exists();
     }
 
     public function anexoPiezas(): HasMany

@@ -166,7 +166,7 @@ export default function ModalCancelarPedido({ abierto, onClose, pedido }) {
                                         className={`${THEME_INPUT} w-full py-2`}
                                         value={folioNuevo}
                                         onChange={(e) => setFolioNuevo(e.target.value)}
-                                        placeholder="Folio nuevo (si WizeRP cambió)"
+                                        placeholder="Folio nuevo"
                                     />
                                 </div>
                             )}

@@ -23,6 +23,7 @@ class CrearTareaPreparacionService
         private CalcularRequisitosPreparacionService $requisitosService,
         private RegistrarHistorialPedidoService $historialService,
         private NotificarPedidoBmaService $notificarService,
+        private AsegurarCumplimientoFisicoService $asegurarCumplimiento,
     ) {}
 
     /**
@@ -44,6 +45,7 @@ class CrearTareaPreparacionService
         ?string $observaciones = null,
         ?string $idempotenciaClave = null,
         array $entregaMunicipal = [],
+        array $meta = [],
     ): PedidoBmaTareaPreparacion {
         if (! $this->config->activo() || ! $this->config->usuarioHabilitado($usuario)) {
             throw ValidationException::withMessages([
@@ -67,9 +69,9 @@ class CrearTareaPreparacionService
             throw new \RuntimeException('No tiene permiso para solicitar preparación en este pedido.');
         }
 
-        if (! $pedido->tienePdfPedido()) {
+        if (! $pedido->tieneSoporteSolicitud()) {
             throw ValidationException::withMessages([
-                'pdf' => 'Debe adjuntar el PDF o una foto del pedido antes de solicitar preparación.',
+                'pdf' => 'Debe adjuntar la cotización o el soporte del pedido antes de solicitar preparación.',
             ]);
         }
 
@@ -112,9 +114,16 @@ class CrearTareaPreparacionService
             ]);
         }
 
-        return DB::transaction(function () use ($pedido, $usuario, $modalidad, $almacenId, $observaciones, $idempotenciaClave, $datosMunicipio) {
+        return DB::transaction(function () use ($pedido, $usuario, $modalidad, $almacenId, $observaciones, $idempotenciaClave, $datosMunicipio, $meta) {
             $pedido->loadMissing('estatus');
             $fechaLimite = $this->requisitosService->calcularFechaLimite($modalidad);
+            $prioridadMd = (bool) ($meta['prioridad_md'] ?? false);
+            if ($prioridadMd) {
+                $cierre = now()->endOfDay();
+                if ($fechaLimite === null || $fechaLimite->greaterThan($cierre)) {
+                    $fechaLimite = $cierre;
+                }
+            }
 
             $tarea = PedidoBmaTareaPreparacion::query()->create(array_merge([
                 'pedido_bma_id' => $pedido->id,
@@ -130,7 +139,8 @@ class CrearTareaPreparacionService
                 'requiere_traslado_cedis' => $modalidad->requiereTrasladoCedisPorDefecto(),
             ], $datosMunicipio));
 
-            $this->sincronizarProductos($pedido, $tarea);
+            $this->sincronizarProductos($pedido, $tarea, $meta['lineas'] ?? []);
+            $this->asegurarCumplimiento->ejecutar($tarea);
 
             $estatusAnterior = $pedido->estatus;
             $estatusNuevo = CatalogoEstatusPedido::porFase(CatalogoEstatusPedido::FASE_PESAJE_PENDIENTE);
@@ -158,7 +168,35 @@ class CrearTareaPreparacionService
                 $pedidoUpdates['catalogo_paqueteria_id'] = $datosMunicipio['catalogo_paqueteria_id'];
                 $pedidoUpdates['envio_por_cobrar'] = ($datosMunicipio['modalidad_cobro'] ?? '') === PedidoBmaCaratula::COBRO_POR_COBRAR;
             }
+            $origen = trim((string) ($meta['origen_solicitud'] ?? ''));
+            if ($origen === '' && $prioridadMd) {
+                $origen = PedidoBma::ORIGEN_SOLICITUD_BELLAROMA;
+            }
+            if ($origen !== '') {
+                $pedidoUpdates['origen_solicitud'] = $origen;
+            }
+            if (! empty($meta['documento_inicial'])) {
+                $pedidoUpdates['documento_inicial'] = $meta['documento_inicial'];
+            }
+            if (trim((string) ($meta['contacto_nombre'] ?? '')) !== '') {
+                $pedidoUpdates['contacto_nombre_snapshot'] = trim((string) $meta['contacto_nombre']);
+            }
+            if (trim((string) ($meta['contacto_telefono'] ?? '')) !== '') {
+                $pedidoUpdates['contacto_telefono_snapshot'] = trim((string) $meta['contacto_telefono']);
+            }
+            $pedidoUpdates['prioridad_md'] = $prioridadMd;
             $pedido->update($pedidoUpdates);
+
+            $folioRef = trim((string) ($meta['folio_referencia'] ?? ''));
+            $tipoRef = trim((string) ($meta['tipo_referencia'] ?? ''));
+            if ($folioRef !== '' && $tipoRef !== '') {
+                \App\Models\ControlPedidos\PedidoBmaReferencia::registrar(
+                    $pedido,
+                    $tipoRef,
+                    $folioRef,
+                    $usuario->id,
+                );
+            }
 
             if ($modalidad->esTransferencia()) {
                 $pedido->update(['es_resguardo' => true]);
@@ -262,15 +300,45 @@ class CrearTareaPreparacionService
         return trim(preg_replace('/\s+/', ' ', $t) ?? '');
     }
 
-    private function sincronizarProductos(PedidoBma $pedido, PedidoBmaTareaPreparacion $tarea): void
+    /**
+     * @param  list<array{sku?: string, descripcion?: string, cantidad?: int, producto_id?: int|null}>  $lineas
+     */
+    public function guardarDesglose(PedidoBmaTareaPreparacion $tarea, array $lineas): PedidoBmaTareaPreparacion
     {
+        if (! in_array($tarea->estado, [
+            PedidoBmaTareaPreparacion::ESTADO_PENDIENTE,
+            PedidoBmaTareaPreparacion::ESTADO_EN_ATENCION,
+        ], true)) {
+            throw ValidationException::withMessages([
+                'lineas' => 'El desglose solo se puede capturar antes de responder la tarea.',
+            ]);
+        }
+
+        $this->aplicarLineas($tarea, $lineas);
+
+        return $tarea->fresh('productos');
+    }
+
+    /**
+     * @param  list<array{sku?: string, descripcion?: string, cantidad?: int, producto_id?: int|null}>  $lineas
+     */
+    private function sincronizarProductos(PedidoBma $pedido, PedidoBmaTareaPreparacion $tarea, array $lineas = []): void
+    {
+        if ($lineas !== []) {
+            $this->aplicarLineas($tarea, $lineas);
+
+            return;
+        }
+
         $pedido->loadMissing('revisionesProducto');
+        $conSku = $pedido->revisionesProducto->filter(fn ($rev) => trim((string) $rev->sku) !== '');
         $orden = 0;
 
-        if ($pedido->revisionesProducto->isNotEmpty()) {
-            foreach ($pedido->revisionesProducto as $rev) {
+        if ($conSku->isNotEmpty()) {
+            foreach ($conSku as $rev) {
                 PedidoBmaTareaProducto::query()->create([
                     'pedido_bma_tarea_preparacion_id' => $tarea->id,
+                    'pedido_bma_origen_id' => $pedido->id,
                     'producto_id' => $rev->producto_id,
                     'sku' => $rev->sku,
                     'descripcion_snapshot' => $rev->descripcion_producto,
@@ -285,9 +353,45 @@ class CrearTareaPreparacionService
         $cantidad = max(1, (int) ($pedido->cantidad_piezas ?: 1));
         PedidoBmaTareaProducto::query()->create([
             'pedido_bma_tarea_preparacion_id' => $tarea->id,
+            'pedido_bma_origen_id' => $pedido->id,
             'descripcion_snapshot' => "Piezas del pedido ({$cantidad})",
             'cantidad_solicitada' => $cantidad,
             'orden' => 0,
         ]);
+    }
+
+    /**
+     * @param  list<array{sku?: string, descripcion?: string, cantidad?: int, producto_id?: int|null}>  $lineas
+     */
+    private function aplicarLineas(PedidoBmaTareaPreparacion $tarea, array $lineas): void
+    {
+        if ($lineas === []) {
+            throw ValidationException::withMessages([
+                'lineas' => 'Capture al menos una pieza con SKU y cantidad.',
+            ]);
+        }
+
+        $tarea->loadMissing('pedido');
+        $tarea->productos()->delete();
+        $orden = 0;
+        foreach ($lineas as $linea) {
+            $sku = trim((string) ($linea['sku'] ?? ''));
+            $cantidad = (int) ($linea['cantidad'] ?? 0);
+            if ($sku === '' || $cantidad < 1) {
+                throw ValidationException::withMessages([
+                    'lineas' => 'Cada pieza necesita SKU y cantidad mayor a cero.',
+                ]);
+            }
+            $descripcion = trim((string) ($linea['descripcion'] ?? ''));
+            PedidoBmaTareaProducto::query()->create([
+                'pedido_bma_tarea_preparacion_id' => $tarea->id,
+                'pedido_bma_origen_id' => $tarea->pedido_bma_id,
+                'producto_id' => $linea['producto_id'] ?? null,
+                'sku' => $sku,
+                'descripcion_snapshot' => $descripcion !== '' ? $descripcion : $sku,
+                'cantidad_solicitada' => $cantidad,
+                'orden' => $orden++,
+            ]);
+        }
     }
 }

@@ -131,12 +131,20 @@ class CalcularRequisitosPreparacionService
             }
         }
 
-        if (! empty($req['requiere_remision'])) {
-            $tieneRem = $tarea->documentos
-                ->where('tipo_evidencia', PedidoBmaTareaDocumento::TIPO_REMISION)
-                ->isNotEmpty();
-            if (! $tieneRem) {
-                $faltantes[] = 'Remisión';
+        if (! empty($req['evidencia_por_producto'])) {
+            foreach ($tarea->productos as $producto) {
+                $input = collect($productosInput)->firstWhere('id', $producto->id) ?? [];
+                $cantidad = (int) ($input['cantidad_encontrada'] ?? 0);
+                if ($cantidad <= 0) {
+                    continue;
+                }
+                $tiene = $tarea->documentos
+                    ->where('tipo_evidencia', PedidoBmaTareaDocumento::TIPO_EVIDENCIA_PRODUCTO)
+                    ->where('pedido_bma_tarea_producto_id', $producto->id)
+                    ->isNotEmpty();
+                if (! $tiene) {
+                    $faltantes[] = "Evidencia del producto «{$producto->descripcion_snapshot}»";
+                }
             }
         }
 
@@ -147,19 +155,23 @@ class CalcularRequisitosPreparacionService
      * @param  array<string, mixed>  $req
      * @return list<string>
      */
-    public function validarDocumentosMunicipio(PedidoBmaTareaPreparacion $tarea, array $req): array
+    /**
+     * Requisitos para generar la carátula (sin remisión; la remisión es de salida).
+     *
+     * @param  array<string, mixed>  $req
+     * @return list<string>
+     */
+    public function validarDocumentosCaratulaMunicipio(PedidoBmaTareaPreparacion $tarea, array $req): array
     {
-        $tarea->loadMissing(['documentos']);
+        $tarea->loadMissing(['documentos', 'modalidad']);
+        if ($tarea->modalidad?->esDestinoSucursal()) {
+            return [];
+        }
         $faltantes = [];
 
         if (! empty($req['requiere_identificacion'])) {
             if ($tarea->documentos->where('tipo_evidencia', PedidoBmaTareaDocumento::TIPO_IDENTIFICACION)->isEmpty()) {
                 $faltantes[] = 'Identificación del destinatario';
-            }
-        }
-        if (! empty($req['requiere_remision'])) {
-            if ($tarea->documentos->where('tipo_evidencia', PedidoBmaTareaDocumento::TIPO_REMISION)->isEmpty()) {
-                $faltantes[] = 'Remisión';
             }
         }
         if (! empty($req['evidencia_general_obligatoria'])) {
@@ -169,6 +181,119 @@ class CalcularRequisitosPreparacionService
         }
 
         return $faltantes;
+    }
+
+    /** @deprecated Use validarDocumentosCaratulaMunicipio or validarDocumentosSalidaMunicipio */
+    public function validarDocumentosMunicipio(PedidoBmaTareaPreparacion $tarea, array $req): array
+    {
+        return $this->validarDocumentosCaratulaMunicipio($tarea, $req);
+    }
+
+    /**
+     * Documentación de salida: remisión si el transporte la exige, o hoja interna de GELIA.
+     *
+     * @param  array<string, mixed>  $req
+     * @return list<string>
+     */
+    public function validarDocumentosSalidaMunicipio(PedidoBmaTareaPreparacion $tarea, array $req): array
+    {
+        $tarea->loadMissing(['documentos', 'modalidad']);
+        if (! $tarea->modalidad?->esEnvioMunicipio()) {
+            return [];
+        }
+
+        if (empty($req['requiere_remision'])) {
+            return [];
+        }
+
+        $tieneRemision = $tarea->documentos
+            ->where('tipo_evidencia', PedidoBmaTareaDocumento::TIPO_REMISION)
+            ->isNotEmpty();
+        $tieneHoja = $tarea->documentos
+            ->where('tipo_evidencia', PedidoBmaTareaDocumento::TIPO_HOJA_SALIDA_INTERNA)
+            ->isNotEmpty();
+
+        if (! $tieneRemision && ! $tieneHoja) {
+            return ['Remisión del expediente o hoja interna de salida generada por GELIA'];
+        }
+
+        return [];
+    }
+
+    /**
+     * Cinco tomas de empaque municipal cuando hay piezas.
+     *
+     * @param  array<string, mixed>  $req
+     * @return list<string>
+     */
+    public function validarEmpaqueMunicipio(PedidoBmaTareaPreparacion $tarea, array $req): array
+    {
+        $tarea->loadMissing(['documentos', 'productos', 'modalidad']);
+        if (! $tarea->modalidad?->esEnvioMunicipio()) {
+            return [];
+        }
+
+        $faltantes = [];
+        $piezas = (int) $tarea->productos->sum(fn ($p) => (int) $p->cantidad_encontrada);
+        if ($piezas <= 0) {
+            return $faltantes;
+        }
+
+        $docs = $tarea->documentos;
+
+        if ($req['evidencia_por_producto'] ?? false) {
+            foreach ($tarea->productos as $producto) {
+                if ((int) $producto->cantidad_encontrada <= 0) {
+                    continue;
+                }
+                if ($docs->where('tipo_evidencia', PedidoBmaTareaDocumento::TIPO_EVIDENCIA_PRODUCTO)
+                    ->where('pedido_bma_tarea_producto_id', $producto->id)->isEmpty()) {
+                    $faltantes[] = "Evidencia del producto «{$producto->descripcion_snapshot}»";
+                }
+            }
+        } elseif ($docs->where('tipo_evidencia', PedidoBmaTareaDocumento::TIPO_EVIDENCIA_PRODUCTO)->isEmpty()
+            && $docs->where('tipo_evidencia', PedidoBmaTareaDocumento::TIPO_EVIDENCIA_GENERAL)->isEmpty()) {
+            $faltantes[] = 'Evidencia del producto';
+        }
+
+        if ($docs->where('tipo_evidencia', PedidoBmaTareaDocumento::TIPO_EVIDENCIA_BASCULA)->isEmpty()) {
+            $faltantes[] = 'Foto de báscula / peso';
+        }
+        if ($docs->where('tipo_evidencia', PedidoBmaTareaDocumento::TIPO_EVIDENCIA_BULTO)->isEmpty()) {
+            $faltantes[] = 'Foto del bulto';
+        }
+        if ($docs->where('tipo_evidencia', PedidoBmaTareaDocumento::TIPO_EVIDENCIA_ENTREGA)->isEmpty()) {
+            $faltantes[] = 'Foto de entrega al transporte';
+        }
+        if ($docs->where('tipo_evidencia', PedidoBmaTareaDocumento::TIPO_EVIDENCIA_CARATULA_COLOCADA)->isEmpty()) {
+            $faltantes[] = 'Foto de carátula colocada';
+        }
+
+        $faltantes = array_merge($faltantes, $this->validarDocumentosSalidaMunicipio($tarea, $req));
+
+        if (! empty($req['peso_real_obligatorio'])) {
+            if ($tarea->peso_real_kg === null || (float) $tarea->peso_real_kg <= 0) {
+                $faltantes[] = 'Peso real (kg)';
+            }
+        }
+        if (! empty($req['caja_obligatoria']) && ! $tarea->catalogo_tipo_caja_id) {
+            $faltantes[] = 'Tipo de caja';
+        }
+
+        return $faltantes;
+    }
+
+    public function causaRemisionSalida(PedidoBmaTareaPreparacion $tarea): ?string
+    {
+        if (! $tarea->modalidad?->esEnvioMunicipio()) {
+            return null;
+        }
+        $req = $this->efectivos($tarea);
+        if (empty($req['requiere_remision'])) {
+            return null;
+        }
+
+        return 'El transporte configurado exige remisión o hoja interna de salida al despachar.';
     }
 
     public function calcularFechaLimite(CatalogoModalidadPreparacionPedido $modalidad): ?\Carbon\Carbon
@@ -201,7 +326,7 @@ class CalcularRequisitosPreparacionService
             'evidencia_general_obligatoria' => $reglas['requiere_evidencia_conjunto']
                 || (bool) (($tarea->modalidad->requisitos_json['evidencia_general_obligatoria'] ?? true)),
             'campos_destino_obligatorios' => $reglas['campos_destino_obligatorios'],
-            'caratula' => $reglas['requiere_caratula'] || true,
+            'caratula' => (bool) ($reglas['requiere_caratula'] ?? false),
             'plantilla_caratula' => $reglas['plantilla_caratula'],
         ];
     }

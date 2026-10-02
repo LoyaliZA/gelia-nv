@@ -7,6 +7,7 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class PedidoBmaTareaPreparacion extends Model
@@ -161,6 +162,11 @@ class PedidoBmaTareaPreparacion extends Model
     public function tareaAnterior(): BelongsTo
     {
         return $this->belongsTo(self::class, 'tarea_anterior_id');
+    }
+
+    public function cumplimientoFisico(): HasOne
+    {
+        return $this->hasOne(PedidoBmaCumplimientoFisico::class, 'pedido_bma_tarea_preparacion_id');
     }
 
     public function productos(): HasMany

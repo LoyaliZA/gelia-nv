@@ -66,6 +66,7 @@ final class AccionesHistorialPedidoBma
     public const RESPUESTA_PREPARACION_TIENDA = 'respuesta_preparacion_tienda';
     public const INCIDENCIA_PREPARACION_TIENDA = 'incidencia_preparacion_tienda';
     public const CORRECCION_PREPARACION_TIENDA = 'correccion_preparacion_tienda';
+    public const CAMBIO_MODALIDAD_PREPARACION = 'cambio_modalidad_preparacion';
     public const LIBERACION_PREPARACION_TIENDA = 'liberacion_preparacion_tienda';
     public const TRASLADO_PREPARACION_CREADO = 'traslado_preparacion_creado';
     public const TRASLADO_PREPARACION_EN_CAMINO = 'traslado_preparacion_en_camino';
@@ -153,6 +154,7 @@ final class AccionesHistorialPedidoBma
         self::RESPUESTA_PREPARACION_TIENDA => 'Respuesta de preparación en Tienda',
         self::INCIDENCIA_PREPARACION_TIENDA => 'Incidencia de preparación en Tienda',
         self::CORRECCION_PREPARACION_TIENDA => 'Corrección de preparación en Tienda',
+        self::CAMBIO_MODALIDAD_PREPARACION => 'Cambio de modalidad de preparación',
         self::LIBERACION_PREPARACION_TIENDA => 'Liberación de mercancía en Tienda',
         self::TRASLADO_PREPARACION_CREADO => 'Traspaso generado desde preparación',
         self::TRASLADO_PREPARACION_EN_CAMINO => 'Mercancía en traslado a CEDIS',

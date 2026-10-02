@@ -17,6 +17,10 @@ class PreparacionTiendaConfig
 
     public const CLAVE_ZONA_HORARIA = 'control_pedidos.preparacion.zona_horaria';
 
+    public const CLAVE_CIERRE_OPERATIVO = 'control_pedidos.preparacion.cierre_operativo_hora';
+
+    public const CLAVE_DIAS_PRORROGA_VIP = 'control_pedidos.preparacion.dias_prorroga_vip';
+
     public const CACHE_KEY = 'control_pedidos.preparacion_tienda.config';
 
     /**
@@ -93,6 +97,20 @@ class PreparacionTiendaConfig
         return $raw !== '' ? $raw : 'America/Mexico_City';
     }
 
+    public function cierreOperativoHora(): string
+    {
+        $raw = trim((string) $this->valorEscalar(self::CLAVE_CIERRE_OPERATIVO, '20:00'));
+
+        return preg_match('/^\d{2}:\d{2}$/', $raw) ? $raw : '20:00';
+    }
+
+    public function diasProrrogaVip(): int
+    {
+        $n = (int) $this->valorEscalar(self::CLAVE_DIAS_PRORROGA_VIP, '1');
+
+        return max(1, min(5, $n));
+    }
+
     public function modalidadPermitida(string $codigo): bool
     {
         if (! $this->activo()) {
@@ -159,6 +177,8 @@ class PreparacionTiendaConfig
             'dias_resguardo' => $this->diasResguardo(),
             'recordatorio_hora_local' => $this->recordatorioHoraLocal(),
             'zona_horaria' => $this->zonaHoraria(),
+            'cierre_operativo_hora' => $this->cierreOperativoHora(),
+            'dias_prorroga_vip' => $this->diasProrrogaVip(),
             'modalidades_catalogo' => CatalogoModalidadPreparacionPedido::query()
                 ->where('activo', true)
                 ->whereIn('codigo', CatalogoModalidadPreparacionPedido::CODIGOS_SOLICITABLES)
@@ -170,6 +190,7 @@ class PreparacionTiendaConfig
     public function olvidarCache(): void
     {
         Cache::forget(self::CACHE_KEY);
+        Cache::forget(self::CACHE_KEY.'_esc');
         Cache::forget('configuraciones_sistema_globales');
     }
 
@@ -200,6 +221,8 @@ class PreparacionTiendaConfig
                     self::CLAVE_DIAS_RESGUARDO,
                     self::CLAVE_RECORDATORIO_HORA,
                     self::CLAVE_ZONA_HORARIA,
+                    self::CLAVE_CIERRE_OPERATIVO,
+                    self::CLAVE_DIAS_PRORROGA_VIP,
                 ])
                 ->pluck('valor', 'clave')
                 ->all();

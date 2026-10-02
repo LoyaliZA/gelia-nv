@@ -27,6 +27,7 @@ final class ClasificacionIngresoBancario
         'tarjeta' => self::INGRESO_BANCARIO,
         'efectivo' => self::PAGO_NO_BANCARIO,
         'otro' => self::PAGO_NO_BANCARIO,
+        'credito' => self::PAGO_NO_BANCARIO,
     ];
 
     /** @var array<string, bool> */
@@ -36,6 +37,17 @@ final class ClasificacionIngresoBancario
         'tarjeta' => false,
         'efectivo' => false,
         'otro' => false,
+        'credito' => false,
+    ];
+
+    /** @var array<string, bool> */
+    private const DEFAULT_REQUIERE_COMPROBANTE = [
+        'transferencia' => true,
+        'deposito' => true,
+        'tarjeta' => true,
+        'efectivo' => true,
+        'otro' => true,
+        'credito' => false,
     ];
 
     /** @return list<string> */
@@ -81,6 +93,24 @@ final class ClasificacionIngresoBancario
         }
 
         return (bool) (PedidoBmaPago::REQUIERE_BANCO[$formaPago] ?? false);
+    }
+
+    public static function formaRequiereComprobante(?string $formaPago): bool
+    {
+        if ($formaPago === null || $formaPago === '') {
+            return true;
+        }
+
+        $mapa = array_merge(
+            self::DEFAULT_REQUIERE_COMPROBANTE,
+            (array) config('reportes_pagos.requiere_comprobante', [])
+        );
+
+        if (array_key_exists($formaPago, $mapa)) {
+            return (bool) $mapa[$formaPago];
+        }
+
+        return (bool) (PedidoBmaPago::REQUIERE_COMPROBANTE[$formaPago] ?? true);
     }
 
     /** @return list<string> */
@@ -150,7 +180,7 @@ final class ClasificacionIngresoBancario
         };
     }
 
-    /** @return list<array{codigo: string, label: string, clasificacion: string, requiere_banco: bool, cuenta_ingreso_bancario: bool}> */
+    /** @return list<array{codigo: string, label: string, clasificacion: string, requiere_banco: bool, requiere_comprobante: bool, cuenta_ingreso_bancario: bool}> */
     public static function catalogoFormasPago(): array
     {
         return array_map(function (string $codigo) {
@@ -162,6 +192,7 @@ final class ClasificacionIngresoBancario
                 'clasificacion' => $clasificacion,
                 'clasificacion_label' => self::labelClasificacion($clasificacion),
                 'requiere_banco' => self::formaRequiereBanco($codigo),
+                'requiere_comprobante' => self::formaRequiereComprobante($codigo),
                 'cuenta_ingreso_bancario' => $clasificacion === self::INGRESO_BANCARIO,
             ];
         }, PedidoBmaPago::FORMAS_PAGO);

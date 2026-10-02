@@ -9,8 +9,10 @@ use App\Models\ControlPedidos\PedidoBmaTareaPreparacion;
 use App\Models\ControlPedidos\PedidoBmaTareaProducto;
 use App\Models\User;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
+use App\Support\ControlPedidos\DesgloseSkuPreparacion;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
 class ResponderPreparacionTiendaService
@@ -26,6 +28,7 @@ class ResponderPreparacionTiendaService
     /**
      * @param  list<array{id: int, cantidad_encontrada: int, estado_fisico: string, observacion?: string|null}>  $productos
      * @param  list<UploadedFile>  $evidencias
+     * @param  array<int|string, UploadedFile>  $evidenciasProducto
      * @param  array{peso_real_kg?: mixed, peso_volumetrico_kg?: mixed, catalogo_tipo_caja_id?: mixed, observaciones_fisicas?: mixed}  $datosExtra
      */
     public function ejecutar(
@@ -36,17 +39,26 @@ class ResponderPreparacionTiendaService
         ?string $observaciones = null,
         ?int $versionEsperada = null,
         array $datosExtra = [],
+        array $evidenciasProducto = [],
     ): PedidoBmaTareaPreparacion {
         if (! $usuario->can('control_pedidos.tienda.responder')) {
             throw new \RuntimeException('No tiene permiso para responder preparación.');
         }
 
-        $faltantes = $this->requisitosService->validarRespuesta($tarea, $productos, $datosExtra);
-        if ($faltantes !== []) {
-            throw ValidationException::withMessages(['requisitos' => $faltantes]);
-        }
+        $rutasNuevas = [];
 
-        return DB::transaction(function () use ($tarea, $usuario, $productos, $evidencias, $observaciones, $versionEsperada, $datosExtra) {
+        try {
+            return DB::transaction(function () use (
+                $tarea,
+                $usuario,
+                $productos,
+                $evidencias,
+                $evidenciasProducto,
+                $observaciones,
+                $versionEsperada,
+                $datosExtra,
+                &$rutasNuevas,
+            ) {
             $tarea = PedidoBmaTareaPreparacion::query()->lockForUpdate()->findOrFail($tarea->id);
             $tarea->loadMissing(['modalidad', 'productos']);
 
@@ -62,6 +74,11 @@ class ResponderPreparacionTiendaService
                 ]);
             }
 
+            $faltanteSku = DesgloseSkuPreparacion::mensaje($tarea);
+            if ($faltanteSku !== null) {
+                throw ValidationException::withMessages(['productos' => $faltanteSku]);
+            }
+
             foreach ($productos as $input) {
                 /** @var PedidoBmaTareaProducto|null $producto */
                 $producto = $tarea->productos()->where('id', $input['id'])->first();
@@ -75,7 +92,19 @@ class ResponderPreparacionTiendaService
                 ]);
             }
 
-            $this->guardarEvidencias($tarea, $evidencias, $usuario->id);
+            $rutasNuevas = array_merge(
+                $rutasNuevas,
+                $this->guardarEvidencias($tarea, $evidencias, $usuario->id),
+                $this->guardarEvidenciasProducto($tarea, $evidenciasProducto, $usuario->id),
+            );
+
+            $tarea->unsetRelation('documentos');
+            $tarea->load('documentos');
+            $faltantes = $this->requisitosService->validarRespuesta($tarea, $productos, $datosExtra);
+            if ($faltantes !== []) {
+                throw ValidationException::withMessages(['requisitos' => $faltantes]);
+            }
+
             $tarea->documentos()->where('inmutable', false)->update(['inmutable' => true]);
 
             $updates = [
@@ -97,20 +126,34 @@ class ResponderPreparacionTiendaService
             }
             $tarea->update($updates);
 
-            $esTraslado = (bool) $tarea->requiere_traslado_cedis;
+            $tarea->unsetRelation('productos');
+            $tarea->load('productos');
+            $requisitos = $this->requisitosService->efectivos($tarea);
+            $esTraslado = (bool) ($requisitos['traslado_cedis'] ?? false);
+            if ((bool) $tarea->requiere_traslado_cedis !== $esTraslado) {
+                $tarea->update(['requiere_traslado_cedis' => $esTraslado]);
+            }
+            $piezasEncontradas = (int) $tarea->productos->sum(fn ($p) => (int) $p->cantidad_encontrada);
+            $hayFaltante = $tarea->productos->contains(
+                fn ($p) => (int) $p->cantidad_encontrada < (int) $p->cantidad_solicitada
+            );
+            $trasladoConPiezas = $esTraslado && $piezasEncontradas > 0;
+
             $esMunicipio = (bool) $tarea->modalidad?->esEnvioMunicipio();
-            $destino = $esTraslado
+            $destino = $trasladoConPiezas
                 ? PedidoBmaTareaPreparacion::ESTADO_LISTA_PARA_TRASLADO
                 : ($esMunicipio
                     ? PedidoBmaTareaPreparacion::ESTADO_LISTA_PARA_CARATULA
                     : PedidoBmaTareaPreparacion::ESTADO_RESPONDIDA);
 
-            $accion = $esTraslado ? 'lista_para_traslado' : ($esMunicipio ? 'lista_para_caratula' : 'responder');
-            $comentario = $esTraslado
+            $accion = $trasladoConPiezas ? 'lista_para_traslado' : ($esMunicipio ? 'lista_para_caratula' : 'responder');
+            $comentario = $trasladoConPiezas
                 ? 'Preparación lista para traslado a CEDIS.'
-                : ($esMunicipio
-                    ? 'Preparación lista para generar carátula municipal.'
-                    : 'Preparación respondida por Tienda.');
+                : ($esTraslado
+                    ? 'Tienda no encontró unidades. La consulta queda respondida para Ventas.'
+                    : ($esMunicipio
+                        ? 'Preparación lista para generar carátula municipal.'
+                        : 'Preparación respondida por Tienda.'));
 
             $tarea = $this->transicionService->ejecutar(
                 $tarea,
@@ -123,11 +166,26 @@ class ResponderPreparacionTiendaService
                 $usuario
             );
 
-            if ($esTraslado) {
+            if ($trasladoConPiezas) {
                 $this->crearTraspasoService->ejecutar($tarea->fresh(['productos', 'pedido.cliente', 'pedido.vendedor', 'almacen']), $usuario);
                 $this->copiarRevisionesProducto($tarea->fresh(['productos', 'pedido']), $usuario->id);
             } elseif (! $esMunicipio) {
                 $this->sincronizarPedido($tarea, $usuario->id);
+            }
+
+            if ($esTraslado && $hayFaltante) {
+                $pedidoFaltante = $tarea->pedido()->with(['cliente', 'vendedor'])->first();
+                $this->notificarService->ejecutar(
+                    $pedidoFaltante,
+                    'pedido_preparacion_tienda_faltante',
+                    $piezasEncontradas > 0
+                        ? 'Tienda encontró solo parte de las piezas. Revise el faltante antes de continuar.'
+                        : 'Tienda no encontró piezas. No se generó traslado.',
+                    [],
+                    $usuario->id,
+                    true,
+                    ['url' => '/control-pedidos?q='.urlencode((string) ($pedidoFaltante->folio ?: $pedidoFaltante->id))]
+                );
             }
 
             $pedido = $tarea->pedido()->with(['cliente', 'vendedor', 'estatus'])->first();
@@ -136,23 +194,25 @@ class ResponderPreparacionTiendaService
                 $usuario->id,
                 $pedido->estatus->id,
                 $pedido->estatus->id,
-                $esTraslado
+                $trasladoConPiezas
                     ? 'Tienda marcó la preparación lista para traslado.'
-                    : ($esMunicipio
-                        ? 'Tienda dejó la preparación lista para carátula municipal.'
-                        : 'Tienda respondió la preparación del pedido.'),
+                    : ($esTraslado
+                        ? 'Tienda respondió sin unidades para traslado.'
+                        : ($esMunicipio
+                            ? 'Tienda dejó la preparación lista para carátula municipal.'
+                            : 'Tienda respondió la preparación del pedido.')),
                 AccionesHistorialPedidoBma::RESPUESTA_PREPARACION_TIENDA
             );
 
             $this->notificarService->ejecutar(
                 $pedido,
-                $esTraslado ? 'pedido_preparacion_tienda_lista_traslado' : ($esMunicipio ? 'pedido_preparacion_tienda_lista_caratula' : 'pedido_preparacion_tienda_respondida'),
-                $esTraslado
+                $trasladoConPiezas ? 'pedido_preparacion_tienda_lista_traslado' : ($esMunicipio ? 'pedido_preparacion_tienda_lista_caratula' : 'pedido_preparacion_tienda_respondida'),
+                $trasladoConPiezas
                     ? 'Tienda dejó la mercancía lista para traslado a CEDIS.'
                     : ($esMunicipio
                         ? 'Tienda dejó la mercancía lista para generar e imprimir carátula.'
                         : 'Tienda respondió la preparación de tu pedido. Confirma con el cliente y cierra la consulta.'),
-                $esTraslado ? ['control_pedidos.tienda.trasladar'] : ($esMunicipio ? ['control_pedidos.tienda.generar_caratula'] : []),
+                $trasladoConPiezas ? ['control_pedidos.tienda.trasladar'] : ($esMunicipio ? ['control_pedidos.tienda.generar_caratula'] : []),
                 $usuario->id,
                 true,
                 ['url' => $esMunicipio
@@ -161,21 +221,77 @@ class ResponderPreparacionTiendaService
             );
 
             return $tarea->fresh(['modalidad', 'almacen', 'productos', 'documentos', 'pedido.cliente', 'solicitudTraspaso', 'paqueteria']);
-        });
+            });
+        } catch (\Throwable $e) {
+            if ($rutasNuevas !== []) {
+                Storage::disk('public')->delete($rutasNuevas);
+            }
+            throw $e;
+        }
     }
 
-    /** @param list<UploadedFile> $evidencias */
-    private function guardarEvidencias(PedidoBmaTareaPreparacion $tarea, array $evidencias, int $usuarioId): void
+    /**
+     * @param  list<UploadedFile>  $evidencias
+     * @return list<string>
+     */
+    private function guardarEvidencias(PedidoBmaTareaPreparacion $tarea, array $evidencias, int $usuarioId): array
     {
+        return $this->persistirArchivos($tarea, $evidencias, $usuarioId, PedidoBmaTareaDocumento::TIPO_EVIDENCIA_GENERAL, null);
+    }
+
+    /**
+     * @param  array<int|string, UploadedFile>  $evidenciasProducto
+     * @return list<string>
+     */
+    private function guardarEvidenciasProducto(PedidoBmaTareaPreparacion $tarea, array $evidenciasProducto, int $usuarioId): array
+    {
+        $rutas = [];
+        foreach ($evidenciasProducto as $productoId => $archivo) {
+            if (! $archivo instanceof UploadedFile || ! $archivo->isValid()) {
+                continue;
+            }
+            $id = (int) $productoId;
+            if (! $tarea->productos()->where('id', $id)->exists()) {
+                continue;
+            }
+            $rutas = array_merge(
+                $rutas,
+                $this->persistirArchivos(
+                    $tarea,
+                    [$archivo],
+                    $usuarioId,
+                    PedidoBmaTareaDocumento::TIPO_EVIDENCIA_PRODUCTO,
+                    $id,
+                )
+            );
+        }
+
+        return $rutas;
+    }
+
+    /**
+     * @param  list<UploadedFile>  $evidencias
+     * @return list<string>
+     */
+    private function persistirArchivos(
+        PedidoBmaTareaPreparacion $tarea,
+        array $evidencias,
+        int $usuarioId,
+        string $tipo,
+        ?int $productoId,
+    ): array {
         $archivos = array_values(array_filter(
             $evidencias,
             fn ($f) => $f instanceof UploadedFile && $f->isValid()
         ));
+        $rutas = [];
 
         foreach ($archivos as $archivo) {
             $ruta = $archivo->store("pedidos_bma/tareas_preparacion/{$tarea->id}", 'public');
+            $rutas[] = $ruta;
             $tarea->documentos()->create([
-                'tipo_evidencia' => PedidoBmaTareaDocumento::TIPO_EVIDENCIA_GENERAL,
+                'pedido_bma_tarea_producto_id' => $productoId,
+                'tipo_evidencia' => $tipo,
                 'ruta_interna' => $ruta,
                 'nombre_original' => $archivo->getClientOriginalName(),
                 'mime_type' => $archivo->getMimeType(),
@@ -185,6 +301,8 @@ class ResponderPreparacionTiendaService
                 'subido_at' => now(),
             ]);
         }
+
+        return $rutas;
     }
 
     private function sincronizarPedido(PedidoBmaTareaPreparacion $tarea, int $usuarioId): void
@@ -218,7 +336,11 @@ class ResponderPreparacionTiendaService
         $pedido->revisionesProducto()->delete();
 
         foreach ($tarea->productos as $p) {
-            for ($i = 0; $i < max(1, (int) $p->cantidad_encontrada); $i++) {
+            $cantidad = (int) $p->cantidad_encontrada;
+            if ($cantidad <= 0) {
+                continue;
+            }
+            for ($i = 0; $i < $cantidad; $i++) {
                 $pedido->revisionesProducto()->create([
                     'orden' => ++$orden,
                     'descripcion_producto' => $p->descripcion_snapshot,

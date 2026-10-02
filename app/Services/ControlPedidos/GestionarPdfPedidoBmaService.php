@@ -19,7 +19,7 @@ class GestionarPdfPedidoBmaService
 
     private const EXTS_SOPORTE = ['pdf', 'jpg', 'jpeg', 'png', 'webp'];
 
-    public function subir(PedidoBma $pedido, UploadedFile $archivo): PedidoBma
+    public function subir(PedidoBma $pedido, UploadedFile $archivo, string $tipo = PedidoBmaDocumento::TIPO_PDF_PEDIDO): PedidoBma
     {
         if (! $pedido->esEditablePorVendedora()) {
             throw new \RuntimeException('Solo se puede adjuntar el soporte del pedido en borrador, pesaje pendiente o rechazado.');
@@ -27,13 +27,19 @@ class GestionarPdfPedidoBmaService
 
         $this->assertSoporteValido($archivo);
 
-        return DB::transaction(function () use ($pedido, $archivo) {
-            $this->eliminarExistentes($pedido, PedidoBmaDocumento::TIPO_PDF_PEDIDO);
+        $tipo = in_array($tipo, [PedidoBmaDocumento::TIPO_PDF_PEDIDO, PedidoBmaDocumento::TIPO_COTIZACION], true)
+            ? $tipo
+            : PedidoBmaDocumento::TIPO_PDF_PEDIDO;
 
-            $ruta = $archivo->store("pedidos_bma/pdf_pedido/{$pedido->id}", 'public');
+        return DB::transaction(function () use ($pedido, $archivo, $tipo) {
+            $this->eliminarExistentes($pedido, PedidoBmaDocumento::TIPO_PDF_PEDIDO);
+            $this->eliminarExistentes($pedido, PedidoBmaDocumento::TIPO_COTIZACION);
+
+            $carpeta = $tipo === PedidoBmaDocumento::TIPO_COTIZACION ? 'cotizacion' : 'pdf_pedido';
+            $ruta = $archivo->store("pedidos_bma/{$carpeta}/{$pedido->id}", 'public');
 
             $pedido->documentos()->create([
-                'tipo' => PedidoBmaDocumento::TIPO_PDF_PEDIDO,
+                'tipo' => $tipo,
                 'ruta_archivo' => $ruta,
                 'nombre_original' => $archivo->getClientOriginalName(),
                 'mime_type' => $archivo->getMimeType(),

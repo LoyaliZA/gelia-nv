@@ -15,6 +15,7 @@ class SubirPdfPedidoBmaRequest extends FormRequest
     {
         return [
             'pdf_pedido' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png,webp', 'max:10240'],
+            'tipo_soporte' => ['nullable', 'string', 'in:pdf_pedido,cotizacion'],
         ];
     }
 

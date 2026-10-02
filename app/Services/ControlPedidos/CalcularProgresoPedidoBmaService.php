@@ -138,11 +138,13 @@ class CalcularProgresoPedidoBmaService
             return false;
         }
 
-        $tienePdf = $pedido->documentos
-            ->contains(fn ($d) => $d->tipo === PedidoBmaDocumento::TIPO_PDF_PEDIDO);
+        $tieneSoporte = $pedido->documentos
+            ->contains(fn ($d) => in_array($d->tipo, [
+                PedidoBmaDocumento::TIPO_PDF_PEDIDO,
+                PedidoBmaDocumento::TIPO_COTIZACION,
+            ], true));
 
-        // Borrador usable: con PDF o al menos folio WizeRP iniciado.
-        return $tienePdf || filled($pedido->folio_remision);
+        return $tieneSoporte || filled($pedido->folio_remision);
     }
 
     private function cotizacionLista(

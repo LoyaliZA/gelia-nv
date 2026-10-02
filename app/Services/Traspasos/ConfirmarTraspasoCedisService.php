@@ -12,7 +12,8 @@ class ConfirmarTraspasoCedisService
 {
     public function __construct(
         private NotificarTraspasoService $notificar,
-        private GuardarRevisionesTraspasoService $revisionesTraspaso
+        private GuardarRevisionesTraspasoService $revisionesTraspaso,
+        private \App\Services\ControlPedidos\ConciliarTraspasoTiendaCedisService $conciliarTraspaso,
     ) {}
 
     /**
@@ -73,6 +74,8 @@ class ConfirmarTraspasoCedisService
                 'CEDIS confirmó la recepción del traspaso.',
                 $usuario->id
             );
+
+            $this->conciliarTraspaso->ejecutar($fresh, $usuario);
 
             if ($fresh->tarea_preparacion_id) {
                 app(\App\Services\ControlPedidos\SincronizarTareaDesdeTraspasoService::class)

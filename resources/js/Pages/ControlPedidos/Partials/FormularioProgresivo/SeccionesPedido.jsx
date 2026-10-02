@@ -31,7 +31,7 @@ export function SeccionSolicitudInicialPedido({ children, soloHijos = false, ...
     return (
         <MarcoSeccion
             titulo="Solicitud inicial"
-            descripcion="Tipo de pedido, folio WizeRP, almacén, archivo y destino cuando ya se conozca."
+            descripcion="Tipo de pedido, folio, almacén, archivo y destino cuando ya se conozca."
             soloHijos={soloHijos}
             {...rest}
         >

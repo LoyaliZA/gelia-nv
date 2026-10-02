@@ -21,6 +21,7 @@ return [
         'tarjeta' => 'ingreso_bancario',
         'efectivo' => 'pago_no_bancario',
         'otro' => 'pago_no_bancario',
+        'credito' => 'pago_no_bancario',
     ],
 
     /*
@@ -33,6 +34,20 @@ return [
         'tarjeta' => false,
         'efectivo' => false,
         'otro' => false,
+        'credito' => false,
+    ],
+
+    /*
+    | Formas que exigen comprobante adjunto al registrar la exhibición.
+    | CREDITO es cuenta por cobrar: no lleva voucher ni banco.
+    */
+    'requiere_comprobante' => [
+        'transferencia' => true,
+        'deposito' => true,
+        'tarjeta' => true,
+        'efectivo' => true,
+        'otro' => true,
+        'credito' => false,
     ],
 
     /*

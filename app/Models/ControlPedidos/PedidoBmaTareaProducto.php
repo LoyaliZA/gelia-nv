@@ -12,6 +12,7 @@ class PedidoBmaTareaProducto extends Model
 
     protected $fillable = [
         'pedido_bma_tarea_preparacion_id',
+        'pedido_bma_origen_id',
         'producto_id',
         'sku',
         'descripcion_snapshot',

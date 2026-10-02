@@ -19,7 +19,7 @@ export default function DatosGeneralesAuditoria({ pedido }) {
         <div className="grid grid-cols-2 gap-4">
             <Campo label="N° Cliente" value={pedido.cliente?.numero_cliente} />
             <Campo label="Nombre" value={pedido.cliente?.nombre} />
-            <Campo label="Folio WizeRP" value={pedido.folio_remision} />
+            <Campo label="Folio" value={pedido.folio_remision} />
             <Campo label="Folio interno" value={pedido.folio} />
             <Campo label="Fecha pedido" value={formatearFechaNegocio(pedido.fecha)} />
             <Campo label="Registrado" value={formatearFechaHoraAuditoria(pedido.created_at)} />

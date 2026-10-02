@@ -84,7 +84,12 @@ class PedidoBmaSaldosPagosController extends Controller
             'fecha_pago' => ['nullable', 'date'],
             'referencia' => ['nullable', 'string', 'max:128'],
             'observaciones' => ['nullable', 'string', 'max:2000'],
-            'comprobante' => ['required', 'file', 'max:10240'],
+            'comprobante' => [
+                Rule::requiredIf(fn () => PedidoBmaPago::formaRequiereComprobante($forma)),
+                'nullable',
+                'file',
+                'max:10240',
+            ],
         ]);
 
         try {
@@ -256,7 +261,7 @@ class PedidoBmaSaldosPagosController extends Controller
             return back()->with('error', $e->getMessage());
         }
 
-        return back()->with('success', 'Comprobante sustituido. El archivo anterior se conserva.');
+        return back()->with('success', 'Exhibición sustituida. El registro anterior se conserva.');
     }
 
     private function assertPuedeMutarPago(PedidoBmaPago $pago): void

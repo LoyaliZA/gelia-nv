@@ -24,7 +24,7 @@ class SustituirPagoPedidoBmaService
     public function ejecutar(
         PedidoBmaPago $rechazado,
         array $datos,
-        UploadedFile $comprobante,
+        ?UploadedFile $comprobante,
         int $usuarioId,
     ): PedidoBmaPago {
         $pedido = $rechazado->pedido;
@@ -70,13 +70,16 @@ class SustituirPagoPedidoBmaService
 
         CoberturaPagoPedidoBmaService::assertBancoPermitido($pedido, $bancoId);
 
-        if (! $comprobante->isValid()) {
+        $requiereComprobante = PedidoBmaPago::formaRequiereComprobante($forma);
+        if ($requiereComprobante && (! $comprobante || ! $comprobante->isValid())) {
             throw new InvalidArgumentException('Debe adjuntar el nuevo comprobante.');
         }
 
         $ruta = null;
         try {
-            $ruta = $comprobante->store("pedidos_bma/pagos/{$pedido->id}", 'public');
+            if ($comprobante && $comprobante->isValid()) {
+                $ruta = $comprobante->store("pedidos_bma/pagos/{$pedido->id}", 'public');
+            }
 
             return DB::transaction(function () use (
                 $rechazado, $pedido, $datos, $comprobante, $usuarioId, $monto, $forma, $bancoId, $ruta
@@ -102,9 +105,9 @@ class SustituirPagoPedidoBmaService
                     'activo_para_cobertura' => true,
                     'observaciones' => $datos['observaciones'] ?? null,
                     'ruta_archivo' => $ruta,
-                    'nombre_original' => $comprobante->getClientOriginalName(),
-                    'mime_type' => $comprobante->getMimeType(),
-                    'tamano_bytes' => $comprobante->getSize(),
+                    'nombre_original' => $comprobante?->getClientOriginalName(),
+                    'mime_type' => $comprobante && $ruta ? $comprobante->getMimeType() : null,
+                    'tamano_bytes' => $comprobante && $ruta ? $comprobante->getSize() : null,
                 ]);
 
                 $rechazado->update([
@@ -124,7 +127,9 @@ class SustituirPagoPedidoBmaService
                         number_format($monto, 2, '.', ',')
                     ),
                     AccionesHistorialPedidoBma::SUSTITUCION_EXHIBICION_PAGO,
-                    ['ruta' => $ruta, 'nombre' => $comprobante->getClientOriginalName(), 'reemplaza_pago_id' => $rechazado->id]
+                    $ruta
+                        ? ['ruta' => $ruta, 'nombre' => $comprobante?->getClientOriginalName(), 'reemplaza_pago_id' => $rechazado->id]
+                        : ['reemplaza_pago_id' => $rechazado->id]
                 );
 
                 $this->registrarPago->reconciliarExcedenteTrasExhibicion($pedido->fresh(), $usuarioId);

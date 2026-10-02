@@ -18,6 +18,18 @@ class PedidoBmaTareaDocumento extends Model
 
     public const TIPO_REMISION = 'remision';
 
+    public const TIPO_HOJA_SALIDA_INTERNA = 'hoja_salida_interna';
+
+    public const TIPO_EVIDENCIA_BASCULA = 'evidencia_bascula';
+
+    public const TIPO_EVIDENCIA_BULTO = 'evidencia_bulto';
+
+    public const TIPO_EVIDENCIA_CARATULA_COLOCADA = 'evidencia_caratula_colocada';
+
+    public const TIPO_EVIDENCIA_ENTREGA = 'evidencia_entrega';
+
+    public const TIPO_DEVOLUCION_ANAQUEL = 'devolucion_anaquel';
+
     protected $table = 'pedido_bma_tarea_documentos';
 
     protected $fillable = [

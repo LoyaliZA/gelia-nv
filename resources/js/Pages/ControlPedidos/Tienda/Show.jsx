@@ -11,6 +11,8 @@ import ModalAlertaPedido from '../Partials/ModalAlertaPedido';
 import AvisoOperativoPedido from '../Partials/AvisoOperativoPedido';
 import ModalSesionEvidenciaTienda from './Partials/ModalSesionEvidenciaTienda';
 import ModalLiberarMercancia from '../Partials/ModalLiberarMercancia';
+import ApartadoFisicoTienda from './Partials/ApartadoFisicoTienda';
+import EmpaqueMunicipioTienda from './Partials/EmpaqueMunicipioTienda';
 
 const TIPOS_INCIDENCIA = [
     { value: 'almacen_incorrecto', label: 'Almacén incorrecto' },
@@ -49,7 +51,12 @@ export default function Show({
     documentos = [],
     historial = [],
     almacenes = [],
+    tipos_caja = [],
     traspaso = null,
+    eventos_apartado = [],
+    conciliacion_grupo = null,
+    discrepancias_traspaso = [],
+    config = {},
 }) {
     const { flash } = usePage().props;
     const permisos = auth?.user?.permissions || [];
@@ -64,6 +71,8 @@ export default function Show({
     const [pesoVol, setPesoVol] = useState(tarea.peso_volumetrico_kg ?? '');
     const [obsFisicas, setObsFisicas] = useState(tarea.observaciones_fisicas || '');
     const [evidencias, setEvidencias] = useState([]);
+    const [evidenciasProducto, setEvidenciasProducto] = useState({});
+    const [tipoCajaId, setTipoCajaId] = useState(tarea.catalogo_tipo_caja_id ? String(tarea.catalogo_tipo_caja_id) : '');
     const [modalQr, setModalQr] = useState(false);
     const [modoIncidencia, setModoIncidencia] = useState(false);
     const [motivoRegeneracion, setMotivoRegeneracion] = useState('');
@@ -115,8 +124,17 @@ export default function Show({
         if (requisitos.peso_real_obligatorio && !(Number(pesoReal) > 0)) f.push('Peso real (kg)');
         if (requisitos.peso_volumetrico_obligatorio && !(Number(pesoVol) > 0)) f.push('Peso volumétrico (kg)');
         if (requisitos.observaciones_fisicas_obligatorias && !String(obsFisicas || '').trim()) f.push('Observaciones físicas');
+        if (requisitos.caja_obligatoria && !tipoCajaId) f.push('Tipo de caja');
+        if (requisitos.evidencia_por_producto) {
+            productos.forEach((p, i) => {
+                if (!(Number(p.cantidad_encontrada) > 0)) return;
+                const orig = tarea.productos[i];
+                const ya = documentos.some((d) => d.tipo_evidencia === 'evidencia_producto' && Number(d.pedido_bma_tarea_producto_id) === Number(p.id));
+                if (!ya && !evidenciasProducto[p.id]) f.push(`Evidencia de «${orig?.descripcion_snapshot || 'producto'}»`);
+            });
+        }
         return f;
-    }, [productos, tarea.productos, requisitos, documentos, evidencias, pesoReal, pesoVol, obsFisicas]);
+    }, [productos, tarea.productos, requisitos, documentos, evidencias, evidenciasProducto, pesoReal, pesoVol, obsFisicas, tipoCajaId]);
 
     const tomar = () => {
         router.post(route('control_pedidos.tienda.tomar', tarea.id), { version: tarea.version });
@@ -134,8 +152,12 @@ export default function Show({
         form.append('version', tarea.version);
         if (pesoReal !== '') form.append('peso_real_kg', pesoReal);
         if (pesoVol !== '') form.append('peso_volumetrico_kg', pesoVol);
+        if (tipoCajaId) form.append('catalogo_tipo_caja_id', tipoCajaId);
         if (obsFisicas) form.append('observaciones_fisicas', obsFisicas);
         evidencias.forEach((f, i) => form.append(`evidencias[${i}]`, f));
+        Object.entries(evidenciasProducto).forEach(([id, file]) => {
+            if (file) form.append(`evidencias_producto[${id}]`, file);
+        });
         router.post(route('control_pedidos.tienda.responder', tarea.id), form, { forceFormData: true });
     };
 
@@ -158,7 +180,10 @@ export default function Show({
 
     const confirmarCaratula = () => {
         if (!window.confirm('¿Confirma que la carátula está colocada en el paquete?')) return;
-        router.post(route('control_pedidos.tienda.caratula.confirmar', tarea.id), { version: tarea.version });
+        router.post(route('control_pedidos.tienda.caratula.confirmar', tarea.id), {
+            version: tarea.version,
+            caratula_id: caratula?.id,
+        });
     };
 
     const subirDocMunicipal = (tipo, file) => {
@@ -182,7 +207,8 @@ export default function Show({
     const enPendiente = tarea.estado === 'PENDIENTE' && puedeTomar;
     const listaTraslado = tarea.estado === 'LISTA_PARA_TRASLADO';
     const traspasoInfo = traspaso || tarea.solicitud_traspaso;
-    const folio = tarea.pedido?.folio_remision || tarea.pedido?.folio || `Tarea #${tarea.id}`;
+    const folio = tarea.pedido?.folio_visible || tarea.pedido?.folio_remision || tarea.pedido?.folio || `Tarea #${tarea.id}`;
+    const folioEtiqueta = tarea.pedido?.folio_etiqueta || 'Folio';
     const badgeClass = BADGE_ESTADO[tarea.estado] || 'theme-element theme-text-muted border theme-border';
     const progreso = tarea.progreso_traslado || [];
     const progresoCaratula = tarea.progreso_caratula || [];
@@ -263,6 +289,11 @@ export default function Show({
                             <h1 className="text-xl md:text-2xl font-black italic uppercase tracking-tighter theme-text-main m-0 truncate">
                                 {folio}
                             </h1>
+                            <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0 mt-1">
+                                {folioEtiqueta}
+                                {tarea.pedido?.folio && tarea.pedido.folio !== folio ? ` · Interno ${tarea.pedido.folio}` : ''}
+                                {tarea.pedido?.prioridad_md ? ' · Mismo día' : ''}
+                            </p>
                             <p className="text-sm theme-text-muted font-bold mt-1 m-0">
                                 {tarea.modalidad?.nombre || '—'}
                                 {tarea.almacen?.nombre ? ` · ${tarea.almacen.nombre}` : ''}
@@ -310,6 +341,24 @@ export default function Show({
                             </section>
                         )}
 
+                        <ApartadoFisicoTienda
+                            tarea={tarea}
+                            auth={auth}
+                            config={config}
+                            eventos={eventos_apartado}
+                            requisitos={requisitos}
+                        />
+
+                        {esMunicipio && (
+                            <EmpaqueMunicipioTienda
+                                tarea={tarea}
+                                apartado={tarea.apartado}
+                                auth={auth}
+                                requisitos={requisitos}
+                                documentos={documentos}
+                            />
+                        )}
+
                         {(tarea.productos || []).map((p, i) => (
                             <article key={p.id} className={`${geliaCardClass()} p-4 space-y-3`}>
                                 <div className="flex items-start justify-between gap-3">
@@ -345,6 +394,20 @@ export default function Show({
                                                 ))}
                                             </select>
                                         </div>
+                                        {requisitos.evidencia_por_producto && Number(productos[i]?.cantidad_encontrada) > 0 && (
+                                            <div className="sm:col-span-2">
+                                                <label className={THEME_LABEL}>Evidencia del producto</label>
+                                                <input
+                                                    type="file"
+                                                    accept="image/*,application/pdf"
+                                                    className={THEME_INPUT}
+                                                    onChange={(e) => {
+                                                        const file = e.target.files?.[0] || null;
+                                                        setEvidenciasProducto((prev) => ({ ...prev, [p.id]: file }));
+                                                    }}
+                                                />
+                                            </div>
+                                        )}
                                         <div className="sm:col-span-2">
                                             <label className={THEME_LABEL}>Observación</label>
                                             <input
@@ -363,7 +426,7 @@ export default function Show({
                             </article>
                         ))}
 
-                        {editable && (requisitos.peso_real_obligatorio || requisitos.peso_volumetrico_obligatorio || requisitos.observaciones_fisicas_obligatorias || tarea.requiere_traslado_cedis) && (
+                        {editable && (requisitos.peso_real_obligatorio || requisitos.peso_volumetrico_obligatorio || requisitos.observaciones_fisicas_obligatorias || requisitos.caja_obligatoria || tarea.requiere_traslado_cedis) && (
                             <section className={`${geliaCardClass()} p-4 space-y-3`}>
                                 <h3 className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0">Peso / empaque</h3>
                                 <div className="grid sm:grid-cols-2 gap-3">
@@ -375,6 +438,17 @@ export default function Show({
                                         <div>
                                             <label className={THEME_LABEL}>Peso volumétrico (kg) *</label>
                                             <input type="number" step="0.001" min="0" className={THEME_INPUT} value={pesoVol} onChange={(e) => setPesoVol(e.target.value)} />
+                                        </div>
+                                    )}
+                                    {requisitos.caja_obligatoria && (
+                                        <div className="sm:col-span-2">
+                                            <label className={THEME_LABEL}>Tipo de caja *</label>
+                                            <select className={THEME_SELECT} value={tipoCajaId} onChange={(e) => setTipoCajaId(e.target.value)}>
+                                                <option value="">Seleccionar...</option>
+                                                {tipos_caja.map((c) => (
+                                                    <option key={c.id} value={String(c.id)}>{c.nombre}</option>
+                                                ))}
+                                            </select>
                                         </div>
                                     )}
                                     <div className="sm:col-span-2">
@@ -414,7 +488,7 @@ export default function Show({
                             </section>
                         )}
 
-                        {esMunicipio && (editable || listaCaratula) && (
+                        {esMunicipio && (editable || listaCaratula || tarea.estado === 'RESPONDIDA') && (
                             <section className={`${geliaCardClass()} p-4 space-y-3`}>
                                 <h3 className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0">Documentos municipales</h3>
                                 <ul className="text-xs theme-text-muted m-0 space-y-1">
@@ -441,17 +515,17 @@ export default function Show({
                                         </label>
                                     </div>
                                 )}
-                                {(requisitos.requiere_identificacion || requisitos.requiere_remision) && (
-                                    <p className="text-[10px] font-bold theme-text-muted m-0">
-                                        Checklist: {[
-                                            requisitos.requiere_identificacion && 'Identificación',
-                                            requisitos.requiere_remision && 'Remisión',
-                                            requisitos.caja_obligatoria && 'Caja',
-                                            requisitos.peso_real_obligatorio && 'Peso',
-                                            requisitos.evidencia_general_obligatoria && 'Evidencia',
-                                        ].filter(Boolean).join(' · ')}
-                                    </p>
-                                )}
+                                <p className="text-[10px] font-bold theme-text-muted m-0">
+                                    Checklist carátula: {[
+                                        requisitos.requiere_identificacion && 'Identificación',
+                                        requisitos.caja_obligatoria && 'Caja',
+                                        requisitos.peso_real_obligatorio && 'Peso',
+                                        requisitos.evidencia_general_obligatoria && 'Evidencia',
+                                    ].filter(Boolean).join(' · ') || 'Según transporte'}
+                                    {requisitos.causa_remision_salida && (
+                                        <span className="block mt-1">Salida: {requisitos.causa_remision_salida}</span>
+                                    )}
+                                </p>
                             </section>
                         )}
 
@@ -513,6 +587,43 @@ export default function Show({
                                         </li>
                                     ))}
                                 </ol>
+                            </section>
+                        )}
+
+                        {conciliacion_grupo?.lineas?.length > 0 && (
+                            <section className={`${geliaCardClass()} p-4 space-y-3 border border-sky-500/30`}>
+                                <h3 className="text-[10px] font-black uppercase tracking-widest text-sky-700 dark:text-sky-300 m-0">
+                                    Grupo complemento ({conciliacion_grupo.folio_raiz})
+                                </h3>
+                                <p className="text-xs theme-text-muted font-bold m-0">
+                                    Cada línea conserva el expediente de origen (caso 9+1).
+                                </p>
+                                <ul className="m-0 p-0 list-none space-y-2 text-sm">
+                                    {conciliacion_grupo.lineas.map((ln, idx) => (
+                                        <li key={`${ln.tarea_id}-${ln.sku}-${idx}`} className="theme-element border theme-border rounded-lg p-2">
+                                            <span className="font-black">{ln.sku}</span>
+                                            <span className="theme-text-muted"> · {ln.folio_expediente}</span>
+                                            <span className="block text-[11px] theme-text-muted font-bold">
+                                                Encontradas {ln.cantidad_encontrada} · {ln.almacen || '—'}
+                                            </span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </section>
+                        )}
+
+                        {discrepancias_traspaso?.length > 0 && (
+                            <section className={`${geliaCardClass()} p-4 space-y-3 border border-red-500/30`}>
+                                <h3 className="text-[10px] font-black uppercase tracking-widest text-red-700 dark:text-red-300 m-0">
+                                    Discrepancias Tienda / CEDIS
+                                </h3>
+                                <ul className="m-0 p-0 list-none space-y-2 text-sm">
+                                    {discrepancias_traspaso.map((d) => (
+                                        <li key={`${d.sku}-${d.pedido_bma_origen_id}`} className="font-bold">
+                                            {d.sku}: enviadas {d.piezas_tienda}, recibidas OK {d.piezas_cedis}
+                                        </li>
+                                    ))}
+                                </ul>
                             </section>
                         )}
 

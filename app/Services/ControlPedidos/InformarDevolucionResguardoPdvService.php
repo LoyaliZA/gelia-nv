@@ -14,6 +14,7 @@ class InformarDevolucionResguardoPdvService
 {
     public function __construct(
         private readonly RegistrarHistorialPedidoService $historialService,
+        private readonly SincronizarCumplimientoDesdeResguardoPdvService $cumplimiento,
     ) {}
 
     public function ejecutar(ResguardoPdv $resguardo, ResguardoPdvEvento $evento, int $actorId): bool
@@ -61,6 +62,7 @@ class InformarDevolucionResguardoPdvService
                 );
 
                 $this->marcarIntegracionCompletada($evento);
+                $this->cumplimiento->reflejarDevolucion($resguardo, $evento, $actorId);
             });
 
             return true;

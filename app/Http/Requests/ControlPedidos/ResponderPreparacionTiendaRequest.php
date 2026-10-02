@@ -29,6 +29,8 @@ class ResponderPreparacionTiendaRequest extends FormRequest
             'version' => ['nullable', 'integer'],
             'evidencias' => ['nullable', 'array'],
             'evidencias.*' => ['file', 'max:10240', 'mimes:jpg,jpeg,png,webp,pdf'],
+            'evidencias_producto' => ['nullable', 'array'],
+            'evidencias_producto.*' => ['file', 'max:10240', 'mimes:jpg,jpeg,png,webp,pdf'],
         ];
     }
 }

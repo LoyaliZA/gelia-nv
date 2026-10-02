@@ -477,7 +477,11 @@ class PedidoBmaController extends Controller
         $listarService->asegurarAcceso($pedidoBma, Auth::user());
 
         try {
-            $pedido = $service->subir($pedidoBma->load('estatus'), $request->file('pdf_pedido'));
+            $pedido = $service->subir(
+                $pedidoBma->load('estatus'),
+                $request->file('pdf_pedido'),
+                (string) ($request->validated('tipo_soporte') ?: \App\Models\ControlPedidos\PedidoBmaDocumento::TIPO_PDF_PEDIDO),
+            );
         } catch (\InvalidArgumentException|\RuntimeException $e) {
             if ($request->expectsJson()) {
                 return response()->json(['message' => $e->getMessage()], 422);
@@ -577,6 +581,16 @@ class PedidoBmaController extends Controller
                     'catalogo_paqueteria_id' => $datos['catalogo_paqueteria_id'] ?? null,
                     'modalidad_cobro' => $datos['modalidad_cobro'] ?? null,
                 ],
+                [
+                    'origen_solicitud' => $datos['origen_solicitud'] ?? null,
+                    'documento_inicial' => $datos['documento_inicial'] ?? null,
+                    'contacto_nombre' => $datos['contacto_nombre'] ?? null,
+                    'contacto_telefono' => $datos['contacto_telefono'] ?? null,
+                    'prioridad_md' => (bool) ($datos['prioridad_md'] ?? false),
+                    'folio_referencia' => $datos['folio_referencia'] ?? null,
+                    'tipo_referencia' => $datos['tipo_referencia'] ?? null,
+                    'lineas' => $datos['lineas'] ?? [],
+                ],
             );
         } catch (Throwable $e) {
             return $this->responderErrorOperacionPedido(
@@ -588,6 +602,42 @@ class PedidoBmaController extends Controller
         }
 
         return redirect()->back()->with('success', 'Solicitud de preparación enviada a Tienda.');
+    }
+
+    public function guardarDesglosePreparacion(
+        Request $request,
+        PedidoBma $pedidoBma,
+        ListarPedidosBmaService $listarService,
+        CrearTareaPreparacionService $service,
+    ): RedirectResponse {
+        Gate::authorize('control_pedidos.preparacion.solicitar');
+        $listarService->asegurarAcceso($pedidoBma, Auth::user());
+
+        $datos = $request->validate([
+            'lineas' => ['required', 'array', 'min:1'],
+            'lineas.*.sku' => ['required', 'string', 'max:64'],
+            'lineas.*.descripcion' => ['nullable', 'string', 'max:255'],
+            'lineas.*.cantidad' => ['required', 'integer', 'min:1'],
+            'lineas.*.producto_id' => ['nullable', 'integer'],
+        ]);
+
+        $tarea = $pedidoBma->tareaPreparacionVigente()->first();
+        if (! $tarea) {
+            return redirect()->back()->with('error', 'No hay una solicitud de preparación activa para capturar el desglose.');
+        }
+
+        try {
+            $service->guardarDesglose($tarea, $datos['lineas']);
+        } catch (Throwable $e) {
+            return $this->responderErrorOperacionPedido(
+                $e,
+                $pedidoBma,
+                'desglose_preparacion',
+                'No se pudo guardar el desglose de piezas.'
+            );
+        }
+
+        return redirect()->back()->with('success', 'Desglose de piezas guardado.');
     }
 
     public function solicitarRepesaje(

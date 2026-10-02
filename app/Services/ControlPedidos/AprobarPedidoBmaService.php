@@ -3,6 +3,7 @@
 namespace App\Services\ControlPedidos;
 
 use App\Models\ControlPedidos\CatalogoEstatusPedido;
+use App\Models\ControlPedidos\CatalogoModalidadPreparacionPedido;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Services\SaldosAFavor\RegistrarPagoPedidoBmaService;
 use App\Services\SaldosAFavor\SincronizarAplicacionesPedidoSafService;
@@ -25,6 +26,10 @@ class AprobarPedidoBmaService
     {
         if (!$pedido->esAuditablePorAuxiliar()) {
             throw new \RuntimeException('Solo se pueden aprobar pedidos pendientes de revisión.');
+        }
+
+        if (in_array($pedido->codigoModalidadPreparacionVigente(), CatalogoModalidadPreparacionPedido::CODIGOS_FASE4, true)) {
+            throw new \RuntimeException('La recogida en tienda se cierra en PDV, sin aprobación de CEDIS y sin PDF de remisión.');
         }
 
         if (!$pedido->tienePagoValidado()) {

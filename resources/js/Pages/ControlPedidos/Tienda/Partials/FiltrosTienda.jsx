@@ -14,13 +14,27 @@ export const TABS_TIENDA = [
     { id: 'RECHAZADAS_CEDIS', label: 'Rechazadas CEDIS' },
     { id: 'RESPONDIDAS_HOY', label: 'Respondidas hoy' },
     { id: 'PENDIENTES_LIBERACION', label: 'Pendientes de liberación' },
+    { id: 'DEVOLUCION_PENDIENTE', label: 'Devolución pendiente' },
+    { id: 'HISTORIAL_DEVUELTAS', label: 'Devueltas al anaquel' },
+    { id: 'HISTORIAL', label: 'Historial' },
 ];
+
+const ORIGEN_LABELS = {
+    CALL_CENTER: 'Call Center',
+    BELLAROMA: 'Bellaroma',
+    SIN_ORIGEN: 'Sin origen',
+};
 
 export default function FiltrosTienda({
     tabActiva,
     busqueda,
+    origenSolicitud = '',
+    prioridadMd = '',
+    origenesSolicitud = [],
     onTabChange,
     onBuscar,
+    onOrigenChange,
+    onPrioridadMdChange,
     onActualizar,
     metricas = {},
     tareas = null,
@@ -40,6 +54,9 @@ export default function FiltrosTienda({
             RECHAZADAS_CEDIS: metricas.rechazadas_cedis,
             RESPONDIDAS_HOY: metricas.respondidas_hoy,
             PENDIENTES_LIBERACION: metricas.pendientes_liberacion,
+            DEVOLUCION_PENDIENTE: metricas.devolucion_pendiente,
+            HISTORIAL_DEVUELTAS: metricas.historial_devueltas,
+            HISTORIAL: metricas.historial,
         };
         return map[tabId];
     };
@@ -54,6 +71,37 @@ export default function FiltrosTienda({
 
     return (
         <div className="space-y-4">
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <div className="min-w-0">
+                    <label htmlFor="tienda-origen" className={`${THEME_LABEL} ml-1`}>Origen</label>
+                    <select
+                        id="tienda-origen"
+                        value={origenSolicitud}
+                        onChange={(e) => onOrigenChange?.(e.target.value)}
+                        className={`${THEME_INPUT} w-full py-2.5 text-sm font-bold mt-1.5`}
+                    >
+                        <option value="">Todos</option>
+                        {origenesSolicitud.map((o) => (
+                            <option key={o} value={o}>{ORIGEN_LABELS[o] || o}</option>
+                        ))}
+                        <option value="SIN_ORIGEN">{ORIGEN_LABELS.SIN_ORIGEN}</option>
+                    </select>
+                </div>
+                <div className="min-w-0">
+                    <label htmlFor="tienda-md" className={`${THEME_LABEL} ml-1`}>Prioridad mismo día</label>
+                    <select
+                        id="tienda-md"
+                        value={prioridadMd}
+                        onChange={(e) => onPrioridadMdChange?.(e.target.value)}
+                        className={`${THEME_INPUT} w-full py-2.5 text-sm font-bold mt-1.5`}
+                    >
+                        <option value="">Todas</option>
+                        <option value="1">Solo mismo día</option>
+                        <option value="0">Sin prioridad MD</option>
+                    </select>
+                </div>
+            </div>
+
             <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
                 <div className="flex-1 min-w-0">
                     <label htmlFor="tienda-busqueda" className={`${THEME_LABEL} ml-1`}>Buscar</label>

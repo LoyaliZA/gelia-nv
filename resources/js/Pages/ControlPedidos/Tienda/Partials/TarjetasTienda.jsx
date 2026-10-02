@@ -117,7 +117,7 @@ function TarjetaTarea({ tarea: t, puedeTomar }) {
     const venc = fmtVencimiento(t.fecha_limite);
     const badge = badgeEstado(t.estado, t.estado_label);
     const aviso = avisoParaTarea(t, venc);
-    const folio = t.pedido?.folio_remision || t.pedido?.folio || `#${t.pedido?.id || t.id}`;
+    const folio = t.pedido?.folio_visible || t.pedido?.folio_remision || t.pedido?.folio || `#${t.pedido?.id || t.id}`;
     const showUrl = route('control_pedidos.tienda.show', t.id);
     const ringAlerta = ['CON_INCIDENCIA', 'RECHAZADA_CEDIS'].includes(t.estado)
         || Boolean(venc?.urgente);
@@ -188,6 +188,14 @@ function TarjetaTarea({ tarea: t, puedeTomar }) {
                             {formatearFechaNegocio?.(t.solicitada_at) || new Date(t.solicitada_at).toLocaleDateString('es-MX')}
                             {' · '}
                             {fmtRelativo(t.solicitada_at)}
+                            {t.tiempo_atencion?.etiqueta ? ` · Atención ${t.tiempo_atencion.etiqueta}${t.tiempo_atencion.en_curso ? ' (en curso)' : ''}` : ''}
+                        </p>
+                    )}
+                    {(t.pedido?.prioridad_md || t.pedido?.origen_solicitud) && (
+                        <p className="text-[10px] font-black uppercase tracking-wide theme-text-muted m-0 mt-0.5">
+                            {t.pedido.prioridad_md ? 'Mismo día' : ''}
+                            {t.pedido.prioridad_md && t.pedido.origen_solicitud ? ' · ' : ''}
+                            {t.pedido.origen_solicitud ? t.pedido.origen_solicitud.replace('_', ' ') : ''}
                         </p>
                     )}
                     {t.responsable?.name && (

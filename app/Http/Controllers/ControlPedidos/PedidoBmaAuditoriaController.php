@@ -127,7 +127,8 @@ class PedidoBmaAuditoriaController extends Controller
             $service->actualizarFolioRemision(
                 $pedidoBma,
                 (string) $request->validated('folio_remision'),
-                Auth::id()
+                Auth::id(),
+                (string) ($request->validated('tipo_referencia') ?: \App\Models\ControlPedidos\PedidoBmaReferencia::TIPO_PEDIDO),
             );
         } catch (\InvalidArgumentException|\RuntimeException $e) {
             return redirect()->back()->with('error', $e->getMessage());

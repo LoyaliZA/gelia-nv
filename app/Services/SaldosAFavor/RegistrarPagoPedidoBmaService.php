@@ -57,16 +57,15 @@ class RegistrarPagoPedidoBmaService
 
         CoberturaPagoPedidoBmaService::assertBancoPermitido($pedido, $bancoId);
 
-        if (! $comprobante || ! $comprobante->isValid()) {
+        $requiereComprobante = PedidoBmaPago::formaRequiereComprobante($forma);
+        if ($requiereComprobante && (! $comprobante || ! $comprobante->isValid())) {
             throw new InvalidArgumentException('Cada exhibición de pago debe incluir su comprobante.');
         }
 
         return DB::transaction(function () use ($pedido, $datos, $comprobante, $usuarioId, $monto, $forma, $bancoId) {
             $siguiente = ((int) PedidoBmaPago::where('pedido_bma_id', $pedido->id)->max('numero_exhibicion')) + 1;
 
-            $ruta = $comprobante->store("pedidos_bma/pagos/{$pedido->id}", 'public');
-
-            $pago = PedidoBmaPago::create([
+            $attrs = [
                 'pedido_bma_id' => $pedido->id,
                 'numero_exhibicion' => $siguiente,
                 'monto' => $monto,
@@ -78,11 +77,19 @@ class RegistrarPagoPedidoBmaService
                 'estado_revision' => PedidoBmaPago::REVISION_PENDIENTE,
                 'activo_para_cobertura' => true,
                 'observaciones' => $datos['observaciones'] ?? null,
-                'ruta_archivo' => $ruta,
-                'nombre_original' => $comprobante->getClientOriginalName(),
-                'mime_type' => $comprobante->getMimeType(),
-                'tamano_bytes' => $comprobante->getSize(),
-            ]);
+            ];
+
+            $archivoHistorial = null;
+            if ($comprobante && $comprobante->isValid()) {
+                $ruta = $comprobante->store("pedidos_bma/pagos/{$pedido->id}", 'public');
+                $attrs['ruta_archivo'] = $ruta;
+                $attrs['nombre_original'] = $comprobante->getClientOriginalName();
+                $attrs['mime_type'] = $comprobante->getMimeType();
+                $attrs['tamano_bytes'] = $comprobante->getSize();
+                $archivoHistorial = ['ruta' => $ruta, 'nombre' => $comprobante->getClientOriginalName()];
+            }
+
+            $pago = PedidoBmaPago::create($attrs);
 
             if ($usuarioId) {
                 $this->historial->ejecutar(
@@ -97,7 +104,7 @@ class RegistrarPagoPedidoBmaService
                         PedidoBmaPago::labelForma($forma) ?? 'sin método'
                     ),
                     AccionesHistorialPedidoBma::ALTA_EXHIBICION_PAGO,
-                    ['ruta' => $ruta, 'nombre' => $comprobante->getClientOriginalName()],
+                    $archivoHistorial,
                     SnapshotHistorialPedidoBma::exhibicion($pago->fresh(['banco']), $pedido->fresh())
                 );
             }
@@ -137,7 +144,7 @@ class RegistrarPagoPedidoBmaService
         }
 
         foreach ($pagosActivos as $pago) {
-            if (empty($pago->ruta_archivo)) {
+            if (PedidoBmaPago::formaRequiereComprobante($pago->forma_pago) && empty($pago->ruta_archivo)) {
                 throw new InvalidArgumentException(
                     'Cada exhibición de pago debe incluir su comprobante.'
                 );

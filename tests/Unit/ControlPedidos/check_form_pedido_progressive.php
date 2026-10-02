@@ -64,14 +64,14 @@ $checks = [
     ['resguardo diferido aviso', str_contains($form, 'Envío (diferido)')],
     ['resguardo en cotizacionLista', str_contains($form, 'esResguardoAbierto')],
     ['pdf local gana a pedido stale', str_contains($form, 'const pdfPedidoDoc = pdfDocLocal')],
-    ['folio wizerp temprano', str_contains($form, 'Folio generado por Wizerp')],
+    ['folio temprano', str_contains($form, 'placeholder="Folio..."')],
     ['paqueteria temprano en pdf', str_contains($form, 'Folio, paquetería y archivo del pedido')],
 ];
 
 $titulos = [
     '{nSec.cliente}. Cliente',
     'Tipo de entrega',
-    'Folio generado por Wizerp',
+    'placeholder="Folio..."',
     '{nSec.solPesaje}. {labelConsulta}',
     'Continuar pedido',
     'Cerrar consulta / Confirmar mercancía con cliente',

@@ -19,6 +19,8 @@ class ResguardoPdvEvento extends Model
 
     public const TIPO_PASADO_A_RECEPCION = 'resguardo.pasado_a_recepcion';
 
+    public const TIPO_CUSTODIA_PREPARACION = 'resguardo.custodia_preparacion';
+
     public const TIPO_CUSTODIA_COMPLETA = 'resguardo.custodia_completa';
 
     public const TIPO_CUSTODIA_PARCIAL = 'resguardo.custodia_parcial';

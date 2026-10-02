@@ -39,6 +39,7 @@ Route::prefix('control-pedidos')->name('control_pedidos.')->group(function () {
         Route::post('/{pedidoBma}/anexo-piezas', [PedidoBmaController::class, 'subirAnexoPiezas'])->name('anexo_piezas.store');
         Route::post('/{pedidoBma}/solicitar-pesaje', [PedidoBmaController::class, 'solicitarPesaje'])->name('solicitar_pesaje');
         Route::post('/{pedidoBma}/solicitar-preparacion-tienda', [PedidoBmaController::class, 'solicitarPreparacionTienda'])->name('solicitar_preparacion_tienda');
+        Route::post('/{pedidoBma}/desglose-preparacion', [PedidoBmaController::class, 'guardarDesglosePreparacion'])->name('desglose_preparacion');
         Route::post('/{pedidoBma}/solicitar-repesaje', [PedidoBmaController::class, 'solicitarRepesaje'])->name('solicitar_repesaje');
         Route::post('/{pedidoBma}/cerrar-consulta', [PedidoBmaController::class, 'cerrarConsulta'])->name('cerrar_consulta');
         Route::post('/{pedidoBma}/reabrir-consulta', [PedidoBmaController::class, 'reabrirConsulta'])->name('reabrir_consulta');

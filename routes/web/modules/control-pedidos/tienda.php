@@ -28,6 +28,16 @@ Route::middleware(['can:control_pedidos.tienda.ver'])
         Route::get('/tareas/{tarea}/sesion-evidencia', [PedidoBmaTiendaController::class, 'mostrarSesionEvidencia'])->middleware('can:control_pedidos.tienda.evidencias')->name('sesion_evidencia.show');
         Route::post('/tareas/{tarea}/sesion-evidencia/cancelar', [PedidoBmaTiendaController::class, 'cancelarSesionEvidencia'])->middleware('can:control_pedidos.tienda.evidencias')->name('sesion_evidencia.cancelar');
         Route::post('/tareas/{tarea}/sesion-evidencia/promover', [PedidoBmaTiendaController::class, 'promoverSesionEvidencia'])->middleware('can:control_pedidos.tienda.evidencias')->name('sesion_evidencia.promover');
+        Route::post('/tareas/{tarea}/apartado/separar', [PedidoBmaTiendaController::class, 'separarApartado'])->middleware('can:control_pedidos.tienda.apartado.separar')->name('apartado.separar');
+        Route::post('/tareas/{tarea}/apartado/devolucion', [PedidoBmaTiendaController::class, 'solicitarDevolucionApartado'])->middleware('can:control_pedidos.tienda.apartado.separar')->name('apartado.devolucion');
+        Route::post('/tareas/{tarea}/apartado/confirmar-devolucion', [PedidoBmaTiendaController::class, 'confirmarDevolucionApartado'])->middleware('can:control_pedidos.tienda.apartado.confirmar_devolucion')->name('apartado.confirmar_devolucion');
+        Route::post('/tareas/{tarea}/apartado/prorroga', [PedidoBmaTiendaController::class, 'prorrogarApartado'])->middleware('can:control_pedidos.tienda.apartado.aprobar_prorroga')->name('apartado.prorroga');
+        Route::post('/tareas/{tarea}/salida/pago', [PedidoBmaTiendaController::class, 'confirmarPagoSalida'])->middleware('can:control_pedidos.salida.validar_pago')->name('salida.pago');
+        Route::post('/tareas/{tarea}/salida/autorizar', [PedidoBmaTiendaController::class, 'autorizarSalida'])->middleware('can:control_pedidos.salida.autorizar')->name('salida.autorizar');
+        Route::post('/tareas/{tarea}/salida/entrega', [PedidoBmaTiendaController::class, 'confirmarEntregaRecogeHoy'])->middleware('can:control_pedidos.salida.confirmar_entrega')->name('salida.entrega');
+        Route::post('/tareas/{tarea}/municipio/evidencia-empaque', [PedidoBmaTiendaController::class, 'subirEvidenciaEmpaqueMunicipal'])->middleware('can:control_pedidos.tienda.empacar_municipio')->name('municipio.evidencia_empaque');
+        Route::post('/tareas/{tarea}/municipio/empacar', [PedidoBmaTiendaController::class, 'confirmarEmpaqueMunicipal'])->middleware('can:control_pedidos.tienda.empacar_municipio')->name('municipio.empacar');
+        Route::post('/tareas/{tarea}/municipio/despachar', [PedidoBmaTiendaController::class, 'confirmarDespachoMunicipal'])->middleware('can:control_pedidos.tienda.despachar_municipio')->name('municipio.despachar');
     });
 
 Route::middleware(['can:control_pedidos.preparacion.corregir'])
@@ -35,4 +45,10 @@ Route::middleware(['can:control_pedidos.preparacion.corregir'])
     ->name('control_pedidos.preparacion.')
     ->group(function () {
         Route::post('/{tarea}/corregir', [PedidoBmaTiendaController::class, 'corregir'])->name('corregir');
+    });
+
+Route::prefix('control-pedidos/tareas-preparacion')
+    ->name('control_pedidos.preparacion.')
+    ->group(function () {
+        Route::post('/{tarea}/cambiar-modalidad', [PedidoBmaTiendaController::class, 'cambiarModalidad'])->name('cambiar_modalidad');
     });

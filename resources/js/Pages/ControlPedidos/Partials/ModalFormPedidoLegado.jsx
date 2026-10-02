@@ -296,6 +296,13 @@ export default function ModalFormPedidoLegado({
     const [codigoModalidadPreparacion, setCodigoModalidadPreparacion] = useState(
         () => pedido?.tarea_preparacion?.modalidad?.codigo || ''
     );
+    const [tipoSoporte, setTipoSoporte] = useState('pdf_pedido');
+    const [origenSolicitud, setOrigenSolicitud] = useState('');
+    const [prioridadMd, setPrioridadMd] = useState(false);
+    const [contactoSolicitud, setContactoSolicitud] = useState({ nombre: '', telefono: '' });
+    const [folioReferencia, setFolioReferencia] = useState('');
+    const [tipoReferencia, setTipoReferencia] = useState('COTIZACION');
+    const [lineasPreparacion, setLineasPreparacion] = useState([{ sku: '', descripcion: '', cantidad: 1 }]);
     const [entregaMunicipal, setEntregaMunicipal] = useState(() => ({
         destinatario_es_cliente: true,
         destinatario_nombre: '',
@@ -562,7 +569,7 @@ export default function ModalFormPedidoLegado({
         : (pagoResumen == null ? null : resumenCoberturaVivo.pendiente);
     // Tras reemplazar PDF, pdfDocLocal gana: pedido del modal suele quedar stale (mismo bug que anexos).
     const pdfPedidoDoc = pdfDocLocal
-        || (pedido?.documentos || []).find((d) => d.tipo === 'pdf_pedido' && !docsEliminar.includes(d.id));
+        || (pedido?.documentos || []).find((d) => ['pdf_pedido', 'cotizacion'].includes(d.tipo) && !docsEliminar.includes(d.id));
     const anexosPiezasDocs = (() => {
         const fromPedido = (pedido?.documentos || []).filter((d) => d.tipo === 'anexo_piezas' && !docsEliminar.includes(d.id));
         const ids = new Set(fromPedido.map((d) => d.id));
@@ -1722,6 +1729,7 @@ export default function ModalFormPedidoLegado({
         if (!id) return;
         const fd = new FormData();
         fd.append('pdf_pedido', file);
+        fd.append('tipo_soporte', tipoSoporte);
         setProcesandoPesaje(true);
         try {
             const { data: res } = await axios.post(route('control_pedidos.pdf_pedido.store', id), fd, {
@@ -1810,6 +1818,23 @@ export default function ModalFormPedidoLegado({
             almacen_id: data.almacen_id,
             idempotencia_clave: `prep-${id}-${Date.now()}`,
         };
+        const lineas = lineasPreparacion
+            .map((l) => ({
+                sku: String(l.sku || '').trim(),
+                descripcion: String(l.descripcion || '').trim(),
+                cantidad: Number(l.cantidad) || 0,
+            }))
+            .filter((l) => l.sku !== '');
+        Object.assign(payload, {
+            origen_solicitud: origenSolicitud || undefined,
+            documento_inicial: tipoSoporte === 'cotizacion' ? 'COTIZACION' : 'PEDIDO',
+            contacto_nombre: contactoSolicitud.nombre || undefined,
+            contacto_telefono: contactoSolicitud.telefono || undefined,
+            prioridad_md: prioridadMd,
+            folio_referencia: folioReferencia.trim() || undefined,
+            tipo_referencia: folioReferencia.trim() ? tipoReferencia : undefined,
+            lineas: lineas.length ? lineas : undefined,
+        });
         if (esModalidadMunicipio) {
             Object.assign(payload, {
                 destinatario_es_cliente: Boolean(entregaMunicipal.destinatario_es_cliente),
@@ -1865,7 +1890,15 @@ export default function ModalFormPedidoLegado({
             return;
         }
         if (!tienePdfPedido) {
-            setAvisoPesaje({ tipo: 'error', mensaje: 'Adjunte el PDF o foto del pedido antes de solicitar preparación.' });
+            setAvisoPesaje({ tipo: 'error', mensaje: 'Adjunte la cotización o el soporte del pedido antes de solicitar preparación.' });
+            return;
+        }
+        if (!lineasPreparacion.some((l) => String(l.sku || '').trim() && Number(l.cantidad) > 0)) {
+            setAvisoPesaje({ tipo: 'error', mensaje: 'Capture el SKU y la cantidad de cada pieza antes de solicitar preparación.' });
+            return;
+        }
+        if (!data.cliente_id && !String(contactoSolicitud.nombre || '').trim()) {
+            setAvisoPesaje({ tipo: 'error', mensaje: 'Indique el cliente o el nombre de contacto de la solicitud.' });
             return;
         }
         if (!codigoModalidadPreparacion) {
@@ -2498,7 +2531,7 @@ export default function ModalFormPedidoLegado({
                                         <div className="flex items-start gap-2 p-3 rounded-xl border border-blue-500/40 bg-blue-500/10">
                                             <AlertTriangle className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
                                             <p className="text-xs font-bold text-blue-700 dark:text-blue-400 m-0">
-                                                Envío diferido: dirección y costo se capturan al Completar envío. Capture ya el folio Wizerp y la paquetería junto al archivo del pedido.
+                                                Envío diferido: dirección y costo se capturan al Completar envío. Capture ya el folio y la paquetería junto al archivo del pedido.
                                             </p>
                                         </div>
                                     )}
@@ -2633,17 +2666,17 @@ export default function ModalFormPedidoLegado({
                         <div className="space-y-4">
                         {!requiereLogistica && (
                             <p className="text-[10px] font-bold theme-text-muted m-0 -mt-1">
-                                Capture el folio Wizerp y adjunte el PDF o foto. El comprobante de pago se carga en la sección de pago.
+                                Capture el folio y adjunte la cotización o el soporte. El comprobante de pago se carga en la sección de pago.
                             </p>
                         )}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className={wrapCampo('folio_remision')} data-campo="folio_remision">
-                                <label className={SECCION}>Folio de pedido *</label>
+                                <label className={SECCION}>Folio *</label>
                                 <input
                                     type="text"
                                     value={data.folio_remision}
                                     onChange={(e) => setData('folio_remision', e.target.value)}
-                                    placeholder="Folio generado por Wizerp..."
+                                    placeholder="Folio..."
                                     className={`${THEME_INPUT} w-full py-3`}
                                 />
                             </div>
@@ -2690,6 +2723,14 @@ export default function ModalFormPedidoLegado({
                             )}
                         </div>
                         <div className="flex flex-wrap items-center gap-3">
+                            <select
+                                value={tipoSoporte}
+                                onChange={(e) => setTipoSoporte(e.target.value)}
+                                className={`${THEME_SELECT} py-3 text-xs font-black uppercase`}
+                            >
+                                <option value="pdf_pedido">Soporte de pedido</option>
+                                <option value="cotizacion">Cotización</option>
+                            </select>
                             <label className="flex items-center gap-2 px-4 py-3 border theme-border border-dashed rounded-xl cursor-pointer w-fit theme-element theme-text-main">
                                 <FileText className="w-4 h-4 theme-text-muted" />
                                 <span className="text-xs font-black uppercase">
@@ -2869,13 +2910,50 @@ export default function ModalFormPedidoLegado({
                                 Adjunta el PDF o foto del pedido y solicite {enFlujoTienda ? 'la preparación en Tienda' : `la ${labelConsulta.toLowerCase()}`}. El monto se captura después de cerrarla.
                             </AvisoOperativoPedido>
                         )}
+                        {enFlujoTienda && !tienePesajeRespondido && !pendientePesaje && !tareaConIncidencia && (
+                            <div className="space-y-3 rounded-xl border theme-border p-3">
+                                <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0">Solicitud</p>
+                                <div className="grid sm:grid-cols-2 gap-2">
+                                    <select value={origenSolicitud} onChange={(e) => setOrigenSolicitud(e.target.value)} className={THEME_SELECT}>
+                                        <option value="">Origen</option>
+                                        <option value="CALL_CENTER">Call Center</option>
+                                        <option value="BELLAROMA">Bellaroma</option>
+                                    </select>
+                                    <label className="flex items-center gap-2 text-xs font-bold theme-text-main">
+                                        <input type="checkbox" checked={prioridadMd} onChange={(e) => setPrioridadMd(e.target.checked)} />
+                                        Prioridad del mismo día
+                                    </label>
+                                    <input className={THEME_INPUT} placeholder="Contacto" value={contactoSolicitud.nombre} onChange={(e) => setContactoSolicitud((s) => ({ ...s, nombre: e.target.value }))} />
+                                    <input className={THEME_INPUT} placeholder="Teléfono" value={contactoSolicitud.telefono} onChange={(e) => setContactoSolicitud((s) => ({ ...s, telefono: e.target.value }))} />
+                                    <select value={tipoReferencia} onChange={(e) => setTipoReferencia(e.target.value)} className={THEME_SELECT}>
+                                        <option value="COTIZACION">Folio · Cotización</option>
+                                        <option value="PEDIDO">Folio · Pedido</option>
+                                        <option value="REMISION">Folio · Remisión</option>
+                                        <option value="OTRO">Folio · Otro</option>
+                                    </select>
+                                    <input className={THEME_INPUT} placeholder="Folio" value={folioReferencia} onChange={(e) => setFolioReferencia(e.target.value)} />
+                                </div>
+                                <div className="space-y-2">
+                                    {lineasPreparacion.map((linea, idx) => (
+                                        <div key={idx} className="grid grid-cols-[1fr_1.4fr_5rem] gap-2">
+                                            <input className={THEME_INPUT} placeholder="SKU" value={linea.sku} onChange={(e) => setLineasPreparacion((prev) => prev.map((l, i) => (i === idx ? { ...l, sku: e.target.value } : l)))} />
+                                            <input className={THEME_INPUT} placeholder="Descripción" value={linea.descripcion} onChange={(e) => setLineasPreparacion((prev) => prev.map((l, i) => (i === idx ? { ...l, descripcion: e.target.value } : l)))} />
+                                            <input type="number" min="1" className={THEME_INPUT} value={linea.cantidad} onChange={(e) => setLineasPreparacion((prev) => prev.map((l, i) => (i === idx ? { ...l, cantidad: e.target.value } : l)))} />
+                                        </div>
+                                    ))}
+                                    <button type="button" className={BTN_SECONDARY} onClick={() => setLineasPreparacion((prev) => [...prev, { sku: '', descripcion: '', cantidad: 1 }])}>
+                                        Agregar pieza
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                         <div className="space-y-4">
                             {!tienePesajeRespondido && !pendientePesaje && !tareaConIncidencia && (
                                 enFlujoTienda ? (
                                     <button
                                         type="button"
                                         onClick={solicitarPreparacionTienda}
-                                        disabled={procesandoPesaje || processing || !data.cliente_id || !tienePdfPedido || !codigoModalidadPreparacion || !data.almacen_id}
+                                        disabled={procesandoPesaje || processing || (!data.cliente_id && !contactoSolicitud.nombre.trim()) || !tienePdfPedido || !codigoModalidadPreparacion || !data.almacen_id || !lineasPreparacion.some((l) => String(l.sku || '').trim())}
                                         className={`${BTN_PRIMARY} flex items-center gap-2 outline-none`}
                                     >
                                         <Scale className="w-4 h-4" /> Solicitar preparación en Tienda
@@ -3606,7 +3684,7 @@ export default function ModalFormPedidoLegado({
                         <p className={SECCION}>{nSec.pago}. Pago</p>
                         <div className="space-y-4">
                             <p className="text-[10px] font-bold theme-text-muted m-0 -mt-1">
-                                Registre el pago cuando el cliente transfiera: elija banco receptor y adjunte el comprobante. La referencia va en el comprobante (no es necesario capturarla).
+                                Registre el pago cuando el cliente transfiera: elija banco receptor y adjunte el comprobante. Con CREDITO no se pide banco ni comprobante. La referencia va en el comprobante cuando aplica.
                             </p>
                             <SeccionPagosExhibicion
                                 pedidoId={idPedidoAcciones}
@@ -3621,6 +3699,7 @@ export default function ModalFormPedidoLegado({
                                 aplicaSeguro={Boolean(data.aplica_seguro)}
                                 costoSeguro={data.costo_seguro}
                                 saldoAFavorAplicado={data.aplica_saldo_favor ? saldoFavorCalculado : 0}
+                                limiteCreditoAutorizado={infoCliente?.monto_credito_autorizado ?? pedido?.cliente?.monto_credito_autorizado}
                                 onResumenChange={(r) => setPagoResumen(r)}
                                 mensajeBloqueo={!consultaCerrada
                                     ? 'Cierre la consulta CEDIS antes de registrar el pago.'

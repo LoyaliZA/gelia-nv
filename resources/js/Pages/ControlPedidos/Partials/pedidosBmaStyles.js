@@ -207,6 +207,7 @@ export const LABELS_FORMA_PAGO = {
     efectivo: 'Efectivo',
     tarjeta: 'Tarjeta',
     otro: 'Otro',
+    credito: 'CREDITO',
 };
 
 /** Aplicaciones SAF en pedido (saf_aplicaciones.estado). */

@@ -2,7 +2,9 @@
 
 namespace App\Services\ControlPedidos;
 
+use App\Models\CatalogoEstadoSolicitud;
 use App\Models\ControlPedidos\PedidoBmaTareaPreparacion;
+use App\Models\SolicitudTraspaso;
 use App\Models\User;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
 use Illuminate\Support\Facades\DB;
@@ -14,6 +16,7 @@ class ConfirmarSalidaTrasladoTiendaService
         private TransicionEstadoTareaPreparacionService $transicionService,
         private RegistrarHistorialPedidoService $historialService,
         private NotificarPedidoBmaService $notificarService,
+        private RegistrarEventoTraspasoPreparacionService $eventosTraspaso,
     ) {}
 
     public function ejecutar(
@@ -37,6 +40,18 @@ class ConfirmarSalidaTrasladoTiendaService
             if (! $tarea->solicitud_traspaso_id) {
                 throw ValidationException::withMessages([
                     'traspaso' => 'No hay traspaso vinculado. Genere el traspaso antes de confirmar salida.',
+                ]);
+            }
+
+            $solicitud = SolicitudTraspaso::query()->find($tarea->solicitud_traspaso_id);
+            $cerrados = array_filter([
+                CatalogoEstadoSolicitud::idDe('Verificada'),
+                CatalogoEstadoSolicitud::idDe('Incorrecta'),
+                CatalogoEstadoSolicitud::idDe('Cancelada'),
+            ]);
+            if (! $solicitud || in_array((int) $solicitud->catalogo_estado_solicitud_id, $cerrados, true)) {
+                throw ValidationException::withMessages([
+                    'traspaso' => 'El traspaso ya no está pendiente de recepción. No se puede confirmar la salida.',
                 ]);
             }
 
@@ -75,6 +90,10 @@ class ConfirmarSalidaTrasladoTiendaService
                 true,
                 ['url' => '/control-pedidos?q='.urlencode((string) ($pedido->folio_remision ?: $pedido->folio ?: $pedido->id))]
             );
+
+            if ($solicitud) {
+                $this->eventosTraspaso->salidaTienda($tarea, $solicitud, $usuario);
+            }
 
             return $tarea->fresh(['modalidad', 'almacen', 'productos', 'solicitudTraspaso']);
         });

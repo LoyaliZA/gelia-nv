@@ -49,8 +49,8 @@ class SolicitarPesajePedidoBmaService
             );
         }
 
-        if (! $pedido->tienePdfPedido()) {
-            throw new \InvalidArgumentException('Debe adjuntar el PDF o una foto del pedido antes de solicitar la consulta a CEDIS.');
+        if (! $pedido->tieneSoporteSolicitud()) {
+            throw new \InvalidArgumentException('Debe adjuntar la cotización o el soporte del pedido antes de solicitar la consulta a CEDIS.');
         }
 
         MaquinaEstadosPedidoBma::assertTransicion(

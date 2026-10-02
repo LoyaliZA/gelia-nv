@@ -2,6 +2,7 @@
 
 namespace App\Services\ControlPedidos;
 
+use App\Models\ControlPedidos\PedidoBmaCumplimientoEvento;
 use App\Models\ControlPedidos\PedidoBmaTareaPreparacion;
 use App\Models\User;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
@@ -15,6 +16,8 @@ class CorregirTareaPreparacionService
         private TransicionEstadoTareaPreparacionService $transicionService,
         private RegistrarHistorialPedidoService $historialService,
         private NotificarPedidoBmaService $notificarService,
+        private RegistrarCierreApartadoService $cierreApartado,
+        private AsegurarCumplimientoFisicoService $asegurarCumplimiento,
     ) {}
 
     /**
@@ -56,6 +59,14 @@ class CorregirTareaPreparacionService
                 $usuario
             );
 
+            $this->cierreApartado->ejecutar(
+                $tareaAnterior->fresh(),
+                $usuario,
+                PedidoBmaCumplimientoEvento::TIPO_CANCELACION,
+                trim('Cancelada por corrección de Ventas. '.($observaciones ?? '')),
+                'correccion:'.$tareaAnterior->id
+            );
+
             $nueva = PedidoBmaTareaPreparacion::query()->create([
                 'pedido_bma_id' => $pedido->id,
                 'catalogo_modalidad_preparacion_id' => $tareaAnterior->catalogo_modalidad_preparacion_id,
@@ -68,6 +79,8 @@ class CorregirTareaPreparacionService
                 'observaciones_solicitud' => $observaciones,
                 'tarea_anterior_id' => $tareaAnterior->id,
             ]);
+
+            $this->asegurarCumplimiento->ejecutar($nueva);
 
             $orden = 0;
             foreach ($productos as $p) {

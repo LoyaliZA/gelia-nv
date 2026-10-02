@@ -66,7 +66,9 @@ $checks = [
     ['Auditar puede revisar exhibiciones', str_contains($auditar, 'puedeRevisar=')],
     ['Auditar no genera SAF', str_contains($auditar, 'puedeGenerarSaldo={false}')],
     ['sin store_auditoria', ! str_contains($routes, 'pagos.store_auditoria')],
-    ['controller comprobante required en store', str_contains($controller, "'comprobante' => ['required'")],
+    ['controller comprobante condicional en store', str_contains($controller, 'formaRequiereComprobante')],
+    ['FORMA credito', str_contains($modelo, "'credito'")],
+    ['REQUIERE_COMPROBANTE mapa', str_contains($modelo, 'REQUIERE_COMPROBANTE')],
     ['ruta pagos.update', str_contains($routes, "name('pagos.update')")],
     ['ruta pagos.destroy', str_contains($routes, "name('pagos.destroy')")],
     ['revisarPago bajo can auditar', preg_match("/can:control_pedidos\.auditar[\s\S]*pagos\.revisar/m", $routes) === 1],
@@ -104,14 +106,19 @@ $checks = [
     ['auditoria usa fuentes_pago', str_contains(file_get_contents($root.'/resources/js/Pages/ControlPedidos/Auditar/Partials/TablaAuditoria.jsx'), 'textoFuentesPagoCompacto')],
 ];
 
-// Unit-ish: requiere_banco sin cargar Laravel
+// Las reglas de forma leen config(); hace falta el contenedor, sin tocar la base.
 require_once $root.'/vendor/autoload.php';
+$app = require $root.'/bootstrap/app.php';
+$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
 
 use App\Models\SaldosAFavor\PedidoBmaPago;
 
 $checks[] = ['transferencia requiere banco', PedidoBmaPago::formaRequiereBanco('transferencia') === true];
 $checks[] = ['deposito requiere banco', PedidoBmaPago::formaRequiereBanco('deposito') === true];
 $checks[] = ['efectivo no requiere banco', PedidoBmaPago::formaRequiereBanco('efectivo') === false];
+$checks[] = ['credito no requiere banco', PedidoBmaPago::formaRequiereBanco('credito') === false];
+$checks[] = ['credito no requiere comprobante', PedidoBmaPago::formaRequiereComprobante('credito') === false];
+$checks[] = ['efectivo requiere comprobante', PedidoBmaPago::formaRequiereComprobante('efectivo') === true];
 
 use App\Services\ControlPedidos\CalcularSeguroPedidoService;
 

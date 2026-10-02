@@ -16,6 +16,7 @@ use App\Services\Traspasos\AlmacenesOrigenTraspasoService;
 use App\Services\Traspasos\CrearSolicitudTraspasoService;
 use App\Services\Traspasos\EliminarSolicitudTraspasoService;
 use App\Services\Traspasos\ListarSolicitudesTraspasoService;
+use App\Services\ControlPedidos\SincronizarTareaDesdeTraspasoService;
 use App\Services\Traspasos\NotificarTraspasoService;
 use App\Services\Traspasos\ResponderSolicitudTraspasoService;
 use Illuminate\Http\JsonResponse;
@@ -169,7 +170,8 @@ class SolicitudTraspasoController extends Controller
 
     public function verificar(
         SolicitudTraspaso $traspaso,
-        NotificarTraspasoService $notificar
+        NotificarTraspasoService $notificar,
+        SincronizarTareaDesdeTraspasoService $sincronizarTarea,
     ): RedirectResponse {
         Gate::authorize('traspasos.verificar');
 
@@ -191,12 +193,17 @@ class SolicitudTraspasoController extends Controller
             'motivo_reporte' => 'Solicitud verificada por auxiliar.',
         ]);
 
+        $fresh = $traspaso->fresh(['vendedor', 'estado', 'cliente']);
         $notificar->respuesta(
-            $traspaso->fresh(['vendedor', 'estado', 'cliente']),
+            $fresh,
             'verificada',
             'Tu solicitud de traspaso fue verificada.',
             Auth::id()
         );
+
+        if ($fresh->tarea_preparacion_id && Auth::user()) {
+            $sincronizarTarea->desdeConfirmacion($fresh, Auth::user());
+        }
 
         event(new SolicitudTraspasoActualizada(
             solicitudId: $traspaso->id,

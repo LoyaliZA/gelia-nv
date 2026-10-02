@@ -32,8 +32,8 @@ class ActualizarConsultaPedidoBmaService
             throw new \InvalidArgumentException('Debe indicar un motivo válido (anexo, retiro, surtido u otro).');
         }
 
-        if (! $pedido->tienePdfPedido()) {
-            throw new \InvalidArgumentException('Debe haber un PDF o foto del pedido adjunto para actualizar la consulta.');
+        if (! $pedido->tieneSoporteSolicitud()) {
+            throw new \InvalidArgumentException('Debe haber una cotización o soporte del pedido adjunto para actualizar la consulta.');
         }
 
         if ($motivo === PedidoBma::MOTIVO_REPESAJE_ANEXO_PIEZAS && ! $pedido->tieneAnexoPiezas()) {

@@ -34,6 +34,12 @@ const formaRequiereBanco = (forma, formasPago = []) => {
     return forma === 'transferencia' || forma === 'deposito';
 };
 
+const formaRequiereComprobante = (forma, formasPago = []) => {
+    const found = formasPago.find((f) => f.codigo === forma);
+    if (found && typeof found.requiere_comprobante === 'boolean') return found.requiere_comprobante;
+    return forma !== 'credito';
+};
+
 const ESTADOS_DEFINITIVOS = new Set(['verificado', 'con_observaciones', 'rechazado', 'confirmado', 'con_diferencia']);
 
 const BTN_REV = {
@@ -93,6 +99,7 @@ export default function SeccionPagosExhibicion({
     costoReexpedicion = null,
     zonas = [],
     zonaId = null,
+    limiteCreditoAutorizado = null,
 }) {
     const [resumen, setResumen] = useState(null);
     const [pagos, setPagos] = useState([]);
@@ -115,6 +122,8 @@ export default function SeccionPagosExhibicion({
     });
 
     const requiereBanco = formaRequiereBanco(form.data.forma_pago, formas);
+    const requiereComprobante = formaRequiereComprobante(form.data.forma_pago, formas);
+    const limiteCredito = Number(limiteCreditoAutorizado || 0);
 
     const asignarComprobante = (file) => {
         setComprobantePreviewUrl((prev) => {
@@ -126,6 +135,7 @@ export default function SeccionPagosExhibicion({
     };
 
     const pegarComprobante = (e) => {
+        if (!formaRequiereComprobante(form.data.forma_pago, formas)) return;
         const pasted = archivosImagenDesdeClipboard(e.clipboardData);
         if (!pasted.length) return;
         e.preventDefault();
@@ -251,7 +261,7 @@ export default function SeccionPagosExhibicion({
 
     const registrar = (e) => {
         e.preventDefault();
-        if (!editandoId && !form.data.comprobante) {
+        if (!editandoId && requiereComprobante && !form.data.comprobante) {
             form.setError('comprobante', 'Adjunte el comprobante de esta exhibición.');
             return;
         }
@@ -315,7 +325,7 @@ export default function SeccionPagosExhibicion({
     };
 
     const sustituirPago = (p) => {
-        if (!form.data.comprobante) {
+        if (requiereComprobante && !form.data.comprobante) {
             form.setError('comprobante', 'Adjunte el nuevo comprobante.');
             return;
         }
@@ -569,12 +579,19 @@ export default function SeccionPagosExhibicion({
                                 </div>
                                 {sustituyendoId === p.id && (
                                     <div className="w-full mt-2 space-y-2 border-t theme-border pt-2">
-                                        <p className="text-[10px] font-black uppercase theme-text-muted m-0">Nuevo comprobante</p>
-                                        <input
-                                            type="file"
-                                            accept="image/*,application/pdf"
-                                            onChange={(e) => asignarComprobante(e.target.files?.[0] || null)}
-                                        />
+                                        <p className="text-[10px] font-black uppercase theme-text-muted m-0">
+                                            {requiereComprobante ? 'Nuevo comprobante' : 'Sustituir exhibición'}
+                                        </p>
+                                        {requiereComprobante && (
+                                            <input
+                                                type="file"
+                                                accept="image/*,application/pdf"
+                                                onChange={(e) => asignarComprobante(e.target.files?.[0] || null)}
+                                            />
+                                        )}
+                                        {form.errors.comprobante && (
+                                            <p className="text-[10px] text-red-500 font-bold m-0">{form.errors.comprobante}</p>
+                                        )}
                                         <div className="flex gap-2">
                                             <button type="button" className={BTN_PRIMARY} onClick={() => sustituirPago(p)}>
                                                 Guardar sustituto
@@ -663,10 +680,19 @@ export default function SeccionPagosExhibicion({
                             value={form.data.forma_pago}
                             onChange={(e) => {
                                 const next = e.target.value;
+                                const pideBanco = formaRequiereBanco(next, formas);
+                                const pideComp = formaRequiereComprobante(next, formas);
+                                if (!pideComp) {
+                                    setComprobantePreviewUrl((prev) => {
+                                        if (prev) URL.revokeObjectURL(prev);
+                                        return null;
+                                    });
+                                }
                                 form.setData({
                                     ...form.data,
                                     forma_pago: next,
-                                    catalogo_banco_id: formaRequiereBanco(next, formas) ? form.data.catalogo_banco_id : '',
+                                    catalogo_banco_id: pideBanco ? form.data.catalogo_banco_id : '',
+                                    comprobante: pideComp ? form.data.comprobante : null,
                                 });
                             }}
                         >
@@ -675,6 +701,11 @@ export default function SeccionPagosExhibicion({
                             ))}
                         </select>
                     </div>
+                    {form.data.forma_pago === 'credito' && limiteCredito > 0 && (
+                        <p className="md:col-span-2 text-[11px] theme-text-muted font-bold m-0">
+                            Límite de crédito autorizado: {formatearMoneda(limiteCredito)} (referencia; no impide registrar).
+                        </p>
+                    )}
                     {requiereBanco && (
                         <div>
                             <label className={`${THEME_LABEL} mb-1.5 block`}>Banco receptor</label>
@@ -693,6 +724,7 @@ export default function SeccionPagosExhibicion({
                             )}
                         </div>
                     )}
+                    {requiereComprobante && (
                     <div className="md:col-span-2">
                         <label className={`${THEME_LABEL} mb-1.5 block`}>
                             {editandoId ? 'Comprobante (opcional al editar)' : 'Comprobante (obligatorio)'}
@@ -730,6 +762,7 @@ export default function SeccionPagosExhibicion({
                             <p className="text-[10px] text-red-500 font-bold mt-1 m-0">{form.errors.comprobante}</p>
                         )}
                     </div>
+                    )}
                     <div className="md:col-span-2 flex flex-wrap gap-2">
                         <button
                             type="submit"

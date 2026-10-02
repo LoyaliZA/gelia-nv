@@ -3,7 +3,9 @@
 namespace App\Http\Requests\ControlPedidos;
 
 use App\Models\ControlPedidos\CatalogoModalidadPreparacionPedido;
+use App\Models\ControlPedidos\PedidoBma;
 use App\Models\ControlPedidos\PedidoBmaCaratula;
+use App\Models\ControlPedidos\PedidoBmaReferencia;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -34,6 +36,18 @@ class SolicitarPreparacionTiendaRequest extends FormRequest
                 'string',
                 Rule::in([PedidoBmaCaratula::COBRO_PAGADO, PedidoBmaCaratula::COBRO_POR_COBRAR]),
             ],
+            'origen_solicitud' => ['nullable', 'string', Rule::in(PedidoBma::ORIGENES_SOLICITUD)],
+            'documento_inicial' => ['nullable', 'string', Rule::in(PedidoBma::DOCUMENTOS_INICIALES)],
+            'contacto_nombre' => ['nullable', 'string', 'max:255'],
+            'contacto_telefono' => ['nullable', 'string', 'max:40'],
+            'prioridad_md' => ['nullable', 'boolean'],
+            'folio_referencia' => ['nullable', 'string', 'max:64'],
+            'tipo_referencia' => ['nullable', 'string', Rule::in(PedidoBmaReferencia::TIPOS)],
+            'lineas' => ['nullable', 'array'],
+            'lineas.*.sku' => ['required_with:lineas', 'string', 'max:64'],
+            'lineas.*.descripcion' => ['nullable', 'string', 'max:255'],
+            'lineas.*.cantidad' => ['required_with:lineas', 'integer', 'min:1'],
+            'lineas.*.producto_id' => ['nullable', 'integer'],
         ];
     }
 }

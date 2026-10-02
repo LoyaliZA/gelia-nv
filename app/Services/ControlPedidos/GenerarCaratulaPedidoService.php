@@ -3,6 +3,7 @@
 namespace App\Services\ControlPedidos;
 
 use App\Models\ControlPedidos\PedidoBmaCaratula;
+use App\Models\ControlPedidos\PedidoBmaReferencia;
 use App\Models\ControlPedidos\PedidoBmaTareaDocumento;
 use App\Models\ControlPedidos\PedidoBmaTareaPreparacion;
 use App\Models\User;
@@ -54,7 +55,7 @@ class GenerarCaratulaPedidoService
             }
 
             $req = $this->requisitosService->efectivos($tarea);
-            $faltantes = $this->requisitosService->validarDocumentosMunicipio($tarea, $req);
+            $faltantes = $this->requisitosService->validarDocumentosCaratulaMunicipio($tarea, $req);
             if ($faltantes !== []) {
                 throw ValidationException::withMessages(['requisitos' => $faltantes]);
             }
@@ -93,6 +94,10 @@ class GenerarCaratulaPedidoService
                 ->sortByDesc('id')
                 ->first();
 
+            $folioVisible = $tarea->pedido
+                ? PedidoBmaReferencia::visible($tarea->pedido)
+                : ['folio' => (string) $tarea->pedido_bma_id, 'etiqueta' => 'Folio'];
+
             $snapshot = [
                 'destinatario_nombre' => (string) $tarea->destinatario_nombre,
                 'destinatario_telefono' => (string) $tarea->destinatario_telefono,
@@ -100,7 +105,9 @@ class GenerarCaratulaPedidoService
                 'direccion_referencia' => $tarea->direccion_referencia,
                 'transporte' => $paqueteria?->nombre ?? '—',
                 'modalidad_cobro' => (string) $tarea->modalidad_cobro,
-                'folio' => $tarea->pedido?->folio_remision ?: $tarea->pedido?->folio ?: (string) $tarea->pedido_bma_id,
+                'folio' => $folioVisible['folio'] !== '' ? $folioVisible['folio'] : (string) $tarea->pedido_bma_id,
+                'folio_etiqueta' => $folioVisible['etiqueta'],
+                'folio_interno' => $tarea->pedido?->folio,
                 'version' => $siguienteVersion,
                 'fecha' => now()->format('d/m/Y H:i'),
             ];

@@ -61,7 +61,10 @@
     @if(!empty($caratula['direccion_referencia']))
         <p class="meta">Ref.: {{ $caratula['direccion_referencia'] }}</p>
     @endif
-    <p class="meta">Folio: {{ $caratula['folio'] ?? '—' }}</p>
+    <p class="meta">{{ $caratula['folio_etiqueta'] ?? 'Folio' }}: {{ $caratula['folio'] ?? '—' }}</p>
+    @if(!empty($caratula['folio_interno']) && ($caratula['folio_interno'] ?? '') !== ($caratula['folio'] ?? ''))
+        <p class="meta">Folio interno: {{ $caratula['folio_interno'] }}</p>
+    @endif
     <div class="pie">
         GELIA · Carátula v{{ $caratula['version'] ?? 1 }} · {{ $caratula['fecha'] ?? '' }}
     </div>
