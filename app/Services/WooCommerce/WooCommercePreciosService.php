@@ -305,14 +305,33 @@ class WooCommercePreciosService
         return round(($base * $mult) / $iva, 2);
     }
 
-    public function generarAnalisisDeCambios(array $preciosWizerp, ?float $iva = null, $margenes = null): array
-    {
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function generarAnalisisDeCambios(
+        array $preciosWizerp,
+        ?float $iva = null,
+        $margenes = null,
+        ?callable $alAvanzarCatalogo = null
+    ): array {
         $iva = $iva ?? $this->obtenerIva();
         $margenes = $margenes ?? WoocommerceMargin::orderBy('precio_min')->get();
         $cambios = [];
+        $indicePrecios = $this->indicePreciosPorSku($preciosWizerp);
+        $totalCatalogo = WoocommerceProduct::count();
+        $catalogoProcesados = 0;
 
-        foreach (WoocommerceProduct::all() as $prod) {
-            $precioBase = $this->resolverPrecioPorSku($preciosWizerp, $prod->sku);
+        foreach (
+            WoocommerceProduct::query()
+                ->select(['sku', 'nombre', 'precio_normal', 'precio_rebajado'])
+                ->lazy(1000) as $prod
+        ) {
+            $catalogoProcesados++;
+            if ($alAvanzarCatalogo !== null && ($catalogoProcesados === $totalCatalogo || $catalogoProcesados % 25 === 0)) {
+                $alAvanzarCatalogo($catalogoProcesados, $totalCatalogo);
+            }
+
+            $precioBase = $this->resolverPrecioPorSku($preciosWizerp, $prod->sku, $indicePrecios);
             if ($precioBase === null) {
                 continue;
             }
@@ -330,6 +349,10 @@ class WooCommercePreciosService
                     'precio_rebaja_nuevo' => $rebaja,
                 ];
             }
+        }
+
+        if ($alAvanzarCatalogo !== null && $totalCatalogo > 0) {
+            $alAvanzarCatalogo($catalogoProcesados, $totalCatalogo);
         }
 
         return $cambios;
@@ -361,28 +384,100 @@ class WooCommercePreciosService
     /**
      * @param  list<array<string, mixed>>  $cambios
      */
-    public function aplicarPreciosLocales(array $cambios): int
+    public function aplicarPreciosLocales(array $cambios, ?callable $alAvanzar = null): int
     {
-        $actualizados = 0;
+        if ($cambios === []) {
+            return 0;
+        }
 
+        $skus = [];
         foreach ($cambios as $cambio) {
             $sku = trim((string) ($cambio['sku'] ?? ''));
-            if ($sku === '') {
+            if ($sku !== '') {
+                $skus[$sku] = true;
+            }
+        }
+
+        if ($skus === []) {
+            return 0;
+        }
+
+        $productosPorSku = WoocommerceProduct::query()
+            ->whereIn('sku', array_keys($skus))
+            ->get(['id', 'sku', 'nombre', 'tipo', 'parent_id'])
+            ->keyBy('sku');
+
+        $filas = [];
+        $ahora = now();
+        foreach ($cambios as $cambio) {
+            $sku = trim((string) ($cambio['sku'] ?? ''));
+            $producto = $productosPorSku->get($sku);
+            if ($producto === null) {
                 continue;
             }
 
-            $filas = WoocommerceProduct::where('sku', $sku)->update([
+            $filas[] = [
+                'id' => $producto->id,
+                'sku' => $sku,
+                'nombre' => (string) ($cambio['nombre'] ?? $producto->nombre),
+                'tipo' => $producto->tipo,
+                'parent_id' => $producto->parent_id,
                 'precio_normal' => $cambio['precio_normal_nuevo'],
                 'precio_rebajado' => $cambio['precio_rebaja_nuevo'],
-                'updated_at' => now(),
-            ]);
+                'updated_at' => $ahora,
+            ];
+        }
 
-            if ($filas > 0) {
-                $actualizados++;
+        $actualizados = 0;
+        $totalFilas = count($filas);
+        foreach (array_chunk($filas, 500) as $lote) {
+            WoocommerceProduct::upsert($lote, ['id'], ['precio_normal', 'precio_rebajado', 'updated_at']);
+            $actualizados += count($lote);
+            if ($alAvanzar !== null) {
+                $alAvanzar($actualizados, $totalFilas);
             }
         }
 
         return $actualizados;
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $cambios
+     * @param  list<string>  $columnasClave
+     * @return array{filas: int, tamano_bytes: int}
+     */
+    public function escribirCsvExportacion(string $rutaAbsoluta, array $cambios, array $columnasClave): array
+    {
+        $columnasOrdenadas = array_values(array_intersect(self::ORDEN_COLUMNAS_CSV_EXPORT, $columnasClave));
+        $header = array_map(fn (string $clave) => self::COLUMNAS_CSV_EXPORT[$clave], $columnasOrdenadas);
+
+        $out = fopen($rutaAbsoluta, 'w');
+        if ($out === false) {
+            throw new \RuntimeException('No se pudo crear el archivo CSV temporal.');
+        }
+
+        fputcsv($out, $header);
+        $filas = 0;
+        foreach ($cambios as $cambio) {
+            $fila = [];
+            foreach ($columnasOrdenadas as $clave) {
+                $fila[] = match ($clave) {
+                    'sku' => $cambio['sku'],
+                    'nombre' => $cambio['nombre'],
+                    'precio_rebajado' => $cambio['precio_rebaja_nuevo'],
+                    'precio_normal' => $cambio['precio_normal_nuevo'],
+                    default => null,
+                };
+            }
+            fputcsv($out, $fila);
+            $filas++;
+        }
+        fclose($out);
+
+        return [
+            'filas' => $filas,
+            'tamano_bytes' => (int) filesize($rutaAbsoluta),
+        ];
     }
 
     /**
@@ -416,29 +511,69 @@ class WooCommercePreciosService
     /**
      * Cruce flexible de SKU (con/sin ceros a la izquierda).
      */
-    public function resolverPrecioPorSku(array $precios, string $skuCatalogo): ?float
+    public function resolverPrecioPorSku(array $precios, string $skuCatalogo, ?array $indicePrecios = null): ?float
     {
         $sku = trim($skuCatalogo);
         if ($sku === '') {
             return null;
         }
 
+        if ($indicePrecios !== null) {
+            if (isset($indicePrecios[$sku])) {
+                return (float) $indicePrecios[$sku];
+            }
+
+            $sinCeros = ltrim($sku, '0');
+            if ($sinCeros !== '' && isset($indicePrecios[$sinCeros])) {
+                return (float) $indicePrecios[$sinCeros];
+            }
+
+            return null;
+        }
+
         if (isset($precios[$sku])) {
-            return $precios[$sku];
+            return (float) $precios[$sku];
         }
 
         $sinCeros = ltrim($sku, '0');
         if ($sinCeros !== '' && isset($precios[$sinCeros])) {
-            return $precios[$sinCeros];
+            return (float) $precios[$sinCeros];
         }
 
         foreach ($precios as $clave => $valor) {
             if (ltrim((string) $clave, '0') === $sinCeros) {
-                return $valor;
+                return (float) $valor;
             }
         }
 
         return null;
+    }
+
+    /**
+     * @return array<string, float>
+     */
+    private function indicePreciosPorSku(array $precios): array
+    {
+        $indice = [];
+
+        foreach ($precios as $clave => $valor) {
+            $sku = trim((string) $clave);
+            if ($sku === '') {
+                continue;
+            }
+
+            $precio = (float) $valor;
+            if (! array_key_exists($sku, $indice)) {
+                $indice[$sku] = $precio;
+            }
+
+            $sinCeros = ltrim($sku, '0');
+            if ($sinCeros !== '' && ! array_key_exists($sinCeros, $indice)) {
+                $indice[$sinCeros] = $precio;
+            }
+        }
+
+        return $indice;
     }
 
     /**

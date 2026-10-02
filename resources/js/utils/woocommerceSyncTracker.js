@@ -33,5 +33,6 @@ export const ESTADOS_REANUDABLES = ['interrumpido', 'error'];
 
 export function etiquetaTipoSync(tipo) {
     if (tipo === 'fetch_prices') return 'Descarga de precios';
+    if (tipo === 'export_csv') return 'Generación de CSV';
     return 'Sincronización de precios';
 }

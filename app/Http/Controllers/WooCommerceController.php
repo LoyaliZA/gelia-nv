@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Jobs\WooCommerce\FetchWooCommercePricesJob;
+use App\Jobs\WooCommerce\GenerarWooCommerceCsvJob;
 use App\Jobs\WooCommerce\OcultarProductosWooCommerceJob;
 use App\Jobs\WooCommerce\UpdateWooCommercePricesJob;
 use App\Models\User;
@@ -293,9 +294,11 @@ class WooCommerceController extends Controller
         $request->validate([
             'columnas_export' => 'nullable|array',
             'columnas_export.*' => 'string|in:sku,nombre,precio_normal,precio_rebajado',
+            'file_path' => 'required|string',
+            'mapping' => 'required|array',
+            'mapping.sku' => 'required|string',
+            'mapping.precio_base' => 'required|string',
         ]);
-
-        [$fullPath, $mapping] = $this->resolverArchivoYMapeo($request);
 
         try {
             $columnasExport = $this->service->normalizarColumnasExport($request->input('columnas_export'));
@@ -303,54 +306,27 @@ class WooCommerceController extends Controller
             return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
         }
 
-        $preciosWizerp = $this->service->extraerPreciosDesdeExcel($fullPath, $mapping);
-        $cambios = $this->service->generarAnalisisDeCambios($preciosWizerp);
+        $filePath = $request->input('file_path');
+        $this->resolverRutaArchivoTemporal($filePath);
 
-        if ($cambios === []) {
-            $this->limpiarArchivoTemporal($request->input('file_path'));
-
-            return response()->json([
-                'success' => false,
-                'message' => 'No hay cambios de precios para exportar. Los precios locales ya coinciden con el listado.',
-            ], 422);
-        }
-
-        $productosActualizados = $this->service->aplicarPreciosLocales($cambios);
-        $csv = $this->service->construirFilasCsvExport($cambios, $columnasExport);
-
-        $fileName = 'WOOCOMMERCE-SYNC-' . date('d-m-Y_H-i-s') . '.csv';
-        $ruta = 'woocommerce/' . $fileName;
-
-        $tempPath = tempnam(sys_get_temp_dir(), 'woo');
-        $fileOut = fopen($tempPath, 'w');
-        fputcsv($fileOut, $csv['header']);
-        foreach ($csv['filas'] as $fila) {
-            fputcsv($fileOut, $fila);
-        }
-        fclose($fileOut);
-
-        Storage::disk('public')->put($ruta, file_get_contents($tempPath));
-        $size = round(filesize($tempPath) / 1024, 2) . ' KB';
-        unlink($tempPath);
-
-        $template = WoocommerceTemplate::create([
-            'nombre_archivo' => $fileName,
-            'ruta_fisica' => $ruta,
-            'tamano_kb' => $size,
+        $log = WoocommerceSyncLog::create([
+            'tipo' => 'export_csv',
+            'total_productos' => 1,
+            'procesados' => 0,
+            'estado' => 'pendiente',
+            'payload' => [
+                'fase' => 'iniciando',
+                'file_path' => $filePath,
+                'mapping' => $this->normalizarMapping($request->input('mapping')),
+                'columnas_export' => $columnasExport,
+            ],
         ]);
 
-        $this->limpiarArchivoTemporal($request->input('file_path'));
+        GenerarWooCommerceCsvJob::dispatch($log->id);
 
         return response()->json([
             'success' => true,
-            'download_url' => route('woocommerce.descargar', $template->id),
-            'productos_exportados' => count($cambios),
-            'productos_actualizados_local' => $productosActualizados,
-            'message' => sprintf(
-                'CSV con %d producto(s) con cambio de precio. Se actualizaron %d registro(s) en GELIANV.',
-                count($cambios),
-                $productosActualizados
-            ),
+            'log_id' => $log->id,
         ]);
     }
 

@@ -32,13 +32,14 @@ class WoocommerceSyncLog extends Model
 
     public static function activo(): ?self
     {
-        $log = static::where(function ($query) {
-            $query->whereIn('estado', ['pendiente', 'en_proceso'])
-                ->orWhere(function ($q) {
-                    $q->whereIn('estado', ['interrumpido', 'error'])
-                        ->whereColumn('procesados', '<', 'total_productos');
-                });
-        })->latest()->first();
+        $log = static::where('tipo', '!=', 'export_csv')
+            ->where(function ($query) {
+                $query->whereIn('estado', ['pendiente', 'en_proceso'])
+                    ->orWhere(function ($q) {
+                        $q->whereIn('estado', ['interrumpido', 'error'])
+                            ->whereColumn('procesados', '<', 'total_productos');
+                    });
+            })->latest()->first();
 
         if (!$log) {
             return null;

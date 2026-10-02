@@ -1,9 +1,10 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { UploadCloud, Eye, Download, CloudUpload, Info, CheckSquare, Square } from 'lucide-react';
 import { geliaCardClass } from '../../../utils/geliaTheme';
 import GeliaLoader from '../../../Components/GeliaLoader';
 import ModalPrevisualizacion from './ModalPrevisualizacion';
 import ModalMapeoPrecios from './ModalMapeoPrecios';
+import ModalProgresoGenerarCsv from './ModalProgresoGenerarCsv';
 import { startWooSyncTracking } from '../../../utils/woocommerceSyncTracker';
 
 export default function GeneradorSync({ permisos, configuracion, margenes, onTemplateGenerado }) {
@@ -15,6 +16,7 @@ export default function GeneradorSync({ permisos, configuracion, margenes, onTem
     const [previewData, setPreviewData] = useState(null);
     const [mapeoModal, setMapeoModal] = useState(null);
     const [ultimoMapeo, setUltimoMapeo] = useState(null);
+    const [exportCsvLog, setExportCsvLog] = useState(null);
     const [columnasExport, setColumnasExport] = useState({
         sku: true,
         nombre: true,
@@ -44,6 +46,38 @@ export default function GeneradorSync({ permisos, configuracion, margenes, onTem
 
     const csrfToken = () => document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '';
 
+    useEffect(() => {
+        if (!exportCsvLog?.id) return undefined;
+        if (['completado', 'error', 'cancelado'].includes(exportCsvLog.estado)) return undefined;
+
+        const poll = async () => {
+            try {
+                const res = await fetch(route('woocommerce.progreso', exportCsvLog.id), {
+                    headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                });
+                if (!res.ok) return;
+                const data = await res.json();
+                setExportCsvLog(data);
+                if (data.estado === 'completado') {
+                    onTemplateGenerado?.();
+                    if (data.payload?.resultado?.message) {
+                        setSuccessMsg(data.payload.resultado.message);
+                    }
+                }
+                if (data.estado === 'error') {
+                    setErrorMsg(data.mensaje_error || 'Error al generar el CSV.');
+                }
+            } catch {
+                // siguiente tick
+            }
+        };
+
+        const iv = setInterval(poll, 600);
+        poll();
+
+        return () => clearInterval(iv);
+    }, [exportCsvLog?.id, exportCsvLog?.estado, onTemplateGenerado]);
+
     const postConMapeo = async (url, payload) => {
         const response = await fetch(url, {
             method: 'POST',
@@ -54,15 +88,27 @@ export default function GeneradorSync({ permisos, configuracion, margenes, onTem
             },
             body: JSON.stringify(payload),
         });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.message || 'Error del servidor.');
+
+        const rawBody = await response.text();
+        let data = {};
+        try {
+            data = rawBody ? JSON.parse(rawBody) : {};
+        } catch {
+            if (!response.ok && rawBody) {
+                data.message = `Error del servidor (${response.status}). Respuesta no JSON.`;
+            }
+        }
+
+        if (!response.ok) {
+            throw new Error(data.message || `Error del servidor (${response.status}).`);
+        }
+
         return data;
     };
 
     const ejecutarConMapeo = async (modo, payload) => {
         setMapeoModal(null);
         setUltimoMapeo(payload);
-        setProcesando(true);
         setErrorMsg(null);
         setSuccessMsg(null);
         try {
@@ -71,23 +117,33 @@ export default function GeneradorSync({ permisos, configuracion, margenes, onTem
                     ...payload,
                     columnas_export: columnasExportSeleccionadas(),
                 });
-                const a = document.createElement('a');
-                a.href = data.download_url;
-                a.click();
-                if (data.message) setSuccessMsg(data.message);
-                onTemplateGenerado?.();
+                setExportCsvLog({
+                    id: data.log_id,
+                    estado: 'pendiente',
+                    procesados: 0,
+                    total_productos: 1,
+                    payload: { fase: 'iniciando' },
+                });
             } else if (modo === 'previsualizar') {
+                setProcesando(true);
                 const data = await postConMapeo(route('woocommerce.previsualizar'), payload);
                 setPreviewData(data.detalles);
             } else if (modo === 'nube') {
+                setProcesando(true);
                 const data = await postConMapeo(route('woocommerce.sincronizar'), payload);
                 startWooSyncTracking(data.log_id);
             }
         } catch (e) {
             setErrorMsg(e.message);
+            setExportCsvLog(null);
         } finally {
-            setProcesando(false);
+            if (modo !== 'local') setProcesando(false);
         }
+    };
+
+    const cerrarModalExportCsv = () => {
+        setExportCsvLog(null);
+        setProcesando(false);
     };
 
     const solicitarMapeo = (modo) => {
@@ -108,6 +164,8 @@ export default function GeneradorSync({ permisos, configuracion, margenes, onTem
     return (
         <div className={`${geliaCardClass()} p-6 md:p-8 flex flex-col gap-6 relative`}>
             <GeliaLoader isVisible={procesando} message="Procesando precios_" />
+
+            <ModalProgresoGenerarCsv log={exportCsvLog} onClose={cerrarModalExportCsv} />
 
             <h2 className="text-xl font-black uppercase tracking-tight theme-text-main border-b theme-border pb-4">
                 Sincronización de Precios

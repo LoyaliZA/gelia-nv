@@ -5,6 +5,7 @@ namespace Tests\Feature\WooCommerce;
 use App\Models\User;
 use App\Models\Woocommerce\WoocommerceMargin;
 use App\Models\Woocommerce\WoocommerceProduct;
+use App\Models\Woocommerce\WoocommerceSyncLog;
 use App\Models\Woocommerce\WoocommerceTemplate;
 use App\Services\WooCommerce\WooCommercePreciosService;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
@@ -83,8 +84,12 @@ class ProcesarWooCommerceCsvTest extends TestCase
 
         $response->assertOk()
             ->assertJsonPath('success', true)
-            ->assertJsonPath('productos_exportados', 1)
-            ->assertJsonPath('productos_actualizados_local', 1);
+            ->assertJsonStructure(['log_id']);
+
+        $log = WoocommerceSyncLog::findOrFail($response->json('log_id'));
+        $this->assertSame('completado', $log->estado);
+        $this->assertSame(1, $log->payload['resultado']['productos_exportados'] ?? null);
+        $this->assertSame(1, $log->payload['resultado']['productos_actualizados_local'] ?? null);
 
         $producto = WoocommerceProduct::where('sku', 'SKU-CAMBIO')->first();
         $this->assertSame($normal, (float) $producto->precio_normal);
@@ -122,10 +127,14 @@ class ProcesarWooCommerceCsvTest extends TestCase
         Storage::put($stored, file_get_contents($excelPath));
         @unlink($excelPath);
 
-        $this->actingAs($this->user)->postJson(route('woocommerce.procesar'), [
+        $response = $this->actingAs($this->user)->postJson(route('woocommerce.procesar'), [
             'file_path' => $stored,
             'mapping' => ['sku' => 'SKU', 'precio_base' => 'Plataformas'],
-        ])->assertStatus(422)
-            ->assertJsonPath('success', false);
+        ]);
+
+        $response->assertOk()->assertJsonPath('success', true);
+        $log = WoocommerceSyncLog::findOrFail($response->json('log_id'));
+        $this->assertSame('error', $log->estado);
+        $this->assertStringContainsString('No hay cambios', $log->mensaje_error ?? '');
     }
 }
