@@ -25,6 +25,11 @@ return [
             'trim',
             explode(',', (string) env('WEBAUTHN_ANDROID_SHA256_CERT_FINGERPRINTS', ''))
         ))),
+        // Mismo certificado que assetlinks, en base64url. Se lee aquí para sobrevivir a config:cache.
+        'apk_key_hashes' => array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string) env('WEBAUTHN_ANDROID_APK_KEY_HASHES', ''))
+        ))),
     ],
 
     'challenge' => [

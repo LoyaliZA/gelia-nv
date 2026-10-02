@@ -11,8 +11,11 @@ class PasskeyOrigins
             ? $current
             : array_filter(array_map('trim', explode(',', (string) $current)));
 
-        $extra = (string) env('WEBAUTHN_ANDROID_APK_KEY_HASHES', '');
-        foreach (array_filter(array_map('trim', explode(',', $extra))) as $hash) {
+        $hashes = config('webauthn.android.apk_key_hashes', []);
+        if (is_string($hashes)) {
+            $hashes = array_filter(array_map('trim', explode(',', $hashes)));
+        }
+        foreach ($hashes as $hash) {
             $origins[] = str_starts_with($hash, 'android:apk-key-hash:')
                 ? $hash
                 : 'android:apk-key-hash:'.$hash;

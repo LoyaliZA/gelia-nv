@@ -64,15 +64,34 @@ class DbBackupCommand extends Command
         ]);
 
         $process->setTimeout(600);
-        $process->run();
+        $process->disableOutput();
 
-        if (! $process->isSuccessful()) {
-            $this->error('mysqldump falló: '.trim($process->getErrorOutput()));
+        $sql = fopen($sqlPath, 'wb');
+        if ($sql === false) {
+            $this->error('No se pudo crear el archivo de respaldo.');
 
             return self::FAILURE;
         }
 
-        File::put($sqlPath, $process->getOutput());
+        $stderr = '';
+        $writeFailed = false;
+        $process->run(function (string $type, string $data) use (&$stderr, &$writeFailed, $sql): void {
+            if ($type === Process::OUT) {
+                if (fwrite($sql, $data) === false) {
+                    $writeFailed = true;
+                }
+            } else {
+                $stderr .= $data;
+            }
+        });
+        fclose($sql);
+
+        if ($writeFailed || ! $process->isSuccessful()) {
+            File::delete($sqlPath);
+            $this->error('mysqldump falló: '.trim($stderr));
+
+            return self::FAILURE;
+        }
 
         try {
             $final = $this->comprimirYOpcionalmenteCifrar($sqlPath);

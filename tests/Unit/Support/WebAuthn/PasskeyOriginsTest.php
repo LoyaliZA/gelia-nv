@@ -9,8 +9,10 @@ class PasskeyOriginsTest extends TestCase
 {
     public function test_agrega_origen_android_apk_key_hash(): void
     {
-        config(['webauthn.origins' => 'https://gelianv.neobash.site']);
-        putenv('WEBAUTHN_ANDROID_APK_KEY_HASHES=android:apk-key-hash:abc123');
+        config([
+            'webauthn.origins' => 'https://gelianv.neobash.site',
+            'webauthn.android.apk_key_hashes' => ['abc123'],
+        ]);
 
         PasskeyOrigins::apply();
 
