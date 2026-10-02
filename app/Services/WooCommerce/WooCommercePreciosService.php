@@ -12,6 +12,16 @@ class WooCommercePreciosService
     /** Columnas de precio base (prioridad legacy). Plataformas = columna F legacy / Lista de Resurtido. */
     private const COLUMNAS_PRECIO_BASE = ['plataformas', 'pg', 'costocalculado', 'costowizerp'];
 
+    /** @var array<string, string> Claves internas → encabezado CSV (importación Woo / precios locales). */
+    public const COLUMNAS_CSV_EXPORT = [
+        'sku' => 'SKU',
+        'nombre' => 'Nombre',
+        'precio_rebajado' => 'Precio rebajado',
+        'precio_normal' => 'Precio normal',
+    ];
+
+    private const ORDEN_COLUMNAS_CSV_EXPORT = ['sku', 'nombre', 'precio_rebajado', 'precio_normal'];
+
     public function obtenerIva(): float
     {
         return (float) (WoocommerceConfiguracion::obtener()->iva ?? 1.16);
@@ -323,6 +333,84 @@ class WooCommercePreciosService
         }
 
         return $cambios;
+    }
+
+    /**
+     * @param  list<string>|null  $columnas
+     * @return list<string>
+     */
+    public function normalizarColumnasExport(?array $columnas): array
+    {
+        $permitidas = self::ORDEN_COLUMNAS_CSV_EXPORT;
+        $seleccion = $columnas !== null && $columnas !== []
+            ? array_values(array_intersect($permitidas, $columnas))
+            : $permitidas;
+
+        if (! in_array('sku', $seleccion, true)) {
+            array_unshift($seleccion, 'sku');
+        }
+
+        $tieneDatoUtil = count(array_intersect($seleccion, ['nombre', 'precio_normal', 'precio_rebajado'])) > 0;
+        if (! $tieneDatoUtil) {
+            throw new \InvalidArgumentException('Selecciona al menos una columna además de SKU (nombre o precios).');
+        }
+
+        return array_values(array_intersect($permitidas, $seleccion));
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $cambios
+     */
+    public function aplicarPreciosLocales(array $cambios): int
+    {
+        $actualizados = 0;
+
+        foreach ($cambios as $cambio) {
+            $sku = trim((string) ($cambio['sku'] ?? ''));
+            if ($sku === '') {
+                continue;
+            }
+
+            $filas = WoocommerceProduct::where('sku', $sku)->update([
+                'precio_normal' => $cambio['precio_normal_nuevo'],
+                'precio_rebajado' => $cambio['precio_rebaja_nuevo'],
+                'updated_at' => now(),
+            ]);
+
+            if ($filas > 0) {
+                $actualizados++;
+            }
+        }
+
+        return $actualizados;
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $cambios
+     * @param  list<string>  $columnasClave
+     * @return array{header: list<string>, filas: list<list<string|float|null>>}
+     */
+    public function construirFilasCsvExport(array $cambios, array $columnasClave): array
+    {
+        $columnasOrdenadas = array_values(array_intersect(self::ORDEN_COLUMNAS_CSV_EXPORT, $columnasClave));
+        $header = array_map(fn (string $clave) => self::COLUMNAS_CSV_EXPORT[$clave], $columnasOrdenadas);
+        $filas = [];
+
+        foreach ($cambios as $cambio) {
+            $fila = [];
+            foreach ($columnasOrdenadas as $clave) {
+                $fila[] = match ($clave) {
+                    'sku' => $cambio['sku'],
+                    'nombre' => $cambio['nombre'],
+                    'precio_rebajado' => $cambio['precio_rebaja_nuevo'],
+                    'precio_normal' => $cambio['precio_normal_nuevo'],
+                    default => null,
+                };
+            }
+            $filas[] = $fila;
+        }
+
+        return ['header' => $header, 'filas' => $filas];
     }
 
     /**

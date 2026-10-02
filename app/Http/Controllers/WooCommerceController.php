@@ -290,27 +290,42 @@ class WooCommerceController extends Controller
     {
         Gate::authorize('woocommerce.sincronizar');
 
+        $request->validate([
+            'columnas_export' => 'nullable|array',
+            'columnas_export.*' => 'string|in:sku,nombre,precio_normal,precio_rebajado',
+        ]);
+
         [$fullPath, $mapping] = $this->resolverArchivoYMapeo($request);
 
-        $iva = $this->service->obtenerIva();
-        $margenes = WoocommerceMargin::orderBy('precio_min')->get();
+        try {
+            $columnasExport = $this->service->normalizarColumnasExport($request->input('columnas_export'));
+        } catch (\InvalidArgumentException $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+        }
+
         $preciosWizerp = $this->service->extraerPreciosDesdeExcel($fullPath, $mapping);
+        $cambios = $this->service->generarAnalisisDeCambios($preciosWizerp);
+
+        if ($cambios === []) {
+            $this->limpiarArchivoTemporal($request->input('file_path'));
+
+            return response()->json([
+                'success' => false,
+                'message' => 'No hay cambios de precios para exportar. Los precios locales ya coinciden con el listado.',
+            ], 422);
+        }
+
+        $productosActualizados = $this->service->aplicarPreciosLocales($cambios);
+        $csv = $this->service->construirFilasCsvExport($cambios, $columnasExport);
 
         $fileName = 'WOOCOMMERCE-SYNC-' . date('d-m-Y_H-i-s') . '.csv';
         $ruta = 'woocommerce/' . $fileName;
 
         $tempPath = tempnam(sys_get_temp_dir(), 'woo');
         $fileOut = fopen($tempPath, 'w');
-        fputcsv($fileOut, ['SKU', 'Nombre', 'Precio rebajado', 'Precio normal']);
-
-        foreach (WoocommerceProduct::all() as $prod) {
-            $base = $this->service->resolverPrecioPorSku($preciosWizerp, $prod->sku);
-            if ($base === null) {
-                continue;
-            }
-            $rebaja = $this->service->calcular($base, 'rebaja', $margenes, $iva);
-            $normal = $this->service->calcular($base, 'normal', $margenes, $iva);
-            fputcsv($fileOut, [$prod->sku, $prod->nombre, $rebaja, $normal]);
+        fputcsv($fileOut, $csv['header']);
+        foreach ($csv['filas'] as $fila) {
+            fputcsv($fileOut, $fila);
         }
         fclose($fileOut);
 
@@ -329,6 +344,13 @@ class WooCommerceController extends Controller
         return response()->json([
             'success' => true,
             'download_url' => route('woocommerce.descargar', $template->id),
+            'productos_exportados' => count($cambios),
+            'productos_actualizados_local' => $productosActualizados,
+            'message' => sprintf(
+                'CSV con %d producto(s) con cambio de precio. Se actualizaron %d registro(s) en GELIANV.',
+                count($cambios),
+                $productosActualizados
+            ),
         ]);
     }
 

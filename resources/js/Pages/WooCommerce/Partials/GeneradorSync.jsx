@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { UploadCloud, Eye, Download, CloudUpload, Info } from 'lucide-react';
+import { UploadCloud, Eye, Download, CloudUpload, Info, CheckSquare, Square } from 'lucide-react';
 import { geliaCardClass } from '../../../utils/geliaTheme';
 import GeliaLoader from '../../../Components/GeliaLoader';
 import ModalPrevisualizacion from './ModalPrevisualizacion';
@@ -11,9 +11,36 @@ export default function GeneradorSync({ permisos, configuracion, margenes, onTem
     const [archivo, setArchivo] = useState(null);
     const [procesando, setProcesando] = useState(false);
     const [errorMsg, setErrorMsg] = useState(null);
+    const [successMsg, setSuccessMsg] = useState(null);
     const [previewData, setPreviewData] = useState(null);
     const [mapeoModal, setMapeoModal] = useState(null);
     const [ultimoMapeo, setUltimoMapeo] = useState(null);
+    const [columnasExport, setColumnasExport] = useState({
+        sku: true,
+        nombre: true,
+        precio_rebajado: true,
+        precio_normal: true,
+    });
+
+    const OPCIONES_COLUMNAS_CSV = [
+        { clave: 'sku', label: 'SKU', fija: true },
+        { clave: 'nombre', label: 'Nombre' },
+        { clave: 'precio_rebajado', label: 'Precio rebaja' },
+        { clave: 'precio_normal', label: 'Precio normal' },
+    ];
+
+    const columnasExportSeleccionadas = () =>
+        OPCIONES_COLUMNAS_CSV.filter((op) => columnasExport[op.clave]).map((op) => op.clave);
+
+    const toggleColumnaExport = (clave) => {
+        if (clave === 'sku') return;
+        setColumnasExport((prev) => {
+            const siguiente = { ...prev, [clave]: !prev[clave] };
+            const activas = OPCIONES_COLUMNAS_CSV.filter((op) => siguiente[op.clave] && op.clave !== 'sku');
+            if (activas.length === 0) return prev;
+            return siguiente;
+        });
+    };
 
     const csrfToken = () => document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '';
 
@@ -37,12 +64,17 @@ export default function GeneradorSync({ permisos, configuracion, margenes, onTem
         setUltimoMapeo(payload);
         setProcesando(true);
         setErrorMsg(null);
+        setSuccessMsg(null);
         try {
             if (modo === 'local') {
-                const data = await postConMapeo(route('woocommerce.procesar'), payload);
+                const data = await postConMapeo(route('woocommerce.procesar'), {
+                    ...payload,
+                    columnas_export: columnasExportSeleccionadas(),
+                });
                 const a = document.createElement('a');
                 a.href = data.download_url;
                 a.click();
+                if (data.message) setSuccessMsg(data.message);
                 onTemplateGenerado?.();
             } else if (modo === 'previsualizar') {
                 const data = await postConMapeo(route('woocommerce.previsualizar'), payload);
@@ -87,6 +119,12 @@ export default function GeneradorSync({ permisos, configuracion, margenes, onTem
                 </div>
             )}
 
+            {successMsg && (
+                <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 text-sm font-bold flex items-center gap-2">
+                    <Info className="w-5 h-5 shrink-0" /> {successMsg}
+                </div>
+            )}
+
             {!configuracion.credenciales_configuradas && (
                 <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-600 text-xs font-bold">
                     Configura URL y credenciales REST de WooCommerce para sincronizar a la nube.
@@ -108,12 +146,42 @@ export default function GeneradorSync({ permisos, configuracion, margenes, onTem
                         setPreviewData(null);
                         setUltimoMapeo(null);
                         setErrorMsg(null);
+                        setSuccessMsg(null);
                     }}
                 />
                 <UploadCloud className="w-10 h-10 mx-auto mb-3 theme-text-muted" style={archivo ? { color: 'var(--color-primario)' } : {}} />
                 <h4 className="text-sm font-black uppercase theme-text-main">Lista de Resurtido / Wizerp</h4>
                 <p className="text-[10px] font-bold theme-text-muted mt-1 uppercase">
                     {archivo ? archivo.name : 'Selecciona el Excel y mapea SKU + Precio base'}
+                </p>
+            </div>
+
+            <div className="rounded-xl border theme-border p-4 space-y-3">
+                <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted">
+                    Columnas del CSV manual (solo productos con cambio de precio)
+                </p>
+                <div className="flex flex-wrap gap-3">
+                    {OPCIONES_COLUMNAS_CSV.map((op) => {
+                        const activa = columnasExport[op.clave];
+                        const Icon = activa ? CheckSquare : Square;
+                        return (
+                            <button
+                                key={op.clave}
+                                type="button"
+                                disabled={op.fija}
+                                onClick={() => toggleColumnaExport(op.clave)}
+                                className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-[10px] font-bold uppercase tracking-wide transition-all ${
+                                    activa ? 'border-[var(--color-primario)] theme-text-main' : 'theme-border theme-text-muted opacity-60'
+                                } ${op.fija ? 'cursor-default opacity-100' : 'hover:border-[var(--color-primario)]'}`}
+                            >
+                                <Icon className="w-4 h-4 shrink-0" style={activa ? { color: 'var(--color-primario)' } : {}} />
+                                {op.label}
+                            </button>
+                        );
+                    })}
+                </div>
+                <p className="text-[10px] theme-text-muted">
+                    Al generar el CSV también se actualizan los precios en la base de datos de GELIANV.
                 </p>
             </div>
 

@@ -66,7 +66,10 @@ export default function PanelInstruccionesExportacion() {
                         <span className="w-2 h-4 rounded bg-emerald-500" />
                         3. CSV de precios GELIANV (opcional)
                     </h4>
-                    <p>Generado con &quot;Generar CSV&quot;: columnas <strong className="theme-text-main">SKU, Precio normal, Precio rebajado</strong> para actualizar precios locales sin API.</p>
+                    <p>
+                        Con &quot;Generar CSV&quot; solo se incluyen productos con cambio de precio; puedes elegir columnas
+                        (<strong className="theme-text-main">SKU, Nombre, Precio normal, Precio rebajado</strong>) y GELIANV actualiza sus precios locales al mismo tiempo.
+                    </p>
                 </section>
 
                 <section className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-400 font-bold">
