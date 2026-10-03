@@ -3,6 +3,7 @@
 namespace App\Services\PuntoVenta\Resguardos;
 
 use App\Contracts\PuntoVenta\ResuelveAlcancePdv;
+use App\Events\PuntoVenta\RegistroManualResguardoPdvCreado;
 use App\Models\Cliente;
 use App\Models\Producto;
 use App\Models\PuntoVenta\ResguardoPdv;
@@ -183,6 +184,8 @@ class CrearResguardoManualPdvService
                         $ahora,
                         $pathsEscritos
                     );
+
+                    RegistroManualResguardoPdvCreado::dispatch($resguardo, $evento, $sucursalId);
 
                     return $resguardo;
                 } catch (UniqueConstraintViolationException $e) {

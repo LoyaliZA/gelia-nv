@@ -18,15 +18,21 @@ class ConsultarTerminalAlertasSucursalPdvService
     /**
      * @return array<string, mixed>
      */
-    public function estadoParaUsuario(User $actor, int $sucursalId, ?string $terminalId, CarbonInterface $ahora): array
-    {
-        $autorizado = $this->alcance->tienePermisoPdv($actor, PuntoVentaModulo::PERMISO_TURNOS_ALERTAS_SUCURSAL)
-            && $this->alcance->idsSucursalesOperables($actor)->contains($sucursalId);
+    public function estadoParaUsuario(
+        User $actor,
+        int $sucursalId,
+        ?string $terminalId,
+        CarbonInterface $ahora,
+        string $proposito = PdvTerminalAlertasSucursal::PROPOSITO_ALERTAS,
+    ): array {
+        $proposito = PdvTerminalAlertasSucursal::normalizarProposito($proposito);
+        $autorizado = $this->usuarioAutorizado($actor, $sucursalId, $proposito);
 
-        $this->marcarVencidas($sucursalId, $ahora);
+        $this->marcarVencidas($sucursalId, $ahora, $proposito);
 
         $activaSucursal = PdvTerminalAlertasSucursal::query()
             ->where('sucursal_id', $sucursalId)
+            ->where('proposito', $proposito)
             ->where('estado', PdvTerminalAlertasSucursal::ESTADO_ACTIVA)
             ->orderByDesc('ultima_senal_at')
             ->first();
@@ -35,10 +41,18 @@ class ConsultarTerminalAlertasSucursalPdvService
         if ($terminalId !== null && trim($terminalId) !== '') {
             $propia = PdvTerminalAlertasSucursal::query()
                 ->where('terminal_id', $terminalId)
+                ->where('proposito', $proposito)
                 ->first();
         }
 
-        $estadoUi = $this->resolverEstadoUi($autorizado, $activaSucursal, $propia, $terminalId, $actor);
+        $estadoUi = $this->resolverEstadoUi(
+            $autorizado,
+            $activaSucursal,
+            $propia,
+            $terminalId,
+            $actor,
+            $proposito === PdvTerminalAlertasSucursal::PROPOSITO_GENERAL,
+        );
 
         return [
             'autorizado' => $autorizado,
@@ -52,13 +66,18 @@ class ConsultarTerminalAlertasSucursalPdvService
         ];
     }
 
-    public function marcarVencidas(int $sucursalId, CarbonInterface $ahora): void
-    {
+    public function marcarVencidas(
+        int $sucursalId,
+        CarbonInterface $ahora,
+        string $proposito = PdvTerminalAlertasSucursal::PROPOSITO_ALERTAS,
+    ): void {
+        $proposito = PdvTerminalAlertasSucursal::normalizarProposito($proposito);
         $limiteSegundos = max(30, (int) config('pdv_alertas.terminal.vencimiento_sin_latido_segundos', 120));
         $umbral = $ahora->copy()->subSeconds($limiteSegundos);
 
         PdvTerminalAlertasSucursal::query()
             ->where('sucursal_id', $sucursalId)
+            ->where('proposito', $proposito)
             ->where('estado', PdvTerminalAlertasSucursal::ESTADO_ACTIVA)
             ->where('ultima_senal_at', '<', $umbral)
             ->update([
@@ -108,20 +127,36 @@ class ConsultarTerminalAlertasSucursalPdvService
             && $designacion->ultima_senal_at->greaterThanOrEqualTo($ahora->copy()->subSeconds($limiteSegundos));
     }
 
+    private function usuarioAutorizado(User $actor, int $sucursalId, string $proposito): bool
+    {
+        if (! $this->alcance->idsSucursalesOperables($actor)->contains($sucursalId)) {
+            return false;
+        }
+
+        if ($this->alcance->tienePermisoPdv($actor, PuntoVentaModulo::PERMISO_TURNOS_ALERTAS_SUCURSAL)) {
+            return true;
+        }
+
+        return $proposito === PdvTerminalAlertasSucursal::PROPOSITO_GENERAL
+            && $this->alcance->tienePermisoPdv($actor, PuntoVentaModulo::PERMISO_TURNOS_ATENDER);
+    }
+
     private function resolverEstadoUi(
         bool $autorizado,
         ?PdvTerminalAlertasSucursal $activaSucursal,
         ?PdvTerminalAlertasSucursal $propia,
         ?string $terminalId,
         User $actor,
+        bool $equipoCompartido = false,
     ): string {
         if (! $autorizado) {
             return 'no_autorizada';
         }
 
+        $dueno = ! $equipoCompartido;
         if ($propia instanceof PdvTerminalAlertasSucursal
             && $propia->estado === PdvTerminalAlertasSucursal::ESTADO_ACTIVA
-            && (int) $propia->user_id === (int) $actor->id
+            && (! $dueno || (int) $propia->user_id === (int) $actor->id)
         ) {
             return 'terminal_activa';
         }

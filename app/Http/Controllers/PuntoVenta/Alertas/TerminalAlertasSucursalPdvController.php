@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\PuntoVenta\Alertas\ActivarTerminalAlertasSucursalPdvRequest;
 use App\Http\Requests\PuntoVenta\Alertas\LatidoTerminalAlertasSucursalPdvRequest;
 use App\Http\Requests\PuntoVenta\Alertas\LiberarTerminalAlertasSucursalPdvRequest;
+use App\Models\PuntoVenta\PdvTerminalAlertasSucursal;
 use App\Models\User;
 use App\Services\PuntoVenta\Alertas\ActivarTerminalAlertasSucursalPdvService;
 use App\Services\PuntoVenta\Alertas\ConsultarTerminalAlertasSucursalPdvService;
@@ -31,6 +32,7 @@ class TerminalAlertasSucursalPdvController extends Controller
                 $sucursalId,
                 $terminalId !== '' ? $terminalId : null,
                 now(),
+                $this->proposito($request),
             ),
         );
     }
@@ -48,6 +50,7 @@ class TerminalAlertasSucursalPdvController extends Controller
                 (int) $request->integer('sucursal_id'),
                 $request->input('terminal_id'),
                 now(),
+                $this->proposito($request),
             ),
         );
     }
@@ -65,6 +68,7 @@ class TerminalAlertasSucursalPdvController extends Controller
                 (int) $request->integer('sucursal_id'),
                 (string) $request->input('terminal_id'),
                 now(),
+                $this->proposito($request),
             ),
         );
     }
@@ -84,7 +88,13 @@ class TerminalAlertasSucursalPdvController extends Controller
                 is_string($terminalId) ? $terminalId : null,
                 now(),
                 (string) ($request->input('motivo') ?: 'manual'),
+                $this->proposito($request),
             ),
         );
+    }
+
+    private function proposito(Request $request): string
+    {
+        return PdvTerminalAlertasSucursal::normalizarProposito($request->route('proposito'));
     }
 }

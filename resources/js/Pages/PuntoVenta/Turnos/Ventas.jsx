@@ -1,4 +1,5 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
+import axios from 'axios';
 import { Head } from '@inertiajs/react';
 import { Loader2, Headphones, RefreshCw, ShieldOff } from 'lucide-react';
 import AppLayout from '../../../Layouts/AppLayout';
@@ -9,8 +10,8 @@ import SelectorSucursalActivaPdv from '@/Components/PuntoVenta/SelectorSucursalA
 import TarjetaTurnoVentas from './Partials/TarjetaTurnoVentas';
 import TarjetaMiAtencion from '../Operacion/Partials/TarjetaMiAtencion';
 import useTableroVentas from './Partials/useTableroVentas';
-import { mostrarBandejaSinTurno } from '../Operacion/Partials/operacionUtils';
-import PdvAlertProvider, { usePdvAlertReload } from '../../../Components/PuntoVenta/PdvAlertProvider';
+import { etiquetaEstadoVendedor, mostrarBandejaSinTurno } from '../Operacion/Partials/operacionUtils';
+import PdvAlertProvider, { usePdvAlertContext, usePdvAlertReload } from '../../../Components/PuntoVenta/PdvAlertProvider';
 import PdvEncabezadoAlertasPdv from '../../../Components/PuntoVenta/PdvEncabezadoAlertasPdv';
 import { PDV_VISTA_REALTIME } from '../../../utils/pdvRealtimeMatrix';
 import useToastAlCambiar from '../../../hooks/useToastAlCambiar';
@@ -160,6 +161,8 @@ function VentasContenido({
                     <EstadoVacio />
                 )}
 
+                <PanelEquipoTerminalGeneral userId={auth?.user?.id} />
+
                 {turnoAsignado && (
                     <TarjetaTurnoVentas
                         turno={turnoAsignado}
@@ -174,6 +177,68 @@ function VentasContenido({
                     />
                 )}
                 </GeliaPageShell>
+    );
+}
+
+function PanelEquipoTerminalGeneral({ userId }) {
+    const ctx = usePdvAlertContext();
+    const activa = Boolean(ctx?.terminalGeneral?.terminalActiva);
+    const terminalId = ctx?.terminalGeneral?.terminalId;
+    const [equipo, setEquipo] = useState([]);
+
+    useEffect(() => {
+        if (!activa || !terminalId) {
+            setEquipo([]);
+            return undefined;
+        }
+
+        let vigente = true;
+        const cargar = () => {
+            const url = typeof route === 'function'
+                ? route('punto_venta.terminal_general.equipo')
+                : '/punto-venta/terminal-general/equipo';
+            axios.get(url, { params: { terminal_id: terminalId } })
+                .then(({ data }) => {
+                    if (vigente) setEquipo(Array.isArray(data?.equipo) ? data.equipo : []);
+                })
+                .catch(() => {
+                    if (vigente) setEquipo([]);
+                });
+        };
+
+        cargar();
+        const timer = window.setInterval(cargar, 30000);
+        return () => {
+            vigente = false;
+            window.clearInterval(timer);
+        };
+    }, [activa, terminalId]);
+
+    if (!activa) return null;
+
+    return (
+        <section className="space-y-3" data-pdv-terminal-general-equipo>
+            <h2 className="text-sm font-black uppercase tracking-widest theme-text-main m-0">Equipo de ventas</h2>
+            <ul className="space-y-2 m-0 p-0 list-none">
+                {equipo.map((persona) => {
+                    const propia = Number(persona.id) === Number(userId);
+                    return (
+                        <li key={persona.id} className={`${geliaCardClass()} p-4`}>
+                            <p className="text-sm font-black theme-text-main m-0">{persona.nombre}</p>
+                            <p className="text-xs theme-text-muted m-0 mt-1">
+                                {etiquetaEstadoVendedor(persona.estado_vendedor)}
+                                {persona.atencion_actual?.folio ? ` · Turno ${persona.atencion_actual.folio}` : ''}
+                            </p>
+                            {propia && (
+                                <p className="text-xs font-semibold theme-text-main m-0 mt-2">
+                                    Tu turno se gestiona en esta pantalla.
+                                </p>
+                            )}
+                        </li>
+                    );
+                })}
+            </ul>
+        </section>
     );
 }
 

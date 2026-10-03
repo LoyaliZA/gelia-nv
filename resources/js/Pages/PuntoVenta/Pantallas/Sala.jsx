@@ -44,7 +44,7 @@ export default function Sala({ estado_inicial: estadoInicial, sucursal_id: sucur
                             estadoConexion={ctx.estadoConexion}
                         />
                         <div className="grid min-h-0 min-w-0 flex-1 grid-cols-1 grid-rows-[auto_minmax(0,1fr)] gap-2 overflow-hidden min-[1100px]:grid-cols-[minmax(0,1.65fr)_minmax(16rem,0.95fr)] min-[1100px]:grid-rows-1 min-[1100px]:gap-4">
-                            <AdvertisingPanel items={ctx.publicidad} />
+                            <AdvertisingPanel items={ctx.publicidad} pausado={Boolean(ctx.hablando)} />
                             <QueuePanel
                                 turnoActual={ctx.turnoActual}
                                 proximos={ctx.proximos}

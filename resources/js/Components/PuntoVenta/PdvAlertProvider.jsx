@@ -25,10 +25,16 @@ import {
     reproducirTonoPdv,
 } from '@/utils/pdvAlertasPrefs';
 import { mensajeTtsTerminalPdv } from '@/utils/pdvAlertasCatalog';
-import { mensajeTtsPersonalPdv } from '@/utils/pdvSpeechUtils';
-import { resolverModoAudioPdv } from '@/utils/pdvAlertasAudiencia';
+import { PDV_AUDIENCIA_CANAL, resolverModoAudioPdv } from '@/utils/pdvAlertasAudiencia';
 
 const PdvAlertContext = createContext(null);
+
+const RUTAS_TERMINAL_GENERAL = {
+    estado: '/punto-venta/terminal-general/estado',
+    activar: '/punto-venta/terminal-general/activar',
+    latido: '/punto-venta/terminal-general/latido',
+    liberar: '/punto-venta/terminal-general/liberar',
+};
 
 export function usePdvAlertContext() {
     return useContext(PdvAlertContext);
@@ -121,6 +127,15 @@ export default function PdvAlertProvider({
         autorizado: Boolean(capacidades?.alertas_sucursal),
         habilitado: habilitado && Boolean(sucursalId),
     });
+    const terminalGeneral = usePdvTerminalAlertas({
+        sucursalId,
+        autorizado: Boolean(capacidades?.alertas_sucursal || capacidades?.atender),
+        habilitado: habilitado && Boolean(sucursalId),
+        storageKey: 'pdv_terminal_general_id',
+        prefijoRuta: 'punto_venta.terminal_general',
+        rutasFallback: RUTAS_TERMINAL_GENERAL,
+        coordinarAudio: false,
+    });
     const [activandoPush, setActivandoPush] = useState(false);
 
     const { encolar, reiniciar } = usePdvAlertQueue();
@@ -140,7 +155,7 @@ export default function PdvAlertProvider({
             return mensajeTtsTerminalPdv(envelope);
         }
         if (modo === 'personal') {
-            return mensajeTtsPersonalPdv(envelope);
+            return null;
         }
         return null;
     }, [userId, terminal, prefs.prefsUsuario, prefs.silencioTerminal]);
@@ -339,16 +354,14 @@ export default function PdvAlertProvider({
     }, []);
 
     const probarVozTerminal = useCallback(() => {
-        const demo = mensajeTtsTerminalPdv({
+        const envelope = {
+            event_id: `demo-terminal-${Date.now()}`,
             tipo: 'turno.alta',
+            audiencia: PDV_AUDIENCIA_CANAL.sucursal,
             datos: { folio: 'V-0001' },
-        });
-        if (demo) {
-            encolarTts({
-                event_id: `demo-terminal-${Date.now()}`,
-                tipo: 'turno.alta',
-                datos: { folio: 'V-0001' },
-            });
+        };
+        if (mensajeTtsTerminalPdv(envelope)) {
+            encolarTts(envelope);
         }
     }, [encolarTts]);
 
@@ -368,6 +381,7 @@ export default function PdvAlertProvider({
         activarPush,
         activandoPush,
         terminal,
+        terminalGeneral,
         capacidades,
         tonosAlertas,
         probarVozTerminal,
@@ -384,6 +398,7 @@ export default function PdvAlertProvider({
         activarPush,
         activandoPush,
         terminal,
+        terminalGeneral,
         capacidades,
         tonosAlertas,
         probarVozTerminal,

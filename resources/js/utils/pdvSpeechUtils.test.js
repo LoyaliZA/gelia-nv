@@ -34,19 +34,43 @@ describe('pdvSpeechUtils', () => {
         }))).toBe(false);
     });
 
-    it('forma el guion neutro sin categorías VIP/Diamante', () => {
+    it('forma el guion breve con prioridad y sin decir reatención ni lista', () => {
         const mensaje = mensajeTtsPdv(envelopeLlamado({
+            tipo: 'turno.reatencion',
             datos: {
                 folio: 'V-0200',
                 snapshot_nombre_llamado: 'Rosa Hernández',
                 prioridad_vip: true,
                 prioridad_diamante: true,
+                prioridad_discapacidad: true,
+                prioridad_adulto_mayor: true,
                 atencion: { primer_nombre: 'Luis' },
             },
         }));
 
-        expect(mensaje).toBe('Turno V-0200. Rosa Hernández. Favor de pasar con Luis.');
-        expect(mensaje).not.toMatch(/\bvip\b|\bdiamante\b/i);
+        expect(mensaje).toBe(
+            'Turno V-0200. Rosa Hernández. Tiene prioridad. Cliente con discapacidad. Cliente de la tercera edad. Cliente VIP. Pase con Luis.',
+        );
+        expect(mensaje).not.toMatch(/reatenci[oó]n|lista/i);
+    });
+
+    it('en sala pública no menciona discapacidad, tercera edad ni VIP', () => {
+        const mensaje = mensajeTtsPdv({
+            tipo: 'turno.asignado',
+            audiencia: 'publico',
+            datos: {
+                folio: 'V-0201',
+                snapshot_nombre_llamado: 'Rosa Hernández',
+                prioridad_vip: true,
+                prioridad_diamante: true,
+                prioridad_discapacidad: true,
+                prioridad_adulto_mayor: true,
+                atencion_primer_nombre: 'Luis',
+            },
+        });
+
+        expect(mensaje).toBe('Turno V-0201. Rosa Hernández. Tiene prioridad. Pase con Luis.');
+        expect(mensaje).not.toMatch(/discapacidad|tercera edad|vip/i);
     });
 
     it('usa atencion_primer_nombre del payload público', () => {
@@ -59,10 +83,10 @@ describe('pdvSpeechUtils', () => {
             },
         });
 
-        expect(mensaje).toContain('Favor de pasar con Carmen.');
+        expect(mensaje).toContain('Pase con Carmen.');
     });
 
-    it('omite apellido de quien atiende y usa fallback sin primer nombre', () => {
+    it('anuncia prórroga una vez y usa fallback sin primer nombre', () => {
         const sinAtencion = mensajeTtsPdv({
             tipo: 'turno.reatencion',
             datos: {
@@ -70,7 +94,12 @@ describe('pdvSpeechUtils', () => {
                 snapshot_nombre_llamado: 'Pedro Ruiz',
             },
         });
-        expect(sinAtencion).toBe('Turno V-0400. Pedro Ruiz. Favor de atender.');
+        expect(sinAtencion).toBe('Turno V-0400. Pedro Ruiz. Pase con el vendedor asignado.');
+
+        expect(mensajeTtsPdv({
+            tipo: 'atencion.prorroga',
+            datos: { folio: 'V-0401' },
+        })).toBe('Prórroga iniciada. Turno V-0401.');
     });
 
     it('resuelve estado TTS inicial como bloqueado sin gesto previo', () => {
@@ -90,17 +119,29 @@ describe('pdvSpeechUtils', () => {
         expect(noSoportado.titulo).toBe('Audio no disponible');
     });
 
-    it('selecciona voz es-MX con fallback a español', () => {
-        const voces = [
+    it('elige voz femenina latina y descarta robóticas o masculinas', () => {
+        const soloRobotica = [
             { name: 'English US', lang: 'en-US' },
+            { name: 'eSpeak Spanish', lang: 'es-ES' },
             { name: 'Google español', lang: 'es-ES' },
         ];
-        expect(seleccionarVozPdv(voces)?.lang).toBe('es-ES');
+        expect(seleccionarVozPdv(soloRobotica)).toBeNull();
 
         const conMexico = [
-            { name: 'Otra', lang: 'en-US' },
-            { name: 'MX', lang: 'es-MX' },
+            { name: 'Jorge', lang: 'es-MX' },
+            { name: 'Microsoft Dalia Online (Natural) - Spanish (Mexico)', lang: 'es-MX' },
         ];
-        expect(seleccionarVozPdv(conMexico)?.lang).toBe('es-MX');
+        expect(seleccionarVozPdv(conMexico)?.name).toContain('Dalia');
+
+        const latam = [
+            { name: 'Festival', lang: 'es-MX' },
+            { name: 'Paulina', lang: 'es-US' },
+        ];
+        expect(seleccionarVozPdv(latam)?.name).toBe('Paulina');
+    });
+
+    it('marca voz no disponible cuando no hay voz latina', () => {
+        const etiqueta = etiquetaAudioIndicadorPdv(PDV_TTS_ESTADO.sin_voz);
+        expect(etiqueta.titulo).toBe('Voz no disponible');
     });
 });

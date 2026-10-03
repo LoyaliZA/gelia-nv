@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Services\PuntoVenta\PuntoVentaModulo;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class LiberarTerminalAlertasSucursalPdvService
 {
@@ -20,19 +21,37 @@ class LiberarTerminalAlertasSucursalPdvService
     /**
      * @return array<string, mixed>
      */
-    public function ejecutar(User $actor, int $sucursalId, ?string $terminalId, CarbonInterface $ahora, string $motivo = 'manual'): array
-    {
-        $this->alcance->asegurarMutacionPiso(
-            $actor,
-            PuntoVentaModulo::PERMISO_TURNOS_ALERTAS_SUCURSAL,
-            $sucursalId,
-        );
+    public function ejecutar(
+        User $actor,
+        int $sucursalId,
+        ?string $terminalId,
+        CarbonInterface $ahora,
+        string $motivo = 'manual',
+        string $proposito = PdvTerminalAlertasSucursal::PROPOSITO_ALERTAS,
+    ): array {
+        $proposito = PdvTerminalAlertasSucursal::normalizarProposito($proposito);
+        $permiso = PuntoVentaModulo::PERMISO_TURNOS_ALERTAS_SUCURSAL;
+        if ($proposito === PdvTerminalAlertasSucursal::PROPOSITO_GENERAL
+            && $this->alcance->tienePermisoPdv($actor, PuntoVentaModulo::PERMISO_TURNOS_ATENDER)) {
+            $permiso = PuntoVentaModulo::PERMISO_TURNOS_ATENDER;
+        }
+        $this->alcance->asegurarMutacionPiso($actor, $permiso, $sucursalId);
 
-        return DB::transaction(function () use ($actor, $sucursalId, $terminalId, $ahora, $motivo): array {
+        if ($proposito === PdvTerminalAlertasSucursal::PROPOSITO_GENERAL && trim((string) $terminalId) === '') {
+            throw ValidationException::withMessages([
+                'terminal_id' => 'Indica el equipo que deja de ser terminal general.',
+            ]);
+        }
+
+        return DB::transaction(function () use ($actor, $sucursalId, $terminalId, $ahora, $motivo, $proposito): array {
             $query = PdvTerminalAlertasSucursal::query()
                 ->where('sucursal_id', $sucursalId)
-                ->where('estado', PdvTerminalAlertasSucursal::ESTADO_ACTIVA)
-                ->where('user_id', $actor->id);
+                ->where('proposito', $proposito)
+                ->where('estado', PdvTerminalAlertasSucursal::ESTADO_ACTIVA);
+
+            if ($proposito !== PdvTerminalAlertasSucursal::PROPOSITO_GENERAL) {
+                $query->where('user_id', $actor->id);
+            }
 
             if ($terminalId !== null && trim($terminalId) !== '') {
                 $query->where('terminal_id', $terminalId);
@@ -56,7 +75,7 @@ class LiberarTerminalAlertasSucursalPdvService
                 );
             }
 
-            return $this->consulta->estadoParaUsuario($actor, $sucursalId, $terminalId, $ahora);
+            return $this->consulta->estadoParaUsuario($actor, $sucursalId, $terminalId, $ahora, $proposito);
         });
     }
 
@@ -64,6 +83,7 @@ class LiberarTerminalAlertasSucursalPdvService
     {
         $designaciones = PdvTerminalAlertasSucursal::query()
             ->where('user_id', $actor->id)
+            ->where('proposito', PdvTerminalAlertasSucursal::PROPOSITO_ALERTAS)
             ->where('estado', PdvTerminalAlertasSucursal::ESTADO_ACTIVA)
             ->lockForUpdate()
             ->get();

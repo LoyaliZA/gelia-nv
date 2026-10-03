@@ -21,6 +21,7 @@ use App\Events\PuntoVenta\PausaFinalizada;
 use App\Events\PuntoVenta\PausaIniciada;
 use App\Events\PuntoVenta\PublicidadPdvActualizada;
 use App\Events\PuntoVenta\RecepcionEsperadaPdvCreada;
+use App\Events\PuntoVenta\RegistroManualResguardoPdvCreado;
 use App\Events\PuntoVenta\RecepcionFisicaPdvCompletada;
 use App\Events\PuntoVenta\TurnoAsignado;
 use App\Events\PuntoVenta\TurnoCreado;
@@ -43,6 +44,7 @@ final class PdvRealtimeMapper
     {
         return [
             RecepcionEsperadaPdvCreada::class,
+            RegistroManualResguardoPdvCreado::class,
             RecepcionFisicaPdvCompletada::class,
             IncidenciaResguardoPdvRegistrada::class,
             EntregaResguardoPdvCompletada::class,
@@ -77,6 +79,14 @@ final class PdvRealtimeMapper
     {
         return match ($event::class) {
             RecepcionEsperadaPdvCreada::class => $this->recepcionEsperada($event),
+            RegistroManualResguardoPdvCreado::class => $this->resguardoSucursal(
+                $event->sucursalId,
+                PayloadResguardoPdvBroadcast::eventIdDesdeEvento($event->evento),
+                $event->evento->tipo_evento,
+                $event->resguardo->version,
+                PayloadResguardoPdvBroadcast::desdeEvento($event->resguardo, $event->evento),
+                $event->evento->ocurrido_at,
+            ),
             RecepcionFisicaPdvCompletada::class => $this->resguardoSucursal(
                 $event->sucursalId,
                 PayloadResguardoPdvBroadcast::eventIdDesdeEvento($event->evento),
@@ -136,7 +146,10 @@ final class PdvRealtimeMapper
             PayloadResguardoPdvBroadcast::eventIdDesdeHandoff($event->resguardo->id, $event->pedidoBmaId),
             'resguardo.recepcion_esperada_creada',
             $event->resguardo->version,
-            PayloadResguardoPdvBroadcast::desdeResguardo($event->resguardo, 'resguardo.recepcion_esperada_creada'),
+            array_merge(
+                PayloadResguardoPdvBroadcast::desdeResguardo($event->resguardo, 'resguardo.recepcion_esperada_creada'),
+                ['snapshot_cliente_nombre' => $event->resguardo->snapshot_cliente_nombre],
+            ),
         );
     }
 
@@ -647,6 +660,7 @@ final class PdvRealtimeMapper
                 [
                     'jornada' => PayloadOperacionPdvBroadcast::jornada($event->jornada),
                     'intervalo' => PayloadOperacionPdvBroadcast::intervalo($event->intervalo),
+                    'primer_nombre' => $this->primerNombreJornada($event->jornada),
                 ],
             ),
         ]];
@@ -719,5 +733,21 @@ final class PdvRealtimeMapper
         }
 
         return $atencion;
+    }
+
+    private function primerNombreJornada(\App\Models\PuntoVenta\JornadaPdv $jornada): ?string
+    {
+        if (! $jornada->relationLoaded('user')) {
+            $jornada->load('user');
+        }
+
+        $nombre = trim((string) ($jornada->user?->name ?? ''));
+        if ($nombre === '') {
+            return null;
+        }
+
+        $partes = preg_split('/\s+/', $nombre) ?: [];
+
+        return $partes[0] ?? null;
     }
 }

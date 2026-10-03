@@ -22,21 +22,24 @@ class ActivarTerminalAlertasSucursalPdvService
     /**
      * @return array<string, mixed>
      */
-    public function ejecutar(User $actor, int $sucursalId, ?string $terminalId, CarbonInterface $ahora): array
-    {
-        $this->alcance->asegurarMutacionPiso(
-            $actor,
-            PuntoVentaModulo::PERMISO_TURNOS_ALERTAS_SUCURSAL,
-            $sucursalId,
-        );
+    public function ejecutar(
+        User $actor,
+        int $sucursalId,
+        ?string $terminalId,
+        CarbonInterface $ahora,
+        string $proposito = PdvTerminalAlertasSucursal::PROPOSITO_ALERTAS,
+    ): array {
+        $proposito = PdvTerminalAlertasSucursal::normalizarProposito($proposito);
+        $this->asegurarPermiso($actor, $sucursalId, $proposito);
 
         $terminalId = $this->normalizarTerminalId($terminalId);
 
-        return DB::transaction(function () use ($actor, $sucursalId, $terminalId, $ahora): array {
-            $this->consulta->marcarVencidas($sucursalId, $ahora);
+        return DB::transaction(function () use ($actor, $sucursalId, $terminalId, $ahora, $proposito): array {
+            $this->consulta->marcarVencidas($sucursalId, $ahora, $proposito);
 
             $activaExistente = PdvTerminalAlertasSucursal::query()
                 ->where('sucursal_id', $sucursalId)
+                ->where('proposito', $proposito)
                 ->where('estado', PdvTerminalAlertasSucursal::ESTADO_ACTIVA)
                 ->lockForUpdate()
                 ->first();
@@ -47,7 +50,7 @@ class ActivarTerminalAlertasSucursalPdvService
                 if ((string) $activaExistente->terminal_id === $terminalId) {
                     $activaExistente->update(['ultima_senal_at' => $ahora]);
 
-                    return $this->consulta->estadoParaUsuario($actor, $sucursalId, $terminalId, $ahora);
+                    return $this->consulta->estadoParaUsuario($actor, $sucursalId, $terminalId, $ahora, $proposito);
                 }
 
                 if ($maxActivas <= 1) {
@@ -71,6 +74,7 @@ class ActivarTerminalAlertasSucursalPdvService
 
             $previa = PdvTerminalAlertasSucursal::query()
                 ->where('terminal_id', $terminalId)
+                ->where('proposito', $proposito)
                 ->lockForUpdate()
                 ->first();
 
@@ -86,12 +90,12 @@ class ActivarTerminalAlertasSucursalPdvService
                         'ultima_senal_at' => $ahora,
                     ]);
 
-                    return $this->consulta->estadoParaUsuario($actor, $sucursalId, $terminalId, $ahora);
+                    return $this->consulta->estadoParaUsuario($actor, $sucursalId, $terminalId, $ahora, $proposito);
                 }
             }
 
             $designacion = PdvTerminalAlertasSucursal::query()->updateOrCreate(
-                ['terminal_id' => $terminalId],
+                ['terminal_id' => $terminalId, 'proposito' => $proposito],
                 [
                     'sucursal_id' => $sucursalId,
                     'user_id' => $actor->id,
@@ -111,8 +115,19 @@ class ActivarTerminalAlertasSucursalPdvService
                 $designacion->id,
             );
 
-            return $this->consulta->estadoParaUsuario($actor, $sucursalId, $terminalId, $ahora);
+            return $this->consulta->estadoParaUsuario($actor, $sucursalId, $terminalId, $ahora, $proposito);
         });
+    }
+
+    private function asegurarPermiso(User $actor, int $sucursalId, string $proposito): void
+    {
+        $permiso = PuntoVentaModulo::PERMISO_TURNOS_ALERTAS_SUCURSAL;
+        if ($proposito === PdvTerminalAlertasSucursal::PROPOSITO_GENERAL
+            && $this->alcance->tienePermisoPdv($actor, PuntoVentaModulo::PERMISO_TURNOS_ATENDER)) {
+            $permiso = PuntoVentaModulo::PERMISO_TURNOS_ATENDER;
+        }
+
+        $this->alcance->asegurarMutacionPiso($actor, $permiso, $sucursalId);
     }
 
     private function normalizarTerminalId(?string $terminalId): string

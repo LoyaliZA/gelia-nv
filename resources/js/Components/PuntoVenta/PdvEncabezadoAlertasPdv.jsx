@@ -25,6 +25,7 @@ export default function PdvEncabezadoAlertasPdv({ className = '' }) {
     const {
         prefs,
         terminal,
+        terminalGeneral,
         tonosAlertas,
         estadoConexion,
         estadoTts,
@@ -35,6 +36,7 @@ export default function PdvEncabezadoAlertasPdv({ className = '' }) {
     } = ctx;
 
     const mostrarTerminal = Boolean(capacidades?.alertas_sucursal);
+    const mostrarTerminalGeneral = Boolean(capacidades?.alertas_sucursal || capacidades?.atender);
 
     return (
         <>
@@ -60,6 +62,8 @@ export default function PdvEncabezadoAlertasPdv({ className = '' }) {
                 onCerrar={cerrarConfiguracion}
                 prefs={prefs}
                 terminal={terminal}
+                terminalGeneral={terminalGeneral}
+                mostrarTerminalGeneral={mostrarTerminalGeneral}
                 tonosAlertas={tonosAlertas}
                 estadoConexion={estadoConexion}
                 estadoTts={estadoTts}

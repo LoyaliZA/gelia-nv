@@ -13,10 +13,10 @@ export const BTN_SEGMENTO_INACTIVO =
 
 export function badgePrioridadTurno(etiqueta) {
     const mapa = {
-        Diamante: 'bg-violet-500/15 text-violet-700 dark:text-violet-300',
+        Diamante: 'pdv-llamado-diamante',
         VIP: 'bg-amber-500/15 text-amber-700 dark:text-amber-300',
-        'Adulto mayor': 'bg-sky-500/15 text-sky-700 dark:text-sky-300',
-        Discapacidad: 'bg-teal-500/15 text-teal-700 dark:text-teal-300',
+        'Adulto mayor': 'pdv-llamado-mayor',
+        Discapacidad: 'pdv-llamado-discapacidad',
     };
     return mapa[etiqueta] || 'bg-black/5 dark:bg-white/10 theme-text-muted';
 }

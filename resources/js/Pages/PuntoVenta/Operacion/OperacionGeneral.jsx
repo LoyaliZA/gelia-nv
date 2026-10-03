@@ -12,7 +12,7 @@ import EncabezadoGestionVendedores from './Partials/EncabezadoGestionVendedores'
 import ListaEquipoGerencia from './Partials/ListaEquipoGerencia';
 import useEstadoOperacion from './Partials/useEstadoOperacion';
 import useAvisoSucursalToast from './Partials/useAvisoSucursalToast';
-import PdvAlertProvider, { usePdvAlertReload } from '../../../Components/PuntoVenta/PdvAlertProvider';
+import PdvAlertProvider, { usePdvAlertContext, usePdvAlertReload } from '../../../Components/PuntoVenta/PdvAlertProvider';
 import PdvEncabezadoAlertasPdv from '../../../Components/PuntoVenta/PdvEncabezadoAlertasPdv';
 import AbrirPantallaSalaPdv from '../../../Components/PuntoVenta/AbrirPantallaSalaPdv';
 import { PDV_VISTA_REALTIME } from '../../../utils/pdvRealtimeMatrix';
@@ -125,6 +125,11 @@ export default function OperacionGeneral({
                     )}
 
                     {estado && (
+                        <VistaSegunTerminal
+                            esGerenciaEquipo={esGerenciaEquipo}
+                            puedeAsignarReatencion={puedeAsignarReatencion}
+                        >
+                            {(modo) => (
                         <>
                             {mostrarMiAtencion && (
                                 <TarjetaMiAtencion
@@ -135,6 +140,7 @@ export default function OperacionGeneral({
                                 />
                             )}
 
+                            {!modo.modoGeneral && (
                             <TarjetaGerenciaOperacion
                                 estado={estado}
                                 permisos={permisos}
@@ -142,6 +148,7 @@ export default function OperacionGeneral({
                                 onConflicto={manejarConflicto}
                                 onError={reportarMensajeOperacion}
                             />
+                            )}
 
                             {puedeVerEquipo && (
                                 <div className="space-y-5">
@@ -153,8 +160,8 @@ export default function OperacionGeneral({
                                     <ListaEquipoGerencia
                                         equipo={estado.equipo ?? []}
                                         servidorAt={servidorAt}
-                                        puedeGestionar={esGerenciaEquipo}
-                                        puedeAsignarReatencion={puedeAsignarReatencion}
+                                        puedeGestionar={modo.esGerenciaEquipo}
+                                        puedeAsignarReatencion={modo.puedeAsignarReatencion}
                                         reatenciones={reatencion}
                                         motivosPausa={motivosPausa}
                                         onActualizado={manejarActualizado}
@@ -164,11 +171,24 @@ export default function OperacionGeneral({
                                 </div>
                             )}
                         </>
+                            )}
+                        </VistaSegunTerminal>
                     )}
                 </GeliaPageShell>
             </PdvAlertProvider>
         </AppLayout>
     );
+}
+
+function VistaSegunTerminal({ esGerenciaEquipo, puedeAsignarReatencion, children }) {
+    const ctx = usePdvAlertContext();
+    const modoGeneral = Boolean(ctx?.terminalGeneral?.terminalActiva);
+
+    return children({
+        modoGeneral,
+        esGerenciaEquipo: esGerenciaEquipo && !modoGeneral,
+        puedeAsignarReatencion: puedeAsignarReatencion && !modoGeneral,
+    });
 }
 
 function OperacionRealtimeSync({ refrescar }) {

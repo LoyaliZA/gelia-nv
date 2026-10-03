@@ -16,6 +16,7 @@ export function crearColaAnunciosTts({
     onEstado = () => {},
     onAnunciado = () => {},
     onFallo = () => {},
+    onReproduccion = () => {},
     estaSilenciado = () => false,
     audioDesbloqueado = () => true,
     resolverTexto = null,
@@ -35,6 +36,12 @@ export function crearColaAnunciosTts({
 
     const estadoActual = () => {
         if (!adaptadorVoz?.soportado?.()) return 'no_soportado';
+        if (typeof adaptadorVoz.vozDisponible === 'function'
+            && typeof adaptadorVoz.vocesConsultadas === 'function'
+            && adaptadorVoz.vocesConsultadas()
+            && !adaptadorVoz.vozDisponible()) {
+            return 'sin_voz';
+        }
         if (estaSilenciado()) return 'silenciado';
         if (!audioDesbloqueado()) return 'bloqueado';
         return 'listo';
@@ -59,16 +66,19 @@ export function crearColaAnunciosTts({
 
         procesando = true;
         anunciados.add(siguiente.eventId);
-        const { texto, eventId } = siguiente;
+        const { texto, eventId, envelope } = siguiente;
+        onReproduccion(true, envelope);
 
         adaptadorVoz.hablar(texto, {
             onEnd: () => {
                 procesando = false;
+                onReproduccion(false, envelope);
                 onAnunciado(eventId);
                 procesarSiguiente();
             },
             onError: () => {
                 procesando = false;
+                onReproduccion(false, envelope);
                 onFallo(eventId);
                 procesarSiguiente();
             },
@@ -87,7 +97,7 @@ export function crearColaAnunciosTts({
             if (!texto) return false;
 
             const estado = estadoActual();
-            if (estado === 'silenciado' || estado === 'no_soportado') {
+            if (estado === 'silenciado' || estado === 'no_soportado' || estado === 'sin_voz') {
                 anunciados.add(eventId);
                 notificarEstado();
                 return true;

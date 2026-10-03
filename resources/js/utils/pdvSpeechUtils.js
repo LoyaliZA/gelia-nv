@@ -1,32 +1,42 @@
-/** Eventos con guion TTS personal aprobado (CONTRATO_PANTALLAS_PDV §5–§7). */
+/** Llamados que comparten el mismo guion breve (sin decir reatención). */
 export const PDV_TTS_TIPOS = new Set([
     'turno.asignado',
     'turno.reatencion',
     'turno.transferido',
+    'atencion.prorroga',
 ]);
 
 export const PDV_TTS_VOZ_PREFERIDA = 'es-MX';
 
+export const PDV_TTS_RATE = 0.95;
+
 export const PDV_TTS_STORAGE_SILENCIO = 'pdv_terminal_tts_silenciado';
+
+const IDIOMAS_LATAM = new Set(['es-MX', 'es-US', 'es-419']);
 
 const VOCES_PREFERIDAS = [
     'Microsoft Renata Online (Natural) - Spanish (Mexico)',
     'Microsoft Dalia Online (Natural) - Spanish (Mexico)',
     'Microsoft Sabina Online (Natural) - Spanish (Mexico)',
     'Microsoft Renata - Spanish (Mexico)',
+    'Microsoft Dalia - Spanish (Mexico)',
     'Microsoft Sabina - Spanish (Mexico)',
     'Paulina',
     'Monica',
+    'Mónica',
     'Spanish (Mexico) Female',
     'Google español de Estados Unidos',
-    'Google español',
 ];
+
+const PATRON_ROBOTICA = /espeak|festival|android|compact/i;
+const PATRON_MASCULINA = /\b(jorge|raul|raúl|diego|juan|carlos|male|masculin)\b/i;
 
 export const PDV_TTS_ESTADO = {
     listo: 'listo',
     bloqueado: 'bloqueado',
     silenciado: 'silenciado',
     no_soportado: 'no_soportado',
+    sin_voz: 'sin_voz',
 };
 
 export function resolverEstadoTtsPdv({ soportado, silenciado, audioDesbloqueado }) {
@@ -52,6 +62,12 @@ export function etiquetaAudioIndicadorPdv(estadoTts, { silenciado = false, canal
             etiqueta: 'Audio bloqueado por el navegador. Toca para activar.',
         };
     }
+    if (estadoTts === PDV_TTS_ESTADO.sin_voz) {
+        return {
+            titulo: 'Voz no disponible',
+            etiqueta: 'Este equipo no tiene una voz femenina en español latinoamericano.',
+        };
+    }
     if (estadoTts === PDV_TTS_ESTADO.no_soportado) {
         return {
             titulo: 'Audio no disponible',
@@ -73,25 +89,70 @@ export function debeAnunciarTtsPdv(envelope) {
 }
 
 /**
- * Guion neutro personal: Turno {folio}. {nombre}. Favor de pasar con {primer nombre}.
- * No nombra VIP, Diamante ni categorías (CONTRATO_PANTALLAS_PDV §5).
+ * Frases cortas de prioridad. La sala pública solo dice prioridad de Diamante.
  */
-export function mensajeTtsPersonalPdv(envelope) {
-    const datos = envelope?.datos;
+export function frasesPrioridadTtsPdv(datos, { publico = false } = {}) {
+    if (!datos || typeof datos !== 'object') return [];
+
+    const frases = [];
+    if (datos.prioridad_diamante === true) {
+        frases.push('Tiene prioridad.');
+    }
+    if (publico) return frases;
+
+    if (datos.prioridad_discapacidad === true) {
+        frases.push('Cliente con discapacidad.');
+    }
+    if (datos.prioridad_adulto_mayor === true) {
+        frases.push('Cliente de la tercera edad.');
+    }
+    if (datos.prioridad_vip === true) {
+        frases.push('Cliente VIP.');
+    }
+
+    return frases;
+}
+
+/**
+ * Guion de llamado: Turno {folio}. {cliente}. [prioridad]. Pase con {vendedor}.
+ * No dice reatención ni la palabra lista.
+ */
+export function mensajeTtsLlamadoPdv(datos, { publico = false } = {}) {
     if (!datos || typeof datos !== 'object') return null;
 
     const folio = String(datos.folio || '').trim();
     const nombreCliente = String(datos.snapshot_nombre_llamado || '').trim();
     if (!folio || !nombreCliente) return null;
 
-    const primerNombre = primerNombreAtencionPdv(datos);
-    const base = `Turno ${folio}. ${nombreCliente}.`;
+    const vendedor = primerNombreAtencionPdv(datos) || 'el vendedor asignado';
+    const partes = [
+        `Turno ${folio}.`,
+        `${nombreCliente}.`,
+        ...frasesPrioridadTtsPdv(datos, { publico }),
+        `Pase con ${vendedor}.`,
+    ];
 
-    if (primerNombre) {
-        return `${base} Favor de pasar con ${primerNombre}.`;
+    return partes.join(' ');
+}
+
+export function mensajeTtsProrrogaPdv(datos) {
+    const folio = String(datos?.folio || '').trim();
+    if (!folio) return null;
+    return `Prórroga iniciada. Turno ${folio}.`;
+}
+
+export function mensajeTtsPersonalPdv(envelope) {
+    const datos = envelope?.datos;
+    if (!datos || typeof datos !== 'object') return null;
+
+    const tipo = String(envelope?.tipo || '');
+    if (tipo === 'atencion.prorroga') {
+        return mensajeTtsProrrogaPdv(datos);
     }
 
-    return `${base} Favor de atender.`;
+    if (tipo && !PDV_TTS_TIPOS.has(tipo)) return null;
+
+    return mensajeTtsLlamadoPdv(datos, { publico: envelope?.audiencia === 'publico' });
 }
 
 /** @deprecated usar mensajeTtsPersonalPdv */
@@ -100,30 +161,42 @@ export function mensajeTtsPdv(envelope) {
 }
 
 export function primerNombreAtencionPdv(datos) {
-    const desdeAtencion = datos?.atencion?.primer_nombre;
-    if (desdeAtencion) return String(desdeAtencion).trim() || null;
+    const candidatos = [
+        datos?.atencion?.primer_nombre,
+        datos?.atencion_primer_nombre,
+        datos?.primer_nombre,
+        datos?.jornada?.primer_nombre,
+    ];
 
-    const desdePublico = datos?.atencion_primer_nombre;
-    if (desdePublico) return String(desdePublico).trim() || null;
+    for (const candidato of candidatos) {
+        const nombre = String(candidato || '').trim();
+        if (nombre) return nombre;
+    }
 
     return null;
 }
 
-export function seleccionarVozPdv(voces = [], preferida = PDV_TTS_VOZ_PREFERIDA) {
+export function vozDescartadaPdv(voz) {
+    const nombre = String(voz?.name || '');
+    const lang = String(voz?.lang || '');
+    if (!lang.startsWith('es')) return true;
+    if (PATRON_ROBOTICA.test(nombre)) return true;
+    if (PATRON_MASCULINA.test(nombre)) return true;
+    return false;
+}
+
+export function seleccionarVozPdv(voces = []) {
     if (!Array.isArray(voces) || voces.length === 0) return null;
 
+    const candidatas = voces.filter((voz) => !vozDescartadaPdv(voz));
+    if (candidatas.length === 0) return null;
+
     for (const nombre of VOCES_PREFERIDAS) {
-        const coincidencia = voces.find((voz) => voz.name === nombre);
+        const coincidencia = candidatas.find((voz) => voz.name === nombre);
         if (coincidencia) return coincidencia;
     }
 
-    const exacta = voces.find((voz) => voz.lang === preferida);
-    if (exacta) return exacta;
-
-    const espanol = voces.find((voz) => String(voz.lang || '').startsWith('es'));
-    if (espanol) return espanol;
-
-    return null;
+    return candidatas.find((voz) => IDIOMAS_LATAM.has(String(voz.lang || ''))) ?? null;
 }
 
 export function leerSilencioTtsPdv() {

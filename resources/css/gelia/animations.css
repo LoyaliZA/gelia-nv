@@ -61,6 +61,27 @@
     50%, 100% { transform: translateX(200%); }
 }
 
+@keyframes gelia-brillo-diamante {
+    0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--pdv-prioridad-diamante) 0%, transparent); }
+    50% { box-shadow: 0 0 28px 6px color-mix(in srgb, var(--pdv-prioridad-diamante) 75%, transparent); }
+}
+
+.pdv-llamado-diamante {
+    background: color-mix(in srgb, var(--pdv-prioridad-diamante) 22%, var(--theme-surface-bg));
+    color: var(--pdv-prioridad-diamante-texto);
+    animation: gelia-brillo-diamante 1.6s ease-in-out infinite;
+}
+
+.pdv-llamado-discapacidad {
+    background: var(--pdv-prioridad-discapacidad);
+    color: var(--pdv-prioridad-discapacidad-texto);
+}
+
+.pdv-llamado-mayor {
+    background: var(--pdv-prioridad-mayor);
+    color: var(--pdv-prioridad-mayor-texto);
+}
+
 @keyframes gelia-presencia-in {
     from {
         opacity: 0;

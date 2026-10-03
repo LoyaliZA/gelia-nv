@@ -9,6 +9,12 @@
     --color-exito: #059669;
     --color-aviso: #d97706;
     --color-info: #3B82F6;
+    --pdv-prioridad-diamante: #38bdf8;
+    --pdv-prioridad-diamante-texto: #0369a1;
+    --pdv-prioridad-discapacidad: #0c2340;
+    --pdv-prioridad-discapacidad-texto: #e0f2fe;
+    --pdv-prioridad-mayor: #e8b4b0;
+    --pdv-prioridad-mayor-texto: #7f1d1d;
     --font-principal: 'Inter', sans-serif;
     --font-scale: 1;
 

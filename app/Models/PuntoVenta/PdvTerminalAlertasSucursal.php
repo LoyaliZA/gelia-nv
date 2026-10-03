@@ -15,10 +15,15 @@ class PdvTerminalAlertasSucursal extends Model
 
     public const ESTADO_VENCIDA = 'vencida';
 
+    public const PROPOSITO_ALERTAS = 'alertas';
+
+    public const PROPOSITO_GENERAL = 'general';
+
     protected $table = 'pdv_terminal_alertas_sucursal';
 
     protected $fillable = [
         'terminal_id',
+        'proposito',
         'sucursal_id',
         'user_id',
         'estado',
@@ -44,5 +49,12 @@ class PdvTerminalAlertasSucursal extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public static function normalizarProposito(?string $proposito): string
+    {
+        return $proposito === self::PROPOSITO_GENERAL
+            ? self::PROPOSITO_GENERAL
+            : self::PROPOSITO_ALERTAS;
     }
 }

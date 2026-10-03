@@ -24,6 +24,7 @@ export default function useSpeechAnnouncements({
     const silenciado = silenciadoControlado === null ? silenciadoInterno : Boolean(silenciadoControlado);
     const [estadoTts, setEstadoTts] = useState(PDV_TTS_ESTADO.no_soportado);
     const [audioDesbloqueado, setAudioDesbloqueado] = useState(false);
+    const [hablando, setHablando] = useState(false);
 
     const adaptadorRef = useRef(null);
     const colaRef = useRef(null);
@@ -52,12 +53,18 @@ export default function useSpeechAnnouncements({
         const adaptador = adaptadorInyectado ?? crearAdaptadorVozNavegador();
         adaptadorRef.current = adaptador;
         adaptador.iniciarEscuchaVoces?.();
+        const dejarDeObservar = adaptador.observarVoz?.((disponible) => {
+            if (disponible) return;
+            if (!adaptador.vocesConsultadas?.()) return;
+            setEstadoTts(PDV_TTS_ESTADO.sin_voz);
+        });
 
         const cola = crearColaAnunciosTts({
             adaptadorVoz: adaptador,
             estaSilenciado: () => silenciadoRef.current,
             audioDesbloqueado: () => audioDesbloqueadoRef.current,
             onEstado: (estado) => setEstadoTts(estado),
+            onReproduccion: (activo) => setHablando(Boolean(activo)),
             resolverTexto,
         });
         colaRef.current = cola;
@@ -69,6 +76,7 @@ export default function useSpeechAnnouncements({
         }));
 
         return () => {
+            dejarDeObservar?.();
             cola.destruir();
             adaptador.destruir?.();
             colaRef.current = null;
@@ -138,5 +146,6 @@ export default function useSpeechAnnouncements({
         desbloquearAudio,
         reiniciar,
         ttsDisponible: estadoTts !== PDV_TTS_ESTADO.no_soportado,
+        hablando,
     };
 }

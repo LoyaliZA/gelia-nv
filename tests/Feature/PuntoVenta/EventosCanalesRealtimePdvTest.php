@@ -118,6 +118,7 @@ class EventosCanalesRealtimePdvTest extends TestCase
         $this->assertNotNull($usuario);
         $this->assertSame('usuario', $usuario['payload']['audiencia']);
         $this->assertSame($ventas->id, $usuario['payload']['datos']['atencion']['user_id']);
+        $this->assertSame('Ana', $usuario['payload']['datos']['atencion']['primer_nombre']);
 
         $publico = $this->emisionPorCanal(CanalesPdv::turnosPublico((int) $this->sucursal->id)->name);
         $this->assertNotNull($publico);

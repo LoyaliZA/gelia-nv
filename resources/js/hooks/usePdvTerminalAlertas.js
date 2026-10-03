@@ -4,6 +4,13 @@ import { crearCoordinadorAudioTerminalPdv } from '@/utils/pdvTerminalAudioLeader
 
 const STORAGE_KEY = 'pdv_terminal_alertas_id';
 
+const RUTAS_ALERTAS = {
+    estado: '/punto-venta/terminal-alertas/estado',
+    activar: '/punto-venta/terminal-alertas/activar',
+    latido: '/punto-venta/terminal-alertas/latido',
+    liberar: '/punto-venta/terminal-alertas/liberar',
+};
+
 function esUuidValido(valor) {
     return typeof valor === 'string'
         && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(valor);
@@ -21,45 +28,47 @@ function generarTerminalId() {
     });
 }
 
-function leerTerminalId() {
+function leerTerminalId(storageKey) {
     if (typeof window === 'undefined') return null;
     try {
-        const existente = window.localStorage.getItem(STORAGE_KEY);
+        const existente = window.localStorage.getItem(storageKey);
         if (existente && esUuidValido(existente)) {
             return existente;
         }
         const nuevo = generarTerminalId();
-        window.localStorage.setItem(STORAGE_KEY, nuevo);
+        window.localStorage.setItem(storageKey, nuevo);
         return nuevo;
     } catch {
         return generarTerminalId();
     }
 }
 
-function urlTerminalAlertas(accion) {
+function urlTerminal(prefijoRuta, rutasFallback, accion) {
     try {
-        const nombre = `punto_venta.terminal_alertas.${accion}`;
+        const nombre = `${prefijoRuta}.${accion}`;
         if (typeof route === 'function' && route().has?.(nombre)) {
             return route(nombre);
         }
     } catch {
         /* ziggy */
     }
-    const rutas = {
-        estado: '/punto-venta/terminal-alertas/estado',
-        activar: '/punto-venta/terminal-alertas/activar',
-        latido: '/punto-venta/terminal-alertas/latido',
-        liberar: '/punto-venta/terminal-alertas/liberar',
-    };
-    return rutas[accion];
+    return rutasFallback[accion];
 }
 
 export default function usePdvTerminalAlertas({
     sucursalId = null,
     autorizado = false,
     habilitado = true,
+    storageKey = STORAGE_KEY,
+    prefijoRuta = 'punto_venta.terminal_alertas',
+    rutasFallback = RUTAS_ALERTAS,
+    coordinarAudio = true,
 } = {}) {
-    const terminalIdRef = useRef(leerTerminalId());
+    const terminalIdRef = useRef(leerTerminalId(storageKey));
+    const urlTerminalAlertas = useCallback(
+        (accion) => urlTerminal(prefijoRuta, rutasFallback, accion),
+        [prefijoRuta, rutasFallback],
+    );
     const [estado, setEstado] = useState('no_autorizada');
     const [designacion, setDesignacion] = useState(null);
     const [config, setConfig] = useState(null);
@@ -93,7 +102,7 @@ export default function usePdvTerminalAlertas({
             }
             return null;
         }
-    }, [habilitado, sucursalId]);
+    }, [habilitado, sucursalId, urlTerminalAlertas]);
 
     const activar = useCallback(async () => {
         if (!habilitado || !sucursalId || !autorizado) return null;
@@ -107,7 +116,7 @@ export default function usePdvTerminalAlertas({
             if (data?.terminal_id) {
                 terminalIdRef.current = data.terminal_id;
                 try {
-                    window.localStorage.setItem(STORAGE_KEY, data.terminal_id);
+                    window.localStorage.setItem(storageKey, data.terminal_id);
                 } catch {
                     /* ponytail */
                 }
@@ -123,7 +132,7 @@ export default function usePdvTerminalAlertas({
         } finally {
             setCargando(false);
         }
-    }, [habilitado, sucursalId, autorizado, refrescar]);
+    }, [habilitado, sucursalId, autorizado, refrescar, storageKey, urlTerminalAlertas]);
 
     const liberar = useCallback(async (motivo = 'manual', sucursalIdObjetivo = null) => {
         const sucursalLiberar = sucursalIdObjetivo ?? sucursalId;
@@ -151,7 +160,7 @@ export default function usePdvTerminalAlertas({
         } finally {
             setCargando(false);
         }
-    }, [habilitado, sucursalId]);
+    }, [habilitado, sucursalId, urlTerminalAlertas]);
 
     const enviarLatido = useCallback(async () => {
         if (!habilitado || !sucursalId || !terminalActiva) return null;
@@ -169,7 +178,7 @@ export default function usePdvTerminalAlertas({
             await refrescar();
             return null;
         }
-    }, [habilitado, sucursalId, terminalActiva, refrescar]);
+    }, [habilitado, sucursalId, terminalActiva, refrescar, urlTerminalAlertas]);
 
     useEffect(() => {
         if (!habilitado) return undefined;
@@ -178,7 +187,7 @@ export default function usePdvTerminalAlertas({
     }, [habilitado, sucursalId, autorizado, refrescar]);
 
     useEffect(() => {
-        if (!habilitado || !terminalActiva) {
+        if (!habilitado || !terminalActiva || !coordinarAudio) {
             liderRef.current?.destruir();
             liderRef.current = null;
             return undefined;
@@ -194,7 +203,7 @@ export default function usePdvTerminalAlertas({
             liderRef.current?.destruir();
             liderRef.current = null;
         };
-    }, [habilitado, terminalActiva]);
+    }, [habilitado, terminalActiva, coordinarAudio]);
 
     useEffect(() => {
         if (!habilitado || !terminalActiva) return undefined;

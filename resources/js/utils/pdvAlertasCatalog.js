@@ -1,3 +1,5 @@
+import { mensajeTtsLlamadoPdv, mensajeTtsProrrogaPdv, primerNombreAtencionPdv } from './pdvSpeechUtils';
+
 /** Prioridades de alertas audibles (alineado con CatalogoAlertasTurnosPdv). */
 export const PDV_ALERTA_PRIORIDAD = {
     critica: 0,
@@ -20,17 +22,17 @@ export const PDV_ALERTAS_CATALOGO_TURNOS = {
     'turno.asignado': {
         prioridad: 'alta',
         tonoConfigurable: false,
-        guion: 'Turno {folio}, pasar con {vendedor}',
+        guion: 'Turno {folio}. {cliente}. Pase con {vendedor}.',
     },
     'turno.reatencion': {
         prioridad: 'alta',
         tonoConfigurable: false,
-        guion: 'Re-atención {folio}, pasar con {vendedor}',
+        guion: 'Turno {folio}. {cliente}. Pase con {vendedor}.',
     },
     'turno.transferido': {
         prioridad: 'alta',
         tonoConfigurable: false,
-        guion: 'Turno {folio} transferido a {vendedor}',
+        guion: 'Turno {folio}. {cliente}. Pase con {vendedor}.',
     },
     'atencion.espera_proximo_vencer': {
         prioridad: 'critica',
@@ -40,12 +42,27 @@ export const PDV_ALERTAS_CATALOGO_TURNOS = {
     'atencion.prorroga': {
         prioridad: 'alta',
         tonoConfigurable: true,
-        guion: 'Turno {folio} en prórroga',
+        guion: 'Prórroga iniciada. Turno {folio}.',
     },
     'atencion.prorroga_proximo_vencer': {
         prioridad: 'critica',
         tonoConfigurable: false,
         guion: 'Prórroga del turno {folio} próxima a vencer',
+    },
+    'pausa.iniciada': {
+        prioridad: 'alta',
+        tonoConfigurable: false,
+        guion: 'Pausa activa. {vendedor}.',
+    },
+    'resguardo.recepcion_esperada_creada': {
+        prioridad: 'alta',
+        tonoConfigurable: false,
+        guion: 'Nuevo resguardo pendiente de aprobación. {referencia}.',
+    },
+    'resguardo.registro_manual_creado': {
+        prioridad: 'alta',
+        tonoConfigurable: false,
+        guion: 'Nuevo resguardo pendiente de aprobación. {referencia}.',
     },
 };
 
@@ -53,6 +70,18 @@ export const PDV_TIPOS_AUDIO_PERSONAL = new Set([
     'turno.asignado',
     'turno.reatencion',
     'turno.transferido',
+    'atencion.prorroga',
+]);
+
+const PDV_TIPOS_LLAMADO = new Set([
+    'turno.asignado',
+    'turno.reatencion',
+    'turno.transferido',
+]);
+
+const PDV_TIPOS_RESGUARDO_NUEVO = new Set([
+    'resguardo.recepcion_esperada_creada',
+    'resguardo.registro_manual_creado',
 ]);
 
 export const PDV_TIPOS_AUDIO_TERMINAL = new Set(Object.keys(PDV_ALERTAS_CATALOGO_TURNOS));
@@ -66,11 +95,7 @@ export function definicionAlertaPdv(tipo) {
 }
 
 export function primerNombreDesdeDatosPdv(datos) {
-    const desdeAtencion = datos?.atencion?.primer_nombre;
-    if (desdeAtencion) return String(desdeAtencion).trim() || null;
-    const desdePublico = datos?.atencion_primer_nombre;
-    if (desdePublico) return String(desdePublico).trim() || null;
-    return null;
+    return primerNombreAtencionPdv(datos);
 }
 
 function clasificacionAltaPdv(datos) {
@@ -87,6 +112,25 @@ export function mensajeTtsTerminalPdv(envelope) {
     const definicion = definicionAlertaPdv(tipo);
     const datos = envelope?.datos;
     if (!definicion || !datos || typeof datos !== 'object') return null;
+
+    if (PDV_TIPOS_LLAMADO.has(tipo)) {
+        return mensajeTtsLlamadoPdv(datos, { publico: false });
+    }
+
+    if (tipo === 'atencion.prorroga') {
+        return mensajeTtsProrrogaPdv(datos);
+    }
+
+    if (tipo === 'pausa.iniciada') {
+        const vendedor = primerNombreDesdeDatosPdv(datos);
+        return vendedor ? `Pausa activa. ${vendedor}.` : 'Pausa activa.';
+    }
+
+    if (PDV_TIPOS_RESGUARDO_NUEVO.has(tipo)) {
+        const referencia = String(datos.folio || datos.snapshot_cliente_nombre || '').trim();
+        if (!referencia) return null;
+        return `Nuevo resguardo pendiente de aprobación. ${referencia}.`;
+    }
 
     const folio = String(datos.folio || '').trim();
     if (!folio) return null;

@@ -30,17 +30,17 @@ final class CatalogoAlertasTurnosPdv
             TurnoPdvEvento::TIPO_ASIGNADO => [
                 'prioridad' => self::PRIORIDAD_ALTA,
                 'tono_configurable' => false,
-                'guion' => 'Turno {folio}, pasar con {vendedor}',
+                'guion' => 'Turno {folio}. {cliente}. Pase con {vendedor}.',
             ],
             TurnoPdvEvento::TIPO_REATENCION => [
                 'prioridad' => self::PRIORIDAD_ALTA,
                 'tono_configurable' => false,
-                'guion' => 'Re-atención {folio}, pasar con {vendedor}',
+                'guion' => 'Turno {folio}. {cliente}. Pase con {vendedor}.',
             ],
             TurnoPdvEvento::TIPO_TRANSFERIDO => [
                 'prioridad' => self::PRIORIDAD_ALTA,
                 'tono_configurable' => false,
-                'guion' => 'Turno {folio} transferido a {vendedor}',
+                'guion' => 'Turno {folio}. {cliente}. Pase con {vendedor}.',
             ],
             TurnoPdvEvento::TIPO_ESPERA_PROXIMO_VENCER => [
                 'prioridad' => self::PRIORIDAD_CRITICA,
@@ -50,12 +50,27 @@ final class CatalogoAlertasTurnosPdv
             TurnoPdvEvento::TIPO_PRORROGA => [
                 'prioridad' => self::PRIORIDAD_ALTA,
                 'tono_configurable' => true,
-                'guion' => 'Turno {folio} en prórroga',
+                'guion' => 'Prórroga iniciada. Turno {folio}.',
             ],
             TurnoPdvEvento::TIPO_PRORROGA_PROXIMO_VENCER => [
                 'prioridad' => self::PRIORIDAD_CRITICA,
                 'tono_configurable' => false,
                 'guion' => 'Prórroga del turno {folio} próxima a vencer',
+            ],
+            'pausa.iniciada' => [
+                'prioridad' => self::PRIORIDAD_ALTA,
+                'tono_configurable' => false,
+                'guion' => 'Pausa activa. {vendedor}.',
+            ],
+            'resguardo.recepcion_esperada_creada' => [
+                'prioridad' => self::PRIORIDAD_ALTA,
+                'tono_configurable' => false,
+                'guion' => 'Nuevo resguardo pendiente de aprobación. {referencia}.',
+            ],
+            'resguardo.registro_manual_creado' => [
+                'prioridad' => self::PRIORIDAD_ALTA,
+                'tono_configurable' => false,
+                'guion' => 'Nuevo resguardo pendiente de aprobación. {referencia}.',
             ],
         ];
     }
@@ -83,12 +98,44 @@ final class CatalogoAlertasTurnosPdv
             return null;
         }
 
+        if ($tipo === 'pausa.iniciada') {
+            $vendedor = self::primerNombre($datos);
+
+            return $vendedor !== '' ? "Pausa activa. {$vendedor}." : 'Pausa activa.';
+        }
+
+        if (in_array($tipo, ['resguardo.recepcion_esperada_creada', 'resguardo.registro_manual_creado'], true)) {
+            $referencia = trim((string) ($datos['folio'] ?? $datos['snapshot_cliente_nombre'] ?? ''));
+            if ($referencia === '') {
+                return null;
+            }
+
+            return "Nuevo resguardo pendiente de aprobación. {$referencia}.";
+        }
+
+        if (in_array($tipo, [
+            TurnoPdvEvento::TIPO_ASIGNADO,
+            TurnoPdvEvento::TIPO_REATENCION,
+            TurnoPdvEvento::TIPO_TRANSFERIDO,
+        ], true)) {
+            return self::guionLlamado($datos, false);
+        }
+
+        if ($tipo === TurnoPdvEvento::TIPO_PRORROGA) {
+            $folio = trim((string) ($datos['folio'] ?? ''));
+            if ($folio === '') {
+                return null;
+            }
+
+            return "Prórroga iniciada. Turno {$folio}.";
+        }
+
         $folio = trim((string) ($datos['folio'] ?? ''));
         if ($folio === '') {
             return null;
         }
 
-        $vendedor = trim((string) ($datos['atencion']['primer_nombre'] ?? $datos['atencion_primer_nombre'] ?? ''));
+        $vendedor = self::primerNombre($datos);
         $clasificacion = self::clasificacionAlta($datos);
 
         if ($tipo === TurnoPdvEvento::TIPO_ALTA) {
@@ -105,6 +152,65 @@ final class CatalogoAlertasTurnosPdv
         $mensaje = str_replace('{vendedor}', $vendedor !== '' ? $vendedor : 'el vendedor asignado', $mensaje);
 
         return $mensaje;
+    }
+
+    /**
+     * @param  array<string, mixed>  $datos
+     */
+    public static function guionLlamado(array $datos, bool $publico = false): ?string
+    {
+        $folio = trim((string) ($datos['folio'] ?? ''));
+        $cliente = trim((string) ($datos['snapshot_nombre_llamado'] ?? ''));
+        if ($folio === '' || $cliente === '') {
+            return null;
+        }
+
+        $vendedor = self::primerNombre($datos);
+        $partes = ["Turno {$folio}.", "{$cliente}."];
+
+        if (($datos['prioridad_diamante'] ?? false) === true) {
+            $partes[] = 'Tiene prioridad.';
+        }
+
+        if (! $publico) {
+            if (($datos['prioridad_discapacidad'] ?? false) === true) {
+                $partes[] = 'Cliente con discapacidad.';
+            }
+            if (($datos['prioridad_adulto_mayor'] ?? false) === true) {
+                $partes[] = 'Cliente de la tercera edad.';
+            }
+            if (($datos['prioridad_vip'] ?? false) === true) {
+                $partes[] = 'Cliente VIP.';
+            }
+        }
+
+        $partes[] = 'Pase con '.($vendedor !== '' ? $vendedor : 'el vendedor asignado').'.';
+
+        return implode(' ', $partes);
+    }
+
+    /**
+     * @param  array<string, mixed>  $datos
+     */
+    private static function primerNombre(array $datos): string
+    {
+        $atencion = is_array($datos['atencion'] ?? null) ? $datos['atencion'] : [];
+        $jornada = is_array($datos['jornada'] ?? null) ? $datos['jornada'] : [];
+        $candidatos = [
+            $atencion['primer_nombre'] ?? null,
+            $datos['atencion_primer_nombre'] ?? null,
+            $datos['primer_nombre'] ?? null,
+            $jornada['primer_nombre'] ?? null,
+        ];
+
+        foreach ($candidatos as $candidato) {
+            $nombre = trim((string) $candidato);
+            if ($nombre !== '') {
+                return $nombre;
+            }
+        }
+
+        return '';
     }
 
     /**

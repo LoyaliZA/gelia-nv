@@ -21,3 +21,23 @@ Route::middleware(['pdv.modulo'])
         Route::delete('/liberar', [TerminalAlertasSucursalPdvController::class, 'liberar'])
             ->name('liberar');
     });
+
+Route::middleware(['pdv.modulo'])
+    ->prefix('terminal-general')
+    ->name('terminal_general.')
+    ->group(function () {
+        Route::get('/estado', [TerminalAlertasSucursalPdvController::class, 'estado'])
+            ->defaults('proposito', 'general')
+            ->name('estado');
+        Route::post('/activar', [TerminalAlertasSucursalPdvController::class, 'activar'])
+            ->defaults('proposito', 'general')
+            ->name('activar');
+        Route::put('/latido', [TerminalAlertasSucursalPdvController::class, 'latido'])
+            ->defaults('proposito', 'general')
+            ->name('latido');
+        Route::delete('/liberar', [TerminalAlertasSucursalPdvController::class, 'liberar'])
+            ->defaults('proposito', 'general')
+            ->name('liberar');
+        Route::get('/equipo', [\App\Http\Controllers\PuntoVenta\Alertas\EquipoTerminalGeneralPdvController::class, 'index'])
+            ->name('equipo');
+    });

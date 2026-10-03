@@ -107,9 +107,14 @@ final class PayloadTurnoPdvBroadcast
      */
     private static function atencionUsuario(TurnoPdvAtencion $atencion): array
     {
+        $persona = $atencion->relationLoaded('user') ? $atencion->user : null;
+
         return [
             'id' => $atencion->id,
             'user_id' => $atencion->user_id,
+            'primer_nombre' => $persona instanceof User
+                ? self::primerNombre($persona->name)
+                : null,
             'inicio_at' => $atencion->inicio_at?->toIso8601String(),
             'atencion_inicio_at' => $atencion->atencion_inicio_at?->toIso8601String(),
             'es_transferencia' => $atencion->es_transferencia,

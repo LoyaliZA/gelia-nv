@@ -20,6 +20,8 @@ export default function ModalConfiguracionAlertasPdv({
     onCerrar,
     prefs,
     terminal = null,
+    terminalGeneral = null,
+    mostrarTerminalGeneral = false,
     tonosAlertas = [],
     estadoConexion,
     estadoTts,
@@ -121,6 +123,38 @@ export default function ModalConfiguracionAlertasPdv({
                                 variante="modal"
                             />
                         </div>
+                    )}
+
+                    {mostrarTerminalGeneral && terminalGeneral && (
+                        <PdvTerminalAlertasSucursal
+                            terminal={terminalGeneral}
+                            variante="modal"
+                            mostrarPruebas={false}
+                            textoActivar="Usar este equipo como terminal general"
+                            textoActiva="Terminal general activa en este equipo."
+                            etiquetasEstado={{
+                                no_autorizada: {
+                                    titulo: 'No autorizada',
+                                    detalle: 'Este usuario no puede designar la terminal general.',
+                                },
+                                disponible: {
+                                    titulo: 'Disponible para activar',
+                                    detalle: 'Este equipo muestra a todo el equipo de ventas, con las opciones de quien tiene la sesión.',
+                                },
+                                terminal_activa: {
+                                    titulo: 'Terminal general',
+                                    detalle: 'Quien inicie sesión aquí gestiona su turno. No aparecen acciones de gerencia.',
+                                },
+                                otra_terminal_activa: {
+                                    titulo: 'Otra terminal general',
+                                    detalle: 'Ya hay un equipo designado como terminal general.',
+                                },
+                                conexion_perdida: {
+                                    titulo: 'Conexión perdida',
+                                    detalle: 'No se pudo renovar la terminal general.',
+                                },
+                            }}
+                        />
                     )}
 
                     <PdvPreferenciasAlertasContenido

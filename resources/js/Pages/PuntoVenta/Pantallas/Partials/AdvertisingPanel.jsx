@@ -44,11 +44,15 @@ function FallbackInstitucional() {
     );
 }
 
-function activarSonidoVideo(video, sonidoActivo) {
+function activarSonidoVideo(video, sonidoActivo, pausado = false) {
     if (!video) return;
+    if (pausado) {
+        video.pause();
+        return;
+    }
     video.muted = !sonidoActivo;
     if (!sonidoActivo) return;
-    video.volume = window.speechSynthesis?.speaking ? 0.12 : 1;
+    video.volume = 1;
     video.play().catch(() => {});
 }
 
@@ -63,7 +67,7 @@ function siguienteIndice(playlist, desde, omitidos) {
     return i;
 }
 
-export default function AdvertisingPanel({ items = [] }) {
+export default function AdvertisingPanel({ items = [], pausado = false }) {
     const [index, setIndex] = useState(0);
     const [ciclo, setCiclo] = useState(0);
     const [progress, setProgress] = useState(0);
@@ -89,7 +93,7 @@ export default function AdvertisingPanel({ items = [] }) {
 
         const activar = () => {
             setSonidoActivo(true);
-            activarSonidoVideo(videoRef.current, true);
+            activarSonidoVideo(videoRef.current, true, pausado);
         };
 
         ['click', 'touchstart', 'keydown'].forEach((evento) => {
@@ -107,22 +111,11 @@ export default function AdvertisingPanel({ items = [] }) {
         const video = videoRef.current;
         if (!video || actual?.tipo !== 'video') return undefined;
 
-        activarSonidoVideo(video, sonidoActivo);
-
-        if (!sonidoActivo) return undefined;
-
-        const ajustarVolumen = () => {
-            const hablando = Boolean(window.speechSynthesis?.speaking);
-            video.volume = hablando ? 0.12 : 1;
-        };
-
-        ajustarVolumen();
-        const timer = window.setInterval(ajustarVolumen, 200);
-        return () => window.clearInterval(timer);
-    }, [sonidoActivo, actual?.id, actual?.tipo]);
+        activarSonidoVideo(video, sonidoActivo, pausado);
+    }, [sonidoActivo, pausado, actual?.id, actual?.tipo]);
 
     useEffect(() => {
-        if (!actual || actual.tipo === 'video') return undefined;
+        if (pausado || !actual || actual.tipo === 'video') return undefined;
 
         const duracionMs = Math.max(3, Number(actual.duracion_seg) || 10) * 1000;
         const iniciado = performance.now();
@@ -140,7 +133,7 @@ export default function AdvertisingPanel({ items = [] }) {
 
         frame = window.requestAnimationFrame(tick);
         return () => window.cancelAnimationFrame(frame);
-    }, [actual?.id, ciclo, playlist.length]);
+    }, [actual?.id, ciclo, playlist.length, pausado]);
 
     useEffect(() => {
         const siguiente = playlist[(index + 1) % playlist.length];

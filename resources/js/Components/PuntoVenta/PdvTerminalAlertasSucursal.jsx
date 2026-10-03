@@ -35,6 +35,10 @@ export default function PdvTerminalAlertasSucursal({
     estadoTts,
     onProbarVoz = null,
     variante = 'tarjeta',
+    mostrarPruebas = true,
+    textoActivar = 'Usar este equipo como terminal de alertas',
+    textoActiva = 'Terminal de alertas activa en este equipo.',
+    etiquetasEstado = null,
 }) {
     if (!terminal) return null;
 
@@ -47,7 +51,8 @@ export default function PdvTerminalAlertasSucursal({
         liberar,
     } = terminal;
 
-    const info = ETIQUETAS_ESTADO[estado] || ETIQUETAS_ESTADO.disponible;
+    const catalogoEstados = etiquetasEstado || ETIQUETAS_ESTADO;
+    const info = catalogoEstados[estado] || catalogoEstados.disponible || ETIQUETAS_ESTADO.disponible;
     const puedeActivar = estado === 'disponible' || estado === 'conexion_perdida';
     const puedeLiberar = terminalActiva;
 
@@ -105,7 +110,7 @@ export default function PdvTerminalAlertasSucursal({
                         role="status"
                         data-pdv-terminal-activa
                     >
-                        Terminal de alertas activa en este equipo.
+                        {textoActiva}
                     </p>
                 )}
 
@@ -117,7 +122,7 @@ export default function PdvTerminalAlertasSucursal({
                             disabled={cargando || estado === 'no_autorizada'}
                             onClick={() => activar()}
                         >
-                            {cargando ? 'Activando…' : 'Usar este equipo como terminal de alertas'}
+                            {cargando ? 'Activando…' : textoActivar}
                         </button>
                     )}
                     {puedeLiberar && (
@@ -130,7 +135,7 @@ export default function PdvTerminalAlertasSucursal({
                             Dejar de ser terminal
                         </button>
                     )}
-                    {terminalActiva && (
+                    {mostrarPruebas && terminalActiva && (
                         <>
                             <button
                                 type="button"

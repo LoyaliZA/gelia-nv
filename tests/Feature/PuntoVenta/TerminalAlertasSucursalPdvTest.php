@@ -69,6 +69,46 @@ class TerminalAlertasSucursalPdvTest extends TestCase
         ]);
     }
 
+    public function test_vendedor_activa_terminal_general_sin_apagar_alertas(): void
+    {
+        $alertasId = (string) Str::uuid();
+        $generalId = (string) Str::uuid();
+        $vendedor = $this->crearUsuarioConPermiso(false);
+        $vendedor->givePermissionTo(PuntoVentaModulo::PERMISO_TURNOS_ATENDER);
+
+        $this->actingAs($this->autorizado)->postJson(
+            route('punto_venta.terminal_alertas.activar'),
+            [
+                'sucursal_id' => $this->sucursal->id,
+                'terminal_id' => $alertasId,
+            ],
+        )->assertOk();
+
+        $this->actingAs($vendedor)->postJson(
+            route('punto_venta.terminal_general.activar'),
+            [
+                'sucursal_id' => $this->sucursal->id,
+                'terminal_id' => $generalId,
+            ],
+        )->assertOk()
+            ->assertJsonPath('estado', 'terminal_activa');
+
+        $this->assertDatabaseHas('pdv_terminal_alertas_sucursal', [
+            'terminal_id' => $alertasId,
+            'proposito' => PdvTerminalAlertasSucursal::PROPOSITO_ALERTAS,
+            'estado' => PdvTerminalAlertasSucursal::ESTADO_ACTIVA,
+        ]);
+        $this->assertDatabaseHas('pdv_terminal_alertas_sucursal', [
+            'terminal_id' => $generalId,
+            'proposito' => PdvTerminalAlertasSucursal::PROPOSITO_GENERAL,
+            'estado' => PdvTerminalAlertasSucursal::ESTADO_ACTIVA,
+        ]);
+
+        $this->actingAs($vendedor)->getJson(route('punto_venta.terminal_general.equipo').'?terminal_id='.$generalId)
+            ->assertOk()
+            ->assertJsonStructure(['equipo']);
+    }
+
     public function test_usuario_sin_permiso_es_rechazado(): void
     {
         $this->actingAs($this->sinPermiso)->postJson(

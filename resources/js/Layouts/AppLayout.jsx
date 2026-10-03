@@ -5,6 +5,7 @@ import Sidebar from '../Components/Sidebar';
 import ProfessionalSidebar from '../Components/Sidebar/ProfessionalSidebar';
 import GeliaLogo from '../Components/GeliaLogo';
 import NotificationBell from '../Components/NotificationBell';
+import PdvLlamadoVendedor from '../Components/PuntoVenta/PdvLlamadoVendedor';
 import MensajeriaWidget from '../Components/Mensajeria/MensajeriaWidget';
 import { Bell, X, Menu } from 'lucide-react';
 import { isProfessionalSidebarLayout, DEFAULT_SIDEBAR_LAYOUT, DEFAULT_SIDEBAR_MOBILE_LAYOUT, ensureProfessionalSidebarDefaultOnce, resolveSidebarLayout } from '../config/sidebarLayouts';
@@ -800,6 +801,10 @@ export default function AppLayout({ children, fullScreen = false }) {
                             </div>
                         </div>
                     </main>
+
+                    {auth?.user?.permissions?.includes('pdv.turnos.atender') && (
+                        <PdvLlamadoVendedor userId={auth.user.id} />
+                    )}
 
                     {/* MODAL GLOBAL — portal a body para blur/centrado fuera de gelia-ui-scale */}
                     {isModalOpen && createPortal(
