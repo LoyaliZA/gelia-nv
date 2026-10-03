@@ -148,7 +148,7 @@ export default function PdvTerminalAlertasSucursal({
                             <button
                                 type="button"
                                 className={`${GELIA_BTN_OUTLINE} min-h-[44px]`}
-                                disabled={!prefsUsuario?.canales?.voz || silencioTerminal || estadoTts === 'bloqueado'}
+                                disabled={!prefsUsuario?.canales?.voz || silencioTerminal}
                                 onClick={probarVoz}
                             >
                                 Probar voz

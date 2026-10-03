@@ -30,6 +30,8 @@ export default function useSpeechAnnouncements({
     const colaRef = useRef(null);
     const silenciadoRef = useRef(silenciado);
     const audioDesbloqueadoRef = useRef(audioDesbloqueado);
+    const resolverTextoRef = useRef(resolverTexto);
+    resolverTextoRef.current = resolverTexto;
 
     useEffect(() => {
         silenciadoRef.current = silenciado;
@@ -65,7 +67,7 @@ export default function useSpeechAnnouncements({
             audioDesbloqueado: () => audioDesbloqueadoRef.current,
             onEstado: (estado) => setEstadoTts(estado),
             onReproduccion: (activo) => setHablando(Boolean(activo)),
-            resolverTexto,
+            resolverTexto: (envelope) => resolverTextoRef.current?.(envelope) ?? null,
         });
         colaRef.current = cola;
 
@@ -82,12 +84,13 @@ export default function useSpeechAnnouncements({
             colaRef.current = null;
             adaptadorRef.current = null;
         };
-    }, [habilitado, adaptadorInyectado, resolverTexto]);
+    }, [habilitado, adaptadorInyectado]);
 
     useEffect(() => {
         if (!habilitado || audioDesbloqueado) return undefined;
 
         const desbloquear = () => {
+            audioDesbloqueadoRef.current = true;
             setAudioDesbloqueado(true);
             colaRef.current?.marcarAudioDesbloqueado();
         };
@@ -133,6 +136,7 @@ export default function useSpeechAnnouncements({
 
     const desbloquearAudio = useCallback(() => {
         if (audioDesbloqueadoRef.current) return;
+        audioDesbloqueadoRef.current = true;
         setAudioDesbloqueado(true);
         colaRef.current?.marcarAudioDesbloqueado();
     }, []);
