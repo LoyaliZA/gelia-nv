@@ -224,11 +224,10 @@ export default function Entregados({
                     )}
                 </div>
 
-                {resguardosVista?.last_page > 1 && (
+                {filas.length > 0 && (
                     <GeliaPaginacion
-                        paginaActual={resguardosVista.current_page}
-                        totalPaginas={resguardosVista.last_page}
-                        onCambiarPagina={onIrAPagina}
+                        paginator={resguardosVista}
+                        onIrAPagina={onIrAPagina}
                     />
                 )}
 
