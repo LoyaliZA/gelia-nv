@@ -1,9 +1,10 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
 import { Accessibility, PersonStanding, UserRound } from 'lucide-react';
+import GeliaLogo from '@/Components/GeliaLogo';
 import { THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from '@/utils/geliaTheme';
 import { etiquetasPrioridadDesdeTurno } from '@/Pages/PuntoVenta/Turnos/Partials/tableroVentasUtils';
-import { badgePrioridadTurno } from '@/Pages/PuntoVenta/Turnos/Partials/turnosStyles';
+import { badgePrioridadTurno, claseModalListaTurno } from '@/Pages/PuntoVenta/Turnos/Partials/turnosStyles';
 
 function etiquetasSala(turno) {
     return turno?.prioridad_diamante ? ['Diamante'] : [];
@@ -32,22 +33,27 @@ export default function ModalLlamadoTurnoPdv({
     const etiquetas = variante === 'vendedor'
         ? etiquetasPrioridadDesdeTurno(turno)
         : etiquetasSala(turno);
-    const diamante = Boolean(turno.prioridad_diamante);
+    const claseLista = claseModalListaTurno(turno);
 
     return createPortal(
         <div
             className={`${THEME_MODAL_OVERLAY} items-center p-4`}
             style={{ zIndex: 'calc(var(--gelia-z-modal) + 20)' }}
             data-pdv-modal-llamado={variante}
+            data-pdv-modal-tono={claseLista ? claseLista.replace('pdv-llamado-', '') : 'base'}
             onClick={() => onCerrar?.()}
         >
             <div
-                className={`${THEME_MODAL_SHELL} w-full max-w-xl p-8 text-center modal-pop ${diamante && variante === 'vendedor' ? 'pdv-llamado-diamante' : ''}`}
+                className={`${THEME_MODAL_SHELL} w-full max-w-xl p-8 text-center modal-pop ${claseLista}`}
                 role="dialog"
                 aria-modal="true"
                 aria-label={`Turno ${turno.folio || ''}`}
                 onClick={(event) => event.stopPropagation()}
             >
+                <GeliaLogo
+                    variant="sparkle"
+                    className="mx-auto mb-4 h-16 w-16 drop-shadow-[0_0_16px_color-mix(in_srgb,var(--color-primario)_70%,transparent)]"
+                />
                 <p className="m-0 text-xs font-black uppercase tracking-[0.2em] theme-text-muted">Turno</p>
                 <p className="m-0 mt-2 text-5xl font-black theme-text-main">{turno.folio || '—'}</p>
                 <p className="m-0 mt-4 text-2xl font-bold theme-text-main">{cliente}</p>

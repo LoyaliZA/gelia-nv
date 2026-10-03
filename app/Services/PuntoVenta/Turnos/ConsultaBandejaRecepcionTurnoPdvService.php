@@ -102,14 +102,7 @@ class ConsultaBandejaRecepcionTurnoPdvService
             ->where('estado', TurnoPdv::ESTADO_EN_COLA)
             ->whereDate('fecha_operativa', $this->fechaOperativa($sucursalId))
             ->whereNull('atencion_actual_id')
-            ->orderByRaw(
-                'CASE WHEN prioridad_adulto_mayor = 1'
-                .' OR prioridad_discapacidad = 1'
-                .' OR prioridad_diamante = 1'
-                .' OR prioridad_vip = 1 THEN 0 ELSE 1 END ASC'
-            )
-            ->orderBy('alta_at')
-            ->orderBy('id')
+            ->enOrdenDeCola()
             ->limit(100)
             ->get();
     }

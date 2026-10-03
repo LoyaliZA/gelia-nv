@@ -13,7 +13,9 @@ export default function TablaListas({ datos = [] }) {
         nombre: '',
         monto_requerido: '',
         porcentaje_descuento: '',
-        activo: true
+        activo: true,
+        tono_sala: '',
+        prioridad_cola_turnos: '',
     });
 
     const formEliminar = useForm({
@@ -28,11 +30,13 @@ export default function TablaListas({ datos = [] }) {
 
     const abrirEditar = (item) => {
         setItemActual(item);
-        setData({ 
-            nombre: item.nombre, 
+        setData({
+            nombre: item.nombre,
             monto_requerido: item.monto_requerido || '',
             porcentaje_descuento: item.porcentaje_descuento || '',
-            activo: item.activo 
+            activo: item.activo,
+            tono_sala: item.tono_sala || '',
+            prioridad_cola_turnos: item.prioridad_cola_turnos ?? '',
         });
         setModalAbierto(true);
     };
@@ -77,6 +81,7 @@ export default function TablaListas({ datos = [] }) {
                             <th className="px-6 py-4 text-left text-[9px] font-black text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">Nombre / ID_</th>
                             <th className="px-6 py-4 text-left text-[9px] font-black text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">Monto Base_</th>
                             <th className="px-6 py-4 text-left text-[9px] font-black text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">% Descuento_</th>
+                            <th className="px-6 py-4 text-left text-[9px] font-black text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">Cola turnos_</th>
                             <th className="px-6 py-4 text-left text-[9px] font-black text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">Status_</th>
                             <th className="px-6 py-4 text-right text-[9px] font-black text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">Acciones_</th>
                         </tr>
@@ -93,6 +98,12 @@ export default function TablaListas({ datos = [] }) {
                                 </td>
                                 <td className="px-6 py-5">
                                     <span className="text-xs font-black theme-text-main text-[var(--color-primario)]">{Number(item.porcentaje_descuento || 0).toLocaleString()}%</span>
+                                </td>
+                                <td className="px-6 py-5">
+                                    <p className="text-xs font-black theme-text-main uppercase">{item.tono_sala || 'Auto'}</p>
+                                    <p className="text-[9px] font-bold theme-text-muted uppercase tracking-tighter mt-0.5">
+                                        Prioridad {item.prioridad_cola_turnos ?? 'auto'}
+                                    </p>
                                 </td>
                                 <td className="px-6 py-5">
                                     <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest ${item.activo ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-red-500/10 text-red-600 dark:text-red-400'}`}>
@@ -176,6 +187,41 @@ export default function TablaListas({ datos = [] }) {
                                 {errors.porcentaje_descuento && <p className="text-xs text-red-500 mt-1 px-1">{errors.porcentaje_descuento}</p>}
                             </div>
                             
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Color en pantalla de turnos_</label>
+                                <select
+                                    value={data.tono_sala}
+                                    onChange={e => setData('tono_sala', e.target.value)}
+                                    className="w-full px-5 py-4 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none focus:ring-2 transition-all shadow-sm hover:shadow-md"
+                                    style={{ '--tw-ring-color': 'var(--color-primario)' }}
+                                >
+                                    <option value="">Automático según el nombre</option>
+                                    <option value="bronce">Bronce</option>
+                                    <option value="plata">Plata</option>
+                                    <option value="oro">Oro</option>
+                                    <option value="diamante">Diamante</option>
+                                </select>
+                                {errors.tono_sala && <p className="text-xs text-red-500 mt-1 px-1">{errors.tono_sala}</p>}
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Prioridad en la cola de turnos_</label>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    max="99"
+                                    value={data.prioridad_cola_turnos}
+                                    onChange={e => setData('prioridad_cola_turnos', e.target.value)}
+                                    placeholder="Automática"
+                                    className="w-full px-5 py-4 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none focus:ring-2 transition-all shadow-sm hover:shadow-md"
+                                    style={{ '--tw-ring-color': 'var(--color-primario)' }}
+                                />
+                                <p className="text-[10px] font-bold theme-text-muted px-1">
+                                    Un número mayor se atiende antes. Vacío deja la prioridad automática: Diamante pasa antes que el resto.
+                                </p>
+                                {errors.prioridad_cola_turnos && <p className="text-xs text-red-500 mt-1 px-1">{errors.prioridad_cola_turnos}</p>}
+                            </div>
+
                             <div className="flex items-center justify-between p-4 rounded-2xl border theme-border bg-black/5 dark:bg-white/5">
                                 <div>
                                     <p className="text-sm font-black theme-text-main">Estado Operativo_</p>

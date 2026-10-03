@@ -10,6 +10,8 @@ export const PDV_TTS_VOZ_PREFERIDA = 'es-MX';
 
 export const PDV_TTS_RATE = 0.95;
 
+export const PDV_TTS_MENSAJE_ACTIVACION = 'Las notificaciones de voz están activas.';
+
 export const PDV_TTS_STORAGE_SILENCIO = 'pdv_terminal_tts_silenciado';
 
 const IDIOMAS_LATAM = new Set(['es-MX', 'es-US', 'es-419']);
@@ -114,22 +116,32 @@ export function frasesPrioridadTtsPdv(datos, { publico = false } = {}) {
 }
 
 /**
- * Guion de llamado: Turno {folio}. {cliente}. [prioridad]. Pase con {vendedor}.
+ * Sala: Turno {folio}. {cliente}. [prioridad]. Pase con {vendedor}.
+ * Vendedor: {vendedor}, tienes un nuevo cliente: {cliente}.
  * No dice reatención ni la palabra lista.
  */
 export function mensajeTtsLlamadoPdv(datos, { publico = false } = {}) {
     if (!datos || typeof datos !== 'object') return null;
 
-    const folio = String(datos.folio || '').trim();
     const nombreCliente = String(datos.snapshot_nombre_llamado || '').trim();
-    if (!folio || !nombreCliente) return null;
+    if (!nombreCliente) return null;
 
-    const vendedor = primerNombreAtencionPdv(datos) || 'el vendedor asignado';
+    const vendedor = primerNombreAtencionPdv(datos);
+
+    if (!publico) {
+        return vendedor
+            ? `${vendedor}, tienes un nuevo cliente: ${nombreCliente}.`
+            : `Tienes un nuevo cliente: ${nombreCliente}.`;
+    }
+
+    const folio = String(datos.folio || '').trim();
+    if (!folio) return null;
+
     const partes = [
         `Turno ${folio}.`,
         `${nombreCliente}.`,
-        ...frasesPrioridadTtsPdv(datos, { publico }),
-        `Pase con ${vendedor}.`,
+        ...frasesPrioridadTtsPdv(datos, { publico: true }),
+        `Pase con ${vendedor || 'el vendedor asignado'}.`,
     ];
 
     return partes.join(' ');
@@ -197,6 +209,27 @@ export function seleccionarVozPdv(voces = []) {
     }
 
     return candidatas.find((voz) => IDIOMAS_LATAM.has(String(voz.lang || ''))) ?? null;
+}
+
+/**
+ * Sala pública: prioriza la voz latina y, si el equipo no la tiene, usa cualquier español
+ * para que el llamado se escuche sin sesión ni preferencias de una cuenta.
+ */
+export function seleccionarVozSalaPdv(voces = []) {
+    const preferida = seleccionarVozPdv(voces);
+    if (preferida) return preferida;
+    if (!Array.isArray(voces) || voces.length === 0) return null;
+
+    const espanol = voces.filter((voz) => {
+        const lang = String(voz?.lang || '').toLowerCase();
+        return lang.startsWith('es') && !PATRON_ROBOTICA.test(String(voz?.name || ''));
+    });
+
+    return espanol.find((voz) => !PATRON_MASCULINA.test(String(voz?.name || '')))
+        ?? espanol[0]
+        ?? voces.find((voz) => !PATRON_ROBOTICA.test(String(voz?.name || '')))
+        ?? voces[0]
+        ?? null;
 }
 
 export function leerSilencioTtsPdv() {

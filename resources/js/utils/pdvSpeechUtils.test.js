@@ -8,6 +8,7 @@ import {
     PDV_TTS_TIPOS,
     resolverEstadoTtsPdv,
     seleccionarVozPdv,
+    seleccionarVozSalaPdv,
 } from './pdvSpeechUtils';
 
 const envelopeLlamado = (extra = {}) => ({
@@ -48,9 +49,7 @@ describe('pdvSpeechUtils', () => {
             },
         }));
 
-        expect(mensaje).toBe(
-            'Turno V-0200. Rosa Hernández. Tiene prioridad. Cliente con discapacidad. Cliente de la tercera edad. Cliente VIP. Pase con Luis.',
-        );
+        expect(mensaje).toBe('Luis, tienes un nuevo cliente: Rosa Hernández.');
         expect(mensaje).not.toMatch(/reatenci[oó]n|lista/i);
     });
 
@@ -83,7 +82,7 @@ describe('pdvSpeechUtils', () => {
             },
         });
 
-        expect(mensaje).toContain('Pase con Carmen.');
+        expect(mensaje).toBe('Carmen, tienes un nuevo cliente: Visitante Uno.');
     });
 
     it('anuncia prórroga una vez y usa fallback sin primer nombre', () => {
@@ -94,7 +93,7 @@ describe('pdvSpeechUtils', () => {
                 snapshot_nombre_llamado: 'Pedro Ruiz',
             },
         });
-        expect(sinAtencion).toBe('Turno V-0400. Pedro Ruiz. Pase con el vendedor asignado.');
+        expect(sinAtencion).toBe('Tienes un nuevo cliente: Pedro Ruiz.');
 
         expect(mensajeTtsPdv({
             tipo: 'atencion.prorroga',
@@ -138,6 +137,15 @@ describe('pdvSpeechUtils', () => {
             { name: 'Paulina', lang: 'es-US' },
         ];
         expect(seleccionarVozPdv(latam)?.name).toBe('Paulina');
+    });
+
+    it('en sala usa español disponible cuando no hay voz latina', () => {
+        const soloEspania = [
+            { name: 'Google español', lang: 'es-ES' },
+        ];
+
+        expect(seleccionarVozPdv(soloEspania)).toBeNull();
+        expect(seleccionarVozSalaPdv(soloEspania)?.name).toBe('Google español');
     });
 
     it('marca voz no disponible cuando no hay voz latina', () => {

@@ -92,6 +92,8 @@ class AltaTurnoPdvService
                     'prioridad_discapacidad' => $prioridades['prioridad_discapacidad'],
                     'prioridad_diamante' => $prioridades['prioridad_diamante'],
                     'prioridad_vip' => $prioridades['prioridad_vip'],
+                    'lista_tono' => $prioridades['lista_tono'],
+                    'prioridad_cola' => $prioridades['prioridad_cola'],
                     'snapshot_nombre_llamado' => $nombreParaLlamado,
                     'snapshot_cliente_nombre' => $cliente?->nombre,
                     'snapshot_json' => $this->construirSnapshot($cliente, $folio, $prioridades),
@@ -327,7 +329,9 @@ class AltaTurnoPdvService
      *     prioridad_adulto_mayor: bool,
      *     prioridad_discapacidad: bool,
      *     prioridad_diamante: bool,
-     *     prioridad_vip: bool
+     *     prioridad_vip: bool,
+     *     prioridad_cola: int,
+     *     lista_tono: ?string
      * }  $prioridades
      * @return array<string, mixed>
      */

@@ -66,9 +66,32 @@
     50% { box-shadow: 0 0 28px 6px color-mix(in srgb, var(--pdv-prioridad-diamante) 75%, transparent); }
 }
 
+.gelia-modal-shell.pdv-llamado-bronce,
+.pdv-llamado-bronce {
+    background-color: color-mix(in srgb, #cd7f32 24%, var(--theme-surface-bg));
+    color: #7c4a12;
+    border-color: color-mix(in srgb, #cd7f32 55%, transparent);
+}
+
+.gelia-modal-shell.pdv-llamado-plata,
+.pdv-llamado-plata {
+    background-color: color-mix(in srgb, #c0c7d1 34%, var(--theme-surface-bg));
+    color: #334155;
+    border-color: color-mix(in srgb, #94a3b8 70%, transparent);
+}
+
+.gelia-modal-shell.pdv-llamado-oro,
+.pdv-llamado-oro {
+    background-color: color-mix(in srgb, #eab308 26%, var(--theme-surface-bg));
+    color: #854d0e;
+    border-color: color-mix(in srgb, #eab308 60%, transparent);
+}
+
+.gelia-modal-shell.pdv-llamado-diamante,
 .pdv-llamado-diamante {
-    background: color-mix(in srgb, var(--pdv-prioridad-diamante) 22%, var(--theme-surface-bg));
+    background-color: color-mix(in srgb, var(--pdv-prioridad-diamante) 22%, var(--theme-surface-bg));
     color: var(--pdv-prioridad-diamante-texto);
+    border-color: color-mix(in srgb, var(--pdv-prioridad-diamante) 55%, transparent);
     animation: gelia-brillo-diamante 1.6s ease-in-out infinite;
 }
 

@@ -71,6 +71,7 @@ class PantallaSalaPdvTest extends TestCase
         $this->assertSame('Luis', $llamado['atencion_primer_nombre']);
         $this->assertSame('Luis Vendedor', $llamado['atencion_nombre']);
         $this->assertTrue($llamado['prioridad_diamante']);
+        $this->assertSame('diamante', $llamado['lista_tono']);
         $this->assertArrayNotHasKey('prioridad_vip', $llamado);
         $this->assertArrayNotHasKey('prioridad_adulto_mayor', $llamado);
         $this->assertArrayNotHasKey('prioridad_discapacidad', $llamado);
@@ -150,6 +151,25 @@ class PantallaSalaPdvTest extends TestCase
 
         $this->assertSame('V-0100', $response->json('turno_actual.folio'));
         $this->assertSame(['V-0102', 'V-0101'], array_column($response->json('proximos'), 'folio'));
+
+        TurnoPdv::factory()->create([
+            'sucursal_id' => $this->sucursal->id,
+            'estado' => TurnoPdv::ESTADO_EN_COLA,
+            'folio' => 'V-0103',
+            'snapshot_nombre_llamado' => 'Cliente Diamante',
+            'lista_tono' => 'diamante',
+            'prioridad_cola' => 10,
+            'alta_at' => now()->subMinutes(2),
+            'atencion_actual_id' => null,
+        ]);
+
+        $conDiamante = $this->getJson(route('sala_turnos.publica.estado', ['sucursal' => $this->sucursal->id]))
+            ->assertOk();
+
+        $this->assertSame(
+            ['V-0102', 'V-0103', 'V-0101'],
+            array_column($conDiamante->json('proximos'), 'folio'),
+        );
         $this->assertArrayNotHasKey('atencion_nombre', $response->json('proximos.0'));
         $this->assertArrayNotHasKey('atendido_por', $response->json('proximos.0'));
         $this->assertSame('Cliente Prioritario', $response->json('proximos.0.snapshot_nombre_llamado'));

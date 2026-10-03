@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { crearAdaptadorVozNavegador } from '@/utils/pdvSpeechAdapter';
+import { crearAdaptadorVozNavegador, emitirEnGestoPdv } from '@/utils/pdvSpeechAdapter';
 import { crearColaAnunciosTts } from '@/utils/pdvSpeechQueue';
 import {
     guardarSilencioTtsPdv,
@@ -17,6 +17,10 @@ export default function useSpeechAnnouncements({
     silenciado: silenciadoControlado = null,
     adaptadorVoz: adaptadorInyectado = null,
     resolverTexto = null,
+    seleccionarVoz = null,
+    permitirVozPorDefecto = false,
+    mensajeAlDesbloquear = '',
+    onAudioDesbloqueado = null,
 } = {}) {
     const [silenciadoInterno, setSilenciadoInterno] = useState(() => (
         silenciadoControlado === null ? leerSilencioTtsPdv() : Boolean(silenciadoControlado)
@@ -27,11 +31,17 @@ export default function useSpeechAnnouncements({
     const [hablando, setHablando] = useState(false);
 
     const adaptadorRef = useRef(null);
+    const seleccionarVozRef = useRef(seleccionarVoz);
+    seleccionarVozRef.current = seleccionarVoz;
     const colaRef = useRef(null);
     const silenciadoRef = useRef(silenciado);
     const audioDesbloqueadoRef = useRef(audioDesbloqueado);
     const resolverTextoRef = useRef(resolverTexto);
+    const mensajeAlDesbloquearRef = useRef(mensajeAlDesbloquear);
+    const onAudioDesbloqueadoRef = useRef(onAudioDesbloqueado);
     resolverTextoRef.current = resolverTexto;
+    mensajeAlDesbloquearRef.current = mensajeAlDesbloquear;
+    onAudioDesbloqueadoRef.current = onAudioDesbloqueado;
 
     useEffect(() => {
         silenciadoRef.current = silenciado;
@@ -52,11 +62,14 @@ export default function useSpeechAnnouncements({
             return undefined;
         }
 
-        const adaptador = adaptadorInyectado ?? crearAdaptadorVozNavegador();
+        const adaptador = adaptadorInyectado ?? crearAdaptadorVozNavegador({
+            ...(seleccionarVoz ? { seleccionarVoz } : {}),
+            permitirVozPorDefecto,
+        });
         adaptadorRef.current = adaptador;
         adaptador.iniciarEscuchaVoces?.();
         const dejarDeObservar = adaptador.observarVoz?.((disponible) => {
-            if (disponible) return;
+            if (disponible || permitirVozPorDefecto) return;
             if (!adaptador.vocesConsultadas?.()) return;
             setEstadoTts(PDV_TTS_ESTADO.sin_voz);
         });
@@ -84,22 +97,29 @@ export default function useSpeechAnnouncements({
             colaRef.current = null;
             adaptadorRef.current = null;
         };
-    }, [habilitado, adaptadorInyectado]);
+    }, [habilitado, adaptadorInyectado, seleccionarVoz, permitirVozPorDefecto]);
 
     useEffect(() => {
         if (!habilitado || audioDesbloqueado) return undefined;
 
         const desbloquear = () => {
+            if (audioDesbloqueadoRef.current) return;
             audioDesbloqueadoRef.current = true;
             setAudioDesbloqueado(true);
             colaRef.current?.marcarAudioDesbloqueado();
+            onAudioDesbloqueadoRef.current?.();
+            pronunciarActivacion();
         };
 
         ['click', 'touchstart', 'keydown'].forEach((evento) => {
             window.addEventListener(evento, desbloquear, { once: true, passive: true, capture: true });
         });
 
-        return undefined;
+        return () => {
+            ['click', 'touchstart', 'keydown'].forEach((evento) => {
+                window.removeEventListener(evento, desbloquear, { capture: true });
+            });
+        };
     }, [habilitado, audioDesbloqueado]);
 
     const encolar = useCallback((envelope) => {
@@ -134,11 +154,24 @@ export default function useSpeechAnnouncements({
         colaRef.current?.reiniciar();
     }, []);
 
+    const pronunciarActivacion = () => {
+        const mensaje = String(mensajeAlDesbloquearRef.current || '').trim();
+        if (!mensaje) return;
+        const fn = adaptadorRef.current?.pronunciarEnGesto;
+        if (typeof fn === 'function') {
+            fn(mensaje);
+            return;
+        }
+        emitirEnGestoPdv(mensaje, seleccionarVozRef.current);
+    };
+
     const desbloquearAudio = useCallback(() => {
         if (audioDesbloqueadoRef.current) return;
         audioDesbloqueadoRef.current = true;
         setAudioDesbloqueado(true);
         colaRef.current?.marcarAudioDesbloqueado();
+        onAudioDesbloqueadoRef.current?.();
+        pronunciarActivacion();
     }, []);
 
     return {

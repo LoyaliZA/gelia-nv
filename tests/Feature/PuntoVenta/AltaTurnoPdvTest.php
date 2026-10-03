@@ -168,6 +168,31 @@ class AltaTurnoPdvTest extends TestCase
             $this->payloadAlta(clienteId: $cliente->id, clave: 'pdv:turno:diamante-1')
         )->assertCreated()
             ->assertJsonPath('turno.prioridad_diamante', true);
+
+        $turno = TurnoPdv::query()->where('cliente_id', $cliente->id)->first();
+        $this->assertSame('diamante', $turno->lista_tono);
+        $this->assertSame(10, (int) $turno->prioridad_cola);
+    }
+
+    public function test_respeta_prioridad_de_cola_configurada_en_la_lista(): void
+    {
+        $lista = CatalogoListaDescuento::query()->create([
+            'nombre' => 'PLATA NORTE',
+            'activo' => true,
+            'tono_sala' => 'plata',
+            'prioridad_cola_turnos' => 7,
+        ]);
+        $cliente = $this->crearCliente('Cliente plata', $lista->id);
+
+        $this->actingAs($this->recepcion)->postJson(
+            route('punto_venta.turnos.store'),
+            $this->payloadAlta(clienteId: $cliente->id, clave: 'pdv:turno:plata-prioridad')
+        )->assertCreated()
+            ->assertJsonPath('turno.prioridad_diamante', false);
+
+        $turno = TurnoPdv::query()->where('cliente_id', $cliente->id)->first();
+        $this->assertSame('plata', $turno->lista_tono);
+        $this->assertSame(7, (int) $turno->prioridad_cola);
     }
 
     public function test_reintento_idempotente_devuelve_mismo_turno(): void

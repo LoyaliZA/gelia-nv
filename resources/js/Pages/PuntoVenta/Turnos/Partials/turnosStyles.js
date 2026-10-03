@@ -11,6 +11,20 @@ export const BTN_SEGMENTO_ACTIVO =
 export const BTN_SEGMENTO_INACTIVO =
     'theme-border theme-element theme-text-muted hover:theme-text-main';
 
+const TONOS_LISTA_TURNO = new Set(['bronce', 'plata', 'oro', 'diamante']);
+
+export function tonoListaTurno(turno) {
+    const tono = String(turno?.lista_tono || '').toLowerCase();
+    if (TONOS_LISTA_TURNO.has(tono)) return tono;
+    if (turno?.prioridad_diamante) return 'diamante';
+    return null;
+}
+
+export function claseModalListaTurno(turno) {
+    const tono = tonoListaTurno(turno);
+    return tono ? `pdv-llamado-${tono}` : '';
+}
+
 export function badgePrioridadTurno(etiqueta) {
     const mapa = {
         Diamante: 'pdv-llamado-diamante',

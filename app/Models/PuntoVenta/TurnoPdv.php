@@ -7,6 +7,7 @@ use App\Models\Concerns\FiltraFilasDemo;
 use App\Models\Sucursal;
 use App\Models\User;
 use Database\Factories\PuntoVenta\TurnoPdvFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -45,6 +46,8 @@ class TurnoPdv extends Model
         'prioridad_discapacidad',
         'prioridad_diamante',
         'prioridad_vip',
+        'lista_tono',
+        'prioridad_cola',
         'snapshot_nombre_llamado',
         'snapshot_cliente_nombre',
         'snapshot_json',
@@ -68,6 +71,7 @@ class TurnoPdv extends Model
             'prioridad_discapacidad' => 'boolean',
             'prioridad_diamante' => 'boolean',
             'prioridad_vip' => 'boolean',
+            'prioridad_cola' => 'integer',
             'snapshot_json' => 'array',
             'fecha_operativa' => 'date',
             'alta_at' => 'datetime',
@@ -117,5 +121,21 @@ class TurnoPdv extends Model
     public function eventos(): HasMany
     {
         return $this->hasMany(TurnoPdvEvento::class, 'turno_id');
+    }
+
+    /**
+     * Accesibilidad y VIP primero; después la prioridad de lista (Diamante por encima del resto) y FIFO.
+     */
+    public function scopeEnOrdenDeCola(Builder $query): Builder
+    {
+        return $query
+            ->orderByRaw(
+                'CASE WHEN prioridad_adulto_mayor = 1'
+                .' OR prioridad_discapacidad = 1'
+                .' OR prioridad_vip = 1 THEN 0 ELSE 1 END ASC'
+            )
+            ->orderByDesc('prioridad_cola')
+            ->orderBy('alta_at')
+            ->orderBy('id');
     }
 }

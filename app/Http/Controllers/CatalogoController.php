@@ -79,13 +79,36 @@ class CatalogoController extends Controller
 
     // --- 3. CATÁLOGO DE LISTAS DE DESCUENTO (Con Revinculación) ---
     public function storeLista(Request $request) {
-        CatalogoListaDescuento::create($request->validate(['nombre' => 'required', 'monto_requerido' => 'required|numeric', 'porcentaje_descuento' => 'required|numeric|min:0|max:100', 'activo' => 'boolean']));
+        CatalogoListaDescuento::create($this->validarLista($request));
         return back()->with('success', 'Lista creada correctamente.');
     }
 
     public function updateLista(Request $request, $id) {
-        CatalogoListaDescuento::findOrFail($id)->update($request->validate(['nombre' => 'required', 'monto_requerido' => 'required|numeric', 'porcentaje_descuento' => 'required|numeric|min:0|max:100', 'activo' => 'boolean']));
+        CatalogoListaDescuento::findOrFail($id)->update($this->validarLista($request));
         return back()->with('success', 'Lista actualizada.');
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function validarLista(Request $request): array
+    {
+        $datos = $request->validate([
+            'nombre' => 'required',
+            'monto_requerido' => 'required|numeric',
+            'porcentaje_descuento' => 'required|numeric|min:0|max:100',
+            'activo' => 'boolean',
+            'tono_sala' => 'nullable|in:bronce,plata,oro,diamante',
+            'prioridad_cola_turnos' => 'nullable|integer|min:0|max:99',
+        ]);
+
+        $datos['tono_sala'] = $datos['tono_sala'] ?? null;
+        $datos['prioridad_cola_turnos'] = $request->input('prioridad_cola_turnos') === null
+            || $request->input('prioridad_cola_turnos') === ''
+            ? null
+            : (int) $datos['prioridad_cola_turnos'];
+
+        return $datos;
     }
 
     public function destroyLista(Request $request, $id) {

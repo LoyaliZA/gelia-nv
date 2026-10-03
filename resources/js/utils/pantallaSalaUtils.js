@@ -43,6 +43,9 @@ export function llamadoDesdeDatosPublicos(datos = {}, extra = {}) {
         servicio: datos.servicio ?? null,
         estado: datos.estado ?? null,
         prioridad_diamante: Boolean(datos.prioridad_diamante),
+        lista_tono: ['bronce', 'plata', 'oro', 'diamante'].includes(String(datos.lista_tono || '').toLowerCase())
+            ? String(datos.lista_tono).toLowerCase()
+            : (datos.prioridad_diamante ? 'diamante' : null),
         snapshot_nombre_llamado: String(datos.snapshot_nombre_llamado || '').trim() || null,
         atencion_nombre: datos.atencion_nombre
             ? String(datos.atencion_nombre).trim()

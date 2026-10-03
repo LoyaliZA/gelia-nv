@@ -37,6 +37,7 @@ describe('pantallaSalaUtils', () => {
         expect(conLlamado[0].folio).toBe('V-0100');
         expect(conLlamado[0].snapshot_nombre_llamado).toBe('María López');
         expect(conLlamado[0].prioridad_diamante).toBe(true);
+        expect(conLlamado[0].lista_tono).toBe('diamante');
         expect(conLlamado[0].prioridad_vip).toBeUndefined();
         expect(conLlamado[0].atencion_primer_nombre).toBe('Ana');
         expect(conLlamado[0].atencion_nombre).toBeNull();

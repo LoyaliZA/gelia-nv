@@ -30,17 +30,17 @@ final class CatalogoAlertasTurnosPdv
             TurnoPdvEvento::TIPO_ASIGNADO => [
                 'prioridad' => self::PRIORIDAD_ALTA,
                 'tono_configurable' => false,
-                'guion' => 'Turno {folio}. {cliente}. Pase con {vendedor}.',
+                'guion' => '{vendedor}, tienes un nuevo cliente: {cliente}.',
             ],
             TurnoPdvEvento::TIPO_REATENCION => [
                 'prioridad' => self::PRIORIDAD_ALTA,
                 'tono_configurable' => false,
-                'guion' => 'Turno {folio}. {cliente}. Pase con {vendedor}.',
+                'guion' => '{vendedor}, tienes un nuevo cliente: {cliente}.',
             ],
             TurnoPdvEvento::TIPO_TRANSFERIDO => [
                 'prioridad' => self::PRIORIDAD_ALTA,
                 'tono_configurable' => false,
-                'guion' => 'Turno {folio}. {cliente}. Pase con {vendedor}.',
+                'guion' => '{vendedor}, tienes un nuevo cliente: {cliente}.',
             ],
             TurnoPdvEvento::TIPO_ESPERA_PROXIMO_VENCER => [
                 'prioridad' => self::PRIORIDAD_CRITICA,
@@ -159,29 +159,28 @@ final class CatalogoAlertasTurnosPdv
      */
     public static function guionLlamado(array $datos, bool $publico = false): ?string
     {
-        $folio = trim((string) ($datos['folio'] ?? ''));
         $cliente = trim((string) ($datos['snapshot_nombre_llamado'] ?? ''));
-        if ($folio === '' || $cliente === '') {
+        if ($cliente === '') {
             return null;
         }
 
         $vendedor = self::primerNombre($datos);
+
+        if (! $publico) {
+            return $vendedor !== ''
+                ? "{$vendedor}, tienes un nuevo cliente: {$cliente}."
+                : "Tienes un nuevo cliente: {$cliente}.";
+        }
+
+        $folio = trim((string) ($datos['folio'] ?? ''));
+        if ($folio === '') {
+            return null;
+        }
+
         $partes = ["Turno {$folio}.", "{$cliente}."];
 
         if (($datos['prioridad_diamante'] ?? false) === true) {
             $partes[] = 'Tiene prioridad.';
-        }
-
-        if (! $publico) {
-            if (($datos['prioridad_discapacidad'] ?? false) === true) {
-                $partes[] = 'Cliente con discapacidad.';
-            }
-            if (($datos['prioridad_adulto_mayor'] ?? false) === true) {
-                $partes[] = 'Cliente de la tercera edad.';
-            }
-            if (($datos['prioridad_vip'] ?? false) === true) {
-                $partes[] = 'Cliente VIP.';
-            }
         }
 
         $partes[] = 'Pase con '.($vendedor !== '' ? $vendedor : 'el vendedor asignado').'.';

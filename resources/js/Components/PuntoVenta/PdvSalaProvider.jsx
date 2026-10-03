@@ -23,7 +23,12 @@ import {
     llamadoActualSala,
     normalizarEstadoSala,
 } from '@/utils/pantallaSalaUtils';
-import { PDV_TTS_ESTADO } from '@/utils/pdvSpeechUtils';
+import {
+    mensajeTtsPersonalPdv,
+    PDV_TTS_ESTADO,
+    PDV_TTS_MENSAJE_ACTIVACION,
+    seleccionarVozSalaPdv,
+} from '@/utils/pdvSpeechUtils';
 import ModalLlamadoTurnoPdv from '@/Components/PuntoVenta/ModalLlamadoTurnoPdv';
 
 export function PdvSalaIndicadorConexion({ estadoConexion }) {
@@ -43,12 +48,13 @@ export function PdvSalaIndicadorConexion({ estadoConexion }) {
     );
 }
 
-function PdvSalaAudioDesbloqueo({ visible }) {
+function PdvSalaAudioDesbloqueo({ visible, onActivar }) {
     if (!visible) return null;
 
     return (
         <button
             type="button"
+            onClick={onActivar}
             className={`${THEME_MODAL_OVERLAY} z-50 p-6`}
             data-pdv-sala-audio-desbloqueo
         >
@@ -74,6 +80,8 @@ export default function PdvSalaProvider({
     urlEstado = null,
 }) {
     const { tonos_alertas: tonosAlertas = [] } = usePage().props;
+    const tonosAlertasRef = useRef(tonosAlertas);
+    tonosAlertasRef.current = tonosAlertas;
     const [estadoSala, setEstadoSala] = useState(() => normalizarEstadoSala(estadoInicial));
     const [cargandoEstado, setCargandoEstado] = useState(false);
     const idsAnunciadosRef = useRef(new Set());
@@ -88,7 +96,21 @@ export default function PdvSalaProvider({
         audioDesbloqueado,
         ttsDisponible,
         hablando,
-    } = useSpeechAnnouncements({ habilitado: true, silenciado: false });
+        desbloquearAudio,
+    } = useSpeechAnnouncements({
+        habilitado: true,
+        silenciado: false,
+        seleccionarVoz: seleccionarVozSalaPdv,
+        permitirVozPorDefecto: true,
+        mensajeAlDesbloquear: PDV_TTS_MENSAJE_ACTIVACION,
+        onAudioDesbloqueado: () => {
+            reproducirTonoPdv('default', tonosAlertasRef.current);
+        },
+        resolverTexto: (envelope) => mensajeTtsPersonalPdv({
+            ...envelope,
+            audiencia: 'publico',
+        }),
+    });
 
     const anunciarEvento = useCallback((envelope) => {
         if (!esEventoLlamadoSala(envelope)) return;
@@ -178,13 +200,24 @@ export default function PdvSalaProvider({
     }, [hablando]);
 
     useEffect(() => {
-        if (!modalLlamado) return;
-        if (estadoTts === PDV_TTS_ESTADO.sin_voz || estadoTts === PDV_TTS_ESTADO.no_soportado) {
-            const timer = window.setTimeout(() => setModalLlamado(null), 8000);
-            return () => window.clearTimeout(timer);
-        }
-        return undefined;
-    }, [modalLlamado, estadoTts]);
+        if (!modalLlamado) return undefined;
+
+        const tope = window.setTimeout(() => setModalLlamado(null), 25000);
+        const sinVoz = estadoTts === PDV_TTS_ESTADO.sin_voz
+            || estadoTts === PDV_TTS_ESTADO.no_soportado
+            || estadoTts === PDV_TTS_ESTADO.bloqueado
+            || estadoTts === PDV_TTS_ESTADO.silenciado;
+        const espera = (!hablando && !vozEnCursoRef.current) || sinVoz
+            ? window.setTimeout(() => {
+                if (!vozEnCursoRef.current) setModalLlamado(null);
+            }, 8000)
+            : null;
+
+        return () => {
+            window.clearTimeout(tope);
+            if (espera) window.clearTimeout(espera);
+        };
+    }, [modalLlamado, hablando, estadoTts]);
 
     const conexionPrevRef = useRef(estadoConexion);
 
@@ -241,7 +274,7 @@ export default function PdvSalaProvider({
 
     return (
         <div data-pdv-sala-provider className="contents">
-            <PdvSalaAudioDesbloqueo visible={mostrarDesbloqueo} />
+            <PdvSalaAudioDesbloqueo visible={mostrarDesbloqueo} onActivar={desbloquearAudio} />
             <ModalLlamadoTurnoPdv abierto={Boolean(modalLlamado)} turno={modalLlamado} variante="sala" />
             {typeof children === 'function' ? children(valor) : children}
         </div>

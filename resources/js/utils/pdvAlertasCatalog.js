@@ -22,17 +22,17 @@ export const PDV_ALERTAS_CATALOGO_TURNOS = {
     'turno.asignado': {
         prioridad: 'alta',
         tonoConfigurable: false,
-        guion: 'Turno {folio}. {cliente}. Pase con {vendedor}.',
+        guion: '{vendedor}, tienes un nuevo cliente: {cliente}.',
     },
     'turno.reatencion': {
         prioridad: 'alta',
         tonoConfigurable: false,
-        guion: 'Turno {folio}. {cliente}. Pase con {vendedor}.',
+        guion: '{vendedor}, tienes un nuevo cliente: {cliente}.',
     },
     'turno.transferido': {
         prioridad: 'alta',
         tonoConfigurable: false,
-        guion: 'Turno {folio}. {cliente}. Pase con {vendedor}.',
+        guion: '{vendedor}, tienes un nuevo cliente: {cliente}.',
     },
     'atencion.espera_proximo_vencer': {
         prioridad: 'critica',

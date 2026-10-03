@@ -19,7 +19,7 @@ class CatalogoAlertasTurnosPdvTest extends TestCase
         ]);
 
         $this->assertSame(
-            'Turno V-300. María López. Tiene prioridad. Cliente con discapacidad. Pase con Ana.',
+            'Ana, tienes un nuevo cliente: María López.',
             $mensaje,
         );
         $this->assertStringNotContainsString('Re-atención', (string) $mensaje);

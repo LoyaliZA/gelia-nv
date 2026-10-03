@@ -16,7 +16,9 @@ class CatalogoListaDescuento extends Model
         'porcentaje_descuento',
         'monto_minimo',
         'monto_maximo',
-        'activo'
+        'activo',
+        'tono_sala',
+        'prioridad_cola_turnos',
     ];
 
     protected $casts = [

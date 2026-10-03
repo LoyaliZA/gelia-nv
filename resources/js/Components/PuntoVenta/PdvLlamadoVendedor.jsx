@@ -80,12 +80,23 @@ export default function PdvLlamadoVendedor({ userId }) {
 
     useEffect(() => {
         if (!turnoModal) return undefined;
-        if (estadoTts === PDV_TTS_ESTADO.sin_voz || estadoTts === PDV_TTS_ESTADO.no_soportado) {
-            const timer = window.setTimeout(() => setTurnoModal(null), 8000);
-            return () => window.clearTimeout(timer);
-        }
-        return undefined;
-    }, [turnoModal, estadoTts]);
+
+        const tope = window.setTimeout(() => setTurnoModal(null), 25000);
+        const sinVoz = estadoTts === PDV_TTS_ESTADO.sin_voz
+            || estadoTts === PDV_TTS_ESTADO.no_soportado
+            || estadoTts === PDV_TTS_ESTADO.bloqueado
+            || estadoTts === PDV_TTS_ESTADO.silenciado;
+        const espera = (!hablando && !vozEnCursoRef.current) || sinVoz
+            ? window.setTimeout(() => {
+                if (!vozEnCursoRef.current) setTurnoModal(null);
+            }, 8000)
+            : null;
+
+        return () => {
+            window.clearTimeout(tope);
+            if (espera) window.clearTimeout(espera);
+        };
+    }, [turnoModal, hablando, estadoTts]);
 
     return (
         <ModalLlamadoTurnoPdv

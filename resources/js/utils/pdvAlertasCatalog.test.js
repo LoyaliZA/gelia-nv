@@ -39,7 +39,7 @@ describe('pdvAlertasCatalog', () => {
                 prioridad_diamante: true,
                 atencion: { primer_nombre: 'Ana' },
             },
-        })).toBe('Turno V-300. María López. Tiene prioridad. Pase con Ana.');
+        })).toBe('Ana, tienes un nuevo cliente: María López.');
 
         expect(mensajeTtsTerminalPdv({
             tipo: 'turno.reatencion',
@@ -48,7 +48,7 @@ describe('pdvAlertasCatalog', () => {
                 snapshot_nombre_llamado: 'María López',
                 atencion: { primer_nombre: 'Ana' },
             },
-        })).toBe('Turno V-301. María López. Pase con Ana.');
+        })).toBe('Ana, tienes un nuevo cliente: María López.');
     });
 
     it('anuncia prórroga, pausa y resguardo nuevo solo con la frase breve', () => {

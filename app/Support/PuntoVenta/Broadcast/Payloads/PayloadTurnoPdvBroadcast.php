@@ -61,6 +61,7 @@ final class PayloadTurnoPdvBroadcast
             'servicio' => $turno->servicio,
             'estado' => $turno->estado,
             'prioridad_diamante' => (bool) $turno->prioridad_diamante,
+            'lista_tono' => self::listaTonoPublico($turno),
             'snapshot_nombre_llamado' => $turno->snapshot_nombre_llamado,
             'atencion_nombre' => $nombreCompleto !== '' ? $nombreCompleto : null,
             'atencion_primer_nombre' => $nombreCompleto !== ''
@@ -83,6 +84,8 @@ final class PayloadTurnoPdvBroadcast
             'prioridad_vip' => (bool) $turno->prioridad_vip,
             'prioridad_adulto_mayor' => (bool) $turno->prioridad_adulto_mayor,
             'prioridad_discapacidad' => (bool) $turno->prioridad_discapacidad,
+            'lista_tono' => self::listaTonoPublico($turno),
+            'prioridad_cola' => (int) $turno->prioridad_cola,
         ];
     }
 
@@ -119,6 +122,16 @@ final class PayloadTurnoPdvBroadcast
             'atencion_inicio_at' => $atencion->atencion_inicio_at?->toIso8601String(),
             'es_transferencia' => $atencion->es_transferencia,
         ];
+    }
+
+    private static function listaTonoPublico(TurnoPdv $turno): ?string
+    {
+        $tono = strtolower(trim((string) $turno->lista_tono));
+        if (in_array($tono, ['bronce', 'plata', 'oro', 'diamante'], true)) {
+            return $tono;
+        }
+
+        return $turno->prioridad_diamante ? 'diamante' : null;
     }
 
     private static function primerNombre(?string $nombreCompleto): ?string
