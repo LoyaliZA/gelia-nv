@@ -3,6 +3,7 @@
 namespace App\Models\Comercial;
 
 use App\Models\Cliente;
+use App\Models\Concerns\FiltraFilasDemo;
 use App\Models\Sucursal;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
@@ -10,6 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class VisitaClienteProgramada extends Model
 {
+    use FiltraFilasDemo;
     public const TIPO_HORA_SIN = 'sin_hora';
 
     public const TIPO_HORA_EXACTA = 'exacta';
@@ -42,6 +44,7 @@ class VisitaClienteProgramada extends Model
         'llegada_confirmada_at',
         'llegada_confirmada_por_user_id',
         'idempotency_key',
+        'es_demo',
     ];
 
     protected function casts(): array
@@ -49,6 +52,7 @@ class VisitaClienteProgramada extends Model
         return [
             'fecha' => 'date',
             'llegada_confirmada_at' => 'datetime',
+            'es_demo' => 'boolean',
         ];
     }
 

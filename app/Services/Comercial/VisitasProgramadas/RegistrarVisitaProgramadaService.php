@@ -61,9 +61,12 @@ final class RegistrarVisitaProgramadaService
         }
 
         return DB::transaction(function () use ($user, $datos, $cliente, $sucursal) {
+            $esDemo = (bool) $cliente->es_demo || (bool) $sucursal->es_demo || (bool) $user->es_demo;
+
             return VisitaClienteProgramada::query()->create([
                 'cliente_id' => $cliente->id,
                 'sucursal_id' => $sucursal->id,
+                'es_demo' => $esDemo,
                 'fecha' => $datos['fecha'],
                 'tipo_hora' => $datos['tipo_hora'],
                 'hora_exacta' => $datos['hora_exacta'] ?? null,

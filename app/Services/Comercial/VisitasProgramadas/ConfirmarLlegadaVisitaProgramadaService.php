@@ -47,6 +47,10 @@ final class ConfirmarLlegadaVisitaProgramadaService
             return $visita->fresh();
         });
 
+        if ($visita->es_demo) {
+            return $visita;
+        }
+
         $registrador = $visita->registradoPor;
         if ($registrador instanceof User && (int) $registrador->id !== (int) $operador->id) {
             $visita->loadMissing('cliente');

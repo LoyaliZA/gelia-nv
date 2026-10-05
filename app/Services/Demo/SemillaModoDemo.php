@@ -4,6 +4,7 @@ namespace App\Services\Demo;
 
 use App\Models\CatalogoListaDescuento;
 use App\Models\Cliente;
+use App\Models\Comercial\VisitaClienteProgramada;
 use App\Models\Departamento;
 use App\Models\Producto;
 use App\Models\PuntoVenta\ResguardoPdv;
@@ -214,7 +215,10 @@ class SemillaModoDemo
             PuntoVentaModulo::PERMISO_RESGUARDOS_VER_HISTORIAL_ENTREGAS,
             PuntoVentaModulo::PERMISO_TURNOS_VER,
             PuntoVentaModulo::PERMISO_TURNOS_ALTA,
+            PuntoVentaModulo::PERMISO_TURNOS_ALTA_REPRESENTANTE,
             PuntoVentaModulo::PERMISO_TURNOS_MARCAR_PRIORIDAD,
+            PuntoVentaModulo::PERMISO_VISITAS_PROGRAMADAS_VER,
+            PuntoVentaModulo::PERMISO_VISITAS_PROGRAMADAS_CONFIRMAR_LLEGADA,
             'clientes.ver',
         ];
     }
@@ -284,6 +288,64 @@ class SemillaModoDemo
                 'version' => 1,
             ]
         );
+
+        $this->visitasProgramadasDia($sucursal, $cliente, $usuario);
+    }
+
+    private function visitasProgramadasDia(Sucursal $sucursal, Cliente $cliente, ?User $usuario): void
+    {
+        if (! $usuario instanceof User) {
+            return;
+        }
+
+        $hoy = now()->toDateString();
+        $clienteDos = Cliente::withoutGlobalScope(EsDemoScope::class)
+            ->where('numero_cliente', 'DEMO-002')
+            ->first();
+
+        $filas = [
+            [
+                'cliente_id' => $cliente->id,
+                'tipo_hora' => VisitaClienteProgramada::TIPO_HORA_EXACTA,
+                'hora_exacta' => '10:30:00',
+                'intencion' => VisitaClienteProgramada::INTENCION_CONFIRMO,
+            ],
+        ];
+
+        if ($clienteDos instanceof Cliente) {
+            $filas[] = [
+                'cliente_id' => $clienteDos->id,
+                'tipo_hora' => VisitaClienteProgramada::TIPO_HORA_RANGO,
+                'hora_inicio' => '09:00:00',
+                'hora_fin' => '11:00:00',
+                'intencion' => VisitaClienteProgramada::INTENCION_POSIBLE,
+            ];
+            $filas[] = [
+                'cliente_id' => $clienteDos->id,
+                'tipo_hora' => VisitaClienteProgramada::TIPO_HORA_SIN,
+                'intencion' => VisitaClienteProgramada::INTENCION_CONFIRMO,
+            ];
+        }
+
+        foreach ($filas as $fila) {
+            VisitaClienteProgramada::withoutGlobalScope(EsDemoScope::class)->firstOrCreate(
+                [
+                    'sucursal_id' => $sucursal->id,
+                    'cliente_id' => $fila['cliente_id'],
+                    'fecha' => $hoy,
+                    'tipo_hora' => $fila['tipo_hora'],
+                    'hora_exacta' => $fila['hora_exacta'] ?? null,
+                    'hora_inicio' => $fila['hora_inicio'] ?? null,
+                    'hora_fin' => $fila['hora_fin'] ?? null,
+                ],
+                [
+                    'intencion' => $fila['intencion'],
+                    'estado' => VisitaClienteProgramada::ESTADO_PROGRAMADA,
+                    'registrado_por_user_id' => $usuario->id,
+                    'es_demo' => true,
+                ]
+            );
+        }
     }
 
     private function resguardo(
@@ -349,6 +411,8 @@ class SemillaModoDemo
             DB::table('pdv_turno_atenciones')->whereIn('turno_id', $turnoIds)->delete();
             DB::table('pdv_turnos')->where('es_demo', true)->whereIn('id', $turnoIds)->delete();
         }
+
+        DB::table('visita_cliente_programadas')->where('es_demo', true)->delete();
 
         Storage::disk('local')->deleteDirectory('demo/resguardos');
     }

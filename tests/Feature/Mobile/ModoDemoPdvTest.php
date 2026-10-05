@@ -5,6 +5,7 @@ namespace Tests\Feature\Mobile;
 use App\Jobs\PuntoVenta\Turnos\EjecutarMatchmakerTurnosPdvJob;
 use App\Models\CatalogoListaDescuento;
 use App\Models\Cliente;
+use App\Models\Comercial\VisitaClienteProgramada;
 use App\Models\ConfiguracionSistema;
 use App\Models\MobileDevice;
 use App\Models\Producto;
@@ -20,6 +21,8 @@ use App\Services\Demo\SemillaModoDemo;
 use App\Services\PuntoVenta\PuntoVentaModulo;
 use App\Services\PuntoVenta\Resguardos\RegistrarEntregaResguardoPdvService;
 use App\Services\PuntoVenta\Resguardos\SincronizarEstatusSucursalPedidoBmaService;
+use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
+use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Routing\Middleware\ThrottleRequests;
@@ -79,6 +82,9 @@ class ModoDemoPdvTest extends TestCase
         $permisos = $login->json('permissions');
         $this->assertContains(PuntoVentaModulo::PERMISO_ACCEDER, $permisos);
         $this->assertContains('clientes.ver', $permisos);
+        $this->assertContains(PuntoVentaModulo::PERMISO_VISITAS_PROGRAMADAS_VER, $permisos);
+        $this->assertContains(PuntoVentaModulo::PERMISO_VISITAS_PROGRAMADAS_CONFIRMAR_LLEGADA, $permisos);
+        $this->assertContains(PuntoVentaModulo::PERMISO_TURNOS_ALTA_REPRESENTANTE, $permisos);
         $this->assertNotContains('pdv.alcance.global', $permisos);
         $this->assertNotContains('usuarios.gestionar', $permisos);
 
@@ -98,6 +104,69 @@ class ModoDemoPdvTest extends TestCase
             ->assertJsonCount(1, 'sucursales_operables');
 
         $this->assertSame('Mostrador demostración', $respuesta->json('origenes.0.nombre'));
+
+        $respuesta->assertJsonPath('permisos.visitas_programadas_ver', true)
+            ->assertJsonPath('permisos.visitas_programadas_confirmar_llegada', true)
+            ->assertJsonPath('permisos.turnos_alta_representante', true);
+    }
+
+    public function test_visitas_del_dia_solo_muestran_la_operacion_demo(): void
+    {
+        Notification::fake();
+
+        $realSucursal = Sucursal::factory()->create();
+        $lista = CatalogoListaDescuento::query()->first();
+        $clienteReal = Cliente::query()->create([
+            'numero_cliente' => '90002',
+            'nombre' => 'Cliente real visita',
+            'lista_actual_id' => $lista->id,
+            'es_demo' => false,
+        ]);
+        $vendedora = User::factory()->create();
+
+        $visitaReal = VisitaClienteProgramada::query()->create([
+            'cliente_id' => $clienteReal->id,
+            'sucursal_id' => $realSucursal->id,
+            'fecha' => now()->toDateString(),
+            'tipo_hora' => VisitaClienteProgramada::TIPO_HORA_SIN,
+            'intencion' => VisitaClienteProgramada::INTENCION_CONFIRMO,
+            'estado' => VisitaClienteProgramada::ESTADO_PROGRAMADA,
+            'registrado_por_user_id' => $vendedora->id,
+            'es_demo' => false,
+        ]);
+
+        $listado = $this->withToken($this->token)
+            ->getJson('/api/v1/mobile/punto-venta/visitas-programadas')
+            ->assertOk()
+            ->json('visitas');
+
+        $ids = collect($listado)->pluck('id');
+        $this->assertGreaterThanOrEqual(1, $ids->count());
+        $this->assertFalse($ids->contains($visitaReal->id));
+
+        $visitaDemo = VisitaClienteProgramada::withoutGlobalScope(EsDemoScope::class)
+            ->where('sucursal_id', $this->sucursalDemo->id)
+            ->where('es_demo', true)
+            ->where('estado', VisitaClienteProgramada::ESTADO_PROGRAMADA)
+            ->firstOrFail();
+
+        $this->withToken($this->token)
+            ->postJson("/api/v1/mobile/punto-venta/visitas-programadas/{$visitaDemo->id}/llegada", [
+                'idempotency_key' => 'demo:visita:llegada:'.$visitaDemo->id,
+            ])
+            ->assertOk();
+
+        $this->assertSame(
+            VisitaClienteProgramada::ESTADO_ASISTIO,
+            $visitaDemo->fresh()->estado
+        );
+        Notification::assertNothingSent();
+
+        $this->withToken($this->token)
+            ->postJson("/api/v1/mobile/punto-venta/visitas-programadas/{$visitaReal->id}/llegada", [
+                'idempotency_key' => 'demo:visita:real',
+            ])
+            ->assertNotFound();
     }
 
     public function test_cambio_de_sucursal_real_se_rechaza(): void
@@ -184,6 +253,7 @@ class ModoDemoPdvTest extends TestCase
         Notification::fake();
 
         $cliente = Cliente::withoutGlobalScope(EsDemoScope::class)->where('numero_cliente', 'DEMO-001')->firstOrFail();
+        $clienteRepresentante = Cliente::withoutGlobalScope(EsDemoScope::class)->where('numero_cliente', 'DEMO-002')->firstOrFail();
         $origenId = DB::table('departamentos')->where('codigo', 'DEMO')->value('id');
         $producto = Producto::withoutGlobalScope(EsDemoScope::class)->where('sku', 'DEMO-MUESTRA-1')->firstOrFail();
         $clienteReal = $this->clienteReal();
@@ -230,7 +300,16 @@ class ModoDemoPdvTest extends TestCase
             ])
             ->assertCreated();
 
+        $this->withToken($this->token)
+            ->postJson('/api/v1/mobile/punto-venta/turnos', [
+                'idempotency_key' => 'pdv:turno:demo-rep',
+                'cliente_id' => $clienteRepresentante->id,
+                'nombre_llamado' => 'Representante demostración',
+            ])
+            ->assertCreated();
+
         $this->assertTrue((bool) DB::table('pdv_turnos')->where('snapshot_nombre_llamado', 'Visita demostración')->value('es_demo'));
+        $this->assertTrue((bool) DB::table('pdv_turnos')->where('snapshot_nombre_llamado', 'Representante demostración')->value('es_demo'));
 
         Bus::assertNotDispatched(EjecutarMatchmakerTurnosPdvJob::class);
 
@@ -347,10 +426,19 @@ class ModoDemoPdvTest extends TestCase
             'snapshot_folio' => 'NO-EXISTE',
         ]);
         $this->assertSame(3, DB::table('clientes')->where('es_demo', true)->count());
+        $this->assertGreaterThanOrEqual(
+            1,
+            DB::table('visita_cliente_programadas')->where('es_demo', true)->count()
+        );
     }
 
     public function test_el_panel_web_rechaza_la_cuenta_demo(): void
     {
+        $this->withoutMiddleware([
+            ValidateCsrfToken::class,
+            PreventRequestForgery::class,
+        ]);
+
         $this->post('/login', [
             'login' => $this->demo->email,
             'password' => 'secreta-demo',
