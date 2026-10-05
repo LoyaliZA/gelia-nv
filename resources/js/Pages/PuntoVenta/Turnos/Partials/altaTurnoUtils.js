@@ -69,7 +69,13 @@ export function mensajeClienteYaEnCola(turno) {
     return `Esta persona ya tiene un turno ${estado}${folio}. No es necesario registrarlo de nuevo.`;
 }
 
-export function validarFormularioAltaTurno({ modo, cliente, nombreLlamado, bandeja = null }) {
+export function validarFormularioAltaTurno({
+    modo,
+    cliente,
+    nombreLlamado,
+    bandeja = null,
+    puedeRepresentante = false,
+}) {
     const errores = {};
 
     if (modo === 'cliente') {
@@ -84,20 +90,17 @@ export function validarFormularioAltaTurno({ modo, cliente, nombreLlamado, bande
     } else if (modo === 'visitante') {
         const nombre = String(nombreLlamado || '').trim();
         if (nombre.length < 2) {
-            errores.nombre_llamado = 'Captura el nombre para llamado del visitante.';
+            errores.nombre_llamado = 'Captura el nombre del visitante (se mostrará en pantalla de turnos).';
         }
-    } else if (modo === 'representante') {
-        if (!cliente?.id) {
-            errores.cliente = 'Selecciona el número de cliente titular.';
-        } else {
-            const turnoExistente = buscarTurnoActivoClienteEnBandeja(bandeja, cliente.id);
-            if (turnoExistente) {
-                errores.cliente = mensajeClienteYaEnCola(turnoExistente);
+        if (cliente?.id) {
+            if (!puedeRepresentante) {
+                errores.cliente = 'No tienes permiso para registrar un visitante con número de cliente titular.';
+            } else {
+                const turnoExistente = buscarTurnoActivoClienteEnBandeja(bandeja, cliente.id);
+                if (turnoExistente) {
+                    errores.cliente = mensajeClienteYaEnCola(turnoExistente);
+                }
             }
-        }
-        const nombre = String(nombreLlamado || '').trim();
-        if (nombre.length < 2) {
-            errores.nombre_llamado = 'Captura el nombre de quien viene por el cliente.';
         }
     } else {
         errores.modo = 'Selecciona cómo registrar el turno.';
@@ -128,6 +131,7 @@ export function formularioListoParaEnviar({
     nombreLlamado,
     bandeja = null,
     sucursalDia = null,
+    puedeRepresentante = false,
 }) {
     if (!sucursalAceptaAltasTurno(sucursalDia)) {
         return false;
@@ -138,6 +142,7 @@ export function formularioListoParaEnviar({
         cliente,
         nombreLlamado,
         bandeja,
+        puedeRepresentante,
     })).length === 0;
 }
 

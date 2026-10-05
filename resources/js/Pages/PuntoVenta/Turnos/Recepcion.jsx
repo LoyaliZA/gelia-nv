@@ -53,6 +53,7 @@ export default function Recepcion({
     } = useAltaTurno({
         onExito: () => refrescarBandeja({ silencioso: true }),
         bandeja: puedeVerBandeja ? bandeja : null,
+        puedeRepresentante: Boolean(permisos?.alta_representante),
     });
 
     return (

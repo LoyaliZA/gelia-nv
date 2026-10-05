@@ -8,7 +8,7 @@ import {
     validarFormularioAltaTurno,
 } from './altaTurnoUtils';
 
-export default function useAltaTurno({ sesionId = 'actual', onExito, bandeja = null } = {}) {
+export default function useAltaTurno({ sesionId = 'actual', onExito, bandeja = null, puedeRepresentante = false } = {}) {
     const [enviando, setEnviando] = useState(false);
     const [error, setError] = useState(null);
     const [turnoCreado, setTurnoCreado] = useState(null);
@@ -30,7 +30,13 @@ export default function useAltaTurno({ sesionId = 'actual', onExito, bandeja = n
             return { duplicado: true };
         }
 
-        const erroresLocales = validarFormularioAltaTurno({ modo, cliente, nombreLlamado, bandeja });
+        const erroresLocales = validarFormularioAltaTurno({
+            modo,
+            cliente,
+            nombreLlamado,
+            bandeja,
+            puedeRepresentante,
+        });
         if (Object.keys(erroresLocales).length > 0) {
             setError(Object.values(erroresLocales)[0]);
             return { validacion: erroresLocales };
@@ -42,7 +48,7 @@ export default function useAltaTurno({ sesionId = 'actual', onExito, bandeja = n
 
         const payload = armarPayloadAltaTurno({
             idempotencyKey: idempotencyRef.current,
-            clienteId: modo === 'visitante' ? null : cliente?.id,
+            clienteId: modo === 'cliente' ? cliente?.id : (cliente?.id ?? null),
             nombreLlamado: modo === 'cliente' ? null : String(nombreLlamado || '').trim(),
             prioridadAdultoMayor,
             prioridadDiscapacidad,
@@ -69,7 +75,7 @@ export default function useAltaTurno({ sesionId = 'actual', onExito, bandeja = n
         } finally {
             setEnviando(false);
         }
-    }, [enviando, renovarIdempotencia, onExito, bandeja]);
+    }, [enviando, renovarIdempotencia, onExito, bandeja, puedeRepresentante]);
 
     const reiniciar = useCallback(() => {
         setTurnoCreado(null);

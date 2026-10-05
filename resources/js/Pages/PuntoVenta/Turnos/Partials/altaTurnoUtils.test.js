@@ -55,17 +55,35 @@ describe('altaTurnoUtils', () => {
             prioridad_adulto_mayor: false,
             prioridad_discapacidad: false,
         });
+
+        expect(armarPayloadAltaTurno({
+            idempotencyKey: 'pdv:turno:3',
+            clienteId: 4,
+            nombreLlamado: 'Ana Visitante',
+        })).toEqual({
+            idempotency_key: 'pdv:turno:3',
+            cliente_id: 4,
+            nombre_llamado: 'Ana Visitante',
+            prioridad_adulto_mayor: false,
+            prioridad_discapacidad: false,
+        });
     });
 
     it('valida cliente, visitante y prioridades visibles', () => {
         expect(validarFormularioAltaTurno({ modo: 'cliente', cliente: null })).toHaveProperty('cliente');
         expect(validarFormularioAltaTurno({ modo: 'visitante', nombreLlamado: 'A' })).toHaveProperty('nombre_llamado');
         expect(validarFormularioAltaTurno({
-            modo: 'representante',
+            modo: 'visitante',
             cliente: { id: 1 },
             nombreLlamado: 'Ana',
+            puedeRepresentante: true,
         })).toEqual({});
-        expect(validarFormularioAltaTurno({ modo: 'representante', cliente: null, nombreLlamado: 'Ana' })).toHaveProperty('cliente');
+        expect(validarFormularioAltaTurno({
+            modo: 'visitante',
+            cliente: { id: 1 },
+            nombreLlamado: 'Ana',
+            puedeRepresentante: false,
+        })).toHaveProperty('cliente');
         expect(validarFormularioAltaTurno({
             modo: 'cliente',
             cliente: { id: 1, nombre: 'Cliente' },

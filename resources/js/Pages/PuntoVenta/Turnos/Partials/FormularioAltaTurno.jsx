@@ -34,11 +34,12 @@ export default function FormularioAltaTurno({
     const puedeMarcarPrioridad = Boolean(permisos.marcar_prioridad);
     const puedeRepresentante = Boolean(permisos.alta_representante);
 
-    const turnoDuplicado = useMemo(() => (
-        (modo === 'cliente' || modo === 'representante') && cliente?.id
-            ? buscarTurnoActivoClienteEnBandeja(bandeja, cliente.id)
-            : null
-    ), [modo, cliente, bandeja]);
+    const turnoDuplicado = useMemo(() => {
+        const clienteId = modo === 'cliente' || (modo === 'visitante' && cliente?.id)
+            ? cliente?.id
+            : null;
+        return clienteId ? buscarTurnoActivoClienteEnBandeja(bandeja, clienteId) : null;
+    }, [modo, cliente, bandeja]);
 
     const avisoSucursal = mensajeSucursalSinAltas(sucursalDia);
 
@@ -50,7 +51,8 @@ export default function FormularioAltaTurno({
         nombreLlamado,
         bandeja,
         sucursalDia,
-    }), [modo, cliente, nombreLlamado, bandeja, sucursalDia]);
+        puedeRepresentante,
+    }), [modo, cliente, nombreLlamado, bandeja, sucursalDia, puedeRepresentante]);
 
     const cambiarModo = (nuevoModo) => {
         setModo(nuevoModo);
@@ -103,21 +105,9 @@ export default function FormularioAltaTurno({
                 >
                     Visitante
                 </button>
-                {puedeRepresentante && (
-                    <button
-                        type="button"
-                        role="tab"
-                        aria-selected={modo === 'representante'}
-                        onClick={() => cambiarModo('representante')}
-                        disabled={enviando}
-                        className={`${BTN_SEGMENTO} ${modo === 'representante' ? BTN_SEGMENTO_ACTIVO : BTN_SEGMENTO_INACTIVO}`}
-                    >
-                        Viene por un cliente
-                    </button>
-                )}
             </div>
 
-            {modo === 'cliente' || modo === 'representante' ? (
+            {modo === 'cliente' ? (
                 <BusquedaClienteTurno
                     clienteSeleccionado={cliente}
                     onSeleccionar={seleccionarCliente}
@@ -126,22 +116,47 @@ export default function FormularioAltaTurno({
                 />
             ) : null}
 
-            {modo === 'visitante' || modo === 'representante' ? (
-                <div className="space-y-2">
-                    <label className="block text-[10px] font-black uppercase tracking-widest theme-text-muted" htmlFor="nombre-llamado-turno">
-                        Nombre para llamado
-                    </label>
-                    <input
-                        id="nombre-llamado-turno"
-                        type="text"
-                        value={nombreLlamado}
-                        onChange={(event) => setNombreLlamado(event.target.value)}
-                        disabled={enviando}
-                        placeholder={modo === 'representante' ? 'Nombre de quien viene por el cliente' : 'Nombre con el que se anunciará en sala'}
-                        className={`${THEME_INPUT} min-h-[44px]`}
-                        autoComplete="name"
-                        maxLength={255}
-                    />
+            {modo === 'visitante' ? (
+                <div className="space-y-4">
+                    <div className="space-y-2">
+                        <label className="block text-[10px] font-black uppercase tracking-widest theme-text-muted" htmlFor="nombre-llamado-turno">
+                            Nombre del visitante
+                        </label>
+                        <input
+                            id="nombre-llamado-turno"
+                            type="text"
+                            value={nombreLlamado}
+                            onChange={(event) => setNombreLlamado(event.target.value)}
+                            disabled={enviando}
+                            placeholder="Nombre que se mostrará en la pantalla de turnos"
+                            className={`${THEME_INPUT} min-h-[44px]`}
+                            autoComplete="name"
+                            maxLength={255}
+                        />
+                        <p className="text-xs theme-text-muted m-0">
+                            En sala y en el tablero se anuncia este nombre, no el del titular del número.
+                        </p>
+                    </div>
+                    {puedeRepresentante ? (
+                        <div className="space-y-2 rounded-2xl border theme-border theme-element px-4 py-3">
+                            <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0">
+                                Número de cliente usado (opcional)
+                            </p>
+                            <p className="text-xs theme-text-muted m-0">
+                                Si la persona entró con el número de un cliente titular, búscalo aquí para ligar el turno a esa cuenta.
+                            </p>
+                            <BusquedaClienteTurno
+                                clienteSeleccionado={cliente}
+                                onSeleccionar={seleccionarCliente}
+                                onLimpiar={() => setCliente(null)}
+                                deshabilitado={enviando}
+                            />
+                        </div>
+                    ) : (
+                        <p className="text-xs theme-text-muted m-0">
+                            Para registrar visitantes con número de cliente titular, solicita el permiso de alta con cliente.
+                        </p>
+                    )}
                 </div>
             ) : null}
 
