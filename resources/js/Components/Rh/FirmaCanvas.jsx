@@ -1,35 +1,31 @@
 import React, { useRef, useEffect, useImperativeHandle, forwardRef, useState, useCallback } from 'react';
 import { Eraser, PenTool } from 'lucide-react';
-
-const STROKE_COLOR = '#1e3a8a';
-const MIN_WIDTH = 1.0;
-const MAX_WIDTH = 4.5;
-const MAX_VELOCITY = 2.0;
-const DEFAULT_WIDTH = 3.5;
+import { dibujarTrazoPluma } from '../../utils/signaturePen';
 
 const FirmaCanvas = forwardRef(function FirmaCanvas({ label, className = '', height = 180 }, ref) {
     const canvasRef = useRef(null);
     const containerRef = useRef(null);
     const dibujando = useRef(false);
-    const lastPosRef = useRef({ x: 0, y: 0, time: 0, width: DEFAULT_WIDTH });
+    const strokesRef = useRef([]);
+    const currentStrokeRef = useRef([]);
     const tieneTrazoRef = useRef(false);
     const contenidoDataUrlRef = useRef(null);
     const [tieneTrazo, setTieneTrazo] = useState(false);
-
-    const obtenerCoordenadas = useCallback((e, canvas) => {
-        const rect = canvas.getBoundingClientRect();
-        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-        return {
-            x: clientX - rect.left,
-            y: clientY - rect.top,
-        };
-    }, []);
 
     const limpiarLienzo = useCallback((ctx, displayWidth, displayHeight) => {
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, displayWidth, displayHeight);
     }, []);
+
+    const redibujar = useCallback((ctx, displayWidth, displayHeight) => {
+        limpiarLienzo(ctx, displayWidth, displayHeight);
+        for (const stroke of strokesRef.current) {
+            dibujarTrazoPluma(ctx, stroke);
+        }
+        if (currentStrokeRef.current.length > 0) {
+            dibujarTrazoPluma(ctx, currentStrokeRef.current);
+        }
+    }, [limpiarLienzo]);
 
     const dibujarDataUrlEnLienzo = useCallback((ctx, dataUrl, displayWidth, displayHeight) => new Promise((resolve) => {
         const img = new Image();
@@ -74,30 +70,25 @@ const FirmaCanvas = forwardRef(function FirmaCanvas({ label, className = '', hei
 
         const ctx = canvas.getContext('2d');
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        ctx.strokeStyle = STROKE_COLOR;
-        ctx.fillStyle = STROKE_COLOR;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
 
-        if (dataUrlPersistido) {
+        if (dataUrlPersistido && strokesRef.current.length === 0) {
             dibujarDataUrlEnLienzo(ctx, dataUrlPersistido, displayWidth, displayHeight);
             return;
         }
 
-        limpiarLienzo(ctx, displayWidth, displayHeight);
-        lastPosRef.current = { x: 0, y: 0, time: 0, width: DEFAULT_WIDTH };
-        tieneTrazoRef.current = false;
-        setTieneTrazo(false);
-    }, [height, limpiarLienzo, dibujarDataUrlEnLienzo]);
+        redibujar(ctx, displayWidth, displayHeight);
+    }, [height, dibujarDataUrlEnLienzo, redibujar]);
 
     const limpiar = useCallback(() => {
         const canvas = canvasRef.current;
         const container = containerRef.current;
         if (!canvas || !container) return;
         const ctx = canvas.getContext('2d');
+        strokesRef.current = [];
+        currentStrokeRef.current = [];
         contenidoDataUrlRef.current = null;
+        dibujando.current = false;
         limpiarLienzo(ctx, container.clientWidth, height);
-        lastPosRef.current = { x: 0, y: 0, time: 0, width: DEFAULT_WIDTH };
         tieneTrazoRef.current = false;
         setTieneTrazo(false);
     }, [height, limpiarLienzo]);
@@ -113,6 +104,8 @@ const FirmaCanvas = forwardRef(function FirmaCanvas({ label, className = '', hei
                 limpiar();
                 return;
             }
+            strokesRef.current = [];
+            currentStrokeRef.current = [];
             contenidoDataUrlRef.current = dataUrl;
             const canvas = canvasRef.current;
             const container = containerRef.current;
@@ -140,6 +133,14 @@ const FirmaCanvas = forwardRef(function FirmaCanvas({ label, className = '', hei
         return () => observer.disconnect();
     }, [configurarCanvas]);
 
+    const obtenerPunto = (e, canvas) => {
+        const rect = canvas.getBoundingClientRect();
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        const pressure = typeof e.pressure === 'number' && e.pressure > 0 ? e.pressure : 0.5;
+        return [clientX - rect.left, clientY - rect.top, pressure];
+    };
+
     const marcarTrazo = () => {
         if (!tieneTrazoRef.current) {
             tieneTrazoRef.current = true;
@@ -150,23 +151,16 @@ const FirmaCanvas = forwardRef(function FirmaCanvas({ label, className = '', hei
     const iniciar = (e) => {
         if (e.cancelable) e.preventDefault();
         const canvas = canvasRef.current;
-        if (!canvas) return;
-        const ctx = canvas.getContext('2d');
-        const pos = obtenerCoordenadas(e, canvas);
+        const container = containerRef.current;
+        if (!canvas || !container) return;
 
-        lastPosRef.current = {
-            x: pos.x,
-            y: pos.y,
-            time: Date.now(),
-            width: DEFAULT_WIDTH,
-        };
-
-        ctx.beginPath();
-        ctx.arc(pos.x, pos.y, DEFAULT_WIDTH / 2, 0, 2 * Math.PI);
-        ctx.fill();
-
+        contenidoDataUrlRef.current = null;
+        currentStrokeRef.current = [obtenerPunto(e, canvas)];
         dibujando.current = true;
         marcarTrazo();
+
+        const ctx = canvas.getContext('2d');
+        redibujar(ctx, container.clientWidth, height);
     };
 
     const dibujar = (e) => {
@@ -174,56 +168,22 @@ const FirmaCanvas = forwardRef(function FirmaCanvas({ label, className = '', hei
         if (e.cancelable) e.preventDefault();
 
         const canvas = canvasRef.current;
-        if (!canvas) return;
+        const container = containerRef.current;
+        if (!canvas || !container) return;
+
+        currentStrokeRef.current.push(obtenerPunto(e, canvas));
         const ctx = canvas.getContext('2d');
-        const pos = obtenerCoordenadas(e, canvas);
-        const lastPos = lastPosRef.current;
-
-        const dx = pos.x - lastPos.x;
-        const dy = pos.y - lastPos.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist === 0) return;
-
-        const now = Date.now();
-        const dt = Math.max(1, now - lastPos.time);
-        const velocity = dist / dt;
-
-        const targetWidth = Math.max(
-            MIN_WIDTH,
-            Math.min(MAX_WIDTH, MAX_WIDTH - (velocity / MAX_VELOCITY) * (MAX_WIDTH - MIN_WIDTH)),
-        );
-        const currentWidth = lastPos.width * 0.7 + targetWidth * 0.3;
-
-        const midX = (lastPos.x + pos.x) / 2;
-        const midY = (lastPos.y + pos.y) / 2;
-
-        ctx.beginPath();
-        ctx.moveTo(lastPos.x, lastPos.y);
-        ctx.quadraticCurveTo(lastPos.x, lastPos.y, midX, midY);
-        ctx.strokeStyle = STROKE_COLOR;
-        ctx.lineWidth = currentWidth;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        ctx.stroke();
-
-        ctx.beginPath();
-        ctx.moveTo(midX, midY);
-        ctx.lineTo(pos.x, pos.y);
-        ctx.lineWidth = currentWidth;
-        ctx.stroke();
-
-        lastPosRef.current = {
-            x: pos.x,
-            y: pos.y,
-            time: now,
-            width: currentWidth,
-        };
-
+        redibujar(ctx, container.clientWidth, height);
         marcarTrazo();
     };
 
     const detener = () => {
+        if (!dibujando.current) return;
         dibujando.current = false;
+        if (currentStrokeRef.current.length > 0) {
+            strokesRef.current.push([...currentStrokeRef.current]);
+            currentStrokeRef.current = [];
+        }
     };
 
     return (
