@@ -106,6 +106,44 @@ class AltaTurnoPdvTest extends TestCase
         Event::assertDispatched(TurnoCreado::class);
     }
 
+    public function test_visitante_con_cliente_titular_usa_nombre_presente_y_liga_cliente(): void
+    {
+        $this->recepcion->givePermissionTo(PuntoVentaModulo::PERMISO_TURNOS_ALTA_REPRESENTANTE);
+        $cliente = $this->crearCliente('Cliente titular');
+
+        $response = $this->actingAs($this->recepcion)->postJson(
+            route('punto_venta.turnos.store'),
+            $this->payloadAlta(
+                clienteId: $cliente->id,
+                nombre: 'Persona que entra',
+                clave: 'pdv:turno:representante-1',
+            )
+        );
+
+        $response->assertCreated()
+            ->assertJsonPath('turno.cliente_id', $cliente->id)
+            ->assertJsonPath('turno.snapshot_nombre_llamado', 'Persona que entra');
+
+        $turno = TurnoPdv::query()->where('folio', 'V-0001')->first();
+        $this->assertSame('representante', $turno?->snapshot_json['tipo_persona'] ?? null);
+        $this->assertSame('Persona que entra', $turno?->snapshot_json['nombre_presente'] ?? null);
+    }
+
+    public function test_visitante_con_cliente_sin_permiso_se_rechaza(): void
+    {
+        $cliente = $this->crearCliente('Cliente titular');
+
+        $this->actingAs($this->recepcion)->postJson(
+            route('punto_venta.turnos.store'),
+            $this->payloadAlta(
+                clienteId: $cliente->id,
+                nombre: 'Persona que entra',
+                clave: 'pdv:turno:representante-sin-permiso',
+            )
+        )->assertUnprocessable()
+            ->assertJsonValidationErrors(['nombre_llamado']);
+    }
+
     public function test_marca_prioridad_adulto_mayor_con_permiso(): void
     {
         $response = $this->actingAs($this->recepcion)->postJson(

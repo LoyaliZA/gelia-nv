@@ -133,6 +133,9 @@ export function normalizarEstadoSala(payload = {}) {
         proximos: Array.isArray(payload.proximos) ? payload.proximos : [],
         anteriores: Array.isArray(payload.anteriores) ? payload.anteriores : [],
         publicidad: Array.isArray(payload.publicidad) ? payload.publicidad : [],
+        volumen_publicidad: Number.isFinite(Number(payload.volumen_publicidad))
+            ? Math.min(1, Math.max(0, Number(payload.volumen_publicidad)))
+            : 0.35,
         servidor_at: payload.servidor_at ?? null,
     };
 }

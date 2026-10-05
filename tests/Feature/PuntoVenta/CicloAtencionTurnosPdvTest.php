@@ -151,6 +151,29 @@ class CicloAtencionTurnosPdvTest extends TestCase
         $this->assertSame(MotivosCierreAtencionTurnoPdv::NO_SE_PRESENTO, $contexto['atencion']->motivo_cierre);
     }
 
+    public function test_gerencia_cierra_atencion_de_otro_vendedor(): void
+    {
+        $this->gerencia->givePermissionTo(PuntoVentaModulo::PERMISO_OPERACION_EQUIPO_GESTIONAR);
+        $contexto = $this->crearTurnoAsignado();
+
+        $this->actingAs($this->gerencia)->postJson(
+            route('punto_venta.turnos.cerrar_atencion', $contexto['turno']),
+            [
+                'version' => $contexto['turno']->version,
+                'idempotency_key' => 'pdv:cerrar:gerencia',
+                'motivo' => MotivosCierreAtencionTurnoPdv::NO_SE_PRESENTO,
+            ],
+        )->assertOk()
+            ->assertJsonPath('turno.estado', TurnoPdv::ESTADO_EN_REATENCION);
+
+        $contexto['atencion']->refresh();
+        $this->assertNotNull($contexto['atencion']->fin_at);
+        $this->assertSame((int) $this->gerencia->id, (int) TurnoPdvEvento::query()
+            ->where('turno_id', $contexto['turno']->id)
+            ->where('tipo_evento', TurnoPdvEvento::TIPO_ATENCION_CERRADA)
+            ->value('actor_id'));
+    }
+
     public function test_baja_cola_en_en_cola_sin_evento_de_ventas(): void
     {
         Event::fake([AtencionCerrada::class, AtencionProrroga::class]);

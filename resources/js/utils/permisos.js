@@ -295,6 +295,7 @@ export const DESCRIPCIONES_PERMISOS = {
     'pdv.visitas_programadas.confirmar_llegada': 'Permite registrar la llegada del cliente en piso.',
     'pdv.turnos.ver': 'Permite consultar la cola y turnos de la sucursal activa.',
     'pdv.turnos.alta': 'Permite dar de alta turnos en recepción.',
+    'pdv.turnos.alta_representante': 'Permite registrar un visitante ligado al número de cliente titular.',
     'pdv.turnos.marcar_prioridad': 'Permite marcar prioridad de adulto mayor o discapacidad en el alta.',
     'pdv.turnos.atender': 'Permite atender turnos y aparecer como vendedor en la sucursal asignada.',
     'pdv.turnos.baja_cola': 'Permite dar de baja turnos en la cola de espera.',
@@ -382,6 +383,7 @@ export const ETIQUETAS_PERMISOS = {
     'pdv.visitas_programadas.confirmar_llegada': 'confirmar llegada de visita',
     'pdv.turnos.ver': 'ver turnos',
     'pdv.turnos.alta': 'alta de turno',
+    'pdv.turnos.alta_representante': 'alta de visitante con cliente',
     'pdv.turnos.marcar_prioridad': 'marcar prioridad',
     'pdv.turnos.atender': 'atender turnos / aparecer como vendedor',
     'pdv.turnos.baja_cola': 'baja de cola',
@@ -1320,10 +1322,11 @@ export const SUBMODULOS_UI_POR_MODULO = {
         {
             id: 'turnos',
             label: 'Turnos',
-            descripcion: 'Alta, atención y gestión de fila en piso',
+            descripcion: 'Alta, atención y gestión de fila en piso. Perfil puerta: ver, alta, visitante con cliente y baja de cola. Las visitas programadas van en su propio grupo.',
             permisos: [
                 'pdv.turnos.ver',
                 'pdv.turnos.alta',
+                'pdv.turnos.alta_representante',
                 'pdv.turnos.marcar_prioridad',
                 'pdv.turnos.atender',
                 'pdv.turnos.baja_cola',
@@ -1614,6 +1617,15 @@ export function agruparModulosPorSeccionSidebar(permisosAgrupadosPorModulo) {
 
     return secciones;
 }
+
+/** Grupo sugerido «Puerta PDV». Visitas programadas se asignan aparte. */
+export const PLANTILLA_PUERTA_PDV = [
+    'punto_venta.acceder',
+    'pdv.turnos.ver',
+    'pdv.turnos.alta',
+    'pdv.turnos.alta_representante',
+    'pdv.turnos.baja_cola',
+];
 
 export function etiquetaPermiso(permisoName) {
     if (ETIQUETAS_PERMISOS[permisoName]) {

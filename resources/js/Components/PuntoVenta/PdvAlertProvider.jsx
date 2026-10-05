@@ -22,6 +22,7 @@ import {
     debeAnunciarVozPdv,
     debeReproducirSonidoPdv,
     debeReproducirTonoEventoPdv,
+    reclamarAudioEventoPdv,
     reproducirTonoPdv,
 } from '@/utils/pdvAlertasPrefs';
 import { mensajeTtsTerminalPdv } from '@/utils/pdvAlertasCatalog';
@@ -247,7 +248,10 @@ export default function PdvAlertProvider({
             audioYaAnunciado: audioAnunciadosRef.current.has(envelope?.event_id),
         });
 
-        if (modoAudio && !audioAnunciadosRef.current.has(envelope.event_id)) {
+        const audioPersonalYaTomado = modoAudio === 'personal'
+            && !reclamarAudioEventoPdv(envelope?.event_id, 'usuario');
+
+        if (modoAudio && !audioPersonalYaTomado && !audioAnunciadosRef.current.has(envelope.event_id)) {
             audioAnunciadosRef.current.add(envelope.event_id);
 
             if (

@@ -6,6 +6,14 @@ import useSpeechAnnouncements from '@/hooks/useSpeechAnnouncements';
 import usePdvAlertasPrefs from '@/hooks/usePdvAlertasPrefs';
 import ModalLlamadoTurnoPdv from '@/Components/PuntoVenta/ModalLlamadoTurnoPdv';
 import { mensajeTtsPersonalPdv, PDV_TTS_ESTADO } from '@/utils/pdvSpeechUtils';
+import { debeReproducirSonidoPersonalPdv } from '@/utils/pdvAlertasAudiencia';
+import {
+    debeReproducirTonoEventoPdv,
+    mensajeFallbackWebPushPdv,
+    PDV_PUSH_ESTADO,
+    reclamarAudioEventoPdv,
+    reproducirTonoPdv,
+} from '@/utils/pdvAlertasPrefs';
 
 const ESTADOS_SIN_MODAL = new Set(['no_activado', 'no_llego', 'jornada_cerrada']);
 const TIPOS_MODAL = new Set(['turno.asignado', 'turno.reatencion', 'turno.transferido']);
@@ -22,13 +30,14 @@ function urlTablero() {
 }
 
 export default function PdvLlamadoVendedor({ userId }) {
-    const { auth } = usePage().props;
+    const { auth, tonos_alertas: tonosAlertas = [] } = usePage().props;
     const prefs = usePdvAlertasPrefs({
         temaVisual: auth?.tema_visual,
         webpush: auth?.webpush,
     });
     const [turnoModal, setTurnoModal] = useState(null);
     const vozEnCursoRef = useRef(false);
+    const avisoPushRef = useRef(false);
 
     const resolverTexto = useCallback((envelope) => {
         if (envelope?.audiencia !== 'usuario') return null;
@@ -58,9 +67,38 @@ export default function PdvLlamadoVendedor({ userId }) {
 
     const onEvent = useCallback((envelope) => {
         if (envelope?.audiencia !== 'usuario') return;
-        encolar(envelope);
+
+        const tomaAudio = reclamarAudioEventoPdv(envelope?.event_id, 'usuario');
+        if (tomaAudio) {
+            if (
+                debeReproducirSonidoPersonalPdv(envelope, prefs.prefsUsuario, prefs.silencioTerminal, userId)
+                && debeReproducirTonoEventoPdv(envelope, 'personal')
+            ) {
+                reproducirTonoPdv(prefs.prefsUsuario.tono_id, tonosAlertas);
+            }
+            encolar(envelope);
+        }
+
+        if (!avisoPushRef.current && prefs.estadoPush === PDV_PUSH_ESTADO.pendiente) {
+            const mensaje = mensajeFallbackWebPushPdv(prefs.estadoPush);
+            if (mensaje) {
+                avisoPushRef.current = true;
+                window.dispatchEvent(new CustomEvent('gelia-toast', {
+                    detail: { mensaje, tipo: 'info' },
+                }));
+            }
+        }
+
         mostrarSiActivo(envelope);
-    }, [encolar, mostrarSiActivo]);
+    }, [
+        encolar,
+        mostrarSiActivo,
+        prefs.estadoPush,
+        prefs.prefsUsuario,
+        prefs.silencioTerminal,
+        tonosAlertas,
+        userId,
+    ]);
 
     usePdvRealtime({
         userId,

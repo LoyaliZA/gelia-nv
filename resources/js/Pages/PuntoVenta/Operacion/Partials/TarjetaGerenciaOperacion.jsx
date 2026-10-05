@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
-import { CalendarClock, Clock, Loader2, ShieldAlert } from 'lucide-react';
+import { CalendarClock, ChevronDown, Clock, Loader2, ShieldAlert } from 'lucide-react';
 import ModalConfirmarAccion from '../../../ControlPedidos/Partials/ModalConfirmarAccion';
 import { geliaCardClass, THEME_BTN_PRIMARY, THEME_BTN_SECONDARY } from '../../../../utils/geliaTheme';
 import {
@@ -12,8 +12,12 @@ import {
     puedeCerrarSucursal,
     puedeConfigurarHorarioCierre,
     puedeReabrirSucursal,
+    resumenHorarioOperativo,
     valorDatetimeLocalDesdeIso,
 } from './operacionUtils';
+
+const STORAGE_HORARIO = 'pdv:operacion:horario_expandido';
+const STORAGE_GERENCIA = 'pdv:operacion:gerencia_expandida';
 
 export default function TarjetaGerenciaOperacion({
     estado,
@@ -30,6 +34,22 @@ export default function TarjetaGerenciaOperacion({
     const [horaApertura, setHoraApertura] = useState(estado?.horario_cierre?.hora_apertura || '');
     const [horaCierre, setHoraCierre] = useState(estado?.horario_cierre?.hora_cierre || '19:00');
     const [zonaHoraria, setZonaHoraria] = useState(estado?.horario_cierre?.zona_horaria || '');
+    const [horarioAbierto, setHorarioAbierto] = useState(() => {
+        if (typeof window === 'undefined') return false;
+        return window.sessionStorage.getItem(STORAGE_HORARIO) === '1';
+    });
+    const [gerenciaAbierta, setGerenciaAbierta] = useState(() => {
+        if (typeof window === 'undefined') return false;
+        return window.sessionStorage.getItem(STORAGE_GERENCIA) === '1';
+    });
+
+    const alternarGerencia = () => {
+        setGerenciaAbierta((actual) => {
+            const siguiente = !actual;
+            window.sessionStorage.setItem(STORAGE_GERENCIA, siguiente ? '1' : '0');
+            return siguiente;
+        });
+    };
 
     useEffect(() => {
         setHoraApertura(estado?.horario_cierre?.hora_apertura || '');
@@ -115,29 +135,64 @@ export default function TarjetaGerenciaOperacion({
     if (!mostrarGerencia) return null;
 
     return (
-        <section className={`${geliaCardClass()} p-5 space-y-4`} aria-labelledby="gerencia-operacion-titulo">
-            <div className="flex items-start gap-3">
+        <section className={`${geliaCardClass()} p-4`} aria-labelledby="gerencia-operacion-titulo">
+            <button
+                type="button"
+                className="flex w-full items-start gap-3 text-left"
+                aria-expanded={gerenciaAbierta}
+                aria-controls="gerencia-operacion-detalle"
+                onClick={alternarGerencia}
+            >
                 <ShieldAlert className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" aria-hidden />
-                <div>
-                    <h2 id="gerencia-operacion-titulo" className="text-sm font-black uppercase tracking-widest theme-text-main m-0">
+                <span className="min-w-0 flex-1">
+                    <span id="gerencia-operacion-titulo" className="block text-sm font-black uppercase tracking-widest theme-text-main">
                         Gerencia del día
-                    </h2>
-                    <p className="text-xs font-semibold theme-text-muted m-0 mt-1">
-                        El inicio o cierre manual tiene prioridad sobre el horario automático de hoy.
-                    </p>
-                </div>
-            </div>
+                    </span>
+                    <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <EstadoJornadaSucursal estado={estado} compacto />
+                        <span className="text-xs font-semibold theme-text-muted">
+                            {resumenHorarioOperativo(estado)}
+                        </span>
+                    </span>
+                </span>
+                <ChevronDown className={`w-4 h-4 theme-text-muted shrink-0 mt-1 transition-transform ${gerenciaAbierta ? 'rotate-180' : ''}`} aria-hidden />
+            </button>
 
-            <EstadoJornadaSucursal estado={estado} />
+            <div className={`grid transition-[grid-template-rows] duration-200 ${gerenciaAbierta ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
+                <div id="gerencia-operacion-detalle" className="overflow-hidden min-h-0">
+            <div className="space-y-4 pt-4">
+            <p className="text-xs font-semibold theme-text-muted m-0">
+                El inicio o cierre manual tiene prioridad sobre el horario automático de hoy.
+            </p>
 
             {puedeConfigurarHorarioCierre(permisos) && (
-                <div className="space-y-3 rounded-2xl border theme-border p-4">
-                    <div className="flex items-center gap-2">
-                        <Clock className="w-4 h-4 theme-text-muted" aria-hidden />
-                        <p className="text-xs font-black uppercase tracking-widest theme-text-main m-0">
-                            Horario operativo (sucursal activa)
-                        </p>
-                    </div>
+                <div className="rounded-2xl border theme-border">
+                    <button
+                        type="button"
+                        className="flex w-full items-center gap-2 p-4 text-left"
+                        aria-expanded={horarioAbierto}
+                        onClick={() => {
+                            setHorarioAbierto((actual) => {
+                                const siguiente = !actual;
+                                window.sessionStorage.setItem(STORAGE_HORARIO, siguiente ? '1' : '0');
+                                return siguiente;
+                            });
+                        }}
+                    >
+                        <Clock className="w-4 h-4 theme-text-muted shrink-0" aria-hidden />
+                        <span className="min-w-0 flex-1">
+                            <span className="block text-xs font-black uppercase tracking-widest theme-text-main">
+                                Horario operativo
+                            </span>
+                            <span className="block text-xs font-semibold theme-text-muted mt-1">
+                                {resumenHorarioOperativo(estado)}
+                            </span>
+                        </span>
+                        <ChevronDown className={`w-4 h-4 theme-text-muted shrink-0 transition-transform ${horarioAbierto ? 'rotate-180' : ''}`} aria-hidden />
+                    </button>
+                    <div className={`grid transition-[grid-template-rows] duration-200 ${horarioAbierto ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
+                        <div className="overflow-hidden min-h-0">
+                    <div className="space-y-3 px-4 pb-4">
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         <label className="space-y-1">
                             <span className="text-[10px] font-black uppercase tracking-widest theme-text-muted">Apertura</span>
@@ -182,6 +237,9 @@ export default function TarjetaGerenciaOperacion({
                         {cargando ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> : <CalendarClock className="w-4 h-4" aria-hidden />}
                         Guardar horario
                     </button>
+                    </div>
+                        </div>
+                    </div>
                 </div>
             )}
 
@@ -238,6 +296,9 @@ export default function TarjetaGerenciaOperacion({
                     Cerrar sucursal
                 </button>
             )}
+            </div>
+                </div>
+            </div>
 
             <ModalConfirmarAccion
                 abierto={modalApertura}
@@ -270,7 +331,7 @@ export default function TarjetaGerenciaOperacion({
     );
 }
 
-function EstadoJornadaSucursal({ estado }) {
+function EstadoJornadaSucursal({ estado, compacto = false }) {
     const dia = estado?.sucursal_dia;
     if (!dia) return null;
 
@@ -291,13 +352,19 @@ function EstadoJornadaSucursal({ estado }) {
         }
     }
 
+    const badge = (
+        <span className={`inline-flex px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${clase}`}>
+            {etiqueta}
+        </span>
+    );
+
+    if (compacto) return badge;
+
     return (
         <p className="text-xs font-semibold theme-text-muted m-0">
             Sucursal:
             {' '}
-            <span className={`inline-flex px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${clase}`}>
-                {etiqueta}
-            </span>
+            {badge}
         </p>
     );
 }

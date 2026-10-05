@@ -39,6 +39,8 @@ export default function Index({
     const [agregarAbierto, setAgregarAbierto] = useState(false);
     const [editando, setEditando] = useState(null);
     const [vistaPrevia, setVistaPrevia] = useState(null);
+    const [volumen, setVolumen] = useState(35);
+    const [guardandoVolumen, setGuardandoVolumen] = useState(false);
 
     useToastAlCambiar(error, 'error');
 
@@ -51,6 +53,9 @@ export default function Index({
                 params: { sucursal_id: sucursalId },
             });
             setItems(data.items ?? []);
+            if (Number.isFinite(Number(data.volumen))) {
+                setVolumen(Number(data.volumen));
+            }
         } catch (err) {
             setError(err?.response?.data?.message || 'No se pudo cargar la publicidad.');
         } finally {
@@ -149,6 +154,26 @@ export default function Index({
         }
     };
 
+    const guardarVolumen = async () => {
+        if (!sucursalId || !permisos.editar) return;
+        setGuardandoVolumen(true);
+        setError(null);
+        try {
+            const { data } = await axios.put(route('punto_venta.publicidad.volumen'), {
+                sucursal_id: sucursalId,
+                volumen: Number(volumen),
+            });
+            if (Number.isFinite(Number(data.volumen))) {
+                setVolumen(Number(data.volumen));
+            }
+            reportarExitoOperacion('Volumen de la pantalla de turnos actualizado');
+        } catch (err) {
+            setError(err?.response?.data?.message || 'No se pudo guardar el volumen.');
+        } finally {
+            setGuardandoVolumen(false);
+        }
+    };
+
     const cerrarAgregar = useCallback(() => setAgregarAbierto(false), []);
     const cerrarEdicion = useCallback(() => setEditando(null), []);
     const cerrarVista = useCallback(() => setVistaPrevia(null), []);
@@ -162,6 +187,35 @@ export default function Index({
                     description="Playlist de la TV de turnos. El orden de arriba hacia abajo es el de reproducción."
                     icon={Images}
                 >
+                    {sucursalId ? (
+                        <div className="flex flex-wrap items-center gap-3 min-w-[16rem]">
+                            <label className="flex items-center gap-2 text-xs font-bold theme-text-main" htmlFor="volumen-publicidad-sala">
+                                Volumen videos
+                                <span className="tabular-nums">{volumen}%</span>
+                            </label>
+                            <input
+                                id="volumen-publicidad-sala"
+                                type="range"
+                                min="0"
+                                max="100"
+                                step="5"
+                                value={volumen}
+                                disabled={!permisos.editar || guardandoVolumen}
+                                onChange={(event) => setVolumen(Number(event.target.value))}
+                                className="w-36"
+                            />
+                            {permisos.editar ? (
+                                <button
+                                    type="button"
+                                    className={THEME_BTN_SECONDARY}
+                                    disabled={guardandoVolumen}
+                                    onClick={guardarVolumen}
+                                >
+                                    Guardar volumen
+                                </button>
+                            ) : null}
+                        </div>
+                    ) : null}
                     <div className="flex flex-wrap items-center gap-2">
                         <SelectorSucursalActivaPdv
                             sucursalActiva={sucursalActiva}

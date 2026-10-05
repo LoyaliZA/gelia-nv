@@ -19,6 +19,7 @@ class GestionarPublicidadPdvService
         private readonly ResuelveAlcancePdv $alcance,
         private readonly ConsultaPlaylistPantallaSalaPdvService $consulta,
         private readonly EliminarPublicidadPdvService $eliminarPublicidad,
+        private readonly VolumenPublicidadSalaPdvConfig $volumenSala,
     ) {}
 
     /**
@@ -29,6 +30,22 @@ class GestionarPublicidadPdvService
         $this->asegurar($actor, PuntoVentaModulo::PERMISO_PUBLICIDAD_VER, $sucursalId);
 
         return $this->consulta->administrar($sucursalId);
+    }
+
+    public function volumen(User $actor, int $sucursalId): int
+    {
+        $this->asegurar($actor, PuntoVentaModulo::PERMISO_PUBLICIDAD_VER, $sucursalId);
+
+        return $this->volumenSala->porcentaje($sucursalId);
+    }
+
+    public function actualizarVolumen(User $actor, int $sucursalId, int $porcentaje): int
+    {
+        $this->asegurar($actor, PuntoVentaModulo::PERMISO_PUBLICIDAD_EDITAR, $sucursalId);
+        $guardado = $this->volumenSala->guardar($sucursalId, $porcentaje);
+        PublicidadPdvActualizada::dispatch($sucursalId, $sucursalId, null);
+
+        return $guardado;
     }
 
     /**

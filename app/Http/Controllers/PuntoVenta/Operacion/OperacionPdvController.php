@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Services\PuntoVenta\Operacion\ConsultaOperacionGeneralPdvService;
 use App\Services\PuntoVenta\PuntoVentaModulo;
 use App\Services\PuntoVenta\SerializarCapacidadesPdvService;
+use App\Support\PuntoVenta\Turnos\MotivosCierreAtencionTurnoPdv;
 use Illuminate\Http\JsonResponse;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -38,6 +39,14 @@ class OperacionPdvController extends Controller
             'capacidades' => fn () => $capacidades->serializar($user),
             'sucursal_activa' => fn () => $this->serializarSucursalActiva($user, $alcance),
             'sucursales_asignadas' => fn () => $this->serializarSucursalesAsignadas($user),
+            'catalogos' => fn () => [
+                'motivos_cierre' => [
+                    ['valor' => MotivosCierreAtencionTurnoPdv::VENTA, 'etiqueta' => 'Venta'],
+                    ['valor' => MotivosCierreAtencionTurnoPdv::SIN_VENTA, 'etiqueta' => 'Sin venta'],
+                    ['valor' => MotivosCierreAtencionTurnoPdv::NO_SE_PRESENTO, 'etiqueta' => 'No se presentó'],
+                    ['valor' => MotivosCierreAtencionTurnoPdv::OTRO, 'etiqueta' => 'Otro'],
+                ],
+            ],
         ]);
     }
 

@@ -42,8 +42,8 @@ export default function useAltaTurno({ sesionId = 'actual', onExito, bandeja = n
 
         const payload = armarPayloadAltaTurno({
             idempotencyKey: idempotencyRef.current,
-            clienteId: modo === 'cliente' ? cliente?.id : null,
-            nombreLlamado: modo === 'visitante' ? String(nombreLlamado || '').trim() : null,
+            clienteId: modo === 'visitante' ? null : cliente?.id,
+            nombreLlamado: modo === 'cliente' ? null : String(nombreLlamado || '').trim(),
             prioridadAdultoMayor,
             prioridadDiscapacidad,
         });

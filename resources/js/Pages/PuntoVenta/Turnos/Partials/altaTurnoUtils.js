@@ -86,6 +86,19 @@ export function validarFormularioAltaTurno({ modo, cliente, nombreLlamado, bande
         if (nombre.length < 2) {
             errores.nombre_llamado = 'Captura el nombre para llamado del visitante.';
         }
+    } else if (modo === 'representante') {
+        if (!cliente?.id) {
+            errores.cliente = 'Selecciona el número de cliente titular.';
+        } else {
+            const turnoExistente = buscarTurnoActivoClienteEnBandeja(bandeja, cliente.id);
+            if (turnoExistente) {
+                errores.cliente = mensajeClienteYaEnCola(turnoExistente);
+            }
+        }
+        const nombre = String(nombreLlamado || '').trim();
+        if (nombre.length < 2) {
+            errores.nombre_llamado = 'Captura el nombre de quien viene por el cliente.';
+        }
     } else {
         errores.modo = 'Selecciona cómo registrar el turno.';
     }

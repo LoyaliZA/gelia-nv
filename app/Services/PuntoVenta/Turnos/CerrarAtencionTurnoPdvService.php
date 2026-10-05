@@ -41,9 +41,20 @@ class CerrarAtencionTurnoPdvService
         ?string $motivoDetalle,
         CarbonInterface $ahora,
     ): array {
+        $puedeCerrarPropia = $this->alcance->tienePermisoPdv($actor, PuntoVentaModulo::PERMISO_TURNOS_CERRAR_ATENCION);
+        $puedeCerrarAjena = $this->alcance->tienePermisoPdv($actor, PuntoVentaModulo::PERMISO_OPERACION_EQUIPO_GESTIONAR);
+
+        if (! $puedeCerrarPropia && ! $puedeCerrarAjena) {
+            throw ValidationException::withMessages([
+                'turno' => 'No tienes permiso para cerrar esta atención.',
+            ]);
+        }
+
         $this->alcance->asegurarMutacionPiso(
             $actor,
-            PuntoVentaModulo::PERMISO_TURNOS_CERRAR_ATENCION,
+            $puedeCerrarPropia
+                ? PuntoVentaModulo::PERMISO_TURNOS_CERRAR_ATENCION
+                : PuntoVentaModulo::PERMISO_OPERACION_EQUIPO_GESTIONAR,
             (int) $turno->sucursal_id,
         );
 
@@ -67,6 +78,8 @@ class CerrarAtencionTurnoPdvService
             $motivo,
             $motivoDetalle,
             $ahora,
+            $puedeCerrarPropia,
+            $puedeCerrarAjena,
         ): array {
             $reintento = $this->resolverReintentoIdempotente($idempotencyKey, TurnoPdvEvento::TIPO_ATENCION_CERRADA);
             if ($reintento !== null) {
@@ -103,7 +116,13 @@ class CerrarAtencionTurnoPdvService
                 ]);
             }
 
-            if ((int) $atencion->user_id !== (int) $actor->id) {
+            $esAsignado = (int) $atencion->user_id === (int) $actor->id;
+            if ($esAsignado && ! $puedeCerrarPropia) {
+                throw ValidationException::withMessages([
+                    'turno' => 'Solo quien atiende puede cerrar esta atención.',
+                ]);
+            }
+            if (! $esAsignado && ! $puedeCerrarAjena) {
                 throw ValidationException::withMessages([
                     'turno' => 'Solo quien atiende puede cerrar esta atención.',
                 ]);

@@ -68,7 +68,9 @@ class AltaTurnoPdvService
             $cliente = $this->resolverCliente($clienteId);
             $this->cerrarReatencionesVigentesPorNuevaAlta($sucursal->id, $cliente, $actor, $ahora);
             $this->assertSinTurnoActivo($sucursal->id, $cliente);
-            $nombreParaLlamado = $this->resolverNombreLlamado($cliente, $nombreLlamado);
+            $esRepresentante = $this->esRepresentante($cliente, $nombreLlamado);
+            $this->asegurarPermisoRepresentante($actor, $esRepresentante);
+            $nombreParaLlamado = $this->resolverNombreLlamado($cliente, $nombreLlamado, $esRepresentante);
             $prioridades = $this->resolverPrioridades->resolver(
                 $cliente,
                 $prioridadAdultoMayor,
@@ -96,7 +98,7 @@ class AltaTurnoPdvService
                     'prioridad_cola' => $prioridades['prioridad_cola'],
                     'snapshot_nombre_llamado' => $nombreParaLlamado,
                     'snapshot_cliente_nombre' => $cliente?->nombre,
-                    'snapshot_json' => $this->construirSnapshot($cliente, $folio, $prioridades),
+                    'snapshot_json' => $this->construirSnapshot($cliente, $folio, $prioridades, $esRepresentante, $nombreParaLlamado),
                     'alta_at' => $ahora,
                     'alta_por_id' => $actor->id,
                     'version' => 1,
@@ -211,8 +213,39 @@ class AltaTurnoPdvService
         return $cliente;
     }
 
-    private function resolverNombreLlamado(?Cliente $cliente, ?string $nombreLlamado): string
+    private function esRepresentante(?Cliente $cliente, ?string $nombreLlamado): bool
     {
+        if (! $cliente instanceof Cliente) {
+            return false;
+        }
+
+        $presente = trim((string) $nombreLlamado);
+        if ($presente === '') {
+            return false;
+        }
+
+        return strcasecmp($presente, trim((string) $cliente->nombre)) !== 0;
+    }
+
+    private function asegurarPermisoRepresentante(User $actor, bool $esRepresentante): void
+    {
+        if (! $esRepresentante) {
+            return;
+        }
+
+        if (! $this->alcance->tienePermisoPdv($actor, PuntoVentaModulo::PERMISO_TURNOS_ALTA_REPRESENTANTE)) {
+            throw ValidationException::withMessages([
+                'nombre_llamado' => 'No tienes permiso para registrar un visitante con el número de un cliente titular.',
+            ]);
+        }
+    }
+
+    private function resolverNombreLlamado(?Cliente $cliente, ?string $nombreLlamado, bool $esRepresentante = false): string
+    {
+        if ($cliente instanceof Cliente && $esRepresentante) {
+            return trim((string) $nombreLlamado);
+        }
+
         if ($cliente instanceof Cliente) {
             $nombre = trim((string) $cliente->nombre);
 
@@ -335,8 +368,13 @@ class AltaTurnoPdvService
      * }  $prioridades
      * @return array<string, mixed>
      */
-    private function construirSnapshot(?Cliente $cliente, FolioTurnoGenerado $folio, array $prioridades): array
-    {
+    private function construirSnapshot(
+        ?Cliente $cliente,
+        FolioTurnoGenerado $folio,
+        array $prioridades,
+        bool $esRepresentante = false,
+        ?string $nombrePresente = null,
+    ): array {
         return [
             'folio' => $folio->folio,
             'secuencia' => $folio->secuencia,
@@ -344,6 +382,8 @@ class AltaTurnoPdvService
             'cliente_id' => $cliente?->id,
             'lista_actual_id' => $cliente?->lista_actual_id,
             'prioridades' => $prioridades,
+            'tipo_persona' => $esRepresentante ? 'representante' : ($cliente instanceof Cliente ? 'cliente' : 'visitante'),
+            'nombre_presente' => $esRepresentante ? $nombrePresente : null,
         ];
     }
 

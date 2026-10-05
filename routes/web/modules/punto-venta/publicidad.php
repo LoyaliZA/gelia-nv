@@ -14,6 +14,10 @@ Route::middleware(['pdv.piso'])
                 Route::get('/items', [PublicidadPdvController::class, 'listar'])->name('items');
             });
 
+        Route::put('/volumen', [PublicidadPdvController::class, 'actualizarVolumen'])
+            ->middleware('pdv.permiso:'.PuntoVentaModulo::PERMISO_PUBLICIDAD_EDITAR)
+            ->name('volumen');
+
         Route::post('/', [PublicidadPdvController::class, 'store'])
             ->middleware('pdv.permiso:'.PuntoVentaModulo::PERMISO_PUBLICIDAD_CREAR)
             ->name('store');

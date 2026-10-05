@@ -52,6 +52,8 @@ final class PuntoVentaModulo
 
     public const PERMISO_TURNOS_ALTA = 'pdv.turnos.alta';
 
+    public const PERMISO_TURNOS_ALTA_REPRESENTANTE = 'pdv.turnos.alta_representante';
+
     public const PERMISO_TURNOS_MARCAR_PRIORIDAD = 'pdv.turnos.marcar_prioridad';
 
     public const PERMISO_TURNOS_BAJA_COLA = 'pdv.turnos.baja_cola';
@@ -121,6 +123,7 @@ final class PuntoVentaModulo
             self::PERMISO_RESGUARDOS_VER_HISTORIAL_ENTREGAS,
             self::PERMISO_TURNOS_VER,
             self::PERMISO_TURNOS_ALTA,
+            self::PERMISO_TURNOS_ALTA_REPRESENTANTE,
             self::PERMISO_TURNOS_MARCAR_PRIORIDAD,
             self::PERMISO_TURNOS_BAJA_COLA,
             self::PERMISO_TURNOS_INICIAR_ATENCION,
@@ -147,6 +150,22 @@ final class PuntoVentaModulo
             self::PERMISO_REPORTES_EXPORTAR,
             self::PERMISO_VISITAS_PROGRAMADAS_VER,
             self::PERMISO_VISITAS_PROGRAMADAS_CONFIRMAR_LLEGADA,
+        ];
+    }
+
+    /**
+     * Perfil sugerido de la tablet de puerta. Visitas programadas quedan en su propio grupo.
+     *
+     * @return list<string>
+     */
+    public static function plantillaPuerta(): array
+    {
+        return [
+            self::PERMISO_ACCEDER,
+            self::PERMISO_TURNOS_VER,
+            self::PERMISO_TURNOS_ALTA,
+            self::PERMISO_TURNOS_ALTA_REPRESENTANTE,
+            self::PERMISO_TURNOS_BAJA_COLA,
         ];
     }
 

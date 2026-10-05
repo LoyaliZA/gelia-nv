@@ -61,6 +61,12 @@ describe('altaTurnoUtils', () => {
         expect(validarFormularioAltaTurno({ modo: 'cliente', cliente: null })).toHaveProperty('cliente');
         expect(validarFormularioAltaTurno({ modo: 'visitante', nombreLlamado: 'A' })).toHaveProperty('nombre_llamado');
         expect(validarFormularioAltaTurno({
+            modo: 'representante',
+            cliente: { id: 1 },
+            nombreLlamado: 'Ana',
+        })).toEqual({});
+        expect(validarFormularioAltaTurno({ modo: 'representante', cliente: null, nombreLlamado: 'Ana' })).toHaveProperty('cliente');
+        expect(validarFormularioAltaTurno({
             modo: 'cliente',
             cliente: { id: 1, nombre: 'Cliente' },
         })).toEqual({});

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\PuntoVenta\Publicidad;
 use App\Contracts\PuntoVenta\ResuelveAlcancePdv;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\PuntoVenta\Pantallas\GestionarEnlacePantallaSalaPdvRequest;
+use App\Http\Requests\PuntoVenta\Publicidad\ActualizarVolumenPublicidadPdvRequest;
 use App\Http\Requests\PuntoVenta\Publicidad\GestionarPublicidadPdvRequest;
 use App\Http\Requests\PuntoVenta\Publicidad\OrdenarPublicidadPdvRequest;
 use App\Models\PuntoVenta\PdvPantallaPublicidad;
@@ -44,8 +45,24 @@ class PublicidadPdvController extends Controller
         /** @var User $user */
         $user = $request->user();
 
+        $sucursalId = (int) $request->integer('sucursal_id');
+
         return response()->json([
-            'items' => $servicio->listar($user, (int) $request->integer('sucursal_id')),
+            'items' => $servicio->listar($user, $sucursalId),
+            'volumen' => $servicio->volumen($user, $sucursalId),
+        ]);
+    }
+
+    public function actualizarVolumen(
+        ActualizarVolumenPublicidadPdvRequest $request,
+        GestionarPublicidadPdvService $servicio,
+    ): JsonResponse {
+        /** @var User $user */
+        $user = $request->user();
+        $sucursalId = (int) $request->integer('sucursal_id');
+
+        return response()->json([
+            'volumen' => $servicio->actualizarVolumen($user, $sucursalId, (int) $request->integer('volumen')),
         ]);
     }
 

@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Services\Medios\AlmacenObjetosMedioFake;
 use App\Services\Medios\MaterializarMedioLocalService;
 use App\Services\PuntoVenta\AlcancePdv;
+use App\Services\PuntoVenta\Pantallas\ConsultaEstadoSalaPdvService;
 use App\Services\PuntoVenta\PuntoVentaModulo;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
@@ -75,6 +76,23 @@ class PublicidadPdvTest extends TestCase
             ->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->component('PuntoVenta/Pantallas/Acceso', false));
+    }
+
+    public function test_volumen_de_videos_se_guarda_por_sucursal_y_llega_a_sala(): void
+    {
+        Event::fake([PublicidadPdvActualizada::class]);
+
+        $this->actingAs($this->autorizado)
+            ->putJson(route('punto_venta.publicidad.volumen'), [
+                'sucursal_id' => $this->sucursal->id,
+                'volumen' => 40,
+            ])
+            ->assertOk()
+            ->assertJsonPath('volumen', 40);
+
+        $payload = app(ConsultaEstadoSalaPdvService::class)->payload($this->sucursal->id, now());
+        $this->assertSame(0.4, $payload['volumen_publicidad']);
+        Event::assertDispatched(PublicidadPdvActualizada::class);
     }
 
     public function test_playlist_publica_mezcla_global_y_sucursal_vigente(): void

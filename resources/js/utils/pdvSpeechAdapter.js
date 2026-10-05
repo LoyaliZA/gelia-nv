@@ -11,6 +11,7 @@ export function emitirEnGestoPdv(texto, seleccionarVoz = null) {
     utterance.lang = PDV_TTS_VOZ_PREFERIDA;
     utterance.rate = PDV_TTS_RATE;
     utterance.pitch = 1;
+    utterance.volume = 1;
     if (voz) utterance.voice = voz;
     if (window.speechSynthesis.paused) window.speechSynthesis.resume();
     window.speechSynthesis.speak(utterance);
@@ -113,6 +114,7 @@ export function crearAdaptadorVozNavegador({
         utterance.lang = PDV_TTS_VOZ_PREFERIDA;
         utterance.rate = PDV_TTS_RATE;
         utterance.pitch = 1;
+        utterance.volume = 1;
         if (voz) utterance.voice = voz;
         if (window.speechSynthesis.paused) {
             window.speechSynthesis.resume();

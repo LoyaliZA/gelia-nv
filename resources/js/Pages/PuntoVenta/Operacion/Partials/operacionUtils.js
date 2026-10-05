@@ -78,6 +78,61 @@ export function esEstadoVendedorConocido(estadoVendedor) {
     return Boolean(estadoVendedor && ETIQUETAS_ESTADO_VENDEDOR[estadoVendedor]);
 }
 
+const ESTADOS_VENDEDOR_INACTIVOS_GERENCIA = new Set(['no_activado', 'no_llego', 'jornada_cerrada']);
+
+const PRIORIDAD_ORDEN_EQUIPO_ACTIVO_GERENCIA = {
+    atendiendo: 0,
+    disponible: 1,
+    en_espera: 2,
+    en_retencion: 3,
+    cierre_pendiente: 4,
+};
+
+const PRIORIDAD_ORDEN_EQUIPO_INACTIVO_GERENCIA = {
+    no_activado: 0,
+    no_llego: 1,
+    jornada_cerrada: 2,
+};
+
+export function esVendedorEquipoInactivoGerencia(estadoVendedor) {
+    return ESTADOS_VENDEDOR_INACTIVOS_GERENCIA.has(estadoVendedor);
+}
+
+function prioridadMiembroEquipoGerencia(miembro, inactivo) {
+    const estado = miembro?.estado_vendedor;
+    const mapa = inactivo ? PRIORIDAD_ORDEN_EQUIPO_INACTIVO_GERENCIA : PRIORIDAD_ORDEN_EQUIPO_ACTIVO_GERENCIA;
+    return mapa[estado] ?? 99;
+}
+
+function compararMiembrosEquipoGerencia(a, b, inactivo) {
+    const delta = prioridadMiembroEquipoGerencia(a, inactivo) - prioridadMiembroEquipoGerencia(b, inactivo);
+    if (delta !== 0) return delta;
+    return String(a?.nombre || '').localeCompare(String(b?.nombre || ''), 'es', { sensitivity: 'base' });
+}
+
+/**
+ * Separa el equipo en activos (jornada operativa) e inactivos, ordenados para la vista de gerencia.
+ *
+ * @returns {{ activos: array, inactivos: array }}
+ */
+export function particionarEquipoGerencia(equipo = []) {
+    const activos = [];
+    const inactivos = [];
+
+    for (const miembro of equipo) {
+        if (esVendedorEquipoInactivoGerencia(miembro?.estado_vendedor)) {
+            inactivos.push(miembro);
+        } else {
+            activos.push(miembro);
+        }
+    }
+
+    activos.sort((a, b) => compararMiembrosEquipoGerencia(a, b, false));
+    inactivos.sort((a, b) => compararMiembrosEquipoGerencia(a, b, true));
+
+    return { activos, inactivos };
+}
+
 export function mostrarBandejaSinTurno(estadoVendedor) {
     return estadoVendedor === 'disponible';
 }
@@ -336,6 +391,22 @@ export function isoDesdeDatetimeLocal(valor) {
     const fecha = new Date(valor);
     if (!Number.isFinite(fecha.getTime())) return null;
     return fecha.toISOString();
+}
+
+export function resumenHorarioOperativo(estado) {
+    const horario = estado?.horario_cierre || {};
+    const apertura = horario.hora_apertura || 'Sin restricción';
+    const cierre = horario.hora_cierre || '—';
+    const partes = [`${apertura}–${cierre}`];
+    const ampliacion = estado?.sucursal_dia?.ampliacion_hasta_at;
+    if (ampliacion) {
+        const fecha = new Date(ampliacion);
+        const hora = Number.isFinite(fecha.getTime())
+            ? fecha.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
+            : String(ampliacion);
+        partes.push(`Ampliación hasta ${hora}`);
+    }
+    return partes.join(' · ');
 }
 
 export const PERMISO_PDV_PLAZOS_TURNOS = 'pdv.operacion.plazos_turnos';

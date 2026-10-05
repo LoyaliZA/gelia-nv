@@ -206,11 +206,31 @@ export function mensajeFallbackWebPushPdv(estadoPush) {
     }
 }
 
-export function reproducirTonoPdv(tonoId, tonosAlertas = []) {
+const audioEventosReclamados = new Set();
+
+/** Evita que pantalla PDV y aviso global reproduzcan el mismo evento dos veces. */
+export function reclamarAudioEventoPdv(eventId, audiencia = 'usuario') {
+    const id = `${audiencia}:${String(eventId || '').trim()}`;
+    if (id.endsWith(':')) return true;
+    if (audioEventosReclamados.has(id)) return false;
+    audioEventosReclamados.add(id);
+    if (audioEventosReclamados.size > 200) {
+        const recortados = [...audioEventosReclamados].slice(-150);
+        audioEventosReclamados.clear();
+        recortados.forEach((valor) => audioEventosReclamados.add(valor));
+    }
+    return true;
+}
+
+export function reproducirTonoPdv(tonoId, tonosAlertas = [], volumen = 1) {
     if (typeof window === 'undefined') return Promise.resolve(false);
 
     const path = resolveTonoPath(tonosAlertas, tonoId);
     const audio = new Audio(path);
+    const nivel = Number(volumen);
+    if (Number.isFinite(nivel)) {
+        audio.volume = Math.min(1, Math.max(0, nivel));
+    }
 
     return audio.play()
         .then(() => true)

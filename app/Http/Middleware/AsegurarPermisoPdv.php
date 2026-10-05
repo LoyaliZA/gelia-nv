@@ -14,13 +14,19 @@ class AsegurarPermisoPdv
     {
     }
 
-    public function handle(Request $request, Closure $next, string $permiso): Response
+    public function handle(Request $request, Closure $next, string ...$permisos): Response
     {
         $user = $request->user();
-        if (! $user instanceof User || ! $this->alcance->tienePermisoPdv($user, $permiso)) {
+        if (! $user instanceof User) {
             abort(403);
         }
 
-        return $next($request);
+        foreach ($permisos as $permiso) {
+            if ($this->alcance->tienePermisoPdv($user, $permiso)) {
+                return $next($request);
+            }
+        }
+
+        abort(403);
     }
 }

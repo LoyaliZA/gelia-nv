@@ -2,6 +2,8 @@
 
 namespace App\Http\Requests\PuntoVenta\Turnos;
 
+use App\Contracts\PuntoVenta\ResuelveAlcancePdv;
+use App\Models\User;
 use App\Services\PuntoVenta\PuntoVentaModulo;
 use App\Support\PuntoVenta\Turnos\MotivosCierreAtencionTurnoPdv;
 use Illuminate\Validation\Rule;
@@ -11,6 +13,20 @@ class CerrarAtencionTurnoPdvRequest extends TurnoPdvMutacionRequest
     protected function permisoAccion(): string
     {
         return PuntoVentaModulo::PERMISO_TURNOS_CERRAR_ATENCION;
+    }
+
+    public function authorize(): bool
+    {
+        $user = $this->user();
+        if (! $user instanceof User) {
+            return false;
+        }
+
+        $alcance = app(ResuelveAlcancePdv::class);
+        $sucursalId = $this->sucursalIdRegistro();
+
+        return $alcance->permiteMutacionPiso($user, PuntoVentaModulo::PERMISO_TURNOS_CERRAR_ATENCION, $sucursalId)
+            || $alcance->permiteMutacionPiso($user, PuntoVentaModulo::PERMISO_OPERACION_EQUIPO_GESTIONAR, $sucursalId);
     }
 
     /**

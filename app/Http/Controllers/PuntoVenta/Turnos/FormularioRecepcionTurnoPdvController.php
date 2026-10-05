@@ -86,6 +86,7 @@ class FormularioRecepcionTurnoPdvController extends Controller
         return [
             'ver' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_TURNOS_VER),
             'alta' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_TURNOS_ALTA),
+            'alta_representante' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_TURNOS_ALTA_REPRESENTANTE),
             'marcar_prioridad' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_TURNOS_MARCAR_PRIORIDAD),
             'baja_cola' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_TURNOS_BAJA_COLA),
         ];

@@ -6,6 +6,7 @@ import ProfessionalSidebar from '../Components/Sidebar/ProfessionalSidebar';
 import GeliaLogo from '../Components/GeliaLogo';
 import NotificationBell from '../Components/NotificationBell';
 import PdvLlamadoVendedor from '../Components/PuntoVenta/PdvLlamadoVendedor';
+import useGeliaDeployWatch from '@/hooks/useGeliaDeployWatch';
 import MensajeriaWidget from '../Components/Mensajeria/MensajeriaWidget';
 import { Bell, X, Menu } from 'lucide-react';
 import { isProfessionalSidebarLayout, DEFAULT_SIDEBAR_LAYOUT, DEFAULT_SIDEBAR_MOBILE_LAYOUT, ensureProfessionalSidebarDefaultOnce, resolveSidebarLayout } from '../config/sidebarLayouts';
@@ -65,6 +66,11 @@ const MOBILE_SIDEBAR_LAYOUT_TOPBAR = 'mobile_topbar';
 export default function AppLayout({ children, fullScreen = false }) {
     const { props: { auth, tonos_alertas = [], flash, webauthnEnabled }, url } = usePage();
     const pageKey = String(url || '').split('?')[0];
+
+    const vigilarDeployPdv = (auth?.user?.permissions ?? []).some((permiso) => (
+        String(permiso).startsWith('pdv.') || permiso === 'punto_venta.acceder'
+    ));
+    useGeliaDeployWatch({ habilitado: vigilarDeployPdv });
 
     const { needsPrompt, activarNotificaciones } = useWebPush(auth);
     const [promptDismissed, setPromptDismissed] = useState(false);

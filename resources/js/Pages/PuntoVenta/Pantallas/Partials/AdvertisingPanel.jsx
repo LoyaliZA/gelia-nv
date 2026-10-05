@@ -44,15 +44,16 @@ function FallbackInstitucional() {
     );
 }
 
-function activarSonidoVideo(video, sonidoActivo, pausado = false) {
+function activarSonidoVideo(video, sonidoActivo, pausado = false, volumen = 0.35) {
     if (!video) return;
+    const nivel = Number(volumen);
+    video.volume = Number.isFinite(nivel) ? Math.min(1, Math.max(0, nivel)) : 0.35;
     if (pausado) {
         video.pause();
         return;
     }
     video.muted = !sonidoActivo;
     if (!sonidoActivo) return;
-    video.volume = 1;
     video.play().catch(() => {});
 }
 
@@ -67,13 +68,15 @@ function siguienteIndice(playlist, desde, omitidos) {
     return i;
 }
 
-export default function AdvertisingPanel({ items = [], pausado = false }) {
+export default function AdvertisingPanel({ items = [], pausado = false, volumen = 0.35 }) {
     const [index, setIndex] = useState(0);
     const [ciclo, setCiclo] = useState(0);
     const [progress, setProgress] = useState(0);
     const [omitidos, setOmitidos] = useState(() => new Set());
     const [sonidoActivo, setSonidoActivo] = useState(false);
     const videoRef = useRef(null);
+    const volumenRef = useRef(volumen);
+    volumenRef.current = volumen;
     const preloadImg = useRef(null);
     const playlist = Array.isArray(items) ? items.filter((item) => item?.url && !omitidos.has(item.id)) : [];
     const actual = playlist[index] ?? playlist[0] ?? null;
@@ -93,7 +96,7 @@ export default function AdvertisingPanel({ items = [], pausado = false }) {
 
         const activar = () => {
             setSonidoActivo(true);
-            activarSonidoVideo(videoRef.current, true, pausado);
+            activarSonidoVideo(videoRef.current, true, pausado, volumenRef.current);
         };
 
         ['click', 'touchstart', 'keydown'].forEach((evento) => {
@@ -111,8 +114,8 @@ export default function AdvertisingPanel({ items = [], pausado = false }) {
         const video = videoRef.current;
         if (!video || actual?.tipo !== 'video') return undefined;
 
-        activarSonidoVideo(video, sonidoActivo, pausado);
-    }, [sonidoActivo, pausado, actual?.id, actual?.tipo]);
+        activarSonidoVideo(video, sonidoActivo, pausado, volumen);
+    }, [sonidoActivo, pausado, volumen, actual?.id, actual?.tipo]);
 
     useEffect(() => {
         if (pausado || !actual || actual.tipo === 'video') return undefined;

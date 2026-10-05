@@ -3,6 +3,7 @@
 namespace App\Services\PuntoVenta\Pantallas;
 
 use App\Models\PuntoVenta\TurnoPdv;
+use App\Services\PuntoVenta\Publicidad\VolumenPublicidadSalaPdvConfig;
 use App\Models\PuntoVenta\TurnoPdvAtencion;
 use App\Models\Sucursal;
 use App\Support\PuntoVenta\Broadcast\Payloads\PayloadTurnoPdvBroadcast;
@@ -14,6 +15,7 @@ final class ConsultaEstadoSalaPdvService
     public function __construct(
         private readonly ConsultaPlaylistPantallaSalaPdvService $playlist,
         private readonly ResolverColorPrimarioSalaPdvService $colorPrimario,
+        private readonly VolumenPublicidadSalaPdvConfig $volumenPublicidad,
     ) {}
 
     /**
@@ -47,6 +49,7 @@ final class ConsultaEstadoSalaPdvService
             'proximos' => $this->proximos($sucursalId),
             'anteriores' => $this->anteriores($sucursalId, $ahora),
             'publicidad' => $this->playlist->paraSucursal($sucursalId, $ahora),
+            'volumen_publicidad' => $this->volumenPublicidad->fraccion($sucursalId),
         ];
     }
 

@@ -8,6 +8,11 @@ import { geliaCardClass, THEME_BTN_PRIMARY } from '../../../../utils/geliaTheme'
 import CronometroVisualOperacion from './CronometroVisualOperacion';
 import MetricasAtencionCompacta from './MetricasAtencionCompacta';
 import ModalReatencionDesdeVendedorGerencia from './ModalReatencionDesdeVendedorGerencia';
+import ModalCerrarAtencionTurno from '../../Turnos/Partials/ModalCerrarAtencionTurno';
+import {
+    claveIdempotenciaOperacionTurno,
+    renovarClaveIdempotenciaOperacionTurno,
+} from '../../Turnos/Partials/tableroVentasUtils';
 import {
     claseBadgeEstadoVendedor,
     esAccionPeligrosaEquipo,
@@ -47,6 +52,7 @@ export default function TarjetaVendedorGerencia({
     puedeAsignarReatencion = false,
     reatenciones = [],
     motivosPausa = [],
+    catalogos = {},
     onActualizado,
     onConflicto,
     onError,
@@ -54,6 +60,7 @@ export default function TarjetaVendedorGerencia({
     const [accionPendiente, setAccionPendiente] = useState(null);
     const [modalPausaAbierto, setModalPausaAbierto] = useState(false);
     const [modalReatencionAbierto, setModalReatencionAbierto] = useState(false);
+    const [modalCerrarAtencion, setModalCerrarAtencion] = useState(false);
     const [motivoPausaId, setMotivoPausaId] = useState('');
     const [motivoDetalle, setMotivoDetalle] = useState('');
     const [cargando, setCargando] = useState(false);
@@ -111,6 +118,35 @@ export default function TarjetaVendedorGerencia({
             return;
         }
         ejecutarAccion(accion);
+    };
+
+    const cerrarAtencion = async ({ motivo, motivoDetalle }) => {
+        const turnoId = persona.atencion_actual?.turno_id;
+        const version = persona.atencion_actual?.turno_version;
+        if (!turnoId || !version || cargando) return;
+
+        setCargando(true);
+        onError?.(null);
+        const idempotencyKey = claveIdempotenciaOperacionTurno('cger', turnoId);
+        try {
+            const { data } = await axios.post(route('punto_venta.turnos.cerrar_atencion', turnoId), {
+                version,
+                idempotency_key: idempotencyKey,
+                motivo,
+                motivo_detalle: motivoDetalle || null,
+            });
+            renovarClaveIdempotenciaOperacionTurno('cger', turnoId);
+            setModalCerrarAtencion(false);
+            await onActualizado?.(data);
+        } catch (err) {
+            if (esConflictoVersion(err)) {
+                onConflicto?.();
+            } else {
+                onError?.(mensajeErrorOperacion(err, 'cierre de atención'));
+            }
+        } finally {
+            setCargando(false);
+        }
     };
 
     const confirmarPausa = () => {
@@ -232,6 +268,17 @@ export default function TarjetaVendedorGerencia({
                     />
                 )}
 
+                {puedeGestionar && persona.atencion_actual?.turno_id && (
+                    <button
+                        type="button"
+                        className={`theme-btn-danger ${CLASE_BTN_TARJETA}`}
+                        disabled={cargando}
+                        onClick={() => setModalCerrarAtencion(true)}
+                    >
+                        Terminar atención
+                    </button>
+                )}
+
                 {persona.recibe_turnos && (
                     <p className="text-[10px] font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-300 m-0">
                         Recibe turnos
@@ -298,6 +345,14 @@ export default function TarjetaVendedorGerencia({
                     setMotivoDetalle('');
                 }}
                 onConfirm={confirmarPausa}
+            />
+
+            <ModalCerrarAtencionTurno
+                abierto={modalCerrarAtencion}
+                catalogos={catalogos}
+                procesando={cargando}
+                onClose={() => setModalCerrarAtencion(false)}
+                onConfirmar={cerrarAtencion}
             />
 
             <ModalReatencionDesdeVendedorGerencia

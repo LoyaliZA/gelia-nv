@@ -11,6 +11,8 @@ import {
     tipoAvisoSucursal,
     mensajeErrorOperacion,
     mensajeMiAtencion,
+    esVendedorEquipoInactivoGerencia,
+    particionarEquipoGerencia,
     mostrarBandejaSinTurno,
     puedeAbrirJornada,
     puedeAbrirSucursalManualmente,
@@ -19,9 +21,20 @@ import {
     puedeIniciarPausa,
     puedeReabrirSucursal,
     referenciaCronometro,
+    resumenHorarioOperativo,
 } from './operacionUtils';
 
 describe('operacionUtils', () => {
+    it('resume horario operativo y ampliación', () => {
+        expect(resumenHorarioOperativo({
+            horario_cierre: { hora_apertura: '10:00', hora_cierre: '19:00' },
+        })).toBe('10:00–19:00');
+        expect(resumenHorarioOperativo({
+            horario_cierre: { hora_cierre: '19:00' },
+            sucursal_dia: { ampliacion_hasta_at: '2026-10-05T21:30:00' },
+        })).toContain('Ampliación hasta');
+    });
+
     it('etiqueta jornada y actividad conocidas', () => {
         expect(etiquetaJornada('ABIERTA')).toBe('Abierta');
         expect(etiquetaActividad('en_pausa')).toBe('En pausa');
@@ -35,6 +48,23 @@ describe('operacionUtils', () => {
         expect(mensajeMiAtencion('en_retencion')).toContain('pausa');
         expect(mensajeMiAtencion('jornada_cerrada')).toContain('finalizó');
         expect(mensajeMiAtencion('estado_raro')).toContain('Estado no disponible');
+    });
+
+    it('particiona y ordena equipo de gerencia (activos primero)', () => {
+        expect(esVendedorEquipoInactivoGerencia('no_activado')).toBe(true);
+        expect(esVendedorEquipoInactivoGerencia('disponible')).toBe(false);
+        expect(esVendedorEquipoInactivoGerencia('jornada_cerrada')).toBe(true);
+
+        const equipo = [
+            { id: 1, nombre: 'Zeta', estado_vendedor: 'no_activado' },
+            { id: 2, nombre: 'Ana', estado_vendedor: 'disponible' },
+            { id: 3, nombre: 'Bruno', estado_vendedor: 'atendiendo' },
+            { id: 4, nombre: 'Carla', estado_vendedor: 'jornada_cerrada' },
+        ];
+
+        const { activos, inactivos } = particionarEquipoGerencia(equipo);
+        expect(activos.map((p) => p.id)).toEqual([3, 2]);
+        expect(inactivos.map((p) => p.id)).toEqual([1, 4]);
     });
 
     it('solo disponible muestra bandeja sin turno', () => {

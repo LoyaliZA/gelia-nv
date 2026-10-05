@@ -162,6 +162,8 @@ class ConsultaEquipoOperativoPdvService
             SerializadorTableroVentasPdv::atencion($atencion, $plazos, $ahora),
             [
                 'folio' => (string) $turno->folio,
+                'turno_id' => (int) $turno->id,
+                'turno_version' => (int) $turno->version,
                 'cliente' => $cliente !== null && $cliente !== '' ? (string) $cliente : null,
                 'servicio' => $turno->servicio !== null ? (string) $turno->servicio : null,
             ],

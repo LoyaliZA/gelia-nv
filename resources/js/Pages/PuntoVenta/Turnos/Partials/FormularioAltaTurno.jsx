@@ -32,9 +32,10 @@ export default function FormularioAltaTurno({
     const [prioridadDiscapacidad, setPrioridadDiscapacidad] = useState(false);
 
     const puedeMarcarPrioridad = Boolean(permisos.marcar_prioridad);
+    const puedeRepresentante = Boolean(permisos.alta_representante);
 
     const turnoDuplicado = useMemo(() => (
-        modo === 'cliente' && cliente?.id
+        (modo === 'cliente' || modo === 'representante') && cliente?.id
             ? buscarTurnoActivoClienteEnBandeja(bandeja, cliente.id)
             : null
     ), [modo, cliente, bandeja]);
@@ -81,7 +82,7 @@ export default function FormularioAltaTurno({
 
     return (
         <form onSubmit={enviar} className={`${geliaCardClass()} p-5 space-y-5`} data-recepcion-turno-form>
-            <div className="flex gap-2" role="tablist" aria-label="Tipo de persona">
+            <div className="flex flex-wrap gap-2" role="tablist" aria-label="Tipo de persona">
                 <button
                     type="button"
                     role="tab"
@@ -102,16 +103,30 @@ export default function FormularioAltaTurno({
                 >
                     Visitante
                 </button>
+                {puedeRepresentante && (
+                    <button
+                        type="button"
+                        role="tab"
+                        aria-selected={modo === 'representante'}
+                        onClick={() => cambiarModo('representante')}
+                        disabled={enviando}
+                        className={`${BTN_SEGMENTO} ${modo === 'representante' ? BTN_SEGMENTO_ACTIVO : BTN_SEGMENTO_INACTIVO}`}
+                    >
+                        Viene por un cliente
+                    </button>
+                )}
             </div>
 
-            {modo === 'cliente' ? (
+            {modo === 'cliente' || modo === 'representante' ? (
                 <BusquedaClienteTurno
                     clienteSeleccionado={cliente}
                     onSeleccionar={seleccionarCliente}
                     onLimpiar={() => setCliente(null)}
                     deshabilitado={enviando}
                 />
-            ) : (
+            ) : null}
+
+            {modo === 'visitante' || modo === 'representante' ? (
                 <div className="space-y-2">
                     <label className="block text-[10px] font-black uppercase tracking-widest theme-text-muted" htmlFor="nombre-llamado-turno">
                         Nombre para llamado
@@ -122,13 +137,13 @@ export default function FormularioAltaTurno({
                         value={nombreLlamado}
                         onChange={(event) => setNombreLlamado(event.target.value)}
                         disabled={enviando}
-                        placeholder="Nombre con el que se anunciará en sala"
+                        placeholder={modo === 'representante' ? 'Nombre de quien viene por el cliente' : 'Nombre con el que se anunciará en sala'}
                         className={`${THEME_INPUT} min-h-[44px]`}
                         autoComplete="name"
                         maxLength={255}
                     />
                 </div>
-            )}
+            ) : null}
 
             <div className="rounded-2xl border theme-border theme-element px-4 py-3">
                 <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0">Servicio</p>

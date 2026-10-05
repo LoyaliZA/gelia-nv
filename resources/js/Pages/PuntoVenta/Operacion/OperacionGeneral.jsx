@@ -27,6 +27,7 @@ export default function OperacionGeneral({
     permisos = {},
     sucursal_activa: sucursalActiva = null,
     sucursales_asignadas: sucursalesAsignadas = [],
+    catalogos = {},
 }) {
     const puedeVer = Boolean(permisos.ver) || Boolean(permisos.equipo_ver);
     const esGerenciaEquipo = Boolean(permisos.equipo_gestionar);
@@ -140,16 +141,6 @@ export default function OperacionGeneral({
                                 />
                             )}
 
-                            {!modo.modoGeneral && (
-                            <TarjetaGerenciaOperacion
-                                estado={estado}
-                                permisos={permisos}
-                                onActualizado={manejarActualizado}
-                                onConflicto={manejarConflicto}
-                                onError={reportarMensajeOperacion}
-                            />
-                            )}
-
                             {puedeVerEquipo && (
                                 <div className="space-y-5">
                                     <EncabezadoGestionVendedores
@@ -164,11 +155,22 @@ export default function OperacionGeneral({
                                         puedeAsignarReatencion={modo.puedeAsignarReatencion}
                                         reatenciones={reatencion}
                                         motivosPausa={motivosPausa}
+                                        catalogos={catalogos}
                                         onActualizado={manejarActualizado}
                                         onConflicto={manejarConflicto}
                                         onError={reportarMensajeOperacion}
                                     />
                                 </div>
+                            )}
+
+                            {!modo.modoGeneral && (
+                            <TarjetaGerenciaOperacion
+                                estado={estado}
+                                permisos={permisos}
+                                onActualizado={manejarActualizado}
+                                onConflicto={manejarConflicto}
+                                onError={reportarMensajeOperacion}
+                            />
                             )}
                         </>
                             )}
