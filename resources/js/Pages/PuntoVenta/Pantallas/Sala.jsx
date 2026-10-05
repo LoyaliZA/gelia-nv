@@ -6,6 +6,7 @@ import DisplayHeader from './Partials/DisplayHeader';
 import AdvertisingPanel from './Partials/AdvertisingPanel';
 import QueuePanel from './Partials/QueuePanel';
 import DisplayFooter from './Partials/DisplayFooter';
+import { VOLUMEN_PUBLICIDAD_SALA_DEFECTO } from '@/utils/volumenPublicidadPdv';
 
 function aplicarTemaPantallaSala(colorHex) {
     if (typeof document === 'undefined') return;
@@ -50,7 +51,7 @@ export default function Sala({ estado_inicial: estadoInicial, sucursal_id: sucur
                             <AdvertisingPanel
                                 items={ctx.publicidad}
                                 pausado={Boolean(ctx.hablando)}
-                                volumen={ctx.volumen_publicidad ?? 0.35}
+                                volumen={ctx.volumen_publicidad ?? VOLUMEN_PUBLICIDAD_SALA_DEFECTO}
                             />
                             <QueuePanel
                                 turnoActual={ctx.turnoActual}

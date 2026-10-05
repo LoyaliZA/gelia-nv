@@ -206,6 +206,12 @@ export function mensajeFallbackWebPushPdv(estadoPush) {
     }
 }
 
+/** Volumen HTMLAudioElement para tonos PDV (0–1). Por debajo del máximo del navegador para no tapar voz. */
+export const PDV_ALERTAS_VOLUMEN_TONO = 0.72;
+
+/** Volumen TTS de llamados en sala (0–1). */
+export const PDV_ALERTAS_VOLUMEN_TTS = 0.85;
+
 const audioEventosReclamados = new Set();
 
 /** Evita que pantalla PDV y aviso global reproduzcan el mismo evento dos veces. */
@@ -222,7 +228,7 @@ export function reclamarAudioEventoPdv(eventId, audiencia = 'usuario') {
     return true;
 }
 
-export function reproducirTonoPdv(tonoId, tonosAlertas = [], volumen = 1) {
+export function reproducirTonoPdv(tonoId, tonosAlertas = [], volumen = PDV_ALERTAS_VOLUMEN_TONO) {
     if (typeof window === 'undefined') return Promise.resolve(false);
 
     const path = resolveTonoPath(tonosAlertas, tonoId);

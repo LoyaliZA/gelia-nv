@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import GeliaLogo from '@/Components/GeliaLogo';
+import { volumenAudioVideoPublicidad, VOLUMEN_PUBLICIDAD_SALA_DEFECTO } from '@/utils/volumenPublicidadPdv';
 
 function MediaProgress({ items, index, progress }) {
     if (!items.length) return null;
@@ -44,10 +45,9 @@ function FallbackInstitucional() {
     );
 }
 
-function activarSonidoVideo(video, sonidoActivo, pausado = false, volumen = 0.35) {
+function activarSonidoVideo(video, sonidoActivo, pausado = false, salaPct = VOLUMEN_PUBLICIDAD_SALA_DEFECTO, piezaPct = null) {
     if (!video) return;
-    const nivel = Number(volumen);
-    video.volume = Number.isFinite(nivel) ? Math.min(1, Math.max(0, nivel)) : 0.35;
+    video.volume = volumenAudioVideoPublicidad(salaPct, piezaPct);
     if (pausado) {
         video.pause();
         return;
@@ -68,7 +68,7 @@ function siguienteIndice(playlist, desde, omitidos) {
     return i;
 }
 
-export default function AdvertisingPanel({ items = [], pausado = false, volumen = 0.35 }) {
+export default function AdvertisingPanel({ items = [], pausado = false, volumen = VOLUMEN_PUBLICIDAD_SALA_DEFECTO }) {
     const [index, setIndex] = useState(0);
     const [ciclo, setCiclo] = useState(0);
     const [progress, setProgress] = useState(0);
@@ -114,8 +114,8 @@ export default function AdvertisingPanel({ items = [], pausado = false, volumen 
         const video = videoRef.current;
         if (!video || actual?.tipo !== 'video') return undefined;
 
-        activarSonidoVideo(video, sonidoActivo, pausado, volumen);
-    }, [sonidoActivo, pausado, volumen, actual?.id, actual?.tipo]);
+        activarSonidoVideo(video, sonidoActivo, pausado, volumen, actual?.volumen_pct);
+    }, [sonidoActivo, pausado, volumen, actual?.id, actual?.tipo, actual?.volumen_pct]);
 
     useEffect(() => {
         if (pausado || !actual || actual.tipo === 'video') return undefined;

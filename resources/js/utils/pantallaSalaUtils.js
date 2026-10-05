@@ -1,3 +1,8 @@
+import {
+    normalizarVolumenPublicidadPct,
+    VOLUMEN_PUBLICIDAD_SALA_DEFECTO,
+} from './volumenPublicidadPdv';
+
 /** Eventos que agregan o actualizan un llamado visible en sala. */
 export const PDV_SALA_TIPOS_LLAMADO = new Set([
     'turno.asignado',
@@ -133,9 +138,10 @@ export function normalizarEstadoSala(payload = {}) {
         proximos: Array.isArray(payload.proximos) ? payload.proximos : [],
         anteriores: Array.isArray(payload.anteriores) ? payload.anteriores : [],
         publicidad: Array.isArray(payload.publicidad) ? payload.publicidad : [],
-        volumen_publicidad: Number.isFinite(Number(payload.volumen_publicidad))
-            ? Math.min(1, Math.max(0, Number(payload.volumen_publicidad)))
-            : 0.35,
+        volumen_publicidad: normalizarVolumenPublicidadPct(
+            payload.volumen_publicidad,
+            VOLUMEN_PUBLICIDAD_SALA_DEFECTO,
+        ),
         servidor_at: payload.servidor_at ?? null,
     };
 }

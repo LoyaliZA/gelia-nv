@@ -70,6 +70,7 @@ final class ConsultaPlaylistPantallaSalaPdvService
             'url' => $item->urlPublica(),
             'duracion_seg' => $item->duracion_seg,
             'ajuste' => $item->ajuste,
+            'volumen_pct' => $item->volumen_pct,
             'orden' => $item->orden,
             'activa' => $item->activa,
             'vigente_desde' => $item->vigente_desde?->timezone(config('app.timezone'))->format('Y-m-d\\TH:i'),
@@ -96,6 +97,7 @@ final class ConsultaPlaylistPantallaSalaPdvService
             'url' => $item->urlPublica(),
             'duracion_seg' => $item->duracion_seg,
             'ajuste' => $item->ajuste,
+            'volumen_pct' => $item->volumen_pct,
         ];
     }
 

@@ -14,6 +14,7 @@ function formularioDesde(item) {
         vigente_hasta: item.vigente_hasta || '',
         eliminar_automaticamente: Boolean(item.eliminar_automaticamente),
         conservar_dias: item.conservar_dias || 30,
+        volumen_pct: item.volumen_pct ?? 100,
     };
 }
 

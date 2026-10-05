@@ -10,6 +10,7 @@ import { geliaCardClass, THEME_BTN_PRIMARY, THEME_BTN_SECONDARY, THEME_INPUT } f
 import useToastAlCambiar from '@/hooks/useToastAlCambiar';
 import { reportarExitoOperacion } from '@/utils/geliaToast';
 import { contarEstados, duracionVueltaSegundos, formatearDuracionSeg } from '@/utils/estadoPublicidadPdv';
+import { VOLUMEN_PUBLICIDAD_SALA_DEFECTO } from '@/utils/volumenPublicidadPdv';
 import PlaylistPublicidad from './Partials/PlaylistPublicidad';
 import ModalAgregarPublicidad from './Partials/ModalAgregarPublicidad';
 import ModalEditarPublicidad from './Partials/ModalEditarPublicidad';
@@ -39,7 +40,7 @@ export default function Index({
     const [agregarAbierto, setAgregarAbierto] = useState(false);
     const [editando, setEditando] = useState(null);
     const [vistaPrevia, setVistaPrevia] = useState(null);
-    const [volumen, setVolumen] = useState(35);
+    const [volumen, setVolumen] = useState(VOLUMEN_PUBLICIDAD_SALA_DEFECTO);
     const [guardandoVolumen, setGuardandoVolumen] = useState(false);
 
     useToastAlCambiar(error, 'error');
@@ -102,6 +103,18 @@ export default function Index({
         }
     };
 
+    const guardarVolumenPieza = async (item, volumenPct) => {
+        try {
+            const { data } = await axios.patch(route('punto_venta.publicidad.update', item.id), {
+                sucursal_id: sucursalId,
+                volumen_pct: volumenPct,
+            });
+            setItems(data.items ?? []);
+        } catch (err) {
+            setError(err?.response?.data?.message || 'No se pudo guardar el volumen de la pieza.');
+        }
+    };
+
     const guardar = async (item, form) => {
         try {
             const { data } = await axios.patch(route('punto_venta.publicidad.update', item.id), {
@@ -113,6 +126,7 @@ export default function Index({
                 vigente_hasta: form.vigente_hasta || null,
                 eliminar_automaticamente: Boolean(form.eliminar_automaticamente),
                 conservar_dias: form.eliminar_automaticamente ? form.conservar_dias : null,
+                volumen_pct: item.tipo === 'video' ? form.volumen_pct : undefined,
             });
             setItems(data.items ?? []);
             reportarExitoOperacion('Programación guardada.');
@@ -189,16 +203,18 @@ export default function Index({
                 >
                     {sucursalId ? (
                         <div className="flex flex-wrap items-center gap-3 min-w-[16rem]">
-                            <label className="flex items-center gap-2 text-xs font-bold theme-text-main" htmlFor="volumen-publicidad-sala">
-                                Volumen videos
-                                <span className="tabular-nums">{volumen}%</span>
+                            <label className="flex flex-col gap-1 text-xs font-bold theme-text-main min-w-[14rem]" htmlFor="volumen-publicidad-sala">
+                                <span className="flex items-center justify-between gap-2">
+                                    Volumen general (sala)
+                                    <span className="tabular-nums">{volumen}%</span>
+                                </span>
                             </label>
                             <input
                                 id="volumen-publicidad-sala"
                                 type="range"
                                 min="0"
                                 max="100"
-                                step="5"
+                                step="1"
                                 value={volumen}
                                 disabled={!permisos.editar || guardandoVolumen}
                                 onChange={(event) => setVolumen(Number(event.target.value))}
@@ -291,6 +307,7 @@ export default function Index({
                                 onReordenar={persistirOrden}
                                 onToggle={cambiarActiva}
                                 onDuracion={guardarDuracion}
+                                onVolumen={guardarVolumenPieza}
                                 onEditar={setEditando}
                                 onPrevisualizar={(item) => setVistaPrevia({ items: [item], indice: 0 })}
                                 onEliminar={eliminar}

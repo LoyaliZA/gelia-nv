@@ -91,8 +91,33 @@ class PublicidadPdvTest extends TestCase
             ->assertJsonPath('volumen', 40);
 
         $payload = app(ConsultaEstadoSalaPdvService::class)->payload($this->sucursal->id, now());
-        $this->assertSame(0.4, $payload['volumen_publicidad']);
+        $this->assertSame(40, $payload['volumen_publicidad']);
         Event::assertDispatched(PublicidadPdvActualizada::class);
+    }
+
+    public function test_volumen_por_pieza_de_video_se_guarda_y_llega_a_playlist_sala(): void
+    {
+        $medio = Medio::factory()->create();
+        $item = PdvPantallaPublicidad::factory()->video()->create([
+            'sucursal_id' => $this->sucursal->id,
+            'medio_id' => $medio->id,
+            'ruta' => $medio->object_key ?? $medio->ruta_local,
+            'activa' => true,
+        ]);
+
+        $this->actingAs($this->autorizado)
+            ->patchJson(route('punto_venta.publicidad.update', $item->id), [
+                'sucursal_id' => $this->sucursal->id,
+                'volumen_pct' => 45,
+            ])
+            ->assertOk();
+
+        $this->assertSame(45, $item->fresh()->volumen_pct);
+
+        $payload = app(ConsultaEstadoSalaPdvService::class)->payload($this->sucursal->id, now());
+        $pieza = collect($payload['publicidad'])->firstWhere('id', $item->id);
+        $this->assertNotNull($pieza);
+        $this->assertSame(45, $pieza['volumen_pct']);
     }
 
     public function test_playlist_publica_mezcla_global_y_sucursal_vigente(): void

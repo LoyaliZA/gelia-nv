@@ -43,9 +43,31 @@ export default function FormularioPublicidad({
                 </select>
             </label>
             {esVideo || tipo === 'mixto' ? (
-                <p className="text-sm theme-text-muted m-0 md:col-span-2">
-                    Duración del video: {formatearDuracionSeg(duracionVideo) || 'se tomará del archivo cargado'}. No se puede cambiar desde la programación.
-                </p>
+                <>
+                    <p className="text-sm theme-text-muted m-0 md:col-span-2">
+                        Duración del video: {formatearDuracionSeg(duracionVideo) || 'se tomará del archivo cargado'}. No se puede cambiar desde la programación.
+                    </p>
+                    {esVideo ? (
+                        <label className="block md:col-span-2">
+                            <span className={THEME_LABEL}>
+                                Volumen de esta pieza ({valor.volumen_pct ?? 100}%)
+                            </span>
+                            <input
+                                type="range"
+                                min="0"
+                                max="100"
+                                step="1"
+                                className="w-full max-w-md"
+                                value={valor.volumen_pct ?? 100}
+                                onChange={(e) => set('volumen_pct', Number(e.target.value))}
+                                aria-label="Volumen del video en porcentaje"
+                            />
+                            <p className="text-xs theme-text-muted m-0 mt-1">
+                                Se multiplica con el volumen general de la sala. 100% usa solo el nivel de sala; valores más bajos atenúan esta pieza.
+                            </p>
+                        </label>
+                    ) : null}
+                </>
             ) : null}
             {muestraDuracionImagen ? (
                 <label className="block">

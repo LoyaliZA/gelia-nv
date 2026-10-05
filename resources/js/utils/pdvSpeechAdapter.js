@@ -1,4 +1,5 @@
 import { PDV_TTS_RATE, PDV_TTS_VOZ_PREFERIDA, seleccionarVozPdv } from './pdvSpeechUtils';
+import { PDV_ALERTAS_VOLUMEN_TTS } from './pdvAlertasPrefs';
 
 const ESPERA_VOCES_MS = 1500;
 const PULSO_CHROME_MS = 8000;
@@ -11,7 +12,7 @@ export function emitirEnGestoPdv(texto, seleccionarVoz = null) {
     utterance.lang = PDV_TTS_VOZ_PREFERIDA;
     utterance.rate = PDV_TTS_RATE;
     utterance.pitch = 1;
-    utterance.volume = 1;
+    utterance.volume = PDV_ALERTAS_VOLUMEN_TTS;
     if (voz) utterance.voice = voz;
     if (window.speechSynthesis.paused) window.speechSynthesis.resume();
     window.speechSynthesis.speak(utterance);
@@ -114,7 +115,7 @@ export function crearAdaptadorVozNavegador({
         utterance.lang = PDV_TTS_VOZ_PREFERIDA;
         utterance.rate = PDV_TTS_RATE;
         utterance.pitch = 1;
-        utterance.volume = 1;
+        utterance.volume = PDV_ALERTAS_VOLUMEN_TTS;
         if (voz) utterance.voice = voz;
         if (window.speechSynthesis.paused) {
             window.speechSynthesis.resume();

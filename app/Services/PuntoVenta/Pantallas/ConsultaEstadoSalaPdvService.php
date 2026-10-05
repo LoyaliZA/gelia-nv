@@ -49,7 +49,7 @@ final class ConsultaEstadoSalaPdvService
             'proximos' => $this->proximos($sucursalId),
             'anteriores' => $this->anteriores($sucursalId, $ahora),
             'publicidad' => $this->playlist->paraSucursal($sucursalId, $ahora),
-            'volumen_publicidad' => $this->volumenPublicidad->fraccion($sucursalId),
+            'volumen_publicidad' => $this->volumenPublicidad->porcentaje($sucursalId),
         ];
     }
 

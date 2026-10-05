@@ -11,7 +11,7 @@ final class VolumenPublicidadSalaPdvConfig
 
     public const CACHE_KEY = 'pdv.publicidad.volumen_sala';
 
-    public const PORCENTAJE_DEFECTO = 35;
+    public const PORCENTAJE_DEFECTO = 30;
 
     public function porcentaje(?int $sucursalId): int
     {
@@ -27,7 +27,7 @@ final class VolumenPublicidadSalaPdvConfig
 
     public function fraccion(?int $sucursalId): float
     {
-        return round($this->porcentaje($sucursalId) / 100, 2);
+        return $this->porcentaje($sucursalId) / 100;
     }
 
     public function guardar(int $sucursalId, int $porcentaje): int

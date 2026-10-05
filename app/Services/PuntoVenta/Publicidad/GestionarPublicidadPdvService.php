@@ -100,6 +100,9 @@ class GestionarPublicidadPdvService
         if (array_key_exists('ajuste', $datos) && $datos['ajuste']) {
             $item->ajuste = $datos['ajuste'];
         }
+        if (array_key_exists('volumen_pct', $datos) && $tipo === PdvPantallaPublicidad::TIPO_VIDEO) {
+            $item->volumen_pct = $this->normalizarVolumenPieza($datos['volumen_pct']);
+        }
         if (array_key_exists('duracion_seg', $datos)) {
             $item->duracion_seg = $this->duracionPara($tipo, $datos['duracion_seg']);
         }
@@ -252,6 +255,15 @@ class GestionarPublicidadPdvService
         }
 
         return 30;
+    }
+
+    private function normalizarVolumenPieza(mixed $valor): ?int
+    {
+        if ($valor === null || $valor === '') {
+            return null;
+        }
+
+        return max(0, min(100, (int) $valor));
     }
 
     private function duracionPara(string $tipo, mixed $duracion): ?int

@@ -14,6 +14,7 @@ export default function TarjetaPublicidad({
     puedeOrdenar,
     onToggle,
     onDuracion,
+    onVolumen,
     onEditar,
     onPrevisualizar,
     onEliminar,
@@ -23,16 +24,28 @@ export default function TarjetaPublicidad({
         disabled: !puedeOrdenar,
     });
     const [duracion, setDuracion] = useState(item.duracion_seg ?? 10);
+    const [volumenPieza, setVolumenPieza] = useState(item.volumen_pct ?? 100);
     const [menu, setMenu] = useState(false);
     const [confirmar, setConfirmar] = useState(false);
     useEffect(() => {
         setDuracion(item.duracion_seg ?? 10);
     }, [item.duracion_seg]);
+    useEffect(() => {
+        setVolumenPieza(item.volumen_pct ?? 100);
+    }, [item.volumen_pct]);
 
     const guardarDuracion = (siguiente) => {
         const valor = Math.min(300, Math.max(3, Number(siguiente) || 3));
         setDuracion(valor);
         if (valor !== Number(item.duracion_seg)) onDuracion(item, valor);
+    };
+
+    const guardarVolumenPieza = () => {
+        const valor = Math.min(100, Math.max(0, Number(volumenPieza) || 0));
+        setVolumenPieza(valor);
+        if (valor !== Number(item.volumen_pct ?? 100) && typeof onVolumen === 'function') {
+            onVolumen(item, valor);
+        }
     };
 
     const estilo = {
@@ -106,7 +119,37 @@ export default function TarjetaPublicidad({
                         </button>
                     </div>
                 ) : (
-                    <span className="text-sm font-bold theme-text-main">{formatearDuracionSeg(item.duracion_seg) || 'Sin duración'}</span>
+                    <div className="flex flex-col gap-1 min-w-[8rem]">
+                        <span className="text-sm font-bold theme-text-main tabular-nums">
+                            {formatearDuracionSeg(item.duracion_seg) || 'Sin duración'}
+                        </span>
+                        {item.tipo === 'video' && puedeEditar && typeof onVolumen === 'function' ? (
+                            <label className="flex flex-col gap-0.5 text-[10px] font-bold theme-text-muted">
+                                <span className="flex justify-between gap-2">
+                                    Volumen
+                                    <span className="tabular-nums theme-text-main">{volumenPieza}%</span>
+                                </span>
+                                <input
+                                    type="range"
+                                    min="0"
+                                    max="100"
+                                    step="1"
+                                    value={volumenPieza}
+                                    aria-label={`Volumen de ${item.nombre_original || 'video'}`}
+                                    onChange={(event) => setVolumenPieza(Number(event.target.value))}
+                                    onMouseUp={guardarVolumenPieza}
+                                    onTouchEnd={guardarVolumenPieza}
+                                    onKeyUp={(event) => {
+                                        if (event.key === 'Enter' || event.key === ' ') guardarVolumenPieza();
+                                    }}
+                                />
+                            </label>
+                        ) : item.tipo === 'video' ? (
+                            <span className="text-[10px] theme-text-muted tabular-nums">
+                                Vol. {item.volumen_pct ?? 100}%
+                            </span>
+                        ) : null}
+                    </div>
                 )}
                 {puedeEditar ? (
                     <button

@@ -28,6 +28,7 @@ export default function PlaylistPublicidad({
     onReordenar,
     onToggle,
     onDuracion,
+    onVolumen,
     onEditar,
     onPrevisualizar,
     onEliminar,
@@ -64,6 +65,7 @@ export default function PlaylistPublicidad({
                         puedeOrdenar={puedeOrdenar && !guardandoOrden}
                         onToggle={onToggle}
                         onDuracion={onDuracion}
+                        onVolumen={onVolumen}
                         onEditar={onEditar}
                         onPrevisualizar={onPrevisualizar}
                         onEliminar={onEliminar}
