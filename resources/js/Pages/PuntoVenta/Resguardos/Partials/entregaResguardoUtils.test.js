@@ -12,6 +12,8 @@ import {
     esConflictoVersion,
     puedeAvanzarPaso,
     PASOS_ENTREGA,
+    FIRMA_ENTREGA_ANCHO_NORMALIZADO,
+    FIRMA_ENTREGA_ALTO_NORMALIZADO,
 } from './entregaResguardoUtils';
 
 describe('entregaResguardoUtils', () => {
@@ -49,6 +51,11 @@ describe('entregaResguardoUtils', () => {
     it('exige firma en paso de evidencia', () => {
         expect(validarPasoEvidencia({ tieneFirma: false }).firma).toBeTruthy();
         expect(validarPasoEvidencia({ tieneFirma: true })).toEqual({});
+    });
+
+    it('define dimensiones normalizadas de firma para el panel de entrega', () => {
+        expect(FIRMA_ENTREGA_ANCHO_NORMALIZADO).toBe(600);
+        expect(FIRMA_ENTREGA_ALTO_NORMALIZADO).toBe(200);
     });
 
     it('valida formulario completo titular con firma', () => {

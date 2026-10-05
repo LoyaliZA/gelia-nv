@@ -4,6 +4,7 @@ namespace App\Services\Mobile;
 
 use App\Models\Cliente;
 use App\Models\User;
+use App\Services\PuntoVenta\PuntoVentaModulo;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Cache;
 
@@ -53,13 +54,23 @@ class MobileClienteAlcanceService
         return $this->puede($user, 'clientes.ver') || $this->puede($user, 'mis_clientes.gestionar');
     }
 
+    /**
+     * Búsqueda puntual en /mobile/clientes (p. ej. alta de turno en recepción).
+     * No habilita sincronización completa; ver tieneAccesoMovil().
+     */
+    public function puedeBuscarClientesMovil(User $user): bool
+    {
+        return $this->tieneAccesoMovil($user)
+            || $this->puede($user, PuntoVentaModulo::PERMISO_TURNOS_ALTA);
+    }
+
     public function puedeAcceder(User $user, Cliente $cliente): bool
     {
         if ($cliente->trashed()) {
             return false;
         }
 
-        if ($this->puede($user, 'clientes.ver')) {
+        if ($this->puede($user, 'clientes.ver') || $this->puede($user, PuntoVentaModulo::PERMISO_TURNOS_ALTA)) {
             return true;
         }
 
@@ -75,7 +86,7 @@ class MobileClienteAlcanceService
     {
         $query = Cliente::query()->orderBy('id');
 
-        if ($this->puede($user, 'clientes.ver')) {
+        if ($this->puede($user, 'clientes.ver') || $this->puede($user, PuntoVentaModulo::PERMISO_TURNOS_ALTA)) {
             return $query;
         }
 
@@ -91,7 +102,7 @@ class MobileClienteAlcanceService
 
     public function tipoAlcance(User $user): string
     {
-        if ($this->puede($user, 'clientes.ver')) {
+        if ($this->puede($user, 'clientes.ver') || $this->puede($user, PuntoVentaModulo::PERMISO_TURNOS_ALTA)) {
             return 'full';
         }
 

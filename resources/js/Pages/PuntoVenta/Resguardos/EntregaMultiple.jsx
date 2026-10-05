@@ -215,6 +215,8 @@ export default function EntregaMultiple({
                         <PasoEvidencia
                             key={actual.id}
                             firmaRef={firmaRef}
+                            firmaDataUrl={datos.firmaDataUrl}
+                            onFirmaGuardada={(url) => actualizar('firmaDataUrl', url)}
                             previews={previews}
                             onAgregar={(archivos) => {
                                 const imagenes = Array.from(archivos || []).filter((f) => f.type.startsWith('image/'));

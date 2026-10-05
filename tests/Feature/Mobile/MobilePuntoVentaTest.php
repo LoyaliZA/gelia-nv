@@ -290,7 +290,19 @@ class MobilePuntoVentaTest extends TestCase
             ->getJson('/api/v1/mobile/punto-venta/turnos/recepcion')
             ->assertOk()
             ->assertJsonPath('resumen.en_espera', 1)
-            ->assertJsonPath('en_cola.0.sucursal_id', $this->otra->id);
+            ->assertJsonPath('en_cola.0.sucursal_id', $this->otra->id)
+            ->assertJsonPath('permisos.alta', true)
+            ->assertJsonPath('catalogos.servicio', 'Ventas')
+            ->assertJsonPath('sucursal_activa.id', $this->otra->id);
+    }
+
+    public function test_contexto_expone_busqueda_de_clientes_para_alta_de_turnos(): void
+    {
+        $this->conToken($this->token())
+            ->getJson('/api/v1/mobile/punto-venta/contexto')
+            ->assertOk()
+            ->assertJsonPath('permisos.turnos_buscar_clientes', true)
+            ->assertJsonPath('permisos.turnos_alta', true);
     }
 
     public function test_la_documentacion_movil_lista_las_rutas_de_piso(): void

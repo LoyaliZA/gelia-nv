@@ -281,7 +281,7 @@ class ApiDocumentacionService
                     'metodo' => 'GET',
                     'ruta' => '/mobile/punto-venta/turnos/recepcion',
                     'auth' => true,
-                    'descripcion' => 'Bandeja de recepción de turnos de la sucursal activa: en cola y asignados. Permiso pdv.turnos.ver.',
+                    'descripcion' => 'Bandeja y formulario de recepción de turnos (permisos, catálogos, sucursal activa y día operativo). Permiso pdv.turnos.ver. La búsqueda de clientes para alta usa GET /mobile/clientes con pdv.turnos.alta (sin exigir clientes.ver).',
                     'curl' => "curl -s \"{$baseUrl}/mobile/punto-venta/turnos/recepcion\" {$authHeaders}",
                 ],
                 [

@@ -53,6 +53,27 @@ class FormularioRecepcionTurnoPdvController extends Controller
         return response()->json($consulta->payload($user, now()));
     }
 
+    public function datosMovil(
+        ConsultarBandejaRecepcionTurnoPdvRequest $request,
+        ConsultaBandejaRecepcionTurnoPdvService $consulta,
+    ): JsonResponse {
+        /** @var User $user */
+        $user = $request->user();
+        $ahora = now();
+        $alcance = app(ResuelveAlcancePdv::class);
+        $operacionConfig = app(OperacionPdvConfig::class);
+
+        return response()->json(array_merge(
+            $consulta->payload($user, $ahora),
+            [
+                'permisos' => $this->serializarPermisos($user, $alcance),
+                'catalogos' => $this->serializarCatalogos(),
+                'sucursal_activa' => $this->serializarSucursalActiva($user, $alcance),
+                'sucursal_dia' => $this->serializarSucursalDia($user, $alcance, $operacionConfig, $ahora),
+            ],
+        ));
+    }
+
     /**
      * @return array<string, mixed>
      */

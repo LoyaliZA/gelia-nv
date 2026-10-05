@@ -6,6 +6,7 @@ use App\Models\CatalogoListaDescuento;
 use App\Models\Cliente;
 use App\Models\User;
 use App\Services\Mobile\MobileClienteAlcanceService;
+use App\Services\PuntoVenta\PuntoVentaModulo;
 use App\Services\Mobile\MobileScopeVersionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -31,6 +32,22 @@ class MobileClienteAlcanceTest extends TestCase
         $this->assertTrue($alcance->puedeAcceder($vendedor, $propio));
         $this->assertFalse($alcance->puedeAcceder($vendedor, $ajeno));
         $this->assertSame([$propio->id], $alcance->queryPara($vendedor)->pluck('id')->all());
+    }
+
+    public function test_alta_turno_pdv_ve_todos_los_clientes_en_busqueda(): void
+    {
+        $recepcion = User::factory()->create();
+        Permission::findOrCreate(PuntoVentaModulo::PERMISO_TURNOS_ALTA, 'web');
+        $recepcion->givePermissionTo(PuntoVentaModulo::PERMISO_TURNOS_ALTA);
+
+        $vendedor = User::factory()->create();
+        $this->cliente('1', $vendedor->id);
+        $this->cliente('2', $recepcion->id);
+
+        $alcance = app(MobileClienteAlcanceService::class);
+        $this->assertTrue($alcance->puedeBuscarClientesMovil($recepcion));
+        $this->assertFalse($alcance->tieneAccesoMovil($recepcion));
+        $this->assertCount(2, $alcance->queryPara($recepcion)->pluck('id')->all());
     }
 
     public function test_clientes_ver_ve_todos(): void

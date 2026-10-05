@@ -21,7 +21,7 @@ class MobileClienteController extends Controller
     {
         $user = $this->user($request);
 
-        if (! $this->alcance->tieneAccesoMovil($user)) {
+        if (! $this->alcance->puedeBuscarClientesMovil($user)) {
             return response()->json(['message' => 'Acceso denegado.'], 403);
         }
 
@@ -62,7 +62,7 @@ class MobileClienteController extends Controller
     {
         $user = $this->user($request);
 
-        if (! $this->alcance->tieneAccesoMovil($user)) {
+        if (! $this->alcance->puedeBuscarClientesMovil($user)) {
             return response()->json(['message' => 'Acceso denegado.'], 403);
         }
 

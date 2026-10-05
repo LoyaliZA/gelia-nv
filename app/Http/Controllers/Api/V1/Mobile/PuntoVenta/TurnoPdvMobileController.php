@@ -18,7 +18,7 @@ class TurnoPdvMobileController extends Controller
         ConsultaBandejaRecepcionTurnoPdvService $consulta,
         FormularioRecepcionTurnoPdvController $web,
     ): JsonResponse {
-        return $web->datos($request, $consulta);
+        return $web->datosMovil($request, $consulta);
     }
 
     public function store(

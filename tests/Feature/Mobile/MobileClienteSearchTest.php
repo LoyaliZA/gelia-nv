@@ -4,8 +4,10 @@ namespace Tests\Feature\Mobile;
 
 use App\Models\CatalogoListaDescuento;
 use App\Models\Cliente;
+use App\Models\ConfiguracionSistema;
 use App\Models\User;
 use App\Services\Mobile\MobileScopeVersionService;
+use App\Services\PuntoVenta\PuntoVentaModulo;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
@@ -150,6 +152,35 @@ class MobileClienteSearchTest extends TestCase
         $this->withHeaders($this->headers($vendedor))
             ->getJson('/api/v1/mobile/clientes/501')
             ->assertNotFound();
+    }
+
+    public function test_recepcion_con_alta_turno_busca_clientes_sin_clientes_ver(): void
+    {
+        ConfiguracionSistema::query()->updateOrCreate(
+            ['clave' => PuntoVentaModulo::CLAVE_FLAG],
+            ['valor' => '1']
+        );
+        Permission::findOrCreate(PuntoVentaModulo::PERMISO_ACCEDER, 'web');
+        Permission::findOrCreate(PuntoVentaModulo::PERMISO_TURNOS_ALTA, 'web');
+
+        $recepcion = User::factory()->create(['password' => 'secret123']);
+        $recepcion->givePermissionTo([
+            PuntoVentaModulo::PERMISO_ACCEDER,
+            PuntoVentaModulo::PERMISO_TURNOS_ALTA,
+        ]);
+
+        $lista = $this->lista();
+        Cliente::create([
+            'numero_cliente' => '88001',
+            'nombre' => 'Cliente Recepción Móvil',
+            'lista_actual_id' => $lista->id,
+        ]);
+
+        $this->withHeaders($this->headers($recepcion))
+            ->getJson('/api/v1/mobile/clientes?q=Recepción')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('data.0.numero_cliente', '88001');
     }
 
     public function test_busqueda_requiere_minimo_dos_caracteres(): void

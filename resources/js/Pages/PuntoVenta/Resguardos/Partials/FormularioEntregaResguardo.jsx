@@ -1,10 +1,11 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
     AlertTriangle,
     ArrowLeft,
     ArrowRight,
     CheckCircle2,
     Loader2,
+    Maximize2,
     Trash2,
     UserCheck,
 } from 'lucide-react';
@@ -23,7 +24,9 @@ import {
     validarPasoReceptor,
 } from './entregaResguardoUtils';
 import PanelPedidoRevisionResguardo from './PanelPedidoRevisionResguardo';
+import OverlayFirmaEntregaPantallaCompleta from './OverlayFirmaEntregaPantallaCompleta';
 import useToastAlCambiar from '../../../../hooks/useToastAlCambiar';
+import { esDispositivoCampo } from '../../../Activos/Partials/useDispositivoCampo';
 
 export default function FormularioEntregaResguardo({
     resguardo,
@@ -197,6 +200,8 @@ export default function FormularioEntregaResguardo({
             {pasoActual === 'evidencia' && (
                 <PasoEvidencia
                     firmaRef={firmaRef}
+                    firmaDataUrl={firmaDataUrlGuardada}
+                    onFirmaGuardada={setFirmaDataUrlGuardada}
                     previews={previews}
                     onAgregar={agregarEvidencias}
                     onQuitar={quitarEvidencia}
@@ -503,17 +508,109 @@ export function PasoReceptor({
     );
 }
 
-export function PasoEvidencia({ firmaRef, previews, onAgregar, onQuitar, errores, deshabilitado }) {
+export function PasoEvidencia({
+    firmaRef,
+    firmaDataUrl = null,
+    onFirmaGuardada,
+    previews,
+    onAgregar,
+    onQuitar,
+    errores,
+    deshabilitado,
+}) {
+    const [overlayFirmaAbierto, setOverlayFirmaAbierto] = useState(false);
+    const esCampo = esDispositivoCampo();
+
+    useEffect(() => {
+        if (!firmaDataUrl) return;
+        firmaRef.current?.loadDataUrl?.(firmaDataUrl);
+    }, [firmaDataUrl, firmaRef]);
+
+    const abrirPantallaCompleta = () => {
+        if (deshabilitado) return;
+        setOverlayFirmaAbierto(true);
+    };
+
+    const dataUrlParaOverlay = firmaDataUrl
+        || firmaRef.current?.getDataUrl?.()
+        || null;
+
+    const limpiarFirma = () => {
+        firmaRef.current?.clear?.();
+        onFirmaGuardada?.(null);
+    };
+
+    const guardarFirmaDesdeOverlay = (urlNormalizada) => {
+        onFirmaGuardada?.(urlNormalizada);
+        firmaRef.current?.loadDataUrl?.(urlNormalizada);
+    };
+
     return (
         <div className="space-y-4">
             <div className={`${geliaCardClass()} p-5 space-y-4`}>
                 <h2 className="text-sm font-black uppercase tracking-widest theme-text-main m-0">Firma del receptor</h2>
-                <p className="text-sm theme-text-muted m-0">La firma es obligatoria para validar la entrega.</p>
-                <FirmaCanvas ref={firmaRef} label="Firma de quien retira" height={200} />
+                <p className="text-sm theme-text-muted m-0">
+                    La firma es obligatoria para validar la entrega.
+                    {esCampo ? ' En este dispositivo se recomienda firmar en pantalla completa en horizontal.' : ''}
+                </p>
+
+                {firmaDataUrl ? (
+                    <div className="space-y-3">
+                        <div className="rounded-xl border theme-border bg-white dark:bg-slate-950 p-2">
+                            <img
+                                src={firmaDataUrl}
+                                alt="Vista previa de la firma capturada"
+                                className="w-full h-[200px] object-contain"
+                            />
+                        </div>
+                        <div className="flex flex-col sm:flex-row gap-2">
+                            <button
+                                type="button"
+                                onClick={abrirPantallaCompleta}
+                                disabled={deshabilitado}
+                                className={`${BTN_SECONDARY} min-h-[48px] flex-1 text-[10px] font-black uppercase tracking-widest`}
+                            >
+                                <Maximize2 className="w-4 h-4 inline mr-2" />
+                                Volver a firmar
+                            </button>
+                            <button
+                                type="button"
+                                onClick={limpiarFirma}
+                                disabled={deshabilitado}
+                                className={`${BTN_SECONDARY} min-h-[48px] flex-1 text-[10px] font-black uppercase tracking-widest`}
+                            >
+                                <Trash2 className="w-4 h-4 inline mr-2" />
+                                Quitar firma
+                            </button>
+                        </div>
+                    </div>
+                ) : (
+                    <>
+                        <FirmaCanvas ref={firmaRef} label="Firma de quien retira" height={200} />
+                        <button
+                            type="button"
+                            onClick={abrirPantallaCompleta}
+                            disabled={deshabilitado}
+                            className={`${THEME_BTN_PRIMARY} w-full min-h-[48px] text-[10px] font-black uppercase tracking-widest`}
+                        >
+                            <Maximize2 className="w-4 h-4 inline mr-2" />
+                            Firmar en pantalla completa
+                        </button>
+                    </>
+                )}
+
                 {errores.firma && (
                     <p className="text-xs font-bold text-[var(--color-peligro)] m-0">{errores.firma}</p>
                 )}
             </div>
+
+            <OverlayFirmaEntregaPantallaCompleta
+                abierto={overlayFirmaAbierto}
+                dataUrlInicial={dataUrlParaOverlay}
+                deshabilitado={deshabilitado}
+                onGuardar={guardarFirmaDesdeOverlay}
+                onCerrar={() => setOverlayFirmaAbierto(false)}
+            />
 
             <div className={`${geliaCardClass()} p-5 space-y-4`}>
                 <h2 className="text-sm font-black uppercase tracking-widest theme-text-main m-0">Evidencia fotográfica (opcional)</h2>

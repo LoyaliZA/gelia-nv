@@ -13,6 +13,7 @@ const FirmaCanvas = forwardRef(function FirmaCanvas({ label, className = '', hei
     const dibujando = useRef(false);
     const lastPosRef = useRef({ x: 0, y: 0, time: 0, width: DEFAULT_WIDTH });
     const tieneTrazoRef = useRef(false);
+    const contenidoDataUrlRef = useRef(null);
     const [tieneTrazo, setTieneTrazo] = useState(false);
 
     const obtenerCoordenadas = useCallback((e, canvas) => {
@@ -30,6 +31,24 @@ const FirmaCanvas = forwardRef(function FirmaCanvas({ label, className = '', hei
         ctx.fillRect(0, 0, displayWidth, displayHeight);
     }, []);
 
+    const dibujarDataUrlEnLienzo = useCallback((ctx, dataUrl, displayWidth, displayHeight) => new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+            limpiarLienzo(ctx, displayWidth, displayHeight);
+            const escala = Math.min(displayWidth / img.width, displayHeight / img.height);
+            const ancho = img.width * escala;
+            const alto = img.height * escala;
+            const offsetX = (displayWidth - ancho) / 2;
+            const offsetY = (displayHeight - alto) / 2;
+            ctx.drawImage(img, offsetX, offsetY, ancho, alto);
+            tieneTrazoRef.current = true;
+            setTieneTrazo(true);
+            resolve();
+        };
+        img.onerror = () => resolve();
+        img.src = dataUrl;
+    }), [limpiarLienzo]);
+
     const configurarCanvas = useCallback(() => {
         const canvas = canvasRef.current;
         const container = containerRef.current;
@@ -38,6 +57,15 @@ const FirmaCanvas = forwardRef(function FirmaCanvas({ label, className = '', hei
         const dpr = Math.min(window.devicePixelRatio || 1, 2);
         const displayWidth = container.clientWidth;
         const displayHeight = height;
+
+        let dataUrlPersistido = contenidoDataUrlRef.current;
+        if (!dibujando.current && tieneTrazoRef.current && canvas.width > 0 && canvas.height > 0) {
+            const captura = canvas.toDataURL('image/png');
+            if (captura) {
+                dataUrlPersistido = captura;
+                contenidoDataUrlRef.current = captura;
+            }
+        }
 
         canvas.width = Math.floor(displayWidth * dpr);
         canvas.height = Math.floor(displayHeight * dpr);
@@ -50,8 +78,25 @@ const FirmaCanvas = forwardRef(function FirmaCanvas({ label, className = '', hei
         ctx.fillStyle = STROKE_COLOR;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
-        limpiarLienzo(ctx, displayWidth, displayHeight);
 
+        if (dataUrlPersistido) {
+            dibujarDataUrlEnLienzo(ctx, dataUrlPersistido, displayWidth, displayHeight);
+            return;
+        }
+
+        limpiarLienzo(ctx, displayWidth, displayHeight);
+        lastPosRef.current = { x: 0, y: 0, time: 0, width: DEFAULT_WIDTH };
+        tieneTrazoRef.current = false;
+        setTieneTrazo(false);
+    }, [height, limpiarLienzo, dibujarDataUrlEnLienzo]);
+
+    const limpiar = useCallback(() => {
+        const canvas = canvasRef.current;
+        const container = containerRef.current;
+        if (!canvas || !container) return;
+        const ctx = canvas.getContext('2d');
+        contenidoDataUrlRef.current = null;
+        limpiarLienzo(ctx, container.clientWidth, height);
         lastPosRef.current = { x: 0, y: 0, time: 0, width: DEFAULT_WIDTH };
         tieneTrazoRef.current = false;
         setTieneTrazo(false);
@@ -63,20 +108,21 @@ const FirmaCanvas = forwardRef(function FirmaCanvas({ label, className = '', hei
             const canvas = canvasRef.current;
             return canvas ? canvas.toDataURL('image/png') : null;
         },
+        loadDataUrl: (dataUrl) => {
+            if (!dataUrl) {
+                limpiar();
+                return;
+            }
+            contenidoDataUrlRef.current = dataUrl;
+            const canvas = canvasRef.current;
+            const container = containerRef.current;
+            if (!canvas || !container) return;
+            const ctx = canvas.getContext('2d');
+            dibujarDataUrlEnLienzo(ctx, dataUrl, container.clientWidth, height);
+        },
         clear: () => limpiar(),
         hasStroke: () => tieneTrazoRef.current,
-    }));
-
-    const limpiar = () => {
-        const canvas = canvasRef.current;
-        const container = containerRef.current;
-        if (!canvas || !container) return;
-        const ctx = canvas.getContext('2d');
-        limpiarLienzo(ctx, container.clientWidth, height);
-        lastPosRef.current = { x: 0, y: 0, time: 0, width: DEFAULT_WIDTH };
-        tieneTrazoRef.current = false;
-        setTieneTrazo(false);
-    };
+    }), [dibujarDataUrlEnLienzo, height, limpiar]);
 
     useEffect(() => {
         configurarCanvas();
