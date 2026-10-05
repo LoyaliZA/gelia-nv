@@ -106,6 +106,11 @@ class ContextoPuntoVentaMobileController extends Controller
                 'resguardos_ver_historial_entregas' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_VER_HISTORIAL_ENTREGAS),
                 'turnos_ver' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_TURNOS_VER),
                 'turnos_alta' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_TURNOS_ALTA),
+                'visitas_programadas_ver' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_VISITAS_PROGRAMADAS_VER),
+                'visitas_programadas_confirmar_llegada' => $alcance->tienePermisoPdv(
+                    $user,
+                    PuntoVentaModulo::PERMISO_VISITAS_PROGRAMADAS_CONFIRMAR_LLEGADA
+                ),
             ],
         ];
     }

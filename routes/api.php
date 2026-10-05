@@ -10,7 +10,9 @@ use App\Http\Controllers\Api\V1\Mobile\MobileSyncController;
 use App\Http\Controllers\Api\V1\Mobile\PuntoVenta\ArchivoResguardoPdvMobileController;
 use App\Http\Controllers\Api\V1\Mobile\PuntoVenta\ContextoPuntoVentaMobileController;
 use App\Http\Controllers\Api\V1\Mobile\PuntoVenta\ResguardoPdvMobileController;
+use App\Http\Controllers\Api\V1\Mobile\Comercial\VisitaProgramadaMobileController;
 use App\Http\Controllers\Api\V1\Mobile\PuntoVenta\TurnoPdvMobileController;
+use App\Http\Controllers\Api\V1\Mobile\PuntoVenta\VisitaProgramadaPdvMobileController;
 use App\Http\Controllers\Api\V1\PasskeyController;
 use App\Services\PuntoVenta\PuntoVentaModulo;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
@@ -63,6 +65,13 @@ Route::prefix('v1')->group(function () {
         Route::get('/clientes', [MobileClienteController::class, 'index']);
         Route::get('/clientes/{numeroCliente}', [MobileClienteController::class, 'show']);
 
+        Route::prefix('comercial')->group(function () {
+            Route::get('/visitas-programadas', [VisitaProgramadaMobileController::class, 'index']);
+            Route::get('/visitas-programadas/historial', [VisitaProgramadaMobileController::class, 'historial']);
+            Route::post('/visitas-programadas', [VisitaProgramadaMobileController::class, 'store']);
+            Route::get('/visitas-programadas/catalogos', [VisitaProgramadaMobileController::class, 'catalogos']);
+        });
+
         Route::middleware('mobile.sync')->group(function () {
             Route::post('/sync/bootstrap', [MobileSyncController::class, 'storeBootstrap']);
             Route::get('/sync/bootstrap', [MobileSyncController::class, 'showBootstrap']);
@@ -111,6 +120,11 @@ Route::prefix('v1')->group(function () {
                     ->middleware('pdv.permiso:'.PuntoVentaModulo::PERMISO_TURNOS_VER);
                 Route::post('/turnos', [TurnoPdvMobileController::class, 'store'])
                     ->middleware('pdv.permiso:'.PuntoVentaModulo::PERMISO_TURNOS_ALTA);
+
+                Route::get('/visitas-programadas', [VisitaProgramadaPdvMobileController::class, 'index'])
+                    ->middleware('pdv.permiso:'.PuntoVentaModulo::PERMISO_VISITAS_PROGRAMADAS_VER);
+                Route::post('/visitas-programadas/{visitaClienteProgramada}/llegada', [VisitaProgramadaPdvMobileController::class, 'confirmarLlegada'])
+                    ->middleware('pdv.permiso:'.PuntoVentaModulo::PERMISO_VISITAS_PROGRAMADAS_CONFIRMAR_LLEGADA);
             });
         });
     });

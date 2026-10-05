@@ -300,6 +300,7 @@ class MobilePuntoVentaTest extends TestCase
 
         $this->assertTrue($rutas->contains('/mobile/punto-venta/resguardos/{id}/entrega'));
         $this->assertTrue($rutas->contains('/mobile/punto-venta/turnos'));
+        $this->assertTrue($rutas->contains('/mobile/punto-venta/visitas-programadas'));
         $this->assertTrue($rutas->contains('/mobile/punto-venta/sucursal-activa'));
     }
 

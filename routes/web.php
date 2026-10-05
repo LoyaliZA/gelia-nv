@@ -10,6 +10,7 @@ Route::middleware(['auth'])->group(function () {
     require __DIR__.'/web/modules/gelia-ai.php';
     require __DIR__.'/web/modules/mensajeria.php';
     require __DIR__.'/web/modules/mis-clientes.php';
+    require __DIR__.'/web/modules/visitas-programadas.php';
     require __DIR__.'/web/modules/limpieza-clientes.php';
     require __DIR__.'/web/modules/plantilla-bellaroma.php';
     require __DIR__.'/web/modules/integraciones/tiendanube.php';

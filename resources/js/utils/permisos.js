@@ -24,6 +24,7 @@ export const DESCRIPCIONES_PERMISOS = {
     'clientes.crear': 'Permite registrar clientes manualmente.',
     'clientes.carga_masiva': 'Permite importar clientes de forma masiva.',
     'mis_clientes.gestionar': 'Permite ver la cartera propia y registrar clientes en Mis Clientes.',
+    'visitas_programadas.gestionar': 'Permite registrar y consultar visitas programadas de clientes a sucursal.',
     'clientes.correccion_emergencia': 'Permite corregir número y nombre intercambiados o en conflicto de unicidad.',
     'clientes.direcciones.ver': 'Permite consultar las direcciones de envío normalizadas de un cliente.',
     'clientes.direcciones.crear': 'Permite crear direcciones de envío para un cliente.',
@@ -290,6 +291,8 @@ export const DESCRIPCIONES_PERMISOS = {
     'pdv.resguardos.confirmar_devolucion': 'Permite confirmar la devolución de mercancía en custodia.',
     'pdv.resguardos.corregir': 'Permite aplicar correcciones administrativas auditadas sobre resguardos.',
     'pdv.resguardos.ver_historial_entregas': 'Permite consultar el historial de resguardos entregados en piso (solo lectura).',
+    'pdv.visitas_programadas.ver': 'Permite consultar las visitas programadas del día en la sucursal activa.',
+    'pdv.visitas_programadas.confirmar_llegada': 'Permite registrar la llegada del cliente en piso.',
     'pdv.turnos.ver': 'Permite consultar la cola y turnos de la sucursal activa.',
     'pdv.turnos.alta': 'Permite dar de alta turnos en recepción.',
     'pdv.turnos.marcar_prioridad': 'Permite marcar prioridad de adulto mayor o discapacidad en el alta.',
@@ -374,6 +377,9 @@ export const ETIQUETAS_PERMISOS = {
     'pdv.resguardos.confirmar_devolucion': 'confirmar devolución',
     'pdv.resguardos.corregir': 'corregir resguardo',
     'pdv.resguardos.ver_historial_entregas': 'historial entregas',
+    'visitas_programadas.gestionar': 'gestionar visitas programadas',
+    'pdv.visitas_programadas.ver': 'ver visitas del día',
+    'pdv.visitas_programadas.confirmar_llegada': 'confirmar llegada de visita',
     'pdv.turnos.ver': 'ver turnos',
     'pdv.turnos.alta': 'alta de turno',
     'pdv.turnos.marcar_prioridad': 'marcar prioridad',
@@ -574,6 +580,14 @@ export const SUBMODULOS_UI_POR_MODULO = {
             label: 'Mis clientes',
             descripcion: 'Cartera propia y altas de clientes',
             permisos: ['mis_clientes.gestionar'],
+        },
+    ],
+    visitas_programadas: [
+        {
+            id: 'gestion',
+            label: 'Visitas programadas',
+            descripcion: 'Intención de asistencia a sucursal',
+            permisos: ['visitas_programadas.gestionar'],
         },
     ],
     clientes: [
@@ -1295,6 +1309,15 @@ export const SUBMODULOS_UI_POR_MODULO = {
             ],
         },
         {
+            id: 'visitas_programadas',
+            label: 'Visitas programadas',
+            descripcion: 'Bandeja del día y confirmación de llegada',
+            permisos: [
+                'pdv.visitas_programadas.ver',
+                'pdv.visitas_programadas.confirmar_llegada',
+            ],
+        },
+        {
             id: 'turnos',
             label: 'Turnos',
             descripcion: 'Alta, atención y gestión de fila en piso',
@@ -1429,6 +1452,7 @@ export const SECCIONES_SIDEBAR_PERMISOS = [
             'cancelaciones_cotizaciones',
             'traspasos',
             'mis_clientes',
+            'visitas_programadas',
         ],
     },
     {
@@ -1507,6 +1531,7 @@ export const ETIQUETAS_MODULO_UI = {
     solicitudes: 'Cambio de lista y tags',
     cancelaciones_cotizaciones: 'Cancelación y cotización',
     mis_clientes: 'Mis clientes',
+    visitas_programadas: 'Visitas programadas',
     entregas: 'Entregas / mapa logístico',
     control_pedidos: 'Gestión de pedidos',
     punto_venta: 'Acceso al módulo',

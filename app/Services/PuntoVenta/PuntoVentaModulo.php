@@ -44,6 +44,10 @@ final class PuntoVentaModulo
 
     public const PERMISO_REPORTES_EXPORTAR = 'pdv.reportes.exportar';
 
+    public const PERMISO_VISITAS_PROGRAMADAS_VER = 'pdv.visitas_programadas.ver';
+
+    public const PERMISO_VISITAS_PROGRAMADAS_CONFIRMAR_LLEGADA = 'pdv.visitas_programadas.confirmar_llegada';
+
     public const PERMISO_TURNOS_VER = 'pdv.turnos.ver';
 
     public const PERMISO_TURNOS_ALTA = 'pdv.turnos.alta';
@@ -141,6 +145,8 @@ final class PuntoVentaModulo
             self::PERMISO_PUBLICIDAD_ORDENAR,
             AlcancePdv::PERMISO_ALCANCE_GLOBAL,
             self::PERMISO_REPORTES_EXPORTAR,
+            self::PERMISO_VISITAS_PROGRAMADAS_VER,
+            self::PERMISO_VISITAS_PROGRAMADAS_CONFIRMAR_LLEGADA,
         ];
     }
 

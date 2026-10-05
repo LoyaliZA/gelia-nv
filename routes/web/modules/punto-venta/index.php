@@ -12,6 +12,7 @@ Route::middleware(['pdv.modulo'])
         require __DIR__.'/publicidad.php';
         require __DIR__.'/resguardos.php';
         require __DIR__.'/turnos.php';
+        require __DIR__.'/visitas-programadas.php';
         require __DIR__.'/operacion.php';
         require __DIR__.'/reportes.php';
     });

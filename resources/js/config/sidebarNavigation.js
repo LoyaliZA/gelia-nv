@@ -228,6 +228,14 @@ export function buildSidebarNavigation({ can, showAdminMenu, manualesHubVisible 
             href: () => routeHref('mis_clientes.index', '/mis-clientes'),
             active: (url) => url.startsWith('/mis-clientes'),
         },
+        can('visitas_programadas.gestionar') && {
+            type: 'link',
+            id: 'visitas_programadas',
+            label: 'Visitas programadas',
+            icon: ClipboardList,
+            href: () => routeHref('visitas_programadas.index', '/visitas-programadas'),
+            active: (url) => url.startsWith('/visitas-programadas'),
+        },
     ].filter(Boolean);
 
     const logisticaChildren = [
@@ -281,6 +289,14 @@ export function buildSidebarNavigation({ can, showAdminMenu, manualesHubVisible 
             icon: ClipboardList,
             href: () => routeHref('punto_venta.turnos.recepcion', '/punto-venta/turnos/recepcion'),
             active: (url) => url.startsWith('/punto-venta/turnos/recepcion'),
+        },
+        can('punto_venta.acceder') && can('pdv.visitas_programadas.ver') && {
+            type: 'link',
+            id: 'punto_venta_visitas_programadas',
+            label: 'Visitas del día',
+            icon: ClipboardList,
+            href: () => routeHref('punto_venta.visitas_programadas.index', '/punto-venta/visitas-programadas'),
+            active: (url) => url.startsWith('/punto-venta/visitas-programadas'),
         },
         can('punto_venta.acceder') && (can('pdv.turnos.ver') || can('pdv.operacion.equipo_ver')) && {
             type: 'link',

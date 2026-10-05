@@ -54,6 +54,7 @@ Schedule::command('control-pedidos:reconciliar-traslados-preparacion')->hourly()
 Schedule::command('pdv:evaluar-vencimientos-resguardos')->hourly();
 Schedule::command('demo:reset')->dailyAt('03:10')->when(fn () => (bool) config('demo.reset_automatico'));
 Schedule::command('pdv:depurar-publicidad')->dailyAt('02:40');
+Schedule::command('visitas-programadas:cerrar-dia')->dailyAt('23:55');
 Schedule::command('pdv:evaluar-cierre-horario-operacion')->everyFiveMinutes();
 Schedule::command('pdv:evaluar-apertura-horario-operacion')->everyFiveMinutes();
 Schedule::command('medios:limpiar-cargas')->hourly();
