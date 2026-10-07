@@ -7,14 +7,16 @@ use App\Models\CatalogoListaDescuento;
 use App\Models\Cliente;
 use App\Models\SolicitudTag;
 use App\Services\Clientes\ReactivarClienteInactivoService;
-use App\Services\Clientes\RegistrarHistorialMontoClienteService;
+use App\Services\Escalonamiento\EscalonamientoAutoridad;
+use App\Services\Escalonamiento\ProyeccionClienteEscalonamiento;
 
 class AjustarMontoPorSolicitudService
 {
     public function __construct(
-        private RegistrarHistorialMontoClienteService $historialMonto,
         private EscalonamientoService $escalonamiento,
         private ReactivarClienteInactivoService $reactivarInactivo,
+        private EscalonamientoAutoridad $autoridad,
+        private ProyeccionClienteEscalonamiento $proyeccionCliente,
     ) {}
 
     /**
@@ -31,7 +33,11 @@ class AjustarMontoPorSolicitudService
 
         $antes = $this->capturarSnapshotCliente($cliente);
 
-        if ($solicitud->catalogo_lista_descuento_id) {
+        if (
+            $solicitud->catalogo_lista_descuento_id
+            && ! $cliente->lista_bloqueada
+            && ! $this->autoridad->clienteGobernadoPorModulo($cliente)
+        ) {
             $cliente->lista_actual_id = $solicitud->catalogo_lista_descuento_id;
         }
 
@@ -53,8 +59,8 @@ class AjustarMontoPorSolicitudService
     }
 
     /**
-     * Quita lista/tipo/tag provisionales. Solo resta la capa de esta solicitud
-     * si todavía está escrita y no la pisó una carga masiva.
+     * Quita lista/tipo/tag provisionales y recalcula la lista con el monto guardado.
+     * No modifica monto_venta_actual.
      *
      * @return array{antes: array<string, mixed>, despues: array<string, mixed>}
      */
@@ -66,13 +72,6 @@ class AjustarMontoPorSolicitudService
         }
 
         $antes = $this->capturarSnapshotCliente($cliente);
-        $this->pelarCapaSiAplica(
-            $cliente,
-            $solicitud,
-            $usuarioId,
-            'Reversión — Solicitante: '.$this->nombreSolicitante($solicitud),
-            $origen ?? RegistrarHistorialMontoClienteService::ORIGEN_SOLICITUD_REVERSION,
-        );
         $this->recalcularListaCliente($cliente);
 
         if ($solicitud->catalogo_tipo_cliente_id) {
@@ -95,7 +94,7 @@ class AjustarMontoPorSolicitudService
      */
     public function proyectarMonto(Cliente $cliente, SolicitudTag $solicitud, float $montoFinal): array
     {
-        $actual = (float) $cliente->monto_venta_actual;
+        $actual = $this->proyeccionCliente->montoAcumulado($cliente);
 
         if ($this->estaCubierta($solicitud)) {
             return [
@@ -105,18 +104,15 @@ class AjustarMontoPorSolicitudService
             ];
         }
 
-        $capa = $this->capaPendiente($solicitud);
-        $base = $capa > 0 ? max(0, $actual - $capa) : $actual;
-
         return [
-            'base' => $base,
-            'proyectado' => $base + $montoFinal,
-            'aplicara_monto' => true,
+            'base' => $actual,
+            'proyectado' => $actual + $montoFinal,
+            'aplicara_monto' => false,
         ];
     }
 
     /**
-     * Suma el pago solo si Wizerp aún no cubre esa venta.
+     * Registra el pago como auditoría y puede asignar la lista. No modifica monto_venta_actual.
      *
      * @return array{antes: array<string, mixed>, despues: array<string, mixed>}
      */
@@ -132,35 +128,28 @@ class AjustarMontoPorSolicitudService
         }
 
         $antes = $this->capturarSnapshotCliente($cliente);
-        $proyeccion = $this->proyectarMonto($cliente, $solicitud, $montoFinal);
-        $montoObjetivo = $proyeccion['aplicara_monto']
-            ? max(0, $proyeccion['proyectado'])
-            : (float) $cliente->monto_venta_actual;
+        $montoGuardado = (float) $cliente->monto_venta_actual;
 
-        if ($proyeccion['aplicara_monto']) {
-            $this->historialMonto->registrar(
-                $cliente,
-                $montoObjetivo,
-                RegistrarHistorialMontoClienteService::ORIGEN_SOLICITUD_PAGO,
-                $usuarioId,
-                null,
-                $solicitud->id,
-                $montoFinal,
-                'Pago confirmado — Solicitante: '.$this->nombreSolicitante($solicitud),
-            );
-            $cliente->monto_venta_actual = $montoObjetivo;
-            $solicitud->monto_aplicado_al_cliente = $montoFinal;
-        }
+        $solicitud->monto_aplicado_al_cliente = $montoFinal;
 
-        if ($asignarListaSolicitada && $solicitud->catalogo_lista_descuento_id) {
+        if (
+            $asignarListaSolicitada
+            && $solicitud->catalogo_lista_descuento_id
+            && ! $cliente->lista_bloqueada
+            && ! $this->autoridad->clienteGobernadoPorModulo($cliente)
+        ) {
             $cliente->lista_actual_id = $solicitud->catalogo_lista_descuento_id;
         }
 
         $this->reactivarInactivo->ejecutar(
             $cliente,
-            $montoObjetivo,
+            $montoGuardado,
             ! ($asignarListaSolicitada && $solicitud->catalogo_lista_descuento_id),
         );
+
+        if ($cliente->es_inactivo && $asignarListaSolicitada && ! $cliente->lista_bloqueada) {
+            $cliente->es_inactivo = false;
+        }
 
         $cliente->save();
         $solicitud->save();
@@ -248,29 +237,21 @@ class AjustarMontoPorSolicitudService
         return max(0, (float) $solicitud->monto_aplicado_al_cliente);
     }
 
-    private function pelarCapaSiAplica(Cliente $cliente, SolicitudTag $solicitud, ?int $usuarioId, string $notas, string $origen): void
+    private function recalcularListaCliente(Cliente $cliente): void
     {
-        $capa = $this->capaPendiente($solicitud);
-        if ($capa <= 0) {
+        if ($cliente->lista_bloqueada) {
             return;
         }
 
-        $montoNuevo = max(0, (float) $cliente->monto_venta_actual - $capa);
-        $this->historialMonto->registrar(
-            $cliente,
-            $montoNuevo,
-            $origen,
-            $usuarioId,
-            null,
-            $solicitud->id,
-            $capa,
-            $notas,
-        );
-        $cliente->monto_venta_actual = $montoNuevo;
-    }
+        if ($this->autoridad->clienteGobernadoPorModulo($cliente)) {
+            $listaId = $this->proyeccionCliente->listaVigenteId($cliente);
+            if ($listaId) {
+                $cliente->lista_actual_id = $listaId;
+            }
 
-    private function recalcularListaCliente(Cliente $cliente): void
-    {
+            return;
+        }
+
         $listas = CatalogoListaDescuento::with('porcentajeEscalonamiento')
             ->where('activo', true)
             ->orderByDesc('monto_requerido')
@@ -297,12 +278,5 @@ class AjustarMontoPorSolicitudService
         $solicitud->loadMissing(['cliente.listaDescuento', 'cliente.vendedor', 'cliente.tipo', 'proceso', 'vendedor']);
 
         return $solicitud->cliente;
-    }
-
-    private function nombreSolicitante(SolicitudTag $solicitud): string
-    {
-        $solicitud->loadMissing('vendedor');
-
-        return $solicitud->vendedor?->name ?? 'N/A';
     }
 }

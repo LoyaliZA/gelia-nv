@@ -100,7 +100,7 @@ class MontoSolicitudVsCargaMasivaTest extends TestCase
         $this->assertSame(0, HistorialMontoCliente::count());
     }
 
-    public function test_vencer_solo_pela_la_capa_de_la_solicitud(): void
+    public function test_revertir_no_resta_el_monto_aunque_exista_marca_de_pago(): void
     {
         $cliente = $this->cliente(13000);
         $solicitud = $this->solicitud($cliente, 3000, $this->listaPlata->id, $this->idRespondida);
@@ -108,8 +108,11 @@ class MontoSolicitudVsCargaMasivaTest extends TestCase
 
         app(AjustarMontoPorSolicitudService::class)->revertirBeneficios($solicitud);
 
-        $this->assertEquals(10000.0, (float) $cliente->fresh()->monto_venta_actual);
+        $cliente->refresh();
+        $this->assertEquals(13000.0, (float) $cliente->monto_venta_actual);
+        $this->assertSame($this->listaPlata->id, $cliente->lista_actual_id);
         $this->assertEquals(0.0, (float) $solicitud->fresh()->monto_aplicado_al_cliente);
+        $this->assertSame(0, \App\Models\Escalonamiento\EscalonamientoPeriodo::count());
     }
 
     public function test_carga_sin_la_remision_no_deja_que_el_vencimiento_coma_historial(): void
@@ -130,23 +133,54 @@ class MontoSolicitudVsCargaMasivaTest extends TestCase
         $this->assertEquals(10500.0, (float) $cliente->fresh()->monto_venta_actual);
     }
 
-    public function test_confirmar_pago_suma_si_wizerp_aun_no_cubre(): void
+    public function test_confirmar_pago_no_altera_monto_y_deja_auditoria(): void
     {
         $cliente = $this->cliente(1000);
         $solicitud = $this->solicitud($cliente, 6000, $this->listaPlata->id, $this->idRespondida);
         app(AjustarMontoPorSolicitudService::class)->aplicarBeneficios($solicitud);
 
-        app(AjustarMontoPorSolicitudService::class)->aplicarPagoConfirmado($solicitud, 6000, $this->vendedor->id);
+        app(AjustarMontoPorSolicitudService::class)->aplicarPagoConfirmado(
+            $solicitud,
+            6000,
+            $this->vendedor->id,
+            true,
+        );
 
         $cliente->refresh();
         $solicitud->refresh();
-        $this->assertEquals(7000.0, (float) $cliente->monto_venta_actual);
+        $this->assertEquals(1000.0, (float) $cliente->monto_venta_actual);
+        $this->assertSame($this->listaPlata->id, $cliente->lista_actual_id);
         $this->assertEquals(6000.0, (float) $solicitud->monto_aplicado_al_cliente);
-        $this->assertDatabaseHas('historial_montos_clientes', [
-            'cliente_id' => $cliente->id,
-            'origen' => RegistrarHistorialMontoClienteService::ORIGEN_SOLICITUD_PAGO,
-            'monto_operacion' => 6000,
-        ]);
+        $this->assertSame(0, HistorialMontoCliente::count());
+        $this->assertSame(0, \App\Models\Escalonamiento\EscalonamientoMovimiento::count());
+    }
+
+    public function test_lista_bloqueada_no_cambia_al_aprobar_ni_al_revertir(): void
+    {
+        $cliente = $this->cliente(1000);
+        $cliente->update(['lista_bloqueada' => true]);
+        $solicitud = $this->solicitud($cliente, 6000, $this->listaPlata->id, $this->idRespondida);
+
+        app(AjustarMontoPorSolicitudService::class)->aplicarBeneficios($solicitud);
+        $this->assertSame($this->listaBronce->id, $cliente->fresh()->lista_actual_id);
+
+        app(AjustarMontoPorSolicitudService::class)->revertirBeneficios($solicitud);
+        $cliente->refresh();
+        $this->assertSame($this->listaBronce->id, $cliente->lista_actual_id);
+        $this->assertEquals(1000.0, (float) $cliente->monto_venta_actual);
+    }
+
+    public function test_con_autoridad_activa_la_carga_masiva_no_sobrescribe_monto(): void
+    {
+        app(\App\Services\Escalonamiento\EscalonamientoAutoridadConfig::class)->guardar(true);
+
+        $this->listaBronce->update(['participa_escalonamiento' => true]);
+        $cliente = $this->cliente(1000);
+
+        $this->importar("numero_cliente,nombre,monto_venta_actual\n{$cliente->numero_cliente},Cliente Test,9999\n");
+
+        $this->assertEquals(1000.0, (float) $cliente->fresh()->monto_venta_actual);
+        $this->assertSame(0, HistorialMontoCliente::where('origen', RegistrarHistorialMontoClienteService::ORIGEN_CARGA_MASIVA)->count());
     }
 
     public function test_carga_que_ya_trae_la_venta_evita_duplicar_al_confirmar(): void

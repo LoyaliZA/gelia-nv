@@ -97,6 +97,10 @@ class ClienteController extends Controller
             unset($validated['fecha_inicio_credito']);
         }
 
+        if (config('escalonamiento.autoridad_activa')) {
+            unset($validated['monto_venta_actual'], $validated['lista_actual_id']);
+        }
+
         return $validated;
     }
 

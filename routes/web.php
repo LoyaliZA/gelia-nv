@@ -23,6 +23,7 @@ Route::middleware(['auth'])->group(function () {
     require __DIR__.'/web/modules/contabilidad.php';
     require __DIR__.'/web/modules/reportes.php';
     require __DIR__.'/web/modules/saldos-favor.php';
+    require __DIR__.'/web/modules/escalonamiento.php';
     require __DIR__.'/web/modules/entregas.php';
     require __DIR__.'/web/modules/funciones-operativas.php';
     require __DIR__.'/web/modules/almacenes.php';

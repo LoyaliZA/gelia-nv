@@ -6,7 +6,13 @@
         "build": "vite build",
         "dev": "vite",
         "test": "vitest run",
-        "test:watch": "vitest"
+        "test:watch": "vitest",
+        "check:style-jsx": "bash scripts/style-guard/check-jsx-no-hex.sh --check",
+        "check:style-css": "bash scripts/style-guard/check-css-features-no-hex.sh --check",
+        "check:style": "npm run check:style-jsx && npm run check:style-css",
+        "check:style-jsx:baseline": "bash scripts/style-guard/check-jsx-no-hex.sh --update-baseline",
+        "check:style-css:baseline": "bash scripts/style-guard/check-css-features-no-hex.sh --update-baseline",
+        "lint:style-css": "stylelint \"resources/css/gelia/features/**/*.css\""
     },
     "devDependencies": {
         "@laravel/echo-react": "^2.3.3",
@@ -16,6 +22,8 @@
         "laravel-echo": "^2.3.4",
         "laravel-vite-plugin": "^3.0.0",
         "pusher-js": "^8.5.0",
+        "stylelint": "^16.25.0",
+        "stylelint-config-standard": "^39.0.0",
         "tailwindcss": "^4.0.0",
         "vite": "^8.0.0",
         "vitest": "^4.1.11"

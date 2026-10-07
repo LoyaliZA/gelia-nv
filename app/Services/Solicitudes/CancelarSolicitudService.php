@@ -45,7 +45,11 @@ class CancelarSolicitudService
 
                 if ($solicitud->catalogo_lista_rebaja_id && $solicitud->cliente_id) {
                     $cliente = Cliente::with(['listaDescuento', 'vendedor', 'tipo'])->find($solicitud->cliente_id);
-                    if ($cliente) {
+                    if (
+                        $cliente
+                        && ! $cliente->lista_bloqueada
+                        && ! app(\App\Services\Escalonamiento\EscalonamientoAutoridad::class)->clienteGobernadoPorModulo($cliente)
+                    ) {
                         $listaRebaja = $this->validarListaInferior->validarListaInferior(
                             $solicitud,
                             $solicitud->catalogo_lista_rebaja_id

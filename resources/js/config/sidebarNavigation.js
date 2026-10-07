@@ -29,6 +29,7 @@ import {
     LifeBuoy,
     Bug,
     Landmark,
+    TrendingUp,
     Warehouse,
     Boxes,
     DollarSign,
@@ -216,6 +217,14 @@ export function buildSidebarNavigation({ can, showAdminMenu, manualesHubVisible 
             icon: Store,
             href: () => routeHref('saldos_favor.caja.index', '/saldos-favor/caja'),
             active: (url) => url.startsWith('/saldos-favor/caja'),
+        },
+        can('escalonamiento.ver') && {
+            type: 'link',
+            id: 'escalonamiento',
+            label: 'Escalonamiento',
+            icon: TrendingUp,
+            href: () => routeHref('escalonamiento.index', '/escalonamiento'),
+            active: (url) => url.startsWith('/escalonamiento'),
         },
     ].filter(Boolean);
 

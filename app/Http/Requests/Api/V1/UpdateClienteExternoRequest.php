@@ -26,8 +26,12 @@ class UpdateClienteExternoRequest extends FormRequest
             'uso_factura' => 'nullable|string|max:255',
             'vendedor_id' => 'nullable|exists:users,id',
             'catalogo_tipo_cliente_id' => 'nullable|exists:catalogo_tipo_clientes,id',
-            'monto_venta_actual' => 'nullable|numeric|min:0',
-            'lista_actual_id' => 'nullable|exists:catalogo_listas_descuento,id',
+            'monto_venta_actual' => config('escalonamiento.autoridad_activa')
+                ? 'prohibited'
+                : 'nullable|numeric|min:0',
+            'lista_actual_id' => config('escalonamiento.autoridad_activa')
+                ? 'prohibited'
+                : 'nullable|exists:catalogo_listas_descuento,id',
             'lista_bloqueada' => 'nullable|boolean',
             'es_heredado' => 'nullable|boolean',
             'numero_cliente' => [

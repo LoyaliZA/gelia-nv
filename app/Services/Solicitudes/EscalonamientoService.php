@@ -4,10 +4,14 @@ namespace App\Services\Solicitudes;
 
 use App\Models\CatalogoListaDescuento;
 use App\Models\Cliente;
+use App\Services\Escalonamiento\ProyeccionClienteEscalonamiento;
 use Illuminate\Support\Collection;
 
 class EscalonamientoService
 {
+    public function __construct(
+        private ?ProyeccionClienteEscalonamiento $proyeccionCliente = null,
+    ) {}
     public function obtenerPorcentajeLista(?CatalogoListaDescuento $lista): float
     {
         if (!$lista) {
@@ -51,12 +55,18 @@ class EscalonamientoService
         Collection|array $catalogoListas
     ): array {
         $listas = collect($catalogoListas);
-        $listaActual = $cliente->lista_actual_id
-            ? $listas->firstWhere('id', (int) $cliente->lista_actual_id)
-            : null;
+        if ($this->proyeccionCliente) {
+            $listaActual = $this->proyeccionCliente->listaActualEnCatalogo($cliente, $listas);
+            $acumulado = $this->proyeccionCliente->montoAcumulado($cliente);
+        } else {
+            $listaActual = $cliente->lista_actual_id
+                ? $listas->firstWhere('id', (int) $cliente->lista_actual_id)
+                : null;
+            $acumulado = (float) ($cliente->monto_venta_actual ?? 0);
+        }
 
         return $this->evaluar(
-            (float) ($cliente->monto_venta_actual ?? 0),
+            $acumulado,
             $montoCotizado,
             $listaSolicitadaId,
             $listas,

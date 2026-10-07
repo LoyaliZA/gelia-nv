@@ -3,7 +3,7 @@ import { Head, useForm, usePage, router } from '@inertiajs/react';
 import {
     Users, Upload, Search,
     FileSpreadsheet, TrendingUp,
-    CheckCircle, Database, Edit3, ChevronDown, Sparkles,
+    CheckCircle, Database, Edit3, ChevronDown,
     Plus, Shield, X, ChevronRight, History, MapPin,
 } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
@@ -15,6 +15,7 @@ import ModalFormCliente from './Partials/ModalFormCliente';
 import ModalConfiguracionEspecial from './Partials/ModalConfiguracionEspecial';
 import TabAuditoriaClientes from './Partials/TabAuditoriaClientes';
 
+import BadgeListaDescuento from '../../Components/BadgeListaDescuento';
 import { geliaCardClass, THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from '../../utils/geliaTheme';
 
 const ModalReporteImportacion = ({ reporte, onClose }) => {
@@ -243,30 +244,6 @@ export default function Clientes({ auth, clientes, vendedores = [], tipos_client
             setReporteModal(flash.reporte_importacion);
         }
     }, [flash]);
-
-    // --- SECCIÓN: RENDERIZADORES DE UI ---
-    const renderBadgeLista = (nombreLista) => {
-        if (!nombreLista) return <span className="px-2 py-1 theme-element border theme-border text-zinc-500 text-[9px] font-black uppercase tracking-widest rounded-md">Sin Lista</span>;
-
-        const nivel = nombreLista.toUpperCase().replace('MAYOREO ', '').trim();
-
-        switch (nivel) {
-            case 'BRONCE': return <span className="px-2 py-1 bg-[#cd7f32]/10 text-[#cd7f32] border border-[#cd7f32]/30 text-[9px] font-black uppercase tracking-widest rounded-md">Bronce</span>;
-            case 'PLATA': return <span className="px-2 py-1 bg-slate-400/10 text-slate-500 border border-slate-400/30 text-[9px] font-black uppercase tracking-widest rounded-md">Plata</span>;
-            case 'ORO': return <span className="px-2 py-1 bg-yellow-500/10 text-yellow-600 border border-yellow-500/30 text-[9px] font-black uppercase tracking-widest rounded-md">Oro</span>;
-            case 'DIAMANTE':
-                return (
-                    <span className="relative flex items-center gap-1.5 px-2.5 py-1 bg-gradient-to-r from-cyan-500/10 to-blue-500/10 border border-cyan-400/40 text-[9px] font-black uppercase tracking-widest rounded-md overflow-hidden shadow-[0_0_8px_rgba(34,211,238,0.2)]">
-                        <Sparkles className="w-3 h-3 text-cyan-600 dark:text-cyan-300" />
-                        <span className="text-cyan-700 dark:text-cyan-300 drop-shadow-sm">Diamante</span>
-                        <span className="absolute inset-0 w-[150%] -translate-x-full bg-gradient-to-r from-transparent via-cyan-100/60 dark:via-white/20 to-transparent skew-x-12 animate-[shimmer_3s_infinite_ease-in-out]"></span>
-                    </span>
-                );
-            case 'PUBLICO GENERAL': return <span className="px-2 py-1 theme-element theme-border border text-zinc-500 text-[9px] font-black uppercase tracking-widest rounded-md">Público Gral.</span>;
-            case 'COLABORADORES': return <span className="px-2 py-1 bg-purple-500/10 text-purple-600 border border-purple-500/30 text-[9px] font-black uppercase tracking-widest rounded-md">Colaborador</span>;
-            default: return <span className="px-2 py-1 bg-blue-500/10 text-blue-500 border border-blue-500/30 text-[9px] font-black uppercase tracking-widest rounded-md">{nivel}</span>;
-        }
-    };
 
     const listaClientes = clientes?.data || [];
     const activeCardClass = geliaCardClass('relative z-10');
@@ -624,7 +601,7 @@ export default function Clientes({ auth, clientes, vendedores = [], tipos_client
                                                         {cliente.nombre}
                                                     </h3>
                                                     <div className="flex flex-wrap items-center gap-2 mt-2">
-                                                        {renderBadgeLista(cliente.lista_descuento?.nombre)}
+                                                        <BadgeListaDescuento nombre={cliente.lista_descuento?.nombre} />
                                                         {(cliente.es_inactivo === true || cliente.es_inactivo === 1) && (
                                                             <span className="px-2 py-1 bg-amber-500/10 text-amber-600 border border-amber-500/30 text-[9px] font-black uppercase tracking-widest rounded-md">
                                                                 Inactivo

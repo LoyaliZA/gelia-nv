@@ -3,6 +3,7 @@
 namespace App\Observers;
 
 use App\Models\CatalogoListaDescuento;
+use App\Services\Escalonamiento\SincronizarReglasPeriodosEscalonamiento;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 
@@ -13,10 +14,26 @@ class CatalogoListaDescuentoObserver
      */
     public function updated(CatalogoListaDescuento $lista): void
     {
-        // Solo registramos si el monto requerido fue modificado
         if ($lista->wasChanged('monto_requerido')) {
             $this->registrarAuditoria($lista);
         }
+
+        if ($lista->wasChanged([
+            'participa_escalonamiento',
+            'activo',
+            'monto_requerido',
+            'porcentaje_descuento',
+            'monto_minimo',
+            'monto_maximo',
+            'nombre',
+        ])) {
+            app(SincronizarReglasPeriodosEscalonamiento::class)->sincronizarPeriodosEditables();
+        }
+    }
+
+    public function created(CatalogoListaDescuento $lista): void
+    {
+        app(SincronizarReglasPeriodosEscalonamiento::class)->sincronizarPeriodosEditables();
     }
 
     /**

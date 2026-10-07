@@ -136,6 +136,8 @@ export const DESCRIPCIONES_PERMISOS = {
     'control_pedidos.direccion.cambiar_despues_guia': 'Permite cambiar dirección e invalidar guía existente.',
     'control_pedidos.direccion.usar_manual': 'Permite capturar una dirección manual excepcional en un pedido.',
     'saldos_favor.ver': 'Permite consultar saldos a favor y cuentas de clientes.',
+    'escalonamiento.ver': 'Permite consultar el acumulado de ventas por período de escalonamiento.',
+    'escalonamiento.operar': 'Permite abrir un período de escalonamiento.',
     'saldos_favor.generar': 'Permite generar saldos a favor.',
     'saldos_favor.aplicar': 'Permite aplicar saldos a favor en pedidos.',
     'saldos_favor.revisar': 'Permite revisar administrativamente saldos a favor.',
@@ -495,6 +497,20 @@ export const SUBMODULOS_UI_POR_MODULO = {
             label: 'Plazos de retraso',
             descripcion: 'Configurar plazos de empaque y recolección',
             permisos: ['control_pedidos.configurar_plazos'],
+        },
+    ],
+    escalonamiento: [
+        {
+            id: 'consulta',
+            label: 'Consulta',
+            descripcion: 'Ver el acumulado de ventas por período',
+            permisos: ['escalonamiento.ver'],
+        },
+        {
+            id: 'operacion',
+            label: 'Operación',
+            descripcion: 'Abrir un período, importar documentos y vincular devoluciones',
+            permisos: ['escalonamiento.operar'],
         },
     ],
     saldos_favor: [
@@ -1477,7 +1493,7 @@ export const SECCIONES_SIDEBAR_PERMISOS = [
         id: 'finanzas',
         label: 'Finanzas',
         descripcion: 'Contabilidad, facturas, cobranza y saldos a favor',
-        modulos: ['contabilidad', 'facturas', 'cobranza', 'saldos_favor'],
+        modulos: ['contabilidad', 'facturas', 'cobranza', 'saldos_favor', 'escalonamiento'],
     },
     {
         id: 'herramientas',
@@ -1540,6 +1556,7 @@ export const ETIQUETAS_MODULO_UI = {
     punto_venta: 'Acceso al módulo',
     pdv: 'Operación en piso',
     saldos_favor: 'Saldos a favor',
+    escalonamiento: 'Escalonamiento',
     contabilidad: 'Contabilidad',
     facturas: 'Facturas',
     traspasos: 'Traspasos',

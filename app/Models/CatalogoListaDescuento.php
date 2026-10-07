@@ -17,6 +17,7 @@ class CatalogoListaDescuento extends Model
         'monto_minimo',
         'monto_maximo',
         'activo',
+        'participa_escalonamiento',
         'tono_sala',
         'prioridad_cola_turnos',
     ];
@@ -25,6 +26,7 @@ class CatalogoListaDescuento extends Model
         'monto_requerido' => 'decimal:2',
         'porcentaje_descuento' => 'decimal:2',
         'activo' => 'boolean',
+        'participa_escalonamiento' => 'boolean',
     ];
 
     protected $appends = [

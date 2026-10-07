@@ -263,9 +263,11 @@ class CrearSolicitudService
             return [];
         }
 
+        $proyeccion = app(\App\Services\Escalonamiento\ProyeccionClienteEscalonamiento::class);
+
         return [
-            'monto_venta' => $cliente->monto_venta_actual,
-            'lista_id' => $cliente->lista_actual_id,
+            'monto_venta' => $proyeccion->montoAcumulado($cliente),
+            'lista_id' => $proyeccion->listaVigenteId($cliente) ?? $cliente->lista_actual_id,
             'lista_nombre' => $cliente->listaDescuento?->nombre,
             'tag_vendedor_id' => $cliente->vendedor_id,
             'tag_vendedor_nombre' => $cliente->vendedor?->name,

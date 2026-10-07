@@ -98,9 +98,12 @@ class CatalogoController extends Controller
             'monto_requerido' => 'required|numeric',
             'porcentaje_descuento' => 'required|numeric|min:0|max:100',
             'activo' => 'boolean',
+            'participa_escalonamiento' => 'boolean',
             'tono_sala' => 'nullable|in:bronce,plata,oro,diamante',
             'prioridad_cola_turnos' => 'nullable|integer|min:0|max:99',
         ]);
+
+        $datos['participa_escalonamiento'] = $request->boolean('participa_escalonamiento');
 
         $datos['tono_sala'] = $datos['tono_sala'] ?? null;
         $datos['prioridad_cola_turnos'] = $request->input('prioridad_cola_turnos') === null

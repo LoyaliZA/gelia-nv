@@ -4,28 +4,17 @@ namespace App\Services\Clientes;
 
 use App\Models\CambioListaImportacionCliente;
 use App\Models\Cliente;
+use App\Services\Escalonamiento\EscalonamientoAutoridad;
+use App\Services\Escalonamiento\ProyeccionClienteEscalonamiento;
 use App\Services\Solicitudes\AjustarMontoPorSolicitudService;
 use App\Services\Solicitudes\EscalonamientoService;
 use Illuminate\Support\Collection;
 
 class ProcesarFilaClienteAction
 {
-    protected $mapaWizerp = [
-        'PG'              => 'PUBLICO GENERAL',
-        '7'               => 'COLABORADORES',
-        '5'               => 'PLATAFORMAS',
-        '4'               => 'MAYOREO DIAMANTE',
-        '3'               => 'MAYOREO PLATA',
-        '2'               => 'MAYOREO BRONCE',
-        '1'               => 'MAYOREO ORO',
-        'DIAMANTE'        => 'MAYOREO DIAMANTE',
-        'ORO'             => 'MAYOREO ORO',
-        'PLATA'           => 'MAYOREO PLATA',
-        'BRONCE'          => 'MAYOREO BRONCE',
-        'COLABORADORES'   => 'COLABORADORES',
-        'PLATAFORMAS'     => 'PLATAFORMAS',
-        'PUBLICO GENERAL' => 'PUBLICO GENERAL',
-    ];
+    public function __construct(
+        private ResolucionListaWizerp $resolucionLista,
+    ) {}
 
     public function ejecutar(
         array $data,
@@ -83,11 +72,12 @@ class ProcesarFilaClienteAction
 
         $listaPgId = $this->idListaPublicoGeneral($listas);
         $montoExtraido = $this->limpiarMonto($data['monto_venta_actual'] ?? null);
+        $autoridadActiva = app(EscalonamientoAutoridad::class)->estaActiva();
 
         $clienteNuevo = [
             'numero_cliente'     => trim($data['numero_cliente']),
             'nombre'             => trim($data['nombre']),
-            'monto_venta_actual' => $montoExtraido ?? 0.00,
+            'monto_venta_actual' => $autoridadActiva ? 0.00 : ($montoExtraido ?? 0.00),
             'es_heredado'        => $this->evaluarHeredado($data['es_heredado'] ?? null),
             'es_inactivo'        => false,
         ];
@@ -175,8 +165,9 @@ class ProcesarFilaClienteAction
             }
         }
 
+        $autoridadActiva = app(EscalonamientoAutoridad::class)->estaActiva();
         $listaIdCSV = null;
-        if ($importaCodigoLista && !$cliente->lista_bloqueada) {
+        if ($importaCodigoLista && !$cliente->lista_bloqueada && ! $autoridadActiva) {
             if ($this->codigoListaVacio($data)) {
                 if (!$cliente->es_inactivo) {
                     $marcadosInactivos++;
@@ -197,7 +188,9 @@ class ProcesarFilaClienteAction
         $montoExtraido = $this->limpiarMonto($data['monto_venta_actual'] ?? null);
 
         if ($montoExtraido !== null) {
-            $montoGeliaAntes = (float) $cliente->monto_venta_actual;
+            $montoGeliaAntes = $autoridadActiva
+                ? app(ProyeccionClienteEscalonamiento::class)->montoAcumulado($cliente)
+                : (float) $cliente->monto_venta_actual;
             app(AjustarMontoPorSolicitudService::class)->marcarCubiertasPorCarga(
                 $cliente,
                 $montoGeliaAntes,
@@ -205,7 +198,7 @@ class ProcesarFilaClienteAction
             );
         }
 
-        if ($montoExtraido !== null && !$this->montosSonIguales($cliente->monto_venta_actual, $montoExtraido)) {
+        if (! $autoridadActiva && $montoExtraido !== null && !$this->montosSonIguales($cliente->monto_venta_actual, $montoExtraido)) {
             $updateData['monto_venta_actual'] = $montoExtraido;
 
             $listaEvaluacionId = $updateData['lista_actual_id'] ?? $cliente->lista_actual_id;
@@ -329,13 +322,16 @@ class ProcesarFilaClienteAction
         ?int $importacionClienteId = null,
         ?int $usuarioId = null,
     ): void {
-        $historialBatch[] = app(RegistrarHistorialMontoClienteService::class)->filaBatch(
+        $filaHistorial = app(RegistrarHistorialMontoClienteService::class)->filaBatch(
             $cliente,
             $montoNuevo,
             RegistrarHistorialMontoClienteService::ORIGEN_CARGA_MASIVA,
             $usuarioId,
             $importacionClienteId,
         );
+        if ($filaHistorial !== []) {
+            $historialBatch[] = $filaHistorial;
+        }
     }
 
     private function evaluarHeredado(?string $valor): bool
@@ -352,7 +348,7 @@ class ProcesarFilaClienteAction
     {
         $lista = $listas->firstWhere('id', $listaId);
 
-        return $lista && in_array($lista->nombre, ['COLABORADORES', 'PLATAFORMAS']);
+        return $lista && $this->resolucionLista->nombreExcluyeEscalonamiento($lista->nombre);
     }
 
     private function montosSonIguales(float $montoA, float $montoB): bool
@@ -375,14 +371,8 @@ class ProcesarFilaClienteAction
         if ($this->codigoListaVacio($data)) {
             return null;
         }
-        $raw = trim((string) ($data['codigo_lista'] ?? ''));
-        $codigo = $this->normalizarCodigoLista($raw);
 
-        if (!isset($this->mapaWizerp[$codigo])) {
-            return null;
-        }
-
-        return $listas->where('nombre', $this->mapaWizerp[$codigo])->first()->id ?? null;
+        return $this->resolucionLista->resolverListaId($listas, (string) ($data['codigo_lista'] ?? ''));
     }
 
     /**
@@ -411,21 +401,6 @@ class ProcesarFilaClienteAction
         }
 
         return $listaIdCSV;
-    }
-
-    private function normalizarCodigoLista(string $raw): string
-    {
-        $codigo = strtoupper(trim($raw));
-
-        if (preg_match('/^(\d+)\.0+$/', $codigo, $matches)) {
-            return $matches[1];
-        }
-
-        if (is_numeric($codigo) && !isset($this->mapaWizerp[$codigo])) {
-            return (string) (int) (float) $codigo;
-        }
-
-        return $codigo;
     }
 
     private function limpiarMonto(?string $montoRaw): ?float

@@ -81,6 +81,20 @@
     color: var(--theme-text-muted);
 }
 
+.gelia-estado-vivo--info {
+    border-color: color-mix(in srgb, var(--color-primario) 35%, transparent);
+    background-color: color-mix(in srgb, var(--color-primario) 12%, transparent);
+    color: var(--color-primario);
+}
+
+.gelia-estado-vivo--compacto {
+    min-height: auto;
+    min-width: auto;
+    padding: 0.25rem 0.625rem;
+    gap: 0.25rem;
+    border-radius: 0.5rem;
+}
+
 .gelia-estado-vivo__pulso {
     position: absolute;
     inset: 0;

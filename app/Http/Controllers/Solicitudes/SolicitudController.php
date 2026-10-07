@@ -14,6 +14,7 @@ use App\Services\Solicitudes\SolicitarCancelacionSolicitudService;
 use App\Services\Solicitudes\ExportarReporteSolicitudesService;
 use App\Services\Solicitudes\AjustarMontoPorSolicitudService;
 use App\Services\Solicitudes\EscalonamientoService;
+use App\Services\Escalonamiento\ProyeccionClienteEscalonamiento;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\JsonResponse;
 use App\Models\SolicitudTag;
@@ -313,7 +314,8 @@ class SolicitudController extends Controller
 
             $cliente = Cliente::find($solicitud->cliente_id);
             if ($cliente) {
-                $totalProyectado = ($cliente->monto_venta_actual ?? 0) + $solicitud->monto_cotizado;
+                $totalProyectado = app(ProyeccionClienteEscalonamiento::class)->montoAcumulado($cliente)
+                    + $solicitud->monto_cotizado;
 
                 $listasActivas = CatalogoListaDescuento::with('porcentajeEscalonamiento')
                     ->where('activo', true)
@@ -911,9 +913,11 @@ class SolicitudController extends Controller
 
         $cliente->loadMissing(['listaDescuento', 'vendedor', 'tipo']);
 
+        $proyeccion = app(ProyeccionClienteEscalonamiento::class);
+
         return [
-            'monto_venta' => $cliente->monto_venta_actual,
-            'lista_id' => $cliente->lista_actual_id,
+            'monto_venta' => $proyeccion->montoAcumulado($cliente),
+            'lista_id' => $proyeccion->listaVigenteId($cliente) ?? $cliente->lista_actual_id,
             'lista_nombre' => $cliente->listaDescuento?->nombre,
             'tag_vendedor_id' => $cliente->vendedor_id,
             'tag_vendedor_nombre' => $cliente->vendedor?->name,

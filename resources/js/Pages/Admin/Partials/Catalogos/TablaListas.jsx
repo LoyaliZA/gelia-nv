@@ -14,6 +14,7 @@ export default function TablaListas({ datos = [] }) {
         monto_requerido: '',
         porcentaje_descuento: '',
         activo: true,
+        participa_escalonamiento: false,
         tono_sala: '',
         prioridad_cola_turnos: '',
     });
@@ -35,6 +36,7 @@ export default function TablaListas({ datos = [] }) {
             monto_requerido: item.monto_requerido || '',
             porcentaje_descuento: item.porcentaje_descuento || '',
             activo: item.activo,
+            participa_escalonamiento: Boolean(item.participa_escalonamiento),
             tono_sala: item.tono_sala || '',
             prioridad_cola_turnos: item.prioridad_cola_turnos ?? '',
         });
@@ -82,6 +84,7 @@ export default function TablaListas({ datos = [] }) {
                             <th className="px-6 py-4 text-left text-[9px] font-black text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">Monto Base_</th>
                             <th className="px-6 py-4 text-left text-[9px] font-black text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">% Descuento_</th>
                             <th className="px-6 py-4 text-left text-[9px] font-black text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">Cola turnos_</th>
+                            <th className="px-6 py-4 text-left text-[9px] font-black text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">Escalonamiento_</th>
                             <th className="px-6 py-4 text-left text-[9px] font-black text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">Status_</th>
                             <th className="px-6 py-4 text-right text-[9px] font-black text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">Acciones_</th>
                         </tr>
@@ -104,6 +107,11 @@ export default function TablaListas({ datos = [] }) {
                                     <p className="text-[9px] font-bold theme-text-muted uppercase tracking-tighter mt-0.5">
                                         Prioridad {item.prioridad_cola_turnos ?? 'auto'}
                                     </p>
+                                </td>
+                                <td className="px-6 py-5">
+                                    <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest ${item.participa_escalonamiento ? 'bg-[var(--color-primario)]/10 text-[var(--color-primario)]' : 'bg-zinc-500/10 text-zinc-500'}`}>
+                                        {item.participa_escalonamiento ? 'Suma ventas' : 'No participa'}
+                                    </span>
                                 </td>
                                 <td className="px-6 py-5">
                                     <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest ${item.activo ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-red-500/10 text-red-600 dark:text-red-400'}`}>
@@ -220,6 +228,20 @@ export default function TablaListas({ datos = [] }) {
                                     Un número mayor se atiende antes. Vacío deja la prioridad automática: Diamante pasa antes que el resto.
                                 </p>
                                 {errors.prioridad_cola_turnos && <p className="text-xs text-red-500 mt-1 px-1">{errors.prioridad_cola_turnos}</p>}
+                            </div>
+
+                            <div className="flex items-center justify-between p-4 rounded-2xl border theme-border bg-black/5 dark:bg-white/5">
+                                <div>
+                                    <p className="text-sm font-black theme-text-main">Participa en escalonamiento_</p>
+                                    <p className="text-[10px] font-bold theme-text-muted uppercase tracking-widest mt-0.5">
+                                        {data.participa_escalonamiento
+                                            ? 'Las remisiones activas en MXN suman al acumulado del mes'
+                                            : 'Se conservan en carga pero no suman al acumulado'}
+                                    </p>
+                                </div>
+                                <button type="button" onClick={() => setData('participa_escalonamiento', !data.participa_escalonamiento)} className="gelia-switch shrink-0 scale-125 origin-right shadow-sm" data-active={data.participa_escalonamiento}>
+                                    <div className="gelia-switch-thumb shadow-md" />
+                                </button>
                             </div>
 
                             <div className="flex items-center justify-between p-4 rounded-2xl border theme-border bg-black/5 dark:bg-white/5">

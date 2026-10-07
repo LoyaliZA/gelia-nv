@@ -35,6 +35,7 @@ export const GELIA_ESTADO_VIVO_TONO = {
     aviso: 'gelia-estado-vivo--aviso',
     error: 'gelia-estado-vivo--error',
     neutro: 'gelia-estado-vivo--neutro',
+    info: 'gelia-estado-vivo--info',
 };
 
 /** Contenedor squircle para iconos decorativos (títulos, filas, modales). */
@@ -75,10 +76,16 @@ export const GELIA_CHIP =
 export const GELIA_FIELDSET_LEGEND =
     'text-[10px] font-black uppercase tracking-widest theme-text-muted px-1';
 
+/** Título de diálogo (modales bajo AppLayout). */
+export const GELIA_MODAL_TITLE =
+    'text-xl sm:text-2xl font-black italic uppercase tracking-tight theme-text-main m-0 leading-tight';
+
 /** Botón conmutador (presets / filtros exclusivos). */
 export function geliaToggleBtnClass(active = false) {
     return [
-        'rounded-lg border theme-border px-3 py-1.5 text-[10px] font-black uppercase tracking-widest transition-colors',
-        active ? 'text-white border-transparent' : 'theme-text-main theme-surface hover:bg-black/5 dark:hover:bg-white/5',
+        'rounded-lg border px-3 py-1.5 text-[10px] font-black uppercase tracking-widest transition-colors',
+        active
+            ? 'text-white border-transparent bg-[var(--color-primario)]'
+            : 'theme-border theme-text-main theme-surface hover:bg-black/5 dark:hover:bg-white/5',
     ].join(' ');
 }

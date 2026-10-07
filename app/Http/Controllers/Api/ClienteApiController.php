@@ -5,11 +5,15 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Cliente;
 use App\Services\Clientes\Direcciones\GestionDireccionesClienteService;
+use App\Services\Escalonamiento\ProyeccionClienteEscalonamiento;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class ClienteApiController extends Controller
 {
+    public function __construct(
+        private ProyeccionClienteEscalonamiento $proyeccionCliente,
+    ) {}
     public function index(Request $request): JsonResponse
     {
         $termino = trim($request->query('q', ''));
@@ -56,9 +60,9 @@ class ClienteApiController extends Controller
                 'nombre' => $cliente->nombre,
                 'es_heredado' => (bool) $cliente->es_heredado,
                 'es_inactivo' => (bool) $cliente->es_inactivo,
-                'lista_actual_id' => $cliente->lista_actual_id,
+                'lista_actual_id' => $this->proyeccionCliente->listaVigenteId($cliente) ?? $cliente->lista_actual_id,
                 'lista_actual' => $cliente->listaDescuento->nombre ?? 'Sin Lista',
-                'monto_venta_actual' => (float) $cliente->monto_venta_actual,
+                'monto_venta_actual' => $this->proyeccionCliente->montoAcumulado($cliente),
                 'monto_credito_autorizado' => $cliente->monto_credito_autorizado !== null
                     ? (float) $cliente->monto_credito_autorizado
                     : null,
@@ -108,9 +112,9 @@ class ClienteApiController extends Controller
             'nombre' => $cliente->nombre,
             'es_heredado' => (bool) $cliente->es_heredado,
             'es_inactivo' => (bool) $cliente->es_inactivo,
-            'lista_actual_id' => $cliente->lista_actual_id,
+            'lista_actual_id' => $this->proyeccionCliente->listaVigenteId($cliente) ?? $cliente->lista_actual_id,
             'lista_actual' => $cliente->listaDescuento->nombre ?? 'Sin Lista',
-            'monto_venta_actual' => (float) $cliente->monto_venta_actual,
+            'monto_venta_actual' => $this->proyeccionCliente->montoAcumulado($cliente),
         ]);
     }
 

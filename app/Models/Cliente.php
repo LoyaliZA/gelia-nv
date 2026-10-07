@@ -36,6 +36,8 @@ class Cliente extends Model
         'es_demo',
         'catalogo_tipo_cliente_id',
         'lista_bloqueada', // <-- NUEVO CAMPO PARA CONTROLAR BLOQUEO DE LISTA
+        'escalonamiento_meses_sin_compra',
+        'escalonamiento_ultima_compra_periodo_id',
         'monto_credito_autorizado',
         'dias_credito',
         'fecha_inicio_credito',
@@ -63,6 +65,7 @@ class Cliente extends Model
         'es_inactivo' => 'boolean',
         'es_demo' => 'boolean',
         'lista_bloqueada' => 'boolean',
+        'escalonamiento_meses_sin_compra' => 'integer',
         'monto_credito_autorizado' => 'decimal:2',
         'dias_credito' => 'integer',
         'fecha_inicio_credito' => 'date:Y-m-d',

@@ -23,6 +23,14 @@ class RegistrarHistorialMontoClienteService
         ?float $montoOperacion = null,
         ?string $notas = null,
     ): HistorialMontoCliente {
+        if (config('escalonamiento.autoridad_activa') && $origen === self::ORIGEN_CARGA_MASIVA) {
+            return new HistorialMontoCliente([
+                'cliente_id' => $cliente->id,
+                'monto_anterior' => (float) $cliente->monto_venta_actual,
+                'monto_nuevo' => $montoNuevo,
+            ]);
+        }
+
         $montoAnterior = (float) $cliente->monto_venta_actual;
 
         if (abs($montoAnterior - $montoNuevo) < 0.001) {
@@ -60,6 +68,10 @@ class RegistrarHistorialMontoClienteService
         ?float $montoOperacion = null,
         ?string $notas = null,
     ): array {
+        if (config('escalonamiento.autoridad_activa') && $origen === self::ORIGEN_CARGA_MASIVA) {
+            return [];
+        }
+
         $ahora = now();
         $montoAnterior = (float) $cliente->monto_venta_actual;
 

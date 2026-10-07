@@ -5,12 +5,14 @@ namespace App\Services\ApiExterna;
 use App\Models\ApiAplicacion;
 use App\Models\ApiRecurso;
 use App\Models\Cliente;
+use App\Services\Escalonamiento\ProyeccionClienteEscalonamiento;
 use Illuminate\Support\Collection;
 
 class ApiFieldFilterService
 {
     public function __construct(
-        protected ApiPermisoService $permisoService
+        protected ApiPermisoService $permisoService,
+        protected ProyeccionClienteEscalonamiento $proyeccionCliente,
     ) {}
 
     public function slugsHabilitados(ApiAplicacion $aplicacion, ApiRecurso $recurso): array
@@ -25,6 +27,13 @@ class ApiFieldFilterService
     {
         $cliente->loadMissing(['listaDescuento', 'vendedor', 'tipo']);
 
+        $listaProyectadaId = $this->proyeccionCliente->listaVigenteId($cliente);
+        $listaProyectada = $listaProyectadaId
+            ? ($cliente->listaDescuento?->id === $listaProyectadaId
+                ? $cliente->listaDescuento
+                : \App\Models\CatalogoListaDescuento::query()->find($listaProyectadaId))
+            : $cliente->listaDescuento;
+
         $mapa = [
             'numero_cliente' => $cliente->numero_cliente,
             'nombre' => $cliente->nombre,
@@ -34,9 +43,9 @@ class ApiFieldFilterService
             'regimen_fiscal' => $cliente->regimen_fiscal,
             'correo_electronico' => $cliente->correo_electronico,
             'uso_factura' => $cliente->uso_factura,
-            'lista_descuento' => $cliente->listaDescuento?->nombre,
+            'lista_descuento' => $listaProyectada?->nombre ?? $cliente->listaDescuento?->nombre,
             'vendedor' => $cliente->vendedor?->name,
-            'monto_venta_actual' => (float) $cliente->monto_venta_actual,
+            'monto_venta_actual' => $this->proyeccionCliente->montoAcumulado($cliente),
             'es_heredado' => (bool) $cliente->es_heredado,
             'tipo_cliente' => $cliente->tipo?->nombre,
             'lista_bloqueada' => (bool) $cliente->lista_bloqueada,
