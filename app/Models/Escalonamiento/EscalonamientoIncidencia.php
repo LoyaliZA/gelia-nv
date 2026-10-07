@@ -5,6 +5,7 @@ namespace App\Models\Escalonamiento;
 use App\Models\Cliente;
 use App\Models\SolicitudTag;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -56,5 +57,31 @@ class EscalonamientoIncidencia extends Model
     public function resueltoPor(): BelongsTo
     {
         return $this->belongsTo(User::class, 'resuelto_por_user_id');
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function codigosInformativos(): array
+    {
+        return config('escalonamiento.incidencias_informativas', ['exclusion_lealtad']);
+    }
+
+    public function esInformativa(): bool
+    {
+        return in_array($this->codigo, self::codigosInformativos(), true);
+    }
+
+    /**
+     * Incidencias que sí exigen revisión operativa (cierre, tabla de clientes, métricas).
+     */
+    public function scopeOperativas(Builder $query): Builder
+    {
+        $codigos = self::codigosInformativos();
+        if ($codigos === []) {
+            return $query;
+        }
+
+        return $query->whereNotIn('codigo', $codigos);
     }
 }

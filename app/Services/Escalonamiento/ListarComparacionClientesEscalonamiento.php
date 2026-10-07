@@ -120,7 +120,7 @@ class ListarComparacionClientesEscalonamiento
             ->where('escalonamiento_periodo_id', $periodo->id)
             ->where('estado', 'abierta')
             ->whereIn('cliente_id', $clienteIds)
-            ->whereNotIn('codigo', ['exclusion_lealtad'])
+            ->operativas()
             ->selectRaw('cliente_id, count(*) as total')
             ->groupBy('cliente_id')
             ->pluck('total', 'cliente_id');
@@ -445,7 +445,7 @@ class ListarComparacionClientesEscalonamiento
                 ->where('escalonamiento_periodo_id', $periodo->id)
                 ->where('estado', 'abierta')
                 ->whereIn('cliente_id', $chunkIds)
-                ->whereNotIn('codigo', ['exclusion_lealtad'])
+                ->operativas()
                 ->selectRaw('cliente_id, count(*) as total')
                 ->groupBy('cliente_id')
                 ->pluck('total', 'cliente_id');
@@ -563,7 +563,7 @@ class ListarComparacionClientesEscalonamiento
         return EscalonamientoIncidencia::query()
             ->where('escalonamiento_periodo_id', $periodo->id)
             ->where('estado', 'abierta')
-            ->whereNotIn('codigo', ['exclusion_lealtad'])
+            ->operativas()
             ->distinct()
             ->pluck('cliente_id')
             ->filter()

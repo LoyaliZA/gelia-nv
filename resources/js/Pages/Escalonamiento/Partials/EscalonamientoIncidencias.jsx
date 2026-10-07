@@ -157,7 +157,7 @@ export default function EscalonamientoIncidencias({
                 <section className="space-y-4">
                     <h3 className="text-base font-bold theme-text-main m-0">Exclusiones informativas</h3>
                     <p className="text-sm theme-text-muted m-0">
-                        Listas o documentos excluidos por configuración. No requieren resolución operativa.
+                        Listas o documentos excluidos por configuración. No bloquean el cierre ni cuentan en incidencias abiertas del período; solo documentan que la remisión no sumó al acumulado.
                     </p>
                     <ul className="m-0 p-0 list-none space-y-2 text-sm">
                         {exclusiones.map((exc) => (

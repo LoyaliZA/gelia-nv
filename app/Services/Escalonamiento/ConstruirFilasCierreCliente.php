@@ -39,6 +39,7 @@ class ConstruirFilasCierreCliente
         $incidenciasAbiertas = EscalonamientoIncidencia::query()
             ->where('escalonamiento_periodo_id', $periodo->id)
             ->where('estado', 'abierta')
+            ->operativas()
             ->whereIn('cliente_id', $clienteIds)
             ->selectRaw('cliente_id, count(*) as total')
             ->groupBy('cliente_id')

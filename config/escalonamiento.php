@@ -18,5 +18,10 @@ return [
         'moneda_no_soportada',
     ],
 
+    // No cuentan como pendientes operativas ni bloquean cierre; solo trazabilidad.
+    'incidencias_informativas' => [
+        'exclusion_lealtad',
+    ],
+
     'meses_inactividad' => 3,
 ];

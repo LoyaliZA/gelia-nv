@@ -36,15 +36,22 @@ class MetricasPeriodoEscalonamiento
         $incidenciasAbiertas = EscalonamientoIncidencia::query()
             ->where('escalonamiento_periodo_id', $periodo->id)
             ->where('estado', 'abierta')
+            ->operativas()
             ->count();
 
         $incidenciasPorCodigo = EscalonamientoIncidencia::query()
             ->where('escalonamiento_periodo_id', $periodo->id)
             ->where('estado', 'abierta')
+            ->operativas()
             ->selectRaw('codigo, count(*) as total')
             ->groupBy('codigo')
             ->pluck('total', 'codigo')
             ->all();
+
+        $exclusionesInformativas = EscalonamientoIncidencia::query()
+            ->where('escalonamiento_periodo_id', $periodo->id)
+            ->whereIn('codigo', EscalonamientoIncidencia::codigosInformativos())
+            ->count();
 
         $resumenes = EscalonamientoResumenCliente::query()
             ->where('escalonamiento_periodo_id', $periodo->id)
@@ -93,6 +100,7 @@ class MetricasPeriodoEscalonamiento
             'pendientes_vinculo' => $pendientesVinculo,
             'incidencias_abiertas' => $incidenciasAbiertas,
             'incidencias_por_codigo' => $incidenciasPorCodigo,
+            'exclusiones_informativas' => $exclusionesInformativas,
             'erp_aplicacion_pendiente' => $erpPendiente,
             'antiguedad_corte_dias' => $antiguedadCorteDias,
             'documentos_total' => $periodo->documentos()->count(),

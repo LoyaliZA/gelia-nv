@@ -618,7 +618,7 @@ class ImportarDocumentosEscalonamiento
             $documento = $this->crearDocumento($periodo, $cliente, $datos, $clave, $origen);
         }
 
-        $this->incidencia($periodo, $cliente->id, $documento->id, 'exclusion_lealtad', $exclusion, 'aviso', $userId);
+        $this->registrarExclusionInformativa($periodo, $cliente->id, $documento->id, $exclusion, $userId);
 
         return ['resultado' => 'excluido', 'motivo' => $exclusion, 'datos' => $datos];
     }
@@ -1184,6 +1184,40 @@ class ImportarDocumentosEscalonamiento
         }
 
         return $documento;
+    }
+
+    /**
+     * @param  array<string, mixed>  $datos
+     * @return array<string, mixed>
+     */
+    private function registrarExclusionInformativa(
+        EscalonamientoPeriodo $periodo,
+        int $clienteId,
+        int $documentoId,
+        string $motivo,
+        ?int $userId,
+    ): void {
+        $existe = EscalonamientoIncidencia::query()
+            ->where('escalonamiento_periodo_id', $periodo->id)
+            ->where('documento_venta_id', $documentoId)
+            ->where('codigo', 'exclusion_lealtad')
+            ->exists();
+        if ($existe) {
+            return;
+        }
+
+        EscalonamientoIncidencia::create([
+            'escalonamiento_periodo_id' => $periodo->id,
+            'cliente_id' => $clienteId,
+            'documento_venta_id' => $documentoId,
+            'gravedad' => 'aviso',
+            'codigo' => 'exclusion_lealtad',
+            'motivo' => $motivo,
+            'estado' => 'resuelta',
+            'resolucion' => 'Registro informativo: el documento se conserva sin sumar al acumulado.',
+            'resuelto_en' => now(),
+            'user_id' => $userId,
+        ]);
     }
 
     /**

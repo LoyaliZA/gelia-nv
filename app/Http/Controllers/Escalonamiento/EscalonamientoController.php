@@ -960,9 +960,9 @@ class EscalonamientoController extends Controller
             ->with('cliente:id,numero_cliente,nombre,lista_bloqueada')
             ->where('escalonamiento_periodo_id', $periodo->id)
             ->when($clienteId > 0, fn ($q) => $q->where('cliente_id', $clienteId))
-            ->when($soloExclusion, fn ($q) => $q->where('codigo', 'exclusion_lealtad'))
-            ->when($accionables && ! $soloExclusion, fn ($q) => $q->where('codigo', '!=', 'exclusion_lealtad'))
-            ->when($estado !== '' && $estado !== 'todas', fn ($q) => $q->where('estado', $estado))
+            ->when($soloExclusion, fn ($q) => $q->whereIn('codigo', EscalonamientoIncidencia::codigosInformativos()))
+            ->when($accionables && ! $soloExclusion, fn ($q) => $q->operativas())
+            ->when($estado !== '' && $estado !== 'todas' && ! $soloExclusion, fn ($q) => $q->where('estado', $estado))
             ->when($tipo !== '', fn ($q) => $q->where('codigo', $tipo))
             ->when($gravedad !== '', fn ($q) => $q->where('gravedad', $gravedad))
             ->orderByRaw("case gravedad when 'bloquea' then 0 when 'aviso' then 1 else 2 end")
@@ -986,7 +986,7 @@ class EscalonamientoController extends Controller
                 'lista_bloqueada' => (bool) $incidencia->cliente?->lista_bloqueada,
                 'documentos_pendientes' => count(is_array($incidencia->contexto['documentos'] ?? null) ? $incidencia->contexto['documentos'] : []),
                 'acciones' => $this->resolverIncidenciaEscalonamiento->accionesPara($incidencia),
-                'es_informativa' => $incidencia->codigo === 'exclusion_lealtad',
+                'es_informativa' => $incidencia->esInformativa(),
             ])
             ->all();
     }
@@ -1002,7 +1002,7 @@ class EscalonamientoController extends Controller
 
         $codigos = EscalonamientoIncidencia::query()
             ->where('escalonamiento_periodo_id', $periodo->id)
-            ->where('codigo', '!=', 'exclusion_lealtad')
+            ->operativas()
             ->distinct()
             ->orderBy('codigo')
             ->pluck('codigo');
