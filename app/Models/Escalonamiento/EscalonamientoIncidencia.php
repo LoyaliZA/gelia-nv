@@ -25,10 +25,12 @@ class EscalonamientoIncidencia extends Model
         'resuelto_en',
         'resuelto_por_user_id',
         'user_id',
+        'contexto',
     ];
 
     protected $casts = [
         'resuelto_en' => 'datetime',
+        'contexto' => 'array',
     ];
 
     public function periodo(): BelongsTo

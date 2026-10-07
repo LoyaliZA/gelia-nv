@@ -163,6 +163,13 @@ class ImportarDocumentosEscalonamientoTest extends TestCase
         $this->assertStringContainsString('18:06', $docPagada->datos_fuente['fecha_hora']);
         $this->assertSame('POS', $docPagada->datos_fuente['origen_documento']);
         $this->assertSame('ZAMORA CADENA NALLELY', $docPagada->datos_fuente['nombre']);
+        $docPagada->load('expedienteRemision');
+        $this->assertNotNull($docPagada->expedienteRemision);
+        $this->assertSame('62704', $docPagada->expedienteRemision->folio);
+        $this->assertEquals('1387.76', (string) $docPagada->expedienteRemision->subtotal);
+        $this->assertSame('Pagada', $docPagada->expedienteRemision->status_pago);
+        $this->assertSame('POS', $docPagada->expedienteRemision->origen);
+        $this->assertStringContainsString('18:06', (string) $docPagada->expedienteRemision->fecha);
         $this->assertEquals('22551.91', (string) EscalonamientoResumenCliente::where('cliente_id', $pagada->id)->value('acumulado'));
         $pagada->refresh();
         $this->assertEquals(40.0, (float) $pagada->monto_venta_actual);
@@ -375,6 +382,40 @@ class ImportarDocumentosEscalonamientoTest extends TestCase
         }
 
         return UploadedFile::fake()->createWithContent($nombre, implode("\n", $lineas));
+    }
+
+    public function test_reimporte_identico_actualiza_expediente_sin_cambiar_acumulado(): void
+    {
+        Storage::fake('local');
+        $this->clienteConNombre('9400', 'EXPEDIENTE UNICO SA');
+        $periodo = app(AbrirPeriodoEscalonamiento::class)->abrir(2026, 10);
+        $importar = app(ImportarDocumentosEscalonamiento::class);
+
+        $reporte = function (string $statusPago): UploadedFile {
+            $contenido = "Folio,Fecha,Cliente,Sucursal,Moneda,Subtotal,Total,Status,Status Pago,Origen\n";
+            $contenido .= 'R-9400,2026-10-05 14:30,EXPEDIENTE UNICO SA,Matriz,MXN,500.00,500.00,Activa,'.$statusPago.',POS';
+
+            return UploadedFile::fake()->createWithContent('reporte.csv', $contenido);
+        };
+
+        $primera = $importar->previsualizar($periodo, $reporte('Pagada'), null, 'remision');
+        $importar->confirmar($primera->id, null);
+
+        $doc = DocumentoVenta::where('folio', 'R-9400')->firstOrFail();
+        $doc->load('expedienteRemision');
+        $this->assertSame('Pagada', $doc->expedienteRemision?->status_pago);
+        $acumulado = (string) EscalonamientoResumenCliente::where('cliente_id', $doc->cliente_id)->value('acumulado');
+        $movimientos = EscalonamientoMovimiento::count();
+
+        $segunda = $importar->previsualizar($periodo, $reporte('Vigente'), null, 'remision');
+        $this->assertSame('identico', $segunda->filas->first()->resultado);
+        $importar->confirmar($segunda->id, null);
+
+        $doc->refresh();
+        $doc->load('expedienteRemision');
+        $this->assertSame('Vigente', $doc->expedienteRemision?->status_pago);
+        $this->assertSame($acumulado, (string) EscalonamientoResumenCliente::where('cliente_id', $doc->cliente_id)->value('acumulado'));
+        $this->assertSame($movimientos, EscalonamientoMovimiento::count());
     }
 
     public function test_remision_historica_duplicada_marca_historial_identico(): void

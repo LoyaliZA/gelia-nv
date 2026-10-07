@@ -83,6 +83,10 @@ export default function EscalonamientoIncidencias({
                 <div className="flex justify-end pt-1"><button type="submit" className={THEME_BTN_SECONDARY}>Aplicar filtros</button></div>
             </form>
 
+            {puedeOperar && (
+                <ResolucionMasiva periodo={periodo} tipos={opciones.tipos || []} />
+            )}
+
             <section className="space-y-4">
                 <div className="space-y-1">
                     <h3 className="text-base font-bold theme-text-main m-0">Incidencias accionables</h3>
@@ -117,7 +121,17 @@ export default function EscalonamientoIncidencias({
                                                 />
                                             </td>
                                             <td className="py-3.5 px-4 theme-text-main align-top leading-relaxed">
-                                                {inc.numero_cliente ? `${inc.numero_cliente} · ` : ''}{inc.nombre || 'Sin cliente'}
+                                                {inc.numero_cliente ? `${inc.numero_cliente} · ` : ''}{inc.nombre || 'Sin cliente en la base'}
+                                                {inc.documentos_pendientes > 0 && (
+                                                    <span className="block text-xs theme-text-muted mt-1">
+                                                        {inc.documentos_pendientes} documento(s) pendiente(s)
+                                                    </span>
+                                                )}
+                                                {inc.lista_bloqueada && (
+                                                    <span className="block text-xs theme-text-aviso mt-1">
+                                                        Lista protegida. La divergencia se mantiene hasta quitar esa protección.
+                                                    </span>
+                                                )}
                                             </td>
                                             <td className="py-3.5 px-4 theme-text-muted max-w-md align-top leading-relaxed">{inc.motivo}</td>
                                             <td className="py-3.5 px-4 align-top">
@@ -168,30 +182,163 @@ function EtiquetaEstado({ tono, texto }) {
     );
 }
 
-function ResolverIncidencia({ incidencia }) {
-    const form = useForm({ resolucion: '' });
+function ResolucionMasiva({ periodo, tipos }) {
+    const codigoInicial = tipos[0]?.codigo || '';
+    const form = useForm({
+        periodo_id: periodo?.id || '',
+        codigo: codigoInicial,
+        accion: accionesDeTipo(codigoInicial)[0]?.id || 'nota',
+        resolucion: '',
+    });
+
+    const acciones = accionesDeTipo(form.data.codigo);
 
     const enviar = (event) => {
         event.preventDefault();
-        form.post(route('escalonamiento.incidencias.resolver', incidencia.id), {
-            preserveScroll: true,
-            onSuccess: () => form.reset(),
-        });
+        form.post(route('escalonamiento.incidencias.resolver_lote'), { preserveScroll: true });
     };
 
     return (
-        <form onSubmit={enviar} className="flex flex-col gap-3 min-w-[14rem]">
-            <input
-                className={THEME_INPUT}
-                value={form.data.resolucion}
-                onChange={(e) => form.setData('resolucion', e.target.value)}
-                placeholder="Nota de resolución"
+        <form onSubmit={enviar} className={`${geliaCardClass('p-5 md:p-6')} space-y-4`}>
+            <div className="space-y-1">
+                <h3 className="text-base font-bold theme-text-main m-0">Resolución masiva</h3>
+                <p className="text-sm theme-text-muted m-0">
+                    Aplica la misma resolución a las incidencias abiertas de un tipo. Las que no puedan resolverse se quedan abiertas.
+                </p>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <label className="space-y-2">
+                    <span className={THEME_LABEL}>Tipo</span>
+                    <select
+                        className={THEME_SELECT}
+                        value={form.data.codigo}
+                        onChange={(e) => {
+                            const codigo = e.target.value;
+                            const siguiente = accionesDeTipo(codigo)[0]?.id || 'nota';
+                            form.setData({ ...form.data, codigo, accion: siguiente });
+                        }}
+                    >
+                        {tipos.length === 0 && <option value="">Sin tipos abiertos</option>}
+                        {tipos.map((t) => (
+                            <option key={t.codigo} value={t.codigo}>{t.etiqueta}</option>
+                        ))}
+                    </select>
+                </label>
+                <label className="space-y-2">
+                    <span className={THEME_LABEL}>Resolución</span>
+                    <select
+                        className={THEME_SELECT}
+                        value={form.data.accion}
+                        onChange={(e) => form.setData('accion', e.target.value)}
+                    >
+                        {acciones.map((accion) => (
+                            <option key={accion.id} value={accion.id}>{accion.etiqueta}</option>
+                        ))}
+                    </select>
+                </label>
+                {form.data.accion === 'nota' && (
+                    <label className="space-y-2 md:col-span-2">
+                        <span className={THEME_LABEL}>Nota</span>
+                        <input
+                            className={THEME_INPUT}
+                            value={form.data.resolucion}
+                            onChange={(e) => form.setData('resolucion', e.target.value)}
+                            placeholder="Nota que se guarda en cada incidencia"
+                        />
+                    </label>
+                )}
+            </div>
+            {(form.errors.accion || form.errors.resolucion || form.errors.codigo) && (
+                <p className="text-xs theme-text-peligro m-0">{form.errors.accion || form.errors.resolucion || form.errors.codigo}</p>
+            )}
+            <div className="flex justify-end">
+                <button type="submit" className={THEME_BTN_SECONDARY} disabled={form.processing || !form.data.codigo}>
+                    Aplicar a las abiertas de este tipo
+                </button>
+            </div>
+        </form>
+    );
+}
+
+function accionesDeTipo(codigo) {
+    if (codigo === 'cliente_no_identificado') {
+        return [
+            { id: 'crear_cliente_y_registrar', etiqueta: 'Agregar a la base y registrar documentos' },
+            { id: 'crear_cliente', etiqueta: 'Agregar a la base de datos' },
+            { id: 'nota', etiqueta: 'Cerrar con nota' },
+        ];
+    }
+    if (codigo === 'divergencia_lista_operativa') {
+        return [
+            { id: 'alinear_lista_operativa', etiqueta: 'Actualizar monto y lista vigente' },
+            { id: 'nota', etiqueta: 'Cerrar con nota' },
+        ];
+    }
+
+    return [{ id: 'nota', etiqueta: 'Cerrar con nota' }];
+}
+
+function ResolverIncidencia({ incidencia }) {
+    const acciones = incidencia.acciones?.length ? incidencia.acciones : [{ id: 'nota', etiqueta: 'Cerrar con nota' }];
+    const form = useForm({
+        accion: acciones[0].id,
+        resolucion: '',
+        cliente_id: '',
+        numero_cliente: '',
+    });
+    const requiereCliente = form.data.accion === 'vincular_cliente' || form.data.accion === 'vincular_cliente_y_registrar';
+    const pideNumero = incidencia.requiere_numero && (form.data.accion === 'crear_cliente' || form.data.accion === 'crear_cliente_y_registrar');
+
+    const enviar = (event) => {
+        event.preventDefault();
+        form.post(route('escalonamiento.incidencias.resolver', incidencia.id), { preserveScroll: true });
+    };
+
+    return (
+        <form onSubmit={enviar} className="flex flex-col gap-3 min-w-[16rem]">
+            <select
+                className={THEME_SELECT}
+                value={form.data.accion}
+                onChange={(e) => form.setData('accion', e.target.value)}
                 aria-label={`Resolución incidencia ${incidencia.id}`}
-            />
+            >
+                {acciones.map((accion) => (
+                    <option key={accion.id} value={accion.id}>{accion.etiqueta}</option>
+                ))}
+            </select>
+            {pideNumero && (
+                <input
+                    className={THEME_INPUT}
+                    value={form.data.numero_cliente}
+                    onChange={(e) => form.setData('numero_cliente', e.target.value)}
+                    placeholder="Número de cliente"
+                    aria-label={`Número para incidencia ${incidencia.id}`}
+                />
+            )}
+            {requiereCliente && (
+                <FiltroClienteEscalonamiento
+                    valorId={form.data.cliente_id}
+                    label="Cliente existente"
+                    onSeleccionar={(cliente) => form.setData('cliente_id', cliente?.id || '')}
+                />
+            )}
+            {form.data.accion === 'nota' && (
+                <input
+                    className={THEME_INPUT}
+                    value={form.data.resolucion}
+                    onChange={(e) => form.setData('resolucion', e.target.value)}
+                    placeholder="Nota de resolución"
+                    aria-label={`Nota incidencia ${incidencia.id}`}
+                />
+            )}
             <button type="submit" className={THEME_BTN_SECONDARY} disabled={form.processing}>
-                Registrar resolución
+                Aplicar resolución
             </button>
-            {form.errors.resolucion && <p className="text-xs theme-text-peligro m-0">{form.errors.resolucion}</p>}
+            {(form.errors.accion || form.errors.resolucion || form.errors.cliente_id || form.errors.numero_cliente) && (
+                <p className="text-xs theme-text-peligro m-0">
+                    {form.errors.accion || form.errors.resolucion || form.errors.cliente_id || form.errors.numero_cliente}
+                </p>
+            )}
         </form>
     );
 }

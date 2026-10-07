@@ -88,6 +88,7 @@ export const RESULTADOS_IMPORTACION = {
     pendiente: 'Pendiente',
     incidencia: 'Error',
     excluido: 'Excluido',
+    omitida: 'Omitida',
     historial_alta: 'Historial · nuevo',
     historial_identico: 'Historial · sin cambio',
     historial_revision: 'Historial · revisión',

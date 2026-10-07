@@ -28,7 +28,9 @@ Route::prefix('escalonamiento')->name('escalonamiento.')->group(function () {
         Route::post('/capturas', [EscalonamientoController::class, 'capturar'])->name('capturas.store');
         Route::post('/devoluciones/{documento}/vincular', [EscalonamientoController::class, 'vincular'])->name('devoluciones.vincular');
         Route::post('/aplicaciones/{aplicacion}/revertir', [EscalonamientoController::class, 'revertir'])->name('aplicaciones.revertir');
-        Route::post('/incidencias/{incidencia}/resolver', [EscalonamientoController::class, 'resolverIncidencia'])->name('incidencias.resolver');
+        Route::post('/incidencias/resolver-lote', [EscalonamientoController::class, 'resolverIncidenciasLote'])->name('incidencias.resolver_lote');
+        Route::post('/incidencias/{incidenciaEscalonamiento}/resolver', [EscalonamientoController::class, 'resolverIncidencia'])->name('incidencias.resolver');
+        Route::post('/importaciones/resolver-clientes', [EscalonamientoController::class, 'resolverClientesPrevisualizacion'])->name('importaciones.resolver_clientes');
         Route::post('/conciliacion/asignar', [EscalonamientoController::class, 'asignarConciliacion'])->name('conciliacion.asignar');
         Route::post('/conciliacion/{conciliacionFila}/quitar', [EscalonamientoController::class, 'quitarConciliacion'])->name('conciliacion.quitar');
         Route::post('/cierre/simular', [EscalonamientoController::class, 'simularCierre'])->name('cierre.simular');

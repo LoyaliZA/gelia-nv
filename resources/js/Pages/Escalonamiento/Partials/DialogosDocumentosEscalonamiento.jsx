@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, router, useForm } from '@inertiajs/react';
+import { Link, router, useForm, usePage } from '@inertiajs/react';
 import { ChevronDown, FileSpreadsheet, HelpCircle, UploadCloud, X } from 'lucide-react';
 import EscalonamientoModal from './EscalonamientoModal';
 import {
@@ -38,6 +38,7 @@ export default function DialogosDocumentosEscalonamiento({
     const [filtroProblemas, setFiltroProblemas] = useState(false);
     const [busquedaFila, setBusquedaFila] = useState('');
     const [arrastrandoArchivo, setArrastrandoArchivo] = useState(false);
+    const { flash, errors: erroresPagina } = usePage().props;
     const inputArchivoRef = useRef(null);
     const cuerpoModalRef = useRef(null);
 
@@ -117,6 +118,21 @@ export default function DialogosDocumentosEscalonamiento({
     const enviarArchivo = (event) => {
         event.preventDefault();
         archivo.post(route('escalonamiento.importaciones.previsualizar'), { forceFormData: true });
+    };
+
+    const clientesFaltantes = useMemo(
+        () => (previsualizacion?.filas || []).filter(
+            (fila) => fila.resultado === 'incidencia' && fila.codigo_incidencia === 'cliente_no_identificado',
+        ),
+        [previsualizacion],
+    );
+
+    const resolverClientesPreview = (accion, numerosFila = []) => {
+        router.post(route('escalonamiento.importaciones.resolver_clientes'), {
+            importacion_id: previsualizacion.id,
+            accion,
+            numeros_fila: numerosFila,
+        }, { preserveScroll: true });
     };
 
     const enviarConfirmacion = (event) => {
@@ -373,6 +389,36 @@ export default function DialogosDocumentosEscalonamiento({
                                     />
                                 </div>
 
+                                {(flash?.success || flash?.error || erroresPagina?.accion) && (
+                                    <p className={`text-sm m-0 ${flash?.error || erroresPagina?.accion ? 'theme-text-peligro' : 'theme-text-exito'}`} role="status">
+                                        {erroresPagina?.accion || flash?.error || flash?.success}
+                                    </p>
+                                )}
+
+                                {clientesFaltantes.length > 0 && (
+                                    <div className={`${geliaCardClass('p-4')} space-y-3`}>
+                                        <p className="text-sm theme-text-main m-0">
+                                            {clientesFaltantes.length} fila(s) sin cliente en la base. Puedes crearlos ahora y decidir si sus documentos entran en esta carga.
+                                        </p>
+                                        <div className="flex flex-wrap gap-2">
+                                            <button
+                                                type="button"
+                                                className={THEME_BTN_PRIMARY}
+                                                onClick={() => resolverClientesPreview('crear_cliente_y_registrar')}
+                                            >
+                                                Agregar a la base y dejar documentos en esta carga
+                                            </button>
+                                            <button
+                                                type="button"
+                                                className={THEME_BTN_SECONDARY}
+                                                onClick={() => resolverClientesPreview('crear_cliente')}
+                                            >
+                                                Solo agregar a la base
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+
                                 <div className="flex flex-col sm:flex-row gap-2">
                                     <input
                                         type="search"
@@ -403,6 +449,7 @@ export default function DialogosDocumentosEscalonamiento({
                                                 <th className="py-2 px-3 font-semibold">Cliente</th>
                                                 <th className="py-2 px-3 font-semibold text-right">Total</th>
                                                 <th className="py-2 px-3 font-semibold">Motivo</th>
+                                                {clientesFaltantes.length > 0 && <th className="py-2 px-3 font-semibold">Resolución</th>}
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -420,11 +467,24 @@ export default function DialogosDocumentosEscalonamiento({
                                                     <td className={`py-2 px-3 max-w-xs ${claseMotivoImportacion(fila.resultado)}`}>
                                                         {fila.motivo || '—'}
                                                     </td>
+                                                    {clientesFaltantes.length > 0 && (
+                                                        <td className="py-2 px-3">
+                                                            {fila.codigo_incidencia === 'cliente_no_identificado' && fila.resultado === 'incidencia' && fila.numero_cliente ? (
+                                                                <button
+                                                                    type="button"
+                                                                    className={GELIA_BTN_OUTLINE}
+                                                                    onClick={() => resolverClientesPreview('crear_cliente_y_registrar', [fila.numero_fila])}
+                                                                >
+                                                                    Agregar y registrar
+                                                                </button>
+                                                            ) : '—'}
+                                                        </td>
+                                                    )}
                                                 </tr>
                                             ))}
                                             {filasVisibles.length === 0 && (
                                                 <tr className="border-t theme-border">
-                                                    <td colSpan={8} className="py-6 px-3 text-center theme-text-muted">
+                                                    <td colSpan={clientesFaltantes.length > 0 ? 9 : 8} className="py-6 px-3 text-center theme-text-muted">
                                                         No hay filas que coincidan con los filtros actuales.
                                                     </td>
                                                 </tr>

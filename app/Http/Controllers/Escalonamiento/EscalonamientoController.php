@@ -33,6 +33,7 @@ use App\Services\Escalonamiento\CancelarSimulacionCierreEscalonamiento;
 use App\Services\Escalonamiento\Excepciones\CierreEscalonamientoException;
 use App\Services\Escalonamiento\RegistrarAplicacionExternaErp;
 use App\Services\Escalonamiento\RevertirAplicacionDevolucion;
+use App\Services\Escalonamiento\ResolverIncidenciaEscalonamiento;
 use App\Services\Escalonamiento\RevisionCierrePrevioDiasUnoDos;
 use App\Services\Escalonamiento\SimularCierreEscalonamiento;
 use App\Services\Escalonamiento\VincularDevolucionARemision;
@@ -51,6 +52,7 @@ class EscalonamientoController extends Controller
     public function __construct(
         private AbrirPeriodoEscalonamiento $abrirPeriodo,
         private ConsultarAcumuladoCliente $consultarAcumulado,
+        private ResolverIncidenciaEscalonamiento $resolverIncidenciaEscalonamiento,
     ) {}
 
     public function index(Request $request, ListarComparacionClientesEscalonamiento $comparacion, MetricasPeriodoEscalonamiento $metricas, ListasPeriodoEscalonamiento $listasPeriodo): Response
@@ -401,25 +403,100 @@ class EscalonamientoController extends Controller
             ->with('success', 'Vínculo revertido. La devolución volvió a quedar pendiente y la capacidad de la remisión quedó libre.');
     }
 
-    public function resolverIncidencia(Request $request, EscalonamientoIncidencia $incidencia): RedirectResponse
+    public function resolverIncidencia(Request $request, EscalonamientoIncidencia $incidenciaEscalonamiento): RedirectResponse
     {
         $datos = $request->validate([
-            'resolucion' => ['required', 'string', 'min:3', 'max:2000'],
+            'accion' => ['required', 'string', 'in:nota,crear_cliente,crear_cliente_y_registrar,vincular_cliente,vincular_cliente_y_registrar,alinear_lista_operativa'],
+            'resolucion' => ['nullable', 'string', 'max:2000'],
+            'cliente_id' => ['nullable', 'integer', 'exists:clientes,id'],
+            'numero_cliente' => ['nullable', 'string', 'max:32'],
         ]);
 
-        if ($incidencia->estado !== 'abierta') {
-            return back()->with('error', 'La incidencia ya estaba resuelta.');
+        try {
+            $mensaje = $this->resolverIncidenciaEscalonamiento->resolver(
+                $incidenciaEscalonamiento,
+                $datos['accion'],
+                $request->user(),
+                $datos,
+            );
+        } catch (PeriodoNoAbiertoException $excepcion) {
+            return back()->with('error', $excepcion->getMessage());
         }
 
-        $incidencia->estado = 'resuelta';
-        $incidencia->resolucion = trim($datos['resolucion']);
-        $incidencia->resuelto_en = now();
-        $incidencia->resuelto_por_user_id = $request->user()?->id;
-        $incidencia->save();
+        return redirect()
+            ->route('escalonamiento.index', [
+                'tab' => 'incidencias',
+                'periodo_id' => $incidenciaEscalonamiento->escalonamiento_periodo_id,
+            ])
+            ->with('success', $mensaje);
+    }
+
+    public function resolverIncidenciasLote(Request $request): RedirectResponse
+    {
+        $datos = $request->validate([
+            'codigo' => ['required', 'string', 'max:64'],
+            'accion' => ['required', 'string', 'in:nota,crear_cliente,crear_cliente_y_registrar,alinear_lista_operativa'],
+            'resolucion' => ['nullable', 'string', 'max:2000'],
+            'periodo_id' => ['nullable', 'integer'],
+        ]);
+
+        $periodo = $this->periodoVista($request);
+        if (! $periodo) {
+            return back()->with('error', 'No hay un período para resolver incidencias.');
+        }
+
+        try {
+            $resultado = $this->resolverIncidenciaEscalonamiento->resolverLote(
+                $periodo,
+                $datos['codigo'],
+                $datos['accion'],
+                $request->user(),
+                $datos,
+            );
+        } catch (PeriodoNoAbiertoException $excepcion) {
+            return back()->with('error', $excepcion->getMessage());
+        }
 
         return redirect()
-            ->route('escalonamiento.index')
-            ->with('success', 'Incidencia resuelta.');
+            ->route('escalonamiento.index', [
+                'tab' => 'incidencias',
+                'periodo_id' => $periodo->id,
+                'tipo_incidencia' => $datos['codigo'],
+            ])
+            ->with('success', $resultado['mensaje']);
+    }
+
+    public function resolverClientesPrevisualizacion(Request $request): RedirectResponse
+    {
+        $datos = $request->validate([
+            'importacion_id' => ['required', 'integer'],
+            'accion' => ['required', 'string', 'in:crear_cliente,crear_cliente_y_registrar'],
+            'numeros_fila' => ['nullable', 'array'],
+            'numeros_fila.*' => ['integer'],
+        ]);
+
+        $importacion = EscalonamientoImportacion::query()->find($datos['importacion_id']);
+        if (! $importacion) {
+            return back()->with('error', 'No se encontró la previsualización.');
+        }
+
+        try {
+            $resultado = $this->resolverIncidenciaEscalonamiento->resolverPrevisualizacion(
+                $importacion,
+                $datos['accion'],
+                $request->user(),
+                array_map('intval', $datos['numeros_fila'] ?? []),
+            );
+        } catch (PeriodoNoAbiertoException $excepcion) {
+            return back()->with('error', $excepcion->getMessage());
+        }
+
+        return redirect()
+            ->route('escalonamiento.index', [
+                'importacion' => $importacion->id,
+                'periodo_id' => $importacion->escalonamiento_periodo_id,
+            ])
+            ->with('success', $resultado['mensaje']);
     }
 
     public function previsualizar(Request $request, ImportarDocumentosEscalonamiento $importar): RedirectResponse
@@ -880,7 +957,7 @@ class EscalonamientoController extends Controller
         $clienteId = (int) $request->get('cliente_id', 0);
 
         return EscalonamientoIncidencia::query()
-            ->with('cliente:id,numero_cliente,nombre')
+            ->with('cliente:id,numero_cliente,nombre,lista_bloqueada')
             ->where('escalonamiento_periodo_id', $periodo->id)
             ->when($clienteId > 0, fn ($q) => $q->where('cliente_id', $clienteId))
             ->when($soloExclusion, fn ($q) => $q->where('codigo', 'exclusion_lealtad'))
@@ -899,9 +976,16 @@ class EscalonamientoController extends Controller
                 'tipo_legible' => $this->etiquetaTipoIncidencia($incidencia->codigo),
                 'estado' => $incidencia->estado,
                 'motivo' => $incidencia->motivo,
-                'numero_cliente' => $incidencia->cliente?->numero_cliente,
-                'nombre' => $incidencia->cliente?->nombre,
+                'numero_cliente' => $incidencia->cliente?->numero_cliente
+                    ?: ($this->resolverIncidenciaEscalonamiento->numeroDesde($incidencia) ?: null),
+                'nombre' => $incidencia->cliente?->nombre
+                    ?: ($this->resolverIncidenciaEscalonamiento->nombreDesde($incidencia) ?: null),
+                'requiere_numero' => $incidencia->codigo === 'cliente_no_identificado'
+                    && $this->resolverIncidenciaEscalonamiento->numeroDesde($incidencia) === '',
                 'cliente_id' => $incidencia->cliente_id,
+                'lista_bloqueada' => (bool) $incidencia->cliente?->lista_bloqueada,
+                'documentos_pendientes' => count(is_array($incidencia->contexto['documentos'] ?? null) ? $incidencia->contexto['documentos'] : []),
+                'acciones' => $this->resolverIncidenciaEscalonamiento->accionesPara($incidencia),
                 'es_informativa' => $incidencia->codigo === 'exclusion_lealtad',
             ])
             ->all();
@@ -991,6 +1075,7 @@ class EscalonamientoController extends Controller
             'pendiente_vinculacion' => 'Pendiente de vínculo',
             'exclusion_lealtad' => 'Exclusión de lealtad',
             'divergencia_lista' => 'Divergencia de lista',
+            'divergencia_lista_operativa' => 'Divergencia de lista operativa',
             default => $codigo ? str_replace('_', ' ', $codigo) : 'Incidencia',
         };
     }
@@ -1288,6 +1373,7 @@ class EscalonamientoController extends Controller
                     'sucursal' => $datos['sucursal'] ?? null,
                     'numero_cliente' => $datos['numero_cliente'] ?? '',
                     'nombre' => $datos['nombre'] ?? '',
+                    'codigo_incidencia' => $datos['codigo_incidencia'] ?? null,
                     'total' => $datos['total'],
                     'periodo_destino' => $datos['periodo_destino'] ?? null,
                 ];

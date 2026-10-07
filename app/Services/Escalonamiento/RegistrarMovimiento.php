@@ -21,6 +21,7 @@ class RegistrarMovimiento
         private EvaluarListaClienteEscalonamiento $evaluarLista,
         private ListasPeriodoEscalonamiento $listasPeriodo,
         private PublicarProyeccionClienteEscalonamiento $publicarProyeccion,
+        private SincronizarExpedienteRemisionEscalonamiento $sincronizarExpediente,
     ) {}
 
     /**
@@ -41,7 +42,9 @@ class RegistrarMovimiento
      *     estado?: string|null,
      *     operacion?: string|null,
      *     remision_original?: string|null,
-     *     datos_fuente?: array<string, string>|null
+     *     datos_fuente?: array<string, string>|null,
+     *     reporte_remisiones?: bool,
+     *     fila_bruta?: array<string, mixed>|null
      * }  $datos
      */
     public function registrar(array $datos): EscalonamientoMovimiento
@@ -118,6 +121,8 @@ class RegistrarMovimiento
             if (bccomp($efecto, '0.00', 2) !== 0 || $resumen) {
                 $this->guardarResumen($periodo->id, (int) $datos['cliente_id'], $nuevo, $resumen);
             }
+
+            $this->sincronizarExpediente->desdeDatosImportacion($documento, $this->datosExpedienteDesdeRegistro($datos));
 
             return $movimiento;
         });
@@ -196,8 +201,9 @@ class RegistrarMovimiento
         string $efectoNuevo,
         string $estadoNuevo,
         ?int $userId = null,
+        ?array $datosImportacion = null,
     ): ?EscalonamientoMovimiento {
-        return DB::transaction(function () use ($documento, $totalNuevo, $efectoNuevo, $estadoNuevo, $userId) {
+        return DB::transaction(function () use ($documento, $totalNuevo, $efectoNuevo, $estadoNuevo, $userId, $datosImportacion) {
             $periodo = EscalonamientoPeriodo::query()->lockForUpdate()->findOrFail($documento->escalonamiento_periodo_id);
             if (! $periodo->permiteEscrituraMovimientos()) {
                 throw new PeriodoNoAbiertoException('El período no admite nuevos movimientos.');
@@ -228,6 +234,9 @@ class RegistrarMovimiento
             $totalAnterior = $this->dinero($documento->total);
             $documento->total = $this->dinero($totalNuevo);
             $documento->estado = $estadoNuevo;
+            if (is_array($datosImportacion) && array_key_exists('datos_fuente', $datosImportacion)) {
+                $documento->datos_fuente = $datosImportacion['datos_fuente'];
+            }
             $documento->save();
 
             if ($movimiento) {
@@ -257,8 +266,29 @@ class RegistrarMovimiento
                 'user_id' => $userId,
             ]);
 
+            if (is_array($datosImportacion)) {
+                $this->sincronizarExpediente->desdeDatosImportacion($documento, $datosImportacion);
+            }
+
             return $movimiento;
         });
+    }
+
+    /**
+     * @param  array<string, mixed>  $datos
+     * @return array<string, mixed>
+     */
+    private function datosExpedienteDesdeRegistro(array $datos): array
+    {
+        return [
+            'folio' => $datos['folio'],
+            'sucursal' => $datos['sucursal'] ?? null,
+            'moneda' => $datos['moneda'] ?? 'MXN',
+            'total' => $this->dinero($datos['total']),
+            'reporte_remisiones' => (bool) ($datos['reporte_remisiones'] ?? false),
+            'datos_fuente' => $datos['datos_fuente'] ?? null,
+            'fila_bruta' => $datos['fila_bruta'] ?? null,
+        ];
     }
 
     /**

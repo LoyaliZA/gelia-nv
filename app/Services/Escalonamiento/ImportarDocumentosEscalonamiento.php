@@ -35,6 +35,8 @@ class ImportarDocumentosEscalonamiento
         private ResolverPeriodoDocumentoEscalonamiento $resolverPeriodo,
         private AsegurarPeriodoHistoricoEscalonamiento $asegurarHistorico,
         private AsegurarPeriodoFuturoEscalonamiento $asegurarFuturo,
+        private MapearExpedienteRemisionReporte $mapearExpediente,
+        private SincronizarExpedienteRemisionEscalonamiento $sincronizarExpediente,
     ) {}
 
     public function previsualizar(
@@ -110,6 +112,13 @@ class ImportarDocumentosEscalonamiento
 
             foreach ($importacion->filas()->orderBy('numero_fila')->get() as $fila) {
                 $datos = is_array($fila->interpretacion) ? $fila->interpretacion : [];
+                if (! empty($datos['omitir_en_confirmacion'])) {
+                    $fila->resultado = 'omitida';
+                    $fila->motivo = (string) ($datos['motivo_omision'] ?? 'Documento omitido al resolver la incidencia.');
+                    $fila->save();
+
+                    continue;
+                }
                 $esReporte = (bool) ($datos['reporte_remisiones'] ?? false);
                 $resultado = $this->procesar(
                     $periodo,
@@ -327,8 +336,18 @@ class ImportarDocumentosEscalonamiento
 
         if (! $cliente) {
             $motivo = $this->motivoSinCliente($datos);
+            $datos['codigo_incidencia'] = 'cliente_no_identificado';
             if ($escribir) {
-                $this->incidencia($periodoIncidencias, null, null, 'cliente_no_identificado', $motivo, 'bloquea', $userId);
+                $this->incidencia(
+                    $periodoIncidencias,
+                    null,
+                    null,
+                    'cliente_no_identificado',
+                    $motivo,
+                    'bloquea',
+                    $userId,
+                    $this->contextoClienteNoIdentificado($datos),
+                );
             }
 
             return ['resultado' => 'incidencia', 'motivo' => $motivo, 'datos' => $datos];
@@ -375,6 +394,9 @@ class ImportarDocumentosEscalonamiento
             if (bccomp($efecto, '0.00', 2) === 0 && $datos['tipo'] === 'remision' && $datos['estado'] === 'activo') {
                 $motivo = 'El documento ya estaba cargado. No suma al acumulado porque la lista no participa en escalonamiento.';
             }
+            if ($escribir) {
+                $this->sincronizarExpedienteRemision($existente, $datos);
+            }
 
             return ['resultado' => 'identico', 'motivo' => $motivo, 'datos' => $datos];
         }
@@ -417,7 +439,7 @@ class ImportarDocumentosEscalonamiento
             }
 
             try {
-                $this->registrar->aplicarDiferencia($existente, $datos['total'], $efecto, $datos['estado'], $userId);
+                $this->registrar->aplicarDiferencia($existente, $datos['total'], $efecto, $datos['estado'], $userId, $datos);
                 $this->resolverIncidenciasExclusionTrasAplicar($periodo, $cliente, $existente, $efecto);
             } catch (AcumuladoNegativoException) {
                 $motivo = 'La revisión del folio '.$datos['folio'].' dejaría el acumulado negativo. No se aplicó.';
@@ -462,6 +484,8 @@ class ImportarDocumentosEscalonamiento
             'estado' => $datos['estado'],
             'operacion' => 'remision',
             'datos_fuente' => $datos['datos_fuente'],
+            'reporte_remisiones' => $datos['reporte_remisiones'] ?? false,
+            'fila_bruta' => $datos['fila_bruta'] ?? null,
         ]);
 
         return ['resultado' => 'alta', 'motivo' => null, 'datos' => $datos];
@@ -582,7 +606,7 @@ class ImportarDocumentosEscalonamiento
 
         if ($existente) {
             try {
-                $this->registrar->aplicarDiferencia($existente, $datos['total'], '0.00', $datos['estado'], $userId);
+                $this->registrar->aplicarDiferencia($existente, $datos['total'], '0.00', $datos['estado'], $userId, $datos);
             } catch (AcumuladoNegativoException) {
                 $motivo = 'La revisión del folio '.$datos['folio'].' dejaría el acumulado negativo. No se aplicó.';
                 $this->incidencia($periodo, $cliente->id, $existente->id, 'acumulado_negativo', $motivo, 'bloquea', $userId);
@@ -873,7 +897,7 @@ class ImportarDocumentosEscalonamiento
         if (is_array($bruto['datos_fuente'] ?? null)) {
             $fuente = $bruto['datos_fuente'] === [] ? null : $bruto['datos_fuente'];
         } elseif ($esReporte) {
-            $construida = $this->datosFuente($bruto);
+            $construida = $this->mapearExpediente->datosFuenteDesdeBruto($bruto);
             $fuente = $construida === [] ? null : $construida;
         }
 
@@ -892,6 +916,7 @@ class ImportarDocumentosEscalonamiento
             'origen' => $origen,
             'reporte_remisiones' => $esReporte,
             'datos_fuente' => $fuente,
+            'fila_bruta' => $esReporte ? $bruto : null,
         ];
     }
 
@@ -1055,92 +1080,6 @@ class ImportarDocumentosEscalonamiento
      * @param  array<string, mixed>  $bruto
      * @return array<string, string>
      */
-    private function datosFuente(array $bruto): array
-    {
-        $porClave = [];
-        foreach ($bruto as $clave => $valor) {
-            $porClave[$this->clave((string) $clave)] = $valor;
-        }
-
-        $mapa = [
-            'subtotal' => 'subtotal',
-            'descuento' => 'descuento',
-            'i_v_a' => 'iva',
-            'iva' => 'iva',
-            'imp_ieps' => 'imp_ieps',
-            'ret_i_v_a' => 'ret_iva',
-            'ret_iva' => 'ret_iva',
-            'ret_i_s_r' => 'ret_isr',
-            'ret_isr' => 'ret_isr',
-            'ret_ieps' => 'ret_ieps',
-            'utilidad' => 'utilidad',
-            'facturada' => 'facturada',
-            'email' => 'email',
-            'condicion_de_pago' => 'condicion_pago',
-            'condicion_pago' => 'condicion_pago',
-            'status' => 'status',
-            'status_pago' => 'status_pago',
-            'vencimiento' => 'vencimiento',
-            'metodo_de_pago' => 'metodo_pago',
-            'metodo_pago' => 'metodo_pago',
-            'origen' => 'origen_documento',
-            'almacen' => 'almacen',
-            'vendedor' => 'vendedor',
-            'plataforma' => 'plataforma',
-            'no_de_venta_en_plataforma' => 'numero_venta_plataforma',
-        ];
-        $monetarios = ['subtotal', 'descuento', 'iva', 'imp_ieps', 'ret_iva', 'ret_isr', 'ret_ieps', 'utilidad'];
-        $salida = [];
-        foreach ($mapa as $origen => $destino) {
-            if (! array_key_exists($origen, $porClave) || array_key_exists($destino, $salida)) {
-                continue;
-            }
-            $texto = $this->textoFuente($porClave[$origen], in_array($destino, $monetarios, true));
-            if ($texto === null) {
-                continue;
-            }
-            $salida[$destino] = $texto;
-        }
-
-        $hora = $this->fechaHora($porClave['fecha'] ?? null);
-        if ($hora !== null) {
-            $salida['fecha_hora'] = $hora;
-        }
-        $nombre = $this->texto($porClave['cliente'] ?? '');
-        if ($nombre !== '') {
-            $salida['nombre'] = $nombre;
-        }
-
-        return $salida;
-    }
-
-    private function textoFuente(mixed $valor, bool $monetario): ?string
-    {
-        if ($monetario) {
-            $total = $this->total($valor);
-
-            return $total;
-        }
-        if ($valor instanceof DateTimeInterface) {
-            return $valor->format('Y-m-d H:i:s');
-        }
-
-        $texto = $this->texto($valor);
-
-        return $texto === '' ? null : $texto;
-    }
-
-    private function fechaHora(mixed $valor): ?string
-    {
-        if ($valor instanceof DateTimeInterface) {
-            return $valor->format('Y-m-d H:i:s');
-        }
-
-        $texto = trim((string) $valor);
-
-        return $texto === '' ? null : $texto;
-    }
-
     /**
      * @return list<Cliente>
      */
@@ -1157,7 +1096,7 @@ class ImportarDocumentosEscalonamiento
             ->where('nombre', 'like', '%'.$escapado.'%')
             ->orderBy('numero_cliente')
             ->limit(5)
-            ->get(['numero_cliente', 'nombre'])
+            ->get(['id', 'numero_cliente', 'nombre'])
             ->all();
     }
 
@@ -1196,7 +1135,7 @@ class ImportarDocumentosEscalonamiento
         string $clave,
         string $origen,
     ): DocumentoVenta {
-        return DocumentoVenta::create([
+        $documento = DocumentoVenta::create([
             'escalonamiento_periodo_id' => $periodo->id,
             'cliente_id' => $cliente->id,
             'tipo' => $datos['tipo'],
@@ -1212,6 +1151,9 @@ class ImportarDocumentosEscalonamiento
             'remision_original' => $datos['remision_original'],
             'datos_fuente' => $datos['datos_fuente'] ?? null,
         ]);
+        $this->sincronizarExpedienteRemision($documento, $datos);
+
+        return $documento;
     }
 
     /**
@@ -1224,7 +1166,11 @@ class ImportarDocumentosEscalonamiento
         $documento->total = $datos['total'];
         $documento->estado = $datos['estado'];
         $documento->remision_original = $datos['remision_original'];
+        if (array_key_exists('datos_fuente', $datos)) {
+            $documento->datos_fuente = $datos['datos_fuente'];
+        }
         $documento->save();
+        $this->sincronizarExpedienteRemision($documento, $datos);
 
         if (bccomp($totalAnterior, $datos['total'], 2) !== 0 || $documento->wasChanged('estado')) {
             DocumentoVentaRevision::create([
@@ -1240,6 +1186,33 @@ class ImportarDocumentosEscalonamiento
         return $documento;
     }
 
+    /**
+     * @param  array<string, mixed>  $datos
+     * @return array<string, mixed>
+     */
+    private function contextoClienteNoIdentificado(array $datos): array
+    {
+        $numero = (string) ($datos['numero_cliente'] ?? '');
+        $nombre = trim((string) ($datos['nombre'] ?? ''));
+        $clave = $numero !== '' ? 'n:'.$numero : 'nombre:'.mb_strtolower($nombre);
+        $candidatos = array_map(fn (Cliente $cliente) => [
+            'id' => $cliente->id,
+            'numero_cliente' => $cliente->numero_cliente,
+            'nombre' => $cliente->nombre,
+        ], $this->candidatos($nombre));
+
+        return [
+            'clave' => $clave,
+            'numero_cliente' => $numero,
+            'nombre' => $nombre,
+            'candidatos' => $candidatos,
+            'documentos' => [$datos],
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $contexto
+     */
     private function incidencia(
         EscalonamientoPeriodo $periodo,
         ?int $clienteId,
@@ -1248,7 +1221,14 @@ class ImportarDocumentosEscalonamiento
         string $motivo,
         string $gravedad,
         ?int $userId,
+        ?array $contexto = null,
     ): void {
+        if ($codigo === 'cliente_no_identificado' && is_array($contexto)) {
+            $this->acumularClienteNoIdentificado($periodo, $motivo, $gravedad, $userId, $contexto);
+
+            return;
+        }
+
         $existe = EscalonamientoIncidencia::query()
             ->where('escalonamiento_periodo_id', $periodo->id)
             ->where('codigo', $codigo)
@@ -1268,7 +1248,107 @@ class ImportarDocumentosEscalonamiento
             'motivo' => $motivo,
             'estado' => 'abierta',
             'user_id' => $userId,
+            'contexto' => $contexto,
         ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $contexto
+     */
+    private function acumularClienteNoIdentificado(
+        EscalonamientoPeriodo $periodo,
+        string $motivo,
+        string $gravedad,
+        ?int $userId,
+        array $contexto,
+    ): void {
+        $clave = (string) ($contexto['clave'] ?? '');
+        $existente = EscalonamientoIncidencia::query()
+            ->where('escalonamiento_periodo_id', $periodo->id)
+            ->where('codigo', 'cliente_no_identificado')
+            ->where('estado', 'abierta')
+            ->where('contexto->clave', $clave)
+            ->first();
+
+        $documentos = is_array($existente?->contexto['documentos'] ?? null)
+            ? $existente->contexto['documentos']
+            : [];
+        foreach ($contexto['documentos'] ?? [] as $documento) {
+            if (! is_array($documento)) {
+                continue;
+            }
+            $ya = false;
+            foreach ($documentos as $previo) {
+                if (($previo['folio'] ?? '') === ($documento['folio'] ?? '')
+                    && ($previo['tipo'] ?? '') === ($documento['tipo'] ?? '')) {
+                    $ya = true;
+                    break;
+                }
+            }
+            if (! $ya) {
+                $documentos[] = $documento;
+            }
+        }
+
+        $contexto['documentos'] = $documentos;
+        $motivo = $motivo.' Documentos pendientes: '.count($documentos).'.';
+
+        if ($existente) {
+            $existente->motivo = $motivo;
+            $existente->contexto = $contexto;
+            $existente->save();
+
+            return;
+        }
+
+        EscalonamientoIncidencia::create([
+            'escalonamiento_periodo_id' => $periodo->id,
+            'cliente_id' => null,
+            'documento_venta_id' => null,
+            'gravedad' => $gravedad,
+            'codigo' => 'cliente_no_identificado',
+            'motivo' => $motivo,
+            'estado' => 'abierta',
+            'user_id' => $userId,
+            'contexto' => $contexto,
+        ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $datos
+     * @return array{resultado: string, motivo: ?string, datos: array<string, mixed>}
+     */
+    public function registrarFilaEnPeriodo(EscalonamientoPeriodo $periodo, array $datos, ?User $usuario): array
+    {
+        $this->exigirAbierto($periodo);
+        $this->reiniciarIndice();
+
+        return $this->procesar(
+            $periodo,
+            $datos,
+            true,
+            $usuario?->id,
+            (string) ($datos['origen'] ?? 'resolucion'),
+            (bool) ($datos['reporte_remisiones'] ?? false),
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $datos
+     * @return array{resultado: string, motivo: ?string, datos: array<string, mixed>}
+     */
+    public function reinterpretarFila(EscalonamientoPeriodo $periodo, array $datos): array
+    {
+        $this->reiniciarIndice();
+
+        return $this->procesar(
+            $periodo,
+            $datos,
+            false,
+            null,
+            (string) ($datos['origen'] ?? 'archivo'),
+            (bool) ($datos['reporte_remisiones'] ?? false),
+        );
     }
 
     /**
@@ -1545,6 +1625,14 @@ class ImportarDocumentosEscalonamiento
     private function dinero(float|int|string $valor): string
     {
         return bcadd((string) $valor, '0', 2);
+    }
+
+    /**
+     * @param  array<string, mixed>  $datos
+     */
+    private function sincronizarExpedienteRemision(DocumentoVenta $documento, array $datos): void
+    {
+        $this->sincronizarExpediente->desdeDatosImportacion($documento, $datos);
     }
 
     /**

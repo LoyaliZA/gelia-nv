@@ -65,4 +65,9 @@ class DocumentoVenta extends Model
     {
         return $this->hasMany(EscalonamientoAplicacionDevolucion::class, 'documento_remision_vinculada_id');
     }
+
+    public function expedienteRemision(): HasOne
+    {
+        return $this->hasOne(DocumentoVentaExpedienteRemision::class, 'documento_venta_id');
+    }
 }
