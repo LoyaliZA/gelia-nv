@@ -5,9 +5,8 @@ import FirmaCanvas from '../../../../Components/Rh/FirmaCanvas';
 import { esDispositivoCampo } from '../../../Activos/Partials/useDispositivoCampo';
 import { THEME_BTN_PRIMARY } from '../../../../utils/geliaTheme';
 import { BTN_SECONDARY } from './resguardosStyles';
+import ModalConfirmarAccion from '../../../ControlPedidos/Partials/ModalConfirmarAccion';
 import { normalizarDataUrlFirma } from './entregaResguardoUtils';
-
-const ALTURA_BARRA = 120;
 
 async function bloquearOrientacionHorizontal() {
     if (!esDispositivoCampo()) return;
@@ -34,35 +33,36 @@ export default function OverlayFirmaEntregaPantallaCompleta({
     onCerrar,
 }) {
     const firmaRef = useRef(null);
-    const [alturaLienzo, setAlturaLienzo] = useState(280);
     const [esVertical, setEsVertical] = useState(false);
     const [guardando, setGuardando] = useState(false);
+    const [tieneTrazo, setTieneTrazo] = useState(false);
+    const [confirmarAlSalir, setConfirmarAlSalir] = useState(false);
     const requiereHorizontal = esDispositivoCampo();
 
-    const actualizarLayout = useCallback(() => {
+    const actualizarOrientacion = useCallback(() => {
         setEsVertical(window.matchMedia?.('(orientation: portrait)')?.matches ?? false);
-        const disponible = Math.max(200, window.innerHeight - ALTURA_BARRA);
-        setAlturaLienzo(disponible);
     }, []);
 
     useEffect(() => {
         if (!abierto) return undefined;
 
-        actualizarLayout();
+        setConfirmarAlSalir(false);
+        setTieneTrazo(Boolean(dataUrlInicial));
+        actualizarOrientacion();
         document.body.style.overflow = 'hidden';
         bloquearOrientacionHorizontal();
 
-        window.addEventListener('resize', actualizarLayout);
+        window.addEventListener('resize', actualizarOrientacion);
         const orientacion = window.matchMedia?.('(orientation: portrait)');
-        orientacion?.addEventListener?.('change', actualizarLayout);
+        orientacion?.addEventListener?.('change', actualizarOrientacion);
 
         return () => {
             document.body.style.overflow = '';
             liberarOrientacion();
-            window.removeEventListener('resize', actualizarLayout);
-            orientacion?.removeEventListener?.('change', actualizarLayout);
+            window.removeEventListener('resize', actualizarOrientacion);
+            orientacion?.removeEventListener?.('change', actualizarOrientacion);
         };
-    }, [abierto, actualizarLayout]);
+    }, [abierto, actualizarOrientacion, dataUrlInicial]);
 
     useEffect(() => {
         if (!abierto) return;
@@ -74,12 +74,23 @@ export default function OverlayFirmaEntregaPantallaCompleta({
         return () => window.clearTimeout(timer);
     }, [abierto, dataUrlInicial]);
 
-    const cerrar = () => {
+    const cerrarSinGuardar = useCallback(() => {
         if (guardando || deshabilitado) return;
+        setConfirmarAlSalir(false);
         onCerrar?.();
-    };
+    }, [deshabilitado, guardando, onCerrar]);
 
-    const guardarFirma = async () => {
+    const solicitarCerrar = useCallback(() => {
+        if (guardando || deshabilitado) return;
+        const hayTrazo = tieneTrazo || firmaRef.current?.hasStroke?.();
+        if (hayTrazo) {
+            setConfirmarAlSalir(true);
+            return;
+        }
+        cerrarSinGuardar();
+    }, [cerrarSinGuardar, deshabilitado, guardando, tieneTrazo]);
+
+    const guardarFirma = useCallback(async () => {
         if (deshabilitado || guardando) return;
         if (requiereHorizontal && esVertical) return;
         if (!firmaRef.current?.hasStroke?.()) return;
@@ -89,46 +100,75 @@ export default function OverlayFirmaEntregaPantallaCompleta({
             const captura = firmaRef.current.getDataUrl();
             const normalizada = await normalizarDataUrlFirma(captura);
             await onGuardar?.(normalizada);
+            setConfirmarAlSalir(false);
             onCerrar?.();
         } finally {
             setGuardando(false);
         }
-    };
+    }, [deshabilitado, esVertical, guardando, onCerrar, onGuardar, requiereHorizontal]);
+
+    useEffect(() => {
+        if (!abierto) return undefined;
+
+        const onTecla = (evento) => {
+            if (evento.key === 'Escape') {
+                evento.preventDefault();
+                solicitarCerrar();
+            }
+        };
+
+        window.addEventListener('keydown', onTecla);
+        return () => window.removeEventListener('keydown', onTecla);
+    }, [abierto, solicitarCerrar]);
 
     if (!abierto) return null;
 
     const bloqueadoPorOrientacion = requiereHorizontal && esVertical;
+    const puedeGuardar = tieneTrazo && !bloqueadoPorOrientacion && !deshabilitado && !guardando;
 
     return createPortal(
         <div
-            className="fixed inset-0 z-[200] flex flex-col bg-[var(--gelia-surface,#f8fafc)] dark:bg-slate-950"
+            className="fixed inset-0 flex flex-col h-dvh max-h-dvh overflow-hidden bg-[var(--gelia-surface,#f8fafc)] dark:bg-slate-950"
+            style={{ zIndex: 'calc(var(--gelia-z-modal) + 30)' }}
             role="dialog"
             aria-modal="true"
             aria-label="Firma en pantalla completa"
         >
-            <header className="shrink-0 flex items-center justify-between gap-3 px-4 py-3 border-b theme-border safe-area-inset-top">
-                <div className="min-w-0">
-                    <p className="text-sm font-black uppercase tracking-widest theme-text-main m-0">
-                        Firma del receptor
-                    </p>
-                    <p className="text-xs theme-text-muted m-0 mt-0.5">
-                        Usa todo el ancho de la pantalla. Al guardar se ajustará al recuadro del formulario.
-                    </p>
+            <header className="shrink-0 flex items-center gap-2 px-3 py-2 border-b theme-border safe-area-inset-top">
+                <p className="flex-1 min-w-0 text-xs sm:text-sm font-black uppercase tracking-widest theme-text-main m-0 truncate">
+                    Firma del receptor
+                </p>
+                <div className="flex items-center gap-2 shrink-0">
+                    <button
+                        type="button"
+                        onClick={guardarFirma}
+                        disabled={!puedeGuardar}
+                        className={`${THEME_BTN_PRIMARY} min-h-[44px] min-w-[44px] px-3 disabled:opacity-40`}
+                        aria-label="Aceptar y guardar firma"
+                        title="Guardar firma"
+                    >
+                        {guardando ? (
+                            <span className="text-[10px] font-black uppercase">…</span>
+                        ) : (
+                            <Check className="w-5 h-5" />
+                        )}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={solicitarCerrar}
+                        disabled={deshabilitado || guardando}
+                        className={`${BTN_SECONDARY} min-h-[44px] min-w-[44px] px-3`}
+                        aria-label="Cancelar firma"
+                        title="Cancelar"
+                    >
+                        <X className="w-5 h-5" />
+                    </button>
                 </div>
-                <button
-                    type="button"
-                    onClick={cerrar}
-                    disabled={deshabilitado || guardando}
-                    className={`${BTN_SECONDARY} shrink-0 min-h-[44px] min-w-[44px] px-3`}
-                    aria-label="Cerrar"
-                >
-                    <X className="w-5 h-5" />
-                </button>
             </header>
 
-            <div className="relative flex-1 min-h-0 px-4 py-3">
+            <div className="relative flex-1 min-h-0 overflow-hidden px-2 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] flex flex-col">
                 {bloqueadoPorOrientacion ? (
-                    <div className="absolute inset-4 flex flex-col items-center justify-center text-center gap-4 rounded-2xl border-2 border-dashed theme-border bg-black/[0.03] dark:bg-white/[0.03] p-6">
+                    <div className="absolute inset-2 flex flex-col items-center justify-center text-center gap-4 rounded-2xl border-2 border-dashed theme-border bg-black/[0.03] dark:bg-white/[0.03] p-6">
                         <Smartphone className="w-12 h-12 text-[var(--color-primario)] rotate-90" />
                         <p className="text-sm font-black uppercase tracking-widest theme-text-main m-0">
                             Gira el dispositivo en horizontal
@@ -142,31 +182,27 @@ export default function OverlayFirmaEntregaPantallaCompleta({
                     <FirmaCanvas
                         ref={firmaRef}
                         label="Dibuja la firma"
-                        height={alturaLienzo}
-                        className="h-full"
+                        adaptarAltura
+                        height={200}
+                        onTrazoChange={setTieneTrazo}
                     />
                 )}
             </div>
 
-            <footer className="shrink-0 flex flex-col sm:flex-row gap-2 px-4 py-3 border-t theme-border safe-area-inset-bottom">
-                <button
-                    type="button"
-                    onClick={cerrar}
-                    disabled={deshabilitado || guardando}
-                    className={`${BTN_SECONDARY} min-h-[48px] flex-1`}
-                >
-                    Cancelar
-                </button>
-                <button
-                    type="button"
-                    onClick={guardarFirma}
-                    disabled={deshabilitado || guardando || bloqueadoPorOrientacion}
-                    className={`${THEME_BTN_PRIMARY} min-h-[48px] flex-1 text-[10px] font-black uppercase tracking-widest disabled:opacity-50`}
-                >
-                    <Check className="w-4 h-4 inline mr-2" />
-                    {guardando ? 'Guardando…' : 'Guardar firma'}
-                </button>
-            </footer>
+            <ModalConfirmarAccion
+                abierto={confirmarAlSalir}
+                titulo="¿Guardar la firma?"
+                mensaje="Hay un trazo capturado que aún no se ha guardado. Puedes conservarlo en el formulario o salir sin guardar."
+                etiquetaConfirmar="Guardar firma"
+                variante="primary"
+                etiquetaAlternativa="Salir sin guardar"
+                onClose={() => setConfirmarAlSalir(false)}
+                onConfirm={() => {
+                    setConfirmarAlSalir(false);
+                    guardarFirma();
+                }}
+                onAlternativa={cerrarSinGuardar}
+            />
         </div>,
         document.body,
     );
