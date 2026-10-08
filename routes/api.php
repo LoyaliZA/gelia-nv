@@ -95,6 +95,8 @@ Route::prefix('v1')->group(function () {
                     ->middleware('pdv.permiso:'.PuntoVentaModulo::PERMISO_RESGUARDOS_REGISTRAR_MANUAL);
                 Route::post('/resguardos', [ResguardoPdvMobileController::class, 'store'])
                     ->middleware('pdv.permiso:'.PuntoVentaModulo::PERMISO_RESGUARDOS_REGISTRAR_MANUAL);
+                Route::post('/resguardos/{resguardo}/registro-manual/evidencia', [ResguardoPdvMobileController::class, 'adjuntarEvidenciaManual'])
+                    ->middleware('pdv.permiso:'.PuntoVentaModulo::PERMISO_RESGUARDOS_REGISTRAR_MANUAL);
                 Route::get('/resguardos/{resguardo}', [ResguardoPdvMobileController::class, 'show'])
                     ->middleware('pdv.permiso:'.PuntoVentaModulo::PERMISO_RESGUARDOS_VER);
                 Route::get('/resguardos/{resguardo}/archivos/evidencias/{evidencia}', [ArchivoResguardoPdvMobileController::class, 'evidencia'])

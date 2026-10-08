@@ -15,6 +15,7 @@ import {
     claseTextoPlazo,
     formatearFechaCompacta,
     tarjetaResguardoClass,
+    RESGUARDOS_FILTRO_LABEL,
 } from './resguardosStyles';
 import {
     clasePieTarjetaRecepcion,
@@ -24,6 +25,8 @@ import {
     titularResguardo,
 } from './resguardosUtils';
 import { cantidadBultosPendiente, resguardoAdmiteRecepcion } from './recepcionFisicaUtils';
+import { faltaEvidenciaManual } from './resguardosUtils';
+import AccionEvidenciaRegistroManual from './AccionEvidenciaRegistroManual';
 import { ChipEvidenciasBultosEmpaque } from './ModalEvidenciasBultosEmpaque';
 import BotonConfirmarRecepcionResguardo, { BotonPasarARecepcionResguardo } from './BotonConfirmarRecepcionResguardo';
 import { AccionConfirmarCustodiaResguardo } from './ModalCustodiaResguardo';
@@ -63,8 +66,9 @@ export default function TarjetaResguardoOperativa({
         : bandeja === 'en_custodia'
             ? (resguardo.cantidad_bultos_en_custodia ?? resguardo.cantidad_bultos_esperada ?? 0)
             : (resguardo.cantidad_bultos_recibida ?? 0);
-    const admiteRecepcion = esPorRecibir && !esPasoRecepcionista && puedeConfirmarLlegada && resguardoAdmiteRecepcion(resguardo);
-    const admitePasarARecepcion = esPorRecibir && !esPasoRecepcionista && puedeEnviarACustodia && Boolean(resguardo?.admite_pasar_a_recepcion ?? resguardo?.puede_pasar_a_recepcion);
+    const faltaEvidencia = faltaEvidenciaManual(resguardo);
+    const admiteRecepcion = esPorRecibir && !esPasoRecepcionista && !faltaEvidencia && puedeConfirmarLlegada && resguardoAdmiteRecepcion(resguardo);
+    const admitePasarARecepcion = esPorRecibir && !esPasoRecepcionista && !faltaEvidencia && puedeEnviarACustodia && Boolean(resguardo?.admite_pasar_a_recepcion ?? resguardo?.puede_pasar_a_recepcion);
     const admiteCustodia = esPasoRecepcionista && puedeConfirmarCustodia && Boolean(resguardo?.admite_confirmacion_custodia ?? resguardo?.puede_confirmar_custodia);
     const admiteEntrega = puedeEntregar && resguardo.estado === 'en_custodia' && !resguardo.entrega_bloqueada;
     const plazos = plazosOperativosResguardo(resguardo);
@@ -74,7 +78,7 @@ export default function TarjetaResguardoOperativa({
     const pendientes = cantidadBultosPendiente(resguardo);
 
     return (
-        <article className={`${tarjetaResguardoClass(resguardo)} p-4 space-y-3`}>
+        <article className={`${tarjetaResguardoClass(resguardo)} p-3 sm:p-4 space-y-3`}>
             <header className="flex items-start justify-between gap-3 pb-3 border-b theme-border">
                 <div className="flex items-start gap-3 min-w-0">
                     {seleccionable && (
@@ -87,11 +91,11 @@ export default function TarjetaResguardoOperativa({
                         />
                     )}
                     <div className="min-w-0">
-                        <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted m-0">
+                        <p className={`${RESGUARDOS_FILTRO_LABEL} m-0`}>
                             Folio del paquete
                         </p>
                         <p
-                            className="text-2xl sm:text-3xl font-black m-0 mt-0.5 truncate tabular-nums text-[var(--color-primario)]"
+                            className="text-xl sm:text-2xl md:text-3xl font-black m-0 mt-0.5 truncate tabular-nums text-[var(--color-primario)]"
                             title={folio}
                         >
                             {folio}
@@ -103,10 +107,10 @@ export default function TarjetaResguardoOperativa({
 
             <div className="space-y-1">
                 <div className="flex items-center justify-between gap-2">
-                    <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted m-0">
+                    <p className={`${RESGUARDOS_FILTRO_LABEL} m-0`}>
                         Titular del paquete
                     </p>
-                    <p className="text-[9px] font-bold theme-text-muted m-0 shrink-0">
+                    <p className="text-xs font-medium theme-text-muted m-0 shrink-0 tabular-nums">
                         {formatearFechaCompacta(fechaReferencia)}
                     </p>
                 </div>
@@ -199,7 +203,13 @@ export default function TarjetaResguardoOperativa({
             )}
 
             <div className="flex flex-col gap-2 pt-1">
-                {admiteRecepcion ? (
+                {faltaEvidencia && permisos.registrar_manual ? (
+                    <AccionEvidenciaRegistroManual
+                        resguardo={resguardo}
+                        onExito={onRecepcionExito}
+                        className={BTN_ACCION_RECEPCION_TARJETA}
+                    />
+                ) : admiteRecepcion ? (
                     <BotonConfirmarRecepcionResguardo
                         resguardo={resguardo}
                         variant="pie"

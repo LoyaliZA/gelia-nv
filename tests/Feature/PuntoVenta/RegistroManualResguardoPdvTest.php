@@ -8,6 +8,7 @@ use App\Models\ConfiguracionSistema;
 use App\Models\Departamento;
 use App\Models\Producto;
 use App\Models\PuntoVenta\ResguardoPdv;
+use App\Models\PuntoVenta\ResguardoPdvBulto;
 use App\Models\PuntoVenta\ResguardoPdvEntrega;
 use App\Models\PuntoVenta\ResguardoPdvEvento;
 use App\Models\PuntoVenta\ResguardoPdvEvidencia;
@@ -110,7 +111,7 @@ class RegistroManualResguardoPdvTest extends TestCase
                 'cantidad_piezas' => 4,
             ]), ['Accept' => 'application/json'])
             ->assertCreated()
-            ->assertJsonPath('resguardo.estado', ResguardoPdv::ESTADO_PENDIENTE_RECEPCION)
+            ->assertJsonPath('resguardo.estado', ResguardoPdv::ESTADO_EN_RECEPCION)
             ->assertJsonPath('resguardo.snapshot_folio', 'REM-HIST-001');
 
         $resguardo = ResguardoPdv::query()->first();
@@ -129,8 +130,19 @@ class RegistroManualResguardoPdvTest extends TestCase
         $this->assertSame(4, (int) ($resguardo->snapshot_json['cantidad_piezas'] ?? 0));
         $this->assertNotNull($resguardo->salida_cedis_at);
 
-        $evento = ResguardoPdvEvento::query()->where('resguardo_id', $resguardo->id)->first();
-        $this->assertSame(ResguardoPdvEvento::TIPO_REGISTRO_MANUAL_CREADO, $evento?->tipo_evento);
+        $evento = ResguardoPdvEvento::query()
+            ->where('resguardo_id', $resguardo->id)
+            ->where('tipo_evento', ResguardoPdvEvento::TIPO_REGISTRO_MANUAL_CREADO)
+            ->first();
+        $this->assertNotNull($evento);
+        $this->assertSame(ResguardoPdv::ESTADO_EN_RECEPCION, $resguardo->estado);
+        $this->assertSame(2, ResguardoPdvBulto::query()->where('resguardo_id', $resguardo->id)->count());
+        $this->assertTrue(
+            ResguardoPdvEvento::query()
+                ->where('resguardo_id', $resguardo->id)
+                ->where('tipo_evento', ResguardoPdvEvento::TIPO_PASADO_A_RECEPCION)
+                ->exists()
+        );
         $this->assertSame('pdv:man:test-1', $evento?->idempotency_key);
 
         $this->assertSame(2, ResguardoPdvEvidencia::query()->where('resguardo_id', $resguardo->id)->count());
@@ -206,8 +218,51 @@ class RegistroManualResguardoPdvTest extends TestCase
             ->assertCreated();
 
         $this->assertSame(1, ResguardoPdv::query()->count());
-        $this->assertSame(1, ResguardoPdvEvento::query()->count());
+        $this->assertSame(3, ResguardoPdvEvento::query()->count());
         $this->assertSame(2, ResguardoPdvEvidencia::query()->count());
+        $this->assertSame(ResguardoPdv::ESTADO_EN_RECEPCION, ResguardoPdv::query()->value('estado'));
+    }
+
+    public function test_alta_sin_evidencia_queda_pendiente_y_al_adjuntarla_entra_a_recepcion(): void
+    {
+        $this->activarRegistroManual();
+
+        $payload = $this->payloadAlta([
+            'idempotency_key' => 'pdv:man:sin-evi',
+        ]);
+        unset($payload['archivo_ticket'], $payload['foto_paquete']);
+
+        $this->actingAs($this->usuario)
+            ->post(route('punto_venta.resguardos.store'), $payload, ['Accept' => 'application/json'])
+            ->assertCreated()
+            ->assertJsonPath('resguardo.estado', ResguardoPdv::ESTADO_PENDIENTE_RECEPCION);
+
+        $resguardo = ResguardoPdv::query()->first();
+        $this->assertSame(0, ResguardoPdvEvidencia::query()->count());
+        $this->assertSame(0, ResguardoPdvBulto::query()->count());
+
+        $this->actingAs($this->usuario)
+            ->post(route('punto_venta.resguardos.registro_manual.evidencia', $resguardo), [
+                'idempotency_key' => 'pdv:evi:1',
+                'archivo_ticket' => UploadedFile::fake()->image('ticket.jpg'),
+                'foto_paquete' => UploadedFile::fake()->image('paquete.jpg'),
+            ], ['Accept' => 'application/json'])
+            ->assertOk()
+            ->assertJsonPath('resguardo.estado', ResguardoPdv::ESTADO_EN_RECEPCION)
+            ->assertJsonPath('resguardo.evidencia_completa', true);
+
+        $this->actingAs($this->usuario)
+            ->post(route('punto_venta.resguardos.registro_manual.evidencia', $resguardo), [
+                'idempotency_key' => 'pdv:evi:1',
+                'archivo_ticket' => UploadedFile::fake()->image('ticket-2.jpg'),
+                'foto_paquete' => UploadedFile::fake()->image('paquete-2.jpg'),
+            ], ['Accept' => 'application/json'])
+            ->assertOk();
+
+        $this->assertSame(1, ResguardoPdv::query()->count());
+        $this->assertSame(2, ResguardoPdvBulto::query()->count());
+        $this->assertSame(2, ResguardoPdvEvidencia::query()->count());
+        $this->assertSame(ResguardoPdv::ESTADO_EN_RECEPCION, $resguardo->fresh()->estado);
     }
 
     public function test_folio_abierto_duplicado_se_rechaza(): void
@@ -281,6 +336,38 @@ class RegistroManualResguardoPdvTest extends TestCase
             ->assertInertia(fn ($page) => $page
                 ->where('operativa.registro_manual', true)
                 ->has('catalogos.origenes_pedido'));
+    }
+
+    public function test_bandeja_filtra_alta_manual_sin_evidencia(): void
+    {
+        $this->activarRegistroManual();
+        $payload = $this->payloadAlta(['idempotency_key' => 'pdv:man:filtro']);
+        unset($payload['archivo_ticket'], $payload['foto_paquete']);
+
+        $this->actingAs($this->usuario)
+            ->post(route('punto_venta.resguardos.store'), $payload, ['Accept' => 'application/json'])
+            ->assertCreated();
+
+        $this->actingAs($this->usuario)
+            ->getJson(route('punto_venta.resguardos.listado', [
+                'bandeja' => BandejaResguardoPdv::POR_RECIBIR,
+                'paso' => BandejaResguardoPdv::PASO_GERENTE,
+                'alta' => 'manual',
+                'evidencia' => 'incompleta',
+                'origen_id' => $this->origen->id,
+            ]))
+            ->assertOk()
+            ->assertJsonPath('resguardos.data.0.snapshot_folio', 'REM-HIST-001')
+            ->assertJsonPath('resguardos.data.0.registro_manual.evidencia_completa', false);
+
+        $this->actingAs($this->usuario)
+            ->getJson(route('punto_venta.resguardos.listado', [
+                'bandeja' => BandejaResguardoPdv::POR_RECIBIR,
+                'alta' => 'manual',
+                'evidencia' => 'completa',
+            ]))
+            ->assertOk()
+            ->assertJsonCount(0, 'resguardos.data');
     }
 
     public function test_busqueda_de_productos_requiere_flag_y_permiso(): void

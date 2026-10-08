@@ -14,6 +14,7 @@ use App\Http\Controllers\PuntoVenta\Resguardos\HistorialEntregadosResguardoPdvCo
 use App\Http\Controllers\PuntoVenta\Resguardos\PasarARecepcionResguardoPdvController;
 use App\Http\Controllers\PuntoVenta\Resguardos\RecepcionFisicaResguardoPdvController;
 use App\Http\Controllers\PuntoVenta\Resguardos\RegistrarIncidenciaResguardoPdvController;
+use App\Http\Controllers\PuntoVenta\Resguardos\AdjuntarEvidenciaRegistroManualPdvController;
 use App\Http\Controllers\PuntoVenta\Resguardos\RegistrarResguardoManualPdvController;
 use App\Http\Controllers\PuntoVenta\Resguardos\ReponerVencidoResguardoPdvController;
 use App\Http\Controllers\PuntoVenta\Resguardos\ResolverIncidenciaResguardoPdvController;
@@ -29,6 +30,7 @@ use App\Http\Requests\PuntoVenta\Resguardos\ConsultarBandejasResguardoPdvRequest
 use App\Http\Requests\PuntoVenta\Resguardos\PasarARecepcionResguardoPdvRequest;
 use App\Http\Requests\PuntoVenta\Resguardos\RegistrarEntregaResguardoPdvRequest;
 use App\Http\Requests\PuntoVenta\Resguardos\RegistrarRecepcionFisicaPdvRequest;
+use App\Http\Requests\PuntoVenta\Resguardos\AdjuntarEvidenciaRegistroManualPdvRequest;
 use App\Http\Requests\PuntoVenta\Resguardos\RegistrarResguardoManualPdvRequest;
 use App\Models\Almacen;
 use App\Models\PuntoVenta\ResguardoPdv;
@@ -41,6 +43,7 @@ use App\Services\PuntoVenta\Resguardos\ConsultaBandejasResguardoPdvService;
 use App\Services\PuntoVenta\Resguardos\ConsultaDetalleResguardoPdvService;
 use App\Services\PuntoVenta\Resguardos\ConsultaHistorialEntregadosResguardoPdvService;
 use App\Services\PuntoVenta\Resguardos\CrearResguardoManualPdvService;
+use App\Services\PuntoVenta\Resguardos\IngresarResguardoManualPdvService;
 use App\Services\PuntoVenta\Resguardos\PasarARecepcionResguardoPdvService;
 use App\Services\PuntoVenta\Resguardos\RegistrarEntregaResguardoPdvService;
 use App\Services\PuntoVenta\Resguardos\RegistrarIncidenciaResguardoPdvService;
@@ -120,6 +123,15 @@ class ResguardoPdvMobileController extends Controller
         RegistrarResguardoManualPdvController $registrar,
     ): JsonResponse {
         return $registrar($request, $crear);
+    }
+
+    public function adjuntarEvidenciaManual(
+        AdjuntarEvidenciaRegistroManualPdvRequest $request,
+        ResguardoPdv $resguardo,
+        IngresarResguardoManualPdvService $ingresar,
+        AdjuntarEvidenciaRegistroManualPdvController $adjuntar,
+    ): JsonResponse {
+        return $adjuntar($request, $resguardo, $ingresar);
     }
 
     public function recepcion(

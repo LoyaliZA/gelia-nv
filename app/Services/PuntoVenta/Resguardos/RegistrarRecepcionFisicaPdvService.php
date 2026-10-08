@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Services\PuntoVenta\PuntoVentaModulo;
 use App\Support\PuntoVenta\Resguardos\BultosEsperadosResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\EstadoRecepcionResguardoPdv;
+use App\Support\PuntoVenta\Resguardos\EvidenciaMinimaRegistroManualPdv;
 use App\Support\PuntoVenta\Resguardos\GeneradorCodigoEtiquetaResguardoPdv;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
@@ -28,6 +29,7 @@ class RegistrarRecepcionFisicaPdvService
     public function __construct(
         private readonly ResuelveAlcancePdv $alcance,
         private readonly SincronizarEstatusSucursalPedidoBmaService $sincronizarEstatusSucursal,
+        private readonly IngresarResguardoManualPdvService $ingresarManual,
     ) {}
 
     public function ejecutar(
@@ -64,6 +66,7 @@ class RegistrarRecepcionFisicaPdvService
 
             $estadoAnterior = $resguardo->estado;
             $this->assertVersionYEstado($resguardo, $versionEsperada);
+            $this->assertEvidenciaManual($resguardo);
             $bultosNormalizados = BultosEsperadosResguardoPdv::desdeResguardo($resguardo);
             $esperada = (int) $resguardo->cantidad_bultos_esperada;
             $ahora = now();
@@ -123,7 +126,12 @@ class RegistrarRecepcionFisicaPdvService
                 throw $e;
             }
 
-            $resguardo = $resguardo->fresh(['bultos', 'almacen']);
+            $resguardo = $resguardo->fresh(['bultos', 'almacen', 'evidencias']);
+            $ingresoManual = EvidenciaMinimaRegistroManualPdv::esManual($resguardo);
+            if ($ingresoManual) {
+                return $this->ingresarManual->cerrarConfirmacionDoble($resguardo, $actor, $idempotencyKey);
+            }
+
             $this->sincronizarEstatusSucursal->desdeResguardo($resguardo);
 
             RecepcionFisicaPdvCompletada::dispatch(
@@ -159,6 +167,21 @@ class RegistrarRecepcionFisicaPdvService
         }
 
         return $resguardo->fresh(['bultos', 'almacen']);
+    }
+
+    private function assertEvidenciaManual(ResguardoPdv $resguardo): void
+    {
+        if (! EvidenciaMinimaRegistroManualPdv::esManual($resguardo)) {
+            return;
+        }
+
+        if (EvidenciaMinimaRegistroManualPdv::completa($resguardo)) {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            'archivo_ticket' => 'Adjunte el ticket y la foto del paquete. Esa evidencia cubre el ingreso completo.',
+        ]);
     }
 
     private function assertVersionYEstado(ResguardoPdv $resguardo, int $versionEsperada): void

@@ -52,7 +52,7 @@ export default function AccionRegistrarResguardoManual({ habilitado = false, ori
                                     Registrar resguardo
                                 </h3>
                                 <p className="text-xs theme-text-muted m-0 mt-1">
-                                    Alta sin pedido. Quedará en recepción para confirmar bultos y entregar.
+                                    Alta sin pedido. Con ticket y foto del paquete queda en recepción, sin otra confirmación de gerencia.
                                 </p>
                             </div>
                             <button

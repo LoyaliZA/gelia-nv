@@ -25,9 +25,9 @@ export default function AlertasCustodiaResguardo({
     const todosActivos = !antiguedadActiva;
 
     return (
-        <section className="space-y-3" aria-label={titulo}>
-            <div className="flex items-center gap-2">
-                <h2 className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0">
+        <section className="space-y-3 min-w-0 max-w-full" aria-label={titulo}>
+            <div className="flex items-center gap-2 min-w-0">
+                <h2 className="text-xs font-semibold theme-text-muted m-0">
                     {titulo}
                 </h2>
             </div>
@@ -45,9 +45,9 @@ export default function AlertasCustodiaResguardo({
                 </div>
             ) : (
                 <div
-                    className={`grid grid-cols-1 gap-3 ${
-                        metricasVisibles.length >= 2 ? 'sm:grid-cols-2 lg:grid-cols-3' : metricasVisibles.length === 1 ? 'sm:grid-cols-2' : ''
-                    }`}
+                    className={`grid w-full min-w-0 max-w-full gap-3 grid-cols-1 ${
+                        metricasVisibles.length >= 2 ? 'sm:grid-cols-2' : ''
+                    } ${metricasVisibles.length >= 2 ? 'lg:grid-cols-3' : metricasVisibles.length === 1 ? 'sm:grid-cols-2' : ''}`}
                     role="group"
                     aria-label="Filtros de antigüedad"
                 >
@@ -55,11 +55,11 @@ export default function AlertasCustodiaResguardo({
                         type="button"
                         onClick={() => onAntiguedad?.('')}
                         aria-pressed={todosActivos}
-                        className={`${geliaCardClass()} p-4 text-left transition-all hover:ring-1 hover:ring-[var(--color-primario)]/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primario)] ${
+                        className={`${geliaCardClass()} p-4 text-left min-w-0 w-full transition-all hover:ring-1 hover:ring-[var(--color-primario)]/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primario)] ${
                             todosActivos ? 'ring-2 ring-[var(--color-primario)]/40 bg-[var(--color-primario)]/10' : ''
                         }`}
                     >
-                        <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted m-0">
+                        <p className="text-xs font-semibold theme-text-muted m-0">
                             Todos
                         </p>
                         <p className="text-2xl font-black m-0 mt-1 tabular-nums" style={{ color: 'var(--color-primario)' }}>
@@ -76,11 +76,11 @@ export default function AlertasCustodiaResguardo({
                                 type="button"
                                 onClick={() => onAntiguedad?.(activa ? '' : key)}
                                 aria-pressed={activa}
-                                className={`${geliaCardClass()} p-4 text-left transition-all hover:ring-1 hover:ring-[var(--color-primario)]/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primario)] ${
+                                className={`${geliaCardClass()} p-4 text-left min-w-0 w-full transition-all hover:ring-1 hover:ring-[var(--color-primario)]/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primario)] ${
                                     activa ? `ring-2 ${ring} ${bg}` : ''
                                 }`}
                             >
-                                <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted m-0">
+                                <p className="text-xs font-semibold theme-text-muted m-0">
                                     {catalogos.antiguedades?.[key] || key}
                                 </p>
                                 <p className={`text-2xl font-black m-0 mt-1 tabular-nums ${tone}`}>

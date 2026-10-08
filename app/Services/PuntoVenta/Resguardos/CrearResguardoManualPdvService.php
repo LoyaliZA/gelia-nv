@@ -13,11 +13,9 @@ use App\Models\Sucursal;
 use App\Models\User;
 use App\Services\PuntoVenta\PuntoVentaModulo;
 use App\Support\PuntoVenta\Resguardos\DepartamentosOrigenResguardoManualPdv;
-use App\Support\PuntoVenta\Resguardos\RutaAlmacenamientoResguardoPdv;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
@@ -29,6 +27,7 @@ class CrearResguardoManualPdvService
     public function __construct(
         private readonly ResuelveAlcancePdv $alcance,
         private readonly RegistroManualResguardoPdvConfig $config,
+        private readonly IngresarResguardoManualPdvService $ingresar,
     ) {}
 
     public function ejecutar(User $actor, array $datos): ResguardoPdv
@@ -105,12 +104,6 @@ class CrearResguardoManualPdvService
                     ]);
                 }
 
-                if (! $archivoTicket instanceof UploadedFile || ! $fotoPaquete instanceof UploadedFile) {
-                    throw ValidationException::withMessages([
-                        'archivo_ticket' => 'Adjunte el ticket y la foto del paquete.',
-                    ]);
-                }
-
                 $ahora = now();
 
                 try {
@@ -166,24 +159,28 @@ class CrearResguardoManualPdvService
                         'idempotency_key' => $idempotencyKey,
                     ]);
 
-                    $this->guardarEvidencia(
-                        $resguardo,
-                        $evento,
-                        $archivoTicket,
-                        ResguardoPdvEvidencia::USO_TICKET,
-                        $actor->id,
-                        $ahora,
-                        $pathsEscritos
-                    );
-                    $this->guardarEvidencia(
-                        $resguardo,
-                        $evento,
-                        $fotoPaquete,
-                        ResguardoPdvEvidencia::USO_PAQUETE,
-                        $actor->id,
-                        $ahora,
-                        $pathsEscritos
-                    );
+                    if ($archivoTicket instanceof UploadedFile) {
+                        $this->ingresar->guardar(
+                            $resguardo,
+                            $evento,
+                            $archivoTicket,
+                            ResguardoPdvEvidencia::USO_TICKET,
+                            $actor->id,
+                            $pathsEscritos
+                        );
+                    }
+                    if ($fotoPaquete instanceof UploadedFile) {
+                        $this->ingresar->guardar(
+                            $resguardo,
+                            $evento,
+                            $fotoPaquete,
+                            ResguardoPdvEvidencia::USO_PAQUETE,
+                            $actor->id,
+                            $pathsEscritos
+                        );
+                    }
+
+                    $resguardo = $this->ingresar->completar($resguardo->fresh(), $actor, $idempotencyKey);
 
                     RegistroManualResguardoPdvCreado::dispatch($resguardo, $evento, $sucursalId);
 
@@ -203,44 +200,6 @@ class CrearResguardoManualPdvService
             $this->eliminarArchivosHuerfanos($pathsEscritos);
             throw $e;
         }
-    }
-
-    /**
-     * @param  list<string>  $pathsEscritos
-     */
-    private function guardarEvidencia(
-        ResguardoPdv $resguardo,
-        ResguardoPdvEvento $evento,
-        UploadedFile $archivo,
-        string $uso,
-        int $actorId,
-        Carbon $capturadoAt,
-        array &$pathsEscritos,
-    ): void {
-        $ruta = $archivo->store(RutaAlmacenamientoResguardoPdv::prefijo($resguardo, 'registro-manual'), 'local');
-        $pathsEscritos[] = $ruta;
-
-        $mime = (string) $archivo->getMimeType();
-        $esPdf = str_contains(strtolower($mime), 'pdf')
-            || strtolower((string) $archivo->getClientOriginalExtension()) === 'pdf';
-
-        ResguardoPdvEvidencia::query()->create([
-            'resguardo_id' => $resguardo->id,
-            'evento_id' => $evento->id,
-            'tipo' => $esPdf ? ResguardoPdvEvidencia::TIPO_ARCHIVO : ResguardoPdvEvidencia::TIPO_FOTO,
-            'ruta_interna' => $ruta,
-            'nombre_original' => $archivo->getClientOriginalName(),
-            'mime_type' => $mime,
-            'tamano_bytes' => $archivo->getSize(),
-            'hash_sha256' => hash_file('sha256', $archivo->getRealPath() ?: $archivo->getPathname()),
-            'actor_id' => $actorId,
-            'capturado_at' => $capturadoAt,
-            'inmutable' => true,
-            'metadata_json' => [
-                'origen' => 'registro_manual',
-                'uso' => $uso,
-            ],
-        ]);
     }
 
     /**

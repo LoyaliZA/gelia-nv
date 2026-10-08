@@ -70,8 +70,8 @@ class RegistrarResguardoManualPdvRequest extends PdvOperacionPisoRequest
             'piezas' => ['sometimes', 'array', 'max:200'],
             'piezas.*.producto_id' => ['required', 'integer', 'exists:productos,id'],
             'piezas.*.cantidad' => ['required', 'integer', 'min:1', 'max:9999'],
-            'archivo_ticket' => ['required', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:5120'],
-            'foto_paquete' => ['required', 'file', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+            'archivo_ticket' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:5120'],
+            'foto_paquete' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
         ];
     }
 

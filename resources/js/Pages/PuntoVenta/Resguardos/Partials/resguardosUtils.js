@@ -10,6 +10,10 @@ export function paramsListadoResguardos({
     q,
     estado,
     antiguedad,
+    origenId,
+    alta,
+    evidencia,
+    altaHoy,
     page = 1,
 }) {
     return paramsLimpios({
@@ -18,8 +22,26 @@ export function paramsListadoResguardos({
         q: q || undefined,
         estado: estado || undefined,
         antiguedad: antiguedad || undefined,
+        origen_id: origenId || undefined,
+        alta: alta || undefined,
+        evidencia: evidencia || undefined,
+        alta_hoy: altaHoy ? 1 : undefined,
         page,
     });
+}
+
+export function evidenciaManualCompleta(resguardo) {
+    if (resguardo?.registro_manual?.evidencia_completa === true) {
+        return true;
+    }
+
+    const usos = new Set((resguardo?.registro_manual?.evidencias || []).map((item) => item.uso));
+
+    return Boolean(resguardo?.registro_manual) && usos.has('ticket') && usos.has('paquete');
+}
+
+export function faltaEvidenciaManual(resguardo) {
+    return Boolean(resguardo?.registro_manual) && !evidenciaManualCompleta(resguardo);
 }
 
 /** Referencia de cliente sin nombre completo. */
@@ -138,7 +160,7 @@ export function claseVistaTabla(_bandeja, vista = VISTA_RESGUARDOS_POR_RECIBIR.C
 
 export function claseGridTarjetasResguardo(_bandeja, vista = VISTA_RESGUARDOS_POR_RECIBIR.CARD) {
     return vista === VISTA_RESGUARDOS_POR_RECIBIR.CARD
-        ? 'p-3 sm:p-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 md:gap-4'
+        ? 'p-2 sm:p-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 md:gap-4'
         : 'p-4 space-y-3';
 }
 

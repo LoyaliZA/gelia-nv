@@ -11,6 +11,7 @@ use App\Services\PuntoVenta\PuntoVentaModulo;
 use App\Support\PuntoVenta\Resguardos\EstadoResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\EtiquetasResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\SerializadorBultosEmpaqueCedisPdv;
+use App\Support\PuntoVenta\Resguardos\SerializadorRegistroManualResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\SerializadorPedidoRevisionResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\SerializadorRetiroPedidoResguardoPdv;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -47,6 +48,7 @@ class ConsultaFormularioConfirmacionCustodiaPdvService
             'pedido.cajas' => fn ($q) => $q->orderBy('orden')->orderBy('id'),
             'pedido.bultosEmpaque.documentos',
             'bultos' => fn ($q) => $q->orderBy('folio')->orderBy('id'),
+            'evidencias',
         ]);
 
         $almacenes = Almacen::query()
@@ -131,6 +133,7 @@ class ConsultaFormularioConfirmacionCustodiaPdvService
             ] : null,
             'bultos_empaque_cedis' => SerializadorBultosEmpaqueCedisPdv::desdePedido($resguardo->pedido),
             'pedido_revision' => SerializadorPedidoRevisionResguardoPdv::desdePedido($resguardo->pedido),
+            'registro_manual' => SerializadorRegistroManualResguardoPdv::desdeResguardo($resguardo),
         ];
     }
 }

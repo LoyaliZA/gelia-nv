@@ -13,6 +13,8 @@ class ResguardoPdvEvento extends Model
 
     public const TIPO_REGISTRO_MANUAL_CREADO = 'resguardo.registro_manual_creado';
 
+    public const TIPO_REGISTRO_MANUAL_EVIDENCIA = 'resguardo.registro_manual_evidencia';
+
     public const TIPO_RECEPCION_COMPLETA = 'resguardo.recepcion_completa';
 
     public const TIPO_RECEPCION_PARCIAL = 'resguardo.recepcion_parcial';

@@ -13,7 +13,8 @@ import {
     resguardoAdmiteEntregaTotal,
     resguardoAdmiteRecepcion,
 } from './recepcionFisicaUtils';
-import { plazosOperativosResguardo } from './resguardosUtils';
+import { faltaEvidenciaManual, plazosOperativosResguardo } from './resguardosUtils';
+import AccionEvidenciaRegistroManual from './AccionEvidenciaRegistroManual';
 import PanelPedidoRevisionResguardo from './PanelPedidoRevisionResguardo';
 import { AccionEntregaResguardo } from './ModalEntregaResguardo';
 import BotonConfirmarRecepcionResguardo, { BotonPasarARecepcionResguardo } from './BotonConfirmarRecepcionResguardo';
@@ -213,7 +214,14 @@ export default function ContenidoDetalleResguardo({
                         onExito={onAccionExito}
                     />
                 )}
-                {permisos.confirmar_llegada && resguardoAdmiteRecepcion(resguardo) && (
+                {faltaEvidenciaManual(resguardo) && permisos.registrar_manual && (
+                    <AccionEvidenciaRegistroManual
+                        resguardo={resguardo}
+                        onExito={onAccionExito}
+                        className={`${BTN_SECONDARY} inline-flex items-center gap-2 min-h-[44px] px-5 text-[10px] font-black uppercase tracking-widest`}
+                    />
+                )}
+                {permisos.confirmar_llegada && !faltaEvidenciaManual(resguardo) && resguardoAdmiteRecepcion(resguardo) && (
                     <BotonConfirmarRecepcionResguardo
                         resguardo={resguardo}
                         className="inline-flex min-h-[44px] px-5 w-auto"
@@ -221,7 +229,7 @@ export default function ContenidoDetalleResguardo({
                         onExito={onAccionExito}
                     />
                 )}
-                {permisos.enviar_a_custodia && (resguardo.admite_pasar_a_recepcion || resguardo.estado === 'recibido') && resguardo.estado === 'recibido' && (
+                {permisos.enviar_a_custodia && !faltaEvidenciaManual(resguardo) && (resguardo.admite_pasar_a_recepcion || resguardo.estado === 'recibido') && resguardo.estado === 'recibido' && (
                     <BotonPasarARecepcionResguardo
                         resguardo={resguardo}
                         className="inline-flex min-h-[44px] px-5 w-auto"

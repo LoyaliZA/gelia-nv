@@ -20,6 +20,7 @@ use App\Http\Controllers\PuntoVenta\Resguardos\HistorialEntregadosResguardoPdvCo
 use App\Http\Controllers\PuntoVenta\Resguardos\PasarARecepcionResguardoPdvController;
 use App\Http\Controllers\PuntoVenta\Resguardos\RecepcionFisicaResguardoPdvController;
 use App\Http\Controllers\PuntoVenta\Resguardos\RegistrarIncidenciaResguardoPdvController;
+use App\Http\Controllers\PuntoVenta\Resguardos\AdjuntarEvidenciaRegistroManualPdvController;
 use App\Http\Controllers\PuntoVenta\Resguardos\RegistrarResguardoManualPdvController;
 use App\Http\Controllers\PuntoVenta\Resguardos\ReponerVencidoResguardoPdvController;
 use App\Http\Controllers\PuntoVenta\Resguardos\ResolverIncidenciaResguardoPdvController;
@@ -88,6 +89,8 @@ Route::middleware(['pdv.piso', 'pdv.permiso:'.PuntoVentaModulo::PERMISO_RESGUARD
     ->name('resguardos.')
     ->group(function () {
         Route::post('/', RegistrarResguardoManualPdvController::class)->name('store');
+        Route::post('/{resguardo}/registro-manual/evidencia', AdjuntarEvidenciaRegistroManualPdvController::class)
+            ->name('registro_manual.evidencia');
     });
 
 Route::middleware(['pdv.piso', 'pdv.permiso:'.PuntoVentaModulo::PERMISO_RESGUARDOS_CONFIRMAR_LLEGADA])

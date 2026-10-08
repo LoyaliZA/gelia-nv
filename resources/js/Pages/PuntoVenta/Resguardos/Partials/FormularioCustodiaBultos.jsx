@@ -4,7 +4,7 @@ import { geliaCardClass } from '../../../../utils/geliaTheme';
 import { THEME_BTN_PRIMARY } from '../../../../utils/geliaTheme';
 import ModalConfirmarAccion from '../../../ControlPedidos/Partials/ModalConfirmarAccion';
 import { BTN_SECONDARY, THEME_INPUT, THEME_SELECT } from './resguardosStyles';
-import { titularResguardo, etiquetaRetiroResguardo } from './resguardosUtils';
+import { titularResguardo, etiquetaRetiroResguardo, evidenciaManualCompleta } from './resguardosUtils';
 import PanelPedidoRevisionResguardo from './PanelPedidoRevisionResguardo';
 import BotonesCapturaEvidencia from './BotonesCapturaEvidencia';
 import { ChipEvidenciasBultosEmpaque } from './ModalEvidenciasBultosEmpaque';
@@ -41,6 +41,7 @@ export default function FormularioCustodiaBultos({
     const condiciones = catalogos.condiciones_bulto || {};
     const titular = titularResguardo(resguardo);
     const etiquetaRetiro = etiquetaRetiroResguardo(resguardo);
+    const reutilizaEvidencia = evidenciaManualCompleta(resguardo);
 
     const previews = useMemo(() => evidencias.map((archivo) => ({
         archivo,
@@ -68,11 +69,19 @@ export default function FormularioCustodiaBultos({
         return errores;
     };
 
-    const solicitarConfirmacion = (e) => {
+    const solicitarConfirmacion = async (e) => {
         e.preventDefault();
         const errores = validar();
         setErroresLocales(errores);
         if (Object.keys(errores).length > 0) return;
+        if (reutilizaEvidencia) {
+            await onEnviar({
+                almacenId: Number(almacenId),
+                bultos,
+                evidencias: [],
+            });
+            return;
+        }
         setConfirmar(true);
     };
 
@@ -202,9 +211,17 @@ export default function FormularioCustodiaBultos({
             </div>
 
             <div className={`${geliaCardClass()} p-5 space-y-4`}>
-                <h2 className="text-sm font-black uppercase tracking-widest theme-text-main m-0">Evidencia fotográfica (opcional)</h2>
+                <h2 className="text-sm font-black uppercase tracking-widest theme-text-main m-0">
+                    {reutilizaEvidencia ? 'Evidencia del registro' : 'Evidencia fotográfica (opcional)'}
+                </h2>
+                {reutilizaEvidencia ? (
+                    <p className="text-sm theme-text-muted m-0">
+                        Se usa el ticket y la foto del paquete capturados en el alta. No hace falta otra foto.
+                    </p>
+                ) : (
                 <BotonesCapturaEvidencia onAgregar={agregarEvidencias} deshabilitado={enviando} />
-                {previews.length > 0 && (
+                )}
+                {!reutilizaEvidencia && previews.length > 0 && (
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                         {previews.map((item, indice) => (
                             <div key={`${item.archivo.name}-${indice}`} className="relative rounded-2xl overflow-hidden border theme-border">

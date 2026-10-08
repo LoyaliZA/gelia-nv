@@ -6,6 +6,7 @@ use App\Models\PuntoVenta\ResguardoPdv;
 use App\Models\PuntoVenta\ResguardoPdvEvidencia;
 use App\Models\User;
 use App\Services\PuntoVenta\Resguardos\CrearResguardoManualPdvService;
+use App\Support\PuntoVenta\Resguardos\EvidenciaMinimaRegistroManualPdv;
 use App\Support\PuntoVenta\Resguardos\UrlEvidenciaResguardoPdv;
 
 final class SerializadorRegistroManualResguardoPdv
@@ -45,6 +46,7 @@ final class SerializadorRegistroManualResguardoPdv
             'cantidad_piezas' => isset($snapshot['cantidad_piezas']) ? (int) $snapshot['cantidad_piezas'] : null,
             'piezas' => is_array($snapshot['piezas'] ?? null) ? $snapshot['piezas'] : [],
             'evidencias' => $evidencias,
+            'evidencia_completa' => EvidenciaMinimaRegistroManualPdv::completa($resguardo),
         ];
     }
 

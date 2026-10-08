@@ -10,7 +10,13 @@ import SelectorSucursalActivaPdv from '@/Components/PuntoVenta/SelectorSucursalA
 import FiltrosHistorialEntregados from './Partials/FiltrosHistorialEntregados';
 import ModalDetalleResguardo from './Partials/ModalDetalleResguardo';
 import useHistorialEntregadosResguardo from './Partials/useHistorialEntregadosResguardo';
-import { BTN_SECONDARY, formatearFechaOperativa } from './Partials/resguardosStyles';
+import {
+    BTN_SECONDARY,
+    formatearFechaOperativa,
+    RESGUARDOS_BTN_ICON_TABLA,
+    RESGUARDOS_TABLA_FILA,
+    RESGUARDOS_TABLA_HEAD,
+} from './Partials/resguardosStyles';
 import MiniaturaEvidenciaResguardo from './Partials/MiniaturaEvidenciaResguardo';
 import useToastAlCambiar from '../../../hooks/useToastAlCambiar';
 
@@ -99,7 +105,7 @@ export default function Entregados({
     return (
         <AppLayout auth={auth}>
             <Head title="Historial de entregas | Resguardos PDV" />
-            <GeliaPageShell className="space-y-5">
+            <GeliaPageShell className="space-y-3 md:space-y-4">
                 <GeliaTituloCard
                     eyebrow="Punto de Venta"
                     title="Historial de entregas"
@@ -149,7 +155,7 @@ export default function Entregados({
                     {cargando && filas.length === 0 ? (
                         <div className="flex flex-col items-center justify-center gap-3 py-16">
                             <Loader2 className="w-8 h-8 animate-spin" style={{ color: 'var(--color-primario)' }} />
-                            <p className="text-sm font-bold theme-text-muted uppercase tracking-widest m-0">Cargando historial</p>
+                            <p className="text-sm font-semibold theme-text-muted m-0">Cargando historial…</p>
                         </div>
                     ) : filas.length === 0 ? (
                         <p className="text-sm font-semibold theme-text-muted text-center m-0 py-12 px-4">
@@ -158,23 +164,27 @@ export default function Entregados({
                                 : 'Aún no hay resguardos entregados en esta sucursal.'}
                         </p>
                     ) : (
-                        <div className="overflow-x-auto">
-                            <table className="w-full border-collapse min-w-[720px]">
-                                <thead>
-                                    <tr className="border-b theme-border">
-                                        {['Folio', 'Cliente', 'Entrega completada', 'Quien retiró', 'Firma', 'Bultos', ''].map((col) => (
+                        <div className="overflow-x-auto overscroll-x-contain">
+                            <table className="w-full border-collapse min-w-[640px] lg:min-w-[720px]">
+                                <thead className={RESGUARDOS_TABLA_HEAD}>
+                                    <tr>
+                                        {['Folio', 'Cliente', 'Entrega completada', 'Quien retiró', 'Firma', 'Bultos'].map((col) => (
                                             <th
-                                                key={col || 'accion'}
-                                                className="px-4 py-3 text-left text-[9px] font-black uppercase tracking-widest theme-text-muted"
+                                                key={col}
+                                                scope="col"
+                                                className="px-3 md:px-4 py-3 text-left text-xs font-semibold theme-text-muted whitespace-nowrap"
                                             >
                                                 {col}
                                             </th>
                                         ))}
+                                        <th scope="col" className="px-2 md:px-4 py-3 text-right text-xs font-semibold theme-text-muted">
+                                            Acciones
+                                        </th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {filas.map((fila) => (
-                                        <tr key={fila.id} className="border-b theme-border">
+                                        <tr key={fila.id} className={RESGUARDOS_TABLA_FILA}>
                                             <td className="px-4 py-3 text-sm font-semibold theme-text-main">
                                                 {fila.snapshot_folio || `#${fila.id}`}
                                             </td>
@@ -207,13 +217,15 @@ export default function Entregados({
                                             <td className="px-4 py-3 text-sm theme-text-muted">
                                                 {fila.cantidad_bultos_esperada}
                                             </td>
-                                            <td className="px-4 py-3 text-right">
+                                            <td className="px-2 md:px-4 py-2.5 text-right">
                                                 <button
                                                     type="button"
                                                     onClick={() => setDetalleResguardoId(fila.id)}
-                                                    className={`${BTN_SECONDARY} inline-flex items-center gap-2 min-h-[40px] px-3 text-[10px]`}
+                                                    className={`${RESGUARDOS_BTN_ICON_TABLA} md:min-w-0 md:px-3 md:gap-2 inline-flex`}
+                                                    aria-label={`Ver detalle de ${fila.snapshot_folio || fila.id}`}
                                                 >
-                                                    <Eye className="w-4 h-4" /> Ver detalle
+                                                    <Eye className="w-4 h-4 shrink-0" aria-hidden />
+                                                    <span className="hidden md:inline text-xs font-semibold">Detalle</span>
                                                 </button>
                                             </td>
                                         </tr>

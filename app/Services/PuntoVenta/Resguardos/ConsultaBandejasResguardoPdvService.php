@@ -14,6 +14,7 @@ use App\Support\PuntoVenta\Resguardos\BandejaResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\BusquedaResguardoPdvQuery;
 use App\Support\PuntoVenta\Resguardos\EstadoRecepcionResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\EstadoResguardoPdv;
+use App\Support\PuntoVenta\Resguardos\EvidenciaMinimaRegistroManualPdv;
 use App\Support\PuntoVenta\Resguardos\EtiquetasResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\SerializadorBultosEmpaqueCedisPdv;
 use App\Support\PuntoVenta\Resguardos\SerializadorRegistroManualResguardoPdv;
@@ -301,6 +302,8 @@ class ConsultaBandejasResguardoPdvService
         if (! empty($filtros['q'])) {
             $this->aplicarBusqueda($query, (string) $filtros['q']);
         }
+
+        $this->aplicarFiltrosRegistro($query, $filtros);
     }
 
     private function aplicarFiltroPaso(Builder $query, string $paso): void
@@ -462,6 +465,38 @@ class ConsultaBandejasResguardoPdvService
 
         if (! empty($filtros['q'])) {
             $this->aplicarBusqueda($query, (string) $filtros['q']);
+        }
+
+        $this->aplicarFiltrosRegistro($query, $filtros);
+    }
+
+    /**
+     * @param  array<string, mixed>  $filtros
+     */
+    private function aplicarFiltrosRegistro(Builder $query, array $filtros): void
+    {
+        if (! empty($filtros['origen_id'])) {
+            $origenId = (int) $filtros['origen_id'];
+            $query->where(function (Builder $origen) use ($origenId) {
+                $origen->where('snapshot_json->origen_id', $origenId)
+                    ->orWhere('snapshot_json->departamento_id', $origenId);
+            });
+        }
+
+        if (($filtros['alta'] ?? null) === 'manual') {
+            $query->where('snapshot_json->handoff', CrearResguardoManualPdvService::HANDOFF);
+        } elseif (($filtros['alta'] ?? null) === 'pedido') {
+            $query->whereNotNull('pedido_bma_id');
+        }
+
+        if (($filtros['evidencia'] ?? null) === 'incompleta') {
+            EvidenciaMinimaRegistroManualPdv::restringirIncompleta($query);
+        } elseif (($filtros['evidencia'] ?? null) === 'completa') {
+            EvidenciaMinimaRegistroManualPdv::restringirCompleta($query);
+        }
+
+        if (filter_var($filtros['alta_hoy'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
+            $query->whereDate('created_at', now()->toDateString());
         }
     }
 
@@ -625,6 +660,14 @@ class ConsultaBandejasResguardoPdvService
             'estado' => $filtros['estado'] ?? null,
             'antiguedad' => $filtros['antiguedad'] ?? null,
             'sucursal_id' => isset($filtros['sucursal_id']) ? (int) $filtros['sucursal_id'] : null,
+            'origen_id' => isset($filtros['origen_id']) && $filtros['origen_id'] !== ''
+                ? (int) $filtros['origen_id']
+                : null,
+            'alta' => in_array($filtros['alta'] ?? null, ['manual', 'pedido'], true) ? $filtros['alta'] : null,
+            'evidencia' => in_array($filtros['evidencia'] ?? null, ['completa', 'incompleta'], true)
+                ? $filtros['evidencia']
+                : null,
+            'alta_hoy' => filter_var($filtros['alta_hoy'] ?? false, FILTER_VALIDATE_BOOLEAN),
             'page' => isset($filtros['page']) ? (int) $filtros['page'] : null,
             'per_page' => isset($filtros['per_page']) ? (int) $filtros['per_page'] : self::PER_PAGE,
         ];

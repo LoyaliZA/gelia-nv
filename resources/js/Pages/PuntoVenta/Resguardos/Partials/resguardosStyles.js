@@ -1,11 +1,27 @@
-import { geliaCardClass, THEME_BTN_PRIMARY, THEME_INPUT as GELIA_THEME_INPUT } from '../../../../utils/geliaTheme';
+import { geliaCardClass, THEME_BTN_PRIMARY, THEME_INPUT as GELIA_THEME_INPUT, THEME_LABEL } from '../../../../utils/geliaTheme';
 
 export const BTN_SECONDARY =
-    'px-4 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest theme-element theme-border border theme-text-main outline-none disabled:opacity-50';
+    'px-4 py-2.5 rounded-xl md:rounded-2xl text-xs font-semibold theme-element theme-border border theme-text-main disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primario)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--theme-surface)]';
+
+/** Hover de fila en tablas densas (tokens tema). */
+export const RESGUARDOS_TABLA_FILA =
+    'border-b theme-border transition-colors hover:bg-black/5 dark:hover:bg-white/5';
+
+/** Cabecera sticky en tablas con scroll horizontal (tablet/desktop). */
+export const RESGUARDOS_TABLA_HEAD =
+    'sticky top-0 z-[1] theme-surface border-b theme-border shadow-[0_1px_0_0_var(--theme-border)]';
+
+export const RESGUARDOS_FILTRO_LABEL = `${THEME_LABEL} text-xs font-semibold theme-text-muted`;
+
+export const RESGUARDOS_STICKY_SELECCION =
+    'p-0 sticky bottom-0 md:bottom-3 z-20 flex flex-col overflow-hidden border theme-border shadow-lg pb-[max(0.5rem,env(safe-area-inset-bottom))]';
+
+export const RESGUARDOS_BTN_ICON_TABLA =
+    'inline-flex items-center justify-center min-h-[44px] min-w-[44px] rounded-xl border theme-border theme-element theme-text-main hover:border-[var(--color-primario)]/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primario)] disabled:opacity-50';
 
 /** Botones «Tomar foto» / «Galería» en formularios de evidencia PDV. */
 export const BTN_CAPTURA_EVIDENCIA =
-    'inline-flex items-center justify-center gap-2 min-h-[44px] px-4 py-2.5 rounded-2xl border theme-border theme-element text-[10px] font-black uppercase tracking-widest theme-text-main outline-none cursor-pointer disabled:opacity-50 hover:border-[var(--color-primario)]/40';
+    'inline-flex items-center justify-center gap-2 min-h-[44px] px-4 py-2.5 rounded-xl border theme-border theme-element text-xs font-semibold theme-text-main cursor-pointer disabled:opacity-50 hover:border-[var(--color-primario)]/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primario)]';
 
 export const ICONO_CAPTURA_EVIDENCIA = 'w-4 h-4 shrink-0 text-[var(--color-primario)]';
 

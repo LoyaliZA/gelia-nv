@@ -1,9 +1,10 @@
 import React, { useMemo, useState } from 'react';
 import { Loader2, PackageCheck, Send } from 'lucide-react';
-import { geliaCardClass, THEME_BTN_SECONDARY } from '../../../../utils/geliaTheme';
+import { THEME_BTN_SECONDARY } from '../../../../utils/geliaTheme';
 import { BTN_ACCION_MASIVA_GERENTE } from './resguardosStyles';
 import { confirmarRecepcionGerente, pasarARecepcionGerente } from './recepcionGerenteApi';
 import useToastAlCambiar from '../../../../hooks/useToastAlCambiar';
+import BarraStickySeleccionResguardo from './BarraStickySeleccionResguardo';
 
 export default function BarraAccionesMasivasGerente({
     resguardos = [],
@@ -59,64 +60,60 @@ export default function BarraAccionesMasivasGerente({
         return null;
     }
 
+    const meta = progreso
+        ? `Procesando ${progreso.actual} de ${progreso.total}…`
+        : 'Acciones masivas en la selección actual';
+
     return (
-        <div className={`${geliaCardClass()} p-0 sticky bottom-3 z-20 flex flex-col gap-0 overflow-hidden border theme-border shadow-lg`}>
-            <div className="px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b theme-border bg-black/[0.02] dark:bg-white/[0.02]">
-                <p className="text-sm font-bold theme-text-main m-0">
-                    {idsSeleccionados.length} seleccionado{idsSeleccionados.length === 1 ? '' : 's'}
-                    {progreso && (
-                        <span className="text-[10px] font-black uppercase tracking-widest theme-text-muted ml-2">
-                            ({progreso.actual}/{progreso.total})
-                        </span>
-                    )}
-                </p>
-                <div className="flex flex-wrap gap-2">
+        <BarraStickySeleccionResguardo
+            titulo={`${idsSeleccionados.length} seleccionado${idsSeleccionados.length === 1 ? '' : 's'}`}
+            meta={meta}
+            acciones={(
+                <>
                     {onSeleccionarPagina && (
                         <button
                             type="button"
                             onClick={onSeleccionarPagina}
                             disabled={procesando || paginaSeleccionada}
-                            className={`${THEME_BTN_SECONDARY} text-[10px] font-black uppercase tracking-widest min-h-[40px] px-4`}
+                            className={`${THEME_BTN_SECONDARY} text-xs font-semibold min-h-[44px] px-3 sm:px-4`}
                         >
-                            Seleccionar página
+                            <span className="hidden sm:inline">Seleccionar página</span>
+                            <span className="sm:hidden">Página</span>
                         </button>
                     )}
                     <button
                         type="button"
                         onClick={onLimpiarSeleccion}
                         disabled={procesando}
-                        className={`${THEME_BTN_SECONDARY} text-[10px] font-black uppercase tracking-widest min-h-[40px] px-4`}
+                        className={`${THEME_BTN_SECONDARY} text-xs font-semibold min-h-[44px] px-3 sm:px-4`}
                     >
                         Limpiar
                     </button>
-                </div>
-            </div>
-
-            <div className="flex flex-col gap-2 p-3">
-                {puedeConfirmarLlegada && pendientes.length > 0 && (
-                    <button
-                        type="button"
-                        disabled={procesando}
-                        onClick={() => ejecutarLote(pendientes, confirmarRecepcionGerente)}
-                        className={BTN_ACCION_MASIVA_GERENTE}
-                    >
-                        {procesando ? <Loader2 className="w-4 h-4 animate-spin" /> : <PackageCheck className="w-4 h-4 stroke-[2]" />}
-                        Confirmar recepción ({pendientes.length})
-                    </button>
-                )}
-                {puedeEnviarACustodia && recibidos.length > 0 && (
-                    <button
-                        type="button"
-                        disabled={procesando}
-                        onClick={() => ejecutarLote(recibidos, pasarARecepcionGerente)}
-                        className={BTN_ACCION_MASIVA_GERENTE}
-                    >
-                        {procesando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4 stroke-[2]" />}
-                        Pasar a recepción ({recibidos.length})
-                    </button>
-                )}
-            </div>
-
-        </div>
+                </>
+            )}
+        >
+            {puedeConfirmarLlegada && pendientes.length > 0 && (
+                <button
+                    type="button"
+                    disabled={procesando}
+                    onClick={() => ejecutarLote(pendientes, confirmarRecepcionGerente)}
+                    className={BTN_ACCION_MASIVA_GERENTE}
+                >
+                    {procesando ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> : <PackageCheck className="w-4 h-4 stroke-[2]" aria-hidden />}
+                    Confirmar recepción ({pendientes.length})
+                </button>
+            )}
+            {puedeEnviarACustodia && recibidos.length > 0 && (
+                <button
+                    type="button"
+                    disabled={procesando}
+                    onClick={() => ejecutarLote(recibidos, pasarARecepcionGerente)}
+                    className={BTN_ACCION_MASIVA_GERENTE}
+                >
+                    {procesando ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> : <Send className="w-4 h-4 stroke-[2]" aria-hidden />}
+                    Pasar a recepción ({recibidos.length})
+                </button>
+            )}
+        </BarraStickySeleccionResguardo>
     );
 }

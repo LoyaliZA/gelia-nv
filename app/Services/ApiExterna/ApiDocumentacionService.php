@@ -253,7 +253,7 @@ class ApiDocumentacionService
                     'metodo' => 'POST',
                     'ruta' => '/mobile/punto-venta/resguardos',
                     'auth' => true,
-                    'descripcion' => 'Crea un resguardo manual en la sucursal activa. Permiso pdv.resguardos.registrar_manual y flag registro_manual. Multipart: idempotency_key, cliente_id, folio, origen_id, cantidad_bultos_esperada, archivo_ticket, foto_paquete; opcionales envia_a_otra_persona, envia_otra_persona, observaciones, piezas[][producto_id], piezas[][cantidad]. origen_id debe ser un departamento de origenes del contexto.',
+                    'descripcion' => 'Crea un resguardo manual en la sucursal activa. Permiso pdv.resguardos.registrar_manual y flag registro_manual. Multipart: idempotency_key, cliente_id, folio, origen_id, cantidad_bultos_esperada; opcionales archivo_ticket, foto_paquete, envia_a_otra_persona, envia_otra_persona, observaciones, piezas[][producto_id], piezas[][cantidad]. Si llegan ticket y foto del paquete, el resguardo queda en recepción sin una segunda confirmación de gerencia. origen_id debe ser un departamento de origenes del contexto.',
                     'curl' => "curl -s -X POST \"{$baseUrl}/mobile/punto-venta/resguardos\" {$authHeaders} \\\n  -F \"idempotency_key=pdv:man:tablet-1\" \\\n  -F \"cliente_id=1\" \\\n  -F \"folio=REM-001\" \\\n  -F \"origen_id=1\" \\\n  -F \"cantidad_bultos_esperada=1\" \\\n  -F \"archivo_ticket=@ticket.jpg\" \\\n  -F \"foto_paquete=@paquete.jpg\"",
                 ],
                 [

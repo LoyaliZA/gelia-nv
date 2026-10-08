@@ -5,7 +5,14 @@ import AppLayout from '../../../Layouts/AppLayout';
 import GeliaPageShell from '../../../Components/GeliaPageShell';
 import GeliaTituloCard from '../../../Components/GeliaTituloCard';
 import GeliaPaginacion from '../../../Components/GeliaPaginacion';
-import { geliaCardClass, GELIA_SEGMENT_TABS_SCROLL, GELIA_SEGMENT_TABS_TRACK, THEME_BTN_PRIMARY } from '../../../utils/geliaTheme';
+import {
+    geliaCardClass,
+    GELIA_BTN_OUTLINE,
+    GELIA_PREVENT_OVERFLOW_X,
+    THEME_BTN_PRIMARY,
+    THEME_BTN_SECONDARY,
+} from '../../../utils/geliaTheme';
+import BarraStickySeleccionResguardo from './Partials/BarraStickySeleccionResguardo';
 import FiltrosResguardos from './Partials/FiltrosResguardos';
 import ListadoResguardos from './Partials/ListadoResguardos';
 import AlertasCustodiaResguardo from './Partials/AlertasCustodiaResguardo';
@@ -65,6 +72,10 @@ export default function Index({
     const [busqueda, setBusqueda] = useState(filtros.q || '');
     const [estado, setEstado] = useState(filtros.estado || '');
     const [antiguedad, setAntiguedad] = useState(filtros.antiguedad || '');
+    const [origenId, setOrigenId] = useState(filtros.origen_id ? String(filtros.origen_id) : '');
+    const [alta, setAlta] = useState(filtros.alta || '');
+    const [evidencia, setEvidencia] = useState(filtros.evidencia || '');
+    const [altaHoy, setAltaHoy] = useState(Boolean(filtros.alta_hoy));
     const [idsSeleccionados, setIdsSeleccionados] = useState([]);
     const [detalleResguardoId, setDetalleResguardoId] = useState(null);
     const [detalleResguardoResumen, setDetalleResguardoResumen] = useState(null);
@@ -95,6 +106,10 @@ export default function Index({
         setBusqueda(filtros.q || '');
         setEstado(filtros.estado || '');
         setAntiguedad(filtros.antiguedad || '');
+        setOrigenId(filtros.origen_id ? String(filtros.origen_id) : '');
+        setAlta(filtros.alta || '');
+        setEvidencia(filtros.evidencia || '');
+        setAltaHoy(Boolean(filtros.alta_hoy));
     }, [filtros, bandejaInicial]);
 
     useEffect(() => {
@@ -114,6 +129,10 @@ export default function Index({
         q: busqueda,
         estado,
         antiguedad,
+        origenId,
+        alta,
+        evidencia,
+        altaHoy,
         page: resguardosVista?.current_page || 1,
         ...extra,
     });
@@ -164,11 +183,44 @@ export default function Index({
         recargar({ antiguedad: valor || undefined, page: 1 });
     };
 
+    const onOrigen = (valor) => {
+        setOrigenId(valor);
+        recargar({ origenId: valor || undefined, page: 1 });
+    };
+
+    const onAlta = (valor) => {
+        setAlta(valor);
+        recargar({ alta: valor || undefined, page: 1 });
+    };
+
+    const onEvidencia = (valor) => {
+        setEvidencia(valor);
+        recargar({ evidencia: valor || undefined, page: 1 });
+    };
+
+    const onAltaHoy = (valor) => {
+        setAltaHoy(valor);
+        recargar({ altaHoy: valor || undefined, page: 1 });
+    };
+
     const onLimpiar = () => {
         setBusqueda('');
         setEstado('');
         setAntiguedad('');
-        recargar({ q: undefined, estado: undefined, antiguedad: undefined, page: 1 });
+        setOrigenId('');
+        setAlta('');
+        setEvidencia('');
+        setAltaHoy(false);
+        recargar({
+            q: undefined,
+            estado: undefined,
+            antiguedad: undefined,
+            origenId: undefined,
+            alta: undefined,
+            evidencia: undefined,
+            altaHoy: undefined,
+            page: 1,
+        });
     };
 
     const onIrAPagina = (page) => {
@@ -187,7 +239,7 @@ export default function Index({
         router.visit(route('punto_venta.resguardos.entregas_multiples.create', { ids: idsSeleccionados }));
     };
 
-    const hayFiltrosActivos = Boolean(busqueda || estado || antiguedad);
+    const hayFiltrosActivos = Boolean(busqueda || estado || antiguedad || origenId || alta || evidencia || altaHoy);
 
     const bandejaRender = bandejaVista || bandejaActiva;
     const puedeConfirmarEscaneo = puedeConfirmarLlegada
@@ -235,30 +287,36 @@ export default function Index({
                 habilitado={Boolean(sucursalActiva?.id)}
             >
                 <ResguardosRealtimeSync refrescar={recargarSilencioso} />
-                <GeliaPageShell className="space-y-5">
+                <GeliaPageShell className={`space-y-3 md:space-y-4 pb-[max(5.5rem,env(safe-area-inset-bottom))] md:pb-6 ${GELIA_PREVENT_OVERFLOW_X}`}>
                 <GeliaTituloCard
                     eyebrow="Punto de Venta"
                     title="Resguardos"
                     titleHighlight="en sucursal"
                     icon={null}
                     aside={(
-                        <div className="flex items-center gap-2 shrink-0 self-start md:self-center">
+                        <div className="flex flex-wrap items-center justify-end gap-2 w-full sm:w-auto shrink-0 self-start md:self-center">
                             <PdvEncabezadoAlertasPdv />
                             {puedeVerHistorialEntregas && (
                                 <Link
                                     href={route('punto_venta.resguardos.entregados.index')}
-                                    className="inline-flex items-center gap-2 min-h-[44px] px-4 rounded-xl border theme-border text-[10px] font-black uppercase tracking-widest theme-text-main hover:theme-element"
+                                    className={`${GELIA_BTN_OUTLINE} min-h-[44px] px-3 sm:px-4 no-underline text-xs`}
                                 >
-                                    <History className="w-4 h-4" /> Historial entregas
+                                    <History className="w-4 h-4 shrink-0" aria-hidden />
+                                    <span className="hidden min-[400px]:inline">Historial entregas</span>
+                                    <span className="min-[400px]:hidden">Historial</span>
                                 </Link>
                             )}
                             <AccionRegistrarResguardoManual
                                 habilitado={puedeRegistrarManual}
                                 origenes={catalogos.origenes_pedido || []}
-                                onExito={() => recargar({ bandeja: 'por_recibir', paso: 'gerente', page: 1 })}
+                                onExito={(data) => recargar({
+                                    bandeja: 'por_recibir',
+                                    paso: data?.resguardo?.estado === 'en_recepcion' ? 'recepcionista' : 'gerente',
+                                    page: 1,
+                                })}
                             />
-                            <div className="p-2.5 rounded-xl theme-element border theme-border flex items-center justify-center">
-                                <Package className="w-5 h-5" style={{ color: 'var(--color-primario)' }} aria-hidden />
+                            <div className="hidden sm:flex p-2.5 rounded-xl theme-element border theme-border items-center justify-center" aria-hidden>
+                                <Package className="w-5 h-5" style={{ color: 'var(--color-primario)' }} />
                             </div>
                         </div>
                     )}
@@ -272,9 +330,9 @@ export default function Index({
                     />
                 </GeliaTituloCard>
 
-                <div className={GELIA_SEGMENT_TABS_SCROLL}>
+                <div className="w-full min-w-0 max-w-full">
                     <div
-                        className={`gelia-segment ${GELIA_SEGMENT_TABS_TRACK} p-1 shadow-sm`}
+                        className="gelia-segment flex w-full min-w-0 max-w-full p-1 shadow-sm"
                         role="tablist"
                         aria-label="Bandejas de resguardos"
                     >
@@ -288,11 +346,11 @@ export default function Index({
                                     aria-selected={activa}
                                     data-active={activa}
                                     onClick={() => onBandeja(clave)}
-                                    className="gelia-segment-btn whitespace-nowrap gap-2"
+                                    className="gelia-segment-btn flex-1 min-w-0 !flex-col sm:!flex-row gap-0.5 sm:gap-2 px-1 py-2 sm:px-2.5 leading-tight"
                                 >
-                                    <span>{etiqueta}</span>
+                                    <span className="text-[0.625rem] sm:text-xs text-center leading-snug line-clamp-2">{etiqueta}</span>
                                     <span
-                                        className={`text-[9px] font-black px-1.5 py-0.5 rounded-md tabular-nums border ${
+                                        className={`shrink-0 text-[10px] sm:text-[11px] font-bold px-1 py-0.5 rounded-md tabular-nums border ${
                                             activa
                                                 ? 'border-[var(--color-primario)]/30 bg-[var(--color-primario)]/10 text-[var(--color-primario)]'
                                                 : 'theme-element theme-border theme-text-muted'
@@ -338,12 +396,20 @@ export default function Index({
                     puedeConfirmarEscaneo={puedeConfirmarEscaneo}
                     ocultarAntiguedad={antiguedadEnTarjetas}
                     onRecepcionExito={() => recargar({ page: resguardosVista?.current_page || 1 })}
+                    origenId={origenId}
+                    onOrigen={onOrigen}
+                    alta={alta}
+                    onAlta={onAlta}
+                    evidencia={evidencia}
+                    onEvidencia={onEvidencia}
+                    altaHoy={altaHoy}
+                    onAltaHoy={onAltaHoy}
                 />
 
                 {cargando && !resguardosVista?.data?.length ? (
                     <div className={`${geliaCardClass()} p-12 flex flex-col items-center gap-3`}>
                         <Loader2 className="w-8 h-8 animate-spin" style={{ color: 'var(--color-primario)' }} />
-                        <p className="text-sm theme-text-muted font-bold uppercase tracking-widest m-0">Cargando resguardos</p>
+                        <p className="text-sm theme-text-muted font-semibold m-0">Cargando resguardos…</p>
                     </div>
                 ) : (
                     <ListadoResguardos
@@ -372,7 +438,18 @@ export default function Index({
                         }
                         onReponerExito={() => recargar({ page: resguardosVista?.current_page || 1 })}
                         onEntregaExito={() => recargar({ page: resguardosVista?.current_page || 1 })}
-                        onRecepcionExito={() => recargar({ page: resguardosVista?.current_page || 1 })}
+                        onRecepcionExito={(data) => {
+                            const estado = data?.resguardo?.estado;
+                            if (estado === 'en_recepcion') {
+                                setPasoActivo('recepcionista');
+                                recargar({ paso: 'recepcionista', page: 1 });
+                                return;
+                            }
+                            recargar({ page: resguardosVista?.current_page || 1 });
+                        }}
+                        onSeleccionarPagina={() => setIdsSeleccionados(idsSeleccionablesPagina)}
+                        paginaSeleccionada={paginaSeleccionada}
+                        idsSeleccionablesPagina={idsSeleccionablesPagina}
                     />
                 )}
 
@@ -398,30 +475,40 @@ export default function Index({
                 )}
 
                 {Boolean(permisos.entregar) && bandejaRender === 'en_custodia' && idsSeleccionados.length > 0 && (
-                    <div className={`${geliaCardClass()} p-4 sticky bottom-3 z-10 flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between`}>
-                        <p className="text-sm font-bold theme-text-main m-0">
-                            {idsSeleccionados.length} seleccionado{idsSeleccionados.length === 1 ? '' : 's'} para entrega conjunta
-                        </p>
-                        <div className="flex flex-col sm:flex-row gap-2">
-                        <button
-                            type="button"
-                            onClick={() => setIdsSeleccionados(idsSeleccionablesPagina)}
-                            disabled={paginaSeleccionada || idsSeleccionablesPagina.length === 0}
-                            className="min-h-[48px] px-4 rounded-xl border theme-border text-[10px] font-black uppercase tracking-widest theme-text-main disabled:opacity-50"
-                        >
-                            Seleccionar página
-                        </button>
+                    <BarraStickySeleccionResguardo
+                        titulo={`${idsSeleccionados.length} para entrega conjunta`}
+                        meta={idsSeleccionados.length < 2 ? 'Selecciona al menos dos para continuar' : undefined}
+                        acciones={(
+                            <>
+                                <button
+                                    type="button"
+                                    onClick={() => setIdsSeleccionados(idsSeleccionablesPagina)}
+                                    disabled={paginaSeleccionada || idsSeleccionablesPagina.length === 0}
+                                    className={`${THEME_BTN_SECONDARY} text-xs font-semibold min-h-[44px] px-3 sm:px-4 disabled:opacity-50`}
+                                >
+                                    <span className="hidden sm:inline">Seleccionar página</span>
+                                    <span className="sm:hidden">Página</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setIdsSeleccionados([])}
+                                    className={`${THEME_BTN_SECONDARY} text-xs font-semibold min-h-[44px] px-3 sm:px-4`}
+                                >
+                                    Limpiar
+                                </button>
+                            </>
+                        )}
+                    >
                         <button
                             type="button"
                             onClick={irAEntregaMultiple}
                             disabled={idsSeleccionados.length < 2}
-                            className={`${THEME_BTN_PRIMARY} min-h-[48px] inline-flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest disabled:opacity-50`}
+                            className={`${THEME_BTN_PRIMARY} min-h-[48px] w-full inline-flex items-center justify-center gap-2 text-sm font-semibold disabled:opacity-50`}
                         >
-                            <Truck className="w-4 h-4" />
+                            <Truck className="w-4 h-4 shrink-0" aria-hidden />
                             Entregar seleccionados
                         </button>
-                        </div>
-                    </div>
+                    </BarraStickySeleccionResguardo>
                 )}
 
                 <GeliaPaginacion paginator={resguardosVista} onIrAPagina={onIrAPagina} />
