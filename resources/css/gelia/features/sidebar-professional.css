@@ -30,13 +30,14 @@
     width: var(--gelia-sidebar-expanded-width);
     height: 100dvh;
     max-height: 100dvh;
-    background: var(--theme-surface-bg);
+    background: color-mix(in srgb, var(--theme-surface-bg) 94%, var(--theme-element-bg));
     border-inline-end: 1px solid var(--theme-border);
     color: var(--theme-text-main);
     pointer-events: auto;
     transition: width var(--gelia-pro-duration) var(--gelia-pro-ease);
     overflow: hidden;
     contain: layout paint;
+    box-shadow: 1px 0 0 color-mix(in srgb, var(--theme-border) 40%, transparent);
 }
 
 .gelia-pro-sidebar[data-collapsed='true'] {
@@ -157,11 +158,13 @@
 
 .gelia-pro-sidebar__header {
     display: block;
-    font-size: 0.75rem;
+    font-size: 0.6875rem;
     font-weight: 600;
-    letter-spacing: 0.02em;
-    opacity: 0.65;
-    padding: 0.5rem 0.625rem 0.25rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--theme-text-muted);
+    opacity: 0.9;
+    padding: 0.625rem 0.625rem 0.25rem;
     max-height: 2.5rem;
     overflow: hidden;
 }
@@ -1156,12 +1159,16 @@
 }
 
 .gelia-sidebar-layout-option__preview {
-    height: 5.5rem;
+    height: 6rem;
     border-radius: 0.625rem;
     border: 1px solid var(--theme-border);
-    background: var(--theme-element-bg);
+    background: color-mix(in srgb, var(--theme-element-bg) 85%, var(--theme-surface-bg));
     position: relative;
     overflow: hidden;
+}
+
+.gelia-sidebar-layout-option[data-active='true'] .gelia-sidebar-layout-option__preview {
+    border-color: color-mix(in srgb, var(--color-primario) 35%, var(--theme-border));
 }
 
 /* --- Miniaturas realistas del picker --- */

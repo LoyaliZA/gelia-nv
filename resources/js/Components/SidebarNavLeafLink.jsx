@@ -42,7 +42,7 @@ export default function SidebarNavLeafLink({
                     )}
                 </span>
                 {description && (
-                    <span className="text-xs mt-0.5 text-gray-500 dark:text-gray-400 whitespace-normal line-clamp-2 leading-tight">
+                    <span className="text-xs mt-0.5 theme-text-muted whitespace-normal line-clamp-2 leading-tight">
                         {description}
                     </span>
                 )}
@@ -54,7 +54,7 @@ export default function SidebarNavLeafLink({
         return (
             <span
                 role="presentation"
-                className={`gelia-sidebar-nav-child-link group flex items-center w-full py-2 pr-4 rounded-lg border-l-2 border-transparent opacity-50 cursor-not-allowed ${paddingClass} ${extraClassName}`.trim()}
+                className={`gelia-sidebar-nav-child-link group flex items-center w-full py-1.5 pr-3 opacity-50 cursor-not-allowed ${paddingClass} ${extraClassName}`.trim()}
             >
                 {content}
             </span>
@@ -67,10 +67,8 @@ export default function SidebarNavLeafLink({
             onClick={onClick}
             role={role}
             aria-current={active ? 'page' : undefined}
-            className={`gelia-sidebar-nav-child-link group flex items-center w-full py-2 pr-4 rounded-lg transition-colors outline-none border-l-2 ${paddingClass} ${
-                active
-                    ? 'gelia-sidebar-nav-child-link--active border-[var(--color-primario)]'
-                    : 'border-transparent'
+            className={`gelia-sidebar-nav-child-link group flex items-center w-full py-1.5 pr-3 transition-colors outline-none ${paddingClass} ${
+                active ? 'gelia-sidebar-nav-child-link--active' : ''
             } ${extraClassName}`.trim()}
         >
             {content}

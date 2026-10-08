@@ -91,7 +91,9 @@ export default function SidebarNavMenu({ url, can, showAdminMenu, manualesHubVis
                     type="button"
                     onClick={() => toggleGroup(group.id)}
                     aria-expanded={isOpen}
-                    className={`gelia-sidebar-nav-root-btn flex items-center w-full gap-2.5 py-3.5 px-4 rounded-[1.25rem] transition-all outline-none border ${
+                    className={`gelia-sidebar-nav-root-btn flex items-center w-full gap-2.5 transition-all outline-none border ${
+                        isOpen ? 'gelia-sidebar-nav-root-btn--open' : ''
+                    } ${
                         hasActiveChild && !isOpen
                             ? 'gelia-sidebar-nav-root-btn--hint-active'
                             : 'gelia-sidebar-nav-root-btn--idle'
@@ -188,7 +190,7 @@ export default function SidebarNavMenu({ url, can, showAdminMenu, manualesHubVis
             return (
                 <span
                     key={node.id}
-                    className="gelia-sidebar-nav-header px-4 mb-1 opacity-70"
+                    className="gelia-sidebar-nav-header px-3 sm:px-4"
                 >
                     {node.label}
                 </span>
@@ -202,7 +204,7 @@ export default function SidebarNavMenu({ url, can, showAdminMenu, manualesHubVis
 
     return (
         <nav
-            className="gelia-sidebar-nav-tree flex flex-col gap-1.5 px-2"
+            className="gelia-sidebar-nav-tree flex flex-col gap-1 px-2 sm:px-2.5"
             aria-label="Navegación principal"
         >
             {tree.map(renderNode)}

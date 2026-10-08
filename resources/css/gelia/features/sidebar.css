@@ -585,6 +585,11 @@
     overflow-x: hidden;
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
+    scrollbar-gutter: stable;
+}
+
+.gelia-sidebar-root .floating-menu {
+    border-radius: 1.25rem;
 }
 
 .gelia-sidebar-access-footer {
@@ -599,11 +604,13 @@
  */
 .gelia-sidebar-root {
     font-family: var(--font-principal);
-    --gelia-sidebar-weight-body: 600;
-    --gelia-sidebar-weight-active: 800;
-    --gelia-sidebar-weight-heading: 900;
-    --gelia-sidebar-size-body: 0.84375rem;
-    --gelia-sidebar-size-heading: 0.6875rem;
+    --gelia-sidebar-weight-body: 500;
+    --gelia-sidebar-weight-active: 600;
+    --gelia-sidebar-weight-heading: 600;
+    --gelia-sidebar-size-body: 0.8125rem;
+    --gelia-sidebar-size-heading: 0.875rem;
+    --gelia-sidebar-radius-row: 0.5rem;
+    --gelia-sidebar-accent-width: 3px;
 }
 
 .gelia-sidebar-root :is(.font-sans, .font-serif, .font-mono, [class*='font-sans'], [class*='font-serif'], [class*='font-mono']) {
@@ -690,13 +697,14 @@
     display: block;
     user-select: none;
     font-family: var(--font-principal);
-    font-size: var(--gelia-sidebar-size-heading);
-    font-weight: var(--gelia-sidebar-weight-heading);
-    font-style: italic;
-    letter-spacing: 0.3em;
-    text-transform: uppercase;
-    color: var(--color-primario);
+    font-size: 0.75rem;
+    font-weight: 600;
+    font-style: normal;
+    letter-spacing: 0.02em;
+    text-transform: none;
+    color: var(--theme-text-muted);
     opacity: 0.85;
+    padding-block: 0.5rem 0.25rem;
 }
 
 /* Contenedor hijos: corta herencia italic/uppercase de botones raíz */
@@ -744,33 +752,74 @@
 }
 
 .gelia-sidebar-root .gelia-sidebar-access-footer-label {
-    font-size: 0.75rem;
-    font-weight: var(--gelia-sidebar-weight-heading);
-    font-style: italic;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    font-style: normal;
+    letter-spacing: 0.01em;
+    text-transform: none;
 }
 
-/* Nivel 1 — categoría raíz (caja + chevron) */
+.gelia-sidebar-access-footer-btn {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    min-height: 2.75rem;
+    padding: 0.625rem 1rem;
+    border-radius: var(--gelia-sidebar-radius-row);
+    border: 1px solid transparent;
+    background: color-mix(in srgb, var(--color-peligro) 6%, transparent);
+    outline: none;
+    cursor: pointer;
+    transition:
+        background 0.18s ease,
+        border-color 0.18s ease,
+        box-shadow 0.18s ease;
+}
+
+.gelia-sidebar-access-footer-btn:hover {
+    border-color: color-mix(in srgb, var(--color-peligro) 45%, var(--theme-border));
+    box-shadow: var(--theme-shadow-card);
+}
+
+.gelia-sidebar-access-footer-btn:focus-visible {
+    outline: 2px solid var(--color-primario);
+    outline-offset: 2px;
+}
+
+/* Nivel 1 — categoría raíz (alineado con filas ERP del sidebar profesional) */
+.gelia-sidebar-nav-root-btn {
+    min-width: 0;
+    min-height: calc(var(--gelia-sidebar-row-height, 2.75rem) + 0.125rem);
+    padding: 0.375rem 0.75rem;
+    border-radius: var(--gelia-sidebar-radius-row);
+    border-inline-start-width: var(--gelia-sidebar-accent-width);
+    font-family: var(--font-principal);
+}
+
 .gelia-sidebar-nav-root-btn--idle {
-    background-color: color-mix(in srgb, var(--theme-element-bg) 88%, transparent);
-    border: 1px solid var(--theme-border);
+    background-color: color-mix(in srgb, currentColor 4%, transparent);
+    border: 1px solid color-mix(in srgb, var(--theme-border) 65%, transparent);
+    border-inline-start-width: var(--gelia-sidebar-accent-width);
+    border-inline-start-color: transparent;
     color: var(--theme-text-main);
 }
 
 .gelia-sidebar-nav-root-btn--idle:hover {
-    border-color: var(--color-primario);
-    box-shadow: var(--theme-shadow-card);
+    background-color: color-mix(in srgb, currentColor 8%, transparent);
+    border-color: color-mix(in srgb, var(--theme-border) 80%, transparent);
+}
+
+.gelia-sidebar-nav-root-btn--open {
+    background-color: color-mix(in srgb, var(--color-primario) 6%, transparent);
+    border-color: color-mix(in srgb, var(--color-primario) 22%, var(--theme-border));
+    border-inline-start-color: color-mix(in srgb, var(--color-primario) 55%, transparent);
 }
 
 .gelia-sidebar-nav-root-btn--hint-active {
-    background-color: color-mix(in srgb, var(--theme-element-bg) 88%, transparent);
-    border: 1px solid color-mix(in srgb, var(--color-primario) 45%, var(--theme-border));
+    background-color: color-mix(in srgb, currentColor 4%, transparent);
+    border: 1px solid color-mix(in srgb, var(--theme-border) 65%, transparent);
+    border-inline-start-color: color-mix(in srgb, var(--color-primario) 45%, transparent);
     color: var(--theme-text-main);
-}
-
-.gelia-sidebar-nav-root-btn {
-    min-width: 0;
 }
 
 .gelia-sidebar-root .gelia-sidebar-nav-root-label {
@@ -783,20 +832,16 @@
     font-family: var(--font-principal);
     font-size: var(--gelia-sidebar-size-heading);
     font-weight: var(--gelia-sidebar-weight-heading);
-    font-style: italic;
-    text-transform: uppercase;
-    letter-spacing: 0.02em;
+    font-style: normal;
+    text-transform: none;
+    letter-spacing: 0.01em;
     color: inherit;
 }
 
-.gelia-sidebar-root .gelia-sidebar-nav-root-btn {
-    font-family: var(--font-principal);
-}
-
-@media (min-width: 640px) {
-    .gelia-sidebar-root .gelia-sidebar-nav-root-label {
-        font-size: 0.75rem;
-    }
+.gelia-sidebar-root .gelia-sidebar-nav-root-block > .sidebar-collapsible-wrapper--open .gelia-sidebar-nav-children {
+    margin-inline-start: 0.375rem;
+    padding-inline-start: 0.625rem;
+    border-inline-start: 1px solid color-mix(in srgb, var(--color-primario) 25%, var(--theme-border));
 }
 
 .gelia-sidebar-nav-root-icon {
@@ -810,7 +855,10 @@
 /* Niveles 2–3 — enlaces planos (sin caja) */
 .gelia-sidebar-nav-child-link {
     position: relative;
+    min-height: 2.125rem;
+    border-radius: var(--gelia-sidebar-radius-row);
     background: transparent;
+    border-inline-start: var(--gelia-sidebar-accent-width) solid transparent;
 }
 
 .gelia-sidebar-nav-child-link:hover {
@@ -828,6 +876,7 @@
 
 .gelia-sidebar-nav-child-link--active {
     background-color: color-mix(in srgb, var(--color-primario) 12%, transparent);
+    border-inline-start-color: var(--color-primario);
 }
 
 .gelia-sidebar-root .gelia-sidebar-nav-child-text--active {

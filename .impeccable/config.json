@@ -1,0 +1,44 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "layout-transition",
+        "value": "*",
+        "files": [
+          "resources/css/gelia/features/sidebar.css"
+        ],
+        "createdAt": "2026-10-08T18:15:36.400Z",
+        "reason": "Sidebar legacy: width/grid collapse animations are intentional and pre-existing; visual refresh only adjusts typography and row tokens."
+      },
+      {
+        "rule": "layout-transition",
+        "value": "*",
+        "files": [
+          "resources/css/gelia/features/sidebar-professional.css"
+        ],
+        "createdAt": "2026-10-08T18:16:13.962Z",
+        "reason": "Professional sidebar: intentional width collapse animation; pre-existing ERP rail behavior."
+      },
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "resources/css/gelia/features/sidebar-professional.css"
+        ],
+        "createdAt": "2026-10-08T18:16:13.968Z",
+        "reason": "GELIA nav contract: inline-start accent on rows matches gelia-pro-sidebar design system."
+      },
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "resources/js/Components/SidebarNavLeafLink.jsx"
+        ],
+        "createdAt": "2026-10-08T18:16:13.973Z",
+        "reason": "Active nav leaf uses CSS accent bar aligned with sidebar.css tokens, not decorative cards."
+      }
+    ]
+  }
+}

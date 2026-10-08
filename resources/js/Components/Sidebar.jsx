@@ -689,8 +689,8 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
                             <div
                                 className={`sidebar-menu-content gelia-sidebar-profile-panel p-5 flex flex-col min-h-0 h-auto shrink-0 overflow-visible w-full max-w-full`}
                             >
-                                <span className="gelia-sidebar-nav-header px-4 mb-1">
-                                    PERFIL_
+                                <span className="gelia-sidebar-nav-header px-3 sm:px-4">
+                                    Cuenta
                                 </span>
                                 <nav className="gelia-sidebar-profile-links flex flex-col gap-0.5 px-2 min-w-0" aria-label="Perfil">
                                     {PROFILE_MENU_ITEMS.map((item) => {
@@ -827,11 +827,11 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
                                                 localStorage.clear();
                                                 post(route('logout'));
                                             }}
-                                            className="flex items-center w-full px-6 py-4 rounded-3xl transition-all theme-element border border-transparent hover:border-red-500 hover:shadow-md outline-none group"
+                                            className="gelia-sidebar-access-footer-btn group"
                                         >
-                                            <LogOut className="w-4 h-4 mr-4 text-red-500 group-hover:text-red-600 transition-colors" />
-                                            <span className="gelia-sidebar-access-footer-label text-red-500 group-hover:text-red-600 transition-colors">
-                                                Cerrar Sesión_
+                                            <LogOut className="w-4 h-4 mr-3 shrink-0 text-[var(--color-peligro)] group-hover:opacity-90 transition-opacity" aria-hidden />
+                                            <span className="gelia-sidebar-access-footer-label text-[var(--color-peligro)]">
+                                                Cerrar sesión
                                             </span>
                                         </button>
                                     )}
