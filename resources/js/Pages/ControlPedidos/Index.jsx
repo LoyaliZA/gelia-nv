@@ -1,10 +1,11 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Head, router, usePage } from '@inertiajs/react';
-import { Plus, FileSpreadsheet, Package, Link2, Loader2 } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
 import GeliaPageShell from '../../Components/GeliaPageShell';
 import { geliaCardClass } from '../../utils/geliaTheme';
+import EncabezadoGestionPedidos from './Partials/EncabezadoGestionPedidos';
 import FiltrosPedidos from './Partials/FiltrosPedidos';
+import MetricasBandejaPedidos from './Partials/MetricasBandejaPedidos';
 import TablaPedidos from './Partials/TablaPedidos';
 import ModalFormPedido, { hayBorradorPedidoLocal } from './Partials/ModalFormPedido';
 import ModalDetallePedido from './Partials/ModalDetallePedido';
@@ -18,7 +19,6 @@ import ModalGenerarLinkDireccion from './Partials/ModalGenerarLinkDireccion';
 import ModalAnexarPagoEnvio from './Partials/ModalAnexarPagoEnvio';
 import ModalCargarGuiaCliente from './Partials/ModalCargarGuiaCliente';
 import ModalLiberarResguardoAbierto from './Auditar/Partials/ModalLiberarResguardoAbierto';
-import { BTN_PRIMARY, BTN_SECONDARY } from './Partials/pedidosBmaStyles';
 import useListadoDiscreto from './Partials/useListadoDiscreto';
 
 const REFRESCO_LISTADO_MS = 15000;
@@ -56,10 +56,17 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
     const [modalCompletarEnvio, setModalCompletarEnvio] = useState({ abierto: false, pedido: null });
     const [modalCargarGuia, setModalCargarGuia] = useState({ abierto: false, pedido: null });
     const [alerta, setAlerta] = useState({ abierto: false, tipo: 'success', titulo: '', mensaje: '' });
+    const [ultimaSync, setUltimaSync] = useState(null);
     const detalleDesdeEnlaceRef = useRef(false);
     const debounceBusqueda = useRef(null);
     const refrescoPendiente = useRef(false);
     const flashMostradoRef = useRef(null);
+
+    const cargarYMarcar = useCallback(async (params, opts) => {
+        const data = await cargar(params, opts);
+        if (data) setUltimaSync(new Date());
+        return data;
+    }, [cargar]);
 
     useEffect(() => {
         // Con el borrador abierto, el feedback va en el propio formulario (evitar alerta Index + click-through).
@@ -127,7 +134,7 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
             q: busqueda || undefined,
             page: pedidosVista?.current_page || 1,
         };
-        const refrescar = () => cargar(params, { silencioso: true });
+        const refrescar = () => cargarYMarcar(params, { silencioso: true });
 
         if (pausarPollingListado) {
             refrescoPendiente.current = true;
@@ -140,7 +147,7 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
 
         const intervalo = setInterval(refrescar, REFRESCO_LISTADO_MS);
         return () => clearInterval(intervalo);
-    }, [pausarPollingListado, tabActiva, busqueda, pedidosVista?.current_page, cargar]);
+    }, [pausarPollingListado, tabActiva, busqueda, pedidosVista?.current_page, cargarYMarcar]);
 
     // Notificación en vivo (pesaje listo, errores CEDIS, etc.): refrescar al instante si el modal está abierto.
     useEffect(() => {
@@ -152,34 +159,34 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
             if (!modalForm.abierto) return;
             const vivoId = modalId || Number(modalForm.pedidoIdVivo);
             if (vivoId && vivoId !== pedidoId) return;
-            cargar(
+            cargarYMarcar(
                 { tab: tabActiva, q: busqueda || undefined, page: pedidosVista?.current_page || 1 },
                 { silencioso: true }
             );
         };
         window.addEventListener('notification-received', onNotification);
         return () => window.removeEventListener('notification-received', onNotification);
-    }, [modalForm.abierto, modalForm.pedido?.id, modalForm.pedidoIdVivo, tabActiva, busqueda, pedidosVista?.current_page, cargar]);
+    }, [modalForm.abierto, modalForm.pedido?.id, modalForm.pedidoIdVivo, tabActiva, busqueda, pedidosVista?.current_page, cargarYMarcar]);
 
     const onTabChange = (tab) => {
         setTabActiva(tab);
-        cargar({ tab, q: busqueda || undefined, page: 1 });
+        cargarYMarcar({ tab, q: busqueda || undefined, page: 1 });
     };
 
     const onBuscar = (valor) => {
         setBusqueda(valor);
         if (debounceBusqueda.current) clearTimeout(debounceBusqueda.current);
         debounceBusqueda.current = setTimeout(() => {
-            cargar({ tab: tabActiva, q: valor || undefined, page: 1 });
+            cargarYMarcar({ tab: tabActiva, q: valor || undefined, page: 1 });
         }, 400);
     };
 
     const onIrAPagina = (page) => {
-        cargar({ tab: tabActiva, q: busqueda || undefined, page });
+        cargarYMarcar({ tab: tabActiva, q: busqueda || undefined, page });
     };
 
     const onActualizar = () => {
-        cargar({ tab: tabActiva, q: busqueda || undefined, page: pedidosVista?.current_page || 1 });
+        cargarYMarcar({ tab: tabActiva, q: busqueda || undefined, page: pedidosVista?.current_page || 1 });
     };
 
     const abrirNuevo = () => {
@@ -240,37 +247,24 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
     return (
         <AppLayout auth={auth}>
             <Head title="Gestión de pedidos | GELIANV" />
-            <GeliaPageShell className="space-y-6">
-                <header className={`${geliaCardClass()} p-6 md:p-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4`}>
-                    <div>
-                        <div className="flex items-center gap-2 mb-2">
-                            <Package className="w-5 h-5" style={{ color: 'var(--color-primario)' }} />
-                            <span className="text-[10px] font-black uppercase tracking-widest theme-text-muted">Control de pedidos_</span>
-                        </div>
-                        <h1 className="text-3xl font-black italic uppercase tracking-tighter theme-text-main m-0">
-                            Gestión de <span style={{ color: 'var(--color-primario)' }}>pedidos</span>
-                        </h1>
-                    </div>
-                    <div className="flex flex-wrap gap-3">
-                        {can('control_pedidos.exportar') && (
-                            <button type="button" onClick={exportarCsv} className={`${BTN_SECONDARY} flex items-center gap-2 outline-none`}>
-                                <FileSpreadsheet className="w-4 h-4" /> Exportar CSV
-                            </button>
-                        )}
-                        {can('clientes.direcciones.generar_enlace') && (
-                            <button type="button" onClick={() => setModalLinkDireccion(true)} className={`${BTN_SECONDARY} flex items-center gap-2 outline-none`}>
-                                <Link2 className="w-4 h-4" /> Link de dirección
-                            </button>
-                        )}
-                        {can('control_pedidos.crear') && (
-                            <button type="button" onClick={abrirNuevo} className={`${BTN_PRIMARY} flex items-center gap-2 outline-none`}>
-                                <Plus className="w-4 h-4" /> Nuevo pedido
-                            </button>
-                        )}
-                    </div>
-                </header>
+            <GeliaPageShell className="gelia-tienda-op gelia-pedidos-bma space-y-4 md:space-y-6">
+                <div className="gelia-pedidos-bma-contenido space-y-4 md:space-y-6">
+                <EncabezadoGestionPedidos
+                    can={can}
+                    cargando={cargando}
+                    ultimaSync={ultimaSync}
+                    onNuevo={abrirNuevo}
+                    onExportar={exportarCsv}
+                    onLinkDireccion={() => setModalLinkDireccion(true)}
+                />
 
-                <div className={`${geliaCardClass()} p-5`}>
+                <div className={`${geliaCardClass()} gelia-tienda-op-workspace p-4 md:p-5 space-y-4`}>
+                    <MetricasBandejaPedidos
+                        metricas={metricasVista}
+                        tabActiva={tabActiva}
+                        onTabChange={onTabChange}
+                    />
+                    <div className="gelia-tienda-op-divider" aria-hidden />
                     <FiltrosPedidos
                         filtros={filtros}
                         tabActiva={tabActiva}
@@ -279,35 +273,30 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
                         onBuscar={onBuscar}
                         onActualizar={onActualizar}
                         metricas={metricasVista}
-                        pedidos={pedidosVista}
-                        onIrAPagina={onIrAPagina}
                         buscando={cargando}
                         can={can}
                     />
                 </div>
 
-                <div className="relative min-h-[12rem]">
-                    {cargando && (
-                        <div className="absolute inset-0 z-10 flex items-start justify-center pt-16 pointer-events-none">
-                            <Loader2 className="w-8 h-8 animate-spin" style={{ color: 'var(--color-primario)' }} aria-label="Cargando pedidos" />
-                        </div>
-                    )}
-                    <TablaPedidos
-                        pedidos={pedidosVista}
-                        can={can}
-                        tabActiva={tabActiva}
-                        onVer={abrirVer}
-                        onBitacora={abrirBitacora}
-                        onEditar={abrirEditar}
-                        onEliminar={setPedidoAEliminar}
-                        onEliminarRegistro={setPedidoAEliminarRegistro}
-                        onRestaurar={setPedidoRestaurar}
-                        onVerAuditoria={setPedidoAuditoria}
-                        onCancelar={setPedidoACancelar}
-                        onAnexarEnvio={(pedido) => setModalAnexo({ abierto: true, pedido })}
-                        onCompletarEnvio={(pedido) => setModalCompletarEnvio({ abierto: true, pedido })}
-                        onCargarGuia={(pedido) => setModalCargarGuia({ abierto: true, pedido })}
-                    />
+                <TablaPedidos
+                    pedidos={pedidosVista}
+                    can={can}
+                    tabActiva={tabActiva}
+                    busqueda={busqueda}
+                    cargando={cargando}
+                    onIrAPagina={onIrAPagina}
+                    onVer={abrirVer}
+                    onBitacora={abrirBitacora}
+                    onEditar={abrirEditar}
+                    onEliminar={setPedidoAEliminar}
+                    onEliminarRegistro={setPedidoAEliminarRegistro}
+                    onRestaurar={setPedidoRestaurar}
+                    onVerAuditoria={setPedidoAuditoria}
+                    onCancelar={setPedidoACancelar}
+                    onAnexarEnvio={(pedido) => setModalAnexo({ abierto: true, pedido })}
+                    onCompletarEnvio={(pedido) => setModalCompletarEnvio({ abierto: true, pedido })}
+                    onCargarGuia={(pedido) => setModalCargarGuia({ abierto: true, pedido })}
+                />
                 </div>
             </GeliaPageShell>
 

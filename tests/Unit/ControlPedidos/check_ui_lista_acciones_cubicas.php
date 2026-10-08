@@ -28,7 +28,7 @@ $checks = [
     ['Auditar columna Vendedor', str_contains($aud, 'Vendedor_')],
     ['Auditar etiquetas top-right', str_contains($aud, 'variante="etiquetas"')],
     ['Delegado importa BotonAccionCubico', str_contains($del, 'BotonAccionCubico')],
-    ['Delegado columna Vendedor', str_contains($del, '>Vendedor<')],
+    ['Delegado listado con bloque vendedor', str_contains($del, 'BloqueVendedorPedido')],
     ['CEDIS importa BotonAccionCubico', str_contains($cedis, 'BotonAccionCubico')],
     ['CEDIS etiquetas top-right', str_contains($cedis, 'variante="etiquetas"')],
 ];

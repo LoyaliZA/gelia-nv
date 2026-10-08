@@ -672,7 +672,7 @@ export function buildSidebarNavigation({ can, showAdminMenu, manualesHubVisible 
     ].filter(Boolean);
 
     return [
-        { type: 'header', id: 'accesos', label: 'ACCESOS_' },
+        { type: 'header', id: 'accesos', label: 'Accesos' },
         {
             type: 'group',
             id: 'inicio',

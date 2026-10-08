@@ -13,6 +13,31 @@ export const LABEL_NOTA_COMPRA_PREGUNTA = '¿Deseas que la nota de compra vaya d
 export const LABEL_NOTA_COMPRA_CAMPO = 'Nota de compra en el envío';
 export const LABEL_GUIA_EMPRESA = 'Guía generada por la empresa';
 export const LABEL_GUIA_CLIENTE = 'Guía proporcionada por el cliente';
+export const LABEL_ENVIO_PARA_TIENDA = 'Envío para tienda';
+
+export const pedidoRequiereLogistica = (pedido) => pedido?.origen?.requiere_logistica ?? true;
+
+/** Paquetería en envío o modalidad de entrega en pedido de tienda/mostrador. */
+export const etiquetaTransportePedido = (pedido) => {
+    const paq = pedido?.paqueteria?.nombre
+        || pedido?.tarea_preparacion?.paqueteria?.nombre;
+    if (paq) return paq;
+
+    const otro = String(pedido?.envio_tienda_otro || '').trim();
+    if (otro) return otro;
+
+    const catalogo = pedido?.envio_tienda?.nombre;
+    if (catalogo) {
+        if (catalogo === 'Tienda') return LABEL_ENVIO_PARA_TIENDA;
+        return catalogo;
+    }
+
+    if (!pedidoRequiereLogistica(pedido)) {
+        return LABEL_ENVIO_PARA_TIENDA;
+    }
+
+    return null;
+};
 
 export const etiquetaOrigenGuia = (pedido) => (
     Boolean(pedido?.cliente_proporciona_guia) ? LABEL_GUIA_CLIENTE : LABEL_GUIA_EMPRESA
@@ -128,6 +153,18 @@ export const TABS_PEDIDOS_ADMIN = [
     { id: 'ELIMINADAS', label: 'Eliminados' },
 ];
 
+/** Bandejas en MetricasBandejaPedidos — no repetir en filtros de escritorio. */
+export const TABS_PEDIDOS_EN_METRICAS_KPI = [
+    'PESAJE_PENDIENTE',
+    'PENDIENTE_AUXILIAR',
+    'EN_CEDIS',
+    'RECHAZADAS',
+    'OBS_CEDIS',
+    'TODAS',
+];
+
+export const esTabPedidoEnMetricasKpi = (tabId) => TABS_PEDIDOS_EN_METRICAS_KPI.includes(tabId);
+
 /** Estado del ciclo: filtros principales de la bandeja auxiliar. */
 export const TABS_AUDITORIA_PRINCIPALES = [
     { id: 'PENDIENTES', label: 'Pendientes' },
@@ -136,6 +173,11 @@ export const TABS_AUDITORIA_PRINCIPALES = [
     { id: 'RECHAZADOS', label: 'Rechazados' },
     { id: 'TODAS', label: 'Todas' },
 ];
+
+/** Bandejas en MetricasBandejaAuditoria — no repetir en filtros de escritorio. */
+export const TABS_AUDITORIA_EN_METRICAS_KPI = TABS_AUDITORIA_PRINCIPALES.map((t) => t.id);
+
+export const esTabAuditoriaEnMetricasKpi = (tabId) => TABS_AUDITORIA_EN_METRICAS_KPI.includes(tabId);
 
 /** Colas operativas / envío: subfiltros. */
 export const TABS_AUDITORIA_SUBFILTROS = [
@@ -428,6 +470,20 @@ export const TABS_DELEGADO = [
     { id: 'EN_CEDIS', label: LABELS_ESTATUS_POR_FASE.EN_CEDIS },
     { id: 'PENDIENTES_ENVIO', label: LABELS_ESTATUS_POR_FASE.PENDIENTE_DE_ENVIO },
     { id: 'ENVIADOS', label: LABELS_ESTATUS_POR_FASE.ENVIADO },
+];
+
+export const OPCIONES_ORDEN_DELEGADO = [
+    { id: 'fecha_desc', label: 'Fecha (más reciente)' },
+    { id: 'fecha_asc', label: 'Fecha (más antigua)' },
+];
+
+export const OPCIONES_SITUACION_DELEGADO = [
+    { id: '', label: 'Todas las situaciones' },
+    { id: 'sin_guia', label: 'Sin guía' },
+    { id: 'con_guia', label: 'Con guía' },
+    { id: 'error_guia', label: 'Error de guía' },
+    { id: 'retraso', label: 'Retraso' },
+    { id: 'resguardo', label: 'Resguardo' },
 ];
 
 export const TABS_TIENDA_COLA = [

@@ -15,6 +15,8 @@ use App\Services\ControlPedidos\GestionarGuiaPdfPedidoBmaService;
 use App\Services\ControlPedidos\ImportarGuiasPedidoService;
 use App\Services\ControlPedidos\ListarPedidosDelegadoService;
 use App\Services\ControlPedidos\ReportarErrorDatosPedidoBmaService;
+use App\Support\ControlPedidos\FiltroPaqueteriaDelegadoPedidoBma;
+use App\Support\ControlPedidos\SituacionOperativaDelegadoPedidoBma;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -31,10 +33,15 @@ class PedidoBmaDelegadoController extends Controller
     {
         Gate::authorize('control_pedidos.delegado');
 
+        $filtros = $this->filtrosDelegado($request);
+
         return Inertia::render('ControlPedidos/Delegado/Index', [
-            'pedidos' => fn () => $listarService->ejecutar($request->all()),
+            'pedidos' => fn () => $listarService->ejecutar($filtros),
             'metricas' => fn () => $listarService->metricas(),
-            'filtros' => $request->only(['tab', 'q', 'page']),
+            'filtros' => $this->filtrosParaRespuesta($filtros),
+            'catalogos' => fn () => [
+                'paqueterias' => FiltroPaqueteriaDelegadoPedidoBma::catalogoComercialActivo(),
+            ],
         ]);
     }
 
@@ -42,10 +49,15 @@ class PedidoBmaDelegadoController extends Controller
     {
         Gate::authorize('control_pedidos.delegado');
 
+        $filtros = $this->filtrosDelegado($request);
+
         return response()->json([
-            'pedidos' => $listarService->ejecutar($request->all()),
+            'pedidos' => $listarService->ejecutar($filtros),
             'metricas' => $listarService->metricas(),
-            'filtros' => $request->only(['tab', 'q', 'page']),
+            'filtros' => $this->filtrosParaRespuesta($filtros),
+            'catalogos' => [
+                'paqueterias' => FiltroPaqueteriaDelegadoPedidoBma::catalogoComercialActivo(),
+            ],
         ]);
     }
 
@@ -162,5 +174,69 @@ class PedidoBmaDelegadoController extends Controller
             'success' => $mensaje,
             'import_resultado' => $resultado,
         ]);
+    }
+
+    /** @return array<string, mixed> */
+    private function filtrosDelegado(Request $request): array
+    {
+        $filtros = [];
+
+        $tab = $request->input('tab', 'PENDIENTES_GUIA');
+        if (is_string($tab) && $tab !== '') {
+            $filtros['tab'] = $tab;
+        }
+
+        $q = $request->input('q');
+        if (is_string($q) && trim($q) !== '') {
+            $filtros['q'] = trim($q);
+        }
+
+        $page = $request->input('page');
+        if (is_numeric($page) && (int) $page > 0) {
+            $filtros['page'] = (int) $page;
+        }
+
+        $ordenar = strtolower(trim((string) $request->input('ordenar', 'fecha_desc')));
+        $filtros['ordenar'] = in_array($ordenar, ['fecha_desc', 'fecha_asc'], true) ? $ordenar : 'fecha_desc';
+
+        $situacion = strtolower(trim((string) $request->input('situacion', '')));
+        if ($situacion !== '' && in_array($situacion, SituacionOperativaDelegadoPedidoBma::valoresPermitidos(), true)) {
+            $filtros['situacion'] = $situacion;
+        }
+
+        if ($request->has('paqueteria_ids')) {
+            $raw = $request->input('paqueteria_ids');
+            if ($raw !== null && $raw !== '' && $raw !== []) {
+                $filtros['paqueteria_ids'] = is_array($raw)
+                    ? $raw
+                    : FiltroPaqueteriaDelegadoPedidoBma::normalizarIds((string) $raw);
+            }
+        }
+
+        return $filtros;
+    }
+
+    /** @return array<string, mixed> */
+    private function filtrosParaRespuesta(array $filtros): array
+    {
+        $resuelto = FiltroPaqueteriaDelegadoPedidoBma::resolver($filtros);
+        $paqueteriaIds = $resuelto['aplicar'] ? $resuelto['ids'] : [];
+
+        $respuesta = [
+            'tab' => $filtros['tab'] ?? 'PENDIENTES_GUIA',
+            'q' => $filtros['q'] ?? null,
+            'page' => $filtros['page'] ?? 1,
+            'ordenar' => ($filtros['ordenar'] ?? 'fecha_desc') !== 'fecha_desc'
+                ? ($filtros['ordenar'] ?? 'fecha_desc')
+                : null,
+            'situacion' => $filtros['situacion'] ?? null,
+            'paqueteria_ids' => $paqueteriaIds,
+        ];
+
+        if ($resuelto['forzar_vacio'] && array_key_exists('paqueteria_ids', $filtros)) {
+            $respuesta['paqueteria_ids'] = FiltroPaqueteriaDelegadoPedidoBma::normalizarIds($filtros['paqueteria_ids']);
+        }
+
+        return array_filter($respuesta, fn ($v) => $v !== null && $v !== '' && $v !== []);
     }
 }

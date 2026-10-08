@@ -11,6 +11,7 @@ $root = dirname(__DIR__, 3);
 $styles = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Partials/pedidosBmaStyles.js');
 $filtros = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Partials/FiltrosPedidos.jsx');
 $tabla = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Partials/TablaPedidos.jsx');
+$listadoUi = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Partials/pedidosListadoUi.js');
 $listar = file_get_contents($root.'/app/Services/ControlPedidos/ListarPedidosBmaService.php');
 $form = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Partials/ModalFormPedido.jsx');
 $seccion = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Partials/SeccionRevisionFisicaPedido.jsx');
@@ -29,8 +30,8 @@ $checks = [
     ['filtros conteo obs_cedis', str_contains($filtros, 'OBS_CEDIS: metricas.obs_cedis')],
     ['listar filtro OBS_CEDIS', str_contains($listar, "'OBS_CEDIS' => \$query->where('tiene_observaciones_fisicas', true)")],
     ['listar metrica obs_cedis', str_contains($listar, "'obs_cedis' =>")],
-    ['tabla usa badgeObservacionesCedis', str_contains($tabla, 'badgeObservacionesCedis')],
-    ['tabla usa badgeSinExistencias', str_contains($tabla, 'badgeSinExistencias')],
+    ['listado usa badgeObservacionesCedis', str_contains($listadoUi, 'badgeObservacionesCedis')],
+    ['listado usa badgeSinExistencias', str_contains($listadoUi, 'badgeSinExistencias')],
     ['form usa SeccionRevisionFisicaPedido', str_contains($form, 'SeccionRevisionFisicaPedido')],
     ['detalle usa SeccionRevisionFisicaPedido', str_contains($detalle, 'SeccionRevisionFisicaPedido')],
     ['seccion productos con detalle', str_contains($seccion, 'Productos con detalle')],

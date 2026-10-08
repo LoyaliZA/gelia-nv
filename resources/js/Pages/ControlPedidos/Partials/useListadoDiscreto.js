@@ -3,8 +3,25 @@ import axios from 'axios';
 
 function paramsLimpios(params) {
     return Object.fromEntries(
-        Object.entries(params).filter(([, v]) => v !== '' && v !== null && v !== undefined)
+        Object.entries(params).filter(([, v]) => {
+            if (v === '' || v === null || v === undefined) return false;
+            if (Array.isArray(v) && v.length === 0) return false;
+            return true;
+        })
     );
+}
+
+function queryStringDesdeParams(params) {
+    const limpios = paramsLimpios(params);
+    const sp = new URLSearchParams();
+    Object.entries(limpios).forEach(([key, value]) => {
+        if (Array.isArray(value)) {
+            value.forEach((item) => sp.append(`${key}[]`, String(item)));
+        } else {
+            sp.set(key, String(value));
+        }
+    });
+    return sp.toString();
 }
 
 /**
@@ -42,7 +59,7 @@ export default function useListadoDiscreto({
     }, [clientesProp]);
 
     const sincronizarUrl = useCallback((params) => {
-        const qs = new URLSearchParams(paramsLimpios(params)).toString();
+        const qs = queryStringDesdeParams(params);
         const base = route(indexRoute);
         window.history.replaceState(window.history.state, '', `${base}${qs ? `?${qs}` : ''}`);
     }, [indexRoute]);
@@ -55,6 +72,7 @@ export default function useListadoDiscreto({
         try {
             const { data } = await axios.get(route(listadoRoute), {
                 params: paramsLimpios(params),
+                paramsSerializer: { indexes: null },
                 signal: controller.signal,
                 headers: { Accept: 'application/json' },
             });

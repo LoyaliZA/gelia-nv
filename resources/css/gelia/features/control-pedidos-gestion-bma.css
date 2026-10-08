@@ -1,0 +1,33 @@
+/* Gestión de pedidos (BMA) — capa visual acotada; tokens globales únicamente. */
+
+.gelia-pedidos-bma {
+    min-width: 0;
+}
+
+@media (min-width: 1440px) {
+    .gelia-pedidos-bma .gelia-pedidos-bma-contenido {
+        max-width: 90rem;
+        margin-left: auto;
+        margin-right: auto;
+        width: 100%;
+    }
+}
+
+.gelia-pedidos-bma .gelia-pedidos-bma-listado thead th {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: none;
+    letter-spacing: normal;
+}
+
+.gelia-pedidos-bma .gelia-pedidos-bma-badge--compact {
+    font-size: 0.75rem !important;
+    font-weight: 600 !important;
+    text-transform: none !important;
+    letter-spacing: normal !important;
+    padding: 0.125rem 0.5rem !important;
+}
+
+.gelia-pedidos-bma .gelia-pedidos-bma-metricas [data-active='true'] {
+    box-shadow: none;
+}

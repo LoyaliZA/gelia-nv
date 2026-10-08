@@ -1,33 +1,39 @@
-import React, { useState } from 'react';
-import { Eye, Edit2, Trash2, AlertTriangle, History, Receipt, PackageCheck, Truck, Ban, Download, RotateCcw, FileSearch, Clock } from 'lucide-react';
+import React, {
+    useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState,
+} from 'react';
+import { createPortal } from 'react-dom';
+import { AlertTriangle, ChevronDown } from 'lucide-react';
 import { router } from '@inertiajs/react';
-import { geliaCardClass } from '../../../utils/geliaTheme';
 import {
-    badgeEstatusPedido,
-    badgeEstatusEnvio,
+    geliaCardClass,
+    THEME_BTN_PRIMARY,
+    THEME_BTN_SECONDARY,
+} from '../../../utils/geliaTheme';
+import GeliaPaginacion from '../../../Components/GeliaPaginacion';
+import {
     formatearMoneda,
     etiquetaAlmacen,
     formatearFechaNegocio,
-    tieneGuiaLista,
-    badgeGuiaLista,
-    badgeObservacionesCedis,
-    badgeSinExistencias,
-    mostrarBadgeSinExistencias,
-    tieneGuiaPdfDisponible,
-    puedeAnexarPagoEnvio,
-    puedeCompletarEnvioResguardo,
-    puedeCargarGuiaCliente,
-    textoFuentesPagoCompacto,
-    guiaPdfDe,
-    esFasePreVenta,
-    FASES_PRE_VENTA,
-    badgesRetrasoSla,
-    badgeAuditoriaRevision,
     etiquetaOrigenGuia,
+    etiquetaTransportePedido,
+    pedidoRequiereLogistica,
+    textoFuentesPagoCompacto,
+    FASES_PRE_VENTA,
+    TABS_PEDIDOS,
+    TABS_PEDIDOS_ADMIN,
 } from './pedidosBmaStyles';
 import EncabezadoFolioPedido from './EncabezadoFolioPedido';
 import BotonAccionCubico from './BotonAccionCubico';
 import ModalVistaPreviaDocumento from './ModalVistaPreviaDocumento';
+import {
+    accionesPedidoLista,
+    badgesListaPedido,
+    elegirAccionPrimaria,
+    MAX_BADGES_LISTADO,
+    tituloOverflowBadges,
+} from './pedidosListadoUi';
+
+const MENU_ACCIONES_Z_INDEX = 60;
 
 function textoTiempoRestante(iso) {
     if (!iso) return null;
@@ -41,243 +47,297 @@ function textoTiempoRestante(iso) {
     return `Quedan ${Math.max(1, Math.floor(ms / 60000))} min`;
 }
 
-function AccionesPedido({
-    pedido, can, onVer, onEditar, onEliminar, onEliminarRegistro, onRestaurar, onVerAuditoria, onCancelar, onBitacora, onVerGuia, onAnexarEnvio, onCompletarEnvio, onCargarGuia,
-    puedeEditar, puedeEliminarBorrador, puedeEliminarRegistro, puedeCancelar, esPapelera = false, compact = false,
-}) {
-    if (esPapelera) {
-        const itemsPapelera = [];
-        if (can('control_pedidos.ver_detalle')) {
-            itemsPapelera.push(
-                <BotonAccionCubico key="ver" icon={Eye} label="Ver" onClick={() => onVer(pedido)} conLabel={compact} />
-            );
-        }
-        if (can('control_pedidos.eliminados') && onRestaurar) {
-            itemsPapelera.push(
-                <BotonAccionCubico key="restaurar" icon={RotateCcw} label="Restaurar" onClick={() => onRestaurar(pedido)} tone="teal" conLabel={compact} />
-            );
-        }
-        if (onVerAuditoria) {
-            itemsPapelera.push(
-                <BotonAccionCubico key="auditoria" icon={FileSearch} label="Auditoría" onClick={() => onVerAuditoria(pedido)} tone="purple" conLabel={compact} />
-            );
-        }
-        if (itemsPapelera.length === 0) return null;
-        return (
-            <div className={compact ? 'grid grid-cols-2 gap-2' : 'flex justify-end gap-1.5 overflow-visible'}>
-                {itemsPapelera}
-            </div>
-        );
-    }
+function useBadgesItems(pedido) {
+    return useMemo(() => badgesListaPedido(pedido), [pedido]);
+}
 
-    const puedeMutar = Boolean(pedido.puede_editar ?? pedido.puede_mutar);
-    const puedeAnexar = puedeMutar
-        && puedeAnexarPagoEnvio(pedido)
-        && (can('control_pedidos.crear') || can('control_pedidos.auditar'));
-    const puedeCompletar = puedeMutar
-        && puedeCompletarEnvioResguardo(pedido)
-        && (can('control_pedidos.crear') || can('control_pedidos.editar'))
-        && onCompletarEnvio;
-    const puedeCargar = puedeMutar
-        && puedeCargarGuiaCliente(pedido)
-        && (can('control_pedidos.crear') || can('control_pedidos.editar'))
-        && onCargarGuia;
-    const guiaPdf = tieneGuiaPdfDisponible(pedido) && onVerGuia ? guiaPdfDe(pedido) : null;
-
-    const items = [];
-    if (guiaPdf) {
-        items.push(
-            <BotonAccionCubico key="guia" icon={Download} label="Guía PDF" onClick={() => onVerGuia(guiaPdf)} conLabel={compact} />
-        );
-    }
-    if (puedeCargar) {
-        items.push(
-            <BotonAccionCubico key="cargar" icon={Truck} label="Cargar guía" onClick={() => onCargarGuia(pedido)} tone="fuchsia" conLabel={compact} />
-        );
-    }
-    if (puedeCompletar) {
-        items.push(
-            <BotonAccionCubico key="completar" icon={PackageCheck} label="Completar envío" onClick={() => onCompletarEnvio(pedido)} tone="teal" conLabel={compact} />
-        );
-    }
-    if (puedeAnexar && onAnexarEnvio) {
-        items.push(
-            <BotonAccionCubico key="anexar" icon={Receipt} label="Anexar pago" onClick={() => onAnexarEnvio(pedido)} tone="amber" conLabel={compact} />
-        );
-    }
-    if (can('control_pedidos.ver_detalle')) {
-        items.push(
-            <BotonAccionCubico key="ver" icon={Eye} label="Ver" onClick={() => onVer(pedido)} conLabel={compact} />
-        );
-    }
-    if (onBitacora) {
-        items.push(
-            <BotonAccionCubico key="bitacora" icon={History} label="Bitácora" onClick={() => onBitacora(pedido)} tone="purple" conLabel={compact} />
-        );
-    }
-    if (puedeEditar(pedido)) {
-        items.push(
-            <BotonAccionCubico key="editar" icon={Edit2} label="Editar" onClick={() => onEditar(pedido)} conLabel={compact} />
-        );
-    }
-    if (pedido.puede_espera_pago && can('control_pedidos.espera_pago')) {
-        items.push(
-            <BotonAccionCubico
-                key="espera"
-                icon={Clock}
-                label="Esperando pago"
-                tone="teal"
-                conLabel={compact}
-                onClick={() => router.post(route('control_pedidos.espera_pago', pedido.id), {}, { preserveScroll: true })}
-            />
-        );
-    }
-    if ((puedeCancelar?.(pedido) || pedido.cancelacion_operativa) && onCancelar) {
-        items.push(
-            <BotonAccionCubico
-                key="cancelar"
-                icon={Ban}
-                label={pedido.cancelacion_operativa ? 'Seguir cancelación' : 'Cancelar'}
-                onClick={() => onCancelar(pedido)}
-                tone="warn"
-                conLabel={compact}
-            />
-        );
-    }
-    if (puedeEliminarBorrador?.(pedido)) {
-        items.push(
-            <BotonAccionCubico key="eliminar-borrador" icon={Trash2} label="Eliminar borrador" onClick={() => onEliminar(pedido)} tone="danger" conLabel={compact} />
-        );
-    }
-    if (puedeEliminarRegistro?.(pedido) && onEliminarRegistro) {
-        items.push(
-            <BotonAccionCubico key="eliminar-registro" icon={Trash2} label="Eliminar registro" onClick={() => onEliminarRegistro(pedido)} tone="danger" conLabel={compact} />
-        );
-    }
-
-    if (items.length === 0) return null;
+function BadgesPedido({ items, className = 'justify-start', max = MAX_BADGES_LISTADO, compact = false }) {
+    const visibles = items.slice(0, max);
+    const overflowTitle = tituloOverflowBadges(items);
+    const gap = compact ? 'gap-1' : 'gap-1.5';
 
     return (
-        <div className={compact
-            ? 'grid grid-cols-2 gap-2'
-            : 'flex justify-end gap-1.5 overflow-visible'
-        }
-        >
-            {items}
+        <div className={`flex flex-wrap ${gap} items-center ${className}`}>
+            {visibles.map((b) => (
+                <span
+                    key={b.key}
+                    className={`${b.className} ${compact ? 'gelia-pedidos-bma-badge--compact max-w-[11rem] truncate' : ''}`}
+                    style={b.style}
+                    title={b.label}
+                >
+                    {b.label}
+                </span>
+            ))}
+            {items.length > visibles.length && (
+                <span className="text-[10px] font-bold theme-text-muted tabular-nums" title={overflowTitle}>
+                    +{items.length - visibles.length}
+                </span>
+            )}
         </div>
     );
 }
 
-function CardPedido({ pedido, badge, badgeEnvio, esRechazado, can, onVer, onEditar, onEliminar, onEliminarRegistro, onRestaurar, onVerAuditoria, onCancelar, onBitacora, onVerGuia, onAnexarEnvio, onCompletarEnvio, onCargarGuia, puedeEditar, puedeEliminarBorrador, puedeEliminarRegistro, puedeCancelar, esPapelera }) {
-    const guiaLista = tieneGuiaLista(pedido);
-    const badgeGuia = badgeGuiaLista();
-    const fase = pedido.estatus?.fase_ciclo;
-    const badgeObs = (pedido.tiene_observaciones_fisicas && esFasePreVenta(fase))
-        ? badgeObservacionesCedis()
-        : null;
-    const badgeSinEx = mostrarBadgeSinExistencias(pedido) ? badgeSinExistencias() : null;
-    const badgesSla = badgesRetrasoSla(pedido);
-    const badgeRevision = badgeAuditoriaRevision(pedido);
+function BadgeEstadoPrincipal({ item }) {
+    if (!item) return null;
+    return (
+        <span
+            className={`${item.className} max-w-[10.5rem] truncate shrink-0`}
+            style={item.style}
+            title={item.label}
+        >
+            {item.label}
+        </span>
+    );
+}
+
+function MenuAccionesPedido({ acciones, primaria, idBase }) {
+    const [abierto, setAbierto] = useState(false);
+    const triggerRef = useRef(null);
+    const menuRef = useRef(null);
+    const [pos, setPos] = useState(null);
+    const menuId = `${idBase}-mas`;
+    const restantes = acciones.filter((a) => a.key !== primaria?.key);
+
+    const actualizarPosicion = useCallback(() => {
+        const el = triggerRef.current;
+        if (!el) return;
+        const rect = el.getBoundingClientRect();
+        setPos({
+            top: rect.bottom + 4,
+            right: window.innerWidth - rect.right,
+        });
+    }, []);
+
+    useLayoutEffect(() => {
+        if (!abierto) {
+            setPos(null);
+            return undefined;
+        }
+        actualizarPosicion();
+        window.addEventListener('resize', actualizarPosicion);
+        window.addEventListener('scroll', actualizarPosicion, true);
+        return () => {
+            window.removeEventListener('resize', actualizarPosicion);
+            window.removeEventListener('scroll', actualizarPosicion, true);
+        };
+    }, [abierto, actualizarPosicion]);
+
+    useEffect(() => {
+        if (!abierto) return undefined;
+        const onDoc = (e) => {
+            const t = e.target;
+            if (triggerRef.current?.contains(t) || menuRef.current?.contains(t)) return;
+            setAbierto(false);
+        };
+        document.addEventListener('mousedown', onDoc);
+        return () => document.removeEventListener('mousedown', onDoc);
+    }, [abierto]);
+
+    if (restantes.length === 0) return null;
+
+    const menu = abierto && pos ? (
+        <div
+            ref={menuRef}
+            role="menu"
+            aria-labelledby={menuId}
+            className="fixed min-w-[12rem] max-w-[min(16rem,calc(100vw-1rem))] p-2 rounded-xl border theme-border theme-surface shadow-lg flex flex-col gap-1"
+            style={{ top: pos.top, right: pos.right, zIndex: MENU_ACCIONES_Z_INDEX }}
+        >
+            {restantes.map((accion) => (
+                <BotonAccionCubico
+                    key={accion.key}
+                    icon={accion.icon}
+                    label={accion.label}
+                    onClick={() => {
+                        setAbierto(false);
+                        accion.onClick();
+                    }}
+                    tone={accion.tone || 'default'}
+                    conLabel
+                    className="!w-full"
+                />
+            ))}
+        </div>
+    ) : null;
 
     return (
-        <div className={`${geliaCardClass()} p-4 space-y-3 ${esRechazado ? 'ring-1 ring-red-500/30' : ''}`}>
-            <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                    <EncabezadoFolioPedido pedido={pedido} size="sm" />
-                    <p className="text-[10px] theme-text-muted font-bold mt-1 m-0">
-                        {formatearFechaNegocio(pedido.fecha)}
-                    </p>
-                    {pedido.vendedor?.name && (
-                        <p className="text-[9px] theme-text-muted font-bold mt-1 m-0">{pedido.vendedor.name}</p>
-                    )}
-                    {pedido.esta_esperando_pago && (
-                        <p className="text-[10px] font-black text-amber-700 m-0 mt-1">
-                            Esperando pago · {textoTiempoRestante(pedido.fecha_limite_espera) || 'Mercancía resguardada'}
-                        </p>
-                    )}
-                    {pedido.cancelacion_operativa && (
-                        <p className="text-[10px] font-black text-red-700 m-0 mt-1">
-                            Cancelación {pedido.cancelacion_operativa.estado}
-                            {pedido.cancelacion_operativa.requiere_resolucion_financiera ? ' · Requiere resolución financiera' : ''}
-                        </p>
-                    )}
-                </div>
-                <div className="flex flex-col items-end gap-1.5 shrink-0">
-                    <span className={badge.className} style={badge.style}>{badge.label}</span>
-                    {badgeRevision && (
-                        <span className={badgeRevision.className} style={badgeRevision.style}>{badgeRevision.label}</span>
-                    )}
-                    {badgeEnvio && (
-                        <span className={badgeEnvio.className} style={badgeEnvio.style}>{badgeEnvio.label}</span>
-                    )}
-                    {badgeObs && (
-                        <span className={badgeObs.className}>{badgeObs.label}</span>
-                    )}
-                    {badgeSinEx && (
-                        <span className={badgeSinEx.className}>{badgeSinEx.label}</span>
-                    )}
-                    {badgesSla.map((b) => (
-                        <span key={b.label} className={b.className} style={b.style}>{b.label}</span>
-                    ))}
-                    {guiaLista && (
-                        <span className={badgeGuia.className}>{badgeGuia.label}</span>
-                    )}
-                </div>
-            </div>
-            <div>
-                <p className="text-xs font-black theme-text-main uppercase m-0">{pedido.cliente?.nombre || '—'}</p>
-                <p className="text-[9px] theme-text-muted m-0">{pedido.cliente?.numero_cliente}</p>
-            </div>
-            <div className="flex flex-wrap gap-2 text-[10px] font-bold theme-text-muted uppercase">
-                {pedido.paqueteria?.nombre && (
-                    <>
-                        <span className="normal-case theme-text-main">{pedido.paqueteria.nombre}</span>
-                        <span>·</span>
-                    </>
-                )}
-                <span>{etiquetaAlmacen(pedido.almacen)}</span>
-                <span>·</span>
-                {(() => {
-                    const f = textoFuentesPagoCompacto(pedido.fuentes_pago);
-                    return <span title={f.completo || undefined}>{f.texto}</span>;
-                })()}
-                <span>·</span>
-                <span className="normal-case">{etiquetaOrigenGuia(pedido)}</span>
-            </div>
-            <p className="text-lg font-black m-0" style={{ color: 'var(--color-primario)' }}>{formatearMoneda(pedido.total_a_cobrar)}</p>
-            {guiaLista && pedido.numero_rastreo && (
-                <p className="text-xs font-black font-mono theme-text-main m-0">
-                    {etiquetaOrigenGuia(pedido)}: {pedido.numero_rastreo}
+        <>
+            <button
+                ref={triggerRef}
+                type="button"
+                id={menuId}
+                aria-expanded={abierto}
+                aria-haspopup="menu"
+                onClick={() => setAbierto((v) => !v)}
+                className={`${THEME_BTN_SECONDARY} theme-btn-primary--compact min-h-[44px] px-3 text-xs font-bold inline-flex items-center gap-1`}
+            >
+                Más
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${abierto ? 'rotate-180' : ''}`} aria-hidden />
+            </button>
+            {typeof document !== 'undefined' && menu ? createPortal(menu, document.body) : null}
+        </>
+    );
+}
+
+function useAccionesProps(props) {
+    const {
+        pedido, can, esPapelera, puedeEditar, puedeEliminarBorrador, puedeEliminarRegistro, puedeCancelar,
+        onVer, onEditar, onEliminar, onEliminarRegistro, onRestaurar, onVerAuditoria, onCancelar, onBitacora,
+        onVerGuia, onAnexarEnvio, onCompletarEnvio, onCargarGuia,
+    } = props;
+
+    return useMemo(() => accionesPedidoLista({
+        pedido,
+        can,
+        esPapelera,
+        puedeEditar,
+        puedeEliminarBorrador,
+        puedeEliminarRegistro,
+        puedeCancelar,
+        onVer,
+        onEditar,
+        onEliminar,
+        onEliminarRegistro,
+        onRestaurar,
+        onVerAuditoria,
+        onCancelar,
+        onBitacora,
+        onVerGuia,
+        onAnexarEnvio,
+        onCompletarEnvio,
+        onCargarGuia,
+        onEsperaPago: (p) => router.post(route('control_pedidos.espera_pago', p.id), {}, { preserveScroll: true }),
+    }), [
+        pedido, can, esPapelera, puedeEditar, puedeEliminarBorrador, puedeEliminarRegistro, puedeCancelar,
+        onVer, onEditar, onEliminar, onEliminarRegistro, onRestaurar, onVerAuditoria, onCancelar, onBitacora,
+        onVerGuia, onAnexarEnvio, onCompletarEnvio, onCargarGuia,
+    ]);
+}
+
+function AccionesFila({ acciones, idBase }) {
+    const primaria = elegirAccionPrimaria(acciones);
+    if (!primaria) return null;
+
+    return (
+        <div className="inline-flex items-center justify-end gap-1.5 flex-wrap">
+            <button
+                type="button"
+                onClick={primaria.onClick}
+                className={`${THEME_BTN_PRIMARY} theme-btn-primary--compact min-h-[44px] px-3 text-xs font-bold`}
+            >
+                {primaria.label}
+            </button>
+            <MenuAccionesPedido acciones={acciones} primaria={primaria} idBase={idBase} />
+        </div>
+    );
+}
+
+function AlertasFila({ pedido, esRechazado }) {
+    return (
+        <>
+            {pedido.esta_esperando_pago && (
+                <p className="text-xs font-bold theme-text-aviso m-0 mt-1">
+                    Esperando pago · {textoTiempoRestante(pedido.fecha_limite_espera) || 'Mercancía resguardada'}
+                </p>
+            )}
+            {pedido.cancelacion_operativa && (
+                <p className="text-xs font-bold theme-text-peligro m-0 mt-1">
+                    Cancelación {pedido.cancelacion_operativa.estado}
+                    {pedido.cancelacion_operativa.requiere_resolucion_financiera ? ' · Requiere resolución financiera' : ''}
                 </p>
             )}
             {esRechazado && pedido.motivo_rechazo && (
-                <p className="text-[10px] text-red-500 font-bold m-0 flex items-start gap-1">
-                    <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" /> {pedido.motivo_rechazo}
+                <p className="text-xs theme-text-peligro font-bold m-0 mt-1 flex items-start gap-1">
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" aria-hidden />
+                    {pedido.motivo_rechazo}
                 </p>
             )}
-            <AccionesPedido
-                pedido={pedido}
-                can={can}
-                onVer={onVer}
-                onEditar={onEditar}
-                onEliminar={onEliminar}
-                onEliminarRegistro={onEliminarRegistro}
-                onRestaurar={onRestaurar}
-                onVerAuditoria={onVerAuditoria}
-                onCancelar={onCancelar}
-                onBitacora={onBitacora}
-                onVerGuia={onVerGuia}
-                onAnexarEnvio={onAnexarEnvio}
-                onCompletarEnvio={onCompletarEnvio}
-                onCargarGuia={onCargarGuia}
-                puedeEditar={puedeEditar}
-                puedeEliminarBorrador={puedeEliminarBorrador}
-                puedeEliminarRegistro={puedeEliminarRegistro}
-                puedeCancelar={puedeCancelar}
-                esPapelera={esPapelera}
-                compact
-            />
-        </div>
+        </>
+    );
+}
+
+function lineaLogisticaPedido(pedido) {
+    const transporte = etiquetaTransportePedido(pedido);
+    const alm = etiquetaAlmacen(pedido.almacen);
+    if (transporte && alm && alm !== '—') return `${transporte} · ${alm}`;
+    if (transporte) return transporte;
+    if (alm && alm !== '—') return alm;
+    return null;
+}
+
+function CardPedido({
+    pedido, esRechazado, accionesProps, onVer,
+}) {
+    const acciones = useAccionesProps(accionesProps);
+    const primaria = elegirAccionPrimaria(acciones);
+    const idBase = `pedido-card-${pedido.id}`;
+    const badgeItems = useBadgesItems(pedido);
+    const badgePrincipal = badgeItems[0] || null;
+    const badgesResto = badgeItems.slice(1);
+    const logistica = lineaLogisticaPedido(pedido);
+
+    return (
+        <article
+            className={`rounded-xl border theme-border theme-element p-3.5 flex flex-col gap-2.5 min-w-0 ${
+                esRechazado ? 'ring-1 ring-[color-mix(in_srgb,var(--color-peligro)_30%,transparent)]' : ''
+            }`}
+        >
+            <header className="flex items-start justify-between gap-2 min-w-0">
+                <button
+                    type="button"
+                    onClick={() => onVer(pedido)}
+                    className="gelia-tienda-op-fila-link text-left min-w-0 flex-1"
+                >
+                    <EncabezadoFolioPedido pedido={pedido} size="sm" />
+                </button>
+                <BadgeEstadoPrincipal item={badgePrincipal} />
+            </header>
+
+            <div className="space-y-1 min-w-0">
+                <p className="text-sm font-bold theme-text-main m-0 leading-snug normal-case">
+                    {pedido.cliente?.nombre || '—'}
+                </p>
+                <p className="text-xs theme-text-muted font-medium m-0 tabular-nums">
+                    {formatearFechaNegocio(pedido.fecha)}
+                </p>
+                {logistica && (
+                    <p className="text-xs theme-text-muted font-medium m-0 leading-snug">{logistica}</p>
+                )}
+                {badgesResto.length > 0 && (
+                    <BadgesPedido items={badgesResto} compact max={1} className="pt-0.5" />
+                )}
+                <AlertasFila pedido={pedido} esRechazado={esRechazado} />
+            </div>
+
+            <footer className="flex items-center justify-between gap-3 pt-2 border-t theme-border">
+                <p className="text-sm font-bold tabular-nums theme-text-main m-0">
+                    {formatearMoneda(pedido.total_a_cobrar)}
+                </p>
+                <div className="flex items-center justify-end gap-1.5 shrink-0">
+                    {primaria ? (
+                        <button
+                            type="button"
+                            onClick={primaria.onClick}
+                            className={`${THEME_BTN_PRIMARY} theme-btn-primary--compact min-h-[44px] px-3 text-xs font-bold`}
+                        >
+                            {primaria.label}
+                        </button>
+                    ) : null}
+                    {acciones.length > 1 ? (
+                        <MenuAccionesPedido acciones={acciones} primaria={primaria} idBase={idBase} />
+                    ) : null}
+                    {accionesProps.can('control_pedidos.ver_detalle') && !primaria && (
+                        <button
+                            type="button"
+                            onClick={() => onVer(pedido)}
+                            className={`${THEME_BTN_SECONDARY} theme-btn-primary--compact min-h-[44px] px-3 text-xs`}
+                        >
+                            Ver
+                        </button>
+                    )}
+                </div>
+            </footer>
+        </article>
     );
 }
 
@@ -285,6 +345,9 @@ export default function TablaPedidos({
     pedidos,
     can,
     tabActiva = 'TODAS',
+    busqueda = '',
+    cargando = false,
+    onIrAPagina,
     onVer,
     onEditar,
     onEliminar,
@@ -299,7 +362,12 @@ export default function TablaPedidos({
 }) {
     const [docPreview, setDocPreview] = useState(null);
     const items = pedidos?.data || [];
+    const total = pedidos?.total ?? items.length;
     const esPapelera = tabActiva === 'ELIMINADAS';
+    const menuId = useId();
+
+    const tabMeta = [...TABS_PEDIDOS, ...TABS_PEDIDOS_ADMIN].find((t) => t.id === tabActiva);
+    const tabLabel = tabMeta?.label || '';
 
     const puedeMutarPedido = (pedido) => Boolean(pedido.puede_editar ?? pedido.puede_mutar);
 
@@ -325,170 +393,160 @@ export default function TablaPedidos({
         && can('control_pedidos.cancelar')
         && pedido.estatus?.fase_ciclo !== 'CANCELADO';
 
-    if (items.length === 0) {
-        return (
-            <div className={`${geliaCardClass()} p-16 text-center text-sm theme-text-muted font-bold uppercase tracking-widest`}>
-                Sin pedidos en esta vista_
-            </div>
-        );
-    }
+    const accionesBase = {
+        can,
+        esPapelera,
+        puedeEditar,
+        puedeEliminarBorrador,
+        puedeEliminarRegistro,
+        puedeCancelar,
+        onVer,
+        onEditar,
+        onEliminar,
+        onEliminarRegistro,
+        onRestaurar,
+        onVerAuditoria,
+        onCancelar,
+        onBitacora,
+        onVerGuia: setDocPreview,
+        onAnexarEnvio,
+        onCompletarEnvio,
+        onCargarGuia,
+    };
+
+    const vacio = (
+        <div className={`${geliaCardClass()} p-10 md:p-16 text-center`}>
+            <p className="text-sm font-bold theme-text-muted m-0">
+                Sin pedidos en esta vista
+                {tabLabel ? ` (${tabLabel})` : ''}.
+            </p>
+            {busqueda && (
+                <p className="text-xs theme-text-muted mt-2 m-0">Prueba otra búsqueda o bandeja.</p>
+            )}
+        </div>
+    );
 
     return (
-        <div className={`${geliaCardClass()} overflow-hidden`}>
-            <div className="md:hidden p-4 space-y-3">
-                {items.map((pedido) => (
-                    <CardPedido
-                        key={pedido.id}
-                        pedido={pedido}
-                        badge={badgeEstatusPedido(pedido.estatus, { esResguardo: pedido.es_resguardo })}
-                        badgeEnvio={badgeEstatusEnvio(pedido.estatus_envio, { faseCiclo: pedido.estatus?.fase_ciclo })}
-                        esRechazado={pedido.estatus?.fase_ciclo === 'RECHAZADO_VENDEDORA'}
-                        can={can}
-                        onVer={onVer}
-                        onEditar={onEditar}
-                        onEliminar={onEliminar}
-                        onEliminarRegistro={onEliminarRegistro}
-                        onRestaurar={onRestaurar}
-                        onVerAuditoria={onVerAuditoria}
-                        onCancelar={onCancelar}
-                        onBitacora={onBitacora}
-                        onVerGuia={setDocPreview}
-                        onAnexarEnvio={onAnexarEnvio}
-                        onCompletarEnvio={onCompletarEnvio}
-                        onCargarGuia={onCargarGuia}
-                        puedeEditar={puedeEditar}
-                        puedeEliminarBorrador={puedeEliminarBorrador}
-                        puedeEliminarRegistro={puedeEliminarRegistro}
-                        puedeCancelar={puedeCancelar}
-                        esPapelera={esPapelera}
-                    />
-                ))}
-            </div>
+        <div className="relative space-y-4">
+            {cargando && items.length > 0 && (
+                <p className="text-xs theme-text-muted m-0 px-1" aria-live="polite">
+                    Actualizando listado…
+                </p>
+            )}
+            {items.length === 0 ? (
+                vacio
+            ) : (
+                <div className={`${geliaCardClass()} gelia-tienda-op-workspace p-4 md:p-5 space-y-4 relative`}>
+                    {cargando && (
+                        <div
+                            className="absolute inset-0 z-10 rounded-[inherit] bg-[color-mix(in_srgb,var(--theme-surface-bg)_70%,transparent)] pointer-events-none"
+                            aria-hidden
+                        />
+                    )}
+                    <p className="text-sm font-bold theme-text-main m-0 tabular-nums">
+                        {total} pedido{total === 1 ? '' : 's'}
+                        {tabLabel ? <span className="theme-text-muted font-semibold"> · {tabLabel}</span> : null}
+                    </p>
 
-            <div className="hidden md:block overflow-x-auto">
-                <table className="w-full border-collapse">
-                    <thead>
-                        <tr className="border-b-2 border-[var(--color-primario)]/30">
-                            <th className="px-5 py-4 text-left text-[9px] font-black uppercase tracking-widest theme-text-muted">Folio_</th>
-                            <th className="px-5 py-4 text-left text-[9px] font-black uppercase tracking-widest theme-text-muted">Fecha_</th>
-                            <th className="px-5 py-4 text-left text-[9px] font-black uppercase tracking-widest theme-text-muted">Cliente_</th>
-                            <th className="px-5 py-4 text-left text-[9px] font-black uppercase tracking-widest theme-text-muted">Paquetería_</th>
-                            <th className="px-5 py-4 text-left text-[9px] font-black uppercase tracking-widest theme-text-muted">Almacén_</th>
-                            <th className="px-5 py-4 text-left text-[9px] font-black uppercase tracking-widest theme-text-muted">Banco_</th>
-                            <th className="px-5 py-4 text-left text-[9px] font-black uppercase tracking-widest theme-text-muted">Total_</th>
-                            <th className="px-5 py-4 text-left text-[9px] font-black uppercase tracking-widest theme-text-muted">Estado_</th>
-                            <th className="px-5 py-4 text-right text-[9px] font-black uppercase tracking-widest theme-text-muted">Acciones_</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {items.map((pedido) => {
-                            const badge = badgeEstatusPedido(pedido.estatus, { esResguardo: pedido.es_resguardo });
-                            const badgeEnvio = badgeEstatusEnvio(pedido.estatus_envio, {
-                                faseCiclo: pedido.estatus?.fase_ciclo,
-                            });
-                            const esRechazado = pedido.estatus?.fase_ciclo === 'RECHAZADO_VENDEDORA';
-                            const guiaLista = tieneGuiaLista(pedido);
-                            const badgeGuia = badgeGuiaLista();
-                            const badgeObs = (pedido.tiene_observaciones_fisicas && esFasePreVenta(pedido.estatus?.fase_ciclo))
-                                ? badgeObservacionesCedis()
-                                : null;
-                            const badgeSinEx = mostrarBadgeSinExistencias(pedido) ? badgeSinExistencias() : null;
-                            const badgesSla = badgesRetrasoSla(pedido);
-                            const badgeRevision = badgeAuditoriaRevision(pedido);
-                            return (
-                                <tr key={pedido.id} className={`border-b theme-border last:border-0 hover:ring-2 hover:ring-inset hover:ring-[var(--color-primario)]/20 transition-all ${esRechazado ? 'bg-red-500/5' : ''}`}>
-                                    <td className="px-5 py-4">
-                                        <EncabezadoFolioPedido pedido={pedido} size="sm" />
-                                        {pedido.esta_esperando_pago && (
-                                            <p className="text-[9px] font-black text-amber-700 mt-1 m-0">
-                                                Esperando pago · {textoTiempoRestante(pedido.fecha_limite_espera) || 'Resguardo'}
-                                            </p>
-                                        )}
-                                        {pedido.cancelacion_operativa && (
-                                            <p className="text-[9px] font-black text-red-700 mt-1 m-0">
-                                                Cancelación {pedido.cancelacion_operativa.estado}
-                                            </p>
-                                        )}
-                                        {esRechazado && pedido.motivo_rechazo && (
-                                            <p className="text-[9px] text-red-500 font-bold mt-1 flex items-center gap-1">
-                                                <AlertTriangle className="w-3 h-3" /> {pedido.motivo_rechazo}
-                                            </p>
-                                        )}
-                                    </td>
-                                    <td className="px-5 py-4 text-xs font-bold theme-text-muted">
-                                        {formatearFechaNegocio(pedido.fecha)}
-                                    </td>
-                                    <td className="px-5 py-4">
-                                        <p className="text-xs font-black theme-text-main uppercase m-0">{pedido.cliente?.nombre}</p>
-                                        <p className="text-[9px] theme-text-muted m-0">{pedido.cliente?.numero_cliente}</p>
-                                    </td>
-                                    <td className="px-5 py-4 text-xs font-bold theme-text-main">
-                                        {pedido.paqueteria?.nombre || '—'}
-                                    </td>
-                                    <td className="px-5 py-4 text-xs font-bold theme-text-muted uppercase">{etiquetaAlmacen(pedido.almacen)}</td>
-                                    <td className="px-5 py-4 text-xs font-bold theme-text-muted uppercase" title={textoFuentesPagoCompacto(pedido.fuentes_pago).completo || undefined}>
-                                        {textoFuentesPagoCompacto(pedido.fuentes_pago).texto}
-                                    </td>
-                                    <td className="px-5 py-4 text-sm font-black" style={{ color: 'var(--color-primario)' }}>
-                                        {formatearMoneda(pedido.total_a_cobrar)}
-                                    </td>
-                                    <td className="px-5 py-4">
-                                        <span className={badge.className} style={badge.style}>
-                                            {badge.label}
-                                        </span>
-                                        {badgeRevision && (
-                                            <span className={`${badgeRevision.className} mt-1.5 block w-fit`} style={badgeRevision.style}>{badgeRevision.label}</span>
-                                        )}
-                                        {badgeEnvio && (
-                                            <span className={`${badgeEnvio.className} mt-1.5 block w-fit`} style={badgeEnvio.style}>{badgeEnvio.label}</span>
-                                        )}
-                                        {badgeObs && (
-                                            <span className={`${badgeObs.className} mt-1.5 block w-fit`}>{badgeObs.label}</span>
-                                        )}
-                                        {badgeSinEx && (
-                                            <span className={`${badgeSinEx.className} mt-1.5 block w-fit`}>{badgeSinEx.label}</span>
-                                        )}
-                                        {badgesSla.map((b) => (
-                                            <span key={b.label} className={`${b.className} mt-1.5 block w-fit`} style={b.style}>{b.label}</span>
-                                        ))}
-                                        {guiaLista && (
-                                            <span className={`${badgeGuia.className} mt-1.5 block w-fit`}>{badgeGuia.label}</span>
-                                        )}
-                                        {guiaLista && pedido.numero_rastreo && (
-                                            <p className="text-[9px] font-bold font-mono theme-text-main mt-1 m-0">
-                                                {etiquetaOrigenGuia(pedido)}: {pedido.numero_rastreo}
-                                            </p>
-                                        )}
-                                    </td>
-                                    <td className="px-5 py-4 text-right overflow-visible">
-                                        <AccionesPedido
-                                            pedido={pedido}
-                                            can={can}
-                                            onVer={onVer}
-                                            onEditar={onEditar}
-                                            onEliminar={onEliminar}
-                                            onEliminarRegistro={onEliminarRegistro}
-                                            onRestaurar={onRestaurar}
-                                            onVerAuditoria={onVerAuditoria}
-                                            onCancelar={onCancelar}
-                                            onBitacora={onBitacora}
-                                            onVerGuia={setDocPreview}
-                                            onAnexarEnvio={onAnexarEnvio}
-                                            onCompletarEnvio={onCompletarEnvio}
-                                            onCargarGuia={onCargarGuia}
-                                            puedeEditar={puedeEditar}
-                                            puedeEliminarBorrador={puedeEliminarBorrador}
-                                            puedeEliminarRegistro={puedeEliminarRegistro}
-                                            puedeCancelar={puedeCancelar}
-                                            esPapelera={esPapelera}
-                                        />
-                                    </td>
+                    <div className="lg:hidden space-y-3 sm:space-y-3.5">
+                        {items.map((pedido) => (
+                            <CardPedido
+                                key={pedido.id}
+                                pedido={pedido}
+                                esRechazado={pedido.estatus?.fase_ciclo === 'RECHAZADO_VENDEDORA'}
+                                accionesProps={{ ...accionesBase, pedido }}
+                                onVer={onVer}
+                            />
+                        ))}
+                    </div>
+
+                    <div className="gelia-tienda-op-table-wrap hidden lg:block">
+                        <table className="gelia-tienda-op-table gelia-pedidos-bma-listado w-full">
+                            <thead>
+                                <tr>
+                                    <th scope="col" className="min-w-[12rem]">Pedido</th>
+                                    <th scope="col" className="min-w-[9rem]">Logística</th>
+                                    <th scope="col" className="text-right w-[7.5rem]">Total</th>
+                                    <th scope="col" className="min-w-[8rem]">Estado</th>
+                                    <th scope="col" className="text-right w-[11rem]">Acciones</th>
                                 </tr>
-                            );
-                        })}
-                    </tbody>
-                </table>
-            </div>
+                            </thead>
+                            <tbody>
+                                {items.map((pedido) => {
+                                    const esRechazado = pedido.estatus?.fase_ciclo === 'RECHAZADO_VENDEDORA';
+                                    const fuentes = textoFuentesPagoCompacto(pedido.fuentes_pago);
+                                    const acciones = accionesPedidoLista({ ...accionesBase, pedido });
+                                    const idBase = `${menuId}-${pedido.id}`;
+                                    const badgeItems = badgesListaPedido(pedido);
+
+                                    return (
+                                        <tr
+                                            key={pedido.id}
+                                            className={esRechazado ? 'bg-[color-mix(in_srgb,var(--color-peligro)_5%,transparent)]' : undefined}
+                                        >
+                                            <td className="align-top py-2.5">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => onVer(pedido)}
+                                                    className="gelia-tienda-op-fila-link text-left w-full min-w-0"
+                                                >
+                                                    <EncabezadoFolioPedido pedido={pedido} size="sm" />
+                                                    <span className="block text-sm font-bold theme-text-main mt-1 normal-case leading-snug">
+                                                        {pedido.cliente?.nombre || '—'}
+                                                    </span>
+                                                    <span className="block text-xs theme-text-muted font-medium mt-0.5 tabular-nums">
+                                                        {formatearFechaNegocio(pedido.fecha)}
+                                                    </span>
+                                                </button>
+                                                <AlertasFila pedido={pedido} esRechazado={esRechazado} />
+                                            </td>
+                                            <td className="align-top py-2.5 text-xs theme-text-muted font-medium leading-relaxed">
+                                                <span className="block theme-text-main font-semibold">
+                                                    {etiquetaTransportePedido(pedido) || '—'}
+                                                </span>
+                                                <span className="block mt-0.5">{etiquetaAlmacen(pedido.almacen)}</span>
+                                                {fuentes.texto !== '—' && (
+                                                    <span className="block mt-0.5 normal-case opacity-90" title={fuentes.completo || undefined}>
+                                                        {fuentes.texto}
+                                                    </span>
+                                                )}
+                                                {pedidoRequiereLogistica(pedido) && (
+                                                    <span className="block mt-0.5 normal-case text-xs opacity-80">
+                                                        {etiquetaOrigenGuia(pedido)}
+                                                    </span>
+                                                )}
+                                            </td>
+                                            <td className="align-top py-2.5 text-right whitespace-nowrap">
+                                                <span className="text-sm font-bold tabular-nums theme-text-main">
+                                                    {formatearMoneda(pedido.total_a_cobrar)}
+                                                </span>
+                                            </td>
+                                            <td className="align-top py-2.5">
+                                                <BadgesPedido items={badgeItems} compact />
+                                            </td>
+                                            <td className="align-top py-2.5 text-right">
+                                                <AccionesFila acciones={acciones} idBase={idBase} />
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {onIrAPagina && pedidos && (
+                        <div className="pt-2 border-t theme-border">
+                            <GeliaPaginacion
+                                paginator={pedidos}
+                                onIrAPagina={onIrAPagina}
+                                embedded
+                                className="!border-0 !p-0"
+                            />
+                        </div>
+                    )}
+                </div>
+            )}
+
             <ModalVistaPreviaDocumento abierto={Boolean(docPreview)} documento={docPreview} onClose={() => setDocPreview(null)} />
         </div>
     );

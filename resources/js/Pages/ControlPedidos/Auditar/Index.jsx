@@ -1,9 +1,10 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Head, usePage } from '@inertiajs/react';
-import { ClipboardCheck, Clock, CheckCircle2, XCircle, RefreshCw, Loader2, Sparkles } from 'lucide-react';
 import AppLayout from '../../../Layouts/AppLayout';
 import GeliaPageShell from '../../../Components/GeliaPageShell';
 import { geliaCardClass } from '../../../utils/geliaTheme';
+import EncabezadoBandejaAuditoria from './Partials/EncabezadoBandejaAuditoria';
+import MetricasBandejaAuditoria from './Partials/MetricasBandejaAuditoria';
 import FiltrosAuditoria from './Partials/FiltrosAuditoria';
 import TablaAuditoria from './Partials/TablaAuditoria';
 import ModalRevisarPedido from './Partials/ModalRevisarPedido';
@@ -12,21 +13,7 @@ import ModalAnexarPagoEnvio from '../Partials/ModalAnexarPagoEnvio';
 import ModalBitacoraPedido from '../Partials/ModalBitacoraPedido';
 import useListadoDiscreto from '../Partials/useListadoDiscreto';
 
-const KPI_CONFIG = [
-    { key: 'pendientes', label: 'Pendientes', tab: 'PENDIENTES', icon: Clock, color: '#EAB308' },
-    { key: 'corregidos', label: 'Corregidos', tab: 'CORREGIDOS', icon: Sparkles, color: '#10B981' },
-    { key: 'rechazados', label: 'Rechazados', tab: 'RECHAZADOS', icon: XCircle, color: '#EF4444' },
-    { key: 'aprobados', label: 'A Registro', tab: 'APROBADOS', icon: CheckCircle2, color: '#22C55E' },
-];
-
-function formatearHoraActualizacion(date) {
-    if (!date) return '—';
-    try {
-        return date.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    } catch {
-        return '—';
-    }
-}
+const REFRESCO_LISTADO_MS = 15000;
 
 export default function Index({ auth, pedidos, metricas = {}, filtros = {}, catalogos = {} }) {
     const { flash } = usePage().props;
@@ -53,7 +40,7 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
     const [modalAnexo, setModalAnexo] = useState({ abierto: false, pedido: null });
     const [modalBitacora, setModalBitacora] = useState({ abierto: false, pedido: null });
     const [alerta, setAlerta] = useState({ abierto: false, tipo: 'success', titulo: '', mensaje: '' });
-    const [ultimaActualizacion, setUltimaActualizacion] = useState(() => new Date());
+    const [ultimaSync, setUltimaSync] = useState(null);
     const debounceBusqueda = useRef(null);
     const debounceCliente = useRef(null);
     const modalAbiertoRef = useRef(false);
@@ -69,11 +56,11 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
         ...extra,
     });
 
-    const cargarYMarcar = async (params, opts) => {
+    const cargarYMarcar = useCallback(async (params, opts) => {
         const data = await cargar(params, opts);
-        if (data) setUltimaActualizacion(new Date());
+        if (data) setUltimaSync(new Date());
         return data;
-    };
+    }, [cargar]);
 
     useEffect(() => {
         if (flash?.success) {
@@ -91,9 +78,9 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
         const interval = setInterval(() => {
             if (modalAbiertoRef.current || cargando) return;
             cargarYMarcar(paramsListado(), { silencioso: true });
-        }, 15000);
+        }, REFRESCO_LISTADO_MS);
         return () => clearInterval(interval);
-    }, [cargando, tabActiva, busqueda, paqueteriaId, departamentoId, clienteFiltro, ordenar, pedidosVista?.current_page, cargar]);
+    }, [cargando, tabActiva, busqueda, paqueteriaId, departamentoId, clienteFiltro, ordenar, pedidosVista?.current_page, cargarYMarcar]);
 
     const onTabChange = (tab) => {
         setTabActiva(tab);
@@ -163,100 +150,50 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
     return (
         <AppLayout auth={auth}>
             <Head title="Revisión de pedidos | GELIANV" />
-            <GeliaPageShell className="space-y-3 md:space-y-6">
-                <header className={`${geliaCardClass()} p-4 md:p-8`}>
-                    <div className="flex flex-wrap items-end justify-between gap-3 md:gap-4">
-                        <div className="min-w-0">
-                            <div className="flex items-center gap-2 mb-1 md:mb-2">
-                                <ClipboardCheck className="w-5 h-5 shrink-0" style={{ color: 'var(--color-primario)' }} />
-                                <span className="text-[10px] font-black uppercase tracking-widest theme-text-muted">Auditar · Control de pedidos_</span>
-                            </div>
-                            <h1 className="text-2xl md:text-3xl font-black italic uppercase tracking-tighter theme-text-main m-0">
-                                Revisión de <span style={{ color: 'var(--color-primario)' }}>pedidos</span>
-                            </h1>
-                            <p className="text-xs md:text-sm theme-text-muted font-bold mt-1.5 md:mt-2 m-0">
-                                Valida pagos y costos antes de que el pedido continúe.
-                            </p>
-                            <p className="text-[10px] theme-text-muted font-bold mt-2 m-0 flex flex-wrap items-center gap-x-3 gap-y-1">
-                                <span>{atencion} requieren atención</span>
-                                <span>Actualizado {formatearHoraActualizacion(ultimaActualizacion)}</span>
-                                <button
-                                    type="button"
-                                    onClick={onActualizar}
-                                    disabled={cargando}
-                                    className="inline-flex items-center gap-1 outline-none hover:opacity-80 disabled:opacity-40"
-                                >
-                                    <RefreshCw className={`w-3 h-3 ${cargando ? 'animate-spin' : ''}`} />
-                                    Actualizar
-                                </button>
-                            </p>
-                        </div>
-                    </div>
-                </header>
-
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 md:gap-4">
-                    {KPI_CONFIG.map(({ key, label, tab, icon: Icon, color }) => {
-                        const activo = tabActiva === tab;
-                        return (
-                            <button
-                                key={key}
-                                type="button"
-                                onClick={() => onTabChange(tab)}
-                                aria-pressed={activo}
-                                className={`${geliaCardClass()} p-2.5 md:p-5 text-center md:text-left outline-none transition-shadow ${
-                                    activo ? 'ring-2 ring-[var(--color-primario)]' : ''
-                                }`}
-                            >
-                                <div className="flex items-center justify-center md:justify-start gap-1 md:gap-2 mb-0.5 md:mb-2 min-w-0">
-                                    <Icon className="w-3 h-3 md:w-4 md:h-4 shrink-0" style={{ color }} />
-                                    <span className="text-[8px] md:text-[9px] font-black uppercase tracking-wide theme-text-muted truncate leading-tight">
-                                        {label}
-                                    </span>
-                                </div>
-                                <p className="text-xl md:text-3xl font-black m-0 tabular-nums" style={{ color }}>
-                                    {metricasVista[key] ?? 0}
-                                </p>
-                            </button>
-                        );
-                    })}
-                </div>
-
-                <div className={`${geliaCardClass()} p-4 md:p-5`}>
-                    <FiltrosAuditoria
-                        tabActiva={tabActiva}
-                        busqueda={busqueda}
-                        paqueteriaId={paqueteriaId}
-                        departamentoId={departamentoId}
-                        clienteFiltro={clienteFiltro}
-                        ordenar={ordenar}
-                        paqueterias={catalogos.paqueterias || []}
-                        departamentos={catalogos.departamentos || []}
-                        onTabChange={onTabChange}
-                        onBuscar={onBuscar}
-                        onPaqueteriaChange={onPaqueteriaChange}
-                        onDepartamentoChange={onDepartamentoChange}
-                        onClienteFiltroChange={onClienteFiltroChange}
-                        onOrdenarChange={onOrdenarChange}
-                        onLimpiarFiltros={onLimpiarFiltros}
-                        onActualizar={onActualizar}
-                        metricas={metricasVista}
-                        pedidos={pedidosVista}
-                        onIrAPagina={onIrAPagina}
-                        buscando={cargando}
+            <GeliaPageShell className="gelia-tienda-op gelia-pedidos-bma space-y-4 md:space-y-6">
+                <div className="gelia-pedidos-bma-contenido space-y-4 md:space-y-6">
+                    <EncabezadoBandejaAuditoria
+                        cargando={cargando}
+                        ultimaSync={ultimaSync}
+                        atencion={atencion}
                     />
-                </div>
 
-                <div className="relative min-h-[12rem]">
-                    {cargando && (
-                        <div className="absolute inset-0 z-10 flex items-start justify-center pt-16 pointer-events-none">
-                            <Loader2 className="w-8 h-8 animate-spin" style={{ color: 'var(--color-primario)' }} aria-label="Cargando pedidos" />
-                        </div>
-                    )}
+                    <div className={`${geliaCardClass()} gelia-tienda-op-workspace p-4 md:p-5 space-y-4`}>
+                        <MetricasBandejaAuditoria
+                            metricas={metricasVista}
+                            tabActiva={tabActiva}
+                            onTabChange={onTabChange}
+                        />
+                        <div className="gelia-tienda-op-divider" aria-hidden />
+                        <FiltrosAuditoria
+                            tabActiva={tabActiva}
+                            busqueda={busqueda}
+                            paqueteriaId={paqueteriaId}
+                            departamentoId={departamentoId}
+                            clienteFiltro={clienteFiltro}
+                            ordenar={ordenar}
+                            paqueterias={catalogos.paqueterias || []}
+                            departamentos={catalogos.departamentos || []}
+                            onTabChange={onTabChange}
+                            onBuscar={onBuscar}
+                            onPaqueteriaChange={onPaqueteriaChange}
+                            onDepartamentoChange={onDepartamentoChange}
+                            onClienteFiltroChange={onClienteFiltroChange}
+                            onOrdenarChange={onOrdenarChange}
+                            onLimpiarFiltros={onLimpiarFiltros}
+                            onActualizar={onActualizar}
+                            metricas={metricasVista}
+                            buscando={cargando}
+                        />
+                    </div>
+
                     <TablaAuditoria
                         pedidos={pedidosVista}
                         tabActiva={tabActiva}
+                        cargando={cargando}
                         hayFiltrosActivos={hayFiltrosActivos}
                         onLimpiarFiltros={onLimpiarFiltros}
+                        onIrAPagina={onIrAPagina}
                         onRevisar={abrirRevisar}
                         onAnexarEnvio={abrirAnexar}
                         onBitacora={abrirBitacora}

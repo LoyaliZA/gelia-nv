@@ -38,6 +38,15 @@
         ],
         "createdAt": "2026-10-08T18:16:13.973Z",
         "reason": "Active nav leaf uses CSS accent bar aligned with sidebar.css tokens, not decorative cards."
+      },
+      {
+        "rule": "overused-font",
+        "value": "system-ui",
+        "files": [
+          "docs/visual-refresh/delegado-actualizar-guias/prototype.html"
+        ],
+        "createdAt": "2026-10-08T18:46:23.722Z",
+        "reason": "Prototipo visual-discovery: tipografía system-ui alineada a fallback de tokens GELIA sin cargar Inter en HTML aislado"
       }
     ]
   }

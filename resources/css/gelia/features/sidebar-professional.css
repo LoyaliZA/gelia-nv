@@ -14,9 +14,14 @@
        esos iconos hay que ajustar aquí o el contenedor recorta. */
     --gelia-pro-utility-btn-size: 2.875rem;
     --gelia-pro-brand-height: calc(2.25rem + 1.5rem + 1px);
-    --gelia-pro-brand-rail-height: calc(2rem + 0.375rem + 2.25rem + 1.125rem + 1px);
+    --gelia-pro-brand-rail-height: calc(2rem + 0.25rem + 2rem + 0.625rem + 1px);
     --gelia-pro-utilities-height: calc(var(--gelia-pro-utility-btn-size) + 1rem + 1px);
-    --gelia-pro-utilities-rail-height: calc(2 * var(--gelia-pro-utility-btn-size) + 0.375rem + 1rem + 1px);
+    --gelia-pro-utilities-rail-height: calc(2 * var(--gelia-pro-rail-cell) + 0.25rem + 0.625rem + 1px);
+    /* Rail contraído: celdas más compactas para caber sin scroll en 100dvh típico */
+    --gelia-pro-rail-cell: 2.125rem;
+    --gelia-pro-rail-gap: 0.125rem;
+    /* Inset horizontal compartido del rail contraído (marca, nav, utilidades, perfil) */
+    --gelia-pro-rail-inset-inline: 0.25rem;
 }
 
 /* El track sigue al aside. Un ancho fijo expandido obligaba a reacomodar todo al final. */
@@ -74,8 +79,12 @@
     align-items: center;
     gap: 0.625rem;
     height: var(--gelia-pro-brand-height);
-    padding: 0.75rem 0.875rem;
-    border-block-end: 1px solid var(--theme-border);
+    margin: 0.5rem 0.5rem 0.25rem;
+    padding: 0.625rem 0.75rem;
+    border-block-end: 0;
+    border-radius: 0.75rem;
+    background: color-mix(in srgb, var(--theme-element-bg) 38%, transparent);
+    border: 1px solid color-mix(in srgb, var(--theme-border) 70%, transparent);
     flex-shrink: 0;
     transition:
         height var(--gelia-pro-settle-duration) var(--gelia-pro-ease),
@@ -152,8 +161,43 @@
     min-height: 0;
     overflow-x: hidden;
     overflow-y: auto;
-    padding: 0.5rem 0.5rem 0.75rem;
-    transition: padding var(--gelia-pro-settle-duration) var(--gelia-pro-ease);
+    margin: 0.375rem 0.5rem 0.5rem;
+    padding: 0.5rem 0.375rem 0.625rem;
+    border-radius: 0.75rem;
+    background: color-mix(in srgb, var(--theme-element-bg) 42%, transparent);
+    border: 1px solid color-mix(in srgb, var(--theme-border) 72%, transparent);
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    transition:
+        padding var(--gelia-pro-settle-duration) var(--gelia-pro-ease),
+        margin var(--gelia-pro-settle-duration) var(--gelia-pro-ease),
+        background var(--gelia-pro-settle-duration) var(--gelia-pro-ease);
+}
+
+.gelia-pro-sidebar__nav::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+}
+
+/* Altura intermedia: aprieta un poco más el rail antes de necesitar scroll */
+@media (max-height: 720px) and (min-height: 520px) {
+    .gelia-pro-sidebar[data-collapsed='true']:not(.gelia-pro-sidebar--drawer) {
+        --gelia-pro-rail-cell: 2rem;
+        --gelia-pro-rail-gap: 0.0625rem;
+        --gelia-pro-brand-rail-height: calc(1.875rem + 0.25rem + 1.875rem + 0.5rem + 1px);
+        --gelia-pro-utilities-rail-height: calc(2 * var(--gelia-pro-rail-cell) + 0.125rem + 0.5rem + 1px);
+    }
+}
+
+/* Viewport muy compacto: celdas más pequeñas; el scroll sigue en auto (barra oculta arriba) */
+@media (max-height: 519px) {
+    .gelia-pro-sidebar[data-collapsed='true'] {
+        --gelia-pro-rail-cell: 1.875rem;
+        --gelia-pro-rail-gap: 0.0625rem;
+    }
 }
 
 .gelia-pro-sidebar__header {
@@ -265,9 +309,10 @@
 }
 
 .gelia-pro-sidebar__row--active {
-    background: color-mix(in srgb, var(--color-primario) 12%, transparent);
+    background: color-mix(in srgb, var(--color-primario) 14%, transparent);
     border-inline-start-color: var(--color-primario);
     font-weight: 600;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primario) 20%, transparent);
 }
 
 .gelia-pro-sidebar__row--hint {
@@ -402,10 +447,15 @@
 .gelia-pro-sidebar__utilities {
     display: flex;
     align-items: center;
-    gap: 0.25rem;
+    justify-content: center;
+    gap: 0.5rem;
     height: var(--gelia-pro-utilities-height);
-    padding: 0.5rem 0.75rem;
-    border-block-start: 1px solid var(--theme-border);
+    margin-inline: 0.5rem;
+    padding: 0.5rem 0.625rem;
+    border-block-start: 0;
+    border-radius: 0.75rem;
+    background: color-mix(in srgb, var(--theme-element-bg) 35%, transparent);
+    border: 1px solid color-mix(in srgb, var(--theme-border) 70%, transparent);
     flex-shrink: 0;
     transition:
         height var(--gelia-pro-settle-duration) var(--gelia-pro-ease),
@@ -416,8 +466,39 @@
 .gelia-pro-sidebar__user {
     position: relative;
     flex-shrink: 0;
-    border-block-start: 1px solid var(--theme-border);
-    padding: 0.625rem 0.75rem;
+    margin: 0.375rem 0.5rem 0.5rem;
+    padding: 0.5rem 0.625rem;
+    border-block-start: 0;
+    border-radius: 0.75rem;
+    background: color-mix(in srgb, var(--theme-element-bg) 40%, transparent);
+    border: 1px solid color-mix(in srgb, var(--theme-border) 72%, transparent);
+}
+
+.gelia-pro-sidebar__utility-slot {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.gelia-pro-sidebar__utility-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--gelia-pro-utility-btn-size);
+    height: var(--gelia-pro-utility-btn-size);
+    min-width: var(--gelia-pro-utility-btn-size);
+    min-height: var(--gelia-pro-utility-btn-size);
+    padding: 0;
+    border-radius: 0.625rem;
+    border: 1px solid color-mix(in srgb, var(--theme-border) 85%, transparent);
+    background: color-mix(in srgb, var(--theme-surface-bg) 65%, var(--theme-element-bg));
+    color: inherit;
+    transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+}
+
+.gelia-pro-sidebar__utility-btn:hover {
+    border-color: color-mix(in srgb, var(--color-primario) 35%, var(--theme-border));
+    background: color-mix(in srgb, var(--color-primario) 8%, var(--theme-surface-bg));
 }
 
 .gelia-pro-sidebar__user-btn {
@@ -672,14 +753,15 @@
 .gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__row--root {
     border-color: transparent;
     background: transparent;
-    width: 2.5rem;
-    min-width: 2.5rem;
-    height: 2.5rem;
-    min-height: 2.5rem;
-    padding: 0.6875rem;
-    margin-inline: 0.625rem;
+    width: var(--gelia-pro-rail-cell);
+    min-width: var(--gelia-pro-rail-cell);
+    height: var(--gelia-pro-rail-cell);
+    min-height: var(--gelia-pro-rail-cell);
+    padding: 0.5rem;
+    margin-inline: 0;
     border-radius: 0.5rem;
     gap: 0;
+    justify-content: center;
 }
 
 .gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__row--root:hover,
@@ -690,12 +772,13 @@
 .gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__row,
 .gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__link {
     align-items: center;
-    width: 2.5rem;
-    min-width: 2.5rem;
-    height: 2.5rem;
-    min-height: 2.5rem;
-    padding: 0.6875rem;
-    margin-inline: 0.625rem;
+    justify-content: center;
+    width: var(--gelia-pro-rail-cell);
+    min-width: var(--gelia-pro-rail-cell);
+    height: var(--gelia-pro-rail-cell);
+    min-height: var(--gelia-pro-rail-cell);
+    padding: 0.5rem;
+    margin-inline: 0;
     border-inline-start-width: 0;
     border-radius: 0.5rem;
     gap: 0;
@@ -715,27 +798,40 @@
 .gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__nav {
     display: flex;
     flex-direction: column;
-    gap: 0.25rem;
-    padding-inline: 0.375rem;
+    align-items: center;
+    gap: var(--gelia-pro-rail-gap);
+    margin-block: 0.125rem 0.25rem;
+    margin-inline: var(--gelia-pro-rail-inset-inline);
+    padding: 0.125rem 0 0.25rem;
+    background: transparent;
+    border-color: transparent;
+    border-radius: 0.625rem;
 }
 
 .gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__group {
     width: 100%;
     display: flex;
     flex-direction: column;
+    align-items: center;
 }
 
 .gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__user {
-    padding-inline: 0.375rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-block: 0.125rem 0.375rem;
+    margin-inline: var(--gelia-pro-rail-inset-inline);
+    padding: 0.25rem 0;
 }
 
 .gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__user-btn {
-    width: 2.5rem;
-    min-width: 2.5rem;
-    height: 2.5rem;
+    width: var(--gelia-pro-rail-cell);
+    min-width: var(--gelia-pro-rail-cell);
+    height: var(--gelia-pro-rail-cell);
     padding: 0.25rem;
-    margin-inline: 0.625rem;
+    margin-inline: 0;
     gap: 0;
+    justify-content: center;
 }
 
 .gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__avatar {
@@ -755,8 +851,10 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 0.375rem;
-    padding: 0.625rem 0.375rem 0.5rem;
+    gap: 0.25rem;
+    margin-block: 0.375rem 0.125rem;
+    margin-inline: var(--gelia-pro-rail-inset-inline);
+    padding: 0.5rem 0 0.375rem;
     height: var(--gelia-pro-brand-rail-height);
 }
 
@@ -778,9 +876,17 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding-inline: 0.375rem;
-    gap: 0.375rem;
+    margin-inline: var(--gelia-pro-rail-inset-inline);
+    padding: 0.375rem 0;
+    gap: 0.25rem;
     height: var(--gelia-pro-utilities-rail-height);
+}
+
+.gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__utility-btn {
+    width: var(--gelia-pro-rail-cell);
+    height: var(--gelia-pro-rail-cell);
+    min-width: var(--gelia-pro-rail-cell);
+    min-height: var(--gelia-pro-rail-cell);
 }
 
 .gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__utilities > * {
@@ -899,6 +1005,15 @@
     overflow-x: hidden;
     overflow-y: auto;
     min-height: 0;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    overscroll-behavior: contain;
+}
+
+.gelia-pro-flyout__body::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
 }
 
 .gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-flyout__body .gelia-pro-sidebar__row--root {

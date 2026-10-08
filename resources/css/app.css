@@ -20,6 +20,7 @@
 @import './gelia/features/registro.css';
 @import './gelia/features/gelia-ai.css';
 @import './gelia/features/control-pedidos-tienda.css';
+@import './gelia/features/control-pedidos-gestion-bma.css';
 
 /* Modo oscuro controlado por clase .dark en <html> (AppLayout), no por prefers-color-scheme */
 @custom-variant dark (&:where(.dark, .dark *));

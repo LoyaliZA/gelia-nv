@@ -132,9 +132,9 @@ function CampoActualizarGuia({ pedido, onDone }) {
 
     return (
         <div className="space-y-2">
-            <div className="flex items-center gap-2 p-3 rounded-xl border border-amber-500/40 bg-amber-500/10">
-                <Clock className="w-4 h-4 text-amber-600 shrink-0" />
-                <p className="text-xs font-bold text-amber-700 m-0">
+            <div className="flex items-center gap-2 p-3 rounded-xl border border-[color-mix(in_srgb,var(--color-aviso)_40%,transparent)] bg-[color-mix(in_srgb,var(--color-aviso)_10%,transparent)]">
+                <Clock className="w-4 h-4 theme-text-aviso shrink-0" />
+                <p className="text-xs font-bold theme-text-aviso m-0">
                     Corregir la guía marcará el pedido con retraso y notificará a CEDIS.
                 </p>
             </div>
@@ -371,7 +371,7 @@ export default function ModalDetalleDelegado({
         <>
             <div className={`${THEME_MODAL_OVERLAY} items-start sm:items-center py-4 sm:py-6`} onClick={onClose}>
                 <div
-                    className={`${THEME_MODAL_SHELL} max-w-3xl w-full flex flex-col`}
+                    className={`${THEME_MODAL_SHELL} max-w-3xl lg:max-w-5xl w-full flex flex-col`}
                     style={{ maxHeight: 'calc(100dvh - 2rem)' }}
                     onClick={(e) => e.stopPropagation()}
                 >
@@ -399,10 +399,12 @@ export default function ModalDetalleDelegado({
                         </button>
                     </div>
 
-                    <div className="gelia-modal-body p-5 md:p-6 space-y-6 overflow-y-auto">
+                    <div className="gelia-modal-body p-5 md:p-6 overflow-y-auto">
+                        <div className="flex flex-col lg:grid lg:grid-cols-[minmax(0,1fr)_17.5rem] gap-6 lg:gap-8 items-start">
+                            <div className="space-y-6 min-w-0 w-full order-2 lg:order-1">
                         {badgeErrorGuia && (
-                            <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 space-y-1">
-                                <p className="text-sm font-bold text-red-600 m-0 flex items-center gap-2">
+                            <div className="p-3 rounded-xl bg-[color-mix(in_srgb,var(--color-peligro)_10%,transparent)] border border-[color-mix(in_srgb,var(--color-peligro)_30%,transparent)] space-y-1">
+                                <p className="text-sm font-bold theme-text-peligro m-0 flex items-center gap-2">
                                     <AlertTriangle className="w-4 h-4" /> Corregir guía
                                 </p>
                                 <p className="text-sm font-bold theme-text-main m-0">
@@ -474,49 +476,53 @@ export default function ModalDetalleDelegado({
                                 </div>
                             )}
                         </section>
+                            </div>
 
-                        <section className={SECCION_WRAP}>
-                            <p className={SECCION}>Guía de rastreo</p>
-                            {pedido.numero_rastreo && (
-                                <div className="mb-4 flex items-center gap-2 flex-wrap">
-                                    <p className="text-lg font-black font-mono theme-text-main m-0 break-all">{pedido.numero_rastreo}</p>
-                                    <BotonCopiar texto={pedido.numero_rastreo} />
-                                </div>
-                            )}
-                            {pedido.guia_corregida_at && (
-                                <p className="text-[10px] font-bold theme-text-muted m-0 mb-3 font-mono">
-                                    Corregida: {formatearFechaHoraAuditoria(pedido.guia_corregida_at)}
-                                    {(pedido.guia_corregida_por?.name || pedido.guiaCorregidaPor?.name)
-                                        ? ` · ${pedido.guia_corregida_por?.name || pedido.guiaCorregidaPor?.name}`
-                                        : ''}
-                                </p>
-                            )}
+                            <aside
+                                className="w-full lg:w-auto order-1 lg:order-2 lg:sticky lg:top-0 self-start rounded-2xl border theme-border theme-element p-4 space-y-4 max-md:sticky max-md:top-0 max-md:z-10 max-md:shadow-[0_8px_24px_rgba(0,0,0,0.08)]"
+                            >
+                                <p className={`${SECCION} mb-0`}>Guía de rastreo</p>
+                                {pedido.numero_rastreo && (
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <p className="text-lg font-black font-mono theme-text-main m-0 break-all">{pedido.numero_rastreo}</p>
+                                        <BotonCopiar texto={pedido.numero_rastreo} />
+                                    </div>
+                                )}
+                                {pedido.guia_corregida_at && (
+                                    <p className="text-[11px] font-bold theme-text-muted m-0 font-mono">
+                                        Corregida: {formatearFechaHoraAuditoria(pedido.guia_corregida_at)}
+                                        {(pedido.guia_corregida_por?.name || pedido.guiaCorregidaPor?.name)
+                                            ? ` · ${pedido.guia_corregida_por?.name || pedido.guiaCorregidaPor?.name}`
+                                            : ''}
+                                    </p>
+                                )}
 
-                            {modo === 'resguardo' && (
-                                <p className="text-sm font-bold text-blue-600 m-0">En resguardo — la guía se habilita al liberar.</p>
-                            )}
-                            {modo === 'solo_lectura' && !pedido.numero_rastreo && (
-                                <p className="text-sm theme-text-muted font-bold m-0">Sin guía capturada.</p>
-                            )}
-                            {modo === 'solo_lectura' && pedido.numero_rastreo && fase === 'EN_CEDIS' && !pedido.empacado_at && (
-                                <p className="text-sm font-bold text-amber-700 m-0 mb-3">
-                                    Guía asignada. El número queda fijo mientras el pedido sigue en {LABELS_ESTATUS_POR_FASE.EN_CEDIS}; puedes adjuntar o reemplazar el PDF.
-                                </p>
-                            )}
-                            {modo === 'asignar' && <CampoAsignarGuia pedido={pedido} onDone={recargarPedido} />}
-                            {modo === 'correccion' && <CampoActualizarGuia pedido={pedido} onDone={recargarPedido} />}
-                            {(modo === 'asignar' || modo === 'correccion' || pedido.numero_rastreo) && (
-                                <div className="mt-4 space-y-2">
-                                    <p className={`${THEME_LABEL} m-0`}>PDF de la guía</p>
-                                    <CampoSubirGuiaPdf
-                                        pedido={pedido}
-                                        onVerPdf={setDocPreview}
-                                        soloLectura={modo === 'resguardo' || fase === 'ENVIADO'}
-                                        onDone={recargarPedido}
-                                    />
-                                </div>
-                            )}
-                        </section>
+                                {modo === 'resguardo' && (
+                                    <p className="text-sm font-bold theme-text-info m-0">En resguardo — la guía se habilita al liberar.</p>
+                                )}
+                                {modo === 'solo_lectura' && !pedido.numero_rastreo && (
+                                    <p className="text-sm theme-text-muted font-bold m-0">Sin guía capturada.</p>
+                                )}
+                                {modo === 'solo_lectura' && pedido.numero_rastreo && fase === 'EN_CEDIS' && !pedido.empacado_at && (
+                                    <p className="text-sm font-bold theme-text-aviso m-0">
+                                        Guía asignada. El número queda fijo mientras el pedido sigue en {LABELS_ESTATUS_POR_FASE.EN_CEDIS}; puedes adjuntar o reemplazar el PDF.
+                                    </p>
+                                )}
+                                {modo === 'asignar' && <CampoAsignarGuia pedido={pedido} onDone={recargarPedido} />}
+                                {modo === 'correccion' && <CampoActualizarGuia pedido={pedido} onDone={recargarPedido} />}
+                                {(modo === 'asignar' || modo === 'correccion' || pedido.numero_rastreo) && (
+                                    <div className="space-y-2">
+                                        <p className={`${THEME_LABEL} m-0`}>PDF de la guía</p>
+                                        <CampoSubirGuiaPdf
+                                            pedido={pedido}
+                                            onVerPdf={setDocPreview}
+                                            soloLectura={modo === 'resguardo' || fase === 'ENVIADO'}
+                                            onDone={recargarPedido}
+                                        />
+                                    </div>
+                                )}
+                            </aside>
+                        </div>
                     </div>
 
                     <div className="gelia-modal-footer flex flex-wrap gap-3 p-5 md:p-6 border-t theme-border shrink-0">
@@ -525,7 +531,7 @@ export default function ModalDetalleDelegado({
                             <button
                                 type="button"
                                 onClick={() => onReportarError?.(pedido)}
-                                className={`${BTN_SECONDARY} border border-orange-500/40 text-orange-600 outline-none ml-auto`}
+                                className={`${BTN_SECONDARY} border border-[color-mix(in_srgb,var(--color-aviso)_40%,transparent)] theme-text-aviso outline-none ml-auto`}
                             >
                                 <AlertTriangle className="w-4 h-4 inline mr-1" /> Reportar error de datos
                             </button>

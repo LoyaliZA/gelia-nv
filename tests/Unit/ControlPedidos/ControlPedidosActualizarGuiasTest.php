@@ -127,11 +127,240 @@ class ControlPedidosActualizarGuiasTest extends TestCase
         );
     }
 
-    private function crearPedidoPendienteGuia(): PedidoBma
+    public function test_filtro_situacion_sin_guia_y_con_guia(): void
+    {
+        $sinGuia = $this->crearPedidoPendienteGuia();
+        $conGuia = $this->crearPedidoPendienteEnvio();
+        $listar = app(ListarPedidosDelegadoService::class);
+
+        $soloSin = $listar->ejecutar(['tab' => 'TODOS', 'situacion' => 'sin_guia'], false);
+        $this->assertTrue($soloSin->contains('id', $sinGuia->id));
+        $this->assertFalse($soloSin->contains('id', $conGuia->id));
+
+        $soloCon = $listar->ejecutar(['tab' => 'TODOS', 'situacion' => 'con_guia'], false);
+        $this->assertTrue($soloCon->contains('id', $conGuia->id));
+        $this->assertFalse($soloCon->contains('id', $sinGuia->id));
+    }
+
+    public function test_filtro_sin_guia_trata_rastreo_vacio(): void
     {
         $pedido = $this->crearPedidoAprobadoCedis([
             'catalogo_paqueteria_id' => $this->paqueteriaComercialId(),
         ]);
+        $pedido->update(['numero_rastreo' => '']);
+        $listar = app(ListarPedidosDelegadoService::class);
+
+        $sin = $listar->ejecutar(['tab' => 'TODOS', 'situacion' => 'sin_guia'], false);
+        $con = $listar->ejecutar(['tab' => 'TODOS', 'situacion' => 'con_guia'], false);
+
+        $this->assertTrue($sin->contains('id', $pedido->id));
+        $this->assertFalse($con->contains('id', $pedido->id));
+    }
+
+    public function test_filtro_error_guia_no_cuenta_como_retraso_sin_flags(): void
+    {
+        $pedido = $this->crearPedidoPendienteEnvio();
+        $pedido->update([
+            'campos_incorrectos' => ['numero_rastreo'],
+            'guia_retraso' => false,
+            'retraso_empaque_alertado_at' => null,
+            'retraso_recoleccion_alertado_at' => null,
+        ]);
+        $listar = app(ListarPedidosDelegadoService::class);
+
+        $err = $listar->ejecutar(['tab' => 'TODOS', 'situacion' => 'error_guia'], false);
+        $ret = $listar->ejecutar(['tab' => 'TODOS', 'situacion' => 'retraso'], false);
+
+        $this->assertTrue($err->contains('id', $pedido->id));
+        $this->assertFalse($ret->contains('id', $pedido->id));
+    }
+
+    public function test_filtro_retraso_por_guia_retraso(): void
+    {
+        $pedido = $this->crearPedidoPendienteEnvio();
+        $pedido->update(['guia_retraso' => true]);
+        $listar = app(ListarPedidosDelegadoService::class);
+
+        $ret = $listar->ejecutar(['tab' => 'TODOS', 'situacion' => 'retraso'], false);
+        $this->assertTrue($ret->contains('id', $pedido->id));
+    }
+
+    public function test_filtro_retraso_por_empaque(): void
+    {
+        $pedido = $this->crearPedidoAprobadoCedis([
+            'catalogo_paqueteria_id' => $this->paqueteriaComercialId(),
+        ]);
+        DB::table('pedidos_bma')->where('id', $pedido->id)->update([
+            'retraso_empaque_alertado_at' => now(),
+            'empacado_at' => null,
+        ]);
+        $listar = app(ListarPedidosDelegadoService::class);
+
+        $ret = $listar->ejecutar(['tab' => 'TODOS', 'situacion' => 'retraso'], false);
+        $this->assertTrue($ret->contains('id', $pedido->id));
+    }
+
+    public function test_filtro_retraso_por_recoleccion(): void
+    {
+        $pedido = $this->crearPedidoPendienteEnvio();
+        DB::table('pedidos_bma')->where('id', $pedido->id)->update([
+            'retraso_recoleccion_alertado_at' => now(),
+        ]);
+        $listar = app(ListarPedidosDelegadoService::class);
+
+        $ret = $listar->ejecutar(['tab' => 'TODOS', 'situacion' => 'retraso'], false);
+        $this->assertTrue($ret->contains('id', $pedido->id));
+    }
+
+    public function test_orden_fecha_desc_y_asc(): void
+    {
+        $antiguo = $this->crearPedidoAprobadoCedis([
+            'created_at' => now()->subDays(2),
+        ]);
+        $reciente = $this->crearPedidoAprobadoCedis([
+            'created_at' => now()->subDay(),
+        ]);
+        $listar = app(ListarPedidosDelegadoService::class);
+
+        $desc = $listar->ejecutar(['tab' => 'TODOS', 'ordenar' => 'fecha_desc'], false);
+        $this->assertSame($reciente->id, $desc->first()->id);
+
+        $asc = $listar->ejecutar(['tab' => 'TODOS', 'ordenar' => 'fecha_asc'], false);
+        $this->assertSame($antiguo->id, $asc->first()->id);
+    }
+
+    public function test_pedidos_para_exportar_orden_folio_remision(): void
+    {
+        $primero = $this->crearPedidoPendienteGuia(['folio_remision' => 'REM-EXPORT-AAA']);
+        $segundo = $this->crearPedidoPendienteGuia(['folio_remision' => 'REM-EXPORT-ZZZ']);
+
+        $export = app(ListarPedidosDelegadoService::class)->pedidosParaExportar();
+        $marcados = $export->whereIn('id', [$primero->id, $segundo->id])->values();
+
+        $this->assertCount(2, $marcados);
+        $this->assertSame(
+            ['REM-EXPORT-AAA', 'REM-EXPORT-ZZZ'],
+            $marcados->pluck('folio_remision')->all()
+        );
+    }
+
+    public function test_filtro_paqueteria_ids_uno_y_varios(): void
+    {
+        $idA = $this->paqueteriaComercialId();
+        $idB = $this->crearPaqueteriaComercial('PAQ-FILTRO-B');
+        $pedidoA = $this->crearPedidoAprobadoCedis(['catalogo_paqueteria_id' => $idA]);
+        $pedidoB = $this->crearPedidoAprobadoCedis(['catalogo_paqueteria_id' => $idB]);
+
+        $listar = app(ListarPedidosDelegadoService::class);
+
+        $soloA = $listar->ejecutar(['tab' => 'TODOS', 'paqueteria_ids' => [$idA]], false);
+        $this->assertTrue($soloA->contains('id', $pedidoA->id));
+        $this->assertFalse($soloA->contains('id', $pedidoB->id));
+
+        $ambos = $listar->ejecutar(['tab' => 'TODOS', 'paqueteria_ids' => [$idA, $idB]], false);
+        $this->assertTrue($ambos->contains('id', $pedidoA->id));
+        $this->assertTrue($ambos->contains('id', $pedidoB->id));
+    }
+
+    public function test_filtro_paqueteria_ids_invalidos_no_muestra_todos(): void
+    {
+        $pedido = $this->crearPedidoPendienteGuia();
+        $listar = app(ListarPedidosDelegadoService::class);
+
+        $sinFiltro = $listar->ejecutar(['tab' => 'TODOS'], false);
+        $this->assertTrue($sinFiltro->contains('id', $pedido->id));
+
+        $invalido = $listar->ejecutar(['tab' => 'TODOS', 'paqueteria_ids' => [999_999_999]], false);
+        $this->assertCount(0, $invalido);
+        $this->assertFalse($invalido->contains('id', $pedido->id));
+    }
+
+    public function test_filtros_combinados_tab_q_paqueteria_situacion(): void
+    {
+        $idPaq = $this->paqueteriaComercialId();
+        $match = $this->crearPedidoPendienteGuia([
+            'folio_remision' => 'REM-COMBO-OK-001',
+            'catalogo_paqueteria_id' => $idPaq,
+        ]);
+        $this->crearPedidoPendienteGuia([
+            'folio_remision' => 'REM-COMBO-OTRO-002',
+            'catalogo_paqueteria_id' => $this->crearPaqueteriaComercial('PAQ-COMBO-OTRA'),
+        ]);
+
+        $listar = app(ListarPedidosDelegadoService::class);
+        $resultado = $listar->ejecutar([
+            'tab' => 'PENDIENTES_GUIA',
+            'q' => 'COMBO-OK',
+            'paqueteria_ids' => [$idPaq],
+            'situacion' => 'sin_guia',
+        ], false);
+
+        $this->assertEqualsCanonicalizing([$match->id], $resultado->pluck('id')->all());
+    }
+
+    public function test_paginacion_respeta_filtros(): void
+    {
+        $idPaq = $this->paqueteriaComercialId();
+        $ids = [];
+        for ($i = 0; $i < 16; $i++) {
+            $p = $this->crearPedidoPendienteGuia([
+                'folio_remision' => 'REM-PAG-'.str_pad((string) $i, 2, '0', STR_PAD_LEFT),
+                'catalogo_paqueteria_id' => $idPaq,
+            ]);
+            $ids[] = $p->id;
+        }
+
+        $listar = app(ListarPedidosDelegadoService::class);
+        $p1 = $listar->ejecutar([
+            'tab' => 'PENDIENTES_GUIA',
+            'paqueteria_ids' => [$idPaq],
+            'page' => 1,
+        ]);
+        $p2 = $listar->ejecutar([
+            'tab' => 'PENDIENTES_GUIA',
+            'paqueteria_ids' => [$idPaq],
+            'page' => 2,
+        ]);
+
+        $this->assertSame(15, $p1->perPage());
+        $this->assertSame(16, $p1->total());
+        $this->assertSame(1, $p2->count());
+
+        $pagina1Ids = $p1->pluck('id')->all();
+        $pagina2Ids = $p2->pluck('id')->all();
+        $this->assertEmpty(array_intersect($pagina1Ids, $pagina2Ids));
+        $this->assertEqualsCanonicalizing($ids, array_merge($pagina1Ids, $pagina2Ids));
+    }
+
+    public function test_metricas_no_dependen_de_filtros_listado(): void
+    {
+        $this->crearPedidoPendienteGuia();
+        $listar = app(ListarPedidosDelegadoService::class);
+        $antes = $listar->metricas();
+        $listar->ejecutar(['q' => 'NO-EXISTE-XYZ-999'], false);
+        $despues = $listar->metricas();
+        $this->assertSame($antes, $despues);
+    }
+
+    private function crearPaqueteriaComercial(string $nombre): int
+    {
+        $now = now();
+        $id = DB::table('catalogo_paqueterias_pedido')->insertGetId([
+            'nombre' => $nombre,
+            'categoria' => 'comercial',
+            'activo' => true,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
+
+        return (int) $id;
+    }
+
+    private function crearPedidoPendienteGuia(array $overrides = []): PedidoBma
+    {
+        $pedido = $this->crearPedidoAprobadoCedis(array_merge([
+            'catalogo_paqueteria_id' => $this->paqueteriaComercialId(),
+        ], $overrides));
 
         return app(MarcarEmpacadoPedidoBmaService::class)->ejecutar(
             $pedido->fresh(['paqueteria', 'origen']),

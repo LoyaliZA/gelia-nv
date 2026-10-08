@@ -5,6 +5,8 @@ namespace App\Services\ControlPedidos;
 use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\CatalogoPaqueteriaPedido;
 use App\Models\ControlPedidos\PedidoBma;
+use App\Support\ControlPedidos\FiltroPaqueteriaDelegadoPedidoBma;
+use App\Support\ControlPedidos\SituacionOperativaDelegadoPedidoBma;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
@@ -14,8 +16,15 @@ class ListarPedidosDelegadoService
     {
         $query = $this->queryBase();
         $this->aplicarFiltros($query, $filtros);
+        $this->aplicarOrden($query, $filtros);
 
-        return $paginar ? $query->paginate(15)->withQueryString() : $query->get();
+        if (! $paginar) {
+            return $query->get();
+        }
+
+        $page = max(1, (int) ($filtros['page'] ?? 1));
+
+        return $query->paginate(15, ['*'], 'page', $page)->withQueryString();
     }
 
     public function metricas(): array
@@ -92,8 +101,7 @@ class ListarPedidosDelegadoService
                     ->orWhere(fn (Builder $q2) => $this->scopePendienteEmpaqueConGuia($q2))
                     ->orWhere(fn (Builder $q2) => $this->scopePendientesEnvio($q2))
                     ->orWhere(fn (Builder $q2) => $this->scopeEnviados($q2));
-            })
-            ->orderBy('folio_remision');
+            });
     }
 
     /** Sin número de guía: EN_CEDIS o ya empacado esperando rastreo. */
@@ -162,6 +170,18 @@ class ListarPedidosDelegadoService
             });
         }
 
+        $paqueteria = FiltroPaqueteriaDelegadoPedidoBma::resolver($filtros);
+        if ($paqueteria['forzar_vacio']) {
+            $query->whereRaw('1 = 0');
+        } elseif ($paqueteria['aplicar']) {
+            $query->whereIn('catalogo_paqueteria_id', $paqueteria['ids']);
+        }
+
+        $situacion = strtolower(trim((string) ($filtros['situacion'] ?? '')));
+        if ($situacion !== '' && in_array($situacion, SituacionOperativaDelegadoPedidoBma::valoresPermitidos(), true)) {
+            SituacionOperativaDelegadoPedidoBma::aplicar($query, $situacion);
+        }
+
         $tab = strtoupper($filtros['tab'] ?? 'PENDIENTES_GUIA');
 
         match ($tab) {
@@ -172,6 +192,16 @@ class ListarPedidosDelegadoService
             'PENDIENTES_ENVIO', 'CORRECCION' => $query->where(fn (Builder $q) => $this->scopePendientesEnvio($q)),
             'ENVIADOS' => $query->where(fn (Builder $q) => $this->scopeEnviados($q)),
             default => $query->where(fn (Builder $q) => $this->scopePendientesGuia($q)),
+        };
+    }
+
+    private function aplicarOrden(Builder $query, array $filtros): void
+    {
+        $orden = strtolower(trim((string) ($filtros['ordenar'] ?? 'fecha_desc')));
+
+        match ($orden) {
+            'fecha_asc' => $query->reorder()->orderBy('pedidos_bma.created_at')->orderBy('pedidos_bma.id'),
+            default => $query->reorder()->orderByDesc('pedidos_bma.created_at')->orderByDesc('pedidos_bma.id'),
         };
     }
 }

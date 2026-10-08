@@ -10,6 +10,7 @@ $root = dirname(__DIR__, 3);
 $servicio = file_get_contents($root.'/app/Services/ControlPedidos/ResponderPesajePedidoBmaService.php');
 $styles = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Partials/pedidosBmaStyles.js');
 $tabla = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Partials/TablaPedidos.jsx');
+$listadoUi = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Partials/pedidosListadoUi.js');
 $cedis = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Cedis/Partials/TarjetasCedis.jsx');
 $form = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Partials/ModalFormPedidoLegado.jsx');
 $detalle = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Cedis/Partials/ModalDetalleCedis.jsx');
@@ -47,8 +48,8 @@ $checks = [
     ['historial usa estatusNuevo', str_contains($servicio, '$estatusNuevo->id')],
     ['JS esFasePreVenta', str_contains($styles, 'esFasePreVenta')],
     ['JS oculta pesaje que duplica fase', str_contains($styles, 'duplicaFase')],
-    ['TablaPedidos pasa faseCiclo', str_contains($tabla, 'faseCiclo:')],
-    ['TablaPedidos obs solo pre-venta', str_contains($tabla, 'esFasePreVenta')],
+    ['Listado UI pasa faseCiclo', str_contains($listadoUi, 'faseCiclo:')],
+    ['Listado UI obs solo pre-venta', str_contains($listadoUi, 'esFasePreVenta')],
     ['CEDIS forzarPesaje', str_contains($cedis, 'forzarPesaje: true')],
     ['form aviso sin Continuar obligatorio', str_contains($form, 'Ya puede capturar el total de mercancía')],
     ['JS mostrarNotaCompraCedis', str_contains($styles, 'mostrarNotaCompraCedis')],

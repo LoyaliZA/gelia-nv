@@ -4,7 +4,7 @@ import { Download, Upload } from 'lucide-react';
 import { BTN_PRIMARY, BTN_SECONDARY } from '../../Partials/pedidosBmaStyles';
 import { puedePermiso } from '../../../../utils/permisos';
 
-export default function PanelImportExport({ onAlerta }) {
+export default function PanelImportExport({ onAlerta, onImportSuccess }) {
     const { auth } = usePage().props;
     const puedeImportar = puedePermiso(auth, 'control_pedidos.delegado.importar');
     const inputRef = useRef(null);
@@ -20,6 +20,9 @@ export default function PanelImportExport({ onAlerta }) {
         router.post(route('control_pedidos.delegado.importar'), { archivo }, {
             forceFormData: true,
             preserveScroll: true,
+            onSuccess: () => {
+                onImportSuccess?.();
+            },
             onError: (errors) => {
                 const mensaje = errors.archivo || 'No se pudo importar el archivo.';
                 onAlerta?.({ abierto: true, tipo: 'error', titulo: 'Error de importación', mensaje });
