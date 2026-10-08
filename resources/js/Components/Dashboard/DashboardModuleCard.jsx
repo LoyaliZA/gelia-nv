@@ -31,9 +31,7 @@ export default function DashboardModuleCard({
                 >
                     <Icon className={`dashboard-module-card-mobile__icon ${iconClass}`} style={iconStyle} />
                 </div>
-                <span className="text-[9px] font-black uppercase tracking-tight theme-text-main mt-1.5 text-center truncate w-full">
-                    {title}
-                </span>
+                <span className="dashboard-module-card-mobile__label theme-text-main">{title}</span>
             </Link>
         );
     }
@@ -42,7 +40,7 @@ export default function DashboardModuleCard({
         <Link
             href={href}
             data-module-title={title}
-            aria-label={title}
+            aria-label={subtitle ? `${title}. ${subtitle}` : title}
             className={`dashboard-module-card theme-element shadow-sm outline-none group ${borderClass}`}
             style={borderStyle}
         >
@@ -56,9 +54,7 @@ export default function DashboardModuleCard({
                 <Icon className={`dashboard-module-card__icon ${iconClass}`} style={iconStyle} />
             </div>
             <h3 className="dashboard-module-card__title theme-text-main">{title}</h3>
-            {subtitle && (
-                <p className="dashboard-module-card__subtitle theme-text-muted">{subtitle}</p>
-            )}
+            {subtitle && <p className="dashboard-module-card__subtitle theme-text-muted">{subtitle}</p>}
         </Link>
     );
 }

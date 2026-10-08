@@ -5,6 +5,7 @@ namespace App\Services\Mobile;
 use App\Models\ConfiguracionUsuario;
 use App\Models\User;
 use App\Services\PersonalizacionCatalogoService;
+use App\Support\NormalizarFondoBase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -135,6 +136,10 @@ class MobileProfileService
 
         if (isset($normalizado['alertas_prefs']) && is_array($normalizado['alertas_prefs'])) {
             $normalizado['alertas_prefs'] = $this->normalizarAlertasPrefs($normalizado['alertas_prefs']);
+        }
+
+        if (isset($normalizado['fondo_base'])) {
+            $normalizado['fondo_base'] = NormalizarFondoBase::aplicar((string) $normalizado['fondo_base']);
         }
 
         return $normalizado;

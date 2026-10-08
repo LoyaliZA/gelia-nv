@@ -1,0 +1,207 @@
+/* Operación Tienda — estilos de módulo (tokens globales; sin nuevas variables). */
+
+.gelia-tienda-op-workspace {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.gelia-tienda-op-metricas {
+    display: flex;
+    gap: 0.5rem;
+    overflow-x: auto;
+    padding: 0.25rem 0 0.75rem;
+    scroll-snap-type: x proximity;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+}
+
+.gelia-tienda-op-metricas::-webkit-scrollbar {
+    height: 4px;
+}
+
+.gelia-tienda-op-metric {
+    flex: 0 0 auto;
+    scroll-snap-align: start;
+    min-width: 7.5rem;
+    padding: 0.65rem 0.85rem;
+    border-radius: 0.75rem;
+    border: 1px solid var(--theme-border);
+    background: var(--theme-element-bg);
+    text-align: left;
+    cursor: pointer;
+    transition:
+        box-shadow 0.2s ease,
+        border-color 0.2s ease,
+        transform 0.15s ease;
+}
+
+.gelia-tienda-op-metric:hover {
+    border-color: color-mix(in srgb, var(--color-primario) 35%, var(--theme-border));
+}
+
+.gelia-tienda-op-metric:focus-visible {
+    outline: 2px solid var(--color-primario);
+    outline-offset: 2px;
+}
+
+.gelia-tienda-op-metric[data-active='true'] {
+    border-color: color-mix(in srgb, var(--color-primario) 55%, var(--theme-border));
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-primario) 25%, transparent);
+}
+
+.gelia-tienda-op-metric__valor {
+    font-variant-numeric: tabular-nums;
+    font-size: 1.35rem;
+    font-weight: 800;
+    line-height: 1.1;
+    color: var(--theme-text-main);
+}
+
+.gelia-tienda-op-metric__label {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    line-height: 1.25;
+    color: var(--theme-text-muted);
+    margin-top: 0.2rem;
+}
+
+.gelia-tienda-op-toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 15;
+    padding: 0.75rem 0;
+    margin: 0 -0.25rem;
+    background: color-mix(in srgb, var(--theme-surface-bg) 92%, transparent);
+    backdrop-filter: blur(8px);
+}
+
+.gelia-tienda-op-divider {
+    height: 1px;
+    background: var(--theme-border);
+    margin: 0.25rem 0 0.75rem;
+}
+
+.gelia-tienda-op-table-wrap {
+    overflow-x: auto;
+    margin: 0 -0.25rem;
+    border-radius: 0.75rem;
+    border: 1px solid var(--theme-border);
+}
+
+.gelia-tienda-op-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8125rem;
+}
+
+.gelia-tienda-op-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    text-align: left;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    color: var(--theme-text-muted);
+    padding: 0.65rem 0.85rem;
+    background: var(--theme-element-bg);
+    border-bottom: 1px solid var(--theme-border);
+    white-space: nowrap;
+}
+
+.gelia-tienda-op-table tbody td {
+    padding: 0.7rem 0.85rem;
+    border-bottom: 1px solid color-mix(in srgb, var(--theme-border) 70%, transparent);
+    vertical-align: middle;
+}
+
+.gelia-tienda-op-table tbody tr {
+    transition: background-color 0.15s ease;
+}
+
+.gelia-tienda-op-table tbody tr:hover {
+    background: color-mix(in srgb, var(--theme-element-bg) 85%, var(--color-primario) 6%);
+}
+
+.gelia-tienda-op-table tbody tr[data-alerta='true'] {
+    box-shadow: inset 3px 0 0 var(--color-peligro);
+}
+
+.gelia-tienda-op-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.gelia-tienda-op-fila-link {
+    font-weight: 700;
+    color: var(--theme-text-main);
+    text-decoration: none;
+}
+
+.gelia-tienda-op-fila-link:hover {
+    color: var(--color-primario);
+}
+
+.gelia-tienda-op-panel-acciones {
+    position: sticky;
+    top: 1rem;
+}
+
+.gelia-tienda-op-stepper {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 0.5rem;
+    align-items: center;
+}
+
+.gelia-tienda-op-step {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.35rem 0.65rem;
+    border-radius: 999px;
+    border: 1px solid var(--theme-border);
+    color: var(--theme-text-muted);
+    background: var(--theme-element-bg);
+}
+
+.gelia-tienda-op-step[data-hecho='true'] {
+    border-color: color-mix(in srgb, var(--color-exito) 40%, var(--theme-border));
+    color: var(--theme-text-main);
+}
+
+.gelia-tienda-op-step__dot {
+    width: 0.4rem;
+    height: 0.4rem;
+    border-radius: 999px;
+    background: var(--theme-border);
+}
+
+.gelia-tienda-op-step[data-hecho='true'] .gelia-tienda-op-step__dot {
+    background: var(--color-exito);
+}
+
+.gelia-tienda-op-refine {
+    animation: gelia-tienda-op-refine-in 0.22s ease-out;
+}
+
+@keyframes gelia-tienda-op-refine-in {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .gelia-tienda-op-metric,
+    .gelia-tienda-op-table tbody tr,
+    .gelia-tienda-op-refine {
+        transition: none;
+        animation: none;
+    }
+}

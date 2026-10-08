@@ -50,6 +50,7 @@ export const GELIA_PREVENT_OVERFLOW_X = 'overflow-x-hidden max-w-full';
 export const GELIA_SEGMENT_TABS_SCROLL = 'gelia-segment-tabs-scroll';
 export const GELIA_SEGMENT_TABS_TRACK = 'gelia-segment-tabs-track';
 export const GELIA_SEGMENT_TABS_TRACK_COMPACT = 'gelia-segment-tabs-track gelia-segment-tabs-track--compact';
+export const GELIA_SEGMENT_TABS_TRACK_SCROLL = 'gelia-segment-tabs-track gelia-segment-tabs-track--scroll';
 
 export const GELIA_LISTADO_GRID =
     'grid grid-cols-1 w-full min-w-0 items-stretch gap-5 lg:grid-cols-2 lg:gap-6 2xl:grid-cols-3';

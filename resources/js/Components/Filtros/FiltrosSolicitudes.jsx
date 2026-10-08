@@ -1,6 +1,32 @@
 import React, { useEffect, useState } from 'react';
 import { Search, Filter, AlertOctagon, SlidersHorizontal, X, Calendar } from 'lucide-react';
 import RangoFechasPersonalizado from '@/Components/Filtros/RangoFechasPersonalizado';
+import { GELIA_CHIP, GELIA_SEGMENT_TABS_SCROLL, GELIA_SEGMENT_TABS_TRACK_COMPACT, THEME_INPUT, THEME_LABEL, THEME_SELECT } from '@/utils/geliaTheme';
+
+const TABS = [
+    { id: 'TODAS', label: 'Todas' },
+    { id: 'PENDIENTES', label: 'Pendientes' },
+    { id: 'RESPONDIDAS', label: 'Respondidas' },
+    { id: 'INCORRECTAS', label: 'Incorrectas' },
+    { id: 'CANCELADAS', label: 'Canceladas' },
+    { id: 'ELIMINADAS', label: 'Eliminadas' },
+];
+
+const ETIQUETA_PERIODO = {
+    HOY: 'Hoy',
+    AYER: 'Ayer',
+    SEMANA: 'Esta semana',
+    MES: 'Este mes',
+    PERSONALIZADO: 'Rango personalizado',
+};
+
+const ETIQUETA_MOTIVO = {
+    error_reportado: 'Reportadas (error)',
+    vencimiento_pago: 'Pago vencido',
+    pago_insuficiente: 'Pago insuficiente',
+};
+
+const FOCUS = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primario)]';
 
 /**
  * Filtros compartidos: módulo Solicitudes y Reportes de solicitudes financieras.
@@ -22,10 +48,7 @@ export default function FiltrosSolicitudes({
     etiquetaBuscar = 'Buscar solicitudes',
     mostrarEliminadas = false,
 }) {
-    const TABS = ['TODAS', 'PENDIENTES', 'RESPONDIDAS', 'INCORRECTAS', 'CANCELADAS'];
-    if (mostrarEliminadas) {
-        TABS.push('ELIMINADAS');
-    }
+    const tabs = mostrarEliminadas ? TABS : TABS.filter((tab) => tab.id !== 'ELIMINADAS');
 
     const [mostrarAdicionales, setMostrarAdicionales] = useState(
         filtrosActivos > 0 || tipoFecha !== 'TODAS'
@@ -76,30 +99,69 @@ export default function FiltrosSolicitudes({
         onLimpiarAdicionales?.();
     };
 
+    const quitarChip = (clave) => {
+        if (clave === 'q') {
+            setBusquedaLocal('');
+            onAplicarFiltros({ q: '' });
+            return;
+        }
+        if (clave === 'periodo') {
+            setTipoFechaLocal('TODAS');
+            setFechaInicioLocal('');
+            setFechaFinLocal('');
+            onAplicarFiltros({ tipo_fecha: 'TODAS', fecha_inicio: '', fecha_fin: '' });
+            return;
+        }
+        if (clave === 'vendedor') {
+            setVendedorLocal('');
+            onAplicarFiltros({ vendedor_id: '' });
+            return;
+        }
+        if (clave === 'motivo') {
+            setMotivoLocal('');
+            onAplicarFiltros({ motivo_incorrecta: '' });
+        }
+    };
+
+    const nombreResponsable = vendedores.find((v) => String(v.id) === String(filtroVendedor))?.name;
+    const etiquetaPeriodo = tipoFecha === 'PERSONALIZADO' && fechaInicio && fechaFin
+        ? `${fechaInicio} – ${fechaFin}`
+        : ETIQUETA_PERIODO[tipoFecha];
+
+    const chips = [
+        busqueda ? { clave: 'q', etiqueta: `Búsqueda: ${busqueda}` } : null,
+        tipoFecha && tipoFecha !== 'TODAS' ? { clave: 'periodo', etiqueta: etiquetaPeriodo || 'Periodo' } : null,
+        filtroVendedor ? { clave: 'vendedor', etiqueta: nombreResponsable || 'Responsable comercial' } : null,
+        filtroMotivo ? { clave: 'motivo', etiqueta: ETIQUETA_MOTIVO[filtroMotivo] || filtroMotivo } : null,
+    ].filter(Boolean);
+
     return (
-        <div className="space-y-4 animate-page-reveal" style={{ animationDelay: '100ms' }}>
-            <div className="flex flex-col lg:flex-row gap-4 items-stretch lg:items-center justify-between">
-                <div className="gelia-segment w-full lg:w-auto p-1 h-14 shadow-sm overflow-x-auto flex shrink-0">
-                    {TABS.map((tab) => (
-                        <button
-                            key={tab}
-                            type="button"
-                            onClick={() => onCambiarTab(tab)}
-                            className="gelia-segment-btn px-4 md:px-6 min-w-max flex-1 text-center"
-                            data-active={tabActiva === tab}
-                        >
-                            {tab}
-                        </button>
-                    ))}
+        <div className="space-y-3">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div className={`gelia-segment ${GELIA_SEGMENT_TABS_SCROLL} w-full p-1 lg:w-auto`}>
+                    <div className={GELIA_SEGMENT_TABS_TRACK_COMPACT} role="group" aria-label="Estado de la solicitud">
+                        {tabs.map((tab) => (
+                            <button
+                                key={tab.id}
+                                type="button"
+                                onClick={() => onCambiarTab(tab.id)}
+                                className={`gelia-segment-btn ${FOCUS}`}
+                                data-active={tabActiva === tab.id}
+                                aria-pressed={tabActiva === tab.id}
+                            >
+                                {tab.label}
+                            </button>
+                        ))}
+                    </div>
                 </div>
 
-                <div className="flex flex-col sm:flex-row gap-3 w-full lg:flex-1 lg:max-w-2xl">
-                    <div className="flex flex-col sm:flex-row gap-2 flex-1 min-w-0">
-                        <div className="relative flex-1 min-w-0">
-                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 theme-text-muted pointer-events-none" />
+                <div className="flex w-full flex-col gap-2 sm:flex-row lg:max-w-xl lg:flex-1">
+                    <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row">
+                        <div className="theme-field-with-icon relative min-w-0 flex-1">
+                            <Search className="theme-field-icon" aria-hidden="true" />
                             <input
-                                type="text"
-                                placeholder="Buscar folio o cliente..."
+                                type="search"
+                                placeholder="Buscar folio o cliente…"
                                 value={busquedaLocal}
                                 onChange={(e) => setBusquedaLocal(e.target.value)}
                                 onKeyDown={(e) => {
@@ -110,17 +172,18 @@ export default function FiltrosSolicitudes({
                                 }}
                                 enterKeyHint="search"
                                 autoComplete="off"
-                                className="w-full px-12 py-4 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none focus:ring-2 transition-all shadow-sm"
+                                aria-label="Buscar folio o cliente"
+                                className={`${THEME_INPUT} w-full`}
                             />
                         </div>
                         <button
                             type="button"
                             onClick={aplicarConsulta}
-                            className="w-full sm:w-auto shrink-0 px-6 py-4 rounded-xl font-black uppercase text-[10px] tracking-widest text-white hover:scale-105 transition-all shadow-md flex items-center justify-center gap-2"
+                            className={`inline-flex w-full shrink-0 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white sm:w-auto ${FOCUS}`}
                             style={{ backgroundColor: 'var(--color-primario)' }}
                             aria-label={etiquetaBuscar}
                         >
-                            <Search className="w-4 h-4 shrink-0" />
+                            <Search className="h-4 w-4 shrink-0" aria-hidden="true" />
                             Buscar
                         </button>
                     </div>
@@ -128,12 +191,12 @@ export default function FiltrosSolicitudes({
                         type="button"
                         onClick={() => setMostrarAdicionales((v) => !v)}
                         aria-expanded={mostrarAdicionales}
-                        className={`flex items-center justify-center gap-2 px-4 py-3 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all shrink-0 w-full sm:w-auto ${mostrarAdicionales || filtrosActivos > 0 || tipoFecha !== 'TODAS' ? 'border-[var(--color-primario)] text-[var(--color-primario)] bg-[color-mix(in_srgb,var(--color-primario)_10%,transparent)]' : 'theme-border theme-element theme-text-muted hover:border-[var(--color-primario)]'}`}
+                        className={`inline-flex w-full shrink-0 items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-medium transition-colors sm:w-auto ${FOCUS} ${mostrarAdicionales || filtrosActivos > 0 || tipoFecha !== 'TODAS' ? 'border-[var(--color-primario)] text-[var(--color-primario)] bg-[color-mix(in_srgb,var(--color-primario)_10%,transparent)]' : 'theme-border theme-element theme-text-muted hover:border-[var(--color-primario)]'}`}
                     >
-                        <SlidersHorizontal className="w-4 h-4 shrink-0" />
-                        <span>Más filtros</span>
+                        <SlidersHorizontal className="h-4 w-4 shrink-0" aria-hidden="true" />
+                        <span>Filtros</span>
                         {filtrosActivos > 0 && (
-                            <span className="w-5 h-5 rounded-full text-white text-[9px] flex items-center justify-center" style={{ backgroundColor: 'var(--color-primario)' }}>
+                            <span className="flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px] font-semibold text-white tabular-nums" style={{ backgroundColor: 'var(--color-primario)' }}>
                                 {filtrosActivos}
                             </span>
                         )}
@@ -141,43 +204,99 @@ export default function FiltrosSolicitudes({
                 </div>
             </div>
 
+            {chips.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                    {chips.map((chip) => (
+                        <button
+                            key={chip.clave}
+                            type="button"
+                            onClick={() => quitarChip(chip.clave)}
+                            className={`${GELIA_CHIP} max-w-full gap-1.5 ${FOCUS}`}
+                            title={chip.etiqueta}
+                        >
+                            <span className="truncate">{chip.etiqueta}</span>
+                            <X className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                            <span className="sr-only">Quitar {chip.etiqueta}</span>
+                        </button>
+                    ))}
+                </div>
+            )}
+
             {mostrarAdicionales && (
-                <div className="theme-surface rounded-2xl border theme-border p-4 md:p-5 shadow-sm space-y-4">
+                <div className="theme-surface space-y-4 rounded-xl border theme-border p-4">
                     <div className="flex items-center justify-between gap-3">
-                        <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted flex items-center gap-2 m-0">
-                            <Filter className="w-3.5 h-3.5" /> Más filtros
+                        <p className="m-0 flex items-center gap-2 text-sm font-medium theme-text-main">
+                            <Filter className="h-3.5 w-3.5" aria-hidden="true" /> Filtros
                         </p>
-                        <p className="text-[9px] font-bold theme-text-muted m-0 hidden sm:block">
-                            Los cambios se aplican al pulsar «Buscar»
+                        <p className="m-0 hidden text-xs theme-text-muted sm:block">
+                            Los cambios se aplican al pulsar Buscar
                         </p>
                         {(filtrosActivos > 0 || tipoFecha !== 'TODAS') && (
                             <button
                                 type="button"
                                 onClick={limpiarPanelAdicionales}
-                                className="text-[9px] font-black uppercase tracking-widest theme-text-muted hover:text-red-500 flex items-center gap-1 transition-colors shrink-0"
+                                className={`inline-flex shrink-0 items-center gap-1 text-sm theme-text-muted transition-colors hover:text-[var(--color-peligro)] ${FOCUS}`}
                             >
-                                <X className="w-3 h-3" /> Limpiar
+                                <X className="h-3.5 w-3.5" aria-hidden="true" /> Limpiar
                             </button>
                         )}
                     </div>
 
-                    <div className="flex flex-col gap-1.5">
-                        <label htmlFor={`${idPrefixFechas}-tipo`} className="text-[10px] font-black uppercase tracking-widest theme-text-muted flex items-center gap-1">
-                            <Calendar className="w-3 h-3" /> Periodo
-                        </label>
-                        <select
-                            id={`${idPrefixFechas}-tipo`}
-                            value={tipoFechaLocal}
-                            onChange={(e) => setTipoFechaLocal(e.target.value)}
-                            className="w-full px-4 py-2.5 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none focus:ring-2 cursor-pointer"
-                        >
-                            <option value="TODAS">Histórico completo</option>
-                            <option value="HOY">Solo hoy</option>
-                            <option value="AYER">Ayer</option>
-                            <option value="SEMANA">Esta semana</option>
-                            <option value="MES">Este mes</option>
-                            <option value="PERSONALIZADO">Rango personalizado</option>
-                        </select>
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                        <div className="flex flex-col gap-1.5">
+                            <label htmlFor={`${idPrefixFechas}-tipo`} className={`${THEME_LABEL} flex items-center gap-1`}>
+                                <Calendar className="h-3 w-3" aria-hidden="true" /> Periodo
+                            </label>
+                            <select
+                                id={`${idPrefixFechas}-tipo`}
+                                value={tipoFechaLocal}
+                                onChange={(e) => setTipoFechaLocal(e.target.value)}
+                                className={`${THEME_SELECT} w-full`}
+                            >
+                                <option value="TODAS">Histórico completo</option>
+                                <option value="HOY">Solo hoy</option>
+                                <option value="AYER">Ayer</option>
+                                <option value="SEMANA">Esta semana</option>
+                                <option value="MES">Este mes</option>
+                                <option value="PERSONALIZADO">Rango personalizado</option>
+                            </select>
+                        </div>
+
+                        <div className="flex flex-col gap-1.5">
+                            <label htmlFor={`${idPrefixFechas}-responsable`} className={THEME_LABEL}>Responsable comercial</label>
+                            <select
+                                id={`${idPrefixFechas}-responsable`}
+                                value={vendedorLocal}
+                                onChange={(e) => setVendedorLocal(e.target.value)}
+                                className={`${THEME_SELECT} w-full`}
+                            >
+                                <option value="">Todos los responsables</option>
+                                {vendedores.map((v) => (
+                                    <option key={v.id} value={v.id}>{v.name}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div className="flex flex-col gap-1.5">
+                            <label htmlFor={`${idPrefixFechas}-motivo`} className={`${THEME_LABEL} flex items-center gap-1`}>
+                                <AlertOctagon className="h-3 w-3" aria-hidden="true" /> Motivo de incidencia
+                            </label>
+                            <select
+                                id={`${idPrefixFechas}-motivo`}
+                                value={motivoLocal}
+                                onChange={(e) => setMotivoLocal(e.target.value)}
+                                className={`${THEME_SELECT} w-full`}
+                                aria-describedby={`${idPrefixFechas}-motivo-ayuda`}
+                            >
+                                <option value="">Todos los motivos</option>
+                                <option value="error_reportado">Reportadas (error)</option>
+                                <option value="vencimiento_pago">Pago vencido</option>
+                                <option value="pago_insuficiente">Pago insuficiente</option>
+                            </select>
+                            <p id={`${idPrefixFechas}-motivo-ayuda`} className="m-0 text-xs theme-text-muted">
+                                Al filtrar por motivo se muestran solicitudes incorrectas, incluyendo registros anteriores sin motivo asignado.
+                            </p>
+                        </div>
                     </div>
 
                     {tipoFechaLocal === 'PERSONALIZADO' && (
@@ -192,52 +311,6 @@ export default function FiltrosSolicitudes({
                             }}
                         />
                     )}
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="flex flex-col gap-1.5">
-                            <label className="text-[10px] font-black uppercase tracking-widest theme-text-muted">Asesor / Vendedor</label>
-                            <select
-                                value={vendedorLocal}
-                                onChange={(e) => setVendedorLocal(e.target.value)}
-                                className="w-full px-4 py-2.5 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none focus:ring-2 cursor-pointer"
-                            >
-                                <option value="">Todos los asesores</option>
-                                {vendedores.map((v) => (
-                                    <option key={v.id} value={v.id}>{v.name}</option>
-                                ))}
-                            </select>
-                        </div>
-                        <div className="flex flex-col gap-1.5">
-                            <label className="text-[10px] font-black uppercase tracking-widest theme-text-muted flex items-center gap-1">
-                                <AlertOctagon className="w-3 h-3" /> Motivo incidencia
-                            </label>
-                            <select
-                                value={motivoLocal}
-                                onChange={(e) => setMotivoLocal(e.target.value)}
-                                className="w-full px-4 py-2.5 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none focus:ring-2 cursor-pointer"
-                            >
-                                <option value="">Todos los motivos</option>
-                                <option value="error_reportado">Reportadas (error)</option>
-                                <option value="vencimiento_pago">Pago vencido</option>
-                                <option value="pago_insuficiente">Pago insuficiente</option>
-                            </select>
-                            <p className="text-[9px] font-bold theme-text-muted italic">
-                                Al filtrar por motivo se muestran solicitudes incorrectas, incluyendo registros anteriores sin motivo asignado.
-                            </p>
-                        </div>
-                    </div>
-
-                    <div className="flex justify-end pt-1 sm:hidden">
-                        <button
-                            type="button"
-                            onClick={aplicarConsulta}
-                            className="w-full px-6 py-3 rounded-xl font-black uppercase text-[10px] tracking-widest text-white flex items-center justify-center gap-2"
-                            style={{ backgroundColor: 'var(--color-primario)' }}
-                        >
-                            <Search className="w-4 h-4" />
-                            Buscar
-                        </button>
-                    </div>
                 </div>
             )}
         </div>

@@ -4,7 +4,6 @@
  * Self-check Fase 5 — Envío Bodega y Traspaso Tienda → CEDIS.
  * Uso: php tests/Unit/ControlPedidos/check_envio_bodega_traspaso.php
  */
-
 $fallos = 0;
 $root = dirname(__DIR__, 3);
 require_once __DIR__.'/_routes_helper.php';
@@ -20,7 +19,7 @@ $checks = [
     ['ruta confirmar salida', str_contains(control_pedidos_routes_content($root), 'confirmar-salida')],
     ['estados LISTA_PARA_TRASLADO', str_contains(file_get_contents($root.'/app/Models/ControlPedidos/PedidoBmaTareaPreparacion.php'), 'LISTA_PARA_TRASLADO')],
     ['CODIGOS_FASE5', str_contains(file_get_contents($root.'/app/Models/ControlPedidos/CatalogoModalidadPreparacionPedido.php'), 'CODIGOS_FASE5')],
-    ['tabs LISTAS_TRASLADO', str_contains(file_get_contents($root.'/resources/js/Pages/ControlPedidos/Tienda/Partials/FiltrosTienda.jsx'), 'LISTAS_TRASLADO')],
+    ['tabs LISTAS_TRASLADO', str_contains(file_get_contents($root.'/resources/js/Pages/ControlPedidos/Partials/pedidosBmaStyles.js'), 'LISTAS_TRASLADO')],
     ['UI confirmar salida', str_contains(file_get_contents($root.'/resources/js/Pages/ControlPedidos/Tienda/Show.jsx'), 'confirmar_salida')],
     ['badge Gestión de pedido', str_contains(file_get_contents($root.'/resources/js/Pages/Traspasos/Cedis/Index.jsx'), 'Gestión de pedido')],
     ['progreso Ventas', str_contains(file_get_contents($root.'/resources/js/Pages/ControlPedidos/Partials/ModalFormPedidoLegado.jsx'), 'progresoTraslado')],

@@ -1,56 +1,52 @@
 import React from 'react';
 import { Package, Clock } from 'lucide-react';
 import DashboardAdaptiveWidget from '../../../Components/Dashboard/DashboardAdaptiveWidget';
+import DashboardWidgetStatus from '../../../Components/Dashboard/DashboardWidgetStatus';
+import DashboardWidgetSummaryChip from '../../../Components/Dashboard/DashboardWidgetSummaryChip';
+import { GELIA_ESTADO_VIVO_TONO } from '../../../utils/geliaTheme';
 
 const FASES = [
-    { key: 'pendiente_auxiliar', label: 'Auxiliar', color: 'text-amber-600 bg-amber-500/10 border-amber-500/20' },
-    { key: 'en_cedis', label: 'CEDIS', color: 'text-blue-600 bg-blue-500/10 border-blue-500/20' },
-    { key: 'borradores', label: 'Borradores', color: 'text-slate-500 bg-slate-500/10 border-slate-500/20' },
-    { key: 'enviados', label: 'Enviados', color: 'text-emerald-600 bg-emerald-500/10 border-emerald-500/20' },
-    { key: 'rechazadas', label: 'Rechazadas', color: 'text-red-600 bg-red-500/10 border-red-500/20' },
+    { key: 'pendiente_auxiliar', label: 'Auxiliar', tono: 'aviso' },
+    { key: 'en_cedis', label: 'CEDIS', tono: 'info' },
+    { key: 'borradores', label: 'Borradores', tono: 'neutro' },
+    { key: 'enviados', label: 'Enviados', tono: 'exito' },
+    { key: 'rechazadas', label: 'Rechazadas', tono: 'error' },
 ];
 
 export default function WidgetPedidosBma({ metricas = {}, variant = 'desktop' }) {
     const atascados = (metricas.pendiente_auxiliar ?? 0) + (metricas.en_cedis ?? 0);
     const total = metricas.todas ?? 0;
 
+    const badge = atascados > 0 ? (
+        <DashboardWidgetStatus tono="aviso" icon={Clock}>
+            {atascados} en cola
+        </DashboardWidgetStatus>
+    ) : (
+        <DashboardWidgetStatus tono="exito">Al día</DashboardWidgetStatus>
+    );
+
     return (
         <DashboardAdaptiveWidget
             variant={variant}
-            title="Pedidos_"
+            title="Pedidos"
             icon={Package}
-            iconClassName="text-blue-500"
             href={route('control_pedidos.index')}
             ctaLabel="Ver pedidos"
             minimalCount={atascados}
             minimalCountLabel={atascados > 0 ? 'En cola' : 'Al día'}
-            badge={atascados > 0 ? (
-                <span className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-amber-600 bg-amber-500/10 px-2 py-1 rounded-md border border-amber-500/20 shrink-0">
-                    <Clock className="w-3 h-3" />
-                    {atascados} en cola
-                </span>
-            ) : (
-                <span className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-emerald-500 bg-emerald-500/10 px-2 py-1 rounded-md border border-emerald-500/20 shrink-0">
-                    <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full" />
-                    OK
-                </span>
-            )}
-            summary={
-                <span className="text-[9px] font-black uppercase px-2 py-1 rounded-lg theme-element border theme-border theme-text-muted">
-                    {total} totales
-                </span>
-            }
+            badge={badge}
+            summary={<DashboardWidgetSummaryChip tono="neutro">{total} totales</DashboardWidgetSummaryChip>}
         >
-            <div className="flex flex-col gap-2">
-                {FASES.map(({ key, label, color }) => (
-                    <div
-                        key={key}
-                        className="flex items-center justify-between theme-element border theme-border p-3 rounded-2xl"
-                    >
-                        <span className={`text-[9px] font-black uppercase px-2 py-1 rounded-lg border ${color}`}>
+            <div className="dashboard-phase-table" role="table" aria-label="Pedidos por fase">
+                {FASES.map(({ key, label, tono }) => (
+                    <div key={key} className="dashboard-phase-table__row" role="row">
+                        <span
+                            className={`gelia-estado-vivo gelia-estado-vivo--compacto text-[10px] font-semibold ${GELIA_ESTADO_VIVO_TONO[tono]}`}
+                            role="cell"
+                        >
                             {label}
                         </span>
-                        <span className="text-sm font-black italic theme-text-main tabular-nums">
+                        <span className="dashboard-phase-table__value tabular-nums theme-text-main" role="cell">
                             {metricas[key] ?? 0}
                         </span>
                     </div>

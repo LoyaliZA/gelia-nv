@@ -2,13 +2,14 @@ import React, { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import {
-    Clock, Plus, MoreVertical, Edit2, CheckCircle2, AlertOctagon,
+    Clock, Plus, MoreVertical, Edit2, CheckCircle2, AlertOctagon, Sparkles,
     History, CheckSquare, CreditCard, User, Copy, Check, Tag, TrendingUp, ShieldAlert, Users,
     ChevronLeft, ChevronRight, Trash2, FileImage, X, MessageSquare, AlertTriangle, Eye, Ban, XCircle,
-    FileSpreadsheet, FileText, FolderOpen, Download, Calculator
+    FileSpreadsheet, FileText, FolderOpen, Download, Calculator, ChevronDown
 } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
 import GeliaLoader from '../../Components/GeliaLoader';
+import GeliaPageShell from '../../Components/GeliaPageShell';
 
 import ModalFormSolicitud from './Partials/ModalFormSolicitud';
 import ModalRespuestaSolicitud from './Partials/ModalRespuestaSolicitud';
@@ -18,10 +19,16 @@ import ModalRespuestaConsulta from './Partials/ModalRespuestaConsulta';
 import ModalEjercicioEscalonamiento from './Partials/ModalEjercicioEscalonamiento';
 import FiltrosSolicitudes from '@/Components/Filtros/FiltrosSolicitudes';
 import useFiltrosSolicitudesPage from '@/hooks/useFiltrosSolicitudesPage';
-import { geliaCardClass } from '../../utils/geliaTheme';
-import { badgeClaseEstadoSolicitud } from './Partials/solicitudesStyles';
+import { GELIA_ESTADO_VIVO_TONO, THEME_BTN_PRIMARY } from '../../utils/geliaTheme';
+import { badgeClaseEstadoSolicitud, claseEtiquetaLista, claseEtiquetaTipoCliente, esListaDiamante, PANEL_AVISO, PANEL_ERROR, PANEL_EXITO, PANEL_NOTA } from './Partials/solicitudesStyles';
 import { puedeEmitirConsultaSolicitud, puedeResponderConsultaSolicitud } from '../../utils/permisos';
 import { idEstadoPorNombre } from '../Facturas/Partials/facturasFiltros';
+
+const BTN_SECUNDARIO = 'inline-flex items-center justify-center gap-2 rounded-xl border theme-border theme-element px-3 py-2 text-sm font-medium theme-text-main transition-colors duration-200 hover:border-[var(--color-primario)] hover:text-[var(--color-primario)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primario)]';
+const ITEM_EXPORTAR = 'flex items-center gap-2 rounded-lg px-3 py-2 text-sm theme-text-main hover:bg-black/5 focus-visible:outline focus-visible:outline-2 dark:hover:bg-white/5';
+const CHIP_AVISO = `gelia-estado-vivo gelia-estado-vivo--compacto gap-1 text-xs font-medium ${GELIA_ESTADO_VIVO_TONO.aviso}`;
+const CHIP_ERROR = `gelia-estado-vivo gelia-estado-vivo--compacto gap-1 text-xs font-medium ${GELIA_ESTADO_VIVO_TONO.error}`;
+const CHIP_INFO = `gelia-estado-vivo gelia-estado-vivo--compacto gap-1 text-xs font-medium ${GELIA_ESTADO_VIVO_TONO.info}`;
 
 // Función para calcular tiempo relativo y formatear lecturas de marcas de tiempo
 const formatearTiempoRelativo = (fechaString) => {
@@ -60,43 +67,48 @@ const EtiquetasOperacion = ({ solicitud, listas }) => {
     const esCambioLista = nombreProceso.toUpperCase().includes('LISTA');
     const objLista = solicitud.lista_descuento || solicitud.listaDescuento;
     const objTipo = solicitud.tipo_cliente || solicitud.tipoCliente;
-    const vendedoraTag = solicitud.vendedor?.name?.split(' ').slice(0, 2).join(' ') || 'Asesor';
+    const responsableTag = solicitud.vendedor?.name?.split(' ').slice(0, 2).join(' ') || 'Responsable';
 
     const listaActual = solicitud.cliente?.lista_descuento?.nombre || solicitud.cliente?.lista_actual || 'Público General';
 
+    const etiquetaLista = (nombre, contenido) => (
+        esListaDiamante(nombre) ? (
+            <span className={claseEtiquetaLista(nombre)}>
+                <Sparkles className="h-3 w-3 text-cyan-600 dark:text-cyan-300" aria-hidden="true" />
+                <span className="text-cyan-700 drop-shadow-sm dark:text-cyan-300">{contenido}</span>
+            </span>
+        ) : (
+            <span className={claseEtiquetaLista(nombre)}>{contenido}</span>
+        )
+    );
+
     return (
         <div className="flex flex-wrap gap-1.5">
-            <span className="text-[9px] font-black uppercase px-2 py-1 rounded-md bg-slate-500/10 text-slate-500 border border-slate-500/20 flex items-center gap-1">
+            <span className="inline-flex items-center gap-1 rounded-md border theme-border bg-black/[0.04] px-2 py-1 text-[11px] font-medium uppercase tracking-wide theme-text-muted dark:bg-white/[0.06]">
                 Lista actual: {listaActual}
             </span>
-            {esCambioLista && objLista && (
-                <span className="text-[9px] font-black uppercase px-2 py-1 rounded-md bg-blue-500/10 text-blue-500 border border-blue-500/20 flex items-center gap-1">
-                    <TrendingUp className="w-3 h-3" /> Ascenso a: {objLista.nombre}
-                </span>
-            )}
+            {esCambioLista && objLista && etiquetaLista(objLista.nombre, <><TrendingUp className="h-3 w-3" aria-hidden="true" /> Ascenso a: {objLista.nombre}</>)}
             {esTag && (
-                <span className="text-[9px] font-black uppercase px-2 py-1 rounded-md bg-amber-500/10 text-amber-500 border border-amber-500/20 flex items-center gap-1">
-                    <Tag className="w-3 h-3" /> TAG: {vendedoraTag}
+                <span className={`${CHIP_AVISO} normal-case tracking-normal`}>
+                    <Tag className="h-3 w-3" aria-hidden="true" /> TAG: {responsableTag}
                 </span>
             )}
             {objTipo && (
-                <span className="text-[9px] font-black uppercase px-2 py-1 rounded-md bg-indigo-500/10 text-indigo-500 border border-indigo-500/20 flex items-center gap-1">
-                    <Users className="w-3 h-3" /> {objTipo.nombre}
+                <span className={claseEtiquetaTipoCliente(objTipo.nombre)}>
+                    <Users className="h-3 w-3" aria-hidden="true" /> {objTipo.nombre}
                 </span>
             )}
             {solicitud.compra_en_tienda && (
-                <span className="text-[9px] font-black uppercase px-2 py-1 rounded-md bg-[#cd7f32]/15 text-[#b87333] dark:text-[#daa520] border border-[#cd7f32]/30 flex items-center gap-1">
-                    Compra en Tienda
-                </span>
+                <span className={claseEtiquetaLista('Bronce')}>Compra en tienda</span>
             )}
             {solicitud.compra_en_tienda_solo_tag && (
-                <span className="text-[9px] font-black uppercase px-2 py-1 rounded-md bg-sky-500/15 text-sky-600 dark:text-sky-400 border border-sky-500/30 flex items-center gap-1">
-                    <Tag className="w-3 h-3" /> Compra Realizada: Solicitar tag
+                <span className={`${CHIP_INFO} normal-case tracking-normal`}>
+                    <Tag className="h-3 w-3" aria-hidden="true" /> Compra realizada: solicitar tag
                 </span>
             )}
             {solicitud.cancelacion_solicitada_at && solicitud.estado?.nombre !== 'Cancelada' && (
-                <span className="text-[9px] font-black uppercase px-2 py-1 rounded-md bg-red-500/10 text-red-600 border border-red-500/20 flex items-center gap-1">
-                    <Ban className="w-3 h-3" /> Cancelación solicitada
+                <span className={CHIP_ERROR}>
+                    <Ban className="h-3 w-3" aria-hidden="true" /> Cancelación solicitada
                 </span>
             )}
         </div>
@@ -137,20 +149,23 @@ const RespuestaConsultaEncargada = ({ solicitud, auth, onMarcarLeido, procesando
     const temas = [consulta.consulta_tag && 'TAG', consulta.consulta_lista && 'Lista'].filter(Boolean);
     const esPositiva = consulta.respuesta_positiva;
 
+    const tono = esPositiva ? 'theme-text-exito' : 'theme-text-peligro';
+    const panel = esPositiva ? PANEL_EXITO : PANEL_ERROR;
+
     return (
-        <div className={`mt-3 p-4 rounded-2xl border flex flex-col gap-3 shadow-sm ${esPositiva ? 'bg-emerald-500/10 border-emerald-500/25' : 'bg-red-500/10 border-red-500/25'}`}>
+        <div className={`mt-2 flex flex-col gap-2 ${panel}`}>
             <div className="flex items-start justify-between gap-3">
-                <div className="flex items-start gap-2 flex-1">
-                    <MessageSquare className={`w-4 h-4 shrink-0 mt-0.5 ${esPositiva ? 'text-emerald-500' : 'text-red-500'}`} />
-                    <div className="flex-1">
-                        <p className={`text-[9px] font-black uppercase tracking-widest mb-1 ${esPositiva ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
-                            Respuesta de encargada · {temas.join(' + ')}
+                <div className="flex min-w-0 flex-1 items-start gap-2">
+                    <MessageSquare className={`mt-0.5 h-4 w-4 shrink-0 ${tono}`} aria-hidden="true" />
+                    <div className="min-w-0 flex-1">
+                        <p className={`mb-0.5 text-xs font-medium ${tono}`}>
+                            Respuesta de supervisión · {temas.join(' + ')}
                         </p>
-                        <p className="text-[10px] font-bold theme-text-muted mb-1">
-                            {consulta.encargada?.name || 'Encargada'} · {esPositiva ? 'Confirmada' : 'Rechazada'}
+                        <p className="mb-0.5 text-xs theme-text-muted">
+                            {consulta.encargada?.name || 'Supervisión'} · {esPositiva ? 'Confirmada' : 'Rechazada'}
                         </p>
                         {consulta.comentario_encargada && (
-                            <p className="text-xs font-bold theme-text-main italic leading-tight">{consulta.comentario_encargada}</p>
+                            <p className="text-xs leading-snug theme-text-main">{consulta.comentario_encargada}</p>
                         )}
                     </div>
                 </div>
@@ -158,10 +173,9 @@ const RespuestaConsultaEncargada = ({ solicitud, auth, onMarcarLeido, procesando
                     type="button"
                     disabled={procesando}
                     onClick={() => onMarcarLeido(solicitud.id, consulta.id)}
-                    className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest text-white transition-transform hover:scale-105 disabled:opacity-50"
-                    style={{ backgroundColor: 'var(--color-primario)' }}
+                    className={`${THEME_BTN_PRIMARY} theme-btn-primary--compact shrink-0 disabled:opacity-50`}
                 >
-                    <Eye className="w-3.5 h-3.5" /> Leído
+                    <Eye className="h-3.5 w-3.5" aria-hidden="true" /> Leído
                 </button>
             </div>
             {consulta.evidencia_respuesta_path && (
@@ -207,13 +221,8 @@ const FeedbackYComentarios = ({ solicitud }) => {
 
     if (!tieneObservacion && !tieneFeedback && !evidenciaAdmin) return null;
 
-    const colorContenedor = esAlertaPago
-        ? 'bg-amber-500/10 border-amber-500/25'
-        : (esError ? 'bg-red-500/10 border-red-500/25' : 'bg-emerald-500/10 border-emerald-500/25');
-
     const Icono = esAlertaPago ? AlertTriangle : (esError ? AlertOctagon : CheckCircle2);
-    const colorIcono = esAlertaPago ? 'text-amber-500' : (esError ? 'text-red-500' : 'text-emerald-500');
-    const colorTexto = esAlertaPago ? 'text-amber-600 dark:text-amber-400' : (esError ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400');
+    const tono = esAlertaPago ? 'theme-text-aviso' : (esError ? 'theme-text-peligro' : 'theme-text-exito');
     const autor = ultimaAuditoria?.usuario?.name?.trim();
     const estadoAnteriorNombre = ultimaAuditoria?.estado_anterior?.nombre
         || ultimaAuditoria?.estadoAnterior?.nombre
@@ -221,8 +230,8 @@ const FeedbackYComentarios = ({ solicitud }) => {
     const esRespuestaACorreccion = !esError && esAprobada && estadoAnteriorNombre === 'Incorrecta';
 
     let titulo;
-    if (esAlertaPago) {
-        titulo = 'ALERTA DE AJUSTE DE LISTA';
+        if (esAlertaPago) {
+        titulo = 'Alerta de ajuste de lista';
     } else if (esVencimiento || esMotivoVencimientoPago(motivoUltimo)) {
         titulo = 'Pago vencido · Sistema';
     } else if (esSistema) {
@@ -235,35 +244,37 @@ const FeedbackYComentarios = ({ solicitud }) => {
         titulo = autor ? `Respuesta de ${autor}` : 'Respuesta';
     }
 
+    const panel = esAlertaPago ? PANEL_AVISO : (esError ? PANEL_ERROR : PANEL_EXITO);
+
     return (
-        <div className="mt-3 flex flex-col gap-2">
+        <div className="mt-2 flex flex-col gap-1.5">
             {tieneObservacion && !esAlertaPago && (
-                <div className="p-3 rounded-2xl border theme-element theme-border flex items-start gap-2 shadow-sm">
-                    <MessageSquare className="w-4 h-4 theme-text-muted mt-0.5 shrink-0" />
-                    <div>
-                        <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted mb-0.5">Nota de Vendedora</p>
-                        <p className="text-xs font-bold theme-text-main italic leading-snug">{solicitud.observaciones_vendedor}</p>
+                <div className={`${PANEL_NOTA} flex items-start gap-2`}>
+                    <MessageSquare className="mt-0.5 h-4 w-4 shrink-0 theme-text-muted" aria-hidden="true" />
+                    <div className="min-w-0">
+                        <p className="mb-0.5 text-xs font-medium theme-text-muted">Nota</p>
+                        <p className="text-xs leading-snug theme-text-main">{solicitud.observaciones_vendedor}</p>
                     </div>
                 </div>
             )}
 
             {(esError || esAprobada || esAlertaPago) && (
-                <div className={`p-3 rounded-2xl border flex flex-col gap-2 shadow-sm ${colorContenedor}`}>
+                <div className={`${panel} flex flex-col gap-1.5`}>
                     <div className="flex items-start gap-2">
-                        <Icono className={`w-4 h-4 shrink-0 mt-0.5 ${colorIcono}`} />
-                        <div className="flex-1">
-                            <p className={`text-[9px] font-black uppercase tracking-widest mb-0.5 ${colorTexto}`}>
+                        <Icono className={`mt-0.5 h-4 w-4 shrink-0 ${tono}`} aria-hidden="true" />
+                        <div className="min-w-0 flex-1">
+                            <p className={`mb-0.5 text-xs font-medium ${tono}`}>
                                 {titulo}
                             </p>
                             {motivoUltimo && (
-                                <p className={`text-xs font-bold italic leading-tight ${esAlertaPago ? 'text-amber-700 dark:text-amber-500' : 'theme-text-main'}`}>
+                                <p className="text-xs leading-snug theme-text-main">
                                     {motivoUltimo}
                                 </p>
                             )}
                         </div>
                     </div>
                     {evidenciaAdmin && !esVencimiento && !esMotivoVencimientoPago(motivoUltimo) && (
-                        <div className="mt-1"><VisorImagenHover path={evidenciaAdmin} /></div>
+                        <VisorImagenHover path={evidenciaAdmin} />
                     )}
                 </div>
             )}
@@ -294,6 +305,98 @@ const listasInferioresParaCancelacion = (listas, solicitud) => {
     ).sort((a, b) => parseFloat(b.monto_requerido) - parseFloat(a.monto_requerido));
 };
 
+const TiemposSolicitud = ({ solicitud }) => (
+    <div className="mt-1 space-y-0.5">
+        <div className="flex items-center gap-1 text-xs theme-text-muted" title={solicitud.created_at}>
+            <Clock className="h-3 w-3" aria-hidden="true" /> Emitida: {formatearTiempoRelativo(solicitud.created_at)}
+        </div>
+        {solicitud.updated_at && solicitud.updated_at !== solicitud.created_at && (
+            <div className="flex items-center gap-1 text-xs theme-text-info" title={solicitud.updated_at}>
+                <History className="h-3 w-3" aria-hidden="true" /> Actualizada: {formatearTiempoRelativo(solicitud.updated_at)}
+            </div>
+        )}
+    </div>
+);
+
+const ClienteSolicitud = ({ solicitud, esHeredado, copiadoId, onCopiar }) => (
+    <div className="min-w-0">
+        <div className="mb-1 flex items-center gap-2">
+            <span className="rounded border theme-border theme-element px-1.5 py-0.5 text-xs font-medium theme-text-main">{solicitud.cliente?.numero_cliente || 'N/A'}</span>
+            {solicitud.cliente?.numero_cliente && (
+                <button type="button" onClick={(e) => onCopiar(e, solicitud.cliente.numero_cliente, solicitud.id)} className="rounded p-1 theme-text-muted transition-colors hover:text-[var(--color-primario)] focus-visible:outline focus-visible:outline-2" aria-label={`Copiar número de cliente ${solicitud.cliente.numero_cliente}`}>
+                    {copiadoId === solicitud.id ? <Check className="h-3 w-3 theme-text-exito" aria-hidden="true" /> : <Copy className="h-3 w-3" aria-hidden="true" />}
+                </button>
+            )}
+            {esHeredado && <span className={CHIP_INFO}><ShieldAlert className="h-3 w-3" aria-hidden="true" /> Heredado</span>}
+        </div>
+        <div className="truncate text-sm font-medium theme-text-main">{solicitud.cliente?.nombre || 'Nuevo prospecto'}</div>
+    </div>
+);
+
+const CotizacionSolicitud = ({ solicitud }) => {
+    const concluida = (solicitud.compra_en_tienda || solicitud.compra_en_tienda_solo_tag) && solicitud.pago_confirmado;
+    const tono = solicitud.pago_confirmado ? 'theme-text-exito' : 'theme-text-aviso';
+    const etiqueta = concluida ? 'Concluida' : (solicitud.pago_confirmado ? 'Pago confirmado' : 'Pago pendiente');
+    const panel = solicitud.pago_confirmado ? PANEL_EXITO : PANEL_AVISO;
+    return (
+        <div className="inline-flex flex-col items-start gap-1.5">
+            <div className="rounded-lg border theme-border theme-element px-2.5 py-1 text-sm font-semibold tabular-nums theme-text-main">{new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(solicitud.monto_cotizado)}</div>
+            <div className={`${panel} flex items-center gap-1 text-xs ${tono}`}>
+                {solicitud.pago_confirmado ? <CheckCircle2 className="h-3 w-3" aria-hidden="true" /> : <Clock className="h-3 w-3" aria-hidden="true" />}
+                {etiqueta}
+            </div>
+        </div>
+    );
+};
+
+const MotivoIncidencia = ({ motivo }) => (
+    <span className={`mt-1 ${CHIP_ERROR}`}>
+        <AlertOctagon className="h-3 w-3" aria-hidden="true" />
+        {motivo === 'vencimiento_pago' ? 'Pago vencido' : motivo === 'error_reportado' ? 'Error reportado' : motivo === 'pago_insuficiente' ? 'Pago insuficiente' : motivo}
+    </span>
+);
+
+const EstadoVacioLista = ({ hayFiltros, puedeCrear, onLimpiar, onCrear }) => (
+    <div className="rounded-xl border theme-border theme-surface px-6 py-10 text-center">
+        <p className="m-0 text-sm theme-text-main">
+            {hayFiltros ? 'Ninguna solicitud coincide con estos filtros.' : 'Aún no hay solicitudes.'}
+        </p>
+        <div className="mt-4 flex justify-center">
+            {hayFiltros ? (
+                <button type="button" onClick={onLimpiar} className={BTN_SECUNDARIO}>Limpiar filtros</button>
+            ) : puedeCrear ? (
+                <button type="button" onClick={onCrear} className={`${THEME_BTN_PRIMARY} theme-btn-primary--compact`}>
+                    <Plus className="h-4 w-4" aria-hidden="true" /> Nueva solicitud
+                </button>
+            ) : null}
+        </div>
+    </div>
+);
+
+const ConsultasPendientes = ({ solicitud }) => {
+    const pendientes = (solicitud.consultas || []).filter((c) => c.estado === 'pendiente');
+    if (!pendientes.length) return null;
+
+    return (
+        <div className="mt-1 flex flex-wrap gap-1.5">
+            {pendientes.map((c) => (
+                <React.Fragment key={c.id}>
+                    {c.consulta_tag && (
+                        <span className={CHIP_AVISO}>
+                            <MessageSquare className="h-3 w-3" aria-hidden="true" /> Consulta TAG
+                        </span>
+                    )}
+                    {c.consulta_lista && (
+                        <span className={CHIP_AVISO}>
+                            <MessageSquare className="h-3 w-3" aria-hidden="true" /> Consulta de lista
+                        </span>
+                    )}
+                </React.Fragment>
+            ))}
+        </div>
+    );
+};
+
 const tieneMotivoCancelacionVisible = (solicitud) => {
     const motivo = solicitud?.motivo_cancelacion?.trim();
     if (!motivo) return false;
@@ -311,28 +414,22 @@ const MotivoCancelacionBloque = ({ solicitud, compacto = false }) => {
     const listaRebajaNombre = obtenerListaRebajaNombre(solicitud);
 
     return (
-        <div
-            className={`${compacto ? 'mt-2' : 'mt-3'} p-3 rounded-2xl border flex flex-col gap-1.5 shadow-sm ${
-                pendiente
-                    ? 'bg-red-500/10 border-red-500/25'
-                    : 'theme-element theme-border'
-            }`}
-        >
+        <div className={`${compacto ? 'mt-2' : 'mt-2'} flex flex-col gap-1`}>
             <div className="flex items-start gap-2">
-                <Ban className={`w-4 h-4 shrink-0 mt-0.5 ${pendiente ? 'text-red-500' : 'theme-text-muted'}`} />
-                <div className="flex-1 min-w-0">
-                    <p className={`text-[9px] font-black uppercase tracking-widest mb-0.5 ${pendiente ? 'text-red-600 dark:text-red-400' : 'theme-text-muted'}`}>
+                <Ban className={`mt-0.5 h-4 w-4 shrink-0 ${pendiente ? 'theme-text-peligro' : 'theme-text-muted'}`} aria-hidden="true" />
+                <div className="min-w-0 flex-1">
+                    <p className={`mb-0.5 text-xs font-medium ${pendiente ? 'theme-text-peligro' : 'theme-text-muted'}`}>
                         {titulo}
                     </p>
                     {fechaSolicitud && pendiente && (
-                        <p className="text-[9px] font-bold theme-text-muted mb-1">Solicitada {fechaSolicitud}</p>
+                        <p className="mb-1 text-xs theme-text-muted">Solicitada {fechaSolicitud}</p>
                     )}
                     {listaRebajaNombre && (
-                        <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${pendiente ? 'text-red-700 dark:text-red-300' : 'theme-text-muted'}`}>
-                            Lista rebaja: {listaRebajaNombre}
+                        <p className={`mb-1 text-xs ${pendiente ? 'theme-text-peligro' : 'theme-text-muted'}`}>
+                            Lista de rebaja: {listaRebajaNombre}
                         </p>
                     )}
-                    <p className={`text-xs font-bold leading-snug whitespace-pre-wrap break-words ${pendiente ? 'text-red-800 dark:text-red-200' : 'theme-text-main italic'}`}>
+                    <p className="whitespace-pre-wrap break-words text-xs leading-snug theme-text-main">
                         {solicitud.motivo_cancelacion}
                     </p>
                 </div>
@@ -581,46 +678,48 @@ const MenuAccionesPortal = ({ menuAbierto, menuSolicitud, menuPos, setMenuAbiert
         && solicitud.cancelacion_solicitada_at
         && !esCancelada;
 
+    const accion = 'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm theme-text-main transition-colors duration-200 hover:bg-black/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primario)] dark:hover:bg-white/5';
+    const accionPeligro = 'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm theme-text-peligro transition-colors duration-200 hover:bg-black/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primario)] dark:hover:bg-white/5';
+
     return createPortal(
         <>
             <div className="fixed inset-0 z-[999]" onClick={() => setMenuAbierto(null)}></div>
-            <div className={`fixed z-[1000] theme-surface border theme-border shadow-2xl rounded-2xl p-2 flex flex-col gap-1 backdrop-blur-xl animate-fade-in ${puedeConfirmarCancelacion && solicitud.motivo_cancelacion ? 'w-72' : 'w-56'}`} style={{ top: menuPos.top, left: menuPos.left }}>
+            <div className={`fixed z-[1000] flex flex-col gap-0.5 rounded-xl border theme-border theme-surface p-1.5 shadow-lg ${puedeConfirmarCancelacion && solicitud.motivo_cancelacion ? 'w-72' : 'w-56'}`} style={{ top: menuPos.top, left: menuPos.left }} role="menu">
 
                 {/* Confirmar Cambio de Lista (Solo si hay alerta) */}
                 {esAlertaPago && can('solicitudes.confirmar_cambio_lista') && (
-                    <button onClick={() => { setMenuAbierto(null); confirmarCambioLista(solicitud.id); }} className="flex items-center gap-3 px-4 py-3 hover:bg-amber-50 dark:hover:bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border-b theme-border mb-1 pb-3">
-                        <TrendingUp className="w-4 h-4" /> Confirmar Ajuste
+                    <button type="button" onClick={() => { setMenuAbierto(null); confirmarCambioLista(solicitud.id); }} className={accion}>
+                        <TrendingUp className="h-4 w-4" aria-hidden="true" /> Confirmar ajuste
                     </button>
                 )}
 
-                {/* Reparar Solicitud (Solo vendedor, solo si está incorrecta y NO es vencimiento) */}
                 {solicitud.vendedor_id === auth.user.id && solicitud.estado?.nombre === 'Incorrecta' && !esAlertaPago && !esVencimiento && (
-                    <button onClick={() => { setMenuAbierto(null); setModalForm({ abierto: true, modoEdicion: true, solicitud }); }} className="flex items-center gap-3 px-4 py-3 hover:bg-orange-50 dark:hover:bg-orange-500/10 text-orange-600 dark:text-orange-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border-b theme-border mb-1 pb-3">
-                        <Edit2 className="w-4 h-4" /> Reparar Solicitud
+                    <button type="button" onClick={() => { setMenuAbierto(null); setModalForm({ abierto: true, modoEdicion: true, solicitud }); }} className={accion}>
+                        <Edit2 className="h-4 w-4" aria-hidden="true" /> Reparar solicitud
                     </button>
                 )}
 
                 {esVencimiento && solicitud.vendedor_id === auth.user.id && (
-                    <div className="px-4 py-3 text-[9px] font-bold theme-text-muted uppercase tracking-widest border-b theme-border mb-1 pb-3 italic">
+                    <p className="m-0 border-b theme-border px-3 py-2 text-xs theme-text-muted">
                         Pago vencido: debe iniciar una nueva solicitud
-                    </div>
+                    </p>
                 )}
 
                 {can('solicitudes.reportar') && esVencimiento && !solicitud.rollback_confirmado_at && (
-                    <button onClick={() => { setMenuAbierto(null); confirmarRollback(solicitud.id); }} className="flex items-center gap-3 px-4 py-3 hover:bg-red-50 dark:hover:bg-red-500/10 text-red-600 dark:text-red-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border-b theme-border mb-1 pb-3">
-                        <ShieldAlert className="w-4 h-4" /> Confirmar Reversión
+                    <button type="button" onClick={() => { setMenuAbierto(null); confirmarRollback(solicitud.id); }} className={accionPeligro}>
+                        <ShieldAlert className="h-4 w-4" aria-hidden="true" /> Confirmar reversión
                     </button>
                 )}
 
                 {puedeConsultar && (
-                    <button onClick={() => { setMenuAbierto(null); setModalConsulta({ abierto: true, solicitud }); }} className="flex items-center gap-3 px-4 py-3 hover:bg-amber-50 dark:hover:bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border-b theme-border mb-1 pb-3">
-                        <MessageSquare className="w-4 h-4" /> Consultar TAG/Lista
+                    <button type="button" onClick={() => { setMenuAbierto(null); setModalConsulta({ abierto: true, solicitud }); }} className={accion}>
+                        <MessageSquare className="h-4 w-4" aria-hidden="true" /> Consultar TAG o lista
                     </button>
                 )}
 
                 {puedeResponderConsultaSolicitud(auth) && consultaPendiente && (
-                    <button onClick={() => { setMenuAbierto(null); setModalRespuestaConsulta({ abierto: true, solicitud, consulta: consultaPendiente }); }} className="flex items-center gap-3 px-4 py-3 hover:bg-amber-50 dark:hover:bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border-b theme-border mb-1 pb-3">
-                        <MessageSquare className="w-4 h-4" /> Responder Consulta
+                    <button type="button" onClick={() => { setMenuAbierto(null); setModalRespuestaConsulta({ abierto: true, solicitud, consulta: consultaPendiente }); }} className={accion}>
+                        <MessageSquare className="h-4 w-4" aria-hidden="true" /> Responder consulta
                     </button>
                 )}
 
@@ -631,34 +730,34 @@ const MenuAccionesPortal = ({ menuAbierto, menuSolicitud, menuPos, setMenuAbiert
                     && !solicitud.compra_en_tienda_solo_tag
                     && solicitud.estado?.nombre === 'Respondida'
                     && !esAlertaPago && (
-                    <button onClick={() => { setMenuAbierto(null); abrirModalPago(solicitud); }} className="flex items-center gap-3 px-4 py-3 hover:bg-blue-50 dark:hover:bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border-b theme-border mb-1 pb-3">
-                        <CreditCard className="w-4 h-4" /> Confirmar Pago
+                    <button type="button" onClick={() => { setMenuAbierto(null); abrirModalPago(solicitud); }} className={accion}>
+                        <CreditCard className="h-4 w-4" aria-hidden="true" /> Confirmar pago
                     </button>
                 )}
 
                 {puedeSolicitarCancelacion && (
-                    <button onClick={() => { setMenuAbierto(null); abrirModalCancelacion(solicitud); }} className="flex items-center gap-3 px-4 py-3 hover:bg-red-50 dark:hover:bg-red-500/10 text-red-600 dark:text-red-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border-b theme-border mb-1 pb-3">
-                        <Ban className="w-4 h-4" /> Solicitar Cancelación
+                    <button type="button" onClick={() => { setMenuAbierto(null); abrirModalCancelacion(solicitud); }} className={accionPeligro}>
+                        <Ban className="h-4 w-4" aria-hidden="true" /> Solicitar cancelación
                     </button>
                 )}
 
                 {puedeConfirmarCancelacion && solicitud.motivo_cancelacion && (
-                    <div className="px-3 py-2 mb-1 border-b theme-border">
-                        <p className="text-[8px] font-black uppercase tracking-widest text-red-600 dark:text-red-400 mb-1">Motivo del vendedor</p>
+                    <div className="mb-1 border-b theme-border px-3 py-2">
+                        <p className="mb-1 text-xs font-medium theme-text-peligro">Motivo de la solicitud</p>
                         {obtenerListaRebajaNombre(solicitud) && (
-                            <p className="text-[9px] font-black uppercase tracking-widest text-red-700 dark:text-red-300 mb-1">
-                                Lista rebaja: {obtenerListaRebajaNombre(solicitud)}
+                            <p className="mb-1 text-xs theme-text-peligro">
+                                Lista de rebaja: {obtenerListaRebajaNombre(solicitud)}
                             </p>
                         )}
-                        <p className="text-[10px] font-bold theme-text-main leading-snug line-clamp-4 italic">
+                        <p className="line-clamp-4 text-xs leading-snug theme-text-main">
                             {solicitud.motivo_cancelacion}
                         </p>
                     </div>
                 )}
 
                 {puedeConfirmarCancelacion && (
-                    <button onClick={() => { setMenuAbierto(null); abrirModalConfirmarCancelacion(solicitud); }} className="flex items-center gap-3 px-4 py-3 hover:bg-red-50 dark:hover:bg-red-500/10 text-red-600 dark:text-red-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border-b theme-border mb-1 pb-3">
-                        <XCircle className="w-4 h-4" /> Confirmar Cancelación
+                    <button type="button" onClick={() => { setMenuAbierto(null); abrirModalConfirmarCancelacion(solicitud); }} className={accionPeligro}>
+                        <XCircle className="h-4 w-4" aria-hidden="true" /> Confirmar cancelación
                     </button>
                 )}
 
@@ -668,42 +767,42 @@ const MenuAccionesPortal = ({ menuAbierto, menuSolicitud, menuPos, setMenuAbiert
                     && solicitud.pago_confirmado
                     && !esAlertaPago
                     && idVerificada && (
-                    <button onClick={() => { setMenuAbierto(null); setModalRespuesta({ abierto: true, solicitud, estadoId: idVerificada }); }} className="flex items-center gap-3 px-4 py-3 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors">
-                        <CheckSquare className="w-4 h-4" /> Verificado
+                    <button type="button" onClick={() => { setMenuAbierto(null); setModalRespuesta({ abierto: true, solicitud, estadoId: idVerificada }); }} className={accion}>
+                        <CheckSquare className="h-4 w-4" aria-hidden="true" /> Verificado
                     </button>
                 )}
 
                 {/* Aprobar (Encargada) — flujos tienda: marca concluida para vendedora, sigue pendiente de verificar */}
                 {can('solicitudes.reportar') && !esAlertaPago && !esCancelada && solicitud.estado?.nombre === 'Pendiente' && idRespondida && (
-                    <button onClick={() => { setMenuAbierto(null); setModalRespuesta({ abierto: true, solicitud, estadoId: idRespondida }); }} className="flex items-center gap-3 px-4 py-3 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border-b theme-border mb-1 pb-3" style={{ color: 'var(--color-primario)' }}>
-                        <CheckCircle2 className="w-4 h-4" /> Aprobar Proceso
+                    <button type="button" onClick={() => { setMenuAbierto(null); setModalRespuesta({ abierto: true, solicitud, estadoId: idRespondida }); }} className={accion}>
+                        <CheckCircle2 className="h-4 w-4" aria-hidden="true" /> Aprobar proceso
                     </button>
                 )}
 
                 {puedeCorregirRespuesta && (
-                    <button onClick={() => { setMenuAbierto(null); setModalRespuesta({ abierto: true, solicitud, estadoId: idRespondida }); }} className="flex items-center gap-3 px-4 py-3 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border-b theme-border mb-1 pb-3">
-                        <CheckCircle2 className="w-4 h-4" /> Corregir Respuesta
+                    <button type="button" onClick={() => { setMenuAbierto(null); setModalRespuesta({ abierto: true, solicitud, estadoId: idRespondida }); }} className={accion}>
+                        <CheckCircle2 className="h-4 w-4" aria-hidden="true" /> Corregir respuesta
                     </button>
                 )}
 
                 {/* Reportar error — staff en etapas activas; vendedora dueña solo en Respondida */}
                 {puedeReportarError && !esAlertaPago && idIncorrecta && (
-                    <button onClick={() => { setMenuAbierto(null); setModalRespuesta({ abierto: true, solicitud, estadoId: idIncorrecta }); }} className="flex items-center gap-3 px-4 py-3 hover:bg-red-50 dark:hover:bg-red-500/10 text-red-600 dark:text-red-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border-b theme-border mb-1 pb-3">
-                        <AlertOctagon className="w-4 h-4" /> Reportar Error
+                    <button type="button" onClick={() => { setMenuAbierto(null); setModalRespuesta({ abierto: true, solicitud, estadoId: idIncorrecta }); }} className={accionPeligro}>
+                        <AlertOctagon className="h-4 w-4" aria-hidden="true" /> Reportar error
                     </button>
                 )}
 
                 {/* Bitácora */}
                 {can('configuracion.ver_auditoria') && (
-                    <button onClick={() => { setMenuAbierto(null); setModalBitacora({ abierto: true, solicitud }); }} className="flex items-center gap-3 px-4 py-3 hover:bg-purple-50 dark:hover:bg-purple-500/10 text-purple-600 dark:text-purple-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border-t theme-border mt-1 pt-3">
-                        <History className="w-4 h-4" /> Ver Bitácora
+                    <button type="button" onClick={() => { setMenuAbierto(null); setModalBitacora({ abierto: true, solicitud }); }} className={`${accion} mt-1 border-t theme-border pt-2`}>
+                        <History className="h-4 w-4" aria-hidden="true" /> Ver bitácora
                     </button>
                 )}
 
                 {/* Eliminar */}
                 {can('solicitudes.eliminar') && (
-                    <button onClick={() => eliminarSolicitud(solicitud.id)} className="flex items-center gap-3 px-4 py-3 hover:bg-red-900/10 text-red-600 dark:text-red-500 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border-t theme-border mt-1 pt-3">
-                        <Trash2 className="w-4 h-4" /> Eliminar Registro
+                    <button type="button" onClick={() => eliminarSolicitud(solicitud.id)} className={`${accionPeligro} mt-1 border-t theme-border pt-2`}>
+                        <Trash2 className="h-4 w-4" aria-hidden="true" /> Eliminar registro
                     </button>
                 )}
             </div>
@@ -718,19 +817,19 @@ const Paginacion = ({ solicitudes, onIrAPagina }) => {
         const paginas = [];
         if (totalPaginas <= 7) { for (let i = 1; i <= totalPaginas; i++) paginas.push(i); }
         else {
-            paginas.push(1); if (paginaActual > 3) paginas.push('...');
+            paginas.push(1); if (paginaActual > 3) paginas.push('…');
             for (let i = Math.max(2, paginaActual - 1); i <= Math.min(totalPaginas - 1, paginaActual + 1); i++) paginas.push(i);
-            if (paginaActual < totalPaginas - 2) paginas.push('...'); paginas.push(totalPaginas);
+            if (paginaActual < totalPaginas - 2) paginas.push('…'); paginas.push(totalPaginas);
         }
         return paginas;
     };
     return (
-        <div className={`${geliaCardClass('rounded-[2rem]')} p-4 flex flex-col sm:flex-row items-center justify-between gap-4`} style={{ animationDelay: '300ms' }}>
-            <span className="text-[10px] font-black uppercase tracking-widest theme-text-muted">Viendo {desde} al {hasta} de {totalRegistros.toLocaleString('es-MX')}</span>
+        <div className="flex flex-col items-center justify-between gap-3 sm:flex-row">
+            <span className="text-sm tabular-nums theme-text-muted">Viendo {desde} a {hasta} de {totalRegistros.toLocaleString('es-MX')}</span>
             <div className="flex items-center gap-2">
-                <button onClick={() => onIrAPagina(paginaActual - 1)} disabled={paginaActual === 1} className="paginacion-btn theme-surface border theme-border theme-text-muted hover:border-[var(--color-primario)] hover:text-[var(--color-primario)]"><ChevronLeft className="w-4 h-4" /></button>
-                {generarPaginas().map((p, i) => p === '...' ? (<span key={`dots-${i}`} className="w-10 text-center text-[11px] font-black theme-text-muted">…</span>) : (<button key={p} onClick={() => onIrAPagina(p)} className={`paginacion-btn theme-border ${p === paginaActual ? '' : 'theme-surface theme-text-main hover:border-[var(--color-primario)] hover:text-[var(--color-primario)]'}`} style={p === paginaActual ? { backgroundColor: 'var(--color-primario)', color: '#fff', borderColor: 'var(--color-primario)' } : {}}>{p}</button>))}
-                <button onClick={() => onIrAPagina(paginaActual + 1)} disabled={paginaActual === totalPaginas} className="paginacion-btn theme-surface border theme-border theme-text-muted hover:border-[var(--color-primario)] hover:text-[var(--color-primario)]"><ChevronRight className="w-4 h-4" /></button>
+                <button type="button" onClick={() => onIrAPagina(paginaActual - 1)} disabled={paginaActual === 1} aria-label="Página anterior" className="paginacion-btn theme-surface theme-text-muted hover:border-[var(--color-primario)] hover:text-[var(--color-primario)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"><ChevronLeft className="h-4 w-4" aria-hidden="true" /></button>
+                {generarPaginas().map((p, i) => p === '…' ? (<span key={`dots-${i}`} className="w-10 text-center text-sm theme-text-muted">…</span>) : (<button type="button" key={p} onClick={() => onIrAPagina(p)} aria-current={p === paginaActual ? 'page' : undefined} aria-label={`Página ${p}`} className={`paginacion-btn tabular-nums focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${p === paginaActual ? 'paginacion-btn--active' : 'theme-surface theme-text-main hover:border-[var(--color-primario)] hover:text-[var(--color-primario)]'}`}>{p}</button>))}
+                <button type="button" onClick={() => onIrAPagina(paginaActual + 1)} disabled={paginaActual === totalPaginas} aria-label="Página siguiente" className="paginacion-btn theme-surface theme-text-muted hover:border-[var(--color-primario)] hover:text-[var(--color-primario)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"><ChevronRight className="h-4 w-4" aria-hidden="true" /></button>
             </div>
         </div>
     );
@@ -765,6 +864,9 @@ export default function Index({
     const [menuSolicitud, setMenuSolicitud] = useState(null);
     const [copiadoId, setCopiadoId] = useState(null);
     const [procesandoAccion, setProcesandoAccion] = useState(false);
+    const [consultando, setConsultando] = useState(false);
+    const [menuExportar, setMenuExportar] = useState(false);
+    const exportarRef = useRef(null);
 
     const modalsAbiertosRef = useRef(false);
     modalsAbiertosRef.current = modalForm.abierto
@@ -794,8 +896,8 @@ export default function Index({
     } = useFiltrosSolicitudesPage({
         filtros,
         rutaIndex: route('solicitudes.index'),
-        onInicioConsulta: () => setProcesandoAccion(true),
-        onFinConsulta: () => setProcesandoAccion(false),
+        onInicioConsulta: () => setConsultando(true),
+        onFinConsulta: () => setConsultando(false),
     });
 
     const can = (permiso) => auth?.user?.permissions?.includes(permiso) ?? false;
@@ -837,6 +939,24 @@ export default function Index({
         window.addEventListener('scroll', handleScroll, true);
         return () => window.removeEventListener('scroll', handleScroll, true);
     }, []);
+
+    useEffect(() => {
+        if (!menuExportar) return undefined;
+        const cerrar = (event) => {
+            if (exportarRef.current && !exportarRef.current.contains(event.target)) {
+                setMenuExportar(false);
+            }
+        };
+        const tecla = (event) => {
+            if (event.key === 'Escape') setMenuExportar(false);
+        };
+        document.addEventListener('mousedown', cerrar);
+        document.addEventListener('keydown', tecla);
+        return () => {
+            document.removeEventListener('mousedown', cerrar);
+            document.removeEventListener('keydown', tecla);
+        };
+    }, [menuExportar]);
 
     // FALLBACK DE PORTAPAPELES PARA HTTP LOCALHOST
     const copiarAlPortapapeles = (e, texto, id) => {
@@ -891,6 +1011,16 @@ export default function Index({
     };
 
     const solicitudesFiltradas = solicitudes.data || [];
+    const hayFiltros = tabActiva !== 'TODAS' || Boolean(busqueda) || filtrosAdicionalesActivos > 0;
+    const limpiarConsulta = () => aplicarFiltros({
+        tab: 'TODAS',
+        q: '',
+        vendedor_id: '',
+        motivo_incorrecta: '',
+        tipo_fecha: 'TODAS',
+        fecha_inicio: '',
+        fecha_fin: '',
+    });
 
     const obtenerEstiloEstado = (nombreEstado) => {
         switch (nombreEstado?.toLowerCase()) {
@@ -905,18 +1035,19 @@ export default function Index({
     const irAPagina = (pagina) => {
         const totalPaginas = solicitudes.last_page || 1;
         if (pagina < 1 || pagina > totalPaginas) return;
-        setProcesandoAccion(true);
+        setConsultando(true);
         router.get(route('solicitudes.index'), construirParams({ page: pagina }), {
             preserveState: true,
             preserveScroll: false,
-            onFinish: () => setProcesandoAccion(false),
+            showProgress: false,
+            onFinish: () => setConsultando(false),
         });
     };
 
     return (
         <AppLayout auth={auth}>
             <Head title="Panel de Solicitudes" />
-            <GeliaLoader isVisible={procesandoAccion} message="Sincronizando_" />
+            <GeliaLoader isVisible={procesandoAccion} message="Guardando…" />
 
             <MenuAccionesPortal
                 menuAbierto={menuAbierto}
@@ -955,55 +1086,54 @@ export default function Index({
                     onProcesando={setProcesandoAccion}
                 />
             )}
-            <div className="max-w-[1440px] mx-auto p-4 md:p-8 space-y-6 md:space-y-8">
-                <header className={`${geliaCardClass()} p-6 md:p-12 flex flex-col md:flex-row items-center justify-between gap-4 md:gap-6`}>
-                    <div className="w-full md:w-auto text-center md:text-left">
-                        <div className="flex items-center justify-center md:justify-start space-x-3 mb-2">
-                            <span className="h-1.5 w-12 rounded-full" style={{ backgroundColor: 'var(--color-primario)' }}></span>
-                            <p className="text-[10px] font-black uppercase tracking-[0.3em]" style={{ color: 'var(--color-primario)' }}>Panel General</p>
-                        </div>
-                        <h1 className="text-3xl md:text-5xl font-black italic tracking-tighter uppercase theme-text-main m-0">GESTIÓN DE <span style={{ color: 'var(--color-primario)' }}>SOLICITUDES</span></h1>
+            <GeliaPageShell className="space-y-4">
+                <p className="sr-only" aria-live="polite">{copiadoId ? 'Número de cliente copiado' : ''}</p>
+                <header className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+                    <div className="min-w-0">
+                        <h1 className="m-0 text-2xl font-semibold theme-text-main text-balance">Solicitudes</h1>
+                        <p className="m-0 mt-1 text-sm theme-text-muted">Cola de trámites comerciales</p>
                     </div>
-                    <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2 w-full md:w-auto">
+                    <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center md:w-auto">
                         {puedeExportar && (
-                            <>
-                                <a
-                                    href={route('reportes.solicitudes.exportar', { ...exportParams, format: 'pdf' })}
-                                    className="inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl border theme-border theme-element theme-text-main text-[10px] font-black uppercase tracking-widest hover:border-[var(--color-primario)] hover:text-[var(--color-primario)] transition-all"
+                            <div className="relative" ref={exportarRef}>
+                                <button
+                                    type="button"
+                                    className={BTN_SECUNDARIO}
+                                    aria-expanded={menuExportar}
+                                    aria-haspopup="menu"
+                                    onClick={() => setMenuExportar((abierto) => !abierto)}
                                 >
-                                    <FileText className="w-4 h-4 shrink-0" /> PDF
-                                </a>
-                                <a
-                                    href={route('reportes.solicitudes.exportar', { ...exportParams, format: 'xlsx' })}
-                                    className="inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl border theme-border theme-element theme-text-main text-[10px] font-black uppercase tracking-widest hover:border-[var(--color-primario)] hover:text-[var(--color-primario)] transition-all"
-                                >
-                                    <FileSpreadsheet className="w-4 h-4 shrink-0" /> Excel
-                                </a>
-                                <a
-                                    href={route('reportes.solicitudes.exportar', { ...exportParams, format: 'csv' })}
-                                    className="inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl border theme-border theme-element theme-text-main text-[10px] font-black uppercase tracking-widest hover:border-[var(--color-primario)] hover:text-[var(--color-primario)] transition-all"
-                                >
-                                    <Download className="w-4 h-4 shrink-0" /> CSV
-                                </a>
-                                <Link
-                                    href={route('reportes.solicitudes.index', exportParams)}
-                                    className="inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl border theme-border theme-element theme-text-muted text-[10px] font-black uppercase tracking-widest hover:border-[var(--color-primario)] hover:text-[var(--color-primario)] transition-all"
-                                >
-                                    Reportes
-                                </Link>
-                            </>
+                                    <Download className="h-4 w-4 shrink-0" aria-hidden="true" />
+                                    Exportar
+                                    <ChevronDown className="h-4 w-4 shrink-0" aria-hidden="true" />
+                                </button>
+                                {menuExportar && (
+                                    <div className="absolute right-0 z-20 mt-2 w-48 rounded-xl border theme-border theme-surface p-1 shadow-lg" role="menu">
+                                        <a href={route('reportes.solicitudes.exportar', { ...exportParams, format: 'pdf' })} className={ITEM_EXPORTAR} role="menuitem">
+                                            <FileText className="h-4 w-4" aria-hidden="true" /> PDF
+                                        </a>
+                                        <a href={route('reportes.solicitudes.exportar', { ...exportParams, format: 'xlsx' })} className={ITEM_EXPORTAR} role="menuitem">
+                                            <FileSpreadsheet className="h-4 w-4" aria-hidden="true" /> Excel
+                                        </a>
+                                        <a href={route('reportes.solicitudes.exportar', { ...exportParams, format: 'csv' })} className={ITEM_EXPORTAR} role="menuitem">
+                                            <Download className="h-4 w-4" aria-hidden="true" /> CSV
+                                        </a>
+                                        <Link href={route('reportes.solicitudes.index', exportParams)} className={ITEM_EXPORTAR} role="menuitem">
+                                            Reportes
+                                        </Link>
+                                    </div>
+                                )}
+                            </div>
                         )}
                         {puedeVerEscalonamiento && (
-                            <button
-                                type="button"
-                                onClick={() => setModalEscalonamiento(true)}
-                                className="inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl border theme-border theme-element theme-text-main text-[10px] font-black uppercase tracking-widest hover:border-[var(--color-primario)] hover:text-[var(--color-primario)] transition-all"
-                            >
-                                <Calculator className="w-4 h-4 shrink-0" /> Escalonamiento
+                            <button type="button" onClick={() => setModalEscalonamiento(true)} className={BTN_SECUNDARIO}>
+                                <Calculator className="h-4 w-4 shrink-0" aria-hidden="true" /> Escalonamiento
                             </button>
                         )}
                         {can('solicitudes.crear') && (
-                            <button onClick={() => setModalForm({ abierto: true, modoEdicion: false, solicitud: null })} className="flex items-center justify-center gap-2 px-8 py-4 text-white rounded-2xl font-black uppercase tracking-widest text-[11px] shadow-xl hover:scale-105 transition-all w-full md:w-auto" style={{ backgroundColor: 'var(--color-primario)' }}><Plus className="w-5 h-5" /> Nueva Solicitud</button>
+                            <button type="button" onClick={() => setModalForm({ abierto: true, modoEdicion: false, solicitud: null })} className={`${THEME_BTN_PRIMARY} theme-btn-primary--compact w-full sm:w-auto`}>
+                                <Plus className="h-4 w-4" aria-hidden="true" /> Nueva solicitud
+                            </button>
                         )}
                     </div>
                 </header>
@@ -1024,84 +1154,46 @@ export default function Index({
                     onLimpiarAdicionales={limpiarFiltrosAdicionales}
                 />
 
-                <div className="block lg:hidden space-y-4 animate-page-reveal" style={{ animationDelay: '200ms' }}>
-                    {solicitudesFiltradas.length === 0 ? (<div className="theme-surface rounded-3xl p-8 text-center border theme-border theme-text-muted font-bold text-sm">No se encontraron solicitudes_</div>) : (
+                <div className="block space-y-3 lg:hidden">
+                    {consultando ? (
+                        <div className="space-y-3" aria-hidden="true">
+                            {Array.from({ length: 4 }, (_, i) => (
+                                <div key={i} className="h-28 animate-pulse rounded-xl border theme-border theme-element" />
+                            ))}
+                        </div>
+                    ) : solicitudesFiltradas.length === 0 ? (
+                        <EstadoVacioLista hayFiltros={hayFiltros} puedeCrear={can('solicitudes.crear')} onLimpiar={limpiarConsulta} onCrear={() => setModalForm({ abierto: true, modoEdicion: false, solicitud: null })} />
+                    ) : (
                         solicitudesFiltradas.map((solicitud) => {
                             const estatus = obtenerEstiloEstado(solicitud.estado?.nombre); const StatusIcon = estatus.icon; const nombreProceso = solicitud.proceso?.nombre || ''; const esHeredado = solicitud.cliente?.es_heredado;
                             return (
-                                <div key={solicitud.id} className="theme-surface rounded-3xl border theme-border p-5 shadow-lg relative flex flex-col gap-4">
-                                    <div className="flex items-start justify-between border-b theme-border pb-3">
-                                        <div>
-                                            <div className="font-black text-base" style={{ color: 'var(--color-primario)' }}>FOL-{solicitud.id}</div>
-                                            <div className="text-[11px] font-bold theme-text-muted mt-0.5 uppercase flex items-center gap-1">
-                                                <User className="w-3 h-3" /> {solicitud.vendedor?.name}
+                                <div key={solicitud.id} className="flex flex-col gap-3 rounded-xl border theme-border theme-surface p-4">
+                                    <div className="flex items-start justify-between gap-3 border-b theme-border pb-3">
+                                        <div className="min-w-0">
+                                            <div className="text-sm font-semibold theme-text-main">FOL-{solicitud.id}</div>
+                                            <div className="mt-0.5 flex items-center gap-1 text-xs theme-text-muted">
+                                                <User className="h-3 w-3" aria-hidden="true" /> {solicitud.vendedor?.name}
                                             </div>
-
-                                            {/* Despliegue de indicadores de tiempo relativo */}
-                                            <div className="mt-2 space-y-1">
-                                                <div className="text-[9px] font-bold theme-text-muted flex items-center gap-1" title={solicitud.created_at}>
-                                                    <Clock className="w-3 h-3" /> Emitida: {formatearTiempoRelativo(solicitud.created_at)}
-                                                </div>
-
-                                                {/* Se muestra solo si el registro ha sufrido modificaciones posteriores */}
-                                                {solicitud.updated_at && solicitud.updated_at !== solicitud.created_at && (
-                                                    <div className="text-[9px] font-bold text-blue-500/80 flex items-center gap-1" title={solicitud.updated_at}>
-                                                        <History className="w-3 h-3" /> Actualizada: {formatearTiempoRelativo(solicitud.updated_at)}
-                                                    </div>
-                                                )}
-                                            </div>
+                                            <TiemposSolicitud solicitud={solicitud} />
                                         </div>
-
-                                        <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border ${estatus.clase}`}>
-                                            <StatusIcon className="w-3.5 h-3.5" />
-                                            <span className="text-[9px] font-black uppercase tracking-wider italic">{estatus.label}</span>
+                                        <div className={`${estatus.clase} whitespace-nowrap`}>
+                                            <StatusIcon className="h-3.5 w-3.5" aria-hidden="true" />
+                                            <span>{estatus.label}</span>
                                         </div>
                                     </div>
-                                    <div>
-                                        <div className="flex items-center gap-2 mb-1.5">
-                                            <span className="text-[10px] font-black px-2 py-0.5 rounded bg-black/5 dark:bg-white/5 border theme-border theme-text-main">{solicitud.cliente?.numero_cliente || 'N/A'}</span>
-                                            {solicitud.cliente?.numero_cliente && (<button onClick={(e) => copiarAlPortapapeles(e, solicitud.cliente.numero_cliente, solicitud.id)} className="p-1 theme-text-muted hover:text-[var(--color-primario)] transition-colors outline-none" title="Copiar ID">{copiadoId === solicitud.id ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}</button>)}
-                                            {esHeredado && <span className="text-[9px] font-black uppercase bg-purple-500/10 text-purple-500 border border-purple-500/20 px-2 py-0.5 rounded flex items-center gap-1"><ShieldAlert className="w-3 h-3" /> Heredado</span>}
-                                        </div>
-                                        <div className="font-bold text-base theme-text-main uppercase italic leading-tight">{solicitud.cliente?.nombre || 'Nuevo Prospecto'}</div>
-                                    </div>
-                                    <div className="bg-black/5 dark:bg-white/5 p-3 rounded-2xl border theme-border flex flex-col gap-2">
-                                        <span className="text-[10px] font-black uppercase tracking-widest theme-text-main block">{nombreProceso}</span>
+                                    <ClienteSolicitud solicitud={solicitud} esHeredado={esHeredado} copiadoId={copiadoId} onCopiar={copiarAlPortapapeles} />
+                                    <div className="flex flex-col gap-2">
+                                        <span className="text-sm font-medium theme-text-main">{nombreProceso}</span>
                                         <EtiquetasOperacion solicitud={solicitud} listas={listas} />
-                                        {(solicitud.consultas || []).filter(c => c.estado === 'pendiente').map(c => (
-                                            <div key={c.id} className="flex flex-wrap gap-2 mt-1">
-                                                {c.consulta_tag && (
-                                                    <span className="inline-flex items-center gap-1.5 text-[10px] sm:text-xs font-black uppercase px-3 py-1.5 rounded-lg bg-amber-500/10 text-amber-500 border border-amber-500/20">
-                                                        <MessageSquare className="w-3.5 h-3.5" /> Consulta TAG
-                                                    </span>
-                                                )}
-                                                {c.consulta_lista && (
-                                                    <span className="inline-flex items-center gap-1.5 text-[10px] sm:text-xs font-black uppercase px-3 py-1.5 rounded-lg bg-amber-500/10 text-amber-500 border border-amber-500/20">
-                                                        <MessageSquare className="w-3.5 h-3.5" /> Consulta Lista
-                                                    </span>
-                                                )}
-                                            </div>
-                                        ))}
+                                        <ConsultasPendientes solicitud={solicitud} />
+                                        {solicitud.motivo_incorrecta && <MotivoIncidencia motivo={solicitud.motivo_incorrecta} />}
                                     </div>
-                                    <RespuestaConsultaEncargada
-                                        solicitud={solicitud}
-                                        auth={auth}
-                                        onMarcarLeido={marcarConsultaLeida}
-                                        procesando={procesandoAccion}
-                                    />
+                                    <RespuestaConsultaEncargada solicitud={solicitud} auth={auth} onMarcarLeido={marcarConsultaLeida} procesando={procesandoAccion} />
                                     <FeedbackYComentarios solicitud={solicitud} />
                                     <MotivoCancelacionBloque solicitud={solicitud} />
-                                    <div className="flex items-center justify-between pt-2 border-t theme-border">
-                                        <div>
-                                            <div className="font-black italic theme-text-main text-sm">{new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(solicitud.monto_cotizado)}</div>
-                                            <div className={`mt-1 flex items-center gap-1 text-[9px] font-black uppercase tracking-widest ${solicitud.pago_confirmado ? 'text-emerald-500' : 'text-amber-500'}`}>
-                                                {solicitud.pago_confirmado ? <CheckCircle2 className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
-                                                {(solicitud.compra_en_tienda || solicitud.compra_en_tienda_solo_tag) && solicitud.pago_confirmado
-                                                    ? 'Concluida'
-                                                    : (solicitud.pago_confirmado ? 'Pago Confirmado' : 'Pago Pendiente')}
-                                            </div>
-                                        </div>
-                                        <button onClick={(e) => abrirMenu(e, solicitud)} className="p-2.5 theme-element border theme-border hover:border-[var(--color-primario)] rounded-xl transition-all shadow-sm outline-none"><MoreVertical className="w-5 h-5 theme-text-main" /></button>
+                                    <div className="flex items-center justify-between border-t theme-border pt-2">
+                                        <CotizacionSolicitud solicitud={solicitud} />
+                                        <button type="button" onClick={(e) => abrirMenu(e, solicitud)} aria-label={`Acciones de FOL-${solicitud.id}`} className="rounded-lg border theme-border theme-element p-2 transition-colors duration-200 hover:border-[var(--color-primario)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"><MoreVertical className="h-5 w-5 theme-text-main" aria-hidden="true" /></button>
                                     </div>
                                 </div>
                             );
@@ -1109,101 +1201,63 @@ export default function Index({
                     )}
                 </div>
 
-                <div className={`hidden lg:block ${geliaCardClass()} overflow-hidden`} style={{ animationDelay: '200ms' }}>
-                    <div className="overflow-x-auto pb-4 custom-scrollbar">
-                        <table className="w-full text-left border-collapse min-w-[1000px]">
-                            <thead>
+                <div className="hidden overflow-hidden rounded-xl border theme-border theme-surface lg:block">
+                    <div className="overflow-x-auto">
+                        <table className="w-full min-w-[1000px] border-collapse text-left">
+                            <thead className="theme-surface">
                                 <tr className="border-b theme-border">
-                                    <th className="p-6 text-[10px] font-black uppercase tracking-widest theme-text-muted">Folio & Asesor_</th>
-                                    <th className="p-6 text-[10px] font-black uppercase tracking-widest theme-text-muted">Cliente_</th>
-                                    <th className="p-6 text-[10px] font-black uppercase tracking-widest theme-text-muted">Detalles de Operación_</th>
-                                    <th className="p-6 text-[10px] font-black uppercase tracking-widest theme-text-muted">Cotización_</th>
-                                    <th className="p-6 text-[10px] font-black uppercase tracking-widest theme-text-muted">Estado_</th>
-                                    <th className="p-6 text-[10px] font-black uppercase tracking-widest theme-text-muted text-center sticky-actions">Acciones_</th>
+                                    <th className="px-4 py-3 text-xs font-medium theme-text-muted">Folio</th>
+                                    <th className="px-4 py-3 text-xs font-medium theme-text-muted">Cliente</th>
+                                    <th className="px-4 py-3 text-xs font-medium theme-text-muted">Operación</th>
+                                    <th className="px-4 py-3 text-xs font-medium theme-text-muted">Cotización</th>
+                                    <th className="px-4 py-3 text-xs font-medium theme-text-muted">Estado</th>
+                                    <th className="sticky-actions px-4 py-3 text-center text-xs font-medium theme-text-muted">Acciones</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {solicitudesFiltradas.map((solicitud) => {
+                                {consultando ? (
+                                    Array.from({ length: 6 }, (_, i) => (
+                                        <tr key={`esqueleto-${i}`} className="border-b theme-border">
+                                            <td colSpan={6} className="px-4 py-3"><div className="h-8 animate-pulse rounded-md theme-element" /></td>
+                                        </tr>
+                                    ))
+                                ) : solicitudesFiltradas.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={6} className="px-4 py-8">
+                                            <EstadoVacioLista hayFiltros={hayFiltros} puedeCrear={can('solicitudes.crear')} onLimpiar={limpiarConsulta} onCrear={() => setModalForm({ abierto: true, modoEdicion: false, solicitud: null })} />
+                                        </td>
+                                    </tr>
+                                ) : solicitudesFiltradas.map((solicitud) => {
                                     const estatus = obtenerEstiloEstado(solicitud.estado?.nombre); const StatusIcon = estatus.icon; const nombreProceso = solicitud.proceso?.nombre || ''; const esHeredado = solicitud.cliente?.es_heredado;
                                     return (
-                                        <tr key={solicitud.id} className="border-b theme-border transition-colors hover:bg-black/5 dark:hover:bg-white/5 group">
-                                            <td className="p-6 align-top">
-                                                <div className="font-black text-sm theme-text-main" style={{ color: 'var(--color-primario)' }}>FOL-{solicitud.id}</div>
-                                                <div className="text-[10px] font-bold theme-text-muted mt-1 uppercase">
-                                                    <User className="w-3 h-3 inline mr-1" /> {solicitud.vendedor?.name}
+                                        <tr key={solicitud.id} className="border-b theme-border transition-colors duration-200 hover:bg-black/5 dark:hover:bg-white/5">
+                                            <td className="px-4 py-3 align-top">
+                                                <div className="text-sm font-semibold theme-text-main">FOL-{solicitud.id}</div>
+                                                <div className="mt-1 text-xs theme-text-muted">
+                                                    <User className="mr-1 inline h-3 w-3" aria-hidden="true" /> {solicitud.vendedor?.name}
                                                 </div>
-
-                                                {/* NUEVO: Despliegue de indicadores de tiempo relativo para Escritorio */}
-                                                <div className="mt-2 space-y-1">
-                                                    <div className="text-[9px] font-bold theme-text-muted flex items-center gap-1" title={solicitud.created_at}>
-                                                        <Clock className="w-3 h-3" /> Emitida: {formatearTiempoRelativo(solicitud.created_at)}
-                                                    </div>
-
-                                                    {solicitud.updated_at && solicitud.updated_at !== solicitud.created_at && (
-                                                        <div className="text-[9px] font-bold text-blue-500/80 flex items-center gap-1" title={solicitud.updated_at}>
-                                                            <History className="w-3 h-3" /> Actualizada: {formatearTiempoRelativo(solicitud.updated_at)}
-                                                        </div>
-                                                    )}
-                                                </div>
+                                                <TiemposSolicitud solicitud={solicitud} />
                                             </td>
-                                            <td className="p-6 align-top">
-                                                <div className="flex items-center gap-2 mb-1">
-                                                    <span className="text-[10px] font-black px-2 py-0.5 rounded bg-black/5 dark:bg-white/5 border theme-border theme-text-main">{solicitud.cliente?.numero_cliente || 'N/A'}</span>
-                                                    {solicitud.cliente?.numero_cliente && (<button onClick={(e) => copiarAlPortapapeles(e, solicitud.cliente.numero_cliente, solicitud.id)} className="p-1 theme-text-muted hover:text-[var(--color-primario)] transition-colors outline-none" title="Copiar ID">{copiadoId === solicitud.id ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}</button>)}
-                                                    {esHeredado && <span className="text-[9px] font-black uppercase bg-purple-500/10 text-purple-500 border border-purple-500/20 px-2 py-0.5 rounded flex items-center gap-1"><ShieldAlert className="w-3 h-3" /> Heredado</span>}
-                                                </div>
-                                                <div className="font-bold text-sm theme-text-main uppercase italic truncate max-w-[200px]">{solicitud.cliente?.nombre || 'Nuevo Prospecto'}</div>
+                                            <td className="max-w-[220px] px-4 py-3 align-top">
+                                                <ClienteSolicitud solicitud={solicitud} esHeredado={esHeredado} copiadoId={copiadoId} onCopiar={copiarAlPortapapeles} />
                                             </td>
-                                            <td className="p-6 align-top">
-                                                <div className="inline-block px-3 py-1 rounded-lg theme-element border theme-border text-[9px] font-black uppercase tracking-widest theme-text-main mb-2">{nombreProceso}</div>
+                                            <td className="px-4 py-3 align-top">
+                                                <div className="mb-1 text-sm font-medium theme-text-main">{nombreProceso}</div>
                                                 <EtiquetasOperacion solicitud={solicitud} listas={listas} />
-                                                {(solicitud.consultas || []).filter(c => c.estado === 'pendiente').map(c => (
-                                                    <React.Fragment key={c.id}>
-                                                        {c.consulta_tag && (
-                                                            <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase px-3 py-1.5 rounded-lg bg-amber-500/10 text-amber-500 border border-amber-500/20 mt-1 mr-1">
-                                                                <MessageSquare className="w-3.5 h-3.5" /> Consulta TAG
-                                                            </span>
-                                                        )}
-                                                        {c.consulta_lista && (
-                                                            <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase px-3 py-1.5 rounded-lg bg-amber-500/10 text-amber-500 border border-amber-500/20 mt-1 mr-1">
-                                                                <MessageSquare className="w-3.5 h-3.5" /> Consulta Lista
-                                                            </span>
-                                                        )}
-                                                    </React.Fragment>
-                                                ))}
-                                                {solicitud.motivo_incorrecta && (
-                                                    <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase px-2 py-1 rounded-md bg-red-500/10 text-red-500 border border-red-500/20 mt-1">
-                                                        <AlertOctagon className="w-3 h-3" /> {
-                                                            solicitud.motivo_incorrecta === 'vencimiento_pago' ? 'Pago vencido'
-                                                            : solicitud.motivo_incorrecta === 'error_reportado' ? 'Error reportado'
-                                                            : solicitud.motivo_incorrecta === 'pago_insuficiente' ? 'Pago insuficiente'
-                                                            : solicitud.motivo_incorrecta
-                                                        }
-                                                    </span>
-                                                )}
-                                                <RespuestaConsultaEncargada
-                                                    solicitud={solicitud}
-                                                    auth={auth}
-                                                    onMarcarLeido={marcarConsultaLeida}
-                                                    procesando={procesandoAccion}
-                                                />
+                                                <ConsultasPendientes solicitud={solicitud} />
+                                                {solicitud.motivo_incorrecta && <MotivoIncidencia motivo={solicitud.motivo_incorrecta} />}
+                                                <RespuestaConsultaEncargada solicitud={solicitud} auth={auth} onMarcarLeido={marcarConsultaLeida} procesando={procesandoAccion} />
                                                 <FeedbackYComentarios solicitud={solicitud} />
                                                 <MotivoCancelacionBloque solicitud={solicitud} />
                                             </td>
-                                            <td className="p-6 align-top">
-                                                <div className="font-black italic theme-text-main text-sm bg-black/5 dark:bg-white/5 px-3 py-1.5 rounded-lg inline-block border theme-border">{new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(solicitud.monto_cotizado)}</div>
-                                                <div className={`mt-2 flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-md w-fit border ${solicitud.pago_confirmado ? 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20' : 'text-amber-500 bg-amber-500/10 border-amber-500/20'}`}>
-                                                    {solicitud.pago_confirmado ? <CheckCircle2 className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
-                                                    {(solicitud.compra_en_tienda || solicitud.compra_en_tienda_solo_tag) && solicitud.pago_confirmado
-                                                        ? 'Concluida'
-                                                        : (solicitud.pago_confirmado ? 'Confirmado' : 'Pendiente')}
-                                                </div>
+                                            <td className="px-4 py-3 align-top">
+                                                <CotizacionSolicitud solicitud={solicitud} />
                                             </td>
-                                            <td className="p-6 align-top">
-                                                <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border ${estatus.clase} whitespace-nowrap shadow-sm`}><StatusIcon className="w-4 h-4" /><span className="text-[10px] font-black uppercase tracking-wider italic">{estatus.label}</span></div>
+                                            <td className="px-4 py-3 align-top">
+                                                <div className={`${estatus.clase} whitespace-nowrap`}><StatusIcon className="h-3.5 w-3.5" aria-hidden="true" /><span>{estatus.label}</span></div>
                                             </td>
-                                            <td className="p-6 text-center sticky-actions group-hover:bg-black/5 dark:group-hover:bg-white/5 transition-colors align-top">
-                                                <button onClick={(e) => abrirMenu(e, solicitud)} className="p-3 theme-element border theme-border hover:border-[var(--color-primario)] rounded-2xl transition-all shadow-sm outline-none"><MoreVertical className="w-5 h-5 theme-text-main" /></button>
+                                            <td className="sticky-actions px-4 py-3 text-center align-top">
+                                                <button type="button" onClick={(e) => abrirMenu(e, solicitud)} aria-label={`Acciones de FOL-${solicitud.id}`} className="rounded-lg border theme-border theme-element p-2 transition-colors duration-200 hover:border-[var(--color-primario)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"><MoreVertical className="h-5 w-5 theme-text-main" aria-hidden="true" /></button>
                                             </td>
                                         </tr>
                                     );
@@ -1214,7 +1268,7 @@ export default function Index({
                 </div>
 
                 <Paginacion solicitudes={solicitudes} onIrAPagina={irAPagina} />
-            </div>
+            </GeliaPageShell>
 
             {modalForm.abierto && <ModalFormSolicitud onClose={() => setModalForm({ ...modalForm, abierto: false })} procesos={procesos} listas={listas} tiposCliente={tipos_cliente} bancos={bancos} modoEdicion={modalForm.modoEdicion} solicitudAEditar={modalForm.solicitud} />}
             {modalRespuesta.abierto && (

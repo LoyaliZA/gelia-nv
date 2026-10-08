@@ -1,0 +1,285 @@
+/**
+ * Dashboard — colas operativas, métricas y modal de configuración (renovación visual).
+ */
+
+.dashboard-adaptive-widget {
+    border-radius: 1rem;
+    border-width: 1px;
+}
+
+@media (min-width: 640px) {
+    .dashboard-adaptive-widget {
+        border-radius: 1.125rem;
+    }
+}
+
+@media (min-width: 768px) {
+    .dashboard-adaptive-widget {
+        border-radius: 1.25rem;
+    }
+}
+
+.dashboard-widget__header-title {
+    font-weight: 600;
+    text-transform: none;
+    letter-spacing: -0.01em;
+}
+
+.dashboard-queue-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+}
+
+.dashboard-queue-row {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    padding: 0.5rem 0.625rem;
+    border-radius: 0.75rem;
+    min-width: 0;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.dashboard-queue-row--link {
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.dashboard-queue-row--link:hover {
+    border-color: color-mix(in srgb, var(--color-primario) 35%, transparent);
+}
+
+.dashboard-queue-row--link:focus-visible {
+    outline: 2px solid var(--color-primario);
+    outline-offset: 2px;
+}
+
+.dashboard-queue-row__estado {
+    width: 1.75rem;
+    height: 1.75rem;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.dashboard-queue-row__primary {
+    font-size: 0.75rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.dashboard-queue-row__secondary {
+    font-size: 0.6875rem;
+    font-weight: 500;
+    margin-top: 0.125rem;
+}
+
+.dashboard-queue-row__metric {
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.dashboard-queue-row__muted {
+    font-size: 0.625rem;
+    font-weight: 500;
+    max-width: 5.5rem;
+}
+
+.dashboard-queue-row__chevron {
+    opacity: 0.5;
+}
+
+.dashboard-widget-empty {
+    text-align: center;
+    padding: 1.5rem 0.5rem;
+    font-size: 0.75rem;
+    font-style: italic;
+    opacity: 0.75;
+}
+
+.dashboard-stat-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+}
+
+.dashboard-stat-grid--quad {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.dashboard-stat-block {
+    padding: 0.75rem 0.875rem;
+    border-radius: 0.75rem;
+}
+
+.dashboard-stat-block__label {
+    font-size: 0.6875rem;
+    font-weight: 500;
+}
+
+.dashboard-stat-block__value {
+    font-size: 1.125rem;
+    font-weight: 600;
+    margin-top: 0.25rem;
+    line-height: 1.2;
+}
+
+.dashboard-phase-table {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+}
+
+.dashboard-phase-table__row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.5rem 0.625rem;
+    border-radius: 0.75rem;
+}
+
+.dashboard-phase-table__row:nth-child(odd) {
+    background: color-mix(in srgb, var(--theme-text-main, #111) 3%, transparent);
+}
+
+.dashboard-phase-table__value {
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.dashboard-config-row__check {
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+/* --- Paneles: módulos del sistema y funciones operativas --- */
+.dashboard-panel-shell {
+    border-width: 1px;
+    border-radius: 1rem;
+    padding: 0.875rem 1rem;
+}
+
+@media (min-width: 640px) {
+    .dashboard-panel-shell {
+        padding: 1rem 1.125rem;
+        border-radius: 1.125rem;
+    }
+}
+
+@media (min-width: 768px) {
+    .dashboard-panel-shell {
+        padding: 1.125rem 1.25rem;
+        border-radius: 1.25rem;
+    }
+}
+
+.dashboard-panel-shell__header {
+    padding-bottom: 0.75rem;
+    min-height: auto;
+}
+
+.dashboard-panel-shell__body {
+    margin-top: 0.75rem;
+}
+
+.dashboard-panel-shell__title {
+    font-size: clamp(0.875rem, 0.65rem + 0.8cqw, 1.0625rem);
+    font-weight: 600;
+    text-transform: none;
+    letter-spacing: -0.01em;
+    line-height: 1.25;
+}
+
+.dashboard-panel-mobile {
+    border-width: 1px;
+    border-radius: 1rem;
+    padding: 0.875rem 1rem;
+}
+
+.dashboard-panel-mobile__title {
+    font-weight: 600;
+    text-transform: none;
+    letter-spacing: -0.01em;
+}
+
+.dashboard-panel-mobile__label,
+.dashboard-module-card-mobile__label {
+    font-size: 0.625rem;
+    font-weight: 600;
+    line-height: 1.2;
+    text-align: center;
+    margin-top: 0.375rem;
+}
+
+.dashboard-panel-empty {
+    padding: 1.5rem 1rem;
+    border-radius: 0.75rem;
+    border-style: dashed;
+    text-align: center;
+}
+
+.dashboard-panel-empty__text {
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.dashboard-panel-cards {
+    --card-min-w: 8.5rem;
+    --card-max-w: 13rem;
+    --card-gap: 0.625rem;
+}
+
+.dashboard-module-card {
+    border-width: 1px;
+    border-radius: 1rem;
+    min-height: 7rem;
+    padding: 0.875rem;
+}
+
+.dashboard-module-card__title {
+    font-weight: 600;
+    font-style: normal;
+    text-transform: none;
+    letter-spacing: -0.01em;
+    font-size: 0.8125rem;
+}
+
+.dashboard-module-card__subtitle {
+    font-weight: 500;
+    font-style: normal;
+    font-size: 0.6875rem;
+    line-height: 1.35;
+}
+
+.dashboard-module-card:hover {
+    box-shadow: 0 2px 12px -4px color-mix(in srgb, var(--color-primario) 14%, transparent);
+}
+
+.dashboard-module-card:focus-visible {
+    outline: 2px solid var(--color-primario);
+    outline-offset: 2px;
+}
+
+.dashboard-module-card-mobile {
+    border-width: 1px;
+    border-radius: 0.875rem;
+}
+
+.dashboard-module-card-mobile__label {
+    display: block;
+    width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: 0 0.125rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .dashboard-page-reveal {
+        opacity: 1;
+        animation: none;
+    }
+}

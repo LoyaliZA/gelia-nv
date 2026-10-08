@@ -68,6 +68,12 @@ import {
     ensureProfessionalSidebarDefaultOnce,
     resolveSidebarLayout,
 } from '../../config/sidebarLayouts';
+import {
+    FONDO_SISTEMA,
+    applyFondoPantalla,
+    normalizeFondoBase,
+    etiquetaTipoFondo,
+} from '../../utils/fondoPantalla';
 
 const MAX_PROFILE_PHOTO_BYTES = 2048 * 1024;
 const MAX_BG_PHOTO_BYTES = 5120 * 1024;
@@ -87,7 +93,7 @@ function readStoredTheme(temaVisual = {}) {
         return {
             color: temaVisual?.color_nombre?.toLowerCase() || 'rosa',
             dark: temaVisual?.modo === 'dark',
-            bg: temaVisual?.fondo_base || 'none',
+            bg: normalizeFondoBase(temaVisual?.fondo_base) || FONDO_SISTEMA,
             font: temaVisual?.fuente_principal || 'inter',
             scale: clampFontScale(temaVisual?.escala_fuente ?? FONT_SCALE_DEFAULT),
             glass: temaVisual?.efecto_cristal !== false,
@@ -107,7 +113,7 @@ function readStoredTheme(temaVisual = {}) {
         dark: localStorage.getItem('theme')
             ? localStorage.getItem('theme') === 'dark'
             : temaVisual?.modo === 'dark',
-        bg: localStorage.getItem('bg_base') || temaVisual?.fondo_base || 'none',
+        bg: normalizeFondoBase(localStorage.getItem('bg_base') || temaVisual?.fondo_base) || FONDO_SISTEMA,
         font: localStorage.getItem('theme_font') || temaVisual?.fuente_principal || 'inter',
         scale: clampFontScale(
             localStorage.getItem(FONT_SCALE_STORAGE_KEY) ?? temaVisual?.escala_fuente ?? FONT_SCALE_DEFAULT
@@ -160,26 +166,6 @@ function restoreThemeSnapshot(snapshot) {
         else localStorage.removeItem(key);
     });
     window.dispatchEvent(new Event('theme-changed'));
-}
-
-function applyBackgroundCSS(bgValue) {
-    const root = document.documentElement;
-    root.style.removeProperty('--bg-image-pc');
-    root.style.removeProperty('--bg-image-movil');
-
-    if (!bgValue || bgValue === 'none') {
-        root.style.setProperty('--bg-image-pc', 'none');
-        root.style.setProperty('--bg-image-movil', 'none');
-    } else if (bgValue.startsWith('#')) {
-        root.style.setProperty('--bg-image-pc', `linear-gradient(to right, ${bgValue}, ${bgValue})`);
-        root.style.setProperty('--bg-image-movil', `linear-gradient(to right, ${bgValue}, ${bgValue})`);
-    } else if (bgValue.startsWith('data:image') || bgValue.startsWith('/storage')) {
-        root.style.setProperty('--bg-image-pc', `url(${bgValue})`);
-        root.style.setProperty('--bg-image-movil', `url(${bgValue})`);
-    } else {
-        root.style.setProperty('--bg-image-pc', `url('/assets/backgrounds/${bgValue}_pc.svg')`);
-        root.style.setProperty('--bg-image-movil', `url('/assets/backgrounds/${bgValue}_movil.svg')`);
-    }
 }
 
 function resolveAccentHex(colorName) {
@@ -400,11 +386,6 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
     });
 
     const FALLBACK_BACKGROUNDS = ['blob', 'blobscene', 'circle', 'layered', 'peaks', 'polygon', 'square', 'stacked', 'steps', 'wave'];
-    const solidBackgrounds  = [
-        { name: 'Blanco',      hex: '#ffffff' },
-        { name: 'Negro',       hex: '#000000' },
-        { name: 'Gris Oscuro', hex: '#1e293b' },
-    ];
     const FALLBACK_PRESETS = [
         { name: 'Gelia Signature', modo: 'dark',  colorHex: '#ec4899', colorNombre: 'rosa',  bg: 'blob',    font: 'montserrat', escala: 1, glass: true,  layout: 'professional_left',  sound: true },
         { name: 'GELIA Oasis',     modo: 'light', colorHex: '#10b981', colorNombre: 'verde', bg: 'stacked', font: 'poppins',     escala: 1, glass: false, layout: 'professional_left', sound: true },
@@ -587,7 +568,7 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
 
             const previewUrl = URL.createObjectURL(compressed);
             setSelectedBg(previewUrl);
-            applyBackgroundCSS(previewUrl);
+            applyFondoPantalla(document.documentElement, previewUrl);
             localStorage.setItem('bg_base', previewUrl);
             window.dispatchEvent(new Event('theme-changed'));
         } catch (err) {
@@ -604,9 +585,9 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
 
     const handleRemoveBg = () => {
         setData(prev => ({ ...prev, archivo_fondo: null, remove_fondo: true }));
-        setSelectedBg('none');
-        applyBackgroundCSS('none');
-        localStorage.setItem('bg_base', 'none');
+        setSelectedBg(FONDO_SISTEMA);
+        applyFondoPantalla(document.documentElement, FONDO_SISTEMA);
+        localStorage.setItem('bg_base', FONDO_SISTEMA);
         window.dispatchEvent(new Event('theme-changed'));
         if (bgFileInputRef.current) bgFileInputRef.current.value = '';
     };
@@ -630,7 +611,7 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
 
         localStorage.setItem('theme', theme.modo);
         localStorage.setItem('theme_color', theme.color);
-        localStorage.setItem('bg_base', theme.bg);
+        localStorage.setItem('bg_base', normalizeFondoBase(theme.bg));
         localStorage.setItem('theme_font', theme.font);
         localStorage.setItem(FONT_SCALE_STORAGE_KEY, String(clampFontScale(theme.scale)));
         localStorage.setItem('theme_glass', String(theme.glass));
@@ -698,9 +679,10 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
                     onSuccess: (page) => {
                         const tv = page.props.tema_visual || {};
                         if (hadBgUpload && tv.fondo_base) {
-                            localStorage.setItem('bg_base', tv.fondo_base);
-                            setSelectedBg(tv.fondo_base);
-                            applyBackgroundCSS(tv.fondo_base);
+                            const fondo = normalizeFondoBase(tv.fondo_base);
+                            localStorage.setItem('bg_base', fondo);
+                            setSelectedBg(fondo);
+                            applyFondoPantalla(document.documentElement, fondo);
                         }
                         const syncedAlertas = mergeAlertasPrefs(tv.alertas_prefs);
                         setAlertasPrefs(syncedAlertas);
@@ -729,12 +711,7 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
         });
     };
 
-    const getBackgroundType = (bg) => {
-        if (!bg || bg === 'none')                                       return 'Sin Fondo';
-        if (bg.startsWith('#'))                                         return 'Color Sólido';
-        if (bg.startsWith('data:image') || bg.startsWith('/storage'))  return 'Imagen Personalizada';
-        return 'Diseño Vectorial';
-    };
+    const getBackgroundType = (bg) => etiquetaTipoFondo(bg);
 
     useEffect(() => {
         const syncThemeState = () => {
@@ -869,10 +846,11 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
         window.dispatchEvent(new Event('theme-changed'));
     };
 
-    const handleBgChange = (bgValue) => {
+    const handleBgChange = (bgValueRaw) => {
+        const bgValue = normalizeFondoBase(bgValueRaw);
         setSelectedBg(bgValue);
         setData('remove_fondo', false);
-        applyBackgroundCSS(bgValue);
+        applyFondoPantalla(document.documentElement, bgValue);
         localStorage.setItem('bg_base', bgValue);
         window.dispatchEvent(new Event('theme-changed'));
     };
@@ -887,7 +865,7 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
 
         setIsDarkMode(isDark);
         setSelectedColor(color);
-        setSelectedBg(preset.bg);
+        setSelectedBg(normalizeFondoBase(preset.bg));
         setTypography(font);
         setFontScale(scale);
         setGlassEffect(glass);
@@ -901,7 +879,7 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
 
         document.documentElement.style.setProperty('--color-primario', resolveAccentHex(color));
         document.documentElement.style.setProperty('--font-principal', fontFamilies[font] || fontFamilies.inter);
-        applyBackgroundCSS(preset.bg);
+        applyFondoPantalla(document.documentElement, normalizeFondoBase(preset.bg));
         applyFontScaleToRoot(scale);
         glass
             ? document.documentElement.classList.add('glass-active')
@@ -910,7 +888,7 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
         persistThemeToStorage({
             modo: isDark ? 'dark' : 'light',
             color,
-            bg: preset.bg,
+            bg: normalizeFondoBase(preset.bg),
             font,
             scale,
             glass,
@@ -1276,8 +1254,31 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
                             <PreferenciasSubheading
                                 icon={ImageIcon}
                                 title="Fondo de pantalla_"
-                                subtitle="Catálogo, colores sólidos o imagen personalizada"
+                                subtitle="Fondo del sistema, catálogo o imagen personalizada"
                             />
+
+                            <div className="space-y-4">
+                                <p className="text-[11px] font-black uppercase theme-text-muted tracking-widest ml-1 drop-shadow-sm m-0">Fondo del sistema</p>
+                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                                    <button
+                                        type="button"
+                                        onClick={() => handleBgChange(FONDO_SISTEMA)}
+                                        className={`relative h-24 rounded-2xl overflow-hidden border-[3px] transition-all duration-300 group ${selectedBg === FONDO_SISTEMA ? 'shadow-2xl scale-105 ring-2 ring-offset-2 dark:ring-offset-[#141414]' : 'border-transparent opacity-60 hover:opacity-100 hover:shadow-lg hover:-translate-y-1'}`}
+                                        style={{ '--tw-ring-color': 'var(--color-primario)', borderColor: selectedBg === FONDO_SISTEMA ? 'var(--color-primario)' : '' }}
+                                        title="Fondo del sistema"
+                                    >
+                                        <div
+                                            className="w-full h-full flex flex-col items-center justify-center gap-1 px-2"
+                                            style={{ background: 'var(--bg-app)' }}
+                                        >
+                                            <Sun className="w-5 h-5 theme-text-muted opacity-80" aria-hidden />
+                                            <span className="text-[9px] font-black uppercase tracking-widest theme-text-main text-center leading-tight">
+                                                Claro / oscuro
+                                            </span>
+                                        </div>
+                                    </button>
+                                </div>
+                            </div>
 
                             <div className="space-y-4">
                                 <div className="flex items-center justify-between">
@@ -1308,27 +1309,7 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                                <div className="space-y-4">
-                                    <p className="text-[11px] font-black uppercase theme-text-muted tracking-widest ml-1 drop-shadow-sm m-0">Colores sólidos</p>
-                                    <div className="flex flex-wrap gap-4">
-                                        {solidBackgrounds.map((solid) => (
-                                            <button
-                                                key={solid.name}
-                                                type="button"
-                                                onClick={() => handleBgChange(solid.hex)}
-                                                className={`w-14 h-14 rounded-2xl border-[3px] transition-all duration-300 ${selectedBg === solid.hex ? 'scale-110 shadow-2xl ring-2 ring-offset-2 dark:ring-offset-[#141414]' : 'border-transparent opacity-60 hover:opacity-100 hover:shadow-lg hover:-translate-y-1'}`}
-                                                style={{ backgroundColor: solid.hex, '--tw-ring-color': 'var(--color-primario)', borderColor: selectedBg === solid.hex ? 'var(--color-primario)' : '' }}
-                                                title={solid.name}
-                                            />
-                                        ))}
-                                        <label className={`relative w-14 h-14 rounded-2xl border-[3px] border-dashed flex items-center justify-center cursor-pointer hover:scale-110 hover:shadow-lg transition-all overflow-hidden theme-element ${glassEffect ? 'border-zinc-400 dark:border-zinc-500 bg-white/50 dark:bg-black/30' : 'border-zinc-300 dark:border-zinc-600 bg-zinc-50 dark:bg-zinc-900'}`} title="Elegir color de fondo personalizado">
-                                            <Palette className="w-6 h-6 theme-text-main z-10 pointer-events-none" />
-                                            <input type="color" className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-20" onChange={(e) => handleBgChange(e.target.value)} />
-                                        </label>
-                                    </div>
-                                </div>
-                                <div className="space-y-4">
+                            <div className="space-y-4">
                                     <p className="text-[11px] font-black uppercase theme-text-muted tracking-widest ml-1 drop-shadow-sm m-0">Imagen personalizada</p>
                                     <button
                                         type="button"
@@ -1338,7 +1319,6 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
                                         <Upload className="w-5 h-5 theme-text-main drop-shadow-sm" />
                                         <span className="text-sm font-bold theme-text-main uppercase tracking-widest drop-shadow-sm">Subir (.jpg, .png)</span>
                                     </button>
-                                </div>
                             </div>
                         </div>
                     )}
@@ -1569,12 +1549,14 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
                         </button>
                         <h3 className="text-lg font-black uppercase italic tracking-tighter theme-text-main m-0">Fondo Personalizado_</h3>
                         <div className="w-full aspect-video rounded-3xl overflow-hidden border-4 shadow-lg flex items-center justify-center bg-zinc-900 shrink-0 theme-border relative">
-                            {selectedBg && selectedBg !== 'none' && !selectedBg.startsWith('#') ? (
+                            {selectedBg && selectedBg !== FONDO_SISTEMA && !selectedBg.startsWith('#') ? (
                                 <img src={selectedBg.startsWith('data:image') || selectedBg.startsWith('/storage') ? selectedBg : `/assets/backgrounds/${selectedBg}_movil.svg`} alt="Preview" className="w-full h-full object-cover" />
                             ) : selectedBg && selectedBg.startsWith('#') ? (
-                                <div className="w-full h-full" style={{ backgroundColor: selectedBg }}></div>
+                                <div className="w-full h-full" style={{ backgroundColor: selectedBg }} />
                             ) : (
-                                <ImageIcon className="w-12 h-12 text-zinc-700" />
+                                <div className="w-full h-full flex items-center justify-center" style={{ background: 'var(--bg-app)' }}>
+                                    <ImageIcon className="w-12 h-12 theme-text-muted opacity-50" />
+                                </div>
                             )}
                             <span className="bg-black/60 text-white px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest absolute top-4 left-4 backdrop-blur-md">
                                 {getBackgroundType(selectedBg)}
@@ -1589,7 +1571,7 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
                                 <Upload className="w-4 h-4" /> Subir Imagen
                             </button>
                             <button type="button" onClick={handleRemoveBg} className="flex-1 py-3 px-4 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30 text-red-600 rounded-2xl text-xs font-bold transition-transform hover:scale-105 shadow-sm flex items-center justify-center gap-2 outline-none">
-                                <Trash2 className="w-4 h-4" /> Sin Fondo
+                                <Trash2 className="w-4 h-4" /> Usar fondo del sistema
                             </button>
                         </div>
                         <button type="button" onClick={() => setIsBgModalOpen(false)} className="w-full py-4 rounded-full text-white font-black uppercase tracking-widest text-[11px] transition-transform hover:scale-105 shadow-md flex justify-center items-center gap-2 outline-none m-0" style={{ backgroundColor: 'var(--color-primario)' }}>

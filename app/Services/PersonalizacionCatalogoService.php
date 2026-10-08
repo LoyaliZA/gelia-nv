@@ -154,10 +154,13 @@ class PersonalizacionCatalogoService
     public static function fondosOpcionesSelect(): array
     {
         if (!self::tablaDisponible('personalizacion_fondos')) {
-            return collect(['blob', 'stacked', 'polygon', 'wave'])->map(fn ($v) => ['value' => $v, 'label' => $v])->all();
+            return array_merge(
+                [['value' => 'none', 'label' => 'Fondo del sistema']],
+                collect(['blob', 'stacked', 'polygon', 'wave'])->map(fn ($v) => ['value' => $v, 'label' => $v])->all()
+            );
         }
 
-        return PersonalizacionFondo::query()
+        $opciones = PersonalizacionFondo::query()
             ->where('activo', true)
             ->orderBy('orden')
             ->orderBy('nombre')
@@ -165,6 +168,11 @@ class PersonalizacionCatalogoService
             ->map(fn (PersonalizacionFondo $f) => ['value' => $f->valor, 'label' => $f->nombre])
             ->values()
             ->all();
+
+        return array_merge(
+            [['value' => 'none', 'label' => 'Fondo del sistema']],
+            $opciones
+        );
     }
 
     public static function tonosAdminPaginados(int $page = 1, int $perPage = 12): array

@@ -4,7 +4,6 @@
  * Self-check Fase 6 — Envío municipio y carátulas.
  * Uso: php tests/Unit/ControlPedidos/check_envio_municipio_caratula.php
  */
-
 $fallos = 0;
 $root = dirname(__DIR__, 3);
 require_once __DIR__.'/_routes_helper.php';
@@ -21,11 +20,11 @@ $checks = [
     ['LISTA_PARA_CARATULA', str_contains(file_get_contents($root.'/app/Models/ControlPedidos/PedidoBmaTareaPreparacion.php'), 'LISTA_PARA_CARATULA')],
     ['ruta generar carátula', str_contains($cpRoutes, 'caratula/generar')],
     ['ruta confirmar colocación', str_contains($cpRoutes, 'caratula/confirmar-colocacion')],
-    ['tab LISTAS_CARATULA', str_contains(file_get_contents($root.'/resources/js/Pages/ControlPedidos/Tienda/Partials/FiltrosTienda.jsx'), 'LISTAS_CARATULA')],
+    ['tab LISTAS_CARATULA', str_contains(file_get_contents($root.'/resources/js/Pages/ControlPedidos/Partials/pedidosBmaStyles.js'), 'LISTAS_CARATULA')],
     ['UI datos municipales Ventas', str_contains(file_get_contents($root.'/resources/js/Pages/ControlPedidos/Partials/ModalFormPedidoLegado.jsx'), 'Datos de entrega municipal')],
     ['permiso generar_caratula', str_contains(file_get_contents($root.'/resources/js/utils/permisos.js'), 'control_pedidos.tienda.generar_caratula')],
-    ['sin hardcode Jaguar', !preg_match('/Jaguar|TNT/i', file_get_contents($root.'/database/migrations/2026_08_24_200000_fase6_envio_municipio_caratulas.php'))],
-    ['habilitado_envio_municipio default false', str_contains(file_get_contents($root.'/database/migrations/2026_08_24_200000_fase6_envio_municipio_caratulas.php'), "->default(false)")],
+    ['sin hardcode Jaguar', ! preg_match('/Jaguar|TNT/i', file_get_contents($root.'/database/migrations/2026_08_24_200000_fase6_envio_municipio_caratulas.php'))],
+    ['habilitado_envio_municipio default false', str_contains(file_get_contents($root.'/database/migrations/2026_08_24_200000_fase6_envio_municipio_caratulas.php'), '->default(false)')],
     ['paqueterias_municipio catalogo', str_contains(file_get_contents($root.'/app/Services/ControlPedidos/ObtenerCatalogosPedidoBmaService.php'), 'paqueterias_municipio')],
 ];
 

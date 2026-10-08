@@ -48,6 +48,31 @@
     }
 }
 
+/* Muchas pestañas: scroll horizontal en todos los breakpoints (sin flex:1 que comprime) */
+.gelia-segment-tabs-track--scroll {
+    display: inline-flex;
+    width: max-content;
+    min-width: 100%;
+}
+
+.gelia-segment-tabs-track--scroll .gelia-segment-btn {
+    flex: 0 0 auto;
+    min-width: max-content;
+}
+
+@media (min-width: 640px) {
+    .gelia-segment-tabs-track--scroll {
+        display: inline-flex;
+        width: max-content;
+        min-width: 100%;
+    }
+
+    .gelia-segment-tabs-track--scroll .gelia-segment-btn {
+        flex: 0 0 auto;
+        min-width: max-content;
+    }
+}
+
 /* Scrollbar scoped (notificaciones, tablas horizontales) */
 .custom-scrollbar::-webkit-scrollbar {
     width: 4px;

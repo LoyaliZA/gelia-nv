@@ -134,6 +134,7 @@ export default function useFiltrosSolicitudesPage({
             router.get(rutaIndex, construirParams(payload), {
                 preserveState: true,
                 preserveScroll: true,
+                showProgress: false,
                 onFinish: () => onFinConsulta?.(),
             });
         },

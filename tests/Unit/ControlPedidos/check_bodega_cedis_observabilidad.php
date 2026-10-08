@@ -4,7 +4,6 @@
  * Self-check Fase 6 — Bodega, CEDIS y observabilidad.
  * Uso: php tests/Unit/ControlPedidos/check_bodega_cedis_observabilidad.php
  */
-
 $fallos = 0;
 $root = dirname(__DIR__, 3);
 
@@ -23,7 +22,7 @@ $checks = [
         'origen_solicitud'
     )],
     ['tab HISTORIAL', str_contains(
-        file_get_contents($root.'/resources/js/Pages/ControlPedidos/Tienda/Partials/FiltrosTienda.jsx'),
+        file_get_contents($root.'/resources/js/Pages/ControlPedidos/Partials/pedidosBmaStyles.js'),
         'HISTORIAL'
     )],
     ['banner cola cuenta', str_contains(

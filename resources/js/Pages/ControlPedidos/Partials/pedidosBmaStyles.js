@@ -6,6 +6,7 @@ import {
     THEME_LABEL,
     GELIA_SEGMENT_TABS_SCROLL,
     GELIA_SEGMENT_TABS_TRACK,
+    GELIA_SEGMENT_TABS_TRACK_SCROLL,
 } from '../../../utils/geliaTheme';
 
 export const LABEL_NOTA_COMPRA_PREGUNTA = '¿Deseas que la nota de compra vaya dentro de tu envío?';
@@ -429,6 +430,51 @@ export const TABS_DELEGADO = [
     { id: 'ENVIADOS', label: LABELS_ESTATUS_POR_FASE.ENVIADO },
 ];
 
+export const TABS_TIENDA_COLA = [
+    { id: 'PENDIENTES', label: 'Pendientes' },
+    { id: 'EN_ATENCION', label: 'En atención' },
+    { id: 'CON_INCIDENCIA', label: 'Con incidencia' },
+];
+
+export const TABS_TIENDA_TRASLADO = [
+    { id: 'LISTAS_TRASLADO', label: 'Listas para traslado' },
+    { id: 'LISTAS_CARATULA', label: 'Listas para carátula' },
+    { id: 'EN_TRASLADO', label: 'En traslado' },
+    { id: 'RECHAZADAS_CEDIS', label: 'Rechazadas CEDIS' },
+];
+
+export const TABS_TIENDA_CIERRE = [
+    { id: 'RESPONDIDAS_HOY', label: 'Respondidas hoy' },
+    { id: 'PENDIENTES_LIBERACION', label: 'Pendientes de liberación' },
+    { id: 'DEVOLUCION_PENDIENTE', label: 'Devolución pendiente' },
+];
+
+export const TABS_TIENDA_HISTORIAL = [
+    { id: 'HISTORIAL_DEVUELTAS', label: 'Devueltas al anaquel' },
+    { id: 'HISTORIAL', label: 'Historial' },
+];
+
+export const TABS_TIENDA = [
+    ...TABS_TIENDA_COLA,
+    ...TABS_TIENDA_TRASLADO,
+    ...TABS_TIENDA_CIERRE,
+    ...TABS_TIENDA_HISTORIAL,
+];
+
+export const TABS_TIENDA_GRUPOS = [
+    { key: 'cola', sectionLabel: 'Cola de trabajo', tabs: TABS_TIENDA_COLA },
+    { key: 'traslado', sectionLabel: 'Traslado y CEDIS', tabs: TABS_TIENDA_TRASLADO },
+    { key: 'cierre', sectionLabel: 'Cierre operativo', tabs: TABS_TIENDA_CIERRE },
+    { key: 'historial', sectionLabel: 'Historial', tabs: TABS_TIENDA_HISTORIAL },
+];
+
+/** Filtros del listado Tienda (códigos alineados con backend). */
+export const MODALIDADES_TIENDA_FILTRO = [
+    { id: '', label: 'Todas las modalidades' },
+    { id: 'RECOGE_TIENDA', label: 'Recoge en tienda' },
+    { id: 'RECOGE_TIENDA_TRANSFERENCIA', label: 'Transferencia' },
+];
+
 export const badgeResguardoSemantico = () => ({
     label: 'Resguardo',
     ...badgeClaseEstatusPedido({ color_hex: '#3B82F6' }),
@@ -681,7 +727,14 @@ export const badgeDepartamentoVendedor = (nombre) => {
 export const BTN_PRIMARY = `${THEME_BTN_PRIMARY} theme-btn-primary--compact`;
 export const BTN_SECONDARY = `${THEME_BTN_SECONDARY} theme-btn-primary--compact`;
 
-export { THEME_MODAL_OVERLAY, THEME_MODAL_SHELL, THEME_LABEL, GELIA_SEGMENT_TABS_SCROLL, GELIA_SEGMENT_TABS_TRACK };
+export {
+    THEME_MODAL_OVERLAY,
+    THEME_MODAL_SHELL,
+    THEME_LABEL,
+    GELIA_SEGMENT_TABS_SCROLL,
+    GELIA_SEGMENT_TABS_TRACK,
+    GELIA_SEGMENT_TABS_TRACK_SCROLL,
+};
 
 export const formatearMoneda = (valor) => {
     const n = Number(valor);

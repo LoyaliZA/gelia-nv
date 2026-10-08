@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Head, useForm, router, usePage } from '@inertiajs/react';
-import { LayoutDashboard, Activity, Settings2, X, Check, Layers, RotateCcw, Sparkles, Clock } from 'lucide-react';
+import { LayoutDashboard, Settings2, X, Check, Layers, RotateCcw, Sparkles, Clock, Activity } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
+import GeliaPageShell from '../../Components/GeliaPageShell';
 import DashboardLayoutGrid from '../../Components/Dashboard/DashboardLayoutGrid';
 import DashboardMobileView from '../../Components/Dashboard/DashboardMobileView';
 import DashboardPanel, { DashboardCardSlot, DashboardPanelCards } from '../../Components/Dashboard/DashboardPanel';
@@ -17,7 +18,15 @@ import {
 } from '../../Components/Dashboard/dashboardLayoutUtils';
 import DashboardModuleCard from '../../Components/Dashboard/DashboardModuleCard';
 import { DASHBOARD_MODULE_CARDS, DASHBOARD_FUNCTION_CARDS } from '../../Components/Dashboard/dashboardModulesCatalog';
-import { geliaCardClass } from '../../utils/geliaTheme';
+import {
+    geliaCardClass,
+    GELIA_BTN_OUTLINE,
+    GELIA_MODAL_TITLE,
+    THEME_BTN_PRIMARY,
+    THEME_MODAL_OVERLAY,
+    THEME_MODAL_SHELL,
+} from '../../utils/geliaTheme';
+import DashboardWidgetStatus from '../../Components/Dashboard/DashboardWidgetStatus';
 import { formatoMoneda } from '../../utils/formatoMoneda';
 
 import WidgetSolicitudes from './Widgets/WidgetSolicitudes';
@@ -80,7 +89,7 @@ function buildCardGridPanel({
 function buildModulosPanel({ variant, tarjetasVisibles }) {
     return buildCardGridPanel({
         variant,
-        title: 'Módulos de Sistema_',
+        title: 'Módulos del sistema',
         icon: LayoutDashboard,
         iconStyle: { color: 'var(--color-primario)' },
         emptyMessage: 'No hay módulos visibles. Haz clic en "Configurar" para añadir accesos a tu panel.',
@@ -91,9 +100,10 @@ function buildModulosPanel({ variant, tarjetasVisibles }) {
 function buildFuncionesPanel({ variant, funcionesVisibles }) {
     return buildCardGridPanel({
         variant,
-        title: 'Funciones Operativas_',
+        title: 'Funciones operativas',
         icon: Layers,
-        iconClassName: 'text-indigo-500',
+        iconStyle: { color: 'var(--color-primario)' },
+        emptyMessage: 'No hay funciones visibles. Usa Configurar para mostrar accesos operativos.',
         items: funcionesVisibles,
     });
 }
@@ -400,70 +410,57 @@ export default function AdminDashboard({
     const hayColasVisibles = mostrarWidgetSolicitudes || mostrarWidgetCancelaciones || mostrarWidgetActivos
         || mostrarWidgetRh || mostrarWidgetCredibox || mostrarWidgetPedidos || mostrarWidgetFacturas;
 
+    const primerNombre = auth?.user?.name ? auth.user.name.trim().split(' ')[0] : 'Usuario';
+
     return (
         <AppLayout auth={auth}>
             <Head title="Dashboard | GELIANV" />
 
-            <div className="w-full max-w-[1400px] mx-auto p-4 md:p-6 lg:p-12 space-y-8 md:space-y-10 min-h-screen relative">
-                <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 relative z-10 dashboard-page-reveal">
-                    <div className="flex items-center gap-3 min-w-0 flex-1 theme-surface border theme-border rounded-2xl px-4 py-3 shadow-sm">
-                        <span className="h-1 w-8 rounded-full shrink-0" style={{ backgroundColor: 'var(--color-primario)' }} />
-                        <div className="min-w-0 overflow-visible">
-                            <p className="text-[9px] font-black uppercase tracking-[0.25em] m-0" style={{ color: 'var(--color-primario)' }}>
-                                Gelia NV
-                            </p>
-                            <p className="text-lg md:text-xl font-black italic tracking-tight uppercase theme-text-main m-0 pr-1">
-                                Hola,{' '}
-                                <span className="inline-block" style={{ color: 'var(--color-primario)' }}>
-                                    {auth?.user?.name ? auth.user.name.trim().split(' ')[0] : 'Usuario'}
-                                </span>
-                            </p>
+            <GeliaPageShell className="space-y-5 md:space-y-6 min-h-screen relative py-4 md:py-6">
+                <header
+                    className={geliaCardClass(
+                        'dashboard-page-header p-4 md:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10 dashboard-page-reveal'
+                    )}
+                >
+                    <div className="min-w-0">
+                        <div className="flex items-center gap-3 mb-2">
+                            <span
+                                className="h-1 w-8 rounded-full shrink-0"
+                                style={{ backgroundColor: 'var(--color-primario)' }}
+                                aria-hidden
+                            />
+                            <span className="text-[10px] font-semibold tracking-wide theme-text-muted m-0">Gelia NV</span>
                         </div>
+                        <h1 className="text-xl md:text-2xl font-bold theme-text-main m-0 leading-tight">Panel de control</h1>
+                        <p className="text-sm theme-text-muted m-0 mt-1">
+                            Sesión de <span className="font-medium theme-text-main">{primerNombre}</span>
+                        </p>
                     </div>
 
                     {hayColasVisibles && (
-                        <div
-                            className={`inline-flex items-center gap-2 px-4 py-3 rounded-2xl border text-[9px] font-black uppercase tracking-widest shrink-0 shadow-sm theme-surface ${
-                                pendientesAtencion > 0
-                                    ? 'border-amber-500/30 text-amber-600'
-                                    : 'border-emerald-500/30 text-emerald-500'
-                            }`}
-                        >
+                        <div className="shrink-0">
                             {pendientesAtencion > 0 ? (
-                                <>
-                                    <span className="w-8 h-8 rounded-xl bg-amber-500/15 border border-amber-500/25 flex items-center justify-center shrink-0">
-                                        <Clock className="w-3.5 h-3.5" />
-                                    </span>
-                                    {pendientesAtencion} pendientes
-                                </>
+                                <DashboardWidgetStatus tono="aviso" icon={Clock}>
+                                    {pendientesAtencion} pendientes de atención
+                                </DashboardWidgetStatus>
                             ) : (
-                                <>
-                                    <span className="w-8 h-8 rounded-xl bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center shrink-0">
-                                        <Activity className="w-3.5 h-3.5" />
-                                    </span>
-                                    Al día
-                                </>
+                                <DashboardWidgetStatus tono="exito" icon={Activity}>
+                                    Operación al día
+                                </DashboardWidgetStatus>
                             )}
                         </div>
                     )}
                 </header>
 
                 {kpiItems.length > 0 && (
-                    <section aria-label="Indicadores" className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-6 dashboard-page-reveal">
+                    <section aria-label="Indicadores" className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-5 dashboard-page-reveal">
                         {kpiItems.map(({ key, label, hint, format }) => (
                             <div key={key} className={geliaCardClass('p-4 md:p-5 min-h-[4.5rem] flex flex-col justify-center')}>
-                                <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0">{label}</p>
-                                <p
-                                    className="text-2xl md:text-3xl font-black italic theme-text-main m-0 leading-none tabular-nums mt-2"
-                                    style={{ color: 'var(--color-primario)' }}
-                                >
+                                <p className="text-xs font-medium theme-text-muted m-0">{label}</p>
+                                <p className="text-2xl md:text-[1.75rem] font-semibold theme-text-main m-0 leading-none tabular-nums mt-2">
                                     {formatKpiValue(estadisticas[key], format)}
                                 </p>
-                                {hint && (
-                                    <p className="text-[9px] font-bold uppercase tracking-widest theme-text-muted m-0 mt-2 opacity-80">
-                                        {hint}
-                                    </p>
-                                )}
+                                {hint && <p className="text-[11px] theme-text-muted m-0 mt-2">{hint}</p>}
                             </div>
                         ))}
                     </section>
@@ -482,54 +479,42 @@ export default function AdminDashboard({
                 )}
 
                 {isMobile && hayPaneles && (
-                    <p className="text-[9px] font-bold theme-text-muted uppercase tracking-widest text-center px-2 -mt-4 dashboard-page-reveal">
+                    <p className="text-xs theme-text-muted text-center px-2 -mt-2 dashboard-page-reveal m-0">
                         Vista optimizada para móvil. Organiza el panel desde escritorio.
                     </p>
                 )}
 
                 {editLayoutMode && !isMobile && (
                     <div
-                        className="theme-surface border-2 rounded-2xl p-4 md:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 dashboard-page-reveal"
-                        style={{ borderColor: 'var(--color-primario)' }}
+                        className="gelia-estado-vivo gelia-estado-vivo--info rounded-xl border theme-border p-4 md:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 dashboard-page-reveal"
+                        role="status"
                     >
-                        <div>
-                            <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: 'var(--color-primario)' }}>
-                                Modo organización activo_
-                            </p>
-                            <p className="text-xs font-bold theme-text-muted mt-1">
-                                Arrastra los contenedores con &quot;Arrastrar&quot; y estíralos desde la esquina inferior derecha. Usa Autoajuste para reorganizar al instante.
+                        <div className="min-w-0">
+                            <p className="text-sm font-semibold theme-text-main m-0">Modo organización activo</p>
+                            <p className="text-xs theme-text-muted mt-1 m-0">
+                                Arrastra los contenedores y ajústalos desde la esquina inferior derecha. Usa Autoajuste para reorganizar al instante.
                             </p>
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
-                            <button
-                                type="button"
-                                onClick={autoAjustarDisposicion}
-                                className="flex items-center gap-2 px-4 py-2.5 rounded-xl theme-element border theme-border text-[9px] font-black uppercase tracking-widest theme-text-muted hover:theme-text-main outline-none"
-                            >
-                                <Sparkles className="w-3.5 h-3.5" /> Autoajuste
+                            <button type="button" onClick={autoAjustarDisposicion} className={GELIA_BTN_OUTLINE}>
+                                <Sparkles className="w-3.5 h-3.5 shrink-0" aria-hidden />
+                                Autoajuste
                             </button>
-                            <button
-                                type="button"
-                                onClick={restaurarDisposicionPredeterminada}
-                                className="flex items-center gap-2 px-4 py-2.5 rounded-xl theme-element border theme-border text-[9px] font-black uppercase tracking-widest theme-text-muted hover:theme-text-main outline-none"
-                            >
-                                <RotateCcw className="w-3.5 h-3.5" /> Restablecer
+                            <button type="button" onClick={restaurarDisposicionPredeterminada} className={GELIA_BTN_OUTLINE}>
+                                <RotateCcw className="w-3.5 h-3.5 shrink-0" aria-hidden />
+                                Restablecer
                             </button>
-                            <button
-                                type="button"
-                                onClick={cancelarEdicionLayout}
-                                className="px-4 py-2.5 rounded-xl theme-element border theme-border text-[9px] font-black uppercase tracking-widest theme-text-muted hover:theme-text-main outline-none"
-                            >
+                            <button type="button" onClick={cancelarEdicionLayout} className={GELIA_BTN_OUTLINE}>
                                 Cancelar
                             </button>
                             <button
                                 type="button"
                                 onClick={guardarDisposicion}
                                 disabled={processing}
-                                className="px-5 py-2.5 rounded-xl text-white text-[9px] font-black uppercase tracking-widest shadow-md outline-none disabled:opacity-60"
-                                style={{ backgroundColor: 'var(--color-primario)' }}
+                                aria-busy={processing}
+                                className={`${THEME_BTN_PRIMARY} theme-btn-primary--compact min-h-[44px] disabled:opacity-60`}
                             >
-                                {processing ? 'Guardando...' : 'Guardar disposición'}
+                                {processing ? 'Guardando…' : 'Guardar disposición'}
                             </button>
                         </div>
                     </div>
@@ -555,62 +540,89 @@ export default function AdminDashboard({
                         )}
                     </div>
                 ) : (
-                    <div className="theme-surface border-2 theme-border rounded-[2rem] p-12 text-center dashboard-page-reveal">
-                        <p className="text-xs font-bold theme-text-muted uppercase tracking-widest">
+                    <div className={geliaCardClass('p-10 md:p-12 text-center dashboard-page-reveal')}>
+                        <p className="text-sm theme-text-muted m-0">
                             No hay secciones visibles en tu panel. Usa Configurar para mostrar módulos.
                         </p>
                     </div>
                 )}
-            </div>
+            </GeliaPageShell>
 
             {showConfig &&
                 createPortal(
-                    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-xl" onClick={cerrarModal}>
+                    <div
+                        className={`${THEME_MODAL_OVERLAY} z-[9999] items-center p-4`}
+                        onClick={cerrarModal}
+                        role="presentation"
+                    >
                         <div
-                            className="w-full max-w-lg theme-surface theme-border border shadow-2xl rounded-[2.5rem] p-8 md:p-10 flex flex-col space-y-6 relative"
+                            className={`${THEME_MODAL_SHELL} w-full max-w-lg p-6 md:p-8 flex flex-col gap-5 relative max-h-[90vh]`}
                             onClick={(e) => e.stopPropagation()}
+                            role="dialog"
+                            aria-modal="true"
+                            aria-labelledby="dashboard-config-title"
                         >
                             <button
                                 type="button"
                                 onClick={cerrarModal}
-                                className="absolute top-5 right-5 p-2 theme-text-muted hover:theme-text-main hover:bg-black/5 dark:hover:bg-white/5 rounded-full transition-colors outline-none"
+                                className="absolute top-4 right-4 p-2 theme-text-muted hover:theme-text-main rounded-full transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primario)]"
+                                aria-label="Cerrar"
                             >
                                 <X className="w-5 h-5" />
                             </button>
 
-                            <h3 className="text-lg font-black uppercase italic tracking-tighter theme-text-main m-0 flex items-center gap-3">
-                                <Settings2 className="w-6 h-6" style={{ color: 'var(--color-primario)' }} />
-                                Personalizar Panel_
+                            <h3 id="dashboard-config-title" className={`${GELIA_MODAL_TITLE} flex items-center gap-3`}>
+                                <Settings2 className="w-6 h-6 shrink-0" style={{ color: 'var(--color-primario)' }} aria-hidden />
+                                Personalizar panel
                             </h3>
 
-                            <div className="space-y-3 max-h-[50vh] overflow-y-auto custom-scrollbar pr-2">
-                                <p className="text-[10px] font-bold theme-text-muted uppercase tracking-widest mb-4 ml-1">Tarjetas operativas disponibles:</p>
+                            <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar pr-1 -mr-1 space-y-2">
+                                <p className="text-xs font-medium theme-text-muted m-0 mb-2">
+                                    Módulos y funciones visibles en el panel
+                                </p>
 
-                                {tarjetasHabilitadas.map((tarjeta) => {
-                                    const isVisible = !data.dashboard_ocultos.includes(tarjeta.id);
+                                {[...tarjetasHabilitadas, ...funcionesHabilitadas].map((item) => {
+                                    const isVisible = !data.dashboard_ocultos.includes(item.id);
                                     return (
                                         <button
-                                            key={tarjeta.id}
+                                            key={item.id}
                                             type="button"
-                                            onClick={() => toggleVisibilidad(tarjeta.id)}
-                                            className={`w-full flex items-center justify-between p-4 rounded-2xl border transition-all text-[11px] font-black uppercase tracking-widest outline-none ${isVisible ? 'border-[var(--color-primario)] bg-[var(--color-primario)]/5 theme-text-main' : 'theme-border theme-element theme-text-muted hover:border-[var(--color-primario)]/30'}`}
+                                            onClick={() => toggleVisibilidad(item.id)}
+                                            aria-pressed={isVisible}
+                                            className={`dashboard-config-row w-full flex items-center justify-between gap-3 p-3 rounded-xl border transition-colors text-left text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primario)] ${
+                                                isVisible
+                                                    ? 'border-[var(--color-primario)] bg-[color-mix(in_srgb,var(--color-primario)_8%,transparent)] theme-text-main'
+                                                    : 'theme-border theme-element theme-text-muted'
+                                            }`}
                                         >
-                                            {tarjeta.titulo}
-                                            {isVisible && <Check className="w-5 h-5" style={{ color: 'var(--color-primario)' }} />}
+                                            <span className="min-w-0 truncate">{item.titulo}</span>
+                                            <span
+                                                className={`dashboard-config-row__check shrink-0 w-5 h-5 rounded-md border flex items-center justify-center ${
+                                                    isVisible ? 'border-[var(--color-primario)] bg-[var(--color-primario)] text-white' : 'theme-border'
+                                                }`}
+                                                aria-hidden
+                                            >
+                                                {isVisible && <Check className="w-3.5 h-3.5" />}
+                                            </span>
                                         </button>
                                     );
                                 })}
                             </div>
 
-                            <button
-                                type="button"
-                                onClick={guardarPreferencias}
-                                disabled={processing}
-                                className="w-full py-4 rounded-full text-white font-black uppercase tracking-widest text-[11px] shadow-md flex justify-center items-center gap-2 outline-none m-0 disabled:opacity-60"
-                                style={{ backgroundColor: 'var(--color-primario)' }}
-                            >
-                                <Check className="w-5 h-5" /> {processing ? 'Procesando...' : 'Aplicar Preferencias'}
-                            </button>
+                            <div className="flex flex-col sm:flex-row gap-2 pt-1">
+                                <button type="button" onClick={cerrarModal} className={`${GELIA_BTN_OUTLINE} flex-1 min-h-[44px]`}>
+                                    Cancelar
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={guardarPreferencias}
+                                    disabled={processing}
+                                    aria-busy={processing}
+                                    className={`${THEME_BTN_PRIMARY} theme-btn-primary--compact flex-1 min-h-[44px] disabled:opacity-60`}
+                                >
+                                    {processing ? 'Guardando…' : 'Guardar preferencias'}
+                                </button>
+                            </div>
                         </div>
                     </div>,
                     document.body

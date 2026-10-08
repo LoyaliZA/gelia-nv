@@ -33,6 +33,7 @@ import {
     notificarMensajeLeido,
     abrirConversacionDesdeNotificacion,
 } from '../utils/mensajeriaNotificaciones';
+import { applyFondoPantalla, normalizeFondoBase } from '../utils/fondoPantalla';
 import {
     clampFontScale,
     FONT_SCALE_DEFAULT,
@@ -598,20 +599,8 @@ export default function AppLayout({ children, fullScreen = false }) {
             localStorage.setItem('theme', 'light');
         }
 
-        const nombreFondo = (typeof window !== 'undefined' ? localStorage.getItem('bg_base') : null) || tema.fondo_base || 'none';
-        if (nombreFondo === 'none') {
-            root.style.setProperty('--bg-image-pc', 'none');
-            root.style.setProperty('--bg-image-movil', 'none');
-        } else if (nombreFondo.startsWith('#')) {
-            root.style.setProperty('--bg-image-pc', `linear-gradient(to right, ${nombreFondo}, ${nombreFondo})`);
-            root.style.setProperty('--bg-image-movil', `linear-gradient(to right, ${nombreFondo}, ${nombreFondo})`);
-        } else if (nombreFondo.startsWith('data:image') || nombreFondo.startsWith('/storage')) {
-            root.style.setProperty('--bg-image-pc', `url(${nombreFondo})`);
-            root.style.setProperty('--bg-image-movil', `url(${nombreFondo})`);
-        } else {
-            root.style.setProperty('--bg-image-pc', `url('/assets/backgrounds/${nombreFondo}_pc.svg')`);
-            root.style.setProperty('--bg-image-movil', `url('/assets/backgrounds/${nombreFondo}_movil.svg')`);
-        }
+        const nombreFondoRaw = (typeof window !== 'undefined' ? localStorage.getItem('bg_base') : null) || tema.fondo_base || 'none';
+        applyFondoPantalla(root, normalizeFondoBase(nombreFondoRaw));
 
         const savedFont = typeof window !== 'undefined' ? localStorage.getItem('theme_font') : null;
         const activeFont = savedFont || tema.fuente_principal || 'inter';

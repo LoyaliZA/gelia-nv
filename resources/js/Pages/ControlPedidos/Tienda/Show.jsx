@@ -1,11 +1,16 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import {
-    ArrowLeft, Camera, CheckCircle2, AlertTriangle, Store, Package, Truck, Clock, User, FileText, Printer,
+    ArrowLeft, Camera, CheckCircle2, AlertTriangle, Store, Package, Truck, FileText, Printer,
 } from 'lucide-react';
 import AppLayout from '../../../Layouts/AppLayout';
 import GeliaPageShell from '../../../Components/GeliaPageShell';
+import GeliaTituloCard from '../../../Components/GeliaTituloCard';
 import { geliaCardClass, THEME_INPUT, THEME_LABEL, THEME_SELECT, THEME_TEXTAREA } from '../../../utils/geliaTheme';
+import { claseBadgeEstadoTienda } from './Partials/tiendaUi';
+import ProgresoOperacionTienda from './Partials/ProgresoOperacionTienda';
+import PanelAccionesShowTienda from './Partials/PanelAccionesShowTienda';
+import TablaProductosShowTienda from './Partials/TablaProductosShowTienda';
 import { BTN_PRIMARY, BTN_SECONDARY, formatearFechaNegocio } from '../Partials/pedidosBmaStyles';
 import ModalAlertaPedido from '../Partials/ModalAlertaPedido';
 import AvisoOperativoPedido from '../Partials/AvisoOperativoPedido';
@@ -20,19 +25,6 @@ const TIPOS_INCIDENCIA = [
     { value: 'producto_no_encontrado', label: 'Producto no encontrado' },
     { value: 'otro', label: 'Otro' },
 ];
-
-const BADGE_ESTADO = {
-    PENDIENTE: 'bg-orange-500/15 text-orange-700 dark:text-orange-300 border-orange-500/30',
-    EN_ATENCION: 'bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/30',
-    CON_INCIDENCIA: 'bg-orange-500/15 text-orange-800 dark:text-orange-200 border-orange-500/40',
-    LISTA_PARA_TRASLADO: 'bg-violet-500/15 text-violet-700 dark:text-violet-300 border-violet-500/30',
-    LISTA_PARA_CARATULA: 'bg-teal-500/15 text-teal-700 dark:text-teal-300 border-teal-500/30',
-    EN_TRASLADO: 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-500/30',
-    RECIBIDA_CEDIS: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30',
-    RECHAZADA_CEDIS: 'bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/30',
-    RESPONDIDA: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30',
-    LIBERACION_SOLICITADA: 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30',
-};
 
 function Meta({ label, children }) {
     return (
@@ -209,7 +201,7 @@ export default function Show({
     const traspasoInfo = traspaso || tarea.solicitud_traspaso;
     const folio = tarea.pedido?.folio_visible || tarea.pedido?.folio_remision || tarea.pedido?.folio || `Tarea #${tarea.id}`;
     const folioEtiqueta = tarea.pedido?.folio_etiqueta || 'Folio';
-    const badgeClass = BADGE_ESTADO[tarea.estado] || 'theme-element theme-text-muted border theme-border';
+    const badgeEstado = claseBadgeEstadoTienda(tarea.estado, tarea.estado_label);
     const progreso = tarea.progreso_traslado || [];
     const progresoCaratula = tarea.progreso_caratula || [];
 
@@ -278,37 +270,21 @@ export default function Show({
     return (
         <AppLayout auth={auth}>
             <Head title={`Preparación Tienda — ${folio}`} />
-            <GeliaPageShell className="space-y-3 md:space-y-6">
-                <header className={`${geliaCardClass()} p-3 md:p-6`}>
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div className="min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
-                                <Store className="w-4 h-4 shrink-0" style={{ color: 'var(--color-primario)' }} />
-                                <span className="text-[10px] font-black uppercase tracking-widest theme-text-muted">Preparación Tienda_</span>
-                            </div>
-                            <h1 className="text-xl md:text-2xl font-black italic uppercase tracking-tighter theme-text-main m-0 truncate">
-                                {folio}
-                            </h1>
-                            <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0 mt-1">
-                                {folioEtiqueta}
-                                {tarea.pedido?.folio && tarea.pedido.folio !== folio ? ` · Interno ${tarea.pedido.folio}` : ''}
-                                {tarea.pedido?.prioridad_md ? ' · Mismo día' : ''}
-                            </p>
-                            <p className="text-sm theme-text-muted font-bold mt-1 m-0">
-                                {tarea.modalidad?.nombre || '—'}
-                                {tarea.almacen?.nombre ? ` · ${tarea.almacen.nombre}` : ''}
-                            </p>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-2">
-                            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border ${badgeClass}`}>
-                                {tarea.estado_label || tarea.estado}
-                            </span>
-                            <Link href={route('control_pedidos.tienda.index')} className={`${BTN_SECONDARY} inline-flex items-center gap-2 min-h-[40px]`}>
-                                <ArrowLeft className="w-4 h-4" /> Volver
+            <GeliaPageShell className="gelia-tienda-op space-y-4 md:space-y-6">
+                <GeliaTituloCard
+                    eyebrow="Preparación tienda"
+                    title={folio}
+                    description={`${folioEtiqueta}${tarea.pedido?.folio && tarea.pedido.folio !== folio ? ` · Interno ${tarea.pedido.folio}` : ''}${tarea.pedido?.prioridad_md ? ' · Mismo día' : ''} · ${tarea.modalidad?.nombre || '—'}${tarea.almacen?.nombre ? ` · ${tarea.almacen.nombre}` : ''}`}
+                    icon={Store}
+                    aside={(
+                        <div className="flex flex-col items-stretch sm:items-end gap-2">
+                            <span className={badgeEstado.className}>{badgeEstado.label}</span>
+                            <Link href={route('control_pedidos.tienda.index')} className={`${BTN_SECONDARY} inline-flex items-center justify-center gap-2 min-h-[44px]`}>
+                                <ArrowLeft className="w-4 h-4" /> Volver al listado
                             </Link>
                         </div>
-                    </div>
-                </header>
+                    )}
+                />
 
                 <div className="grid lg:grid-cols-3 gap-4">
                     <div className="lg:col-span-2 space-y-4">
@@ -318,18 +294,9 @@ export default function Show({
                             </AvisoOperativoPedido>
                         )}
 
-                        {tarea.modalidad?.nombre && (
-                            <p
-                                className="text-sm font-black uppercase tracking-widest text-center py-2.5 px-3 rounded-xl bg-[var(--color-primario)]/10 m-0"
-                                style={{ color: 'var(--color-primario)' }}
-                            >
-                                {tarea.modalidad.nombre}
-                            </p>
-                        )}
-
                         {entrega && (
-                            <section className={`${geliaCardClass()} p-4 space-y-3 border border-teal-500/30`}>
-                                <h3 className="text-[10px] font-black uppercase tracking-widest text-teal-700 dark:text-teal-300 m-0">Destino y cobro</h3>
+                            <section className={`${geliaCardClass()} p-4 space-y-3 theme-element border theme-border`}>
+                                <h3 className="text-sm font-bold theme-text-main m-0">Destino y cobro</h3>
                                 <div className="grid sm:grid-cols-2 gap-3">
                                     <Meta label="Municipio">{entrega.municipio_destino || '—'}</Meta>
                                     <Meta label="Destinatario">{entrega.destinatario_nombre || '—'}</Meta>
@@ -359,72 +326,16 @@ export default function Show({
                             />
                         )}
 
-                        {(tarea.productos || []).map((p, i) => (
-                            <article key={p.id} className={`${geliaCardClass()} p-4 space-y-3`}>
-                                <div className="flex items-start justify-between gap-3">
-                                    <div className="min-w-0">
-                                        <p className="font-black text-sm theme-text-main m-0">{p.descripcion_snapshot}</p>
-                                        {p.sku && <p className="text-xs theme-text-muted m-0 mt-1">SKU: {p.sku}</p>}
-                                    </div>
-                                    <span className="shrink-0 text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-lg theme-element border theme-border">
-                                        Sol. {p.cantidad_solicitada}
-                                    </span>
-                                </div>
-                                {editable ? (
-                                    <div className="grid sm:grid-cols-2 gap-3">
-                                        <div>
-                                            <label className={THEME_LABEL}>Cantidad encontrada</label>
-                                            <input
-                                                type="number"
-                                                min="0"
-                                                className={THEME_INPUT}
-                                                value={productos[i]?.cantidad_encontrada ?? ''}
-                                                onChange={(e) => setProductos((prev) => prev.map((x, j) => (j === i ? { ...x, cantidad_encontrada: e.target.value } : x)))}
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className={THEME_LABEL}>Estado físico</label>
-                                            <select
-                                                className={THEME_SELECT}
-                                                value={productos[i]?.estado_fisico || ''}
-                                                onChange={(e) => setProductos((prev) => prev.map((x, j) => (j === i ? { ...x, estado_fisico: e.target.value } : x)))}
-                                            >
-                                                {Object.entries(estados_fisicos).map(([k, v]) => (
-                                                    <option key={k} value={k}>{v}</option>
-                                                ))}
-                                            </select>
-                                        </div>
-                                        {requisitos.evidencia_por_producto && Number(productos[i]?.cantidad_encontrada) > 0 && (
-                                            <div className="sm:col-span-2">
-                                                <label className={THEME_LABEL}>Evidencia del producto</label>
-                                                <input
-                                                    type="file"
-                                                    accept="image/*,application/pdf"
-                                                    className={THEME_INPUT}
-                                                    onChange={(e) => {
-                                                        const file = e.target.files?.[0] || null;
-                                                        setEvidenciasProducto((prev) => ({ ...prev, [p.id]: file }));
-                                                    }}
-                                                />
-                                            </div>
-                                        )}
-                                        <div className="sm:col-span-2">
-                                            <label className={THEME_LABEL}>Observación</label>
-                                            <input
-                                                className={THEME_INPUT}
-                                                value={productos[i]?.observacion || ''}
-                                                onChange={(e) => setProductos((prev) => prev.map((x, j) => (j === i ? { ...x, observacion: e.target.value } : x)))}
-                                            />
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <div className="grid grid-cols-2 gap-2 text-sm">
-                                        <Meta label="Encontradas">{p.cantidad_encontrada ?? '—'}</Meta>
-                                        <Meta label="Estado físico">{estados_fisicos[p.estado_fisico] || p.estado_fisico || '—'}</Meta>
-                                    </div>
-                                )}
-                            </article>
-                        ))}
+                        <TablaProductosShowTienda
+                            productos={tarea.productos || []}
+                            productosState={productos}
+                            estados_fisicos={estados_fisicos}
+                            editable={editable}
+                            requisitos={requisitos}
+                            evidenciasProducto={evidenciasProducto}
+                            setProductos={setProductos}
+                            setEvidenciasProducto={setEvidenciasProducto}
+                        />
 
                         {editable && (requisitos.peso_real_obligatorio || requisitos.peso_volumetrico_obligatorio || requisitos.observaciones_fisicas_obligatorias || requisitos.caja_obligatoria || tarea.requiere_traslado_cedis) && (
                             <section className={`${geliaCardClass()} p-4 space-y-3`}>
@@ -530,8 +441,8 @@ export default function Show({
                         )}
 
                         {(listaCaratula || caratula) && esMunicipio && (
-                            <section className={`${geliaCardClass()} p-4 space-y-3 border border-teal-500/40`}>
-                                <h3 className="text-[10px] font-black uppercase tracking-widest text-teal-700 dark:text-teal-300 m-0">Carátula</h3>
+                            <section className={`${geliaCardClass()} p-4 space-y-3 theme-element border theme-border`}>
+                                <h3 className="text-sm font-bold theme-text-main m-0">Carátula</h3>
                                 <p className="text-sm font-bold m-0">
                                     Estado: {caratula?.estado || 'PENDIENTE'}
                                     {caratula?.version ? ` · v${caratula.version}` : ''}
@@ -577,22 +488,14 @@ export default function Show({
                         )}
 
                         {progresoCaratula.length > 0 && (
-                            <section className={`${geliaCardClass()} p-4 space-y-3`}>
-                                <h3 className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0">Progreso municipal</h3>
-                                <ol className="space-y-2 m-0 p-0 list-none">
-                                    {progresoCaratula.map((paso) => (
-                                        <li key={paso.clave} className={`flex items-start gap-2.5 text-sm ${paso.hecho ? 'theme-text-main' : 'theme-text-muted'}`}>
-                                            <span className={`mt-0.5 w-2.5 h-2.5 rounded-full shrink-0 ${paso.hecho ? 'bg-emerald-500' : 'theme-element border theme-border'}`} />
-                                            <span className="font-bold">{paso.label}</span>
-                                        </li>
-                                    ))}
-                                </ol>
+                            <section className={`${geliaCardClass()} p-4`}>
+                                <ProgresoOperacionTienda pasos={progresoCaratula} titulo="Progreso municipal" />
                             </section>
                         )}
 
                         {conciliacion_grupo?.lineas?.length > 0 && (
-                            <section className={`${geliaCardClass()} p-4 space-y-3 border border-sky-500/30`}>
-                                <h3 className="text-[10px] font-black uppercase tracking-widest text-sky-700 dark:text-sky-300 m-0">
+                            <section className={`${geliaCardClass()} p-4 space-y-3 theme-element border theme-border`}>
+                                <h3 className="text-sm font-bold theme-text-main m-0">
                                     Grupo complemento ({conciliacion_grupo.folio_raiz})
                                 </h3>
                                 <p className="text-xs theme-text-muted font-bold m-0">
@@ -613,8 +516,8 @@ export default function Show({
                         )}
 
                         {discrepancias_traspaso?.length > 0 && (
-                            <section className={`${geliaCardClass()} p-4 space-y-3 border border-red-500/30`}>
-                                <h3 className="text-[10px] font-black uppercase tracking-widest text-red-700 dark:text-red-300 m-0">
+                            <section className={`${geliaCardClass()} p-4 space-y-3 theme-element border theme-border`}>
+                                <h3 className="text-sm font-bold theme-text-main m-0">
                                     Discrepancias Tienda / CEDIS
                                 </h3>
                                 <ul className="m-0 p-0 list-none space-y-2 text-sm">
@@ -628,8 +531,8 @@ export default function Show({
                         )}
 
                         {traspasoInfo && (
-                            <section className={`${geliaCardClass()} p-4 space-y-3 border border-violet-500/30`}>
-                                <h3 className="text-[10px] font-black uppercase tracking-widest text-violet-700 dark:text-violet-300 m-0">Traspaso vinculado</h3>
+                            <section className={`${geliaCardClass()} p-4 space-y-3 theme-element border theme-border`}>
+                                <h3 className="text-sm font-bold theme-text-main m-0">Traspaso vinculado</h3>
                                 <div className="grid sm:grid-cols-2 gap-3">
                                     <Meta label="Folio">{traspasoInfo.folio || '—'}</Meta>
                                     {traspasoInfo.folio_traspaso && <Meta label="Folio CEDIS">{traspasoInfo.folio_traspaso}</Meta>}
@@ -646,31 +549,20 @@ export default function Show({
 
                         {progreso.length > 0 && (
                             <section className={`${geliaCardClass()} p-4 space-y-3`}>
-                                <h3 className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0">Progreso de traslado</h3>
-                                <ol className="space-y-2 m-0 p-0 list-none">
-                                    {progreso.map((paso) => (
-                                        <li
-                                            key={paso.clave}
-                                            className={`flex items-start gap-2.5 text-sm ${paso.hecho ? 'theme-text-main' : 'theme-text-muted'}`}
-                                        >
-                                            <span className={`mt-0.5 w-2.5 h-2.5 rounded-full shrink-0 ${paso.hecho ? 'bg-emerald-500' : 'theme-element border theme-border'}`} />
-                                            <span>
-                                                <span className="font-bold">{paso.label}</span>
-                                                {paso.en && (
-                                                    <span className="block text-[11px] theme-text-muted font-bold">
-                                                        {formatearFechaNegocio(paso.en)}
-                                                        {paso.por ? ` · ${paso.por}` : ''}
-                                                    </span>
-                                                )}
-                                            </span>
+                                <ProgresoOperacionTienda pasos={progreso} titulo="Progreso de traslado" />
+                                <ul className="m-0 p-0 list-none space-y-1 text-xs theme-text-muted">
+                                    {progreso.filter((p) => p.en).map((paso) => (
+                                        <li key={`${paso.clave}-meta`}>
+                                            {paso.label}: {formatearFechaNegocio(paso.en)}
+                                            {paso.por ? ` · ${paso.por}` : ''}
                                         </li>
                                     ))}
-                                </ol>
+                                </ul>
                             </section>
                         )}
 
                         {modoIncidencia && puedeIncidencia && (
-                            <section className={`${geliaCardClass()} p-4 space-y-3 border border-amber-500/40`}>
+                            <section className={`${geliaCardClass()} p-4 space-y-3 theme-element border theme-border`}>
                                 <h3 className="font-black text-sm flex items-center gap-2 m-0">
                                     <AlertTriangle className="w-4 h-4" /> Reportar incidencia
                                 </h3>
@@ -728,76 +620,24 @@ export default function Show({
                         )}
                     </div>
 
-                    <aside className="space-y-4 lg:sticky lg:top-4 self-start">
-                        <section className={`${geliaCardClass()} p-4 space-y-3`}>
-                            <h3 className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0">Resumen</h3>
-                            <div className="grid grid-cols-1 gap-3">
-                                <Meta label="Cliente">{tarea.pedido?.cliente_nombre || '—'}</Meta>
-                                <Meta label="Almacén">{tarea.almacen?.nombre || '—'}</Meta>
-                                <Meta label="Piezas">{tarea.piezas_solicitadas ?? 0}</Meta>
-                                {tarea.responsable?.name && (
-                                    <Meta label="Responsable">
-                                        <span className="inline-flex items-center gap-1">
-                                            <User className="w-3.5 h-3.5" /> {tarea.responsable.name}
-                                        </span>
-                                    </Meta>
-                                )}
-                                {tarea.solicitada_at && (
-                                    <Meta label="Solicitada">
-                                        <span className="inline-flex items-center gap-1">
-                                            <Clock className="w-3.5 h-3.5" /> {formatearFechaNegocio(tarea.solicitada_at)}
-                                        </span>
-                                    </Meta>
-                                )}
-                                {tarea.fecha_limite && (
-                                    <Meta label="Vencimiento">
-                                        <span className="text-amber-700 dark:text-amber-300">
-                                            {formatearFechaNegocio(tarea.fecha_limite)}
-                                        </span>
-                                    </Meta>
-                                )}
-                            </div>
-                            {faltantes.length > 0 && editable && (
-                                <div className="rounded-xl border border-red-500/30 bg-red-500/5 p-3">
-                                    <p className="text-[9px] font-black uppercase tracking-widest text-red-600 m-0 mb-1">Faltan</p>
-                                    <ul className="text-xs text-red-600 list-disc pl-4 m-0 space-y-0.5">
-                                        {faltantes.map((f) => <li key={f}>{f}</li>)}
-                                    </ul>
-                                </div>
-                            )}
-                        </section>
-
-                        <div className="flex flex-col gap-2">
-                            {enPendiente && (
-                                <button type="button" className={`${BTN_PRIMARY} min-h-[44px]`} onClick={tomar}>
-                                    <Package className="w-4 h-4 inline mr-1" /> Tomar tarea
-                                </button>
-                            )}
-                            {editable && (
-                                <>
-                                    <button type="button" className={`${BTN_PRIMARY} min-h-[44px]`} disabled={faltantes.length > 0} onClick={responder}>
-                                        <CheckCircle2 className="w-4 h-4 inline mr-1" />
-                                        {tarea.requiere_traslado_cedis
-                                            ? 'Marcar lista para traslado'
-                                            : (esMunicipio ? 'Marcar lista para carátula' : 'Responder preparación')}
-                                    </button>
-                                    <button type="button" className={`${BTN_SECONDARY} min-h-[44px]`} onClick={() => setModoIncidencia((v) => !v)}>
-                                        Reportar incidencia
-                                    </button>
-                                </>
-                            )}
-                            {listaTraslado && puedeTrasladar && (
-                                <button type="button" className={`${BTN_PRIMARY} min-h-[44px]`} onClick={confirmarSalida}>
-                                    <Truck className="w-4 h-4 inline mr-1" /> Confirmar salida a CEDIS
-                                </button>
-                            )}
-                            {puedeLiberar && ['RESPONDIDA', 'LIBERACION_SOLICITADA', 'RECIBIDA_CEDIS'].includes(tarea.estado) && (
-                                <button type="button" className={`${BTN_SECONDARY} min-h-[44px]`} onClick={liberar}>
-                                    Liberar mercancía
-                                </button>
-                            )}
-                        </div>
-                    </aside>
+                    <PanelAccionesShowTienda
+                        tarea={tarea}
+                        faltantes={faltantes}
+                        editable={editable}
+                        enPendiente={enPendiente}
+                        listaTraslado={listaTraslado}
+                        puedeTomar={puedeTomar}
+                        puedeResponder={puedeResponder}
+                        puedeTrasladar={puedeTrasladar}
+                        puedeLiberar={puedeLiberar}
+                        esMunicipio={esMunicipio}
+                        modoIncidencia={modoIncidencia}
+                        onTomar={tomar}
+                        onResponder={responder}
+                        onConfirmarSalida={confirmarSalida}
+                        onToggleIncidencia={() => setModoIncidencia((v) => !v)}
+                        onLiberar={liberar}
+                    />
                 </div>
             </GeliaPageShell>
 

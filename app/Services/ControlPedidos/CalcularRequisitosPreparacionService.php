@@ -341,12 +341,21 @@ class CalcularRequisitosPreparacionService
             return [];
         }
 
-        $filas = Cache::remember('cp.matriz_requisitos_prep.v1', 60, function () {
+        $filas = collect(Cache::remember('cp.matriz_requisitos_prep.v2', 60, function () {
             return MatrizRequisitosPreparacion::query()
                 ->where('activo', true)
                 ->orderBy('orden')
-                ->get();
-        });
+                ->get()
+                ->map(fn (MatrizRequisitosPreparacion $f) => [
+                    'codigo_modalidad' => $f->codigo_modalidad,
+                    'departamento_codigo' => $f->departamento_codigo,
+                    'almacen_origen_id' => $f->almacen_origen_id,
+                    'tipo_integracion' => $f->tipo_integracion,
+                    'requisitos_json' => $f->requisitos_json,
+                ])
+                ->values()
+                ->all();
+        }))->map(fn (array $row) => (object) $row);
 
         $deptoCodigo = $this->departamentoCodigoPedido($tarea);
         $tipoIntegracion = $tarea->pedido?->pedido_principal_id ? 'complemento' : 'pedido_principal';

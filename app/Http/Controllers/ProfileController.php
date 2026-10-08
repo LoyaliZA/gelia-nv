@@ -12,6 +12,7 @@ use Illuminate\Http\RedirectResponse;
 use Carbon\Carbon;
 use App\Services\PersonalizacionCatalogoService;
 use App\Services\UserSessionService;
+use App\Support\NormalizarFondoBase;
 
 class ProfileController extends Controller
 {
@@ -159,6 +160,10 @@ class ProfileController extends Controller
         if (isset($configVisual['contenido_max_rem'])) {
             $maxRem = round(((float) $configVisual['contenido_max_rem']) / 2.5) * 2.5;
             $configVisual['contenido_max_rem'] = max(60, min(120, $maxRem));
+        }
+
+        if (isset($configVisual['fondo_base'])) {
+            $configVisual['fondo_base'] = NormalizarFondoBase::aplicar($configVisual['fondo_base']);
         }
 
         if (isset($configVisual['contenido_padding_rem'])) {

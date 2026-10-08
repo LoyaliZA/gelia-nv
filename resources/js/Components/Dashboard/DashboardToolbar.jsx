@@ -1,6 +1,11 @@
 import React from 'react';
 import { Move, Settings2, Sparkles } from 'lucide-react';
 import { DASHBOARD_PRESETS } from './dashboardLayoutUtils';
+import {
+    GELIA_BTN_OUTLINE,
+    GELIA_SEGMENT_TABS_SCROLL,
+    GELIA_SEGMENT_TABS_TRACK_COMPACT,
+} from '../../utils/geliaTheme';
 
 const PRESET_OPTIONS = [
     { id: DASHBOARD_PRESETS.OPERATIVO, label: 'Operativo' },
@@ -18,53 +23,63 @@ export default function DashboardToolbar({
     onPresetChange,
 }) {
     return (
-        <div className="dashboard-toolbar flex flex-wrap items-center justify-between gap-3 animate-page-reveal">
+        <div
+            className="dashboard-toolbar flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center justify-between gap-3 animate-page-reveal"
+            role="toolbar"
+            aria-label="Controles del panel"
+        >
             {!isMobile && onPresetChange && (
-                <div className="flex items-center gap-1 p-1 rounded-xl theme-surface border theme-border shadow-sm">
-                    {PRESET_OPTIONS.map(({ id, label }) => (
-                        <button
-                            key={id}
-                            type="button"
-                            onClick={() => onPresetChange(id)}
-                            className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest outline-none transition-colors ${
-                                preset === id
-                                    ? 'theme-text-main'
-                                    : 'theme-text-muted hover:theme-text-main'
-                            }`}
-                            style={preset === id ? { backgroundColor: 'color-mix(in srgb, var(--color-primario) 18%, transparent)' } : undefined}
-                        >
-                            {label}
-                        </button>
-                    ))}
+                <div className={GELIA_SEGMENT_TABS_SCROLL}>
+                    <div
+                        className={`gelia-segment ${GELIA_SEGMENT_TABS_TRACK_COMPACT} p-1 shadow-sm`}
+                        role="tablist"
+                        aria-label="Vista del panel"
+                    >
+                        {PRESET_OPTIONS.map(({ id, label }) => (
+                            <button
+                                key={id}
+                                type="button"
+                                role="tab"
+                                aria-selected={preset === id}
+                                data-active={preset === id}
+                                onClick={() => onPresetChange(id)}
+                                className="gelia-segment-btn whitespace-nowrap min-h-[44px]"
+                            >
+                                {label}
+                            </button>
+                        ))}
+                    </div>
                 </div>
             )}
 
-            <div className="flex flex-wrap items-center justify-end gap-2 ml-auto">
+            <div className="flex flex-wrap items-center justify-end gap-2 sm:ml-auto">
                 {!isMobile && (
                     <button
                         type="button"
                         onClick={onAutoAdjust}
                         title="Reorganizar automáticamente los contenedores"
-                        className="flex items-center gap-2 px-3 py-2 rounded-xl theme-surface border theme-border hover:border-[var(--color-primario)] transition-colors theme-text-muted hover:theme-text-main text-[9px] font-black uppercase tracking-widest shadow-sm outline-none"
+                        className={`${GELIA_BTN_OUTLINE} min-h-[44px]`}
                     >
-                        <Sparkles className="w-3.5 h-3.5" /> Autoajuste
+                        <Sparkles className="w-3.5 h-3.5 shrink-0" aria-hidden />
+                        Autoajuste
                     </button>
                 )}
                 {!isMobile && (
                     <button
                         type="button"
                         onClick={onOrganize}
-                        className={`flex items-center gap-2 px-3 py-2 rounded-xl theme-surface border theme-border transition-colors text-[9px] font-black uppercase tracking-widest shadow-sm outline-none ${editLayoutMode ? 'border-[var(--color-primario)] theme-text-main' : 'theme-text-muted hover:theme-text-main hover:border-[var(--color-primario)]'}`}
+                        aria-pressed={editLayoutMode}
+                        className={`${GELIA_BTN_OUTLINE} min-h-[44px] ${
+                            editLayoutMode ? 'border-[var(--color-primario)] theme-text-main' : ''
+                        }`}
                     >
-                        <Move className="w-3.5 h-3.5" /> Organizar
+                        <Move className="w-3.5 h-3.5 shrink-0" aria-hidden />
+                        Organizar
                     </button>
                 )}
-                <button
-                    type="button"
-                    onClick={onConfigure}
-                    className="flex items-center gap-2 px-3 py-2 rounded-xl theme-surface border theme-border hover:border-[var(--color-primario)] transition-colors theme-text-muted hover:theme-text-main text-[9px] font-black uppercase tracking-widest shadow-sm outline-none"
-                >
-                    <Settings2 className="w-3.5 h-3.5" /> Configurar
+                <button type="button" onClick={onConfigure} className={`${GELIA_BTN_OUTLINE} min-h-[44px]`}>
+                    <Settings2 className="w-3.5 h-3.5 shrink-0" aria-hidden />
+                    Configurar
                 </button>
             </div>
         </div>

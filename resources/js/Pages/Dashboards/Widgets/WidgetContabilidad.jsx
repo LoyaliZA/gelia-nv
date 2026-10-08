@@ -1,6 +1,9 @@
 import React from 'react';
 import { Calculator } from 'lucide-react';
 import DashboardAdaptiveWidget from '../../../Components/Dashboard/DashboardAdaptiveWidget';
+import { DashboardStatBlock } from '../../../Components/Dashboard/DashboardQueueRow';
+import DashboardWidgetStatus from '../../../Components/Dashboard/DashboardWidgetStatus';
+import DashboardWidgetSummaryChip from '../../../Components/Dashboard/DashboardWidgetSummaryChip';
 import { formatoMoneda } from '../../../utils/formatoMoneda';
 import { contabilidadRoutes } from '../../Contabilidad/contabilidadRoutes';
 
@@ -12,35 +15,26 @@ export default function WidgetContabilidad({ metricas = {}, variant = 'desktop' 
     return (
         <DashboardAdaptiveWidget
             variant={variant}
-            title="Contabilidad_"
+            title="Contabilidad"
             icon={Calculator}
-            iconClassName="text-teal-500"
             href={contabilidadRoutes.index()}
             ctaLabel="Abrir contabilidad"
             minimalCount={null}
             minimalCountLabel=""
-            badge={(
-                <span className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-teal-600 bg-teal-500/10 px-2 py-1 rounded-md border border-teal-500/20 shrink-0">
-                    Mes
-                </span>
-            )}
-            summary={(
-                <span className="text-[9px] font-black uppercase px-2 py-1 rounded-lg bg-teal-500/10 text-teal-600 border border-teal-500/20">
+            badge={<DashboardWidgetStatus tono="info">Mes actual</DashboardWidgetStatus>}
+            summary={
+                <DashboardWidgetSummaryChip tono="info">
                     Margen {Number(margen).toFixed(1)}%
-                </span>
-            )}
+                </DashboardWidgetSummaryChip>
+            }
         >
-            <div className="space-y-3">
-                <div className="theme-element border theme-border p-4 rounded-2xl">
-                    <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted m-0">Ventas del mes</p>
-                    <p className="text-xl font-black italic theme-text-main m-0 mt-1 tabular-nums">{formatoMoneda(ventas)}</p>
-                </div>
-                <div className="theme-element border theme-border p-4 rounded-2xl">
-                    <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted m-0">Utilidad neta</p>
-                    <p className={`text-xl font-black italic m-0 mt-1 tabular-nums ${utilidad >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
-                        {formatoMoneda(utilidad)}
-                    </p>
-                </div>
+            <div className="dashboard-stat-grid">
+                <DashboardStatBlock label="Ventas del mes" value={formatoMoneda(ventas)} />
+                <DashboardStatBlock
+                    label="Utilidad neta"
+                    value={formatoMoneda(utilidad)}
+                    valueClassName={utilidad >= 0 ? 'theme-text-exito' : 'theme-text-peligro'}
+                />
             </div>
         </DashboardAdaptiveWidget>
     );
