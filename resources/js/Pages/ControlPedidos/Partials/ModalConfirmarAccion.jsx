@@ -1,3 +1,4 @@
+import usePedidoDialog from './usePedidoDialog';
 import React from 'react';
 import { createPortal } from 'react-dom';
 import { AlertTriangle } from 'lucide-react';
@@ -16,6 +17,8 @@ export default function ModalConfirmarAccion({
     onConfirm,
     onAlternativa = null,
 }) {
+    const dialog = usePedidoDialog({ abierto, onClose });
+
     if (!abierto) return null;
 
     const btnConfirmar = variante === 'danger'
@@ -34,6 +37,8 @@ export default function ModalConfirmarAccion({
             onClick={cerrar}
         >
             <div
+                {...dialog}
+                aria-label="Confirmar acción"
                 className={`${THEME_MODAL_SHELL} max-w-md w-full p-6 md:p-8 space-y-6`}
                 onClick={(e) => e.stopPropagation()}
             >

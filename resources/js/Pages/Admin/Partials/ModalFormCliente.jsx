@@ -2,11 +2,13 @@ import React, { useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useForm, usePage } from '@inertiajs/react';
 import { X, User, ChevronDown, Check, TrendingUp, ShieldCheck, ListOrdered, FileText, AlertTriangle, MapPin } from 'lucide-react';
+import useClienteDialog from './useClienteDialog';
 import { soloDigitosNumeroCliente } from '../../../utils/numeroClienteInput';
 
 const nombrePareceNumero = (valor) => /^\d+(\.\d+)?$/.test(String(valor || '').trim());
 
 export default function ModalFormCliente({ onClose, modoModal, clienteActual, tiposCliente = [], vendedores = [], listas = [] }) {
+    const dialogRef = useClienteDialog(onClose);
     const { auth } = usePage().props;
     const puedeCorreccionEmergencia = auth?.user?.permissions?.includes('clientes.correccion_emergencia') ?? false;
     const puedeEditarCredito = auth?.user?.permissions?.includes('cobranza.editar_credito') || auth?.user?.roles?.includes('Super Admin');
@@ -70,18 +72,18 @@ export default function ModalFormCliente({ onClose, modoModal, clienteActual, ti
     };
 
     return createPortal(
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-xl animate-fade-in" onClick={onClose}>
-            <div className="w-full max-w-xl theme-surface theme-border border shadow-2xl rounded-[2.5rem] p-8 md:p-10 flex flex-col space-y-6 relative modal-pop max-h-[90vh] overflow-y-auto custom-scrollbar" onClick={e => e.stopPropagation()}>
+        <div className="clientes-form fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-xl animate-fade-in" onClick={onClose}>
+            <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="cliente-form-title" tabIndex={-1} className="clientes-form-shell w-full max-w-xl theme-surface theme-border border shadow-2xl rounded-[2.5rem] p-8 md:p-10 flex flex-col space-y-6 relative modal-pop max-h-[90vh] overflow-y-auto custom-scrollbar" onClick={e => e.stopPropagation()}>
                 
-                <button onClick={onClose} className="absolute top-5 right-5 p-2 theme-text-muted hover:theme-text-main rounded-full transition-colors outline-none">
+                <button type="button" aria-label="Cerrar formulario de cliente" onClick={onClose} className="absolute top-5 right-5 p-2 theme-text-muted hover:theme-text-main rounded-full transition-colors outline-none">
                     <X className="w-5 h-5" />
                 </button>
                 
                 <form onSubmit={guardarCliente} className="space-y-6 w-full">
                     <div>
-                        <h3 className="text-xl font-black uppercase italic theme-text-main m-0">
+                        <h2 id="cliente-form-title" className="text-xl font-black uppercase italic theme-text-main m-0">
                             {modoModal === 'crear' ? 'Nuevo' : 'Gestión 360'} <span style={{ color: 'var(--color-primario)' }}>Cliente_</span>
-                        </h3>
+                        </h2>
                         <p className="text-[10px] font-bold theme-text-muted uppercase tracking-widest mt-1">
                             Control total de identidad, comercial y seguridad_
                         </p>
@@ -91,8 +93,8 @@ export default function ModalFormCliente({ onClose, modoModal, clienteActual, ti
                         {/* --- BLOQUE 1: IDENTIDAD --- */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className="space-y-2">
-                                <label className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Número Cliente</label>
-                                <input 
+                                <label htmlFor="cliente-numero_cliente" className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Número Cliente</label>
+                                <input id="cliente-numero_cliente" name="numero_cliente"
                                     type="text"
                                     inputMode="numeric"
                                     pattern="[0-9]*"
@@ -118,10 +120,10 @@ export default function ModalFormCliente({ onClose, modoModal, clienteActual, ti
                                 )}
                             </div>
                             <div className="space-y-2">
-                                <label className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Nombre Completo</label>
+                                <label htmlFor="cliente-nombre" className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Nombre Completo</label>
                                 <div className="relative">
                                     <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 theme-text-muted pointer-events-none" />
-                                    <input 
+                                    <input id="cliente-nombre" name="nombre"
                                         type="text" 
                                         value={data.nombre} 
                                         onChange={e => setData('nombre', e.target.value)}
@@ -137,7 +139,7 @@ export default function ModalFormCliente({ onClose, modoModal, clienteActual, ti
                         </div>
 
                         {/* --- BLOQUE 2: COMERCIAL --- */}
-                        <div className="p-6 theme-element border theme-border rounded-2xl space-y-4 shadow-sm">
+                        <div className="clientes-form-section p-6 theme-element border theme-border rounded-2xl space-y-4 shadow-sm">
                             <div className="flex items-center gap-2 mb-2">
                                 <TrendingUp className="w-4 h-4 text-emerald-500 drop-shadow-sm" />
                                 <span className="text-[10px] font-black uppercase tracking-widest theme-text-main">Situación Comercial Actual_</span>
@@ -145,8 +147,8 @@ export default function ModalFormCliente({ onClose, modoModal, clienteActual, ti
                             
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div className="space-y-2">
-                                    <label className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Monto de Venta (MXN)</label>
-                                    <input 
+                                    <label htmlFor="cliente-monto_venta_actual" className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Monto de Venta (MXN)</label>
+                                    <input id="cliente-monto_venta_actual" name="monto_venta_actual"
                                         type="number" 
                                         step="0.01"
                                         value={data.monto_venta_actual} 
@@ -158,10 +160,10 @@ export default function ModalFormCliente({ onClose, modoModal, clienteActual, ti
                                     />
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Lista de Descuento</label>
+                                    <label htmlFor="cliente-lista_actual_id" className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Lista de Descuento</label>
                                     <div className="relative">
                                         <ListOrdered className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 theme-text-muted pointer-events-none" />
-                                        <select 
+                                        <select id="cliente-lista_actual_id" name="lista_actual_id"
                                             value={data.lista_actual_id} 
                                             onChange={e => setData('lista_actual_id', e.target.value)}
                                             className="w-full pl-10 pr-10 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main appearance-none outline-none focus:ring-2 transition-all shadow-sm cursor-pointer"
@@ -183,8 +185,8 @@ export default function ModalFormCliente({ onClose, modoModal, clienteActual, ti
                             
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t theme-border pt-4">
                                 <div className="space-y-2">
-                                    <label className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Monto de Crédito Autorizado</label>
-                                    <input 
+                                    <label htmlFor="cliente-monto_credito_autorizado" className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Monto de Crédito Autorizado</label>
+                                    <input id="cliente-monto_credito_autorizado" name="monto_credito_autorizado"
                                         type="number" 
                                         step="0.01"
                                         value={data.monto_credito_autorizado} 
@@ -198,8 +200,8 @@ export default function ModalFormCliente({ onClose, modoModal, clienteActual, ti
                                     {errors.monto_credito_autorizado && <p className="text-[9px] text-red-500 font-bold ml-1">{errors.monto_credito_autorizado}</p>}
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Días de Crédito</label>
-                                    <input 
+                                    <label htmlFor="cliente-dias_credito" className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Días de Crédito</label>
+                                    <input id="cliente-dias_credito" name="dias_credito"
                                         type="number" 
                                         value={data.dias_credito} 
                                         onChange={e => setData('dias_credito', e.target.value)}
@@ -213,8 +215,8 @@ export default function ModalFormCliente({ onClose, modoModal, clienteActual, ti
                                     {errors.dias_credito && <p className="text-[9px] text-red-500 font-bold ml-1">{errors.dias_credito}</p>}
                                 </div>
                                 <div className="space-y-2 md:col-span-2">
-                                    <label className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Fecha de Inicio de Crédito</label>
-                                    <input 
+                                    <label htmlFor="cliente-fecha_inicio_credito" className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Fecha de Inicio de Crédito</label>
+                                    <input id="cliente-fecha_inicio_credito" name="fecha_inicio_credito"
                                         type="date" 
                                         value={data.fecha_inicio_credito} 
                                         onChange={e => setData('fecha_inicio_credito', e.target.value)}
@@ -227,16 +229,16 @@ export default function ModalFormCliente({ onClose, modoModal, clienteActual, ti
                                     {errors.fecha_inicio_credito && <p className="text-[9px] text-red-500 font-bold ml-1">{errors.fecha_inicio_credito}</p>}
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Días Cheque Postfechado</label>
-                                    <input type="number" value={data.dias_cheque_postfechado} onChange={e => setData('dias_cheque_postfechado', e.target.value)} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" placeholder="Ej. 15" />
+                                    <label htmlFor="cliente-dias_cheque_postfechado" className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Días Cheque Postfechado</label>
+                                    <input id="cliente-dias_cheque_postfechado" name="dias_cheque_postfechado" type="number" value={data.dias_cheque_postfechado} onChange={e => setData('dias_cheque_postfechado', e.target.value)} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" placeholder="Ej. 15" />
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Parte Relacional</label>
-                                    <input type="text" value={data.parte_relacional} onChange={e => setData('parte_relacional', e.target.value)} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" />
+                                    <label htmlFor="cliente-parte_relacional" className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Parte Relacional</label>
+                                    <input id="cliente-parte_relacional" name="parte_relacional" type="text" value={data.parte_relacional} onChange={e => setData('parte_relacional', e.target.value)} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" />
                                 </div>
                                 <div className="space-y-2 md:col-span-2">
-                                    <label className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Variable Contable</label>
-                                    <input type="text" value={data.variable_contable} onChange={e => setData('variable_contable', e.target.value)} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" />
+                                    <label htmlFor="cliente-variable_contable" className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Variable Contable</label>
+                                    <input id="cliente-variable_contable" name="variable_contable" type="text" value={data.variable_contable} onChange={e => setData('variable_contable', e.target.value)} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" />
                                 </div>
                             </div>
                         </div>
@@ -244,9 +246,9 @@ export default function ModalFormCliente({ onClose, modoModal, clienteActual, ti
                         {/* --- BLOQUE 3: ASIGNACIÓN Y SEGURIDAD --- */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                              <div className="space-y-2">
-                                <label className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Vendedora_</label>
+                                <label htmlFor="cliente-vendedor_id" className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Vendedora_</label>
                                 <div className="relative">
-                                    <select 
+                                    <select id="cliente-vendedor_id" name="vendedor_id"
                                         value={data.vendedor_id} 
                                         onChange={e => setData('vendedor_id', e.target.value)}
                                         className="w-full pl-5 pr-10 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main appearance-none outline-none focus:ring-2 transition-all shadow-sm cursor-pointer"
@@ -263,9 +265,9 @@ export default function ModalFormCliente({ onClose, modoModal, clienteActual, ti
                                 </div>
                             </div>
                             <div className="space-y-2">
-                                <label className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Tipo_</label>
+                                <label htmlFor="cliente-catalogo_tipo_cliente_id" className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Tipo_</label>
                                 <div className="relative">
-                                    <select 
+                                    <select id="cliente-catalogo_tipo_cliente_id" name="catalogo_tipo_cliente_id"
                                         value={data.catalogo_tipo_cliente_id} 
                                         onChange={e => setData('catalogo_tipo_cliente_id', e.target.value)}
                                         className="w-full pl-5 pr-10 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main appearance-none outline-none focus:ring-2 transition-all shadow-sm cursor-pointer"
@@ -284,96 +286,96 @@ export default function ModalFormCliente({ onClose, modoModal, clienteActual, ti
                         </div>
 
                         {/* --- BLOQUE: DATOS FISCALES --- */}
-                        <div className="p-6 theme-element border theme-border rounded-2xl space-y-4 shadow-sm">
+                        <div className="clientes-form-section p-6 theme-element border theme-border rounded-2xl space-y-4 shadow-sm">
                             <div className="flex items-center gap-2 mb-2">
                                 <FileText className="w-4 h-4 text-blue-500 drop-shadow-sm" />
                                 <span className="text-[10px] font-black uppercase tracking-widest theme-text-main">Datos Fiscales_</span>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div className="space-y-2">
-                                    <label className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">RFC</label>
-                                    <input type="text" value={data.rfc} onChange={e => setData('rfc', e.target.value)} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" />
+                                    <label htmlFor="cliente-rfc" className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">RFC</label>
+                                    <input id="cliente-rfc" name="rfc" type="text" value={data.rfc} onChange={e => setData('rfc', e.target.value)} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" />
                                     {errors.rfc && <p className="text-[9px] text-red-500 font-bold ml-1">{errors.rfc}</p>}
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Código Postal</label>
-                                    <input type="text" value={data.codigo_postal} onChange={e => setData('codigo_postal', e.target.value)} maxLength={5} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" />
+                                    <label htmlFor="cliente-codigo_postal" className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Código Postal</label>
+                                    <input id="cliente-codigo_postal" name="codigo_postal" type="text" value={data.codigo_postal} onChange={e => setData('codigo_postal', e.target.value)} maxLength={5} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" />
                                     {errors.codigo_postal && <p className="text-[9px] text-red-500 font-bold ml-1">{errors.codigo_postal}</p>}
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Régimen Fiscal</label>
-                                    <input type="text" value={data.regimen_fiscal} onChange={e => setData('regimen_fiscal', e.target.value)} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" />
+                                    <label htmlFor="cliente-regimen_fiscal" className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Régimen Fiscal</label>
+                                    <input id="cliente-regimen_fiscal" name="regimen_fiscal" type="text" value={data.regimen_fiscal} onChange={e => setData('regimen_fiscal', e.target.value)} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" />
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Correo Electrónico</label>
-                                    <input type="email" value={data.correo_electronico} onChange={e => setData('correo_electronico', e.target.value)} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" />
+                                    <label htmlFor="cliente-correo_electronico" className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Correo Electrónico</label>
+                                    <input id="cliente-correo_electronico" name="correo_electronico" type="email" value={data.correo_electronico} onChange={e => setData('correo_electronico', e.target.value)} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" />
                                     {errors.correo_electronico && <p className="text-[9px] text-red-500 font-bold ml-1">{errors.correo_electronico}</p>}
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Uso de Factura</label>
-                                    <input type="text" value={data.uso_factura} onChange={e => setData('uso_factura', e.target.value)} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" />
+                                    <label htmlFor="cliente-uso_factura" className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Uso de Factura</label>
+                                    <input id="cliente-uso_factura" name="uso_factura" type="text" value={data.uso_factura} onChange={e => setData('uso_factura', e.target.value)} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" />
                                 </div>
                                 <div className="space-y-2 md:col-span-2">
-                                    <label className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Nombre (Razón Social)</label>
-                                    <input type="text" value={data.nombre_razon_social} onChange={e => setData('nombre_razon_social', e.target.value)} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" />
+                                    <label htmlFor="cliente-nombre_razon_social" className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Nombre (Razón Social)</label>
+                                    <input id="cliente-nombre_razon_social" name="nombre_razon_social" type="text" value={data.nombre_razon_social} onChange={e => setData('nombre_razon_social', e.target.value)} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" />
                                 </div>
                                 <div className="space-y-2 md:col-span-2">
-                                    <label className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Dirección Fiscal</label>
-                                    <input type="text" value={data.direccion_fiscal} onChange={e => setData('direccion_fiscal', e.target.value)} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" />
+                                    <label htmlFor="cliente-direccion_fiscal" className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Dirección Fiscal</label>
+                                    <input id="cliente-direccion_fiscal" name="direccion_fiscal" type="text" value={data.direccion_fiscal} onChange={e => setData('direccion_fiscal', e.target.value)} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" />
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Colonia</label>
-                                    <input type="text" value={data.colonia_fiscal} onChange={e => setData('colonia_fiscal', e.target.value)} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" />
+                                    <label htmlFor="cliente-colonia_fiscal" className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Colonia</label>
+                                    <input id="cliente-colonia_fiscal" name="colonia_fiscal" type="text" value={data.colonia_fiscal} onChange={e => setData('colonia_fiscal', e.target.value)} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" />
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Municipio / Alcaldía</label>
-                                    <input type="text" value={data.municipio_fiscal} onChange={e => setData('municipio_fiscal', e.target.value)} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" />
+                                    <label htmlFor="cliente-municipio_fiscal" className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Municipio / Alcaldía</label>
+                                    <input id="cliente-municipio_fiscal" name="municipio_fiscal" type="text" value={data.municipio_fiscal} onChange={e => setData('municipio_fiscal', e.target.value)} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" />
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Estado</label>
-                                    <input type="text" value={data.estado_fiscal} onChange={e => setData('estado_fiscal', e.target.value)} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" />
+                                    <label htmlFor="cliente-estado_fiscal" className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Estado</label>
+                                    <input id="cliente-estado_fiscal" name="estado_fiscal" type="text" value={data.estado_fiscal} onChange={e => setData('estado_fiscal', e.target.value)} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" />
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">País</label>
-                                    <input type="text" value={data.pais_fiscal} onChange={e => setData('pais_fiscal', e.target.value)} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" />
+                                    <label htmlFor="cliente-pais_fiscal" className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">País</label>
+                                    <input id="cliente-pais_fiscal" name="pais_fiscal" type="text" value={data.pais_fiscal} onChange={e => setData('pais_fiscal', e.target.value)} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" />
                                 </div>
                             </div>
                         </div>
 
                         {/* --- BLOQUE: DATOS DE CONTACTO --- */}
-                        <div className="p-6 theme-element border theme-border rounded-2xl space-y-4 shadow-sm">
+                        <div className="clientes-form-section p-6 theme-element border theme-border rounded-2xl space-y-4 shadow-sm">
                             <div className="flex items-center gap-2 mb-2">
                                 <User className="w-4 h-4 text-orange-500 drop-shadow-sm" />
                                 <span className="text-[10px] font-black uppercase tracking-widest theme-text-main">Datos de Contacto_</span>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div className="space-y-2 md:col-span-2">
-                                    <label className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Dirección de Contacto / Entrega</label>
-                                    <input type="text" value={data.direccion_contacto} onChange={e => setData('direccion_contacto', e.target.value)} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" />
+                                    <label htmlFor="cliente-direccion_contacto" className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Dirección de Contacto / Entrega</label>
+                                    <input id="cliente-direccion_contacto" name="direccion_contacto" type="text" value={data.direccion_contacto} onChange={e => setData('direccion_contacto', e.target.value)} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" />
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Código Postal</label>
-                                    <input type="text" value={data.cp_contacto} onChange={e => setData('cp_contacto', e.target.value)} maxLength={10} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" />
+                                    <label htmlFor="cliente-cp_contacto" className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Código Postal</label>
+                                    <input id="cliente-cp_contacto" name="cp_contacto" type="text" value={data.cp_contacto} onChange={e => setData('cp_contacto', e.target.value)} maxLength={10} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" />
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Teléfono</label>
-                                    <input type="text" value={data.telefono} onChange={e => setData('telefono', e.target.value)} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" />
+                                    <label htmlFor="cliente-telefono" className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Teléfono</label>
+                                    <input id="cliente-telefono" name="telefono" type="text" value={data.telefono} onChange={e => setData('telefono', e.target.value)} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" />
                                 </div>
                                 <div className="space-y-2 md:col-span-2">
-                                    <label className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Colonia</label>
-                                    <input type="text" value={data.colonia_contacto} onChange={e => setData('colonia_contacto', e.target.value)} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" />
+                                    <label htmlFor="cliente-colonia_contacto" className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Colonia</label>
+                                    <input id="cliente-colonia_contacto" name="colonia_contacto" type="text" value={data.colonia_contacto} onChange={e => setData('colonia_contacto', e.target.value)} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" />
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Municipio / Alcaldía</label>
-                                    <input type="text" value={data.municipio_contacto} onChange={e => setData('municipio_contacto', e.target.value)} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" />
+                                    <label htmlFor="cliente-municipio_contacto" className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Municipio / Alcaldía</label>
+                                    <input id="cliente-municipio_contacto" name="municipio_contacto" type="text" value={data.municipio_contacto} onChange={e => setData('municipio_contacto', e.target.value)} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" />
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Estado</label>
-                                    <input type="text" value={data.estado_contacto} onChange={e => setData('estado_contacto', e.target.value)} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" />
+                                    <label htmlFor="cliente-estado_contacto" className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Estado</label>
+                                    <input id="cliente-estado_contacto" name="estado_contacto" type="text" value={data.estado_contacto} onChange={e => setData('estado_contacto', e.target.value)} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" />
                                 </div>
                                 <div className="space-y-2 md:col-span-2">
-                                    <label className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">País</label>
-                                    <input type="text" value={data.pais_contacto} onChange={e => setData('pais_contacto', e.target.value)} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" />
+                                    <label htmlFor="cliente-pais_contacto" className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">País</label>
+                                    <input id="cliente-pais_contacto" name="pais_contacto" type="text" value={data.pais_contacto} onChange={e => setData('pais_contacto', e.target.value)} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" />
                                 </div>
                             </div>
                             {modoModal === 'editar' && clienteActual?.id && (
@@ -389,8 +391,7 @@ export default function ModalFormCliente({ onClose, modoModal, clienteActual, ti
                         </div>
 
                         {modoModal === 'editar' && puedeCorreccionEmergencia && (
-                            <div
-                                className="p-4 theme-element border border-amber-500/40 rounded-xl flex items-center justify-between cursor-pointer transition-all hover:shadow-md"
+                            <button type="button" role="switch" aria-checked={data.correccion_emergencia} className="p-4 theme-element border border-amber-500/40 rounded-xl flex items-center justify-between cursor-pointer transition-all hover:shadow-md"
                                 onClick={() => setData('correccion_emergencia', !data.correccion_emergencia)}
                             >
                                 <div className="flex items-center gap-3">
@@ -403,13 +404,12 @@ export default function ModalFormCliente({ onClose, modoModal, clienteActual, ti
                                 <div className="gelia-switch shrink-0 pointer-events-none" data-active={data.correccion_emergencia}>
                                     <div className="gelia-switch-thumb shadow-md" />
                                 </div>
-                            </div>
+                            </button>
                         )}
 
                         {/* --- BLOQUE 4: SWITCHES DE PROTECCIÓN --- */}
                         <div className="flex flex-col gap-3">
-                            <div 
-                                className="p-4 theme-element border theme-border rounded-xl flex items-center justify-between cursor-pointer transition-all hover:shadow-md" 
+                            <button type="button" role="switch" aria-checked={data.lista_bloqueada} className="p-4 theme-element border theme-border rounded-xl flex items-center justify-between cursor-pointer transition-all hover:shadow-md"
                                 style={{ borderColor: data.lista_bloqueada ? 'var(--color-primario)' : '' }}
                                 onClick={() => setData('lista_bloqueada', !data.lista_bloqueada)}
                             >
@@ -424,10 +424,9 @@ export default function ModalFormCliente({ onClose, modoModal, clienteActual, ti
                                 <div className="gelia-switch shrink-0 pointer-events-none" data-active={data.lista_bloqueada}>
                                     <div className="gelia-switch-thumb shadow-md" />
                                 </div>
-                            </div>
+                            </button>
 
-                            <div 
-                                className="p-4 theme-element border theme-border rounded-xl flex items-center justify-between cursor-pointer transition-all hover:shadow-md" 
+                            <button type="button" role="switch" aria-checked={data.es_heredado} className="p-4 theme-element border theme-border rounded-xl flex items-center justify-between cursor-pointer transition-all hover:shadow-md"
                                 style={{ borderColor: data.es_heredado ? 'var(--color-primario)' : '' }}
                                 onClick={() => setData('es_heredado', !data.es_heredado)}
                             >
@@ -442,10 +441,9 @@ export default function ModalFormCliente({ onClose, modoModal, clienteActual, ti
                                 <div className="gelia-switch shrink-0 pointer-events-none" data-active={data.es_heredado}>
                                     <div className="gelia-switch-thumb shadow-md" />
                                 </div>
-                            </div>
+                            </button>
 
-                            <div
-                                className="p-4 theme-element border theme-border rounded-xl flex items-center justify-between cursor-pointer transition-all hover:shadow-md"
+                            <button type="button" role="switch" aria-checked={data.es_inactivo} className="p-4 theme-element border theme-border rounded-xl flex items-center justify-between cursor-pointer transition-all hover:shadow-md"
                                 style={{ borderColor: data.es_inactivo ? 'var(--color-primario)' : '' }}
                                 onClick={() => setData('es_inactivo', !data.es_inactivo)}
                             >
@@ -459,12 +457,12 @@ export default function ModalFormCliente({ onClose, modoModal, clienteActual, ti
                                 <div className="gelia-switch shrink-0 pointer-events-none" data-active={data.es_inactivo}>
                                     <div className="gelia-switch-thumb shadow-md" />
                                 </div>
-                            </div>
+                            </button>
                         </div>
                     </div>
 
                     <button type="submit" disabled={processing || (alertaIntercambio && !data.correccion_emergencia)} className="w-full py-4 mt-4 rounded-2xl text-white font-black uppercase tracking-widest text-[11px] transition-transform hover:scale-105 shadow-md flex justify-center items-center gap-2 outline-none disabled:opacity-50 disabled:scale-100" style={{ backgroundColor: 'var(--color-primario)' }}>
-                        <Check className="w-5 h-5" /> {processing ? 'Sincronizando...' : 'Guardar Cambios_'}
+                        <Check className="w-5 h-5" /> {processing ? 'Sincronizando…' : 'Guardar Cambios_'}
                     </button>
                 </form>
             </div>

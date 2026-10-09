@@ -52,7 +52,7 @@ function ListaBandejasMovil({ tabs, tabActiva, onElegir, conteoTab }) {
                     <button
                         key={tab.id}
                         type="button"
-                        aria-selected={activo}
+                        aria-pressed={activo}
                         onClick={() => onElegir(tab.id)}
                         className={`flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg text-left text-sm font-semibold outline-none border transition-colors ${
                             activo
@@ -164,10 +164,11 @@ export default function FiltrosPedidos({
                         <Search className="theme-field-icon w-4 h-4" aria-hidden />
                         <input
                             id="pedidos-busqueda"
+                            name="q" enterKeyHint="search"
                             type="search"
                             value={busqueda ?? filtros.q ?? ''}
                             onChange={(e) => onBuscar(e.target.value)}
-                            placeholder="Folio, cliente o número..."
+                            placeholder="Folio, cliente o número…"
                             className={`${THEME_INPUT} w-full py-2.5 text-sm font-semibold pr-10`}
                             aria-busy={buscando}
                             autoComplete="off"
@@ -187,6 +188,7 @@ export default function FiltrosPedidos({
                     </label>
                     <select
                         id="pedidos-bandeja-extra"
+                        name="bandeja"
                         value={valorSelectorExtra}
                         onChange={onSelectorExtra}
                         className={`${THEME_SELECT} mt-1 w-full py-2.5 text-sm font-semibold`}
@@ -225,8 +227,9 @@ export default function FiltrosPedidos({
                 )}
             </div>
 
-            <div className="hidden md:block">
+            <div className="hidden md:flex items-center justify-between gap-2">
                 <IndicadorBandejaActiva tabActual={tabActual} conteoActual={conteoActual} />
+                {busqueda && <button type="button" onClick={() => onBuscar('')} className="text-xs font-semibold theme-text-main underline underline-offset-4">Limpiar búsqueda</button>}
             </div>
 
             {/* Móvil */}
@@ -236,6 +239,7 @@ export default function FiltrosPedidos({
                         <Search className="theme-field-icon w-4 h-4" aria-hidden />
                         <input
                             id="pedidos-busqueda-movil"
+                            name="q" enterKeyHint="search"
                             type="search"
                             value={busqueda ?? filtros.q ?? ''}
                             onChange={(e) => onBuscar(e.target.value)}

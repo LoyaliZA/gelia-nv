@@ -4,7 +4,6 @@ import { THEME_INPUT, THEME_LABEL } from '../../../../utils/geliaTheme';
 import {
     BTN_SECONDARY,
     GELIA_SEGMENT_TABS_SCROLL,
-    GELIA_SEGMENT_TABS_TRACK,
     TABS_CEDIS,
 } from '../../Partials/pedidosBmaStyles';
 import GeliaPaginacion from '../../../../Components/GeliaPaginacion';
@@ -32,11 +31,13 @@ export default function FiltrosCedis({
             PENDIENTES_GUIA: metricas.pendientes_guia,
             ENVIADOS: metricas.enviados,
             INCORRECTAS: metricas.incorrectas,
+            LIBERACIONES: metricas.liberaciones_pendientes,
         };
         return map[tabId];
     };
 
-    const tabActual = TABS_CEDIS.find((t) => t.id === tabActiva) || TABS_CEDIS[0];
+    const tabs = [...TABS_CEDIS, { id: 'LIBERACIONES', label: 'Liberaciones' }];
+    const tabActual = tabs.find((t) => t.id === tabActiva) || TABS_CEDIS[0];
     const conteoActual = conteoTab(tabActual.id);
 
     const elegirTab = (id) => {
@@ -46,17 +47,17 @@ export default function FiltrosCedis({
 
     return (
         <div className="space-y-4">
-            <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
+            <div className="flex flex-row gap-2 items-end">
                 <div className="flex-1 min-w-0">
                     <label htmlFor="cedis-busqueda" className={`${THEME_LABEL} ml-1`}>Buscar</label>
                     <div className="theme-field-with-icon relative mt-1.5">
                         <Search className="theme-field-icon w-4 h-4" aria-hidden />
                         <input
                             id="cedis-busqueda"
-                            type="text"
+                            type="search" name="q" enterKeyHint="search"
                             value={busqueda ?? filtros.q ?? ''}
                             onChange={(e) => onBuscar(e.target.value)}
-                            placeholder="Folio, cliente o número..."
+                            placeholder="Folio, cliente o número…"
                             className={`${THEME_INPUT} w-full py-3 text-sm font-bold pr-10`}
                             aria-busy={buscando}
                             autoComplete="off"
@@ -72,9 +73,11 @@ export default function FiltrosCedis({
                 <button
                     type="button"
                     onClick={onActualizar}
-                    className={`${BTN_SECONDARY} flex items-center justify-center gap-2 outline-none shrink-0 w-full sm:w-auto min-h-[44px]`}
+                    aria-label="Actualizar pedidos"
+                    disabled={buscando}
+                    className={`${BTN_SECONDARY} flex items-center justify-center gap-2 outline-none shrink-0 !px-3 min-w-[44px] sm:w-auto min-h-[44px]`}
                 >
-                    <RefreshCw className="w-4 h-4" /> Actualizar
+                    <RefreshCw className="w-4 h-4" aria-hidden="true" /> <span className="hidden sm:inline">Actualizar</span>
                 </button>
             </div>
 
@@ -84,11 +87,12 @@ export default function FiltrosCedis({
                     type="button"
                     onClick={() => setFiltrosAbiertos((v) => !v)}
                     aria-expanded={filtrosAbiertos}
+                    aria-controls="cedis-filtros-estados"
                     className="w-full flex items-center justify-between gap-2 px-3 py-2.5 min-h-[44px] rounded-xl border theme-border theme-element outline-none"
                 >
                     <span className="min-w-0 text-left">
-                        <span className="block text-[9px] font-black uppercase tracking-widest theme-text-muted">Filtro</span>
-                        <span className="block text-xs font-black uppercase theme-text-main truncate mt-0.5">
+                        <span className="block text-xs font-semibold theme-text-muted">Filtro</span>
+                        <span className="block text-xs font-semibold theme-text-main truncate mt-0.5">
                             {tabActual.label}
                             {conteoActual !== undefined ? ` · ${conteoActual}` : ''}
                         </span>
@@ -100,27 +104,26 @@ export default function FiltrosCedis({
                 </button>
 
                 {filtrosAbiertos && (
-                    <div className="grid grid-cols-2 gap-2" role="tablist" aria-label="Estado de empaque">
-                        {TABS_CEDIS.map((tab) => {
+                    <div id="cedis-filtros-estados" className="grid grid-cols-2 gap-2" role="group" aria-label="Estado de empaque">
+                        {tabs.map((tab) => {
                             const conteo = conteoTab(tab.id);
                             const activo = tabActiva === tab.id;
                             return (
                                 <button
                                     key={tab.id}
                                     type="button"
-                                    role="tab"
-                                    aria-selected={activo}
+                                        aria-pressed={activo}
                                     onClick={() => elegirTab(tab.id)}
-                                    className={`flex items-center justify-between gap-1 px-3 py-3 min-h-[44px] rounded-xl text-[10px] font-black uppercase tracking-wide outline-none border transition-colors ${
+                                    className={`flex items-center justify-between gap-1 px-3 py-3 min-h-[44px] rounded-xl text-xs font-semibold outline-none border transition-colors ${
                                         activo
-                                            ? 'border-transparent text-white'
+                                            ? 'border-[var(--color-primario)] theme-text-main'
                                             : 'theme-border theme-element theme-text-muted'
                                     }`}
-                                    style={activo ? { backgroundColor: 'var(--color-primario)' } : undefined}
+                                    style={activo ? { backgroundColor: 'color-mix(in srgb, var(--color-primario) 8%, var(--theme-element-bg))' } : undefined}
                                 >
-                                    <span className="truncate text-left leading-tight">{tab.label}</span>
+                                    <span className="text-left leading-snug">{tab.label}</span>
                                     {conteo !== undefined && (
-                                        <span className={`text-[10px] font-black tabular-nums shrink-0 ${activo ? 'opacity-90' : ''}`}>
+                                        <span className={`text-xs font-semibold tabular-nums shrink-0 ${activo ? 'opacity-90' : ''}`}>
                                             {conteo}
                                         </span>
                                     )}
@@ -133,22 +136,21 @@ export default function FiltrosCedis({
 
             {/* Desktop: segment tabs */}
             <div className={`hidden md:block ${GELIA_SEGMENT_TABS_SCROLL}`}>
-                <div className={`gelia-segment ${GELIA_SEGMENT_TABS_TRACK} p-1 shadow-sm`} role="tablist" aria-label="Estado de empaque">
-                    {TABS_CEDIS.map((tab) => {
+                <div className="gelia-segment gelia-pedidos-filtros-track p-1" role="group" aria-label="Estado de empaque">
+                    {tabs.map((tab) => {
                         const conteo = conteoTab(tab.id);
                         return (
                             <button
                                 key={tab.id}
                                 type="button"
-                                role="tab"
-                                aria-selected={tabActiva === tab.id}
+                                aria-pressed={tabActiva === tab.id}
                                 onClick={() => onTabChange(tab.id)}
                                 className="gelia-segment-btn whitespace-nowrap gap-1.5"
                                 data-active={tabActiva === tab.id}
                             >
                                 {tab.label}
                                 {conteo !== undefined && (
-                                    <span className="text-[9px] font-black px-1.5 py-0.5 rounded-md theme-element border theme-border">
+                                    <span className="text-xs font-semibold px-1.5 py-0.5 rounded-md theme-element border theme-border">
                                         {conteo}
                                     </span>
                                 )}
@@ -158,6 +160,10 @@ export default function FiltrosCedis({
                 </div>
             </div>
 
+            <div className="hidden md:flex items-center justify-between gap-2 text-xs theme-text-muted">
+                <p className="m-0">Bandeja activa: <strong className="theme-text-main">{tabActual.label}</strong></p>
+                {busqueda && <button type="button" onClick={() => onBuscar('')} className="font-semibold theme-text-main underline underline-offset-4">Limpiar búsqueda</button>}
+            </div>
             {pedidos && (
                 <div className="pt-1 border-t theme-border">
                     <GeliaPaginacion

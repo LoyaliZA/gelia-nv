@@ -1,8 +1,8 @@
 import {
     THEME_BTN_PRIMARY,
     THEME_BTN_SECONDARY,
-    THEME_MODAL_OVERLAY,
-    THEME_MODAL_SHELL,
+    THEME_MODAL_OVERLAY as BASE_MODAL_OVERLAY,
+    THEME_MODAL_SHELL as BASE_MODAL_SHELL,
     THEME_LABEL,
     GELIA_SEGMENT_TABS_SCROLL,
     GELIA_SEGMENT_TABS_TRACK,
@@ -63,10 +63,10 @@ export const badgeClaseEstatusPedido = (estatus) => {
     return {
         style: {
             backgroundColor: `color-mix(in srgb, ${hex} 18%, transparent)`,
-            color: hex,
+            color: 'var(--theme-text-main)',
             borderColor: `color-mix(in srgb, ${hex} 35%, transparent)`,
         },
-        className: 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border',
+        className: 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border',
     };
 };
 
@@ -661,7 +661,7 @@ export const camposIncorrectosDe = (pedido) => (
 
 export const tieneErrorRemision = (pedido) => {
     const c = camposIncorrectosDe(pedido);
-    return c.includes('remision') || c.includes('folio_remision');
+    return c.includes('remision') || c.includes('numero_remision');
 };
 
 export const tieneErrorGuiaReportado = (pedido) => {
@@ -755,17 +755,17 @@ export const puedeCargarGuiaCliente = (pedido) =>
     && pedido?.estatus?.fase_ciclo === 'PENDIENTE_GUIA_CLIENTE';
 
 export const badgeGuiaLista = () => ({
-    className: 'inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-widest border border-emerald-500/40 bg-emerald-500/15 text-emerald-600',
+    className: 'inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-semibold border border-emerald-500/40 bg-emerald-500/15 text-emerald-600',
     label: 'Guía Lista',
 });
 
 export const badgeObservacionesCedis = () => ({
-    className: 'inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-widest bg-orange-500/15 text-orange-600',
+    className: 'inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-semibold bg-orange-500/15 text-orange-600',
     label: 'Observaciones CEDIS',
 });
 
 export const badgeSinExistencias = () => ({
-    className: 'inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-widest bg-sky-500/15 text-sky-600',
+    className: 'inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-semibold bg-sky-500/15 text-sky-600',
     label: 'Sin existencias',
 });
 
@@ -819,10 +819,13 @@ export const nombreDepartamentoVendedor = (vendedor) => {
 export const badgeDepartamentoVendedor = (nombre) => {
     if (!nombre) return null;
     return {
-        className: 'inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-widest border border-indigo-500/40 bg-indigo-500/15 text-indigo-600 dark:text-indigo-400',
+        className: 'inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-semibold border border-indigo-500/40 bg-indigo-500/15 text-indigo-600 dark:text-indigo-400',
         label: nombre,
     };
 };
+
+const THEME_MODAL_OVERLAY = `${BASE_MODAL_OVERLAY} gelia-pedidos-overlay`;
+const THEME_MODAL_SHELL = `${BASE_MODAL_SHELL} gelia-pedidos-dialog`;
 
 export const BTN_PRIMARY = `${THEME_BTN_PRIMARY} theme-btn-primary--compact`;
 export const BTN_SECONDARY = `${THEME_BTN_SECONDARY} theme-btn-primary--compact`;
@@ -853,6 +856,11 @@ export const formatearFechaHoraAuditoria = (valor) => {
 
 export const formatearFechaNegocio = (valor) => {
     if (!valor) return '—';
+    // Una fecha de negocio sin hora es un día del calendario, no un instante UTC.
+    if (typeof valor === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(valor)) {
+        const fecha = new Date(`${valor}T00:00:00Z`);
+        return !Number.isNaN(fecha.getTime()) && fecha.toISOString().slice(0, 10) === valor ? valor : '—';
+    }
     const d = new Date(valor);
     if (Number.isNaN(d.getTime())) return '—';
     return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;

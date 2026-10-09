@@ -24,9 +24,9 @@ export default function BloqueVendedorPedido({ pedido, className = 'mt-1.5', var
     return (
         <div className={`flex flex-wrap items-center gap-1.5 ${className}`}>
             {mostrarNombre && (
-                <div className="text-[10px] font-bold theme-text-muted uppercase flex items-center gap-1 min-w-0">
-                    <User className="w-3 h-3 shrink-0" />
-                    <span className="truncate">{vendedor.name}</span>
+                <div className="text-xs font-medium theme-text-muted flex items-center gap-1 min-w-0">
+                    <User className="w-3 h-3 shrink-0" aria-hidden="true" />
+                    <span className="break-words">{vendedor.name}</span>
                 </div>
             )}
             {mostrarEtiquetas && badges.map((b) => (

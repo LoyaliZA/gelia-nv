@@ -39,6 +39,11 @@ class ListarPedidosAuditoriaService
         );
     }
 
+    public function detalle(int $pedidoId, User $usuario): PedidoBma
+    {
+        return $this->anexarFlagsVista($this->queryBase($usuario)->findOrFail($pedidoId));
+    }
+
     private function anexarFlagsVista(PedidoBma $pedido): PedidoBma
     {
         $hito = MaquinaEstadosPedidoBma::hitoAuditoria($pedido);
@@ -185,6 +190,7 @@ class ListarPedidosAuditoriaService
             $query->where(function (Builder $q) use ($termino) {
                 $q->where('folio', 'like', "%{$termino}%")
                     ->orWhere('folio_remision', 'like', "%{$termino}%")
+                    ->orWhere('numero_remision', 'like', "%{$termino}%")
                     ->orWhereHas('cliente', function (Builder $c) use ($termino) {
                         $c->where('nombre', 'like', "%{$termino}%")
                             ->orWhere('numero_cliente', 'like', "%{$termino}%");

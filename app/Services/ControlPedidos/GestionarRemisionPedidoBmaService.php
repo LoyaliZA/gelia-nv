@@ -70,27 +70,28 @@ class GestionarRemisionPedidoBmaService
         });
     }
 
-    public function actualizarFolioRemision(PedidoBma $pedido, string $folio, int $usuarioId, string $tipo = \App\Models\ControlPedidos\PedidoBmaReferencia::TIPO_PEDIDO): PedidoBma
+    public function actualizarFolioRemision(PedidoBma $pedido, string $folio, int $usuarioId, string $tipo = 'PEDIDO'): PedidoBma
+    {
+        throw new \InvalidArgumentException('El número de pedido no se modifica en auditoría. Captura el número de remisión en su campo propio.');
+    }
+
+    public function actualizarNumeroRemision(PedidoBma $pedido, string $numero, int $usuarioId): PedidoBma
     {
         if (! $pedido->esAuditablePorAuxiliar()) {
-            throw new \RuntimeException('Solo se puede corregir el folio en pedidos pendientes de revisión.');
+            throw new \RuntimeException('Solo se puede capturar la remisión en pedidos pendientes de revisión.');
         }
 
-        $folio = trim($folio);
-        if ($folio === '') {
-            throw new \InvalidArgumentException('Indique el folio.');
+        $numero = trim($numero);
+        if ($numero === '') {
+            throw new \InvalidArgumentException('Escribe el número de remisión.');
         }
 
-        if (! in_array($tipo, \App\Models\ControlPedidos\PedidoBmaReferencia::TIPOS, true) || $tipo === \App\Models\ControlPedidos\PedidoBmaReferencia::TIPO_SIN_CLASIFICAR) {
-            $tipo = \App\Models\ControlPedidos\PedidoBmaReferencia::TIPO_PEDIDO;
-        }
-
-        return DB::transaction(function () use ($pedido, $folio, $usuarioId, $tipo) {
-            $antes = (string) ($pedido->folio_remision ?? '');
-            if ($tipo === \App\Models\ControlPedidos\PedidoBmaReferencia::TIPO_REMISION) {
-                $pedido->update(['folio_remision' => $folio]);
-            }
-            \App\Models\ControlPedidos\PedidoBmaReferencia::registrar($pedido, $tipo, $folio, $usuarioId);
+        return DB::transaction(function () use ($pedido, $numero, $usuarioId) {
+            $antes = (string) ($pedido->numero_remision ?? '');
+            $pedido->update(['numero_remision' => $numero]);
+            \App\Models\ControlPedidos\PedidoBmaReferencia::registrar(
+                $pedido, \App\Models\ControlPedidos\PedidoBmaReferencia::TIPO_REMISION, $numero, $usuarioId
+            );
 
             $estatusId = $pedido->catalogo_estatus_pedido_id;
             $this->historialService->ejecutar(
@@ -98,13 +99,18 @@ class GestionarRemisionPedidoBmaService
                 $usuarioId,
                 $estatusId,
                 $estatusId,
-                $antes !== '' && $antes !== $folio
-                    ? "Folio de pedido corregido: {$antes} → {$folio}"
-                    : "Folio de pedido actualizado: {$folio}",
-                AccionesHistorialPedidoBma::CORRECCION
+                $antes !== '' && $antes !== $numero
+                    ? "Número de remisión corregido: {$antes} → {$numero}"
+                    : "Número de remisión actualizado: {$numero}",
+                AccionesHistorialPedidoBma::CORRECCION,
+                null,
+                SnapshotHistorialPedidoBma::merge(
+                    SnapshotHistorialPedidoBma::financiero($pedido->fresh()),
+                    ['remision' => ['numero_anterior' => $antes, 'numero' => $numero]]
+                )
             );
 
-            $this->resolverCamposAuxiliar($pedido, ['folio_remision'], $usuarioId, "Folio corregido: {$folio}");
+            $this->resolverCamposAuxiliar($pedido, ['numero_remision'], $usuarioId, "Número de remisión corregido: {$numero}");
 
             return $pedido->fresh([
                 'cliente', 'estatus', 'documentos', 'banco', 'almacen',

@@ -10,11 +10,11 @@ export default function EncabezadoFolioPedido({ pedido, size = 'md', className =
 
     return (
         <div className={className}>
-            <p className={`${sizeClass} font-black theme-text-main uppercase italic m-0 leading-tight`}>
+            <p className={`${sizeClass} font-bold theme-text-main m-0 leading-tight`}>
                 {folioRemision}
             </p>
             {folioInterno && (
-                <p className="text-[10px] theme-text-muted font-bold m-0 mt-0.5 opacity-60">
+                <p className="text-xs theme-text-muted font-medium m-0 mt-0.5">
                     {folioInterno}
                 </p>
             )}

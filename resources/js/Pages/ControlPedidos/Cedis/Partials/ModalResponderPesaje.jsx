@@ -1,7 +1,8 @@
+import usePedidoDialog from '../../Partials/usePedidoDialog';
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { router } from '@inertiajs/react';
-import { X, Scale, Plus, Trash2, FileText, ChevronDown, ImagePlus, Search, Camera, ExternalLink, Smartphone } from 'lucide-react';
+import { X, Scale, Plus, Trash2, FileText, ChevronDown, Search, ExternalLink, Smartphone } from 'lucide-react';
 import {
     THEME_MODAL_OVERLAY,
     THEME_MODAL_SHELL,
@@ -27,7 +28,7 @@ import VisorPdfPaginas from '../../Partials/VisorPdfPaginas';
 import ModalConfirmarAccion from '../../Partials/ModalConfirmarAccion';
 import DireccionPedidoResumen from '../../Partials/DireccionPedidoResumen';
 import { codigoDireccionCliente } from '../../Partials/codigoDireccionCliente';
-import { archivosImagenDesdeClipboard } from '../../Partials/archivosDesdeClipboard';
+import GaleriaEvidencias from '../../Partials/GaleriaEvidenciasPedido';
 import InputConEscanner from '../../../../Components/Escanner/InputConEscanner';
 import { desbloquearBipAudio, reproducirBipConfirmacion, reproducirBipError } from '../../../../Components/Escanner/bipScanner';
 import ModalSesionEvidenciaCedis from './ModalSesionEvidenciaCedis';
@@ -152,169 +153,6 @@ const resolverAlmacenBusqueda = (pedido, almacenesBusqueda = []) => {
     return null;
 };
 
-const archivoADoc = (file, url) => ({
-    url,
-    nombre_original: file.name,
-    mime_type: file.type || '',
-    tipo: 'evidencia_condicion',
-});
-
-function GaleriaEvidencias({
-    archivos,
-    previews,
-    onChange,
-    onVer,
-    label = 'Evidencias',
-    obligatorio = false,
-}) {
-    const camaraRef = useRef(null);
-    const galeriaRef = useRef(null);
-    const [quitarIdx, setQuitarIdx] = useState(null);
-    const esMovil = esDispositivoCampo();
-
-    const agregar = (lista) => {
-        const nuevos = Array.from(lista || []);
-        if (!nuevos.length) return;
-        const nextFiles = [...archivos, ...nuevos];
-        const nextPreviews = [
-            ...previews,
-            ...nuevos.map((f) => ({ name: f.name, url: URL.createObjectURL(f), mime: f.type || '' })),
-        ];
-        onChange(nextFiles, nextPreviews);
-    };
-
-    const quitar = (idx) => {
-        const p = previews[idx];
-        const nextPreviews = [...previews];
-        const [removed] = nextPreviews.splice(idx, 1);
-        if (p?.remoto) {
-            if (removed?.url && removed.url.startsWith('blob:')) URL.revokeObjectURL(removed.url);
-            onChange(archivos, nextPreviews);
-            return;
-        }
-        let localIdx = 0;
-        for (let i = 0; i < idx; i += 1) {
-            if (!previews[i]?.remoto) localIdx += 1;
-        }
-        const nextFiles = archivos.filter((_, i) => i !== localIdx);
-        if (removed?.url) URL.revokeObjectURL(removed.url);
-        onChange(nextFiles, nextPreviews);
-    };
-
-        const docs = previews.map((p) => archivoADoc({ name: p.name, type: p.mime }, p.url));
-
-    return (
-        <div
-            className="space-y-2"
-            onPaste={(e) => {
-                const pasted = archivosImagenDesdeClipboard(e.clipboardData);
-                if (!pasted.length) return;
-                e.preventDefault();
-                agregar(pasted.map((img, i) => new File(
-                    [img],
-                    `evidencia-paste-${Date.now()}-${i}.png`,
-                    { type: img.type || 'image/png' }
-                )));
-            }}
-        >
-            <label className={SECCION}>{label}{obligatorio ? ' *' : ''}</label>
-            {esMovil ? (
-                <div className="grid grid-cols-2 gap-2">
-                    <button type="button" onClick={() => camaraRef.current?.click()} className={`${BTN_SECONDARY} min-h-[44px] w-full inline-flex items-center justify-center gap-2 text-xs`}>
-                        <Camera className="w-4 h-4" /> Tomar foto
-                    </button>
-                    <button type="button" onClick={() => galeriaRef.current?.click()} className={`${BTN_SECONDARY} min-h-[44px] w-full inline-flex items-center justify-center gap-2 text-xs`}>
-                        <ImagePlus className="w-4 h-4" /> Galería
-                    </button>
-                    <input
-                        ref={camaraRef}
-                        type="file"
-                        accept="image/*"
-                        capture="environment"
-                        className="hidden"
-                        onChange={(e) => {
-                            agregar(e.target.files);
-                            e.target.value = '';
-                        }}
-                    />
-                    <input
-                        ref={galeriaRef}
-                        type="file"
-                        accept="image/*,application/pdf"
-                        multiple
-                        className="hidden"
-                        onChange={(e) => {
-                            agregar(e.target.files);
-                            e.target.value = '';
-                        }}
-                    />
-                </div>
-            ) : (
-                <label className="flex items-center gap-2 px-4 py-3 min-h-[44px] border theme-border border-dashed rounded-xl cursor-pointer w-fit theme-element theme-text-main">
-                    <ImagePlus className="w-4 h-4 theme-text-muted" />
-                    <span className="text-xs font-black uppercase">
-                        {archivos.length || previews.some((x) => x.remoto) ? `${previews.length} archivo(s)` : 'Adjuntar fotos'}
-                    </span>
-                    <input
-                        type="file"
-                        accept="image/*,application/pdf"
-                        multiple
-                        className="hidden"
-                        onChange={(e) => {
-                            agregar(e.target.files);
-                            e.target.value = '';
-                        }}
-                    />
-                </label>
-            )}
-            {previews.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                    {previews.map((p, idx) => {
-                        const esPdf = (p.mime || '').includes('pdf') || String(p.name || '').toLowerCase().endsWith('.pdf');
-                        return (
-                            <div key={`${p.url}-${idx}`} className="relative min-w-[44px] min-h-[44px] w-20 h-20 rounded-xl overflow-hidden border theme-border theme-element group">
-                                <button type="button" className="w-full h-full outline-none" onClick={() => onVer(docs, idx)} title="Ver evidencia">
-                                    {esPdf ? (
-                                        <div className="w-full h-full flex items-center justify-center text-[9px] font-black uppercase theme-text-muted">PDF</div>
-                                    ) : (
-                                        <img src={p.url} alt={p.name} className="w-full h-full object-cover transition-opacity group-hover:opacity-90" />
-                                    )}
-                                    {p.remoto && (
-                                        <span className="absolute bottom-0 left-0 right-0 text-[8px] font-black uppercase text-center bg-black/50 text-white">Cel</span>
-                                    )}
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setQuitarIdx(idx)}
-                                    className="absolute top-1 right-1 p-1 min-h-[44px] min-w-[44px] rounded-full theme-element border theme-border outline-none inline-flex items-center justify-center"
-                                    aria-label="Quitar evidencia"
-                                >
-                                    <Trash2 className="w-3.5 h-3.5 theme-text-main" />
-                                </button>
-                            </div>
-                        );
-                    })}
-                </div>
-            )}
-            <p className="text-[10px] theme-text-muted font-bold m-0">
-                Puede pegar capturas (Ctrl+V). Clic en la miniatura abre el visor.
-            </p>
-            <ModalConfirmarAccion
-                abierto={quitarIdx != null}
-                titulo="Quitar evidencia"
-                mensaje="¿Quitar esta foto? No se puede deshacer."
-                etiquetaConfirmar="Quitar"
-                variante="danger"
-                onClose={() => setQuitarIdx(null)}
-                onConfirm={() => {
-                    if (quitarIdx != null) quitar(quitarIdx);
-                    setQuitarIdx(null);
-                }}
-            />
-        </div>
-    );
-}
-
 export default function ModalResponderPesaje({
     abierto, onClose, pedido, tiposCaja = [], almacenesBusqueda = [],
 }) {
@@ -345,6 +183,9 @@ export default function ModalResponderPesaje({
     const [celularConectado, setCelularConectado] = useState(false);
     const skuPistolaRef = useRef(null);
     const [borradorMsg, setBorradorMsg] = useState(null);
+    const [errorCampo, setErrorCampo] = useState(null);
+    const [paso, setPaso] = useState(0);
+    const cuerpoRef = useRef(null);
     const [listaProductosAbierta, setListaProductosAbierta] = useState(false);
     const skuAbortRef = useRef(null);
     const skuDebounceRef = useRef(null);
@@ -388,6 +229,7 @@ export default function ModalResponderPesaje({
         setSkuError('');
         setListaProductosAbierta(false);
         setBorradorMsg(null);
+        setErrorCampo(null);
         setBultosAproximados('');
         avisoPiezasRef.current = false;
     };
@@ -411,6 +253,7 @@ export default function ModalResponderPesaje({
         if (!abierto || !pedido?.id) return undefined;
 
         let cancelado = false;
+        setPaso(0);
         skipAutosaveRef.current = true;
         hydratingRef.current = true;
         loteUuidRef.current = nuevoUuid();
@@ -611,7 +454,7 @@ export default function ModalResponderPesaje({
             };
             guardarBorradorPesaje(pedido.id, payload)
                 .then(() => setBorradorMsg('Autoguardado'))
-                .catch(() => {});
+                .catch(() => setBorradorMsg('No se pudo guardar el borrador. Mantén esta pantalla abierta y registra al terminar.'));
         }, 700);
 
         return () => window.clearTimeout(timer);
@@ -708,10 +551,10 @@ export default function ModalResponderPesaje({
     }, [abierto, pedido?.id, sesionId, revisiones, envios, tiposCaja, soloRevisiones]);
 
     useEffect(() => {
-        if (!abierto || esCampo) return undefined;
+        if (!abierto || esCampo || paso !== 1) return undefined;
         const t = window.setTimeout(() => skuPistolaRef.current?.focus(), 200);
         return () => window.clearTimeout(t);
-    }, [abierto, esCampo]);
+    }, [abierto, esCampo, paso]);
 
     useEffect(() => () => {
         evidenciasPorEnvio.forEach((s) => revocarPreviews(s.previews));
@@ -719,6 +562,8 @@ export default function ModalResponderPesaje({
         revisiones.forEach((r) => revocarPreviews(r.previews));
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
+    const dialog = usePedidoDialog({ abierto: abierto && Boolean(pedido), onClose: () => pedirCerrar(), bloqueado: procesando });
 
     if (!abierto || !pedido) return null;
 
@@ -752,14 +597,14 @@ export default function ModalResponderPesaje({
         if (esImagenDoc(doc)) {
             return (
                 <button type="button" onClick={() => abrirGaleria([doc], 0)} className={`block w-full overflow-hidden outline-none ${PREVIEW_SURFACE}`} title="Ver foto">
-                    <img src={doc.url} alt={doc.nombre_original || titulo} className="w-full max-h-[min(40vh,360px)] object-contain hover:opacity-90 transition-opacity" />
+                    <img src={doc.url} alt={doc.nombre_original || titulo} width="480" height="360" className="w-full max-h-[min(40vh,360px)] object-contain hover:opacity-90 transition-opacity" />
                 </button>
             );
         }
         if (esCampo || esMovil) {
             return (
                 <div className={`overflow-hidden ${PREVIEW_SURFACE}`}>
-                    <VisorPdfPaginas url={doc.url} titulo={doc.nombre_original || titulo} maxHeight="min(50dvh, 420px)" />
+                    <VisorPdfPaginas url={doc.url} titulo={doc.nombre_original || titulo} maxHeight="min(40dvh, 360px)" />
                     <div className="p-2 border-t theme-border">
                         <a
                             href={doc.url}
@@ -779,7 +624,7 @@ export default function ModalResponderPesaje({
                     src={doc.url}
                     title={doc.nombre_original || titulo}
                     className="w-full border-0 bg-white"
-                    style={{ height: 'min(55vh, 480px)' }}
+                    style={{ height: 'min(45vh, 400px)' }}
                 />
             </div>
         );
@@ -788,6 +633,7 @@ export default function ModalResponderPesaje({
     const actualizarEnvio = (idx, campo, valor) => {
         // Solo tipo de caja (rellena catálogo) y peso real son editables.
         if (campo !== 'catalogo_tipo_caja_id' && campo !== 'peso_real_kg') return;
+        setErrorCampo(null);
         setEnvios((prev) => prev.map((e, i) => {
             if (i !== idx) return e;
             if (campo === 'peso_real_kg') return { ...e, peso_real_kg: valor };
@@ -812,6 +658,7 @@ export default function ModalResponderPesaje({
     };
 
     const actualizarRevision = (idx, campo, valor) => {
+        if (campo !== 'expandido') setErrorCampo(null);
         setRevisiones((prev) => prev.map((r, i) => (i === idx ? { ...r, [campo]: valor } : r)));
     };
 
@@ -952,7 +799,27 @@ export default function ModalResponderPesaje({
         setModalQr(false);
     };
 
+    const avisarCampo = (id, mensaje) => {
+        setPaso(id === 'cedis-sku-pesaje' || id.startsWith('pesaje-comentario-') || id.startsWith('pesaje-evidencia-producto-') ? 1 : 2);
+        if (id.startsWith('pesaje-comentario-') || id.startsWith('pesaje-evidencia-producto-')) setListaProductosAbierta(true);
+        setErrorCampo({ id, mensaje });
+        window.requestAnimationFrame(() => {
+            const campo = document.getElementById(id);
+            campo?.scrollIntoView({ block: 'center' });
+            campo?.focus({ preventScroll: true });
+        });
+    };
+    const atributosError = (id) => ({
+        'aria-invalid': errorCampo?.id === id || undefined,
+        'aria-describedby': errorCampo?.id === id ? `${id}-error` : undefined,
+    });
+    const mensajeError = (id) => errorCampo?.id === id
+        ? <p id={`${id}-error`} role="alert" className="text-sm theme-text-peligro m-0 mt-2">{errorCampo.mensaje}</p>
+        : null;
+
     const confirmar = () => {
+        if (procesando) return;
+        setErrorCampo(null);
         if (!soloRevisiones) {
             for (let i = 0; i < envios.length; i++) {
                 const e = envios[i];
@@ -965,7 +832,7 @@ export default function ModalResponderPesaje({
                 const n = i + 1;
 
                 if (!tipoId) {
-                    setAlerta({ abierto: true, tipo: 'error', titulo: `Envío ${n}`, mensaje: 'Seleccione el tipo de caja.' });
+                    avisarCampo(`pesaje-caja-${e.client_uuid}`, 'Selecciona el tipo de caja para este envío.');
                     return;
                 }
                 if (e.largo === '' || Number.isNaN(largo) || largo < 0
@@ -975,7 +842,7 @@ export default function ModalResponderPesaje({
                     return;
                 }
                 if (e.peso_real_kg === '' || Number.isNaN(pesoReal) || pesoReal < 0) {
-                    setAlerta({ abierto: true, tipo: 'error', titulo: `Envío ${n}`, mensaje: 'Indique el peso real en kg.' });
+                    avisarCampo(`pesaje-peso-${e.client_uuid}`, 'Ingresa un peso válido en kilogramos.');
                     return;
                 }
                 if (e.peso_volumetrico_kg === '' || Number.isNaN(pesoVol) || pesoVol < 0) {
@@ -988,33 +855,23 @@ export default function ModalResponderPesaje({
                 const hayLocal = evidenciasPorEnvio[i]?.archivos?.length;
                 const hayRemota = evidenciasPorEnvio[i]?.previews?.some((p) => p.remoto);
                 if (!hayLocal && !hayRemota) {
-                    setAlerta({ abierto: true, tipo: 'error', titulo: `Envío ${i + 1}`, mensaje: 'Adjunte al menos una foto del contenido de esta caja.' });
+                    avisarCampo(`pesaje-evidencia-${envios[i].client_uuid}`, 'Adjunta una foto del contenido de esta caja.');
                     return;
                 }
             }
         } else if (revisiones.length === 0) {
-            setAlerta({ abierto: true, tipo: 'error', titulo: 'Productos', mensaje: 'Revise al menos un producto.' });
+            avisarCampo('cedis-sku-pesaje', 'Escanea o busca al menos un producto para registrar la consulta.');
             return;
         } else {
             const bultos = Number(bultosAproximados);
             if (bultosAproximados === '' || Number.isNaN(bultos) || bultos < 1) {
-                setAlerta({
-                    abierto: true,
-                    tipo: 'error',
-                    titulo: 'Bultos a preparar',
-                    mensaje: 'Indique cuántos bultos aproximados llevará el pedido.',
-                });
+                avisarCampo('pesaje-bultos', 'Indica cuántos bultos aproximados llevará el pedido.');
                 return;
             }
             const hayLocal = evidenciasLote.archivos?.length;
             const hayRemota = evidenciasLote.previews?.some((p) => p.remoto);
             if (!hayLocal && !hayRemota) {
-                setAlerta({
-                    abierto: true,
-                    tipo: 'error',
-                    titulo: 'Evidencia final',
-                    mensaje: 'Adjunte al menos una foto de cómo quedan los productos (lote del pedido).',
-                });
+                avisarCampo('pesaje-evidencia-lote', 'Adjunta una foto de todos los productos del pedido juntos.');
                 return;
             }
         }
@@ -1039,19 +896,16 @@ export default function ModalResponderPesaje({
             }
             if (requiereComentario(r.estado_fisico)) {
                 if (!r.comentario.trim()) {
-                    setAlerta({
-                        abierto: true,
-                        tipo: 'error',
-                        titulo: `Producto ${i + 1}`,
-                        mensaje: r.estado_fisico === 'sin_existencia'
-                            ? 'Sin existencias requiere un comentario para Ventas.'
-                            : 'Estado malo/dañado requiere comentario.',
-                    });
+                    actualizarRevision(i, 'expandido', true);
+                    avisarCampo(`pesaje-comentario-${r.client_uuid}`, r.estado_fisico === 'sin_existencia'
+                        ? 'Indica qué falta y cómo debe proceder Ventas.'
+                        : 'Describe el daño o problema de esta pieza.');
                     return;
                 }
             }
             if (requiereEvidencia(r.estado_fisico) && !r.evidencias?.length && !(r.previews || []).some((p) => p.remoto)) {
-                setAlerta({ abierto: true, tipo: 'error', titulo: `Producto ${i + 1}`, mensaje: 'Estado malo/dañado requiere evidencia.' });
+                actualizarRevision(i, 'expandido', true);
+                avisarCampo(`pesaje-evidencia-producto-${r.client_uuid}`, 'Adjunta una foto que muestre el daño o problema de esta pieza.');
                 return;
             }
         }
@@ -1144,6 +998,7 @@ export default function ModalResponderPesaje({
         || evidenciasLote.archivos?.length;
 
     const pedirCerrar = () => {
+        if (procesando) return;
         if (hayDatosPesaje) {
             setConfirmacion('cerrar');
             return;
@@ -1176,6 +1031,22 @@ export default function ModalResponderPesaje({
         };
     })();
 
+    const pasos = ['Pedido', 'Productos', soloRevisiones ? 'Bultos' : 'Cajas'];
+    const instrucciones = [
+        'Consulta el pedido y su destino.',
+        'Registra las piezas y su condición.',
+        soloRevisiones ? 'Indica los bultos y fotografía el lote.' : 'Registra el peso y fotografía el contenido de cada caja.',
+    ];
+    const cambiarPaso = (siguiente) => {
+        if (procesando) return;
+        setPaso(siguiente);
+        window.requestAnimationFrame(() => {
+            cuerpoRef.current?.scrollTo({ top: 0, behavior: 'instant' });
+            const id = ['pesaje-referencia', 'pesaje-productos', 'pesaje-envios'][siguiente];
+            document.getElementById(id)?.focus({ preventScroll: true });
+        });
+    };
+
     const productosCompactos = revisiones.length > MAX_PRODUCTOS_ABIERTOS;
     const productosConDetalle = revisiones.filter((r) => (
         r.estado_fisico !== 'bueno'
@@ -1191,7 +1062,7 @@ export default function ModalResponderPesaje({
         const instancia = instancias[idx];
         return (
             <details
-                key={`${rev.producto_id || rev.descripcion_producto}-${idx}`}
+                key={rev.client_uuid}
                 className="rounded-xl border theme-border theme-element overflow-hidden"
                 open={Boolean(rev.expandido)}
                 onToggle={(e) => actualizarRevision(idx, 'expandido', e.target.open)}
@@ -1200,11 +1071,11 @@ export default function ModalResponderPesaje({
                     <div className="min-w-0 flex-1 flex flex-wrap items-center gap-2">
                         <ChevronDown className={`w-4 h-4 theme-text-muted shrink-0 transition-transform ${rev.expandido ? 'rotate-180' : ''}`} />
                         {instancia && (
-                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-black tabular-nums theme-element border theme-border theme-text-main shrink-0">
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold tabular-nums theme-element border theme-border theme-text-main shrink-0">
                                 {instancia}
                             </span>
                         )}
-                        <p className="text-sm font-bold theme-text-main m-0 break-words line-clamp-1">{rev.descripcion_producto}</p>
+                        <p className="text-sm font-bold theme-text-main m-0 break-words line-clamp-2">{rev.descripcion_producto}</p>
                         <span className={badge.className} style={badge.style}>{badge.label}</span>
                     </div>
                     <button
@@ -1214,7 +1085,7 @@ export default function ModalResponderPesaje({
                             e.stopPropagation();
                             setConfirmacion({ tipo: 'quitar_pieza', idx });
                         }}
-                        className="p-2 min-h-[40px] min-w-[40px] rounded-xl border theme-border theme-element outline-none inline-flex items-center justify-center theme-text-main shrink-0"
+                        className="p-2 min-h-[44px] min-w-[44px] rounded-xl border theme-border theme-element outline-none inline-flex items-center justify-center theme-text-main shrink-0"
                         aria-label="Eliminar pieza de la revisión"
                         title="Eliminar pieza (agregada por error)"
                     >
@@ -1222,18 +1093,22 @@ export default function ModalResponderPesaje({
                     </button>
                 </summary>
                 <div className="px-3 pb-3 space-y-3 border-t theme-border pt-3">
-                    <p className="text-[10px] theme-text-muted font-bold m-0">Agregue detalle solo si el estado no es Bueno o necesita foto/comentario.</p>
+                    <p className="text-xs theme-text-muted font-normal m-0">Agregue detalle solo si el estado no es Bueno o necesita foto/comentario.</p>
                     <div>
-                        <label className={SECCION}>Estado físico</label>
-                        <select value={rev.estado_fisico} onChange={(e) => actualizarRevision(idx, 'estado_fisico', e.target.value)} className={`${THEME_SELECT} w-full py-2.5 min-h-[44px]`}>
+                        <label htmlFor={`pesaje-estado-${rev.client_uuid}`} className={SECCION}>Estado físico</label>
+                        <select id={`pesaje-estado-${rev.client_uuid}`} name={`estado-${rev.client_uuid}`} value={rev.estado_fisico} onChange={(e) => actualizarRevision(idx, 'estado_fisico', e.target.value)} className={`${THEME_SELECT} w-full py-2.5 min-h-[44px]`}>
                             {ESTADOS.map((c) => (
                                 <option key={c} value={c}>{LABELS_ESTADO_FISICO[c]}</option>
                             ))}
                         </select>
                     </div>
                     <div>
-                        <label className={SECCION}>Comentario{requiereComentario(rev.estado_fisico) ? ' *' : ''}</label>
+                        <label htmlFor={`pesaje-comentario-${rev.client_uuid}`} className={SECCION}>Comentario{requiereComentario(rev.estado_fisico) ? ' *' : ''}</label>
                         <textarea
+                            id={`pesaje-comentario-${rev.client_uuid}`}
+                            {...atributosError(`pesaje-comentario-${rev.client_uuid}`)}
+                            name={`comentario-${rev.client_uuid}`}
+                            aria-required={requiereComentario(rev.estado_fisico)}
                             value={rev.comentario}
                             onChange={(e) => actualizarRevision(idx, 'comentario', e.target.value)}
                             className={`${THEME_TEXTAREA} w-full py-2.5 min-h-[60px]`}
@@ -1243,9 +1118,10 @@ export default function ModalResponderPesaje({
                                     : (requiereComentario(rev.estado_fisico) ? 'Comentario obligatorio…' : 'Opcional…')
                             }
                         />
+                        {mensajeError(`pesaje-comentario-${rev.client_uuid}`)}
                     </div>
                     {rev.estado_fisico === 'sin_existencia' && (
-                        <p className="text-[10px] font-bold text-sky-600 m-0">
+                        <p className="text-xs font-bold theme-text-info m-0">
                             Sin existencias: Ventas verá este aviso en el detalle del pedido (no hace falta adjuntar foto).
                         </p>
                     )}
@@ -1262,6 +1138,9 @@ export default function ModalResponderPesaje({
                     <GaleriaEvidencias
                         archivos={rev.evidencias || []}
                         previews={rev.previews || []}
+                        id={`pesaje-evidencia-producto-${rev.client_uuid}`}
+                        error={errorCampo?.id === `pesaje-evidencia-producto-${rev.client_uuid}` ? errorCampo.mensaje : undefined}
+                        disabled={procesando}
                         obligatorio={requiereEvidencia(rev.estado_fisico)}
                         label="Evidencia del producto (solo si hay detalle)"
                         onChange={(files, previews) => setEvidenciasRevision(idx, files, previews)}
@@ -1276,39 +1155,51 @@ export default function ModalResponderPesaje({
         <>
             <div className={`${THEME_MODAL_OVERLAY} items-start sm:items-center py-4 sm:py-6`}>
                 <div
-                    className={`${THEME_MODAL_SHELL} max-w-3xl w-full flex flex-col`}
+                    {...dialog}
+                    aria-labelledby="pesaje-titulo"
+                    className={`${THEME_MODAL_SHELL} gelia-pedidos-dialog-workspace gelia-pedidos-respuesta max-w-3xl w-full flex flex-col`}
                     style={{ maxHeight: 'calc(100dvh - 2rem)' }}
                     onClick={(e) => e.stopPropagation()}
                 >
                     <div className="p-4 md:p-6 border-b theme-border flex justify-between items-start gap-3 shrink-0">
                         <div className="min-w-0">
-                            <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0 mb-1">
-                                {soloRevisiones ? 'Responder consulta mercancía' : 'Responder pesaje'}
-                            </p>
+                            <h2 id="pesaje-titulo" className="text-lg font-semibold theme-text-main m-0 mb-2">
+                                {soloRevisiones ? 'Responder consulta de mercancía' : 'Responder pesaje'}
+                            </h2>
                             <EncabezadoFolioPedido pedido={pedido} />
                             <p className="text-xs theme-text-muted m-0 mt-1">
                                 {pedido.cliente?.nombre || '—'} · {formatearFechaNegocio(pedido.fecha)}
                             </p>
                         </div>
-                        <button type="button" onClick={pedirCerrar} className="p-2 min-h-[44px] min-w-[44px] rounded-xl theme-element border theme-border outline-none shrink-0 inline-flex items-center justify-center theme-text-main" aria-label="Cerrar">
+                        <button type="button" disabled={procesando} onClick={pedirCerrar} className="p-2 min-h-[44px] min-w-[44px] rounded-xl theme-element border theme-border outline-none shrink-0 inline-flex items-center justify-center theme-text-main" aria-label="Cerrar">
                             <X className="w-4 h-4" />
                         </button>
                     </div>
 
-                    <div className="gelia-modal-body p-4 md:p-6 space-y-5">
-                        {(pedido.motivo_repesaje || pedido.consulta_actualizacion_pendiente) && (
+                    <nav className="gelia-pedidos-pasos" aria-label="Pasos para responder">
+                        {pasos.map((label, index) => (
+                            <button key={label} type="button" disabled={procesando}
+                                aria-current={paso === index ? 'step' : undefined}
+                                onClick={() => cambiarPaso(index)}>
+                                <span aria-hidden="true">{index + 1}</span>{label}
+                            </button>
+                        ))}
+                    </nav>
+                    <div ref={cuerpoRef} className="gelia-modal-body p-4 md:p-6 space-y-5">
+                        <p className="text-xs theme-text-muted m-0" role="status">Paso {paso + 1} de 3 · {instrucciones[paso]}</p>
+                        {paso === 0 && (pedido.motivo_repesaje || pedido.consulta_actualizacion_pendiente) && (
                             <AvisoOperativoPedido label="Actualización de consulta" tono="warning" icon={Scale}>
                                 Motivo: {LABELS_MOTIVO_REPESAJE[pedido.motivo_repesaje] || pedido.motivo_repesaje || 'cambio'}
                                 . Revise el resumen antes → después, ajuste piezas/cajas y guarde.
                             </AvisoOperativoPedido>
                         )}
 
-                        {resumenAntesDespues && (
+                        {paso === 2 && resumenAntesDespues && (
                             <div className="p-4 rounded-xl border theme-border theme-element space-y-3">
                                 <p className={`${SECCION} m-0`}>Antes → después</p>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                                     <div className="rounded-lg border theme-border p-3 space-y-1">
-                                        <p className="text-[10px] font-black uppercase theme-text-muted m-0">Antes (CEDIS)</p>
+                                        <p className="text-xs font-medium theme-text-muted m-0">Antes (CEDIS)</p>
                                         <p className="m-0 font-bold theme-text-main">
                                             {resumenAntesDespues.antes.productos.length} producto(s)
                                             {!soloRevisiones && (
@@ -1325,7 +1216,7 @@ export default function ModalResponderPesaje({
                                         </ul>
                                     </div>
                                     <div className="rounded-lg border theme-border p-3 space-y-1" style={{ borderColor: 'color-mix(in srgb, var(--color-primario) 45%, transparent)' }}>
-                                        <p className="text-[10px] font-black uppercase theme-text-muted m-0">Después (a guardar)</p>
+                                        <p className="text-xs font-medium theme-text-muted m-0">Después (a guardar)</p>
                                         <p className="m-0 font-bold theme-text-main">
                                             {resumenAntesDespues.despues.productos.length} producto(s)
                                             {!soloRevisiones && (
@@ -1342,7 +1233,7 @@ export default function ModalResponderPesaje({
                                         </ul>
                                     </div>
                                 </div>
-                                <div className="flex flex-wrap gap-2 text-[10px] font-black uppercase tracking-wide">
+                                <div className="flex flex-wrap gap-2 text-xs font-semibold">
                                     {resumenAntesDespues.agregados.length > 0 && (
                                         <span className="px-2 py-1 rounded-lg bg-emerald-500/15 text-emerald-700">
                                             +{resumenAntesDespues.agregados.length} agregada(s)
@@ -1359,12 +1250,12 @@ export default function ModalResponderPesaje({
                                         </span>
                                     )}
                                     {resumenAntesDespues.cambioEnvios && (
-                                        <span className="px-2 py-1 rounded-lg bg-amber-500/15 text-amber-800">
+                                        <span className="px-2 py-1 rounded-lg gelia-estado-vivo gelia-estado-vivo--aviso">
                                             Envios {resumenAntesDespues.antes.envios} → {resumenAntesDespues.despues.envios}
                                         </span>
                                     )}
                                     {resumenAntesDespues.cambioPeso && (
-                                        <span className="px-2 py-1 rounded-lg bg-amber-500/15 text-amber-800">
+                                        <span className="px-2 py-1 rounded-lg gelia-estado-vivo gelia-estado-vivo--aviso">
                                             Peso cobrado cambió (se puede invalidar costo de envío)
                                         </span>
                                     )}
@@ -1372,10 +1263,12 @@ export default function ModalResponderPesaje({
                             </div>
                         )}
 
-                        <div className="space-y-4 p-4 rounded-xl border theme-border theme-element">
+                        <div className="space-y-4">
+                        <div hidden={paso !== 0} className="gelia-pedidos-paso space-y-4">
+                        <section id="pesaje-referencia" tabIndex={-1} className="gelia-pedidos-seccion space-y-4">
                             <div className="space-y-2">
                                 <div className="flex items-center justify-between gap-2 flex-wrap">
-                                    <label className={`${SECCION} m-0`}>PDF o foto del pedido</label>
+                                    <h3 className="gelia-pedidos-seccion-titulo">PDF o foto del pedido</h3>
                                     {pdfPedido?.url && (
                                         <button type="button" onClick={() => abrirGaleria([pdfPedido], 0)} className={`${BTN_SECONDARY} inline-flex items-center justify-center gap-1.5 text-xs min-h-[44px]`}>
                                             <FileText className="w-3.5 h-3.5" /> Ver
@@ -1402,16 +1295,16 @@ export default function ModalResponderPesaje({
                                                 title={doc.nombre_original || 'Ver anexo'}
                                             >
                                                 {esImagenDoc(doc) ? (
-                                                    <img src={doc.url} alt={doc.nombre_original || 'Anexo'} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-200" />
+                                                    <img src={doc.url} alt={doc.nombre_original || 'Anexo'} width="80" height="80" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-200" />
                                                 ) : (
-                                                    <div className="w-full h-full flex items-center justify-center text-[9px] font-black uppercase theme-text-muted group-hover:scale-105 transition-transform">PDF</div>
+                                                    <div className="w-full h-full flex items-center justify-center text-xs font-medium theme-text-muted group-hover:scale-105 transition-transform">PDF</div>
                                                 )}
                                             </button>
                                         ))}
                                     </div>
                                 </div>
                             )}
-                        </div>
+                        </section>
 
                         {soloRevisiones ? (
                         <div className="space-y-2 p-4 rounded-xl border theme-border theme-element">
@@ -1441,32 +1334,34 @@ export default function ModalResponderPesaje({
                         </div>
                         )}
 
-                        <div className="space-y-4 p-4 rounded-xl border theme-border theme-element">
+                        </div>
+                        <fieldset disabled={procesando} className="gelia-pedidos-respuesta-main min-w-0 border-0 p-0 m-0">
+                        <section id="pesaje-productos" tabIndex={-1} hidden={paso !== 1} className="gelia-pedidos-paso gelia-pedidos-seccion space-y-4">
                             <div className="flex items-center justify-between gap-2 flex-wrap">
-                                <p className={`${SECCION} m-0`}>{soloRevisiones ? 'Registro de productos' : 'Revisión física de productos'}</p>
+                                <h3 className="gelia-pedidos-seccion-titulo">{soloRevisiones ? 'Registro de productos' : 'Revisión física de productos'}</h3>
+                                <span className="text-xs theme-text-muted tabular-nums">{revisiones.length} de {pedido.cantidad_piezas || '—'} piezas</span>
                                 {borradorMsg && (
-                                    <p className="text-[10px] font-black uppercase theme-text-muted m-0">{borradorMsg}</p>
+                                    <p className="text-xs font-medium theme-text-muted m-0" role="status">{borradorMsg}</p>
                                 )}
                             </div>
-                            <p className="text-[10px] theme-text-muted font-bold m-0">
-                                Cada producto se agrega en Bueno. Expanda solo si CEDIS debe cambiar el estado o adjuntar evidencia individual.
-                                Si no hay existencias reales, márquela Sin existencias. Si agregó una pieza por error, elimínela con el ícono de basura.
+                            <p className="text-xs theme-text-muted font-normal m-0">
+                                Cada pieza inicia en Bueno. Abre su detalle para cambiar la condición o adjuntar fotos. Si falta una pieza, registra Sin existencias.
                             </p>
 
                             <div className="space-y-2">
                                 <div className="flex items-center justify-between gap-2">
-                                    <p className="text-xs font-black uppercase theme-text-muted m-0">Productos revisados</p>
+                                    <p className="text-xs font-medium theme-text-muted m-0">Productos revisados</p>
                                     <button type="button" onClick={() => document.getElementById('cedis-sku-pesaje')?.focus()} className={`${BTN_SECONDARY} text-xs flex items-center gap-1.5 min-h-[44px]`}>
                                         <Plus className="w-3.5 h-3.5" /> Producto
                                     </button>
                                 </div>
-                                <label className={SECCION}>SKU / código de barras</label>
+                                <label htmlFor="cedis-sku-pesaje" className={SECCION}>SKU / código de barras</label>
                                 {!esCampo && (
-                                    <p className="text-[10px] font-black uppercase m-0 mb-1 text-emerald-600">
+                                    <p className="text-xs font-semibold m-0 mb-1 theme-text-exito">
                                         Pistola lista · escaneo continuo
                                     </p>
                                 )}
-                                <p className="text-[10px] font-black uppercase theme-text-muted m-0 mb-2">
+                                <p className="text-xs font-medium theme-text-muted m-0 mb-2">
                                     Buscando en:{' '}
                                     <span className="theme-text-main">
                                         {etiquetaAlmacen(almacenBusqueda) !== '—'
@@ -1482,6 +1377,8 @@ export default function ModalResponderPesaje({
                                     className=""
                                     inputProps={{
                                         id: 'cedis-sku-pesaje',
+                                        name: 'sku',
+                                        ...atributosError('cedis-sku-pesaje'),
                                         ref: skuPistolaRef,
                                         placeholder: esCampo ? 'Escanear o escribir SKU…' : 'Pistola: escanee y pulse Enter…',
                                         className: `${THEME_INPUT} w-full py-3 min-h-[44px]`,
@@ -1491,23 +1388,24 @@ export default function ModalResponderPesaje({
                                         onFocus: desbloquearBipAudio,
                                     }}
                                 />
+                                {mensajeError('cedis-sku-pesaje')}
                                 <div className="flex flex-wrap gap-2">
                                     <button type="button" onClick={() => buscarProductos(skuQuery, { autoAgregar: true })} disabled={skuCargando || String(skuQuery).trim().length < 2 || !almacenBusquedaId} className={`${BTN_SECONDARY} text-xs flex items-center gap-1.5 min-h-[44px] outline-none`}>
                                         <Search className="w-3.5 h-3.5" /> {skuCargando ? 'Buscando…' : 'Buscar y agregar'}
                                     </button>
-                                    <button type="button" onClick={abrirSesionEvidencia} className={`${BTN_SECONDARY} text-xs flex items-center gap-1.5 min-h-[44px] outline-none`}>
+                                    {!esCampo && <button type="button" onClick={abrirSesionEvidencia} className={`${BTN_SECONDARY} text-xs flex items-center gap-1.5 min-h-[44px] outline-none`}>
                                         <Smartphone className="w-3.5 h-3.5" /> Tomar evidencias con celular
-                                    </button>
+                                    </button>}
                                 </div>
-                                {skuError && <p className="text-[10px] font-bold text-amber-600 m-0">{skuError}</p>}
+                                {skuError && <p className="text-xs font-bold theme-text-aviso m-0">{skuError}</p>}
                                 {skuResultados.length > 0 && (
                                     <div className="theme-surface border theme-border rounded-xl shadow-xl max-h-48 overflow-y-auto p-2">
                                         {skuResultados.map((p) => (
-                                            <button key={p.id} type="button" onClick={() => agregarProducto(p)} className="w-full text-left p-3 rounded-lg hover:bg-[color-mix(in_srgb,var(--color-texto)_6%,transparent)] text-xs font-bold theme-text-main outline-none">
-                                                <span className="font-mono">{p.sku}</span>
+                                            <button key={p.id} type="button" onClick={() => agregarProducto(p)} className="w-full text-left p-3 rounded-lg hover:bg-[color-mix(in_srgb,var(--theme-text-main)_6%,transparent)] text-xs font-bold theme-text-main outline-none">
+                                                <span className="tabular-nums">{p.sku}</span>
                                                 <span className="theme-text-muted"> — </span>
                                                 {p.descripcion}
-                                                <span className="block text-[10px] theme-text-muted font-bold mt-0.5">
+                                                <span className="block text-xs theme-text-muted font-normal mt-0.5">
                                                     {p.almacen_codigo || p.almacen_nombre
                                                         ? `${p.almacen_codigo ? `${p.almacen_codigo} · ` : ''}${p.almacen_nombre || ''}`
                                                         : 'Almacén del pedido'}
@@ -1522,7 +1420,7 @@ export default function ModalResponderPesaje({
                             </div>
 
                             {revisiones.length === 0 && (
-                                <p className="text-xs theme-text-muted font-bold m-0">Sin productos agregados.</p>
+                                <p className="text-xs theme-text-muted font-normal m-0">Sin productos agregados.</p>
                             )}
 
                             {productosCompactos ? (
@@ -1533,11 +1431,11 @@ export default function ModalResponderPesaje({
                                 >
                                     <summary className="flex items-center justify-between gap-2 px-3 py-3 cursor-pointer list-none min-h-[48px] theme-element">
                                         <div className="min-w-0">
-                                            <p className="text-sm font-black theme-text-main m-0">
+                                            <p className="text-sm font-semibold theme-text-main m-0">
                                                 {revisiones.length} productos
                                                 {productosConDetalle > 0 ? ` · ${productosConDetalle} con detalle` : ''}
                                             </p>
-                                            <p className="text-[10px] theme-text-muted font-bold m-0 mt-1 line-clamp-2">
+                                            <p className="text-xs theme-text-muted font-normal m-0 mt-1 line-clamp-2">
                                                 {revisiones.map((r, i) => {
                                                     const tag = instancias[i];
                                                     const base = r.sku || r.descripcion_producto;
@@ -1547,39 +1445,42 @@ export default function ModalResponderPesaje({
                                         </div>
                                         <ChevronDown className={`w-4 h-4 theme-text-muted shrink-0 transition-transform ${listaProductosAbierta ? 'rotate-180' : ''}`} />
                                     </summary>
-                                    <div className="p-3 space-y-2 border-t theme-border max-h-[40vh] overflow-y-auto">
+                                    <div className="p-3 space-y-2 border-t theme-border">
                                         {listaProductos}
                                     </div>
                                 </details>
                             ) : (
                                 <div className="space-y-2">{listaProductos}</div>
                             )}
-                        </div>
+                        </section>
 
                         {soloRevisiones && (
-                        <div>
-                            <label className={`${SECCION} m-0 mb-3`}>Evidencia final del pedido</label>
-                            <p className="text-[10px] theme-text-muted font-bold m-0 mb-3">
+                        <section id="pesaje-envios" tabIndex={-1} hidden={paso !== 2} className="gelia-pedidos-paso gelia-pedidos-seccion">
+                            <h3 className="gelia-pedidos-seccion-titulo mb-3">Evidencia final del pedido</h3>
+                            <p className="text-xs theme-text-muted font-normal m-0 mb-3">
                                 Adjunte foto(s) de cómo quedan todos los productos juntos e indique los bultos a preparar.
                             </p>
                             <div className="p-4 rounded-xl border theme-border theme-element space-y-3">
                                 <div>
-                                    <label className={SECCION}>Bultos a preparar (Aprox)</label>
+                                    <label htmlFor="pesaje-bultos" className={SECCION}>Bultos a preparar (Aprox)</label>
                                     <input
+                                        id="pesaje-bultos" {...atributosError('pesaje-bultos')} name="bultos" aria-required="true"
                                         type="number"
                                         min={1}
                                         max={999}
                                         inputMode="numeric"
                                         value={bultosAproximados}
                                         onChange={(e) => setBultosAproximados(e.target.value)}
-                                        placeholder="Ej. 3"
+                                        placeholder="Ej. 3…"
                                         className={`${THEME_INPUT} w-full py-3 min-h-[44px] max-w-[10rem]`}
                                     />
-                                    <p className="text-[10px] theme-text-muted font-bold m-0 mt-1">
+                                    {mensajeError('pesaje-bultos')}
+                                    <p className="text-xs theme-text-muted font-normal m-0 mt-1">
                                         Cantidad aproximada de bultos en los que se empacará el pedido.
                                     </p>
                                 </div>
                                 <GaleriaEvidencias
+                                    id="pesaje-evidencia-lote" error={errorCampo?.id === 'pesaje-evidencia-lote' ? errorCampo.mensaje : undefined} disabled={procesando}
                                     archivos={evidenciasLote.archivos}
                                     previews={evidenciasLote.previews}
                                     obligatorio
@@ -1588,13 +1489,13 @@ export default function ModalResponderPesaje({
                                     onVer={abrirGaleria}
                                 />
                             </div>
-                        </div>
+                        </section>
                         )}
 
                         {!soloRevisiones && (
-                        <div>
-                            <label className={`${SECCION} m-0 mb-3`}>Envíos</label>
-                            <p className="text-[10px] theme-text-muted font-bold m-0 mb-3">
+                        <section id="pesaje-envios" tabIndex={-1} hidden={paso !== 2} className="gelia-pedidos-paso gelia-pedidos-seccion">
+                            <h3 className="gelia-pedidos-seccion-titulo mb-3">Envíos</h3>
+                            <p className="text-xs theme-text-muted font-normal m-0 mb-3">
                                 Por cada caja adjunte la foto del lote de productos que van en ese envío.
                             </p>
                             <div className="space-y-4">
@@ -1603,58 +1504,64 @@ export default function ModalResponderPesaje({
                                     const slot = evidenciasPorEnvio[idx] || slotEnvioVacio();
                                     const esUltimo = idx === envios.length - 1;
                                     return (
-                                        <div key={idx} ref={esUltimo ? envioNuevoRef : undefined} className="p-4 rounded-xl border theme-border theme-element space-y-3">
+                                        <div key={envio.client_uuid} ref={esUltimo ? envioNuevoRef : undefined} className="p-4 rounded-xl border theme-border theme-element space-y-3">
                                             <div className="flex items-center justify-between gap-2">
-                                                <p className="text-sm font-black theme-text-main m-0">{etiquetaEnvio(idx, { tipo_caja: tiposCaja.find((t) => String(t.id) === String(envio.catalogo_tipo_caja_id)) })}</p>
+                                                <p className="text-sm font-semibold theme-text-main m-0">{etiquetaEnvio(idx, { tipo_caja: tiposCaja.find((t) => String(t.id) === String(envio.catalogo_tipo_caja_id)) })}</p>
                                                 <button type="button" onClick={() => envios.length > 1 && setConfirmacion({ tipo: 'quitar_envio', idx })} disabled={envios.length <= 1} className="p-2 min-h-[44px] min-w-[44px] rounded-xl border theme-border theme-element outline-none disabled:opacity-40 inline-flex items-center justify-center theme-text-main" aria-label={`Quitar envío ${idx + 1}`}>
                                                     <Trash2 className="w-4 h-4" />
                                                 </button>
                                             </div>
                                             <div className="space-y-3">
                                                 <div>
-                                                    <label className={SECCION}>Tipo de caja</label>
-                                                    <select value={envio.catalogo_tipo_caja_id} onChange={(e) => actualizarEnvio(idx, 'catalogo_tipo_caja_id', e.target.value)} className={`${THEME_SELECT} w-full py-3 min-h-[44px]`}>
+                                                    <label htmlFor={`pesaje-caja-${envio.client_uuid}`} className={SECCION}>Tipo de caja *</label>
+                                                    <select id={`pesaje-caja-${envio.client_uuid}`} {...atributosError(`pesaje-caja-${envio.client_uuid}`)} name={`caja-${envio.client_uuid}`} aria-required="true" value={envio.catalogo_tipo_caja_id} onChange={(e) => actualizarEnvio(idx, 'catalogo_tipo_caja_id', e.target.value)} className={`${THEME_SELECT} w-full py-3 min-h-[44px]`}>
                                                         <option value="">Seleccionar…</option>
                                                         {tiposCaja.map((c) => (
                                                             <option key={c.id} value={c.id}>{c.nombre}</option>
                                                         ))}
                                                     </select>
+                                                    {mensajeError(`pesaje-caja-${envio.client_uuid}`)}
                                                 </div>
                                                 {envio.catalogo_tipo_caja_id ? (
-                                                    <div className="rounded-xl border theme-border theme-surface p-3 sm:p-4">
-                                                        <p className="text-[10px] font-black uppercase tracking-wide theme-text-muted m-0 mb-3">Datos del catálogo</p>
+                                                    <details className="rounded-xl border theme-border theme-surface p-3 sm:p-4">
+                                                        <summary className="cursor-pointer min-h-[44px] text-xs theme-text-muted">
+                                                            Datos del catálogo · {envio.largo || '—'} × {envio.ancho || '—'} × {envio.alto || '—'} cm
+                                                            <span className="block mt-1 text-sm font-semibold theme-text-main">Peso cobrado: {cobrado === '' ? '—' : cobrado} kg</span>
+                                                        </summary>
                                                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                                                             <div>
-                                                                <p className="text-[10px] font-black uppercase theme-text-muted m-0">Largo</p>
-                                                                <p className="text-base font-black theme-text-main m-0 mt-0.5 tabular-nums">{envio.largo || '—'} <span className="text-xs font-bold theme-text-muted">cm</span></p>
+                                                                <p className="text-xs font-medium theme-text-muted m-0">Largo</p>
+                                                                <p className="text-base font-semibold theme-text-main m-0 mt-0.5 tabular-nums">{envio.largo || '—'} <span className="text-xs font-bold theme-text-muted">cm</span></p>
                                                             </div>
                                                             <div>
-                                                                <p className="text-[10px] font-black uppercase theme-text-muted m-0">Ancho</p>
-                                                                <p className="text-base font-black theme-text-main m-0 mt-0.5 tabular-nums">{envio.ancho || '—'} <span className="text-xs font-bold theme-text-muted">cm</span></p>
+                                                                <p className="text-xs font-medium theme-text-muted m-0">Ancho</p>
+                                                                <p className="text-base font-semibold theme-text-main m-0 mt-0.5 tabular-nums">{envio.ancho || '—'} <span className="text-xs font-bold theme-text-muted">cm</span></p>
                                                             </div>
                                                             <div>
-                                                                <p className="text-[10px] font-black uppercase theme-text-muted m-0">Alto</p>
-                                                                <p className="text-base font-black theme-text-main m-0 mt-0.5 tabular-nums">{envio.alto || '—'} <span className="text-xs font-bold theme-text-muted">cm</span></p>
+                                                                <p className="text-xs font-medium theme-text-muted m-0">Alto</p>
+                                                                <p className="text-base font-semibold theme-text-main m-0 mt-0.5 tabular-nums">{envio.alto || '—'} <span className="text-xs font-bold theme-text-muted">cm</span></p>
                                                             </div>
                                                             <div>
-                                                                <p className="text-[10px] font-black uppercase theme-text-muted m-0">Peso vol.</p>
-                                                                <p className="text-base font-black theme-text-main m-0 mt-0.5 tabular-nums">{envio.peso_volumetrico_kg || '—'} <span className="text-xs font-bold theme-text-muted">kg</span></p>
+                                                                <p className="text-xs font-medium theme-text-muted m-0">Peso vol.</p>
+                                                                <p className="text-base font-semibold theme-text-main m-0 mt-0.5 tabular-nums">{envio.peso_volumetrico_kg || '—'} <span className="text-xs font-bold theme-text-muted">kg</span></p>
                                                             </div>
                                                             <div className="col-span-2 sm:col-span-2">
-                                                                <p className="text-[10px] font-black uppercase theme-text-muted m-0">Peso cobrado</p>
-                                                                <p className="text-lg font-black theme-text-main m-0 mt-0.5 tabular-nums">{cobrado !== '' ? cobrado : '—'} <span className="text-xs font-bold theme-text-muted">kg</span></p>
+                                                                <p className="text-xs font-medium theme-text-muted m-0">Peso cobrado</p>
+                                                                <p className="text-lg font-semibold theme-text-main m-0 mt-0.5 tabular-nums">{cobrado !== '' ? cobrado : '—'} <span className="text-xs font-bold theme-text-muted">kg</span></p>
                                                             </div>
                                                         </div>
-                                                    </div>
+                                                    </details>
                                                 ) : (
-                                                    <p className="text-[11px] theme-text-muted font-bold m-0">Seleccione el tipo de caja para ver medidas del catálogo.</p>
+                                                    <p className="text-xs theme-text-muted font-normal m-0">Seleccione el tipo de caja para ver medidas del catálogo.</p>
                                                 )}
                                                 <div>
-                                                    <label className={SECCION}>Peso real (kg) *</label>
-                                                    <input type="number" step="0.0001" min="0" inputMode="decimal" value={envio.peso_real_kg} onChange={(e) => actualizarEnvio(idx, 'peso_real_kg', e.target.value)} onFocus={(e) => e.target.scrollIntoView({ behavior: 'smooth', block: 'center' })} className={`${THEME_INPUT} w-full py-3 min-h-[44px] text-base`} placeholder="0.0000" />
+                                                    <label htmlFor={`pesaje-peso-${envio.client_uuid}`} className={SECCION}>Peso real (kg) *</label>
+                                                    <input id={`pesaje-peso-${envio.client_uuid}`} {...atributosError(`pesaje-peso-${envio.client_uuid}`)} name={`peso-${envio.client_uuid}`} aria-required="true" type="number" step="0.0001" min="0" inputMode="decimal" value={envio.peso_real_kg} onChange={(e) => actualizarEnvio(idx, 'peso_real_kg', e.target.value)} onFocus={(e) => e.target.scrollIntoView({ block: 'nearest' })} className={`${THEME_INPUT} w-full py-3 min-h-[44px] text-base`} placeholder="0.0000" />
+                                                    {mensajeError(`pesaje-peso-${envio.client_uuid}`)}
                                                 </div>
                                             </div>
                                             <GaleriaEvidencias
+                                                id={`pesaje-evidencia-${envio.client_uuid}`} error={errorCampo?.id === `pesaje-evidencia-${envio.client_uuid}` ? errorCampo.mensaje : undefined} disabled={procesando}
                                                 archivos={slot.archivos}
                                                 previews={slot.previews}
                                                 obligatorio
@@ -1672,14 +1579,15 @@ export default function ModalResponderPesaje({
                                 <Plus className="w-3.5 h-3.5" /> Otro envío
                             </button>
                             {envios.length > 1 && (
-                                <p className="text-xs theme-text-muted font-bold m-0 mt-3">
+                                <p className="text-xs theme-text-muted font-normal m-0 mt-3">
                                     Total peso cobrado: {Math.round(totalCobrado * 10000) / 10000} kg · {envios.length} envíos
                                 </p>
                             )}
                             {(pedirMotivoRetiro || uuidsGuardados.some((u) => !envios.some((e) => e.client_uuid === u))) && (
                                 <div className="mt-3">
-                                    <label className={SECCION}>Motivo de retiro de envíos *</label>
+                                    <label htmlFor="pesaje-motivo-retiro" className={SECCION}>Motivo de retiro de envíos *</label>
                                     <textarea
+                                        id="pesaje-motivo-retiro" name="motivo_retiro" aria-required="true"
                                         value={motivoRetiro}
                                         onChange={(e) => setMotivoRetiro(e.target.value)}
                                         rows={2}
@@ -1688,16 +1596,26 @@ export default function ModalResponderPesaje({
                                     />
                                 </div>
                             )}
-                        </div>
+                        </section>
                         )}
-
+                        </fieldset>
+                        </div>
                     </div>
 
-                    <div className="gelia-modal-footer flex flex-col-reverse sm:flex-row flex-wrap gap-3 sm:justify-end p-4 md:p-6 pb-[max(1rem,env(safe-area-inset-bottom))] border-t theme-border shrink-0">
-                        <button type="button" onClick={pedirCerrar} className={`${BTN_SECONDARY} outline-none min-h-[44px] w-full sm:w-auto`} disabled={procesando}>Cancelar</button>
-                        <button type="button" onClick={confirmar} disabled={procesando} className={`${BTN_PRIMARY} flex items-center justify-center gap-2 outline-none min-h-[44px] w-full sm:w-auto`}>
-                            <Scale className="w-4 h-4" /> {procesando ? 'Guardando…' : (soloRevisiones ? 'Registrar consulta' : 'Registrar pesaje')}
-                        </button>
+                    <div className="gelia-modal-footer gelia-pedidos-respuesta-footer flex flex-row gap-2 sm:justify-end p-4 md:p-6 pb-[max(1rem,env(safe-area-inset-bottom))] border-t theme-border shrink-0">
+                        <p className="gelia-pedidos-resumen-guardar m-0 text-xs theme-text-muted" role="status">
+                            <strong className="theme-text-main tabular-nums">{revisiones.length} piezas</strong>
+                            {soloRevisiones ? ` · ${bultosAproximados || '—'} bultos` : ` · ${envios.length} envíos · ${new Intl.NumberFormat('es-MX', { maximumFractionDigits: 4 }).format(totalCobrado)} kg cobrados`}
+                            <span className="block mt-0.5">{borradorMsg || 'Revisa los datos antes de registrar la respuesta.'}</span>
+                        </p>
+                        <button type="button" onClick={() => paso > 0 ? cambiarPaso(paso - 1) : pedirCerrar()} className={`${BTN_SECONDARY} outline-none min-h-[44px] sm:w-auto`} disabled={procesando}>{paso > 0 ? 'Atrás' : 'Cerrar'}</button>
+                        {paso < 2 ? (
+                            <button type="button" onClick={() => cambiarPaso(paso + 1)} disabled={procesando} className={`${BTN_PRIMARY} min-h-[44px] flex-1 sm:flex-none`}>{paso === 0 ? 'Revisar productos' : (soloRevisiones ? 'Bultos y evidencias' : 'Cajas y evidencias')}</button>
+                        ) : (
+                            <button type="button" onClick={confirmar} disabled={procesando} aria-busy={procesando} className={`${BTN_PRIMARY} flex items-center justify-center gap-2 outline-none min-h-[44px] flex-1 sm:flex-none sm:w-auto`}>
+                                <Scale className="w-4 h-4" aria-hidden="true" /> <span>{procesando ? 'Guardando…' : (soloRevisiones ? 'Registrar consulta' : 'Registrar pesaje')}</span>
+                            </button>
+                        )}
                     </div>
                 </div>
             </div>

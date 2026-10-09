@@ -408,12 +408,12 @@ class ControlPedidosErroresPorDuenoTest extends TestCase
         $actualizado = app(ReportarErrorDatosPedidoBmaService::class)->ejecutar(
             $pedido->fresh(['estatus', 'documentos']),
             $this->usuario->id,
-            ['remision', 'folio_remision'],
+            ['remision', 'numero_remision'],
             'Me equivoqué de PDF'
         );
 
         $this->assertSame($faseAntes, $actualizado->estatus->fase_ciclo);
-        $this->assertEqualsCanonicalizing(['remision', 'folio_remision'], $actualizado->campos_incorrectos);
+        $this->assertEqualsCanonicalizing(['remision', 'numero_remision'], $actualizado->campos_incorrectos);
         $this->assertStringContainsString('Auto-reporte auxiliar', (string) $actualizado->motivo_rechazo);
         $this->assertNull($actualizado->pago_validado_at);
         $this->assertFalse(

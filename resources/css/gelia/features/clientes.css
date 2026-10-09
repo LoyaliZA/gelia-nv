@@ -1,0 +1,256 @@
+/* Base de clientes: consulta primero, paneles sin alturas fijas. */
+.clientes-page {
+    min-width: 0;
+}
+
+.clientes-page :is(button, a, summary),
+.clientes-form :is(button, a) {
+    touch-action: manipulation;
+}
+
+.clientes-header h1 {
+    overflow-wrap: anywhere;
+    text-wrap: balance;
+}
+
+.clientes-header-actions > button {
+    flex: 1 1 auto;
+    min-height: 44px;
+    padding: 0.875rem 1rem;
+}
+
+.clientes-tabs > button {
+    flex: 1;
+    min-width: 0;
+    padding-inline: 0.75rem;
+}
+
+.clientes-list-panel {
+    min-width: 0;
+    container: clientes-list / inline-size;
+}
+
+.clientes-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.clientes-search,
+.clientes-search-button {
+    grid-column: 1 / -1;
+}
+
+.clientes-filters :is(input, select) {
+    min-width: 0;
+    min-height: 44px;
+    font-size: 1rem;
+    font-weight: 600;
+    letter-spacing: normal;
+    text-transform: none;
+}
+
+.clientes-filters select {
+    padding: 0.75rem 2.25rem 0.75rem 0.875rem;
+    text-overflow: ellipsis;
+}
+
+.clientes-page .clientes-filters select.theme-text-main:has(option[value='']:checked),
+.clientes-page .clientes-filters option {
+    color: var(--theme-text-main);
+}
+
+.clientes-filters input {
+    padding-inline: 2.75rem 0.75rem;
+}
+
+.clientes-record {
+    min-width: 0;
+    display: grid;
+    gap: 1rem;
+}
+
+.clientes-record-number {
+    flex: 0 0 3.5rem;
+    overflow-wrap: anywhere;
+}
+
+.clientes-record-name,
+.clientes-record-fiscal,
+.clientes-import-help {
+    overflow-wrap: anywhere;
+}
+
+.clientes-record-identity .inline-flex {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+}
+
+.clientes-record-assignment {
+    flex-basis: 100%;
+}
+
+.clientes-record-actions :is(a, button) {
+    flex-shrink: 0;
+}
+
+.clientes-import-toggle {
+    min-height: 44px;
+    cursor: pointer;
+    list-style: none;
+}
+
+.clientes-import-toggle::-webkit-details-marker {
+    display: none;
+}
+
+.clientes-import-toggle h2 {
+    font-size: 1rem;
+    letter-spacing: normal;
+    font-style: normal;
+    text-transform: none;
+}
+
+.clientes-import-toggle > div {
+    min-width: 0;
+}
+
+.clientes-import details[open] .clientes-import-chevron {
+    transform: rotate(180deg);
+}
+
+.clientes-import label:focus-within {
+    outline: 2px solid var(--color-primario);
+    outline-offset: 3px;
+}
+
+.clientes-page .paginacion-btn {
+    min-width: 44px;
+    min-height: 44px;
+}
+
+.clientes-page .clientes-audit {
+    min-width: 0;
+}
+
+.clientes-audit > section {
+    min-width: 0;
+    padding: 1rem;
+}
+
+.clientes-audit :is(input, select) {
+    min-width: 0;
+    width: 100%;
+    font-size: 1rem;
+}
+
+.clientes-audit table {
+    min-width: 800px;
+}
+
+.clientes-audit [tabindex='0'] {
+    overscroll-behavior-inline: contain;
+}
+
+.clientes-report .shrink-0 {
+    flex-shrink: 1;
+    min-width: 0;
+    flex-wrap: wrap;
+    overflow-wrap: anywhere;
+}
+
+.clientes-form {
+    padding: max(0.75rem, env(safe-area-inset-top)) max(0.75rem, env(safe-area-inset-right)) max(0.75rem, env(safe-area-inset-bottom)) max(0.75rem, env(safe-area-inset-left));
+}
+
+.clientes-form-shell {
+    max-height: calc(100dvh - 1.5rem - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    padding: 1.25rem;
+    border-radius: var(--theme-radius-panel);
+    overscroll-behavior: contain;
+    overflow-wrap: anywhere;
+}
+
+.clientes-protection-record > div {
+    min-width: 0;
+    flex: 1 1 180px;
+}
+
+.clientes-protection-record button {
+    min-height: 44px;
+}
+
+.clientes-form-shell form > div:first-child {
+    padding-right: 2rem;
+}
+
+.clientes-form-shell :is(input, select) {
+    min-width: 0;
+    font-size: 1rem;
+}
+
+.clientes-form-shell .clientes-form-section {
+    padding: 1rem;
+}
+
+.clientes-form-shell button[role='switch'] {
+    width: 100%;
+    gap: 0.75rem;
+    text-align: left;
+}
+
+.clientes-form-shell button[role='switch'] > div:first-child {
+    min-width: 0;
+}
+
+.clientes-form-shell button[role='switch'] svg {
+    flex-shrink: 0;
+}
+
+@container clientes-list (min-width: 660px) {
+    .clientes-record-assignment {
+        flex-basis: 0;
+    }
+
+    .clientes-filters {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .clientes-search {
+        grid-column: span 3;
+    }
+
+    .clientes-search-button {
+        grid-column: span 1;
+    }
+}
+
+@media (width >= 640px) {
+    .clientes-tabs > button {
+        flex: initial;
+        padding-inline: 1.5rem;
+    }
+
+    .clientes-audit > section {
+        padding: 1.5rem;
+    }
+
+    .clientes-form-shell {
+        padding: 2rem;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .clientes-page *,
+    .clientes-form *,
+    .clientes-report * {
+        animation: none !important;
+        transition: none !important;
+    }
+}
+
+.clientes-page :is(button, a, summary, input, select):focus-visible,
+.clientes-form :is(button, a, input, select):focus-visible,
+.clientes-report button:focus-visible {
+    outline: 2px solid var(--color-primario);
+    outline-offset: 3px;
+}
+

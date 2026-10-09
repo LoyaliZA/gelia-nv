@@ -12,6 +12,8 @@ import {
 } from './pedidosBmaStyles';
 import { THEME_INPUT, THEME_TEXTAREA } from '../../../utils/geliaTheme';
 import ModalAlertaPedido from './ModalAlertaPedido';
+import ModalConfirmarAccion from './ModalConfirmarAccion';
+import usePedidoDialog from './usePedidoDialog';
 
 const SECCION = `${THEME_LABEL} mb-2 block`;
 
@@ -21,6 +23,8 @@ export default function ModalAtenderSinExistencia({
     const { auth } = usePage().props;
     const cancelarOk = puedeCancelar || (auth?.user?.permissions || []).includes('control_pedidos.cancelar')
         || (auth?.user?.roles || []).includes('Super Admin');
+    const [confirmarCancelacion, setConfirmarCancelacion] = useState(false);
+    const [errorNota, setErrorNota] = useState('');
     const [accion, setAccion] = useState('esperar');
     const [nota, setNota] = useState('');
     const [totalMercancia, setTotalMercancia] = useState('');
@@ -33,6 +37,8 @@ export default function ModalAtenderSinExistencia({
 
     useEffect(() => {
         if (!abierto || !pedido || !revision) return;
+        setConfirmarCancelacion(false);
+        setErrorNota('');
         setAccion('esperar');
         setNota('');
         setTotalMercancia(String(pedido.total_mercancia ?? ''));
@@ -43,13 +49,16 @@ export default function ModalAtenderSinExistencia({
         setProcesando(false);
     }, [abierto, pedido?.id, revision?.id]);
 
+    const dialog = usePedidoDialog({ abierto: abierto && Boolean(pedido && revision), onClose, bloqueado: procesando });
     if (!abierto || !pedido || !revision) return null;
 
     const requiereTotales = accion === 'retirar' || accion === 'sustituir';
 
     const enviar = () => {
+        if (procesando) return;
         if ((accion === 'contactar' || accion === 'esperar') && !String(nota).trim()) {
-            setAlerta({ abierto: true, tipo: 'error', titulo: 'Nota', mensaje: 'Indique qué se acordó con el cliente.' });
+            setErrorNota('Indica qué se acordó con el cliente.');
+            document.getElementById('decision-nota')?.focus();
             return;
         }
         const payload = {
@@ -86,21 +95,22 @@ export default function ModalAtenderSinExistencia({
 
     return createPortal(
         <>
-            <div className={`${THEME_MODAL_OVERLAY} items-center py-4`} style={{ zIndex: 'calc(var(--gelia-z-modal) + 10)' }}>
-                <div className={`${THEME_MODAL_SHELL} max-w-lg w-full p-5 md:p-6 space-y-4`} onClick={(e) => e.stopPropagation()}>
-                    <div className="flex justify-between items-start gap-3">
+            <div className={`${THEME_MODAL_OVERLAY} items-center py-4`} style={{ zIndex: 'calc(var(--gelia-z-toast) + 2)' }}>
+                <div {...dialog} aria-labelledby="decision-titulo" className={`${THEME_MODAL_SHELL} gelia-pedidos-dialog-workspace max-w-lg w-full`} onClick={(e) => e.stopPropagation()}>
+                    <div className="p-5 border-b theme-border flex justify-between items-start gap-3 shrink-0">
                         <div>
-                            <p className="text-[9px] font-black uppercase theme-text-muted m-0">Sin existencias</p>
-                            <p className="text-sm font-black theme-text-main m-0 mt-1">{revision.descripcion_producto}</p>
+                            <h2 id="decision-titulo" className="text-lg font-semibold theme-text-main m-0">Resolver pieza sin existencias</h2>
+                            <p className="text-sm font-medium theme-text-muted m-0 mt-2">{revision.descripcion_producto}</p>
                         </div>
-                        <button type="button" onClick={onClose} className="p-2 rounded-full theme-text-muted outline-none" aria-label="Cerrar">
+                        <button type="button" onClick={onClose} disabled={procesando} className="p-2 rounded-full theme-text-muted outline-none" aria-label="Cerrar">
                             <X className="w-5 h-5" />
                         </button>
                     </div>
 
+                    <div className="gelia-modal-body p-5 space-y-4">
                     <div>
-                        <label className={SECCION}>Acción</label>
-                        <select value={accion} onChange={(e) => setAccion(e.target.value)} className="w-full py-2.5 min-h-[44px] rounded-xl border theme-border theme-element text-sm font-bold">
+                        <label htmlFor="decision-accion" className={SECCION}>Acción</label>
+                        <select id="decision-accion" name="accion" disabled={procesando} value={accion} onChange={(e) => setAccion(e.target.value)} className="w-full py-2.5 min-h-[44px] rounded-xl border theme-border theme-element text-sm font-bold">
                             {Object.entries(LABELS_RESOLUCION_SIN_EXISTENCIA)
                                 .filter(([k]) => k !== 'stock_ok')
                                 .map(([k, label]) => (
@@ -111,30 +121,31 @@ export default function ModalAtenderSinExistencia({
                     </div>
 
                     <div>
-                        <label className={SECCION}>Nota{accion === 'contactar' || accion === 'esperar' ? ' *' : ''}</label>
-                        <textarea
+                        <label htmlFor="decision-nota" className={SECCION}>Nota{accion === 'contactar' || accion === 'esperar' ? ' *' : ''}</label>
+                        <textarea id="decision-nota" name="nota" autoComplete="off" aria-invalid={Boolean(errorNota)} aria-describedby={errorNota ? 'decision-nota-error' : undefined}
                             value={nota}
-                            onChange={(e) => setNota(e.target.value)}
+                            onChange={(e) => { setNota(e.target.value); setErrorNota(''); }}
                             className={`${THEME_TEXTAREA} w-full min-h-[72px]`}
                             placeholder={accion === 'cancelar' ? 'Comentario de cancelación…' : 'Qué decidió el cliente…'}
                         />
+                        {errorNota && <p id="decision-nota-error" role="alert" className="text-sm theme-text-peligro m-0 mt-2">{errorNota}</p>}
                     </div>
 
                     {requiereTotales && (
                         <div className="space-y-3 p-3 rounded-xl border theme-border">
-                            <p className="text-[9px] font-black uppercase theme-text-muted m-0">Recálculo</p>
+                            <p className="text-sm font-semibold theme-text-muted m-0">Recálculo</p>
                             <div className="grid grid-cols-2 gap-3">
                                 <div>
-                                    <label className={SECCION}>Mercancía</label>
-                                    <input type="number" min="0" step="0.01" value={totalMercancia} onChange={(e) => setTotalMercancia(e.target.value)} className={`${THEME_INPUT} w-full py-2`} />
+                                    <label htmlFor="decision-mercancia" className={SECCION}>Mercancía</label>
+                                    <input id="decision-mercancia" name="decision-mercancia" inputMode="decimal" type="number" min="0" step="0.01" value={totalMercancia} onChange={(e) => setTotalMercancia(e.target.value)} className={`${THEME_INPUT} w-full py-2`} />
                                 </div>
                                 <div>
-                                    <label className={SECCION}>Piezas</label>
-                                    <input type="number" min="0" step="1" value={cantidadPiezas} onChange={(e) => setCantidadPiezas(e.target.value)} className={`${THEME_INPUT} w-full py-2`} />
+                                    <label htmlFor="decision-piezas" className={SECCION}>Piezas</label>
+                                    <input id="decision-piezas" name="decision-piezas" inputMode="numeric" type="number" min="0" step="1" value={cantidadPiezas} onChange={(e) => setCantidadPiezas(e.target.value)} className={`${THEME_INPUT} w-full py-2`} />
                                 </div>
                                 <div>
-                                    <label className={SECCION}>Envío</label>
-                                    <input type="number" min="0" step="0.01" value={costoEnvio} onChange={(e) => setCostoEnvio(e.target.value)} className={`${THEME_INPUT} w-full py-2`} />
+                                    <label htmlFor="decision-envio" className={SECCION}>Envío</label>
+                                    <input id="decision-envio" name="decision-envio" inputMode="decimal" type="number" min="0" step="0.01" value={costoEnvio} onChange={(e) => setCostoEnvio(e.target.value)} className={`${THEME_INPUT} w-full py-2`} />
                                 </div>
                                 <label className="flex items-center gap-2 text-xs font-bold theme-text-main mt-6">
                                     <input type="checkbox" checked={aplicaSeguro} onChange={(e) => setAplicaSeguro(e.target.checked)} className="w-4 h-4" />
@@ -148,19 +159,22 @@ export default function ModalAtenderSinExistencia({
                                 </label>
                             )}
                             {accion === 'sustituir' && (
-                                <p className="text-[10px] font-bold text-sky-600 m-0">Se solicitará re-pesaje. Adjunte PDF o anexo del surtido nuevo antes de confirmar.</p>
+                                <p className="text-xs font-medium theme-text-info m-0">Se solicitará re-pesaje. Adjunte PDF o anexo del surtido nuevo antes de confirmar.</p>
                             )}
                         </div>
                     )}
 
-                    <div className="flex flex-col-reverse sm:flex-row gap-3 pt-2">
-                        <button type="button" onClick={onClose} className={`${BTN_SECONDARY} min-h-[44px] w-full sm:w-auto`}>Cancelar</button>
-                        <button type="button" onClick={enviar} disabled={procesando} className={`${BTN_PRIMARY} min-h-[44px] w-full sm:w-auto sm:ml-auto disabled:opacity-50`}>
-                            {procesando ? 'Guardando…' : 'Guardar decisión'}
+                    </div>
+                    <div className="gelia-modal-footer p-4 flex flex-col-reverse sm:flex-row gap-3">
+                        <button type="button" onClick={onClose} disabled={procesando} className={`${BTN_SECONDARY} min-h-[44px] w-full sm:w-auto`}>Cancelar</button>
+                        <button type="button" onClick={() => accion === 'cancelar' ? setConfirmarCancelacion(true) : enviar()} disabled={procesando} aria-busy={procesando} className={`${BTN_PRIMARY} min-h-[44px] w-full sm:w-auto sm:ml-auto disabled:opacity-50`}>
+                            {procesando ? 'Guardando…' : (accion === 'cancelar' ? 'Revisar cancelación' : 'Guardar decisión')}
                         </button>
                     </div>
                 </div>
             </div>
+            <ModalConfirmarAccion abierto={confirmarCancelacion} titulo="Cancelar pedido" mensaje="Se cancelará el pedido completo. Revisa que esta sea la decisión acordada con el cliente."
+                etiquetaConfirmar="Cancelar pedido" variante="danger" onClose={() => setConfirmarCancelacion(false)} onConfirm={() => { setConfirmarCancelacion(false); enviar(); }} />
             <ModalAlertaPedido
                 abierto={alerta.abierto}
                 tipo={alerta.tipo}

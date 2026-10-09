@@ -201,7 +201,7 @@ export default function FiltrosAuditoria({
                     <div className="theme-field-with-icon relative mt-1">
                         <Search className="theme-field-icon w-4 h-4" aria-hidden />
                         <input
-                            id="auditoria-busqueda"
+                            id="auditoria-busqueda" name="q" enterKeyHint="search"
                             type="search"
                             value={busqueda}
                             onChange={(e) => onBuscar(e.target.value)}
@@ -250,7 +250,7 @@ export default function FiltrosAuditoria({
                     type="button"
                     onClick={() => setAdicionalesAbiertos((v) => !v)}
                     aria-expanded={adicionalesAbiertos}
-                    className={`${BTN_SECONDARY} !min-h-0 !py-2.5 !px-3 flex items-center justify-center gap-2 outline-none shrink-0 ${
+                    className={`${BTN_SECONDARY} min-h-[44px] !py-2.5 !px-3 flex items-center justify-center gap-2 outline-none shrink-0 ${
                         hayAdicionalesActivos ? 'ring-2 ring-[color-mix(in_srgb,var(--color-primario)_40%,transparent)]' : ''
                     }`}
                 >
@@ -264,7 +264,7 @@ export default function FiltrosAuditoria({
                         type="button"
                         onClick={onActualizar}
                         disabled={buscando}
-                        className={`${BTN_SECONDARY} !min-h-0 !py-2.5 !px-3 flex items-center justify-center gap-2 outline-none shrink-0 disabled:opacity-60`}
+                        className={`${BTN_SECONDARY} min-h-[44px] !py-2.5 !px-3 flex items-center justify-center gap-2 outline-none shrink-0 disabled:opacity-60`}
                     >
                         <RefreshCw className={`w-4 h-4 ${buscando ? 'animate-spin' : ''}`} aria-hidden />
                         Actualizar
@@ -275,7 +275,7 @@ export default function FiltrosAuditoria({
                     <button
                         type="button"
                         onClick={onLimpiarFiltros}
-                        className={`${BTN_SECONDARY} !min-h-0 !py-2.5 !px-3 flex items-center justify-center gap-2 outline-none shrink-0`}
+                        className={`${BTN_SECONDARY} min-h-[44px] !py-2.5 !px-3 flex items-center justify-center gap-2 outline-none shrink-0`}
                     >
                         <X className="w-4 h-4" aria-hidden />
                         Limpiar
@@ -292,7 +292,7 @@ export default function FiltrosAuditoria({
                     <div className="theme-field-with-icon relative flex-1 min-w-0">
                         <Search className="theme-field-icon w-4 h-4" aria-hidden />
                         <input
-                            id="auditoria-busqueda-movil"
+                            id="auditoria-busqueda-movil" name="q" enterKeyHint="search"
                             type="search"
                             value={busqueda}
                             onChange={(e) => onBuscar(e.target.value)}

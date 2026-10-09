@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Head, router, usePage } from '@inertiajs/react';
-import { Warehouse, Clock, CheckCircle2, Package, Scale, Loader2, PackageOpen } from 'lucide-react';
+import { Warehouse, Clock, CheckCircle2, Package, Scale, Loader2, PackageOpen, AlertTriangle } from 'lucide-react';
 import AppLayout from '../../../Layouts/AppLayout';
 import GeliaPageShell from '../../../Components/GeliaPageShell';
+import GeliaPaginacion from '../../../Components/GeliaPaginacion';
 import { geliaCardClass } from '../../../utils/geliaTheme';
 import FiltrosCedis from './Partials/FiltrosCedis';
 import TarjetasCedis from './Partials/TarjetasCedis';
@@ -16,13 +17,13 @@ import ModalLiberarMercancia from '../Partials/ModalLiberarMercancia';
 import useListadoDiscreto from '../Partials/useListadoDiscreto';
 
 const KPI_CONFIG = [
-    { key: 'pendientes_pesaje', label: 'Pendientes consulta', tab: 'PENDIENTES_PESAJE', icon: Scale, color: '#F97316' },
-    { key: 'empacados', label: 'Pendiente de empaque', tab: 'EMPACADOS', icon: Clock, color: '#EAB308' },
-    { key: 'pendientes_guia', label: 'Pendientes de guía', tab: 'PENDIENTES_GUIA', icon: Package, color: '#A855F7' },
-    { key: 'pendientes_envio', label: 'Pendiente de recolección', tab: 'PENDIENTES_ENVIO', icon: Package, color: '#0EA5E9' },
-    { key: 'enviados', label: 'Enviados', tab: 'ENVIADOS', icon: CheckCircle2, color: '#22C55E' },
-    { key: 'incorrectas', label: 'Errores CEDIS', tab: 'INCORRECTAS', icon: CheckCircle2, color: '#F97316' },
-    { key: 'liberaciones_pendientes', label: 'Liberaciones pendientes', tab: 'LIBERACIONES', icon: PackageOpen, color: '#D97706' },
+    { key: 'pendientes_pesaje', label: 'Consultas pendientes', tab: 'PENDIENTES_PESAJE', icon: Scale, color: 'var(--color-aviso)' },
+    { key: 'empacados', label: 'Pendiente de empaque', tab: 'EMPACADOS', icon: Clock, color: 'var(--color-aviso)' },
+    { key: 'pendientes_guia', label: 'Pendientes de guía', tab: 'PENDIENTES_GUIA', icon: Package, color: 'var(--color-primario)' },
+    { key: 'pendientes_envio', label: 'Pendiente de recolección', tab: 'PENDIENTES_ENVIO', icon: Package, color: 'var(--color-info)' },
+    { key: 'enviados', label: 'Enviados', tab: 'ENVIADOS', icon: CheckCircle2, color: 'var(--color-exito)' },
+    { key: 'incorrectas', label: 'Errores CEDIS', tab: 'INCORRECTAS', icon: AlertTriangle, color: 'var(--color-aviso)' },
+    { key: 'liberaciones_pendientes', label: 'Liberaciones pendientes', tab: 'LIBERACIONES', icon: PackageOpen, color: 'var(--color-aviso)' },
 ];
 
 export default function Index({
@@ -60,7 +61,10 @@ export default function Index({
     const debounceBusqueda = useRef(null);
     const modalAbiertoRef = useRef(false);
 
+    useEffect(() => () => clearTimeout(debounceBusqueda.current), []);
+
     const onTabChange = (tab) => {
+        clearTimeout(debounceBusqueda.current);
         setTabActiva(tab);
         if (tab === 'LIBERACIONES') {
             router.get(route('control_pedidos.cedis.index'), { tab, q: busqueda || undefined }, { preserveState: true, preserveScroll: true });
@@ -78,12 +82,12 @@ export default function Index({
     }, [flash?.success, flash?.error]);
 
     useEffect(() => {
-        modalAbiertoRef.current = modalDetalle.abierto || modalPesaje.abierto || modalErrorDatos.abierto || modalApartado.abierto || modalBitacora.abierto;
-    }, [modalDetalle.abierto, modalPesaje.abierto, modalErrorDatos.abierto, modalApartado.abierto, modalBitacora.abierto]);
+        modalAbiertoRef.current = modalDetalle.abierto || modalPesaje.abierto || modalErrorDatos.abierto || modalApartado.abierto || modalBitacora.abierto || modalLiberar.abierto;
+    }, [modalDetalle.abierto, modalPesaje.abierto, modalErrorDatos.abierto, modalApartado.abierto, modalBitacora.abierto, modalLiberar.abierto]);
 
     useEffect(() => {
         const interval = setInterval(() => {
-            if (modalAbiertoRef.current || cargando) return;
+            if (modalAbiertoRef.current || cargando || tabActiva === 'LIBERACIONES') return;
             cargar(
                 { tab: tabActiva, q: busqueda || undefined, page: pedidosVista?.current_page || 1 },
                 { silencioso: true }
@@ -96,15 +100,27 @@ export default function Index({
         setBusqueda(valor);
         if (debounceBusqueda.current) clearTimeout(debounceBusqueda.current);
         debounceBusqueda.current = setTimeout(() => {
-            cargar({ tab: tabActiva, q: valor || undefined, page: 1 });
+            if (tabActiva === 'LIBERACIONES') {
+                router.get(route('control_pedidos.cedis.index'), { tab: tabActiva, q: valor || undefined }, { preserveState: true, preserveScroll: true });
+            } else {
+                cargar({ tab: tabActiva, q: valor || undefined, page: 1 });
+            }
         }, 400);
     };
 
     const onActualizar = () => {
+        if (tabActiva === 'LIBERACIONES') {
+            onIrAPagina(liberaciones?.current_page || 1);
+            return;
+        }
         cargar({ tab: tabActiva, q: busqueda || undefined, page: pedidosVista?.current_page || 1 });
     };
 
     const onIrAPagina = (page) => {
+        if (tabActiva === 'LIBERACIONES') {
+            router.get(route('control_pedidos.cedis.index'), { tab: tabActiva, q: busqueda || undefined, page }, { preserveState: true, preserveScroll: true });
+            return;
+        }
         cargar({ tab: tabActiva, q: busqueda || undefined, page });
     };
 
@@ -117,66 +133,28 @@ export default function Index({
     return (
         <AppLayout auth={auth}>
             <Head title="Gestión de pedidos CEDIS | GELIANV" />
-            <GeliaPageShell className="space-y-3 md:space-y-6">
-                <header className={`${geliaCardClass()} p-3 md:p-8`}>
-                    <div className="flex items-center gap-2 mb-0.5 md:mb-2">
-                        <Warehouse className="w-4 h-4 md:w-5 md:h-5" style={{ color: 'var(--color-primario)' }} />
-                        <span className="text-[10px] font-black uppercase tracking-widest theme-text-muted">Gestión de pedidos_</span>
+            <GeliaPageShell className="gelia-pedidos-bma gelia-pedidos-cedis space-y-4 md:space-y-6">
+                <header className={`${geliaCardClass()} gelia-pedidos-encabezado p-4 md:p-6`}>
+                    <div className="flex items-center gap-3">
+                        <span className="gelia-pedidos-icono" aria-hidden="true"><Warehouse className="w-6 h-6" /></span>
+                        <div className="min-w-0">
+                            <h1 className="text-xl md:text-2xl font-bold theme-text-main m-0">Control pedidos CEDIS</h1>
+                            <p className="text-sm theme-text-muted mt-1 m-0">Consulta, pesaje y empaque de pedidos</p>
+                        </div>
                     </div>
-                    <h1 className="text-xl md:text-3xl font-black italic uppercase tracking-tighter theme-text-main m-0">
-                        Control <span style={{ color: 'var(--color-primario)' }}>pedidos</span> CEDIS
-                    </h1>
-                    <p className="hidden md:block text-sm theme-text-muted font-bold mt-2 m-0">Bandeja de pesaje y empaque para almacén</p>
                 </header>
 
-                <div className="md:hidden -mx-1 overflow-x-auto snap-x snap-mandatory flex gap-2 pb-1" role="tablist" aria-label="Estado de empaque">
+                <div className="gelia-pedidos-kpis grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-7 gap-2 md:gap-3" role="group" aria-label="Filtrar por estado del pedido">
                     {KPI_CONFIG.map(({ key, label, tab, icon: Icon, color }) => {
                         const activo = tabActiva === tab;
                         return (
-                            <button
-                                key={key}
-                                type="button"
-                                onClick={() => onTabChange(tab)}
-                                aria-pressed={activo}
-                                className={`${geliaCardClass()} snap-start shrink-0 min-w-[9.5rem] p-3 min-h-[72px] text-left outline-none ${
-                                    activo ? 'ring-2 ring-[var(--color-primario)]' : ''
-                                }`}
-                            >
-                                <div className="flex items-center gap-1.5 mb-1 min-w-0">
-                                    <Icon className="w-3.5 h-3.5 shrink-0" style={{ color }} />
-                                    <span className="text-[10px] font-black uppercase tracking-wide theme-text-muted truncate leading-tight">
-                                        {label}
-                                    </span>
+                            <button key={key} type="button" onClick={() => onTabChange(tab)} aria-pressed={activo}
+                                className={`${geliaCardClass()} gelia-pedidos-kpi min-w-0 p-3 md:p-4 text-left ${activo ? 'border-[var(--color-primario)]' : ''}`}>
+                                <div className="flex items-start gap-1.5 mb-2 min-w-0">
+                                    <Icon className="w-4 h-4 shrink-0 mt-0.5" style={{ color }} aria-hidden="true" />
+                                    <span className="text-xs font-semibold theme-text-muted leading-snug">{label}</span>
                                 </div>
-                                <p className="text-2xl font-black m-0 tabular-nums" style={{ color }}>
-                                    {metricasVista[key] ?? 0}
-                                </p>
-                            </button>
-                        );
-                    })}
-                </div>
-                <div className="hidden md:grid grid-cols-3 lg:grid-cols-7 gap-4">
-                    {KPI_CONFIG.map(({ key, label, tab, icon: Icon, color }) => {
-                        const activo = tabActiva === tab;
-                        return (
-                            <button
-                                key={key}
-                                type="button"
-                                onClick={() => onTabChange(tab)}
-                                aria-pressed={activo}
-                                className={`${geliaCardClass()} p-5 text-left outline-none transition-shadow ${
-                                    activo ? 'ring-2 ring-[var(--color-primario)]' : ''
-                                }`}
-                            >
-                                <div className="flex items-center gap-2 mb-2 min-w-0">
-                                    <Icon className="w-4 h-4 shrink-0" style={{ color }} />
-                                    <span className="text-[9px] font-black uppercase tracking-wide theme-text-muted truncate leading-tight">
-                                        {label}
-                                    </span>
-                                </div>
-                                <p className="text-3xl font-black m-0 tabular-nums" style={{ color }}>
-                                    {metricasVista[key] ?? 0}
-                                </p>
+                                <p className="text-2xl font-semibold theme-text-main m-0 tabular-nums">{new Intl.NumberFormat('es-MX').format(metricasVista[key] ?? 0)}</p>
                             </button>
                         );
                     })}
@@ -191,13 +169,16 @@ export default function Index({
                         onBuscar={onBuscar}
                         onActualizar={onActualizar}
                         metricas={metricasVista}
-                        pedidos={pedidosVista}
-                        onIrAPagina={onIrAPagina}
                         buscando={cargando}
                     />
                 </div>
 
-                <div className="relative min-h-[12rem]">
+                <div className="relative min-h-[12rem] space-y-3" aria-busy={cargando}>
+                    <div className="flex flex-wrap justify-between items-center gap-2 px-1">
+                        <h2 className="text-sm font-semibold theme-text-main m-0">{tabActiva === 'LIBERACIONES' ? 'Liberaciones' : 'Pedidos'}</h2>
+                        <p className="text-xs theme-text-muted m-0 tabular-nums">{(tabActiva === 'LIBERACIONES' ? liberaciones : pedidosVista)?.total ?? 0} resultados{busqueda ? ` para “${busqueda}”` : ''}</p>
+                    </div>
+                    <p className="sr-only" role="status">{cargando ? 'Actualizando pedidos…' : 'Listado actualizado'}</p>
                     {cargando && tabActiva !== 'LIBERACIONES' && (
                         <div className="absolute inset-0 z-10 flex items-start justify-center pt-16 pointer-events-none">
                             <Loader2 className="w-8 h-8 animate-spin" style={{ color: 'var(--color-primario)' }} aria-label="Cargando pedidos" />
@@ -207,7 +188,7 @@ export default function Index({
                         <div className="space-y-3">
                             {(liberaciones?.data || []).length === 0 && (
                                 <div className={`${geliaCardClass()} p-8 text-center text-sm font-bold theme-text-muted`}>
-                                    Sin liberaciones pendientes_
+                                    Sin liberaciones pendientes
                                 </div>
                             )}
                             {(liberaciones?.data || []).map((tarea) => {
@@ -247,6 +228,7 @@ export default function Index({
                             onBitacora={abrirBitacora}
                         />
                     )}
+                    <GeliaPaginacion paginator={tabActiva === 'LIBERACIONES' ? liberaciones : pedidosVista} onIrAPagina={onIrAPagina} embedded />
                 </div>
             </GeliaPageShell>
 

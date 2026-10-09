@@ -49,7 +49,7 @@ export default function EncabezadoBandejaAuditoria({
     atencion = 0,
 }) {
     return (
-        <header className={geliaCardClass('p-5 md:p-6 overflow-visible relative z-20')}>
+        <header className={geliaCardClass('p-4 md:p-5 overflow-visible relative z-20')}>
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:gap-3">
                 <div className="min-w-0 flex-1 space-y-1">
                     <p className="m-0 flex items-center gap-1.5 text-xs font-semibold theme-text-muted">

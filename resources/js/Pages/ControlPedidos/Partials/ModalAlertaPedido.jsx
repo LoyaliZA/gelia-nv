@@ -1,4 +1,5 @@
-import React, { useEffect } from 'react';
+import usePedidoDialog from './usePedidoDialog';
+import React from 'react';
 import { createPortal } from 'react-dom';
 import { AlertTriangle, XCircle, CheckCircle, Info, X } from 'lucide-react';
 import {
@@ -13,12 +14,8 @@ const CONFIG = {
 };
 
 export default function ModalAlertaPedido({ abierto, tipo = 'info', titulo, mensaje, onClose }) {
-    useEffect(() => {
-        if (abierto) {
-            document.body.style.overflow = 'hidden';
-        } else document.body.style.overflow = '';
-        return () => { document.body.style.overflow = ''; };
-    }, [abierto]);
+
+    const dialog = usePedidoDialog({ abierto, onClose });
 
     if (!abierto) return null;
 
@@ -37,6 +34,8 @@ export default function ModalAlertaPedido({ abierto, tipo = 'info', titulo, mens
             onClick={cerrar}
         >
             <div
+                {...dialog}
+                aria-label="Resultado de la operación"
                 className={`${THEME_MODAL_SHELL} max-w-sm w-full p-6 md:p-8 flex flex-col items-center gap-4 text-center relative`}
                 onClick={(e) => e.stopPropagation()}
             >

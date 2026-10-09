@@ -82,6 +82,7 @@ export default function SeccionPagosExhibicion({
     modoAuxiliarSimplificado = false,
     ocultarResumen = false,
     rutaResumen = 'control_pedidos.pagos.resumen',
+    ocultarEncabezado = false,
     rutaStore = 'control_pedidos.pagos.store',
     rutaUpdate = 'control_pedidos.pagos.update',
     rutaDestroy = 'control_pedidos.pagos.destroy',
@@ -441,6 +442,7 @@ export default function SeccionPagosExhibicion({
 
     return (
         <div className="space-y-3" onPaste={mostrarFormulario ? pegarComprobante : undefined}>
+            {!ocultarEncabezado && (
             <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
                     <p className={`${THEME_LABEL} mb-0`}>Exhibiciones de pago</p>
@@ -462,6 +464,7 @@ export default function SeccionPagosExhibicion({
                     </label>
                 )}
             </div>
+            )}
             {mensajeBloqueo && (
                 <p className="text-xs theme-text-muted font-bold m-0">{mensajeBloqueo}</p>
             )}

@@ -1,225 +1,107 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { router } from '@inertiajs/react';
-import { X, PackageCheck, ImagePlus, Camera, Trash2 } from 'lucide-react';
-import { THEME_INPUT, THEME_LABEL } from '../../../../utils/geliaTheme';
-import {
-    THEME_MODAL_OVERLAY,
-    THEME_MODAL_SHELL,
-    BTN_PRIMARY,
-    BTN_SECONDARY,
-} from '../../Partials/pedidosBmaStyles';
+import { X, PackageCheck, Loader2 } from 'lucide-react';
+import { THEME_TEXTAREA, THEME_LABEL } from '../../../../utils/geliaTheme';
+import { THEME_MODAL_OVERLAY, THEME_MODAL_SHELL, BTN_PRIMARY, BTN_SECONDARY } from '../../Partials/pedidosBmaStyles';
 import EncabezadoFolioPedido from '../../Partials/EncabezadoFolioPedido';
 import ModalConfirmarAccion from '../../Partials/ModalConfirmarAccion';
-import { esDispositivoCampo } from '../../../Activos/Partials/useDispositivoCampo';
+import GaleriaEvidenciasPedido from '../../Partials/GaleriaEvidenciasPedido';
+import ModalVistaPreviaDocumento from '../../Partials/ModalVistaPreviaDocumento';
+import usePedidoDialog from '../../Partials/usePedidoDialog';
 
 export default function ModalMarcarApartadoResguardo({ abierto, onClose, pedido }) {
-    const inputRef = useRef(null);
-    const camaraRef = useRef(null);
-    const galeriaRef = useRef(null);
     const [archivos, setArchivos] = useState([]);
     const [previews, setPreviews] = useState([]);
     const [detalle, setDetalle] = useState('');
     const [procesando, setProcesando] = useState(false);
     const [error, setError] = useState('');
-    const [esMovil, setEsMovil] = useState(false);
-    const [quitarIdx, setQuitarIdx] = useState(null);
+    const [confirmarCierre, setConfirmarCierre] = useState(false);
+    const [galeria, setGaleria] = useState(null);
+    const previewsRef = useRef(previews);
+    previewsRef.current = previews;
 
     useEffect(() => {
-        if (abierto) {
-            setArchivos([]);
-            setPreviews((prev) => {
-                prev.forEach((p) => URL.revokeObjectURL(p.url));
-                return [];
-            });
-            setDetalle('');
-            setError('');
-            setProcesando(false);
-            setEsMovil(esDispositivoCampo());
-        }
+        if (!abierto) return;
+        previewsRef.current.forEach((p) => URL.revokeObjectURL(p.url));
+        setArchivos([]);
+        setPreviews([]);
+        setDetalle('');
+        setError('');
+        setProcesando(false);
+        setConfirmarCierre(false);
+        setGaleria(null);
     }, [abierto, pedido?.id]);
+    useEffect(() => () => previewsRef.current.forEach((p) => URL.revokeObjectURL(p.url)), []);
 
-    if (!abierto || !pedido) return null;
-
-    const agregarArchivos = (lista) => {
-        const nuevos = Array.from(lista || []).filter((f) => f.type?.startsWith('image/'));
-        if (nuevos.length === 0) return;
-        setArchivos((prev) => [...prev, ...nuevos].slice(0, 8));
-        setPreviews((prev) => [
-            ...prev,
-            ...nuevos.map((f) => ({ name: f.name, url: URL.createObjectURL(f) })),
-        ].slice(0, 8));
+    const pedirCerrar = () => {
+        if (procesando) return;
+        if (archivos.length || detalle.trim()) setConfirmarCierre(true);
+        else onClose();
     };
-
-    const quitar = (idx) => {
-        setArchivos((prev) => prev.filter((_, i) => i !== idx));
-        setPreviews((prev) => {
-            const copy = [...prev];
-            const [removed] = copy.splice(idx, 1);
-            if (removed?.url) URL.revokeObjectURL(removed.url);
-            return copy;
-        });
-    };
-
-    const enviar = (e) => {
-        e.preventDefault();
+    const dialog = usePedidoDialog({ abierto: abierto && Boolean(pedido), onClose: pedirCerrar, bloqueado: procesando });
+    const enviar = (event) => {
+        event.preventDefault();
+        if (procesando) return;
         if (archivos.length === 0) {
-            setError('Adjunta al menos una foto del apartado.');
+            setError('Adjunta al menos una foto de las piezas apartadas.');
+            document.getElementById('apartado-evidencias')?.focus();
             return;
         }
         setProcesando(true);
         setError('');
-        router.post(
-            route('control_pedidos.cedis.marcar_resguardo_apartado', pedido.id),
-            { evidencias: archivos, detalle: detalle.trim() || null },
-            {
-                forceFormData: true,
-                preserveScroll: true,
-                onSuccess: () => onClose(),
-                onError: (errors) => {
-                    setError(errors.evidencias || errors['evidencias.0'] || errors.detalle || 'No se pudo marcar como apartado.');
-                },
-                onFinish: () => setProcesando(false),
-            }
-        );
+        router.post(route('control_pedidos.cedis.marcar_resguardo_apartado', pedido.id), { evidencias: archivos, detalle: detalle.trim() || null }, {
+            forceFormData: true, preserveScroll: true,
+            onSuccess: () => onClose(),
+            onError: (errors) => setError(errors.evidencias || errors['evidencias.0'] || errors.detalle || 'No se pudo registrar el apartado. Revisa los archivos e intenta otra vez.'),
+            onFinish: () => setProcesando(false),
+        });
     };
-
+    if (!abierto || !pedido) return null;
     return createPortal(
         <>
-        <div className={`${THEME_MODAL_OVERLAY} items-center py-4`} onClick={esMovil ? undefined : onClose}>
-            <div className={`${THEME_MODAL_SHELL} max-w-lg w-full`} onClick={(e) => e.stopPropagation()}>
-                <div className="p-5 border-b theme-border flex justify-between items-start gap-3">
-                    <div>
-                        <h2 className="text-lg font-black italic uppercase theme-text-main m-0 flex items-center gap-2">
-                            <PackageCheck className="w-5 h-5 text-sky-600" />
-                            Marcar apartado
-                        </h2>
-                        <EncabezadoFolioPedido pedido={pedido} size="sm" className="mt-1" />
-                        <p className="text-xs theme-text-muted font-bold mt-2 m-0">
-                            Confirma que las piezas de este resguardo ya están apartadas. Se notificará a quien realizó el pedido.
-                        </p>
+            <div className={`${THEME_MODAL_OVERLAY} items-center py-4`}>
+                <form {...dialog} aria-labelledby="apartado-titulo" onSubmit={enviar} className={`${THEME_MODAL_SHELL} gelia-pedidos-dialog-workspace max-w-xl w-full`}>
+                    <header className="p-5 border-b theme-border flex justify-between items-start gap-3 shrink-0">
+                        <div className="min-w-0">
+                            <h2 id="apartado-titulo" className="text-lg font-semibold theme-text-main m-0 flex items-center gap-2">
+                                <PackageCheck className="w-5 h-5 theme-text-primario" aria-hidden="true" /> Confirmar separación
+                            </h2>
+                            <EncabezadoFolioPedido pedido={pedido} size="sm" className="mt-2" />
+                            <p className="text-sm theme-text-muted mt-2 m-0">{pedido.cliente?.nombre || 'Pedido en resguardo'}</p>
+                        </div>
+                        <button type="button" disabled={procesando} onClick={pedirCerrar} className="p-2 min-h-[44px] min-w-[44px] rounded-xl theme-element border theme-border theme-text-main inline-flex items-center justify-center" aria-label="Cerrar separación">
+                            <X className="w-5 h-5" aria-hidden="true" />
+                        </button>
+                    </header>
+                    <div className="gelia-modal-body p-5 space-y-4">
+                        <p className="text-sm theme-text-muted m-0">Confirma que las piezas están separadas y listas para resguardo. Ventas recibirá las fotos y tu nota.</p>
+                        <section className="gelia-pedidos-seccion">
+                            <GaleriaEvidenciasPedido id="apartado-evidencias" label="Fotos de las piezas apartadas" obligatorio soloImagenes maxArchivos={8} maxMb={5}
+                                archivos={archivos} previews={previews} disabled={procesando} error={error}
+                                onChange={(files, images) => { setArchivos(files); setPreviews(images); setError(''); }}
+                                onVer={(documentos, indice) => setGaleria({ documentos, indice })} />
+                        </section>
+                        <section className="gelia-pedidos-seccion">
+                            <label htmlFor="detalle-apartado" className={THEME_LABEL}>Ubicación o nota para Ventas (opcional)</label>
+                            <textarea id="detalle-apartado" name="detalle" autoComplete="off" disabled={procesando} value={detalle} onChange={(event) => setDetalle(event.target.value)} rows={3} maxLength={2000}
+                                placeholder="Ej. Rack B-3, 2 cajas con el folio del pedido…" className={`${THEME_TEXTAREA} w-full mt-2 py-3 resize-y min-h-[100px]`} />
+                            <p className="text-xs theme-text-muted m-0 mt-2">Indica dónde se encuentran las piezas para facilitar su identificación.</p>
+                        </section>
                     </div>
-                    <button type="button" onClick={onClose} className="p-2 min-h-[44px] min-w-[44px] rounded-full theme-text-muted outline-none inline-flex items-center justify-center" aria-label="Cerrar">
-                        <X className="w-5 h-5" />
-                    </button>
-                </div>
-
-                <form onSubmit={enviar} className="p-5 space-y-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
-                    <div>
-                        <p className={`${THEME_LABEL} mb-2`}>Evidencia fotográfica <span className="text-red-500">*</span></p>
-                        {esMovil ? (
-                            <div className="grid grid-cols-2 gap-2">
-                                <button type="button" onClick={() => camaraRef.current?.click()} className={`${BTN_SECONDARY} min-h-[44px] inline-flex items-center justify-center gap-2 text-xs outline-none`}>
-                                    <Camera className="w-4 h-4" /> Tomar foto
-                                </button>
-                                <button type="button" onClick={() => galeriaRef.current?.click()} className={`${BTN_SECONDARY} min-h-[44px] inline-flex items-center justify-center gap-2 text-xs outline-none`}>
-                                    <ImagePlus className="w-4 h-4" /> Galería
-                                </button>
-                                <input
-                                    ref={camaraRef}
-                                    type="file"
-                                    accept="image/*"
-                                    capture="environment"
-                                    className="hidden"
-                                    onChange={(e) => {
-                                        agregarArchivos(e.target.files);
-                                        e.target.value = '';
-                                    }}
-                                />
-                                <input
-                                    ref={galeriaRef}
-                                    type="file"
-                                    accept="image/jpeg,image/png,image/webp,image/jpg"
-                                    multiple
-                                    className="hidden"
-                                    onChange={(e) => {
-                                        agregarArchivos(e.target.files);
-                                        e.target.value = '';
-                                    }}
-                                />
-                            </div>
-                        ) : (
-                            <>
-                                <button
-                                    type="button"
-                                    onClick={() => inputRef.current?.click()}
-                                    className={`${BTN_SECONDARY} inline-flex items-center gap-2 text-xs outline-none min-h-[44px]`}
-                                >
-                                    <ImagePlus className="w-4 h-4" />
-                                    Adjuntar imagen o captura
-                                </button>
-                                <input
-                                    ref={inputRef}
-                                    type="file"
-                                    accept="image/jpeg,image/png,image/webp,image/jpg"
-                                    multiple
-                                    className="hidden"
-                                    onChange={(e) => {
-                                        agregarArchivos(e.target.files);
-                                        e.target.value = '';
-                                    }}
-                                />
-                            </>
-                        )}
-                        {previews.length > 0 && (
-                            <div className="flex flex-wrap gap-2 mt-3">
-                                {previews.map((p, idx) => (
-                                    <div key={`${p.name}-${idx}`} className="relative min-w-[44px] min-h-[44px] w-20 h-20 rounded-xl overflow-hidden border theme-border">
-                                        <img src={p.url} alt={p.name} className="w-full h-full object-cover" />
-                                        <button
-                                            type="button"
-                                            onClick={() => setQuitarIdx(idx)}
-                                            className="absolute top-1 right-1 p-1 min-h-[44px] min-w-[44px] rounded-full bg-black/50 text-white outline-none inline-flex items-center justify-center"
-                                            aria-label="Quitar"
-                                        >
-                                            <Trash2 className="w-3.5 h-3.5" />
-                                        </button>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-
-                    <div>
-                        <label htmlFor="detalle-apartado" className={`${THEME_LABEL} ml-1`}>Nota (opcional)</label>
-                        <textarea
-                            id="detalle-apartado"
-                            value={detalle}
-                            onChange={(e) => setDetalle(e.target.value)}
-                            rows={3}
-                            placeholder="Ej. ubicado en rack B-3, 2 cajas..."
-                            className={`${THEME_INPUT} w-full mt-1.5 py-3 text-sm font-bold resize-y min-h-[80px]`}
-                        />
-                    </div>
-
-                    {error && <p className="text-xs text-red-500 font-bold m-0">{error}</p>}
-
-                    <div className="flex flex-col-reverse sm:flex-row flex-wrap gap-3 sm:justify-end">
-                        <button type="button" onClick={onClose} className={`${BTN_SECONDARY} outline-none min-h-[44px] w-full sm:w-auto`}>Cancelar</button>
-                        <button
-                            type="submit"
-                            disabled={procesando || archivos.length === 0}
-                            className={`${BTN_PRIMARY} outline-none disabled:opacity-50 min-h-[44px] w-full sm:w-auto`}
-                        >
+                    <footer className="gelia-modal-footer gelia-pedidos-apartado-footer p-4 sm:p-5 flex flex-wrap gap-2 items-center">
+                        <span className="text-xs theme-text-muted flex-1 tabular-nums whitespace-nowrap">{previews.length} de 8 fotos</span>
+                        <button type="button" disabled={procesando} onClick={pedirCerrar} className={BTN_SECONDARY}>Cancelar</button>
+                        <button type="submit" disabled={procesando} aria-busy={procesando} className={`${BTN_PRIMARY} inline-flex items-center justify-center gap-2`}>
+                            {procesando ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> : <PackageCheck className="w-4 h-4" aria-hidden="true" />}
                             {procesando ? 'Guardando…' : 'Confirmar apartado'}
                         </button>
-                    </div>
+                    </footer>
                 </form>
             </div>
-        </div>
-        <ModalConfirmarAccion
-            abierto={quitarIdx != null}
-            titulo="Quitar evidencia"
-            mensaje="¿Quitar esta foto? No se puede deshacer."
-            etiquetaConfirmar="Quitar"
-            variante="danger"
-            onClose={() => setQuitarIdx(null)}
-            onConfirm={() => {
-                if (quitarIdx != null) quitar(quitarIdx);
-                setQuitarIdx(null);
-            }}
-        />
-        </>,
-        document.body
+            <ModalConfirmarAccion abierto={confirmarCierre} titulo="Descartar separación" mensaje="Las fotos y la nota todavía no se han registrado. ¿Quieres descartarlas?"
+                etiquetaConfirmar="Descartar" variante="danger" onClose={() => setConfirmarCierre(false)} onConfirm={() => { setConfirmarCierre(false); onClose(); }} />
+            <ModalVistaPreviaDocumento abierto={Boolean(galeria)} documentos={galeria?.documentos} indice={galeria?.indice || 0} onClose={() => setGaleria(null)} />
+        </>, document.body,
     );
 }

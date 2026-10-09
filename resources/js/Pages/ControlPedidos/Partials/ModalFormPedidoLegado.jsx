@@ -1,3 +1,4 @@
+import usePedidoDialog from './usePedidoDialog';
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useForm, usePage, router } from '@inertiajs/react';
@@ -46,6 +47,7 @@ import ModalCorregirPreparacionTienda from './ModalCorregirPreparacionTienda';
 import AvisoOperativoPedido from './AvisoOperativoPedido';
 import TarjetaEnvioPedido from './TarjetaEnvioPedido';
 import SeccionRevisionFisicaPedido from './SeccionRevisionFisicaPedido';
+import ReferenciaPedidoCompartido from './ReferenciaPedidoCompartido';
 import CamposDireccionPedido, {
     CAMPOS_DIRECCION_VACIOS,
     camposDesdeDireccion,
@@ -2138,11 +2140,15 @@ export default function ModalFormPedidoLegado({
         onClose();
     };
 
+    const dialog = usePedidoDialog({ abierto, onClose, bloqueado: processing || procesandoPesaje });
+
     const modal = abierto ? createPortal(
         <div className={`${THEME_MODAL_OVERLAY} items-start sm:items-center py-4 sm:py-6`} data-gelia-modal="1" onClick={cerrarOverlayBorrador}>
             <div
-                className={`${THEME_MODAL_SHELL} ${modoProgresivo ? 'max-w-6xl' : 'max-w-4xl'} w-full flex flex-col text-left ${data.es_resguardo ? 'ring-2 ring-blue-500/50' : ''}`}
-                style={{ maxHeight: 'calc(100dvh - 2rem)', ...(data.es_resguardo ? { backgroundColor: 'color-mix(in srgb, #3B82F6 6%, var(--color-surface))' } : {}) }}
+                {...dialog}
+                aria-label="Registro del pedido"
+                className={`${THEME_MODAL_SHELL} gelia-pedidos-dialog-workspace ${modoProgresivo ? 'max-w-6xl' : 'max-w-4xl'} w-full flex flex-col text-left ${data.es_resguardo ? 'ring-2 ring-blue-500/50' : ''}`}
+                style={{ maxHeight: 'calc(100dvh - 2rem)', ...(data.es_resguardo ? { backgroundColor: 'color-mix(in srgb, var(--color-info) 6%, var(--theme-surface-solid))' } : {}) }}
                 onClick={(e) => e.stopPropagation()}
                 onPaste={handlePaste}
             >
@@ -2194,7 +2200,7 @@ export default function ModalFormPedidoLegado({
                             onSeleccionar={seleccionarEtapaUi}
                         />
                     )}
-                    <div className={modoProgresivo ? 'flex flex-col lg:flex-row gap-6 items-start' : undefined}>
+                    <div className={modoProgresivo ? `flex flex-col ${tienePesajeRespondido && ['consulta', 'confirmacion'].includes(etapaVista) ? 'lg:flex-row-reverse' : 'lg:flex-row'} gap-6 items-start` : undefined}>
                     <div className={modoProgresivo ? 'lg:w-[70%] w-full space-y-8 min-w-0' : 'contents'}>
                     {avisoForm && (
                         <div
@@ -3064,6 +3070,7 @@ export default function ModalFormPedidoLegado({
                                 <SeccionRevisionFisicaPedido
                                     pedido={pedido}
                                     onVerDoc={abrirVistaPrevia}
+                                    onVerGaleria={abrirVistaPrevia}
                                     titulo={esConsultaMercancia ? 'Registro de productos CEDIS' : 'Revisión física CEDIS'}
                                     puedeAtender={Boolean(pedido?.puede_mutar)}
                                     puedeCancelar={Boolean(pedido?.puede_cancelar)}
@@ -3190,7 +3197,7 @@ export default function ModalFormPedidoLegado({
                                             onClick={continuarPedido}
                                             disabled={procesandoPesaje || processing}
                                             className={`${BTN_PRIMARY} w-full sm:w-auto flex items-center justify-center gap-2 outline-none min-h-[48px] px-6 mt-1 text-sm font-black uppercase tracking-widest ring-2 ring-orange-400/60`}
-                                            style={{ backgroundColor: '#EA580C' }}
+                                            style={{ backgroundColor: 'var(--color-aviso)' }}
                                         >
                                             <ArrowRight className="w-5 h-5" /> Continuar pedido
                                         </button>
@@ -3209,7 +3216,7 @@ export default function ModalFormPedidoLegado({
                                             onClick={cerrarConsulta}
                                             disabled={procesandoPesaje}
                                             className={`${BTN_PRIMARY} w-full sm:w-auto flex items-center justify-center gap-2 outline-none min-h-[48px] px-6 mt-1 text-sm font-black uppercase tracking-widest ring-2 ring-orange-400/60`}
-                                            style={{ backgroundColor: '#EA580C' }}
+                                            style={{ backgroundColor: 'var(--color-aviso)' }}
                                         >
                                             <CheckCircle2 className="w-5 h-5" /> Cerrar consulta / Confirmar mercancía con cliente
                                         </button>
@@ -3878,7 +3885,8 @@ export default function ModalFormPedidoLegado({
 
                     </div>
                     {modoProgresivo && (
-                        <div className="lg:w-[30%] w-full space-y-4 shrink-0">
+                        <div className="lg:w-[30%] w-full space-y-4 shrink-0 min-w-0">
+                            {tienePesajeRespondido && ['consulta', 'confirmacion'].includes(etapaVista) && <ReferenciaPedidoCompartido pedido={pedido} onVerGaleria={abrirVistaPrevia} />}
                             <SeccionResumenEnvioPedido
                                 progreso={progresoLocal || progresoDto}
                                 totalMercancia={data.total_mercancia}

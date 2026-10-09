@@ -83,6 +83,7 @@ class PedidoBma extends Model
     protected $fillable = [
         'folio',
         'folio_remision',
+        'numero_remision',
         'origen_solicitud',
         'documento_inicial',
         'contacto_nombre_snapshot',

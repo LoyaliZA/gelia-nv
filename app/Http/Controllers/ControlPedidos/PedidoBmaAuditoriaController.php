@@ -4,6 +4,7 @@ namespace App\Http\Controllers\ControlPedidos;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ControlPedidos\ActualizarFolioRemisionPedidoBmaRequest;
+use App\Http\Requests\ControlPedidos\ActualizarNumeroRemisionPedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\AnexarPagoEnvioPedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\LiberarResguardoPedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\RechazarAnexoEnvioPedidoBmaRequest;
@@ -117,24 +118,39 @@ class PedidoBmaAuditoriaController extends Controller
         return $redirect;
     }
 
+    public function detalle(PedidoBma $pedidoBma, ListarPedidosAuditoriaService $listarService): JsonResponse
+    {
+        Gate::authorize('control_pedidos.auditar');
+        $this->assertPedidoVisible($pedidoBma);
+
+        return response()->json(['pedido' => $listarService->detalle($pedidoBma->id, Auth::user())]);
+    }
+
     public function actualizarFolioRemision(
         ActualizarFolioRemisionPedidoBmaRequest $request,
         PedidoBma $pedidoBma,
         GestionarRemisionPedidoBmaService $service
     ): RedirectResponse {
+        return $this->actualizarNumeroRemision($request, $pedidoBma, $service);
+    }
+
+    public function actualizarNumeroRemision(
+        ActualizarNumeroRemisionPedidoBmaRequest $request,
+        PedidoBma $pedidoBma,
+        GestionarRemisionPedidoBmaService $service
+    ): RedirectResponse {
         $this->assertPedidoVisible($pedidoBma);
         try {
-            $service->actualizarFolioRemision(
+            $service->actualizarNumeroRemision(
                 $pedidoBma,
-                (string) $request->validated('folio_remision'),
+                (string) $request->validated('numero_remision'),
                 Auth::id(),
-                (string) ($request->validated('tipo_referencia') ?: \App\Models\ControlPedidos\PedidoBmaReferencia::TIPO_PEDIDO),
             );
         } catch (\InvalidArgumentException|\RuntimeException $e) {
             return redirect()->back()->with('error', $e->getMessage());
         }
 
-        return redirect()->back()->with('success', 'Folio de pedido actualizado.');
+        return redirect()->back()->with('success', 'Número de remisión actualizado.');
     }
 
     public function subirRemision(

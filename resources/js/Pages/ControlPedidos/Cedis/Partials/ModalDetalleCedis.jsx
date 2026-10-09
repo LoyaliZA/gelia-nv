@@ -1,3 +1,6 @@
+import ListaProductosOk from '../../Partials/ListaProductosOk';
+import usePedidoDialog from '../../Partials/usePedidoDialog';
+import NavegacionPedido from '../../Partials/NavegacionPedido';
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { router, usePage } from '@inertiajs/react';
@@ -51,7 +54,7 @@ const SECCION_WRAP = 'border-b theme-border pb-6 last:border-0';
 
 const Campo = ({ label, value }) => (
     <div>
-        <p className="text-[9px] font-black uppercase theme-text-muted m-0">{label}</p>
+        <p className="text-xs font-semibold theme-text-muted m-0">{label}</p>
         <p className="text-sm font-bold theme-text-main m-0 mt-0.5">{value ?? '—'}</p>
     </div>
 );
@@ -97,6 +100,8 @@ export default function ModalDetalleCedis({
             setGuiasEnvio(guias);
         }
     }, [abierto, pedidoInicial?.id]);
+
+    const dialog = usePedidoDialog({ abierto: abierto && Boolean(pedido), onClose, bloqueado: procesando });
 
     if (!abierto || !pedido) return null;
 
@@ -313,15 +318,17 @@ export default function ModalDetalleCedis({
 
     return createPortal(
         <>
-            <div className={`${THEME_MODAL_OVERLAY} items-start sm:items-center py-4 sm:py-6`} onClick={esCampo ? undefined : onClose}>
+            <div className={`${THEME_MODAL_OVERLAY} items-start sm:items-center py-4 sm:py-6`} onClick={esCampo || procesando ? undefined : onClose}>
                 <div
-                    className={`${THEME_MODAL_SHELL} max-w-3xl w-full flex flex-col`}
+                    {...dialog}
+                    aria-label="Detalle del pedido CEDIS"
+                    className={`${THEME_MODAL_SHELL} gelia-pedidos-dialog-workspace max-w-4xl w-full flex flex-col`}
                     style={{ maxHeight: 'calc(100dvh - 2rem)' }}
                     onClick={(e) => e.stopPropagation()}
                 >
                     <div className="p-4 md:p-6 border-b theme-border flex justify-between items-start gap-3 shrink-0">
                         <div className="min-w-0">
-                            <p className="text-[10px] font-black uppercase theme-text-muted m-0 mb-1">Detalle CEDIS</p>
+                            <p className="text-xs font-semibold theme-text-muted m-0 mb-1">Detalle CEDIS</p>
                             <EncabezadoFolioPedido pedido={pedido} size="lg" />
                             {pedido.vendedor?.name && (
                                 <p className="text-xs font-bold theme-text-muted mt-2 m-0 flex items-center gap-1">
@@ -347,15 +354,21 @@ export default function ModalDetalleCedis({
                                 )}
                             </div>
                         </div>
-                        <button type="button" onClick={onClose} className="p-2 min-h-[44px] min-w-[44px] rounded-full theme-text-muted hover:theme-text-main outline-none shrink-0 inline-flex items-center justify-center" aria-label="Cerrar">
+                        <button type="button" onClick={onClose} disabled={procesando} className="p-2 min-h-[44px] min-w-[44px] rounded-full theme-text-muted hover:theme-text-main outline-none shrink-0 inline-flex items-center justify-center" aria-label="Cerrar">
                             <X className="w-5 h-5" />
                         </button>
                     </div>
 
-                    <div className="gelia-modal-body p-4 md:p-6 space-y-6">
+                    <NavegacionPedido secciones={[
+                        { id: 'cedis-estado', label: 'Estado' },
+                        { id: 'cedis-destino', label: 'Destino' },
+                        tieneRevisionFisica && { id: 'cedis-revision', label: 'Revisión', cantidad: revisiones.length },
+                        { id: 'cedis-pedido', label: 'Datos operativos' },
+                    ]} />
+                    <div className="gelia-modal-body p-4 md:p-6 space-y-4">
                         {/* 1. Estatus / avisos / errores */}
-                        <section className={SECCION_WRAP}>
-                            <p className={SECCION}>Estatus de empaque</p>
+                        <section id="cedis-estado" tabIndex={-1} className={`${SECCION_WRAP} gelia-pedidos-seccion`}>
+                            <h3 className="gelia-pedidos-seccion-titulo mb-3">Estado de empaque</h3>
                             <div className="space-y-3">
                                 {(fase === 'EN_CEDIS' || fase === 'INCIDENCIA_CEDIS') && pedido.es_resguardo && (
                                     <AvisoOperativoPedido
@@ -375,7 +388,7 @@ export default function ModalDetalleCedis({
                                         icon={CheckCircle2}
                                     >
                                         Empacado por {(pedido.empacado_por?.name || pedido.empacadoPor?.name) || '—'}
-                                        <span className="block text-sm font-bold mt-1 opacity-80 font-mono">
+                                        <span className="block text-sm font-bold mt-1 opacity-80 tabular-nums">
                                             {formatearFechaHoraAuditoria(pedido.empacado_at)}
                                         </span>
                                     </AvisoOperativoPedido>
@@ -388,7 +401,7 @@ export default function ModalDetalleCedis({
                                     >
                                         {pedido.detalle_incidencia_empaque || pedido.detalle_error_datos || 'Error CEDIS reportado'}
                                         {pedido.incidencia_empaque_at && (
-                                            <span className="block text-sm font-bold mt-1 opacity-80 font-mono">
+                                            <span className="block text-sm font-bold mt-1 opacity-80 tabular-nums">
                                                 {(pedido.incidencia_empaque_por?.name || pedido.incidenciaEmpaquePor?.name) || '—'}
                                                 {' · '}
                                                 {formatearFechaHoraAuditoria(pedido.incidencia_empaque_at)}
@@ -422,7 +435,7 @@ export default function ModalDetalleCedis({
 
                         {/* 2. Nota de compra + guía (nota solo en empaque/envío) */}
                         {(mostrarNotaCompra || mostrarGuia) && (
-                        <section className={SECCION_WRAP}>
+                        <section className={`${SECCION_WRAP} gelia-pedidos-seccion`}>
                             <p className={SECCION}>Empaque y guía</p>
                             <div className="space-y-3">
                                 {mostrarNotaCompra && (
@@ -444,8 +457,8 @@ export default function ModalDetalleCedis({
                         )}
 
                         {esTienda ? (
-                        <section className={SECCION_WRAP}>
-                            <p className={SECCION}>Sucursal destino</p>
+                        <section id="cedis-destino" tabIndex={-1} className={`${SECCION_WRAP} gelia-pedidos-seccion`}>
+                            <h3 className="gelia-pedidos-seccion-titulo mb-3">Sucursal destino</h3>
                             <p className="text-sm font-bold theme-text-main m-0">
                                 {etiquetaSucursal(pedido.sucursal_destino || pedido.sucursalDestino || {
                                     id: pedido.sucursal_destino_id,
@@ -455,8 +468,8 @@ export default function ModalDetalleCedis({
                             </p>
                         </section>
                         ) : (
-                        <section className={SECCION_WRAP}>
-                            <p className={SECCION}>Dirección de entrega</p>
+                        <section id="cedis-destino" tabIndex={-1} className={`${SECCION_WRAP} gelia-pedidos-seccion`}>
+                            <h3 className="gelia-pedidos-seccion-titulo mb-3">Dirección de entrega</h3>
                             <DireccionPedidoResumen
                                 conCopia
                                 direccion={pedido.direccion_vigente || pedido.direccionVigente}
@@ -471,8 +484,8 @@ export default function ModalDetalleCedis({
                         )}
 
                         {tieneRevisionFisica && (
-                            <section className={SECCION_WRAP}>
-                                <p className={SECCION}>{esTienda ? 'Registro de productos' : 'Revisión física'}</p>
+                            <section id="cedis-revision" tabIndex={-1} className={`${SECCION_WRAP} gelia-pedidos-seccion`}>
+                                <h3 className="gelia-pedidos-seccion-titulo mb-3">{esTienda ? 'Registro de productos' : 'Revisión física'}</h3>
                                 <div className="space-y-3">
                                     {pedido.estado_fisico_general && badgeFisico && (
                                         <div className="flex flex-wrap items-center gap-2">
@@ -484,7 +497,7 @@ export default function ModalDetalleCedis({
                                     )}
                                     {revisionesConDetalle.length > 0 && (
                                         <div className="space-y-2">
-                                            <p className="text-[9px] font-black uppercase theme-text-muted m-0">Productos con detalle</p>
+                                            <p className="text-xs font-semibold theme-text-muted m-0">Productos con detalle</p>
                                             {revisionesConDetalle.map((r) => {
                                                 const b = badgeEstadoFisico(r.estado_fisico);
                                                 const docs = docsDeProducto(r.id);
@@ -493,16 +506,16 @@ export default function ModalDetalleCedis({
                                                     <div key={r.id} className="p-3 rounded-xl border theme-border space-y-2">
                                                         <div className="flex flex-wrap items-center gap-2">
                                                             {instancia && (
-                                                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-black tabular-nums theme-element border theme-border theme-text-main">
+                                                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold tabular-nums theme-element border theme-border theme-text-main">
                                                                     {instancia}
                                                                 </span>
                                                             )}
-                                                            <p className="text-xs font-black theme-text-main m-0">{r.descripcion_producto}</p>
+                                                            <p className="text-xs font-semibold theme-text-main m-0">{r.descripcion_producto}</p>
                                                             <span className={b.className} style={b.style}>{b.label}</span>
                                                         </div>
                                                         {r.comentario && <p className="text-xs theme-text-muted font-bold m-0">{r.comentario}</p>}
                                                         {r.estado_fisico === 'sin_existencia' && esFasePreVenta(pedido?.estatus?.fase_ciclo) && (
-                                                            <p className="text-[10px] font-black uppercase text-sky-600 m-0">
+                                                            <p className="text-xs font-semibold theme-text-info m-0">
                                                                 Sin existencias en CEDIS — Ventas debe proceder.
                                                                 {r.resolucion ? ` (${LABELS_RESOLUCION_SIN_EXISTENCIA[r.resolucion] || r.resolucion})` : ''}
                                                             </p>
@@ -534,18 +547,14 @@ export default function ModalDetalleCedis({
                                     )}
                                     {revisionesOk.length > 0 && (
                                         <div className="space-y-1">
-                                            <p className="text-[9px] font-black uppercase theme-text-muted m-0">Productos OK</p>
-                                            <p className="text-xs font-bold theme-text-main m-0">
-                                                {revisionesOk.map((r) => {
-                                                    const tag = instancias[indiceRevision(r)];
-                                                    return tag ? `${r.descripcion_producto} (${tag})` : r.descripcion_producto;
-                                                }).join(' · ')}
-                                            </p>
+                                            <p className="text-xs font-semibold theme-text-muted m-0">Productos OK</p>
+                                            <ListaProductosOk productos={revisionesOk}
+                                                etiquetaInstancia={(r) => instancias[indiceRevision(r)]} />
                                         </div>
                                     )}
                                     {evidenciasLote.length > 0 && (
                                         <div className="space-y-2">
-                                            <p className="text-[9px] font-black uppercase theme-text-muted m-0">Evidencias del lote</p>
+                                            <p className="text-xs font-semibold theme-text-muted m-0">Evidencias del lote</p>
                                             <div className="flex flex-wrap gap-2">
                                                 {evidenciasLote.map((doc) => (
                                                     <MiniaturaDocumento key={doc.id} documento={doc} onVer={setDocPreview} />
@@ -555,10 +564,10 @@ export default function ModalDetalleCedis({
                                     )}
                                     {evidenciasEnvio.length > 0 && (
                                         <div className="space-y-2">
-                                            <p className="text-[9px] font-black uppercase theme-text-muted m-0">Foto por envío</p>
+                                            <p className="text-xs font-semibold theme-text-muted m-0">Foto por envío</p>
                                             {evidenciasEnvio.map((doc) => (
                                                 <div key={doc.id} className="space-y-1">
-                                                    <p className="text-[10px] font-black uppercase theme-text-muted m-0">{etiquetaEnvioDoc(doc)}</p>
+                                                    <p className="text-xs font-semibold theme-text-muted m-0">{etiquetaEnvioDoc(doc)}</p>
                                                     <MiniaturaDocumento documento={doc} onVer={setDocPreview} />
                                                 </div>
                                             ))}
@@ -576,8 +585,9 @@ export default function ModalDetalleCedis({
                                 </p>
                                 <div className="space-y-3">
                                     <div>
-                                        <label className="text-[9px] font-black uppercase theme-text-muted mb-1 block">Producto</label>
+                                        <label htmlFor="cedis-faltante-producto" className="text-xs font-semibold theme-text-muted mb-1 block">Producto</label>
                                         <input
+                                            id="cedis-faltante-producto" name="producto_faltante" autoComplete="off"
                                             value={reporteSinEx.descripcion}
                                             onChange={(e) => setReporteSinEx((s) => ({ ...s, descripcion: e.target.value }))}
                                             className={`${THEME_INPUT} w-full py-2`}
@@ -585,8 +595,9 @@ export default function ModalDetalleCedis({
                                         />
                                     </div>
                                     <div>
-                                        <label className="text-[9px] font-black uppercase theme-text-muted mb-1 block">Comentario para Ventas *</label>
+                                        <label htmlFor="cedis-faltante-nota" className="text-xs font-semibold theme-text-muted mb-1 block">Comentario para Ventas *</label>
                                         <textarea
+                                            id="cedis-faltante-nota" name="nota_faltante" autoComplete="off"
                                             value={reporteSinEx.comentario}
                                             onChange={(e) => setReporteSinEx((s) => ({ ...s, comentario: e.target.value }))}
                                             className={`${THEME_TEXTAREA} w-full min-h-[60px]`}
@@ -597,7 +608,7 @@ export default function ModalDetalleCedis({
                                         type="button"
                                         disabled={procesando}
                                         onClick={() => setConfirmacion('reportar_sin_ex')}
-                                        className={`${BTN_SECONDARY} text-xs min-h-[44px] border-sky-500/40 text-sky-700`}
+                                        className={`${BTN_SECONDARY} text-xs min-h-[44px] border-sky-500/40 theme-text-info`}
                                     >
                                         Reportar sin existencias
                                     </button>
@@ -627,7 +638,7 @@ export default function ModalDetalleCedis({
                                 )}
                                 {comprobantes.length > 0 && (
                                     <div className="mb-3">
-                                        <p className="text-[9px] font-black uppercase theme-text-muted mb-2">Comprobantes</p>
+                                        <p className="text-xs font-semibold theme-text-muted mb-2">Comprobantes</p>
                                         <div className="flex flex-wrap gap-2">
                                             {comprobantes.map((doc) => (
                                                 <MiniaturaDocumento key={doc.id} documento={doc} onVer={setDocPreview} />
@@ -637,7 +648,7 @@ export default function ModalDetalleCedis({
                                 )}
                                 {evidenciasApartado.length > 0 && (
                                     <div className="mb-3">
-                                        <p className="text-[9px] font-black uppercase theme-text-muted mb-2">Evidencia de apartado</p>
+                                        <p className="text-xs font-semibold theme-text-muted mb-2">Evidencia de apartado</p>
                                         <div className="flex flex-wrap gap-2">
                                             {evidenciasApartado.map((doc) => (
                                                 <MiniaturaDocumento key={doc.id} documento={doc} onVer={setDocPreview} />
@@ -647,17 +658,17 @@ export default function ModalDetalleCedis({
                                 )}
                                 {complementos.length > 0 && (
                                     <div className="space-y-3">
-                                        <p className="text-[9px] font-black uppercase theme-text-muted m-0">Remisiones del grupo</p>
+                                        <p className="text-xs font-semibold theme-text-muted m-0">Remisiones del grupo</p>
                                         {[pedido, ...complementos].map((p) => {
                                             const rem = remisionDe(p);
                                             return (
                                                 <div key={p.id} className="p-3 rounded-xl border theme-border theme-element space-y-2">
-                                                    <p className="text-sm font-black theme-text-main m-0">
+                                                    <p className="text-sm font-semibold theme-text-main m-0">
                                                         {p.folio}
                                                         {p.folio_remision ? ` · ${p.folio_remision}` : ''}
                                                         {p.id === pedido.id ? ' · principal' : ' · complemento'}
                                                     </p>
-                                                    <p className="text-[10px] theme-text-muted font-bold m-0">
+                                                    <p className="text-xs theme-text-muted font-bold m-0">
                                                         {formatearMoneda(p.total_mercancia)}
                                                     </p>
                                                     {rem && (
@@ -679,8 +690,8 @@ export default function ModalDetalleCedis({
                         )}
 
                         {/* 4. Datos operativos */}
-                        <section className={SECCION_WRAP}>
-                            <p className={SECCION}>Datos operativos</p>
+                        <section id="cedis-pedido" tabIndex={-1} className={`${SECCION_WRAP} gelia-pedidos-seccion`}>
+                            <h3 className="gelia-pedidos-seccion-titulo mb-3">Datos operativos</h3>
                             <div className="grid grid-cols-2 gap-4">
                                 <Campo label="Cliente" value={pedido.cliente?.nombre} />
                                 <Campo label="N° Cliente" value={pedido.cliente?.numero_cliente} />
@@ -697,9 +708,9 @@ export default function ModalDetalleCedis({
                             {(pedido.cajas || []).length > 0 && (
                                 <div className="mt-3 space-y-2">
                                     <div className="flex items-center justify-between gap-2">
-                                        <p className="text-[9px] font-black uppercase theme-text-muted m-0">Detalle de envíos (pesaje)</p>
+                                        <p className="text-xs font-semibold theme-text-muted m-0">Detalle de envíos (pesaje)</p>
                                         {cajasOrdenadas.length > 0 && (cajasRecolectadasCount > 0 || fase === 'PENDIENTE_DE_ENVIO') && (
-                                            <span className="text-[10px] font-black uppercase theme-text-muted">
+                                            <span className="text-xs font-semibold theme-text-muted">
                                                 {cajasRecolectadasCount}/{cajasOrdenadas.length} recolectadas
                                             </span>
                                         )}
@@ -728,7 +739,7 @@ export default function ModalDetalleCedis({
                                                         />
                                                     )}
                                                     <div className="min-w-0 flex-1">
-                                                        <p className="text-xs font-black theme-text-main m-0">
+                                                        <p className="text-xs font-semibold theme-text-main m-0">
                                                             {etiquetaEnvio(idx, c)}
                                                             <span className="ml-2 font-bold theme-text-muted">
                                                                 {pendiente ? 'Pendiente' : 'Recolectada'}
@@ -777,14 +788,14 @@ export default function ModalDetalleCedis({
                             )}
                             {pedido.comentarios_drive && (
                                 <div className="mt-4">
-                                    <p className="text-[9px] font-black uppercase theme-text-muted m-0 mb-1">Comentarios para Drive</p>
+                                    <p className="text-xs font-semibold theme-text-muted m-0 mb-1">Comentarios para Drive</p>
                                     <p className="text-sm font-bold theme-text-main m-0">{pedido.comentarios_drive}</p>
                                 </div>
                             )}
                         </section>
 
                         {/* 5. Costos */}
-                        <section className={SECCION_WRAP}>
+                        <section className={`${SECCION_WRAP} gelia-pedidos-seccion`}>
                             <p className={SECCION}>Costos</p>
                             <div className="space-y-3">
                                 <Campo label="Código postal" value={pedido.codigo_postal} />
@@ -823,7 +834,7 @@ export default function ModalDetalleCedis({
                                         <span>Saldo a favor aplicado</span>
                                         <span>- {formatearMoneda(pedido.saldo_a_favor)}</span>
                                     </div>
-                                    <div className="flex justify-between font-black pt-2 border-t theme-border" style={{ color: 'var(--color-primario)' }}>
+                                    <div className="flex justify-between font-semibold pt-2 border-t theme-border" style={{ color: 'var(--color-primario)' }}>
                                         <span>Total a cobrar ahora</span><span>{formatearMoneda(pedido.total_a_cobrar)}</span>
                                     </div>
                                 </div>
@@ -840,7 +851,7 @@ export default function ModalDetalleCedis({
                                 type="button"
                                 onClick={() => onReportarErrorDatos?.(pedido)}
                                 disabled={procesando}
-                                className={`${BTN_SECONDARY} theme-element border border-orange-500/40 text-orange-600 outline-none min-h-[44px] w-full sm:w-auto`}
+                                className={`${BTN_SECONDARY} theme-element border border-[color:color-mix(in_srgb,var(--color-aviso)_40%,var(--theme-border))] theme-text-aviso outline-none min-h-[44px] w-full sm:w-auto`}
                             >
                                 <AlertTriangle className="w-4 h-4 inline mr-1" /> Reportar error
                             </button>

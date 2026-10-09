@@ -18,6 +18,7 @@ final class SnapshotHistorialPedidoBma
             'financiero' => [
                 'folio' => $pedido->folio,
                 'folio_remision' => $pedido->folio_remision,
+                'numero_remision' => $pedido->numero_remision,
                 'total_mercancia' => self::m($pedido->total_mercancia),
                 'costo_envio' => self::m($pedido->costo_envio),
                 'costo_seguro' => self::m($pedido->costo_seguro),

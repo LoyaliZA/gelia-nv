@@ -115,7 +115,7 @@ export default function TabAuditoriaClientes({ puedeDescargarImportaciones = fal
     };
 
     return (
-        <div className="space-y-8">
+        <div className="clientes-audit space-y-5">
             {importacionAuditoriaId !== null && (
                 <ModalAuditoriaImportacion
                     importacionId={importacionAuditoriaId}
@@ -132,7 +132,7 @@ export default function TabAuditoriaClientes({ puedeDescargarImportaciones = fal
                     </h2>
                 </div>
 
-                <div className={`overflow-x-auto ${cargando ? 'opacity-60 pointer-events-none' : ''}`}>
+                <div tabIndex={0} role="region" aria-label="Tabla de auditoría, desplaza horizontalmente para ver todas las columnas" className={`overflow-x-auto ${cargando ? 'opacity-60 pointer-events-none' : ''}`}>
                     <table className="w-full text-left text-sm">
                         <thead>
                             <tr className="text-[9px] font-black uppercase tracking-widest theme-text-muted border-b theme-border">
@@ -221,7 +221,8 @@ export default function TabAuditoriaClientes({ puedeDescargarImportaciones = fal
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 theme-text-muted pointer-events-none" />
                         <input
                             type="text"
-                            placeholder="Buscar cliente..."
+                            aria-label="Buscar cliente en auditoría"
+                            placeholder="Buscar cliente…"
                             value={qInput}
                             onChange={(e) => setQInput(e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && aplicarFiltros()}
@@ -230,6 +231,7 @@ export default function TabAuditoriaClientes({ puedeDescargarImportaciones = fal
                     </div>
                     <div className="md:col-span-2 relative">
                         <select
+                            aria-label="Origen del cambio"
                             value={origen}
                             onChange={(e) => setOrigen(e.target.value)}
                             className="w-full pl-4 pr-8 py-3 theme-element border theme-border rounded-xl text-[10px] font-black uppercase appearance-none cursor-pointer"
@@ -243,6 +245,7 @@ export default function TabAuditoriaClientes({ puedeDescargarImportaciones = fal
                     </div>
                     <div className="md:col-span-2 relative">
                         <select
+                            aria-label="Usuario responsable"
                             value={usuarioId}
                             onChange={(e) => setUsuarioId(e.target.value)}
                             className="w-full pl-4 pr-8 py-3 theme-element border theme-border rounded-xl text-[10px] font-black uppercase appearance-none cursor-pointer"
@@ -258,12 +261,14 @@ export default function TabAuditoriaClientes({ puedeDescargarImportaciones = fal
                     </div>
                     <input
                         type="date"
+                        aria-label="Fecha de inicio"
                         value={fechaInicio}
                         onChange={(e) => setFechaInicio(e.target.value)}
                         className="md:col-span-2 py-3 px-4 theme-element border theme-border rounded-xl text-[10px] font-bold theme-text-main"
                     />
                     <input
                         type="date"
+                        aria-label="Fecha de fin"
                         value={fechaFin}
                         onChange={(e) => setFechaFin(e.target.value)}
                         className="md:col-span-1 py-3 px-4 theme-element border theme-border rounded-xl text-[10px] font-bold theme-text-main"
@@ -279,7 +284,7 @@ export default function TabAuditoriaClientes({ puedeDescargarImportaciones = fal
                     </button>
                 </div>
 
-                <div className={`overflow-x-auto ${cargando ? 'opacity-60 pointer-events-none' : ''}`}>
+                <div tabIndex={0} role="region" aria-label="Tabla de auditoría, desplaza horizontalmente para ver todas las columnas" className={`overflow-x-auto ${cargando ? 'opacity-60 pointer-events-none' : ''}`}>
                     <table className="w-full text-left text-sm min-w-[800px]">
                         <thead>
                             <tr className="text-[9px] font-black uppercase tracking-widest theme-text-muted border-b theme-border">

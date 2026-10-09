@@ -18,8 +18,8 @@ $checks = [
     ['sin bloqueo auto-reporte', ! str_contains($svc, 'La remisión se corrige aquí mismo en auditoría')],
     ['UI grupo auxiliar en auditar', str_contains($modal, 'Mi error (remisión / pago)')],
     ['copy auto-reporte', str_contains($modal, 'Se registrará en bitácora')],
-    ['folio editable auditar', str_contains($auditar, 'folio_remision.update')],
-    ['ruta folio update', str_contains($routes, 'folio_remision.update')],
+    ['número de remisión editable en auditar', str_contains($auditar, 'numero_remision.update')],
+    ['ruta número de remisión', str_contains($routes, 'numero_remision.update')],
 ];
 
 foreach ($checks as [$label, $ok]) {

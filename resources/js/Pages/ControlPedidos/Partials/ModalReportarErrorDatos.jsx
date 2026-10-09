@@ -30,6 +30,7 @@ export const GRUPOS_ERROR_DATOS = [
         label: 'Datos de captura / envío',
         destino: 'vendedora',
         campos: [
+            { id: 'folio_remision', label: 'Número de pedido' },
             { id: 'domicilio', label: 'Domicilio / dirección' },
             { id: 'destinatario', label: 'Destinatario' },
             { id: 'telefono', label: 'Teléfono' },
@@ -66,7 +67,7 @@ export const GRUPOS_ERROR_DATOS = [
         destino: 'auxiliar',
         campos: [
             { id: 'remision', label: 'Remisión PDF' },
-            { id: 'folio_remision', label: 'Folio de remisión' },
+            { id: 'numero_remision', label: 'Número de remisión' },
             { id: 'pago_validado', label: 'Validación de pago' },
             { id: 'anexo_envio', label: 'Anexo de envío' },
         ],

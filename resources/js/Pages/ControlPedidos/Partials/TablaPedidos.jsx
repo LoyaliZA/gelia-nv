@@ -30,7 +30,6 @@ import {
     badgesListaPedido,
     elegirAccionPrimaria,
     MAX_BADGES_LISTADO,
-    tituloOverflowBadges,
 } from './pedidosListadoUi';
 
 const MENU_ACCIONES_Z_INDEX = 60;
@@ -53,7 +52,6 @@ function useBadgesItems(pedido) {
 
 function BadgesPedido({ items, className = 'justify-start', max = MAX_BADGES_LISTADO, compact = false }) {
     const visibles = items.slice(0, max);
-    const overflowTitle = tituloOverflowBadges(items);
     const gap = compact ? 'gap-1' : 'gap-1.5';
 
     return (
@@ -69,9 +67,10 @@ function BadgesPedido({ items, className = 'justify-start', max = MAX_BADGES_LIS
                 </span>
             ))}
             {items.length > visibles.length && (
-                <span className="text-[10px] font-bold theme-text-muted tabular-nums" title={overflowTitle}>
-                    +{items.length - visibles.length}
-                </span>
+                <details className="gelia-pedidos-estados-extra">
+                    <summary className="text-xs font-semibold theme-text-muted tabular-nums cursor-pointer list-none" aria-label="Ver estados adicionales">+{items.length - visibles.length} estados</summary>
+                    <div className="flex flex-wrap gap-1.5 pt-2">{items.slice(max).map((badge) => <span key={badge.key} className={badge.className} style={badge.style}>{badge.label}</span>)}</div>
+                </details>
             )}
         </div>
     );
@@ -103,10 +102,12 @@ function MenuAccionesPedido({ acciones, primaria, idBase }) {
         if (!el) return;
         const rect = el.getBoundingClientRect();
         setPos({
-            top: rect.bottom + 4,
-            right: window.innerWidth - rect.right,
+            top: window.innerHeight - rect.bottom > Math.min(restantes.length * 48 + 16, 448)
+                ? rect.bottom + 4
+                : Math.max(8, rect.top - Math.min(restantes.length * 48 + 16, window.innerHeight - 16)),
+            right: Math.max(8, window.innerWidth - rect.right),
         });
-    }, []);
+    }, [restantes.length]);
 
     useLayoutEffect(() => {
         if (!abierto) {
@@ -133,23 +134,44 @@ function MenuAccionesPedido({ acciones, primaria, idBase }) {
         return () => document.removeEventListener('mousedown', onDoc);
     }, [abierto]);
 
+    useEffect(() => {
+        if (!abierto || !pos) return;
+        menuRef.current?.querySelector('button')?.focus({ preventScroll: true });
+    }, [abierto, Boolean(pos)]);
+
+    const tecladoMenu = (event) => {
+        const controles = [...menuRef.current.querySelectorAll('button:not([disabled])')];
+        const index = controles.indexOf(document.activeElement);
+        if (event.key === 'Escape') {
+            event.preventDefault(); setAbierto(false); triggerRef.current?.focus();
+        } else if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
+            event.preventDefault();
+            const siguiente = event.key === 'Home' ? 0 : event.key === 'End' ? controles.length - 1
+                : (index + (event.key === 'ArrowDown' ? 1 : -1) + controles.length) % controles.length;
+            controles[siguiente]?.focus();
+        } else if (event.key === 'Tab') setAbierto(false);
+    };
+
     if (restantes.length === 0) return null;
 
     const menu = abierto && pos ? (
         <div
             ref={menuRef}
             role="menu"
+            onKeyDown={tecladoMenu}
             aria-labelledby={menuId}
-            className="fixed min-w-[12rem] max-w-[min(16rem,calc(100vw-1rem))] p-2 rounded-xl border theme-border theme-surface shadow-lg flex flex-col gap-1"
+            className="gelia-pedidos-menu fixed min-w-[12rem] max-w-[min(16rem,calc(100vw-1rem))] p-2 rounded-xl border theme-border theme-surface shadow-lg flex flex-col gap-1"
             style={{ top: pos.top, right: pos.right, zIndex: MENU_ACCIONES_Z_INDEX }}
         >
             {restantes.map((accion) => (
                 <BotonAccionCubico
                     key={accion.key}
+                    role="menuitem"
                     icon={accion.icon}
                     label={accion.label}
                     onClick={() => {
                         setAbierto(false);
+                        triggerRef.current?.focus();
                         accion.onClick();
                     }}
                     tone={accion.tone || 'default'}

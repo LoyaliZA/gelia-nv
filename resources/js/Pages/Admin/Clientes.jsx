@@ -12,26 +12,30 @@ import GeliaLoader from '../../Components/GeliaLoader';
 
 // --- IMPORTACIÓN DEL PARCIAL ---
 import ModalFormCliente from './Partials/ModalFormCliente';
+import useClienteDialog from './Partials/useClienteDialog';
 import ModalConfiguracionEspecial from './Partials/ModalConfiguracionEspecial';
 import TabAuditoriaClientes from './Partials/TabAuditoriaClientes';
 
 import BadgeListaDescuento from '../../Components/BadgeListaDescuento';
-import { geliaCardClass, THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from '../../utils/geliaTheme';
+import { geliaCardClass, GELIA_PAGE_SHELL, THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from '../../utils/geliaTheme';
+
+const formatoMoneda = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
 
 const ModalReporteImportacion = ({ reporte, onClose }) => {
+    const dialogRef = useClienteDialog(onClose);
     return (
         <div className={`${THEME_MODAL_OVERLAY} z-[100]`} onClick={onClose}>
-            <div className={`${THEME_MODAL_SHELL} max-w-3xl modal-pop p-6 md:p-8 flex flex-col max-h-[90vh]`} onClick={e => e.stopPropagation()}>
+            <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="clientes-reporte-title" tabIndex={-1} className={`${THEME_MODAL_SHELL} clientes-report max-w-3xl modal-pop p-4 sm:p-6 md:p-8 flex flex-col max-h-[90dvh]`} onClick={e => e.stopPropagation()}>
                 <div className="flex justify-between items-center mb-6">
                     <div>
-                        <h3 className="text-xl font-black italic uppercase theme-text-main">
+                        <h2 id="clientes-reporte-title" className="text-xl font-black italic uppercase theme-text-main">
                             REPORTE DE <span style={{ color: 'var(--color-primario)' }}>ASCENSOS</span>
-                        </h3>
+                        </h2>
                         <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted mt-1">
                             {reporte.length} clientes promovidos a una lista superior_
                         </p>
                     </div>
-                    <button onClick={onClose} className="p-2 rounded-full theme-element theme-text-muted hover:theme-text-main transition-colors outline-none">
+                    <button onClick={onClose} aria-label="Cerrar reporte de importación" className="p-2 rounded-full theme-element theme-text-muted hover:theme-text-main transition-colors outline-none">
                         <X className="w-5 h-5" />
                     </button>
                 </div>
@@ -286,30 +290,30 @@ export default function Clientes({ auth, clientes, vendedores = [], tipos_client
                 onClose={() => setModalExitoAbierto(false)}
             />
 
-            <div className="max-w-[1400px] w-full mx-auto p-4 md:p-8 space-y-8 relative">
+            <div className={`${GELIA_PAGE_SHELL} clientes-page max-w-[1400px] w-full mx-auto space-y-5 md:space-y-6 relative`}>
 
                 {/* --- HEADER --- */}
-                <header className={`${activeCardClass} p-8 md:p-12 flex flex-col md:flex-row justify-between items-start md:items-center gap-6`} style={{ animationDelay: '0ms' }}>
-                    <div className="flex flex-col gap-4">
+                <header className={`${activeCardClass} clientes-header p-5 sm:p-8 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-5`} style={{ animationDelay: '0ms' }}>
+                    <div className="min-w-0 flex flex-col gap-3">
                         <div className="flex items-center justify-start mb-2">
                             <div className="w-8 h-1.5 rounded-full mr-3" style={{ backgroundColor: 'var(--color-primario)' }}></div>
                             <span className="text-[10px] font-black tracking-[0.2em] uppercase theme-text-muted drop-shadow-sm">
-                                BASE DE DATOS WIZERP_
+                                Base de datos Wizerp
                             </span>
                         </div>
-                        <h1 className="text-4xl md:text-5xl font-black italic tracking-tighter uppercase theme-text-main leading-none m-0 p-0">
+                        <h1 className="text-3xl sm:text-4xl font-black italic tracking-tighter uppercase theme-text-main leading-none m-0 p-0">
                             SISTEMA DE <span style={{ color: 'var(--color-primario)' }}>CLIENTES</span>
                         </h1>
                     </div>
 
                     {/* --- BOTONES DE ACCION --- */}
-                    <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+                    <div className="clientes-header-actions flex flex-wrap gap-3 w-full xl:w-auto">
                         <button
                             onClick={() => setPanelProteccionAbierto(true)}
                             className="py-4 px-6 theme-element border theme-border theme-text-main rounded-2xl font-black uppercase tracking-widest text-[11px] transition-all hover:shadow-md outline-none flex justify-center items-center gap-2 group"
                         >
                             <Shield className="w-5 h-5 group-hover:scale-110 transition-transform" style={{ color: 'var(--color-primario)' }} /> 
-                            Protección_
+                            Protección
                         </button>
 
                         <button
@@ -317,16 +321,17 @@ export default function Clientes({ auth, clientes, vendedores = [], tipos_client
                             className="py-4 px-8 text-white rounded-2xl font-black uppercase tracking-widest text-[11px] transition-all hover:scale-105 shadow-xl outline-none flex justify-center items-center gap-2"
                             style={{ backgroundColor: 'var(--color-primario)' }}
                         >
-                            <Plus className="w-5 h-5" /> Nuevo Cliente_
+                            <Plus className="w-5 h-5" /> Nuevo cliente
                         </button>
                     </div>
                 </header>
 
                 {/* Pestañas Clientes / Auditoría */}
-                <div className="flex gap-2">
+                <div className="clientes-tabs flex gap-2">
                     <button
                         type="button"
                         onClick={() => cambiarTab('clientes')}
+                        aria-pressed={tabActivo === 'clientes'}
                         className={`px-6 py-3 rounded-xl font-black uppercase tracking-widest text-[10px] transition-all border ${tabActivo === 'clientes' ? 'text-white border-transparent shadow-lg' : 'theme-element theme-border theme-text-muted hover:theme-text-main'}`}
                         style={tabActivo === 'clientes' ? { backgroundColor: 'var(--color-primario)' } : {}}
                     >
@@ -336,6 +341,7 @@ export default function Clientes({ auth, clientes, vendedores = [], tipos_client
                     <button
                         type="button"
                         onClick={() => cambiarTab('auditoria')}
+                        aria-pressed={tabActivo === 'auditoria'}
                         className={`px-6 py-3 rounded-xl font-black uppercase tracking-widest text-[10px] transition-all border ${tabActivo === 'auditoria' ? 'text-white border-transparent shadow-lg' : 'theme-element theme-border theme-text-muted hover:theme-text-main'}`}
                         style={tabActivo === 'auditoria' ? { backgroundColor: 'var(--color-primario)' } : {}}
                     >
@@ -347,125 +353,135 @@ export default function Clientes({ auth, clientes, vendedores = [], tipos_client
                 {tabActivo === 'auditoria' ? (
                     <TabAuditoriaClientes puedeDescargarImportaciones={puedeDescargarImportaciones} />
                 ) : (
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch h-[calc(100vh-240px)] min-h-[600px]">
+                <div className="clientes-workspace grid grid-cols-1 xl:grid-cols-[minmax(0,320px)_minmax(0,1fr)] gap-5 items-start">
 
                     {/* --- PANEL LATERAL: CARGA MASIVA --- */}
-                    <div className="lg:col-span-1 h-full">
-                        <section className={`${activeCardClass} p-8 h-full overflow-y-auto custom-scrollbar`} style={{ animationDelay: '100ms' }}>
-                            <div className="flex items-center justify-between gap-3 mb-6 shrink-0">
-                                <div className="flex items-center gap-3">
-                                    <Upload className="w-6 h-6 drop-shadow-sm" style={{ color: 'var(--color-primario)' }} />
-                                    <h2 className="text-xl font-black italic theme-text-main uppercase tracking-tighter m-0 drop-shadow-sm">
-                                        Carga Masiva_
-                                    </h2>
+                    <div className="min-w-0 order-2 xl:order-1">
+                        <section className={`${activeCardClass} clientes-import p-5 sm:p-6`} style={{ animationDelay: '100ms' }}>
+                            <details>
+                                <summary className="clientes-import-toggle flex items-center justify-between gap-3">
+                                    <div className="flex items-center gap-3">
+                                        <Upload className="w-6 h-6 drop-shadow-sm" style={{ color: 'var(--color-primario)' }} />
+                                        <h2 className="text-xl font-black italic theme-text-main uppercase tracking-tighter m-0 drop-shadow-sm">
+                                            Carga masiva
+                                        </h2>
+                                    </div>
+                                    <ChevronDown className="clientes-import-chevron w-5 h-5 shrink-0 theme-text-muted" aria-hidden="true" />
+                                </summary>
+                                <div className="mt-5 flex justify-end">
+                                    <button type="button" onClick={descargarPlantilla} className="inline-flex items-center gap-2 min-h-11 px-3 text-xs font-bold theme-text-main theme-element border theme-border rounded-xl hover:shadow-md transition-shadow">
+                                        <FileSpreadsheet className="w-4 h-4" aria-hidden="true" /> Descargar plantilla
+                                    </button>
                                 </div>
-                                <button 
-                                    type="button"
-                                    onClick={descargarPlantilla}
-                                    className="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest theme-text-main theme-element border theme-border rounded-lg hover:shadow-md transition-all flex items-center gap-1.5"
-                                >
-                                    <FileSpreadsheet className="w-3 h-3" />
-                                    Plantilla
-                                </button>
-                            </div>
 
-                            <form onSubmit={handleUpload} className="space-y-6">
-                                <label
-                                    className="border-[3px] border-dashed theme-border rounded-[2rem] p-10 flex flex-col items-center justify-center text-center space-y-4 transition-all cursor-pointer group w-full block theme-element hover:shadow-md"
-                                    onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
-                                    onDragLeave={() => setDragActive(false)}
-                                    onDrop={(e) => {
-                                        e.preventDefault();
-                                        setDragActive(false);
-                                        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-                                            formCarga.setData('archivo', e.dataTransfer.files[0]);
-                                        }
-                                    }}
-                                    style={{ borderColor: dragActive ? 'var(--color-primario)' : '' }}
-                                >
-                                    <div className="w-16 h-16 theme-surface border theme-border rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform shadow-sm">
-                                        <FileSpreadsheet className="w-8 h-8" style={{ color: formCarga.data.archivo ? 'var(--color-primario)' : 'var(--theme-text-muted)' }} />
+                                <form onSubmit={handleUpload} className="space-y-4 mt-4">
+                                    <label
+                                        className="border-[3px] border-dashed theme-border rounded-2xl p-5 flex flex-col items-center justify-center text-center space-y-4 transition-all cursor-pointer group w-full block theme-element hover:shadow-md"
+                                        onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
+                                        onDragLeave={() => setDragActive(false)}
+                                        onDrop={(e) => {
+                                            e.preventDefault();
+                                            setDragActive(false);
+                                            if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                                                formCarga.setData('archivo', e.dataTransfer.files[0]);
+                                            }
+                                        }}
+                                        style={{ borderColor: dragActive ? 'var(--color-primario)' : '' }}
+                                    >
+                                        <div className="w-16 h-16 theme-surface border theme-border rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform shadow-sm">
+                                            <FileSpreadsheet className="w-8 h-8" style={{ color: formCarga.data.archivo ? 'var(--color-primario)' : 'var(--theme-text-muted)' }} />
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-black theme-text-main uppercase">Selecciona o arrastra un archivo</p>
+                                            <p className="text-[10px] theme-text-muted italic mt-1 uppercase font-bold">Formatos: .csv</p>
+                                        </div>
+
+                                        <span className="text-[9px] font-black uppercase tracking-widest underline" style={{ color: 'var(--color-primario)' }}>
+                                            O examinar archivos
+                                        </span>
+
+                                        <input
+                                            type="file"
+                                            className="sr-only"
+                                            name="archivo"
+                                            aria-label="Seleccionar archivo de clientes"
+                                            accept=".csv,.txt"
+                                            onChange={e => formCarga.setData('archivo', e.target.files[0])}
+                                        />
+                                    </label>
+
+                                    {formCarga.errors.archivo && (
+                                        <p className="text-red-500 text-[10px] font-bold mt-2 uppercase tracking-widest text-center">{formCarga.errors.archivo}</p>
+                                    )}
+
+                                    {formCarga.data.archivo && (
+                                        <div className="min-w-0 flex items-center gap-3 p-4 theme-surface border border-emerald-500/30 rounded-2xl shadow-sm">
+                                            <CheckCircle className="w-5 h-5 text-emerald-500 shrink-0" />
+                                            <span className="text-[10px] font-bold theme-text-main truncate">{formCarga.data.archivo.name}</span>
+                                        </div>
+                                    )}
+
+                                    <button
+                                        type="submit"
+                                        disabled={formCarga.processing || !formCarga.data.archivo}
+                                        className="w-full py-4 text-white rounded-2xl font-black uppercase tracking-widest text-[11px] transition-all hover:scale-105 shadow-xl disabled:opacity-50 disabled:scale-100 outline-none flex justify-center items-center gap-2"
+                                        style={{ backgroundColor: 'var(--color-primario)' }}
+                                    >
+                                        <Database className="w-4 h-4" /> {formCarga.processing ? 'Sincronizando…' : 'Actualizar base de clientes'}
+                                    </button>
+                                    {formCarga.processing && (
+                                        <p className="text-[9px] font-black uppercase tracking-widest text-amber-600 text-center">
+                                            No cierre esta pestaña hasta que termine la sincronización.
+                                        </p>
+                                    )}
+                                </form>
+
+                                <div className="clientes-import-help mt-6 pt-5 border-t theme-border space-y-4">
+                                    <div className="flex items-center gap-2 text-amber-500">
+                                        <Database className="w-4 h-4" />
+                                        <p className="text-[9px] font-black uppercase tracking-widest italic">Columnas admitidas</p>
                                     </div>
-                                    <div>
-                                        <p className="text-xs font-black theme-text-main uppercase">Suelte el archivo aquí_</p>
-                                        <p className="text-[10px] theme-text-muted italic mt-1 uppercase font-bold">Formatos: .csv</p>
-                                    </div>
-
-                                    <span className="text-[9px] font-black uppercase tracking-widest underline" style={{ color: 'var(--color-primario)' }}>
-                                        O examinar archivos
-                                    </span>
-
-                                    <input
-                                        type="file"
-                                        className="hidden"
-                                        accept=".csv,.txt"
-                                        onChange={e => formCarga.setData('archivo', e.target.files[0])}
-                                    />
-                                </label>
-
-                                {formCarga.errors.archivo && (
-                                    <p className="text-red-500 text-[10px] font-bold mt-2 uppercase tracking-widest text-center">{formCarga.errors.archivo}</p>
-                                )}
-
-                                {formCarga.data.archivo && (
-                                    <div className="flex items-center gap-3 p-4 theme-surface border border-emerald-500/30 rounded-2xl shadow-sm">
-                                        <CheckCircle className="w-5 h-5 text-emerald-500 shrink-0" />
-                                        <span className="text-[10px] font-bold theme-text-main truncate">{formCarga.data.archivo.name}</span>
-                                    </div>
-                                )}
-
-                                <button
-                                    type="submit"
-                                    disabled={formCarga.processing || !formCarga.data.archivo}
-                                    className="w-full py-4 text-white rounded-2xl font-black uppercase tracking-widest text-[11px] transition-all hover:scale-105 shadow-xl disabled:opacity-50 disabled:scale-100 outline-none flex justify-center items-center gap-2"
-                                    style={{ backgroundColor: 'var(--color-primario)' }}
-                                >
-                                    <Database className="w-4 h-4" /> {formCarga.processing ? 'Sincronizando...' : 'Actualizar BD_'}
-                                </button>
-                                {formCarga.processing && (
-                                    <p className="text-[9px] font-black uppercase tracking-widest text-amber-600 text-center">
-                                        No cierre esta pestaña hasta que termine la sincronización.
+                                    <p className="text-[10px] theme-text-muted font-bold leading-relaxed">
+                                        El sistema detecta automáticamente los campos. Puedes enviar un archivo solo con las columnas necesarias. <br /><br />
+                                        <strong style={{ color: 'var(--color-primario)' }}>numero_cliente</strong> (Requerido)<br />
+                                        <strong style={{ color: 'var(--color-primario)' }}>nombre</strong><br />
+                                        <strong style={{ color: 'var(--color-primario)' }}>codigo_lista</strong> (Ej: PG, 1, 2, 3, 4, 7; celda vacía = inactivo; sin columna = solo actualiza monto)<br />
+                                        <strong style={{ color: 'var(--color-primario)' }}>monto_venta_actual</strong><br />
+                                        <strong style={{ color: 'var(--color-primario)' }}>vendedor_id</strong> (TAG de la Vendedora)<br />
+                                        <strong style={{ color: 'var(--color-primario)' }}>es_heredado</strong> (SI o NO)<br />
+                                        <strong style={{ color: 'var(--color-primario)' }}>limite_asignado</strong> o <strong style={{ color: 'var(--color-primario)' }}>monto_credito_autorizado</strong> (Sin símbolos, ej: 5000)<br />
+                                        <strong style={{ color: 'var(--color-primario)' }}>dias_credito</strong> o <strong style={{ color: 'var(--color-primario)' }}>dias_de_credito</strong> (Número entero, ej: 15)<br /><br />
+                                        <span className="text-[9px] font-black uppercase tracking-widest text-amber-600">
+                                            Ejecute la carga antes de las 09:00 para evitar conflicto con el rechazo automático de pagos vencidos.
+                                        </span><br /><br />
+                                        <span className="text-[9px] font-black uppercase tracking-widest text-blue-500">Datos fiscales:</span><br />
+                                        <strong style={{ color: 'var(--color-primario)' }}>rfc</strong>, <strong style={{ color: 'var(--color-primario)' }}>codigo_postal</strong>, <strong style={{ color: 'var(--color-primario)' }}>regimen_fiscal</strong>, <strong style={{ color: 'var(--color-primario)' }}>correo_electronico</strong>, <strong style={{ color: 'var(--color-primario)' }}>uso_factura</strong>, <strong style={{ color: 'var(--color-primario)' }}>nombre_razon_social</strong>, <strong style={{ color: 'var(--color-primario)' }}>direccion_fiscal</strong>, <strong style={{ color: 'var(--color-primario)' }}>colonia_fiscal</strong>, <strong style={{ color: 'var(--color-primario)' }}>municipio_fiscal</strong>, <strong style={{ color: 'var(--color-primario)' }}>estado_fiscal</strong>, <strong style={{ color: 'var(--color-primario)' }}>pais_fiscal</strong><br /><br />
+                                        <span className="text-[9px] font-black uppercase tracking-widest text-orange-500">Datos de contacto y control:</span><br />
+                                        <strong style={{ color: 'var(--color-primario)' }}>direccion_contacto</strong>, <strong style={{ color: 'var(--color-primario)' }}>colonia_contacto</strong>, <strong style={{ color: 'var(--color-primario)' }}>municipio_contacto</strong>, <strong style={{ color: 'var(--color-primario)' }}>estado_contacto</strong>, <strong style={{ color: 'var(--color-primario)' }}>pais_contacto</strong>, <strong style={{ color: 'var(--color-primario)' }}>cp_contacto</strong>, <strong style={{ color: 'var(--color-primario)' }}>telefono</strong><br />
+                                        <strong style={{ color: 'var(--color-primario)' }}>dias_cheque_postfechado</strong>, <strong style={{ color: 'var(--color-primario)' }}>parte_relacional</strong>, <strong style={{ color: 'var(--color-primario)' }}>variable_contable</strong>
                                     </p>
-                                )}
-                            </form>
-
-                            <div className="mt-8 pt-6 border-t theme-border space-y-4">
-                                <div className="flex items-center gap-2 text-amber-500">
-                                    <Database className="w-4 h-4" />
-                                    <p className="text-[9px] font-black uppercase tracking-widest italic">Cabeceras Soportadas_</p>
                                 </div>
-                                <p className="text-[10px] theme-text-muted font-bold leading-relaxed">
-                                    El sistema detecta automáticamente los campos. Puedes enviar un archivo solo con las columnas necesarias. <br /><br />
-                                    <strong style={{ color: 'var(--color-primario)' }}>numero_cliente</strong> (Requerido)<br />
-                                    <strong style={{ color: 'var(--color-primario)' }}>nombre</strong><br />
-                                    <strong style={{ color: 'var(--color-primario)' }}>codigo_lista</strong> (Ej: PG, 1, 2, 3, 4, 7; celda vacía = inactivo; sin columna = solo actualiza monto)<br />
-                                    <strong style={{ color: 'var(--color-primario)' }}>monto_venta_actual</strong><br />
-                                    <strong style={{ color: 'var(--color-primario)' }}>vendedor_id</strong> (TAG de la Vendedora)<br />
-                                    <strong style={{ color: 'var(--color-primario)' }}>es_heredado</strong> (SI o NO)<br />
-                                    <strong style={{ color: 'var(--color-primario)' }}>limite_asignado</strong> o <strong style={{ color: 'var(--color-primario)' }}>monto_credito_autorizado</strong> (Sin símbolos, ej: 5000)<br />
-                                    <strong style={{ color: 'var(--color-primario)' }}>dias_credito</strong> o <strong style={{ color: 'var(--color-primario)' }}>dias_de_credito</strong> (Número entero, ej: 15)<br /><br />
-                                    <span className="text-[9px] font-black uppercase tracking-widest text-amber-600">
-                                        Ejecute la carga antes de las 09:00 para evitar conflicto con el rechazo automático de pagos vencidos.
-                                    </span><br /><br />
-                                    <span className="text-[9px] font-black uppercase tracking-widest text-blue-500">Datos fiscales:</span><br />
-                                    <strong style={{ color: 'var(--color-primario)' }}>rfc</strong>, <strong style={{ color: 'var(--color-primario)' }}>codigo_postal</strong>, <strong style={{ color: 'var(--color-primario)' }}>regimen_fiscal</strong>, <strong style={{ color: 'var(--color-primario)' }}>correo_electronico</strong>, <strong style={{ color: 'var(--color-primario)' }}>uso_factura</strong>, <strong style={{ color: 'var(--color-primario)' }}>nombre_razon_social</strong>, <strong style={{ color: 'var(--color-primario)' }}>direccion_fiscal</strong>, <strong style={{ color: 'var(--color-primario)' }}>colonia_fiscal</strong>, <strong style={{ color: 'var(--color-primario)' }}>municipio_fiscal</strong>, <strong style={{ color: 'var(--color-primario)' }}>estado_fiscal</strong>, <strong style={{ color: 'var(--color-primario)' }}>pais_fiscal</strong><br /><br />
-                                    <span className="text-[9px] font-black uppercase tracking-widest text-orange-500">Datos de contacto y control:</span><br />
-                                    <strong style={{ color: 'var(--color-primario)' }}>direccion_contacto</strong>, <strong style={{ color: 'var(--color-primario)' }}>colonia_contacto</strong>, <strong style={{ color: 'var(--color-primario)' }}>municipio_contacto</strong>, <strong style={{ color: 'var(--color-primario)' }}>estado_contacto</strong>, <strong style={{ color: 'var(--color-primario)' }}>pais_contacto</strong>, <strong style={{ color: 'var(--color-primario)' }}>cp_contacto</strong>, <strong style={{ color: 'var(--color-primario)' }}>telefono</strong><br />
-                                    <strong style={{ color: 'var(--color-primario)' }}>dias_cheque_postfechado</strong>, <strong style={{ color: 'var(--color-primario)' }}>parte_relacional</strong>, <strong style={{ color: 'var(--color-primario)' }}>variable_contable</strong>
-                                </p>
-                            </div>
+                            </details>
                         </section>
                     </div>
 
                     {/* --- PANEL PRINCIPAL: LISTADO --- */}
-                    <div className="lg:col-span-2 h-full min-h-0">
-                        <section className={`${activeCardClass} p-8 h-full flex flex-col`} style={{ animationDelay: '200ms' }}>
-                            <div className="grid grid-cols-1 md:grid-cols-12 gap-4 shrink-0 mb-4">
-                                <div className="md:col-span-10 relative">
+                    <div className="min-w-0 order-1 xl:order-2">
+                        <section className={`${activeCardClass} clientes-list-panel p-4 sm:p-6 flex flex-col`} style={{ animationDelay: '200ms' }}>
+                            <div className="flex flex-wrap items-baseline justify-between gap-2 mb-5">
+                                <h2 className="text-xl font-black theme-text-main m-0">Directorio de clientes</h2>
+                                <span className="text-sm theme-text-muted tabular-nums">{(clientes?.total ?? 0).toLocaleString('es-MX')} clientes</span>
+                            </div>
+                            <div className="clientes-filters grid gap-3 shrink-0 mb-4">
+                                <div className="clientes-search relative">
                                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 theme-text-muted z-10 pointer-events-none" />
                                     <input
                                         type="text"
-                                        placeholder="Buscar por número o nombre..."
+                                        id="clientes-busqueda"
+                                        name="q"
+                                        aria-label="Buscar clientes por número o nombre"
+                                        autoComplete="off"
+                                        placeholder="Número o nombre…"
                                         value={busquedaInput}
                                         onChange={e => setBusquedaInput(e.target.value)}
                                         onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); ejecutarBusqueda(); } }}
@@ -475,7 +491,7 @@ export default function Clientes({ auth, clientes, vendedores = [], tipos_client
                                         onBlur={e => e.target.style.borderColor = ''}
                                     />
                                 </div>
-                                <div className="md:col-span-2">
+                                <div className="clientes-search-button">
                                     <button
                                         type="button"
                                         onClick={ejecutarBusqueda}
@@ -487,85 +503,101 @@ export default function Clientes({ auth, clientes, vendedores = [], tipos_client
                                     </button>
                                 </div>
 
-                                <div className="md:col-span-3 relative">
-                                    <select
-                                        value={filtroListaId}
-                                        onChange={e => {
-                                            setFiltroListaId(e.target.value);
-                                            aplicarFiltroDropdown('lista_id', e.target.value);
-                                        }}
-                                        className="w-full pl-5 pr-10 py-4 theme-element border theme-border rounded-xl theme-text-main text-xs font-bold uppercase tracking-widest outline-none focus:ring-2 transition-all shadow-sm hover:shadow-md appearance-none cursor-pointer"
-                                        style={{ '--tw-ring-color': 'var(--color-primario)' }}
-                                        onFocus={e => e.target.style.borderColor = 'var(--color-primario)'}
-                                        onBlur={e => e.target.style.borderColor = ''}
-                                    >
-                                        <option value="">Todas las listas</option>
-                                        {listas.map(lista => (
-                                            <option key={lista.id} value={String(lista.id)}>{lista.nombre}</option>
-                                        ))}
-                                    </select>
-                                    <div className="pointer-events-none absolute inset-y-0 right-4 flex items-center">
-                                        <ChevronDown className="w-4 h-4 theme-text-muted" />
+                                <div className="min-w-0">
+                                    <label htmlFor="clientes-filtro-lista" className="block text-xs font-semibold theme-text-muted mb-2">Lista</label>
+                                    <div className="relative">
+                                        <select id="clientes-filtro-lista" name="lista_id"
+                                            aria-label="Lista de descuento"
+                                            value={filtroListaId}
+                                            onChange={e => {
+                                                setFiltroListaId(e.target.value);
+                                                aplicarFiltroDropdown('lista_id', e.target.value);
+                                            }}
+                                            className="w-full pl-5 pr-10 py-4 theme-element border theme-border rounded-xl theme-text-main text-xs font-bold uppercase tracking-widest outline-none focus:ring-2 transition-all shadow-sm hover:shadow-md appearance-none cursor-pointer"
+                                            style={{ '--tw-ring-color': 'var(--color-primario)' }}
+                                            onFocus={e => e.target.style.borderColor = 'var(--color-primario)'}
+                                            onBlur={e => e.target.style.borderColor = ''}
+                                        >
+                                            <option value="">Todas</option>
+                                            {listas.map(lista => (
+                                                <option key={lista.id} value={String(lista.id)}>{lista.nombre}</option>
+                                            ))}
+                                        </select>
+                                        <div className="pointer-events-none absolute inset-y-0 right-4 flex items-center">
+                                            <ChevronDown className="w-4 h-4 theme-text-muted" />
+                                        </div>
                                     </div>
                                 </div>
 
-                                <div className="md:col-span-3 relative">
-                                    <select
-                                        value={filtroTipo}
-                                        onChange={e => {
-                                            setFiltroTipo(e.target.value);
-                                            aplicarFiltroDropdown('tipo', e.target.value);
-                                        }}
-                                        className="w-full pl-5 pr-10 py-4 theme-element border theme-border rounded-xl theme-text-main text-xs font-bold uppercase tracking-widest outline-none focus:ring-2 transition-all shadow-sm hover:shadow-md appearance-none cursor-pointer"
-                                        style={{ '--tw-ring-color': 'var(--color-primario)' }}
-                                        onFocus={e => e.target.style.borderColor = 'var(--color-primario)'}
-                                        onBlur={e => e.target.style.borderColor = ''}
-                                    >
-                                        <option value="">TODOS</option>
-                                        <option value="directos">DIRECTOS</option>
-                                        <option value="heredados">HEREDADOS</option>
-                                    </select>
-                                    <div className="pointer-events-none absolute inset-y-0 right-4 flex items-center">
-                                        <ChevronDown className="w-4 h-4 theme-text-muted" />
+                                <div className="min-w-0">
+                                    <label htmlFor="clientes-filtro-tipo" className="block text-xs font-semibold theme-text-muted mb-2">Asignación</label>
+                                    <div className="relative">
+                                        <select id="clientes-filtro-tipo" name="tipo"
+                                            aria-label="Tipo de asignación"
+                                            value={filtroTipo}
+                                            onChange={e => {
+                                                setFiltroTipo(e.target.value);
+                                                aplicarFiltroDropdown('tipo', e.target.value);
+                                            }}
+                                            className="w-full pl-5 pr-10 py-4 theme-element border theme-border rounded-xl theme-text-main text-xs font-bold uppercase tracking-widest outline-none focus:ring-2 transition-all shadow-sm hover:shadow-md appearance-none cursor-pointer"
+                                            style={{ '--tw-ring-color': 'var(--color-primario)' }}
+                                            onFocus={e => e.target.style.borderColor = 'var(--color-primario)'}
+                                            onBlur={e => e.target.style.borderColor = ''}
+                                        >
+                                            <option value="">Todos</option>
+                                            <option value="directos">Directos</option>
+                                            <option value="heredados">Heredados</option>
+                                        </select>
+                                        <div className="pointer-events-none absolute inset-y-0 right-4 flex items-center">
+                                            <ChevronDown className="w-4 h-4 theme-text-muted" />
+                                        </div>
                                     </div>
                                 </div>
 
-                                <div className="md:col-span-3 relative">
-                                    <select
-                                        value={filtroEstado}
-                                        onChange={e => {
-                                            setFiltroEstado(e.target.value);
-                                            aplicarFiltroDropdown('estado', e.target.value);
-                                        }}
-                                        className="w-full pl-5 pr-10 py-4 theme-element border theme-border rounded-xl theme-text-main text-xs font-bold uppercase tracking-widest outline-none focus:ring-2 transition-all shadow-sm hover:shadow-md appearance-none cursor-pointer"
-                                        style={{ '--tw-ring-color': 'var(--color-primario)' }}
-                                    >
-                                        <option value="">ESTADO: TODOS</option>
-                                        <option value="activos">ACTIVOS</option>
-                                        <option value="inactivos">INACTIVOS</option>
-                                    </select>
-                                    <div className="pointer-events-none absolute inset-y-0 right-4 flex items-center">
-                                        <ChevronDown className="w-4 h-4 theme-text-muted" />
+                                <div className="min-w-0">
+                                    <label htmlFor="clientes-filtro-estado" className="block text-xs font-semibold theme-text-muted mb-2">Estado</label>
+                                    <div className="relative">
+                                        <select id="clientes-filtro-estado" name="estado"
+                                            aria-label="Estado del cliente"
+                                            value={filtroEstado}
+                                            onChange={e => {
+                                                setFiltroEstado(e.target.value);
+                                                aplicarFiltroDropdown('estado', e.target.value);
+                                            }}
+                                            className="w-full pl-5 pr-10 py-4 theme-element border theme-border rounded-xl theme-text-main text-xs font-bold uppercase tracking-widest outline-none focus:ring-2 transition-all shadow-sm hover:shadow-md appearance-none cursor-pointer"
+                                            style={{ '--tw-ring-color': 'var(--color-primario)' }}
+                                        >
+                                            <option value="">Todos</option>
+                                            <option value="activos">Activos</option>
+                                            <option value="inactivos">Inactivos</option>
+                                        </select>
+                                        <div className="pointer-events-none absolute inset-y-0 right-4 flex items-center">
+                                            <ChevronDown className="w-4 h-4 theme-text-muted" />
+                                        </div>
                                     </div>
                                 </div>
 
-                                <div className="md:col-span-3 relative">
-                                    <select
-                                        value={filtroOrden}
-                                        onChange={e => {
-                                            setFiltroOrden(e.target.value);
-                                            aplicarFiltroDropdown('orden', e.target.value);
-                                        }}
-                                        className="w-full pl-5 pr-10 py-4 theme-element border theme-border rounded-xl theme-text-main text-xs font-bold uppercase tracking-widest outline-none focus:ring-2 transition-all shadow-sm hover:shadow-md appearance-none cursor-pointer"
-                                        style={{ '--tw-ring-color': 'var(--color-primario)' }}
-                                    >
-                                        <option value="numero_asc">NÚMERO (MENOR A MAYOR)</option>
-                                        <option value="numero_desc">NÚMERO (MAYOR A MENOR)</option>
-                                        <option value="monto_desc">MAYOR MONTO</option>
-                                        <option value="monto_asc">MENOR MONTO</option>
-                                    </select>
-                                    <div className="pointer-events-none absolute inset-y-0 right-4 flex items-center">
-                                        <ChevronDown className="w-4 h-4 theme-text-muted" />
+                                <div className="min-w-0">
+                                    <label htmlFor="clientes-filtro-orden" className="block text-xs font-semibold theme-text-muted mb-2">Orden</label>
+                                    <div className="relative">
+                                        <select id="clientes-filtro-orden" name="orden"
+                                            aria-label="Orden de clientes"
+                                            value={filtroOrden}
+                                            onChange={e => {
+                                                setFiltroOrden(e.target.value);
+                                                aplicarFiltroDropdown('orden', e.target.value);
+                                            }}
+                                            className="w-full pl-5 pr-10 py-4 theme-element border theme-border rounded-xl theme-text-main text-xs font-bold uppercase tracking-widest outline-none focus:ring-2 transition-all shadow-sm hover:shadow-md appearance-none cursor-pointer"
+                                            style={{ '--tw-ring-color': 'var(--color-primario)' }}
+                                        >
+                                            <option value="numero_asc">Número menor</option>
+                                            <option value="numero_desc">Número mayor</option>
+                                            <option value="monto_desc">Mayor monto</option>
+                                            <option value="monto_asc">Menor monto</option>
+                                        </select>
+                                        <div className="pointer-events-none absolute inset-y-0 right-4 flex items-center">
+                                            <ChevronDown className="w-4 h-4 theme-text-muted" />
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -580,24 +612,25 @@ export default function Clientes({ auth, clientes, vendedores = [], tipos_client
                                 </div>
                             )}
 
-                            <div className={`space-y-4 flex-1 overflow-y-auto custom-scrollbar pr-3 pb-4 ${cargandoLista ? 'opacity-60 pointer-events-none' : ''}`}>
+                            <div aria-busy={cargandoLista} className={`clientes-records space-y-3 ${cargandoLista ? 'opacity-60 pointer-events-none' : ''}`}>
+                                <p role="status" className="sr-only">{cargandoLista ? 'Cargando clientes…' : `${listaClientes.length} clientes en esta página`}</p>
                                 {listaClientes.length === 0 ? (
                                     <div className="text-center py-16 theme-element border-2 border-dashed theme-border rounded-[2rem]">
                                         <Users className="w-12 h-12 theme-text-muted mx-auto mb-4 opacity-50" />
                                         <h3 className="text-lg font-black italic uppercase theme-text-main">Sin resultados</h3>
-                                        <p className="text-[10px] font-bold uppercase tracking-widest theme-text-muted mt-2">No se encontraron coincidencias.</p>
+                                        <p className="text-[10px] font-bold uppercase tracking-widest theme-text-muted mt-2">Prueba con otro nombre, número o filtro.</p>
                                     </div>
                                 ) : (
                                     listaClientes.map((cliente) => (
-                                        <div key={cliente.id} className="theme-element border theme-border p-5 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-6 transition-all duration-150 hover:ring-2 hover:ring-[var(--color-primario)]/40 hover:shadow-md group">
+                                        <article key={cliente.id} className="clientes-record theme-element border theme-border p-4 rounded-2xl group">
 
-                                            <div className="flex items-center gap-4 w-full md:w-auto">
-                                                <div className="w-14 h-14 theme-surface border theme-border rounded-2xl flex items-center justify-center font-black italic theme-text-main text-[10px] transition-transform group-hover:scale-110 shadow-sm shrink-0">
+                                            <div className="clientes-record-identity flex items-start gap-3 min-w-0">
+                                                <div className="clientes-record-number theme-surface border theme-border rounded-xl px-2 py-3 font-black theme-text-main text-xs text-center tabular-nums">
                                                     {cliente.numero_cliente}
                                                 </div>
 
-                                                <div>
-                                                    <h3 className="text-[15px] font-black theme-text-main leading-tight uppercase truncate max-w-[200px] md:max-w-[280px]">
+                                                <div className="min-w-0 flex-1">
+                                                    <h3 className="clientes-record-name text-[15px] font-black theme-text-main leading-snug m-0">
                                                         {cliente.nombre}
                                                     </h3>
                                                     <div className="flex flex-wrap items-center gap-2 mt-2">
@@ -607,13 +640,13 @@ export default function Clientes({ auth, clientes, vendedores = [], tipos_client
                                                                 Inactivo
                                                             </span>
                                                         )}
-                                                        <span className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest theme-text-muted">
+                                                        <span className="flex items-center gap-1 text-xs font-semibold theme-text-muted tabular-nums">
                                                             <TrendingUp className="w-3 h-3 text-emerald-500" />
-                                                            {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(cliente.monto_venta_actual)}
+                                                            {formatoMoneda.format(cliente.monto_venta_actual ?? 0)}
                                                         </span>
                                                     </div>
                                                     {cliente.rfc || cliente.correo_electronico || cliente.nombre_razon_social ? (
-                                                        <p className="text-[9px] font-bold theme-text-muted mt-1.5 truncate max-w-[280px]">
+                                                        <p className="clientes-record-fiscal text-xs theme-text-muted mt-2">
                                                             {[cliente.rfc, cliente.codigo_postal, cliente.correo_electronico].filter(Boolean).join(' · ')}
                                                         </p>
                                                     ) : (
@@ -624,16 +657,16 @@ export default function Clientes({ auth, clientes, vendedores = [], tipos_client
                                                 </div>
                                             </div>
 
-                                            <div className="flex items-center justify-between md:justify-end gap-4 w-full md:w-auto mt-2 md:mt-0">
+                                            <div className="clientes-record-actions flex flex-wrap items-center gap-2 pt-3 border-t theme-border">
                                                 {cliente.es_heredado ? (
-                                                    <div className="text-right border-r theme-border pr-4">
-                                                        <p className="text-[8px] font-black text-amber-500 uppercase tracking-widest">Protegido_</p>
+                                                    <div className="clientes-record-assignment min-w-0 flex-1 pr-2">
+                                                        <p className="text-[8px] font-black text-amber-500 uppercase tracking-widest">Protegido</p>
                                                         <p className="text-[10px] font-black text-amber-600 dark:text-amber-400 uppercase italic">Heredado</p>
                                                     </div>
                                                 ) : (
-                                                    <div className="text-right border-r theme-border pr-4">
-                                                        <p className="text-[8px] font-black theme-text-muted uppercase tracking-widest">Asignación_</p>
-                                                        <p className="text-[10px] font-black theme-text-main uppercase italic truncate max-w-[100px]">
+                                                    <div className="clientes-record-assignment min-w-0 flex-1 pr-2">
+                                                        <p className="text-[8px] font-black theme-text-muted uppercase tracking-widest">Asignación</p>
+                                                        <p className="text-xs font-bold theme-text-main break-words">
                                                             {cliente.vendedor ? cliente.vendedor.name : 'Sin Asignar'}
                                                         </p>
                                                     </div>
@@ -641,7 +674,8 @@ export default function Clientes({ auth, clientes, vendedores = [], tipos_client
 
                                                 <a
                                                     href={route('admin.clientes.direcciones.index', cliente.id)}
-                                                    className="relative p-3 theme-surface rounded-xl transition-all shadow-sm hover:shadow-md group-hover:scale-110 outline-none"
+                                                    className="relative inline-flex items-center justify-center gap-2 min-h-11 px-3 theme-surface border theme-border rounded-xl transition-shadow hover:shadow-md text-xs font-bold"
+                                                    aria-label={`Ver direcciones de ${cliente.nombre}`}
                                                     style={{ color: 'var(--color-primario)' }}
                                                     title={
                                                         cliente.direcciones_sin_verificar_count > 0
@@ -649,7 +683,7 @@ export default function Clientes({ auth, clientes, vendedores = [], tipos_client
                                                             : `${cliente.direcciones_activas_count || 0} direcciones`
                                                     }
                                                 >
-                                                    <MapPin className="w-4 h-4" />
+                                                    <MapPin className="w-4 h-4" aria-hidden="true" /> Direcciones
                                                     {(cliente.direcciones_activas_count > 0 || cliente.direcciones_sin_verificar_count > 0) && (
                                                         <span
                                                             className={`absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full text-[8px] font-black flex items-center justify-center text-white ${
@@ -668,14 +702,15 @@ export default function Clientes({ auth, clientes, vendedores = [], tipos_client
                                                 </a>
                                                 <button
                                                     onClick={() => abrirModal('editar', cliente)}
-                                                    className="p-3 theme-surface rounded-xl transition-all shadow-sm hover:shadow-md group-hover:scale-110 outline-none"
+                                                    className="inline-flex items-center justify-center gap-2 min-h-11 px-3 theme-surface border theme-border rounded-xl transition-shadow hover:shadow-md text-xs font-bold"
+                                                    aria-label={`Editar a ${cliente.nombre}`}
                                                     style={{ color: 'var(--color-primario)' }}
                                                     title="Editar cliente"
                                                 >
-                                                    <Edit3 className="w-4 h-4" />
+                                                    <Edit3 className="w-4 h-4" aria-hidden="true" /> Editar
                                                 </button>
                                             </div>
-                                        </div>
+                                        </article>
                                     ))
                                 )}
 

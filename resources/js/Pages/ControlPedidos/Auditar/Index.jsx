@@ -8,7 +8,7 @@ import MetricasBandejaAuditoria from './Partials/MetricasBandejaAuditoria';
 import FiltrosAuditoria from './Partials/FiltrosAuditoria';
 import TablaAuditoria from './Partials/TablaAuditoria';
 import ModalRevisarPedido from './Partials/ModalRevisarPedido';
-import ModalAlertaPedido from '../Partials/ModalAlertaPedido';
+import { X } from 'lucide-react';
 import ModalAnexarPagoEnvio from '../Partials/ModalAnexarPagoEnvio';
 import ModalBitacoraPedido from '../Partials/ModalBitacoraPedido';
 import useListadoDiscreto from '../Partials/useListadoDiscreto';
@@ -150,8 +150,14 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
     return (
         <AppLayout auth={auth}>
             <Head title="Revisión de pedidos | GELIANV" />
-            <GeliaPageShell className="gelia-tienda-op gelia-pedidos-bma space-y-4 md:space-y-6">
-                <div className="gelia-pedidos-bma-contenido space-y-4 md:space-y-6">
+            <GeliaPageShell className="gelia-tienda-op gelia-pedidos-bma gelia-pedidos-auditar space-y-4 md:space-y-4">
+                <div className="gelia-pedidos-bma-contenido space-y-4 md:space-y-4">
+                    {alerta.abierto && !modalRevisar.abierto && (
+                        <div role={alerta.tipo === 'error' ? 'alert' : 'status'} className={`flex items-center gap-3 p-4 rounded-xl border theme-border theme-element text-sm ${alerta.tipo === 'error' ? 'theme-text-peligro' : 'theme-text-exito'}`}>
+                            <p className="m-0 flex-1">{alerta.mensaje}</p>
+                            <button type="button" aria-label="Descartar aviso" onClick={() => setAlerta((prev) => ({ ...prev, abierto: false }))} className="p-2"><X className="w-4 h-4" /></button>
+                        </div>
+                    )}
                     <EncabezadoBandejaAuditoria
                         cargando={cargando}
                         ultimaSync={ultimaSync}
@@ -222,13 +228,6 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
                 bancos={catalogos.bancos || []}
                 routeName="control_pedidos.auditar.anexar_pago_envio"
                 onClose={() => setModalAnexo({ abierto: false, pedido: null })}
-            />
-            <ModalAlertaPedido
-                abierto={alerta.abierto}
-                tipo={alerta.tipo}
-                titulo={alerta.titulo}
-                mensaje={alerta.mensaje}
-                onClose={() => setAlerta({ ...alerta, abierto: false })}
             />
         </AppLayout>
     );

@@ -22,6 +22,7 @@ import {
     etiquetaOrigenGuia,
     LABELS_MOTIVO_REPESAJE,
     mostrarNotaCompraCedis,
+    nombresDepartamentosVendedor,
 } from '../../Partials/pedidosBmaStyles';
 import EncabezadoFolioPedido from '../../Partials/EncabezadoFolioPedido';
 import BloqueVendedorPedido from '../../Partials/BloqueVendedorPedido';
@@ -41,6 +42,7 @@ function TarjetaPedido({
     pedido, onVerDetalle, onResponderPesaje, onReportarErrorDatos, onMarcarApartado, onSolicitarConfirmacion, onVerDocumento, onBitacora, puedeReabrir, puedeEnviar,
 }) {
     const fase = pedido.estatus?.fase_ciclo;
+    const soloMercancia = Boolean(pedido.consulta_cedis_modo_revision_mercancia || pedido.es_consulta_mercancia || pedido.origen?.requiere_logistica === false || (pedido.paqueteria?.categoria === 'local_regional' && pedido.paqueteria?.requiere_peso === false));
     const pendientePesaje = pedido.estatus_envio === 'pendiente_pesaje';
     const badgeEmpaque = badgeEmpaqueSemantico(fase, pedido.es_resguardo, Boolean(pedido.resguardo_apartado_at));
     const badgeEnvio = badgeEstatusEnvio(pedido.estatus_envio, { forzarPesaje: true });
@@ -71,22 +73,27 @@ function TarjetaPedido({
         || tieneRetrasoRecoleccionActivo(pedido);
 
     return (
-        <div className={`${geliaCardClass()} p-4 space-y-3 ${esErrorCedis ? 'ring-1 ring-orange-500/40' : ''} ${ringRetraso ? 'ring-1 ring-amber-500/40' : ''}`}>
+        <article aria-label={`Pedido ${pedido.folio_remision || pedido.folio}`} className={`${geliaCardClass()} gelia-pedidos-tarjeta p-4 ${esErrorCedis ? 'ring-1 ring-[color:color-mix(in_srgb,var(--color-aviso)_40%,transparent)]' : ''} ${ringRetraso ? 'ring-1 ring-[color:color-mix(in_srgb,var(--color-aviso)_40%,transparent)]' : ''}`}>
             {pedido.origen?.nombre && (
-                <p className="text-sm font-black uppercase tracking-widest text-center py-2 px-3 rounded-xl bg-[var(--color-primario)]/10 m-0" style={{ color: 'var(--color-primario)' }}>
-                    ORIGEN: {pedido.origen.nombre}
+                <p className="gelia-pedidos-tarjeta-origen m-0">
+                    Origen: {pedido.origen.nombre}
                 </p>
             )}
-            <div className="flex items-start justify-between gap-3">
+            <div className="gelia-pedidos-tarjeta-cabecera flex flex-col gap-3">
                 <div className="min-w-0">
                     <EncabezadoFolioPedido pedido={pedido} size="sm" />
-                    <p className="text-[10px] theme-text-muted font-bold mt-1 m-0">
+                    <p className="text-xs theme-text-muted font-bold mt-1 m-0">
                         {formatearFechaNegocio(pedido.fecha)}
                     </p>
                     <BloqueVendedorPedido pedido={pedido} variante="nombre" />
+                    {nombresDepartamentosVendedor(pedido.vendedor).length > 0 && (
+                        <div className="gelia-pedidos-departamento flex flex-wrap items-center gap-2 mt-3">
+                            <span className="text-xs theme-text-muted">Departamento</span>
+                            <BloqueVendedorPedido pedido={pedido} variante="etiquetas" className="mt-0" />
+                        </div>
+                    )}
                 </div>
-                <div className="flex flex-col items-end gap-1.5 shrink-0 max-w-[50%]">
-                    <BloqueVendedorPedido pedido={pedido} variante="etiquetas" className="mt-0 justify-end" />
+                <div className="gelia-pedidos-estados flex flex-wrap items-start gap-1.5">
                     {!pendientePesaje && (
                         <span className={badgeEmpaque.className} style={badgeEmpaque.style}>{badgeEmpaque.label}</span>
                     )}
@@ -103,7 +110,7 @@ function TarjetaPedido({
                         <span key={b.label} className={b.className} style={b.style}>{b.label}</span>
                     ))}
                     {fase === 'PENDIENTE_DE_ENVIO' && cajasPedido.length > 1 && (
-                        <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-700">
+                        <span className="text-xs font-semibold px-2 py-0.5 rounded-full gelia-estado-vivo gelia-estado-vivo--aviso">
                             {cajasRecolectadasCount}/{cajasPedido.length} recolectadas
                         </span>
                     )}
@@ -125,10 +132,10 @@ function TarjetaPedido({
             )}
 
             {complementos.length > 0 && (
-                <div className="rounded-xl border border-teal-500/30 bg-teal-500/5 p-2.5 space-y-1">
-                    <p className="text-[9px] font-black uppercase text-teal-700 dark:text-teal-400 m-0">Complementos</p>
+                <div className="rounded-xl border theme-border theme-element p-2.5 space-y-1">
+                    <p className="text-xs font-semibold theme-text-info m-0">Complementos</p>
                     {complementos.map((c) => (
-                        <p key={c.id} className="text-[11px] font-bold theme-text-main m-0">
+                        <p key={c.id} className="text-xs font-bold theme-text-main m-0">
                             {c.folio}{c.folio_remision ? ` · ${c.folio_remision}` : ''}
                         </p>
                     ))}
@@ -147,23 +154,23 @@ function TarjetaPedido({
                 </AvisoOperativoPedido>
             )}
 
-            <div className="grid grid-cols-2 gap-2 text-[10px] font-bold theme-text-muted uppercase">
+            <div className="gelia-pedidos-tarjeta-datos grid grid-cols-2 gap-x-3 gap-y-3 text-xs font-medium theme-text-muted">
                 <div>
-                    <p className="text-[9px] font-black m-0 opacity-70">Cliente</p>
+                    <p className="text-xs font-medium m-0">Cliente</p>
                     <p className="text-xs theme-text-main m-0 mt-0.5 normal-case">{pedido.cliente?.nombre || '—'}</p>
                 </div>
                 <div>
-                    <p className="text-[9px] font-black m-0 opacity-70">Almacén</p>
+                    <p className="text-xs font-medium m-0">Almacén</p>
                     <p className="text-xs theme-text-main m-0 mt-0.5 normal-case">{etiquetaAlmacen(pedido.almacen)}</p>
                 </div>
                 {requiereLogistica && (
                 <>
                 <div>
-                    <p className="text-[9px] font-black m-0 opacity-70">Paquetería</p>
+                    <p className="text-xs font-medium m-0">Paquetería</p>
                     <p className="text-xs theme-text-main m-0 mt-0.5 normal-case">{pedido.paqueteria?.nombre || '—'}</p>
                 </div>
                 <div>
-                    <p className="text-[9px] font-black m-0 opacity-70">Envíos / Guía</p>
+                    <p className="text-xs font-medium m-0">Envíos / Guía</p>
                     <p className="text-xs theme-text-main m-0 mt-0.5 normal-case">
                         {pedido.numero_cajas ?? '—'} · {etiquetaOrigenGuia(pedido)}
                     </p>
@@ -201,7 +208,7 @@ function TarjetaPedido({
             {esEmpacado && pedido.empacado_at && (
                 <AvisoOperativoPedido label="Empaque" tono="success" icon={CheckCircle2}>
                     Empacado por {(pedido.empacado_por?.name || pedido.empacadoPor?.name) || '—'}
-                    <span className="block text-sm font-bold mt-1 opacity-80 font-mono">
+                    <span className="block text-xs font-medium mt-1">
                         {formatearFechaHoraAuditoria(pedido.empacado_at)}
                     </span>
                 </AvisoOperativoPedido>
@@ -212,10 +219,10 @@ function TarjetaPedido({
                 </AvisoOperativoPedido>
             )}
 
-            <div className="pt-2 border-t theme-border space-y-2">
+            <div className="gelia-pedidos-tarjeta-acciones pt-2">
                 {pendientePesaje && (
                     <button type="button" onClick={() => onResponderPesaje?.(pedido)} className={`${BTN_PRIMARY} w-full flex items-center justify-center gap-2 text-xs outline-none py-3 min-h-[44px]`}>
-                        <Scale className="w-4 h-4" /> Responder pesaje
+                        <Scale className="w-4 h-4" aria-hidden="true" /> {soloMercancia ? 'Responder consulta' : 'Responder pesaje'}
                     </button>
                 )}
                 {puedeMarcarEnviado && (
@@ -236,7 +243,7 @@ function TarjetaPedido({
                     </button>
                 )}
                 {puedeEmpacar && (
-                    <button type="button" onClick={() => onSolicitarConfirmacion({ accion: 'empacar', pedido })} className={`${BTN_PRIMARY} w-full flex items-center justify-center gap-2 text-xs outline-none py-3 min-h-[44px]`}>
+                    <button type="button" onClick={() => onSolicitarConfirmacion({ accion: 'empacar', pedido })} className={`${pendientePesaje ? 'theme-btn-secondary' : BTN_PRIMARY} w-full flex items-center justify-center gap-2 text-xs outline-none py-3 min-h-[44px]`}>
                         <CheckCircle2 className="w-4 h-4" /> {complementos.length ? 'Empacar grupo' : 'Marcar empacado'}
                     </button>
                 )}
@@ -266,7 +273,7 @@ function TarjetaPedido({
                         <BotonAccionCubico icon={FileText} label="Remisión" onClick={() => onVerDocumento(remision)} conLabel />
                     )}
                     {puedeReportarError && (
-                        <BotonAccionCubico icon={AlertTriangle} label="Reportar" onClick={() => onReportarErrorDatos?.(pedido)} tone="warn" conLabel className="col-span-2" />
+                        <BotonAccionCubico icon={AlertTriangle} label="Reportar error" onClick={() => onReportarErrorDatos?.(pedido)} tone="warn" conLabel className="col-span-2" />
                     )}
                     <BotonAccionCubico icon={Eye} label="Detalle" onClick={() => onVerDetalle(pedido)} conLabel />
                     {onBitacora && (
@@ -281,7 +288,7 @@ function TarjetaPedido({
                     )}
                 </div>
             </div>
-        </div>
+        </article>
     );
 }
 
@@ -346,8 +353,9 @@ export default function TarjetasCedis({
 
     if (items.length === 0) {
         return (
-            <div className={`${geliaCardClass()} p-10 md:p-16 text-center text-sm theme-text-muted font-bold uppercase tracking-widest`}>
-                Sin pedidos en esta vista_
+            <div className={`${geliaCardClass()} p-10 md:p-16 text-center text-sm theme-text-muted font-bold`}>
+                Sin pedidos en esta vista
+                <p className="text-sm font-normal mt-2 mb-0">Prueba otra búsqueda o cambia el filtro de estado.</p>
             </div>
         );
     }

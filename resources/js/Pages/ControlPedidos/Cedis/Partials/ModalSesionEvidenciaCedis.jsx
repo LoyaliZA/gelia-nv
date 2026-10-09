@@ -1,3 +1,4 @@
+import usePedidoDialog from '../../Partials/usePedidoDialog';
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Smartphone } from 'lucide-react';
@@ -30,27 +31,32 @@ export default function ModalSesionEvidenciaCedis({
         return () => window.clearInterval(t);
     }, [abierto, sesion?.expira_en]);
 
+    const dialog = usePedidoDialog({ abierto: abierto && Boolean(sesion), onClose: onCerrar });
+
     if (!abierto || !sesion) return null;
 
     return createPortal(
         <div className={`${THEME_MODAL_OVERLAY} items-center`}>
-            <div className={`${THEME_MODAL_SHELL} max-w-sm w-full p-5 space-y-4`} onClick={(e) => e.stopPropagation()}>
+            <div {...dialog}
+            aria-label="Tomar evidencias con celular"
+            className={`${THEME_MODAL_SHELL} max-w-sm w-full p-5 space-y-4`} onClick={(e) => e.stopPropagation()}>
                 <div className="flex justify-between items-start gap-2">
                     <div>
-                        <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0">Celular</p>
-                        <h2 className="text-lg font-black theme-text-main m-0 mt-1">Tomar evidencias</h2>
+                        <p className="text-xs font-semibold theme-text-muted m-0">Celular</p>
+                        <h2 className="text-lg font-semibold theme-text-main m-0 mt-1">Tomar evidencias</h2>
                     </div>
                     <button type="button" onClick={onCerrar} className="p-2 min-h-[44px] min-w-[44px]" aria-label="Cerrar">
                         <X className="w-4 h-4" />
                     </button>
                 </div>
                 <p className="text-xs theme-text-muted m-0">
-                    Escanee este QR con el teléfono. Las fotos aparecen aquí al instante. Quedan {restante || '—'}.
+                    Escanea el QR con tu celular, selecciona el producto o la caja y toma la foto. Aparecerá en esta respuesta.
                 </p>
                 {sesion.qr_data_uri && (
-                    <img src={sesion.qr_data_uri} alt="QR de evidencias" className="w-56 h-56 mx-auto bg-white p-2 rounded-xl" />
+                    <img src={sesion.qr_data_uri} alt="QR de evidencias" width="224" height="224" className="w-56 h-56 mx-auto bg-white p-2 rounded-xl" />
                 )}
-                <p className={`text-xs font-black uppercase m-0 ${conectado ? 'text-emerald-600' : 'theme-text-muted'}`}>
+                <p className="text-xs theme-text-muted text-center m-0 tabular-nums">Tiempo disponible: {restante || '—'}</p>
+                <p role="status" className={`text-sm font-semibold m-0 ${conectado ? 'theme-text-exito' : 'theme-text-muted'}`}>
                     {conectado ? 'Celular conectado' : 'Esperando escaneo…'}
                 </p>
                 <div className="flex gap-2">
@@ -58,7 +64,7 @@ export default function ModalSesionEvidenciaCedis({
                         Cancelar sesión
                     </button>
                     <button type="button" onClick={onCerrar} className={`${BTN_SECONDARY} flex-1 min-h-[44px] inline-flex items-center justify-center gap-1`}>
-                        <Smartphone className="w-4 h-4" /> Listo
+                        <Smartphone className="w-4 h-4" aria-hidden="true" /> Volver al registro
                     </button>
                 </div>
             </div>

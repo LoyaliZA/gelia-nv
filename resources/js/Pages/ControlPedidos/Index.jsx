@@ -168,7 +168,10 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
         return () => window.removeEventListener('notification-received', onNotification);
     }, [modalForm.abierto, modalForm.pedido?.id, modalForm.pedidoIdVivo, tabActiva, busqueda, pedidosVista?.current_page, cargarYMarcar]);
 
+    useEffect(() => () => clearTimeout(debounceBusqueda.current), []);
+
     const onTabChange = (tab) => {
+        clearTimeout(debounceBusqueda.current);
         setTabActiva(tab);
         cargarYMarcar({ tab, q: busqueda || undefined, page: 1 });
     };

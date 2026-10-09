@@ -102,8 +102,8 @@ class PedidoBmaReferencia extends Model
     public static function visible(PedidoBma $pedido): array
     {
         $referencia = $pedido->relationLoaded('referencias')
-            ? $pedido->referencias->where('vigente', true)->sortByDesc('id')->first()
-            : $pedido->referencias()->where('vigente', true)->orderByDesc('id')->first();
+            ? $pedido->referencias->where('vigente', true)->where('tipo', '!=', self::TIPO_REMISION)->sortByDesc('id')->first()
+            : $pedido->referencias()->where('vigente', true)->where('tipo', '!=', self::TIPO_REMISION)->orderByDesc('id')->first();
 
         if ($referencia) {
             $nombre = self::ETIQUETAS[$referencia->tipo] ?? null;

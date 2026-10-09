@@ -23,6 +23,7 @@ class CamposIncorrectosPedidoBma
     ];
 
     public const CAMPOS_VENDEDORA = [
+        'folio_remision',
         'domicilio',
         'destinatario',
         'telefono',
@@ -55,7 +56,7 @@ class CamposIncorrectosPedidoBma
 
     public const CAMPOS_AUXILIAR = [
         'remision',
-        'folio_remision',
+        'numero_remision',
         'pago_validado',
         'anexo_envio',
     ];
@@ -137,6 +138,7 @@ class CamposIncorrectosPedidoBma
     public const INVALIDAN_REMISION = [
         'remision',
         'folio_remision',
+        'numero_remision',
     ];
 
     public const ETIQUETAS = [
@@ -169,7 +171,8 @@ class CamposIncorrectosPedidoBma
         'pagos' => 'Pagos / exhibición',
         'envio_tienda' => 'Envío de tienda',
         'remision' => 'Remisión PDF',
-        'folio_remision' => 'Folio',
+        'folio_remision' => 'Número de pedido',
+        'numero_remision' => 'Número de remisión',
         'pago_validado' => 'Validación de pago',
         'anexo_envio' => 'Anexo de envío',
         'empaque' => 'Empaque',

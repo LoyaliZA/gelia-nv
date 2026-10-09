@@ -2,7 +2,7 @@ import React from 'react';
 import { CheckCircle2 } from 'lucide-react';
 import { BTN_PRIMARY, BTN_SECONDARY } from '../../Partials/pedidosBmaStyles';
 
-/** Footer operativo: Cerrar / Liberar / Reportar / Aprobar (Validar-Rechazar viven en el bloque de pago). */
+/** Acciones operativas; la X de la cabecera cierra la revisión. */
 export default function BarraAccionesRevision({
     procesando,
     puedeLiberarResguardo,
@@ -11,22 +11,19 @@ export default function BarraAccionesRevision({
     puedeAprobar,
     pagoValidado,
     tieneRemision,
-    onClose,
     onLiberar,
     onReportarError,
     onAprobar,
 }) {
+    if (!puedeLiberarResguardo && !esPendiente && !muestraAprobar) return null;
     return (
-        <div className="gelia-modal-footer flex flex-wrap gap-3 p-5 md:p-6 border-t theme-border shrink-0">
-            <button type="button" onClick={onClose} className={`${BTN_SECONDARY} theme-element border theme-border outline-none`}>
-                Cerrar
-            </button>
+        <div className="gelia-pedidos-auditoria-acciones flex flex-wrap items-center justify-end gap-2 min-w-0">
             {puedeLiberarResguardo && (
                 <button
                     type="button"
                     onClick={onLiberar}
                     disabled={procesando}
-                    className={`${BTN_SECONDARY} theme-element border border-blue-500/40 text-blue-600 outline-none`}
+                    className={`${BTN_SECONDARY} theme-element border theme-border theme-text-info outline-none`}
                 >
                     Liberar resguardo
                 </button>
@@ -36,7 +33,7 @@ export default function BarraAccionesRevision({
                     type="button"
                     onClick={onReportarError}
                     disabled={procesando}
-                    className={`${BTN_SECONDARY} theme-element border border-red-500/40 text-red-500 outline-none`}
+                    className={`${BTN_SECONDARY} theme-element border theme-border theme-text-peligro outline-none`}
                 >
                     Reportar error
                 </button>
@@ -46,11 +43,14 @@ export default function BarraAccionesRevision({
                     type="button"
                     onClick={onAprobar}
                     disabled={!puedeAprobar || procesando}
-                    className={`${BTN_PRIMARY} flex items-center gap-2 outline-none disabled:opacity-50 ml-auto`}
+                    className={`${BTN_PRIMARY} flex items-center gap-2 outline-none disabled:opacity-50 `}
                     title={!pagoValidado ? 'Valide el pago antes de aprobar' : !tieneRemision ? 'Adjunte la remisión PDF antes de aprobar' : ''}
                 >
-                    <CheckCircle2 className="w-4 h-4" /> Aprobar y enviar a Registro General
+                    <CheckCircle2 className="w-4 h-4" /> Aprobar pedido
                 </button>
+            )}
+            {muestraAprobar && !puedeAprobar && (
+                <p className="text-xs theme-text-muted m-0 w-full">{!pagoValidado ? 'Valida el pago para aprobar el pedido.' : !tieneRemision ? 'Adjunta la remisión PDF para aprobar el pedido.' : ''}</p>
             )}
         </div>
     );

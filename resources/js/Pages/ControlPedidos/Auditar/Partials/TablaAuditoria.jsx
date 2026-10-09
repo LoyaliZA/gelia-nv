@@ -294,20 +294,20 @@ export default function TablaAuditoria({
                 })}
             </div>
 
-            <div className="gelia-tienda-op-table-wrap hidden lg:block">
+            <div className="gelia-tienda-op-table-wrap gelia-pedidos-auditar-tabla hidden lg:block">
                 <table className="gelia-tienda-op-table gelia-pedidos-bma-listado w-full">
                     <thead>
                         <tr>
-                            <th scope="col" className="min-w-[10rem]">Folio</th>
-                            <th scope="col" className="min-w-[8rem]">Vendedor</th>
+                            <th scope="col" className="min-w-[8rem]">Folio</th>
+                            <th scope="col" className="min-w-[7rem]">Vendedor</th>
                             <th scope="col" className="w-[6.5rem]">Fecha</th>
                             <th scope="col" className="min-w-[9rem]">Cliente</th>
-                            <th scope="col" className="min-w-[8rem]">Transporte</th>
+                            <th scope="col" className="min-w-[7rem]">Transporte</th>
                             <th scope="col" className="text-right w-[5.5rem]">Total</th>
                             <th scope="col" className="text-right w-[5.5rem]">Pagado</th>
                             <th scope="col" className="text-right w-[5rem]">Dif.</th>
                             <th scope="col" className="min-w-[8rem]">Estado</th>
-                            <th scope="col" className="text-right w-[9rem]">Acciones</th>
+                            <th scope="col" className="text-right w-[8rem]">Acciones</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -328,7 +328,7 @@ export default function TablaAuditoria({
                             return (
                                 <tr
                                     key={pedido.id}
-                                    className={`border-b theme-border last:border-0 hover:ring-2 hover:ring-inset hover:ring-[var(--color-primario)]/20 transition-all ${
+                                    className={`border-b theme-border last:border-0 hover:bg-[color-mix(in_srgb,var(--color-primario)_4%,transparent)] transition-colors ${
                                         badgeReRevision
                                             ? 'pedido-re-revision-row'
                                             : esRechazado

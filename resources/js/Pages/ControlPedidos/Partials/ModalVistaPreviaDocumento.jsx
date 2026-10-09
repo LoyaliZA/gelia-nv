@@ -1,3 +1,4 @@
+import usePedidoDialog from './usePedidoDialog';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
@@ -59,11 +60,6 @@ export default function ModalVistaPreviaDocumento({
         });
     }, [lista.length, onChangeIndice]);
 
-    useEffect(() => {
-        if (!abierto) return undefined;
-        document.body.style.overflow = 'hidden';
-        return () => { document.body.style.overflow = ''; };
-    }, [abierto]);
 
     useEffect(() => {
         if (!abierto) return;
@@ -76,11 +72,6 @@ export default function ModalVistaPreviaDocumento({
     useEffect(() => {
         if (!abierto) return undefined;
         const onKey = (e) => {
-            if (e.key === 'Escape') {
-                e.stopPropagation();
-                deferModalAction(onClose);
-                return;
-            }
             if (lista.length > 1 && e.key === 'ArrowLeft') {
                 e.preventDefault();
                 ir(-1);
@@ -93,6 +84,8 @@ export default function ModalVistaPreviaDocumento({
         window.addEventListener('keydown', onKey, true);
         return () => window.removeEventListener('keydown', onKey, true);
     }, [abierto, lista.length, ir, onClose]);
+
+    const dialog = usePedidoDialog({ abierto: abierto && lista.length > 0, onClose });
 
     if (!abierto || lista.length === 0) return null;
 
@@ -112,12 +105,11 @@ export default function ModalVistaPreviaDocumento({
             className={`${THEME_MODAL_OVERLAY} items-start sm:items-center py-4 sm:py-6`}
             style={{ zIndex: 'calc(var(--gelia-z-toast) + 2)' }}
             onClick={cerrar}
-            role="dialog"
-            aria-modal="true"
-            aria-label="Visor de evidencia"
         >
             <div
-                className={`${THEME_MODAL_SHELL} max-w-5xl w-full flex flex-col`}
+                {...dialog}
+                aria-label="Visor de evidencia"
+                className={`${THEME_MODAL_SHELL} gelia-pedidos-dialog-workspace max-w-5xl w-full flex flex-col`}
                 style={{ maxHeight: 'calc(100dvh - 2rem)' }}
                 onClick={(e) => e.stopPropagation()}
             >
@@ -142,13 +134,13 @@ export default function ModalVistaPreviaDocumento({
                             </p>
                         )}
                     </div>
-                    <button type="button" onClick={cerrar} className="p-2 min-h-[44px] min-w-[44px] rounded-xl theme-element border theme-border theme-text-main outline-none shrink-0 inline-flex items-center justify-center" aria-label="Cerrar vista">
+                    <button type="button" onClick={cerrar} className="p-2 min-h-[44px] min-w-[44px] rounded-xl theme-element border theme-border theme-text-main outline-none shrink-0 inline-flex items-center justify-center" aria-label="Cerrar vista de la foto">
                         <X className="w-5 h-5" />
                     </button>
                 </div>
                 <div className="sm:hidden px-4 pt-3 shrink-0">
                     <button type="button" onClick={cerrar} className={`${BTN_PRIMARY} w-full min-h-[44px] inline-flex items-center justify-center gap-2`}>
-                        <X className="w-4 h-4" /> Cerrar vista
+                        <X className="w-4 h-4" /> Cerrar vista de la foto
                     </button>
                 </div>
                 <div className="gelia-modal-body flex-1 min-h-0 p-0 flex items-center justify-center theme-element relative overflow-auto">
@@ -259,6 +251,7 @@ export function MiniaturaDocumento({ documento, onVer, className = 'block w-20 h
             onClick={() => onVer(documento)}
             className={`${className} group outline-none hover:border-[var(--color-primario)] transition-colors`}
             title={documento.nombre_original || 'Ver documento'}
+            aria-label={`Ver ${documento.nombre_original || (pdf ? 'documento PDF' : 'evidencia')}`}
         >
             {pdf ? (
                 <div className="w-full h-full flex flex-col items-center justify-center gap-0.5 theme-element text-[9px] font-black uppercase theme-text-muted group-hover:scale-105 transition-transform duration-200">
@@ -267,8 +260,9 @@ export function MiniaturaDocumento({ documento, onVer, className = 'block w-20 h
             ) : (
                 <img
                     src={documento.url}
-                    alt={documento.nombre_original}
-                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-200"
+                    alt={documento.nombre_original || 'Evidencia del pedido'}
+                    width="80" height="80" loading="lazy"
+                    className="w-full h-full object-cover group-hover:opacity-90 transition-opacity duration-150"
                 />
             )}
         </button>

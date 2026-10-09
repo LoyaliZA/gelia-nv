@@ -32,6 +32,7 @@ final class MaquinaEstadosPedidoBma
         'pagos',
         'remision',
         'folio_remision',
+        'numero_remision',
         'numero_rastreo',
         'guia_pdf',
         'producto_faltante',
