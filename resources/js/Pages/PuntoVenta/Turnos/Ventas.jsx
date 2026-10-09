@@ -16,6 +16,7 @@ import PdvEncabezadoAlertasPdv from '../../../Components/PuntoVenta/PdvEncabezad
 import { PDV_VISTA_REALTIME } from '../../../utils/pdvRealtimeMatrix';
 import useToastAlCambiar from '../../../hooks/useToastAlCambiar';
 import { reportarInfoOperacion, reportarMensajeOperacion } from '../../../utils/geliaToast';
+import useGeliaDeployWatch from '@/hooks/useGeliaDeployWatch';
 
 export default function Ventas({
     auth,
@@ -25,6 +26,7 @@ export default function Ventas({
     sucursales_asignadas: sucursalesAsignadas = [],
     catalogos = {},
 }) {
+    useGeliaDeployWatch({ superficie: 'turnos', politica: 'en_reposo' });
     const puedeAtender = Boolean(permisos.atender);
     const {
         tablero,

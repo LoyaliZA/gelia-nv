@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Services\Admin\ListarAuditoriasAccesosService;
+use App\Services\Admin\ListarAuditoriasDesplieguesService;
 use App\Services\Admin\ListarAuditoriasListasService;
 use App\Models\CatalogoListaDescuento;
 use App\Models\AuditoriaConfiguracion;
@@ -21,7 +22,8 @@ class AuditoriaListaDescuentoController extends Controller
     public function index(
         Request $request,
         ListarAuditoriasListasService $servicio,
-        ListarAuditoriasAccesosService $accesosService
+        ListarAuditoriasAccesosService $accesosService,
+        ListarAuditoriasDesplieguesService $desplieguesService,
     ): Response {
         $user = Auth::user();
         $isSuperAdmin = $user->hasRole('Super Admin');
@@ -48,6 +50,7 @@ class AuditoriaListaDescuentoController extends Controller
         $auditorias = [];
         $auditoriasConfiguracion = [];
         $auditoriasAccesos = [];
+        $auditoriasDespliegues = [];
         $resumenAccesos = ['sesiones_activas' => 0, 'promedio_duracion_segundos' => 0];
         $usuariosFiltro = [];
 
@@ -81,6 +84,8 @@ class AuditoriaListaDescuentoController extends Controller
             $auditoriasAccesos = $accesosService->ejecutar($request->all());
             $resumenAccesos = $accesosService->resumen();
             $usuariosFiltro = \App\Models\User::orderBy('name')->get(['id', 'name', 'apellido_paterno']);
+        } elseif ($tab === 'despliegues') {
+            $auditoriasDespliegues = $desplieguesService->ejecutar($request->all());
         }
 
         $listas = CatalogoListaDescuento::orderBy('nombre')->get(['id', 'nombre']);
@@ -89,6 +94,7 @@ class AuditoriaListaDescuentoController extends Controller
             'auditorias'              => $auditorias,
             'auditoriasConfiguracion' => $auditoriasConfiguracion,
             'auditoriasAccesos'       => $auditoriasAccesos,
+            'auditoriasDespliegues'   => $auditoriasDespliegues,
             'resumenAccesos'          => $resumenAccesos,
             'usuariosFiltro'          => $usuariosFiltro,
             'listas'                  => $listas,

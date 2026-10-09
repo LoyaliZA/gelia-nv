@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <meta name="gelia-build" content="{{ \App\Support\GeliaBuildVersion::actual() }}">
+    <meta name="gelia-deploy-sala" content="{{ \App\Support\Deploy\CalcularVersionesDeploy::actual()['surfaces']['sala'] }}">
+    <meta name="gelia-deploy-turnos" content="{{ \App\Support\Deploy\CalcularVersionesDeploy::actual()['surfaces']['turnos'] }}">
     <link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,700;0,900;1,400;1,700;1,900&family=JetBrains+Mono:wght@400;700&family=Montserrat:ital,wght@0,400;0,700;0,900;1,400;1,700;1,900&family=Nunito:ital,wght@0,400;0,700;0,900;1,400;1,700;1,900&family=Poppins:ital,wght@0,400;0,700;0,900;1,400;1,700;1,900&family=Roboto:ital,wght@0,400;0,700;0,900;1,400;1,700;1,900&display=swap" rel="stylesheet">
     <title>GELIA</title>
 

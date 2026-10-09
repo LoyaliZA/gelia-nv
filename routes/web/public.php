@@ -6,6 +6,7 @@ use App\Http\Controllers\Auth\AndroidAssetLinksController;
 use App\Http\Controllers\Clientes\Direcciones\SolicitudDireccionPublicaController;
 use App\Http\Controllers\ControlPedidos\PedidoBmaEvidenciaPublicaController;
 use App\Http\Controllers\ControlPedidos\PedidoBmaEvidenciaTiendaPublicaController;
+use App\Http\Controllers\DeployEventoController;
 use App\Http\Controllers\DeployVersionController;
 use App\Http\Controllers\Facturas\DatosFiscalesPublicosController;
 use App\Http\Controllers\PuntoVenta\Pantallas\PantallaSalaPdvController;
@@ -23,6 +24,10 @@ Route::get('/', function () {
 Route::get('/api/deploy-version', DeployVersionController::class)
     ->middleware('throttle:30,1')
     ->name('deploy.version');
+
+Route::post('/api/deploy-eventos', DeployEventoController::class)
+    ->middleware('throttle:30,1')
+    ->name('deploy.eventos');
 
 Route::get('/.well-known/assetlinks.json', AndroidAssetLinksController::class)
     ->name('well-known.assetlinks');

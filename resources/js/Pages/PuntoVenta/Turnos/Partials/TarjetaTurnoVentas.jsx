@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
+import { conBloqueoRecarga } from '@/utils/bloqueoRecargaDeploy';
 import { AlertTriangle, Play, Square, ArrowRightLeft } from 'lucide-react';
 import { geliaCardClass, THEME_BTN_PRIMARY } from '../../../../utils/geliaTheme';
 import { badgePrioridadTurno } from './turnosStyles';
@@ -67,11 +68,11 @@ export default function TarjetaTurnoVentas({
         if (!puedeIniciarAtencion(turno, permisos) || procesando) return;
         setProcesando(true);
         try {
-            const { data } = await axios.post(
+            const { data } = await conBloqueoRecarga(() => axios.post(
                 route('punto_venta.turnos.iniciar_atencion', turno.id),
                 { version: turno.version },
                 { headers: { Accept: 'application/json' } },
-            );
+            ));
             onActualizado?.(data);
         } catch (err) {
             if (!manejarConflicto(err)) {
@@ -87,7 +88,7 @@ export default function TarjetaTurnoVentas({
         setProcesando(true);
         const idempotencyKey = claveIdempotenciaOperacionTurno('cerrar', turno.id);
         try {
-            const { data } = await axios.post(
+            const { data } = await conBloqueoRecarga(() => axios.post(
                 route('punto_venta.turnos.cerrar_atencion', turno.id),
                 {
                     version: turno.version,
@@ -96,7 +97,7 @@ export default function TarjetaTurnoVentas({
                     motivo_detalle: motivoDetalle || null,
                 },
                 { headers: { Accept: 'application/json' } },
-            );
+            ));
             renovarClaveIdempotenciaOperacionTurno('cerrar', turno.id);
             setModalCerrar(false);
             setModalEspera(false);
@@ -115,7 +116,7 @@ export default function TarjetaTurnoVentas({
         setProcesando(true);
         const idempotencyKey = claveIdempotenciaOperacionTurno('transferir', turno.id);
         try {
-            const { data } = await axios.post(
+            const { data } = await conBloqueoRecarga(() => axios.post(
                 route('punto_venta.turnos.transferir', turno.id),
                 {
                     version: turno.version,
@@ -123,7 +124,7 @@ export default function TarjetaTurnoVentas({
                     destino_user_id: destinoUserId,
                 },
                 { headers: { Accept: 'application/json' } },
-            );
+            ));
             renovarClaveIdempotenciaOperacionTurno('transferir', turno.id);
             setModalTransferir(false);
             onActualizado?.(data);

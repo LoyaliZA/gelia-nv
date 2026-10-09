@@ -11,6 +11,7 @@ import {
 import AppLayout from '../../Layouts/AppLayout';
 import { geliaCardClass, THEME_MODAL_OVERLAY, THEME_MODAL_SHELL, GELIA_SEGMENT_TABS_SCROLL, GELIA_SEGMENT_TABS_TRACK } from '../../utils/geliaTheme';
 import { inertiaVisitUrl } from '../../utils/inertiaVisitUrl';
+import TabAuditoriaDespliegues from './Partials/TabAuditoriaDespliegues';
 
 const TEMA_VISUAL_LABELS = {
     modo: 'Modo',
@@ -44,6 +45,7 @@ export default function Auditorias({
     auditorias,
     auditoriasConfiguracion,
     auditoriasAccesos = {},
+    auditoriasDespliegues = {},
     resumenAccesos = {},
     listas,
     filtros,
@@ -215,8 +217,8 @@ export default function Auditorias({
                 </header>
 
                 {/* --- TABS --- */}
-                {(isSuperAdmin || puedeVerAccesos) && (
-                    <div className={`${GELIA_SEGMENT_TABS_SCROLL} w-full max-w-2xl`}>
+                {(isSuperAdmin || puedeVerAccesos || puedeVerCatalogos) && (
+                    <div className={`${GELIA_SEGMENT_TABS_SCROLL} w-full max-w-4xl`}>
                         <div
                             className={`gelia-segment ${GELIA_SEGMENT_TABS_TRACK} p-1 shadow-sm`}
                             role="tablist"
@@ -246,6 +248,19 @@ export default function Auditorias({
                                 >
                                     <Settings className="w-4 h-4" />
                                     Configuración
+                                </button>
+                            )}
+                            {puedeVerCatalogos && (
+                                <button
+                                    type="button"
+                                    role="tab"
+                                    aria-selected={tabActivo === 'despliegues'}
+                                    onClick={() => handleTabChange('despliegues')}
+                                    className="gelia-segment-btn whitespace-nowrap uppercase tracking-widest"
+                                    data-active={tabActivo === 'despliegues'}
+                                >
+                                    <Monitor className="w-4 h-4" />
+                                    Despliegues
                                 </button>
                             )}
                             {puedeVerAccesos && (
@@ -683,6 +698,15 @@ export default function Auditorias({
                                 <Paginador data={auditoriasConfiguracion} />
                             </div>
                         </>
+                    )}
+
+                    {tabActivo === 'despliegues' && puedeVerCatalogos && (
+                        <TabAuditoriaDespliegues
+                            auditorias={auditoriasDespliegues}
+                            filtros={filtros}
+                            onFiltrar={handleNavigation}
+                            paginador={Paginador}
+                        />
                     )}
 
                     {tabActivo === 'accesos' && puedeVerAccesos && (

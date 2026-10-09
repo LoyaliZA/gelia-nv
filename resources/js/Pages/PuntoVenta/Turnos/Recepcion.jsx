@@ -20,6 +20,7 @@ import {
 import { PDV_VISTA_REALTIME } from '../../../utils/pdvRealtimeMatrix';
 import { badgeEstadoTurno, badgePrioridadTurno } from './Partials/turnosStyles';
 import PdvAlertProvider, { usePdvAlertReload } from '../../../Components/PuntoVenta/PdvAlertProvider';
+import useGeliaDeployWatch from '@/hooks/useGeliaDeployWatch';
 import PdvEncabezadoAlertasPdv from '../../../Components/PuntoVenta/PdvEncabezadoAlertasPdv';
 
 export default function Recepcion({
@@ -31,6 +32,7 @@ export default function Recepcion({
     sucursales_asignadas: sucursalesAsignadas = [],
     catalogos = {},
 }) {
+    useGeliaDeployWatch({ superficie: 'turnos', politica: 'en_reposo' });
     const puedeAlta = Boolean(permisos.alta);
     const puedeVerBandeja = Boolean(permisos.ver);
 

@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
 import axios from 'axios';
+import { conBloqueoRecarga } from '@/utils/bloqueoRecargaDeploy';
 import {
     armarPayloadAltaTurno,
     claveIdempotenciaAltaTurno,
@@ -55,9 +56,9 @@ export default function useAltaTurno({ sesionId = 'actual', onExito, bandeja = n
         });
 
         try {
-            const { data } = await axios.post(route('punto_venta.turnos.store'), payload, {
+            const { data } = await conBloqueoRecarga(() => axios.post(route('punto_venta.turnos.store'), payload, {
                 headers: { Accept: 'application/json' },
-            });
+            }));
 
             const turno = data?.turno ?? null;
             setTurnoCreado(turno);

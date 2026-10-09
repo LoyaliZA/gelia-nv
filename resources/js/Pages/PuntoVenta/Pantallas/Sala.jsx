@@ -27,7 +27,7 @@ function TemaSala({ colorHex }) {
 }
 
 export default function Sala({ estado_inicial: estadoInicial, sucursal_id: sucursalId, url_estado: urlEstado }) {
-    useGeliaDeployWatch();
+    useGeliaDeployWatch({ superficie: 'sala', politica: 'inmediata' });
 
     return (
         <>

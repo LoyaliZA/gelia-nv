@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import axios from 'axios';
+import { conBloqueoRecarga } from '@/utils/bloqueoRecargaDeploy';
 import { Loader2, RefreshCw, UserMinus } from 'lucide-react';
 import { geliaCardClass, THEME_BTN_SECONDARY } from '../../../../utils/geliaTheme';
 import ModalBajaColaTurno from './ModalBajaColaTurno';
@@ -55,7 +56,7 @@ export default function BandejaColaRecepcionTurno({
         setProcesandoBaja(true);
 
         try {
-            await axios.post(
+            await conBloqueoRecarga(() => axios.post(
                 route('punto_venta.turnos.baja_cola', turnoBaja.id),
                 {
                     version: turnoBaja.version,
@@ -64,7 +65,7 @@ export default function BandejaColaRecepcionTurno({
                     motivo_detalle: motivoDetalle,
                 },
                 { headers: { Accept: 'application/json' } },
-            );
+            ));
 
             renovarClaveIdempotenciaOperacionTurno('baja-cola', turnoBaja.id);
             setTurnoBaja(null);

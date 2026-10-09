@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePage } from '@inertiajs/react';
 import axios from 'axios';
-import { Volume2, Wifi, WifiOff } from 'lucide-react';
+import { Wifi, WifiOff } from 'lucide-react';
 import PdvIndicadorEstadoVivo from '@/Components/PuntoVenta/PdvIndicadorEstadoVivo';
-import { THEME_MODAL_OVERLAY, THEME_MODAL_SHELL, GELIA_ICON_BOX } from '@/utils/geliaTheme';
+import { alConsultarDeploy, DEPLOY_REINTENTO_AUDIO_MS, DEPLOY_REINTENTO_AUDIO_TOPE_MS } from '@/utils/deployWatch';
 import usePdvRealtimePublico from '@/hooks/usePdvRealtimePublico';
 import useSpeechAnnouncements from '@/hooks/useSpeechAnnouncements';
 import {
@@ -45,31 +45,6 @@ export function PdvSalaIndicadorConexion({ estadoConexion }) {
             pulsando={degradada}
             dataAtributo={`sala-conexion-${estadoConexion}`}
         />
-    );
-}
-
-function PdvSalaAudioDesbloqueo({ visible, onActivar }) {
-    if (!visible) return null;
-
-    return (
-        <button
-            type="button"
-            onClick={onActivar}
-            className={`${THEME_MODAL_OVERLAY} z-50 p-6`}
-            data-pdv-sala-audio-desbloqueo
-        >
-            <span
-                className={`${THEME_MODAL_SHELL} flex max-w-md flex-col items-center gap-4 px-8 py-10 text-center modal-pop`}
-            >
-                <span className={GELIA_ICON_BOX} aria-hidden>
-                    <Volume2 className="w-8 h-8 theme-text-primario" />
-                </span>
-                <span className="text-lg font-bold theme-text-main">Toca para activar anuncios</span>
-                <span className="text-sm theme-text-muted">
-                    El navegador requiere un toque inicial para emitir el audio del video y los anuncios de turnos.
-                </span>
-            </span>
-        </button>
     );
 }
 
@@ -267,14 +242,30 @@ export default function PdvSalaProvider({
         refrescarEstado,
     ]);
 
-    const hayVideo = estadoSala.publicidad.some((item) => item?.tipo === 'video' && item?.url);
-    const mostrarDesbloqueo = !audioDesbloqueado && (
-        estadoTts === PDV_TTS_ESTADO.bloqueado || hayVideo
-    );
+    useEffect(() => {
+        const intentar = () => {
+            window.speechSynthesis?.resume?.();
+            desbloquearAudio();
+        };
+        intentar();
+        const inicio = Date.now();
+        const id = window.setInterval(() => {
+            if (Date.now() - inicio > DEPLOY_REINTENTO_AUDIO_TOPE_MS) {
+                window.clearInterval(id);
+                return;
+            }
+            intentar();
+        }, DEPLOY_REINTENTO_AUDIO_MS);
+        return () => window.clearInterval(id);
+    }, [desbloquearAudio]);
+
+    useEffect(() => alConsultarDeploy(() => {
+        window.speechSynthesis?.resume?.();
+        desbloquearAudio();
+    }), [desbloquearAudio]);
 
     return (
         <div data-pdv-sala-provider className="contents">
-            <PdvSalaAudioDesbloqueo visible={mostrarDesbloqueo} onActivar={desbloquearAudio} />
             <ModalLlamadoTurnoPdv abierto={Boolean(modalLlamado)} turno={modalLlamado} variante="sala" />
             {typeof children === 'function' ? children(valor) : children}
         </div>

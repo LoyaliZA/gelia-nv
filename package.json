@@ -3,7 +3,7 @@
     "private": true,
     "type": "module",
     "scripts": {
-        "build": "vite build",
+        "build": "node scripts/retain-vite-assets.mjs",
         "dev": "vite",
         "test": "vitest run",
         "test:watch": "vitest",
