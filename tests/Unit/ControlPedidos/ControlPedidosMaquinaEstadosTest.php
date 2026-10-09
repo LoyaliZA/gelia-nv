@@ -163,4 +163,24 @@ class ControlPedidosMaquinaEstadosTest extends TestCase
         RevisionEnCursoPedidoBma::soltar(99, 7);
         $this->assertFalse(RevisionEnCursoPedidoBma::activa(99));
     }
+
+    public function test_etiqueta_semantica_tienda_usa_separacion_en_fases_de_pesaje(): void
+    {
+        $pendiente = new CatalogoEstatusPedido([
+            'fase_ciclo' => CatalogoEstatusPedido::FASE_PESAJE_PENDIENTE,
+            'nombre_visual' => 'Pesaje pendiente',
+        ]);
+        $respondido = new CatalogoEstatusPedido([
+            'fase_ciclo' => CatalogoEstatusPedido::FASE_PESAJE_RESPONDIDO,
+            'nombre_visual' => 'Pesaje respondido',
+        ]);
+
+        $this->assertSame('Pesaje pendiente', $pendiente->etiquetaSemantica(false, true));
+        $this->assertSame('Separación pendiente', $pendiente->etiquetaSemantica(false, false));
+        $this->assertSame('Pesaje respondido', $respondido->etiquetaSemantica());
+        $this->assertSame('Separación respondida', $respondido->etiquetaSemantica(false, false));
+        $this->assertSame('Borrador', (new CatalogoEstatusPedido([
+            'fase_ciclo' => CatalogoEstatusPedido::FASE_BORRADOR,
+        ]))->etiquetaSemantica(false, false));
+    }
 }

@@ -40,13 +40,13 @@ class ResponderPesajePedidoBmaService
 
         if (! $pedido->puedeResponderPesaje()) {
             throw new \RuntimeException(
-                $pedido->esConsultaMercancia()
+                $pedido->consultaCedisModoRevisionMercancia()
                     ? 'Este pedido no está pendiente de consulta de mercancía.'
                     : 'Este pedido no está pendiente de pesaje.'
             );
         }
 
-        $soloRevisiones = $pedido->esConsultaMercancia();
+        $soloRevisiones = $pedido->consultaCedisModoRevisionMercancia();
         $pesoAntes = (float) ($pedido->peso_cobrado_guia_kg ?? 0);
         $cajasAntes = (int) ($pedido->numero_cajas ?? 0);
         $costoEnvioAntes = $pedido->costo_envio;

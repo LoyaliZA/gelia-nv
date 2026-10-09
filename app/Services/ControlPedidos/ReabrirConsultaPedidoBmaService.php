@@ -37,7 +37,7 @@ class ReabrirConsultaPedidoBmaService
                 'consulta_cerrada_por_id' => null,
             ]);
 
-            $label = $pedido->esConsultaMercancia() ? 'Consulta de mercancía' : 'Consulta de pesaje';
+            $label = $pedido->consultaCedisModoRevisionMercancia() ? 'Consulta de mercancía' : 'Consulta de pesaje';
             $this->historialService->ejecutar(
                 $pedido->id,
                 $usuarioId,

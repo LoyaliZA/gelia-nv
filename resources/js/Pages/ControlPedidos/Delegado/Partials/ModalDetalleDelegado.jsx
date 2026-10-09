@@ -8,6 +8,7 @@ import {
 import { THEME_INPUT } from '../../../../utils/geliaTheme';
 import {
     badgeEstatusPedido,
+    pedidoRequiereLogistica,
     badgeRetrasoGuia,
     badgesRetrasoSla,
     badgeResguardoSemantico,
@@ -335,7 +336,10 @@ export default function ModalDetalleDelegado({
     if (!abierto || !pedido) return null;
 
     const fase = pedido.estatus?.fase_ciclo;
-    const badgeEstatus = badgeEstatusPedido(pedido.estatus, { esResguardo: pedido.es_resguardo });
+    const badgeEstatus = badgeEstatusPedido(pedido.estatus, {
+        esResguardo: pedido.es_resguardo,
+        requiereLogistica: pedidoRequiereLogistica(pedido),
+    });
     const badgeRetraso = pedido.guia_retraso ? badgeRetrasoGuia() : null;
     const badgesSla = badgesRetrasoSla(pedido);
     const badgeResguardo = pedido.es_resguardo ? badgeResguardoSemantico() : null;

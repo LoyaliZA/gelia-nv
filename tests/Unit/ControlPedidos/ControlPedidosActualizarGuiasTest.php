@@ -298,6 +298,50 @@ class ControlPedidosActualizarGuiasTest extends TestCase
         $this->assertEqualsCanonicalizing([$match->id], $resultado->pluck('id')->all());
     }
 
+    public function test_busqueda_tipificada_guia_no_coincide_con_folio_remision(): void
+    {
+        $terminoRemision = 'REM-TIPO-ABC-123';
+        $pedido = $this->crearPedidoPendienteEnvio();
+        $pedido->update([
+            'folio_remision' => $terminoRemision,
+            'numero_rastreo' => 'TRACK-ZZZ-999',
+        ]);
+
+        $listar = app(ListarPedidosDelegadoService::class);
+
+        $porRemision = $listar->ejecutar([
+            'tab' => 'TODOS',
+            'q' => 'ABC-123',
+            'q_campo' => 'folio_remision',
+        ], false);
+        $this->assertTrue($porRemision->contains('id', $pedido->id));
+
+        $porGuia = $listar->ejecutar([
+            'tab' => 'TODOS',
+            'q' => 'ABC-123',
+            'q_campo' => 'guia',
+        ], false);
+        $this->assertFalse($porGuia->contains('id', $pedido->id));
+    }
+
+    public function test_busqueda_tipificada_guia_solo_numero_rastreo(): void
+    {
+        $pedido = $this->crearPedidoPendienteEnvio();
+        $pedido->update([
+            'folio_remision' => 'REM-UNICO-'.uniqid(),
+            'numero_rastreo' => 'GUIA-TIP-'.uniqid(),
+        ]);
+
+        $listar = app(ListarPedidosDelegadoService::class);
+        $resultado = $listar->ejecutar([
+            'tab' => 'TODOS',
+            'q' => $pedido->numero_rastreo,
+            'q_campo' => 'guia',
+        ], false);
+
+        $this->assertEqualsCanonicalizing([$pedido->id], $resultado->pluck('id')->all());
+    }
+
     public function test_paginacion_respeta_filtros(): void
     {
         $idPaq = $this->paqueteriaComercialId();

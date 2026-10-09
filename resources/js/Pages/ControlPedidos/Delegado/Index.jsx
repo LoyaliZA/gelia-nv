@@ -10,7 +10,7 @@ import PanelImportExport from './Partials/PanelImportExport';
 import MetricasBandejaDelegado from './Partials/MetricasBandejaDelegado';
 import FiltrosDelegado from './Partials/FiltrosDelegado';
 import ModalAlertaPedido from '../Partials/ModalAlertaPedido';
-import { TABS_DELEGADO } from '../Partials/pedidosBmaStyles';
+import { Q_CAMPO_DELEGADO_GENERAL, TABS_DELEGADO } from '../Partials/pedidosBmaStyles';
 import useListadoDiscreto from '../Partials/useListadoDiscreto';
 
 const POLL_MS = 180_000;
@@ -48,6 +48,9 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
 
     const [tabActiva, setTabActiva] = useState(filtros.tab || 'PENDIENTES_GUIA');
     const [busqueda, setBusqueda] = useState(filtros.q || '');
+    const [busquedaCampo, setBusquedaCampo] = useState(
+        filtros.q_campo || Q_CAMPO_DELEGADO_GENERAL
+    );
     const [ordenar, setOrdenar] = useState(filtros.ordenar || 'fecha_desc');
     const [situacion, setSituacion] = useState(filtros.situacion || '');
     const [paqueteriaIds, setPaqueteriaIds] = useState(() => normalizarPaqueteriaIdsInicial(filtros));
@@ -64,6 +67,9 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
     const paramsListado = useCallback((extra = {}) => ({
         tab: tabActiva,
         q: busqueda || undefined,
+        q_campo: busquedaCampo && busquedaCampo !== Q_CAMPO_DELEGADO_GENERAL
+            ? busquedaCampo
+            : undefined,
         ordenar: ordenar && ordenar !== 'fecha_desc' ? ordenar : undefined,
         situacion: situacion || undefined,
         paqueteria_ids: paqueteriaIds.length
@@ -71,7 +77,7 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
             : undefined,
         page: pedidosVista?.current_page || 1,
         ...extra,
-    }), [tabActiva, busqueda, ordenar, situacion, paqueteriaIds, pedidosVista?.current_page]);
+    }), [tabActiva, busqueda, busquedaCampo, ordenar, situacion, paqueteriaIds, pedidosVista?.current_page]);
 
     const puedeSincronizar = useCallback(() => (
         !modalAbiertoRef.current
@@ -108,6 +114,7 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
     );
 
     const hayFiltrosAdicionalesActivos = Boolean(busqueda)
+        || (busquedaCampo && busquedaCampo !== Q_CAMPO_DELEGADO_GENERAL)
         || Boolean(situacion)
         || paqueteriaIds.length > 0
         || (ordenar && ordenar !== 'fecha_desc');
@@ -184,6 +191,17 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
         }, 400);
     };
 
+    const onBuscarCampoChange = (campo) => {
+        const next = campo || Q_CAMPO_DELEGADO_GENERAL;
+        setBusquedaCampo(next);
+        if (debounceBusqueda.current) clearTimeout(debounceBusqueda.current);
+        if (!busqueda.trim()) return;
+        cargarYMarcar(paramsListado({
+            q_campo: next !== Q_CAMPO_DELEGADO_GENERAL ? next : undefined,
+            page: 1,
+        }));
+    };
+
     const onTabChange = (tab) => {
         setTabActiva(tab);
         cargarYMarcar(paramsListado({ tab, page: 1 }));
@@ -214,6 +232,7 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
 
     const onLimpiarFiltros = () => {
         setBusqueda('');
+        setBusquedaCampo(Q_CAMPO_DELEGADO_GENERAL);
         setPaqueteriaIds([]);
         setSituacion('');
         setOrdenar('fecha_desc');
@@ -269,11 +288,13 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
                     <div className="gelia-tienda-op-divider" aria-hidden />
                     <FiltrosDelegado
                         busqueda={busqueda}
+                        busquedaCampo={busquedaCampo}
                         paqueteriaIds={paqueteriaIds}
                         situacion={situacion}
                         ordenar={ordenar}
                         paqueterias={paqueterias}
                         onBuscar={onBuscar}
+                        onBuscarCampoChange={onBuscarCampoChange}
                         onPaqueteriaIdsChange={onPaqueteriaIdsChange}
                         onSituacionChange={onSituacionChange}
                         onOrdenarChange={onOrdenarChange}

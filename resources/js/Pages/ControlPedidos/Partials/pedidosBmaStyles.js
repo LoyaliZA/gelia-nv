@@ -88,6 +88,12 @@ export const LABELS_ESTATUS_POR_FASE = {
     CANCELADO: 'Cancelado',
 };
 
+/** Misma fase que pesaje; etiqueta cuando el origen es tienda (sin logística). */
+export const LABELS_ESTATUS_TIENDA_POR_FASE = {
+    PESAJE_PENDIENTE: 'Separación pendiente',
+    PESAJE_RESPONDIDO: 'Separación respondida',
+};
+
 export const LABELS_HITO_AUDITORIA = {
     pago_en_revision: 'Pago en revisión',
     pendiente_remision: 'Pendiente de remisión',
@@ -115,11 +121,14 @@ export const etiquetaResguardoVisible = (estatus, esResguardo = false) => {
     return Boolean(fase) && !['BORRADOR', 'PESAJE_PENDIENTE', 'PESAJE_RESPONDIDO', 'RECHAZADO_VENDEDORA'].includes(fase);
 };
 
-export const etiquetaEstatusPedido = (estatus, { esResguardo = false } = {}) => {
+export const etiquetaEstatusPedido = (estatus, { esResguardo = false, requiereLogistica = true } = {}) => {
     if (etiquetaResguardoVisible(estatus, esResguardo)) {
         return 'Resguardo';
     }
     const fase = estatus?.fase_ciclo;
+    if (requiereLogistica === false && fase && LABELS_ESTATUS_TIENDA_POR_FASE[fase]) {
+        return LABELS_ESTATUS_TIENDA_POR_FASE[fase];
+    }
     if (fase && LABELS_ESTATUS_POR_FASE[fase]) {
         return LABELS_ESTATUS_POR_FASE[fase];
     }
@@ -486,6 +495,41 @@ export const OPCIONES_SITUACION_DELEGADO = [
     { id: 'resguardo', label: 'Resguardo' },
 ];
 
+export const Q_CAMPO_DELEGADO_GENERAL = 'general';
+
+export const OPCIONES_BUSQUEDA_DELEGADO = [
+    {
+        id: Q_CAMPO_DELEGADO_GENERAL,
+        label: 'Todo',
+        placeholder: 'Remisión, folio de compra, cliente o guía…',
+    },
+    {
+        id: 'folio_remision',
+        label: 'Remisión',
+        placeholder: 'Folio de nota de remisión…',
+    },
+    {
+        id: 'folio',
+        label: 'Compra',
+        placeholder: 'Folio de compra…',
+    },
+    {
+        id: 'guia',
+        label: 'Guía',
+        placeholder: 'Número de guía de rastreo…',
+    },
+    {
+        id: 'cliente',
+        label: 'Cliente',
+        placeholder: 'Nombre o número de cliente…',
+    },
+];
+
+export const placeholderBusquedaDelegado = (campo) => (
+    OPCIONES_BUSQUEDA_DELEGADO.find((o) => o.id === campo)?.placeholder
+    ?? OPCIONES_BUSQUEDA_DELEGADO[0].placeholder
+);
+
 export const TABS_TIENDA_COLA = [
     { id: 'PENDIENTES', label: 'Pendientes' },
     { id: 'EN_ATENCION', label: 'En atención' },
@@ -626,12 +670,12 @@ export const tieneErrorGuiaReportado = (pedido) => {
 };
 
 /** Badge con color del catálogo + etiqueta semántica del estado. */
-export const badgeEstatusPedido = (estatus, { esResguardo = false } = {}) => {
+export const badgeEstatusPedido = (estatus, { esResguardo = false, requiereLogistica = true } = {}) => {
     if (etiquetaResguardoVisible(estatus, esResguardo)) {
         return badgeResguardoSemantico();
     }
     return {
-        label: etiquetaEstatusPedido(estatus),
+        label: etiquetaEstatusPedido(estatus, { esResguardo, requiereLogistica }),
         ...badgeClaseEstatusPedido(estatus),
     };
 };
@@ -1061,9 +1105,28 @@ export const textoWhatsAppPedido = (pedido) => {
         pedido.folio_remision && pedido.folio ? `Folio interno: ${pedido.folio}` : null,
         `Cliente: ${pedido.cliente?.nombre || ''}`,
         `Total: ${formatearMoneda(pedido.total_a_cobrar)}`,
-        `Estado: ${etiquetaEstatusPedido(pedido.estatus, { esResguardo: pedido.es_resguardo })}`,
+        `Estado: ${etiquetaEstatusPedido(pedido.estatus, {
+            esResguardo: pedido.es_resguardo,
+            requiereLogistica: pedidoRequiereLogistica(pedido),
+        })}`,
     ].filter(Boolean);
     return encodeURIComponent(lineas.join('\n'));
+};
+
+/**
+ * Consulta CEDIS en modo revisión de mercancía (sin pesaje obligatorio).
+ * Origen sin logística, o paquetería local/regional con requiere_peso === false.
+ * Sin paquetería: pesaje (conservador).
+ */
+export const pedidoModoRevisionMercancia = (pedido, paqueteria, requiereLogistica = true) => {
+    if (pedido?.es_consulta_mercancia || requiereLogistica === false) {
+        return true;
+    }
+    const paq = paqueteria ?? pedido?.paqueteria ?? null;
+    if (paq) {
+        return paq.categoria === 'local_regional' && paq.requiere_peso === false;
+    }
+    return Boolean(pedido?.consulta_cedis_modo_revision_mercancia);
 };
 
 /** Espeja EnviarPedidoBmaService::validarCamposRequeridos para feedback inmediato en UI. */
@@ -1084,15 +1147,18 @@ export const validarCamposEnvioPedido = (data, {
     cajasPesaje = [],
 } = {}) => {
     const faltantes = [];
+    const modoRevisionMercancia = pedidoModoRevisionMercancia(null, paqueteria, requiereLogistica);
+    const sinPesoCapturado = (data.peso_real_kg === '' || data.peso_real_kg == null)
+        && (data.peso_cobrado_guia_kg === '' || data.peso_cobrado_guia_kg == null || Number(data.peso_cobrado_guia_kg) <= 0);
+    const tarifaPorPesoLocal = Boolean(
+        paqueteria
+        && paqueteria.categoria !== 'comercial'
+        && paqueteria.modalidad_tarifa === 'por_peso'
+    );
     const omiteCosto = esMunicipioDiferido || esResguardoAbierto || esResguardoComplementario
         || Boolean(data.cliente_proporciona_guia)
         || Boolean(data.envio_por_cobrar)
-        || (
-            !tienePesajeRespondido
-            && paqueteria
-            && paqueteria.categoria !== 'comercial'
-            && paqueteria.modalidad_tarifa === 'por_peso'
-        );
+        || (tarifaPorPesoLocal && (!tienePesajeRespondido || (modoRevisionMercancia && sinPesoCapturado)));
     const guiaCliente = Boolean(data.cliente_proporciona_guia);
 
     const claves = [];
@@ -1104,7 +1170,7 @@ export const validarCamposEnvioPedido = (data, {
     if (requiereLogistica && !esResguardoComplementario && !tienePesajeRespondido) {
         return {
             valido: false,
-            faltantes: ['pesaje CEDIS'],
+            faltantes: [modoRevisionMercancia ? 'consulta CEDIS' : 'pesaje CEDIS'],
             claves: ['pesaje'],
             mensaje: 'Hay campos faltantes.',
         };
@@ -1136,11 +1202,11 @@ export const validarCamposEnvioPedido = (data, {
     }
 
     if (requiereLogistica) {
-        if (tienePesajeRespondido) {
+        if (tienePesajeRespondido && !modoRevisionMercancia) {
             if (data.peso_real_kg === '' || data.peso_real_kg == null) marcar('peso_real', 'peso real (pesaje CEDIS)');
             if (!data.catalogo_tipo_caja_id) marcar('tipo_caja', 'tipo de caja (pesaje CEDIS)');
             if (data.numero_cajas === '' || data.numero_cajas == null) marcar('numero_envios', 'número de envíos (pesaje CEDIS)');
-        } else if (!omiteCosto) {
+        } else if (!omiteCosto && !modoRevisionMercancia) {
             if (data.peso_real_kg === '' || data.peso_real_kg == null) marcar('peso_real', 'peso real');
             if (!data.catalogo_tipo_caja_id) marcar('tipo_caja', 'tipo de caja');
             if (data.numero_cajas === '' || data.numero_cajas == null) marcar('numero_envios', 'número de envíos');

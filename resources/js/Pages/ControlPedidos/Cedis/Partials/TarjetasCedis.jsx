@@ -112,13 +112,13 @@ function TarjetaPedido({
 
             {pendientePesaje && (
                 <AvisoOperativoPedido
-                    label={pedido.origen?.requiere_logistica === false ? 'Consulta mercancía' : 'Consulta de pesaje'}
+                    label={pedido.consulta_cedis_modo_revision_mercancia || pedido.es_consulta_mercancia || pedido.origen?.requiere_logistica === false || (pedido.paqueteria?.categoria === 'local_regional' && pedido.paqueteria?.requiere_peso === false) ? 'Consulta mercancía' : 'Consulta de pesaje'}
                     tono="warning"
                     icon={Scale}
                 >
                     {pedido.consulta_actualizacion_pendiente || pedido.motivo_repesaje
                         ? `Actualización (${LABELS_MOTIVO_REPESAJE[pedido.motivo_repesaje] || pedido.motivo_repesaje || 'cambio'}). Revise el anexo/PDF y confirme.`
-                        : (pedido.origen?.requiere_logistica === false
+                        : (pedido.consulta_cedis_modo_revision_mercancia || pedido.es_consulta_mercancia || pedido.origen?.requiere_logistica === false || (pedido.paqueteria?.categoria === 'local_regional' && pedido.paqueteria?.requiere_peso === false)
                             ? 'Revise el PDF o foto, registre las piezas, los bultos a preparar (aprox.) y la evidencia final del lote.'
                             : 'Revise el PDF o foto del pedido y registre peso y cajas.')}
                 </AvisoOperativoPedido>

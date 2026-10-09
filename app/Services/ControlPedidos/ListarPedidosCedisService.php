@@ -34,7 +34,24 @@ class ListarPedidosCedisService
 
         $this->aplicarFiltros($query, $filtros);
 
-        return $paginar ? $query->paginate(15)->withQueryString() : $query->get();
+        $resultado = $paginar ? $query->paginate(15)->withQueryString() : $query->get();
+        $marcar = function (PedidoBma $pedido): PedidoBma {
+            $pedido->setAttribute('es_consulta_mercancia', $pedido->esConsultaMercancia());
+            $pedido->setAttribute(
+                'consulta_cedis_modo_revision_mercancia',
+                $pedido->consultaCedisModoRevisionMercancia()
+            );
+
+            return $pedido;
+        };
+
+        if ($resultado instanceof LengthAwarePaginator) {
+            $resultado->getCollection()->transform($marcar);
+        } else {
+            $resultado->each($marcar);
+        }
+
+        return $resultado;
     }
 
     public function metricas(): array

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { calcularPesoCobradoGuia, esCotizacionLista, validarCamposEnvioPedido } from './pedidosBmaStyles';
+import { calcularPesoCobradoGuia, esCotizacionLista, pedidoModoRevisionMercancia, validarCamposEnvioPedido } from './pedidosBmaStyles';
 
 const baseTienda = {
     folio_remision: 'F-1',
@@ -73,6 +73,40 @@ describe('resguardo abierto — envío diferido', () => {
             esResguardoAbierto: true,
             total_mercancia: 100,
         })).toBe(true);
+    });
+});
+
+describe('pedidoModoRevisionMercancia', () => {
+    it('local sin peso es revisión; comercial y sin paquetería son pesaje', () => {
+        expect(pedidoModoRevisionMercancia(null, { categoria: 'local_regional', requiere_peso: false }, true)).toBe(true);
+        expect(pedidoModoRevisionMercancia(null, { categoria: 'local_regional', requiere_peso: true }, true)).toBe(false);
+        expect(pedidoModoRevisionMercancia(null, { categoria: 'comercial', requiere_peso: false }, true)).toBe(false);
+        expect(pedidoModoRevisionMercancia({}, null, true)).toBe(false);
+        expect(pedidoModoRevisionMercancia({}, null, false)).toBe(true);
+    });
+
+    it('no exige peso CEDIS cuando la consulta es revisión de mercancía', () => {
+        const paq = { categoria: 'local_regional', requiere_peso: false, modalidad_tarifa: 'fija' };
+        const out = validarCamposEnvioPedido({
+            ...baseTienda,
+            catalogo_paqueteria_id: 4,
+            catalogo_tipo_guia_id: 1,
+            catalogo_zona_id: 1,
+            codigo_postal: '86000',
+            domicilio_entrega: 'Calle 1',
+            costo_envio: 40,
+        }, {
+            requiereLogistica: true,
+            tienePesajeRespondido: true,
+            tienePdfPedido: true,
+            pagoPendiente: 0,
+            consultaCerrada: true,
+            requiereConsultaCerrada: true,
+            paqueteria: paq,
+        });
+        expect(out.claves).not.toContain('peso_real');
+        expect(out.claves).not.toContain('tipo_caja');
+        expect(out.valido).toBe(true);
     });
 });
 

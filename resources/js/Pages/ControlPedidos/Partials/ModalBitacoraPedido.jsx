@@ -4,6 +4,7 @@ import { X, History } from 'lucide-react';
 import {
     THEME_MODAL_OVERLAY,
     THEME_MODAL_SHELL,
+    pedidoRequiereLogistica,
 } from './pedidosBmaStyles';
 import EncabezadoFolioPedido from './EncabezadoFolioPedido';
 import ModalVistaPreviaDocumento from './ModalVistaPreviaDocumento';
@@ -98,6 +99,7 @@ export default function ModalBitacoraPedido({ abierto, onClose, pedido }) {
                                     <TarjetaEntradaBitacora
                                         key={h.id}
                                         entrada={h}
+                                        requiereLogistica={pedidoRequiereLogistica(pedido)}
                                         onVerEvidencia={evidenciaRuta
                                             ? () => setDocPreview({ indice: Math.max(idxEvidencia, 0) })
                                             : null}

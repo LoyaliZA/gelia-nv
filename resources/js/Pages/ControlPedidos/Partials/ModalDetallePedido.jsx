@@ -6,6 +6,7 @@ import {
     badgeEstatusPedido,
     badgeResguardoApartado,
     etiquetaEstatusPedido,
+    pedidoRequiereLogistica,
     formatearMoneda,
     etiquetaAlmacen,
     etiquetaSucursal,
@@ -48,7 +49,11 @@ export default function ModalDetallePedido({ abierto, onClose, pedido }) {
 
     if (!abierto || !pedido) return null;
 
-    const badge = badgeEstatusPedido(pedido.estatus, { esResguardo: pedido.es_resguardo });
+    const opcionesEstatus = {
+        esResguardo: pedido.es_resguardo,
+        requiereLogistica: pedidoRequiereLogistica(pedido),
+    };
+    const badge = badgeEstatusPedido(pedido.estatus, opcionesEstatus);
     const guiaLista = tieneGuiaLista(pedido);
     const badgeGuia = badgeGuiaLista();
     const badgeApartado = pedido.resguardo_apartado_at ? badgeResguardoApartado() : null;
@@ -108,7 +113,7 @@ export default function ModalDetallePedido({ abierto, onClose, pedido }) {
                             <Campo label="Cliente" value={`${pedido.cliente?.numero_cliente || ''} — ${pedido.cliente?.nombre || ''}`} />
                             <Campo label="Fecha pedido" value={formatearFechaNegocio(pedido.fecha)} />
                             <Campo label="Registrado" value={formatearFechaHoraAuditoria(pedido.created_at)} />
-                            <Campo label="Status" value={etiquetaEstatusPedido(pedido.estatus, { esResguardo: pedido.es_resguardo })} />
+                            <Campo label="Status" value={etiquetaEstatusPedido(pedido.estatus, opcionesEstatus)} />
                             <Campo label="Tipo de pedido" value={pedido.origen?.nombre} />
                             <Campo label="Almacén" value={etiquetaAlmacen(pedido.almacen)} />
                             {(pedido.sucursal_destino || pedido.sucursal_destino_id) && (

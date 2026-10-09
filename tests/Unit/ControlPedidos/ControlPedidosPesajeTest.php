@@ -4,6 +4,7 @@ namespace Tests\Unit\ControlPedidos;
 
 use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\CatalogoOrigenPedido;
+use App\Models\ControlPedidos\CatalogoPaqueteriaPedido;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Models\ControlPedidos\PedidoBmaDocumento;
 use App\Services\ControlPedidos\ResponderPesajePedidoBmaService;
@@ -194,6 +195,69 @@ class ControlPedidosPesajeTest extends TestCase
         $validador->check($pedido);
     }
 
+    public function test_consulta_cedis_modo_revision_mercancia(): void
+    {
+        $origenTienda = new CatalogoOrigenPedido(['requiere_logistica' => false]);
+        $tienda = new PedidoBma;
+        $tienda->setRelation('origen', $origenTienda);
+        $this->assertTrue($tienda->consultaCedisModoRevisionMercancia());
+
+        $origenEnvio = new CatalogoOrigenPedido(['requiere_logistica' => true]);
+        $sinPaq = new PedidoBma;
+        $sinPaq->setRelation('origen', $origenEnvio);
+        $sinPaq->setRelation('paqueteria', null);
+        $this->assertFalse($sinPaq->consultaCedisModoRevisionMercancia());
+
+        $local = new CatalogoPaqueteriaPedido([
+            'categoria' => CatalogoPaqueteriaPedido::CATEGORIA_LOCAL_REGIONAL,
+            'requiere_peso' => false,
+        ]);
+        $pedidoLocal = new PedidoBma;
+        $pedidoLocal->setRelation('origen', $origenEnvio);
+        $pedidoLocal->setRelation('paqueteria', $local);
+        $this->assertTrue($pedidoLocal->consultaCedisModoRevisionMercancia());
+
+        $localPeso = new CatalogoPaqueteriaPedido([
+            'categoria' => CatalogoPaqueteriaPedido::CATEGORIA_LOCAL_REGIONAL,
+            'requiere_peso' => true,
+        ]);
+        $pedidoPeso = new PedidoBma;
+        $pedidoPeso->setRelation('origen', $origenEnvio);
+        $pedidoPeso->setRelation('paqueteria', $localPeso);
+        $this->assertFalse($pedidoPeso->consultaCedisModoRevisionMercancia());
+
+        $comercial = new CatalogoPaqueteriaPedido([
+            'categoria' => CatalogoPaqueteriaPedido::CATEGORIA_COMERCIAL,
+            'requiere_peso' => false,
+        ]);
+        $pedidoCom = new PedidoBma;
+        $pedidoCom->setRelation('origen', $origenEnvio);
+        $pedidoCom->setRelation('paqueteria', $comercial);
+        $this->assertFalse($pedidoCom->consultaCedisModoRevisionMercancia());
+    }
+
+    public function test_enviar_revision_mercancia_no_exige_pesos(): void
+    {
+        $pedido = $this->pedidoListoParaEnviarStub(comprobantes: 1, costoEnvio: 80.0);
+        $pedido->shouldReceive('consultaCedisModoRevisionMercancia')->andReturn(true);
+        $pedido->forceFill([
+            'peso_real_kg' => null,
+            'catalogo_tipo_caja_id' => null,
+            'numero_cajas' => null,
+            'peso_cobrado_guia_kg' => null,
+            'envio_por_cobrar' => true,
+        ]);
+        $pedido->setRelation('cajas', collect());
+        $pedido->setRelation('paqueteria', new CatalogoPaqueteriaPedido([
+            'categoria' => CatalogoPaqueteriaPedido::CATEGORIA_LOCAL_REGIONAL,
+            'modalidad_tarifa' => CatalogoPaqueteriaPedido::MODALIDAD_FIJA,
+            'requiere_peso' => false,
+        ]));
+
+        $this->validadorCampos()->check($pedido);
+        $this->assertTrue(true);
+    }
+
     public function test_enviar_sin_pesaje_exige_consulta_cedis(): void
     {
         $origen = new CatalogoOrigenPedido(['requiere_logistica' => true]);
@@ -316,6 +380,9 @@ class ControlPedidosPesajeTest extends TestCase
 
     public function test_enviar_con_pesaje_sin_costo_envio_falla(): void
     {
+        $this->mock(\App\Services\ControlPedidos\CalcularTotalesEnvioPedidoService::class, function ($mock) {
+            $mock->shouldReceive('requiereDesgloseCajas')->andReturn(false);
+        });
         $probe = $this->validadorCampos();
         $pedido = $this->pedidoListoParaEnviarStub(comprobantes: 1, costoEnvio: null);
 
@@ -390,6 +457,10 @@ class ControlPedidosPesajeTest extends TestCase
         ]);
         $pedido->setRelation('origen', $origen);
         $pedido->setRelation('tipoOperacionEnvio', null);
+        $pedido->setRelation('paqueteria', new CatalogoPaqueteriaPedido([
+            'categoria' => CatalogoPaqueteriaPedido::CATEGORIA_COMERCIAL,
+            'requiere_peso' => true,
+        ]));
         $pedido->setRelation('cajas', collect([
             (object) [
                 'catalogo_tipo_caja_id' => 1,

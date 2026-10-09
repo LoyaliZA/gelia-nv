@@ -27,6 +27,7 @@ import {
     BTN_PRIMARY,
     BTN_SECONDARY,
     validarCamposEnvioPedido,
+    pedidoModoRevisionMercancia,
     etiquetaEstatusPedido,
     LABELS_ESTATUS_ENVIO,
     LABELS_MOTIVO_REPESAJE,
@@ -490,7 +491,7 @@ export default function ModalFormPedidoLegado({
     const pendientePesaje = pedido?.estatus_envio === 'pendiente_pesaje' || consultaPendienteLocal;
     const consultaCerrada = Boolean(pedido?.consulta_cerrada || pedido?.consulta_cerrada_at);
     const puedeCerrarConsulta = Boolean(pedido?.puede_cerrar_consulta);
-    const esConsultaMercancia = Boolean(pedido?.es_consulta_mercancia) || !requiereLogistica;
+    const esConsultaMercancia = pedidoModoRevisionMercancia(pedido, paqueteriaSeleccionada, requiereLogistica);
     const labelConsulta = enFlujoTienda
         ? (esModalidadBodega || tareaPreparacion?.requiere_traslado_cedis
             ? 'Preparación Tienda → CEDIS'
@@ -500,9 +501,11 @@ export default function ModalFormPedidoLegado({
     const envioPorCobrar = Boolean(data.envio_por_cobrar);
     const pesoCajasSoloLectura = tienePesajeRespondido || pendientePesaje || camposEnvioBloqueados;
     const cotizacionHabilitada = !requiereLogistica || esResguardoComplementario || tienePesajeRespondido;
-    const omiteCostoPorTarifaPeso = !tienePesajeRespondido
-        && paqueteriaSeleccionada?.categoria !== 'comercial'
-        && paqueteriaSeleccionada?.modalidad_tarifa === 'por_peso';
+    const sinPesoOpcional = (data.peso_cobrado_guia_kg === '' || data.peso_cobrado_guia_kg == null || Number(data.peso_cobrado_guia_kg) <= 0)
+        && (data.peso_real_kg === '' || data.peso_real_kg == null);
+    const omiteCostoPorTarifaPeso = paqueteriaSeleccionada?.categoria !== 'comercial'
+        && paqueteriaSeleccionada?.modalidad_tarifa === 'por_peso'
+        && (!tienePesajeRespondido || (esConsultaMercancia && sinPesoOpcional));
     const omiteCosto = esMunicipioDiferido || esResguardoAbierto || esResguardoComplementario
         || guiaCliente || envioPorCobrar || omiteCostoPorTarifaPeso;
     const cotizacionLista = esCotizacionLista({
@@ -1480,7 +1483,10 @@ export default function ModalFormPedidoLegado({
 
     const etiquetaCandidatoPrincipal = (p) => {
         const fase = p.estatus?.fase_ciclo;
-        const estatus = LABELS_ESTATUS_POR_FASE[fase] || p.estatus?.nombre_visual || fase || '—';
+        const estatus = etiquetaEstatusPedido(p.estatus, {
+            esResguardo: p.es_resguardo,
+            requiereLogistica: p.origen?.requiere_logistica ?? true,
+        });
         const fecha = p.fecha ? formatearFechaNegocio(p.fecha) : '—';
         return `Folio interno: ${p.folio || '—'} · Folio de pedido: ${p.folio_remision || '—'} · ${estatus} · ${fecha}`;
     };
@@ -1534,8 +1540,16 @@ export default function ModalFormPedidoLegado({
     });
 
     const manejarPaqueteria = (id) => {
-        setData('catalogo_paqueteria_id', id);
         const paq = (catalogos.paqueterias || []).find((p) => String(p.id) === String(id));
+        const modoAntes = pedidoModoRevisionMercancia(pedido, paqueteriaSeleccionada, requiereLogistica);
+        const modoDespues = pedidoModoRevisionMercancia(pedido, paq, requiereLogistica);
+        if (tienePesajeRespondido && modoAntes !== modoDespues) {
+            const ok = window.confirm(
+                'Cambiar la paquetería cambia el tipo de consulta (pesaje o revisión de mercancía). Use «Actualizar consulta» para que CEDIS confirme de nuevo. ¿Continuar?'
+            );
+            if (!ok) return;
+        }
+        setData('catalogo_paqueteria_id', id);
         if (!paqueteriaTieneCobertura(paq?.nombre)) {
             setData('aplica_seguro', false);
         }
@@ -1873,6 +1887,10 @@ export default function ModalFormPedidoLegado({
             setAvisoPesaje({ tipo: 'error', mensaje: `Adjunte el PDF o una foto del pedido antes de solicitar la ${labelConsulta.toLowerCase()}.` });
             return;
         }
+        if (requiereLogistica && !data.catalogo_paqueteria_id) {
+            setAvisoPesaje({ tipo: 'error', mensaje: 'Seleccione la paquetería antes de solicitar la consulta a CEDIS.' });
+            return;
+        }
         if (procesandoPesaje || pendientePesaje) return;
         setProcesandoPesaje(true);
         const id = await asegurarPedidoEnBd({ zona: 'pesaje' });
@@ -2136,6 +2154,7 @@ export default function ModalFormPedidoLegado({
                         clienteNombre={infoCliente?.nombre || pedido?.cliente?.nombre || null}
                         estatus={pedido?.estatus || null}
                         esResguardo={Boolean(data.es_resguardo)}
+                        requiereLogistica={origenSeleccionado ? Boolean(origenSeleccionado.requiere_logistica) : true}
                         estadoGuardado={estadoGuardadoProg}
                         onClose={onClose}
                     />
@@ -2962,7 +2981,7 @@ export default function ModalFormPedidoLegado({
                                     <button
                                         type="button"
                                         onClick={solicitarPesaje}
-                                        disabled={procesandoPesaje || processing || !data.cliente_id || !tienePdfPedido}
+                                        disabled={procesandoPesaje || processing || !data.cliente_id || !tienePdfPedido || (requiereLogistica && !data.catalogo_paqueteria_id)}
                                         className={`${BTN_PRIMARY} flex items-center gap-2 outline-none`}
                                     >
                                         <Scale className="w-4 h-4" /> Solicitar {labelConsulta.toLowerCase()} a CEDIS
@@ -2974,6 +2993,9 @@ export default function ModalFormPedidoLegado({
                             )}
                             {data.cliente_id && !tienePdfPedido && !tienePesajeRespondido && !pendientePesaje && (
                                 <p className="text-[10px] font-bold text-amber-600 m-0">Adjunte el PDF o foto del pedido para solicitar la consulta.</p>
+                            )}
+                            {requiereLogistica && !enFlujoTienda && data.cliente_id && !data.catalogo_paqueteria_id && !tienePesajeRespondido && !pendientePesaje && (
+                                <p className="text-[10px] font-bold text-amber-600 m-0">Seleccione la paquetería antes de solicitar la consulta.</p>
                             )}
                             {enFlujoTienda && !usaPreparacionTienda && !codigoModalidadPreparacion && !tienePesajeRespondido && !pendientePesaje && (
                                 <p className="text-[10px] font-bold text-amber-600 m-0">Seleccione la modalidad de recolección en tienda.</p>
@@ -3632,7 +3654,9 @@ export default function ModalFormPedidoLegado({
                                     <InputMoneda value={camposEnvioBloqueados ? '' : data.costo_envio} onChange={(v) => setData('costo_envio', v)} className={`w-full py-3 ${camposEnvioBloqueados ? 'opacity-50 pointer-events-none' : ''}`} placeholder="" />
                                     {omiteCostoPorTarifaPeso && (
                                         <p className="text-[10px] theme-text-muted font-bold mt-1 m-0">
-                                            Se calculará con el pesaje CEDIS según la tarifa por peso de la paquetería.
+                                            {esConsultaMercancia
+                                                ? 'Opcional: capture el peso abajo para calcular la tarifa, o ingrese el costo a mano.'
+                                                : 'Se calculará con el pesaje CEDIS según la tarifa por peso de la paquetería.'}
                                         </p>
                                     )}
                                     {Number(costoReexpedicion) > 0 && (
@@ -3640,6 +3664,49 @@ export default function ModalFormPedidoLegado({
                                             Reexpedición (zona): {formatearMoneda(costoReexpedicion)} (se suma aparte al cobro).
                                         </p>
                                     )}
+                                </div>
+                            )}
+                            {esConsultaMercancia && consultaCerrada && requiereLogistica && (
+                                <div className="p-3 rounded-xl border theme-border space-y-3">
+                                    <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0">Datos de envío (opcional)</p>
+                                    <p className="text-[10px] theme-text-muted font-bold m-0">Útil si el transporte cobra por peso. No bloquean el envío.</p>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                        <div>
+                                            <label className={SECCION}>Peso cobrado (kg)</label>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                step="0.01"
+                                                value={data.peso_cobrado_guia_kg}
+                                                onChange={(e) => setData('peso_cobrado_guia_kg', e.target.value)}
+                                                className={`${THEME_INPUT} w-full py-3`}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className={SECCION}>Número de cajas</label>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                step="1"
+                                                value={data.numero_cajas}
+                                                onChange={(e) => setData('numero_cajas', e.target.value)}
+                                                className={`${THEME_INPUT} w-full py-3`}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className={SECCION}>Tipo de caja</label>
+                                            <select
+                                                value={data.catalogo_tipo_caja_id || ''}
+                                                onChange={(e) => setData('catalogo_tipo_caja_id', e.target.value)}
+                                                className={`${THEME_SELECT} w-full py-3`}
+                                            >
+                                                <option value="">Sin especificar</option>
+                                                {(catalogos.tipos_caja || []).map((c) => (
+                                                    <option key={c.id} value={String(c.id)}>{c.nombre}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    </div>
                                 </div>
                             )}
                             <div className="space-y-2 text-sm">
@@ -3781,7 +3848,10 @@ export default function ModalFormPedidoLegado({
                                 <input
                                     type="text"
                                     readOnly
-                                    value={etiquetaEstatusPedido(pedido?.estatus, { esResguardo: pedido?.es_resguardo }) || 'Borrador'}
+                                    value={etiquetaEstatusPedido(pedido?.estatus, {
+                                        esResguardo: Boolean(pedido?.es_resguardo || data.es_resguardo),
+                                        requiereLogistica: origenSeleccionado ? Boolean(origenSeleccionado.requiere_logistica) : true,
+                                    }) || 'Borrador'}
                                     className={`${THEME_INPUT} w-full py-3 opacity-60`}
                                 />
                             </div>

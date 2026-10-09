@@ -1,21 +1,26 @@
 import React, { useEffect, useState } from 'react';
 import { Search, RefreshCw, ChevronDown, Loader2, X, SlidersHorizontal } from 'lucide-react';
-import { THEME_INPUT, THEME_LABEL } from '../../../../utils/geliaTheme';
+import { THEME_INPUT, THEME_LABEL, THEME_SELECT } from '../../../../utils/geliaTheme';
 import {
     BTN_SECONDARY,
+    OPCIONES_BUSQUEDA_DELEGADO,
     OPCIONES_ORDEN_DELEGADO,
     OPCIONES_SITUACION_DELEGADO,
+    Q_CAMPO_DELEGADO_GENERAL,
+    placeholderBusquedaDelegado,
 } from '../../Partials/pedidosBmaStyles';
 
 const STORAGE_KEY = 'control_pedidos.delegado.filtros_adicionales';
 
 export default function FiltrosDelegado({
     busqueda = '',
+    busquedaCampo = Q_CAMPO_DELEGADO_GENERAL,
     paqueteriaIds = [],
     situacion = '',
     ordenar = 'fecha_desc',
     paqueterias = [],
     onBuscar,
+    onBuscarCampoChange,
     onPaqueteriaIdsChange,
     onSituacionChange,
     onOrdenarChange,
@@ -53,7 +58,9 @@ export default function FiltrosDelegado({
         || Boolean(situacion)
         || (ordenar && ordenar !== 'fecha_desc');
 
-    const hayFiltrosExtra = Boolean(busqueda) || hayAdicionalesActivos;
+    const hayFiltrosExtra = Boolean(busqueda)
+        || busquedaCampo !== Q_CAMPO_DELEGADO_GENERAL
+        || hayAdicionalesActivos;
 
     useEffect(() => {
         if (hayAdicionalesActivos) {
@@ -90,26 +97,49 @@ export default function FiltrosDelegado({
         <div className="space-y-4">
             <div className="flex flex-col lg:flex-row lg:items-end gap-3 lg:gap-4 justify-between">
                 <div className="flex flex-col sm:flex-row gap-3 sm:items-end flex-1 min-w-0">
-                    <div className="flex-1 min-w-0 max-w-md">
-                        <label htmlFor="delegado-busqueda" className={`${THEME_LABEL} ml-1`}>Buscar</label>
-                        <div className="theme-field-with-icon relative mt-1.5">
-                            <Search className="theme-field-icon w-4 h-4" aria-hidden />
-                            <input
-                                id="delegado-busqueda"
-                                type="text"
-                                value={busqueda}
-                                onChange={(e) => onBuscar?.(e.target.value)}
-                                placeholder="Folio, cliente o guía..."
-                                className={`${THEME_INPUT} w-full py-3 text-sm font-bold pr-10 theme-text-main placeholder:theme-text-muted`}
-                                aria-busy={buscando}
-                                autoComplete="off"
-                            />
-                            {buscando && (
-                                <Loader2
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin theme-text-muted"
-                                    aria-label="Buscando"
+                    <div
+                        className="flex flex-col sm:flex-row gap-3 sm:items-end flex-1 min-w-0 w-full"
+                        role="search"
+                        aria-label="Filtrar pedidos"
+                    >
+                        <div className="shrink-0 w-full sm:w-[8.75rem]">
+                            <label htmlFor="delegado-busqueda-campo" className={`${THEME_LABEL} ml-1`}>
+                                Buscar por
+                            </label>
+                            <select
+                                id="delegado-busqueda-campo"
+                                value={busquedaCampo}
+                                onChange={(e) => onBuscarCampoChange?.(e.target.value)}
+                                className={`${THEME_SELECT} theme-text-main w-full mt-1.5 py-3 text-xs font-bold min-h-[44px]`}
+                            >
+                                {OPCIONES_BUSQUEDA_DELEGADO.map((o) => (
+                                    <option key={o.id} value={o.id}>{o.label}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <label htmlFor="delegado-busqueda" className={`${THEME_LABEL} ml-1`}>
+                                Buscar
+                            </label>
+                            <div className="theme-field-with-icon relative mt-1.5">
+                                <Search className="theme-field-icon w-4 h-4" aria-hidden />
+                                <input
+                                    id="delegado-busqueda"
+                                    type="search"
+                                    value={busqueda}
+                                    onChange={(e) => onBuscar?.(e.target.value)}
+                                    placeholder={placeholderBusquedaDelegado(busquedaCampo)}
+                                    className={`${THEME_INPUT} w-full py-3 text-sm font-bold pr-10 theme-text-main placeholder:theme-text-muted min-h-[44px]`}
+                                    aria-busy={buscando}
+                                    autoComplete="off"
                                 />
-                            )}
+                                {buscando && (
+                                    <Loader2
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin theme-text-muted"
+                                        aria-label="Buscando"
+                                    />
+                                )}
+                            </div>
                         </div>
                     </div>
                     <button

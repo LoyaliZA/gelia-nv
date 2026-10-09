@@ -5,6 +5,7 @@ namespace App\Services\ControlPedidos;
 use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\CatalogoPaqueteriaPedido;
 use App\Models\ControlPedidos\PedidoBma;
+use App\Support\ControlPedidos\BusquedaDelegadoPedidoBma;
 use App\Support\ControlPedidos\FiltroPaqueteriaDelegadoPedidoBma;
 use App\Support\ControlPedidos\SituacionOperativaDelegadoPedidoBma;
 use Illuminate\Database\Eloquent\Builder;
@@ -154,20 +155,11 @@ class ListarPedidosDelegadoService
     private function aplicarFiltros(Builder $query, array $filtros): void
     {
         if (! empty($filtros['q'])) {
-            $termino = trim($filtros['q']);
-            $query->where(function (Builder $q) use ($termino) {
-                $q->where('folio', 'like', "%{$termino}%")
-                    ->orWhere('folio_remision', 'like', "%{$termino}%")
-                    ->orWhere('numero_rastreo', 'like', "%{$termino}%")
-                    ->orWhereHas('cliente', function (Builder $c) use ($termino) {
-                        $c->where('nombre', 'like', "%{$termino}%")
-                            ->orWhere('numero_cliente', 'like', "%{$termino}%");
-                    });
-
-                if (ctype_digit($termino)) {
-                    $q->orWhere('id', (int) $termino);
-                }
-            });
+            BusquedaDelegadoPedidoBma::aplicar(
+                $query,
+                trim((string) $filtros['q']),
+                isset($filtros['q_campo']) ? (string) $filtros['q_campo'] : null
+            );
         }
 
         $paqueteria = FiltroPaqueteriaDelegadoPedidoBma::resolver($filtros);

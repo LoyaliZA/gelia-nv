@@ -255,9 +255,9 @@ class PedidoBmaCedisController extends Controller
             return redirect()->back()->with('error', $e->getMessage());
         }
 
-        $label = $pedidoBma->fresh(['origen'])->esConsultaMercancia()
-            ? 'Consulta de mercancía registrada. Se notificó a la vendedora.'
-            : 'Pesaje registrado. Se notificó a la vendedora.';
+        $label = $pedidoBma->fresh(['origen', 'paqueteria'])->consultaCedisModoRevisionMercancia()
+            ? 'Consulta de mercancía registrada. Se notificó a Ventas.'
+            : 'Pesaje registrado. Se notificó a Ventas.';
 
         return redirect()->back()->with('success', $label);
     }

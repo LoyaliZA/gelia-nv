@@ -33,9 +33,16 @@ class SolicitarPesajePedidoBmaService
 
         if (! $pedido->puedeSolicitarPesaje()) {
             throw new \RuntimeException(
-                $pedido->esConsultaMercancia()
+                $pedido->consultaCedisModoRevisionMercancia()
                     ? 'Este pedido no puede solicitar consulta de mercancía en su estado actual.'
                     : 'Este pedido no puede solicitar pesaje en su estado actual.'
+            );
+        }
+
+        $pedido->loadMissing('paqueteria');
+        if (($pedido->origen?->requiere_logistica ?? true) && ! $pedido->catalogo_paqueteria_id) {
+            throw new \InvalidArgumentException(
+                'Seleccione la paquetería antes de solicitar la consulta a CEDIS.'
             );
         }
 
@@ -63,7 +70,7 @@ class SolicitarPesajePedidoBmaService
             throw new \RuntimeException('No se encontró el estatus de consulta pendiente.');
         }
 
-        $esMercancia = $pedido->esConsultaMercancia();
+        $esMercancia = $pedido->consultaCedisModoRevisionMercancia();
         $label = $esMercancia ? 'Consulta de mercancía' : 'Consulta de pesaje';
 
         return DB::transaction(function () use ($pedido, $usuarioId, $estatusNuevo, $esMercancia, $label) {

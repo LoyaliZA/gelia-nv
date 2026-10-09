@@ -56,7 +56,13 @@ class CatalogoEstatusPedido extends Model
         self::FASE_CANCELADO => 'Cancelado',
     ];
 
-    public function etiquetaSemantica(?bool $esResguardo = false): string
+    /** Misma fase interna que pesaje; copy de tienda (origen sin logística). */
+    public const LABELS_TIENDA_POR_FASE = [
+        self::FASE_PESAJE_PENDIENTE => 'Separación pendiente',
+        self::FASE_PESAJE_RESPONDIDO => 'Separación respondida',
+    ];
+
+    public function etiquetaSemantica(?bool $esResguardo = false, ?bool $requiereLogistica = true): string
     {
         // Flag de intención en pre-venta: no sustituye la etiqueta de fase.
         if ($esResguardo
@@ -66,6 +72,10 @@ class CatalogoEstatusPedido extends Model
             && $this->fase_ciclo !== self::FASE_RECHAZADO_VENDEDORA
         ) {
             return 'Resguardo';
+        }
+
+        if ($requiereLogistica === false && isset(self::LABELS_TIENDA_POR_FASE[$this->fase_ciclo])) {
+            return self::LABELS_TIENDA_POR_FASE[$this->fase_ciclo];
         }
 
         return self::LABELS_POR_FASE[$this->fase_ciclo]

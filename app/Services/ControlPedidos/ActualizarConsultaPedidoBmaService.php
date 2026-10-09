@@ -67,7 +67,7 @@ class ActualizarConsultaPedidoBmaService
 
         return DB::transaction(function () use ($pedido, $usuarioId, $motivo, $etiquetas, $estatusNuevo) {
             $estatus = $pedido->estatus;
-            $esMercancia = $pedido->esConsultaMercancia();
+            $esMercancia = $pedido->consultaCedisModoRevisionMercancia();
             $label = $esMercancia ? 'Consulta de mercancía' : 'Consulta de pesaje';
 
             $datos = [

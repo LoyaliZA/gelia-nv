@@ -12,6 +12,7 @@ export default function EncabezadoPedido({
     clienteNombre = null,
     estatus = null,
     esResguardo = false,
+    requiereLogistica = true,
     estadoGuardado = null, // 'guardando' | 'guardado' | 'error' | null
     onClose,
 }) {
@@ -35,8 +36,8 @@ export default function EncabezadoPedido({
                 )}
                 <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px] font-bold uppercase tracking-widest theme-text-muted">
                     {estatus && (
-                        <span aria-label={`Estado: ${etiquetaEstatusPedido(estatus, { esResguardo })}`}>
-                            {etiquetaEstatusPedido(estatus, { esResguardo })}
+                        <span aria-label={`Estado: ${etiquetaEstatusPedido(estatus, { esResguardo, requiereLogistica })}`}>
+                            {etiquetaEstatusPedido(estatus, { esResguardo, requiereLogistica })}
                         </span>
                     )}
                     {labelGuardado && (

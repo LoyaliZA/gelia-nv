@@ -38,7 +38,7 @@ $repesaje = file_get_contents($root.'/app/Services/ControlPedidos/SolicitarRepes
 $checks[] = ['repesaje es wrapper ActualizarConsulta', str_contains($repesaje, 'ActualizarConsultaPedidoBmaService')];
 
 $responder = file_get_contents($root.'/app/Services/ControlPedidos/ResponderPesajePedidoBmaService.php');
-$checks[] = ['responder soporta soloRevisiones', str_contains($responder, 'esConsultaMercancia')];
+$checks[] = ['responder soporta soloRevisiones', str_contains($responder, 'consultaCedisModoRevisionMercancia')];
 $checks[] = ['responder no wipe costo si pesos iguales', str_contains($responder, 'cambioPesos')];
 
 $val = file_get_contents($root.'/app/Services/ControlPedidos/ValidacionCamposPedidoBma.php');

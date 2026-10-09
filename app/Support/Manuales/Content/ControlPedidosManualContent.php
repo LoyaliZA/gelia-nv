@@ -130,7 +130,7 @@ class ControlPedidosManualContent
                 'resumen' => 'Creas el pedido, solicitas pesaje cuando aplica, completas datos y lo envías a auditoría. También atiendes rechazos y errores de datos tuyos.',
                 'pasos' => [
                     ['titulo' => 'Crear o autoguardar', 'detalle' => 'El pedido nace en BORRADOR. Puedes ir guardando sin enviar.'],
-                    ['titulo' => 'Pesaje CEDIS (si aplica)', 'detalle' => 'Si el origen requiere logística (y no es complementario), solicita pesaje (PESAJE_PENDIENTE). CEDIS responde → PESAJE_RESPONDIDO. Sin pesaje no podrás enviar.'],
+                    ['titulo' => 'Consulta CEDIS (si aplica)', 'detalle' => 'Si el origen requiere logística (y no es complementario), solicita consulta (PESAJE_PENDIENTE). Paquetería comercial o local con peso obligatorio: pesaje. Local/municipal sin peso obligatorio: revisión de mercancía; el peso queda opcional en cotización. CEDIS responde → PESAJE_RESPONDIDO. Sin consulta no podrás enviar.'],
                     ['titulo' => 'Completar campos', 'detalle' => 'Cliente, origen, banco, almacén, mercancía, comprobante de pago, paquetería, tipo de guía, reexpedición, CP y domicilio (o dirección verificada).'],
                     ['titulo' => 'Enviar', 'detalle' => 'Pasa a PENDIENTE_AUXILIAR. Se limpia remisión/validación de pago previas y se notifica al auxiliar.'],
                     ['titulo' => 'Si te rechazan o reportan error', 'detalle' => 'Aparece en RECHAZADAS. Corrige los campos marcados y reenvía.'],

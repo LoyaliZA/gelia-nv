@@ -34,13 +34,15 @@ export default function TarjetaEntradaBitacora({
     onVerEvidencia = null,
     onVerArchivoSnapshot = null,
     compacto = false,
+    requiereLogistica = true,
 }) {
     const [expandido, setExpandido] = useState(false);
     const h = entrada;
     const estatusNuevo = h.estatus_nuevo || h.estatusNuevo;
     const estatusAnterior = h.estatus_anterior || h.estatusAnterior;
-    const badgeNuevo = badgeEstatusPedido(estatusNuevo);
-    const badgeAnt = badgeEstatusPedido(estatusAnterior);
+    const opcionesEstatus = { requiereLogistica };
+    const badgeNuevo = badgeEstatusPedido(estatusNuevo, opcionesEstatus);
+    const badgeAnt = badgeEstatusPedido(estatusAnterior, opcionesEstatus);
     const actor = contextoActor(h);
     const evidenciaRuta = h.evidencia_ruta || h.evidenciaRuta;
     const evidenciaNombre = h.evidencia_nombre || h.evidenciaNombre || 'Ver archivo';

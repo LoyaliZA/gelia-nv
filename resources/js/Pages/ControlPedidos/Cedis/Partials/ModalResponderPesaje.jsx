@@ -318,8 +318,10 @@ function GaleriaEvidencias({
 export default function ModalResponderPesaje({
     abierto, onClose, pedido, tiposCaja = [], almacenesBusqueda = [],
 }) {
-    const soloRevisiones = Boolean(pedido?.es_consulta_mercancia)
-        || pedido?.origen?.requiere_logistica === false;
+    const soloRevisiones = Boolean(pedido?.consulta_cedis_modo_revision_mercancia)
+        || Boolean(pedido?.es_consulta_mercancia)
+        || pedido?.origen?.requiere_logistica === false
+        || (pedido?.paqueteria?.categoria === 'local_regional' && pedido?.paqueteria?.requiere_peso === false);
     const [envios, setEnvios] = useState([envioVacio()]);
     const [uuidsGuardados, setUuidsGuardados] = useState([]);
     const [motivoRetiro, setMotivoRetiro] = useState('');

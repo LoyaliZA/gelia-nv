@@ -18,7 +18,7 @@ class ResponderPesajePedidoBmaRequest extends FormRequest
     {
         $estados = PedidoBmaRevisionProducto::ESTADOS;
         $pedido = $this->route('pedidoBma');
-        $soloRevisiones = $pedido instanceof PedidoBma && $pedido->esConsultaMercancia();
+        $soloRevisiones = $pedido instanceof PedidoBma && $pedido->consultaCedisModoRevisionMercancia();
 
         $rules = [
             'estado_fisico_general' => ['nullable', 'string', Rule::in($estados)],

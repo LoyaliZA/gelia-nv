@@ -18,6 +18,7 @@ const formVacio = () => ({
     tarifa_monto: '',
     tarifa_unidad_peso: 'kg',
     tarifa_paso_peso: '1',
+    requiere_peso: false,
     activo: true,
 });
 
@@ -56,6 +57,7 @@ export default function TablaPaqueteriasPedido({ datos = [] }) {
             tarifa_monto: item.tarifa_monto ?? '',
             tarifa_unidad_peso: item.tarifa_unidad_peso || 'kg',
             tarifa_paso_peso: item.tarifa_paso_peso ?? '1',
+            requiere_peso: Boolean(item.requiere_peso),
             activo: item.activo,
         });
         setModalAbierto(true);
@@ -71,6 +73,7 @@ export default function TablaPaqueteriasPedido({ datos = [] }) {
             tarifa_monto: data.tarifa_monto === '' ? null : data.tarifa_monto,
             tarifa_unidad_peso: data.tarifa_unidad_peso || null,
             tarifa_paso_peso: data.tarifa_paso_peso === '' ? null : data.tarifa_paso_peso,
+            requiere_peso: data.categoria === 'local_regional' ? Boolean(data.requiere_peso) : true,
             activo: Boolean(data.activo),
         };
         if (payload.categoria === 'comercial' || !payload.modalidad_tarifa) {
@@ -189,6 +192,20 @@ export default function TablaPaqueteriasPedido({ datos = [] }) {
                             {esLocal && (
                                 <div className="space-y-4 p-4 rounded-2xl border theme-border">
                                     <p className="text-[10px] font-black uppercase theme-text-muted tracking-widest m-0">Tarifa local_</p>
+                                    <label className="flex items-start gap-3 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={Boolean(data.requiere_peso)}
+                                            onChange={(e) => setData('requiere_peso', e.target.checked)}
+                                            className="w-4 h-4 mt-0.5"
+                                        />
+                                        <span className="text-sm font-bold theme-text-main">
+                                            Exige pesaje en CEDIS
+                                            <span className="block text-[10px] font-bold theme-text-muted mt-1">
+                                                Desmarcado: la consulta es de mercancía y el peso queda opcional en cotización. También aplica al empaque municipal.
+                                            </span>
+                                        </span>
+                                    </label>
                                     <div>
                                         <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest">Modalidad_</label>
                                         <select

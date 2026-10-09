@@ -21,23 +21,29 @@ trait ValidacionCamposPedidoBma
         $guiaCliente = (bool) $pedido->cliente_proporciona_guia;
         $envioPorCobrar = (bool) $pedido->envio_por_cobrar;
         $tienePesaje = $pedido->tienePesajeRespondido();
+        $modoRevisionMercancia = $pedido->consultaCedisModoRevisionMercancia();
 
         if ($guiaCliente || $envioPorCobrar) {
             $omiteCosto = true;
         }
 
-        // Tarifa por peso local: no exigir costo hasta tener pesaje.
-        if (! $omiteCosto && ! $tienePesaje) {
+        // Tarifa por peso local: no exigir costo hasta tener pesaje, o peso opcional en revisión de mercancía.
+        if (! $omiteCosto) {
             $pedido->loadMissing('paqueteria');
-            if ($pedido->paqueteria?->esLocalRegional()
-                && $pedido->paqueteria->modalidad_tarifa === CatalogoPaqueteriaPedido::MODALIDAD_POR_PESO) {
+            $sinPesoCapturado = $pedido->peso_real_kg === null
+                && ($pedido->peso_cobrado_guia_kg === null || (float) $pedido->peso_cobrado_guia_kg <= 0);
+            $tarifaPorPesoLocal = $pedido->paqueteria?->esLocalRegional()
+                && $pedido->paqueteria->modalidad_tarifa === CatalogoPaqueteriaPedido::MODALIDAD_POR_PESO;
+            if ($tarifaPorPesoLocal && (! $tienePesaje || ($modoRevisionMercancia && $sinPesoCapturado))) {
                 $omiteCosto = true;
             }
         }
 
         if ($requiereLogistica && ! $esComplementario && ! $tienePesaje) {
             throw new \InvalidArgumentException(
-                'Debe solicitar y recibir el pesaje de CEDIS antes de enviar el pedido al auxiliar.'
+                $pedido->consultaCedisModoRevisionMercancia()
+                    ? 'Debe solicitar y recibir la consulta de mercancía de CEDIS antes de enviar el pedido al auxiliar.'
+                    : 'Debe solicitar y recibir el pesaje de CEDIS antes de enviar el pedido al auxiliar.'
             );
         }
 
@@ -84,7 +90,7 @@ trait ValidacionCamposPedidoBma
         }
 
         if ($requiereLogistica) {
-            if ($tienePesaje) {
+            if ($tienePesaje && ! $modoRevisionMercancia) {
                 if ($pedido->peso_real_kg === null) {
                     $faltantes[] = 'peso real (pesaje CEDIS)';
                 }
@@ -112,7 +118,7 @@ trait ValidacionCamposPedidoBma
                         }
                     }
                 }
-            } elseif (! $omiteCosto) {
+            } elseif (! $omiteCosto && ! $modoRevisionMercancia) {
                 if ($pedido->peso_real_kg === null) {
                     $faltantes[] = 'peso real';
                 }

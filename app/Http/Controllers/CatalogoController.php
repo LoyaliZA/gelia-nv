@@ -759,6 +759,7 @@ class CatalogoController extends Controller
             'nombre' => $unique,
             'categoria' => 'required|in:comercial,local_regional',
             'permite_costo_diferido' => 'boolean',
+            'requiere_peso' => 'boolean',
             'activo' => 'boolean',
             'modalidad_tarifa' => 'nullable|in:fija,por_peso',
             'tarifa_monto' => 'nullable|numeric|min:0',
@@ -769,6 +770,10 @@ class CatalogoController extends Controller
 
     private function payloadPaqueteriaPedido(array $validated): array
     {
+        if (($validated['categoria'] ?? '') === CatalogoPaqueteriaPedido::CATEGORIA_COMERCIAL) {
+            $validated['requiere_peso'] = true;
+        }
+
         if (($validated['categoria'] ?? '') === CatalogoPaqueteriaPedido::CATEGORIA_COMERCIAL
             || empty($validated['modalidad_tarifa'])) {
             $validated['modalidad_tarifa'] = null;

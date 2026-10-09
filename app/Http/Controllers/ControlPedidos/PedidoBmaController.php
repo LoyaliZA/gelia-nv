@@ -1022,7 +1022,10 @@ class PedidoBmaController extends Controller
                 'Almacén' => $pedido->almacen?->nombre ?? '',
                 'Banco' => $pedido->banco?->nombre ?? '',
                 'Total a Cobrar' => number_format((float) $pedido->total_a_cobrar, 2, '.', ''),
-                'Estado' => $pedido->estatus?->etiquetaSemantica((bool) $pedido->es_resguardo) ?? '',
+                'Estado' => $pedido->estatus?->etiquetaSemantica(
+                    (bool) $pedido->es_resguardo,
+                    (bool) ($pedido->origen?->requiere_logistica ?? true),
+                ) ?? '',
                 'Fase' => $pedido->estatus?->fase_ciclo ?? '',
                 'Vendedora' => $pedido->vendedor?->name ?? '',
             ];

@@ -15,6 +15,7 @@ use App\Services\ControlPedidos\GestionarGuiaPdfPedidoBmaService;
 use App\Services\ControlPedidos\ImportarGuiasPedidoService;
 use App\Services\ControlPedidos\ListarPedidosDelegadoService;
 use App\Services\ControlPedidos\ReportarErrorDatosPedidoBmaService;
+use App\Support\ControlPedidos\BusquedaDelegadoPedidoBma;
 use App\Support\ControlPedidos\FiltroPaqueteriaDelegadoPedidoBma;
 use App\Support\ControlPedidos\SituacionOperativaDelegadoPedidoBma;
 use Illuminate\Http\RedirectResponse;
@@ -191,6 +192,12 @@ class PedidoBmaDelegadoController extends Controller
             $filtros['q'] = trim($q);
         }
 
+        if ($request->has('q_campo')) {
+            $filtros['q_campo'] = BusquedaDelegadoPedidoBma::normalizar(
+                is_string($request->input('q_campo')) ? $request->input('q_campo') : null
+            );
+        }
+
         $page = $request->input('page');
         if (is_numeric($page) && (int) $page > 0) {
             $filtros['page'] = (int) $page;
@@ -222,9 +229,14 @@ class PedidoBmaDelegadoController extends Controller
         $resuelto = FiltroPaqueteriaDelegadoPedidoBma::resolver($filtros);
         $paqueteriaIds = $resuelto['aplicar'] ? $resuelto['ids'] : [];
 
+        $qCampo = isset($filtros['q_campo'])
+            ? BusquedaDelegadoPedidoBma::normalizar((string) $filtros['q_campo'])
+            : BusquedaDelegadoPedidoBma::CAMPO_GENERAL;
+
         $respuesta = [
             'tab' => $filtros['tab'] ?? 'PENDIENTES_GUIA',
             'q' => $filtros['q'] ?? null,
+            'q_campo' => $qCampo !== BusquedaDelegadoPedidoBma::CAMPO_GENERAL ? $qCampo : null,
             'page' => $filtros['page'] ?? 1,
             'ordenar' => ($filtros['ordenar'] ?? 'fecha_desc') !== 'fecha_desc'
                 ? ($filtros['ordenar'] ?? 'fecha_desc')

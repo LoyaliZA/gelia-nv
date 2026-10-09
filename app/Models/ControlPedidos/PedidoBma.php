@@ -762,6 +762,30 @@ class PedidoBma extends Model
         return ! (bool) ($this->origen?->requiere_logistica ?? true);
     }
 
+    /**
+     * CEDIS responde solo revisiones de mercancía (sin cajas/pesos obligatorios).
+     * Origen sin logística, o logística + paquetería local con requiere_peso en falso.
+     * Sin paquetería: pesaje (conservador). Comercial nunca entra por este flag.
+     */
+    public function consultaCedisModoRevisionMercancia(): bool
+    {
+        if ($this->esConsultaMercancia()) {
+            return true;
+        }
+
+        $this->loadMissing(['origen', 'paqueteria']);
+        if (! ($this->origen?->requiere_logistica ?? false)) {
+            return false;
+        }
+
+        $paqueteria = $this->paqueteria;
+        if ($paqueteria === null || ! $paqueteria->esLocalRegional()) {
+            return false;
+        }
+
+        return ! (bool) $paqueteria->requiere_peso;
+    }
+
     public function consultaCerrada(): bool
     {
         return $this->consulta_cerrada_at !== null;

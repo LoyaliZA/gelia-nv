@@ -4,6 +4,7 @@ import { geliaCardClass, THEME_BTN_PRIMARY, THEME_BTN_ICON } from '../../../../u
 import GeliaPaginacion from '../../../../Components/GeliaPaginacion';
 import {
     badgeEstatusPedido,
+    pedidoRequiereLogistica,
     badgeRetrasoGuia,
     badgesRetrasoSla,
     badgeResguardoSemantico,
@@ -22,7 +23,10 @@ import { etiquetaCtaListadoDelegado, pedidoConSenialOperativa } from './delegado
 const MAX_BADGES_VISIBLE = 2;
 
 function badgesLista(pedido) {
-    const badge = badgeEstatusPedido(pedido.estatus, { esResguardo: pedido.es_resguardo });
+    const badge = badgeEstatusPedido(pedido.estatus, {
+        esResguardo: pedido.es_resguardo,
+        requiereLogistica: pedidoRequiereLogistica(pedido),
+    });
     const items = [{ key: 'estatus', className: badge.className, style: badge.style, label: badge.label }];
     const errorGuia = tieneErrorGuiaReportado(pedido) ? badgeCorregirGuia() : null;
     if (errorGuia) items.push({ key: 'error', ...errorGuia });

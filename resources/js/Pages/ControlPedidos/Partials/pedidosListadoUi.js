@@ -1,5 +1,6 @@
 import {
     badgeEstatusPedido,
+    pedidoRequiereLogistica,
     badgeEstatusEnvio,
     badgeGuiaLista,
     badgeObservacionesCedis,
@@ -19,7 +20,10 @@ import {
 export const MAX_BADGES_LISTADO = 2;
 
 export function badgesListaPedido(pedido) {
-    const badge = badgeEstatusPedido(pedido.estatus, { esResguardo: pedido.es_resguardo });
+    const badge = badgeEstatusPedido(pedido.estatus, {
+        esResguardo: pedido.es_resguardo,
+        requiereLogistica: pedidoRequiereLogistica(pedido),
+    });
     const items = [{ key: 'estatus', className: badge.className, style: badge.style, label: badge.label }];
 
     const fase = pedido.estatus?.fase_ciclo;
