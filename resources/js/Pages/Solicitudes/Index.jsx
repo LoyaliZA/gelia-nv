@@ -1,6 +1,11 @@
-import React, { useEffect, useState, useRef } from 'react';
+import ResumenSolicitudes from './Partials/ResumenSolicitudes';
+import IndicadoresSolicitudes from '@/Components/Solicitudes/IndicadoresSolicitudes';
+import ModalAccionSolicitud from './Partials/ModalAccionSolicitud';
+import SolicitudDialog from '@/Components/Solicitudes/SolicitudDialog';
+import EvidenciaSolicitud from '@/Components/Solicitudes/EvidenciaSolicitud';
+import React, { useEffect, useLayoutEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Head, Link, router, useForm } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
 import {
     Clock, Plus, MoreVertical, Edit2, CheckCircle2, AlertOctagon, Sparkles,
     History, CheckSquare, CreditCard, User, Copy, Check, Tag, TrendingUp, ShieldAlert, Users,
@@ -115,76 +120,6 @@ const EtiquetasOperacion = ({ solicitud, listas }) => {
     );
 };
 
-const VisorImagenHover = ({ path }) => {
-    const [isHovered, setIsHovered] = useState(false);
-    if (!path) return null;
-    const imageUrl = `/storage/${path}`;
-
-    return (
-        <div className="inline-block" onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}>
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border bg-black/5 dark:bg-white/5 border-black/10 dark:border-white/10 cursor-pointer hover:border-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors">
-                <img src={imageUrl} className="w-5 h-5 object-cover rounded shadow-sm" alt="Miniatura" />
-                <span className="text-[9px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400">Ver evidencia</span>
-            </div>
-            {isHovered && createPortal(
-                <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-md pointer-events-none animate-fade-in p-4 md:p-8">
-                    <img src={imageUrl} alt="Evidencia Expandida" className="max-w-full max-h-full object-contain rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.5)] transform scale-100" />
-                </div>,
-                document.body
-            )}
-        </div>
-    );
-};
-
-// =============================================
-// COMPONENTE: RESPUESTA DE CONSULTA (VENDEDORA)
-// =============================================
-const RespuestaConsultaEncargada = ({ solicitud, auth, onMarcarLeido, procesando }) => {
-    const consulta = (solicitud.consultas || [])
-        .filter(c => c.estado === 'respondida' && !c.leido_vendedor_at)
-        .sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))[0];
-
-    if (!consulta || solicitud.vendedor_id !== auth?.user?.id) return null;
-
-    const temas = [consulta.consulta_tag && 'TAG', consulta.consulta_lista && 'Lista'].filter(Boolean);
-    const esPositiva = consulta.respuesta_positiva;
-
-    const tono = esPositiva ? 'theme-text-exito' : 'theme-text-peligro';
-    const panel = esPositiva ? PANEL_EXITO : PANEL_ERROR;
-
-    return (
-        <div className={`mt-2 flex flex-col gap-2 ${panel}`}>
-            <div className="flex items-start justify-between gap-3">
-                <div className="flex min-w-0 flex-1 items-start gap-2">
-                    <MessageSquare className={`mt-0.5 h-4 w-4 shrink-0 ${tono}`} aria-hidden="true" />
-                    <div className="min-w-0 flex-1">
-                        <p className={`mb-0.5 text-xs font-medium ${tono}`}>
-                            Respuesta de supervisión · {temas.join(' + ')}
-                        </p>
-                        <p className="mb-0.5 text-xs theme-text-muted">
-                            {consulta.encargada?.name || 'Supervisión'} · {esPositiva ? 'Confirmada' : 'Rechazada'}
-                        </p>
-                        {consulta.comentario_encargada && (
-                            <p className="text-xs leading-snug theme-text-main">{consulta.comentario_encargada}</p>
-                        )}
-                    </div>
-                </div>
-                <button
-                    type="button"
-                    disabled={procesando}
-                    onClick={() => onMarcarLeido(solicitud.id, consulta.id)}
-                    className={`${THEME_BTN_PRIMARY} theme-btn-primary--compact shrink-0 disabled:opacity-50`}
-                >
-                    <Eye className="h-3.5 w-3.5" aria-hidden="true" /> Leído
-                </button>
-            </div>
-            {consulta.evidencia_respuesta_path && (
-                <VisorImagenHover path={consulta.evidencia_respuesta_path} />
-            )}
-        </div>
-    );
-};
-
 // =============================================
 // COMPONENTE: COMENTARIOS Y FEEDBACK
 // =============================================
@@ -215,7 +150,7 @@ const FeedbackYComentarios = ({ solicitud }) => {
 
     let evidenciaAdmin = solicitud.evidencia_respuesta_path;
     if (!evidenciaAdmin && ultimaAuditoria?.datos_snapshot) {
-        const snap = typeof ultimaAuditoria.datos_snapshot === 'string' ? JSON.parse(ultimaAuditoria.datos_snapshot) : ultimaAuditoria.datos_snapshot;
+        const snap = typeof ultimaAuditoria.datos_snapshot === 'string' ? leerSnapshot(ultimaAuditoria.datos_snapshot) : ultimaAuditoria.datos_snapshot;
         if (snap?.evidencia_respuesta_path) evidenciaAdmin = snap.evidencia_respuesta_path;
     }
 
@@ -253,7 +188,7 @@ const FeedbackYComentarios = ({ solicitud }) => {
                     <MessageSquare className="mt-0.5 h-4 w-4 shrink-0 theme-text-muted" aria-hidden="true" />
                     <div className="min-w-0">
                         <p className="mb-0.5 text-xs font-medium theme-text-muted">Nota</p>
-                        <p className="text-xs leading-snug theme-text-main">{solicitud.observaciones_vendedor}</p>
+                        <p className="text-sm leading-relaxed whitespace-pre-wrap break-words theme-text-main">{solicitud.observaciones_vendedor}</p>
                     </div>
                 </div>
             )}
@@ -267,14 +202,14 @@ const FeedbackYComentarios = ({ solicitud }) => {
                                 {titulo}
                             </p>
                             {motivoUltimo && (
-                                <p className="text-xs leading-snug theme-text-main">
+                                <p className="text-sm leading-relaxed whitespace-pre-wrap break-words theme-text-main">
                                     {motivoUltimo}
                                 </p>
                             )}
                         </div>
                     </div>
                     {evidenciaAdmin && !esVencimiento && !esMotivoVencimientoPago(motivoUltimo) && (
-                        <VisorImagenHover path={evidenciaAdmin} />
+                        <EvidenciaSolicitud path={evidenciaAdmin} dialogClassName="gelia-tag-lista-overlay" />
                     )}
                 </div>
             )}
@@ -282,28 +217,7 @@ const FeedbackYComentarios = ({ solicitud }) => {
     );
 };
 
-const esProcesoCambioLista = (solicitud) =>
-    (solicitud?.proceso?.nombre || '').toUpperCase().includes('LISTA');
-
-const obtenerListaRebajaNombre = (solicitud) =>
-    solicitud?.lista_rebaja?.nombre || solicitud?.listaRebaja?.nombre || null;
-
-const listasInferioresParaCancelacion = (listas, solicitud) => {
-    const listaCliente = solicitud?.cliente?.lista_descuento || solicitud?.cliente?.listaDescuento;
-    const listaSolicitud = solicitud?.lista_descuento || solicitud?.listaDescuento;
-    const ref = Math.max(
-        parseFloat(listaCliente?.monto_requerido ?? 0),
-        parseFloat(listaSolicitud?.monto_requerido ?? 0),
-    );
-    if (ref <= 0) return [];
-
-    return (listas || []).filter(l =>
-        l.activo !== false &&
-        !l.nombre?.toUpperCase().includes('COLABORADOR') &&
-        !l.nombre?.toUpperCase().includes('PLATAFORMAS') &&
-        parseFloat(l.monto_requerido) < ref
-    ).sort((a, b) => parseFloat(b.monto_requerido) - parseFloat(a.monto_requerido));
-};
+const obtenerListaRebajaNombre = solicitud => solicitud?.lista_rebaja?.nombre || solicitud?.listaRebaja?.nombre || null;
 
 const TiemposSolicitud = ({ solicitud }) => (
     <div className="mt-1 space-y-0.5">
@@ -329,22 +243,25 @@ const ClienteSolicitud = ({ solicitud, esHeredado, copiadoId, onCopiar }) => (
             )}
             {esHeredado && <span className={CHIP_INFO}><ShieldAlert className="h-3 w-3" aria-hidden="true" /> Heredado</span>}
         </div>
-        <div className="truncate text-sm font-medium theme-text-main">{solicitud.cliente?.nombre || 'Nuevo prospecto'}</div>
+        <div className="text-sm font-medium break-words theme-text-main">{solicitud.cliente?.nombre || 'Nuevo prospecto'}</div>
     </div>
 );
 
 const CotizacionSolicitud = ({ solicitud }) => {
-    const concluida = (solicitud.compra_en_tienda || solicitud.compra_en_tienda_solo_tag) && solicitud.pago_confirmado;
-    const tono = solicitud.pago_confirmado ? 'theme-text-exito' : 'theme-text-aviso';
-    const etiqueta = concluida ? 'Concluida' : (solicitud.pago_confirmado ? 'Pago confirmado' : 'Pago pendiente');
-    const panel = solicitud.pago_confirmado ? PANEL_EXITO : PANEL_AVISO;
+    const aprobada = ['Respondida', 'Verificada'].includes(solicitud.estado?.nombre);
+    const concluida = (solicitud.compra_en_tienda || solicitud.compra_en_tienda_solo_tag) && aprobada;
+    const vencido = solicitud.motivo_incorrecta === 'vencimiento_pago';
+    const exito = solicitud.pago_confirmado || concluida;
+    const etiqueta = concluida ? 'Atención concluida' : solicitud.pago_confirmado ? 'Pago confirmado' : vencido ? 'Pago vencido' : 'Pago pendiente';
+    const chip = vencido ? CHIP_ERROR : exito ? `gelia-estado-vivo gelia-estado-vivo--compacto ${GELIA_ESTADO_VIVO_TONO.exito}` : CHIP_AVISO;
+    const mostrarPago = solicitud.estado?.nombre !== 'Cancelada' && (aprobada || solicitud.pago_confirmado || vencido);
     return (
         <div className="inline-flex flex-col items-start gap-1.5">
-            <div className="rounded-lg border theme-border theme-element px-2.5 py-1 text-sm font-semibold tabular-nums theme-text-main">{new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(solicitud.monto_cotizado)}</div>
-            <div className={`${panel} flex items-center gap-1 text-xs ${tono}`}>
-                {solicitud.pago_confirmado ? <CheckCircle2 className="h-3 w-3" aria-hidden="true" /> : <Clock className="h-3 w-3" aria-hidden="true" />}
+            <div className="text-sm font-semibold tabular-nums theme-text-main">{new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(solicitud.monto_cotizado || 0)}</div>
+            {mostrarPago && <div className={`${chip} flex items-center gap-1 text-xs`}>
+                {exito ? <CheckCircle2 className="h-3 w-3" aria-hidden="true" /> : <Clock className="h-3 w-3" aria-hidden="true" />}
                 {etiqueta}
-            </div>
+            </div>}
         </div>
     );
 };
@@ -429,7 +346,7 @@ const MotivoCancelacionBloque = ({ solicitud, compacto = false }) => {
                             Lista de rebaja: {listaRebajaNombre}
                         </p>
                     )}
-                    <p className="whitespace-pre-wrap break-words text-xs leading-snug theme-text-main">
+                    <p className="whitespace-pre-wrap break-words text-sm leading-relaxed theme-text-main">
                         {solicitud.motivo_cancelacion}
                     </p>
                 </div>
@@ -438,197 +355,66 @@ const MotivoCancelacionBloque = ({ solicitud, compacto = false }) => {
     );
 };
 
-const ModalConfirmarCancelacion = ({ onClose, solicitud, onProcesando }) => {
-    const { put, processing } = useForm({});
-
-    const submit = (e) => {
-        e.preventDefault();
-        onProcesando?.(true);
-        put(route('solicitudes.cancelar', solicitud.id), {
-            onSuccess: () => onClose(),
-            onFinish: () => onProcesando?.(false),
-        });
-    };
-
-    return createPortal(
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md" onClick={onClose}>
-            <div className="w-full max-w-md theme-surface border theme-border rounded-[2rem] p-8 shadow-2xl relative" onClick={e => e.stopPropagation()}>
-                <button onClick={onClose} className="absolute top-4 right-4 p-2 theme-text-muted hover:theme-text-main rounded-xl outline-none"><X className="w-5 h-5" /></button>
-                <div className="flex items-center gap-3 mb-4">
-                    <XCircle className="w-6 h-6 text-red-500" />
-                    <h3 className="text-xl font-black italic theme-text-main uppercase m-0">Confirmar Cancelación</h3>
-                </div>
-                <p className="text-sm theme-text-muted mb-4">
-                    FOL-{solicitud.id} — Se revertirán los cambios al cliente si la solicitud ya fue aprobada.
-                </p>
-                <MotivoCancelacionBloque solicitud={solicitud} compacto />
-                <form onSubmit={submit} className="mt-6 flex flex-col gap-3">
-                    <button
-                        type="submit"
-                        disabled={processing}
-                        className="w-full py-4 text-white rounded-xl font-black uppercase text-[11px] tracking-widest bg-red-600 hover:bg-red-700 transition-all shadow-lg outline-none disabled:opacity-50"
-                    >
-                        Confirmar cancelación
-                    </button>
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="w-full py-3 rounded-xl font-black uppercase text-[10px] tracking-widest theme-element border theme-border theme-text-muted hover:theme-text-main transition-colors outline-none"
-                    >
-                        Volver
-                    </button>
-                </form>
-            </div>
-        </div>,
-        document.body
-    );
+const leerSnapshot = (snapshot) => {
+    if (typeof snapshot !== 'string') return snapshot;
+    try { return JSON.parse(snapshot); } catch { return null; }
 };
 
-const ModalConfirmarPago = ({ onClose, solicitud, onConfirmar }) => {
-    const esCompraTienda = !!solicitud?.compra_en_tienda || !!solicitud?.compra_en_tienda_solo_tag;
-    const { data, setData, processing } = useForm({
-        modo: 'pago',
-        monto_final_pagado: solicitud?.monto_cotizado || '',
-    });
-
-    const requiereMonto = data.modo === 'pago';
-    const submit = (e) => {
-        e.preventDefault();
-        const payload = requiereMonto
-            ? { modo: data.modo, monto_final_pagado: data.monto_final_pagado }
-            : { modo: data.modo };
-        onConfirmar(solicitud.id, payload);
-    };
-
-    return createPortal(
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-fade-in" onClick={onClose}>
-            <div className="w-full max-w-sm theme-surface border theme-border shadow-2xl rounded-3xl p-8 relative modal-pop" onClick={e => e.stopPropagation()}>
-                <button onClick={onClose} className="absolute top-4 right-4 p-2 theme-text-muted hover:theme-text-main rounded-xl outline-none transition-transform hover:scale-110"><X className="w-5 h-5" /></button>
-                <div className="flex items-center gap-3 mb-6">
-                    <CreditCard className="w-6 h-6 text-blue-500" />
-                    <h3 className="text-xl font-black italic theme-text-main uppercase m-0">
-                        {esCompraTienda ? 'Validar Solicitud' : 'Confirmar Pago'}
-                    </h3>
-                </div>
-                <form onSubmit={submit} className="space-y-6">
-                    {esCompraTienda && (
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest">Tipo de validación_</label>
-                            <select
-                                value={data.modo}
-                                onChange={e => setData('modo', e.target.value)}
-                                className="w-full px-4 py-3 theme-surface border theme-border rounded-xl theme-text-main text-xs font-black outline-none focus:ring-2 shadow-sm transition-all"
-                            >
-                                <option value="pago">Confirmar pago (con monto)</option>
-                                <option value="pago_sin_monto">Confirmar pago sin monto</option>
-                                <option value="atencion_gelia">Confirmar atención Gelia</option>
-                            </select>
-                            {data.modo === 'pago_sin_monto' && (
-                                <p className="text-[10px] theme-text-muted italic leading-snug">
-                                    Valida la solicitud sin sumar monto (si la remisión ya se cargó, evita duplicar cantidades).
-                                </p>
-                            )}
-                            {data.modo === 'atencion_gelia' && (
-                                <p className="text-[10px] theme-text-muted italic leading-snug">
-                                    Confirma que el cliente fue atendido en Gelia. No modifica montos ni lista.
-                                </p>
-                            )}
-                        </div>
-                    )}
-                    {requiereMonto && (
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest">Monto Final Cobrado_</label>
-                            <input type="number" step="0.01" required value={data.monto_final_pagado} onChange={e => setData('monto_final_pagado', e.target.value)} className="w-full px-4 py-3 theme-surface border theme-border rounded-xl theme-text-main text-sm font-black outline-none focus:ring-2 shadow-sm transition-all" />
-                            <p className="text-[10px] theme-text-muted mt-2 italic">* Si el monto cobrado con descuento es inferior a la meta de la lista, el sistema lo alertará automáticamente a la encargada.</p>
-                        </div>
-                    )}
-                    <button type="submit" disabled={processing} className="w-full py-4 text-white rounded-xl font-black uppercase text-[11px] tracking-widest bg-blue-600 hover:bg-blue-700 transition-all shadow-lg outline-none disabled:opacity-50">
-                        Confirmar Operación
-                    </button>
-                </form>
-            </div>
-        </div>,
-        document.body
-    );
+const ResumenDetalle = ({ solicitud, auth, onAbrir }) => {
+    const sinLeer = (solicitud.consultas || []).filter(c => c.estado === 'respondida' && !c.leido_vendedor_at && Number(solicitud.vendedor_id) === Number(auth?.user?.id)).length;
+    const cancelacion = tieneMotivoCancelacionVisible(solicitud);
+    const ultima = [...(solicitud.auditorias || [])].sort((a, b) => b.id - a.id)[0];
+    const resumen = cancelacion ? solicitud.motivo_cancelacion : ultima?.motivo_reporte || solicitud.observaciones_vendedor;
+    return <div className="gelia-tag-resumen">
+        {sinLeer > 0 && <span className="gelia-tag-unread"><MessageSquare className="w-3.5 h-3.5" aria-hidden="true" />{sinLeer} {sinLeer === 1 ? 'respuesta sin leer' : 'respuestas sin leer'}</span>}
+        {resumen && <p className="line-clamp-2 text-sm theme-text-muted m-0">{resumen}</p>}
+        <button type="button" onClick={onAbrir} className="gelia-tag-detail-link"><Eye className="w-4 h-4" aria-hidden="true" />{cancelacion ? 'Ver cancelación y detalle' : sinLeer ? 'Leer respuesta' : 'Ver detalle y respuestas'}</button>
+    </div>;
 };
 
-const ModalSolicitarCancelacion = ({ onClose, solicitud, listas = [] }) => {
-    const esCambioLista = esProcesoCambioLista(solicitud);
-    const listasInferiores = listasInferioresParaCancelacion(listas, solicitud);
-    const { data, setData, post, processing } = useForm({
-        motivo_cancelacion: '',
-        catalogo_lista_rebaja_id: '',
-    });
-
-    const submit = (e) => {
-        e.preventDefault();
-        post(route('solicitudes.solicitar_cancelacion', solicitud.id), {
-            onSuccess: () => onClose(),
-        });
-    };
-
-    return createPortal(
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md" onClick={onClose}>
-            <div className="w-full max-w-md theme-surface border theme-border rounded-[2rem] p-8 shadow-2xl relative" onClick={e => e.stopPropagation()}>
-                <button onClick={onClose} className="absolute top-4 right-4 p-2 theme-text-muted hover:theme-text-main rounded-xl outline-none"><X className="w-5 h-5" /></button>
-                <div className="flex items-center gap-3 mb-6">
-                    <Ban className="w-6 h-6 text-red-500" />
-                    <h3 className="text-xl font-black italic theme-text-main uppercase m-0">Solicitar Cancelación</h3>
-                </div>
-                <p className="text-sm theme-text-muted mb-4">FOL-{solicitud.id} — La encargada o administrador deberá confirmar la cancelación.</p>
-                <form onSubmit={submit} className="space-y-4">
-                    {esCambioLista && (
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest">
-                                Lista a la que debe rebajarse el cliente
-                            </label>
-                            {listasInferiores.length > 0 ? (
-                                <select
-                                    required
-                                    value={data.catalogo_lista_rebaja_id}
-                                    onChange={e => setData('catalogo_lista_rebaja_id', e.target.value)}
-                                    className="w-full px-4 py-3 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none focus:ring-2"
-                                >
-                                    <option value="">Selecciona una lista inferior...</option>
-                                    {listasInferiores.map(l => (
-                                        <option key={l.id} value={l.id}>{l.nombre}</option>
-                                    ))}
-                                </select>
-                            ) : (
-                                <p className="text-xs font-bold text-red-600 dark:text-red-400 italic">
-                                    No hay listas inferiores disponibles para este folio.
-                                </p>
-                            )}
-                            <p className="text-[10px] theme-text-muted italic">Solo se permiten listas con nivel inferior al actual o al solicitado.</p>
-                        </div>
-                    )}
-                    <textarea
-                        required
-                        minLength={10}
-                        value={data.motivo_cancelacion}
-                        onChange={e => setData('motivo_cancelacion', e.target.value)}
-                        placeholder="Describe el motivo de la cancelación (mín. 10 caracteres)..."
-                        rows={4}
-                        className="w-full px-4 py-3 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none focus:ring-2 resize-none"
-                    />
-                    <button
-                        type="submit"
-                        disabled={processing || (esCambioLista && listasInferiores.length === 0)}
-                        className="w-full py-4 text-white rounded-xl font-black uppercase text-[11px] tracking-widest bg-red-600 hover:bg-red-700 transition-all shadow-lg outline-none disabled:opacity-50"
-                    >
-                        Enviar Solicitud
-                    </button>
-                </form>
+const ModalDetalleSolicitud = ({ solicitud, auth, onClose, onMarcarLeido, procesando, onBitacora }) => (
+    <SolicitudDialog onClose={onClose} title={`Detalle de FOL-${solicitud.id}`} className="gelia-tag-lista-overlay">
+        <div className="gelia-modal-shell gelia-tag-detalle w-full max-w-3xl">
+            <header className="gelia-workflow-header"><div><h2 className="m-0 theme-text-main">Detalle de la solicitud</h2><p className="m-0 mt-1 text-sm theme-text-muted">FOL-{solicitud.id} · {solicitud.proceso?.nombre}</p></div><button type="button" data-dialog-close className="gelia-workflow-close" aria-label="Cerrar detalle"><X className="w-5 h-5" aria-hidden="true" /></button></header>
+            <div className="gelia-modal-body p-5 sm:p-6 space-y-6">
+                <dl className="gelia-respuesta-contexto"><div><dt>Cliente</dt><dd>{solicitud.cliente?.nombre || 'Nuevo prospecto'} · {solicitud.cliente?.numero_cliente || 'Sin número'}</dd></div><div><dt>Responsable</dt><dd>{solicitud.vendedor?.name || 'Sin asignar'}</dd></div><div><dt>Estado</dt><dd>{solicitud.estado?.nombre || 'Pendiente'}</dd></div><div><dt>Cotización</dt><dd>{new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(solicitud.monto_cotizado || 0)}</dd></div></dl>
+                <EtiquetasOperacion solicitud={solicitud} />
+                <section className="gelia-tag-detail-section"><h3>Notas y resolución</h3><FeedbackYComentarios solicitud={solicitud} />{!solicitud.observaciones_vendedor && !solicitud.auditorias?.length && <p className="text-sm theme-text-muted">La solicitud todavía no tiene una respuesta.</p>}{solicitud.evidencia_path && <EvidenciaSolicitud path={solicitud.evidencia_path} title="Evidencia de la solicitud" dialogClassName="gelia-tag-lista-overlay" />}</section>
+                {tieneMotivoCancelacionVisible(solicitud) && <section className="gelia-tag-message" data-tone="peligro"><MotivoCancelacionBloque solicitud={solicitud} /></section>}
+                {!!solicitud.consultas?.length && <section className="gelia-tag-detail-section"><h3>Consultas y respuestas de supervisión</h3><div className="space-y-4">{[...solicitud.consultas].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).map(c => <div key={c.id} className="gelia-tag-message"><div className="flex flex-wrap justify-between gap-2"><h4 className="m-0 text-sm font-medium theme-text-main">{[c.consulta_tag && 'TAG', c.consulta_lista && 'Lista'].filter(Boolean).join(' y ')}</h4><span className="text-xs theme-text-muted">{c.estado === 'pendiente' ? 'Pendiente de respuesta' : c.respuesta_positiva ? 'Confirmada' : 'Rechazada'}</span></div>{c.comentario_vendedor && <p>{c.comentario_vendedor}</p>}{c.estado === 'respondida' && <><p className="text-xs theme-text-muted">Respuesta de {c.encargada?.name || 'Supervisión'}</p><p>{c.comentario_encargada || 'Sin comentario adicional.'}</p>{c.evidencia_respuesta_path && <EvidenciaSolicitud path={c.evidencia_respuesta_path} dialogClassName="gelia-tag-lista-overlay" />}{Number(solicitud.vendedor_id) === Number(auth?.user?.id) && !c.leido_vendedor_at && <button type="button" disabled={procesando} className="theme-btn-secondary mt-3" onClick={() => onMarcarLeido(solicitud.id, c.id)}><Check className="w-4 h-4" aria-hidden="true" />Marcar como leída</button>}</>}</div>)}</div></section>}
             </div>
-        </div>,
-        document.body
-    );
-};
+            <footer className="gelia-modal-footer gelia-workflow-actions">{onBitacora && <button type="button" className="theme-btn-secondary" onClick={onBitacora}><History className="w-4 h-4" aria-hidden="true" />Ver bitácora</button>}<button type="button" data-dialog-close className="theme-btn-primary">Cerrar detalle</button></footer>
+        </div>
+    </SolicitudDialog>
+);
 
-// =============================================
-// MENÚ ACCIONES — Portal
-// =============================================
 const MenuAccionesPortal = ({ menuAbierto, menuSolicitud, menuPos, setMenuAbierto, setModalForm, setModalRespuesta, setModalBitacora, setModalConsulta, setModalRespuestaConsulta, abrirModalPago, confirmarCambioLista, confirmarRollback, eliminarSolicitud, abrirModalCancelacion, abrirModalConfirmarCancelacion, can, auth, idRespondida, idVerificada, idIncorrecta }) => {
+    const menuRef = useRef(null);
+    const [posicion, setPosicion] = useState(menuPos);
+    useLayoutEffect(() => {
+        if (!menuAbierto || !menuRef.current) return;
+        const rect = menuRef.current.getBoundingClientRect();
+        const abajo = menuPos.anchorBottom + 8;
+        const top = abajo + rect.height <= window.innerHeight - 8 ? abajo : Math.max(8, menuPos.anchorTop - rect.height - 8);
+        setPosicion({ top: Math.min(top, window.innerHeight - rect.height - 8), left: Math.max(8, Math.min(menuPos.left, window.innerWidth - rect.width - 8)) });
+        menuRef.current.querySelector('button')?.focus({ preventScroll: true });
+    }, [menuAbierto, menuPos]);
+    useEffect(() => {
+        if (!menuAbierto) return undefined;
+        const tecla = event => {
+            const items = [...(menuRef.current?.querySelectorAll('button') || [])];
+            const indice = items.indexOf(document.activeElement);
+            if (event.key === 'Escape') { event.preventDefault(); setMenuAbierto(null); menuPos.trigger?.focus(); }
+            if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
+                event.preventDefault();
+                const siguiente = event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1 : (indice + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+                items[siguiente]?.focus();
+            }
+            if (event.key === 'Tab') setMenuAbierto(null);
+        };
+        document.addEventListener('keydown', tecla);
+        return () => document.removeEventListener('keydown', tecla);
+    }, [menuAbierto, menuPos, setMenuAbierto]);
     if (!menuAbierto || !menuSolicitud) return null;
     const solicitud = menuSolicitud;
     const esCancelada = solicitud.estado?.nombre === 'Cancelada';
@@ -684,17 +470,17 @@ const MenuAccionesPortal = ({ menuAbierto, menuSolicitud, menuPos, setMenuAbiert
     return createPortal(
         <>
             <div className="fixed inset-0 z-[999]" onClick={() => setMenuAbierto(null)}></div>
-            <div className={`fixed z-[1000] flex flex-col gap-0.5 rounded-xl border theme-border theme-surface p-1.5 shadow-lg ${puedeConfirmarCancelacion && solicitud.motivo_cancelacion ? 'w-72' : 'w-56'}`} style={{ top: menuPos.top, left: menuPos.left }} role="menu">
+            <div ref={menuRef} className={`gelia-tag-menu fixed z-[1000] flex flex-col gap-0.5 rounded-xl border theme-border theme-surface p-1.5 shadow-lg w-56`} style={{ top: posicion.top, left: posicion.left }} role="menu" aria-label={`Acciones de FOL-${solicitud.id}`}>
 
                 {/* Confirmar Cambio de Lista (Solo si hay alerta) */}
                 {esAlertaPago && can('solicitudes.confirmar_cambio_lista') && (
-                    <button type="button" onClick={() => { setMenuAbierto(null); confirmarCambioLista(solicitud.id); }} className={accion}>
+                    <button type="button" role="menuitem" onClick={() => { setMenuAbierto(null); confirmarCambioLista(solicitud.id); }} className={accion}>
                         <TrendingUp className="h-4 w-4" aria-hidden="true" /> Confirmar ajuste
                     </button>
                 )}
 
                 {solicitud.vendedor_id === auth.user.id && solicitud.estado?.nombre === 'Incorrecta' && !esAlertaPago && !esVencimiento && (
-                    <button type="button" onClick={() => { setMenuAbierto(null); setModalForm({ abierto: true, modoEdicion: true, solicitud }); }} className={accion}>
+                    <button type="button" role="menuitem" onClick={() => { setMenuAbierto(null); setModalForm({ abierto: true, modoEdicion: true, solicitud }); }} className={accion}>
                         <Edit2 className="h-4 w-4" aria-hidden="true" /> Reparar solicitud
                     </button>
                 )}
@@ -706,19 +492,19 @@ const MenuAccionesPortal = ({ menuAbierto, menuSolicitud, menuPos, setMenuAbiert
                 )}
 
                 {can('solicitudes.reportar') && esVencimiento && !solicitud.rollback_confirmado_at && (
-                    <button type="button" onClick={() => { setMenuAbierto(null); confirmarRollback(solicitud.id); }} className={accionPeligro}>
+                    <button type="button" role="menuitem" onClick={() => { setMenuAbierto(null); confirmarRollback(solicitud.id); }} className={accionPeligro}>
                         <ShieldAlert className="h-4 w-4" aria-hidden="true" /> Confirmar reversión
                     </button>
                 )}
 
                 {puedeConsultar && (
-                    <button type="button" onClick={() => { setMenuAbierto(null); setModalConsulta({ abierto: true, solicitud }); }} className={accion}>
+                    <button type="button" role="menuitem" onClick={() => { setMenuAbierto(null); setModalConsulta({ abierto: true, solicitud }); }} className={accion}>
                         <MessageSquare className="h-4 w-4" aria-hidden="true" /> Consultar TAG o lista
                     </button>
                 )}
 
                 {puedeResponderConsultaSolicitud(auth) && consultaPendiente && (
-                    <button type="button" onClick={() => { setMenuAbierto(null); setModalRespuestaConsulta({ abierto: true, solicitud, consulta: consultaPendiente }); }} className={accion}>
+                    <button type="button" role="menuitem" onClick={() => { setMenuAbierto(null); setModalRespuestaConsulta({ abierto: true, solicitud, consulta: consultaPendiente }); }} className={accion}>
                         <MessageSquare className="h-4 w-4" aria-hidden="true" /> Responder consulta
                     </button>
                 )}
@@ -730,33 +516,19 @@ const MenuAccionesPortal = ({ menuAbierto, menuSolicitud, menuPos, setMenuAbiert
                     && !solicitud.compra_en_tienda_solo_tag
                     && solicitud.estado?.nombre === 'Respondida'
                     && !esAlertaPago && (
-                    <button type="button" onClick={() => { setMenuAbierto(null); abrirModalPago(solicitud); }} className={accion}>
+                    <button type="button" role="menuitem" onClick={() => { setMenuAbierto(null); abrirModalPago(solicitud); }} className={accion}>
                         <CreditCard className="h-4 w-4" aria-hidden="true" /> Confirmar pago
                     </button>
                 )}
 
                 {puedeSolicitarCancelacion && (
-                    <button type="button" onClick={() => { setMenuAbierto(null); abrirModalCancelacion(solicitud); }} className={accionPeligro}>
+                    <button type="button" role="menuitem" onClick={() => { setMenuAbierto(null); abrirModalCancelacion(solicitud); }} className={accionPeligro}>
                         <Ban className="h-4 w-4" aria-hidden="true" /> Solicitar cancelación
                     </button>
                 )}
 
-                {puedeConfirmarCancelacion && solicitud.motivo_cancelacion && (
-                    <div className="mb-1 border-b theme-border px-3 py-2">
-                        <p className="mb-1 text-xs font-medium theme-text-peligro">Motivo de la solicitud</p>
-                        {obtenerListaRebajaNombre(solicitud) && (
-                            <p className="mb-1 text-xs theme-text-peligro">
-                                Lista de rebaja: {obtenerListaRebajaNombre(solicitud)}
-                            </p>
-                        )}
-                        <p className="line-clamp-4 text-xs leading-snug theme-text-main">
-                            {solicitud.motivo_cancelacion}
-                        </p>
-                    </div>
-                )}
-
                 {puedeConfirmarCancelacion && (
-                    <button type="button" onClick={() => { setMenuAbierto(null); abrirModalConfirmarCancelacion(solicitud); }} className={accionPeligro}>
+                    <button type="button" role="menuitem" onClick={() => { setMenuAbierto(null); abrirModalConfirmarCancelacion(solicitud); }} className={accionPeligro}>
                         <XCircle className="h-4 w-4" aria-hidden="true" /> Confirmar cancelación
                     </button>
                 )}
@@ -767,41 +539,41 @@ const MenuAccionesPortal = ({ menuAbierto, menuSolicitud, menuPos, setMenuAbiert
                     && solicitud.pago_confirmado
                     && !esAlertaPago
                     && idVerificada && (
-                    <button type="button" onClick={() => { setMenuAbierto(null); setModalRespuesta({ abierto: true, solicitud, estadoId: idVerificada }); }} className={accion}>
+                    <button type="button" role="menuitem" onClick={() => { setMenuAbierto(null); setModalRespuesta({ abierto: true, solicitud, estadoId: idVerificada }); }} className={accion}>
                         <CheckSquare className="h-4 w-4" aria-hidden="true" /> Verificado
                     </button>
                 )}
 
                 {/* Aprobar (Encargada) — flujos tienda: marca concluida para vendedora, sigue pendiente de verificar */}
                 {can('solicitudes.reportar') && !esAlertaPago && !esCancelada && solicitud.estado?.nombre === 'Pendiente' && idRespondida && (
-                    <button type="button" onClick={() => { setMenuAbierto(null); setModalRespuesta({ abierto: true, solicitud, estadoId: idRespondida }); }} className={accion}>
+                    <button type="button" role="menuitem" onClick={() => { setMenuAbierto(null); setModalRespuesta({ abierto: true, solicitud, estadoId: idRespondida }); }} className={accion}>
                         <CheckCircle2 className="h-4 w-4" aria-hidden="true" /> Aprobar proceso
                     </button>
                 )}
 
                 {puedeCorregirRespuesta && (
-                    <button type="button" onClick={() => { setMenuAbierto(null); setModalRespuesta({ abierto: true, solicitud, estadoId: idRespondida }); }} className={accion}>
+                    <button type="button" role="menuitem" onClick={() => { setMenuAbierto(null); setModalRespuesta({ abierto: true, solicitud, estadoId: idRespondida }); }} className={accion}>
                         <CheckCircle2 className="h-4 w-4" aria-hidden="true" /> Corregir respuesta
                     </button>
                 )}
 
                 {/* Reportar error — staff en etapas activas; vendedora dueña solo en Respondida */}
                 {puedeReportarError && !esAlertaPago && idIncorrecta && (
-                    <button type="button" onClick={() => { setMenuAbierto(null); setModalRespuesta({ abierto: true, solicitud, estadoId: idIncorrecta }); }} className={accionPeligro}>
+                    <button type="button" role="menuitem" onClick={() => { setMenuAbierto(null); setModalRespuesta({ abierto: true, solicitud, estadoId: idIncorrecta }); }} className={accionPeligro}>
                         <AlertOctagon className="h-4 w-4" aria-hidden="true" /> Reportar error
                     </button>
                 )}
 
                 {/* Bitácora */}
                 {can('configuracion.ver_auditoria') && (
-                    <button type="button" onClick={() => { setMenuAbierto(null); setModalBitacora({ abierto: true, solicitud }); }} className={`${accion} mt-1 border-t theme-border pt-2`}>
+                    <button type="button" role="menuitem" onClick={() => { setMenuAbierto(null); setModalBitacora({ abierto: true, solicitud }); }} className={`${accion} mt-1 border-t theme-border pt-2`}>
                         <History className="h-4 w-4" aria-hidden="true" /> Ver bitácora
                     </button>
                 )}
 
                 {/* Eliminar */}
                 {can('solicitudes.eliminar') && (
-                    <button type="button" onClick={() => eliminarSolicitud(solicitud.id)} className={`${accionPeligro} mt-1 border-t theme-border pt-2`}>
+                    <button type="button" role="menuitem" onClick={() => eliminarSolicitud(solicitud.id)} className={`${accionPeligro} mt-1 border-t theme-border pt-2`}>
                         <Trash2 className="h-4 w-4" aria-hidden="true" /> Eliminar registro
                     </button>
                 )}
@@ -844,12 +616,18 @@ export default function Index({
     bancos = [],
     estados = [],
     filtros = {},
+    metricas = null,
+    resumen = null,
+    listas_filtro = listas,
+    tipos_cliente_filtro = tipos_cliente,
     auth
 }) {
     const idRespondida = idEstadoPorNombre(estados, 'Respondida');
     const idVerificada = idEstadoPorNombre(estados, 'Verificada');
     const idIncorrecta = idEstadoPorNombre(estados, 'Incorrecta');
 
+    const [detalleId, setDetalleId] = useState(null);
+    const [modalAccion, setModalAccion] = useState(null);
     const [modalForm, setModalForm] = useState({ abierto: false, modoEdicion: false, solicitud: null });
     const [modalRespuesta, setModalRespuesta] = useState({ abierto: false, solicitud: null, estadoId: null });
     const [modalBitacora, setModalBitacora] = useState({ abierto: false, solicitud: null });
@@ -878,6 +656,8 @@ export default function Index({
         || modalCancelacion.abierto
         || modalConfirmarCancelacion.abierto
         || modalEscalonamiento
+        || detalleId !== null
+        || modalAccion !== null
         || menuAbierto !== null;
 
     const {
@@ -887,7 +667,7 @@ export default function Index({
         fechaInicio,
         fechaFin,
         filtroVendedor,
-        filtroMotivo,
+        filtroMotivo, filtroLista, filtroTipoCliente, filtroTag,
         filtrosAdicionalesActivos,
         construirParams,
         exportParams,
@@ -905,17 +685,24 @@ export default function Index({
     const puedeVerEscalonamiento = can('ejercicio_escalonamiento.ver')
         || (auth?.user?.roles || []).includes('Super Admin');
 
-    const eliminarSolicitud = (id) => {
-        const motivo = window.prompt("ATENCIÓN: Se eliminará este registro y se creará un respaldo en la auditoría.\n\nIngresa el motivo de la eliminación (Mínimo 10 caracteres):");
-        if (motivo === null) return;
-        if (motivo.trim().length < 10) { alert("Operación cancelada: El motivo debe tener al menos 10 caracteres."); return; }
-        setMenuAbierto(null); setProcesandoAccion(true);
-        router.delete(route('solicitudes.destroy', id), {
-            data: { motivo: motivo.trim() },
-            preserveScroll: true,
-            onFinish: () => setProcesandoAccion(false),
-        });
+    const accionPrincipal = (solicitud) => {
+        const ultima = [...(solicitud.auditorias || [])].sort((a, b) => b.id - a.id).find(a => !/AUTOMÁTICAMENTE|SISTEMA AUTOMÁTICO/i.test(a.motivo_reporte || ''));
+        if (/ALERTA DE PAGO/i.test(ultima?.motivo_reporte || '')) return null;
+        const consulta = solicitud.consultas?.find(c => c.estado === 'pendiente');
+        let label, ejecutar;
+        if (consulta && puedeResponderConsultaSolicitud(auth)) {
+            label = 'Responder consulta'; ejecutar = () => setModalRespuestaConsulta({ abierto: true, solicitud, consulta });
+        } else if (solicitud.estado?.nombre === 'Pendiente' && can('solicitudes.reportar') && idRespondida) {
+            label = 'Aprobar'; ejecutar = () => setModalRespuesta({ abierto: true, solicitud, estadoId: idRespondida });
+        } else if (solicitud.estado?.nombre === 'Incorrecta' && Number(solicitud.vendedor_id) === Number(auth?.user?.id) && solicitud.motivo_incorrecta !== 'vencimiento_pago') {
+            label = 'Corregir'; ejecutar = () => setModalForm({ abierto: true, modoEdicion: true, solicitud });
+        } else if (solicitud.estado?.nombre === 'Respondida' && solicitud.pago_confirmado && can('solicitudes.verificar') && idVerificada) {
+            label = 'Verificar'; ejecutar = () => setModalRespuesta({ abierto: true, solicitud, estadoId: idVerificada });
+        }
+        return label ? <button type="button" className="gelia-tag-quick-action" onClick={ejecutar}>{label}</button> : null;
     };
+
+    const eliminarSolicitud = (id) => { setMenuAbierto(null); setModalAccion({ accion: 'eliminar', solicitud: menuSolicitud }); };
 
     const marcarConsultaLeida = (solicitudId, consultaId) => {
         setProcesandoAccion(true);
@@ -929,13 +716,16 @@ export default function Index({
         const interval = setInterval(() => {
             if (/\/\d+\//.test(window.location.pathname)) return;
             if (modalsAbiertosRef.current) return;
-            router.reload({ only: ['solicitudes'], preserveState: true, preserveScroll: true, showProgress: false });
+            router.reload({ only: ['solicitudes', 'metricas', 'resumen'], preserveState: true, preserveScroll: true, showProgress: false });
         }, 15000);
         return () => clearInterval(interval);
     }, []);
 
     useEffect(() => {
-        const handleScroll = () => setMenuAbierto(null);
+        const handleScroll = (event) => {
+            if (event.target instanceof Element && event.target.closest('.gelia-tag-menu')) return;
+            setMenuAbierto(null);
+        };
         window.addEventListener('scroll', handleScroll, true);
         return () => window.removeEventListener('scroll', handleScroll, true);
     }, []);
@@ -974,45 +764,20 @@ export default function Index({
         setCopiadoId(id); setTimeout(() => setCopiadoId(null), 2000);
     };
 
-    const confirmarPagoConMonto = (id, formData) => {
-        setModalPago({ abierto: false, solicitud: null });
-        setProcesandoAccion(true);
-        router.put(route('solicitudes.confirmar_pago', id), formData, {
-            preserveScroll: true,
-            onFinish: () => setProcesandoAccion(false),
-        });
-    };
-
-    const confirmarCambioLista = (id) => {
-        if (window.confirm('¿Confirmar el ajuste de lista para este cliente?')) {
-            setProcesandoAccion(true);
-            router.put(route('solicitudes.confirmar_lista', id), {}, {
-                preserveScroll: true,
-                onFinish: () => setProcesandoAccion(false),
-            });
-        }
-    };
-
-    const confirmarRollback = (id) => {
-        if (window.confirm('¿Confirmar la reversión de cambios por vencimiento de pago? La vendedora deberá iniciar una nueva solicitud.')) {
-            setProcesandoAccion(true);
-            router.put(route('solicitudes.confirmar_rollback', id), {}, {
-                preserveScroll: true,
-                onFinish: () => setProcesandoAccion(false),
-            });
-        }
-    };
+    const confirmarCambioLista = () => setModalAccion({ accion: 'lista', solicitud: menuSolicitud });
+    const confirmarRollback = () => setModalAccion({ accion: 'rollback', solicitud: menuSolicitud });
 
     const abrirMenu = (e, solicitud) => {
         const btn = e.currentTarget; const rect = btn.getBoundingClientRect(); const menuWidth = 224; const menuHeight = 220;
         const spaceBelow = window.innerHeight - rect.bottom; const openUpward = spaceBelow < menuHeight + 16;
         let top = openUpward ? rect.top - menuHeight - 8 : rect.bottom + 8; let left = rect.right - menuWidth; if (left < 8) left = 8;
-        setMenuPos({ top, left }); setMenuSolicitud(solicitud); setMenuAbierto(menuAbierto === solicitud.id ? null : solicitud.id);
+        setMenuPos({ top, left, anchorTop: rect.top, anchorBottom: rect.bottom, trigger: btn }); setMenuSolicitud(solicitud); setMenuAbierto(menuAbierto === solicitud.id ? null : solicitud.id);
     };
 
     const solicitudesFiltradas = solicitudes.data || [];
     const hayFiltros = tabActiva !== 'TODAS' || Boolean(busqueda) || filtrosAdicionalesActivos > 0;
     const limpiarConsulta = () => aplicarFiltros({
+        lista_id: '', tipo_cliente_id: '', tag: '',
         tab: 'TODAS',
         q: '',
         vendedor_id: '',
@@ -1071,27 +836,29 @@ export default function Index({
                 idVerificada={idVerificada}
                 idIncorrecta={idIncorrecta}
             />
-            {modalPago.abierto && <ModalConfirmarPago onClose={() => setModalPago({ abierto: false, solicitud: null })} solicitud={modalPago.solicitud} onConfirmar={confirmarPagoConMonto} />}
+            {modalPago.abierto && <ModalAccionSolicitud accion="pago" onClose={() => setModalPago({ abierto: false, solicitud: null })} solicitud={modalPago.solicitud} />}
             {modalCancelacion.abierto && (
-                <ModalSolicitarCancelacion
+                <ModalAccionSolicitud accion="solicitar"
                     onClose={() => setModalCancelacion({ abierto: false, solicitud: null })}
                     solicitud={modalCancelacion.solicitud}
                     listas={listas}
                 />
             )}
             {modalConfirmarCancelacion.abierto && (
-                <ModalConfirmarCancelacion
+                <ModalAccionSolicitud accion="cancelar"
                     onClose={() => setModalConfirmarCancelacion({ abierto: false, solicitud: null })}
                     solicitud={modalConfirmarCancelacion.solicitud}
                     onProcesando={setProcesandoAccion}
                 />
             )}
-            <GeliaPageShell className="space-y-4">
+            {modalAccion && <ModalAccionSolicitud {...modalAccion} onClose={() => setModalAccion(null)} />}
+            {detalleId !== null && solicitudesFiltradas.find(s => s.id === detalleId) && <ModalDetalleSolicitud solicitud={solicitudesFiltradas.find(s => s.id === detalleId)} auth={auth} onClose={() => setDetalleId(null)} onMarcarLeido={marcarConsultaLeida} procesando={procesandoAccion} onBitacora={can('configuracion.ver_auditoria') ? () => { setModalBitacora({ abierto: true, solicitud: solicitudesFiltradas.find(s => s.id === detalleId) }); setDetalleId(null); } : null} />}
+            <GeliaPageShell className="gelia-solicitudes-workspace gelia-tag-lista space-y-5">
                 <p className="sr-only" aria-live="polite">{copiadoId ? 'Número de cliente copiado' : ''}</p>
                 <header className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
                     <div className="min-w-0">
                         <h1 className="m-0 text-2xl font-semibold theme-text-main text-balance">Solicitudes</h1>
-                        <p className="m-0 mt-1 text-sm theme-text-muted">Cola de trámites comerciales</p>
+                        <p className="m-0 mt-1 text-sm theme-text-muted">Gestiona solicitudes de TAG y cambios de lista</p>
                     </div>
                     <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center md:w-auto">
                         {puedeExportar && (
@@ -1138,6 +905,15 @@ export default function Index({
                     </div>
                 </header>
 
+                {resumen ? (
+                    <ResumenSolicitudes
+                        resumen={resumen}
+                        filtroTipoCliente={filtroTipoCliente}
+                        onFiltrarTipo={(tipoClienteId) => aplicarFiltros({ tipo_cliente_id: tipoClienteId })}
+                        onLimpiarTipo={() => aplicarFiltros({ tipo_cliente_id: '' })}
+                    />
+                ) : metricas && <IndicadoresSolicitudes metricas={metricas} onSeleccionar={tab => aplicarFiltros({ tab })} />}
+
                 <FiltrosSolicitudes
                     tabActiva={tabActiva}
                     busqueda={busqueda}
@@ -1146,7 +922,11 @@ export default function Index({
                     fechaFin={fechaFin}
                     filtroVendedor={filtroVendedor}
                     filtroMotivo={filtroMotivo}
+                    filtroLista={filtroLista} filtroTipoCliente={filtroTipoCliente} filtroTag={filtroTag}
+                    listas={listas_filtro} tiposCliente={tipos_cliente_filtro}
                     vendedores={vendedores}
+                    variante="tag-lista"
+                    mostrarEliminadas={can('solicitudes.eliminadas')}
                     filtrosActivos={filtrosAdicionalesActivos}
                     idPrefixFechas="solicitud-fecha"
                     onCambiarTab={(tab) => aplicarFiltros({ tab })}
@@ -1167,7 +947,7 @@ export default function Index({
                         solicitudesFiltradas.map((solicitud) => {
                             const estatus = obtenerEstiloEstado(solicitud.estado?.nombre); const StatusIcon = estatus.icon; const nombreProceso = solicitud.proceso?.nombre || ''; const esHeredado = solicitud.cliente?.es_heredado;
                             return (
-                                <div key={solicitud.id} className="flex flex-col gap-3 rounded-xl border theme-border theme-surface p-4">
+                                <article key={solicitud.id} className="gelia-tag-card flex flex-col gap-3 rounded-xl border theme-border theme-surface p-4">
                                     <div className="flex items-start justify-between gap-3 border-b theme-border pb-3">
                                         <div className="min-w-0">
                                             <div className="text-sm font-semibold theme-text-main">FOL-{solicitud.id}</div>
@@ -1188,14 +968,12 @@ export default function Index({
                                         <ConsultasPendientes solicitud={solicitud} />
                                         {solicitud.motivo_incorrecta && <MotivoIncidencia motivo={solicitud.motivo_incorrecta} />}
                                     </div>
-                                    <RespuestaConsultaEncargada solicitud={solicitud} auth={auth} onMarcarLeido={marcarConsultaLeida} procesando={procesandoAccion} />
-                                    <FeedbackYComentarios solicitud={solicitud} />
-                                    <MotivoCancelacionBloque solicitud={solicitud} />
+                                    <ResumenDetalle solicitud={solicitud} auth={auth} onAbrir={() => setDetalleId(solicitud.id)} />
                                     <div className="flex items-center justify-between border-t theme-border pt-2">
                                         <CotizacionSolicitud solicitud={solicitud} />
-                                        <button type="button" onClick={(e) => abrirMenu(e, solicitud)} aria-label={`Acciones de FOL-${solicitud.id}`} className="rounded-lg border theme-border theme-element p-2 transition-colors duration-200 hover:border-[var(--color-primario)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"><MoreVertical className="h-5 w-5 theme-text-main" aria-hidden="true" /></button>
+                                        <div className="flex flex-wrap items-center justify-end gap-2">{accionPrincipal(solicitud)}<button type="button" onClick={(e) => abrirMenu(e, solicitud)} aria-haspopup="menu" aria-expanded={menuAbierto === solicitud.id} aria-label={`Acciones de FOL-${solicitud.id}`} className="rounded-lg border theme-border theme-element p-2 transition-colors duration-200 hover:border-[var(--color-primario)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"><MoreVertical className="h-5 w-5 theme-text-main" aria-hidden="true" /></button></div>
                                     </div>
-                                </div>
+                                </article>
                             );
                         })
                     )}
@@ -1203,7 +981,7 @@ export default function Index({
 
                 <div className="hidden overflow-hidden rounded-xl border theme-border theme-surface lg:block">
                     <div className="overflow-x-auto">
-                        <table className="w-full min-w-[1000px] border-collapse text-left">
+                        <table className="gelia-tag-table w-full min-w-[1000px] border-collapse text-left">
                             <thead className="theme-surface">
                                 <tr className="border-b theme-border">
                                     <th className="px-4 py-3 text-xs font-medium theme-text-muted">Folio</th>
@@ -1246,9 +1024,7 @@ export default function Index({
                                                 <EtiquetasOperacion solicitud={solicitud} listas={listas} />
                                                 <ConsultasPendientes solicitud={solicitud} />
                                                 {solicitud.motivo_incorrecta && <MotivoIncidencia motivo={solicitud.motivo_incorrecta} />}
-                                                <RespuestaConsultaEncargada solicitud={solicitud} auth={auth} onMarcarLeido={marcarConsultaLeida} procesando={procesandoAccion} />
-                                                <FeedbackYComentarios solicitud={solicitud} />
-                                                <MotivoCancelacionBloque solicitud={solicitud} />
+                                                <ResumenDetalle solicitud={solicitud} auth={auth} onAbrir={() => setDetalleId(solicitud.id)} />
                                             </td>
                                             <td className="px-4 py-3 align-top">
                                                 <CotizacionSolicitud solicitud={solicitud} />
@@ -1257,7 +1033,7 @@ export default function Index({
                                                 <div className={`${estatus.clase} whitespace-nowrap`}><StatusIcon className="h-3.5 w-3.5" aria-hidden="true" /><span>{estatus.label}</span></div>
                                             </td>
                                             <td className="sticky-actions px-4 py-3 text-center align-top">
-                                                <button type="button" onClick={(e) => abrirMenu(e, solicitud)} aria-label={`Acciones de FOL-${solicitud.id}`} className="rounded-lg border theme-border theme-element p-2 transition-colors duration-200 hover:border-[var(--color-primario)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"><MoreVertical className="h-5 w-5 theme-text-main" aria-hidden="true" /></button>
+                                                <div className="flex flex-wrap items-center justify-end gap-2">{accionPrincipal(solicitud)}<button type="button" onClick={(e) => abrirMenu(e, solicitud)} aria-haspopup="menu" aria-expanded={menuAbierto === solicitud.id} aria-label={`Acciones de FOL-${solicitud.id}`} className="rounded-lg border theme-border theme-element p-2 transition-colors duration-200 hover:border-[var(--color-primario)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"><MoreVertical className="h-5 w-5 theme-text-main" aria-hidden="true" /></button></div>
                                             </td>
                                         </tr>
                                     );
@@ -1276,10 +1052,11 @@ export default function Index({
                     onClose={() => setModalRespuesta({ ...modalRespuesta, abierto: false })}
                     solicitud={modalRespuesta.solicitud}
                     estadoId={modalRespuesta.estadoId}
+                    esVerificacion={modalRespuesta.estadoId === idVerificada}
                     esReporteError={Number(modalRespuesta.estadoId) === Number(idIncorrecta)}
                 />
             )}
-            {modalBitacora.abierto && <ModalBitacoraSolicitud onClose={() => setModalBitacora({ ...modalBitacora, abierto: false })} solicitud={modalBitacora.solicitud} listas={listas} tiposCliente={tipos_cliente} />}
+            {modalBitacora.abierto && <ModalBitacoraSolicitud onClose={() => setModalBitacora({ ...modalBitacora, abierto: false })} solicitud={modalBitacora.solicitud} listas={listas_filtro} tiposCliente={tipos_cliente_filtro} procesos={procesos} />}
             {modalConsulta.abierto && <ModalConsultaSolicitud onClose={() => setModalConsulta({ ...modalConsulta, abierto: false })} solicitud={modalConsulta.solicitud} />}
             {modalRespuestaConsulta.abierto && <ModalRespuestaConsulta onClose={() => setModalRespuestaConsulta({ ...modalRespuestaConsulta, abierto: false })} solicitud={modalRespuestaConsulta.solicitud} consulta={modalRespuestaConsulta.consulta} />}
             {modalEscalonamiento && (

@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
+import SolicitudDialog from '@/Components/Solicitudes/SolicitudDialog';
+import React, { useEffect, useId, useRef, useState } from 'react';
 import { useForm } from '@inertiajs/react';
 import axios from 'axios';
 import { X, Search, MessageSquare, Send, Hash, Calendar, FileText, Landmark, ChevronDown } from 'lucide-react';
@@ -15,12 +15,12 @@ import {
 } from '../../../utils/geliaTheme';
 
 /** Select con icono izquierdo y chevron derecho (hijos directos del contenedor). */
-function SelectConIcono({ icon: Icon, required, value, onChange, children, error }) {
+function SelectConIcono({ icon: Icon, required, value, onChange, children, error, id, label }) {
     return (
         <>
             <div className="theme-field-with-icon theme-field-with-icon--has-trailing relative mt-0">
                 <Icon className="theme-field-icon" aria-hidden />
-                <select required={required} value={value} onChange={onChange} className={`${THEME_SELECT} w-full`}>
+                <select id={id} aria-label={label} aria-invalid={!!error} required={required} value={value} onChange={onChange} className={`${THEME_SELECT} w-full`}>
                     {children}
                 </select>
                 <ChevronDown className="theme-field-with-icon__trailing" aria-hidden />
@@ -31,12 +31,13 @@ function SelectConIcono({ icon: Icon, required, value, onChange, children, error
 }
 
 function Campo({ icon: Icon, label, type = 'text', required, value, onChange, error, placeholder }) {
+    const id = useId();
     return (
         <div className="space-y-1.5">
-            <label className={THEME_LABEL}>{label}</label>
+            <label htmlFor={id} className={THEME_LABEL}>{label}</label>
             <div className="theme-field-with-icon relative">
                 <Icon className="theme-field-icon" aria-hidden />
-                <input
+                <input id={id} aria-invalid={!!error} autoComplete="off"
                     type={type}
                     required={required}
                     value={value}
@@ -51,12 +52,13 @@ function Campo({ icon: Icon, label, type = 'text', required, value, onChange, er
 }
 
 function CampoTextarea({ icon: Icon, label, required, value, onChange, error, placeholder, rows = 3 }) {
+    const id = useId();
     return (
         <div className="space-y-1.5">
-            <label className={THEME_LABEL}>{label}</label>
+            <label htmlFor={id} className={THEME_LABEL}>{label}</label>
             <div className="theme-field-with-icon theme-field-with-icon--textarea relative">
                 <Icon className="theme-field-icon" aria-hidden />
-                <textarea
+                <textarea id={id} aria-invalid={!!error} autoComplete="off"
                     required={required}
                     value={value}
                     onChange={(e) => onChange(e.target.value)}
@@ -78,7 +80,7 @@ export default function ModalFormOperativa({ onClose, onExito, procesos = [], ba
     const temporizadorBusqueda = useRef(null);
     const abortBusquedaCliente = useRef(null);
 
-    const { data, setData, post, processing, errors, reset } = useForm({
+    const { data, setData, post, processing, errors, reset, isDirty } = useForm({
         numero_cliente: '',
         nombre_cliente: '',
         catalogo_proceso_id: procesoInicialId || '',
@@ -159,8 +161,8 @@ export default function ModalFormOperativa({ onClose, onExito, procesos = [], ba
 
     const tituloProceso = procesoSeleccionado?.nombre || 'Solicitar Cotizacion Sobre Pedido Cancelado';
 
-    return createPortal(
-        <div className={`${THEME_MODAL_OVERLAY} items-start sm:items-center py-4 sm:py-6`} onClick={onClose}>
+    return (
+        <SolicitudDialog onClose={onClose} busy={processing} title="Nueva solicitud operativa" dirty={isDirty}>
             <div
                 className={`${THEME_MODAL_SHELL} max-w-2xl w-full flex flex-col text-left`}
                 style={{ maxHeight: 'calc(100dvh - 2rem)' }}
@@ -177,7 +179,7 @@ export default function ModalFormOperativa({ onClose, onExito, procesos = [], ba
                     </div>
                     <button
                         type="button"
-                        onClick={onClose}
+                        data-dialog-close onClick={onClose}
                         className="p-2 rounded-full theme-text-muted hover:theme-text-main hover:bg-black/5 dark:hover:bg-white/5 transition-colors outline-none shrink-0"
                         aria-label="Cerrar"
                     >
@@ -189,9 +191,9 @@ export default function ModalFormOperativa({ onClose, onExito, procesos = [], ba
                     <div className="gelia-modal-body p-5 md:p-6 space-y-6">
                         {!procesoInicialId && (
                             <div className="space-y-1.5">
-                                <label className={THEME_LABEL}>Tipo de solicitud</label>
+                                <label htmlFor="operativa-proceso" className={THEME_LABEL}>Tipo de solicitud</label>
                                 <div className="relative">
-                                    <select
+                                    <select id="operativa-proceso" name="catalogo_proceso_id"
                                         required
                                         value={data.catalogo_proceso_id}
                                         onChange={(e) => setData('catalogo_proceso_id', e.target.value)}
@@ -209,10 +211,10 @@ export default function ModalFormOperativa({ onClose, onExito, procesos = [], ba
                         )}
 
                         <div className="space-y-1.5 relative">
-                            <label className={THEME_LABEL}>Cliente</label>
+                            <label htmlFor="operativa-cliente" className={THEME_LABEL}>Cliente</label>
                             <div className="theme-field-with-icon relative">
                                 <Search className="theme-field-icon" aria-hidden />
-                                <input
+                                <input id="operativa-cliente" name="numero_cliente" autoComplete="off"
                                     type="text"
                                     required
                                     value={data.numero_cliente}
@@ -252,8 +254,8 @@ export default function ModalFormOperativa({ onClose, onExito, procesos = [], ba
                                 <Campo icon={Calendar} label="Fecha" type="date" required value={data.fecha_operacion} onChange={(v) => setData('fecha_operacion', v)} error={errors.fecha_operacion} />
                                 <CampoTextarea icon={FileText} label="Motivo" required value={data.motivo_operacion} onChange={(v) => setData('motivo_operacion', v)} error={errors.motivo_operacion} placeholder="Describe el motivo de la cancelación…" />
                                 <div className="space-y-1.5">
-                                    <label className={THEME_LABEL}>Banco</label>
-                                    <SelectConIcono
+                                    <label htmlFor="operativa-banco" className={THEME_LABEL}>Banco</label>
+                                    <SelectConIcono id="operativa-banco" label="Banco"
                                         icon={Landmark}
                                         required
                                         value={data.catalogo_banco_id}
@@ -316,7 +318,6 @@ export default function ModalFormOperativa({ onClose, onExito, procesos = [], ba
                     </div>
                 </form>
             </div>
-        </div>,
-        document.body
+        </SolicitudDialog>
     );
 }

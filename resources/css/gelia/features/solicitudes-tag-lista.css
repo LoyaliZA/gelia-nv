@@ -1,0 +1,680 @@
+/* Tag and Lista inherit Gelia; refinements stay local to this workspace. */
+
+.gelia-tag-lista,
+.gelia-tag-lista-overlay {
+    --solicitudes-radius: 0.875rem;
+    --tag-motion: 180ms;
+    --tag-ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+    --tag-accent-soft: color-mix(in srgb, var(--color-primario) 6%, var(--theme-surface-solid));
+}
+
+.gelia-tag-lista :is(.uppercase, [class*="tracking-wide"]),
+.gelia-tag-lista-overlay :is(.uppercase, [class*="tracking-wide"]) {
+    text-transform: none;
+    letter-spacing: normal;
+}
+
+.gelia-tag-lista .gelia-solicitudes-indicadores {
+    gap: 0;
+    border: 1px solid var(--theme-border);
+    border-radius: var(--solicitudes-radius);
+    overflow: hidden;
+    background: var(--theme-surface-solid);
+}
+
+.gelia-tag-lista .gelia-solicitudes-indicador {
+    border: 0;
+    border-radius: 0;
+    padding: 0.875rem 1.25rem;
+    background: transparent;
+}
+
+.gelia-tag-lista .gelia-solicitudes-indicador + .gelia-solicitudes-indicador {
+    border-left: 1px solid var(--theme-border);
+}
+
+.gelia-tag-lista .gelia-solicitudes-indicador:hover {
+    background: var(--tag-accent-soft);
+}
+
+.gelia-tag-lista .gelia-solicitudes-indicador:focus-visible {
+    outline-offset: -3px;
+}
+
+.gelia-tag-filtros > div:first-child {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.gelia-tag-filtros > div:first-child > div {
+    width: 100%;
+    max-width: none;
+}
+
+.gelia-tag-filtros-bar {
+    gap: 1rem;
+}
+
+.gelia-tag-filtros .gelia-tag-filtros-tabs.gelia-segment {
+    background-color: var(--gelia-segment-bg);
+    border: 1px solid var(--gelia-segment-border);
+    border-radius: calc(var(--solicitudes-radius) - 2px);
+    box-shadow: none;
+    padding: 0.25rem;
+}
+
+html:not(.glass-active) .gelia-tag-lista .gelia-tag-filtros .gelia-tag-filtros-tabs.gelia-segment {
+    background-color: var(--theme-surface-solid);
+}
+
+.gelia-tag-resultados.gelia-titulo-card,
+.gelia-tag-filtros-bar.gelia-titulo-card {
+    box-shadow: var(--theme-shadow-card);
+}
+
+.gelia-tag-resultados-kpis.gelia-solicitudes-indicadores {
+    margin: 0;
+}
+
+.gelia-tag-resultados-details {
+    margin-top: 0;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--theme-border);
+}
+
+.gelia-tag-resultados-details-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding-top: 0.5rem;
+}
+
+.gelia-tag-resultados-tipos {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+    gap: 0.75rem;
+}
+
+.gelia-tag-resultados-tipo {
+    padding: 0.875rem 1rem;
+    border: 1px solid var(--theme-border);
+    border-radius: calc(var(--solicitudes-radius) - 2px);
+    background: var(--theme-element-bg);
+    text-align: left;
+}
+
+html:not(.glass-active) .gelia-tag-lista .gelia-tag-resultados-tipo {
+    background: color-mix(in srgb, var(--theme-surface-solid) 92%, var(--theme-text-main) 8%);
+}
+
+.gelia-tag-resultados-tipo-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+    margin: 0;
+    cursor: pointer;
+    transition: border-color var(--tag-motion), box-shadow var(--tag-motion), background-color var(--tag-motion);
+}
+
+.gelia-tag-resultados-tipo-btn:hover {
+    border-color: color-mix(in srgb, var(--color-primario) 35%, var(--theme-border));
+    background: var(--tag-accent-soft);
+}
+
+.gelia-tag-resultados-tipo-btn[data-active='true'] {
+    border-color: var(--color-primario);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-primario) 45%, transparent);
+    background: color-mix(in srgb, var(--color-primario) 8%, var(--theme-element-bg));
+}
+
+.gelia-tag-resultados-tipo-encabezado {
+    display: flex;
+    min-width: 0;
+}
+
+.gelia-tag-resultados-tipo-encabezado .inline-flex {
+    max-width: 100%;
+}
+
+.gelia-tag-resultados-tipo-resumen {
+    display: flex;
+    align-items: baseline;
+    gap: 0.35rem;
+    margin-top: 0.625rem;
+}
+
+.gelia-tag-resultados-tipo-resumen-total {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--theme-text-main);
+    line-height: 1.2;
+}
+
+.gelia-tag-resultados-tipo-metricas {
+    display: none;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem 1rem;
+    margin: 0.75rem 0 0;
+}
+
+.gelia-tag-resultados-limpiar-tipo {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.375rem 0.75rem;
+    border: 1px solid var(--theme-border);
+    border-radius: 0.625rem;
+    background: var(--theme-element-bg);
+    color: var(--theme-text-main);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.gelia-tag-resultados-limpiar-tipo:hover {
+    border-color: var(--color-primario);
+    color: var(--color-primario);
+}
+
+@media (width >= 640px) {
+    .gelia-tag-resultados-tipo-resumen {
+        display: none;
+    }
+
+    .gelia-tag-resultados-tipo-metricas {
+        display: grid;
+    }
+}
+
+@media (width >= 1024px) {
+    .gelia-tag-resultados-tipo-metricas {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+}
+
+.gelia-tag-lista :is(.gelia-tag-card, .gelia-tag-table tbody tr) {
+    transition: background-color var(--tag-motion), border-color var(--tag-motion);
+}
+
+.gelia-tag-card:hover {
+    border-color: color-mix(in srgb, var(--color-primario) 30%, var(--theme-border));
+}
+
+.gelia-tag-table td {
+    padding-block: 1rem;
+}
+
+.gelia-tag-table td:nth-child(3) {
+    max-width: 25rem;
+}
+
+.gelia-tag-table tbody tr:last-child {
+    border-bottom: 0;
+}
+
+.gelia-tag-table tbody tr:hover {
+    background: var(--tag-accent-soft);
+}
+
+.gelia-tag-resumen {
+    margin-top: 0.75rem;
+    max-width: 42ch;
+}
+
+.gelia-tag-resumen > p {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.5;
+}
+
+.gelia-tag-detail-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 2.75rem;
+    margin-top: 0.25rem;
+    padding: 0.375rem 0;
+    color: var(--solicitudes-acento-accion);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    cursor: pointer;
+    text-align: left;
+}
+
+.gelia-tag-detail-link:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.gelia-tag-quick-action {
+    min-height: 2.75rem;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--theme-border);
+    border-radius: 0.625rem;
+    color: var(--solicitudes-acento-accion);
+    background: var(--tag-accent-soft);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.gelia-tag-quick-action:hover {
+    border-color: var(--solicitudes-acento-accion);
+}
+
+.gelia-tag-unread {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    margin-bottom: 0.375rem;
+    color: var(--solicitudes-acento-accion);
+    font-size: 0.8125rem;
+    font-weight: 600;
+}
+
+.gelia-tag-lista-overlay .gelia-workflow-dialog > .gelia-modal-shell {
+    overflow: hidden;
+    box-shadow: var(--theme-shadow-modal);
+}
+
+.gelia-tag-lista-overlay .gelia-respuesta-comercial {
+    max-width: 48rem;
+}
+
+.gelia-tag-lista-overlay .gelia-modal-body {
+    scroll-padding-block: 1.5rem;
+}
+
+.gelia-tag-lista-overlay :is(p, dd, h2, h3, h4) {
+    overflow-wrap: anywhere;
+}
+
+.gelia-tag-lista-overlay :is(textarea, input, select) {
+    font-size: 0.875rem;
+}
+
+.gelia-tag-lista-overlay textarea {
+    resize: vertical;
+}
+
+.gelia-tag-lista-overlay .gelia-workflow-actions {
+    gap: 0.625rem;
+}
+
+.gelia-tag-menu button {
+    min-height: 2.75rem;
+}
+
+.gelia-tag-lista-overlay .gelia-workflow-actions > button {
+    padding: 0.75rem 1rem;
+}
+
+.gelia-tag-lista-overlay .theme-btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border: 1px solid var(--theme-border);
+    background: var(--theme-element-bg);
+    color: var(--theme-text-main);
+    cursor: pointer;
+}
+
+.gelia-tag-lista-overlay .theme-btn-secondary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.gelia-tag-lista-overlay .theme-btn-secondary:hover:not(:disabled) {
+    border-color: var(--color-primario);
+    background: var(--tag-accent-soft);
+}
+
+.gelia-tag-lista :is(input, select, textarea),
+.gelia-tag-lista-overlay :is(input, select, textarea) {
+    font-weight: 400;
+    min-height: 2.75rem;
+}
+
+.gelia-tag-lista-overlay :is(input[type="checkbox"], input[type="radio"]) {
+    min-height: 0;
+}
+
+.gelia-tag-detail-section > h3 {
+    font-size: 1rem;
+    margin: 0 0 1rem;
+}
+
+.gelia-tag-message {
+    padding: 1rem;
+    border: 1px solid var(--theme-border);
+    border-radius: 0.75rem;
+    background: var(--theme-element-bg);
+}
+
+.gelia-tag-message[data-tone="peligro"] {
+    border-color: color-mix(in srgb, var(--color-peligro) 35%, var(--theme-border));
+    background: color-mix(in srgb, var(--color-peligro) 4%, var(--theme-surface-solid));
+}
+
+.gelia-tag-message :is(h3, h4) {
+    font-size: 0.875rem;
+    margin: 0;
+    font-weight: 600;
+}
+
+.gelia-tag-message p {
+    white-space: pre-wrap;
+    font-size: 0.875rem;
+    line-height: 1.6;
+    margin: 0.5rem 0 0;
+}
+
+.gelia-tag-history-layout {
+    display: grid;
+    grid-template-columns: minmax(14rem, 0.85fr) minmax(0, 2fr);
+}
+
+.gelia-tag-history-summary {
+    padding: 1.5rem;
+    border-right: 1px solid var(--theme-border);
+    background: var(--theme-element-bg);
+}
+
+.gelia-tag-history-summary .gelia-respuesta-contexto {
+    grid-template-columns: 1fr;
+    gap: 0.875rem;
+}
+
+.gelia-tag-history-events {
+    padding: 1.5rem;
+    min-width: 0;
+}
+
+.gelia-tag-timeline {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.gelia-tag-event {
+    display: grid;
+    grid-template-columns: 2rem minmax(0, 1fr);
+    gap: 0.875rem;
+    position: relative;
+    padding-bottom: 1.5rem;
+}
+
+.gelia-tag-event:not(:last-child)::before {
+    content: '';
+    position: absolute;
+    inset: 2rem auto 0 1rem;
+    width: 1px;
+    background: var(--theme-border);
+}
+
+.gelia-tag-event-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    color: var(--theme-text-muted);
+    background: var(--theme-element-bg);
+    border: 1px solid var(--theme-border);
+    border-radius: 50%;
+    z-index: 1;
+}
+
+.gelia-tag-event[data-tone="ok"] .gelia-tag-event-icon {
+    color: var(--color-exito);
+}
+
+.gelia-tag-event[data-tone="error"] .gelia-tag-event-icon {
+    color: var(--color-peligro);
+}
+
+.gelia-tag-event[data-tone="alerta"] .gelia-tag-event-icon {
+    color: var(--color-aviso);
+}
+
+.gelia-tag-event[data-tone="pago"] .gelia-tag-event-icon {
+    color: var(--color-info);
+}
+
+.gelia-tag-event-content {
+    min-width: 0;
+    padding: 0.25rem 0 1rem;
+    border-bottom: 1px solid var(--theme-border);
+}
+
+.gelia-tag-event-message {
+    margin: 0;
+    font-size: 0.875rem;
+    color: var(--theme-text-main);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    line-height: 1.6;
+}
+
+.gelia-tag-event-details {
+    margin-top: 0.75rem;
+}
+
+.gelia-tag-event-details > summary {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+    padding-block: 0.5rem;
+    min-height: 2.75rem;
+    color: var(--solicitudes-acento-accion);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    cursor: pointer;
+    list-style: none;
+}
+
+.gelia-tag-event-details > summary::-webkit-details-marker {
+    display: none;
+}
+
+.gelia-tag-event-details > summary:hover {
+    text-decoration: underline;
+}
+
+.gelia-tag-event-details > summary:focus-visible {
+    outline: 2px solid var(--solicitudes-focus);
+    outline-offset: 3px;
+}
+
+.gelia-tag-event-details > summary svg {
+    transition: transform var(--tag-motion);
+    flex-shrink: 0;
+}
+
+.gelia-tag-event-details[open] > summary svg {
+    transform: rotate(180deg);
+}
+
+.gelia-tag-event-details .font-black {
+    font-weight: 500;
+}
+
+.gelia-tag-event-details [class~="text-[9px]"] {
+    font-size: 0.75rem;
+}
+
+.gelia-tag-menu {
+    max-height: calc(100dvh - 2rem);
+    overflow-y: auto;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+.gelia-tag-lista-overlay {
+    animation: gelia-tag-overlay-in 140ms ease-out;
+}
+
+.gelia-tag-lista-overlay .gelia-workflow-dialog > .gelia-modal-shell {
+    animation: gelia-tag-dialog-in 220ms var(--tag-ease);
+}
+
+.gelia-tag-menu {
+    animation: gelia-tag-dialog-in 140ms ease-out;
+}
+
+.gelia-tag-filtros-panel,
+    .gelia-tag-event-details[open] > div {
+    animation: gelia-tag-panel-in 180ms ease-out;
+}
+
+.gelia-tag-lista :is(button, a),
+    .gelia-tag-lista-overlay :is(button, a) {
+    transition: color 150ms, background-color 150ms, border-color 150ms, box-shadow 150ms;
+}
+
+.gelia-tag-lista-overlay button:active:not(:disabled) {
+    transform: translateY(1px);
+}
+}
+
+@keyframes gelia-tag-overlay-in {
+from {
+    opacity: 0;
+}
+
+to {
+    opacity: 1;
+} }
+
+@keyframes gelia-tag-dialog-in {
+from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+}
+
+to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+} }
+
+@keyframes gelia-tag-panel-in {
+from {
+    opacity: 0;
+    transform: translateY(-4px);
+}
+
+to {
+    opacity: 1;
+    transform: translateY(0);
+} }
+
+@media (width <= 767px) {
+.gelia-tag-lista-overlay .gelia-modal-shell {
+    max-height: calc(100dvh - 1rem - env(safe-area-inset-bottom));
+}
+
+.gelia-tag-history-layout {
+    grid-template-columns: 1fr;
+}
+
+.gelia-tag-history-summary {
+    border-right: 0;
+    border-bottom: 1px solid var(--theme-border);
+    padding: 1rem;
+}
+
+.gelia-tag-history-summary .gelia-respuesta-contexto {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.gelia-tag-history-events {
+    padding: 1rem;
+}
+
+.gelia-tag-lista-overlay :is(textarea, input, select) {
+    font-size: 1rem;
+}
+
+.gelia-tag-lista .gelia-solicitudes-indicadores {
+    grid-template-columns: 1fr;
+}
+
+.gelia-tag-lista .gelia-solicitudes-indicador {
+    padding: 0.75rem 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.gelia-tag-lista .gelia-solicitudes-indicador + .gelia-solicitudes-indicador {
+    border-left: 0;
+    border-top: 1px solid var(--theme-border);
+}
+
+.gelia-tag-lista .gelia-solicitudes-indicador > div:last-child {
+    margin-top: 0;
+}
+
+.gelia-tag-lista .gelia-solicitudes-indicador strong {
+    font-size: 1.25rem;
+}
+
+.gelia-tag-lista .gelia-solicitudes-indicador > div:last-child > svg {
+    display: none;
+}
+}
+
+@media (prefers-reduced-motion: reduce) {
+.gelia-tag-menu,
+    .gelia-tag-lista *,
+    .gelia-tag-lista-overlay * {
+    animation: none !important;
+    transition: none !important;
+}
+}
+
+.gelia-tag-lista-overlay .gelia-tag-comparativa {
+    padding: 1rem;
+    border: 1px solid var(--theme-border);
+    border-radius: 0.75rem;
+}
+
+.gelia-tag-lista-overlay .gelia-tag-comparativa th,
+.gelia-tag-lista-overlay .gelia-tag-comparativa td {
+    padding: 0.65rem 0.35rem;
+    overflow-wrap: anywhere;
+    vertical-align: middle;
+}
+
+.gelia-tag-lista-overlay .gelia-tag-comparativa td:last-child {
+    background: color-mix(in srgb, var(--color-primario) 5%, transparent);
+}
+
+@media (width <= 640px) {
+    .gelia-tag-lista-overlay .gelia-tag-comparativa tr {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 1.25rem minmax(0, 1fr);
+    }
+
+    .gelia-tag-lista-overlay .gelia-tag-comparativa tbody th {
+        grid-column: 1 / -1;
+        padding-bottom: 0;
+        overflow-wrap: normal;
+    }
+
+    .gelia-tag-lista-overlay .gelia-tag-comparativa thead th:first-child {
+        display: none;
+    }
+
+    .gelia-tag-lista-overlay .gelia-tag-comparativa td {
+        min-width: 0;
+        padding-top: 0.4rem;
+    }
+}
+

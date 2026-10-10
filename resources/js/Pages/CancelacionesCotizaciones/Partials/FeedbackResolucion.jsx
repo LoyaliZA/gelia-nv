@@ -1,40 +1,8 @@
-import React, { useState } from 'react';
-import { createPortal } from 'react-dom';
+import EvidenciaSolicitud from '@/Components/Solicitudes/EvidenciaSolicitud';
+import React from 'react';
 import { CheckCircle2, AlertOctagon, MessageSquare } from 'lucide-react';
-import { THEME_MODAL_OVERLAY } from '../../../utils/geliaTheme';
 
 const chipEvidencia = 'inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border theme-element theme-border hover:border-[var(--color-primario)] transition-colors';
-
-const VisorImagenHover = ({ path }) => {
-    const [isHovered, setIsHovered] = useState(false);
-    if (!path) return null;
-
-    const imageUrl = `/storage/${path}`;
-    const esPdf = path.toLowerCase().endsWith('.pdf');
-
-    if (esPdf) {
-        return (
-            <a href={imageUrl} target="_blank" rel="noreferrer" className={chipEvidencia}>
-                <span className="text-[9px] font-black uppercase tracking-widest" style={{ color: 'var(--color-primario)' }}>Ver PDF</span>
-            </a>
-        );
-    }
-
-    return (
-        <div className="inline-block" onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}>
-            <div className={`${chipEvidencia} cursor-pointer`}>
-                <img src={imageUrl} className="w-5 h-5 object-cover rounded shadow-sm" alt="Miniatura" />
-                <span className="text-[9px] font-black uppercase tracking-widest" style={{ color: 'var(--color-primario)' }}>Ver resolución</span>
-            </div>
-            {isHovered && createPortal(
-                <div className={`${THEME_MODAL_OVERLAY} items-center justify-center pointer-events-none`}>
-                    <img src={imageUrl} alt="Evidencia expandida" className="max-w-full max-h-full object-contain rounded-2xl shadow-2xl" />
-                </div>,
-                document.body
-            )}
-        </div>
-    );
-};
 
 export default function FeedbackResolucion({ solicitud }) {
     const esError = solicitud.estado?.nombre === 'Incorrecta';
@@ -78,7 +46,7 @@ export default function FeedbackResolucion({ solicitud }) {
                     <MessageSquare className="w-4 h-4 theme-text-muted mt-0.5 shrink-0" />
                     <div className="min-w-0">
                         <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted mb-0.5 m-0">Nota de vendedora</p>
-                        <p className="text-xs font-bold theme-text-main italic leading-snug m-0 break-words">{solicitud.observaciones_vendedor}</p>
+                        <p className="text-xs font-bold theme-text-main leading-relaxed m-0 break-words">{solicitud.observaciones_vendedor}</p>
                     </div>
                 </div>
             )}
@@ -92,7 +60,7 @@ export default function FeedbackResolucion({ solicitud }) {
                                 {titulo}
                             </p>
                             {ultimaAuditoria?.motivo_reporte && (
-                                <p className="text-xs font-bold italic leading-tight theme-text-main m-0 break-words">
+                                <p className="text-sm font-normal leading-relaxed whitespace-pre-wrap theme-text-main m-0 break-words">
                                     {ultimaAuditoria.motivo_reporte}
                                 </p>
                             )}
@@ -100,7 +68,7 @@ export default function FeedbackResolucion({ solicitud }) {
                     </div>
                     {evidenciaAdmin && (
                         <div className="mt-1">
-                            <VisorImagenHover path={evidenciaAdmin} />
+                            <EvidenciaSolicitud path={evidenciaAdmin} />
                         </div>
                     )}
                 </div>

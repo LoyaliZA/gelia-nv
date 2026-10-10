@@ -1,5 +1,5 @@
+import SolicitudDialog from '@/Components/Solicitudes/SolicitudDialog';
 import React from 'react';
-import { createPortal } from 'react-dom';
 import { useForm } from '@inertiajs/react';
 import { X, XCircle } from 'lucide-react';
 import {
@@ -19,8 +19,8 @@ export default function ModalConfirmarCancelacion({ onClose, onExito, solicitud 
         });
     };
 
-    return createPortal(
-        <div className={`${THEME_MODAL_OVERLAY} items-start sm:items-center py-4 sm:py-6`} onClick={onClose}>
+    return (
+        <SolicitudDialog onClose={onClose} busy={processing} title="Confirmar cancelación">
             <div
                 className={`${THEME_MODAL_SHELL} max-w-md w-full flex flex-col text-left`}
                 onClick={(e) => e.stopPropagation()}
@@ -34,7 +34,7 @@ export default function ModalConfirmarCancelacion({ onClose, onExito, solicitud 
                     </div>
                     <button
                         type="button"
-                        onClick={onClose}
+                        data-dialog-close onClick={onClose}
                         className="p-2 rounded-full theme-text-muted hover:theme-text-main hover:bg-black/5 dark:hover:bg-white/5 transition-colors outline-none shrink-0"
                         aria-label="Cerrar"
                     >
@@ -60,13 +60,12 @@ export default function ModalConfirmarCancelacion({ onClose, onExito, solicitud 
                         >
                             {processing ? 'Confirmando…' : 'Confirmar cancelación'}
                         </button>
-                        <button type="button" onClick={onClose} className={`${THEME_BTN_SECONDARY} w-full`}>
+                        <button type="button" data-dialog-close onClick={onClose} className={`${THEME_BTN_SECONDARY} w-full`}>
                             Volver
                         </button>
                     </div>
                 </form>
             </div>
-        </div>,
-        document.body
+        </SolicitudDialog>
     );
 }

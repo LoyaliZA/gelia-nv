@@ -1,5 +1,5 @@
+import SolicitudDialog from '@/Components/Solicitudes/SolicitudDialog';
 import React, { useEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { X, FileSpreadsheet, Download, ChevronLeft, ChevronRight, Copy, Check, Loader2, Receipt, AlertOctagon, RefreshCw } from 'lucide-react';
 import { ACCENT, BTN_PRIMARY, BTN_SECONDARY, esImagenVoucher, esPdfVoucher, urlArchivoFactura, nombreArchivoFacturaPdf, receptorFiscalDeFactura } from './facturasStyles';
 import { THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from '../../../utils/geliaTheme';
@@ -45,10 +45,6 @@ export default function ModalExpedienteFactura({ onClose, factura: facturaInicia
     const [mensajeSync, setMensajeSync] = useState(null);
     const [errorSync, setErrorSync] = useState(null);
 
-    useEffect(() => {
-        document.body.style.overflow = 'hidden';
-        return () => { document.body.style.overflow = 'unset'; };
-    }, []);
 
     useEffect(() => {
         if (!facturaInicial?.id) return;
@@ -135,8 +131,8 @@ export default function ModalExpedienteFactura({ onClose, factura: facturaInicia
             .finally(() => setAplicandoCliente(false));
     };
 
-    return createPortal(
-        <div className={`${THEME_MODAL_OVERLAY} items-start sm:items-center py-4 sm:py-6`} onClick={onClose}>
+    return (
+        <SolicitudDialog onClose={onClose} busy={aplicandoCliente} title="Expediente fiscal">
             <div
                 className={`${THEME_MODAL_SHELL} max-w-4xl w-full flex flex-col text-left`}
                 style={{ maxHeight: 'calc(100dvh - 2rem)' }}
@@ -152,7 +148,7 @@ export default function ModalExpedienteFactura({ onClose, factura: facturaInicia
                     </div>
                     <button
                         type="button"
-                        onClick={onClose}
+                        data-dialog-close onClick={onClose}
                         className="p-2 theme-text-muted hover:theme-text-main rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors outline-none shrink-0"
                         aria-label="Cerrar"
                     >
@@ -379,10 +375,9 @@ export default function ModalExpedienteFactura({ onClose, factura: facturaInicia
                 </div>
 
                 <div className="gelia-modal-footer p-5 md:p-6 border-t theme-border flex justify-end shrink-0">
-                    <button type="button" onClick={onClose} className={BTN_SECONDARY}>Cerrar</button>
+                    <button type="button" data-dialog-close onClick={onClose} className={BTN_SECONDARY}>Cerrar</button>
                 </div>
             </div>
-        </div>,
-        document.body
+        </SolicitudDialog>
     );
 }

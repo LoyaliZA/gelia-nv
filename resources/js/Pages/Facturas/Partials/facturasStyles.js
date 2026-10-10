@@ -19,10 +19,10 @@ export const INPUT_ERROR = '!border-[var(--color-peligro)] focus:!border-[var(--
 export const TEXTO_ERROR = 'text-[var(--color-peligro)]';
 
 export const ESTADO_BADGE = {
-    1: 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30',
-    2: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30',
-    3: 'bg-emerald-500/15 text-emerald-800 dark:text-emerald-200 border-emerald-500/30',
-    4: 'bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/30',
+    1: 'gelia-estado-vivo gelia-estado-vivo--compacto gelia-estado-vivo--aviso',
+    2: 'gelia-estado-vivo gelia-estado-vivo--compacto gelia-estado-vivo--exito',
+    3: 'gelia-estado-vivo gelia-estado-vivo--compacto gelia-estado-vivo--info',
+    4: 'gelia-estado-vivo gelia-estado-vivo--compacto gelia-estado-vivo--error',
 };
 
 export const ESTADO_LABELS = {

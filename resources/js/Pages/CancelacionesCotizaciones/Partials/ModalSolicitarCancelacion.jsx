@@ -1,5 +1,5 @@
+import SolicitudDialog from '@/Components/Solicitudes/SolicitudDialog';
 import React from 'react';
-import { createPortal } from 'react-dom';
 import { useForm } from '@inertiajs/react';
 import { X, Ban, Send } from 'lucide-react';
 import {
@@ -11,7 +11,7 @@ import {
 } from '../../../utils/geliaTheme';
 
 export default function ModalSolicitarCancelacion({ onClose, onExito, solicitud }) {
-    const { data, setData, post, processing } = useForm({
+    const { data, setData, post, processing, isDirty } = useForm({
         motivo_cancelacion: '',
     });
 
@@ -22,8 +22,8 @@ export default function ModalSolicitarCancelacion({ onClose, onExito, solicitud 
         });
     };
 
-    return createPortal(
-        <div className={`${THEME_MODAL_OVERLAY} items-start sm:items-center py-4 sm:py-6`} onClick={onClose}>
+    return (
+        <SolicitudDialog onClose={onClose} busy={processing} title="Solicitar cancelación" dirty={isDirty}>
             <div
                 className={`${THEME_MODAL_SHELL} max-w-md w-full flex flex-col text-left`}
                 onClick={(e) => e.stopPropagation()}
@@ -37,7 +37,7 @@ export default function ModalSolicitarCancelacion({ onClose, onExito, solicitud 
                     </div>
                     <button
                         type="button"
-                        onClick={onClose}
+                        data-dialog-close onClick={onClose}
                         className="p-2 rounded-full theme-text-muted hover:theme-text-main hover:bg-black/5 dark:hover:bg-white/5 transition-colors outline-none shrink-0"
                         aria-label="Cerrar"
                     >
@@ -74,7 +74,6 @@ export default function ModalSolicitarCancelacion({ onClose, onExito, solicitud 
                     </div>
                 </form>
             </div>
-        </div>,
-        document.body
+        </SolicitudDialog>
     );
 }

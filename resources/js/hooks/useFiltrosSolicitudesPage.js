@@ -6,9 +6,9 @@ export function calcularRangoFechas(tipo, fInicio, fFin) {
     let inicioCalculado = fInicio;
     let finCalculado = fFin;
 
-    if (tipo !== 'PERSONALIZADO' && tipo !== 'TODAS') {
+    if (tipo !== 'PERSONALIZADO' && tipo !== 'MES_ESPECIFICO' && tipo !== 'TODAS') {
         const hoy = new Date();
-        const formatDate = (d) => d.toISOString().split('T')[0];
+        const formatDate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
         if (tipo === 'HOY') {
             inicioCalculado = finCalculado = formatDate(hoy);
@@ -18,9 +18,12 @@ export function calcularRangoFechas(tipo, fInicio, fFin) {
             inicioCalculado = finCalculado = formatDate(ayer);
         } else if (tipo === 'SEMANA') {
             const primerDia = new Date(hoy);
-            primerDia.setDate(primerDia.getDate() - primerDia.getDay() + 1);
+            primerDia.setDate(primerDia.getDate() - (primerDia.getDay() + 6) % 7);
             inicioCalculado = formatDate(primerDia);
             finCalculado = formatDate(hoy);
+        } else if (tipo === 'MES_ANTERIOR') {
+            inicioCalculado = formatDate(new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1));
+            finCalculado = formatDate(new Date(hoy.getFullYear(), hoy.getMonth(), 0));
         } else if (tipo === 'MES') {
             const primerDiaMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
             inicioCalculado = formatDate(primerDiaMes);
@@ -47,6 +50,9 @@ export default function useFiltrosSolicitudesPage({
     const [busqueda, setBusqueda] = useState(filtros.q || '');
     const [filtroVendedor, setFiltroVendedor] = useState(filtros.vendedor_id || '');
     const [filtroMotivo, setFiltroMotivo] = useState(filtros.motivo_incorrecta || '');
+    const [filtroLista, setFiltroLista] = useState(filtros.lista_id || '');
+    const [filtroTipoCliente, setFiltroTipoCliente] = useState(filtros.tipo_cliente_id || '');
+    const [filtroTag, setFiltroTag] = useState(filtros.tag || '');
     const [tipoFecha, setTipoFecha] = useState(filtros.tipo_fecha || 'TODAS');
     const [fechaInicio, setFechaInicio] = useState(filtros.fecha_inicio || '');
     const [fechaFin, setFechaFin] = useState(filtros.fecha_fin || '');
@@ -56,6 +62,9 @@ export default function useFiltrosSolicitudesPage({
         setBusqueda(filtros.q || '');
         setFiltroVendedor(filtros.vendedor_id || '');
         setFiltroMotivo(filtros.motivo_incorrecta || '');
+        setFiltroLista(filtros.lista_id || '');
+        setFiltroTipoCliente(filtros.tipo_cliente_id || '');
+        setFiltroTag(filtros.tag || '');
         setTipoFecha(filtros.tipo_fecha || 'TODAS');
         setFechaInicio(filtros.fecha_inicio || '');
         setFechaFin(filtros.fecha_fin || '');
@@ -64,14 +73,17 @@ export default function useFiltrosSolicitudesPage({
         filtros.q,
         filtros.vendedor_id,
         filtros.motivo_incorrecta,
+        filtros.lista_id,
+        filtros.tipo_cliente_id,
+        filtros.tag,
         filtros.tipo_fecha,
         filtros.fecha_inicio,
         filtros.fecha_fin,
     ]);
 
     const filtrosAdicionalesActivos = useMemo(
-        () => [filtroVendedor, filtroMotivo, tipoFecha !== 'TODAS' ? tipoFecha : ''].filter(Boolean).length,
-        [filtroVendedor, filtroMotivo, tipoFecha]
+        () => [filtroLista, filtroTipoCliente, filtroTag, filtroVendedor, filtroMotivo, tipoFecha !== 'TODAS' ? tipoFecha : ''].filter(Boolean).length,
+        [filtroLista, filtroTipoCliente, filtroTag, filtroVendedor, filtroMotivo, tipoFecha]
     );
 
     const construirParams = useCallback(
@@ -89,6 +101,9 @@ export default function useFiltrosSolicitudesPage({
             return Object.fromEntries(
                 Object.entries({
                     tab: tabFinal !== 'TODAS' ? tabFinal : undefined,
+                    lista_id: (overrides.lista_id ?? filtroLista) || undefined,
+                    tipo_cliente_id: (overrides.tipo_cliente_id ?? filtroTipoCliente) || undefined,
+                    tag: (overrides.tag ?? filtroTag) || undefined,
                     vendedor_id: vendedorId || undefined,
                     tipo_fecha: tipo !== 'TODAS' ? tipo : undefined,
                     fecha_inicio: inicioCalculado || undefined,
@@ -99,10 +114,13 @@ export default function useFiltrosSolicitudesPage({
                 }).filter(([, v]) => v !== '' && v !== null && v !== undefined)
             );
         },
-        [tabActiva, filtroVendedor, filtroMotivo, tipoFecha, busqueda, fechaInicio, fechaFin]
+        [tabActiva, filtroLista, filtroTipoCliente, filtroTag, filtroVendedor, filtroMotivo, tipoFecha, busqueda, fechaInicio, fechaFin]
     );
 
     const sincronizarEstadoFiltros = useCallback((overrides = {}) => {
+        if (overrides.lista_id !== undefined) setFiltroLista(overrides.lista_id);
+        if (overrides.tipo_cliente_id !== undefined) setFiltroTipoCliente(overrides.tipo_cliente_id);
+        if (overrides.tag !== undefined) setFiltroTag(overrides.tag);
         if (overrides.tab !== undefined) setTabActiva(overrides.tab);
         if (overrides.vendedor_id !== undefined) setFiltroVendedor(overrides.vendedor_id);
         if (overrides.motivo_incorrecta !== undefined) {
@@ -153,6 +171,9 @@ export default function useFiltrosSolicitudesPage({
     const limpiarFiltrosAdicionales = useCallback(() => {
         const nuevaTab = filtroMotivo ? 'TODAS' : tabActiva;
         aplicarFiltros({
+            lista_id: '',
+            tipo_cliente_id: '',
+            tag: '',
             vendedor_id: '',
             motivo_incorrecta: '',
             tipo_fecha: 'TODAS',
@@ -170,6 +191,9 @@ export default function useFiltrosSolicitudesPage({
         tipoFecha,
         fechaInicio,
         fechaFin,
+        filtroLista,
+        filtroTipoCliente,
+        filtroTag,
         filtroVendedor,
         filtroMotivo,
         filtrosAdicionalesActivos,

@@ -1,229 +1,37 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Search, Calendar, SlidersHorizontal, X, ChevronDown } from 'lucide-react';
-import { geliaCardClass } from '../../../utils/geliaTheme';
-import { TIPOS_OPERATIVO, BTN_PRIMARY, BTN_SECONDARY, GELIA_SEGMENT_TABS_SCROLL, GELIA_SEGMENT_TABS_TRACK, GELIA_SEGMENT_TABS_TRACK_COMPACT } from './operativasStyles';
+import React, { useEffect, useState } from 'react';
+import { Search, SlidersHorizontal, X } from 'lucide-react';
+import { TIPOS_OPERATIVO, BTN_PRIMARY, BTN_SECONDARY } from './operativasStyles';
 
-const TABS = ['TODAS', 'PENDIENTES', 'RESPONDIDAS', 'VERIFICADAS', 'INCORRECTAS', 'CANCELADAS'];
+const TABS = [
+    ['TODAS', 'Todas'], ['PENDIENTES', 'Pendientes'], ['RESPONDIDAS', 'Respondidas'],
+    ['VERIFICADAS', 'Verificadas'], ['INCORRECTAS', 'Incorrectas'], ['CANCELADAS', 'Canceladas'],
+];
 
-const TAB_LABELS = {
-    TODAS: 'Todas',
-    PENDIENTES: 'Pendientes',
-    RESPONDIDAS: 'Respondidas',
-    VERIFICADAS: 'Verificadas',
-    INCORRECTAS: 'Incorrectas',
-    CANCELADAS: 'Canceladas',
-};
-
-export default function FiltrosOperativas({
-    tabActiva,
-    busqueda = '',
-    tipoOperativo,
-    fechaInicio,
-    fechaFin,
-    filtroVendedor,
-    vendedores = [],
-    filtrosActivos = 0,
-    onCambiarTab,
-    onAplicarFiltros,
-    onCambiarTipo,
-    onLimpiarAdicionales,
-    listaCargando = false,
-}) {
+export default function FiltrosOperativas({ tabActiva, busqueda = '', tipoOperativo, fechaInicio = '', fechaFin = '', filtroVendedor = '', vendedores = [], filtrosActivos = 0, onCambiarTab, onAplicarFiltros, onCambiarTipo, onLimpiarAdicionales, listaCargando = false }) {
     const [mostrarAdicionales, setMostrarAdicionales] = useState(filtrosActivos > 0);
     const [busquedaLocal, setBusquedaLocal] = useState(busqueda);
-
-    useEffect(() => {
-        setBusquedaLocal(busqueda);
-    }, [busqueda]);
-
-    useEffect(() => {
-        if (filtrosActivos > 0) setMostrarAdicionales(true);
-    }, [filtrosActivos]);
-
-    const enviarBusqueda = useCallback(
-        (valor) => {
-            onAplicarFiltros?.({ q: valor.trim() || undefined, page: 1 });
-        },
-        [onAplicarFiltros]
-    );
-
-    const handleBusquedaKeyDown = (e) => {
-        if (e.key !== 'Enter') return;
-        e.preventDefault();
-        enviarBusqueda(busquedaLocal);
-    };
-
+    useEffect(() => setBusquedaLocal(busqueda), [busqueda]);
+    useEffect(() => { if (filtrosActivos > 0) setMostrarAdicionales(true); }, [filtrosActivos]);
     return (
-        <section
-            className={`${geliaCardClass('overflow-hidden')} ${listaCargando ? 'opacity-95' : ''}`}
-            aria-label="Filtros operativas"
-            aria-busy={listaCargando}
-        >
-            <div className="p-4 md:p-5 border-b theme-border flex items-center gap-3">
-                <div className="p-2 rounded-xl theme-element border theme-border shrink-0">
-                    <SlidersHorizontal className="w-4 h-4 theme-text-muted" aria-hidden />
+        <section className="theme-card theme-surface border theme-border p-4 space-y-4" aria-label="Filtros de solicitudes operativas" aria-busy={listaCargando}>
+            <form onSubmit={(event) => { event.preventDefault(); onAplicarFiltros({ q: busquedaLocal.trim() || undefined, page: 1 }); }} className="flex flex-wrap items-end gap-2">
+                <div className="flex-1 min-w-[min(100%,15rem)]">
+                    <label htmlFor="operativas-busqueda" className="theme-label block mb-1.5">Buscar solicitudes</label>
+                    <div className="theme-field-with-icon"><Search className="theme-field-icon" aria-hidden="true" /><input id="operativas-busqueda" name="q" type="search" value={busquedaLocal} onChange={(event) => setBusquedaLocal(event.target.value)} placeholder="Folio, remisión, pedido o cliente…" autoComplete="off" enterKeyHint="search" className="theme-input w-full" /></div>
                 </div>
-                <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0 min-w-0 flex-1">
-                    Filtros
-                </p>
-                {filtrosActivos > 0 && (
-                    <span className="text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-lg border theme-border theme-element shrink-0" style={{ color: 'var(--color-primario)' }}>
-                        {filtrosActivos} activo{filtrosActivos !== 1 ? 's' : ''}
-                    </span>
-                )}
+                <button type="submit" disabled={listaCargando} className={BTN_PRIMARY}><Search className="w-4 h-4" aria-hidden="true" /> Buscar</button>
+                <button type="button" className={BTN_SECONDARY} aria-expanded={mostrarAdicionales} aria-controls="operativas-filtros-extra" onClick={() => setMostrarAdicionales((valor) => !valor)}><SlidersHorizontal className="w-4 h-4" aria-hidden="true" />{mostrarAdicionales ? 'Ocultar filtros' : 'Más filtros'}{filtrosActivos > 0 ? ` (${filtrosActivos})` : ''}</button>
+            </form>
+            <div className="gelia-operativas-filtros-grupos">
+                <div className="min-w-0"><p className="text-xs theme-text-muted mb-1.5 mt-0">Estado</p><div className="gelia-filtros-scroll"><div className="gelia-segment p-1" role="group" aria-label="Estado de solicitudes">{TABS.map(([id, label]) => <button key={id} type="button" className="gelia-segment-btn whitespace-nowrap" aria-pressed={tabActiva === id} data-active={tabActiva === id} onClick={() => onCambiarTab(id)}>{label}</button>)}</div></div></div>
+                <div className="min-w-0"><p className="text-xs theme-text-muted mb-1.5 mt-0">Tipo de operación</p><div className="gelia-filtros-scroll"><div className="gelia-segment p-1" role="group" aria-label="Tipo de operación">{TIPOS_OPERATIVO.map(({ id, label }) => <button key={id || 'todos'} type="button" className="gelia-segment-btn whitespace-nowrap" aria-pressed={tipoOperativo === id} data-active={tipoOperativo === id} onClick={() => onCambiarTipo(id)}>{label}</button>)}</div></div></div>
             </div>
-
-            <div className={`${GELIA_SEGMENT_TABS_SCROLL} p-3 md:p-4 border-b theme-border`}>
-                <div className={`gelia-segment ${GELIA_SEGMENT_TABS_TRACK} p-1 shadow-sm`} role="tablist" aria-label="Estado de solicitudes">
-                    {TABS.map((tab) => (
-                        <button
-                            key={tab}
-                            type="button"
-                            role="tab"
-                            aria-selected={tabActiva === tab}
-                            onClick={() => onCambiarTab(tab)}
-                            className="gelia-segment-btn whitespace-nowrap"
-                            data-active={tabActiva === tab}
-                        >
-                            {TAB_LABELS[tab] || tab}
-                        </button>
-                    ))}
-                </div>
-            </div>
-
-            <div className={`${GELIA_SEGMENT_TABS_SCROLL} p-3 md:p-4 border-b theme-border`}>
-                <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted ml-1 mb-2 m-0">
-                    Tipo de operación
-                </p>
-                <div className={`gelia-segment ${GELIA_SEGMENT_TABS_TRACK_COMPACT} p-1 shadow-sm`} role="tablist" aria-label="Tipo de operación">
-                    {TIPOS_OPERATIVO.map(({ id, label }) => (
-                        <button
-                            key={id || 'all'}
-                            type="button"
-                            role="tab"
-                            aria-selected={tipoOperativo === id}
-                            onClick={() => onCambiarTipo(id)}
-                            className="gelia-segment-btn whitespace-nowrap"
-                            data-active={tipoOperativo === id}
-                        >
-                            {label}
-                        </button>
-                    ))}
-                </div>
-            </div>
-
-            <div className="p-4 md:p-5 flex flex-col sm:flex-row gap-3 sm:gap-4 sm:items-end">
-                <div className="min-w-0 flex-1">
-                    <label htmlFor="operativas-busqueda" className="theme-label ml-1">
-                        Buscar
-                    </label>
-                    <div className="flex flex-col sm:flex-row gap-2 mt-1.5">
-                        <div className="theme-field-with-icon min-w-0 flex-1">
-                            <Search className="theme-field-icon" aria-hidden />
-                            <input
-                                id="operativas-busqueda"
-                                type="text"
-                                value={busquedaLocal}
-                                onChange={(e) => setBusquedaLocal(e.target.value)}
-                                onKeyDown={handleBusquedaKeyDown}
-                                placeholder="Folio, remisión, pedido o cliente"
-                                autoComplete="off"
-                                enterKeyHint="search"
-                                className="theme-input w-full pr-4 py-3 normal-case tracking-normal font-bold text-sm"
-                            />
-                        </div>
-                        <button
-                            type="button"
-                            onClick={() => enviarBusqueda(busquedaLocal)}
-                            disabled={listaCargando}
-                            className={`${BTN_PRIMARY} w-full sm:w-auto shrink-0 px-6`}
-                            aria-label="Buscar solicitudes operativas"
-                        >
-                            <Search className="w-4 h-4 shrink-0" aria-hidden />
-                            Buscar
-                        </button>
-                    </div>
-                </div>
-                <button
-                    type="button"
-                    onClick={() => setMostrarAdicionales((v) => !v)}
-                    className={`${BTN_SECONDARY} w-full sm:w-auto shrink-0`}
-                    aria-expanded={mostrarAdicionales}
-                >
-                    <SlidersHorizontal className="w-4 h-4 shrink-0" />
-                    {mostrarAdicionales ? 'Ocultar' : 'Más filtros'}
-                </button>
-            </div>
-
-            {mostrarAdicionales && (
-                <div className="px-4 md:px-5 pb-5 pt-0 border-t theme-border">
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4">
-                        <div>
-                            <label htmlFor="operativas-vendedor" className="theme-label ml-1">
-                                Vendedor
-                            </label>
-                            <div className="relative mt-1.5">
-                                <select
-                                    id="operativas-vendedor"
-                                    value={filtroVendedor}
-                                    onChange={(e) => onAplicarFiltros({ vendedor_id: e.target.value, page: 1 })}
-                                    className="theme-select w-full py-3 pr-10"
-                                >
-                                    <option value="">Todos</option>
-                                    {vendedores.map((v) => (
-                                        <option key={v.id} value={v.id}>{v.name}</option>
-                                    ))}
-                                </select>
-                                <ChevronDown className="theme-field-with-icon__trailing" aria-hidden />
-                            </div>
-                        </div>
-                        <div>
-                            <label htmlFor="operativas-desde" className="theme-label ml-1">
-                                Desde
-                            </label>
-                            <div className="theme-field-with-icon mt-1.5">
-                                <Calendar className="theme-field-icon" aria-hidden />
-                                <input
-                                    id="operativas-desde"
-                                    type="date"
-                                    value={fechaInicio}
-                                    onChange={(e) => onAplicarFiltros({ fecha_inicio: e.target.value, fecha_fin: fechaFin, page: 1 })}
-                                    className="theme-input w-full pr-4 py-3"
-                                />
-                            </div>
-                        </div>
-                        <div>
-                            <label htmlFor="operativas-hasta" className="theme-label ml-1">
-                                Hasta
-                            </label>
-                            <div className="theme-field-with-icon mt-1.5">
-                                <Calendar className="theme-field-icon" aria-hidden />
-                                <input
-                                    id="operativas-hasta"
-                                    type="date"
-                                    value={fechaFin}
-                                    onChange={(e) => onAplicarFiltros({ fecha_inicio: fechaInicio, fecha_fin: e.target.value, page: 1 })}
-                                    className="theme-input w-full pr-4 py-3"
-                                />
-                            </div>
-                        </div>
-                    </div>
-                    {filtrosActivos > 0 && (
-                        <div className="flex justify-end mt-4">
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    onLimpiarAdicionales?.();
-                                    setMostrarAdicionales(false);
-                                }}
-                                className="inline-flex items-center gap-2 text-[10px] font-black uppercase text-red-500 outline-none"
-                            >
-                                <X className="w-4 h-4 shrink-0" /> Limpiar filtros avanzados
-                            </button>
-                        </div>
-                    )}
-                </div>
-            )}
+            {mostrarAdicionales && <div id="operativas-filtros-extra" className="grid grid-cols-1 sm:grid-cols-3 gap-3 border-t theme-border pt-4">
+                <div><label htmlFor="operativas-vendedor" className="theme-label block mb-1.5">Vendedor</label><select id="operativas-vendedor" name="vendedor_id" value={filtroVendedor} className="theme-select w-full" onChange={(event) => onAplicarFiltros({ vendedor_id: event.target.value || undefined, page: 1 })}><option value="">Todos</option>{vendedores.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}</select></div>
+                <div><label htmlFor="operativas-desde" className="theme-label block mb-1.5">Desde</label><input id="operativas-desde" name="fecha_inicio" type="date" value={fechaInicio} max={fechaFin || undefined} className="theme-input w-full" onChange={(event) => onAplicarFiltros({ fecha_inicio: event.target.value, fecha_fin: fechaFin, page: 1 })} /></div>
+                <div><label htmlFor="operativas-hasta" className="theme-label block mb-1.5">Hasta</label><input id="operativas-hasta" name="fecha_fin" type="date" value={fechaFin} min={fechaInicio || undefined} className="theme-input w-full" onChange={(event) => onAplicarFiltros({ fecha_inicio: fechaInicio, fecha_fin: event.target.value, page: 1 })} /></div>
+                {filtrosActivos > 0 && <button type="button" className={`${BTN_SECONDARY} sm:col-span-3 justify-self-end`} onClick={() => onLimpiarAdicionales?.()}><X className="w-4 h-4" aria-hidden="true" /> Limpiar filtros avanzados</button>}
+            </div>}
         </section>
     );
 }

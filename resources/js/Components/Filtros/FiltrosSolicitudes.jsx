@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Search, Filter, AlertOctagon, SlidersHorizontal, X, Calendar } from 'lucide-react';
+import { normalizarFechaAlConfirmar } from '@/utils/fechaFiltro';
 import RangoFechasPersonalizado from '@/Components/Filtros/RangoFechasPersonalizado';
-import { GELIA_CHIP, GELIA_SEGMENT_TABS_SCROLL, GELIA_SEGMENT_TABS_TRACK_COMPACT, THEME_INPUT, THEME_LABEL, THEME_SELECT } from '@/utils/geliaTheme';
+import { geliaCardClass, GELIA_CHIP, GELIA_SEGMENT_TABS_SCROLL, GELIA_SEGMENT_TABS_TRACK_COMPACT, THEME_INPUT, THEME_LABEL, THEME_SELECT } from '@/utils/geliaTheme';
 
 const TABS = [
     { id: 'TODAS', label: 'Todas' },
@@ -17,6 +18,8 @@ const ETIQUETA_PERIODO = {
     AYER: 'Ayer',
     SEMANA: 'Esta semana',
     MES: 'Este mes',
+    MES_ANTERIOR: 'Mes anterior',
+    MES_ESPECIFICO: 'Mes específico',
     PERSONALIZADO: 'Rango personalizado',
 };
 
@@ -47,8 +50,14 @@ export default function FiltrosSolicitudes({
     idPrefixFechas = 'filtro-fecha',
     etiquetaBuscar = 'Buscar solicitudes',
     mostrarEliminadas = false,
+    variante,
+    mostrarFiltrosClientes = false,
+    filtroLista = '', filtroTipoCliente = '', filtroTag = '',
+    listas = [], tiposCliente = [],
 }) {
-    const tabs = mostrarEliminadas ? TABS : TABS.filter((tab) => tab.id !== 'ELIMINADAS');
+    const filtrosClientes = variante === 'tag-lista' || mostrarFiltrosClientes;
+    const tabsBase = filtrosClientes ? [...TABS.slice(0, 3), { id: 'VIGENTES', label: 'Vigentes' }, ...TABS.slice(3)] : TABS;
+    const tabs = mostrarEliminadas ? tabsBase : tabsBase.filter((tab) => tab.id !== 'ELIMINADAS');
 
     const [mostrarAdicionales, setMostrarAdicionales] = useState(
         filtrosActivos > 0 || tipoFecha !== 'TODAS'
@@ -59,6 +68,12 @@ export default function FiltrosSolicitudes({
     const [fechaFinLocal, setFechaFinLocal] = useState(fechaFin);
     const [vendedorLocal, setVendedorLocal] = useState(filtroVendedor);
     const [motivoLocal, setMotivoLocal] = useState(filtroMotivo);
+
+    const [listaLocal, setListaLocal] = useState(filtroLista);
+    const [tipoClienteLocal, setTipoClienteLocal] = useState(filtroTipoCliente);
+    const [tagLocal, setTagLocal] = useState(filtroTag);
+    const [errorFechas, setErrorFechas] = useState('');
+    useEffect(() => { setListaLocal(filtroLista); setTipoClienteLocal(filtroTipoCliente); setTagLocal(filtroTag); }, [filtroLista, filtroTipoCliente, filtroTag]);
 
     useEffect(() => {
         setBusquedaLocal(busqueda);
@@ -79,7 +94,17 @@ export default function FiltrosSolicitudes({
     }, [filtrosActivos, tipoFecha]);
 
     const aplicarConsulta = () => {
+        if (['PERSONALIZADO', 'MES_ESPECIFICO'].includes(tipoFechaLocal)) {
+            const inicio = normalizarFechaAlConfirmar(fechaInicioLocal);
+            const fin = normalizarFechaAlConfirmar(fechaFinLocal);
+            if (!inicio.ok || !fin.ok || (inicio.valor && fin.valor && inicio.valor > fin.valor) || (tipoFechaLocal === 'MES_ESPECIFICO' && (!inicio.valor || !fin.valor))) {
+                setErrorFechas('Selecciona fechas válidas. La fecha inicial debe ser anterior o igual a la final.');
+                return;
+            }
+        }
+        setErrorFechas('');
         onAplicarFiltros({
+            ...(filtrosClientes ? { lista_id: listaLocal, tipo_cliente_id: tipoClienteLocal, tag: tagLocal } : {}),
             q: busquedaLocal,
             tipo_fecha: tipoFechaLocal,
             fecha_inicio: fechaInicioLocal,
@@ -91,6 +116,7 @@ export default function FiltrosSolicitudes({
     };
 
     const limpiarPanelAdicionales = () => {
+        setListaLocal(''); setTipoClienteLocal(''); setTagLocal(''); setErrorFechas('');
         setTipoFechaLocal('TODAS');
         setFechaInicioLocal('');
         setFechaFinLocal('');
@@ -100,6 +126,8 @@ export default function FiltrosSolicitudes({
     };
 
     const quitarChip = (clave) => {
+        const facetas = { lista_id: setListaLocal, tipo_cliente_id: setTipoClienteLocal, tag: setTagLocal };
+        if (facetas[clave]) { facetas[clave](''); onAplicarFiltros({ [clave]: '' }); return; }
         if (clave === 'q') {
             setBusquedaLocal('');
             onAplicarFiltros({ q: '' });
@@ -124,7 +152,7 @@ export default function FiltrosSolicitudes({
     };
 
     const nombreResponsable = vendedores.find((v) => String(v.id) === String(filtroVendedor))?.name;
-    const etiquetaPeriodo = tipoFecha === 'PERSONALIZADO' && fechaInicio && fechaFin
+    const etiquetaPeriodo = ['PERSONALIZADO', 'MES_ESPECIFICO'].includes(tipoFecha) && fechaInicio && fechaFin
         ? `${fechaInicio} – ${fechaFin}`
         : ETIQUETA_PERIODO[tipoFecha];
 
@@ -133,12 +161,19 @@ export default function FiltrosSolicitudes({
         tipoFecha && tipoFecha !== 'TODAS' ? { clave: 'periodo', etiqueta: etiquetaPeriodo || 'Periodo' } : null,
         filtroVendedor ? { clave: 'vendedor', etiqueta: nombreResponsable || 'Responsable comercial' } : null,
         filtroMotivo ? { clave: 'motivo', etiqueta: ETIQUETA_MOTIVO[filtroMotivo] || filtroMotivo } : null,
+        filtrosClientes && filtroLista ? { clave: 'lista_id', etiqueta: `Lista: ${listas.find(l => String(l.id) === String(filtroLista))?.nombre || filtroLista}` } : null,
+        filtrosClientes && filtroTipoCliente ? { clave: 'tipo_cliente_id', etiqueta: `Tipo: ${filtroTipoCliente === 'SIN_TIPO' ? 'Sin tipo registrado' : tiposCliente.find(t => String(t.id) === String(filtroTipoCliente))?.nombre || filtroTipoCliente}` } : null,
+        filtrosClientes && filtroTag ? { clave: 'tag', etiqueta: filtroTag === 'con_tag' ? 'Con TAG actual' : 'Sin TAG actual' } : null,
     ].filter(Boolean);
 
+    const barFiltrosClass = variante === 'tag-lista'
+        ? geliaCardClass('gelia-tag-filtros-bar p-3 md:p-4')
+        : '';
+
     return (
-        <div className="space-y-3">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                <div className={`gelia-segment ${GELIA_SEGMENT_TABS_SCROLL} w-full p-1 lg:w-auto`}>
+        <div className={`space-y-3 ${variante === 'tag-lista' ? 'gelia-tag-filtros' : ''}`}>
+            <div className={`flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between ${barFiltrosClass}`}>
+                <div className={`gelia-segment gelia-tag-filtros-tabs ${GELIA_SEGMENT_TABS_SCROLL} w-full p-1 shadow-sm lg:w-auto`}>
                     <div className={GELIA_SEGMENT_TABS_TRACK_COMPACT} role="group" aria-label="Estado de la solicitud">
                         {tabs.map((tab) => (
                             <button
@@ -179,8 +214,8 @@ export default function FiltrosSolicitudes({
                         <button
                             type="button"
                             onClick={aplicarConsulta}
-                            className={`inline-flex w-full shrink-0 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white sm:w-auto ${FOCUS}`}
-                            style={{ backgroundColor: 'var(--color-primario)' }}
+                            className={`${variante === 'tag-lista' ? 'theme-btn-primary' : 'text-white'} inline-flex w-full shrink-0 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold sm:w-auto ${FOCUS}`}
+                            style={variante === 'tag-lista' ? undefined : { backgroundColor: 'var(--color-primario)' }}
                             aria-label={etiquetaBuscar}
                         >
                             <Search className="h-4 w-4 shrink-0" aria-hidden="true" />
@@ -191,6 +226,7 @@ export default function FiltrosSolicitudes({
                         type="button"
                         onClick={() => setMostrarAdicionales((v) => !v)}
                         aria-expanded={mostrarAdicionales}
+                        aria-controls={`${idPrefixFechas}-adicionales`}
                         className={`inline-flex w-full shrink-0 items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-medium transition-colors sm:w-auto ${FOCUS} ${mostrarAdicionales || filtrosActivos > 0 || tipoFecha !== 'TODAS' ? 'border-[var(--color-primario)] text-[var(--color-primario)] bg-[color-mix(in_srgb,var(--color-primario)_10%,transparent)]' : 'theme-border theme-element theme-text-muted hover:border-[var(--color-primario)]'}`}
                     >
                         <SlidersHorizontal className="h-4 w-4 shrink-0" aria-hidden="true" />
@@ -223,13 +259,13 @@ export default function FiltrosSolicitudes({
             )}
 
             {mostrarAdicionales && (
-                <div className="theme-surface space-y-4 rounded-xl border theme-border p-4">
+                <div id={`${idPrefixFechas}-adicionales`} className="gelia-tag-filtros-panel theme-surface space-y-4 rounded-xl border theme-border p-4">
                     <div className="flex items-center justify-between gap-3">
                         <p className="m-0 flex items-center gap-2 text-sm font-medium theme-text-main">
                             <Filter className="h-3.5 w-3.5" aria-hidden="true" /> Filtros
                         </p>
                         <p className="m-0 hidden text-xs theme-text-muted sm:block">
-                            Los cambios se aplican al pulsar Buscar
+                            Los cambios se aplican al pulsar {variante === 'tag-lista' ? 'Aplicar filtros' : 'Buscar'}
                         </p>
                         {(filtrosActivos > 0 || tipoFecha !== 'TODAS') && (
                             <button
@@ -258,6 +294,7 @@ export default function FiltrosSolicitudes({
                                 <option value="AYER">Ayer</option>
                                 <option value="SEMANA">Esta semana</option>
                                 <option value="MES">Este mes</option>
+                                {filtrosClientes && <><option value="MES_ANTERIOR">Mes anterior</option><option value="MES_ESPECIFICO">Elegir mes</option></>}
                                 <option value="PERSONALIZADO">Rango personalizado</option>
                             </select>
                         </div>
@@ -299,6 +336,22 @@ export default function FiltrosSolicitudes({
                         </div>
                     </div>
 
+                    {filtrosClientes && <>
+                        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                            {[
+                                ['lista', 'Lista de la solicitud', listaLocal, setListaLocal, listas, 'Todas las listas'],
+                                ['cliente', 'Tipo registrado en la solicitud', tipoClienteLocal, setTipoClienteLocal, [...tiposCliente, { id: 'SIN_TIPO', nombre: 'Sin tipo registrado' }], 'Todos los tipos'],
+                                ['tag', 'TAG actual del cliente', tagLocal, setTagLocal, [{ id: 'con_tag', nombre: 'Clientes con TAG' }, { id: 'sin_tag', nombre: 'Clientes sin TAG' }], 'Con y sin TAG'],
+                            ].map(([key, label, value, setter, options, placeholder]) => <div key={key} className="flex flex-col gap-1.5"><label htmlFor={`${idPrefixFechas}-${key}`} className={THEME_LABEL}>{label}</label><select id={`${idPrefixFechas}-${key}`} value={value} onChange={event => setter(event.target.value)} className={`${THEME_SELECT} w-full`}><option value="">{placeholder}</option>{options.map(option => <option key={option.id} value={option.id}>{option.nombre}</option>)}</select></div>)}
+                        </div>
+                        <p className="m-0 text-xs theme-text-muted">El periodo corresponde a la creación de la solicitud. Para consultar listas aprobadas, combina la lista con Vigentes. El TAG refleja la asignación actual del cliente.</p>
+                    </>}
+                    {tipoFechaLocal === 'MES_ESPECIFICO' && <div className="flex flex-col gap-1.5 max-w-sm"><label htmlFor={`${idPrefixFechas}-mes`} className={THEME_LABEL}>Mes y año</label><input id={`${idPrefixFechas}-mes`} type="month" value={fechaInicioLocal?.slice(0, 7) || ''} className={THEME_INPUT} onChange={event => {
+                        const mes = event.target.value;
+                        setFechaInicioLocal(mes ? `${mes}-01` : '');
+                        const [year, month] = mes.split('-').map(Number);
+                        setFechaFinLocal(mes ? `${mes}-${String(new Date(year, month, 0).getDate()).padStart(2, '0')}` : '');
+                    }} /></div>}
                     {tipoFechaLocal === 'PERSONALIZADO' && (
                         <RangoFechasPersonalizado
                             idPrefix={idPrefixFechas}
@@ -311,6 +364,8 @@ export default function FiltrosSolicitudes({
                             }}
                         />
                     )}
+                    {errorFechas && <p role="alert" className="text-sm theme-text-peligro">{errorFechas}</p>}
+                    {variante === 'tag-lista' && <div className="flex justify-end"><button type="button" className="theme-btn-primary" onClick={aplicarConsulta}>Aplicar filtros</button></div>}
                 </div>
             )}
         </div>

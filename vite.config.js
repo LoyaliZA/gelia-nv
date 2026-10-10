@@ -28,7 +28,7 @@ export default defineConfig(({ mode }) => {
         },
         test: {
             environment: 'node',
-            include: ['resources/js/**/*.test.js'],
+            include: ['resources/js/**/*.test.{js,jsx}'],
         },
         server: {
             host: '0.0.0.0',

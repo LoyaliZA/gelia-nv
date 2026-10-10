@@ -10,6 +10,33 @@ use Illuminate\Database\Eloquent\Builder;
 
 class ListarSolicitudesService
 {
+    public function resumenFiltrado(?User $usuario, array $filtros = []): array
+    {
+        $query = SolicitudTag::query()->whereHas('proceso', fn (Builder $q) =>
+            $q->where('categoria_flujo', '!=', CatalogoProceso::CATEGORIA_OPERATIVO));
+        if ($usuario) $this->aplicarAislamientoDeDatos($query, $usuario);
+        $this->aplicarFiltros($query, $filtros, $usuario);
+
+        $respondida = (int) CatalogoEstadoSolicitud::idDe('Respondida');
+        $verificada = (int) CatalogoEstadoSolicitud::idDe('Verificada');
+        $incorrecta = (int) CatalogoEstadoSolicitud::idDe('Incorrecta');
+        $select = "COUNT(*) AS solicitudes, COUNT(DISTINCT cliente_id) AS clientes,
+            SUM(CASE WHEN catalogo_estado_solicitud_id IN ($respondida, $verificada)
+                AND cancelacion_solicitada_at IS NULL AND rollback_confirmado_at IS NULL THEN 1 ELSE 0 END) AS vigentes,
+            SUM(CASE WHEN catalogo_estado_solicitud_id = $incorrecta THEN 1 ELSE 0 END) AS errores";
+        $normalizar = fn ($fila) => collect(['solicitudes', 'clientes', 'vigentes', 'errores'])
+            ->mapWithKeys(fn ($key) => [$key => (int) $fila->$key])->all();
+        $totales = (clone $query)->selectRaw($select)->first();
+        $tipos = (clone $query)->select('catalogo_tipo_cliente_id')->selectRaw($select)
+            ->with('tipoCliente')->groupBy('catalogo_tipo_cliente_id')->get()
+            ->map(fn ($fila) => array_merge($normalizar($fila), [
+                'id' => $fila->catalogo_tipo_cliente_id,
+                'nombre' => $fila->tipoCliente?->nombre ?? 'Sin tipo registrado',
+            ]))->sortBy('nombre')->values()->all();
+
+        return array_merge($normalizar($totales), ['tipos' => $tipos]);
+    }
+
     public function ejecutar(?User $usuario, array $filtros = [], bool $paginar = true)
     {
         $query = SolicitudTag::with([
@@ -145,10 +172,26 @@ class ListarSolicitudesService
             $query->where('vendedor_id', $filtros['vendedor_id']);
         }
 
+        if (!empty($filtros['lista_id'])) {
+            $query->where('catalogo_lista_descuento_id', $filtros['lista_id']);
+        }
+        if (!empty($filtros['tipo_cliente_id'])) {
+            $filtros['tipo_cliente_id'] === 'SIN_TIPO'
+                ? $query->whereNull('catalogo_tipo_cliente_id')
+                : $query->where('catalogo_tipo_cliente_id', $filtros['tipo_cliente_id']);
+        }
+        if (in_array($filtros['tag'] ?? '', ['con_tag', 'sin_tag'], true)) {
+            $query->whereHas('cliente', fn (Builder $q) => $filtros['tag'] === 'con_tag'
+                ? $q->whereNotNull('vendedor_id') : $q->whereNull('vendedor_id'));
+        }
+
         if (!empty($filtros['fecha_inicio']) && !empty($filtros['fecha_fin'])) {
-            $query->whereBetween('created_at', [$filtros['fecha_inicio'] . ' 00:00:00', $filtros['fecha_fin'] . ' 23:59:59']);
+            $query->whereDate('created_at', '>=', $filtros['fecha_inicio'])
+                ->whereDate('created_at', '<=', $filtros['fecha_fin']);
         } elseif (!empty($filtros['fecha_inicio'])) {
-            $query->whereDate('created_at', $filtros['fecha_inicio']);
+            $query->whereDate('created_at', '>=', $filtros['fecha_inicio']);
+        } elseif (!empty($filtros['fecha_fin'])) {
+            $query->whereDate('created_at', '<=', $filtros['fecha_fin']);
         }
 
         if (!empty($filtros['mes'])) {
@@ -209,6 +252,9 @@ class ListarSolicitudesService
                     });
             }),
             'RESPONDIDAS' => $query->where('catalogo_estado_solicitud_id', $idRespondida),
+            'VIGENTES' => $query->whereIn('catalogo_estado_solicitud_id', array_filter([
+                $idRespondida, CatalogoEstadoSolicitud::idDe('Verificada'),
+            ]))->whereNull('cancelacion_solicitada_at')->whereNull('rollback_confirmado_at'),
             'INCORRECTAS' => $query->where('catalogo_estado_solicitud_id', $idIncorrecta),
             'CANCELADAS' => $idCancelada
                 ? $query->where('catalogo_estado_solicitud_id', $idCancelada)

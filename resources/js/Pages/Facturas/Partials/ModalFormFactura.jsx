@@ -1,5 +1,5 @@
+import SolicitudDialog from '@/Components/Solicitudes/SolicitudDialog';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { useForm, usePage } from '@inertiajs/react';
 import axios from 'axios';
 import { X, Receipt, Search, Download, FileSpreadsheet, AlertOctagon, ExternalLink, RotateCcw, Link2, Copy, Check, Loader2 } from 'lucide-react';
@@ -730,10 +730,10 @@ export default function ModalFormFactura({ onClose, onExito, onBorradorCreado, m
             ? 'Editar Borrador de Factura_'
             : 'Nueva Solicitud de Factura_';
 
-    return createPortal(
-        <div className={`${THEME_MODAL_OVERLAY} items-start sm:items-center py-4 sm:py-6`} onClick={onClose}>
+    return (
+        <SolicitudDialog onClose={onClose} busy={processing || generandoEnlace} title="Solicitud de factura">
             <div
-                className={`${THEME_MODAL_SHELL} max-w-2xl w-full flex flex-col text-left`}
+                className={`${THEME_MODAL_SHELL} max-w-3xl w-full flex flex-col text-left`}
                 style={{ maxHeight: 'calc(100dvh - 2rem)' }}
                 onClick={e => e.stopPropagation()}
             >
@@ -749,7 +749,7 @@ export default function ModalFormFactura({ onClose, onExito, onBorradorCreado, m
                             )}
                         </div>
                     </div>
-                    <button type="button" onClick={onClose} className="p-2 theme-text-muted hover:theme-text-main rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors outline-none shrink-0"><X className="w-5 h-5" /></button>
+                    <button type="button" data-dialog-close onClick={onClose} className="p-2 theme-text-muted hover:theme-text-main rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors outline-none shrink-0" aria-label="Cerrar"><X className="w-5 h-5" /></button>
                 </div>
 
                 <form onSubmit={enviar} className="gelia-modal-body p-5 md:p-6 overflow-y-auto custom-scrollbar flex-1 min-h-0 space-y-6">
@@ -1331,7 +1331,7 @@ export default function ModalFormFactura({ onClose, onExito, onBorradorCreado, m
                 </form>
 
                 {preguntarVinculo && (
-                    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4" onClick={() => setPreguntarVinculo(false)}>
+                    <SolicitudDialog onClose={() => setPreguntarVinculo(false)} title="Vincular receptor fiscal">
                         <div className="theme-surface border theme-border rounded-2xl p-6 max-w-sm w-full space-y-4" onClick={e => e.stopPropagation()}>
                             <p className="text-sm font-bold theme-text-main m-0">
                                 ¿Vincular este receptor fiscal al cliente {clienteSeleccionado?.nombre || 'seleccionado'} para reutilizarlo en próximas facturas?
@@ -1347,10 +1347,9 @@ export default function ModalFormFactura({ onClose, onExito, onBorradorCreado, m
                                 </button>
                             </div>
                         </div>
-                    </div>
+                    </SolicitudDialog>
                 )}
             </div>
-        </div>,
-        document.body
+        </SolicitudDialog>
     );
 }

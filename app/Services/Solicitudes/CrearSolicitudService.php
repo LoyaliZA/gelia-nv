@@ -108,7 +108,7 @@ class CrearSolicitudService
                     : ($compraEnTienda
                         ? 'Creación de solicitud. Compra en tienda: lista Bronce asignada automáticamente. Cotización no requerida.'
                         : 'Creación original de la solicitud.'),
-                'datos_snapshot' => [
+                'datos_snapshot' => array_merge([
                     'monto_cotizado' => $solicitud->monto_cotizado,
                     'proceso_id' => $solicitud->catalogo_proceso_id,
                     'compra_en_tienda' => $compraEnTienda,
@@ -128,8 +128,9 @@ class CrearSolicitudService
                     'motivo_operacion' => $solicitud->motivo_operacion,
                     'catalogo_banco_id' => $solicitud->catalogo_banco_id,
                     'solicitar_cotizacion' => $solicitud->solicitar_cotizacion,
-                    'antes' => $this->snapshotClienteAlCrear($clienteId),
-                ]
+                ], app(SnapshotCotizacionSolicitudService::class)->construir(
+                    $solicitud, $this->snapshotClienteAlCrear($clienteId)
+                ))
             ]);
 
             // 4. Despliegue de Notificaciones

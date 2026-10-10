@@ -1,3 +1,4 @@
+import IndicadoresSolicitudes from '@/Components/Solicitudes/IndicadoresSolicitudes';
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
 import axios from 'axios';
@@ -183,27 +184,17 @@ export default function Index({ auth, facturas, metricas, filtros, vendedores, e
     );
 
     const cardHeader = geliaCardClass('p-6 md:p-10 flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-6');
-    const cardMetricas = geliaCardClass('p-5 md:p-6 flex items-center gap-4 min-w-0');
 
     return (
         <AppLayout>
             <Head title="Solicitudes de Facturas" />
 
-            <GeliaPageShell className="space-y-6 md:space-y-8">
+            <GeliaPageShell className="gelia-solicitudes-workspace space-y-5">
+                <p className="sr-only" role="status">{listaCargando ? 'Actualizando solicitudes…' : `${facturas?.total ?? listaVisible.length} solicitudes disponibles`}</p>
                 <header className={cardHeader}>
                     <div className="min-w-0">
-                        <div className="flex items-center gap-3 mb-2">
-                            <span className="h-1.5 w-12 rounded-full shrink-0" style={{ backgroundColor: 'var(--color-primario)' }} />
-                            <p className="text-[10px] font-black uppercase tracking-[0.3em] m-0" style={{ color: 'var(--color-primario)' }}>
-                                Fiscal
-                            </p>
-                        </div>
-                        <h1 className="text-2xl sm:text-3xl md:text-5xl font-black italic uppercase tracking-tighter theme-text-main m-0 leading-none">
-                            Control de <span style={{ color: 'var(--color-primario)' }}>Facturas</span>
-                        </h1>
-                        <p className="text-[10px] font-bold theme-text-muted uppercase tracking-widest mt-2 m-0">
-                            Solicitudes de facturación y expediente fiscal
-                        </p>
+                        <h1 className="m-0 theme-text-main">Facturas</h1>
+                        <p className="text-sm theme-text-muted mt-1 mb-0">Gestiona solicitudes de facturación y revisa sus documentos y respuestas.</p>
                     </div>
                     <div className="flex flex-wrap gap-2 w-full lg:w-auto shrink-0">
                         {puedeDatosFiscales && (
@@ -224,24 +215,7 @@ export default function Index({ auth, facturas, metricas, filtros, vendedores, e
                     </div>
                 </header>
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 md:gap-6 min-w-0">
-                    {[
-                        { label: 'Borradores', value: metricas?.borradores ?? 0, color: '#94a3b8' },
-                        { label: 'Pendientes', value: metricas?.pendientes ?? 0, color: '#f59e0b' },
-                        { label: 'Respondidas hoy', value: metricas?.respondidas_hoy ?? 0, accent: true },
-                        { label: 'Incorrectas', value: metricas?.incorrectas ?? 0, color: '#ef4444' },
-                    ].map(({ label, value, color, accent }) => (
-                        <div key={label} className={cardMetricas}>
-                            <div className="p-3 rounded-2xl theme-element border theme-border shrink-0">
-                                <Receipt className="w-6 h-6" style={{ color: accent ? 'var(--color-primario)' : color }} />
-                            </div>
-                            <div className="min-w-0">
-                                <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0">{label}</p>
-                                <p className="text-2xl font-black theme-text-main m-0 tabular-nums leading-tight mt-1">{value}</p>
-                            </div>
-                        </div>
-                    ))}
-                </div>
+                <IndicadoresSolicitudes metricas={metricas} borradores onSeleccionar={cambiarTab} />
 
                 <FiltrosFacturas
                     filtros={filtros}

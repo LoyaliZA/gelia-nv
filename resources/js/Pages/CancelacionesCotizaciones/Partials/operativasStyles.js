@@ -10,16 +10,16 @@ import {
 export const ACCENT = 'var(--color-primario)';
 
 export const ESTADO_BADGE = {
-    1: 'bg-amber-500/15 text-amber-600 border-amber-500/30',
-    2: 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30',
-    3: 'bg-emerald-500/15 text-emerald-700 border-emerald-500/30',
-    4: 'bg-red-500/15 text-red-600 border-red-500/30',
+    1: 'gelia-estado-vivo gelia-estado-vivo--compacto gelia-estado-vivo--aviso',
+    2: 'gelia-estado-vivo gelia-estado-vivo--compacto gelia-estado-vivo--exito',
+    3: 'gelia-estado-vivo gelia-estado-vivo--compacto gelia-estado-vivo--info',
+    4: 'gelia-estado-vivo gelia-estado-vivo--compacto gelia-estado-vivo--error',
 };
 
 export const DEPARTAMENTO_BADGE = 'bg-[var(--color-primario)]/15 border-[var(--color-primario)]/30';
 
 export const BTN_PRIMARY = `${THEME_BTN_PRIMARY} theme-btn-primary--compact`;
-export const BTN_SECONDARY = `${THEME_BTN_SECONDARY} theme-btn-primary--compact`;
+export const BTN_SECONDARY = `${THEME_BTN_SECONDARY} theme-btn-secondary--compact`;
 
 export {
     GELIA_SEGMENT_TABS_SCROLL,

@@ -9,7 +9,7 @@ import { geliaCardClass } from '../../../utils/geliaTheme';
 
 const BTN_SECONDARY = 'inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl border theme-border theme-element theme-text-main text-[10px] font-black uppercase tracking-widest hover:border-[var(--color-primario)] hover:text-[var(--color-primario)] transition-all';
 
-export default function Index({ auth, filtros = {}, total = 0, vendedores = [] }) {
+export default function Index({ auth, filtros = {}, total = 0, vendedores = [], listas = [], tipos_cliente = [] }) {
     const [cargando, setCargando] = useState(false);
 
     const {
@@ -19,7 +19,7 @@ export default function Index({ auth, filtros = {}, total = 0, vendedores = [] }
         fechaInicio,
         fechaFin,
         filtroVendedor,
-        filtroMotivo,
+        filtroMotivo, filtroLista, filtroTipoCliente, filtroTag,
         filtrosAdicionalesActivos,
         exportParams,
         aplicarFiltros,
@@ -55,7 +55,7 @@ export default function Index({ auth, filtros = {}, total = 0, vendedores = [] }
                         </p>
                     </div>
                     <div className="flex flex-wrap gap-2 w-full lg:w-auto shrink-0">
-                        <Link href={route('solicitudes.index')} className={BTN_SECONDARY}>
+                        <Link href={route('solicitudes.index', exportParams)} className={BTN_SECONDARY}>
                             Ver listado
                         </Link>
                         <a href={route('reportes.solicitudes.exportar', { ...exportParams, format: 'pdf' })} className={BTN_SECONDARY}>
@@ -103,6 +103,8 @@ export default function Index({ auth, filtros = {}, total = 0, vendedores = [] }
                     fechaFin={fechaFin}
                     filtroVendedor={filtroVendedor}
                     filtroMotivo={filtroMotivo}
+                    filtroLista={filtroLista} filtroTipoCliente={filtroTipoCliente} filtroTag={filtroTag}
+                    listas={listas} tiposCliente={tipos_cliente} mostrarFiltrosClientes
                     vendedores={vendedores}
                     filtrosActivos={filtrosAdicionalesActivos}
                     idPrefixFechas="reporte-fecha"

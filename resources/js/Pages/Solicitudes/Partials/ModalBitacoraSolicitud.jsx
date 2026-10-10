@@ -1,71 +1,10 @@
+import SolicitudDialog from '@/Components/Solicitudes/SolicitudDialog';
 import React, { useState } from 'react';
-import { createPortal } from 'react-dom';
-import { X, History, ShieldCheck, CheckCircle2, FileImage, Camera, Users, TrendingUp, Tag, Server, AlertOctagon, CreditCard } from 'lucide-react';
+import EvidenciaSolicitud from '@/Components/Solicitudes/EvidenciaSolicitud';
+import { eventosHistorial, leerSnapshotSeguro, cotizacionHistorial } from './solicitudHistorial';
+import { X, ShieldCheck, CheckCircle2, TrendingUp, Server, AlertOctagon, CreditCard, MessageSquare, ChevronDown, ArrowRight, Minus } from 'lucide-react';
 
 const money = (v) => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(v || 0);
-
-const LightboxEvidencia = ({ path, onClose }) => {
-    if (!path) return null;
-    const url = `/storage/${path}`;
-    const esPdf = path.toLowerCase().endsWith('.pdf');
-
-    return createPortal(
-        <div
-            className="fixed inset-0 z-[200] flex items-center justify-center bg-black/85 backdrop-blur-md p-4 md:p-8 animate-fade-in"
-            onClick={(e) => {
-                e.stopPropagation();
-                onClose();
-            }}
-        >
-            <button
-                type="button"
-                onClick={(e) => {
-                    e.stopPropagation();
-                    onClose();
-                }}
-                className="absolute top-6 right-6 p-3 rounded-2xl bg-white/10 text-white border border-white/20 hover:bg-white/20 outline-none"
-            >
-                <X className="w-5 h-5" />
-            </button>
-            <div className="max-w-5xl w-full max-h-full" onClick={(e) => e.stopPropagation()}>
-                {esPdf ? (
-                    <iframe title="Evidencia PDF" src={url} className="w-full h-[80vh] rounded-2xl bg-white border border-white/20" />
-                ) : (
-                    <img src={url} alt="Evidencia" className="max-w-full max-h-[85vh] mx-auto object-contain rounded-2xl shadow-2xl" />
-                )}
-            </div>
-        </div>,
-        document.body
-    );
-};
-
-const BotonEvidencia = ({ path, label = 'Ver evidencia', onAbrir, miniatura = false }) => {
-    if (!path) return null;
-    const url = `/storage/${path}`;
-    const esPdf = path.toLowerCase().endsWith('.pdf');
-
-    if (miniatura && !esPdf) {
-        return (
-            <button
-                type="button"
-                onClick={() => onAbrir(path)}
-                className="block w-full rounded-2xl overflow-hidden border theme-border h-32 relative group text-left outline-none"
-            >
-                <img src={url} className="w-full h-full object-cover group-hover:scale-105 transition-transform" alt={label} />
-            </button>
-        );
-    }
-
-    return (
-        <button
-            type="button"
-            onClick={() => onAbrir(path)}
-            className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-blue-500 hover:text-blue-600 transition-colors w-fit outline-none"
-        >
-            <FileImage className="w-3 h-3" /> {esPdf ? `${label} (PDF)` : label}
-        </button>
-    );
-};
 
 const ComparativaSnapshot = ({
     antes,
@@ -77,31 +16,23 @@ const ComparativaSnapshot = ({
     if (!antes && !despues) return null;
 
     const filas = [
-        { label: 'Monto de venta', key: 'monto_venta', formato: money },
-        { label: 'Lista', key: 'lista_nombre', formato: (v) => v || 'Sin lista' },
-        { label: 'TAG (Vendedora)', key: 'tag_vendedor_nombre', formato: (v) => v || 'Sin asignar' },
-        { label: 'Clasificación', key: 'tipo_cliente_nombre', formato: (v) => v || 'Normal' },
+        ['Acumulado de venta', 'monto_venta', money],
+        ['Lista', 'lista_nombre', value => value || 'Sin lista'],
+        ['TAG (vendedora)', 'tag_vendedor_nombre', value => value || 'Sin asignar'],
+        ['Tipo de cliente', 'tipo_cliente_nombre', value => value || 'Sin tipo'],
     ];
-
-    return (
-        <div className="mb-4 p-4 bg-black/5 dark:bg-white/5 rounded-2xl border theme-border">
-            <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted mb-3">{titulo}</p>
-            <div className="grid grid-cols-3 gap-2 text-[9px] font-black uppercase tracking-widest theme-text-muted mb-2">
-                <span>Campo</span>
-                <span className="text-center">{etiquetaIzq}</span>
-                <span className="text-center">{etiquetaDer}</span>
-            </div>
-            {filas.map(({ label, key, formato }) => (
-                <div key={key} className="grid grid-cols-3 gap-2 py-2 border-t theme-border items-center">
-                    <span className="text-[9px] font-black uppercase theme-text-muted">{label}</span>
-                    <span className="text-xs font-bold theme-text-main text-center">{formato(antes?.[key])}</span>
-                    <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 text-center">
-                        {despues ? formato(despues?.[key]) : '—'}
-                    </span>
-                </div>
-            ))}
-        </div>
-    );
+    const mostrar = (valor, formato) => valor === undefined ? 'No registrado' : valor === null ? 'Sin asignar' : formato(valor);
+    return <div className="gelia-tag-comparativa mb-4">
+        <p className="text-sm font-medium theme-text-main mb-3">{titulo}</p>
+        <table className="w-full text-xs"><caption className="sr-only">{titulo}</caption><thead><tr><th scope="col" className="text-left theme-text-muted">Dato</th><th scope="col" className="theme-text-muted">{etiquetaIzq}</th><th scope="col"><span className="sr-only">Transición</span></th><th scope="col" className="theme-text-muted">{etiquetaDer}</th></tr></thead><tbody>
+            {filas.map(([label, key, formato]) => {
+                const conocido = antes?.[key] !== undefined && despues?.[key] !== undefined;
+                const cambio = conocido && String(antes[key] ?? '') !== String(despues[key] ?? '');
+                const Icono = conocido && !cambio ? Minus : ArrowRight;
+                return <tr key={key} className="border-t theme-border" data-changed={cambio}><th scope="row" className="text-left font-medium theme-text-muted">{label}</th><td className="theme-text-main">{mostrar(antes?.[key], formato)}</td><td><Icono className="w-4 h-4 theme-text-muted" aria-hidden="true" /><span className="sr-only">{conocido && !cambio ? 'Sin cambio' : 'Pasa a'}</span></td><td className={cambio ? 'theme-text-primario font-semibold' : 'theme-text-main'}>{mostrar(despues?.[key], formato)}</td></tr>;
+            })}
+        </tbody></table>
+    </div>;
 };
 
 const describirPaso = (registro) => {
@@ -128,7 +59,7 @@ const describirPaso = (registro) => {
         return { titulo: 'Ajuste de lista confirmado', detalle: anterior && nuevo ? `${anterior} → ${nuevo}` : nuevo, tono: 'ok', esSistema: false, modoComparativa: 'default' };
     }
     if (motivo.includes('CORRIGIÓ') || motivo.includes('REPAR')) {
-        return { titulo: 'Solicitud reparada', detalle: anterior && nuevo ? `${anterior} → ${nuevo}` : 'Vuelve a revisión', tono: 'info', esSistema: false, modoComparativa: 'default' };
+        return { titulo: 'Solicitud reparada', detalle: anterior && nuevo ? `${anterior} → ${nuevo}` : 'Vuelve a revisión', tono: 'info', esSistema: false, modoComparativa: 'creacion' };
     }
     if (motivo.includes('REVERSIÓN CONFIRMADA') || motivo.includes('ROLLBACK')) {
         return { titulo: 'Reversión confirmada', detalle: 'Cierre por vencimiento', tono: 'error', esSistema: false, modoComparativa: 'default' };
@@ -150,7 +81,7 @@ const describirPaso = (registro) => {
                 modoComparativa: esCreacion ? 'creacion' : 'default',
             };
         case 'Respondida':
-            return { titulo: anterior === 'Incorrecta' ? 'Respuesta a corrección' : 'Proceso aprobado', detalle: `${anterior || '—'} → Respondida`, tono: 'ok', esSistema: false, modoComparativa: 'default' };
+            return { titulo: anterior === 'Incorrecta' ? 'Respuesta a corrección' : 'Proceso aprobado', detalle: `${anterior || '—'} → Respondida`, tono: 'ok', esSistema: false, modoComparativa: 'aprobacion' };
         case 'Verificada':
             return { titulo: 'Solicitud verificada', detalle: `${anterior || '—'} → Verificada`, tono: 'ok', esSistema: false, modoComparativa: 'default' };
         case 'Incorrecta':
@@ -170,10 +101,13 @@ const describirPaso = (registro) => {
 
 const etiquetasComparativa = (modo) => {
     if (modo === 'creacion') {
-        return { izq: 'Actual', der: 'Cotizado', titulo: 'Estado del cliente al crear' };
+        return { izq: 'Antes de solicitar', der: 'Cotizado / solicitado', titulo: 'Propuesta de ventas' };
+    }
+    if (modo === 'aprobacion') {
+        return { izq: 'Antes de aprobar', der: 'Aplicado al aprobar', titulo: 'Cambios aplicados al cliente' };
     }
     if (modo === 'pago') {
-        return { izq: 'Anterior', der: 'Nuevo (pago confirmado)', titulo: 'Cambios tras confirmar pago' };
+        return { izq: 'Antes del pago', der: 'Confirmado con pago', titulo: 'Cambios tras confirmar pago' };
     }
     return { izq: 'Antes', der: 'Después', titulo: 'Comparativa de cambios en cliente' };
 };
@@ -187,288 +121,78 @@ const estilosPaso = {
     info: { iconBg: 'bg-purple-500 text-white', border: 'theme-border', label: 'text-purple-600 dark:text-purple-400', Icon: ShieldCheck },
 };
 
-export default function ModalBitacoraSolicitud({ onClose, solicitud, listas = [], tiposCliente = [] }) {
-    const [evidenciaAbierta, setEvidenciaAbierta] = useState(null);
-
+export default function ModalBitacoraSolicitud({ onClose, solicitud, listas = [], tiposCliente = [], procesos = [] }) {
+    const [orden, setOrden] = useState('reciente');
     if (!solicitud) return null;
-
-    const auditoriasLimpias = [...(solicitud?.auditorias || [])].sort((a, b) => a.id - b.id);
-    const objListaActual = solicitud.lista_descuento || solicitud.listaDescuento;
-    const objTipoActual = solicitud.tipo_cliente || solicitud.tipoCliente;
-    const consultas = [...(solicitud?.consultas || [])].sort((a, b) => a.id - b.id);
-
+    const objLista = solicitud.lista_descuento || solicitud.listaDescuento;
+    const objTipo = solicitud.tipo_cliente || solicitud.tipoCliente;
+    const eventos = eventosHistorial(solicitud, orden);
+    const fecha = value => value && !Number.isNaN(Date.parse(value)) ? new Intl.DateTimeFormat('es-MX', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : 'Sin fecha';
     return (
-        <>
-            {createPortal(
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-8 bg-black/60 backdrop-blur-md animate-fade-in" onClick={onClose}>
-            <div className="w-full max-w-6xl theme-surface border theme-border shadow-2xl rounded-[2.5rem] p-10 md:p-12 flex flex-col relative modal-pop max-h-[90vh]" onClick={e => e.stopPropagation()}>
-                <button onClick={onClose} className="absolute top-6 right-6 p-3 theme-text-muted hover:theme-text-main theme-element border theme-border rounded-2xl outline-none hover:scale-110 transition-transform z-10">
-                    <X className="w-5 h-5" />
-                </button>
-
-                <div className="flex items-center gap-4 mb-8 shrink-0 border-b theme-border pb-6">
-                    <History className="w-10 h-10 text-purple-500 drop-shadow-sm" />
-                    <div>
-                        <h2 className="text-3xl font-black italic theme-text-main uppercase tracking-tighter m-0">Expediente de Auditoría_</h2>
-                        <p className="text-xs font-bold theme-text-muted uppercase tracking-widest mt-1">Folio: FOL-{solicitud?.id}</p>
-                    </div>
-                </div>
-
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 flex-1 overflow-hidden">
-                    <div className="theme-element border theme-border rounded-3xl p-8 overflow-y-auto custom-scrollbar">
-                        <h3 className="text-sm font-black uppercase text-purple-600 dark:text-purple-400 tracking-widest mb-6">Estado Actual de la Solicitud</h3>
-                        <div className="space-y-6">
-                            <div><p className="text-[10px] font-bold theme-text-muted uppercase mb-1">Cliente</p><p className="text-base font-black theme-text-main">{solicitud?.cliente?.nombre}</p></div>
-                            <div><p className="text-[10px] font-bold theme-text-muted uppercase mb-1">Proceso Solicitado</p><p className="text-base font-black theme-text-main">{solicitud?.proceso?.nombre}</p></div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="p-4 rounded-xl bg-black/5 dark:bg-white/5 border theme-border">
-                                    <p className="text-[10px] font-black uppercase theme-text-muted tracking-widest mb-1 flex items-center gap-1"><Users className="w-3 h-3" /> Clasificación</p>
-                                    <p className="text-sm font-bold theme-text-main">{objTipoActual?.nombre || 'Normal'}</p>
-                                </div>
-                                <div className="p-4 rounded-xl bg-black/5 dark:bg-white/5 border theme-border">
-                                    <p className="text-[10px] font-black uppercase theme-text-muted tracking-widest mb-1 flex items-center gap-1"><TrendingUp className="w-3 h-3" /> Lista Solicitada</p>
-                                    <p className="text-sm font-bold theme-text-main">{objListaActual?.nombre || 'Mantener actual'}</p>
-                                </div>
-                            </div>
-                            <div><p className="text-[10px] font-bold theme-text-muted uppercase mb-1">Cotización Final</p><p className="text-base font-black theme-text-main">{money(solicitud?.monto_cotizado)}</p></div>
-                            <div>
-                                <p className="text-[10px] font-bold theme-text-muted uppercase mb-1">Estado</p>
-                                <p className="text-base font-black theme-text-main">{solicitud?.estado?.nombre || '—'}</p>
-                                {solicitud?.motivo_incorrecta === 'vencimiento_pago' && (
-                                    <p className="text-[10px] font-bold text-red-500 uppercase tracking-widest mt-1">Motivo: pago vencido</p>
-                                )}
-                                {solicitud?.pago_confirmado && (
-                                    <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest mt-1">Pago confirmado</p>
-                                )}
-                            </div>
-                            <div>
-                                <p className="text-[10px] font-bold theme-text-muted uppercase mb-3">Comentario de la Vendedora</p>
-                                {solicitud?.observaciones_vendedor?.trim() ? (
-                                    <p className="text-sm font-bold theme-text-main italic leading-relaxed p-4 rounded-2xl border theme-border theme-element">
-                                        {solicitud.observaciones_vendedor}
-                                    </p>
-                                ) : (
-                                    <p className="text-sm font-bold theme-text-muted italic">Sin comentario registrado.</p>
-                                )}
-                            </div>
-                            {(solicitud?.monto_final_tentativo || solicitud?.total_proyectado_neto) && (
-                                <div className="grid grid-cols-2 gap-3">
-                                    {solicitud.monto_final_tentativo != null && (
-                                        <div>
-                                            <p className="text-[10px] font-bold theme-text-muted uppercase mb-1">Pago Tentativo</p>
-                                            <p className="text-sm font-black theme-text-main">{money(solicitud.monto_final_tentativo)}</p>
-                                        </div>
-                                    )}
-                                    {solicitud.total_proyectado_neto != null && (
-                                        <div>
-                                            <p className="text-[10px] font-bold theme-text-muted uppercase mb-1">Total Neto Proyectado</p>
-                                            <p className={`text-sm font-black ${parseFloat(solicitud.total_proyectado_neto) >= parseFloat(objListaActual?.monto_requerido || 0) ? 'text-emerald-500' : 'text-amber-500'}`}>
-                                                {money(solicitud.total_proyectado_neto)}
-                                            </p>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-                            {solicitud?.compra_en_tienda && (
-                                <p className="text-[10px] font-bold text-[#b87333] dark:text-[#daa520] uppercase tracking-widest flex items-center gap-1">
-                                    Compra en Tienda
-                                </p>
-                            )}
-                            {solicitud?.compra_en_tienda_solo_tag && (
-                                <p className="text-[10px] font-bold text-sky-600 dark:text-sky-400 uppercase tracking-widest flex items-center gap-1">
-                                    Compra Realizada: Solicitar tag
-                                </p>
-                            )}
-                            {solicitud?.confirmo_informacion_escalonamiento && (
-                                <p className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-widest">
-                                    Vendedora confirmó haber informado al cliente que no asciende (umbral efectivo no alcanzado).
-                                </p>
-                            )}
-                            {solicitud?.evidencia_path && (
-                                <div>
-                                    <p className="text-[10px] font-bold theme-text-muted uppercase mb-3">Evidencia Histórica</p>
-                                    <button
-                                        type="button"
-                                        onClick={() => setEvidenciaAbierta(solicitud.evidencia_path)}
-                                        className="block w-full overflow-hidden rounded-2xl border theme-border hover:ring-2 transition-all h-40 outline-none text-left"
-                                    >
-                                        <img src={`/storage/${solicitud.evidencia_path}`} className="w-full h-full object-cover hover:scale-105 transition-transform" alt="Evidencia histórica" />
-                                    </button>
-                                </div>
-                            )}
+        <SolicitudDialog onClose={onClose} title={`Bitácora de FOL-${solicitud.id}`} className="gelia-tag-lista-overlay">
+            <div className="gelia-modal-shell gelia-tag-bitacora w-full max-w-6xl">
+                <header className="gelia-workflow-header">
+                    <div><h2 className="m-0 theme-text-main">Bitácora de la solicitud</h2><p className="m-0 mt-1 text-sm theme-text-muted">FOL-{solicitud.id} · {solicitud.cliente?.nombre || 'Cliente'}</p></div>
+                    <button type="button" data-dialog-close className="gelia-workflow-close" aria-label="Cerrar bitácora"><X className="w-5 h-5" aria-hidden="true" /></button>
+                </header>
+                <div className="gelia-modal-body gelia-tag-history-layout">
+                    <aside className="gelia-tag-history-summary">
+                        <h3 className="m-0 text-base theme-text-main">Resumen actual</h3>
+                        <dl className="gelia-respuesta-contexto mt-4">
+                            {[['Proceso', solicitud.proceso?.nombre], ['Estado', solicitud.estado?.nombre], ['Responsable', solicitud.vendedor?.name], ['Cotización', money(solicitud.monto_cotizado)], ['Tipo solicitado', objTipo?.nombre || 'Mantener actual'], ['Lista solicitada', objLista?.nombre || 'Mantener actual']].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value || '—'}</dd></div>)}
+                        </dl>
+                        <div className="space-y-3 mt-5 text-sm theme-text-muted">
+                            {solicitud.pago_confirmado && <p className="theme-text-exito">Pago confirmado</p>}
+                            {solicitud.compra_en_tienda && <p>Compra en tienda</p>}
+                            {solicitud.compra_en_tienda_solo_tag && <p>Compra realizada: solicitar TAG</p>}
+                            {solicitud.monto_final_tentativo != null && <p>Pago tentativo: {money(solicitud.monto_final_tentativo)}</p>}
+                            {solicitud.total_proyectado_neto != null && <p>Total neto proyectado: {money(solicitud.total_proyectado_neto)}</p>}
+                            {solicitud.confirmo_informacion_escalonamiento && <p>Ventas confirmó haber informado al cliente que no alcanza el siguiente nivel.</p>}
+                            {solicitud.motivo_incorrecta && <p className="theme-text-peligro">Incidencia: {solicitud.motivo_incorrecta.replaceAll('_', ' ')}</p>}
                         </div>
-                    </div>
-
-                    <div className="overflow-y-auto custom-scrollbar relative px-6 py-4 before:absolute before:inset-0 before:ml-6 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-purple-300 dark:before:via-purple-900/50 before:to-transparent">
-                        <h3 className="text-sm font-black uppercase text-purple-600 dark:text-purple-400 tracking-widest mb-8 ml-8 relative z-10 theme-surface inline-block pr-4">Línea de Tiempo Operativa</h3>
-
-                        <div className="space-y-8">
-                            {auditoriasLimpias.length === 0 && consultas.length === 0 && (
-                                <p className="ml-10 text-xs font-bold theme-text-muted italic">No hay registros de auditoría disponibles.</p>
-                            )}
-
-                            {auditoriasLimpias.map((registro, idx) => {
-                                const paso = describirPaso(registro);
-                                const estilo = estilosPaso[paso.tono] || estilosPaso.info;
-                                const IconoPaso = estilo.Icon;
-                                const snapshot = typeof registro.datos_snapshot === 'string' ? JSON.parse(registro.datos_snapshot) : registro.datos_snapshot;
-                                const nombreListaHistorial = snapshot?.lista_descuento_id ? listas.find(l => l.id == snapshot.lista_descuento_id)?.nombre : null;
-                                const nombreTipoHistorial = snapshot?.tipo_cliente_id ? tiposCliente.find(t => t.id == snapshot.tipo_cliente_id)?.nombre : null;
-                                const actor = paso.esSistema ? 'Sistema' : (registro.usuario?.name || 'Usuario');
+                        {solicitud.observaciones_vendedor && <section className="gelia-tag-message mt-5"><h3>Comentario de ventas</h3><p>{solicitud.observaciones_vendedor}</p></section>}
+                        {solicitud.motivo_cancelacion && <section className="gelia-tag-message mt-5" data-tone="peligro"><h3>{solicitud.estado?.nombre === 'Cancelada' ? 'Motivo de cancelación' : 'Cancelación solicitada'}</h3><p>{solicitud.motivo_cancelacion}</p>{(solicitud.lista_rebaja || solicitud.listaRebaja)?.nombre && <p>Lista de rebaja: {(solicitud.lista_rebaja || solicitud.listaRebaja).nombre}</p>}</section>}
+                        {solicitud.evidencia_path && <div className="mt-4"><EvidenciaSolicitud path={solicitud.evidencia_path} title="Evidencia de la solicitud" dialogClassName="gelia-tag-lista-overlay" /></div>}
+                    </aside>
+                    <section className="gelia-tag-history-events" aria-label="Cronología de la solicitud">
+                        <div className="flex flex-wrap items-center justify-between gap-3 mb-5"><h3 className="m-0 text-base theme-text-main">Actividad <span className="theme-text-muted font-normal">({eventos.length})</span></h3><label className="flex items-center gap-2 text-xs theme-text-muted">Orden<select name="orden-bitacora" value={orden} onChange={event => setOrden(event.target.value)} className="theme-select text-sm"><option value="reciente">Más reciente primero</option><option value="antiguo">Desde el inicio</option></select></label></div>
+                        {!eventos.length && <p role="status" className="text-sm theme-text-muted">Aún no hay actividad registrada.</p>}
+                        <ol className="gelia-tag-timeline">
+                            {eventos.map(evento => {
+                                const registro = evento.registro;
+                                const audit = evento.tipo === 'auditoria';
+                                const respuesta = evento.tipo === 'respuesta';
+                                const paso = audit ? describirPaso(registro) : { titulo: respuesta ? (registro.respuesta_positiva ? 'Consulta confirmada' : 'Consulta rechazada') : 'Consulta enviada', tono: respuesta ? (registro.respuesta_positiva ? 'ok' : 'error') : 'alerta', detalle: [registro.consulta_tag && 'TAG', registro.consulta_lista && 'Lista'].filter(Boolean).join(' y ') };
+                                const Icono = audit ? (estilosPaso[paso.tono] || estilosPaso.info).Icon : MessageSquare;
+                                const snapshot = audit ? leerSnapshotSeguro(registro.datos_snapshot) : null;
+                                const autor = audit ? (paso.esSistema ? 'Sistema' : registro.usuario?.name || 'Usuario') : respuesta ? registro.encargada?.name || 'Supervisión' : registro.vendedor?.name || 'Ventas';
+                                const mensaje = audit ? registro.motivo_reporte : respuesta ? registro.comentario_encargada : registro.comentario_vendedor;
                                 const labels = etiquetasComparativa(paso.modoComparativa);
-                                const montoCotizado = snapshot?.monto_cotizado;
-                                const mostrarMontoCotizado = montoCotizado != null && montoCotizado !== '';
-
-                                // En creación: "Cotizado" proyecta monto actual + cotizado si no hay despues
-                                const despuesComparativa = snapshot?.despues || (
-                                    paso.modoComparativa === 'creacion' && snapshot?.antes
-                                        ? {
-                                            ...snapshot.antes,
-                                            monto_venta: (parseFloat(snapshot.antes.monto_venta) || 0) + (parseFloat(montoCotizado) || 0),
-                                        }
-                                        : null
-                                );
-
-                                return (
-                                    <div key={`audit-${idx}`} className="relative flex flex-col ml-10">
-                                        <div className={`absolute -left-[3.5rem] top-1 w-10 h-10 rounded-full border-4 theme-surface flex items-center justify-center shadow-md z-10 ${estilo.iconBg}`}>
-                                            <IconoPaso className="w-4 h-4" />
-                                        </div>
-
-                                        <div className={`theme-element border ${estilo.border} p-6 rounded-3xl shadow-sm`}>
-                                            <div className="flex justify-between items-center mb-2">
-                                                <div className="flex items-center gap-2 flex-wrap">
-                                                    <span className={`font-black text-xs uppercase tracking-widest ${estilo.label}`}>
-                                                        {paso.titulo}
-                                                    </span>
-                                                    {paso.esSistema && (
-                                                        <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded bg-slate-500/10 text-slate-500 border border-slate-500/20">Sistema</span>
-                                                    )}
-                                                </div>
-                                                <span className="text-[10px] font-bold theme-text-muted shrink-0">{new Date(registro.created_at).toLocaleString()}</span>
-                                            </div>
-
-                                            <p className="text-[10px] font-bold theme-text-muted uppercase tracking-widest mb-1">
-                                                Por: {actor}
-                                            </p>
-                                            <p className="text-sm font-black theme-text-main mb-3">
-                                                {paso.detalle}
-                                            </p>
-
-                                            {mostrarMontoCotizado && (
-                                                <div className="mb-4 p-4 rounded-2xl border border-blue-500/25 bg-blue-500/10 flex justify-between items-center gap-3">
-                                                    <p className="text-[10px] font-black uppercase tracking-widest text-blue-600 dark:text-blue-400 m-0">Monto cotizado</p>
-                                                    <span className="text-sm font-black text-blue-700 dark:text-blue-300">{money(montoCotizado)}</span>
-                                                </div>
-                                            )}
-
-                                            {(snapshot?.antes || snapshot?.despues) && (
-                                                <ComparativaSnapshot
-                                                    antes={snapshot.antes}
-                                                    despues={despuesComparativa}
-                                                    etiquetaIzq={labels.izq}
-                                                    etiquetaDer={labels.der}
-                                                    titulo={labels.titulo}
-                                                />
-                                            )}
-
-                                            {snapshot && !snapshot?.antes && !snapshot?.despues && (nombreListaHistorial || nombreTipoHistorial || snapshot?.compra_en_tienda || snapshot?.compra_en_tienda_solo_tag) && (
-                                                <div className="mb-4 p-4 bg-black/5 dark:bg-white/5 rounded-2xl border theme-border flex flex-col gap-3">
-                                                    <div className="flex flex-wrap gap-2">
-                                                        {snapshot?.compra_en_tienda && (
-                                                            <span className="text-[9px] font-black uppercase px-2 py-1 rounded bg-[#cd7f32]/15 text-[#b87333] border border-[#cd7f32]/30">
-                                                                Compra en Tienda
-                                                            </span>
-                                                        )}
-                                                        {snapshot?.compra_en_tienda_solo_tag && (
-                                                            <span className="text-[9px] font-black uppercase px-2 py-1 rounded bg-sky-500/15 text-sky-600 border border-sky-500/30">
-                                                                Compra Realizada: Solicitar tag
-                                                            </span>
-                                                        )}
-                                                        {nombreListaHistorial && <span className="text-[9px] font-black uppercase px-2 py-1 rounded bg-blue-500/10 text-blue-500 border border-blue-500/20">Lista solicitada: {nombreListaHistorial}</span>}
-                                                        {nombreTipoHistorial && <span className="text-[9px] font-black uppercase px-2 py-1 rounded bg-indigo-500/10 text-indigo-500 border border-indigo-500/20">Clasificación: {nombreTipoHistorial}</span>}
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            {registro.motivo_reporte && (
-                                                <div className="p-4 theme-surface rounded-2xl border theme-border">
-                                                    <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted mb-1">Nota del registro</p>
-                                                    <p className="text-xs font-bold theme-text-main m-0 leading-relaxed">
-                                                        {registro.motivo_reporte}
-                                                    </p>
-                                                </div>
-                                            )}
-
-                                            {snapshot?.evidencia_path && (
-                                                <div className="mt-4">
-                                                    <BotonEvidencia path={snapshot.evidencia_path} label="Ver evidencia adjunta" onAbrir={setEvidenciaAbierta} />
-                                                </div>
-                                            )}
-
-                                            {snapshot?.evidencia_respuesta_path && (
-                                                <div className="mt-4 pt-4 border-t theme-border">
-                                                    <h4 className={`text-[10px] font-black uppercase tracking-widest mb-3 flex items-center gap-2 ${estilo.label}`}>
-                                                        <Camera className="w-3 h-3" /> Evidencia de respuesta
-                                                    </h4>
-                                                    <BotonEvidencia path={snapshot.evidencia_respuesta_path} label="Ver evidencia" onAbrir={setEvidenciaAbierta} miniatura />
-                                                </div>
-                                            )}
-                                        </div>
+                                const despues = paso.modoComparativa === 'creacion' ? cotizacionHistorial(snapshot, registro, { listas, tiposCliente, procesos }) : snapshot?.despues;
+                                const evidencia = audit ? snapshot?.evidencia_respuesta_path || snapshot?.evidencia_path : respuesta ? registro.evidencia_respuesta_path : null;
+                                const lista = snapshot?.lista_descuento_id ? listas.find(l => String(l.id) === String(snapshot.lista_descuento_id))?.nombre : null;
+                                const tipo = snapshot?.tipo_cliente_id ? tiposCliente.find(t => String(t.id) === String(snapshot.tipo_cliente_id))?.nombre : null;
+                                return <li key={evento.key} className="gelia-tag-event" data-tone={paso.tono}>
+                                    <span className="gelia-tag-event-icon"><Icono className="w-4 h-4" aria-hidden="true" /></span>
+                                    <div className="gelia-tag-event-content"><div className="flex flex-wrap justify-between items-start gap-2"><h4 className="m-0 text-sm font-semibold theme-text-main">{paso.titulo}</h4><time dateTime={evento.fecha} className="text-xs theme-text-muted">{evento.fechaEsActualizacion ? 'Actualizada: ' : ''}{fecha(evento.fecha)}</time></div><p className="text-xs theme-text-muted mt-1 mb-3">{autor} · {paso.detalle}</p>
+                                        {mensaje && <p className="gelia-tag-event-message">{mensaje}</p>}
+                                        {evidencia && <div className="mt-3"><EvidenciaSolicitud path={evidencia} dialogClassName="gelia-tag-lista-overlay" /></div>}
+                                        {audit && snapshot?.evidencia_path && snapshot?.evidencia_respuesta_path && snapshot.evidencia_path !== snapshot.evidencia_respuesta_path && <div className="mt-2"><EvidenciaSolicitud path={snapshot.evidencia_path} label="Ver evidencia de la solicitud" dialogClassName="gelia-tag-lista-overlay" /></div>}
+                                        {snapshot && (snapshot.antes || snapshot.despues || snapshot.monto_cotizado != null || lista || tipo || snapshot.compra_en_tienda || snapshot.compra_en_tienda_solo_tag) && <details className="gelia-tag-event-details"><summary>{paso.modoComparativa === 'creacion' ? 'Ver cotización solicitada' : 'Ver datos y cambios del registro'}<ChevronDown className="w-4 h-4" aria-hidden="true" /></summary><div>
+                                            {snapshot.monto_cotizado != null && <p className="text-sm theme-text-muted mb-3">Monto cotizado: <strong className="theme-text-main tabular-nums">{money(snapshot.monto_cotizado)}</strong></p>}
+                                            {paso.modoComparativa === 'creacion' && <p className="text-xs theme-text-muted mb-3">Propuesta de ventas; aún no aplicada al cliente. El acumulado cotizado es una proyección.</p>}
+                                            {(snapshot.antes || snapshot.despues) && <ComparativaSnapshot antes={snapshot.antes} despues={despues} etiquetaIzq={labels.izq} etiquetaDer={labels.der} titulo={labels.titulo} />}
+                                            {lista && !despues && <p className="text-sm theme-text-main">Lista: {lista}</p>}{tipo && !despues && <p className="text-sm theme-text-main">Tipo de cliente: {tipo}</p>}
+                                            {snapshot.compra_en_tienda && <p className="text-sm theme-text-muted">Compra en tienda</p>}{snapshot.compra_en_tienda_solo_tag && <p className="text-sm theme-text-muted">Compra realizada: solicitar TAG</p>}
+                                        </div></details>}
                                     </div>
-                                );
+                                </li>;
                             })}
-
-                            {consultas.map((consulta, idx) => {
-                                const temas = [consulta.consulta_tag && 'TAG', consulta.consulta_lista && 'Lista'].filter(Boolean);
-                                return (
-                                    <div key={`consulta-${idx}`} className="relative flex flex-col ml-10">
-                                        <div className="absolute -left-[3.5rem] top-1 w-10 h-10 rounded-full border-4 theme-surface flex items-center justify-center shadow-md z-10 bg-amber-500 text-white">
-                                            <Tag className="w-4 h-4" />
-                                        </div>
-                                        <div className="theme-element border border-amber-500/30 p-6 rounded-3xl shadow-sm">
-                                            <div className="flex justify-between items-center mb-3">
-                                                <span className="font-black text-xs uppercase tracking-widest text-amber-600 dark:text-amber-400">
-                                                    Consulta TAG/Lista · {consulta.vendedor?.name}
-                                                </span>
-                                                <span className="text-[10px] font-bold theme-text-muted">{new Date(consulta.created_at).toLocaleString()}</span>
-                                            </div>
-                                            <div className="flex flex-wrap gap-2 mb-3">
-                                                {temas.map(t => (
-                                                    <span key={t} className="text-[9px] font-black uppercase px-2 py-1 rounded bg-amber-500/10 text-amber-500 border border-amber-500/20">{t}</span>
-                                                ))}
-                                                <span className={`text-[9px] font-black uppercase px-2 py-1 rounded border ${consulta.estado === 'pendiente' ? 'bg-orange-500/10 text-orange-500 border-orange-500/20' : consulta.respuesta_positiva ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-red-500/10 text-red-500 border-red-500/20'}`}>
-                                                    {consulta.estado === 'pendiente' ? 'Pendiente' : consulta.respuesta_positiva ? 'Confirmada' : 'Rechazada'}
-                                                </span>
-                                            </div>
-                                            {consulta.comentario_vendedor && (
-                                                <p className="text-xs font-bold theme-text-main mb-2">Pregunta: {consulta.comentario_vendedor}</p>
-                                            )}
-                                            {consulta.estado === 'respondida' && (
-                                                <>
-                                                    {consulta.comentario_encargada && (
-                                                        <p className="text-xs font-bold theme-text-main mb-2">Respuesta ({consulta.encargada?.name}): {consulta.comentario_encargada}</p>
-                                                    )}
-                                                    {consulta.evidencia_respuesta_path && (
-                                                        <BotonEvidencia path={consulta.evidencia_respuesta_path} label="Ver evidencia de respuesta" onAbrir={setEvidenciaAbierta} />
-                                                    )}
-                                                </>
-                                            )}
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </div>
+                        </ol>
+                    </section>
                 </div>
+                <footer className="gelia-modal-footer gelia-workflow-actions"><button type="button" data-dialog-close className="theme-btn-secondary">Cerrar bitácora</button></footer>
             </div>
-        </div>,
-        document.body
-            )}
-
-            {evidenciaAbierta && (
-                <LightboxEvidencia path={evidenciaAbierta} onClose={() => setEvidenciaAbierta(null)} />
-            )}
-        </>
+        </SolicitudDialog>
     );
 }

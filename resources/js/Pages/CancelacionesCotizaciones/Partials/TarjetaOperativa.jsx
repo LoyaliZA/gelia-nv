@@ -44,7 +44,7 @@ export default function TarjetaOperativa({ solicitud, auth, onMenu, onAprobar, o
                     <h3 className="text-sm font-black theme-text-main m-0 leading-snug break-words">
                         {solicitud.proceso?.nombre || '—'}
                     </h3>
-                    <p className="text-[10px] font-bold theme-text-muted mt-1 m-0 truncate">
+                    <p className="text-[10px] font-bold theme-text-muted mt-1 m-0 break-words">
                         {solicitud.cliente?.numero_cliente} — {solicitud.cliente?.nombre || 'Sin cliente'}
                     </p>
                 </div>
@@ -103,7 +103,7 @@ export default function TarjetaOperativa({ solicitud, auth, onMenu, onAprobar, o
                     {solicitud.motivo_operacion && (
                         <div className="flex items-start gap-2 min-w-0">
                             <FileText className="w-3.5 h-3.5 shrink-0 mt-0.5 theme-text-muted" />
-                            <p className="font-bold theme-text-main line-clamp-2 m-0 break-words">{solicitud.motivo_operacion}</p>
+                            <p className="font-bold theme-text-main whitespace-pre-wrap m-0 break-words">{solicitud.motivo_operacion}</p>
                         </div>
                     )}
                 </div>
@@ -137,7 +137,7 @@ export default function TarjetaOperativa({ solicitud, auth, onMenu, onAprobar, o
                             onClick={() => onReportar(solicitud)}
                             className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] font-black uppercase bg-red-500/10 text-red-600 border border-red-500/30 outline-none"
                         >
-                            <XCircle className="w-3.5 h-3.5 shrink-0" /> Error
+                            <XCircle className="w-3.5 h-3.5 shrink-0" /> Reportar error
                         </button>
                     </>
                 )}

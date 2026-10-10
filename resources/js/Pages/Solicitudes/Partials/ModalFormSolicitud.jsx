@@ -1,5 +1,6 @@
+import useSolicitudErrores from '@/Components/Solicitudes/useSolicitudErrores';
+import SolicitudDialog from '@/Components/Solicitudes/SolicitudDialog';
 import React, { useEffect, useState, useRef } from 'react';
-import { createPortal } from 'react-dom';
 import { useForm } from '@inertiajs/react';
 import axios from 'axios';
 import { X, Sparkles, Search, CreditCard, FileSignature, TrendingUp, Send, AlertTriangle, Users, MessageSquare, CheckCircle2, Circle, FileText, Calendar, Landmark, Hash, Store, Tag, FileSpreadsheet, Upload, Trash2, Download, ChevronDown } from 'lucide-react';
@@ -37,7 +38,7 @@ const fmtMonto = fmtMontoEscalonamiento;
 const FilaMontoEscalonamiento = ({ etiqueta, valor, destacado = false, valorClassName = '' }) => (
     <div className={`flex justify-between items-baseline gap-4 ${destacado ? 'py-2.5 px-3 rounded-xl bg-black/5 dark:bg-white/5' : 'py-1'}`}>
         <span className={`${destacado ? 'text-sm font-bold' : 'text-sm font-medium'} theme-text-muted leading-snug`}>{etiqueta}</span>
-        <span className={`text-sm font-bold tabular-nums shrink-0 ${destacado ? 'text-base font-black text-[var(--color-primario)]' : 'theme-text-main'} ${valorClassName}`}>
+        <span className={`text-sm font-bold tabular-nums shrink-0 ${destacado ? 'text-base font-medium text-[var(--color-primario)]' : 'theme-text-main'} ${valorClassName}`}>
             {fmtMonto(valor)}
         </span>
     </div>
@@ -56,7 +57,7 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
     const temporizadorBusqueda = useRef(null);
     const abortBusquedaCliente = useRef(null);
 
-    const { data, setData, post, processing, reset, transform, errors } = useForm({
+    const { data, setData, post, processing, reset, transform, errors, isDirty } = useForm({
         numero_cliente: solicitudAEditar?.cliente?.numero_cliente || '',
         nombre_cliente: solicitudAEditar?.cliente?.nombre || '',
         monto_cotizado: solicitudAEditar?.monto_cotizado || '',
@@ -71,6 +72,7 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
         compra_en_tienda_solo_tag: !!(solicitudAEditar?.compra_en_tienda_solo_tag),
     });
 
+    useSolicitudErrores(errors);
     const procesoFinancieroSeleccionado = esProcesoFinancieroSeleccionado(procesos, data.catalogo_proceso_id);
     const procesoAsignarTagSolo = esProcesoAsignarTagSolo(procesos, data.catalogo_proceso_id);
     const listaBronce = resolverListaBronce(listas);
@@ -245,6 +247,7 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
 
     const guardarSolicitud = (e) => {
         e.preventDefault();
+        if (processing) return;
 
         if (!modoEdicion && (!data.numero_cliente || !infoCliente)) {
             return;
@@ -267,16 +270,15 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
         }
     };
 
-    return createPortal(
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-8 bg-black/60 backdrop-blur-md animate-fade-in" onClick={onClose}>
-            <div className="w-full max-w-4xl theme-surface border theme-border shadow-2xl rounded-[2.5rem] p-10 md:p-12 flex flex-col relative modal-pop max-h-[90vh] overflow-y-auto custom-scrollbar" onClick={e => e.stopPropagation()}>
-                <button onClick={onClose} className="absolute top-6 right-6 p-3 theme-text-muted hover:theme-text-main theme-element border theme-border rounded-2xl transition-all outline-none hover:scale-110 z-50"><X className="w-5 h-5" /></button>
-
-                <div className="flex items-center gap-3 mb-8">
-                    <Sparkles className="w-8 h-8 drop-shadow-sm" style={{ color: 'var(--color-primario)' }} />
-                    <h2 className="text-2xl font-black italic theme-text-main uppercase tracking-tighter m-0 drop-shadow-sm">{modoEdicion ? 'Reparar Solicitud_' : 'Nueva Solicitud_'}</h2>
-                </div>
-
+    return (
+        <SolicitudDialog className="gelia-tag-lista-overlay" onClose={onClose} busy={processing} title={modoEdicion ? 'Corregir solicitud' : 'Nueva solicitud'} dirty={isDirty}>
+            <form onSubmit={guardarSolicitud} className="gelia-modal-shell gelia-tag-form w-full max-w-4xl">
+                <header className="gelia-workflow-header">
+                    <div><h2 className="m-0 theme-text-main">{modoEdicion ? 'Corregir solicitud' : 'Nueva solicitud'}</h2><p className="m-0 mt-1 text-sm theme-text-muted">Registra los datos del cliente y el cambio que necesitas.</p></div>
+                    <button type="button" data-dialog-close disabled={processing} className="gelia-workflow-close" aria-label="Cerrar registro"><X className="w-5 h-5" aria-hidden="true" /></button>
+                </header>
+                <div className="gelia-modal-body p-5 sm:p-6">
+                {Object.keys(errors).length > 0 && <div role="alert" className="gelia-tag-message mb-5" data-tone="peligro"><h3>Revisa estos datos antes de enviar</h3>{Object.entries(errors).map(([key, error]) => <p key={key}>{error}</p>)}</div>}
                 {alertaHeredado && (
                     <div className="mb-8 p-5 rounded-2xl border-2 border-amber-400 bg-amber-50 dark:bg-amber-500/10 flex gap-4 items-center animate-fade-in">
                         <AlertTriangle className="w-8 h-8 text-amber-500 shrink-0" />
@@ -284,20 +286,20 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                     </div>
                 )}
 
-                <form onSubmit={guardarSolicitud} className="grid grid-cols-1 lg:grid-cols-2 gap-10 relative z-10">
+                <fieldset disabled={processing} className="grid grid-cols-1 lg:grid-cols-2 gap-5 sm:gap-6 relative z-10 border-0 p-0 m-0">
 
                     <div className="lg:col-span-2 space-y-2">
-                        <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Tipo de Solicitud_</label>
+                        <label htmlFor="solicitud-tipo" className="text-[10px] font-medium  theme-text-muted  ml-1">Tipo de solicitud</label>
                         <div className="theme-field-with-icon theme-field-with-icon--has-trailing relative">
                             <FileSignature className="theme-field-icon w-4 h-4" aria-hidden />
-                            <select
+                            <select id="solicitud-tipo" name="catalogo_proceso_id"
                                 value={data.catalogo_proceso_id}
                                 required
                                 onChange={e => setData('catalogo_proceso_id', e.target.value)}
                                 disabled={modoEdicion}
                                 className={`${THEME_SELECT} w-full py-4 text-xs`}
                             >
-                                <option value="">Selecciona el tipo de solicitud...</option>
+                                <option value="">Selecciona el tipo de solicitud…</option>
                                 {procesos.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
                             </select>
                             <ChevronDown className="theme-field-with-icon__trailing" aria-hidden />
@@ -305,19 +307,20 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                         {errors.catalogo_proceso_id && <p className="text-xs text-red-500">{errors.catalogo_proceso_id}</p>}
                     </div>
 
-                    <div className="space-y-8">
+                    <div className="space-y-5">
 
                         <div className="space-y-2 relative">
-                            <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Cliente (Buscador)_</label>
+                            <label htmlFor="solicitud-cliente" className="text-[10px] font-medium  theme-text-muted  ml-1">Cliente</label>
                             <div className="theme-field-with-icon relative">
                                 <Search className="theme-field-icon w-5 h-5" aria-hidden />
-                                <input
+                                <input id="solicitud-cliente" name="numero_cliente" autoComplete="off"
                                     type="text"
                                     value={data.numero_cliente}
                                     required
                                     onChange={e => manejarBusquedaCliente(e.target.value)}
                                     onFocus={() => { if (data.numero_cliente) setMostrarDropdown(true); }}
-                                    placeholder="Ingresa nombre o folio..."
+                                    onKeyDown={event => { if (event.key === 'Escape') setMostrarDropdown(false); if (event.key === 'ArrowDown') { event.preventDefault(); event.currentTarget.closest('.relative')?.parentElement.querySelector('button')?.focus(); } }}
+                                    placeholder="Ingresa nombre o folio…"
                                     className={`${THEME_INPUT} w-full py-4 text-sm`}
                                     disabled={modoEdicion}
                                 />
@@ -332,15 +335,15 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                                 <div className={`mt-4 p-4 theme-element border ${infoCliente.es_heredado ? 'border-purple-500/50 bg-purple-500/5' : 'theme-border'} rounded-2xl shadow-sm animate-fade-in`}>
                                     <div className="flex justify-between items-start">
                                         <div>
-                                            <p className="text-[10px] theme-text-muted font-bold uppercase tracking-widest mb-1">Titular Seleccionado:</p>
-                                            <p className="text-sm font-black theme-text-main italic truncate">{infoCliente.nombre}</p>
+                                            <p className="text-[10px] theme-text-muted font-bold   mb-1">Titular Seleccionado:</p>
+                                            <p className="text-sm font-medium theme-text-main  truncate">{infoCliente.nombre}</p>
                                         </div>
                                         {infoCliente.es_heredado && (
-                                            <span className="text-[9px] font-black bg-purple-500 text-white px-2 py-1 rounded-md uppercase tracking-widest shadow-sm">HEREDADO</span>
+                                            <span className="text-[9px] font-medium bg-purple-500 text-white px-2 py-1 rounded-md   shadow-sm">HEREDADO</span>
                                         )}
                                     </div>
                                     <div className="flex gap-2 mt-3">
-                                        <span className="text-[10px] font-bold bg-[var(--color-primario)] text-white px-3 py-1 rounded-lg uppercase shadow-sm">
+                                        <span className="text-[10px] font-bold bg-[var(--color-primario)] text-white px-3 py-1 rounded-lg  shadow-sm">
                                             Lista Actual: {obtenerListaActual()?.nombre || 'Público General'}
                                         </span>
                                     </div>
@@ -348,7 +351,7 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                             )}
                             {mostrarDropdown && !modoEdicion && (
                                 <div className="absolute top-[100%] mt-2 left-0 right-0 theme-surface border theme-border rounded-2xl shadow-2xl z-50 max-h-60 overflow-y-auto custom-scrollbar p-2">
-                                    {buscandoCliente ? (<div className="p-6 text-center text-xs font-bold theme-text-muted animate-pulse italic">Consultando directorio...</div>) : listaClientes.map(c => (<div key={c.id} onClick={() => seleccionarCliente(c)} className="p-4 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer flex justify-between items-center group mb-1 border border-transparent"><p className="text-xs font-black uppercase theme-text-main">{c.numero_cliente} - {c.nombre}</p>{c.es_heredado ? <span className="text-[8px] font-bold bg-purple-500/20 text-purple-500 px-2 py-0.5 rounded uppercase">Heredado</span> : null}</div>))}
+                                    {buscandoCliente ? (<div className="p-6 text-center text-xs font-bold theme-text-muted animate-pulse ">Consultando directorio…</div>) : listaClientes.length === 0 ? <p role="status" className="p-4 text-sm theme-text-muted">No se encontraron clientes. Prueba con otro nombre o número.</p> : listaClientes.map(c => (<button type="button" key={c.id} onClick={() => seleccionarCliente(c)} className="p-4 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer w-full text-left flex justify-between items-center group mb-1 border border-transparent"><p className="text-xs font-medium  theme-text-main">{c.numero_cliente} - {c.nombre}</p>{c.es_heredado ? <span className="text-[8px] font-bold bg-purple-500/20 text-purple-500 px-2 py-0.5 rounded ">Heredado</span> : null}</button>))}
                                 </div>
                             )}
                         </div>
@@ -367,7 +370,7 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                                         className="mt-1 w-4 h-4 accent-[#cd7f32]"
                                     />
                                     <div>
-                                        <span className="text-sm font-black theme-text-main flex items-center gap-2">
+                                        <span className="text-sm font-medium theme-text-main flex items-center gap-2">
                                             <Store className="w-4 h-4 text-[#cd7f32]" />
                                             Compra en Tienda
                                         </span>
@@ -390,7 +393,7 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                                         className="mt-1 w-4 h-4 accent-sky-500"
                                     />
                                     <div>
-                                        <span className="text-sm font-black theme-text-main flex items-center gap-2">
+                                        <span className="text-sm font-medium theme-text-main flex items-center gap-2">
                                             <Tag className="w-4 h-4 text-sky-500" />
                                             Compra Realizada: Solicitar tag
                                         </span>
@@ -404,12 +407,13 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                         )}
 
                         <div className="space-y-2">
-                            <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">
-                                Cotización Autorizada_{cotizacionOpcional ? ' (opcional)' : ''}
+                            <label htmlFor="solicitud-monto" className="theme-label">
+                                Cotización autorizada{cotizacionOpcional ? ' (opcional)' : ''}
                             </label>
                             <div className="theme-field-with-icon relative">
                                 <CreditCard className="theme-field-icon w-5 h-5" aria-hidden />
                                 <input
+                                    id="solicitud-monto" name="monto_cotizado" autoComplete="off" inputMode="decimal" min="0"
                                     type="number"
                                     step="0.01"
                                     required={!cotizacionOpcional}
@@ -424,10 +428,10 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Clasificación_</label>
+                            <label htmlFor="solicitud-clasificacion" className="text-[10px] font-medium  theme-text-muted  ml-1">Tipo de cliente</label>
                             <div className="theme-field-with-icon theme-field-with-icon--has-trailing relative">
                                 <Users className="theme-field-icon w-4 h-4" aria-hidden />
-                                <select value={data.catalogo_tipo_cliente_id} onChange={e => setData('catalogo_tipo_cliente_id', e.target.value)} className={`${THEME_SELECT} w-full py-4 text-xs`}>
+                                <select id="solicitud-clasificacion" name="catalogo_tipo_cliente_id" value={data.catalogo_tipo_cliente_id} onChange={e => setData('catalogo_tipo_cliente_id', e.target.value)} className={`${THEME_SELECT} w-full py-4 text-xs`}>
                                     <option value="">Asignar Tipo</option>
                                     {opcionesTipoCliente.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
                                 </select>
@@ -436,17 +440,17 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                         </div>
                     </div>
 
-                    <div className="space-y-8 flex flex-col">
+                    <div className="space-y-5 flex flex-col">
                         <div className="space-y-2 flex flex-col flex-1">
-                            <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Comentario de la Vendedora_</label>
+                            <label htmlFor="solicitud-comentario" className="text-[10px] font-medium  theme-text-muted  ml-1">Comentario para quien responderá</label>
                             <div className="theme-field-with-icon theme-field-with-icon--textarea relative flex-1">
                                 <MessageSquare className="theme-field-icon w-5 h-5" aria-hidden />
-                                <textarea
+                                <textarea id="solicitud-comentario" name="observaciones_vendedor" autoComplete="off"
                                     value={data.observaciones_vendedor}
                                     onChange={e => setData('observaciones_vendedor', e.target.value)}
-                                    placeholder="Observaciones, contexto de la venta, acuerdos con el cliente..."
-                                    rows={8}
-                                    className={`${THEME_TEXTAREA} w-full min-h-[220px] lg:min-h-[280px] py-4 text-sm resize-none`}
+                                    placeholder="Observaciones, contexto de la venta, acuerdos con el cliente…"
+                                    rows={4}
+                                    className={`${THEME_TEXTAREA} w-full min-h-[120px] py-4 text-sm resize-none`}
                                 />
                             </div>
                             {errors.observaciones_vendedor && (
@@ -458,9 +462,9 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                     <div className="lg:col-span-2 space-y-3">
                         <>
                         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-2 mb-1 px-1">
-                            <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest">Lista Solicitada_</label>
+                            <label htmlFor="solicitud-lista" className="text-[10px] font-medium  theme-text-muted ">Lista solicitada</label>
                             {alertaLista && (
-                                <span className="text-xs font-black uppercase px-3 py-1.5 rounded-lg bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                                <span className="text-xs font-medium  px-3 py-1.5 rounded-lg bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
                                     {alertaLista.mensaje}
                                 </span>
                             )}
@@ -471,7 +475,7 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                                 {analisisFinanciero.listaAnticipada && analisisFinanciero.montoCotizado > 0 && (
                                     <div className="px-4 py-3 bg-emerald-500/10 border-b border-emerald-500/20 flex items-center gap-2.5">
                                         <TrendingUp className="w-5 h-5 text-emerald-500 shrink-0" />
-                                        <p className="text-sm font-black text-emerald-700 dark:text-emerald-400 m-0 leading-snug">
+                                        <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400 m-0 leading-snug">
                                             Nivel anticipado: {analisisFinanciero.listaAnticipada.nombre}
                                             <span className="font-bold opacity-80"> · {analisisFinanciero.porcentajeDescuento.toFixed(2)}% descuento</span>
                                         </p>
@@ -483,7 +487,7 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                                         {/* Columna izquierda: montos */}
                                         <div className="space-y-4">
                                             <div>
-                                                <p className="text-[11px] font-black uppercase tracking-widest theme-text-muted mb-3 m-0">Resumen de montos</p>
+                                                <p className="text-[11px] font-medium   theme-text-muted mb-3 m-0">Resumen de montos</p>
                                                 <div className="space-y-1">
                                                     <FilaMontoEscalonamiento
                                                         etiqueta="Acumulado pagado anterior"
@@ -499,7 +503,7 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                                                         valor={analisisFinanciero.totalProyectadoBruto}
                                                         valorClassName={
                                                             analisisFinanciero.listaProvisional
-                                                                ? 'text-emerald-600 dark:text-emerald-400 font-black text-base'
+                                                                ? 'text-emerald-600 dark:text-emerald-400 font-medium text-base'
                                                                 : ''
                                                         }
                                                     />
@@ -517,15 +521,15 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                                                     <FilaMontoEscalonamiento
                                                         etiqueta={`Pago neto estimado (${analisisFinanciero.porcentajeDescuento.toFixed(2)}% desc.)`}
                                                         valor={analisisFinanciero.montoFinalTentativo}
-                                                        valorClassName="text-base font-black theme-text-main"
+                                                        valorClassName="text-base font-medium theme-text-main"
                                                     />
                                                     <FilaMontoEscalonamiento
                                                         etiqueta="Acumulado neto estimado"
                                                         valor={analisisFinanciero.totalProyectadoNeto}
                                                         valorClassName={
                                                             analisisFinanciero.mantieneListaAnticipada
-                                                                ? 'text-emerald-600 dark:text-emerald-400 font-black text-base'
-                                                                : 'text-amber-600 dark:text-amber-400 font-black text-base'
+                                                                ? 'text-emerald-600 dark:text-emerald-400 font-medium text-base'
+                                                                : 'text-amber-600 dark:text-amber-400 font-medium text-base'
                                                         }
                                                     />
                                                     {analisisFinanciero.listaConfirmacionEstimada
@@ -551,21 +555,21 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                                                     && !analisisFinanciero.casiAlcanzaSiguiente
                                                     && analisisFinanciero.listaSiguienteEfectiva.id !== analisisFinanciero.listaAnticipada?.id) ? (
                                                 <div className="space-y-3">
-                                                    <p className="text-[11px] font-black uppercase tracking-widest theme-text-muted m-0">Estado del escalonamiento</p>
+                                                    <p className="text-[11px] font-medium   theme-text-muted m-0">Estado del escalonamiento</p>
 
                                                     {analisisFinanciero.casiAlcanzaSiguiente && analisisFinanciero.listaCasiAlcanzada && (
                                                         <div className="p-4 rounded-xl bg-amber-500/10 border-2 border-amber-500/30 flex gap-3 items-start">
                                                             <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
                                                             <p className="text-sm font-bold text-amber-800 dark:text-amber-300 leading-relaxed m-0">
-                                                                Puedes solicitar <span className="font-black">{analisisFinanciero.listaCasiAlcanzada.nombre}</span> de forma provisional,
+                                                                Puedes solicitar <span className="font-medium">{analisisFinanciero.listaCasiAlcanzada.nombre}</span> de forma provisional,
                                                                 pero el pago neto estimado quedaría{' '}
-                                                                <span className="font-black tabular-nums">{fmtMonto(analisisFinanciero.faltanteNetoCasi)}</span> por debajo del mínimo neto.
+                                                                <span className="font-medium tabular-nums">{fmtMonto(analisisFinanciero.faltanteNetoCasi)}</span> por debajo del mínimo neto.
                                                                 {analisisFinanciero.faltanteBrutoCasi > 0 && (
                                                                     <> Ajusta la cotización en al menos{' '}
-                                                                        <span className="font-black tabular-nums">{fmtMonto(analisisFinanciero.faltanteBrutoCasi)}</span> brutos.</>
+                                                                        <span className="font-medium tabular-nums">{fmtMonto(analisisFinanciero.faltanteBrutoCasi)}</span> brutos.</>
                                                                 )}
                                                                 Con este pago se estimaría:{' '}
-                                                                <span className="font-black">{analisisFinanciero.listaConfirmacionEstimada?.nombre || analisisFinanciero.listaAnticipada?.nombre || 'lista actual'}</span>.
+                                                                <span className="font-medium">{analisisFinanciero.listaConfirmacionEstimada?.nombre || analisisFinanciero.listaAnticipada?.nombre || 'lista actual'}</span>.
                                                             </p>
                                                         </div>
                                                     )}
@@ -587,10 +591,10 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                                                         && !analisisFinanciero.casiAlcanzaSiguiente
                                                         && analisisFinanciero.listaSiguienteEfectiva.id !== analisisFinanciero.listaAnticipada?.id && (
                                                         <p className="text-sm font-semibold text-amber-700 dark:text-amber-400 leading-relaxed m-0 p-3 rounded-xl bg-amber-500/5 border border-amber-500/20">
-                                                            Faltan <span className="font-black tabular-nums">{fmtMonto(analisisFinanciero.faltanteBrutoParaSiguiente)}</span> brutos
+                                                            Faltan <span className="font-medium tabular-nums">{fmtMonto(analisisFinanciero.faltanteBrutoParaSiguiente)}</span> brutos
                                                             (umbral efectivo {fmtMonto(analisisFinanciero.umbralEfectivoSiguiente)} al{' '}
                                                             {analisisFinanciero.porcentajeSiguiente.toFixed(2)}%) para{' '}
-                                                            <span className="font-black">{analisisFinanciero.listaSiguienteEfectiva.nombre}</span>.
+                                                            <span className="font-medium">{analisisFinanciero.listaSiguienteEfectiva.nombre}</span>.
                                                         </p>
                                                     )}
                                                 </div>
@@ -598,7 +602,7 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
 
                                             {analisisFinanciero.desgloseListas?.length > 0 && (
                                                 <div className={`${(analisisFinanciero.casiAlcanzaSiguiente || analisisFinanciero.mantieneListaAnticipada) ? 'pt-4 border-t-2 md:border-t-0 md:pt-0 theme-border' : ''}`}>
-                                                    <p className="text-[11px] font-black uppercase tracking-widest theme-text-muted mb-3 m-0">Niveles de lista</p>
+                                                    <p className="text-[11px] font-medium   theme-text-muted mb-3 m-0">Niveles de lista</p>
                                                     <div className="space-y-2">
                                                         {analisisFinanciero.desgloseListas.map(item => (
                                                             <div
@@ -615,7 +619,7 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                                                                         : <Circle className="w-4 h-4 shrink-0 opacity-60" />}
                                                                     {item.nombre}
                                                                 </span>
-                                                                <span className={`text-sm font-black tabular-nums shrink-0 ${item.cubre ? 'text-emerald-700 dark:text-emerald-400' : 'theme-text-muted'}`}>
+                                                                <span className={`text-sm font-medium tabular-nums shrink-0 ${item.cubre ? 'text-emerald-700 dark:text-emerald-400' : 'theme-text-muted'}`}>
                                                                     {fmtMonto(item.umbral_efectivo ?? item.monto_requerido)}
                                                                 </span>
                                                             </div>
@@ -631,7 +635,7 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
 
                         <div className="theme-field-with-icon theme-field-with-icon--has-trailing relative">
                             <TrendingUp className="theme-field-icon w-5 h-5" aria-hidden />
-                            <select
+                            <select id="solicitud-lista" name="catalogo_lista_descuento_id"
                                 value={data.catalogo_lista_descuento_id || ''}
                                 onChange={e => setData('catalogo_lista_descuento_id', e.target.value)}
                                 disabled={cotizacionOpcional}
@@ -684,13 +688,15 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                         </>
                     </div>
 
-                    <div className="lg:col-span-2">
-                        <button type="submit" disabled={processing || (requiereConfirmacionEscalonamiento && !data.confirmo_informacion_escalonamiento)} className={`${THEME_BTN_PRIMARY} w-full py-5 text-[12px]`}>
-                            <Send className="w-5 h-5" /> {processing ? 'Procesando...' : (modoEdicion ? 'Reenviar Corrección' : 'Transmitir Solicitud')}
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>, document.body
+                </fieldset>
+                </div>
+                <footer className="gelia-modal-footer gelia-workflow-actions">
+                    <button type="button" data-dialog-close disabled={processing} className="theme-btn-secondary">Cancelar</button>
+                    <button type="submit" disabled={processing || (requiereConfirmacionEscalonamiento && !data.confirmo_informacion_escalonamiento)} className="theme-btn-primary">
+                        <Send className="w-4 h-4" aria-hidden="true" />{processing ? 'Enviando…' : modoEdicion ? 'Reenviar corrección' : 'Enviar solicitud'}
+                    </button>
+                </footer>
+            </form>
+        </SolicitudDialog>
     );
 }

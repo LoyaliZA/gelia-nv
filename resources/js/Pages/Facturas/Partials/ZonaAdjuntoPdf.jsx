@@ -1,85 +1,60 @@
-import React, { useCallback, useState } from 'react';
+import React, { useEffect, useId, useState } from 'react';
 import { Upload, Trash2, FileText } from 'lucide-react';
+import EvidenciaSolicitud from '@/Components/Solicitudes/EvidenciaSolicitud';
 import { MAX_PDFS_EMITIDOS, archivoExcedeLimite, mensajeLimiteArchivo } from './limitesAdjuntosFactura';
 
-export default function ZonaAdjuntoPdf({
-    archivos,
-    onChange,
-    error,
-    maxTotal = MAX_PDFS_EMITIDOS,
-}) {
+function ArchivoPdf({ file, disabled, onRemove }) {
+    const [url, setUrl] = useState(null);
+    useEffect(() => {
+        const src = URL.createObjectURL(file);
+        setUrl(src);
+        return () => URL.revokeObjectURL(src);
+    }, [file]);
+    return (
+        <div className="flex flex-wrap items-center gap-2 p-3 rounded-xl theme-element border theme-border">
+            <FileText className="w-5 h-5 theme-text-primario shrink-0" aria-hidden="true" />
+            <span className="text-sm theme-text-main break-words min-w-0 flex-1">{file.name}</span>
+            {url && <EvidenciaSolicitud url={url} esPdf label="Revisar PDF" title={file.name} />}
+            <button type="button" disabled={disabled} onClick={onRemove} className="gelia-workflow-close theme-text-peligro" aria-label={`Quitar ${file.name}`}><Trash2 className="w-4 h-4" aria-hidden="true" /></button>
+        </div>
+    );
+}
+
+export default function ZonaAdjuntoPdf({ archivos, onChange, error, maxTotal = MAX_PDFS_EMITIDOS, disabled = false }) {
     const [errorLocal, setErrorLocal] = useState('');
-
-    const agregar = useCallback((files) => {
-        const lista = Array.from(files || []);
-        if (!lista.length) return;
-
+    const id = useId();
+    const agregar = (files) => {
+        if (disabled) return;
         const actuales = [...archivos];
-        const cupo = maxTotal - actuales.length;
-        let rechazadoTam = false;
-
-        for (const file of lista) {
-            if (actuales.length >= maxTotal) break;
-            if (file.type !== 'application/pdf' && !String(file.name || '').toLowerCase().endsWith('.pdf')) {
-                continue;
-            }
-            if (archivoExcedeLimite(file)) {
-                rechazadoTam = true;
-                continue;
-            }
+        const problemas = new Set();
+        for (const file of Array.from(files || [])) {
+            if (file.type !== 'application/pdf' && !/\.pdf$/i.test(file.name)) { problemas.add('Solo se admiten archivos PDF.'); continue; }
+            if (archivoExcedeLimite(file)) { problemas.add(mensajeLimiteArchivo()); continue; }
+            if (actuales.length >= maxTotal) { problemas.add(`Puedes adjuntar hasta ${maxTotal} PDFs.`); continue; }
+            if (actuales.some((f) => f.name === file.name && f.size === file.size && f.lastModified === file.lastModified)) { problemas.add(`${file.name} ya está adjunto.`); continue; }
             actuales.push(file);
         }
-
-        if (rechazadoTam) setErrorLocal(mensajeLimiteArchivo());
-        else setErrorLocal('');
-
+        setErrorLocal([...problemas].join(' '));
         onChange(actuales);
-    }, [archivos, maxTotal, onChange]);
-
-    const quitar = (index) => {
-        onChange(archivos.filter((_, i) => i !== index));
     };
-
     const mensajeError = error || errorLocal;
-
     return (
-        <div className="space-y-2">
-            <div className="flex items-center justify-between ml-1">
-                <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest">
-                    PDF de factura emitida *
-                </label>
-                <span className="text-[9px] font-black theme-text-muted">{archivos.length}/{maxTotal}</span>
+        <section className="space-y-3" aria-labelledby={`${id}-titulo`}>
+            <div className="flex justify-between items-center gap-2">
+                <h3 id={`${id}-titulo`} className="text-sm font-medium theme-text-main m-0">PDF de factura emitida (obligatorio)</h3>
+                <span className="text-xs tabular-nums theme-text-muted">{archivos.length}/{maxTotal}</span>
             </div>
-
-            <div className={`border-2 border-dashed rounded-2xl p-4 space-y-2 ${mensajeError ? 'border-red-500' : 'theme-border'}`}>
-                {archivos.map((f, i) => (
-                    <div key={`pdf-${i}`} className="flex items-center gap-3 p-2 rounded-xl theme-element border theme-border">
-                        <FileText className="w-8 h-8 shrink-0" style={{ color: 'var(--color-primario)' }} />
-                        <span className="text-[10px] font-bold theme-text-main truncate flex-1">{f.name}</span>
-                        <button type="button" onClick={() => quitar(i)} className="p-1 text-red-500 hover:bg-red-500/10 rounded-lg outline-none">
-                            <Trash2 className="w-4 h-4" />
-                        </button>
-                    </div>
-                ))}
-
+            <div className="space-y-2" onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); agregar(event.dataTransfer.files); }}>
+                {archivos.map((file, index) => <ArchivoPdf key={`${file.name}-${file.lastModified}-${index}`} file={file} disabled={disabled} onRemove={() => { setErrorLocal(''); onChange(archivos.filter((_, i) => i !== index)); }} />)}
                 {archivos.length < maxTotal && (
-                    <label className="flex flex-col items-center justify-center py-4 cursor-pointer rounded-xl border border-dashed theme-border hover:border-[var(--color-primario)] transition-colors">
-                        <Upload className="w-6 h-6 mb-2 theme-text-muted" />
-                        <span className="text-[9px] font-black uppercase tracking-widest theme-text-muted text-center px-2">
-                            Agregar PDF · máx. 5 archivos, 5 MB c/u
-                        </span>
-                        <input
-                            type="file"
-                            className="hidden"
-                            accept=".pdf,application/pdf"
-                            multiple
-                            onChange={(e) => { agregar(e.target.files); e.target.value = ''; }}
-                        />
+                    <label className={`gelia-adjunto-control w-full border-dashed py-4 ${disabled ? 'opacity-50' : ''}`}>
+                        <Upload className="w-5 h-5" aria-hidden="true" /> Agregar PDF
+                        <input type="file" className="sr-only" aria-label="Agregar PDF de factura emitida" accept=".pdf,application/pdf" multiple disabled={disabled} onChange={(event) => { agregar(event.target.files); event.target.value = ''; }} />
                     </label>
                 )}
             </div>
-
-            {mensajeError && <p className="text-xs text-red-500 font-bold m-0">{mensajeError}</p>}
-        </div>
+            <p className="text-xs theme-text-muted m-0">Hasta {maxTotal} PDFs de 5 MB cada uno. Puedes arrastrarlos aquí y revisarlos antes de enviar.</p>
+            {mensajeError && <p role="alert" className="text-sm theme-text-peligro m-0">{mensajeError}</p>}
+        </section>
     );
 }

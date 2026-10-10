@@ -1,5 +1,5 @@
+import SolicitudDialog from '@/Components/Solicitudes/SolicitudDialog';
 import React, { useEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { X, FileSpreadsheet, FileText, Download, ChevronLeft, ChevronRight, ExternalLink, Copy, Check, Loader2 } from 'lucide-react';
 
 const ETIQUETAS_DEFAULT = {
@@ -89,10 +89,10 @@ export default function ModalExpedienteFacturas({ onClose, solicitud }) {
         setTimeout(() => setCopiadoKey(null), 2000);
     };
 
-    return createPortal(
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md" onClick={onClose}>
+    return (
+        <SolicitudDialog className="gelia-tag-lista-overlay" onClose={onClose} busy={false} title="Documentos de la solicitud">
             <div className="w-full max-w-4xl theme-surface border theme-border rounded-[2rem] p-8 shadow-2xl relative max-h-[90vh] overflow-y-auto custom-scrollbar" onClick={e => e.stopPropagation()}>
-                <button onClick={onClose} className="absolute top-4 right-4 p-2 theme-text-muted hover:theme-text-main rounded-xl outline-none"><X className="w-5 h-5" /></button>
+                <button data-dialog-close onClick={onClose} className="absolute top-4 right-4 p-2 theme-text-muted hover:theme-text-main rounded-xl outline-none" aria-label="Cerrar"><X className="w-5 h-5" /></button>
 
                 <div className="flex items-center gap-3 mb-6">
                     <FileText className="w-7 h-7 text-blue-500" />
@@ -213,7 +213,6 @@ export default function ModalExpedienteFacturas({ onClose, solicitud }) {
                     </section>
                 </div>
             </div>
-        </div>,
-        document.body
+        </SolicitudDialog>
     );
 }

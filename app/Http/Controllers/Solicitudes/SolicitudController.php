@@ -84,10 +84,14 @@ class SolicitudController extends Controller
 
         return Inertia::render('Solicitudes/Index', [
             'solicitudes' => $solicitudes,
+            'metricas' => fn () => $listarService->metricas(Auth::user()),
+            'resumen' => fn () => $listarService->resumenFiltrado(Auth::user(), $request->all()),
             'filtros' => $request->all(), // Pasamos los filtros actuales para mantener el estado en React
             'procesos' => $procesos,
             'listas' => CatalogoListaDescuento::with('porcentajeEscalonamiento')->where('activo', true)->get(),
             'tipos_cliente' => CatalogoTipoCliente::where('activo', true)->orderBy('nombre')->get(),
+            'listas_filtro' => CatalogoListaDescuento::orderBy('nombre')->get(['id', 'nombre']),
+            'tipos_cliente_filtro' => CatalogoTipoCliente::orderBy('nombre')->get(['id', 'nombre']),
             'vendedores' => $vendedores,
             'bancos' => CatalogoBanco::where('activo', true)->orderBy('nombre')->get(),
             'estados' => CatalogoEstadoSolicitud::orderBy('id')->get(['id', 'nombre']),
@@ -468,7 +472,9 @@ class SolicitudController extends Controller
                     'compra_en_tienda' => $compraEnTienda,
                     'compra_en_tienda_solo_tag' => $compraSoloTag,
                     'lista_bronce_autoasignada' => $compraEnTienda,
-                ], $clienteSnapshot ?? []),
+                ], app(\App\Services\Solicitudes\SnapshotCotizacionSolicitudService::class)->construir(
+                    $solicitud, $clienteSnapshot['antes'] ?? null
+                )),
             ]);
 
             $destinatarios = $this->obtenerDestinatariosDepartamentales($solicitud, false);

@@ -1,5 +1,5 @@
+import SolicitudDialog from '@/Components/Solicitudes/SolicitudDialog';
 import React, { useEffect, useMemo } from 'react';
-import { createPortal } from 'react-dom';
 import { useForm } from '@inertiajs/react';
 import { Save, X } from 'lucide-react';
 import {
@@ -61,7 +61,7 @@ export default function ModalEditarReceptorFiscal({
     const regimenInicial = receptor?.regimen_fiscal || '';
     const usoInicial = usoCfdiParaRegimen(regimenInicial) || receptor?.uso_factura || '';
 
-    const { data, setData, post, put, processing, errors, setError, clearErrors } = useForm({
+    const { data, setData, post, put, processing, errors, setError, clearErrors, isDirty } = useForm({
         rfc: receptor?.rfc || '',
         codigo_postal: receptor?.codigo_postal || '',
         regimen_fiscal: regimenInicial,
@@ -113,8 +113,8 @@ export default function ModalEditarReceptorFiscal({
         }
     };
 
-    return createPortal(
-        <div className={`${THEME_MODAL_OVERLAY} items-start sm:items-center py-4 sm:py-6`} onClick={onClose}>
+    return (
+        <SolicitudDialog onClose={onClose} busy={processing} title="Editar receptor fiscal" dirty={isDirty}>
             <div
                 className={`${THEME_MODAL_SHELL} max-w-lg w-full flex flex-col text-left`}
                 style={{ maxHeight: 'calc(100dvh - 2rem)' }}
@@ -131,7 +131,7 @@ export default function ModalEditarReceptorFiscal({
                     </div>
                     <button
                         type="button"
-                        onClick={onClose}
+                        data-dialog-close onClick={onClose}
                         className="p-2 rounded-full theme-text-muted hover:theme-text-main hover:bg-black/5 dark:hover:bg-white/5 transition-colors outline-none shrink-0"
                         aria-label="Cerrar"
                     >
@@ -255,7 +255,6 @@ export default function ModalEditarReceptorFiscal({
                     </div>
                 </form>
             </div>
-        </div>,
-        document.body
+        </SolicitudDialog>
     );
 }

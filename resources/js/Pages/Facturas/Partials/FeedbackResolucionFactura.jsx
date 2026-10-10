@@ -1,40 +1,11 @@
-import React, { useState } from 'react';
-import { createPortal } from 'react-dom';
+import EvidenciaSolicitud from '@/Components/Solicitudes/EvidenciaSolicitud';
+import React from 'react';
 import { CheckCircle2, AlertOctagon, MessageSquare, FileText } from 'lucide-react';
-import { THEME_MODAL_OVERLAY } from '../../../utils/geliaTheme';
 import { urlArchivoFactura } from './facturasStyles';
 import { etiquetaCampoError } from './camposFacturaErrores';
 import { nombreEstadoFactura } from './facturasFiltros';
 
 const chipEvidencia = 'inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border theme-element theme-border hover:border-[var(--color-primario)] transition-colors';
-
-const VisorEvidenciaUrl = ({ url, esPdf }) => {
-    const [isHovered, setIsHovered] = useState(false);
-    if (!url) return null;
-
-    if (esPdf) {
-        return (
-            <a href={url} target="_blank" rel="noopener noreferrer" className={chipEvidencia}>
-                <span className="text-[9px] font-black uppercase tracking-widest" style={{ color: 'var(--color-primario)' }}>Ver PDF</span>
-            </a>
-        );
-    }
-
-    return (
-        <div className="inline-block" onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}>
-            <div className={`${chipEvidencia} cursor-pointer`}>
-                <img src={url} className="w-5 h-5 object-cover rounded shadow-sm" alt="Miniatura" />
-                <span className="text-[9px] font-black uppercase tracking-widest" style={{ color: 'var(--color-primario)' }}>Ver evidencia</span>
-            </div>
-            {isHovered && createPortal(
-                <div className={`${THEME_MODAL_OVERLAY} items-center justify-center pointer-events-none`}>
-                    <img src={url} alt="Evidencia expandida" className="max-w-full max-h-full object-contain rounded-2xl shadow-2xl" />
-                </div>,
-                document.body
-            )}
-        </div>
-    );
-};
 
 export default function FeedbackResolucionFactura({ factura }) {
     const estadoNombre = nombreEstadoFactura(factura);
@@ -82,7 +53,7 @@ export default function FeedbackResolucionFactura({ factura }) {
                     <MessageSquare className="w-4 h-4 theme-text-muted mt-0.5 shrink-0" />
                     <div className="min-w-0">
                         <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted mb-0.5 m-0">Nota de vendedora</p>
-                        <p className="text-xs font-bold theme-text-main italic leading-snug m-0 break-words">{factura.observaciones_vendedor}</p>
+                        <p className="text-xs font-bold theme-text-main leading-relaxed m-0 break-words">{factura.observaciones_vendedor}</p>
                     </div>
                 </div>
             )}
@@ -96,7 +67,7 @@ export default function FeedbackResolucionFactura({ factura }) {
                                 {titulo}
                             </p>
                             {motivo && (
-                                <p className="text-xs font-bold italic leading-tight theme-text-main m-0 break-words whitespace-pre-wrap">
+                                <p className="text-xs font-medium leading-relaxed theme-text-main m-0 break-words whitespace-pre-wrap">
                                     {motivo}
                                 </p>
                             )}
@@ -118,7 +89,7 @@ export default function FeedbackResolucionFactura({ factura }) {
                     </div>
                     <div className="flex flex-wrap gap-2 mt-1">
                         {tieneEvidenciaError && urlEvidenciaError && (
-                            <VisorEvidenciaUrl url={urlEvidenciaError} esPdf={esPdfEvidencia} />
+                            <EvidenciaSolicitud url={urlEvidenciaError} esPdf={esPdfEvidencia} />
                         )}
                         {esAprobada && cantidadPdfs > 0 && (
                             Array.from({ length: cantidadPdfs }).map((_, i) => (

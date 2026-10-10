@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Reportes;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Models\CatalogoListaDescuento;
+use App\Models\CatalogoTipoCliente;
 use App\Services\Solicitudes\ExportarReporteSolicitudesService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -28,6 +30,8 @@ class ReporteSolicitudesController extends Controller
             'filtros' => $filtros,
             'total' => $total,
             'vendedores' => $vendedores,
+            'listas' => CatalogoListaDescuento::orderBy('nombre')->get(['id', 'nombre']),
+            'tipos_cliente' => CatalogoTipoCliente::orderBy('nombre')->get(['id', 'nombre']),
         ]);
     }
 

@@ -1,0 +1,491 @@
+/* Commercial workflows: inherit Gelia theme, typography and semantic colors. */
+.gelia-solicitudes-workspace,
+.gelia-workflow-overlay {
+    color: var(--theme-text-main);
+
+    --solicitudes-radius: 1rem;
+    --solicitudes-gap: 1.25rem;
+    --solicitudes-acento-accion: color-mix(in srgb, var(--color-primario) 82%, var(--theme-text-main));
+    --solicitudes-texto-accion: var(--theme-surface-solid);
+    --solicitudes-focus: color-mix(in srgb, var(--color-primario) 65%, var(--theme-text-main));
+}
+
+.gelia-solicitudes-workspace {
+    gap: var(--solicitudes-gap);
+}
+
+.gelia-solicitudes-workspace .theme-card {
+    border-radius: var(--solicitudes-radius);
+    box-shadow: none;
+}
+
+.gelia-solicitudes-workspace > header {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+.gelia-solicitudes-workspace :is(h1, h2, h3),
+.gelia-workflow-overlay :is(h2, h3) {
+    font-style: normal;
+    font-weight: 600;
+    text-transform: none;
+    letter-spacing: normal;
+    text-wrap: pretty;
+}
+
+.gelia-solicitudes-workspace h1 {
+    font-size: 1.5rem;
+    line-height: 1.3;
+}
+
+.gelia-solicitudes-workspace :is(.theme-label, [class*="text-[8px]"], [class*="text-[9px]"], [class*="text-[10px]"]),
+.gelia-workflow-overlay :is(.theme-label, [class*="text-[8px]"], [class*="text-[9px]"], [class*="text-[10px]"]) {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    text-transform: none;
+    letter-spacing: normal;
+    line-height: 1.5;
+}
+
+.gelia-solicitudes-workspace :is(button, a),
+.gelia-workflow-overlay :is(button, a) {
+    touch-action: manipulation;
+}
+
+.gelia-solicitudes-workspace :is(button, input, select, textarea, a):focus-visible,
+.gelia-workflow-overlay :is(button, input, select, textarea, a):focus-visible {
+    outline: 2px solid var(--solicitudes-focus);
+    outline-offset: 3px;
+}
+
+.gelia-solicitudes-workspace :is(.theme-btn-primary, .theme-btn-secondary, .theme-btn-danger, .gelia-segment-btn),
+.gelia-workflow-overlay :is(.theme-btn-primary, .theme-btn-secondary, .theme-btn-danger) {
+    min-height: 2.75rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    text-transform: none;
+    letter-spacing: normal;
+    border-radius: 0.75rem;
+}
+
+.gelia-workflow-actions > button { padding-inline: 1rem; }
+
+.gelia-solicitudes-workspace article {
+    border-radius: var(--solicitudes-radius);
+    box-shadow: none;
+    border-left-width: 1px;
+    border-left-color: var(--theme-border);
+}
+
+.gelia-solicitudes-workspace article p {
+    overflow-wrap: anywhere;
+    font-weight: 400;
+}
+
+.gelia-solicitudes-workspace article :is(.italic, .font-black) {
+    font-style: normal;
+    font-weight: 500;
+}
+
+.gelia-solicitudes-workspace article h3 {
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.gelia-solicitudes-workspace article button {
+    min-height: 2.75rem;
+}
+
+.gelia-solicitudes-indicadores {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
+    gap: 0.75rem;
+}
+
+.gelia-solicitudes-indicador {
+    padding: 1rem 1.25rem;
+    border: 1px solid var(--theme-border);
+    border-radius: var(--solicitudes-radius);
+    background: var(--theme-surface-solid);
+    text-align: left;
+}
+
+button.gelia-solicitudes-indicador {
+    cursor: pointer;
+    transition: border-color 150ms;
+}
+
+button.gelia-solicitudes-indicador:hover {
+    border-color: var(--color-primario);
+}
+
+.gelia-solicitudes-indicador[data-tone="aviso"] .gelia-indicador-icon {
+    color: var(--color-aviso);
+}
+
+.gelia-solicitudes-indicador[data-tone="exito"] .gelia-indicador-icon {
+    color: var(--color-exito);
+}
+
+.gelia-solicitudes-indicador[data-tone="peligro"] .gelia-indicador-icon {
+    color: var(--color-peligro);
+}
+
+.gelia-solicitudes-indicador[data-tone="neutro"] .gelia-indicador-icon {
+    color: var(--theme-text-muted);
+}
+
+.gelia-workflow-overlay {
+    padding: 1rem;
+    overscroll-behavior: contain;
+}
+
+.gelia-workflow-dialog {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    outline: none;
+}
+
+.gelia-workflow-dialog > :is(.gelia-modal-shell, .theme-surface) {
+    max-height: calc(100dvh - 2rem);
+    border-radius: var(--solicitudes-radius);
+    background: var(--theme-surface-solid);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.gelia-workflow-dialog > .theme-surface {
+    padding: clamp(1.25rem, 3vw, 2rem);
+}
+
+.gelia-workflow-dialog h2 {
+    font-size: 1.25rem;
+    line-height: 1.4;
+}
+
+.gelia-workflow-dialog .gelia-modal-body {
+    scroll-padding-block: 1rem;
+    overscroll-behavior: contain;
+}
+
+.gelia-workflow-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid var(--theme-border);
+    flex-shrink: 0;
+}
+
+.gelia-workflow-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.75rem;
+    min-width: 2.75rem;
+    flex-shrink: 0;
+    border: 1px solid var(--theme-border);
+    border-radius: 0.75rem;
+    color: var(--theme-text-muted);
+    background: var(--theme-element-bg);
+    cursor: pointer;
+}
+
+.gelia-workflow-close:hover {
+    color: var(--theme-text-main);
+}
+
+.gelia-workflow-confirm {
+    width: min(100%, 28rem);
+}
+
+.gelia-respuesta-comercial {
+    display: flex;
+    flex-direction: column;
+}
+
+.gelia-respuesta-contexto {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+    margin: 0;
+}
+
+.gelia-respuesta-contexto dt {
+    font-size: 0.8125rem;
+    color: var(--theme-text-muted);
+}
+
+.gelia-respuesta-contexto dd {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--theme-text-main);
+    margin: 0.25rem 0 0;
+    overflow-wrap: anywhere;
+}
+
+.gelia-respuesta-nota {
+    padding: 1rem;
+    background: var(--theme-element-bg);
+    border: 1px solid var(--theme-border);
+    border-radius: 0.75rem;
+}
+
+.gelia-respuesta-aviso {
+    display: flex;
+    gap: 0.75rem;
+    padding: 1rem;
+    color: var(--theme-text-main);
+    background: color-mix(in srgb, var(--color-primario) 7%, var(--theme-surface-solid));
+    border: 1px solid color-mix(in srgb, var(--color-primario) 25%, var(--theme-border));
+    border-radius: 0.75rem;
+}
+
+.gelia-respuesta-aviso-error {
+    background: color-mix(in srgb, var(--color-peligro) 7%, var(--theme-surface-solid));
+    border-color: color-mix(in srgb, var(--color-peligro) 30%, var(--theme-border));
+}
+
+.gelia-respuesta-aviso-error svg {
+    color: var(--color-peligro);
+}
+
+.gelia-workflow-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    padding: 1rem 1.5rem max(1rem, env(safe-area-inset-bottom));
+    flex-shrink: 0;
+    background: var(--theme-surface-solid);
+    border-top: 1px solid var(--theme-border);
+}
+
+.gelia-adjunto-control,
+.gelia-evidencia-link {
+    position: relative;
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 2.75rem;
+    padding: 0.5rem 0.875rem;
+    border-radius: 0.75rem;
+    border: 1px solid var(--theme-border);
+    background: var(--theme-element-bg);
+    color: var(--theme-text-main);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.gelia-adjunto-control:hover,
+.gelia-evidencia-link:hover {
+    border-color: var(--color-primario);
+}
+
+.gelia-adjunto-preview {
+    width: 100%;
+    height: 12rem;
+    object-fit: contain;
+    background: var(--theme-element-bg);
+    border: 1px solid var(--theme-border);
+    border-radius: 0.75rem;
+}
+
+.gelia-evidencia-visor {
+    display: flex;
+    flex-direction: column;
+}
+
+.gelia-evidencia-imagen {
+    max-height: 65dvh;
+    width: 100%;
+    object-fit: contain;
+}
+
+@media (width <= 640px) {
+    .gelia-workflow-overlay {
+    padding: 0.5rem;
+}
+
+    .gelia-workflow-dialog > :is(.gelia-modal-shell, .theme-surface) {
+    max-height: calc(100dvh - 1rem);
+}
+
+    .gelia-workflow-header {
+    padding: 1rem;
+}
+
+    .gelia-workflow-actions {
+    padding-inline: 1rem;
+}
+
+    .gelia-workflow-actions > button {
+    flex: 1;
+}
+
+    .gelia-respuesta-contexto {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+}
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .gelia-workflow-overlay *,
+    .gelia-solicitudes-workspace * {
+    animation: none !important;
+    transition: none !important;
+}
+}
+
+.gelia-respuesta-opcion {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 2.75rem;
+    padding: 0.75rem;
+    border: 1px solid var(--theme-border);
+    border-radius: 0.75rem;
+    color: var(--theme-text-main);
+    background: var(--theme-element-bg);
+    cursor: pointer;
+}
+
+.gelia-respuesta-opcion-activa {
+    border-color: var(--color-primario);
+    background: color-mix(in srgb, var(--color-primario) 8%, var(--theme-surface-solid));
+}
+
+.gelia-respuesta-opcion input {
+    accent-color: var(--color-primario);
+}
+
+.gelia-historial-grid {
+    min-height: 0;
+}
+
+@media (width < 1024px) {
+    .gelia-historial-grid {
+    display: block;
+    overflow-y: auto;
+}
+
+    .gelia-historial-grid > div {
+    overflow: visible;
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+}
+
+.gelia-adjunto-control:focus-within {
+    outline: 2px solid var(--solicitudes-focus);
+    outline-offset: 3px;
+}
+
+.gelia-operativas-filtros-grupos {
+    display: grid;
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+    gap: 1rem;
+}
+
+.gelia-filtros-scroll {
+    overflow-x: auto;
+    padding: 3px;
+    scrollbar-width: thin;
+}
+
+.gelia-filtros-scroll > .gelia-segment {
+    width: 100%;
+    min-width: max-content;
+    box-shadow: none;
+}
+
+.gelia-filtros-scroll .gelia-segment-btn { padding-inline: 0.875rem; }
+
+.gelia-respuesta-comercial .gelia-modal-body {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.gelia-respuesta-comercial .gelia-modal-body > * {
+    margin-block: 0;
+    flex-shrink: 0;
+}
+
+
+
+.gelia-workflow-dialog button[data-dialog-close] {
+    min-height: 2.75rem;
+    min-width: 2.75rem;
+}
+
+.gelia-workflow-dialog > .theme-surface > div:first-of-type { padding-right: 3rem; }
+
+@media (width < 1024px) {
+    .gelia-operativas-filtros-grupos { grid-template-columns: minmax(0, 1fr); }
+}
+
+.dark :is(.gelia-solicitudes-workspace, .gelia-workflow-overlay) {
+    --solicitudes-acento-accion: color-mix(in srgb, var(--color-primario) 82%, var(--theme-surface-solid));
+    --solicitudes-texto-accion: var(--theme-text-main);
+}
+
+.gelia-solicitudes-workspace .theme-btn-primary,
+.gelia-workflow-dialog .theme-btn-primary {
+    background-color: var(--solicitudes-acento-accion);
+    color: var(--solicitudes-texto-accion);
+    box-shadow: none;
+}
+
+.gelia-solicitudes-workspace .theme-btn-primary:hover:not(:disabled),
+.gelia-workflow-dialog .theme-btn-primary:hover:not(:disabled) {
+    transform: none;
+    filter: brightness(0.95);
+}
+
+.gelia-solicitudes-workspace .gelia-segment-btn[data-active="true"] {
+    color: var(--solicitudes-acento-accion);
+}
+
+
+.gelia-solicitudes-workspace [class~="gelia-estado-vivo--aviso"] {
+    color: color-mix(in srgb, var(--color-aviso) 70%, var(--theme-text-main));
+}
+
+.gelia-solicitudes-workspace [class~="gelia-estado-vivo--exito"] {
+    color: color-mix(in srgb, var(--color-exito) 70%, var(--theme-text-main));
+}
+
+.gelia-solicitudes-workspace [class~="gelia-estado-vivo--info"] {
+    color: color-mix(in srgb, var(--color-info) 70%, var(--theme-text-main));
+}
+
+.gelia-solicitudes-workspace [class~="gelia-estado-vivo--error"] {
+    color: color-mix(in srgb, var(--color-peligro) 70%, var(--theme-text-main));
+}
+
+.gelia-workflow-overlay input[type="file"].hidden {
+    display: block;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    clip-path: inset(50%);
+    overflow: hidden;
+}
+
+.gelia-workflow-overlay label:has(input[type="file"]):focus-within {
+    outline: 2px solid var(--solicitudes-focus);
+    outline-offset: 3px;
+}
+
+.dark .gelia-solicitudes-workspace .gelia-segment-btn[data-active="true"] {
+    color: color-mix(in srgb, var(--color-primario) 70%, var(--theme-text-main));
+}

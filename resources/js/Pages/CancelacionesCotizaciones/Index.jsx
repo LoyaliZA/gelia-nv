@@ -1,3 +1,4 @@
+import IndicadoresSolicitudes from '@/Components/Solicitudes/IndicadoresSolicitudes';
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Head, router } from '@inertiajs/react';
@@ -255,21 +256,12 @@ export default function Index({ auth, solicitudes, metricas, filtros = {}, proce
         <AppLayout>
             <Head title="Cancelaciones y Cotizaciones" />
 
-            <GeliaPageShell className="space-y-6 md:space-y-8">
+            <GeliaPageShell className="gelia-solicitudes-workspace space-y-5">
+                <p className="sr-only" role="status">{listaCargando ? 'Actualizando solicitudes…' : `${solicitudes?.total ?? listaVisible.length} solicitudes disponibles`}</p>
                 <header className={geliaCardClass('p-6 md:p-10 flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-6')}>
                     <div className="min-w-0">
-                        <div className="flex items-center gap-3 mb-2">
-                            <span className="h-1.5 w-12 rounded-full shrink-0" style={{ backgroundColor: 'var(--color-primario)' }} />
-                            <p className="text-[10px] font-black uppercase tracking-[0.3em] m-0" style={{ color: 'var(--color-primario)' }}>
-                                Operaciones
-                            </p>
-                        </div>
-                        <h1 className="text-2xl sm:text-3xl md:text-5xl font-black italic uppercase tracking-tighter theme-text-main m-0 leading-none">
-                            Cancelaciones y <span style={{ color: 'var(--color-primario)' }}>Cotizaciones</span>
-                        </h1>
-                        <p className="text-[10px] font-bold theme-text-muted uppercase tracking-widest mt-2 m-0">
-                            Remisión, pedido y cotización sobre pedido
-                        </p>
+                        <h1 className="m-0 theme-text-main">Cancelaciones y cotizaciones</h1>
+                        <p className="text-sm theme-text-muted mt-1 mb-0">Gestiona cancelaciones de remisiones y pedidos, y solicitudes de cotización.</p>
                     </div>
                     <div className="flex flex-wrap gap-2 w-full lg:w-auto shrink-0">
                         {puedeExportar && (
@@ -293,23 +285,7 @@ export default function Index({ auth, solicitudes, metricas, filtros = {}, proce
                     </div>
                 </header>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-6 min-w-0">
-                    {[
-                        { label: 'Pendientes', value: metricas?.pendientes ?? 0, color: '#f59e0b' },
-                        { label: 'Respondidas hoy', value: metricas?.respondidas_hoy ?? 0, accent: true },
-                        { label: 'Incorrectas', value: metricas?.incorrectas ?? 0, color: '#ef4444' },
-                    ].map(({ label, value, color, accent }) => (
-                        <div key={label} className={geliaCardClass('p-5 md:p-6 flex items-center gap-4 min-w-0')}>
-                            <div className="p-3 rounded-2xl theme-element border theme-border shrink-0">
-                                <FileSpreadsheet className="w-6 h-6" style={{ color: accent ? 'var(--color-primario)' : color }} />
-                            </div>
-                            <div className="min-w-0">
-                                <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0">{label}</p>
-                                <p className="text-2xl font-black theme-text-main m-0 tabular-nums leading-tight mt-1">{value}</p>
-                            </div>
-                        </div>
-                    ))}
-                </div>
+                <IndicadoresSolicitudes metricas={metricas} onSeleccionar={cambiarTab} />
 
                 <FiltrosOperativas
                     tabActiva={tabActiva}
