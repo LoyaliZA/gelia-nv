@@ -13,7 +13,9 @@ use Illuminate\Database\Eloquent\Builder;
  * - Gerente: consulta pedidos de colaboradores y de su departamento, excepto borradores ajenos; muta solo los propios.
  * - Super Admin: consulta todos (omnisciencia); muta solo los propios como vendedora.
  * - Auxiliar: bandeja de auditoría del departamento (permiso + fase).
- * - CEDIS/Delegado: bandeja por permiso + fase (sin filtro dept).
+ * - CEDIS: bandeja por permiso + fase + departamentos asignados.
+ *   esAdmin o control_pedidos.cedis.ver_todos ven todos.
+ * - Delegado: bandeja por permiso + fase (sin filtro de departamento).
  */
 final class VisibilidadPedidoBma
 {
@@ -106,6 +108,64 @@ final class VisibilidadPedidoBma
         return array_values(array_unique($ids));
     }
 
+    public static function puedeVerEnCedis(User $usuario, PedidoBma $pedido): bool
+    {
+        if (self::esAdmin($usuario) || $usuario->can('control_pedidos.cedis.ver_todos')) {
+            return true;
+        }
+
+        $deptos = self::idsDepartamentos($usuario);
+        if ($deptos === []) {
+            return false;
+        }
+
+        $pedido->loadMissing('vendedor.departamentos');
+        $vendedor = $pedido->vendedor;
+        if ($vendedor === null) {
+            return false;
+        }
+
+        if ($vendedor->departamento_id && in_array((int) $vendedor->departamento_id, $deptos, true)) {
+            return true;
+        }
+
+        foreach ($vendedor->departamentos as $depto) {
+            if (in_array((int) $depto->id, $deptos, true)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public static function aplicarAlcanceCedis(Builder $query, User $usuario): void
+    {
+        if (self::esAdmin($usuario) || $usuario->can('control_pedidos.cedis.ver_todos')) {
+            return;
+        }
+
+        $deptos = self::idsDepartamentos($usuario);
+        if ($deptos === []) {
+            $query->whereRaw('1 = 0');
+
+            return;
+        }
+
+        $query->whereHas('vendedor', function (Builder $vendedor) use ($deptos) {
+            $vendedor->where(function (Builder $coincidencia) use ($deptos) {
+                $coincidencia->whereIn('departamento_id', $deptos)
+                    ->orWhereHas('departamentos', fn (Builder $d) => $d->whereIn('departamentos.id', $deptos));
+            });
+        });
+    }
+
+    public static function restringirTareasCedis(Builder $query, User $usuario): void
+    {
+        $query->whereHas('pedido', function (Builder $pedido) use ($usuario) {
+            self::aplicarAlcanceCedis($pedido, $usuario);
+        });
+    }
+
     public static function aplicarAlcanceListadoBma(Builder $query, User $usuario): void
     {
         $ids = self::idsVendedoresVisibles($usuario);
@@ -153,7 +213,8 @@ final class VisibilidadPedidoBma
             return true;
         }
 
-        if ($usuario->can('control_pedidos.cedis') && self::enBandejaCedis($pedido, $fase)) {
+        if ($usuario->can('control_pedidos.cedis') && self::enBandejaCedis($pedido, $fase)
+            && self::puedeVerEnCedis($usuario, $pedido)) {
             return true;
         }
 
