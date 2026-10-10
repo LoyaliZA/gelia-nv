@@ -4,8 +4,10 @@ namespace Tests\Unit\ControlPedidos;
 
 use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\PedidoBma;
+use App\Models\ControlPedidos\PedidoBmaDocumento;
 use App\Models\Departamento;
 use App\Models\User;
+use App\Services\ControlPedidos\ListarPedidosCedisService;
 use App\Support\ControlPedidos\VisibilidadPedidoBma;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Permission;
@@ -69,6 +71,41 @@ class ControlPedidosCedisVisibilidadTest extends TestCase
         $this->assertFalse(VisibilidadPedidoBma::puedeConsultar($cedisAromas, $pedidoBellaroma));
     }
 
+    public function test_listado_cedis_respeta_departamento_busqueda_y_contadores(): void
+    {
+        [$aromas, $bellaroma] = $this->departamentos();
+        $vendeAromas = User::factory()->create(['departamento_id' => $aromas->id]);
+        $vendeBellaroma = User::factory()->create(['departamento_id' => $bellaroma->id]);
+        $cedisAromas = $this->usuarioCedis($aromas->id);
+        $cedisAmbos = $this->usuarioCedis($aromas->id, [$bellaroma->id]);
+        $cedisVacio = $this->usuarioCedis(null);
+        $pedidoAromas = $this->pedidoEnCedis($vendeAromas, 'LIST-AROMAS');
+        $pedidoBellaroma = $this->pedidoEnCedis($vendeBellaroma, 'LIST-BELLA');
+
+        $servicio = app(ListarPedidosCedisService::class);
+        $lista = $servicio->ejecutar(['tab' => 'EMPACADOS'], false, $cedisAromas);
+
+        $this->assertTrue($lista->contains('id', $pedidoAromas->id));
+        $this->assertFalse($lista->contains('id', $pedidoBellaroma->id));
+
+        $listaAmbos = $servicio->ejecutar(['tab' => 'EMPACADOS'], false, $cedisAmbos);
+        $this->assertTrue($listaAmbos->contains('id', $pedidoAromas->id));
+        $this->assertTrue($listaAmbos->contains('id', $pedidoBellaroma->id));
+
+        $listaVacia = $servicio->ejecutar(['tab' => 'EMPACADOS'], false, $cedisVacio);
+        $this->assertTrue($listaVacia->isEmpty());
+
+        $busqueda = $servicio->ejecutar([
+            'tab' => 'TODOS',
+            'q' => $pedidoBellaroma->folio,
+        ], false, $cedisAromas);
+        $this->assertFalse($busqueda->contains('id', $pedidoBellaroma->id));
+
+        $metricas = $servicio->metricas($cedisAromas);
+        $this->assertSame(1, $metricas['empacados']);
+        $this->assertSame(1, $metricas['total']);
+    }
+
     /** @return array{0: Departamento, 1: Departamento} */
     private function departamentos(): array
     {
@@ -108,8 +145,9 @@ class ControlPedidosCedisVisibilidadTest extends TestCase
                 'activo' => true,
             ]);
 
-        return PedidoBma::create([
+        $pedido = PedidoBma::create([
             'folio' => $folio.'-'.uniqid(),
+            'folio_remision' => $folio.'-REM',
             'fecha' => now()->toDateString(),
             'vendedor_id' => $vendedor->id,
             'catalogo_estatus_pedido_id' => $estatus->id,
@@ -118,5 +156,18 @@ class ControlPedidosCedisVisibilidadTest extends TestCase
             'es_resguardo' => false,
             'pago_validado_at' => now(),
         ]);
+
+        PedidoBmaDocumento::create([
+            'pedido_bma_id' => $pedido->id,
+            'tipo' => PedidoBmaDocumento::TIPO_REMISION,
+            'ruta_archivo' => 'test/remision.pdf',
+            'nombre_original' => 'remision.pdf',
+            'mime_type' => 'application/pdf',
+            'tamano_bytes' => 100,
+            'orden' => 0,
+            'activo' => true,
+        ]);
+
+        return $pedido;
     }
 }

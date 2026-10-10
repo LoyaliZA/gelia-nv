@@ -4,9 +4,12 @@ namespace App\Services\ControlPedidos;
 
 use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\PedidoBma;
+use App\Models\User;
+use App\Support\ControlPedidos\VisibilidadPedidoBma;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Auth;
 
 class ListarPedidosCedisService
 {
@@ -23,13 +26,14 @@ class ListarPedidosCedisService
         CatalogoEstatusPedido::FASE_ENVIADO,
     ];
 
-    public function ejecutar(array $filtros = [], bool $paginar = true): LengthAwarePaginator|Collection
+    public function ejecutar(array $filtros = [], bool $paginar = true, ?User $usuario = null): LengthAwarePaginator|Collection
     {
+        $usuario = $usuario ?? Auth::user();
         $tab = strtoupper($filtros['tab'] ?? 'TODOS');
         $query = match ($tab) {
-            'PENDIENTES_PESAJE' => $this->queryPendientesPesaje(),
-            'TODOS', '' => $this->queryTodos(),
-            default => $this->queryBase(),
+            'PENDIENTES_PESAJE' => $this->queryPendientesPesaje($usuario),
+            'TODOS', '' => $this->queryTodos($usuario),
+            default => $this->queryBase($usuario),
         };
 
         $this->aplicarFiltros($query, $filtros);
@@ -54,9 +58,10 @@ class ListarPedidosCedisService
         return $resultado;
     }
 
-    public function metricas(): array
+    public function metricas(?User $usuario = null): array
     {
-        $base = $this->queryBase();
+        $usuario = $usuario ?? Auth::user();
+        $base = $this->queryBase($usuario);
         $idsPorFase = $this->idsPorFase();
 
         $empacados = (clone $base)->where('catalogo_estatus_pedido_id', $idsPorFase['EN_CEDIS'] ?? 0)->count();
@@ -67,7 +72,7 @@ class ListarPedidosCedisService
         ]))->count();
         $enviados = (clone $base)->where('catalogo_estatus_pedido_id', $idsPorFase['ENVIADO'] ?? 0)->count();
         $incorrectas = (clone $base)->where('catalogo_estatus_pedido_id', $idsPorFase['INCIDENCIA_CEDIS'] ?? 0)->count();
-        $pendientesPesaje = $this->queryPendientesPesaje()->count();
+        $pendientesPesaje = $this->queryPendientesPesaje($usuario)->count();
         $entregados = (clone $base)->where('catalogo_estatus_pedido_id', $idsPorFase['ENTREGADO'] ?? 0)->count();
 
         return [
@@ -121,11 +126,11 @@ class ListarPedidosCedisService
     }
 
     /** Bandeja CEDIS post-remisión (sin pendientes de pesaje). */
-    private function queryBase(): Builder
+    private function queryBase(?User $usuario): Builder
     {
         $idsVisibles = $this->idsEstatusVisibles();
 
-        return $this->excluirPreparacionTienda(
+        $query = $this->excluirPreparacionTienda(
             PedidoBma::with($this->withRelations())
                 ->whereNull('pedido_principal_id')
                 ->whereIn('catalogo_estatus_pedido_id', $idsVisibles ?: [0])
@@ -133,15 +138,21 @@ class ListarPedidosCedisService
                 ->whereHas('remision')
                 ->orderByDesc('created_at')
         );
+
+        if ($usuario instanceof User) {
+            VisibilidadPedidoBma::aplicarAlcanceCedis($query, $usuario);
+        }
+
+        return $query;
     }
 
     /** TODOS = bandeja CEDIS + pendientes de pesaje. */
-    private function queryTodos(): Builder
+    private function queryTodos(?User $usuario): Builder
     {
         $idsVisibles = $this->idsEstatusVisibles();
         $estatusPesaje = PedidoBma::ESTATUS_ENVIO_PENDIENTE_PESAJE;
 
-        return $this->excluirPreparacionTienda(
+        $query = $this->excluirPreparacionTienda(
             PedidoBma::with($this->withRelations())
                 ->whereNull('pedido_principal_id')
                 ->where(function (Builder $q) use ($idsVisibles, $estatusPesaje) {
@@ -158,11 +169,17 @@ class ListarPedidosCedisService
                 ->orderByDesc('pesaje_solicitado_at')
                 ->orderByDesc('created_at')
         );
+
+        if ($usuario instanceof User) {
+            VisibilidadPedidoBma::aplicarAlcanceCedis($query, $usuario);
+        }
+
+        return $query;
     }
 
-    private function queryPendientesPesaje(): Builder
+    private function queryPendientesPesaje(?User $usuario): Builder
     {
-        return $this->excluirPreparacionTienda(
+        $query = $this->excluirPreparacionTienda(
             PedidoBma::with($this->withRelations())
                 ->whereNull('pedido_principal_id')
                 ->where('estatus_envio', PedidoBma::ESTATUS_ENVIO_PENDIENTE_PESAJE)
@@ -170,6 +187,12 @@ class ListarPedidosCedisService
                 ->orderByDesc('pesaje_solicitado_at')
                 ->orderByDesc('created_at')
         );
+
+        if ($usuario instanceof User) {
+            VisibilidadPedidoBma::aplicarAlcanceCedis($query, $usuario);
+        }
+
+        return $query;
     }
 
     private function aplicarFiltros(Builder $query, array $filtros): void
