@@ -45,29 +45,18 @@ class PedidoBmaCedisController extends Controller
 
         $liberaciones = null;
         if ($tab === 'LIBERACIONES') {
-            $liberaciones = \App\Models\ControlPedidos\PedidoBmaTareaPreparacion::query()
+            $liberaciones = $this->consultaLiberacionesCedis()
                 ->with(['pedido.cliente', 'pedido.vendedor', 'almacen', 'modalidad', 'productos'])
-                ->where('estado', \App\Models\ControlPedidos\PedidoBmaTareaPreparacion::ESTADO_LIBERACION_SOLICITADA)
-                ->where(function ($q) {
-                    $q->where('area_responsable_codigo', 'CEDIS')
-                        ->orWhereHas('modalidad', fn ($m) => $m->where('area_responsable_codigo', 'CEDIS'));
-                })
                 ->orderBy('updated_at')
                 ->paginate(15)
                 ->withQueryString();
         }
 
         return Inertia::render('ControlPedidos/Cedis/Index', [
-            'pedidos' => fn () => $tab === 'LIBERACIONES' ? ['data' => []] : $listarService->ejecutar($request->all()),
+            'pedidos' => fn () => $tab === 'LIBERACIONES' ? ['data' => []] : $listarService->ejecutar($request->all(), true, Auth::user()),
             'liberaciones' => $liberaciones,
-            'metricas' => fn () => array_merge($listarService->metricas(), [
-                'liberaciones_pendientes' => \App\Models\ControlPedidos\PedidoBmaTareaPreparacion::query()
-                    ->where('estado', \App\Models\ControlPedidos\PedidoBmaTareaPreparacion::ESTADO_LIBERACION_SOLICITADA)
-                    ->where(function ($q) {
-                        $q->where('area_responsable_codigo', 'CEDIS')
-                            ->orWhereHas('modalidad', fn ($m) => $m->where('area_responsable_codigo', 'CEDIS'));
-                    })
-                    ->count(),
+            'metricas' => fn () => array_merge($listarService->metricas(Auth::user()), [
+                'liberaciones_pendientes' => $this->consultaLiberacionesCedis()->count(),
             ]),
             'filtros' => $request->only(['tab', 'q', 'page']),
             'tipos_caja' => $catalogos['tipos_caja'] ?? [],
@@ -87,8 +76,8 @@ class PedidoBmaCedisController extends Controller
         Gate::authorize('control_pedidos.cedis');
 
         return response()->json([
-            'pedidos' => $listarService->ejecutar($request->all()),
-            'metricas' => $listarService->metricas(),
+            'pedidos' => $listarService->ejecutar($request->all(), true, Auth::user()),
+            'metricas' => $listarService->metricas(Auth::user()),
             'filtros' => $request->only(['tab', 'q', 'page']),
         ]);
     }
@@ -99,6 +88,7 @@ class PedidoBmaCedisController extends Controller
         MarcarEmpacadoPedidoBmaService $service
     ): RedirectResponse {
         Gate::authorize('control_pedidos.cedis');
+        VisibilidadPedidoBma::assertPuedeConsultar(Auth::user(), $pedidoBma);
 
         try {
             $service->ejecutar(
@@ -119,6 +109,7 @@ class PedidoBmaCedisController extends Controller
         MarcarEnviadoPedidoBmaService $service
     ): RedirectResponse {
         Gate::authorize('control_pedidos.cedis.enviar');
+        VisibilidadPedidoBma::assertPuedeConsultar(Auth::user(), $pedidoBma);
 
         $cajas = $request->validated('cajas');
 
@@ -142,6 +133,7 @@ class PedidoBmaCedisController extends Controller
     public function reabrirEnvio(PedidoBma $pedidoBma, ReabrirEnvioPedidoBmaService $service): RedirectResponse
     {
         Gate::authorize('control_pedidos.reabrir');
+        VisibilidadPedidoBma::assertPuedeConsultar(Auth::user(), $pedidoBma);
 
         try {
             $service->ejecutar($pedidoBma->load('estatus'), Auth::id());
@@ -155,6 +147,7 @@ class PedidoBmaCedisController extends Controller
     public function revertirEmpacado(PedidoBma $pedidoBma, RevertirEmpacadoPedidoBmaService $service): RedirectResponse
     {
         Gate::authorize('control_pedidos.cedis');
+        VisibilidadPedidoBma::assertPuedeConsultar(Auth::user(), $pedidoBma);
 
         try {
             $service->ejecutar($pedidoBma, Auth::id());
@@ -170,6 +163,8 @@ class PedidoBmaCedisController extends Controller
         PedidoBma $pedidoBma,
         ReportarErrorDatosPedidoBmaService $service
     ): RedirectResponse {
+        VisibilidadPedidoBma::assertPuedeConsultar(Auth::user(), $pedidoBma);
+
         try {
             $service->ejecutar(
                 $pedidoBma->load(['estatus', 'documentos']),
@@ -189,6 +184,8 @@ class PedidoBmaCedisController extends Controller
         PedidoBma $pedidoBma,
         ReportarErrorDatosPedidoBmaService $service
     ): RedirectResponse {
+        VisibilidadPedidoBma::assertPuedeConsultar(Auth::user(), $pedidoBma);
+
         try {
             $service->ejecutar(
                 $pedidoBma->load(['estatus', 'documentos']),
@@ -208,6 +205,8 @@ class PedidoBmaCedisController extends Controller
         PedidoBma $pedidoBma,
         MarcarResguardoApartadoPedidoBmaService $service
     ): RedirectResponse {
+        VisibilidadPedidoBma::assertPuedeConsultar(Auth::user(), $pedidoBma);
+
         try {
             $service->ejecutar(
                 $pedidoBma->load('estatus'),
@@ -228,6 +227,7 @@ class PedidoBmaCedisController extends Controller
         ResponderPesajePedidoBmaService $service
     ): RedirectResponse {
         Gate::authorize('control_pedidos.cedis');
+        VisibilidadPedidoBma::assertPuedeConsultar(Auth::user(), $pedidoBma);
 
         try {
             $service->ejecutar(
@@ -268,6 +268,7 @@ class PedidoBmaCedisController extends Controller
         GestionarSinExistenciaCedisPedidoBmaService $service
     ): RedirectResponse {
         Gate::authorize('control_pedidos.cedis');
+        VisibilidadPedidoBma::assertPuedeConsultar(Auth::user(), $pedidoBma);
 
         try {
             $service->reportar(
@@ -288,6 +289,7 @@ class PedidoBmaCedisController extends Controller
         GestionarSinExistenciaCedisPedidoBmaService $service
     ): RedirectResponse {
         Gate::authorize('control_pedidos.cedis');
+        VisibilidadPedidoBma::assertPuedeConsultar(Auth::user(), $pedidoBma);
 
         try {
             $service->confirmarStock(
@@ -401,6 +403,13 @@ class PedidoBmaCedisController extends Controller
     ): RedirectResponse {
         Gate::authorize('control_pedidos.cedis.liberar');
 
+        $tarea->loadMissing('pedido');
+        $pedido = $tarea->pedido;
+        if ($pedido === null) {
+            abort(403, 'No tienes autorización para consultar este pedido.');
+        }
+        VisibilidadPedidoBma::assertPuedeConsultar(Auth::user(), $pedido);
+
         $datos = $request->validate([
             'motivo' => ['nullable', 'string', 'max:2000'],
             'version' => ['nullable', 'integer', 'min:1'],
@@ -424,5 +433,22 @@ class PedidoBmaCedisController extends Controller
         }
 
         return redirect()->back()->with('success', 'Mercancía liberada. Confirmó devolución a disponibilidad.');
+    }
+
+    private function consultaLiberacionesCedis(): \Illuminate\Database\Eloquent\Builder
+    {
+        $query = \App\Models\ControlPedidos\PedidoBmaTareaPreparacion::query()
+            ->where('estado', \App\Models\ControlPedidos\PedidoBmaTareaPreparacion::ESTADO_LIBERACION_SOLICITADA)
+            ->where(function ($q) {
+                $q->where('area_responsable_codigo', 'CEDIS')
+                    ->orWhereHas('modalidad', fn ($m) => $m->where('area_responsable_codigo', 'CEDIS'));
+            });
+
+        $usuario = Auth::user();
+        if ($usuario instanceof \App\Models\User) {
+            VisibilidadPedidoBma::restringirTareasCedis($query, $usuario);
+        }
+
+        return $query;
     }
 }

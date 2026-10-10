@@ -3,13 +3,16 @@
 namespace Tests\Unit\ControlPedidos;
 
 use App\Models\ControlPedidos\CatalogoEstatusPedido;
+use App\Models\ControlPedidos\CatalogoModalidadPreparacionPedido;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Models\ControlPedidos\PedidoBmaDocumento;
+use App\Models\ControlPedidos\PedidoBmaTareaPreparacion;
 use App\Models\Departamento;
 use App\Models\User;
 use App\Services\ControlPedidos\ListarPedidosCedisService;
 use App\Support\ControlPedidos\VisibilidadPedidoBma;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
@@ -17,6 +20,16 @@ use Tests\TestCase;
 class ControlPedidosCedisVisibilidadTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->withoutMiddleware([
+            \Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class,
+            \Illuminate\Foundation\Http\Middleware\PreventRequestForgery::class,
+        ]);
+    }
 
     public function test_permiso_ver_todos_existe_y_no_se_hereda_de_cedis(): void
     {
@@ -104,6 +117,72 @@ class ControlPedidosCedisVisibilidadTest extends TestCase
         $metricas = $servicio->metricas($cedisAromas);
         $this->assertSame(1, $metricas['empacados']);
         $this->assertSame(1, $metricas['total']);
+    }
+
+    public function test_empacar_pedido_de_otro_departamento_responde_403_sin_cambiar_estatus(): void
+    {
+        [$aromas, $bellaroma] = $this->departamentos();
+        $vendeBellaroma = User::factory()->create(['departamento_id' => $bellaroma->id]);
+        $cedisAromas = $this->usuarioCedis($aromas->id);
+        $pedido = $this->pedidoEnCedis($vendeBellaroma, 'ACCION-BELLA');
+        $estatusId = $pedido->catalogo_estatus_pedido_id;
+
+        $this->actingAs($cedisAromas)
+            ->post(route('control_pedidos.cedis.marcar_empacado', $pedido))
+            ->assertForbidden();
+
+        $this->assertSame($estatusId, $pedido->fresh()->catalogo_estatus_pedido_id);
+    }
+
+    public function test_liberaciones_cedis_excluyen_el_otro_departamento(): void
+    {
+        [$aromas, $bellaroma] = $this->departamentos();
+        $vendeAromas = User::factory()->create(['departamento_id' => $aromas->id]);
+        $vendeBellaroma = User::factory()->create(['departamento_id' => $bellaroma->id]);
+        $cedisAromas = $this->usuarioCedis($aromas->id);
+        $pedidoAromas = $this->pedidoEnCedis($vendeAromas, 'LIB-AROMAS');
+        $pedidoBellaroma = $this->pedidoEnCedis($vendeBellaroma, 'LIB-BELLA');
+
+        $almacenId = DB::table('almacenes')->insertGetId([
+            'codigo' => 'VIS'.substr(uniqid(), -6),
+            'nombre' => 'Almacen vis',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $modalidad = CatalogoModalidadPreparacionPedido::create([
+            'codigo' => 'VIS_CEDIS_'.uniqid(),
+            'nombre' => 'CEDIS vis',
+            'area_responsable_codigo' => 'CEDIS',
+            'activo' => true,
+            'orden' => 1,
+        ]);
+
+        $tareaPropia = PedidoBmaTareaPreparacion::create([
+            'pedido_bma_id' => $pedidoAromas->id,
+            'catalogo_modalidad_preparacion_id' => $modalidad->id,
+            'almacen_id' => $almacenId,
+            'area_responsable_codigo' => 'CEDIS',
+            'estado' => PedidoBmaTareaPreparacion::ESTADO_LIBERACION_SOLICITADA,
+        ]);
+        $tareaAjena = PedidoBmaTareaPreparacion::create([
+            'pedido_bma_id' => $pedidoBellaroma->id,
+            'catalogo_modalidad_preparacion_id' => $modalidad->id,
+            'almacen_id' => $almacenId,
+            'area_responsable_codigo' => 'CEDIS',
+            'estado' => PedidoBmaTareaPreparacion::ESTADO_LIBERACION_SOLICITADA,
+        ]);
+
+        $this->actingAs($cedisAromas)
+            ->get(route('control_pedidos.cedis.index', ['tab' => 'LIBERACIONES']))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('ControlPedidos/Cedis/Index', false)
+                ->where('liberaciones.data', function ($filas) use ($tareaPropia, $tareaAjena) {
+                    $ids = collect($filas)->pluck('id')->all();
+
+                    return in_array($tareaPropia->id, $ids, true)
+                        && ! in_array($tareaAjena->id, $ids, true);
+                }));
     }
 
     /** @return array{0: Departamento, 1: Departamento} */
