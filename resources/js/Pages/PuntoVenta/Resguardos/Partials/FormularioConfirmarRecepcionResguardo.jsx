@@ -39,6 +39,10 @@ export default function FormularioConfirmarRecepcionResguardo({
             descripcion: linea.descripcion,
             cantidad: linea.cantidad || 1,
             nota: linea.nota || '',
+            estado_fisico: linea.estado_fisico || 'bueno',
+            unica_pieza: Boolean(linea.unica_pieza),
+            mejor_ejemplar: Boolean(linea.mejor_ejemplar),
+            evidencia_ids: (linea.evidencia_ids || (linea.evidencias || []).map((foto) => foto.id)).filter(Boolean),
         }));
         setPiezas(iniciales);
     }, [resguardo?.id, registroManual]);
@@ -57,6 +61,10 @@ export default function FormularioConfirmarRecepcionResguardo({
                 producto_id: linea.producto_id,
                 cantidad: Number.parseInt(linea.cantidad, 10) || 1,
                 nota: String(linea.nota || '').trim() || null,
+                estado_fisico: linea.estado_fisico || 'bueno',
+                unica_pieza: Boolean(linea.unica_pieza),
+                mejor_ejemplar: Boolean(linea.mejor_ejemplar),
+                evidencia_ids: linea.evidencia_ids || [],
             })),
         } : undefined);
     };

@@ -325,6 +325,14 @@ function PanelEntregaCompletada({ entrega }) {
     );
 }
 
+const ETIQUETA_ESTADO_PIEZA = {
+    bueno: 'Bueno',
+    regular: 'Regular',
+    malo: 'Malo',
+    danado: 'Dañado',
+    sin_existencia: 'Sin existencias',
+};
+
 function PanelRegistroManual({ registro }) {
     const piezas = Array.isArray(registro.piezas) ? registro.piezas : [];
 
@@ -350,7 +358,12 @@ function PanelRegistroManual({ registro }) {
                             <li key={`${pieza.producto_id}-${pieza.sku}`} className="px-3 py-2 flex items-center justify-between gap-3">
                                 <span className="min-w-0">
                                     <span className="block text-sm font-bold theme-text-main truncate">{pieza.descripcion}</span>
-                                    <span className="block text-xs theme-text-muted">{pieza.sku || 'Sin SKU'}</span>
+                                    <span className="block text-xs theme-text-muted">
+                                        {pieza.sku || 'Sin SKU'}
+                                        {` · ${ETIQUETA_ESTADO_PIEZA[pieza.estado_fisico] || 'Bueno'}`}
+                                        {pieza.unica_pieza ? ' · Existencia única' : ''}
+                                        {pieza.mejor_ejemplar ? ' · Mejor pieza' : ''}
+                                    </span>
                                 </span>
                                 <span className="text-sm font-black theme-text-main tabular-nums shrink-0">{pieza.cantidad}</span>
                             </li>

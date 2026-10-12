@@ -18,6 +18,8 @@ class ResguardoPdvEvidencia extends Model
 
     public const USO_PAQUETE = 'paquete';
 
+    public const USO_DETALLE_PIEZA = 'detalle_pieza';
+
     protected $table = 'pdv_resguardo_evidencias';
 
     protected $fillable = [

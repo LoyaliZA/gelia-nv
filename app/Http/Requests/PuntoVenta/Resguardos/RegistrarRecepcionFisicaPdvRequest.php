@@ -33,6 +33,11 @@ class RegistrarRecepcionFisicaPdvRequest extends PdvOperacionPisoRequest
             'piezas.*.producto_id' => ['required', 'integer', 'exists:productos,id'],
             'piezas.*.cantidad' => ['required', 'integer', 'min:1', 'max:9999'],
             'piezas.*.nota' => ['nullable', 'string', 'max:500'],
+            'piezas.*.estado_fisico' => ['nullable', 'string', 'in:'.implode(',', NormalizadorPiezasRegistroManualPdv::ESTADOS)],
+            'piezas.*.unica_pieza' => ['sometimes', 'boolean'],
+            'piezas.*.mejor_ejemplar' => ['sometimes', 'boolean'],
+            'piezas.*.evidencia_ids' => ['sometimes', 'array', 'max:8'],
+            'piezas.*.evidencia_ids.*' => ['integer', 'min:1'],
         ];
     }
 

@@ -58,7 +58,9 @@ class CrearResguardoManualPdvService
             : '';
         $observaciones = $datos['observaciones'] ?? null;
         $cantidadPiezas = $datos['cantidad_piezas'] ?? null;
-        $piezas = is_array($datos['piezas'] ?? null) ? $datos['piezas'] : [];
+        [$piezas, $archivosPiezas] = $this->separarEvidenciasPiezas(
+            is_array($datos['piezas'] ?? null) ? $datos['piezas'] : []
+        );
         $this->assertAlcanceDemo($actor, $sucursalId, $datos, $piezas);
         $archivoTicket = $datos['archivo_ticket'] ?? null;
         $fotoPaquete = $datos['foto_paquete'] ?? null;
@@ -81,6 +83,7 @@ class CrearResguardoManualPdvService
                 $piezas,
                 $archivoTicket,
                 $fotoPaquete,
+                $archivosPiezas,
                 &$pathsEscritos,
             ) {
                 $existente = $this->resguardoPorIdempotencia($idempotencyKey);
@@ -180,6 +183,8 @@ class CrearResguardoManualPdvService
                         );
                     }
 
+                    $this->guardarEvidenciasPiezas($resguardo, $evento, $piezas, $archivosPiezas, $actor->id, $pathsEscritos);
+
                     $resguardo = $this->ingresar->completar($resguardo->fresh(), $actor, $idempotencyKey);
 
                     RegistroManualResguardoPdvCreado::dispatch($resguardo, $evento, $sucursalId);
@@ -200,6 +205,83 @@ class CrearResguardoManualPdvService
             $this->eliminarArchivosHuerfanos($pathsEscritos);
             throw $e;
         }
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $piezas
+     * @return array{0: list<array<string, mixed>>, 1: array<int, list<UploadedFile>>}
+     */
+    private function separarEvidenciasPiezas(array $piezas): array
+    {
+        $archivos = [];
+        $limpias = [];
+        foreach (array_values($piezas) as $indice => $pieza) {
+            $lista = [];
+            foreach (is_array($pieza['evidencias'] ?? null) ? $pieza['evidencias'] : [] as $archivo) {
+                if ($archivo instanceof UploadedFile) {
+                    $lista[] = $archivo;
+                }
+            }
+            unset($pieza['evidencias']);
+            $archivos[$indice] = $lista;
+            $limpias[] = $pieza;
+        }
+
+        return [$limpias, $archivos];
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $piezas
+     * @param  array<int, list<UploadedFile>>  $archivosPiezas
+     * @param  list<string>  $pathsEscritos
+     */
+    private function guardarEvidenciasPiezas(
+        ResguardoPdv $resguardo,
+        ResguardoPdvEvento $evento,
+        array $piezas,
+        array $archivosPiezas,
+        int $actorId,
+        array &$pathsEscritos,
+    ): void {
+        $actualizadas = $piezas;
+        $guardoAlguna = false;
+        foreach ($archivosPiezas as $indice => $archivos) {
+            $ids = [];
+            foreach ($archivos as $archivo) {
+                $evidencia = $this->ingresar->guardar(
+                    $resguardo,
+                    $evento,
+                    $archivo,
+                    ResguardoPdvEvidencia::USO_DETALLE_PIEZA,
+                    $actorId,
+                    $pathsEscritos,
+                    [
+                        'pieza_indice' => $indice,
+                        'producto_id' => $piezas[$indice]['producto_id'] ?? null,
+                    ]
+                );
+                $ids[] = $evidencia->id;
+            }
+            if ($ids === []) {
+                continue;
+            }
+            $guardoAlguna = true;
+            $previos = is_array($actualizadas[$indice]['evidencia_ids'] ?? null)
+                ? $actualizadas[$indice]['evidencia_ids']
+                : [];
+            $actualizadas[$indice]['evidencia_ids'] = array_values(array_unique([
+                ...array_map('intval', $previos),
+                ...$ids,
+            ]));
+        }
+
+        if (! $guardoAlguna) {
+            return;
+        }
+
+        $snapshot = is_array($resguardo->snapshot_json) ? $resguardo->snapshot_json : [];
+        $snapshot['piezas'] = $actualizadas;
+        $resguardo->update(['snapshot_json' => $snapshot]);
     }
 
     /**

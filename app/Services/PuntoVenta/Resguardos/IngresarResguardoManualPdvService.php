@@ -207,6 +207,7 @@ class IngresarResguardoManualPdvService
 
     /**
      * @param  list<string>  $pathsEscritos
+     * @param  array<string, mixed>  $metadataExtra
      */
     public function guardar(
         ResguardoPdv $resguardo,
@@ -215,7 +216,8 @@ class IngresarResguardoManualPdvService
         string $uso,
         int $actorId,
         array &$pathsEscritos,
-    ): void {
+        array $metadataExtra = [],
+    ): ResguardoPdvEvidencia {
         $ruta = $archivo->store(RutaAlmacenamientoResguardoPdv::prefijo($resguardo, 'registro-manual'), 'local');
         $pathsEscritos[] = $ruta;
 
@@ -223,7 +225,7 @@ class IngresarResguardoManualPdvService
         $esPdf = str_contains(strtolower($mime), 'pdf')
             || strtolower((string) $archivo->getClientOriginalExtension()) === 'pdf';
 
-        ResguardoPdvEvidencia::query()->create([
+        return ResguardoPdvEvidencia::query()->create([
             'resguardo_id' => $resguardo->id,
             'evento_id' => $evento->id,
             'tipo' => $esPdf ? ResguardoPdvEvidencia::TIPO_ARCHIVO : ResguardoPdvEvidencia::TIPO_FOTO,
@@ -235,10 +237,10 @@ class IngresarResguardoManualPdvService
             'actor_id' => $actorId,
             'capturado_at' => now(),
             'inmutable' => true,
-            'metadata_json' => [
+            'metadata_json' => array_merge([
                 'origen' => 'registro_manual',
                 'uso' => $uso,
-            ],
+            ], $metadataExtra),
         ]);
     }
 

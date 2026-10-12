@@ -44,7 +44,10 @@ final class SerializadorRegistroManualResguardoPdv
             'registrado_por' => self::registradoPor($resguardo, $snapshot),
             'observaciones' => isset($snapshot['observaciones']) ? (string) $snapshot['observaciones'] : null,
             'cantidad_piezas' => isset($snapshot['cantidad_piezas']) ? (int) $snapshot['cantidad_piezas'] : null,
-            'piezas' => is_array($snapshot['piezas'] ?? null) ? $snapshot['piezas'] : [],
+            'piezas' => self::piezasConFotos(
+                is_array($snapshot['piezas'] ?? null) ? $snapshot['piezas'] : [],
+                $resguardo
+            ),
             'evidencias' => $evidencias,
             'evidencia_completa' => EvidenciaMinimaRegistroManualPdv::completa($resguardo),
         ];
@@ -75,6 +78,34 @@ final class SerializadorRegistroManualResguardoPdv
         }
 
         return null;
+    }
+
+    /**
+     * @param  list<mixed>  $piezas
+     * @return list<mixed>
+     */
+    private static function piezasConFotos(array $piezas, ResguardoPdv $resguardo): array
+    {
+        $porId = $resguardo->relationLoaded('evidencias')
+            ? $resguardo->evidencias->keyBy('id')
+            : collect();
+
+        return array_map(function ($pieza) use ($porId) {
+            if (! is_array($pieza)) {
+                return $pieza;
+            }
+
+            $fotos = [];
+            foreach (is_array($pieza['evidencia_ids'] ?? null) ? $pieza['evidencia_ids'] : [] as $id) {
+                $evidencia = $porId->get((int) $id);
+                if ($evidencia instanceof ResguardoPdvEvidencia) {
+                    $fotos[] = self::serializarEvidencia($evidencia, ResguardoPdvEvidencia::USO_DETALLE_PIEZA);
+                }
+            }
+            $pieza['evidencias'] = $fotos;
+
+            return $pieza;
+        }, $piezas);
     }
 
     /**
