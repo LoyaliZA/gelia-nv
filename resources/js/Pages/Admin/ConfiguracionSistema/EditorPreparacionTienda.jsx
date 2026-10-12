@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import Interruptor from './Interruptor';
+import { parseObjeto } from './editoresJson';
 
 export const CLAVE_FLAG_PREPARACION_TIENDA = 'control_pedidos.preparacion_tienda';
 
@@ -57,8 +59,9 @@ export function parseFlagPreparacionTienda(valor) {
     };
 }
 
-export function serializarFlagPreparacionTienda(flag) {
+export function serializarFlagPreparacionTienda(flag, valorOriginal) {
     return JSON.stringify({
+        ...parseObjeto(valorOriginal),
         activo: Boolean(flag.activo),
         modalidades_habilitadas: flag.modalidades,
         departamentos_habilitados: listaIds(flag.departamentos),
@@ -67,25 +70,12 @@ export function serializarFlagPreparacionTienda(flag) {
     });
 }
 
-const Interruptor = ({ activo, onChange, etiqueta }) => (
-    <button
-        type="button"
-        role="switch"
-        aria-checked={activo}
-        aria-label={etiqueta}
-        onClick={() => onChange(!activo)}
-        className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border theme-border transition-colors ${activo ? 'bg-[var(--color-primario)]' : 'bg-black/10 dark:bg-white/10'}`}
-    >
-        <span className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transform transition-transform mt-px ${activo ? 'translate-x-5' : 'translate-x-0.5'}`} />
-    </button>
-);
-
 export default function EditorPreparacionTienda({ valor, onChange }) {
     const [flag, setFlag] = useState(() => parseFlagPreparacionTienda(valor));
 
     const publicar = (siguiente) => {
         setFlag(siguiente);
-        onChange(serializarFlagPreparacionTienda(siguiente));
+        onChange(serializarFlagPreparacionTienda(siguiente, valor));
     };
 
     const alternarModalidad = (codigo) => {
@@ -136,26 +126,26 @@ export default function EditorPreparacionTienda({ valor, onChange }) {
                 <p className="text-xs theme-text-muted mt-2 mb-3">
                     Deje el campo vacío para no restringir. Varios identificadores se separan con coma.
                 </p>
-                <label className="block text-xs font-bold theme-text-main mb-1">Departamentos</label>
+                <label className="block text-xs font-semibold theme-text-main mb-1">Departamentos</label>
                 <input
                     className="theme-input w-full px-3 py-2 text-sm mb-3"
                     value={flag.departamentos}
                     onChange={(e) => publicar({ ...flag, departamentos: e.target.value })}
                     placeholder="Ej. 4, 12"
                 />
-                <label className="block text-xs font-bold theme-text-main mb-1">Almacenes</label>
+                <label className="block text-xs font-semibold theme-text-main mb-1">Almacenes</label>
                 <input
                     className="theme-input w-full px-3 py-2 text-sm mb-3"
                     value={flag.almacenes}
                     onChange={(e) => publicar({ ...flag, almacenes: e.target.value })}
                     placeholder="Vacío: todos los almacenes de tipo PDV"
                 />
-                <label className="block text-xs font-bold theme-text-main mb-1">Usuarios piloto</label>
+                <label className="block text-xs font-semibold theme-text-main mb-1">Personas en prueba</label>
                 <input
                     className="theme-input w-full px-3 py-2 text-sm"
                     value={flag.usuarios}
                     onChange={(e) => publicar({ ...flag, usuarios: e.target.value })}
-                    placeholder="Vacío: cualquier usuario con permiso"
+                    placeholder="Vacío: cualquiera con permiso"
                 />
             </details>
         </div>

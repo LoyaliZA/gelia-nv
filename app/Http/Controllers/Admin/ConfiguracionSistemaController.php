@@ -20,6 +20,14 @@ class ConfiguracionSistemaController extends Controller
         'sesiones.jornada_zona_horaria',
     ];
 
+    private const CLAVES_SECRETAS = [
+        'mail.mailers.smtp.password',
+        'tiendanube.app_secret',
+        'tiendanube.access_token',
+        'webpush.vapid.private_key',
+        'deepseek.api_token',
+    ];
+
     /**
      * Display a listing of the resource.
      */
@@ -74,9 +82,21 @@ class ConfiguracionSistemaController extends Controller
             'tipo' => 'required|string|in:string,integer,boolean,json,decimal',
             'descripcion' => 'nullable|string',
             'grupo' => 'nullable|string',
+            'borrar_secreto' => 'sometimes|boolean',
         ]);
 
         $valorAnterior = $configuracion->valor;
+        $borrarSecreto = $request->boolean('borrar_secreto');
+        unset($validated['borrar_secreto']);
+
+        if (in_array($configuracion->clave, self::CLAVES_SECRETAS, true)) {
+            $valor = (string) ($validated['valor'] ?? '');
+            if ($valor === '' && ! $borrarSecreto) {
+                $validated['valor'] = $configuracion->valor;
+            } elseif ($borrarSecreto && $valor === '') {
+                $validated['valor'] = '';
+            }
+        }
 
         if ($validated['tipo'] === 'boolean') {
             $validated['valor'] = $this->normalizarValorBooleano((string) ($validated['valor'] ?? 'false'));
