@@ -84,9 +84,9 @@ class CrearTareaPreparacionService
 
         if ($modalidad->codigo === CatalogoModalidadPreparacionPedido::CODIGO_RECOGE_TIENDA) {
             $almacen = Almacen::query()->find($almacenId);
-            if (! $almacen || ! AlmacenPdv::esCodigo($almacen->codigo)) {
+            if (! $almacen || ! AlmacenPdv::esAlmacen($almacen)) {
                 throw ValidationException::withMessages([
-                    'almacen_id' => 'Recoge en tienda solo aplica para el almacén PDV.',
+                    'almacen_id' => 'Recoge hoy solo aplica para un almacén de tipo PDV.',
                 ]);
             }
             $origenDepto = $this->origenDesdeDepartamentoPrincipal($usuario);

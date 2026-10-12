@@ -158,7 +158,12 @@ class PreparacionTiendaConfig
         $habilitados = $this->almacenesHabilitados();
         if ($habilitados === []) {
             return \App\Models\Almacen::query()->whereKey($almacenId)->where('activo', true)
-                ->where('codigo', \App\Support\ControlPedidos\AlmacenPdv::CODIGO)->exists();
+                ->where(function ($query) {
+                    $query->whereRaw('UPPER(TRIM(codigo)) = ?', [\App\Support\ControlPedidos\AlmacenPdv::CODIGO])
+                        ->orWhereHas('tipoAlmacen', function ($tipo) {
+                            $tipo->whereRaw('UPPER(TRIM(nombre)) = ?', [\App\Support\ControlPedidos\AlmacenPdv::TIPO]);
+                        });
+                })->exists();
         }
 
         return in_array($almacenId, $habilitados, true);

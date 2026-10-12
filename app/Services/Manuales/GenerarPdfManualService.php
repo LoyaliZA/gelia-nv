@@ -3,6 +3,7 @@
 namespace App\Services\Manuales;
 
 use App\Support\Manuales\Content\ControlPedidosManualContent;
+use App\Support\Manuales\Content\RegistrarPedidosVendedorManualContent;
 use App\Support\Manuales\ManualesCatalog;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Contracts\Auth\Access\Authorizable;
@@ -53,6 +54,15 @@ class GenerarPdfManualService
         $view = $this->vistaPara($slug);
         $pdf = Pdf::loadView($view, $data)->setPaper('a4');
 
+        if ($slug === ManualesCatalog::SLUG_REGISTRAR_PEDIDOS_VENDEDOR) {
+            $pdf->render();
+            $dompdf = $pdf->getDomPDF();
+            $dompdf->getCanvas()->page_text(
+                475, 817, '{PAGE_NUM} / {PAGE_COUNT}',
+                $dompdf->getFontMetrics()->getFont('DejaVu Sans'), 8, [0.3, 0.35, 0.4]
+            );
+        }
+
         $nombre = 'Manual_'.$slug.'_'.now()->format('Ymd').'.pdf';
 
         return $pdf->download($nombre);
@@ -62,6 +72,7 @@ class GenerarPdfManualService
     private function contenidoPara(string $slug, array $ids): ?array
     {
         return match ($slug) {
+            ManualesCatalog::SLUG_REGISTRAR_PEDIDOS_VENDEDOR => RegistrarPedidosVendedorManualContent::payload(),
             ManualesCatalog::SLUG_CONTROL_PEDIDOS => ControlPedidosManualContent::payload($ids),
             default => null,
         };
@@ -70,6 +81,7 @@ class GenerarPdfManualService
     private function vistaPara(string $slug): string
     {
         return match ($slug) {
+            ManualesCatalog::SLUG_REGISTRAR_PEDIDOS_VENDEDOR => 'manuales.registrar_pedidos_vendedor',
             ManualesCatalog::SLUG_CONTROL_PEDIDOS => 'manuales.control_pedidos',
             default => 'manuales.control_pedidos',
         };

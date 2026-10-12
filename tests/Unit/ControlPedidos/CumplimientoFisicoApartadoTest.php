@@ -72,6 +72,14 @@ class CumplimientoFisicoApartadoTest extends TestCase
         $this->assertTrue(AlmacenPdv::esCodigo('PDV'));
         $this->assertTrue(AlmacenPdv::esCodigo(' pdv '));
         $this->assertFalse(AlmacenPdv::esCodigo('CEDIS'));
+        $this->assertFalse(AlmacenPdv::esCodigo('PDV-1'));
+        $this->assertTrue(AlmacenPdv::esTipo('pdv'));
+        $punto = new \App\Models\Almacen(['codigo' => 'PDV-1', 'nombre' => 'Carmen']);
+        $punto->setRelation('tipoAlmacen', new \App\Models\CatalogoTipoAlmacen(['nombre' => 'PDV']));
+        $this->assertTrue(AlmacenPdv::esAlmacen($punto));
+        $cedis = new \App\Models\Almacen(['codigo' => 'VTA', 'nombre' => 'CEDIS']);
+        $cedis->setRelation('tipoAlmacen', new \App\Models\CatalogoTipoAlmacen(['nombre' => 'CEDIS']));
+        $this->assertFalse(AlmacenPdv::esAlmacen($cedis));
     }
 
     public function test_cierre_operativo_conserva_el_dia_en_la_zona_de_la_tienda(): void

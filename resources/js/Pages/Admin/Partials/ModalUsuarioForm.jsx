@@ -231,7 +231,12 @@ export default function ModalUsuarioForm({
                             </div>
                         )}
 
+                        <p className="text-[11px] theme-text-muted leading-relaxed px-0.5">
+                            Los permisos de <span className="font-bold theme-text-main">Gestión de pedidos</span> se agrupan por panel del módulo (ventas, auditoría, CEDIS, tienda, pagos, etc.). Cada casilla incluye una descripción de lo que habilita.
+                        </p>
+
                         <PermisosAtomicos
+                            modulosInicialesExpandidos={['control_pedidos']}
                             data={permisosFormData}
                             setData={(campo, valor) => {
                                 if (campo === 'permisos_individuales') {

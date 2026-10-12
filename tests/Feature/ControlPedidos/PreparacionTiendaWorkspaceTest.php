@@ -116,9 +116,17 @@ class PreparacionTiendaWorkspaceTest extends TestCase
     public function test_tienda_no_utiliza_cedis_por_defecto_y_respeta_almacenes_configurados(): void
     {
         $cedis = Almacen::create(['codigo' => 'VTA', 'nombre' => 'CEDIS de prueba', 'activo' => true]);
+        $tipoPdv = \App\Models\CatalogoTipoAlmacen::create(['nombre' => 'PDV']);
+        $sucursal = Almacen::create([
+            'codigo' => 'PDV-1',
+            'nombre' => 'Carmen Cadena',
+            'activo' => true,
+            'tipo_almacen_id' => $tipoPdv->id,
+        ]);
         $config = \Mockery::mock(\App\Services\ControlPedidos\PreparacionTiendaConfig::class)->makePartial();
         $config->shouldReceive('almacenesHabilitados')->andReturn([]);
         $this->assertTrue($config->almacenPermitido($this->tarea->almacen_id));
+        $this->assertTrue($config->almacenPermitido($sucursal->id));
         $this->assertFalse($config->almacenPermitido($cedis->id));
         $otro = \Mockery::mock(\App\Services\ControlPedidos\PreparacionTiendaConfig::class)->makePartial();
         $otro->shouldReceive('almacenesHabilitados')->andReturn([$this->tarea->almacen_id]);

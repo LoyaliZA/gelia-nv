@@ -4,6 +4,7 @@ namespace Tests\Unit\Manuales;
 
 use App\Services\Manuales\GenerarPdfManualService;
 use App\Services\Manuales\ResolverManualesVisiblesService;
+use App\Support\Manuales\Content\RegistrarPedidosVendedorManualContent;
 use App\Support\Manuales\ManualesCatalog;
 use Illuminate\Contracts\Auth\Access\Authorizable;
 use Tests\TestCase;
@@ -69,7 +70,7 @@ class ResolverManualesVisiblesServiceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->resolver = new ResolverManualesVisiblesService();
+        $this->resolver = new ResolverManualesVisiblesService;
         $this->pdf = new GenerarPdfManualService($this->resolver);
     }
 
@@ -80,10 +81,11 @@ class ResolverManualesVisiblesServiceTest extends TestCase
         $this->assertTrue($this->resolver->hubVisible($user));
 
         $list = $this->resolver->listarPara($user);
-        $this->assertCount(1, $list);
-        $this->assertSame(ManualesCatalog::SLUG_CONTROL_PEDIDOS, $list[0]['slug']);
+        $this->assertCount(2, $list);
+        $this->assertSame(ManualesCatalog::SLUG_REGISTRAR_PEDIDOS_VENDEDOR, $list[0]['slug']);
+        $this->assertSame(ManualesCatalog::SLUG_CONTROL_PEDIDOS, $list[1]['slug']);
 
-        $ids = array_column($list[0]['secciones'], 'id');
+        $ids = array_column($list[1]['secciones'], 'id');
         $this->assertContains('vendedora', $ids);
         $this->assertNotContains('cedis', $ids);
         $this->assertNotContains('guias', $ids);
@@ -136,5 +138,53 @@ class ResolverManualesVisiblesServiceTest extends TestCase
         $this->assertNotNull($payload);
         $this->assertContains('cedis', $payload['secciones_ids']);
         $this->assertContains('guias', $payload['secciones_ids']);
+    }
+
+    public function test_guia_vendedor_reutiliza_el_mismo_contenido_en_pdf(): void
+    {
+        $payload = $this->pdf->payload(
+            ManualesCatalog::SLUG_REGISTRAR_PEDIDOS_VENDEDOR,
+            new FakeManualUser(['control_pedidos.ver_listado'])
+        );
+
+        $this->assertNotNull($payload);
+        $this->assertSame(['vendedor'], $payload['secciones_ids']);
+        $this->assertSame(RegistrarPedidosVendedorManualContent::payload(), $payload['contenido']);
+    }
+
+    public function test_guia_vendedor_no_concede_acceso_a_otros_perfiles(): void
+    {
+        $slug = ManualesCatalog::SLUG_REGISTRAR_PEDIDOS_VENDEDOR;
+        foreach ([[], ['control_pedidos.auditar'], ['control_pedidos.cedis'], ['clientes.direcciones.ver']] as $permisos) {
+            $user = new FakeManualUser($permisos);
+            $this->assertNull($this->resolver->resolverShow($slug, $user));
+            $this->assertNull($this->pdf->descargar($slug, $user));
+        }
+
+        $this->assertNotNull($this->resolver->resolverShow($slug, new FakeManualUser(['soporte.gestionar'])));
+        $this->assertNotNull($this->resolver->resolverShow($slug, new FakeManualUser([], ['Super Admin'])));
+    }
+
+    public function test_descarga_pdf_vendedor_renderiza_la_guia_y_las_ilustraciones(): void
+    {
+        $slug = ManualesCatalog::SLUG_REGISTRAR_PEDIDOS_VENDEDOR;
+        $user = new FakeManualUser(['control_pedidos.ver_listado']);
+        $payload = $this->pdf->payload($slug, $user);
+        $html = view('manuales.registrar_pedidos_vendedor', $payload)->render();
+
+        foreach ($payload['contenido']['casos'] as $caso) {
+            $this->assertStringContainsString(e($caso['titulo']), $html);
+            $this->assertStringContainsString(e($caso['esperar']), $html);
+        }
+        foreach ($payload['contenido']['pasos'] as $paso) {
+            $this->assertStringContainsString(e($paso['visual']['titulo']), $html);
+            $this->assertStringContainsString(e($paso['resultado']), $html);
+        }
+
+        $response = $this->pdf->descargar($slug, $user);
+        $this->assertNotNull($response);
+        $this->assertSame('application/pdf', $response->headers->get('Content-Type'));
+        $this->assertStringContainsString('attachment;', $response->headers->get('Content-Disposition'));
+        $this->assertStringStartsWith('%PDF-', $response->getContent());
     }
 }

@@ -22,6 +22,7 @@ import {
     calcularCostoTarifaLocal,
     esCotizacionLista,
     formatearMoneda,
+    esAlmacenTipoPdv,
     etiquetaAlmacen,
     etiquetaSucursal,
     THEME_MODAL_OVERLAY,
@@ -476,8 +477,17 @@ export default function ModalFormPedidoLegado({
     );
     const almacenesPreparacion = (catalogos.almacenes || []).filter((a) => {
         const hab = preparacionConfig.almacenes_habilitados || [];
-        return hab.length === 0 ? String(a.codigo || '').toUpperCase() === 'PDV' : hab.some((id) => String(id) === String(a.id));
+        return hab.length === 0 ? esAlmacenTipoPdv(a) : hab.some((id) => String(id) === String(a.id));
     });
+    const almacenesPdv = (catalogos.almacenes || []).filter((a) => {
+        if (!esAlmacenTipoPdv(a)) return false;
+        const hab = preparacionConfig.almacenes_habilitados || [];
+        return hab.length === 0 || hab.some((id) => String(id) === String(a.id));
+    });
+    const modalidadTransferenciaDisponible = modalidadesPreparacion.some((m) => m.codigo === 'RECOGE_TIENDA_TRANSFERENCIA');
+    const recogeHoyDisponible = !flujoPreparacionTienda
+        || (preparacionConfig.modalidades_habilitadas || []).includes('RECOGE_TIENDA');
+    const modalidadesPreparacionResto = modalidadesPreparacion.filter((m) => m.codigo !== 'RECOGE_TIENDA_TRANSFERENCIA');
     const tareaPreparacion = pedido?.tarea_preparacion || null;
     const usaPreparacionTienda = Boolean(pedido?.usa_preparacion_tienda || tareaPreparacion);
     const esRecogeTienda = recogeEnTienda || tareaPreparacion?.modalidad?.codigo === 'RECOGE_TIENDA';
@@ -489,7 +499,15 @@ export default function ModalFormPedidoLegado({
     const puedeCorregirPreparacion = can('control_pedidos.preparacion.corregir') && tareaConIncidencia;
     const esModalidadTransferencia = codigoModalidadPreparacion === 'RECOGE_TIENDA_TRANSFERENCIA'
         || tareaPreparacion?.modalidad?.codigo === 'RECOGE_TIENDA_TRANSFERENCIA';
-    const almacenPdv = (catalogos.almacenes || []).find((a) => String(a.codigo || '').toUpperCase() === 'PDV');
+    const exigeEleccionEntregaTienda = Boolean(
+        flujoPreparacionTienda
+        && !requiereLogistica
+        && !usaPreparacionTienda
+        && !esRecogeTienda
+        && !esModalidadTransferencia
+        && (recogeHoyDisponible || modalidadTransferenciaDisponible)
+    );
+    const almacenPdv = almacenesPdv.length === 1 ? almacenesPdv[0] : (almacenesPdv.find((a) => String(a.id) === String(data.almacen_id)) || null);
     const apartadoConfirmado = pedido?.estatus_envio === 'apartado_confirmado'
         || tareaPreparacion?.apartado?.estado === 'APARTADO_CONFIRMADO';
     const esModalidadBodega = String(codigoModalidadPreparacion || tareaPreparacion?.modalidad?.codigo || '').startsWith('ENVIO_BODEGA');
@@ -540,11 +558,17 @@ export default function ModalFormPedidoLegado({
     }, [pedido?.id, pedido?.estatus_envio]);
 
     useEffect(() => {
-        if (!esRecogeTienda || !almacenPdv) return;
-        if (String(data.almacen_id || '') !== String(almacenPdv.id)) {
-            setData('almacen_id', String(almacenPdv.id));
+        if (!esRecogeTienda) return;
+        if (almacenesPdv.length === 1) {
+            if (String(data.almacen_id || '') !== String(almacenesPdv[0].id)) {
+                setData('almacen_id', String(almacenesPdv[0].id));
+            }
+            return;
         }
-    }, [esRecogeTienda, almacenPdv?.id, data.almacen_id, setData]);
+        if (data.almacen_id && !almacenesPdv.some((a) => String(a.id) === String(data.almacen_id))) {
+            setData('almacen_id', '');
+        }
+    }, [esRecogeTienda, almacenesPdv.map((a) => a.id).join(','), data.almacen_id, setData]);
 
     useEffect(() => {
         if (!abierto || !enFlujoTienda || esRecogeTienda || usaPreparacionTienda) return;
@@ -1943,7 +1967,7 @@ export default function ModalFormPedidoLegado({
     const postSolicitudPreparacionTienda = (id) => {
         const payload = {
             codigo_modalidad: esRecogeTienda ? 'RECOGE_TIENDA' : codigoModalidadPreparacion,
-            almacen_id: esRecogeTienda && almacenPdv ? almacenPdv.id : data.almacen_id,
+            almacen_id: esRecogeTienda ? (data.almacen_id || almacenPdv?.id || '') : data.almacen_id,
             idempotencia_clave: `prep-${id}-${Date.now()}`,
         };
         Object.assign(payload, {
@@ -2022,8 +2046,12 @@ export default function ModalFormPedidoLegado({
             setAvisoPesaje({ tipo: 'error', mensaje: 'Seleccione la modalidad de recolección en tienda.' });
             return;
         }
-        if (esRecogeTienda && !almacenPdv) {
-            setAvisoPesaje({ tipo: 'error', mensaje: 'No hay un almacén PDV activo para Recoge en tienda.' });
+        if (esRecogeTienda && almacenesPdv.length === 0) {
+            setAvisoPesaje({ tipo: 'error', mensaje: 'No hay un almacén tipo PDV visible en pedidos para Recoge hoy.' });
+            return;
+        }
+        if (esRecogeTienda && !(data.almacen_id || almacenPdv?.id)) {
+            setAvisoPesaje({ tipo: 'error', mensaje: 'Seleccione el almacén tipo PDV de salida.' });
             return;
         }
         if (!esRecogeTienda && !data.almacen_id) {
@@ -2447,11 +2475,21 @@ export default function ModalFormPedidoLegado({
                                 >
                                     <option value="">Seleccionar...</option>
                                     {(esRecogeTienda
-                                        ? (almacenPdv ? [almacenPdv] : [])
+                                        ? almacenesPdv
                                         : (enFlujoTienda ? almacenesPreparacion : (catalogos.almacenes || []))).map((a) => (
                                         <option key={a.id} value={String(a.id)}>{etiquetaAlmacen(a)}</option>
                                     ))}
                                 </select>
+                                {esRecogeTienda && almacenesPdv.length === 0 && (
+                                    <p className="text-[10px] font-bold text-amber-600 m-0 mt-1.5" role="status">
+                                        No hay almacenes tipo PDV activos y visibles en pedidos.
+                                    </p>
+                                )}
+                                {esRecogeTienda && almacenesPdv.length > 1 && (
+                                    <p className="text-[10px] font-bold theme-text-muted m-0 mt-1.5">
+                                        Elija el punto de venta (tipo PDV) del que sale la mercancía.
+                                    </p>
+                                )}
                             </div>
                             {muestraDestinoSucursal && (
                             <div className={wrapCampo('sucursal_destino')} data-campo="sucursal_destino">
@@ -2482,7 +2520,7 @@ export default function ModalFormPedidoLegado({
                                 </p>
                             </div>
                             )}
-                            {flujoPreparacionTienda && !usaPreparacionTienda && !esRecogeTienda && modalidadesPreparacion.length > 0 && (
+                            {flujoPreparacionTienda && !usaPreparacionTienda && !esRecogeTienda && modalidadesPreparacionResto.length > 0 && (
                             <div className="md:col-span-2">
                                 <label className={SECCION}>Modalidad de recolección</label>
                                 <select
@@ -2491,7 +2529,7 @@ export default function ModalFormPedidoLegado({
                                     className={`${THEME_SELECT} w-full py-3`}
                                 >
                                     <option value="">Seleccionar...</option>
-                                    {modalidadesPreparacion.map((m) => (
+                                    {modalidadesPreparacionResto.map((m) => (
                                         <option key={m.codigo} value={m.codigo}>{m.nombre}</option>
                                     ))}
                                 </select>
@@ -2627,29 +2665,63 @@ export default function ModalFormPedidoLegado({
                                 </label>
                             </div>
                             {!requiereLogistica && (
-                            <div className="md:col-span-2">
-                                <label className="flex items-center gap-3 theme-text-main p-3 rounded-xl border theme-border w-full cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        checked={esRecogeTienda}
+                            <div className="md:col-span-2 space-y-2">
+                                <p className={SECCION}>Cómo entrega la tienda</p>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                    {recogeHoyDisponible && (
+                                    <button
+                                        type="button"
                                         disabled={usaPreparacionTienda && !esRecogeTienda}
-                                        onChange={(e) => {
-                                            const on = e.target.checked;
-                                            setRecogeEnTienda(on);
-                                            if (on) {
-                                                setCodigoModalidadPreparacion('');
-                                                if (almacenPdv) setData('almacen_id', String(almacenPdv.id));
-                                            }
+                                        onClick={() => {
+                                            setRecogeEnTienda(true);
+                                            setCodigoModalidadPreparacion('');
+                                            const unico = almacenesPdv.length === 1 ? almacenesPdv[0] : null;
+                                            if (unico) setData('almacen_id', String(unico.id));
                                         }}
-                                        className="w-4 h-4"
-                                    />
-                                    <span className="text-sm font-bold">Recoge en tienda</span>
-                                </label>
-                                {esRecogeTienda && (
-                                    <p className="text-[10px] font-bold theme-text-muted m-0 mt-1.5">
-                                        Mismo día en PDV. El origen se toma del departamento principal. Sin pago ni transferencia.
-                                    </p>
-                                )}
+                                        className={`text-left p-3 rounded-xl border w-full ${esRecogeTienda ? 'theme-border' : 'theme-border opacity-80'} ${usaPreparacionTienda && !esRecogeTienda ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                                        style={esRecogeTienda ? { borderColor: 'var(--color-primario)', boxShadow: 'inset 0 0 0 1px var(--color-primario)' } : undefined}
+                                    >
+                                        <span className="block text-sm font-bold theme-text-main">Recoge hoy</span>
+                                        <span className="block text-[11px] font-bold theme-text-muted mt-1">
+                                            Mismo día en un almacén tipo PDV. Se aparta la mercancía y se genera la carátula. Sin pago ni transferencia.
+                                        </span>
+                                    </button>
+                                    )}
+                                    {modalidadTransferenciaDisponible && (
+                                    <button
+                                        type="button"
+                                        disabled={usaPreparacionTienda && esRecogeTienda}
+                                        onClick={() => {
+                                            setRecogeEnTienda(false);
+                                            setCodigoModalidadPreparacion('RECOGE_TIENDA_TRANSFERENCIA');
+                                        }}
+                                        className={`text-left p-3 rounded-xl border theme-border w-full ${usaPreparacionTienda && esRecogeTienda ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                                        style={esModalidadTransferencia && !esRecogeTienda ? { borderColor: 'var(--color-primario)', boxShadow: 'inset 0 0 0 1px var(--color-primario)' } : undefined}
+                                    >
+                                        <span className="block text-sm font-bold theme-text-main">Resguardo con transferencia</span>
+                                        <span className="block text-[11px] font-bold theme-text-muted mt-1">
+                                            El pago es por transferencia. La mercancía queda resguardada en tienda hasta que la persona recoja.
+                                        </span>
+                                    </button>
+                                    )}
+                                    {!flujoPreparacionTienda && (
+                                    <button
+                                        type="button"
+                                        disabled={usaPreparacionTienda}
+                                        onClick={() => {
+                                            setRecogeEnTienda(false);
+                                            setCodigoModalidadPreparacion('');
+                                        }}
+                                        className="text-left p-3 rounded-xl border theme-border w-full cursor-pointer"
+                                        style={!esRecogeTienda && !esModalidadTransferencia ? { borderColor: 'var(--color-primario)', boxShadow: 'inset 0 0 0 1px var(--color-primario)' } : undefined}
+                                    >
+                                        <span className="block text-sm font-bold theme-text-main">Consulta en CEDIS</span>
+                                        <span className="block text-[11px] font-bold theme-text-muted mt-1">
+                                            Separación de mercancía en CEDIS. El monto y el pago se capturan después de cerrar la consulta.
+                                        </span>
+                                    </button>
+                                    )}
+                                </div>
                             </div>
                             )}
                             {data.es_resguardo && (
@@ -3103,11 +3175,19 @@ export default function ModalFormPedidoLegado({
                         )}
                         <div className="space-y-4">
                             {!tienePesajeRespondido && !pendientePesaje && !tareaConIncidencia && !apartadoConfirmado && (
-                                enFlujoTienda ? (
+                                exigeEleccionEntregaTienda ? (
+                                    <p className="text-[10px] font-bold text-amber-600 m-0">
+                                        {recogeHoyDisponible && modalidadTransferenciaDisponible
+                                            ? 'Elija Recoge hoy o Resguardo con transferencia antes de solicitar.'
+                                            : recogeHoyDisponible
+                                                ? 'Elija Recoge hoy antes de solicitar.'
+                                                : 'Elija Resguardo con transferencia antes de solicitar.'}
+                                    </p>
+                                ) : enFlujoTienda ? (
                                     <button
                                         type="button"
                                         onClick={solicitarPreparacionTienda}
-                                        disabled={procesandoPesaje || processing || !data.cliente_id || !tienePdfPedido || (!esRecogeTienda && (!codigoModalidadPreparacion || !data.almacen_id)) || (esRecogeTienda && !almacenPdv)}
+                                        disabled={procesandoPesaje || processing || !data.cliente_id || !tienePdfPedido || (!esRecogeTienda && (!codigoModalidadPreparacion || !data.almacen_id)) || (esRecogeTienda && !(data.almacen_id || almacenPdv))}
                                         className={`${BTN_PRIMARY} flex items-center gap-2 outline-none`}
                                     >
                                         <Scale className="w-4 h-4" /> {esRecogeTienda ? 'Solicitar apartado en PDV' : 'Solicitar preparación en Tienda'}

@@ -8,9 +8,11 @@ import GeliaTituloCard from '@/Components/GeliaTituloCard';
 import GeliaLogo from '@/Components/GeliaLogo';
 import { geliaCardClass, THEME_BTN_PRIMARY, THEME_BTN_SECONDARY, isGlassEffectEnabled } from '@/utils/geliaTheme';
 import ControlPedidosManualView from './content/control-pedidos/ControlPedidosManualView';
+import RegistrarPedidosVendedorManualView from './content/registrar-pedidos-vendedor/RegistrarPedidosVendedorManualView';
 
 const CONTENT_BY_SLUG = {
     'control-pedidos': ControlPedidosManualView,
+    'registrar-pedidos-vendedor': RegistrarPedidosVendedorManualView,
 };
 
 const TOC_TOP_GAP = 24;
@@ -145,7 +147,8 @@ function ManualTocDesktop({ toc, activo, onSelect, pie }) {
                         <button
                             type="button"
                             onClick={() => onSelect(t.id, t.href)}
-                            className="w-full text-left text-xs font-bold px-2.5 py-2 rounded-lg border border-transparent outline-none"
+                            aria-current={activo === t.id ? 'location' : undefined}
+                            className="w-full text-left text-xs font-bold px-2.5 py-2 rounded-lg border border-transparent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primario)]"
                             style={tocItemStyle(activo === t.id)}
                         >
                             {t.label}
@@ -245,7 +248,8 @@ function ManualTocMobile({ toc, activo, onSelect }) {
                         key={t.id}
                         type="button"
                         onClick={() => onSelect(t.id, t.href)}
-                        className="text-[10px] font-black uppercase tracking-wider px-3 py-2 rounded-lg border shrink-0 outline-none"
+                        aria-current={activo === t.id ? 'location' : undefined}
+                        className="text-xs font-semibold px-3 py-2 rounded-lg border shrink-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primario)]"
                         style={tocItemStyle(activo === t.id)}
                     >
                         {t.label}
@@ -276,7 +280,8 @@ export default function Show({
     const ContentView = CONTENT_BY_SLUG[manual?.slug];
     const tieneEjemplos = secciones.length > 0;
     const toc = useMemo(
-        () => buildToc(secciones, (contenido?.errores || []).length > 0, tieneEjemplos),
+        () => contenido?.indice?.map((item) => ({ ...item, href: `#sec-${item.id}` }))
+            || buildToc(secciones, (contenido?.errores || []).length > 0, tieneEjemplos),
         [secciones, contenido, tieneEjemplos]
     );
     const [activo, setActivo] = useState(toc[0]?.id || 'overview');
@@ -286,7 +291,7 @@ export default function Show({
         if (!seccionInicial) return;
         const el = document.getElementById(`sec-${seccionInicial}`);
         if (el) {
-            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            el.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start' });
             setActivo(seccionInicial);
         }
     }, [seccionInicial]);
@@ -321,7 +326,7 @@ export default function Show({
             scrollLockRef.current = null;
             return;
         }
-        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        el.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start' });
 
         const unlock = () => {
             if (scrollLockRef.current !== id) return;

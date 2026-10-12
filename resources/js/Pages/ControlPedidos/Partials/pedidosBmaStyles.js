@@ -883,6 +883,13 @@ export const formatearFechaNegocio = (valor) => {
     return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 };
 
+/** Punto de venta por tipo de almacén, o por código PDV en catálogos anteriores. */
+export const esAlmacenTipoPdv = (almacen) => {
+    const tipo = String(almacen?.tipo_almacen?.nombre || '').trim().toUpperCase();
+    if (tipo === 'PDV') return true;
+    return String(almacen?.codigo || '').trim().toUpperCase() === 'PDV';
+};
+
 export const etiquetaAlmacen = (almacen) => {
     if (!almacen) return '—';
     if (almacen.codigo) return `${almacen.codigo} - ${almacen.nombre}`;

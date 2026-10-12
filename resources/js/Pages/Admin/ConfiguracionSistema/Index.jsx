@@ -30,6 +30,10 @@ import {
     tituloConfiguracion,
     tituloUsaDescripcion,
 } from './configDisplay';
+import EditorPreparacionTienda, {
+    CLAVE_FLAG_PREPARACION_TIENDA,
+    parseFlagPreparacionTienda,
+} from './EditorPreparacionTienda';
 
 const SECCION_SISTEMA = 'sistema';
 const MIN_ITEMS_PARA_SUBCATEGORIAS = 6;
@@ -81,6 +85,20 @@ const BadgeValor = ({ config }) => {
             }`}>
                 {activo ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
                 {activo ? 'Activado' : 'Desactivado'}
+            </span>
+        );
+    }
+
+    if (config.clave === CLAVE_FLAG_PREPARACION_TIENDA) {
+        const flag = parseFlagPreparacionTienda(config.valor);
+        return (
+            <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest shrink-0 ${
+                flag.activo
+                    ? 'bg-green-500/15 text-green-600 dark:text-green-400'
+                    : 'bg-gray-500/15 text-gray-500 dark:text-gray-400'
+            }`}>
+                {flag.activo ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
+                {flag.activo ? `Activo · ${flag.modalidades.length}` : 'Desactivado'}
             </span>
         );
     }
@@ -626,7 +644,13 @@ export default function ConfiguracionSistema({ auth, configuracionesGrupos, conf
 
                     <div>
                         <label className="block text-sm font-bold theme-text-main mb-1">Valor</label>
-                        {data.tipo === 'boolean' ? (
+                        {data.clave === CLAVE_FLAG_PREPARACION_TIENDA && data.tipo === 'json' ? (
+                            <EditorPreparacionTienda
+                                key={`${data.id || 'nuevo'}-${data.clave}`}
+                                valor={data.valor}
+                                onChange={(valor) => setData('valor', valor)}
+                            />
+                        ) : data.tipo === 'boolean' ? (
                         <select
                             value={data.tipo === 'boolean' ? normalizarBooleanoParaEdicion(data.valor) : data.valor}
                             onChange={e => setData('valor', e.target.value)}

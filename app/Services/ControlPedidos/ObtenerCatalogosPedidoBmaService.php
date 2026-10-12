@@ -45,10 +45,21 @@ class ObtenerCatalogosPedidoBmaService
                 ->orderBy('orden')
                 ->get(['id', 'codigo', 'nombre', 'descripcion']),
             'estatus' => CatalogoEstatusPedido::where('activo', true)->orderBy('orden')->get(['id', 'codigo_interno', 'nombre_visual', 'color_hex', 'fase_ciclo']),
-            'almacenes' => Almacen::where('activo', true)
+            'almacenes' => Almacen::query()
+                ->where('activo', true)
                 ->where('visible_en_pedidos', true)
+                ->with('tipoAlmacen:id,nombre')
                 ->orderBy('nombre')
-                ->get(['id', 'codigo', 'nombre']),
+                ->get(['id', 'codigo', 'nombre', 'tipo_almacen_id'])
+                ->map(fn (Almacen $almacen) => [
+                    'id' => $almacen->id,
+                    'codigo' => $almacen->codigo,
+                    'nombre' => $almacen->nombre,
+                    'tipo_almacen' => $almacen->tipoAlmacen
+                        ? ['id' => $almacen->tipoAlmacen->id, 'nombre' => $almacen->tipoAlmacen->nombre]
+                        : null,
+                ])
+                ->values(),
             'sucursales' => Sucursal::query()
                 ->where('activo', true)
                 ->orderBy('nombre')

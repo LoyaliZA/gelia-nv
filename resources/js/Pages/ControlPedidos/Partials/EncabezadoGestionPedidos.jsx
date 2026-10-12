@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { Link } from '@inertiajs/react';
 import {
     Plus,
     FileSpreadsheet,
@@ -7,6 +8,7 @@ import {
     Loader2,
     Package,
     MoreHorizontal,
+    BookOpen,
 } from 'lucide-react';
 import { geliaCardClass, THEME_BTN_PRIMARY, THEME_BTN_SECONDARY } from '../../../utils/geliaTheme';
 
@@ -215,6 +217,13 @@ export default function EncabezadoGestionPedidos({
                     <p className="md:hidden m-0 text-xs font-medium theme-text-muted leading-snug line-clamp-1">
                         {DESCRIPCION_MOVIL}
                     </p>
+                    <Link
+                        href={route('soporte.manuales.show', 'registrar-pedidos-vendedor')}
+                        className="inline-flex items-center gap-1.5 py-2 text-xs font-semibold theme-text-primario underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primario)]"
+                    >
+                        <BookOpen className="w-3.5 h-3.5" aria-hidden />
+                        Manual para registrar pedidos
+                    </Link>
                 </div>
 
                 <div className="flex flex-col gap-2 shrink-0 w-full md:w-auto md:items-end md:max-w-md 2xl:max-w-sm overflow-visible">

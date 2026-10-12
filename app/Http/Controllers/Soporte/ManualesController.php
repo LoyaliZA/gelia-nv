@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Services\Manuales\GenerarPdfManualService;
 use App\Services\Manuales\ResolverManualesVisiblesService;
 use App\Support\Manuales\Content\ControlPedidosManualContent;
+use App\Support\Manuales\Content\RegistrarPedidosVendedorManualContent;
 use App\Support\Manuales\ManualesCatalog;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -38,6 +39,7 @@ class ManualesController extends Controller
 
         $ids = array_column($resolved['secciones'], 'id');
         $contenido = match ($slug) {
+            ManualesCatalog::SLUG_REGISTRAR_PEDIDOS_VENDEDOR => RegistrarPedidosVendedorManualContent::payload(),
             ManualesCatalog::SLUG_CONTROL_PEDIDOS => ControlPedidosManualContent::payload($ids),
             default => null,
         };

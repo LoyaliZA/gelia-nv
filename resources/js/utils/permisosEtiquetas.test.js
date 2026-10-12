@@ -70,8 +70,9 @@ describe('agruparPermisosPorSubmodulo', () => {
         expect(grupos.map((g) => g.id)).toEqual([
             'registrar', 'auditar', 'cedis', 'delegado', 'catalogos', 'plazos',
         ]);
+        expect(grupos.find((g) => g.id === 'otros')).toBeUndefined();
         expect(grupos.find((g) => g.id === 'cedis').permisos.map((p) => p.name))
-            .toEqual(['control_pedidos.cedis', 'control_pedidos.reabrir', 'control_pedidos.cedis.enviar']);
+            .toEqual(['control_pedidos.cedis', 'control_pedidos.cedis.enviar', 'control_pedidos.reabrir']);
         expect(grupos.find((g) => g.id === 'auditar').permisos.map((p) => p.name))
             .toEqual(['control_pedidos.auditar', 'control_pedidos.auditar.aprobar', 'control_pedidos.liberar_resguardo']);
         expect(grupos.find((g) => g.id === 'delegado').permisos.map((p) => p.name))
@@ -109,8 +110,71 @@ describe('descripcionPermiso', () => {
         expect(descripcionPermiso('control_pedidos.cedis.enviar')).toMatch(/recog/i);
         expect(descripcionPermiso('control_pedidos.delegado.importar')).toMatch(/importar/i);
         expect(descripcionPermiso('control_pedidos.liberar_resguardo')).toMatch(/resguardo/i);
+        expect(descripcionPermiso('control_pedidos.pagos.validar')).toMatch(/validar/i);
+        expect(descripcionPermiso('control_pedidos.cancelacion_operativa.solicitar')).toMatch(/cancelaci/i);
         expect(descripcionPermiso('cobranza.ver')).toMatch(/cobranza|Credibox/i);
         expect(descripcionPermiso('rh.ver')).toMatch(/Humanos|RH/i);
+    });
+
+    it('cubre el catálogo completo de control_pedidos en submódulos y descripciones', () => {
+        const catalogo = [
+            'control_pedidos.auditar', 'control_pedidos.auditar.aprobar',
+            'control_pedidos.bancos_departamento.administrar',
+            'control_pedidos.cancelacion_operativa.concluir_admin',
+            'control_pedidos.cancelacion_operativa.reactivar',
+            'control_pedidos.cancelacion_operativa.resolver_financiera',
+            'control_pedidos.cancelacion_operativa.solicitar', 'control_pedidos.cancelar',
+            'control_pedidos.cedis', 'control_pedidos.cedis.enviar', 'control_pedidos.cedis.liberar',
+            'control_pedidos.cedis.ver_todos', 'control_pedidos.configurar_catalogos',
+            'control_pedidos.configurar_plazos', 'control_pedidos.crear', 'control_pedidos.delegado',
+            'control_pedidos.delegado.importar', 'control_pedidos.direccion.cambiar',
+            'control_pedidos.direccion.cambiar_despues_guia',
+            'control_pedidos.direccion.cambiar_despues_remision', 'control_pedidos.direccion.seleccionar',
+            'control_pedidos.direccion.usar_manual', 'control_pedidos.editar', 'control_pedidos.eliminados',
+            'control_pedidos.eliminar', 'control_pedidos.eliminar_registro',
+            'control_pedidos.envios.editar_costos_pago_validado', 'control_pedidos.envios.reabrir_caja',
+            'control_pedidos.envios.retirar_caja', 'control_pedidos.espera_pago', 'control_pedidos.exportar',
+            'control_pedidos.liberar_resguardo', 'control_pedidos.pagos.adjuntar',
+            'control_pedidos.pagos.evidencia_historica', 'control_pedidos.pagos.rechazar',
+            'control_pedidos.pagos.sustituir', 'control_pedidos.pagos.validar', 'control_pedidos.pagos.ver',
+            'control_pedidos.preparacion.corregir', 'control_pedidos.preparacion.destinatario',
+            'control_pedidos.preparacion.solicitar', 'control_pedidos.reabrir',
+            'control_pedidos.salida.autorizar', 'control_pedidos.salida.confirmar_entrega',
+            'control_pedidos.salida.validar_pago', 'control_pedidos.tienda.apartado.aprobar_prorroga',
+            'control_pedidos.tienda.apartado.confirmar_devolucion', 'control_pedidos.tienda.apartado.separar',
+            'control_pedidos.tienda.apartado.ver', 'control_pedidos.tienda.cargar_identificacion',
+            'control_pedidos.tienda.confirmar_caratula', 'control_pedidos.tienda.despachar_municipio',
+            'control_pedidos.tienda.empacar_municipio', 'control_pedidos.tienda.evidencias',
+            'control_pedidos.tienda.generar_caratula', 'control_pedidos.tienda.imprimir_caratula',
+            'control_pedidos.tienda.liberar', 'control_pedidos.tienda.regenerar_caratula',
+            'control_pedidos.tienda.reportar_error', 'control_pedidos.tienda.responder',
+            'control_pedidos.tienda.tomar', 'control_pedidos.tienda.trasladar', 'control_pedidos.tienda.ver',
+            'control_pedidos.tienda.ver_identificacion', 'control_pedidos.ver_detalle',
+            'control_pedidos.ver_listado',
+        ];
+        const grupos = agruparPermisosPorSubmodulo(
+            'control_pedidos',
+            catalogo.map((name) => ({ name, id: name })),
+        );
+        expect(grupos.some((g) => g.id === 'otros')).toBe(false);
+        catalogo.forEach((name) => {
+            expect(descripcionPermiso(name), name).toBeTruthy();
+        });
+    });
+
+    it('agrupa todos los permisos de control_pedidos sin bloque Otros', () => {
+        const nombres = [
+            'control_pedidos.ver_listado', 'control_pedidos.crear', 'control_pedidos.pagos.ver',
+            'control_pedidos.tienda.ver', 'control_pedidos.cancelacion_operativa.solicitar',
+            'control_pedidos.cedis.ver_todos',
+        ];
+        const grupos = agruparPermisosPorSubmodulo(
+            'control_pedidos',
+            nombres.map((name) => ({ name, id: name })),
+        );
+        expect(grupos.some((g) => g.id === 'otros')).toBe(false);
+        expect(grupos.find((g) => g.id === 'pagos')?.permisos.map((p) => p.name))
+            .toContain('control_pedidos.pagos.ver');
     });
 });
 

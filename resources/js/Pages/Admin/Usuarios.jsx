@@ -786,7 +786,7 @@ export default function Usuarios({
                             Directorio y <span style={{ color: 'var(--color-primario)' }}>Accesos</span>
                         </h1>
                         <p className="theme-text-muted text-[10px] font-bold uppercase tracking-widest mt-2 max-w-xl">
-                            Gestión de personal, identidad y permisos operativos
+                            Gestión de personal, identidad y permisos por módulo (p. ej. Gestión de pedidos por subpanel)
                             {usuariosState.total > 0 && (
                                 <span className="block sm:inline sm:ml-2 mt-1 sm:mt-0 opacity-80">
                                     · {usuariosState.total.toLocaleString('es-MX')} colaboradores

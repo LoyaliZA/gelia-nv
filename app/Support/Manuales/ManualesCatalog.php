@@ -9,6 +9,8 @@ class ManualesCatalog
 {
     public const SLUG_CONTROL_PEDIDOS = 'control-pedidos';
 
+    public const SLUG_REGISTRAR_PEDIDOS_VENDEDOR = 'registrar-pedidos-vendedor';
+
     /**
      * @return list<array{
      *     slug: string,
@@ -22,6 +24,21 @@ class ManualesCatalog
     public static function todos(): array
     {
         return [
+            [
+                'slug' => self::SLUG_REGISTRAR_PEDIDOS_VENDEDOR,
+                'modulo' => 'Gestión de pedidos · Ventas',
+                'titulo' => 'Registrar pedidos (Vendedor)',
+                'descripcion' => 'Guía paso a paso con ejemplos visuales: registrar, confirmar mercancía, cotizar, capturar pagos y dar seguimiento a las respuestas de otras áreas.',
+                'permisosAny' => ['control_pedidos.ver_listado', 'control_pedidos.crear'],
+                'secciones' => [
+                    [
+                        'id' => 'vendedor',
+                        'cargo' => 'Vendedor',
+                        'titulo' => 'Registrar y dar seguimiento a pedidos',
+                        'permisosAny' => ['control_pedidos.ver_listado', 'control_pedidos.crear'],
+                    ],
+                ],
+            ],
             [
                 'slug' => self::SLUG_CONTROL_PEDIDOS,
                 'modulo' => 'Logística · Gestión de pedidos',

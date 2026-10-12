@@ -43,6 +43,18 @@ function MatrizPermisos({
         () => agruparPermisosPorSubmodulo(moduloRoot, permisosDeModulo),
         [moduloRoot, permisosDeModulo],
     );
+    const usarAcordeonSubmodulo = submodulos.length > 4;
+    const [submodsExpandidos, setSubmodsExpandidos] = useState({});
+
+    useEffect(() => {
+        if (!usarAcordeonSubmodulo || submodulos.length === 0) return;
+        setSubmodsExpandidos((prev) => {
+            if (Object.keys(prev).length > 0) return prev;
+            const inicial = {};
+            submodulos.slice(0, 2).forEach((g) => { inicial[g.id] = true; });
+            return inicial;
+        });
+    }, [usarAcordeonSubmodulo, submodulos]);
 
     if (!permisosDeModulo?.length) return null;
 
@@ -158,36 +170,74 @@ function MatrizPermisos({
         );
     };
 
-    const renderBloqueSubmodulo = (grupo) => {
+    const renderEncabezadoSubmodulo = (grupo, { compacto = false } = {}) => {
         const toggleables = grupo.permisos.filter(permisoEsToggleable);
         const todosActivos = toggleables.length > 0
             && toggleables.every((p) => activos.includes(p.name));
         const puedeAlternar = toggleables.length > 0 && !soloLectura;
+        const activosEnGrupo = grupo.permisos.filter((p) => activos.includes(p.name)).length;
+
+        return (
+            <div className={`flex items-start justify-between gap-2 min-w-0 w-full ${compacto ? '' : ''}`}>
+                <div className="min-w-0">
+                    <h4 className="text-[11px] font-black uppercase tracking-widest theme-text-muted">
+                        {grupo.label}
+                        <span className="ml-1.5 not-italic font-bold opacity-80">
+                            ({activosEnGrupo}/{grupo.permisos.length})
+                        </span>
+                    </h4>
+                    {grupo.descripcion && (
+                        <p className="text-[11px] theme-text-muted mt-0.5 leading-snug font-normal normal-case tracking-normal">
+                            {grupo.descripcion}
+                        </p>
+                    )}
+                </div>
+                {puedeAlternar && (
+                    <button
+                        type="button"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            togglePermisos(grupo.permisos);
+                        }}
+                        className="shrink-0 text-[10px] font-bold uppercase tracking-wide theme-text-muted hover:text-[var(--color-primario)] transition-colors"
+                        aria-pressed={todosActivos}
+                    >
+                        {todosActivos ? 'Quitar todos' : 'Seleccionar todos'}
+                    </button>
+                )}
+            </div>
+        );
+    };
+
+    const renderBloqueSubmodulo = (grupo) => {
+        if (usarAcordeonSubmodulo) {
+            const abierto = submodsExpandidos[grupo.id] ?? false;
+            return (
+                <AcordeonAnimado
+                    key={grupo.id}
+                    abierto={abierto}
+                    onToggle={() => setSubmodsExpandidos((prev) => ({ ...prev, [grupo.id]: !abierto }))}
+                    className="theme-element"
+                    contentClassName="p-3 pt-0 space-y-2"
+                    summary={(
+                        <>
+                            {renderEncabezadoSubmodulo(grupo, { compacto: true })}
+                            <ChevronRight
+                                className={`w-4 h-4 theme-text-muted shrink-0 transition-transform duration-300 ease-out ${abierto ? 'rotate-90' : ''}`}
+                                aria-hidden
+                            />
+                        </>
+                    )}
+                    summaryClassName="p-3 items-start"
+                >
+                    {renderListaPermisos(grupo.permisos)}
+                </AcordeonAnimado>
+            );
+        }
 
         return (
             <section key={grupo.id} className="border theme-border rounded-xl p-3 space-y-2">
-                <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                        <h4 className="text-[11px] font-black uppercase tracking-widest theme-text-muted">
-                            {grupo.label}
-                        </h4>
-                        {grupo.descripcion && (
-                            <p className="text-[11px] theme-text-muted mt-0.5 leading-snug">
-                                {grupo.descripcion}
-                            </p>
-                        )}
-                    </div>
-                    {puedeAlternar && (
-                        <button
-                            type="button"
-                            onClick={() => togglePermisos(grupo.permisos)}
-                            className="shrink-0 text-[10px] font-bold uppercase tracking-wide theme-text-muted hover:text-[var(--color-primario)] transition-colors"
-                            aria-pressed={todosActivos}
-                        >
-                            {todosActivos ? 'Quitar todos' : 'Seleccionar todos'}
-                        </button>
-                    )}
-                </div>
+                {renderEncabezadoSubmodulo(grupo)}
                 {renderListaPermisos(grupo.permisos)}
             </section>
         );
@@ -387,9 +437,14 @@ export default function PermisosAtomicos({
     sucursalesCatalogo = [],
     sucursalIds = [],
     sucursalPrincipalId = null,
+    modulosInicialesExpandidos = [],
 }) {
     const [busquedaPermisos, setBusquedaPermisos] = useState('');
-    const [modulosExpandidos, setModulosExpandidos] = useState({});
+    const [modulosExpandidos, setModulosExpandidos] = useState(() => {
+        const inicial = {};
+        (modulosInicialesExpandidos || []).forEach((modulo) => { inicial[modulo] = true; });
+        return inicial;
+    });
     const [plantillaExpandida, setPlantillaExpandida] = useState(false);
 
     const permisosGestionables = useMemo(
