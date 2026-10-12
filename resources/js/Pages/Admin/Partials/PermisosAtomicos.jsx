@@ -170,11 +170,29 @@ function MatrizPermisos({
         );
     };
 
-    const renderEncabezadoSubmodulo = (grupo, { compacto = false } = {}) => {
+    const renderBotonAlternarGrupo = (grupo) => {
         const toggleables = grupo.permisos.filter(permisoEsToggleable);
         const todosActivos = toggleables.length > 0
             && toggleables.every((p) => activos.includes(p.name));
         const puedeAlternar = toggleables.length > 0 && !soloLectura;
+
+        if (!puedeAlternar) {
+            return null;
+        }
+
+        return (
+            <button
+                type="button"
+                onClick={() => togglePermisos(grupo.permisos)}
+                className="shrink-0 text-[10px] font-bold uppercase tracking-wide theme-text-muted hover:text-[var(--color-primario)] transition-colors"
+                aria-pressed={todosActivos}
+            >
+                {todosActivos ? 'Quitar todos' : 'Seleccionar todos'}
+            </button>
+        );
+    };
+
+    const renderEncabezadoSubmodulo = (grupo, { compacto = false, omitirAccionMasiva = false } = {}) => {
         const activosEnGrupo = grupo.permisos.filter((p) => activos.includes(p.name)).length;
 
         return (
@@ -192,19 +210,7 @@ function MatrizPermisos({
                         </p>
                     )}
                 </div>
-                {puedeAlternar && (
-                    <button
-                        type="button"
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            togglePermisos(grupo.permisos);
-                        }}
-                        className="shrink-0 text-[10px] font-bold uppercase tracking-wide theme-text-muted hover:text-[var(--color-primario)] transition-colors"
-                        aria-pressed={todosActivos}
-                    >
-                        {todosActivos ? 'Quitar todos' : 'Seleccionar todos'}
-                    </button>
-                )}
+                {!omitirAccionMasiva && renderBotonAlternarGrupo(grupo)}
             </div>
         );
     };
@@ -221,13 +227,14 @@ function MatrizPermisos({
                     contentClassName="p-3 pt-0 space-y-2"
                     summary={(
                         <>
-                            {renderEncabezadoSubmodulo(grupo, { compacto: true })}
+                            {renderEncabezadoSubmodulo(grupo, { compacto: true, omitirAccionMasiva: true })}
                             <ChevronRight
                                 className={`w-4 h-4 theme-text-muted shrink-0 transition-transform duration-300 ease-out ${abierto ? 'rotate-90' : ''}`}
                                 aria-hidden
                             />
                         </>
                     )}
+                    headerActions={renderBotonAlternarGrupo(grupo)}
                     summaryClassName="p-3 items-start"
                 >
                     {renderListaPermisos(grupo.permisos)}
@@ -256,6 +263,7 @@ function AcordeonAnimado({
     abierto,
     onToggle,
     summary,
+    headerActions = null,
     children,
     className = '',
     summaryClassName = '',
@@ -263,14 +271,19 @@ function AcordeonAnimado({
 }) {
     return (
         <div className={`rounded-2xl overflow-hidden border theme-border ${className}`}>
-            <button
-                type="button"
-                onClick={onToggle}
-                aria-expanded={abierto}
-                className={`w-full p-4 flex justify-between items-center gap-3 cursor-pointer select-none outline-none text-left transition-colors hover:bg-black/[0.02] dark:hover:bg-white/[0.02] focus-visible:ring-2 focus-visible:ring-[var(--color-primario)] focus-visible:ring-inset ${summaryClassName}`}
+            <div
+                className={`w-full p-4 flex justify-between items-start gap-3 ${summaryClassName}`}
             >
-                {summary}
-            </button>
+                <button
+                    type="button"
+                    onClick={onToggle}
+                    aria-expanded={abierto}
+                    className="flex-1 min-w-0 flex justify-between items-center gap-3 cursor-pointer select-none outline-none text-left transition-colors hover:bg-black/[0.02] dark:hover:bg-white/[0.02] focus-visible:ring-2 focus-visible:ring-[var(--color-primario)] focus-visible:ring-inset rounded-lg -m-1 p-1"
+                >
+                    {summary}
+                </button>
+                {headerActions}
+            </div>
             <div
                 className={`grid transition-[grid-template-rows] duration-300 ease-out ${abierto ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}
                 aria-hidden={!abierto}

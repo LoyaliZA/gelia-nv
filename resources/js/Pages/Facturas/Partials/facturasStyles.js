@@ -45,7 +45,7 @@ export { GELIA_SEGMENT_TABS_SCROLL, GELIA_SEGMENT_TABS_TRACK };
 export function urlArchivoFactura(facturaId, tipo, indice = 0, options = {}) {
     const base = route('facturas.archivo', { factura: facturaId, tipo });
     const params = new URLSearchParams();
-    if (tipo === 'voucher') {
+    if (tipo === 'voucher' || tipo === 'pdf') {
         params.set('indice', String(indice));
     }
     if (options.descargar) {
@@ -101,4 +101,11 @@ export function esImagenVoucher(voucher) {
 /** Relación receptorFiscal serializada como receptor_fiscal (snake_case) o receptorFiscal. */
 export function receptorFiscalDeFactura(factura) {
     return factura?.receptor_fiscal || factura?.receptorFiscal || null;
+}
+
+/** Never reuse another request's link or present a used, revoked or expired form as current. */
+export function enlaceFiscalVigente(factura, ahora = Date.now()) {
+    return (factura?.enlaces_fiscales || factura?.enlacesFiscales || []).find((enlace) =>
+        !enlace.usado_en && !enlace.revocado_en && (!enlace.expira_en || new Date(enlace.expira_en).getTime() > ahora)
+    ) || null;
 }

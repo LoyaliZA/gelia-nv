@@ -13,11 +13,14 @@ class CatalogoBanco extends Model
         'nombre',
         'activo',
         'compartido',
+        'facturacion_habilitada',
+        'motivo_bloqueo_facturacion',
     ];
 
     protected $casts = [
         'activo' => 'boolean',
         'compartido' => 'boolean',
+        'facturacion_habilitada' => 'boolean',
     ];
 
     public function solicitudes(): HasMany

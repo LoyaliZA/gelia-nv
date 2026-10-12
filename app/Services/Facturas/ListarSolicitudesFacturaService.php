@@ -12,7 +12,9 @@ class ListarSolicitudesFacturaService
     public function ejecutar(?User $usuario, array $filtros = [], bool $paginar = true)
     {
         $query = SolicitudFactura::with([
-            'vendedor:id,name',
+            'vendedor:id,name,area_id',
+            'vendedor.area:id,nombre',
+            'banco',
             'departamento:id,nombre',
             'estado:id,nombre',
             'cliente:id,numero_cliente,nombre,rfc,nombre_razon_social',
@@ -36,12 +38,15 @@ class ListarSolicitudesFacturaService
         return $paginar ? $query->paginate(15)->withQueryString() : $query->get();
     }
 
-    public function metricas(?User $usuario): array
+    public function metricas(?User $usuario, array $filtros = []): array
     {
         $query = SolicitudFactura::query();
         if ($usuario) {
             $this->aplicarAislamiento($query, $usuario);
         }
+
+        unset($filtros['tab']);
+        $this->aplicarFiltros($query, $filtros);
 
         $hoy = now()->toDateString();
         $idPendiente = CatalogoEstadoSolicitud::idDe('Pendiente');
@@ -57,6 +62,19 @@ class ListarSolicitudesFacturaService
                     ->whereDate('respondida_at', $hoy)->count()
                 : 0,
             'incorrectas' => $idIncorrecta ? (clone $query)->where('catalogo_estado_solicitud_id', $idIncorrecta)->count() : 0,
+        ];
+    }
+
+    public function opcionesFiltros(User $usuario): array
+    {
+        $visibles = SolicitudFactura::query();
+        $this->aplicarAislamiento($visibles, $usuario);
+        $vendedores = User::withTrashed()->whereIn('id', (clone $visibles)->select('vendedor_id'));
+
+        return [
+            'vendedores' => (clone $vendedores)->orderBy('name')->get(['id', 'name']),
+            'departamentos' => \App\Models\Departamento::whereIn('id', (clone $visibles)->select('departamento_id'))->orderBy('nombre')->get(['id', 'nombre']),
+            'areas' => \App\Models\Area::whereIn('id', (clone $vendedores)->select('area_id'))->orderBy('nombre')->get(['id', 'nombre', 'departamento_id']),
         ];
     }
 
@@ -128,15 +146,22 @@ class ListarSolicitudesFacturaService
             };
         }
 
+        if (!empty($filtros['departamento_id'])) {
+            $query->where('departamento_id', $filtros['departamento_id']);
+        }
+        if (!empty($filtros['area_id'])) {
+            $query->whereHas('vendedor', fn (Builder $q) => $q->where('area_id', $filtros['area_id']));
+        }
+
         if (!empty($filtros['vendedor_id'])) {
             $query->where('vendedor_id', $filtros['vendedor_id']);
         }
 
-        if (!empty($filtros['fecha_inicio']) && !empty($filtros['fecha_fin'])) {
-            $query->whereBetween('created_at', [
-                $filtros['fecha_inicio'] . ' 00:00:00',
-                $filtros['fecha_fin'] . ' 23:59:59',
-            ]);
+        if (!empty($filtros['fecha_inicio'])) {
+            $query->whereDate('created_at', '>=', $filtros['fecha_inicio']);
+        }
+        if (!empty($filtros['fecha_fin'])) {
+            $query->whereDate('created_at', '<=', $filtros['fecha_fin']);
         }
 
         if (!empty($filtros['q'])) {

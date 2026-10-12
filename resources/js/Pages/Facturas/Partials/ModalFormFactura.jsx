@@ -1,13 +1,13 @@
-import SolicitudDialog from '@/Components/Solicitudes/SolicitudDialog';
+import SolicitudDialog from './FacturaDialog';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { useForm, usePage } from '@inertiajs/react';
+import { useForm } from '@inertiajs/react';
 import axios from 'axios';
 import { X, Receipt, Search, Download, FileSpreadsheet, AlertOctagon, ExternalLink, RotateCcw, Link2, Copy, Check, Loader2 } from 'lucide-react';
 import ZonaAdjuntoVoucher from './ZonaAdjuntoVoucher';
 import FormularioDatosFiscalesInline from './FormularioDatosFiscalesInline';
 import { wrapCampoFactura } from './wrapCampoFactura';
 import { esCampoFiscalError } from './camposFacturaErrores';
-import { FACTURA_ACCENT, BTN_PRIMARY, BTN_SECONDARY, urlArchivoFactura, esImagenVoucher, esPdfVoucher, receptorFiscalDeFactura } from './facturasStyles';
+import { FACTURA_ACCENT, BTN_PRIMARY, BTN_SECONDARY, urlArchivoFactura, esImagenVoucher, esPdfVoucher, receptorFiscalDeFactura, enlaceFiscalVigente } from './facturasStyles';
 import { THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from '../../../utils/geliaTheme';
 import { normalizarRazonSocial, normalizarRazonSocialAlEscribir } from '../../../utils/reglasCatalogosFiscales';
 
@@ -75,10 +75,10 @@ function CampoFiscalResaltado({ etiqueta, valor, resalte }) {
                 background: 'color-mix(in srgb, var(--color-primario) 10%, transparent)',
             } : undefined}
         >
-            <dt className="text-[9px] font-black uppercase theme-text-muted m-0 flex items-center gap-2">
+            <dt className="text-xs font-semibold  theme-text-muted m-0 flex items-center gap-2">
                 {etiqueta}
                 {marcado && (
-                    <span className="normal-case tracking-normal font-black" style={{ color: FACTURA_ACCENT }}>
+                    <span className="normal-case tracking-normal font-semibold" style={{ color: FACTURA_ACCENT }}>
                         {resalte === 'nuevo' ? 'Nuevo' : 'Actualizado'}
                     </span>
                 )}
@@ -104,7 +104,7 @@ async function copiarAlPortapapeles(texto) {
         textArea.setAttribute('readonly', '');
         textArea.style.position = 'fixed';
         textArea.style.left = '-9999px';
-        document.body.appendChild(textArea);
+        (document.activeElement?.closest('[role="dialog"]') || document.body).appendChild(textArea);
         textArea.select();
         const ok = document.execCommand('copy');
         document.body.removeChild(textArea);
@@ -114,10 +114,10 @@ async function copiarAlPortapapeles(texto) {
     }
 }
 
-export default function ModalFormFactura({ onClose, onExito, onBorradorCreado, modoEdicion = false, facturaAEditar = null, catalogos = { regimen_fiscal: [], uso_cfdi: [] } }) {
-    const flash = usePage().props?.flash || {};
+export default function ModalFormFactura({ onClose, onExito, onBorradorCreado, modoEdicion = false, facturaAEditar = null, bancos = [], bancosConfigurados = true, catalogos = { regimen_fiscal: [], uso_cfdi: [] } }) {
     const trabajandoBorrador = Boolean(facturaAEditar?.estado?.nombre === 'Borrador');
 
+    const [adjuntosProcesando, setAdjuntosProcesando] = useState(false);
     const [vouchers, setVouchers] = useState([]);
     const [vouchersConservarIds, setVouchersConservarIds] = useState(() =>
         (facturaAEditar ? (facturaAEditar.vouchers || []).map(v => v.id) : [])
@@ -142,9 +142,7 @@ export default function ModalFormFactura({ onClose, onExito, onBorradorCreado, m
             : CAMPOS_FISCALES.map(c => c.clave)
     );
     const [enlaceUrl, setEnlaceUrl] = useState(() => {
-        const vigentes = (facturaAEditar?.enlaces_fiscales || facturaAEditar?.enlacesFiscales || [])
-            .find(e => !e.usado_en && !e.revocado_en);
-        return vigentes?.url || flash.enlace_fiscal_url || null;
+        return enlaceFiscalVigente(facturaAEditar)?.url || null;
     });
     const [copiado, setCopiado] = useState(false);
     const [facturaLive, setFacturaLive] = useState(facturaAEditar);
@@ -167,7 +165,8 @@ export default function ModalFormFactura({ onClose, onExito, onBorradorCreado, m
     const esReparacion = modoEdicion && !trabajandoBorrador;
     const fiscalesMarcados = camposIncorrectos.filter(esCampoFiscalError);
 
-    const { data, setData, post, processing, errors, transform } = useForm({
+    const { data, setData, post, processing, errors, transform, isDirty, clearErrors } = useForm({
+        catalogo_banco_id: facturaAEditar?.catalogo_banco_id || '',
         razon_social: facturaAEditar ? razonSocialDesdeFactura(facturaAEditar) : '',
         numero_cliente: facturaAEditar
             ? (facturaAEditar?.cliente?.numero_cliente || facturaAEditar?.datos_fiscales?.numero_cliente || '')
@@ -177,9 +176,9 @@ export default function ModalFormFactura({ onClose, onExito, onBorradorCreado, m
         vincular_receptor_cliente: false,
         observaciones_vendedor: facturaAEditar ? (facturaAEditar?.observaciones_vendedor || '') : '',
         archivo_fiscal: null,
-        modo: 'pendiente',
+        modo: trabajandoBorrador ? 'borrador' : 'pendiente',
         pedir_formulario: false,
-        accion_formulario: 'register_first',
+        accion_formulario: clienteTieneFiscales(clienteSeleccionado) ? 'update_fields' : 'register_first',
         campos_fiscales: CAMPOS_FISCALES.map(c => c.clave),
     });
 
@@ -198,6 +197,7 @@ export default function ModalFormFactura({ onClose, onExito, onBorradorCreado, m
         snapshotFiscalRef.current = snapshotDatosFiscales(facturaAEditar);
 
         setData({
+            catalogo_banco_id: facturaAEditar.catalogo_banco_id || '',
             razon_social: razonSocialDesdeFactura(facturaAEditar),
             numero_cliente: facturaAEditar.cliente?.numero_cliente || facturaAEditar.datos_fiscales?.numero_cliente || '',
             destinatario_tipo: facturaAEditar.destinatario_tipo || 'cliente',
@@ -226,8 +226,7 @@ export default function ModalFormFactura({ onClose, onExito, onBorradorCreado, m
         if (facturaAEditar.campos_fiscales_solicitados?.length) {
             setCamposSeleccionados([...facturaAEditar.campos_fiscales_solicitados]);
         }
-        const vigentes = (facturaAEditar.enlaces_fiscales || facturaAEditar.enlacesFiscales || [])
-            .find(e => !e.usado_en && !e.revocado_en);
+        const vigentes = enlaceFiscalVigente(facturaAEditar);
         if (vigentes?.url) setEnlaceUrl(vigentes.url);
     }, [facturaAEditar?.id, setData]);
 
@@ -546,7 +545,7 @@ export default function ModalFormFactura({ onClose, onExito, onBorradorCreado, m
 
     const guardarBorrador = (e) => {
         e.preventDefault();
-        if (pedirFormulario && camposSeleccionados.length === 0) return;
+        if (processing || adjuntosProcesando || generandoEnlace || (pedirFormulario && camposSeleccionados.length === 0)) return;
 
         const config = {
             forceFormData: true,
@@ -610,6 +609,7 @@ export default function ModalFormFactura({ onClose, onExito, onBorradorCreado, m
 
     const enviar = (e) => {
         e.preventDefault();
+        if (!puedeEnviarDirecto) return;
         const config = {
             forceFormData: true,
             onSuccess: () => {
@@ -714,8 +714,10 @@ export default function ModalFormFactura({ onClose, onExito, onBorradorCreado, m
         }
     };
 
-    const puedeEnviarDirecto = !processing && totalVouchers >= 1 && !formPendiente;
-    const puedeGuardarBorrador = !processing
+    const bancoSeleccionado = bancos.find((b) => String(b.id) === String(data.catalogo_banco_id));
+    const bancoBloqueado = bancoSeleccionado?.facturacion_habilitada === false;
+    const puedeEnviarDirecto = !processing && !adjuntosProcesando && totalVouchers >= 1 && !formPendiente && (!bancosConfigurados || !!bancoSeleccionado) && !bancoBloqueado;
+    const puedeGuardarBorrador = !processing && !adjuntosProcesando
         && (!pedirFormulario || camposSeleccionados.length > 0)
         && (
             data.destinatario_tipo === 'tercero'
@@ -725,13 +727,13 @@ export default function ModalFormFactura({ onClose, onExito, onBorradorCreado, m
 
     const voucherError = errors.vouchers || errors['vouchers.0'] || errors.vouchers_conservar;
     const titulo = modoEdicion && !trabajandoBorrador
-        ? 'Reparar Solicitud de Factura_'
+        ? 'Corregir solicitud de factura'
         : trabajandoBorrador
-            ? 'Editar Borrador de Factura_'
-            : 'Nueva Solicitud de Factura_';
+            ? 'Continuar borrador'
+            : 'Nueva solicitud de factura';
 
     return (
-        <SolicitudDialog onClose={onClose} busy={processing || generandoEnlace} title="Solicitud de factura">
+        <SolicitudDialog onClose={onClose} busy={processing || generandoEnlace || adjuntosProcesando} title={titulo} dirty={isDirty || vouchers.length > 0 || quitarExcel || pedirFormulario || vouchersConservarIds.length !== (facturaAEditar?.vouchers?.length || 0) || JSON.stringify(fiscalesReparacion) !== JSON.stringify(facturaAEditar?.datos_fiscales || {})}>
             <div
                 className={`${THEME_MODAL_SHELL} max-w-3xl w-full flex flex-col text-left`}
                 style={{ maxHeight: 'calc(100dvh - 2rem)' }}
@@ -741,26 +743,28 @@ export default function ModalFormFactura({ onClose, onExito, onBorradorCreado, m
                     <div className="flex items-center gap-3 min-w-0">
                         <Receipt className="w-7 h-7 shrink-0" style={{ color: FACTURA_ACCENT }} />
                         <div className="min-w-0">
-                            <h2 className="text-lg font-black italic theme-text-main uppercase tracking-tighter m-0">
+                            <h2 className="text-lg font-semibold  theme-text-main   m-0">
                                 {titulo}
                             </h2>
                             {facturaAEditar?.folio && (
-                                <p className="text-[10px] font-bold theme-text-muted uppercase tracking-widest mt-1 m-0">{facturaAEditar.folio}</p>
+                                <p className="text-xs font-bold theme-text-muted   mt-1 m-0">{facturaAEditar.folio}</p>
                             )}
                         </div>
                     </div>
                     <button type="button" data-dialog-close onClick={onClose} className="p-2 theme-text-muted hover:theme-text-main rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors outline-none shrink-0" aria-label="Cerrar"><X className="w-5 h-5" /></button>
                 </div>
 
-                <form onSubmit={enviar} className="gelia-modal-body p-5 md:p-6 overflow-y-auto custom-scrollbar flex-1 min-h-0 space-y-6">
+                <form onSubmit={enviar} className="flex flex-col flex-1 min-h-0">
+                    <div className="gelia-modal-body p-5 md:p-6 space-y-6">
+                    <p className="text-sm theme-text-muted m-0">Selecciona el cliente, registra dónde se recibió el pago y adjunta sus comprobantes. Puedes guardar un borrador o pedir los datos fiscales mediante un enlace.</p>
                     {modoEdicion && facturaAEditar?.motivo_respuesta && (
                         <div className="p-4 rounded-2xl border border-red-500/30 bg-red-500/10 flex gap-3">
                             <AlertOctagon className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
                             <div>
-                                <p className="text-[9px] font-black uppercase tracking-widest text-red-600 dark:text-red-400 m-0 mb-1">Motivo del error</p>
+                                <p className="text-xs font-semibold   text-red-600 dark:text-red-400 m-0 mb-1">Motivo del error</p>
                                 <p className="text-xs font-bold theme-text-main m-0 leading-snug">{facturaAEditar.motivo_respuesta}</p>
                                 {camposIncorrectos.length > 0 && (
-                                    <p className="text-[10px] font-bold theme-text-muted mt-2 m-0">
+                                    <p className="text-xs font-bold theme-text-muted mt-2 m-0">
                                         Campos: {camposIncorrectos.map(c => CAMPOS_FISCALES.find(f => f.clave === c)?.etiqueta || c).join(', ')}
                                     </p>
                                 )}
@@ -770,7 +774,7 @@ export default function ModalFormFactura({ onClose, onExito, onBorradorCreado, m
 
                     {esReparacion && fiscalesMarcados.length > 0 && (
                         <div className="space-y-3 p-4 rounded-2xl border theme-border">
-                            <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted m-0">Corregir datos fiscales</p>
+                            <p className="text-xs font-semibold   theme-text-muted m-0">Corregir datos fiscales</p>
                             <FormularioDatosFiscalesInline
                                 valores={fiscalesReparacion}
                                 onChange={setFiscalesReparacion}
@@ -793,7 +797,7 @@ export default function ModalFormFactura({ onClose, onExito, onBorradorCreado, m
                             {formPendiente ? (
                                 <div className="space-y-3 pt-1 border-t theme-border">
                                     <p
-                                        className="text-[10px] font-bold m-0 px-3 py-2 rounded-xl border"
+                                        className="text-xs font-bold m-0 px-3 py-2 rounded-xl border"
                                         style={{
                                             color: 'var(--color-info)',
                                             borderColor: 'color-mix(in srgb, var(--color-info) 35%, transparent)',
@@ -804,18 +808,19 @@ export default function ModalFormFactura({ onClose, onExito, onBorradorCreado, m
                                     </p>
                                     {enlaceUrl && (
                                         <div className="space-y-2">
-                                            <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted m-0 flex items-center gap-1">
+                                            <p className="text-xs font-semibold   theme-text-muted m-0 flex items-center gap-1">
                                                 <Link2 className="w-3 h-3" /> Enlace para el cliente
                                             </p>
                                             <div className="flex flex-wrap items-center gap-2">
                                                 <input
+                                                    aria-label="Enlace del formulario fiscal"
                                                     readOnly
                                                     value={enlaceUrl}
-                                                    className="flex-1 min-w-0 px-3 py-2 rounded-xl theme-surface border theme-border text-[11px] font-mono theme-text-main"
+                                                    className="flex-1 min-w-0 px-3 py-2 rounded-xl theme-surface border theme-border text-xs font-mono theme-text-main"
                                                 />
                                                 <button
                                                     type="button"
-                                                    className={`${BTN_SECONDARY} !py-2 !px-3 text-[9px]`}
+                                                    className={`${BTN_SECONDARY} !py-2 !px-3 text-xs`}
                                                     onClick={async () => {
                                                         const ok = await copiarAlPortapapeles(enlaceUrl);
                                                         if (ok) {
@@ -825,7 +830,7 @@ export default function ModalFormFactura({ onClose, onExito, onBorradorCreado, m
                                                     }}
                                                 >
                                                     {copiado ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                                                    {copiado ? 'Copiado' : 'Copiar'}
+                                                    {copiado ? 'Enlace copiado' : 'Copiar enlace'}
                                                 </button>
                                             </div>
                                         </div>
@@ -849,18 +854,19 @@ export default function ModalFormFactura({ onClose, onExito, onBorradorCreado, m
                                     )}
                                     {enlaceUrl && (
                                         <div className="space-y-2">
-                                            <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted m-0 flex items-center gap-1">
+                                            <p className="text-xs font-semibold   theme-text-muted m-0 flex items-center gap-1">
                                                 <Link2 className="w-3 h-3" /> Enlace para el cliente
                                             </p>
                                             <div className="flex flex-wrap items-center gap-2">
                                                 <input
+                                                    aria-label="Enlace del formulario fiscal"
                                                     readOnly
                                                     value={enlaceUrl}
-                                                    className="flex-1 min-w-0 px-3 py-2 rounded-xl theme-surface border theme-border text-[11px] font-mono theme-text-main"
+                                                    className="flex-1 min-w-0 px-3 py-2 rounded-xl theme-surface border theme-border text-xs font-mono theme-text-main"
                                                 />
                                                 <button
                                                     type="button"
-                                                    className={`${BTN_SECONDARY} !py-2 !px-3 text-[9px]`}
+                                                    className={`${BTN_SECONDARY} !py-2 !px-3 text-xs`}
                                                     onClick={async () => {
                                                         const ok = await copiarAlPortapapeles(enlaceUrl);
                                                         if (ok) {
@@ -870,7 +876,7 @@ export default function ModalFormFactura({ onClose, onExito, onBorradorCreado, m
                                                     }}
                                                 >
                                                     {copiado ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                                                    {copiado ? 'Copiado' : 'Copiar'}
+                                                    {copiado ? 'Enlace copiado' : 'Copiar enlace'}
                                                 </button>
                                             </div>
                                         </div>
@@ -893,17 +899,17 @@ export default function ModalFormFactura({ onClose, onExito, onBorradorCreado, m
 
                     {!modoEdicion || trabajandoBorrador ? (
                         <div className="space-y-2">
-                            <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Facturar a_</label>
+                            <label className="text-xs font-semibold  theme-text-muted  ml-1">Facturar a</label>
                             <div className="grid grid-cols-2 gap-2">
                                 {[
                                     { value: 'cliente', label: 'Cliente de cuenta' },
-                                    { value: 'tercero', label: 'Un Tercero' },
+                                    { value: 'tercero', label: 'Un tercero' },
                                 ].map(opt => (
                                     <button
                                         key={opt.value}
                                         type="button"
                                         onClick={() => setData('destinatario_tipo', opt.value)}
-                                        className={`px-3 py-3 rounded-xl border text-[10px] font-black uppercase tracking-widest outline-none transition-colors ${
+                                        className={`px-3 py-3 rounded-xl border text-xs font-semibold   outline-none transition-colors ${
                                             data.destinatario_tipo === opt.value
                                                 ? 'border-[var(--color-primario)] bg-[color-mix(in_srgb,var(--color-primario)_12%,transparent)] theme-text-main'
                                                 : 'theme-border theme-element theme-text-muted'
@@ -914,7 +920,7 @@ export default function ModalFormFactura({ onClose, onExito, onBorradorCreado, m
                                 ))}
                             </div>
                             {data.destinatario_tipo === 'tercero' && (
-                                <p className="text-[10px] theme-text-muted m-0 ml-1">
+                                <p className="text-xs theme-text-muted m-0 ml-1">
                                     Separe la cuenta que compra de quien factura (tercero).
                                 </p>
                             )}
@@ -922,11 +928,11 @@ export default function ModalFormFactura({ onClose, onExito, onBorradorCreado, m
                     ) : null}
 
                     <div className="space-y-2 relative">
-                        <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">
-                            {data.destinatario_tipo === 'tercero' ? 'Cuenta que compra_' : 'Cliente_'}
+                        <label htmlFor="factura-busqueda-cliente" className="theme-label">
+                            {data.destinatario_tipo === 'tercero' ? 'Cliente que realiza la compra' : 'Cliente'}
                         </label>
                         {data.destinatario_tipo === 'tercero' && (
-                            <p className="text-[10px] theme-text-muted m-0 ml-1">
+                            <p className="text-xs theme-text-muted m-0 ml-1">
                                 Número de cliente que presta la cuenta; no es quien factura.
                             </p>
                         )}
@@ -934,6 +940,9 @@ export default function ModalFormFactura({ onClose, onExito, onBorradorCreado, m
                             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 theme-text-muted" />
                             <input
                                 type="text"
+                                id="factura-busqueda-cliente"
+                                name="busqueda_cliente"
+                                autoComplete="off"
                                 value={busquedaCliente}
                                 onChange={e => { setBusquedaCliente(e.target.value); setMostrarDropdown(true); }}
                                 onFocus={() => setMostrarDropdown(true)}
@@ -950,16 +959,16 @@ export default function ModalFormFactura({ onClose, onExito, onBorradorCreado, m
                                 ))}
                             </div>
                         )}
-                        {buscandoCliente && <p className="text-[10px] theme-text-muted m-0">Buscando…</p>}
+                        {buscandoCliente && <p className="text-xs theme-text-muted m-0">Buscando…</p>}
                     </div>
 
                     {clienteSeleccionado && data.destinatario_tipo === 'tercero' && (
                         <div className="p-4 rounded-2xl border theme-border theme-element space-y-1">
-                            <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted m-0">Cuenta que compra</p>
-                            <p className="text-sm font-black theme-text-main m-0">
+                            <p className="text-xs font-semibold   theme-text-muted m-0">Cuenta que compra</p>
+                            <p className="text-sm font-semibold theme-text-main m-0">
                                 {clienteSeleccionado.numero_cliente} — {clienteSeleccionado.nombre}
                             </p>
-                            <p className="text-[10px] theme-text-muted m-0">
+                            <p className="text-xs theme-text-muted m-0">
                                 Este nombre identifica la cuenta. No es la razón social a facturar.
                             </p>
                         </div>
@@ -967,7 +976,7 @@ export default function ModalFormFactura({ onClose, onExito, onBorradorCreado, m
 
                     {clienteSeleccionado && data.destinatario_tipo === 'cliente' && (
                         <div className="p-4 rounded-2xl border theme-border theme-element space-y-2">
-                            <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted m-0">Preview datos fiscales actuales</p>
+                            <p className="text-xs font-semibold   theme-text-muted m-0">Preview datos fiscales actuales</p>
                             {clienteTieneFiscales(previewFiscalFuente) || (previewFiscalFuente && Object.keys(camposResaltados).length > 0) ? (
                                 <dl className="grid grid-cols-1 sm:grid-cols-2 gap-2 m-0">
                                     {CAMPOS_FISCALES.map(({ clave, etiqueta }) => (
@@ -987,14 +996,17 @@ export default function ModalFormFactura({ onClose, onExito, onBorradorCreado, m
 
                     {!(data.destinatario_tipo === 'tercero' && pedirFormulario && !factura?.formulario_respondido_at) && (
                         <div className={`space-y-2 relative ${wrapCampoFactura('razon_social', camposIncorrectos, factura)}`}>
-                            <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">
-                                {data.destinatario_tipo === 'tercero' ? 'Quién factura (tercero)_' : 'Razón Social_'}
+                            <label htmlFor="factura-razon-social" className="theme-label">
+                                {data.destinatario_tipo === 'tercero' ? 'Razón social del tercero' : 'Razón social'}
                             </label>
                             <div className="relative">
                                 {data.destinatario_tipo === 'tercero' && (
                                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 theme-text-muted" />
                                 )}
                                 <input
+                                    id="factura-razon-social"
+                                    name="razon_social"
+                                    aria-invalid={Boolean(errors.razon_social)}
                                     required={!(data.destinatario_tipo === 'tercero' && pedirFormulario)}
                                     value={data.razon_social}
                                     onChange={(e) => {
@@ -1042,18 +1054,18 @@ export default function ModalFormFactura({ onClose, onExito, onBorradorCreado, m
                                 </div>
                             )}
                             {data.destinatario_tipo === 'tercero' && buscandoReceptor && (
-                                <p className="text-[10px] theme-text-muted m-0">Buscando en padrón de terceros…</p>
+                                <p className="text-xs theme-text-muted m-0">Buscando en padrón de terceros…</p>
                             )}
                             {data.destinatario_tipo === 'tercero' && errorBusquedaReceptor && (
-                                <p className="text-[10px] text-red-500 font-bold m-0">{errorBusquedaReceptor}</p>
+                                <p className="text-xs text-red-500 font-bold m-0">{errorBusquedaReceptor}</p>
                             )}
                             {data.destinatario_tipo === 'tercero' && (receptorSeleccionado || (factura?.formulario_respondido_at && previewFiscalFuente)) && (
                                 <div className="p-4 rounded-2xl border theme-border theme-element space-y-2">
-                                    <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted m-0">
+                                    <p className="text-xs font-semibold   theme-text-muted m-0">
                                         Preview datos fiscales del tercero
                                     </p>
                                     {receptorSeleccionado?.codigo_interno && (
-                                        <p className="text-[10px] font-black theme-text-main m-0">
+                                        <p className="text-xs font-semibold theme-text-main m-0">
                                             {receptorSeleccionado.codigo_interno}
                                         </p>
                                     )}
@@ -1070,7 +1082,7 @@ export default function ModalFormFactura({ onClose, onExito, onBorradorCreado, m
                                 </div>
                             )}
                             {data.destinatario_tipo === 'tercero' && !receptorSeleccionado && String(data.razon_social || '').trim().length >= 2 && !buscandoReceptor && (
-                                <p className="text-[10px] theme-text-muted m-0">
+                                <p className="text-xs theme-text-muted m-0">
                                     Escriba para buscar un tercero registrado, o deje el nombre si es nuevo.
                                 </p>
                             )}
@@ -1080,9 +1092,9 @@ export default function ModalFormFactura({ onClose, onExito, onBorradorCreado, m
 
                     {data.destinatario_tipo === 'tercero' && pedirFormulario && !factura?.formulario_respondido_at && (
                         <div className="p-4 rounded-2xl border border-dashed theme-border space-y-1">
-                            <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted m-0">Quién factura (tercero)</p>
+                            <p className="text-xs font-semibold   theme-text-muted m-0">Quién factura (tercero)</p>
                             <p className="text-xs font-bold theme-text-main m-0">Pendiente del formulario</p>
-                            <p className="text-[10px] theme-text-muted m-0">
+                            <p className="text-xs theme-text-muted m-0">
                                 La capturará el tercero en el formulario público — no se mezcla con el nombre de la cuenta.
                             </p>
                         </div>
@@ -1104,18 +1116,18 @@ export default function ModalFormFactura({ onClose, onExito, onBorradorCreado, m
                                     className="mt-1"
                                 />
                                 <span>
-                                    <span className="text-[10px] font-black uppercase tracking-widest theme-text-main block">
+                                    <span className="text-xs font-semibold   theme-text-main block">
                                         Pedir datos por formulario
                                     </span>
-                                    <span className="text-[10px] theme-text-muted">
-                                        Camino principal: guarda borrador y genera link. Cuando respondan, adjunte el voucher y envíe a encargada.
+                                    <span className="text-xs theme-text-muted">
+                                        Genera un enlace para que el cliente registre sus datos. Cuando responda, podrás enviar la solicitud a revisión.
                                     </span>
                                 </span>
                             </label>
 
                             {pedirFormulario && (
                                 <div className="space-y-2 pl-7">
-                                    <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted m-0">
+                                    <p className="text-xs font-semibold   theme-text-muted m-0">
                                         {tieneFiscalesCliente && data.destinatario_tipo === 'cliente'
                                             ? 'Campos a actualizar'
                                             : 'Campos a solicitar (primera vez)'}
@@ -1136,6 +1148,7 @@ export default function ModalFormFactura({ onClose, onExito, onBorradorCreado, m
                                             );
                                         })}
                                     </div>
+                                    <p className="sr-only" role="status">{copiado ? 'Enlace copiado al portapapeles' : ''}</p>
                                     {errors.campos_fiscales && <p className="text-xs text-red-500">{errors.campos_fiscales}</p>}
                                 </div>
                             )}
@@ -1145,9 +1158,10 @@ export default function ModalFormFactura({ onClose, onExito, onBorradorCreado, m
                                     {enlaceUrl && (
                                         <div className="flex flex-wrap items-center gap-2">
                                             <input
+                                                aria-label="Enlace del formulario fiscal"
                                                 readOnly
                                                 value={enlaceUrl}
-                                                className="flex-1 min-w-0 px-3 py-2 rounded-xl theme-surface border theme-border text-[11px] font-mono theme-text-main"
+                                                className="flex-1 min-w-0 px-3 py-2 rounded-xl theme-surface border theme-border text-xs font-mono theme-text-main"
                                             />
                                             <button
                                                 type="button"
@@ -1161,7 +1175,7 @@ export default function ModalFormFactura({ onClose, onExito, onBorradorCreado, m
                                                 }}
                                             >
                                                 {copiado ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                                                {copiado ? 'Copiado' : 'Copiar'}
+                                                {copiado ? 'Enlace copiado' : 'Copiar enlace'}
                                             </button>
                                         </div>
                                     )}
@@ -1181,10 +1195,10 @@ export default function ModalFormFactura({ onClose, onExito, onBorradorCreado, m
                             onClick={() => setExcelExpandido(v => !v)}
                             className="w-full flex items-center justify-between gap-2 px-1 py-1 outline-none"
                         >
-                            <span className="text-[10px] font-black uppercase theme-text-muted tracking-widest text-left">
-                                Otra forma de cargar datos (Excel)_
+                            <span className="text-xs font-semibold  theme-text-muted  text-left">
+                                Importar datos desde Excel
                             </span>
-                            <span className="text-[10px] font-black uppercase tracking-widest theme-text-muted">
+                            <span className="text-xs font-semibold   theme-text-muted">
                                 {excelExpandido ? 'Ocultar' : 'Mostrar'}
                             </span>
                         </button>
@@ -1192,16 +1206,16 @@ export default function ModalFormFactura({ onClose, onExito, onBorradorCreado, m
                         {excelExpandido && (
                             <div className="space-y-2 p-4 rounded-2xl border theme-border">
                                 <div className="flex items-center justify-between ml-1">
-                                    <p className="text-[10px] theme-text-muted m-0">
+                                    <p className="text-xs theme-text-muted m-0">
                                         Usar Excel en lugar del formulario. Si ya hay link pendiente, primero debe responderse o regenerarse.
                                     </p>
-                                    <a href={route('facturas.plantilla_fiscales')} className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest hover:underline shrink-0 ml-2" style={{ color: FACTURA_ACCENT }}>
+                                    <a href={route('facturas.plantilla_fiscales')} className="inline-flex items-center gap-1 text-xs font-semibold   hover:underline shrink-0 ml-2" style={{ color: FACTURA_ACCENT }}>
                                         <Download className="w-3.5 h-3.5" /> Plantilla
                                     </a>
                                 </div>
 
                                 {(data.archivo_fiscal || tieneExcelActual) && !pedirFormulario && (
-                                    <p className="text-[10px] theme-text-muted m-0">
+                                    <p className="text-xs theme-text-muted m-0">
                                         Con Excel cargado, el formulario no es necesario.
                                     </p>
                                 )}
@@ -1210,8 +1224,8 @@ export default function ModalFormFactura({ onClose, onExito, onBorradorCreado, m
                             <div className="flex flex-wrap items-center gap-2 p-3 rounded-xl theme-element border theme-border bg-[color-mix(in_srgb,var(--color-primario)_6%,transparent)]">
                                 <FileSpreadsheet className="w-5 h-5 shrink-0" style={{ color: FACTURA_ACCENT }} />
                                 <div className="min-w-0 flex-1">
-                                    <p className="text-[10px] font-bold theme-text-main m-0 truncate">Excel / CSV actual</p>
-                                    <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted m-0">Se conservará si no sube otro</p>
+                                    <p className="text-xs font-bold theme-text-main m-0 truncate">Excel / CSV actual</p>
+                                    <p className="text-xs font-semibold   theme-text-muted m-0">Se conservará si no sube otro</p>
                                 </div>
                                 <a
                                     href={urlArchivoFactura(factura.id, 'fiscal')}
@@ -1225,7 +1239,7 @@ export default function ModalFormFactura({ onClose, onExito, onBorradorCreado, m
                                 <button
                                     type="button"
                                     onClick={() => setQuitarExcel(true)}
-                                    className="text-[9px] font-black uppercase tracking-widest text-red-600 dark:text-red-400 px-2 py-1 rounded-lg hover:bg-red-500/10 outline-none"
+                                    className="text-xs font-semibold   text-red-600 dark:text-red-400 px-2 py-1 rounded-lg hover:bg-red-500/10 outline-none"
                                 >
                                     Quitar
                                 </button>
@@ -1234,11 +1248,11 @@ export default function ModalFormFactura({ onClose, onExito, onBorradorCreado, m
 
                         {(modoEdicion || trabajandoBorrador) && quitarExcel && !data.archivo_fiscal && (
                             <div className="flex items-center justify-between gap-2 p-3 rounded-xl border border-amber-500/30 bg-amber-500/10">
-                                <p className="text-[10px] font-bold text-amber-700 dark:text-amber-300 m-0">El Excel actual se eliminará al guardar.</p>
+                                <p className="text-xs font-bold text-amber-700 dark:text-amber-300 m-0">El Excel actual se eliminará al guardar.</p>
                                 <button
                                     type="button"
                                     onClick={() => setQuitarExcel(false)}
-                                    className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-amber-700 dark:text-amber-300 outline-none shrink-0"
+                                    className="inline-flex items-center gap-1 text-xs font-semibold   text-amber-700 dark:text-amber-300 outline-none shrink-0"
                                 >
                                     <RotateCcw className="w-3.5 h-3.5" /> Deshacer
                                 </button>
@@ -1261,11 +1275,11 @@ export default function ModalFormFactura({ onClose, onExito, onBorradorCreado, m
                             onClick={() => excelInputRef.current?.click()}
                         >
                             <FileSpreadsheet className="w-7 h-7 theme-text-muted" style={{ color: data.archivo_fiscal ? FACTURA_ACCENT : undefined }} />
-                            <p className="text-[10px] font-black theme-text-main uppercase m-0">
+                            <p className="text-xs font-semibold theme-text-main  m-0">
                                 {data.archivo_fiscal ? 'Reemplazar Excel / CSV' : 'Arrastra o selecciona Excel / CSV'}
                             </p>
                             {data.archivo_fiscal && (
-                                <p className="text-[10px] font-bold m-0" style={{ color: 'var(--color-primario)' }}>{data.archivo_fiscal.name}</p>
+                                <p className="text-xs font-bold m-0" style={{ color: 'var(--color-primario)' }}>{data.archivo_fiscal.name}</p>
                             )}
                             <input ref={excelInputRef} type="file" className="hidden" accept=".xlsx,.xls,.csv" onChange={e => {
                                 setData('archivo_fiscal', e.target.files[0] || null);
@@ -1277,19 +1291,39 @@ export default function ModalFormFactura({ onClose, onExito, onBorradorCreado, m
                         )}
                     </div>
 
+                    <section className="gelia-facturas-section space-y-3" aria-labelledby="factura-pago-titulo">
+                        <h3 id="factura-pago-titulo" className="text-base font-semibold theme-text-main m-0">Pago recibido</h3>
+                        <div>
+                            <label htmlFor="factura-banco" className="theme-label block mb-2">Banco receptor del pago</label>
+                            <select id="factura-banco" name="catalogo_banco_id" disabled={!bancosConfigurados} value={data.catalogo_banco_id} onChange={(event) => { setData('catalogo_banco_id', event.target.value); clearErrors('catalogo_banco_id'); }} className="theme-select w-full" aria-invalid={Boolean(errors.catalogo_banco_id)} aria-describedby="factura-banco-ayuda">
+                                <option value="">Selecciona el banco…</option>
+                                {data.catalogo_banco_id && !bancoSeleccionado && <option value={data.catalogo_banco_id}>{factura?.banco?.nombre || 'Banco registrado'} · no disponible</option>}
+                                {bancos.map((b) => <option key={b.id} value={b.id}>{b.nombre}{b.facturacion_habilitada === false ? ' · facturación no disponible' : ''}</option>)}
+                            </select>
+                            <p id="factura-banco-ayuda" className="text-xs theme-text-muted mt-2 mb-0">Registra el banco en el que se recibió el pago. Esta información es interna.</p>
+                            {bancoBloqueado && <div role="alert" className="gelia-facturas-alert mt-3"><strong>No se puede facturar el pago recibido en {bancoSeleccionado.nombre}.</strong><p className="mt-1 mb-0">{bancoSeleccionado.motivo_bloqueo_facturacion || 'Solicita una alternativa de pago.'} Puedes conservar el borrador; el envío a revisión está bloqueado.</p></div>}
+                            {errors.catalogo_banco_id && <p role="alert" className="text-sm theme-text-peligro mt-2">{errors.catalogo_banco_id}</p>}
+                            {bancos.length === 0 && <p className="text-sm theme-text-muted mt-2">{bancosConfigurados ? 'No hay bancos disponibles para tu departamento. Solicita la configuración del catálogo antes de enviar.' : 'El registro del banco estará disponible al activar la actualización. Puedes continuar con la solicitud.'}</p>}
+                        </div>
                     <div className={`space-y-2 ${wrapCampoFactura('vouchers', camposIncorrectos, factura)}`}>
                     <ZonaAdjuntoVoucher
                         vouchers={vouchers}
                         onChange={setVouchers}
+                        disabled={processing || generandoEnlace}
+                        onBusyChange={setAdjuntosProcesando}
                         error={voucherError}
                         existentes={vouchersExistentesUi}
                         onQuitarExistente={(id) => setVouchersConservarIds(prev => prev.filter(x => x !== id))}
                     />
                     </div>
+                    </section>
 
                     <div className={`space-y-2 ${wrapCampoFactura('observaciones_vendedor', camposIncorrectos, factura)}`}>
-                        <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Observaciones_</label>
+                        <label htmlFor="factura-observaciones" className="theme-label">Observaciones (opcional)</label>
                         <textarea
+                            id="factura-observaciones"
+                            name="observaciones_vendedor"
+                            maxLength={2000}
                             rows={3}
                             value={data.observaciones_vendedor}
                             onChange={e => setData('observaciones_vendedor', e.target.value)}
@@ -1299,7 +1333,8 @@ export default function ModalFormFactura({ onClose, onExito, onBorradorCreado, m
 
                     {errors.borrador && <p className="text-xs text-red-500">{errors.borrador}</p>}
 
-                    <div className="flex flex-col gap-2">
+                    </div>
+                    <div className="gelia-modal-footer gelia-facturas-actions p-5 md:p-6 flex flex-col gap-2">
                         {(!modoEdicion || trabajandoBorrador) && (
                             <button
                                 type="button"
@@ -1307,7 +1342,7 @@ export default function ModalFormFactura({ onClose, onExito, onBorradorCreado, m
                                 onClick={guardarBorrador}
                                 className={`${BTN_SECONDARY} w-full !py-4 disabled:opacity-50`}
                             >
-                                {processing ? 'Guardando…' : (pedirFormulario ? 'Guardar borrador + generar link' : 'Guardar borrador')}
+                                {processing ? 'Guardando…' : (pedirFormulario ? 'Guardar y generar enlace' : 'Guardar borrador')}
                             </button>
                         )}
                         <button
@@ -1321,8 +1356,10 @@ export default function ModalFormFactura({ onClose, onExito, onBorradorCreado, m
                                     ? 'Reenviar corrección'
                                     : 'Enviar a encargada')}
                         </button>
+                        {bancosConfigurados && !data.catalogo_banco_id && <p className="text-xs theme-text-muted m-0">Selecciona el banco receptor para enviar la solicitud.</p>}
+                        {totalVouchers === 0 && <p className="text-xs theme-text-muted m-0">Adjunta al menos un comprobante para enviar. Puedes guardar el borrador sin archivos.</p>}
                         {formPendiente && (
-                            <p className="text-[10px] font-bold theme-text-muted text-center m-0">
+                            <p className="text-xs font-bold theme-text-muted text-center m-0">
                                 Espere a que respondan el formulario fiscal
                             </p>
                         )}

@@ -27,6 +27,7 @@ class RecepcionFisicaResguardoPdvController extends Controller
             $user,
             (int) $datos['version'],
             (string) $datos['idempotency_key'],
+            array_key_exists('piezas', $datos) ? $datos['piezas'] : null,
         );
 
         return response()->json([

@@ -43,17 +43,19 @@ class SolicitudFacturaController extends Controller
         Gate::authorize('facturas.ver_listado');
 
         $facturas = $listarService->ejecutar(Auth::user(), $request->all());
-        $metricas = $listarService->metricas(Auth::user());
+        $metricas = $listarService->metricas(Auth::user(), $request->all());
 
-        $vendedores = User::permission('facturas.crear')
-            ->orderBy('name')
-            ->get(['id', 'name']);
+        $opciones = $listarService->opcionesFiltros(Auth::user());
+        $usuario = Auth::user();
+        $departamentoBancoId = $usuario->departamentos->first()?->id ?? $usuario->area?->departamento_id;
 
         return Inertia::render('Facturas/Index', [
             'facturas' => $facturas,
             'metricas' => $metricas,
             'filtros' => $request->all(),
-            'vendedores' => $vendedores,
+            ...$opciones,
+            'bancos_facturacion_configurados' => \App\Support\Facturas\BancoFacturacion::configurado(),
+            'bancos' => app(\App\Services\ControlPedidos\BancosDepartamentoService::class)->disponibles($departamentoBancoId)->map->only(['id', 'nombre', 'facturacion_habilitada', 'motivo_bloqueo_facturacion']),
             'estados' => CatalogoEstadoSolicitud::orderBy('id')->get(['id', 'nombre']),
             'catalogos' => $catalogosService->activosParaUi(),
         ]);
@@ -272,7 +274,10 @@ class SolicitudFacturaController extends Controller
         }
 
         $factura->load([
-            'vendedor:id,name',
+            'vendedor:id,name,area_id',
+            'vendedor.area:id,nombre',
+            'departamento:id,nombre',
+            'banco',
             'estado:id,nombre',
             'cliente:id,numero_cliente,nombre,rfc,codigo_postal,regimen_fiscal,correo_electronico,uso_factura,nombre_razon_social,telefono',
             'receptorFiscal:id,codigo_interno,rfc,codigo_postal,regimen_fiscal,correo_electronico,uso_factura,nombre_razon_social,telefono',
@@ -492,6 +497,9 @@ class SolicitudFacturaController extends Controller
             'RFC' => $f->datos_fiscales['rfc'] ?? '',
             'Estado' => $f->estado->nombre ?? '',
             'Vendedor' => $f->vendedor->name ?? '',
+            'Departamento' => $f->departamento->nombre ?? '',
+            'Área principal' => $f->vendedor?->area?->nombre ?? '',
+            'Banco receptor' => $f->banco?->nombre ?? '',
             'Vouchers' => $f->vouchers->count(),
             'PDF Emitido' => $f->tiene_pdf_emitido ? 'Sí' : 'No',
             'XML' => $f->tiene_xml ? 'Sí' : 'No',

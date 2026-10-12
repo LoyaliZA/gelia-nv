@@ -1,4 +1,4 @@
-import SolicitudDialog from '@/Components/Solicitudes/SolicitudDialog';
+import SolicitudDialog from './FacturaDialog';
 import React, { useEffect, useMemo } from 'react';
 import { useForm } from '@inertiajs/react';
 import { Save, X } from 'lucide-react';
@@ -121,10 +121,10 @@ export default function ModalEditarDatosFiscales({
             >
                 <div className="p-5 md:p-6 border-b theme-border flex justify-between items-start gap-3 shrink-0">
                     <div className="min-w-0">
-                        <h3 className="text-lg font-black italic uppercase theme-text-main m-0 leading-tight">
+                        <h3 className="text-lg font-semibold   theme-text-main m-0 leading-tight">
                             Datos fiscales
                         </h3>
-                        <p className="text-[10px] font-bold theme-text-muted uppercase tracking-widest mt-1.5 m-0">
+                        <p className="text-xs font-bold theme-text-muted   mt-1.5 m-0">
                             {cliente.numero_cliente} — {cliente.nombre}
                         </p>
                     </div>
@@ -145,9 +145,11 @@ export default function ModalEditarDatosFiscales({
                             const tieneError = Boolean(errors[key]);
                             return (
                                 <div key={key} className={`space-y-1.5 ${opciones ? 'relative z-10' : ''}`}>
-                                    <label className={`${THEME_LABEL} ${tieneError ? '!text-red-500' : ''}`}>{label}</label>
+                                    <label htmlFor={`ModalEditarDatosFiscales-${key}`} className={`${THEME_LABEL} ${tieneError ? '!text-red-500' : ''}`}>{label}</label>
                                     {opciones ? (
                                         <SelectorCatalogoFiscal
+                                            id={`ModalEditarDatosFiscales-${key}`}
+                                            label={label}
                                             opciones={opciones}
                                             value={data[key]}
                                             onChange={(codigo) => {
@@ -165,9 +167,13 @@ export default function ModalEditarDatosFiscales({
                                             }}
                                             disabled={esUsoBloqueado}
                                             invalid={tieneError}
+                                            describedBy={tieneError ? `ModalEditarDatosFiscales-${key}-error` : undefined}
                                         />
                                     ) : (
                                         <input
+                                            id={`ModalEditarDatosFiscales-${key}`}
+                                            name={key}
+                                            aria-describedby={tieneError ? `ModalEditarDatosFiscales-${key}-error` : undefined}
                                             type={key === 'correo_electronico' ? 'email' : 'text'}
                                             value={data[key]}
                                             onChange={(e) => {
@@ -200,11 +206,11 @@ export default function ModalEditarDatosFiscales({
                                         />
                                     )}
                                     {esUsoBloqueado && (
-                                        <p className="text-[10px] font-bold theme-text-muted m-0">
+                                        <p className="text-xs font-bold theme-text-muted m-0">
                                             Fijo por régimen Sueldos y Salarios.
                                         </p>
                                     )}
-                                    {tieneError && <p className="text-xs text-red-500 font-bold m-0">{errors[key]}</p>}
+                                    {tieneError && <p id={`ModalEditarDatosFiscales-${key}-error`} role="alert" className="text-xs text-red-500 font-bold m-0">{errors[key]}</p>}
                                 </div>
                             );
                         })}

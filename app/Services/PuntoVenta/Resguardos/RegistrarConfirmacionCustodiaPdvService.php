@@ -12,6 +12,7 @@ use App\Models\PuntoVenta\ResguardoPdvEvidencia;
 use App\Models\User;
 use App\Services\PuntoVenta\PuntoVentaModulo;
 use App\Support\PuntoVenta\Resguardos\EstadoResguardoPdv;
+use App\Support\PuntoVenta\Resguardos\EvidenciaMinimaRegistroManualPdv;
 use App\Support\PuntoVenta\Resguardos\RutaAlmacenamientoResguardoPdv;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -78,6 +79,7 @@ class RegistrarConfirmacionCustodiaPdvService
                 }
 
                 $this->assertVersionYEstado($resguardo, $versionEsperada);
+                $this->exigirPiezasSiCompleto($resguardo, $actor);
                 $almacen = $this->resolverAlmacenUbicacion($resguardo, $almacenId);
                 $bultosNormalizados = $this->normalizarBultosCustodia($resguardo, $bultos);
 
@@ -372,6 +374,25 @@ class RegistrarConfirmacionCustodiaPdvService
     {
         foreach ($pathsEscritos as $ruta) {
             Storage::disk('local')->delete($ruta);
+        }
+    }
+
+    private function exigirPiezasSiCompleto(ResguardoPdv $resguardo, User $actor): void
+    {
+        if (! $this->alcance->tienePermisoPdv($actor, PuntoVentaModulo::PERMISO_RESGUARDOS_FLUJO_COMPLETO)) {
+            return;
+        }
+
+        if (! EvidenciaMinimaRegistroManualPdv::esManual($resguardo)) {
+            return;
+        }
+
+        $snapshot = is_array($resguardo->snapshot_json) ? $resguardo->snapshot_json : [];
+        $piezas = $snapshot['piezas'] ?? [];
+        if (! is_array($piezas) || $piezas === []) {
+            throw ValidationException::withMessages([
+                'piezas' => 'Registre las piezas del pedido antes de confirmar la custodia.',
+            ]);
         }
     }
 }

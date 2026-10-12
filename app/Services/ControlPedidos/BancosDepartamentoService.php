@@ -38,7 +38,13 @@ class BancosDepartamentoService
     public function guardar(CatalogoBanco $banco, array $datos): CatalogoBanco
     {
         return DB::transaction(function () use ($banco, $datos) {
-            $banco->fill(collect($datos)->only(['nombre', 'activo', 'compartido'])->all())->save();
+            if (! Schema::hasColumn('catalogo_bancos', 'facturacion_habilitada')) {
+                if (array_key_exists('facturacion_habilitada', $datos) && ! $datos['facturacion_habilitada']) {
+                    throw ValidationException::withMessages(['facturacion_habilitada' => 'Aplique la actualización de bancos de Facturas antes de configurar un bloqueo.']);
+                }
+                unset($datos['facturacion_habilitada'], $datos['motivo_bloqueo_facturacion']);
+            }
+            $banco->fill(collect($datos)->only(['nombre', 'activo', 'compartido', 'facturacion_habilitada', 'motivo_bloqueo_facturacion'])->all())->save();
             if (array_key_exists('departamento_ids', $datos)) {
                 $banco->departamentos()->delete();
                 foreach (array_unique($datos['departamento_ids']) as $orden => $id) {

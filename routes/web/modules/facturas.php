@@ -49,7 +49,7 @@ Route::prefix('facturas')->name('facturas.')->group(function () {
         ->put('/{factura}/verificar', [SolicitudFacturaController::class, 'verificar'])
         ->name('verificar');
 
-    Route::middleware(['can:facturas.eliminar'])
-        ->delete('/{factura}', [SolicitudFacturaController::class, 'destroy'])
+    // The controller also authorizes the seller deleting their own draft.
+    Route::delete('/{factura}', [SolicitudFacturaController::class, 'destroy'])
         ->name('destroy');
 });

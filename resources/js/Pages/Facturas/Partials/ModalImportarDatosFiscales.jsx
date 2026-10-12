@@ -34,17 +34,17 @@ function Resumen({ stats }) {
             <div className={`grid ${creados !== null ? 'grid-cols-3' : 'grid-cols-2'} gap-3`}>
                 {creados !== null && (
                     <div className="theme-element border theme-border rounded-xl p-3 text-center">
-                        <p className="text-2xl font-black theme-text-main m-0">{creados}</p>
-                        <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted m-0 mt-1">Creados</p>
+                        <p className="text-2xl font-semibold theme-text-main m-0">{creados}</p>
+                        <p className="text-xs font-semibold   theme-text-muted m-0 mt-1">Creados</p>
                     </div>
                 )}
                 <div className="theme-element border theme-border rounded-xl p-3 text-center">
-                    <p className="text-2xl font-black theme-text-main m-0">{actualizados}</p>
-                    <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted m-0 mt-1">Actualizados</p>
+                    <p className="text-2xl font-semibold theme-text-main m-0">{actualizados}</p>
+                    <p className="text-xs font-semibold   theme-text-muted m-0 mt-1">Actualizados</p>
                 </div>
                 <div className="theme-element border theme-border rounded-xl p-3 text-center">
-                    <p className={`text-2xl font-black m-0 ${omitidos > 0 ? 'text-amber-600 dark:text-amber-400' : 'theme-text-main'}`}>{omitidos}</p>
-                    <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted m-0 mt-1">Omitidos</p>
+                    <p className={`text-2xl font-semibold m-0 ${omitidos > 0 ? 'text-amber-600 dark:text-amber-400' : 'theme-text-main'}`}>{omitidos}</p>
+                    <p className="text-xs font-semibold   theme-text-muted m-0 mt-1">Omitidos</p>
                 </div>
             </div>
 
@@ -52,19 +52,19 @@ function Resumen({ stats }) {
                 <div className="space-y-2">
                     <div className="flex items-center gap-2 text-amber-500 dark:text-amber-400">
                         <AlertTriangle className="w-4 h-4 shrink-0" />
-                        <p className="text-[9px] font-black uppercase tracking-widest m-0">
+                        <p className="text-xs font-semibold   m-0">
                             {errores.length} fila(s) con errores
                         </p>
                     </div>
                     <ul className="max-h-40 overflow-y-auto space-y-1 m-0 p-0 list-none">
                         {errores.slice(0, 20).map((msg, i) => (
-                            <li key={i} className="flex items-start gap-2 text-[10px] theme-text-muted font-bold px-2 py-1.5 theme-element rounded-lg border theme-border">
+                            <li key={i} className="flex items-start gap-2 text-xs theme-text-muted font-bold px-2 py-1.5 theme-element rounded-lg border theme-border">
                                 <FileWarning className="w-3.5 h-3.5 shrink-0 mt-0.5 text-amber-500" />
                                 {msg}
                             </li>
                         ))}
                         {errores.length > 20 && (
-                            <li className="text-[10px] theme-text-muted italic px-2">
+                            <li className="text-xs theme-text-muted  px-2">
                                 … y {errores.length - 20} errores más.
                             </li>
                         )}
@@ -113,7 +113,7 @@ export default function ModalImportarDatosFiscales({ tipo = 'clientes', onClose 
                     onClick={(e) => e.stopPropagation()}
                 >
                     <div className="p-6 border-b theme-border flex justify-between items-center sticky top-0 theme-surface z-10">
-                        <h2 className="text-xl font-black italic uppercase theme-text-main m-0 flex items-center gap-2">
+                        <h2 className="text-xl font-semibold   theme-text-main m-0 flex items-center gap-2">
                             <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
                             Resumen de importación
                         </h2>
@@ -126,7 +126,7 @@ export default function ModalImportarDatosFiscales({ tipo = 'clientes', onClose 
                         <button
                             type="button"
                             onClick={onClose}
-                            className="w-full py-3 text-[11px] font-black uppercase rounded-xl theme-element border theme-border theme-text-main"
+                            className="w-full py-3 text-xs font-semibold  rounded-xl theme-element border theme-border theme-text-main"
                         >
                             Cerrar
                         </button>
@@ -144,7 +144,7 @@ export default function ModalImportarDatosFiscales({ tipo = 'clientes', onClose 
                 onClick={(e) => e.stopPropagation()}
             >
                 <div className="flex justify-between items-center gap-3 p-5 md:p-6 border-b theme-border shrink-0">
-                    <h2 className="text-lg md:text-xl font-black italic uppercase theme-text-main m-0 flex items-center gap-2 leading-tight">
+                    <h2 className="text-lg md:text-xl font-semibold   theme-text-main m-0 flex items-center gap-2 leading-tight">
                         <FileSpreadsheet className="w-5 h-5 shrink-0" style={{ color: 'var(--color-primario)' }} />
                         {cfg.titulo}
                     </h2>
@@ -158,7 +158,7 @@ export default function ModalImportarDatosFiscales({ tipo = 'clientes', onClose 
                         <button
                             type="button"
                             onClick={descargarPlantilla}
-                            className="px-4 py-2 text-[10px] font-black uppercase tracking-widest theme-element border theme-border rounded-xl hover:shadow-md flex items-center gap-2 theme-text-main"
+                            className="px-4 py-2 text-xs font-semibold   theme-element border theme-border rounded-xl hover:shadow-md flex items-center gap-2 theme-text-main"
                         >
                             <FileSpreadsheet className="w-4 h-4" />
                             Descargar plantilla
@@ -180,9 +180,9 @@ export default function ModalImportarDatosFiscales({ tipo = 'clientes', onClose 
                             style={{ borderColor: dragActive ? 'var(--color-primario)' : undefined }}
                         >
                             <UploadCloud className="w-8 h-8 theme-text-muted mb-2" />
-                            <p className="text-xs font-black theme-text-main uppercase m-0">Suelta el archivo aquí</p>
-                            <p className="text-[10px] theme-text-muted mt-1 m-0">Formatos: .csv, .xlsx, .xls</p>
-                            <span className="text-[9px] font-black uppercase tracking-widest mt-2" style={{ color: 'var(--color-primario)' }}>
+                            <p className="text-xs font-semibold theme-text-main  m-0">Suelta el archivo aquí</p>
+                            <p className="text-xs theme-text-muted mt-1 m-0">Formatos: .csv, .xlsx, .xls</p>
+                            <span className="text-xs font-semibold   mt-2" style={{ color: 'var(--color-primario)' }}>
                                 O examinar archivos
                             </span>
                             <input
@@ -194,13 +194,13 @@ export default function ModalImportarDatosFiscales({ tipo = 'clientes', onClose 
                         </label>
 
                         {importForm.errors.archivo && (
-                            <p className="text-red-500 dark:text-red-400 text-[10px] font-bold text-center">{importForm.errors.archivo}</p>
+                            <p className="text-red-500 dark:text-red-400 text-xs font-bold text-center">{importForm.errors.archivo}</p>
                         )}
 
                         {importForm.data.archivo && (
                             <div className="flex items-center gap-3 p-3 theme-element border border-emerald-500/30 rounded-xl">
                                 <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                                <span className="text-[10px] font-bold theme-text-main truncate">{importForm.data.archivo.name}</span>
+                                <span className="text-xs font-bold theme-text-main truncate">{importForm.data.archivo.name}</span>
                             </div>
                         )}
                     </form>
@@ -208,9 +208,9 @@ export default function ModalImportarDatosFiscales({ tipo = 'clientes', onClose 
                     <div className="mt-2 pt-4 border-t theme-border space-y-3">
                         <div className="flex items-center gap-2 text-amber-500 dark:text-amber-400">
                             <FileSpreadsheet className="w-4 h-4" />
-                            <p className="text-[9px] font-black uppercase tracking-widest italic m-0">Cómo importar_</p>
+                            <p className="text-xs font-semibold    m-0">Cómo importar</p>
                         </div>
-                        <ol className="text-[10px] theme-text-muted font-bold leading-relaxed space-y-1 list-decimal list-inside m-0 p-0">
+                        <ol className="text-xs theme-text-muted font-bold leading-relaxed space-y-1 list-decimal list-inside m-0 p-0">
                             <li>Descarga la plantilla (hoja Datos + hoja Catalogos con los códigos vigentes).</li>
                             <li>Llena la hoja Datos sin renombrar las columnas, empezando por <strong className="theme-text-main">{cfg.primeraColumna}</strong>.</li>
                             <li>Régimen fiscal y Uso de factura aceptan el código SAT o el nombre exacto de la hoja Catalogos.</li>

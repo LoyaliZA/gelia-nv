@@ -1,0 +1,226 @@
+:where(.gelia-facturas-workspace, .gelia-facturas-dialog-overlay, .gelia-facturas-public) {
+    font-family: var(--font-principal), sans-serif;
+    line-height: 1.5;
+}
+
+.gelia-facturas-workspace .theme-card,
+.gelia-facturas-public .theme-card {
+    border-radius: var(--facturas-radius);
+}
+
+.gelia-facturas-workspace h1 {
+    font-size: clamp(1.5rem, 3vw, 2rem);
+    font-weight: 650;
+    font-style: normal;
+    text-transform: none;
+    letter-spacing: normal;
+}
+
+.gelia-facturas-workspace > .gelia-facturas-header {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: space-between;
+    gap: 1.25rem;
+    padding: clamp(1rem, 2vw, 1.5rem);
+    border: 1px solid var(--theme-border);
+    background-color: var(--theme-surface-solid);
+}
+
+.gelia-facturas-header-copy {
+    min-width: 0;
+}
+
+.gelia-facturas-header-copy h1 {
+    font-size: clamp(1.5rem, 2vw, 1.875rem);
+    line-height: 1.25;
+}
+
+.gelia-facturas-header-copy p {
+    max-width: 70ch;
+    overflow-wrap: anywhere;
+}
+
+.gelia-facturas-header-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.625rem;
+    flex-shrink: 0;
+}
+
+.gelia-facturas-header-actions > :is(a, button) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    line-height: 1.25;
+    white-space: nowrap;
+}
+
+@media (width >= 1024px) {
+    .gelia-facturas-workspace > .gelia-facturas-header {
+        flex-direction: row;
+        align-items: center;
+    }
+}
+
+.gelia-facturas-dialog-overlay .gelia-workflow-dialog > .gelia-modal-shell {
+    border-radius: var(--facturas-radius);
+    overflow: hidden;
+    background: var(--theme-surface-solid);
+}
+
+.gelia-facturas-dialog-overlay h2 {
+    font-weight: 650;
+    font-style: normal;
+    text-transform: none;
+    letter-spacing: normal;
+    text-wrap: balance;
+}
+
+:where(.gelia-facturas-workspace, .gelia-facturas-dialog-overlay, .gelia-facturas-public) .theme-label {
+    font-size: var(--facturas-label-size);
+    font-weight: 550;
+    text-transform: none;
+    letter-spacing: normal;
+}
+
+:where(.gelia-facturas-workspace, .gelia-facturas-dialog-overlay, .gelia-facturas-public) :is(button, a, input, select, textarea):focus-visible,
+.gelia-fiscal-popup :is(button, input):focus-visible {
+    outline: 2px solid var(--color-primario);
+    outline-offset: 3px;
+}
+
+:where(.gelia-facturas-workspace, .gelia-facturas-dialog-overlay, .gelia-facturas-public) :is(button, a) {
+    touch-action: manipulation;
+}
+
+.gelia-factura-card {
+    box-shadow: none;
+}
+
+.gelia-factura-card h3 {
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.gelia-factura-card :is(button, a) {
+    min-height: 40px;
+    font-size: 0.8125rem;
+    font-weight: 550;
+    text-transform: none;
+    letter-spacing: normal;
+}
+
+.gelia-facturas-card-context {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+    padding: 0.875rem;
+    border-radius: 0.75rem;
+    background: var(--facturas-section-bg);
+}
+
+.gelia-facturas-card-context > div:last-child {
+    grid-column: 1 / -1;
+}
+
+.gelia-facturas-card-context dt {
+    font-size: 0.75rem;
+    color: var(--theme-text-muted);
+}
+
+.gelia-facturas-card-context dd {
+    margin: 0.125rem 0 0;
+    font-size: 0.8125rem;
+    color: var(--theme-text-main);
+    overflow-wrap: anywhere;
+}
+
+.gelia-facturas-section {
+    padding: 1rem;
+    border: 1px solid var(--theme-border);
+    border-radius: 0.75rem;
+    background: var(--facturas-section-bg);
+}
+
+.gelia-facturas-alert {
+    padding: 0.875rem 1rem;
+    border: 1px solid color-mix(in srgb, var(--color-peligro) 35%, var(--theme-border));
+    border-radius: 0.75rem;
+    background: color-mix(in srgb, var(--color-peligro) 7%, var(--theme-surface-solid));
+    color: var(--theme-text-main);
+    font-size: 0.875rem;
+}
+
+.gelia-facturas-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.625rem;
+    background: var(--theme-surface-solid);
+}
+
+.gelia-facturas-actions p {
+    grid-column: 1 / -1;
+    text-align: left;
+}
+
+.gelia-facturas-filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.625rem;
+    border: 1px solid var(--theme-border);
+    border-radius: 0.5rem;
+    font-size: 0.8125rem;
+    color: var(--theme-text-main);
+    background: var(--theme-element-bg);
+    overflow-wrap: anywhere;
+    text-align: left;
+}
+
+.gelia-facturas-filter-chip:hover {
+    border-color: var(--color-primario);
+}
+
+.gelia-fiscal-option:hover,
+.gelia-fiscal-option[data-highlighted='true'] {
+    background: color-mix(in srgb, var(--color-primario) 12%, var(--theme-surface-solid));
+}
+
+.gelia-facturas-public .theme-input,
+.gelia-facturas-public .theme-select {
+    font-size: 1rem;
+}
+
+@media (width <= 640px) {
+    .gelia-facturas-actions {
+        grid-template-columns: 1fr;
+        padding: 0.875rem 1rem calc(0.875rem + env(safe-area-inset-bottom, 0px));
+    }
+
+    .gelia-facturas-dialog-overlay {
+        padding: 0.5rem;
+    }
+
+    .gelia-facturas-dialog-overlay .gelia-workflow-dialog > .gelia-modal-shell {
+        max-height: calc(100dvh - 1rem);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    :where(.gelia-facturas-workspace, .gelia-facturas-dialog-overlay, .gelia-facturas-public) *,
+    .gelia-fiscal-popup * {
+        animation: none;
+        transition: none;
+    }
+}
+
+
+:is(.gelia-facturas-workspace, .gelia-facturas-dialog-overlay, .gelia-facturas-public) :is(.theme-btn-primary, .theme-btn-secondary, .theme-btn-danger) {
+    min-height: 44px;
+    font-weight: 550;
+    text-transform: none;
+    letter-spacing: normal;
+}

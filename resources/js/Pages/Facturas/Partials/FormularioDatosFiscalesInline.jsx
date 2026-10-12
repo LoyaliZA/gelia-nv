@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useId } from 'react';
 import { THEME_INPUT, THEME_LABEL } from '../../../utils/geliaTheme';
 import SelectorCatalogoFiscal from '../../../Components/Facturas/SelectorCatalogoFiscal';
 import {
@@ -21,6 +21,7 @@ export default function FormularioDatosFiscalesInline({
     factura = null,
     errors = {},
 }) {
+    const id = useId();
     const visibles = camposVisibles?.length
         ? CAMPOS_DATOS_FISCALES.filter((c) => camposVisibles.includes(c.clave))
         : CAMPOS_DATOS_FISCALES;
@@ -52,16 +53,18 @@ export default function FormularioDatosFiscalesInline({
 
                 return (
                     <div key={clave} className="space-y-1" style={wrapStyle}>
-                        <label className={`${THEME_LABEL} ${tieneError ? '!text-red-500' : ''}`}>
+                        <label htmlFor={`${id}-${clave}`} className={`${THEME_LABEL} ${tieneError ? '!text-red-500' : ''}`}>
                             {label}
                             {estadoWrap === 'corregido' && (
-                                <span className="ml-2 normal-case tracking-normal font-black" style={{ color: '#4ade80' }}>
+                                <span className="ml-2 normal-case tracking-normal font-semibold" style={{ color: 'var(--color-exito)' }}>
                                     Corregido
                                 </span>
                             )}
                         </label>
                         {opciones?.length ? (
                             <SelectorCatalogoFiscal
+                                id={`${id}-${clave}`}
+                                label={label}
                                 opciones={opciones}
                                 value={valores[clave] || ''}
                                 onChange={(codigo) => {
@@ -78,9 +81,15 @@ export default function FormularioDatosFiscalesInline({
                                 }}
                                 disabled={clave === 'uso_factura' && usoBloqueado}
                                 invalid={tieneError}
+                                describedBy={tieneError ? `${id}-${clave}-error` : undefined}
                             />
                         ) : (
                             <input
+                                id={`${id}-${clave}`}
+                                name={clave}
+                                aria-invalid={tieneError}
+                                aria-describedby={tieneError ? `${id}-${clave}-error` : undefined}
+                                inputMode={['telefono', 'codigo_postal'].includes(clave) ? 'numeric' : undefined}
                                 type={clave === 'correo_electronico' ? 'email' : 'text'}
                                 value={valores[clave] || ''}
                                 onChange={(e) => {
@@ -94,7 +103,7 @@ export default function FormularioDatosFiscalesInline({
                                 className={`${THEME_INPUT} ${tieneError ? INPUT_ERROR : ''}`}
                             />
                         )}
-                        {tieneError && <p className="text-xs text-red-500 font-bold m-0">{errors[clave]}</p>}
+                        {tieneError && <p id={`${id}-${clave}-error`} role="alert" className="text-xs text-red-500 font-bold m-0">{errors[clave]}</p>}
                     </div>
                 );
             })}

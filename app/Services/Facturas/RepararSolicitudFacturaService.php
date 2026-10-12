@@ -42,10 +42,14 @@ class RepararSolicitudFacturaService
                 abort(403, 'Solo quien creó la solicitud puede repararla.');
             }
 
+            $bancoId = array_key_exists('catalogo_banco_id', $datos) ? ($datos['catalogo_banco_id'] ?: null) : $solicitud->catalogo_banco_id;
+            \App\Support\Facturas\BancoFacturacion::validar($bancoId, $solicitud->departamento_id, true, $solicitud->catalogo_banco_id !== null);
+
             $estadoAnteriorId = $solicitud->catalogo_estado_solicitud_id;
             $corregidos = [];
 
             $updates = [
+                ...(\App\Support\Facturas\BancoFacturacion::configurado() ? ['catalogo_banco_id' => $bancoId] : []),
                 'razon_social' => $datos['razon_social'],
                 'observaciones_vendedor' => $datos['observaciones_vendedor'] ?? null,
                 'motivo_respuesta' => null,

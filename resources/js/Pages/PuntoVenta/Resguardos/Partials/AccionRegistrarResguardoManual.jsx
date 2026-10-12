@@ -5,7 +5,7 @@ import { THEME_BTN_PRIMARY, THEME_BTN_SECONDARY, THEME_MODAL_OVERLAY, THEME_MODA
 import FormularioRegistroManualResguardo from './FormularioRegistroManualResguardo';
 import useRegistroManualResguardo from './useRegistroManualResguardo';
 
-export default function AccionRegistrarResguardoManual({ habilitado = false, origenes = [], onExito }) {
+export default function AccionRegistrarResguardoManual({ habilitado = false, origenes = [], flujoCompleto = false, onExito }) {
     const [modalAbierto, setModalAbierto] = useState(false);
 
     const { enviando, error, registrar, setError } = useRegistroManualResguardo({
@@ -52,7 +52,9 @@ export default function AccionRegistrarResguardoManual({ habilitado = false, ori
                                     Registrar resguardo
                                 </h3>
                                 <p className="text-xs theme-text-muted m-0 mt-1">
-                                    Alta sin pedido. Con ticket y foto del paquete queda en recepción, sin otra confirmación de gerencia.
+                                    {flujoCompleto
+                                        ? 'Alta con piezas. Queda en Confirmar llegada. Ticket y foto se reutilizan después.'
+                                        : 'Alta sin pedido. Con ticket y foto del paquete queda en recepción, sin otra confirmación de gerencia.'}
                                 </p>
                             </div>
                             <button
@@ -71,6 +73,7 @@ export default function AccionRegistrarResguardoManual({ habilitado = false, ori
                                 enviando={enviando}
                                 error={error}
                                 origenes={origenes}
+                                flujoCompleto={flujoCompleto}
                                 onEnviar={registrar}
                                 onCancelar={cerrar}
                             />

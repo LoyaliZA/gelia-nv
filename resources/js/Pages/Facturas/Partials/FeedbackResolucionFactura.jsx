@@ -52,7 +52,7 @@ export default function FeedbackResolucionFactura({ factura }) {
                 <div className="p-3 rounded-2xl border theme-element theme-border flex items-start gap-2">
                     <MessageSquare className="w-4 h-4 theme-text-muted mt-0.5 shrink-0" />
                     <div className="min-w-0">
-                        <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted mb-0.5 m-0">Nota de vendedora</p>
+                        <p className="text-xs font-semibold   theme-text-muted mb-0.5 m-0">Nota de vendedora</p>
                         <p className="text-xs font-bold theme-text-main leading-relaxed m-0 break-words">{factura.observaciones_vendedor}</p>
                     </div>
                 </div>
@@ -63,7 +63,7 @@ export default function FeedbackResolucionFactura({ factura }) {
                     <div className="flex items-start gap-2 min-w-0">
                         <Icono className={`w-4 h-4 shrink-0 mt-0.5 ${colorIcono}`} />
                         <div className="flex-1 min-w-0">
-                            <p className={`text-[9px] font-black uppercase tracking-widest mb-0.5 m-0 ${colorTexto}`}>
+                            <p className={`text-xs font-semibold   mb-0.5 m-0 ${colorTexto}`}>
                                 {titulo}
                             </p>
                             {motivo && (
@@ -74,14 +74,14 @@ export default function FeedbackResolucionFactura({ factura }) {
                             {camposIncorrectos.length > 0 && (
                                 <div className="flex flex-wrap gap-1 mt-2">
                                     {camposIncorrectos.map((c) => (
-                                        <span key={c} className="px-2 py-0.5 rounded-lg text-[8px] font-black uppercase bg-red-500/15 text-red-700 dark:text-red-300 border border-red-500/25">
+                                        <span key={c} className="px-2 py-0.5 rounded-lg text-xs font-semibold  bg-red-500/15 text-red-700 dark:text-red-300 border border-red-500/25">
                                             {etiquetaCampoError(c)}
                                         </span>
                                     ))}
                                 </div>
                             )}
                             {factura.respondida_por?.name && esAprobada && (
-                                <p className="text-[9px] font-bold theme-text-muted mt-1 m-0">
+                                <p className="text-xs font-bold theme-text-muted mt-1 m-0">
                                     Por: {factura.respondida_por.name}
                                 </p>
                             )}
@@ -101,7 +101,7 @@ export default function FeedbackResolucionFactura({ factura }) {
                                     className={chipEvidencia}
                                 >
                                     <FileText className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--color-primario)' }} />
-                                    <span className="text-[9px] font-black uppercase tracking-widest" style={{ color: 'var(--color-primario)' }}>
+                                    <span className="text-xs font-semibold  " style={{ color: 'var(--color-primario)' }}>
                                         PDF {cantidadPdfs > 1 ? i + 1 : 'emitido'}
                                     </span>
                                 </a>

@@ -10,6 +10,7 @@ import TarjetaFactura from './Partials/TarjetaFactura';
 import ModalFormFactura from './Partials/ModalFormFactura';
 import ModalResponderFactura from './Partials/ModalResponderFactura';
 import ModalExpedienteFactura from './Partials/ModalExpedienteFactura';
+import ModalEliminarFactura from './Partials/ModalEliminarFactura';
 import { BTN_PRIMARY, BTN_SECONDARY } from './Partials/facturasStyles';
 import { filtrarFacturasPorTab, idEstadoPorNombre } from './Partials/facturasFiltros';
 import GeliaPageShell from '../../Components/GeliaPageShell';
@@ -18,7 +19,7 @@ import { puedePermiso } from '../../utils/permisos';
 import { recargarModuloInertia } from '../../utils/recargarModuloInertia';
 import useSolicitudRealtime from '../../hooks/useSolicitudRealtime';
 
-const PROPS_LISTADO = ['facturas', 'metricas', 'filtros'];
+const PROPS_LISTADO = ['facturas', 'metricas', 'filtros', 'vendedores', 'departamentos', 'areas'];
 
 const OPCIONES_LISTADO = {
     preserveState: true,
@@ -28,7 +29,7 @@ const OPCIONES_LISTADO = {
     only: PROPS_LISTADO,
 };
 
-export default function Index({ auth, facturas, metricas, filtros, vendedores, estados = [], catalogos = { regimen_fiscal: [], uso_cfdi: [] } }) {
+export default function Index({ auth, facturas, metricas, filtros = {}, vendedores, departamentos = [], areas = [], bancos = [], bancos_facturacion_configurados = false, estados = [], catalogos = { regimen_fiscal: [], uso_cfdi: [] } }) {
     const puedeCrear = puedePermiso(auth, 'facturas.crear');
     const puedeExportar = puedePermiso(auth, 'facturas.exportar');
     const puedeDatosFiscales = puedePermiso(auth, 'facturas.gestionar_datos_fiscales');
@@ -39,6 +40,7 @@ export default function Index({ auth, facturas, metricas, filtros, vendedores, e
     const [listaCargando, setListaCargando] = useState(false);
     const [modalForm, setModalForm] = useState({ abierto: false, modoEdicion: false, factura: null });
     const [modalRespuesta, setModalRespuesta] = useState({ abierto: false, factura: null, estadoId: null, modo: 'emitir' });
+    const [facturaEliminar, setFacturaEliminar] = useState(null);
     const [modalExpediente, setModalExpediente] = useState({ abierto: false, factura: null });
     const expedienteDesdeEnlaceRef = useRef(false);
     const modalFormRef = useRef(modalForm);
@@ -90,6 +92,10 @@ export default function Index({ auth, facturas, metricas, filtros, vendedores, e
             const p = {
                 q: filtros.q || undefined,
                 vendedor_id: filtros.vendedor_id || undefined,
+                departamento_id: filtros.departamento_id || undefined,
+                area_id: filtros.area_id || undefined,
+                fecha_inicio: filtros.fecha_inicio || undefined,
+                fecha_fin: filtros.fecha_fin || undefined,
                 tab: tabActiva,
                 page: 1,
                 ...extra,
@@ -98,7 +104,7 @@ export default function Index({ auth, facturas, metricas, filtros, vendedores, e
                 Object.entries(p).filter(([, v]) => v !== '' && v !== null && v !== undefined)
             );
         },
-        [filtros.q, filtros.vendedor_id, tabActiva]
+        [filtros, tabActiva]
     );
 
     const recargarListado = useCallback(
@@ -153,21 +159,6 @@ export default function Index({ auth, facturas, metricas, filtros, vendedores, e
         });
     };
 
-    const eliminar = useCallback((factura) => {
-        const motivo = window.prompt('Motivo de la eliminación (mínimo 5 caracteres):');
-        if (motivo !== null) {
-            if (motivo.trim().length >= 5) {
-                router.delete(route('facturas.destroy', factura.id), {
-                    data: { motivo },
-                    preserveScroll: true,
-                    onSuccess: recargarTrasAccion,
-                });
-            } else {
-                alert('El motivo debe tener al menos 5 caracteres.');
-            }
-        }
-    }, [recargarTrasAccion]);
-
     const listaServidor = facturas?.data || [];
 
     /** Vista optimista: filtra la página actual mientras llega la pestaña correcta del servidor. */
@@ -183,20 +174,20 @@ export default function Index({ auth, facturas, metricas, filtros, vendedores, e
         [filtros, tabActiva]
     );
 
-    const cardHeader = geliaCardClass('p-6 md:p-10 flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-6');
+    const cardHeader = geliaCardClass('gelia-facturas-header');
 
     return (
         <AppLayout>
             <Head title="Solicitudes de Facturas" />
 
-            <GeliaPageShell className="gelia-solicitudes-workspace space-y-5">
-                <p className="sr-only" role="status">{listaCargando ? 'Actualizando solicitudes…' : `${facturas?.total ?? listaVisible.length} solicitudes disponibles`}</p>
+            <p className="sr-only" role="status">{listaCargando ? 'Actualizando solicitudes…' : `${facturas?.total ?? listaVisible.length} solicitudes disponibles`}</p>
+            <GeliaPageShell className="gelia-solicitudes-workspace gelia-facturas-workspace space-y-5">
                 <header className={cardHeader}>
-                    <div className="min-w-0">
+                    <div className="gelia-facturas-header-copy">
                         <h1 className="m-0 theme-text-main">Facturas</h1>
                         <p className="text-sm theme-text-muted mt-1 mb-0">Gestiona solicitudes de facturación y revisa sus documentos y respuestas.</p>
                     </div>
-                    <div className="flex flex-wrap gap-2 w-full lg:w-auto shrink-0">
+                    <div className="gelia-facturas-header-actions">
                         {puedeDatosFiscales && (
                             <Link href={route('facturas.datos_fiscales.index')} className={BTN_SECONDARY}>
                                 <Database className="w-4 h-4 shrink-0" /> Datos fiscales
@@ -215,11 +206,13 @@ export default function Index({ auth, facturas, metricas, filtros, vendedores, e
                     </div>
                 </header>
 
-                <IndicadoresSolicitudes metricas={metricas} borradores onSeleccionar={cambiarTab} />
+                <div className="space-y-2"><IndicadoresSolicitudes metricas={metricas} borradores onSeleccionar={cambiarTab} /><p className="text-xs theme-text-muted m-0">Resumen de las solicitudes que coinciden con tus filtros, en todos los estados.</p></div>
 
                 <FiltrosFacturas
                     filtros={filtros}
                     vendedores={vendedores}
+                    departamentos={departamentos}
+                    areas={areas}
                     tabActiva={tabActiva}
                     onTabChange={cambiarTab}
                     onAplicarFiltros={recargarListado}
@@ -233,6 +226,7 @@ export default function Index({ auth, facturas, metricas, filtros, vendedores, e
                         <p className="text-[10px] font-bold theme-text-muted uppercase tracking-widest mt-2 m-0">
                             No hay facturas en «{tabActiva.toLowerCase()}» con los filtros actuales
                         </p>
+                        <button type="button" className={`${BTN_SECONDARY} mt-4`} onClick={() => recargarListado({ q: undefined, vendedor_id: undefined, departamento_id: undefined, area_id: undefined, fecha_inicio: undefined, fecha_fin: undefined, tab: 'TODAS' })}>Ver todas las solicitudes</button>
                     </div>
                 ) : (
                     <>
@@ -263,7 +257,7 @@ export default function Index({ auth, facturas, metricas, filtros, vendedores, e
                                             onAprobar={(factura) => setModalRespuesta({ abierto: true, factura, estadoId: idRespondida, modo: 'emitir' })}
                                             onReportar={(factura) => setModalRespuesta({ abierto: true, factura, estadoId: idIncorrecta, modo: 'reportar' })}
                                             onVerificar={verificar}
-                                            onEliminar={eliminar}
+                                            onEliminar={setFacturaEliminar}
                                             onReparar={(factura) => setModalForm({ abierto: true, modoEdicion: true, factura, instanceKey: Date.now() })}
                                             onEditarBorrador={(factura) => setModalForm({ abierto: true, modoEdicion: false, factura, instanceKey: Date.now() })}
                                         />
@@ -277,6 +271,7 @@ export default function Index({ auth, facturas, metricas, filtros, vendedores, e
                     </>
                 )}
             </GeliaPageShell>
+            {facturaEliminar && <ModalEliminarFactura factura={facturaEliminar} onClose={() => setFacturaEliminar(null)} onExito={recargarTrasAccion} />}
             {modalRespuesta.abierto && (
                 <ModalResponderFactura
                     onClose={() => setModalRespuesta({ abierto: false, factura: null, estadoId: null, modo: 'emitir' })}
@@ -310,6 +305,8 @@ export default function Index({ auth, facturas, metricas, filtros, vendedores, e
                     }}
                     modoEdicion={modalForm.modoEdicion}
                     facturaAEditar={modalForm.factura}
+                    bancos={bancos_facturacion_configurados ? bancos : []}
+                    bancosConfigurados={bancos_facturacion_configurados}
                     catalogos={catalogos}
                 />
             )}

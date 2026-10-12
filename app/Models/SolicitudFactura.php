@@ -22,6 +22,7 @@ class SolicitudFactura extends Model
         'folio',
         'vendedor_id',
         'departamento_id',
+        'catalogo_banco_id',
         'cliente_id',
         'destinatario_tipo',
         'receptor_fiscal_id',
@@ -68,6 +69,11 @@ class SolicitudFactura extends Model
     public function departamento(): BelongsTo
     {
         return $this->belongsTo(Departamento::class, 'departamento_id');
+    }
+
+    public function banco(): BelongsTo
+    {
+        return $this->belongsTo(CatalogoBanco::class, 'catalogo_banco_id');
     }
 
     public function cliente(): BelongsTo

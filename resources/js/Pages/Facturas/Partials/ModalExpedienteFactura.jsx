@@ -1,4 +1,4 @@
-import SolicitudDialog from '@/Components/Solicitudes/SolicitudDialog';
+import SolicitudDialog from './FacturaDialog';
 import React, { useEffect, useState } from 'react';
 import { X, FileSpreadsheet, Download, ChevronLeft, ChevronRight, Copy, Check, Loader2, Receipt, AlertOctagon, RefreshCw } from 'lucide-react';
 import { ACCENT, BTN_PRIMARY, BTN_SECONDARY, esImagenVoucher, esPdfVoucher, urlArchivoFactura, nombreArchivoFacturaPdf, receptorFiscalDeFactura } from './facturasStyles';
@@ -142,8 +142,8 @@ export default function ModalExpedienteFactura({ onClose, factura: facturaInicia
                     <div className="flex items-center gap-3 min-w-0">
                         <Receipt className="w-7 h-7 shrink-0" style={{ color: ACCENT }} />
                         <div className="min-w-0">
-                            <h3 className="text-lg font-black italic uppercase theme-text-main m-0 leading-tight">Expediente fiscal</h3>
-                            <p className="text-[10px] font-mono font-bold theme-text-muted mt-1 m-0">{factura?.folio || facturaInicial.folio}</p>
+                            <h2 className="text-lg font-semibold theme-text-main m-0 leading-tight">Expediente fiscal</h2>
+                            <p className="text-xs font-mono font-bold theme-text-muted mt-1 m-0">{factura?.folio || facturaInicial.folio}</p>
                         </div>
                     </div>
                     <button
@@ -158,7 +158,7 @@ export default function ModalExpedienteFactura({ onClose, factura: facturaInicia
 
                 <div className="gelia-modal-body p-5 md:p-6 overflow-y-auto custom-scrollbar flex-1 min-h-0">
                     {cargandoFactura && (
-                        <div className="flex items-center gap-2 p-4 text-xs font-bold theme-text-muted italic mb-4">
+                        <div className="flex items-center gap-2 p-4 text-xs font-bold theme-text-muted  mb-4">
                             <Loader2 className="w-4 h-4 animate-spin" /> Cargando archivos adjuntos…
                         </div>
                     )}
@@ -167,38 +167,44 @@ export default function ModalExpedienteFactura({ onClose, factura: facturaInicia
                         <p className="text-xs font-bold text-red-600 dark:text-red-400 p-4 rounded-2xl border border-red-500/20 bg-red-500/5 mb-4">{errorFactura}</p>
                     )}
 
+                    {!cargandoFactura && factura && <dl className="gelia-respuesta-contexto mb-5">
+                        <div><dt>Solicitante</dt><dd>{factura.vendedor?.name || 'Sin solicitante'}</dd></div>
+                        <div><dt>Banco receptor</dt><dd>{factura.banco?.nombre || 'Sin banco registrado'}</dd></div>
+                        <div><dt>Departamento</dt><dd>{factura.departamento?.nombre || 'Sin departamento'}</dd></div>
+                        <div><dt>Área principal</dt><dd>{factura.vendedor?.area?.nombre || 'Sin área asignada'}</dd></div>
+                    </dl>}
                     {!cargandoFactura && factura && (
                         <>
                             <div className="p-4 rounded-2xl border theme-border mb-6 theme-element space-y-3">
                                 {factura.destinatario_tipo === 'tercero' && factura.cliente ? (
                                     <>
                                         <div>
-                                            <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted mb-1">Quién solicita (cliente de cuenta)</p>
-                                            <p className="text-sm font-black theme-text-main m-0">
+                                            <p className="text-xs font-semibold   theme-text-muted mb-1">Quién solicita (cliente de cuenta)</p>
+                                            <p className="text-sm font-semibold theme-text-main m-0">
                                                 {factura.cliente.numero_cliente} — {factura.cliente.nombre}
                                             </p>
                                         </div>
                                         <div>
-                                            <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted mb-1">Razón social a facturar (tercero)</p>
-                                            <p className="text-sm font-black theme-text-main m-0">
+                                            <p className="text-xs font-semibold   theme-text-muted mb-1">Razón social a facturar (tercero)</p>
+                                            <p className="text-sm font-semibold theme-text-main m-0">
                                                 {factura.razon_social || '—'}
                                                 {receptorFiscalDeFactura(factura)?.codigo_interno && (
-                                                    <span className="ml-2 font-mono font-black" style={{ color: ACCENT }}>
+                                                    <span className="ml-2 font-mono font-semibold" style={{ color: ACCENT }}>
                                                         {receptorFiscalDeFactura(factura).codigo_interno}
                                                     </span>
                                                 )}
                                             </p>
-                                            <p className="text-[10px] theme-text-muted mt-1 m-0">Solo aplica a esta solicitud; no modifica los fiscales del cliente de cuenta.</p>
+                                            <p className="text-xs theme-text-muted mt-1 m-0">Solo aplica a esta solicitud; no modifica los fiscales del cliente de cuenta.</p>
                                         </div>
                                     </>
                                 ) : (
                                     <div>
-                                        <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted mb-1">Razón Social</p>
-                                        <p className="text-sm font-black theme-text-main m-0">{factura.razon_social || '—'}</p>
+                                        <p className="text-xs font-semibold   theme-text-muted mb-1">Razón Social</p>
+                                        <p className="text-sm font-semibold theme-text-main m-0">{factura.razon_social || '—'}</p>
                                     </div>
                                 )}
                                 {factura.formulario_respondido_at && (
-                                    <p className="text-[10px] font-bold theme-text-muted m-0">
+                                    <p className="text-xs font-bold theme-text-muted m-0">
                                         Formulario fiscal respondido el {new Date(factura.formulario_respondido_at).toLocaleString('es-MX')}
                                         {factura.estado?.nombre === 'Borrador' && !factura.tiene_voucher
                                             ? '. Adjunte el voucher y envíe a encargada.'
@@ -210,7 +216,7 @@ export default function ModalExpedienteFactura({ onClose, factura: facturaInicia
                             <div className="space-y-6">
                                 {((factura.estado?.nombre === 'Incorrecta') || factura.evidencia_error_path) && (
                                     <section>
-                                        <p className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-red-600 dark:text-red-400 mb-3">
+                                        <p className="flex items-center gap-2 text-xs font-semibold   text-red-600 dark:text-red-400 mb-3">
                                             <AlertOctagon className="w-3.5 h-3.5" /> Error Reportado
                                         </p>
                                         {factura.motivo_respuesta && (
@@ -221,7 +227,7 @@ export default function ModalExpedienteFactura({ onClose, factura: facturaInicia
                                         {factura.evidencia_error_path && (
                                             <div className="space-y-3">
                                                 <div className="flex items-center justify-between gap-2 px-1">
-                                                    <span className="text-[10px] font-bold text-red-600 dark:text-red-400 uppercase tracking-widest">Evidencia del Error</span>
+                                                    <span className="text-xs font-bold text-red-600 dark:text-red-400  ">Evidencia del Error</span>
                                                     <a href={urlArchivoFactura(factura.id, 'evidencia_error')} target="_blank" rel="noopener noreferrer" className={`${BTN_SECONDARY} !p-2 !border-red-500/30 !text-red-600 dark:!text-red-400 hover:!bg-red-500/10`}>
                                                         <Download className="w-4 h-4" />
                                                     </a>
@@ -240,13 +246,13 @@ export default function ModalExpedienteFactura({ onClose, factura: facturaInicia
 
                                 <section>
                                     <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-                                        <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0">Datos fiscales</p>
+                                        <p className="text-xs font-semibold   theme-text-muted m-0">Datos fiscales</p>
                                         {puedeSyncCliente && (
                                             <button
                                                 type="button"
                                                 onClick={aplicarDatosAlCliente}
                                                 disabled={aplicandoCliente}
-                                                className={`${BTN_PRIMARY} !py-1.5 !px-3 text-[10px]`}
+                                                className={`${BTN_PRIMARY} !py-1.5 !px-3 text-xs`}
                                             >
                                                 {aplicandoCliente
                                                     ? <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
@@ -262,7 +268,7 @@ export default function ModalExpedienteFactura({ onClose, factura: facturaInicia
                                         <p className="text-xs font-bold text-red-600 dark:text-red-400 p-3 rounded-2xl border border-red-500/20 bg-red-500/5 mb-3">{errorSync}</p>
                                     )}
                                     {cargandoDatos && (
-                                        <div className="flex items-center gap-2 p-4 text-xs font-bold theme-text-muted italic">
+                                        <div className="flex items-center gap-2 p-4 text-xs font-bold theme-text-muted ">
                                             <Loader2 className="w-4 h-4 animate-spin" /> Extrayendo datos…
                                         </div>
                                     )}
@@ -275,10 +281,10 @@ export default function ModalExpedienteFactura({ onClose, factura: facturaInicia
                                                 <tbody>
                                                     {filasDatos.map(clave => (
                                                         <tr key={clave} className="border-b theme-border last:border-b-0">
-                                                            <td className="px-4 py-3 text-[10px] font-black uppercase theme-text-muted w-[40%]">{etiquetas[clave]}</td>
+                                                            <td className="px-4 py-3 text-xs font-semibold  theme-text-muted w-[40%]">{etiquetas[clave]}</td>
                                                             <td className="px-4 py-3 text-xs font-bold theme-text-main break-all">{datosFiscales[clave]}</td>
                                                             <td className="px-4 py-3">
-                                                                <button type="button" onClick={() => copiarCampo(clave, datosFiscales[clave])} className={`${BTN_SECONDARY} !py-1.5 !px-2`}>
+                                                                <button type="button" aria-label={`Copiar ${etiquetas[clave]}`} onClick={() => copiarCampo(clave, datosFiscales[clave])} className={`${BTN_SECONDARY} !py-1.5 !px-2`}>
                                                                     {copiadoKey === clave ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
                                                                 </button>
                                                             </td>
@@ -289,13 +295,13 @@ export default function ModalExpedienteFactura({ onClose, factura: facturaInicia
                                         </div>
                                     )}
                                     {!cargandoDatos && !datosFiscales && !factura.tiene_archivo_fiscal && (
-                                        <p className="text-xs italic theme-text-muted p-4 border border-dashed theme-border rounded-2xl">Sin datos fiscales registrados.</p>
+                                        <p className="text-xs  theme-text-muted p-4 border border-dashed theme-border rounded-2xl">Sin datos fiscales registrados.</p>
                                     )}
                                 </section>
 
                                 {factura.tiene_archivo_fiscal && (
                                     <section>
-                                        <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted mb-3">Excel fiscal</p>
+                                        <p className="text-xs font-semibold   theme-text-muted mb-3">Excel fiscal</p>
                                         <a
                                             href={urlArchivoFactura(factura.id, 'fiscal')}
                                             target="_blank"
@@ -308,17 +314,17 @@ export default function ModalExpedienteFactura({ onClose, factura: facturaInicia
                                 )}
 
                                 <section>
-                                    <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted mb-3">Vouchers ({vouchers.length})</p>
+                                    <p className="text-xs font-semibold   theme-text-muted mb-3">Vouchers ({vouchers.length})</p>
                                     {vouchers.length === 0 ? (
-                                        <p className="text-xs italic theme-text-muted">Sin vouchers adjuntos.</p>
+                                        <p className="text-xs  theme-text-muted">Sin vouchers adjuntos.</p>
                                     ) : (
                                         <div className="space-y-3">
                                             <div className="flex items-center justify-between gap-2">
-                                                <span className="text-[10px] font-bold theme-text-main truncate">{voucherActual?.nombre_original || 'Voucher'}</span>
+                                                <span className="text-xs font-bold theme-text-main truncate">{voucherActual?.nombre_original || 'Voucher'}</span>
                                                 <div className="flex items-center gap-2 shrink-0">
-                                                    <button type="button" disabled={voucherIndex <= 0} onClick={() => setVoucherIndex(i => i - 1)} className={`${BTN_SECONDARY} !p-2 disabled:opacity-30`}><ChevronLeft className="w-4 h-4" /></button>
-                                                    <span className="text-[9px] font-black theme-text-muted">{voucherIndex + 1}/{vouchers.length}</span>
-                                                    <button type="button" disabled={voucherIndex >= vouchers.length - 1} onClick={() => setVoucherIndex(i => i + 1)} className={`${BTN_SECONDARY} !p-2 disabled:opacity-30`}><ChevronRight className="w-4 h-4" /></button>
+                                                    <button type="button" disabled={voucherIndex <= 0} aria-label="Comprobante anterior" onClick={() => setVoucherIndex(i => i - 1)} className={`${BTN_SECONDARY} !p-2 disabled:opacity-30`}><ChevronLeft className="w-4 h-4" /></button>
+                                                    <span className="text-xs font-semibold theme-text-muted">{voucherIndex + 1}/{vouchers.length}</span>
+                                                    <button type="button" disabled={voucherIndex >= vouchers.length - 1} aria-label="Comprobante siguiente" onClick={() => setVoucherIndex(i => i + 1)} className={`${BTN_SECONDARY} !p-2 disabled:opacity-30`}><ChevronRight className="w-4 h-4" /></button>
                                                     <a href={urlArchivoFactura(factura.id, 'voucher', voucherIndex)} target="_blank" rel="noopener noreferrer" className={`${BTN_SECONDARY} !p-2`}><Download className="w-4 h-4" /></a>
                                                 </div>
                                             </div>
@@ -339,14 +345,14 @@ export default function ModalExpedienteFactura({ onClose, factura: facturaInicia
 
                                 {(pdfsEmitidos.length > 0 || factura.tiene_xml) && (
                                     <section>
-                                        <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted mb-3">
+                                        <p className="text-xs font-semibold   theme-text-muted mb-3">
                                             Factura emitida {pdfsEmitidos.length > 1 ? `(${pdfIndex + 1}/${pdfsEmitidos.length})` : ''}
                                         </p>
                                         <div className="flex flex-wrap gap-2 items-center">
                                             {pdfsEmitidos.length > 1 && (
                                                 <>
-                                                    <button type="button" disabled={pdfIndex <= 0} onClick={() => setPdfIndex(i => i - 1)} className={`${BTN_SECONDARY} !p-2 disabled:opacity-30`}><ChevronLeft className="w-4 h-4" /></button>
-                                                    <button type="button" disabled={pdfIndex >= pdfsEmitidos.length - 1} onClick={() => setPdfIndex(i => i + 1)} className={`${BTN_SECONDARY} !p-2 disabled:opacity-30`}><ChevronRight className="w-4 h-4" /></button>
+                                                    <button type="button" disabled={pdfIndex <= 0} aria-label="PDF anterior" onClick={() => setPdfIndex(i => i - 1)} className={`${BTN_SECONDARY} !p-2 disabled:opacity-30`}><ChevronLeft className="w-4 h-4" /></button>
+                                                    <button type="button" disabled={pdfIndex >= pdfsEmitidos.length - 1} aria-label="PDF siguiente" onClick={() => setPdfIndex(i => i + 1)} className={`${BTN_SECONDARY} !p-2 disabled:opacity-30`}><ChevronRight className="w-4 h-4" /></button>
                                                 </>
                                             )}
                                             {pdfsEmitidos.length > 0 && (

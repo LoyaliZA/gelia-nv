@@ -9,6 +9,7 @@ export default function BusquedaProductoResguardo({
     onAgregar,
     onQuitar,
     onCambiarCantidad,
+    onCambiarNota,
     deshabilitado = false,
 }) {
     const [consulta, setConsulta] = useState('');
@@ -150,6 +151,18 @@ export default function BusquedaProductoResguardo({
                             <div className="min-w-0 flex-1 overflow-hidden">
                                 <p className="text-sm font-bold theme-text-main m-0 truncate">{linea.descripcion}</p>
                                 <p className="text-xs font-semibold theme-text-muted m-0 truncate">{linea.sku || 'Sin SKU'}</p>
+                                {onCambiarNota && (
+                                    <input
+                                        type="text"
+                                        maxLength={500}
+                                        value={linea.nota || ''}
+                                        disabled={deshabilitado}
+                                        onChange={(event) => onCambiarNota(linea.producto_id, event.target.value)}
+                                        placeholder="Detalle o nota"
+                                        className={`${THEME_INPUT} min-h-[44px] mt-2`}
+                                        aria-label={`Nota de ${linea.descripcion}`}
+                                    />
+                                )}
                             </div>
                             <input
                                 type="number"

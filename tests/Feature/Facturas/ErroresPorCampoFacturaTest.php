@@ -31,6 +31,8 @@ class ErroresPorCampoFacturaTest extends TestCase
         parent::setUp();
 
         config(['app.form_public_url' => 'https://form.neobash.site']);
+        \Spatie\Permission\Models\Role::findOrCreate('Super Admin', 'web');
+        \Spatie\Permission\Models\Role::findOrCreate('Administrador', 'web');
 
         foreach (['Pendiente', 'Respondida', 'Incorrecta', 'Borrador'] as $nombre) {
             CatalogoEstadoSolicitud::updateOrCreate(
@@ -217,7 +219,7 @@ class ErroresPorCampoFacturaTest extends TestCase
         $this->actingAs($vendedor)
             ->put(route('facturas.reparar', $factura), [
                 'razon_social' => $factura->razon_social,
-                'numero_cliente' => $this->cliente()->numero_cliente,
+                'numero_cliente' => $factura->cliente->numero_cliente,
                 'vouchers_conservar' => [$factura->vouchers->first()->id],
                 'datos_fiscales' => ['rfc' => 'CORREGIDO123'],
             ])

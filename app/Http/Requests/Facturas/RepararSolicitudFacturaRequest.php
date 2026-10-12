@@ -34,6 +34,7 @@ class RepararSolicitudFacturaRequest extends FormRequest
         $maxKb = LimitesAdjuntosFactura::MAX_KB_POR_ARCHIVO;
 
         return [
+            'catalogo_banco_id' => [$this->route('factura')->catalogo_banco_id !== null ? 'required' : 'nullable', 'integer', 'exists:catalogo_bancos,id'],
             'razon_social' => ['required', 'string', 'min:3', 'max:255'],
             'numero_cliente' => ['nullable', 'string', 'max:255'],
             'observaciones_vendedor' => ['nullable', 'string', 'max:2000'],

@@ -20,6 +20,7 @@ export default function useFormularioRecepcionResguardo(resguardoId) {
     const [catalogos, setCatalogos] = useState({});
     const [admiteRecepcion, setAdmiteRecepcion] = useState(false);
     const [motivoNoRecepcion, setMotivoNoRecepcion] = useState(null);
+    const [flujoCompleto, setFlujoCompleto] = useState(false);
 
     const cargar = useCallback(async () => {
         if (!resguardoId) return null;
@@ -37,6 +38,7 @@ export default function useFormularioRecepcionResguardo(resguardoId) {
             setCatalogos(data?.catalogos || {});
             setAdmiteRecepcion(Boolean(data?.admite_recepcion));
             setMotivoNoRecepcion(data?.motivo_no_recepcion || null);
+            setFlujoCompleto(Boolean(data?.flujo_completo));
 
             return data;
         } catch (err) {
@@ -54,6 +56,7 @@ export default function useFormularioRecepcionResguardo(resguardoId) {
         setCatalogos({});
         setAdmiteRecepcion(false);
         setMotivoNoRecepcion(null);
+        setFlujoCompleto(false);
         setError(null);
     }, []);
 
@@ -67,5 +70,6 @@ export default function useFormularioRecepcionResguardo(resguardoId) {
         catalogos,
         admiteRecepcion,
         motivoNoRecepcion,
+        flujoCompleto,
     };
 }

@@ -8,6 +8,7 @@ import {
     THEME_SELECT,
 } from '../../../../utils/geliaTheme';
 import BusquedaClienteResguardo from './BusquedaClienteResguardo';
+import BusquedaProductoResguardo from './BusquedaProductoResguardo';
 import BotonesCapturaEvidencia from './BotonesCapturaEvidencia';
 import useToastAlCambiar from '../../../../hooks/useToastAlCambiar';
 
@@ -56,6 +57,7 @@ export default function FormularioRegistroManualResguardo({
     enviando = false,
     error = null,
     origenes = [],
+    flujoCompleto = false,
     onEnviar,
     onCancelar,
 }) {
@@ -67,6 +69,7 @@ export default function FormularioRegistroManualResguardo({
     const [fotoPaquete, setFotoPaquete] = useState(null);
     const [previewTicket, setPreviewTicket] = useState(null);
     const [previewPaquete, setPreviewPaquete] = useState(null);
+    const [piezas, setPiezas] = useState([]);
     const [erroresLocales, setErroresLocales] = useState({});
 
     useToastAlCambiar(error, 'error');
@@ -111,6 +114,9 @@ export default function FormularioRegistroManualResguardo({
         if ((archivoTicket && !fotoPaquete) || (!archivoTicket && fotoPaquete)) {
             errores.archivo_ticket = 'Adjunte ticket y foto del paquete juntos, o déjelos para después.';
         }
+        if (flujoCompleto && piezas.length < 1) {
+            errores.piezas = 'Registre al menos una pieza del pedido.';
+        }
         if (Object.keys(errores).length > 0) {
             setErroresLocales(errores);
             return;
@@ -124,9 +130,35 @@ export default function FormularioRegistroManualResguardo({
             cantidad_bultos_esperada: bultos,
             archivo_ticket: archivoTicket,
             foto_paquete: fotoPaquete,
+            piezas: piezas.map((linea) => ({
+                producto_id: linea.producto_id,
+                cantidad: Number.parseInt(linea.cantidad, 10) || 1,
+                nota: linea.nota?.trim() || null,
+            })),
         };
 
         await onEnviar?.(payload);
+    };
+
+    const agregarPieza = (producto) => {
+        setPiezas((prev) => {
+            const existente = prev.find((linea) => linea.producto_id === producto.id);
+            if (existente) {
+                return prev.map((linea) => (
+                    linea.producto_id === producto.id
+                        ? { ...linea, cantidad: Math.min(9999, Number(linea.cantidad) + 1) }
+                        : linea
+                ));
+            }
+
+            return [...prev, {
+                producto_id: producto.id,
+                sku: producto.sku,
+                descripcion: producto.descripcion,
+                cantidad: 1,
+                nota: '',
+            }];
+        });
     };
 
     return (
@@ -202,6 +234,30 @@ export default function FormularioRegistroManualResguardo({
                 )}
             </div>
 
+            {flujoCompleto && (
+                <div className="space-y-2">
+                    <p className={`${THEME_LABEL} m-0`}>Piezas del pedido</p>
+                    <p className="text-xs theme-text-muted m-0">
+                        Registre cada pieza. El ticket y la foto del paquete se reutilizan en recepción y custodia.
+                    </p>
+                    <BusquedaProductoResguardo
+                        lineas={piezas}
+                        onAgregar={agregarPieza}
+                        onQuitar={(productoId) => setPiezas((prev) => prev.filter((linea) => linea.producto_id !== productoId))}
+                        onCambiarCantidad={(productoId, cantidad) => setPiezas((prev) => prev.map((linea) => (
+                            linea.producto_id === productoId ? { ...linea, cantidad } : linea
+                        )))}
+                        onCambiarNota={(productoId, nota) => setPiezas((prev) => prev.map((linea) => (
+                            linea.producto_id === productoId ? { ...linea, nota } : linea
+                        )))}
+                        deshabilitado={enviando}
+                    />
+                    {erroresLocales.piezas && (
+                        <p className="text-xs font-semibold theme-text-peligro m-0">{erroresLocales.piezas}</p>
+                    )}
+                </div>
+            )}
+
             <div className="space-y-2">
                 <p className={`${THEME_LABEL} m-0`}>Evidencia del flujo</p>
                 <p className="text-xs theme-text-muted m-0">
@@ -248,7 +304,7 @@ export default function FormularioRegistroManualResguardo({
                     className={`${THEME_BTN_PRIMARY} min-h-[44px] inline-flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest`}
                 >
                     {enviando && <Loader2 className="w-4 h-4 animate-spin" aria-hidden />}
-                    {evidenciaLista ? 'Dejar en recepción' : 'Guardar pendiente'}
+                    {flujoCompleto ? 'Guardar para recepción' : (evidenciaLista ? 'Dejar en recepción' : 'Guardar pendiente')}
                 </button>
             </div>
         </form>

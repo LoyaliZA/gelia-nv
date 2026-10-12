@@ -10,6 +10,7 @@ use App\Support\PuntoVenta\Resguardos\EstadoRecepcionResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\EtiquetasResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\SerializadorBultosEmpaqueCedisPdv;
 use App\Support\PuntoVenta\Resguardos\SerializadorPedidoRevisionResguardoPdv;
+use App\Support\PuntoVenta\Resguardos\SerializadorRegistroManualResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\SerializadorRetiroPedidoResguardoPdv;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 
@@ -54,6 +55,7 @@ class ConsultaFormularioRecepcionFisicaPdvService
             ],
             'admite_recepcion' => EstadoRecepcionResguardoPdv::admiteRecepcion($resguardo),
             'motivo_no_recepcion' => EstadoRecepcionResguardoPdv::motivoNoRecepcion($resguardo),
+            'flujo_completo' => $this->alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_FLUJO_COMPLETO),
         ];
     }
 
@@ -93,6 +95,7 @@ class ConsultaFormularioRecepcionFisicaPdvService
             ] : null,
             'bultos_empaque_cedis' => SerializadorBultosEmpaqueCedisPdv::desdePedido($resguardo->pedido),
             'pedido_revision' => SerializadorPedidoRevisionResguardoPdv::desdePedido($resguardo->pedido),
+            'registro_manual' => SerializadorRegistroManualResguardoPdv::desdeResguardo($resguardo),
         ];
     }
 

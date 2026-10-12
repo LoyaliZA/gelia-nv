@@ -13,6 +13,7 @@ use App\Support\PuntoVenta\Resguardos\BultosEsperadosResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\EstadoRecepcionResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\EvidenciaMinimaRegistroManualPdv;
 use App\Support\PuntoVenta\Resguardos\GeneradorCodigoEtiquetaResguardoPdv;
+use App\Support\PuntoVenta\Resguardos\NormalizadorPiezasRegistroManualPdv;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -32,11 +33,15 @@ class RegistrarRecepcionFisicaPdvService
         private readonly IngresarResguardoManualPdvService $ingresarManual,
     ) {}
 
+    /**
+     * @param  list<array{producto_id: int, sku: string|null, descripcion: string|null, cantidad: int, nota: string|null}>|null  $piezas
+     */
     public function ejecutar(
         ResguardoPdv $resguardo,
         User $actor,
         int $versionEsperada,
         string $idempotencyKey,
+        ?array $piezas = null,
     ): ResguardoPdv {
         $this->alcance->asegurarMutacionPiso(
             $actor,
@@ -49,6 +54,7 @@ class RegistrarRecepcionFisicaPdvService
             $actor,
             $versionEsperada,
             $idempotencyKey,
+            $piezas,
         ) {
             $resguardo = ResguardoPdv::query()
                 ->with(['bultos', 'pedido.bultosEmpaque'])
@@ -67,6 +73,10 @@ class RegistrarRecepcionFisicaPdvService
             $estadoAnterior = $resguardo->estado;
             $this->assertVersionYEstado($resguardo, $versionEsperada);
             $this->assertEvidenciaManual($resguardo);
+            if (is_array($piezas) && $this->flujoCompleto($actor)) {
+                $this->guardarPiezas($resguardo, $piezas);
+            }
+            $this->exigirPiezasSiCompleto($resguardo, $actor);
             $bultosNormalizados = BultosEsperadosResguardoPdv::desdeResguardo($resguardo);
             $esperada = (int) $resguardo->cantidad_bultos_esperada;
             $ahora = now();
@@ -128,7 +138,7 @@ class RegistrarRecepcionFisicaPdvService
 
             $resguardo = $resguardo->fresh(['bultos', 'almacen', 'evidencias']);
             $ingresoManual = EvidenciaMinimaRegistroManualPdv::esManual($resguardo);
-            if ($ingresoManual) {
+            if ($ingresoManual && ! $this->flujoCompleto($actor)) {
                 return $this->ingresarManual->cerrarConfirmacionDoble($resguardo, $actor, $idempotencyKey);
             }
 
@@ -199,6 +209,38 @@ class RegistrarRecepcionFisicaPdvService
 
             throw ValidationException::withMessages([
                 'estado' => 'El resguardo no admite recepción física desde su estado actual.',
+            ]);
+        }
+    }
+
+    private function flujoCompleto(User $actor): bool
+    {
+        return $this->alcance->tienePermisoPdv($actor, PuntoVentaModulo::PERMISO_RESGUARDOS_FLUJO_COMPLETO);
+    }
+
+    /**
+     * @param  list<array{producto_id: int, sku: string|null, descripcion: string|null, cantidad: int, nota: string|null}>  $piezas
+     */
+    private function guardarPiezas(ResguardoPdv $resguardo, array $piezas): void
+    {
+        $snapshot = is_array($resguardo->snapshot_json) ? $resguardo->snapshot_json : [];
+        $snapshot['piezas'] = $piezas;
+        $snapshot['cantidad_piezas'] = NormalizadorPiezasRegistroManualPdv::cantidad($piezas);
+        $resguardo->update(['snapshot_json' => $snapshot]);
+        $resguardo->refresh();
+    }
+
+    private function exigirPiezasSiCompleto(ResguardoPdv $resguardo, User $actor): void
+    {
+        if (! $this->flujoCompleto($actor) || ! EvidenciaMinimaRegistroManualPdv::esManual($resguardo)) {
+            return;
+        }
+
+        $snapshot = is_array($resguardo->snapshot_json) ? $resguardo->snapshot_json : [];
+        $piezas = $snapshot['piezas'] ?? [];
+        if (! is_array($piezas) || $piezas === []) {
+            throw ValidationException::withMessages([
+                'piezas' => 'Registre las piezas del pedido antes de confirmar la recepción.',
             ]);
         }
     }

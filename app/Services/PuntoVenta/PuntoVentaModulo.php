@@ -14,6 +14,8 @@ final class PuntoVentaModulo
 
     public const PERMISO_RESGUARDOS_REGISTRAR_MANUAL = 'pdv.resguardos.registrar_manual';
 
+    public const PERMISO_RESGUARDOS_FLUJO_COMPLETO = 'pdv.resguardos.flujo_completo';
+
     public const PERMISO_RESGUARDOS_CONFIRMAR_LLEGADA = 'pdv.resguardos.confirmar_llegada';
 
     public const PERMISO_RESGUARDOS_ENVIAR_A_CUSTODIA = 'pdv.resguardos.enviar_a_custodia';
@@ -107,6 +109,7 @@ final class PuntoVentaModulo
             self::PERMISO_ACCEDER,
             self::PERMISO_RESGUARDOS_VER,
             self::PERMISO_RESGUARDOS_REGISTRAR_MANUAL,
+            self::PERMISO_RESGUARDOS_FLUJO_COMPLETO,
             self::PERMISO_RESGUARDOS_CONFIRMAR_LLEGADA,
             self::PERMISO_RESGUARDOS_ENVIAR_A_CUSTODIA,
             self::PERMISO_RESGUARDOS_CONFIRMAR_CUSTODIA,

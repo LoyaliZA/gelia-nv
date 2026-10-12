@@ -6,6 +6,7 @@ use App\Models\CatalogoListaDescuento;
 use App\Models\Cliente;
 use App\Models\ConfiguracionSistema;
 use App\Models\Departamento;
+use App\Models\Almacen;
 use App\Models\Producto;
 use App\Models\PuntoVenta\ResguardoPdv;
 use App\Models\PuntoVenta\ResguardoPdvBulto;
@@ -202,6 +203,112 @@ class RegistroManualResguardoPdvTest extends TestCase
         $this->assertSame(3, (int) ($resguardo?->snapshot_json['cantidad_piezas'] ?? 0));
         $this->assertSame($producto->id, (int) ($resguardo?->snapshot_json['piezas'][0]['producto_id'] ?? 0));
         $this->assertSame($producto->sku, $resguardo?->snapshot_json['piezas'][0]['sku'] ?? null);
+    }
+
+    public function test_flujo_completo_exige_piezas_y_no_salta_la_llegada(): void
+    {
+        $this->activarRegistroManual();
+        $this->usuario->givePermissionTo(PuntoVentaModulo::PERMISO_RESGUARDOS_FLUJO_COMPLETO);
+
+        $this->actingAs($this->usuario)
+            ->post(route('punto_venta.resguardos.store'), $this->payloadAlta([
+                'idempotency_key' => 'pdv:man:completo-sin-piezas',
+                'folio' => 'REM-COMPLETO-0',
+            ]), ['Accept' => 'application/json'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['piezas']);
+
+        $producto = $this->crearProducto();
+        $this->actingAs($this->usuario)
+            ->post(route('punto_venta.resguardos.store'), $this->payloadAlta([
+                'idempotency_key' => 'pdv:man:completo-con-piezas',
+                'folio' => 'REM-COMPLETO-1',
+                'piezas' => [
+                    ['producto_id' => $producto->id, 'cantidad' => 2, 'nota' => 'Caja abierta'],
+                ],
+            ]), ['Accept' => 'application/json'])
+            ->assertCreated()
+            ->assertJsonPath('resguardo.estado', ResguardoPdv::ESTADO_PENDIENTE_RECEPCION);
+
+        $resguardo = ResguardoPdv::query()->where('snapshot_folio', 'REM-COMPLETO-1')->first();
+        $this->assertNotNull($resguardo);
+        $this->assertSame(0, $resguardo->bultos()->count());
+        $this->assertSame('Caja abierta', $resguardo->snapshot_json['piezas'][0]['nota'] ?? null);
+        $this->assertSame(
+            0,
+            ResguardoPdvEvento::query()
+                ->where('resguardo_id', $resguardo->id)
+                ->where('tipo_evento', ResguardoPdvEvento::TIPO_PASADO_A_RECEPCION)
+                ->count()
+        );
+    }
+
+    public function test_flujo_completo_confirma_llegada_sin_pasar_solo_a_recepcion(): void
+    {
+        $this->activarRegistroManual();
+        $this->usuario->givePermissionTo([
+            PuntoVentaModulo::PERMISO_RESGUARDOS_FLUJO_COMPLETO,
+            PuntoVentaModulo::PERMISO_RESGUARDOS_CONFIRMAR_LLEGADA,
+            PuntoVentaModulo::PERMISO_RESGUARDOS_CONFIRMAR_CUSTODIA,
+        ]);
+        $producto = $this->crearProducto();
+
+        $this->actingAs($this->usuario)
+            ->post(route('punto_venta.resguardos.store'), $this->payloadAlta([
+                'idempotency_key' => 'pdv:man:completo-llegada',
+                'folio' => 'REM-COMPLETO-2',
+                'piezas' => [
+                    ['producto_id' => $producto->id, 'cantidad' => 1],
+                ],
+            ]), ['Accept' => 'application/json'])
+            ->assertCreated();
+
+        $resguardo = ResguardoPdv::query()->where('snapshot_folio', 'REM-COMPLETO-2')->firstOrFail();
+
+        $this->actingAs($this->usuario)
+            ->putJson(route('punto_venta.resguardos.recepcion', $resguardo), [
+                'version' => $resguardo->version,
+                'idempotency_key' => 'pdv:rec:completo:1',
+                'piezas' => [
+                    ['producto_id' => $producto->id, 'cantidad' => 3, 'nota' => 'Conteo en piso'],
+                ],
+            ])
+            ->assertOk()
+            ->assertJsonPath('resguardo.estado', ResguardoPdv::ESTADO_RECIBIDO);
+
+        $resguardo->refresh();
+        $this->assertSame(3, (int) ($resguardo->snapshot_json['piezas'][0]['cantidad'] ?? 0));
+        $this->assertSame('Conteo en piso', $resguardo->snapshot_json['piezas'][0]['nota'] ?? null);
+
+        $almacen = Almacen::query()->create([
+            'codigo' => 'PISO-COMPLETO',
+            'nombre' => 'Piso recepción',
+            'sucursal_id' => $this->sucursal->id,
+            'activo' => true,
+        ]);
+        $resguardo->update(['estado' => ResguardoPdv::ESTADO_EN_RECEPCION]);
+        $resguardo->bultos()->update(['estado' => ResguardoPdvBulto::ESTADO_RECIBIDO_GERENTE]);
+        $resguardo->refresh();
+
+        $sinPiezas = $resguardo->snapshot_json;
+        $sinPiezas['piezas'] = [];
+        $resguardo->update(['snapshot_json' => $sinPiezas]);
+
+        $folio = $resguardo->bultos()->value('folio');
+        $this->actingAs($this->usuario)
+            ->putJson(route('punto_venta.resguardos.custodia', $resguardo), [
+                'version' => $resguardo->version,
+                'idempotency_key' => 'pdv:custodia:completo:1',
+                'almacen_id' => $almacen->id,
+                'bultos' => [[
+                    'folio' => $folio,
+                    'tipo' => 'caja',
+                    'condicion' => 'bueno',
+                    'piezas' => 1,
+                ]],
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['piezas']);
     }
 
     public function test_reintento_idempotente_no_duplica(): void

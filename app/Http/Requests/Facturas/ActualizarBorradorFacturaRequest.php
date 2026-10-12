@@ -24,6 +24,7 @@ class ActualizarBorradorFacturaRequest extends FormRequest
             && filter_var($this->input('pedir_formulario'), FILTER_VALIDATE_BOOLEAN);
 
         return [
+            'catalogo_banco_id' => [($this->boolean('enviar_ahora') && \App\Support\Facturas\BancoFacturacion::configurado()) ? 'required' : 'nullable', 'integer', 'exists:catalogo_bancos,id'],
             'destinatario_tipo' => ['nullable', Rule::in([SolicitudFactura::DESTINATARIO_CLIENTE, SolicitudFactura::DESTINATARIO_TERCERO])],
             'razon_social' => [$terceroConForm ? 'nullable' : 'required', 'string', 'min:3', 'max:255'],
             'numero_cliente' => [

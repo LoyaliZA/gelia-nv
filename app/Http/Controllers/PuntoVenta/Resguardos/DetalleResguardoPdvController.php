@@ -75,6 +75,7 @@ class DetalleResguardoPdvController extends Controller
             'permisos' => [
                 'ver_etiquetas' => $puedeVerEtiquetas,
                 'registrar_manual' => $puedeOperar && $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_REGISTRAR_MANUAL),
+                'flujo_completo' => $puedeOperar && $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_FLUJO_COMPLETO),
                 'confirmar_llegada' => $puedeOperar && $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_CONFIRMAR_LLEGADA),
                 'enviar_a_custodia' => $puedeOperar && $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_ENVIAR_A_CUSTODIA),
                 'entregar' => $puedeOperar && $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_ENTREGAR),

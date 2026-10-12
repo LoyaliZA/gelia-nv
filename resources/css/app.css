@@ -20,6 +20,7 @@
 @import './gelia/features/registro.css';
 @import './gelia/features/clientes.css';
 @import './gelia/features/solicitudes.css';
+@import './gelia/features/facturas.css';
 @import './gelia/features/solicitudes-tag-lista.css';
 @import './gelia/features/gelia-ai.css';
 @import './gelia/features/control-pedidos-tienda.css';

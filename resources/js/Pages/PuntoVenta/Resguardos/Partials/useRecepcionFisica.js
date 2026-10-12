@@ -35,7 +35,7 @@ export default function useRecepcionFisica({
         idempotencyRef.current = claveIdempotenciaRecepcion(resguardoId);
     }, [resguardoId]);
 
-    const enviar = useCallback(async () => {
+    const enviar = useCallback(async (extras = {}) => {
         if (envioBloqueado.current || enviando) {
             return { duplicado: true };
         }
@@ -46,12 +46,17 @@ export default function useRecepcionFisica({
         setError(null);
 
         try {
+            const cuerpo = {
+                version: versionRef.current,
+                idempotency_key: idempotencyRef.current,
+            };
+            if (Array.isArray(extras?.piezas)) {
+                cuerpo.piezas = extras.piezas;
+            }
+
             const { data } = await axios.put(
                 route('punto_venta.resguardos.recepcion', resguardoId),
-                {
-                    version: versionRef.current,
-                    idempotency_key: idempotencyRef.current,
-                },
+                cuerpo,
                 { headers: { Accept: 'application/json' } },
             );
 

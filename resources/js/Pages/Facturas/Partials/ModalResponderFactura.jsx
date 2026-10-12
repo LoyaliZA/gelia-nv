@@ -1,5 +1,7 @@
 import AdjuntoRespuesta, { useAdjuntoRespuesta } from '@/Components/Solicitudes/AdjuntoRespuesta';
-import SolicitudDialog from '@/Components/Solicitudes/SolicitudDialog';
+import SolicitudDialog from './FacturaDialog';
+import EvidenciaSolicitud from '@/Components/Solicitudes/EvidenciaSolicitud';
+import { urlArchivoFactura, esPdfVoucher } from './facturasStyles';
 import React, { useEffect, useMemo, useState } from 'react';
 import { router, useForm } from '@inertiajs/react';
 import { X, CheckCircle2, AlertOctagon, Upload, Send, Wrench } from 'lucide-react';
@@ -148,10 +150,17 @@ export default function ModalResponderFactura({
                 onExito?.();
                 cerrar();
             },
+            onError: setErroresEmision,
             onFinish: () => setProcesandoCorregir(false),
         });
     };
 
+    const bancoBloqueado = factura.banco?.facturacion_habilitada === false;
+    const datosRevision = factura.datos_fiscales || factura.receptor_fiscal || factura.cliente || {};
+    const descripcionCatalogo = (opciones, codigo) => {
+        const opcion = opciones?.find((item) => String(item.codigo) === String(codigo));
+        return opcion ? `${opcion.codigo} — ${opcion.nombre}` : codigo || 'Sin dato registrado';
+    };
     const titulo = esError
         ? (subModo === 'corregir' ? 'Corregir factura' : 'Reportar error en factura')
         : 'Emitir factura';
@@ -170,8 +179,8 @@ export default function ModalResponderFactura({
                             ? <AlertOctagon className="w-7 h-7 shrink-0" style={{ color: 'var(--color-peligro)' }} />
                             : <CheckCircle2 className="w-7 h-7 shrink-0" style={{ color: ACCENT }} />}
                         <div className="min-w-0">
-                            <h2 className="text-lg font-black italic theme-text-main uppercase m-0 leading-tight">{titulo}</h2>
-                            <p className="text-[10px] font-bold theme-text-muted uppercase tracking-widest mt-1 m-0">{factura.folio}</p>
+                            <h2 className="text-lg font-semibold  theme-text-main  m-0 leading-tight">{titulo}</h2>
+                            <p className="text-xs font-bold theme-text-muted   mt-1 m-0">{factura.folio}</p>
                         </div>
                     </div>
                     <button type="button" data-dialog-close onClick={cerrar} className="p-2 theme-text-muted hover:theme-text-main rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors outline-none shrink-0" aria-label="Cerrar">
@@ -183,14 +192,14 @@ export default function ModalResponderFactura({
                     <div className="px-5 md:px-6 pt-4 flex gap-2 shrink-0">
                         <button
                             type="button"
-                            className={`${BTN_SECONDARY} flex-1 !py-2 text-[9px] ${subModo === 'reportar' ? TAB_ACTIVO_PELIGRO : ''}`}
+                            className={`${BTN_SECONDARY} flex-1 !py-2 text-xs ${subModo === 'reportar' ? TAB_ACTIVO_PELIGRO : ''}`}
                             onClick={() => setSubModo('reportar')}
                         >
                             Reportar a vendedora
                         </button>
                         <button
                             type="button"
-                            className={`${BTN_SECONDARY} flex-1 !py-2 text-[9px] ${subModo === 'corregir' ? TAB_ACTIVO_PRIMARIO : ''}`}
+                            className={`${BTN_SECONDARY} flex-1 !py-2 text-xs ${subModo === 'corregir' ? TAB_ACTIVO_PRIMARIO : ''}`}
                             onClick={() => setSubModo('corregir')}
                         >
                             <Wrench className="w-3.5 h-3.5 inline mr-1" />
@@ -202,7 +211,7 @@ export default function ModalResponderFactura({
                 <form
                     onSubmit={esAprobacion ? (e) => {
                         e.preventDefault();
-                        if (enviandoFactura) return;
+                        if (enviandoFactura || bancoBloqueado) return;
                         setEnviandoFactura(true);
                         setErroresEmision({});
                         const formData = new FormData();
@@ -224,12 +233,34 @@ export default function ModalResponderFactura({
                     <dl className="gelia-respuesta-contexto">
                         <div><dt>Razón social</dt><dd>{factura.razon_social || 'Sin razón social'}</dd></div>
                         <div><dt>RFC</dt><dd>{factura.datos_fiscales?.rfc || 'Sin RFC registrado'}</dd></div>
+                        <div><dt>Solicitante</dt><dd>{factura.vendedor?.name || 'Sin solicitante'}</dd></div>
+                        <div><dt>Banco receptor</dt><dd>{factura.banco?.nombre || 'Sin banco registrado (solicitud anterior)'}</dd></div>
                     </dl>
+                    <details open className="gelia-facturas-section">
+                        <summary className="text-sm font-semibold theme-text-main cursor-pointer">Datos fiscales para la revisión</summary>
+                        <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4 mb-0">
+                            {[
+                                ['Código postal', datosRevision.codigo_postal],
+                                ['Régimen fiscal', descripcionCatalogo(catalogos.regimen_fiscal, datosRevision.regimen_fiscal)],
+                                ['Uso de CFDI', descripcionCatalogo(catalogos.uso_cfdi, datosRevision.uso_factura)],
+                                ['Correo electrónico', datosRevision.correo_electronico],
+                                ['Teléfono', datosRevision.telefono],
+                            ].map(([label, value]) => <div key={label} className="min-w-0"><dt className="text-xs theme-text-muted">{label}</dt><dd className="text-sm theme-text-main mt-1 mb-0 break-words">{value || 'Sin dato registrado'}</dd></div>)}
+                        </dl>
+                        {factura.observaciones_vendedor && <div className="mt-4 border-t theme-border pt-3"><p className="text-xs theme-text-muted m-0">Observaciones de quien solicita</p><p className="text-sm theme-text-main whitespace-pre-wrap break-words mt-1 mb-0">{factura.observaciones_vendedor}</p></div>}
+                    </details>
+                    {bancoBloqueado && <div role="alert" className="gelia-facturas-alert"><strong>Este pago no se puede facturar.</strong><p className="mt-1 mb-0">{factura.banco.motivo_bloqueo_facturacion || 'El banco receptor tiene la facturación bloqueada.'}</p></div>}
+                    <section className="gelia-facturas-section space-y-3" aria-label="Documentos de la solicitud">
+                        <h3 className="text-sm font-semibold theme-text-main m-0">Comprobantes del pago</h3>
+                        <div className="flex flex-wrap gap-2">{[...(factura.vouchers || [])].sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)).map((v, i) => <EvidenciaSolicitud key={v.id} url={urlArchivoFactura(factura.id, 'voucher', i)} esPdf={esPdfVoucher(v)} dialogClassName="gelia-facturas-dialog-overlay" label={`Comprobante ${i + 1}`} title={v.nombre_original || `Comprobante ${i + 1}`} />)}</div>
+                        {factura.tiene_archivo_fiscal && <a href={urlArchivoFactura(factura.id, 'fiscal')} className={BTN_SECONDARY}>Descargar archivo fiscal</a>}
+                        {!(factura.vouchers || []).length && <p className="text-sm theme-text-muted m-0">Sin comprobantes adjuntos.</p>}
+                    </section>
                     {Object.values(erroresEmision).map((mensaje, index) => <p key={index} role="alert" className="text-sm theme-text-peligro">{mensaje}</p>)}
                     {esError && (
                         <div className="space-y-2">
                             {esError && (
-                                <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted m-0">
+                                <p className="text-xs font-semibold   theme-text-muted m-0">
                                     {subModo === 'corregir' ? 'Seleccione qué corrige' : 'Seleccione los campos con error'}
                                 </p>
                             )}
@@ -268,7 +299,7 @@ export default function ModalResponderFactura({
 
                     {esError && subModo === 'corregir' && camposSel.includes('archivo_fiscal') && (
                         <div className="space-y-2">
-                            <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest">Excel fiscal</label>
+                            <label className="text-xs font-semibold  theme-text-muted ">Excel fiscal</label>
                             <input
                                 type="file"
                                 accept=".xlsx,.xls,.csv"
@@ -287,7 +318,7 @@ export default function ModalResponderFactura({
 
                     {esError && subModo === 'corregir' && camposSel.includes('razon_social') && (
                         <div className="space-y-2">
-                            <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest">Razón social</label>
+                            <label className="text-xs font-semibold  theme-text-muted ">Razón social</label>
                             <input
                                 type="text"
                                 defaultValue={factura.razon_social || ''}
@@ -299,7 +330,7 @@ export default function ModalResponderFactura({
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="space-y-2">
-                            <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">
+                            <label htmlFor="factura-respuesta-observaciones" className="theme-label">
                                 Observaciones (opcional)
                             </label>
                             <textarea id="factura-respuesta-observaciones" name="motivo" autoComplete="off"
@@ -316,19 +347,19 @@ export default function ModalResponderFactura({
                         <div className="space-y-4">
                             {esAprobacion && (
                                 <>
-                                    <ZonaAdjuntoPdf archivos={pdfs} onChange={setPdfs} error={errors.factura_pdfs || erroresEmision.factura_pdfs} disabled={enviandoFactura} />
+                                    <ZonaAdjuntoPdf archivos={pdfs} onChange={setPdfs} error={errors.factura_pdfs || erroresEmision.factura_pdfs} disabled={bancoBloqueado || enviandoFactura} />
                                     <div className="space-y-2">
-                                        <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">XML CFDI (opcional)</label>
+                                        <label className="text-xs font-semibold  theme-text-muted  ml-1">XML CFDI (opcional)</label>
                                         <label className="gelia-adjunto-control flex flex-col items-center justify-center border-2 border-dashed theme-border rounded-2xl p-4 cursor-pointer hover:border-[var(--color-primario)] transition-colors">
                                             <Upload className="w-6 h-6 theme-text-muted mb-1" />
-                                            <span className="text-[10px] font-bold theme-text-muted uppercase">
+                                            <span className="text-xs font-bold theme-text-muted ">
                                                 {data.factura_xml ? data.factura_xml.name : 'Adjuntar XML'}
                                             </span>
                                             <input
                                                 type="file"
                                                 className="sr-only"
                                                 aria-label="Adjuntar XML de la factura"
-                                                disabled={enviandoFactura}
+                                                disabled={bancoBloqueado || enviandoFactura}
                                                 accept=".xml,application/xml,text/xml"
                                                 onChange={(e) => {
                                                     const f = e.target.files?.[0];
@@ -352,7 +383,7 @@ export default function ModalResponderFactura({
                         <button type="button" data-dialog-close disabled={processing || procesandoCorregir || enviandoFactura || attachment.busy} className={BTN_SECONDARY}>Cancelar</button>
                             <button
                                 type="submit"
-                                disabled={processing || procesandoCorregir || enviandoFactura || attachment.busy || (esError && subModo === 'reportar' && camposSel.length === 0) || (esAprobacion && pdfs.length === 0)}
+                                disabled={processing || procesandoCorregir || enviandoFactura || attachment.busy || (esError && subModo === 'reportar' && camposSel.length === 0) || (esAprobacion && (pdfs.length === 0 || bancoBloqueado))}
                                 className={`${esError && subModo === 'reportar' ? BTN_DANGER : BTN_PRIMARY} !py-3 disabled:opacity-50`}
                             >
                                 <Send className="w-4 h-4 inline mr-2" />

@@ -49,6 +49,10 @@ class IngresarResguardoManualPdvService
             return $resguardo;
         }
 
+        if ($this->alcance->tienePermisoPdv($actor, PuntoVentaModulo::PERMISO_RESGUARDOS_FLUJO_COMPLETO)) {
+            return $resguardo;
+        }
+
         $bultos = BultosEsperadosResguardoPdv::desdeResguardo($resguardo);
         $ahora = now();
         $esperada = (int) $resguardo->cantidad_bultos_esperada;
@@ -99,6 +103,10 @@ class IngresarResguardoManualPdvService
         }
 
         if ($resguardo->estado !== ResguardoPdv::ESTADO_RECIBIDO) {
+            return $resguardo;
+        }
+
+        if ($this->alcance->tienePermisoPdv($actor, PuntoVentaModulo::PERMISO_RESGUARDOS_FLUJO_COMPLETO)) {
             return $resguardo;
         }
 

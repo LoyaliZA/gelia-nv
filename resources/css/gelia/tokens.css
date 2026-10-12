@@ -121,3 +121,11 @@
         100vw - var(--gelia-main-inset-inline-start) - var(--gelia-main-inset-inline-end)
     );
 }
+
+/* Facturas: local density tokens, derived from the active Gelia theme. */
+:where(.gelia-facturas-workspace, .gelia-facturas-dialog-overlay, .gelia-facturas-public) {
+    --facturas-radius: 1rem;
+    --facturas-section-bg: var(--theme-element-bg);
+    --facturas-focus: var(--color-primario);
+    --facturas-label-size: 0.8125rem;
+}

@@ -367,6 +367,8 @@ class CatalogoController extends Controller
             'nombre' => ['required', 'string', 'max:255', \Illuminate\Validation\Rule::unique('catalogo_bancos', 'nombre')->ignore($id)],
             'activo' => ['required', 'boolean'],
             'compartido' => ['required', 'boolean'],
+            'facturacion_habilitada' => ['sometimes', 'boolean'],
+            'motivo_bloqueo_facturacion' => ['nullable', 'string', 'max:500'],
             'departamento_ids' => [\Illuminate\Validation\Rule::requiredIf(!$request->boolean('compartido')), 'array'],
             'departamento_ids.*' => ['integer', 'distinct', 'exists:departamentos,id'],
         ]);
@@ -387,6 +389,9 @@ class CatalogoController extends Controller
     }
 
     public function destroyBanco($id) {
+        if (\App\Support\Facturas\BancoFacturacion::configurado() && \App\Models\SolicitudFactura::withTrashed()->where('catalogo_banco_id', $id)->exists()) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['banco' => 'Este banco tiene solicitudes de factura. Desactívelo para conservar el historial.']);
+        }
         CatalogoBanco::findOrFail($id)->delete();
         return back()->with('success', 'Banco eliminado.');
     }

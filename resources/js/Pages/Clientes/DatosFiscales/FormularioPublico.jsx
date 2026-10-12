@@ -18,7 +18,7 @@ import {
     normalizarRazonSocialAlEscribir,
 } from '../../../utils/reglasCatalogosFiscales';
 
-const LABEL = 'mb-1.5 block text-[9px] font-black uppercase tracking-widest theme-text-muted';
+const LABEL = 'theme-label mb-2 block';
 const INPUT_WARN = '!border-orange-500 focus:!border-orange-500 focus:!ring-orange-500/30';
 const CAMPO_WARN = 'rounded-xl border-2 border-orange-500 bg-orange-500/5 p-3';
 const CAMPO_OK = 'rounded-xl border-2 border-transparent p-3';
@@ -107,17 +107,20 @@ export default function FormularioPublico({
             }
         }
 
-        if (!ok) return;
+        if (!ok) {
+            requestAnimationFrame(() => document.querySelector('[aria-invalid="true"]')?.focus());
+            return;
+        }
 
-        post(route('datos_fiscales.publicas.store'), { preserveScroll: true });
+        post(route('datos_fiscales.publicas.store'), { preserveScroll: true, onError: () => requestAnimationFrame(() => document.querySelector('[aria-invalid="true"]')?.focus()) });
     };
 
     const seccion = `${geliaCardClass()} p-4 md:p-5 space-y-4`;
 
     return (
         <div
-            className="relative min-h-screen px-4 py-10 md:py-14"
-            style={{ backgroundColor: 'var(--bg-app, #0a0a0a)' }}
+            className="gelia-facturas-public relative min-h-screen px-4 py-10 md:py-14"
+            style={{ backgroundColor: 'var(--bg-app)' }}
         >
             <Head title="Datos fiscales" />
             <button
@@ -145,7 +148,7 @@ export default function FormularioPublico({
                         Gelia NV
                     </p>
                 )}
-                <h1 className="mt-2 text-3xl md:text-4xl font-black italic tracking-tighter uppercase theme-text-main m-0 text-center">
+                <h1 className="mt-2 text-2xl md:text-3xl font-semibold theme-text-main m-0 text-center">
                     Datos fiscales
                 </h1>
                 <p className="mt-3 text-sm theme-text-muted m-0 text-center">
@@ -165,7 +168,7 @@ export default function FormularioPublico({
                     <input type="hidden" name="token" value={data.token} />
 
                     <section className={seccion}>
-                        <h2 className="text-[10px] font-black uppercase tracking-[0.2em] theme-text-main m-0">Información fiscal</h2>
+                        <h2 className="text-base font-semibold theme-text-main m-0">Información fiscal</h2>
                         <div className="grid gap-4 md:grid-cols-2">
                             {campos.map((campo) => {
                                 const opciones = opcionesCatalogo(catalogos, campo.clave);
@@ -182,11 +185,13 @@ export default function FormularioPublico({
                                         key={campo.clave}
                                         className={`${spanAncho ? 'md:col-span-2' : ''} ${tieneError ? CAMPO_WARN : CAMPO_OK}`}
                                     >
-                                        <label className={`${LABEL} ${tieneError ? 'text-orange-500' : ''}`}>
+                                        <label htmlFor={`fiscal-publico-${campo.clave}`} className={`${LABEL} ${tieneError ? 'text-orange-500' : ''}`}>
                                             {campo.etiqueta}
                                         </label>
                                         {esSelect ? (
                                             <SelectorCatalogoFiscal
+                                                id={`fiscal-publico-${campo.clave}`}
+                                                label={campo.etiqueta}
                                                 opciones={
                                                     esUsoBloqueado
                                                         ? (opciones.filter((o) => o.codigo === USO_SIN_EFECTOS_FISCALES).length
@@ -214,9 +219,13 @@ export default function FormularioPublico({
                                                 required
                                                 disabled={esUsoBloqueado}
                                                 invalid={tieneError}
+                                                describedBy={tieneError ? `fiscal-publico-${campo.clave}-error` : undefined}
                                             />
                                         ) : (
                                             <input
+                                                id={`fiscal-publico-${campo.clave}`}
+                                                name={campo.clave}
+                                                aria-describedby={tieneError ? `fiscal-publico-${campo.clave}-error` : undefined}
                                                 type={campo.clave === 'correo_electronico' ? 'email' : 'text'}
                                                 className={`${THEME_INPUT} ${tieneError ? INPUT_WARN : ''}`}
                                                 value={data[campo.clave] || ''}
@@ -264,12 +273,12 @@ export default function FormularioPublico({
                                             />
                                         )}
                                         {esUsoBloqueado && (
-                                            <p className="mt-1 text-[10px] font-bold theme-text-muted m-0">
+                                            <p className="mt-1 text-xs theme-text-muted m-0">
                                                 Bloqueado por Regimen fiscal: {data.regimen_fiscal}.
                                             </p>
                                         )}
                                         {tieneError && (
-                                            <p className="mt-1 text-xs text-orange-600 dark:text-orange-400 font-bold m-0">{errors[campo.clave]}</p>
+                                            <p id={`fiscal-publico-${campo.clave}-error`} role="alert" className="mt-1 text-xs text-orange-600 dark:text-orange-400 font-bold m-0">{errors[campo.clave]}</p>
                                         )}
                                     </div>
                                 );

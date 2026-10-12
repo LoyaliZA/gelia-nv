@@ -309,6 +309,7 @@ export default function Index({
                             <AccionRegistrarResguardoManual
                                 habilitado={puedeRegistrarManual}
                                 origenes={catalogos.origenes_pedido || []}
+                                flujoCompleto={Boolean(permisos.flujo_completo)}
                                 onExito={(data) => recargar({
                                     bandeja: 'por_recibir',
                                     paso: data?.resguardo?.estado === 'en_recepcion' ? 'recepcionista' : 'gerente',

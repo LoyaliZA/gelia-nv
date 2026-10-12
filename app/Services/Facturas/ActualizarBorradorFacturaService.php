@@ -41,6 +41,9 @@ class ActualizarBorradorFacturaService
                 throw new \InvalidArgumentException('No puede editar este borrador.');
             }
 
+            $bancoId = array_key_exists('catalogo_banco_id', $datos) ? ($datos['catalogo_banco_id'] ?: null) : $solicitud->catalogo_banco_id;
+            \App\Support\Facturas\BancoFacturacion::validar($bancoId, $solicitud->departamento_id, false);
+
             $destinatarioTipo = ($datos['destinatario_tipo'] ?? $solicitud->destinatario_tipo) === SolicitudFactura::DESTINATARIO_TERCERO
                 ? SolicitudFactura::DESTINATARIO_TERCERO
                 : SolicitudFactura::DESTINATARIO_CLIENTE;
@@ -51,6 +54,7 @@ class ActualizarBorradorFacturaService
             }
 
             $updates = [
+                ...(\App\Support\Facturas\BancoFacturacion::configurado() ? ['catalogo_banco_id' => $bancoId] : []),
                 'destinatario_tipo' => $destinatarioTipo,
                 'razon_social' => $razonSocial,
                 'observaciones_vendedor' => $datos['observaciones_vendedor'] ?? $solicitud->observaciones_vendedor,
@@ -179,6 +183,8 @@ class ActualizarBorradorFacturaService
                         'enviar_ahora' => 'Espere a que respondan el formulario fiscal antes de enviar a encargada.',
                     ]);
                 }
+
+                \App\Support\Facturas\BancoFacturacion::validar($solicitud->catalogo_banco_id, $solicitud->departamento_id, true, \App\Support\Facturas\BancoFacturacion::configurado());
 
                 $idPendiente = CatalogoEstadoSolicitud::idDe('Pendiente');
                 if ($idPendiente === null) {

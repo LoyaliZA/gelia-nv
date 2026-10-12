@@ -27,6 +27,7 @@ class StoreSolicitudFacturaRequest extends FormRequest
             && filter_var($this->input('pedir_formulario'), FILTER_VALIDATE_BOOLEAN);
 
         return [
+            'catalogo_banco_id' => [($esBorrador || ! \App\Support\Facturas\BancoFacturacion::configurado()) ? 'nullable' : 'required', 'integer', 'exists:catalogo_bancos,id'],
             'modo' => ['nullable', Rule::in(['borrador', 'pendiente'])],
             'destinatario_tipo' => ['nullable', Rule::in([SolicitudFactura::DESTINATARIO_CLIENTE, SolicitudFactura::DESTINATARIO_TERCERO])],
             'razon_social' => [$terceroConForm ? 'nullable' : 'required', 'string', 'min:3', 'max:255'],

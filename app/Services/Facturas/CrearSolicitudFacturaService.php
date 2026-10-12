@@ -38,6 +38,11 @@ class CrearSolicitudFacturaService
             $departamentoId = $vendedor->departamentos->first()?->id
                 ?? $vendedor->area?->departamento_id;
 
+            \App\Support\Facturas\BancoFacturacion::validar(
+                isset($datos['catalogo_banco_id']) ? (int) $datos['catalogo_banco_id'] : null,
+                $departamentoId, $modo === 'pendiente'
+            );
+
             $destinatarioTipo = ($datos['destinatario_tipo'] ?? SolicitudFactura::DESTINATARIO_CLIENTE) === SolicitudFactura::DESTINATARIO_TERCERO
                 ? SolicitudFactura::DESTINATARIO_TERCERO
                 : SolicitudFactura::DESTINATARIO_CLIENTE;
@@ -93,6 +98,7 @@ class CrearSolicitudFacturaService
                 'folio' => SolicitudFactura::generarFolio(),
                 'vendedor_id' => $vendedorId,
                 'departamento_id' => $departamentoId,
+                ...(\App\Support\Facturas\BancoFacturacion::configurado() ? ['catalogo_banco_id' => $datos['catalogo_banco_id'] ?? null] : []),
                 'cliente_id' => $clienteId,
                 'receptor_fiscal_id' => $destinatarioTipo === SolicitudFactura::DESTINATARIO_TERCERO ? $receptorId : null,
                 'destinatario_tipo' => $destinatarioTipo,
@@ -142,6 +148,7 @@ class CrearSolicitudFacturaService
                     'vouchers_count' => $orden - 1,
                     'tiene_archivo_fiscal' => (bool) $archivoFiscalPath,
                     'modo' => $modo,
+                    'catalogo_banco_id' => $solicitud->catalogo_banco_id,
                 ],
             ]);
 

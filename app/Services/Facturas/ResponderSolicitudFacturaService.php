@@ -37,6 +37,10 @@ class ResponderSolicitudFacturaService
             $esError = $idIncorrecta !== null && $estadoNuevoId === $idIncorrecta;
             $esAprobacion = $idRespondida !== null && $estadoNuevoId === $idRespondida;
 
+            if ($esAprobacion) {
+                \App\Support\Facturas\BancoFacturacion::validar($solicitud->catalogo_banco_id, $solicitud->departamento_id, true);
+            }
+
             if ($esError) {
                 $updates['motivo_incorrecta'] = 'error_reportado';
                 $updates['campos_incorrectos'] = CamposIncorrectosFactura::filtrar($datos['campos_incorrectos'] ?? []);

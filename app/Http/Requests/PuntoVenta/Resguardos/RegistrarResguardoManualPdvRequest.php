@@ -2,13 +2,14 @@
 
 namespace App\Http\Requests\PuntoVenta\Resguardos;
 
+use App\Contracts\PuntoVenta\ResuelveAlcancePdv;
 use App\Http\Requests\PuntoVenta\PdvOperacionPisoRequest;
-use App\Models\Producto;
 use App\Models\User;
 use App\Services\PuntoVenta\PuntoVentaModulo;
 use App\Services\PuntoVenta\Resguardos\RegistroManualResguardoPdvConfig;
 use App\Support\PuntoVenta\Resguardos\DepartamentosOrigenResguardoManualPdv;
-use Illuminate\Validation\ValidationException;
+use App\Support\PuntoVenta\Resguardos\NormalizadorPiezasRegistroManualPdv;
+use Illuminate\Contracts\Validation\Validator;
 
 class RegistrarResguardoManualPdvRequest extends PdvOperacionPisoRequest
 {
@@ -70,6 +71,7 @@ class RegistrarResguardoManualPdvRequest extends PdvOperacionPisoRequest
             'piezas' => ['sometimes', 'array', 'max:200'],
             'piezas.*.producto_id' => ['required', 'integer', 'exists:productos,id'],
             'piezas.*.cantidad' => ['required', 'integer', 'min:1', 'max:9999'],
+            'piezas.*.nota' => ['nullable', 'string', 'max:500'],
             'archivo_ticket' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:5120'],
             'foto_paquete' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
         ];
@@ -89,8 +91,8 @@ class RegistrarResguardoManualPdvRequest extends PdvOperacionPisoRequest
         $datos['observaciones'] = filled($datos['observaciones'] ?? null)
             ? trim((string) $datos['observaciones'])
             : null;
-        $datos['piezas'] = $this->normalizarPiezas($datos['piezas'] ?? []);
-        $datos['cantidad_piezas'] = $this->resolverCantidadPiezas(
+        $datos['piezas'] = NormalizadorPiezasRegistroManualPdv::normalizar($datos['piezas'] ?? []);
+        $datos['cantidad_piezas'] = NormalizadorPiezasRegistroManualPdv::cantidad(
             $datos['piezas'],
             isset($datos['cantidad_piezas']) ? (int) $datos['cantidad_piezas'] : null
         );
@@ -98,57 +100,28 @@ class RegistrarResguardoManualPdvRequest extends PdvOperacionPisoRequest
         return $datos;
     }
 
-    /**
-     * @param  list<array<string, mixed>>  $filas
-     * @return list<array{producto_id: int, sku: string|null, descripcion: string|null, cantidad: int}>
-     */
-    private function normalizarPiezas(array $filas): array
+    public function withValidator(Validator $validator): void
     {
-        if ($filas === []) {
-            return [];
-        }
-
-        $ids = array_values(array_unique(array_map(
-            static fn (array $fila): int => (int) ($fila['producto_id'] ?? 0),
-            $filas
-        )));
-        $productos = Producto::query()
-            ->whereIn('id', $ids)
-            ->get(['id', 'sku', 'descripcion'])
-            ->keyBy('id');
-
-        $normalizadas = [];
-        foreach ($filas as $fila) {
-            $productoId = (int) ($fila['producto_id'] ?? 0);
-            $producto = $productos->get($productoId);
-            if ($producto === null) {
-                throw ValidationException::withMessages([
-                    'piezas' => 'Seleccione productos del catálogo autorizado.',
-                ]);
+        $validator->after(function (Validator $validator): void {
+            if (! $this->actorEnFlujoCompleto()) {
+                return;
             }
 
-            $normalizadas[] = [
-                'producto_id' => $producto->id,
-                'sku' => $producto->sku,
-                'descripcion' => $producto->descripcion,
-                'cantidad' => (int) $fila['cantidad'],
-            ];
-        }
-
-        return $normalizadas;
+            $piezas = $this->input('piezas', []);
+            if (! is_array($piezas) || $piezas === []) {
+                $validator->errors()->add('piezas', 'Registre al menos una pieza del pedido.');
+            }
+        });
     }
 
-    /**
-     * @param  list<array{cantidad: int}>  $piezas
-     */
-    private function resolverCantidadPiezas(array $piezas, ?int $cantidadDeclarada): ?int
+    private function actorEnFlujoCompleto(): bool
     {
-        if ($piezas !== []) {
-            return array_sum(array_column($piezas, 'cantidad'));
-        }
+        $actor = $this->user();
 
-        return $cantidadDeclarada !== null && $cantidadDeclarada > 0
-            ? $cantidadDeclarada
-            : null;
+        return $actor instanceof User
+            && app(ResuelveAlcancePdv::class)->tienePermisoPdv(
+                $actor,
+                PuntoVentaModulo::PERMISO_RESGUARDOS_FLUJO_COMPLETO
+            );
     }
 }

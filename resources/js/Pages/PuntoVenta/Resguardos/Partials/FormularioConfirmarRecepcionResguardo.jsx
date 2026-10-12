@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Loader2, Package, UserRound } from 'lucide-react';
 import { geliaCardClass, THEME_BTN_PRIMARY } from '../../../../utils/geliaTheme';
 import { titularResguardo, etiquetaRetiroResguardo } from './resguardosUtils';
 import { ChipEvidenciasBultosEmpaque } from './ModalEvidenciasBultosEmpaque';
+import BusquedaProductoResguardo from './BusquedaProductoResguardo';
 import useToastAlCambiar from '../../../../hooks/useToastAlCambiar';
 
 function CampoSoloLectura({ label, value }) {
@@ -16,6 +17,7 @@ function CampoSoloLectura({ label, value }) {
 
 export default function FormularioConfirmarRecepcionResguardo({
     resguardo,
+    flujoCompleto = false,
     enviando = false,
     progreso = 0,
     error = null,
@@ -25,12 +27,38 @@ export default function FormularioConfirmarRecepcionResguardo({
     const bultosCedis = resguardo?.bultos_empaque_cedis || [];
     const titular = titularResguardo(resguardo);
     const etiquetaRetiro = etiquetaRetiroResguardo(resguardo);
+    const registroManual = resguardo?.registro_manual;
+    const corrigePiezas = Boolean(flujoCompleto && registroManual);
+    const [piezas, setPiezas] = useState([]);
+    const [errorPiezas, setErrorPiezas] = useState(null);
+
+    useEffect(() => {
+        const iniciales = (registroManual?.piezas || []).map((linea) => ({
+            producto_id: linea.producto_id,
+            sku: linea.sku,
+            descripcion: linea.descripcion,
+            cantidad: linea.cantidad || 1,
+            nota: linea.nota || '',
+        }));
+        setPiezas(iniciales);
+    }, [resguardo?.id, registroManual]);
 
     useToastAlCambiar(error, 'error');
 
     const confirmarEnvio = async (e) => {
         e.preventDefault();
-        await onEnviar?.();
+        if (corrigePiezas && piezas.length < 1) {
+            setErrorPiezas('Registre las piezas del pedido antes de confirmar la recepción.');
+            return;
+        }
+        setErrorPiezas(null);
+        await onEnviar?.(corrigePiezas ? {
+            piezas: piezas.map((linea) => ({
+                producto_id: linea.producto_id,
+                cantidad: Number.parseInt(linea.cantidad, 10) || 1,
+                nota: String(linea.nota || '').trim() || null,
+            })),
+        } : undefined);
     };
 
     return (
@@ -61,9 +89,46 @@ export default function FormularioConfirmarRecepcionResguardo({
             <div className={`${geliaCardClass()} p-4 flex items-start gap-3 border border-[color-mix(in_srgb,var(--color-info)_35%,transparent)]`}>
                 <UserRound className="w-5 h-5 text-[var(--color-info)] shrink-0 mt-0.5" />
                 <p className="text-sm theme-text-muted m-0">
-                    Solo confirma que el paquete llegó a sucursal. El recepcionista revisará bultos y piezas después.
+                    {corrigePiezas
+                        ? 'Confirme la llegada y ajuste las piezas si el conteo no coincide. Ticket y foto del paquete ya capturados se reutilizan.'
+                        : 'Solo confirma que el paquete llegó a sucursal. El recepcionista revisará bultos y piezas después.'}
                 </p>
             </div>
+
+            {corrigePiezas && (
+                <div className={`${geliaCardClass()} p-5 space-y-3`}>
+                    <h2 className="text-sm font-black uppercase tracking-widest theme-text-main m-0">Piezas del pedido</h2>
+                    <BusquedaProductoResguardo
+                        lineas={piezas}
+                        onAgregar={(producto) => setPiezas((prev) => {
+                            const existente = prev.find((linea) => linea.producto_id === producto.id);
+                            if (existente) {
+                                return prev.map((linea) => (
+                                    linea.producto_id === producto.id
+                                        ? { ...linea, cantidad: Math.min(9999, Number(linea.cantidad) + 1) }
+                                        : linea
+                                ));
+                            }
+                            return [...prev, {
+                                producto_id: producto.id,
+                                sku: producto.sku,
+                                descripcion: producto.descripcion,
+                                cantidad: 1,
+                                nota: '',
+                            }];
+                        })}
+                        onQuitar={(productoId) => setPiezas((prev) => prev.filter((linea) => linea.producto_id !== productoId))}
+                        onCambiarCantidad={(productoId, cantidad) => setPiezas((prev) => prev.map((linea) => (
+                            linea.producto_id === productoId ? { ...linea, cantidad } : linea
+                        )))}
+                        onCambiarNota={(productoId, nota) => setPiezas((prev) => prev.map((linea) => (
+                            linea.producto_id === productoId ? { ...linea, nota } : linea
+                        )))}
+                        deshabilitado={enviando}
+                    />
+                    {errorPiezas && <p className="text-xs font-semibold theme-text-peligro m-0">{errorPiezas}</p>}
+                </div>
+            )}
 
             <div className="flex flex-col sm:flex-row gap-2">
                 <button

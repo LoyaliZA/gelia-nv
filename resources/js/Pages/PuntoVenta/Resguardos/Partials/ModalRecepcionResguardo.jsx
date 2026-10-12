@@ -29,6 +29,7 @@ export default function ModalRecepcionResguardo({
         catalogos,
         admiteRecepcion,
         motivoNoRecepcion,
+        flujoCompleto,
     } = useFormularioRecepcionResguardo(resguardoId);
 
     const {
@@ -143,6 +144,7 @@ export default function ModalRecepcionResguardo({
                     ) : resguardo ? (
                         <FormularioConfirmarRecepcionResguardo
                             resguardo={resguardo}
+                            flujoCompleto={flujoCompleto}
                             enviando={enviando}
                             progreso={progreso}
                             error={error}

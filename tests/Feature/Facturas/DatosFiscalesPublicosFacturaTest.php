@@ -428,6 +428,7 @@ class DatosFiscalesPublicosFacturaTest extends TestCase
             'numero_cliente' => $cliente->numero_cliente,
             'destinatario_tipo' => SolicitudFactura::DESTINATARIO_CLIENTE,
             'enviar_ahora' => true,
+            'catalogo_banco_id' => \App\Models\CatalogoBanco::create(['nombre' => 'Banco de prueba', 'activo' => true, 'compartido' => true, 'facturacion_habilitada' => true])->id,
         ], $vendedor);
 
         $this->assertSame('Pendiente', $resultado['solicitud']->estado->nombre);
