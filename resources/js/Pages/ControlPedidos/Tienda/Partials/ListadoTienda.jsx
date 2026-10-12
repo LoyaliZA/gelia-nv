@@ -13,13 +13,15 @@ import {
     claseBadgeEstadoTienda,
     fmtRelativo,
     fmtVencimiento,
+    accionPrincipalTienda,
 } from './tiendaUi';
 
 function CtaTabla({ t, puedeTomar, showUrl, onAbrir }) {
     if (onAbrir) {
+        const accion = accionPrincipalTienda(t, puedeTomar);
         return <button type="button" className={`${BTN_PRIMARY} inline-flex items-center gap-1.5 text-xs px-3 py-2 min-h-[36px]`}
-            onClick={() => onAbrir(t, t.estado === 'PENDIENTE' && puedeTomar)}>
-            <Package className="w-3.5 h-3.5" /> {t.estado === 'PENDIENTE' && puedeTomar ? 'Atender' : t.estado === 'EN_ATENCION' ? 'Responder' : 'Ver'}
+            onClick={() => onAbrir(t, accion.atender)}>
+            <Package className="w-3.5 h-3.5" aria-hidden="true" /> {accion.label}
         </button>;
     }
     if (t.estado === 'PENDIENTE' && puedeTomar) {
@@ -91,7 +93,7 @@ function TablaTareas({ items, puedeTomar, onAbrir }) {
                         return (
                             <tr key={t.id} data-alerta={alerta}>
                                 <td>
-                                    <Link href={showUrl} onClick={(e) => { if (onAbrir) { e.preventDefault(); onAbrir(t); } }} className="gelia-tienda-op-fila-link block truncate max-w-[10rem]" title={folio}>
+                                    <Link href={showUrl} onClick={(e) => { if (onAbrir && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey && e.button === 0) { e.preventDefault(); onAbrir(t); } }} className="gelia-tienda-op-fila-link block truncate max-w-[10rem]" title={folio}>
                                         {folio}
                                     </Link>
                                     {t.modalidad?.nombre && (

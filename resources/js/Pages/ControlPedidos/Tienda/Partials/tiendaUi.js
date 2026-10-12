@@ -33,6 +33,18 @@ export const TONO_ESTADO_TIENDA = {
     CANCELADA: 'neutro',
 };
 
+export function accionPrincipalTienda(tarea, puedeTomar = false) {
+    const atender = tarea.estado === 'PENDIENTE' && (tarea.puede_tomar ?? puedeTomar);
+    if (atender) return { label: 'Atender pedido', atender: true };
+    if (tarea.estado === 'EN_ATENCION') {
+        const esRecoge = !tarea.modalidad || tarea.modalidad.codigo === 'RECOGE_TIENDA';
+        const puedeResponder = esRecoge ? tarea.puede_preparar : tarea.puede_responder;
+        return { label: puedeResponder === false ? 'Ver preparación' : 'Continuar preparación', atender: false };
+    }
+    const etiquetas = { LISTA_PARA_TRASLADO: 'Confirmar salida', LISTA_PARA_CARATULA: 'Revisar carátula', RESPONDIDA: 'Ver respuesta', CON_INCIDENCIA: 'Revisar problema', RECHAZADA_CEDIS: 'Revisar rechazo' };
+    return { label: etiquetas[tarea.estado] || 'Ver preparación', atender: false };
+}
+
 export const ETIQUETA_ESTADO_TIENDA = {
     PENDIENTE: 'Pendiente',
     EN_ATENCION: 'En atención',

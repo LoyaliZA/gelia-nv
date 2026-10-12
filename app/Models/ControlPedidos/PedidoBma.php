@@ -716,7 +716,7 @@ class PedidoBma extends Model
 
     public function tienePdfPedido(): bool
     {
-        return $this->pdfPedido()->exists();
+        return $this->tieneSoporteSolicitud();
     }
 
     public function cotizaciones(): HasMany

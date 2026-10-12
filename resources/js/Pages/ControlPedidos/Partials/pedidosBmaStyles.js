@@ -730,6 +730,23 @@ export const esPedidoEmpacadoCedis = (fase) =>
 export const mostrarNotaCompraCedis = (fase) =>
     fase === 'EN_CEDIS' || fase === 'INCIDENCIA_CEDIS' || esPedidoEmpacadoCedis(fase);
 
+/** PDF o foto del pedido. La cotización cuenta cuando no hay un pdf_pedido vigente. */
+export const soportePedidoDe = (pedido) => {
+    const docs = pedido?.documentos || [];
+    const doc = docs.find((d) => d.tipo === 'pdf_pedido')
+        || docs.find((d) => d.tipo === 'cotizacion')
+        || null;
+    if (!doc) return null;
+
+    const url = doc.url
+        || (doc.id && pedido?.id
+            ? route('control_pedidos.documentos.show', { pedidoBma: pedido.id, documento: doc.id })
+            : null)
+        || (doc.ruta_archivo ? `/storage/${doc.ruta_archivo}` : null);
+
+    return url ? { ...doc, url } : null;
+};
+
 export const guiaPdfDe = (pedido) => {
     const doc = (pedido?.documentos || []).find((d) => d.tipo === 'guia');
     if (!doc) return null;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { calcularPesoCobradoGuia, esCotizacionLista, pedidoModoRevisionMercancia, validarCamposEnvioPedido } from './pedidosBmaStyles';
+import { calcularPesoCobradoGuia, esCotizacionLista, pedidoModoRevisionMercancia, soportePedidoDe, validarCamposEnvioPedido } from './pedidosBmaStyles';
 
 const baseTienda = {
     folio_remision: 'F-1',
@@ -122,5 +122,27 @@ describe('calcularPesoCobradoGuia — ceil max(real, vol)', () => {
         expect(calcularPesoCobradoGuia(3, 5)).toBe('5');
         expect(calcularPesoCobradoGuia(4, 2)).toBe('4');
         expect(calcularPesoCobradoGuia('', '')).toBe('');
+    });
+});
+
+describe('soportePedidoDe', () => {
+    it('muestra la cotización cuando el pedido no tiene pdf_pedido', () => {
+        const pedido = {
+            id: 35,
+            documentos: [
+                { id: 78, tipo: 'cotizacion', url: '/pedidos/35/documentos/78', mime_type: 'image/jpeg', nombre_original: 'FLUJO BENITO.jpeg' },
+            ],
+        };
+        expect(soportePedidoDe(pedido)?.nombre_original).toBe('FLUJO BENITO.jpeg');
+    });
+
+    it('prefiere el pdf del pedido sobre la cotización', () => {
+        const pedido = {
+            documentos: [
+                { id: 1, tipo: 'cotizacion', url: '/c' },
+                { id: 2, tipo: 'pdf_pedido', url: '/p' },
+            ],
+        };
+        expect(soportePedidoDe(pedido)?.id).toBe(2);
     });
 });

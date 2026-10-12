@@ -98,6 +98,10 @@ class PedidoBmaDocumento extends Model
             ]);
         }
 
+        if (! is_string($this->ruta_archivo) || $this->ruta_archivo === '') {
+            return '';
+        }
+
         return Storage::disk('public')->url($this->ruta_archivo);
     }
 }

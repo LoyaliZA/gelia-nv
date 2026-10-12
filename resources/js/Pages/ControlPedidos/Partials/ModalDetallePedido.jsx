@@ -62,7 +62,7 @@ export default function ModalDetallePedido({ abierto, onClose, pedido }) {
     const guiaLista = tieneGuiaLista(pedido);
     const badgeGuia = badgeGuiaLista();
     const badgeApartado = pedido.resguardo_apartado_at ? badgeResguardoApartado() : null;
-    const docsSinGuia = (pedido.documentos || []).filter((d) => !['guia', 'pdf_pedido', 'anexo_piezas'].includes(d.tipo));
+    const docsSinGuia = (pedido.documentos || []).filter((d) => !['guia', 'pdf_pedido', 'cotizacion', 'anexo_piezas'].includes(d.tipo));
     const evidenciasApartado = (pedido.documentos || []).filter((d) => d.tipo === 'evidencia_apartado');
     const badgeFisico = pedido.estado_fisico_general ? badgeEstadoFisico(pedido.estado_fisico_general) : null;
     const badgesSla = badgesRetrasoSla(pedido);

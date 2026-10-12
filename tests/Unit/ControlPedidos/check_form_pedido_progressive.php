@@ -12,7 +12,7 @@ $form = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Partials/Mod
 $progDir = $root.'/resources/js/Pages/ControlPedidos/Partials/FormularioProgresivo';
 
 $checks = [
-    ['orquestador usa flag formulario_progresivo', str_contains($orquestador, 'formulario_config?.formulario_progresivo')],
+    ['orquestador usa formulario por fases', str_contains($orquestador, 'modoProgresivo = true')],
     ['orquestador delega a Legado', str_contains($orquestador, 'ModalFormPedidoLegado')],
     ['existe EncabezadoPedido', is_file($progDir.'/EncabezadoPedido.jsx')],
     ['existe ProgresoPedido', is_file($progDir.'/ProgresoPedido.jsx')],

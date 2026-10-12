@@ -50,6 +50,7 @@ import AvisoOperativoPedido from './AvisoOperativoPedido';
 import TarjetaEnvioPedido from './TarjetaEnvioPedido';
 import SeccionRevisionFisicaPedido from './SeccionRevisionFisicaPedido';
 import ReferenciaPedidoCompartido from './ReferenciaPedidoCompartido';
+import NavegacionPedido from './NavegacionPedido';
 import CamposDireccionPedido, {
     CAMPOS_DIRECCION_VACIOS,
     camposDesdeDireccion,
@@ -58,7 +59,6 @@ import CamposDireccionPedido, {
 import { resolverReexpedicionForm, separarCostoEnvioDeReexpedicion, costoEnvioParaPersistir, costoReexpedicionDeZona } from './resolverReexpedicionForm';
 import {
     EncabezadoPedido,
-    ProgresoPedido,
     SeccionResumenEnvioPedido,
     HistorialPedidoAcordeon,
     SeccionClientePedido,
@@ -77,6 +77,49 @@ import {
     requiereCapturaDestinoSucursal,
     resolverCodigoModalidadEfectiva,
 } from './destinoSucursalPedido';
+
+const FASE_DATOS = 'datos';
+const FASE_RESPUESTA = 'respuesta';
+const FASE_COTIZACION = 'cotizacion';
+const FASE_PAGO = 'pago';
+
+const FASE_POR_CAMPO = {
+    cliente: FASE_DATOS,
+    origen: FASE_DATOS,
+    almacen: FASE_DATOS,
+    sucursal_destino: FASE_DATOS,
+    pdf_pedido: FASE_DATOS,
+    folio_remision: FASE_DATOS,
+    paqueteria: FASE_DATOS,
+    pesaje: FASE_DATOS,
+    tipo_caja: FASE_RESPUESTA,
+    numero_envios: FASE_RESPUESTA,
+    peso_real: FASE_RESPUESTA,
+    total_mercancia: FASE_COTIZACION,
+    domicilio: FASE_COTIZACION,
+    tipo_guia: FASE_COTIZACION,
+    reexpedicion: FASE_COTIZACION,
+    costo_envio: FASE_COTIZACION,
+    codigo_postal: FASE_COTIZACION,
+    pago: FASE_PAGO,
+};
+
+function faseDeCampo(clave) {
+    if (FASE_POR_CAMPO[clave]) return FASE_POR_CAMPO[clave];
+    if (String(clave || '').startsWith('caja_costo_')) return FASE_RESPUESTA;
+    return null;
+}
+
+/** Mantiene montada la fase visitada y solo oculta la que no está activa. */
+function PanelFase({ activa, codigo, montada, children }) {
+    if (activa != null && !montada) return null;
+    const visible = activa == null || activa === codigo;
+    return (
+        <div id={`registro-${codigo}`} className={visible ? 'space-y-8' : 'hidden'} inert={visible ? undefined : true}>
+            {children}
+        </div>
+    );
+}
 
 const STORAGE_BORRADOR = 'control_pedidos.borrador_pedido_v2';
 /** Autoguardado local: rápido, no satura red. Constante frontend documentada (no regla de negocio). */
@@ -289,7 +332,6 @@ export default function ModalFormPedidoLegado({
     const direccionSuciaRef = useRef(false);
     const capturaManualRef = useRef(false);
     const autoguardandoBd = useRef(false);
-    const ignoreOverlayCloseUntil = useRef(0);
     const cuerpoFormRef = useRef(null);
     const [pedidoBdId, setPedidoBdId] = useState(pedido?.id || null);
     const [estadoAuto, setEstadoAuto] = useState({ local: null, bd: null });
@@ -302,11 +344,10 @@ export default function ModalFormPedidoLegado({
     const [codigoModalidadPreparacion, setCodigoModalidadPreparacion] = useState(
         () => pedido?.tarea_preparacion?.modalidad?.codigo || ''
     );
-    const [tipoSoporte, setTipoSoporte] = useState('pdf_pedido');
+    const [prioridadMd, setPrioridadMd] = useState(false);
     const [recogeEnTienda, setRecogeEnTienda] = useState(
         () => pedido?.tarea_preparacion?.modalidad?.codigo === 'RECOGE_TIENDA'
     );
-    const [prioridadMd, setPrioridadMd] = useState(false);
     const [folioReferencia, setFolioReferencia] = useState('');
     const [tipoReferencia, setTipoReferencia] = useState('COTIZACION');
     const [entregaMunicipal, setEntregaMunicipal] = useState(() => ({
@@ -522,7 +563,9 @@ export default function ModalFormPedidoLegado({
         || (pedido?.cajas || []).length > 0
         || pedido?.estatus?.fase_ciclo === 'PESAJE_RESPONDIDO';
     const pendientePesaje = pedido?.estatus_envio === 'pendiente_pesaje' || consultaPendienteLocal;
-    const consultaCerrada = Boolean(pedido?.consulta_cerrada || pedido?.consulta_cerrada_at);
+    const consultaCerradaServidor = Boolean(pedido?.consulta_cerrada || pedido?.consulta_cerrada_at);
+    const [consultaCerradaLocal, setConsultaCerradaLocal] = useState(null);
+    const consultaCerrada = consultaCerradaLocal ?? consultaCerradaServidor;
     const puedeCerrarConsulta = Boolean(pedido?.puede_cerrar_consulta);
     const esConsultaMercancia = pedidoModoRevisionMercancia(pedido, paqueteriaSeleccionada, requiereLogistica);
     const labelConsulta = enFlujoTienda
@@ -666,16 +709,34 @@ export default function ModalFormPedidoLegado({
     const formularioConfig = catalogos?.formulario_config || {};
     const autosaveBdMs = Number(formularioConfig.autosave_debounce_ms) || AUTOSAVE_BD_MS;
     const progresoDto = pedido?.progreso || null;
-    const [etapaUi, setEtapaUi] = useState(progresoDto?.etapa_actual || 'solicitud');
+    const [faseUi, setFaseUi] = useState(FASE_DATOS);
+    const [fasesMontadas, setFasesMontadas] = useState(() => new Set([FASE_DATOS]));
+    const consultaCerradaPrevia = useRef(null);
     const [updatedAtEsperado, setUpdatedAtEsperado] = useState(pedido?.updated_at || null);
     const [progresoLocal, setProgresoLocal] = useState(progresoDto);
-    const etapaVista = modoProgresivo ? (etapaUi || progresoLocal?.etapa_actual || 'solicitud') : null;
-    const verEtapa = (codigo) => !modoProgresivo || etapaVista === codigo;
-    const seleccionarEtapaUi = (codigo) => {
-        const etapa = (progresoLocal?.etapas || progresoDto?.etapas || []).find((e) => e.codigo === codigo);
-        if (etapa && !etapa.editable) return;
-        setEtapaUi(codigo);
+    const verEtapa = (codigo) => !modoProgresivo || fasesMontadas.has(codigo);
+    const irAFase = (codigo) => {
+        setFasesMontadas((prev) => {
+            if (prev.has(codigo)) return prev;
+            const next = new Set(prev);
+            next.add(codigo);
+            return next;
+        });
+        setFaseUi(codigo);
     };
+    const fasesRegistro = [
+        { id: FASE_DATOS, label: 'Datos del cliente y pedido' },
+        (pendientePesaje || tienePesajeRespondido || consultaCerrada)
+            ? { id: FASE_RESPUESTA, label: 'Respuesta CEDIS' }
+            : null,
+        (consultaCerrada || esResguardoComplementario)
+            ? { id: FASE_COTIZACION, label: 'Cotización' }
+            : null,
+        (consultaCerrada || esResguardoComplementario)
+            ? { id: FASE_PAGO, label: 'Pago y remisión' }
+            : null,
+    ].filter(Boolean);
+    const faseActiva = modoProgresivo ? faseUi : null;
     const estadoGuardadoProg = estadoAuto.bd?.includes('guardando')
         ? 'guardando'
         : estadoAuto.bd?.includes('error')
@@ -692,23 +753,48 @@ export default function ModalFormPedidoLegado({
     );
     const paqPendienteSeleccionada = esPaqPendienteNombre(paqueteriaSeleccionada?.nombre);
 
-    const modalAnidadoAbierto = confirmarActualizarDir || Boolean(vistaPrevia?.documentos?.length) || modalLinkDireccion;
+    useEffect(() => {
+        if (!abierto) return;
+        setFaseUi(FASE_DATOS);
+        setFasesMontadas(new Set([FASE_DATOS]));
+        setConsultaCerradaLocal(null);
+        consultaCerradaPrevia.current = Boolean(pedido?.consulta_cerrada || pedido?.consulta_cerrada_at);
+        setProgresoLocal(pedido?.progreso || null);
+        setUpdatedAtEsperado(pedido?.updated_at || null);
+    }, [abierto, pedido?.id]);
 
     useEffect(() => {
         if (!abierto) return;
         setProgresoLocal(pedido?.progreso || null);
         setUpdatedAtEsperado(pedido?.updated_at || null);
-        if (pedido?.progreso?.etapa_actual) {
-            setEtapaUi(pedido.progreso.etapa_actual);
-        }
-    }, [abierto, pedido?.id, pedido?.progreso, pedido?.updated_at]);
+    }, [abierto, pedido?.progreso, pedido?.updated_at]);
 
     useEffect(() => {
-        // Tras cerrar un modal hijo, ignorar clics al overlay del borrador un instante.
-        if (!modalAnidadoAbierto) {
-            ignoreOverlayCloseUntil.current = Date.now() + 400;
+        const previa = consultaCerradaPrevia.current;
+        if (previa === null) {
+            consultaCerradaPrevia.current = consultaCerrada;
+            return;
         }
-    }, [modalAnidadoAbierto]);
+        if (previa === consultaCerrada) return;
+        if (modoProgresivo && consultaCerrada) {
+            setFasesMontadas((prev) => {
+                if (prev.has(FASE_COTIZACION)) return prev;
+                const next = new Set(prev);
+                next.add(FASE_COTIZACION);
+                return next;
+            });
+            setFaseUi(FASE_COTIZACION);
+        } else if (modoProgresivo && (faseUi === FASE_COTIZACION || faseUi === FASE_PAGO)) {
+            setFaseUi(pendientePesaje || tienePesajeRespondido ? FASE_RESPUESTA : FASE_DATOS);
+        }
+        consultaCerradaPrevia.current = consultaCerrada;
+    }, [consultaCerrada, modoProgresivo, faseUi, pendientePesaje, tienePesajeRespondido]);
+
+    useEffect(() => {
+        if (!modoProgresivo) return;
+        if (fasesRegistro.some((fase) => fase.id === faseUi)) return;
+        setFaseUi(FASE_DATOS);
+    }, [modoProgresivo, faseUi, pendientePesaje, tienePesajeRespondido, consultaCerrada, esResguardoComplementario]);
 
     useEffect(() => {
         if (!abierto) return;
@@ -1034,9 +1120,6 @@ export default function ModalFormPedidoLegado({
             if (res.updated_at) setUpdatedAtEsperado(res.updated_at);
             if (res.progreso) {
                 setProgresoLocal(res.progreso);
-                if (modoProgresivo && res.progreso.etapa_actual) {
-                    setEtapaUi(res.progreso.etapa_actual);
-                }
             }
             ultimoFingerprintBd.current = fingerprintBd(data);
             if (!modoEdicion) {
@@ -1668,18 +1751,25 @@ export default function ModalFormPedidoLegado({
                 });
                 requestAnimationFrame(() => {
                     const clave = validacionEnvio.claves?.[0];
-                    const nodo = clave
-                        ? cuerpoFormRef.current?.querySelector(`[data-campo="${clave}"]`)
-                        : null;
-                    nodo?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    const fase = faseDeCampo(clave);
+                    if (fase && modoProgresivo) irAFase(fase);
+                    requestAnimationFrame(() => {
+                        const nodo = clave
+                            ? cuerpoFormRef.current?.querySelector(`[data-campo="${clave}"]`)
+                            : null;
+                        nodo?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    });
                 });
                 return;
             }
             if (muestraDestinoSucursal && !data.sucursal_destino_id) {
                 setAvisoForm({ tipo: 'error', mensaje: 'Indique la sucursal destino.' });
                 requestAnimationFrame(() => {
-                    cuerpoFormRef.current?.querySelector('[data-campo="sucursal_destino"]')
-                        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    if (modoProgresivo) irAFase(FASE_DATOS);
+                    requestAnimationFrame(() => {
+                        cuerpoFormRef.current?.querySelector('[data-campo="sucursal_destino"]')
+                            ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    });
                 });
                 return;
             }
@@ -1767,7 +1857,7 @@ export default function ModalFormPedidoLegado({
         if (!id) return;
         const fd = new FormData();
         fd.append('pdf_pedido', file);
-        fd.append('tipo_soporte', tipoSoporte);
+        fd.append('tipo_soporte', 'pdf_pedido');
         setProcesandoPesaje(true);
         try {
             const { data: res } = await axios.post(route('control_pedidos.pdf_pedido.store', id), fd, {
@@ -1857,7 +1947,7 @@ export default function ModalFormPedidoLegado({
             idempotencia_clave: `prep-${id}-${Date.now()}`,
         };
         Object.assign(payload, {
-            documento_inicial: tipoSoporte === 'cotizacion' ? 'COTIZACION' : 'PEDIDO',
+            documento_inicial: 'PEDIDO',
             prioridad_md: prioridadMd,
             folio_referencia: folioReferencia.trim() || undefined,
             tipo_referencia: folioReferencia.trim() ? tipoReferencia : undefined,
@@ -1973,6 +2063,7 @@ export default function ModalFormPedidoLegado({
         if (!idPedidoAcciones) return;
         setProcesandoPesaje(true);
         router.post(route('control_pedidos.cerrar_consulta', idPedidoAcciones), {}, {
+            preserveState: true,
             preserveScroll: true,
             onFinish: () => setProcesandoPesaje(false),
             onSuccess: (page) => {
@@ -1981,6 +2072,7 @@ export default function ModalFormPedidoLegado({
                     setAvisoPesaje({ tipo: 'error', mensaje: err });
                     return;
                 }
+                setConsultaCerradaLocal(true);
                 setAvisoPesaje({ tipo: 'success', mensaje: page?.props?.flash?.success || 'Consulta cerrada.' });
             },
             onError: () => setAvisoPesaje({ tipo: 'error', mensaje: 'No se pudo cerrar la consulta.' }),
@@ -1992,6 +2084,7 @@ export default function ModalFormPedidoLegado({
         if (!window.confirm('¿Reabrir la consulta? El monto y el pago quedarán bloqueados hasta cerrarla de nuevo.')) return;
         setProcesandoPesaje(true);
         router.post(route('control_pedidos.reabrir_consulta', idPedidoAcciones), {}, {
+            preserveState: true,
             preserveScroll: true,
             onFinish: () => setProcesandoPesaje(false),
             onSuccess: (page) => {
@@ -2000,6 +2093,7 @@ export default function ModalFormPedidoLegado({
                     setAvisoPesaje({ tipo: 'error', mensaje: err });
                     return;
                 }
+                setConsultaCerradaLocal(false);
                 setAvisoPesaje({ tipo: 'success', mensaje: page?.props?.flash?.success || 'Consulta reabierta.' });
             },
             onError: () => setAvisoPesaje({ tipo: 'error', mensaje: 'No se pudo reabrir la consulta.' }),
@@ -2144,17 +2238,15 @@ export default function ModalFormPedidoLegado({
         </>
     );
 
-    const cerrarOverlayBorrador = (e) => {
-        if (e.target !== e.currentTarget) return;
-        if (modalAnidadoAbierto) return;
-        if (Date.now() < ignoreOverlayCloseUntil.current) return;
-        onClose();
-    };
-
-    const dialog = usePedidoDialog({ abierto, onClose, bloqueado: processing || procesandoPesaje });
+    const dialog = usePedidoDialog({
+        abierto,
+        onClose,
+        bloqueado: processing || procesandoPesaje,
+        cerrarConEscape: false,
+    });
 
     const modal = abierto ? createPortal(
-        <div className={`${THEME_MODAL_OVERLAY} items-start sm:items-center py-4 sm:py-6`} data-gelia-modal="1" onClick={cerrarOverlayBorrador}>
+        <div className={`${THEME_MODAL_OVERLAY} items-start sm:items-center py-4 sm:py-6`} data-gelia-modal="1">
             <div
                 {...dialog}
                 aria-label="Registro del pedido"
@@ -2203,16 +2295,18 @@ export default function ModalFormPedidoLegado({
                 </div>
                 )}
 
+                {modoProgresivo && (
+                    <NavegacionPedido
+                        label="Fases del registro"
+                        activa={faseUi}
+                        onSeleccionar={irAFase}
+                        secciones={fasesRegistro}
+                    />
+                )}
+
                 <div className={`gelia-modal-body p-5 md:p-8 ${modoProgresivo ? 'space-y-4' : 'space-y-8'}`} ref={cuerpoFormRef}>
-                    {modoProgresivo && (
-                        <ProgresoPedido
-                            progreso={progresoLocal || progresoDto}
-                            etapaSeleccionada={etapaVista}
-                            onSeleccionar={seleccionarEtapaUi}
-                        />
-                    )}
-                    <div className={modoProgresivo ? `flex flex-col ${tienePesajeRespondido && ['consulta', 'confirmacion'].includes(etapaVista) ? 'lg:flex-row-reverse' : 'lg:flex-row'} gap-6 items-start` : undefined}>
-                    <div className={modoProgresivo ? 'lg:w-[70%] w-full space-y-8 min-w-0' : 'contents'}>
+                    <div className={modoProgresivo ? `flex flex-col ${faseUi === FASE_RESPUESTA ? 'lg:flex-row-reverse' : 'lg:flex-row'} gap-6 items-start` : undefined}>
+                    <div className={modoProgresivo ? 'lg:w-[70%] w-full min-w-0' : 'contents'}>
                     {avisoForm && (
                         <div
                             className="p-4 rounded-xl border flex items-start gap-3"
@@ -2269,9 +2363,8 @@ export default function ModalFormPedidoLegado({
                         </div>
                     )}
 
-                    {/* 1. Cliente */}
-                    {verEtapa('solicitud') && (
-                    <SeccionClientePedido soloHijos={!modoProgresivo}>
+                    <PanelFase codigo={FASE_DATOS} activa={faseActiva} montada={verEtapa(FASE_DATOS)}>
+                    <SeccionClientePedido soloHijos>
                     <section className={SECCION_WRAP}>
                         <p className={SECCION}>{nSec.cliente}. Cliente</p>
                         {!pedido && (departamentosUsuario.length > 1 || puedeElegirCualquierDepartamento) && <label className="block text-sm mb-3">Departamento del pedido
@@ -2732,10 +2825,9 @@ export default function ModalFormPedidoLegado({
                         </div>
                     </section>
                     </SeccionClientePedido>
-                    )}
 
-                    {mostrarPdfPedido && verEtapa('solicitud') && (
-                    <SeccionSolicitudInicialPedido soloHijos={!modoProgresivo}>
+                    {mostrarPdfPedido && (
+                    <SeccionSolicitudInicialPedido soloHijos>
                     <section className={`${SECCION_WRAP} ${wrapCampo('pdf_pedido')}`} data-campo="pdf_pedido" onPaste={pegarPdfPedido}>
                         <p className={SECCION}>
                             {nSec.pdf}. {requiereLogistica ? 'Folio, paquetería y archivo del pedido' : 'Folio y archivo del pedido'}
@@ -2800,14 +2892,6 @@ export default function ModalFormPedidoLegado({
                             )}
                         </div>
                         <div className="flex flex-wrap items-center gap-3">
-                            <select
-                                value={tipoSoporte}
-                                onChange={(e) => setTipoSoporte(e.target.value)}
-                                className={`${THEME_SELECT} py-3 text-xs font-black uppercase`}
-                            >
-                                <option value="pdf_pedido">Soporte de pedido</option>
-                                <option value="cotizacion">Cotización</option>
-                            </select>
                             <label className="flex items-center gap-2 px-4 py-3 border theme-border border-dashed rounded-xl cursor-pointer w-fit theme-element theme-text-main">
                                 <FileText className="w-4 h-4 theme-text-muted" />
                                 <span className="text-xs font-black uppercase">
@@ -2852,9 +2936,8 @@ export default function ModalFormPedidoLegado({
                     </SeccionSolicitudInicialPedido>
                     )}
 
-                    {mostrarPesaje && (verEtapa('consulta') || verEtapa('confirmacion')) && (
-                    <SeccionConsultaPreparacionPedido esConsultaMercancia={esConsultaMercancia} soloHijos={!modoProgresivo}>
-                    <>
+                    {mostrarPesaje && (
+                    <SeccionConsultaPreparacionPedido esConsultaMercancia={esConsultaMercancia} soloHijos>
                     <section className={SECCION_WRAP} data-campo="pesaje">
                         <p className={SECCION}>{nSec.solPesaje}. {labelConsulta}</p>
                         {avisoPesaje && (
@@ -3055,53 +3138,62 @@ export default function ModalFormPedidoLegado({
                             {enFlujoTienda && !esRecogeTienda && !usaPreparacionTienda && !data.almacen_id && !tienePesajeRespondido && !pendientePesaje && (
                                 <p className="text-[10px] font-bold text-amber-600 m-0">Seleccione el almacén de preparación.</p>
                             )}
-                            {tienePesajeRespondido && !pendientePesaje && !pedido?.empacado_at && !puedeContinuarPedido && !enFlujoTienda && (
-                                <div className="space-y-3 p-3 rounded-xl border theme-border">
-                                    <div>
-                                        <label className={SECCION}>Piezas adicionales (PDF o fotos)</label>
-                                        <div className="flex flex-wrap items-center gap-3">
-                                            <label className="flex items-center gap-2 px-4 py-3 border theme-border border-dashed rounded-xl cursor-pointer w-fit theme-element theme-text-main">
-                                                <ImagePlus className="w-4 h-4 theme-text-muted" />
-                                                <span className="text-xs font-black uppercase">
-                                                    {tieneAnexoPiezas ? 'Agregar más' : 'Adjuntar anexos'}
-                                                </span>
-                                                <input type="file" multiple accept="application/pdf,.pdf,image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" className="hidden" onChange={subirAnexoPiezas} disabled={procesandoPesaje} />
-                                            </label>
-                                        </div>
-                                        {anexosPiezasDocs.length > 0 && (
-                                            <div className="flex flex-wrap gap-2 mt-3">
-                                                {anexosPiezasDocs.map((doc, idx) => (
-                                                    <MiniaturaDocumento
-                                                        key={doc.id || doc.url || idx}
-                                                        documento={doc}
-                                                        onVer={() => abrirVistaPrevia(anexosPiezasDocs, idx)}
-                                                    />
-                                                ))}
-                                            </div>
-                                        )}
-                                        <p className="text-[10px] theme-text-muted font-bold m-0 mt-2">
-                                            Puede pegar una o varias capturas (Ctrl+V). Clic en miniatura abre el visor; en fotos también se agrandan al pasar el cursor.
-                                        </p>
-                                    </div>
-                                    <div className="flex flex-wrap items-end gap-3">
-                                        <div className="min-w-[200px] flex-1">
-                                            <label className={SECCION}>Actualizar consulta</label>
-                                            <select value={motivoRepesaje} onChange={(e) => setMotivoRepesaje(e.target.value)} className={`${THEME_SELECT} w-full py-3`}>
-                                                <option value="">Motivo…</option>
-                                                {Object.entries(LABELS_MOTIVO_REPESAJE).map(([k, label]) => (
-                                                    <option key={k} value={k}>{label}</option>
-                                                ))}
-                                            </select>
-                                        </div>
-                                        <button type="button" onClick={solicitarRepesaje} disabled={procesandoPesaje || !motivoRepesaje} className={`${BTN_SECONDARY} flex items-center gap-2 outline-none`}>
-                                            <Scale className="w-4 h-4" /> Actualizar consulta
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
                         </div>
                     </section>
+                    </SeccionConsultaPreparacionPedido>
+                    )}
+                    </PanelFase>
 
+                    <PanelFase codigo={FASE_RESPUESTA} activa={faseActiva} montada={verEtapa(FASE_RESPUESTA)}>
+                    {!tienePesajeRespondido && (pendientePesaje || consultaCerrada) && (
+                        <AvisoOperativoPedido label="Esperando CEDIS" tono="warning" icon={Scale}>
+                            La consulta ya fue enviada. La respuesta, el anexo de piezas y el cierre aparecen aquí cuando CEDIS responda.
+                        </AvisoOperativoPedido>
+                    )}
+                    {tienePesajeRespondido && !pendientePesaje && !pedido?.empacado_at && !puedeContinuarPedido && !enFlujoTienda && !consultaCerrada && (
+                        <div className="space-y-3 p-3 rounded-xl border theme-border">
+                            <div>
+                                <label className={SECCION}>Piezas adicionales (PDF o fotos)</label>
+                                <div className="flex flex-wrap items-center gap-3">
+                                    <label className="flex items-center gap-2 px-4 py-3 border theme-border border-dashed rounded-xl cursor-pointer w-fit theme-element theme-text-main">
+                                        <ImagePlus className="w-4 h-4 theme-text-muted" />
+                                        <span className="text-xs font-black uppercase">
+                                            {tieneAnexoPiezas ? 'Agregar más' : 'Adjuntar anexos'}
+                                        </span>
+                                        <input type="file" multiple accept="application/pdf,.pdf,image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" className="hidden" onChange={subirAnexoPiezas} disabled={procesandoPesaje} />
+                                    </label>
+                                </div>
+                                {anexosPiezasDocs.length > 0 && (
+                                    <div className="flex flex-wrap gap-2 mt-3">
+                                        {anexosPiezasDocs.map((doc, idx) => (
+                                            <MiniaturaDocumento
+                                                key={doc.id || doc.url || idx}
+                                                documento={doc}
+                                                onVer={() => abrirVistaPrevia(anexosPiezasDocs, idx)}
+                                            />
+                                        ))}
+                                    </div>
+                                )}
+                                <p className="text-[10px] theme-text-muted font-bold m-0 mt-2">
+                                    Puede pegar una o varias capturas (Ctrl+V). Clic en miniatura abre el visor; en fotos también se agrandan al pasar el cursor.
+                                </p>
+                            </div>
+                            <div className="flex flex-wrap items-end gap-3">
+                                <div className="min-w-[200px] flex-1">
+                                    <label className={SECCION}>Actualizar consulta</label>
+                                    <select value={motivoRepesaje} onChange={(e) => setMotivoRepesaje(e.target.value)} className={`${THEME_SELECT} w-full py-3`}>
+                                        <option value="">Motivo…</option>
+                                        {Object.entries(LABELS_MOTIVO_REPESAJE).map(([k, label]) => (
+                                            <option key={k} value={k}>{label}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <button type="button" onClick={solicitarRepesaje} disabled={procesandoPesaje || !motivoRepesaje} className={`${BTN_SECONDARY} flex items-center gap-2 outline-none`}>
+                                    <Scale className="w-4 h-4" /> Actualizar consulta
+                                </button>
+                            </div>
+                        </div>
+                    )}
                     {tienePesajeRespondido && (
                     <section className={SECCION_WRAP}>
                         <p className={SECCION}>{nSec.resp}. {esConsultaMercancia ? 'Respuesta de separación' : 'Respuesta de cajas y pesos'}</p>
@@ -3280,12 +3372,11 @@ export default function ModalFormPedidoLegado({
                                 )}
                     </section>
                     )}
-                    </>
-                    </SeccionConsultaPreparacionPedido>
-                    )}
+                    </PanelFase>
 
-                    {mostrarMontoMercancia && verEtapa('cotizacion') && (
-                    <SeccionCotizacionPedido soloHijos={!modoProgresivo}>
+                    <PanelFase codigo={FASE_COTIZACION} activa={faseActiva} montada={verEtapa(FASE_COTIZACION)}>
+                    {mostrarMontoMercancia && (
+                    <SeccionCotizacionPedido soloHijos>
                     <section className={SECCION_WRAP} data-campo="total_mercancia">
                         <p className={SECCION}>{nSec.monto}. Total de mercancía</p>
                         <AvisoOperativoPedido label="Pedido final" tono="info" icon={CheckCircle2} className="mb-4">
@@ -3299,7 +3390,7 @@ export default function ModalFormPedidoLegado({
                     </SeccionCotizacionPedido>
                     )}
 
-                    {mostrarLogisticaPostPesaje && verEtapa('cotizacion') && esResguardoAbierto && (
+                    {mostrarLogisticaPostPesaje && esResguardoAbierto && (
                     <section className={SECCION_WRAP}>
                         <p className={SECCION}>{nSec.dir}. Envío (diferido)</p>
                         <AvisoOperativoPedido label="Resguardo abierto" tono="info" icon={AlertTriangle} className="mb-0">
@@ -3308,7 +3399,7 @@ export default function ModalFormPedidoLegado({
                     </section>
                     )}
 
-                    {mostrarLogisticaPostPesaje && verEtapa('cotizacion') && !esResguardoAbierto && (
+                    {mostrarLogisticaPostPesaje && !esResguardoAbierto && (
                     <>
                     {/* Dirección de envío */}
                     <section className={SECCION_WRAP}>
@@ -3797,9 +3888,11 @@ export default function ModalFormPedidoLegado({
                     </section>
                     </>
                     )}
+                    </PanelFase>
 
-                    {mostrarSeccionPago && verEtapa('pago') && (
-                    <SeccionPagoPedido soloHijos={!modoProgresivo}>
+                    <PanelFase codigo={FASE_PAGO} activa={faseActiva} montada={verEtapa(FASE_PAGO)}>
+                    {mostrarSeccionPago && (
+                    <SeccionPagoPedido soloHijos>
                     <section className={`${SECCION_WRAP} ${wrapCampo('pago')}`} data-campo="pago">
                         <p className={SECCION}>{nSec.pago}. Pago</p>
                         <div className="space-y-4">
@@ -3863,8 +3956,8 @@ export default function ModalFormPedidoLegado({
                     </SeccionPagoPedido>
                     )}
 
-                    {mostrarRestoPedido && !mostrarSeccionPago && verEtapa('pago') && (
-                    <SeccionPagoPedido soloHijos={!modoProgresivo}>
+                    {mostrarRestoPedido && !mostrarSeccionPago && (
+                    <SeccionPagoPedido soloHijos>
                     <section className={SECCION_WRAP} data-campo="pago">
                         <p className={SECCION}>{nSec.pago}. Pago</p>
                         <AvisoOperativoPedido label="Más adelante" tono="info" icon={Scale} className="mb-0">
@@ -3928,11 +4021,12 @@ export default function ModalFormPedidoLegado({
                     </section>
                     </>
                     )}
+                    </PanelFase>
 
                     </div>
                     {modoProgresivo && (
                         <div className="lg:w-[30%] w-full space-y-4 shrink-0 min-w-0">
-                            {tienePesajeRespondido && ['consulta', 'confirmacion'].includes(etapaVista) && <ReferenciaPedidoCompartido pedido={pedido} onVerGaleria={abrirVistaPrevia} />}
+                            {faseUi === FASE_RESPUESTA && <ReferenciaPedidoCompartido pedido={pedido} onVerGaleria={abrirVistaPrevia} />}
                             <SeccionResumenEnvioPedido
                                 progreso={progresoLocal || progresoDto}
                                 totalMercancia={data.total_mercancia}
@@ -4013,10 +4107,7 @@ export default function ModalFormPedidoLegado({
             {modal}
             <ModalGenerarLinkDireccion
                 abierto={Boolean(abierto) && modalLinkDireccion}
-                onClose={() => {
-                    ignoreOverlayCloseUntil.current = Date.now() + 400;
-                    setModalLinkDireccion(false);
-                }}
+                onClose={() => setModalLinkDireccion(false)}
                 clientePreseleccionado={infoCliente?.id ? infoCliente : null}
                 onEnlaceGenerado={() => {
                     if (infoCliente?.id) {
@@ -4032,10 +4123,7 @@ export default function ModalFormPedidoLegado({
                 abierto={Boolean(abierto) && Boolean(vistaPrevia?.documentos?.length)}
                 documentos={vistaPrevia?.documentos || []}
                 indice={vistaPrevia?.indice || 0}
-                onClose={() => {
-                    ignoreOverlayCloseUntil.current = Date.now() + 400;
-                    setVistaPrevia(null);
-                }}
+                onClose={() => setVistaPrevia(null)}
             />
             <ModalConfirmarAccion
                 abierto={Boolean(abierto) && confirmarActualizarDir}
@@ -4049,10 +4137,7 @@ export default function ModalFormPedidoLegado({
                 })()}
                 etiquetaConfirmar="Confirmar actualización"
                 variante="primary"
-                onClose={() => {
-                    ignoreOverlayCloseUntil.current = Date.now() + 400;
-                    setConfirmarActualizarDir(false);
-                }}
+                onClose={() => setConfirmarActualizarDir(false)}
                 onConfirm={confirmarGuardarDireccion}
             />
             <ModalCorregirPreparacionTienda

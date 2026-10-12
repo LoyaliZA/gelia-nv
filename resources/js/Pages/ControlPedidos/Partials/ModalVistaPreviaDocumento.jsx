@@ -15,7 +15,7 @@ const esPdf = (doc) => {
     const nombre = String(doc?.nombre_original || doc?.url || '').toLowerCase();
     const mime = String(doc?.mime_type || doc?.mime || '').toLowerCase();
     if (nombre.endsWith('.pdf') || mime.includes('pdf')) return true;
-    if (doc?.tipo === 'pdf_pedido' && !mime.startsWith('image/')) return true;
+    if ((doc?.tipo === 'pdf_pedido' || doc?.tipo === 'cotizacion') && !mime.startsWith('image/')) return true;
     return false;
 };
 

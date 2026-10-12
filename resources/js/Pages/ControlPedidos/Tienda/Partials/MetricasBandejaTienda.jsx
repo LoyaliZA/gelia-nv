@@ -13,7 +13,8 @@ export default function MetricasBandejaTienda({ metricas = {}, tabActiva, onTabC
                     <button
                         key={key}
                         type="button"
-                        className={`gelia-tienda-op-metric ${activo ? '' : ''}`}
+                        className="gelia-tienda-op-metric"
+                        aria-label={`${label}: ${valor}. Ver bandeja`}
                         data-active={activo}
                         aria-pressed={activo}
                         onClick={() => onTabChange(tab)}

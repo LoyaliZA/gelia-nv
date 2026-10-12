@@ -687,11 +687,11 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                         </div>
                                     )}
                                     <TotalesEnviosAuditoria pedido={pedido} cajasActivas={cajasActivas} />
-                                    {(pedido.documentos || []).some((d) => d.tipo === 'pdf_pedido') && (
+                                    {(pedido.documentos || []).some((d) => d.tipo === 'pdf_pedido' || d.tipo === 'cotizacion') && (
                                         <div className="mt-3">
                                             <button
                                                 type="button"
-                                                onClick={() => setDocPreview((pedido.documentos || []).find((d) => d.tipo === 'pdf_pedido'))}
+                                                onClick={() => setDocPreview((pedido.documentos || []).find((d) => d.tipo === 'pdf_pedido') || (pedido.documentos || []).find((d) => d.tipo === 'cotizacion'))}
                                                 className={`${BTN_SECONDARY} text-xs outline-none`}
                                             >
                                                 Ver PDF del pedido

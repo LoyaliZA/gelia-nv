@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import {
     ArrowLeft, Camera, CheckCircle2, AlertTriangle, Store, Package, Truck, FileText, Printer,
@@ -19,6 +19,8 @@ import ModalLiberarMercancia from '../Partials/ModalLiberarMercancia';
 import ApartadoFisicoTienda from './Partials/ApartadoFisicoTienda';
 import PrepararApartadoRecoge from './Partials/PrepararApartadoRecoge';
 import EmpaqueMunicipioTienda from './Partials/EmpaqueMunicipioTienda';
+import ResultadoPreparacionTienda from './Partials/ResultadoPreparacionTienda';
+import ModalConfirmarAccion from '../Partials/ModalConfirmarAccion';
 
 const TIPOS_INCIDENCIA = [
     { value: 'almacen_incorrecto', label: 'Almacén incorrecto' },
@@ -83,6 +85,19 @@ export default function Show({
         observacion: '',
     });
     const [modalLiberar, setModalLiberar] = useState(false);
+    const [capturaVersion, setCapturaVersion] = useState(0);
+    const [capturaDirty, setCapturaDirty] = useState(false);
+    const [confirmarVolver, setConfirmarVolver] = useState(false);
+    useEffect(() => {
+        const prevenir = (event) => { if (capturaDirty) { event.preventDefault(); event.returnValue = ''; } };
+        window.addEventListener('beforeunload', prevenir);
+        return () => window.removeEventListener('beforeunload', prevenir);
+    }, [capturaDirty]);
+    const enviarCaptura = (url, datos, opciones = {}) => postOperacion(url, datos, { ...opciones, onSuccess: (...args) => {
+        setCapturaVersion((v) => v + 1);
+        setCapturaDirty(false);
+        opciones.onSuccess?.(...args);
+    } });
 
     const puedeTomar = permisos.includes('control_pedidos.tienda.tomar');
     const puedeResponder = permisos.includes('control_pedidos.tienda.responder');
@@ -202,15 +217,17 @@ export default function Show({
     const badgeEstado = claseBadgeEstadoTienda(tarea.estado, tarea.estado_label);
     const progreso = tarea.progreso_traslado || [];
     const progresoCaratula = tarea.progreso_caratula || [];
+    const tieneRespuesta = Boolean(tarea.atendida_at) || ['RESPONDIDA', 'LISTA_PARA_TRASLADO', 'LISTA_PARA_CARATULA', 'EN_TRASLADO', 'RECIBIDA_CEDIS', 'LIBERACION_SOLICITADA', 'LIBERADA'].includes(tarea.estado);
 
     if (tarea.estado === 'EN_ATENCION') {
         return <Layout {...(!embedded ? { auth } : {})}>
             {!embedded && <Head title={`Preparación Tienda — ${folio}`} />}
             <GeliaPageShell className="gelia-tienda-op space-y-4">
-                {!embedded && <div className="flex items-center justify-between gap-3"><h1 className="text-lg font-bold">{folio}</h1><Link href={route('control_pedidos.tienda.index')} className={BTN_SECONDARY}>Volver al listado</Link></div>}
+                {!embedded && <div className="flex items-center justify-between gap-3"><h1 className="text-lg font-bold">{folio}</h1><Link href={route('control_pedidos.tienda.index')} className={BTN_SECONDARY} onClick={(e) => { if (capturaDirty && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey && e.button === 0) { e.preventDefault(); setConfirmarVolver(true); } }}>Volver al listado</Link></div>}
                 <AvisoResultadoTienda flash={flash} />
-                <PrepararApartadoRecoge key={`${tarea.id}-${tarea.version}-${tarea.apartado?.version}`} tarea={tarea} auth={auth} documentos={documentos_solicitud} documentosTarea={documentos} requisitos={requisitos} tiposCaja={tipos_caja} onEnviar={onEnviar} onRefrescarDocumentos={() => router.reload({ only: ['documentos'], preserveScroll: true })} />
+                <PrepararApartadoRecoge key={`${tarea.id}-${capturaVersion}`} tarea={tarea} auth={auth} documentos={documentos_solicitud} documentosTarea={documentos} requisitos={requisitos} tiposCaja={tipos_caja} onEnviar={enviarCaptura} onDirtyChange={setCapturaDirty} onRefrescarDocumentos={() => router.reload({ only: ['documentos'], preserveScroll: true })} />
             </GeliaPageShell>
+            <ModalConfirmarAccion abierto={confirmarVolver} titulo="Hay cambios sin guardar" mensaje="Puede continuar la preparación o volver al listado y descartar la captura pendiente." etiquetaConfirmar="Volver sin guardar" onClose={() => setConfirmarVolver(false)} onConfirm={() => { setCapturaDirty(false); router.visit(route('control_pedidos.tienda.index')); }} />
         </Layout>;
     }
 
@@ -305,6 +322,8 @@ export default function Show({
                             </AvisoOperativoPedido>
                         )}
 
+                        {tieneRespuesta && <ResultadoPreparacionTienda tarea={tarea} documentos={documentos} tiposCaja={tipos_caja} />}
+
                         {entrega && (
                             <section className={`${geliaCardClass()} p-4 space-y-3 theme-element border theme-border`}>
                                 <h3 className="text-sm font-bold theme-text-main m-0">Destino y cobro</h3>
@@ -351,7 +370,7 @@ export default function Show({
                             />
                         )}
 
-                        {!esRecogeHoy && <TablaProductosShowTienda
+                        {!esRecogeHoy && !tieneRespuesta && <TablaProductosShowTienda
                             productos={tarea.productos || []}
                             productosState={productos}
                             estados_fisicos={estados_fisicos}

@@ -12,10 +12,10 @@ function topOverlay() {
 }
 
 /** Retains focus and scroll through stacked order dialogs, including photo previews. */
-export default function usePedidoDialog({ abierto, onClose, bloqueado = false }) {
+export default function usePedidoDialog({ abierto, onClose, bloqueado = false, cerrarConEscape = true }) {
     const ref = useRef(null);
-    const options = useRef({ onClose, bloqueado });
-    options.current = { onClose, bloqueado };
+    const options = useRef({ onClose, bloqueado, cerrarConEscape });
+    options.current = { onClose, bloqueado, cerrarConEscape };
 
     useEffect(() => {
         const el = ref.current;
@@ -33,7 +33,7 @@ export default function usePedidoDialog({ abierto, onClose, bloqueado = false })
             if (event.key === 'Escape') {
                 event.preventDefault();
                 event.stopImmediatePropagation();
-                if (!options.current.bloqueado) options.current.onClose?.();
+                if (!options.current.bloqueado && options.current.cerrarConEscape) options.current.onClose?.();
             }
             if (event.key === 'Tab') {
                 const controls = [...el.querySelectorAll(focusableSelector)]

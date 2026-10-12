@@ -778,6 +778,7 @@ class PedidoBmaController extends Controller
         string $mensajeGenerico
     ): RedirectResponse {
         $esNegocio = $e instanceof \InvalidArgumentException
+            || $e instanceof \Illuminate\Validation\ValidationException
             || ($e instanceof \RuntimeException && ! $e instanceof \Illuminate\Database\QueryException);
 
         Log::error('Control pedidos: error en operación', [

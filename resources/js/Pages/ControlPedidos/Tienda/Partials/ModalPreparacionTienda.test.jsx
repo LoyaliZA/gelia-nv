@@ -5,6 +5,8 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import ModalPreparacionTienda from './ModalPreparacionTienda';
 
 const api = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn() }));
+let importarFotos;
+vi.mock('./ModalSesionEvidenciaTienda', () => ({ default: ({ onImportado }) => { importarFotos = onImportado; return null; } }));
 vi.mock('axios', () => ({ default: api }));
 vi.mock('../../Partials/VisorPdfPaginas', () => ({ default: ({ url, titulo }) => <div data-preview={url}>{titulo}</div> }));
 vi.mock('../../../../Components/Almacenes/SelectorProducto', () => ({ default: ({ onChange }) => <button onClick={() => onChange(7, { id: 7, sku: 'CREMA-7', descripcion: 'Crema' })}>Elegir crema</button> }));
@@ -60,4 +62,19 @@ it('permite cerrar mientras se está cargando el pedido', async () => {
     expect(control.disabled).toBe(false);
     await act(async () => control.click());
     expect(cerrar).toHaveBeenCalledOnce();
+});
+
+it('actualiza evidencias importadas sin descartar productos capturados ni la protección al cerrar', async () => {
+    const cerrar = vi.fn();
+    await mount({ onClose: cerrar });
+    await click('Elegir crema'); await click('Agregar pieza');
+    const nuevaData = data('EN_ATENCION', 3);
+    nuevaData.documentos = [{ id: 50, tipo_evidencia: 'evidencia_general', nombre_original: 'foto.jpg', mime_type: 'image/jpeg', url: '/foto.jpg' }];
+    api.get.mockResolvedValue({ data: nuevaData });
+    await act(async () => importarFotos());
+    expect(document.querySelector('#tienda-cantidad-0').value).toBe('1');
+    expect(document.body.textContent).toContain('1 evidencias ya guardadas');
+    await act(async () => document.querySelector('[aria-label="Cerrar preparación"]').click());
+    expect(cerrar).not.toHaveBeenCalled();
+    expect(button('Cerrar sin guardar')).toBeDefined();
 });

@@ -583,7 +583,8 @@ export default function ModalResponderPesaje({
         return mime.startsWith('image/') || /\.(jpe?g|png|webp)$/.test(nombre);
     };
 
-    const pdfPedido = (pedido.documentos || []).find((d) => d.tipo === 'pdf_pedido');
+    const pdfPedido = (pedido.documentos || []).find((d) => d.tipo === 'pdf_pedido')
+        || (pedido.documentos || []).find((d) => d.tipo === 'cotizacion');
     const anexosPiezas = (pedido.documentos || []).filter((d) => d.tipo === 'anexo_piezas');
     const severidadEstado = { bueno: 0, regular: 1, sin_existencia: 2, malo: 3, danado: 4 };
     const estadoGeneralDerivado = revisiones.reduce((acc, r) => {

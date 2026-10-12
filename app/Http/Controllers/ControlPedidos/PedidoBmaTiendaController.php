@@ -159,7 +159,7 @@ class PedidoBmaTiendaController extends Controller
                 'usuario' => $h->usuario?->name,
                 'created_at' => $h->created_at?->toIso8601String(),
             ]),
-            'documentos_solicitud' => $tarea->pedido->documentos()->where('activo', true)->whereIn('tipo', ['pdf_pedido', 'cotizacion', 'anexo_piezas'])->get(['id', 'nombre_original', 'tipo', 'mime_type']),
+            'documentos_solicitud' => $tarea->pedido->documentos()->where('activo', true)->whereIn('tipo', ['pdf_pedido', 'cotizacion', 'anexo_piezas'])->get(['id', 'pedido_bma_id', 'nombre_original', 'tipo', 'mime_type', 'ruta_archivo']),
             'documentos' => $tarea->documentos->map(fn ($d) => [
                 'id' => $d->id,
                 'tipo_evidencia' => $d->tipo_evidencia,

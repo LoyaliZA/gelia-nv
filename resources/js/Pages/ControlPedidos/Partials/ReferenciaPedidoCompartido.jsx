@@ -1,6 +1,6 @@
 import React from 'react';
 import { FileText } from 'lucide-react';
-import { BTN_SECONDARY } from './pedidosBmaStyles';
+import { BTN_SECONDARY, soportePedidoDe } from './pedidosBmaStyles';
 import { MiniaturaDocumento } from './ModalVistaPreviaDocumento';
 import VisorPdfPaginas from './VisorPdfPaginas';
 import useDispositivoCampo from '../../Activos/Partials/useDispositivoCampo';
@@ -8,8 +8,11 @@ import useDispositivoCampo from '../../Activos/Partials/useDispositivoCampo';
 /** Referencia visible mientras vendedores revisan la respuesta de CEDIS. */
 export default function ReferenciaPedidoCompartido({ pedido, onVerGaleria, id, descripcion = 'Compara las piezas solicitadas con la revisión y las evidencias de CEDIS.' }) {
     const { esCampo, esMovil } = useDispositivoCampo();
-    const documentos = (pedido?.documentos || []).filter((d) => d.tipo === 'pdf_pedido' || d.tipo === 'anexo_piezas');
-    const principal = documentos.find((d) => d.tipo === 'pdf_pedido');
+    const principal = soportePedidoDe(pedido);
+    const documentos = [
+        ...(principal ? [principal] : []),
+        ...(pedido?.documentos || []).filter((d) => d.tipo === 'anexo_piezas' && d.id !== principal?.id),
+    ];
     const esImagen = principal?.mime_type?.startsWith('image/') || /\.(jpe?g|png|webp)$/i.test(principal?.nombre_original || '');
     const ver = (doc) => onVerGaleria?.(documentos, Math.max(0, documentos.indexOf(doc)));
     return (

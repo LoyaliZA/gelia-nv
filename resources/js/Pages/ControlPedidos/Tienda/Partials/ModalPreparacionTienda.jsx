@@ -18,6 +18,7 @@ export default function ModalPreparacionTienda({ tareaId, atender = false, auth,
     const [mensaje, setMensaje] = useState('');
     const [dirty, setDirty] = useState(false);
     const [confirmarCerrar, setConfirmarCerrar] = useState(false);
+    const [capturaVersion, setCapturaVersion] = useState(0);
     const ocupado = cargando || procesando;
     const pedirCerrar = () => dirty ? setConfirmarCerrar(true) : onClose();
     const dialog = usePedidoDialog({ abierto: true, onClose: pedirCerrar, bloqueado: procesando });
@@ -26,9 +27,10 @@ export default function ModalPreparacionTienda({ tareaId, atender = false, auth,
         window.addEventListener('beforeunload', prevenir);
         return () => window.removeEventListener('beforeunload', prevenir);
     }, [dirty]);
-    const cargar = useCallback(async (signal) => {
+    const cargar = useCallback(async (signal, conservarCaptura = false) => {
         const respuesta = await axios.get(route('control_pedidos.tienda.show', tareaId), { headers: { Accept: 'application/json' }, signal });
         setDatos(respuesta.data);
+        if (!conservarCaptura) setCapturaVersion((v) => v + 1);
         return respuesta.data;
     }, [tareaId]);
 
@@ -90,8 +92,8 @@ export default function ModalPreparacionTienda({ tareaId, atender = false, auth,
                 {cargando ? <div role="status" className="flex items-center gap-2 py-8 px-4 theme-text-muted"><Loader2 className="w-5 h-5 animate-spin" /> Abriendo pedido…</div> : tarea && <>
                     {tarea.estado === 'PENDIENTE' && tarea.puede_tomar && <button type="button" className={BTN_PRIMARY} disabled={ocupado}
                         onClick={() => enviar(route('control_pedidos.tienda.tomar', tarea.id), { version: tarea.version })}>Atender pedido</button>}
-                    {['PENDIENTE', 'EN_ATENCION'].includes(tarea.estado) ? <PrepararApartadoRecoge key={`${tarea.id}-${tarea.apartado?.version}-${tarea.version}-${tarea.estado}`} tarea={tarea} auth={auth}
-                        documentos={datos.documentos_solicitud} documentosTarea={datos.documentos} requisitos={datos.requisitos} tiposCaja={datos.tipos_caja} onEnviar={enviar} bloqueado={ocupado} onDirtyChange={setDirty} onRefrescarDocumentos={() => cargar().catch(() => setError('No se pudieron actualizar las fotos.'))} />
+                    {['PENDIENTE', 'EN_ATENCION'].includes(tarea.estado) ? <PrepararApartadoRecoge key={`${tarea.id}-${capturaVersion}`} tarea={tarea} auth={auth}
+                        documentos={datos.documentos_solicitud} documentosTarea={datos.documentos} requisitos={datos.requisitos} tiposCaja={datos.tipos_caja} onEnviar={enviar} bloqueado={ocupado} onDirtyChange={setDirty} onRefrescarDocumentos={() => cargar(undefined, true).catch(() => setError('No se pudieron actualizar las fotos.'))} />
                         : <ShowTienda {...datos} auth={auth} embedded onEnviar={enviar} />}
                     {caratula && tarea.apartado?.estado === 'APARTADO_CONFIRMADO' && <a className="inline-block underline text-sm font-bold theme-text-primario px-4 pb-3"
                         href={route('control_pedidos.tienda.evidencia.descargar', [tarea.id, caratula.id])}>Descargar carátula del apartado</a>}

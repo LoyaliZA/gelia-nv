@@ -5,8 +5,7 @@ export { hayBorradorPedidoLocal };
 
 /**
  * Orquestador del formulario de Ventas.
- * Flag off → layout vigente (legado).
- * Flag on → mismo formulario con shell progresivo (DTO de etapas).
+ * El registro usa el formulario por fases en el mismo modal.
  */
 export default function ModalFormPedido({
     abierto,
@@ -17,7 +16,7 @@ export default function ModalFormPedido({
     recuperarBorrador = false,
     onPedidoCreado = null,
 }) {
-    const modoProgresivo = Boolean(catalogos?.formulario_config?.formulario_progresivo);
+    const modoProgresivo = true;
 
     return (
         <ModalFormPedidoLegado

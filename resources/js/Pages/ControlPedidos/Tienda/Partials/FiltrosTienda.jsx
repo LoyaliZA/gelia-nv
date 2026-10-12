@@ -27,7 +27,7 @@ function ChipFiltro({ children, onQuitar }) {
                     type="button"
                     onClick={onQuitar}
                     className="shrink-0 p-0.5 rounded-md outline-none theme-text-muted hover:theme-text-main"
-                    aria-label="Quitar filtro"
+                    aria-label={`Quitar filtro: ${children}`}
                 >
                     <X className="w-3 h-3" />
                 </button>
@@ -56,7 +56,8 @@ export default function FiltrosTienda({
 }) {
     const [filtrosAdicionalesAbiertos, setFiltrosAdicionalesAbiertos] = useState(() => {
         try {
-            return sessionStorage.getItem(STORAGE_KEY_ADICIONALES) === '1';
+            const guardado = sessionStorage.getItem(STORAGE_KEY_ADICIONALES);
+            return guardado === null ? window.matchMedia('(min-width: 1024px)').matches : guardado === '1';
         } catch {
             return false;
         }
@@ -108,7 +109,8 @@ export default function FiltrosTienda({
                             type="search"
                             value={busqueda ?? ''}
                             onChange={(e) => onBuscar(e.target.value)}
-                            placeholder="Folio, cliente o número"
+                            name="q"
+                            placeholder="Folio, cliente o número…"
                             className={`${THEME_INPUT} w-full py-3 text-sm font-semibold pr-10`}
                             aria-busy={buscando}
                             autoComplete="off"
@@ -126,6 +128,7 @@ export default function FiltrosTienda({
                         type="button"
                         onClick={() => setFiltrosAdicionalesAbiertos((v) => !v)}
                         aria-expanded={filtrosAdicionalesAbiertos}
+                        aria-controls="tienda-filtros-adicionales"
                         className={`${BTN_SECONDARY} flex items-center justify-center gap-2 outline-none min-h-[44px] flex-1 sm:flex-none ${
                             hayFiltrosRefinamiento ? 'ring-2 ring-[color-mix(in_srgb,var(--color-primario)_35%,transparent)]' : ''
                         }`}
@@ -168,7 +171,7 @@ export default function FiltrosTienda({
             </div>
 
             {filtrosAdicionalesAbiertos && (
-                <div className="gelia-tienda-op-refine space-y-3 p-4 rounded-xl border theme-border theme-element">
+                <div id="tienda-filtros-adicionales" className="gelia-tienda-op-refine space-y-3 p-4 rounded-xl border theme-border theme-element">
                     <p className="text-xs font-semibold theme-text-muted m-0">
                         Almacén, modalidad, origen y prioridad
                     </p>

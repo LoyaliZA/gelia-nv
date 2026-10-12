@@ -12,6 +12,7 @@ import {
     claseBadgeEstadoTienda,
     fmtRelativo,
     fmtVencimiento,
+    accionPrincipalTienda,
 } from './tiendaUi';
 
 export function TarjetaTareaVacia({ hayFiltrosActivos, onLimpiarFiltros }) {
@@ -45,9 +46,10 @@ export function TarjetaTarea({ tarea: t, puedeTomar, compacto = false, onAbrir }
 
     const ctaPrincipal = () => {
         if (onAbrir) {
+            const accion = accionPrincipalTienda(t, puedeTomar);
             return <button type="button" className={`${BTN_PRIMARY} w-full inline-flex items-center justify-center gap-2 py-3 min-h-[44px]`}
-                onClick={() => onAbrir(t, t.estado === 'PENDIENTE' && puedeTomar)}>
-                <Package className="w-4 h-4" /> {t.estado === 'PENDIENTE' && puedeTomar ? 'Atender pedido' : t.estado === 'EN_ATENCION' ? 'Responder preparación' : 'Ver apartado'}
+                onClick={() => onAbrir(t, accion.atender)}>
+                <Package className="w-4 h-4" aria-hidden="true" /> {accion.label}
             </button>;
         }
 
@@ -97,11 +99,11 @@ export function TarjetaTarea({ tarea: t, puedeTomar, compacto = false, onAbrir }
 
     return (
         <article
-            className={`${geliaCardClass()} p-4 space-y-3 transition-shadow duration-200 hover:shadow-md ${
+            className={`${geliaCardClass()} gelia-tienda-op-tarjeta p-4 space-y-3 ${
                 ringAlerta ? 'ring-1 ring-[color-mix(in_srgb,var(--color-peligro)_35%,transparent)]' : ''
             }`}
         >
-            {!compacto && t.modalidad?.nombre && (
+            {t.modalidad?.nombre && (
                 <p
                     className="text-xs font-semibold text-center py-2 px-3 rounded-xl bg-[color-mix(in_srgb,var(--color-primario)_12%,transparent)] m-0 theme-text-primario"
                 >
@@ -172,7 +174,7 @@ export function TarjetaTarea({ tarea: t, puedeTomar, compacto = false, onAbrir }
                     </p>
                 </div>
                 <div>
-                    <p className="text-[11px] font-semibold m-0 theme-text-muted">Piezas</p>
+                    <p className="text-[11px] font-semibold m-0 theme-text-muted">Piezas solicitadas</p>
                     <p className="text-sm theme-text-main m-0 mt-0.5 tabular-nums">
                         {t.piezas_solicitadas ?? t.pedido?.cantidad_piezas ?? 0}
                     </p>
@@ -213,13 +215,13 @@ export function TarjetaTarea({ tarea: t, puedeTomar, compacto = false, onAbrir }
 
             <div className="pt-2 border-t theme-border space-y-2">
                 {ctaPrincipal()}
-                <BotonAccionCubico
+                {!onAbrir && <BotonAccionCubico
                     icon={Eye}
                     label="Ver detalle"
                     onClick={() => onAbrir ? onAbrir(t) : router.visit(showUrl)}
                     conLabel
                     className="w-full"
-                />
+                />}
             </div>
         </article>
     );

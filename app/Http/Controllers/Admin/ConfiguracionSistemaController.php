@@ -53,12 +53,13 @@ class ConfiguracionSistemaController extends Controller
             $validated['valor'] = $this->normalizarValorBooleano((string) ($validated['valor'] ?? 'false'));
         }
 
-        ConfiguracionSistema::create($validated);
+        $configuracion = ConfiguracionSistema::create($validated);
 
         Cache::forget('configuraciones_sistema_globales');
         Cache::forget(\App\Services\ControlPedidos\PagosPedidoBmaConfig::CACHE_KEY);
         Cache::forget(\App\Services\ControlPedidos\EnviosPedidoBmaConfig::CACHE_KEY);
         Cache::forget(\App\Services\ControlPedidos\FormularioProgresivoPedidoBmaConfig::CACHE_KEY);
+        $this->olvidarCachePreparacionTienda($configuracion->clave);
 
         return redirect()->back()->with('success', 'Configuración creada correctamente.');
     }
@@ -99,6 +100,7 @@ class ConfiguracionSistemaController extends Controller
         Cache::forget(\App\Services\ControlPedidos\PagosPedidoBmaConfig::CACHE_KEY);
         Cache::forget(\App\Services\ControlPedidos\EnviosPedidoBmaConfig::CACHE_KEY);
         Cache::forget(\App\Services\ControlPedidos\FormularioProgresivoPedidoBmaConfig::CACHE_KEY);
+        $this->olvidarCachePreparacionTienda($configuracion->clave);
 
         return redirect()->back()->with('success', 'Configuración actualizada correctamente.');
     }
@@ -108,12 +110,14 @@ class ConfiguracionSistemaController extends Controller
      */
     public function destroy(ConfiguracionSistema $configuracion)
     {
+        $clave = $configuracion->clave;
         $configuracion->delete();
 
         Cache::forget('configuraciones_sistema_globales');
         Cache::forget(\App\Services\ControlPedidos\PagosPedidoBmaConfig::CACHE_KEY);
         Cache::forget(\App\Services\ControlPedidos\EnviosPedidoBmaConfig::CACHE_KEY);
         Cache::forget(\App\Services\ControlPedidos\FormularioProgresivoPedidoBmaConfig::CACHE_KEY);
+        $this->olvidarCachePreparacionTienda($clave);
 
         return redirect()->back()->with('success', 'Configuración eliminada correctamente.');
     }
@@ -137,6 +141,15 @@ class ConfiguracionSistemaController extends Controller
         } catch (\Exception $e) {
             return redirect()->back()->withErrors(['error' => 'Error al enviar el correo: ' . $e->getMessage()]);
         }
+    }
+
+    private function olvidarCachePreparacionTienda(string $clave): void
+    {
+        if ($clave !== \App\Services\ControlPedidos\PreparacionTiendaConfig::CLAVE_FLAG) {
+            return;
+        }
+
+        app(\App\Services\ControlPedidos\PreparacionTiendaConfig::class)->olvidarCache();
     }
 
     private function normalizarValorBooleano(string $valor): string

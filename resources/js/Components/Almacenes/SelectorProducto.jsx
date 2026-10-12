@@ -6,7 +6,7 @@ function etiquetaProducto(p) {
     return `${p.sku} - ${p.descripcion}`;
 }
 
-export default function SelectorProducto({ value, onChange, productoInicial, disabled = false, required = false, almacenId = null }) {
+export default function SelectorProducto({ value, onChange, productoInicial, disabled = false, required = false, almacenId = null, inputId }) {
     const [texto, setTexto] = useState('');
     const [abierto, setAbierto] = useState(false);
     const [productos, setProductos] = useState([]);
@@ -137,6 +137,8 @@ export default function SelectorProducto({ value, onChange, productoInicial, dis
             <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 theme-text-muted pointer-events-none" />
                 <input
+                    id={inputId}
+                    aria-label="Buscar producto por nombre o código"
                     type="text"
                     value={texto}
                     required={required && !value}

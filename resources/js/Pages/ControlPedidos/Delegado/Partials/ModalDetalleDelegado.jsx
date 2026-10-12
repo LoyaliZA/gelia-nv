@@ -41,6 +41,7 @@ const ETIQUETA_DOC = {
     comprobante: 'Comprobante',
     guia: 'Guía PDF',
     pdf_pedido: 'PDF pedido',
+    cotizacion: 'Cotización',
     anexo_piezas: 'Anexo piezas',
     evidencia_apartado: 'Evidencia apartado',
 };
@@ -57,7 +58,7 @@ const CampoConCopia = ({ label, value, copiar = true }) => (
 
 const documentosVisibles = (pedido) => {
     const docs = pedido?.documentos || [];
-    const orden = ['remision', 'pdf_pedido', 'anexo_piezas', 'comprobante', 'guia', 'evidencia_apartado'];
+    const orden = ['remision', 'pdf_pedido', 'cotizacion', 'anexo_piezas', 'comprobante', 'guia', 'evidencia_apartado'];
     return [...docs].sort((a, b) => {
         const ia = orden.indexOf(a.tipo);
         const ib = orden.indexOf(b.tipo);

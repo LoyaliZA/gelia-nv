@@ -7,8 +7,8 @@ import usePedidoDialog from './usePedidoDialog';
 let root;
 let container;
 let originalRects;
-function Dialog({ name, onClose, bloqueado = false, layer = 1 }) {
-    const props = usePedidoDialog({ abierto: true, onClose, bloqueado });
+function Dialog({ name, onClose, bloqueado = false, layer = 1, cerrarConEscape = true }) {
+    const props = usePedidoDialog({ abierto: true, onClose, bloqueado, cerrarConEscape });
     return React.createElement('div', { className: 'gelia-modal-overlay', style: { zIndex: layer } },
         React.createElement('div', { ...props, 'aria-label': name },
             React.createElement('button', {}, `${name} first`),
@@ -83,5 +83,12 @@ describe('order dialog interaction', () => {
         await act(() => root.render(React.createElement(Dialog, { name: 'order', onClose: updatedClose })));
         key('Escape');
         expect(updatedClose).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not close on Escape when the dialog only closes from its button', async () => {
+        const close = vi.fn();
+        await act(() => root.render(React.createElement(Dialog, { name: 'order', onClose: close, cerrarConEscape: false })));
+        key('Escape');
+        expect(close).not.toHaveBeenCalled();
     });
 });

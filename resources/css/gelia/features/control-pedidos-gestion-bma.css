@@ -399,6 +399,11 @@
     background: color-mix(in srgb, var(--color-primario) 8%, var(--theme-element-bg));
 }
 
+.gelia-pedidos-navegacion a[aria-current="page"] {
+    color: var(--color-primario);
+    background: color-mix(in srgb, var(--color-primario) 12%, var(--theme-element-bg));
+}
+
 .gelia-pedidos-navegacion a > span {
     padding: 0.125rem 0.375rem;
     border-radius: 0.375rem;

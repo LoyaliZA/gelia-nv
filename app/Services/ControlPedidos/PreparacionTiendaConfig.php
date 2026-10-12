@@ -198,20 +198,36 @@ class PreparacionTiendaConfig
     /**
      * @return array<string, mixed>
      */
+    private function flagDesdeBd(): array
+    {
+        $row = ConfiguracionSistema::query()->where('clave', self::CLAVE_FLAG)->first();
+        if (! $row || $row->valor === null || $row->valor === '') {
+            return self::flagPorDefecto();
+        }
+
+        $decoded = json_decode((string) $row->valor, true);
+
+        return is_array($decoded) ? array_merge(self::flagPorDefecto(), $decoded) : self::flagPorDefecto();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
     private function flag(): array
     {
-        $raw = Cache::remember(self::CACHE_KEY, 60, function () {
-            $row = ConfiguracionSistema::query()->where('clave', self::CLAVE_FLAG)->first();
-            if (! $row || $row->valor === null || $row->valor === '') {
-                return self::flagPorDefecto();
+        $raw = Cache::remember(self::CACHE_KEY, 60, fn () => $this->flagDesdeBd());
+
+        $flag = is_array($raw) ? $raw : self::flagPorDefecto();
+        // A stale default (for example after a clock step) must not hide a saved flag.
+        if ($flag == self::flagPorDefecto()) {
+            $fresco = $this->flagDesdeBd();
+            if ($fresco != $flag) {
+                Cache::put(self::CACHE_KEY, $fresco, 60);
+                $flag = $fresco;
             }
+        }
 
-            $decoded = json_decode((string) $row->valor, true);
-
-            return is_array($decoded) ? array_merge(self::flagPorDefecto(), $decoded) : self::flagPorDefecto();
-        });
-
-        return is_array($raw) ? $raw : self::flagPorDefecto();
+        return $flag;
     }
 
     private function valorEscalar(string $clave, mixed $default): mixed

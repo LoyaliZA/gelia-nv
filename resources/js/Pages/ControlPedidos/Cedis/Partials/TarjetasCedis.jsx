@@ -35,7 +35,8 @@ import BotonGuiaPdf from '../../Partials/BotonGuiaPdf';
 import AvisoOperativoPedido from '../../Partials/AvisoOperativoPedido';
 
 const remisionDe = (pedido) => (pedido?.documentos || []).find((d) => d.tipo === 'remision');
-const pdfPedidoDe = (pedido) => (pedido?.documentos || []).find((d) => d.tipo === 'pdf_pedido');
+const pdfPedidoDe = (pedido) => (pedido?.documentos || []).find((d) => d.tipo === 'pdf_pedido')
+    || (pedido?.documentos || []).find((d) => d.tipo === 'cotizacion');
 const anexosPiezasDe = (pedido) => (pedido?.documentos || []).filter((d) => d.tipo === 'anexo_piezas');
 
 function TarjetaPedido({
