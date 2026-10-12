@@ -28,7 +28,7 @@ const FilaMontoEscalonamiento = ({ etiqueta, valor, destacado = false, valorClas
 );
 
 const TarjetaDesgloseNivel = ({ item, esProyectada }) => {
-    const califica = item.califica_efectivo ?? item.califica_neto;
+    const califica = item.califica_neto;
     const calificaBrutoSolo = item.califica_bruto && !califica;
 
     return (

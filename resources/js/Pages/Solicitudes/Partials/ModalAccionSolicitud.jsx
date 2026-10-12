@@ -3,6 +3,7 @@ import React from 'react';
 import { useForm } from '@inertiajs/react';
 import { Loader2, X } from 'lucide-react';
 import SolicitudDialog from '@/Components/Solicitudes/SolicitudDialog';
+import { listaVisibleEnSolicitudes } from '../../../utils/escalonamiento';
 
 const ACCIONES = {
     pago: { titulo: 'Confirmar pago', ruta: 'solicitudes.confirmar_pago', boton: 'Confirmar pago', texto: 'Registra el monto final cobrado. Si no alcanza el nivel de lista, supervisión recibirá una alerta.' },
@@ -17,7 +18,7 @@ export default function ModalAccionSolicitud({ accion, solicitud, listas = [], o
     const config = ACCIONES[accion];
     const cambioLista = (solicitud.proceso?.nombre || '').toUpperCase().includes('LISTA');
     const referencia = Math.max(Number((solicitud.cliente?.lista_descuento || solicitud.cliente?.listaDescuento)?.monto_requerido || 0), Number((solicitud.lista_descuento || solicitud.listaDescuento)?.monto_requerido || 0));
-    const inferiores = listas.filter(l => l.activo !== false && !/COLABORADOR|PLATAFORMAS/i.test(l.nombre) && Number(l.monto_requerido) < referencia).sort((a, b) => Number(b.monto_requerido) - Number(a.monto_requerido));
+    const inferiores = listas.filter(l => l.activo !== false && listaVisibleEnSolicitudes(l) && Number(l.monto_requerido) < referencia).sort((a, b) => Number(b.monto_requerido) - Number(a.monto_requerido));
     const requiereLista = accion === 'solicitar' && cambioLista;
     const requiereMotivo = accion === 'solicitar' || accion === 'eliminar';
     const campoMotivo = accion === 'eliminar' ? 'motivo' : 'motivo_cancelacion';

@@ -9,6 +9,7 @@ import {
     evaluarEscalonamiento,
     buscarListaPorId,
     fmtMontoEscalonamiento,
+    listaVisibleEnSolicitudes,
 } from '../../../utils/escalonamiento';
 
 const obtenerProceso = (procesos, procesoId) => procesos.find(p => String(p.id) === String(procesoId)) || null;
@@ -507,10 +508,10 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                                                                 : ''
                                                         }
                                                     />
-                                                    {analisisFinanciero.listaAnticipada && analisisFinanciero.umbralEfectivoAnticipada > 0 && (
+                                                    {analisisFinanciero.listaAnticipada && parseFloat(analisisFinanciero.listaAnticipada.monto_requerido) > 0 && (
                                                         <FilaMontoEscalonamiento
-                                                            etiqueta={`Umbral efectivo (${analisisFinanciero.listaAnticipada.nombre})`}
-                                                            valor={analisisFinanciero.umbralEfectivoAnticipada}
+                                                            etiqueta={`Mínimo de lista (${analisisFinanciero.listaAnticipada.nombre})`}
+                                                            valor={analisisFinanciero.listaAnticipada.monto_requerido}
                                                         />
                                                     )}
                                                 </div>
@@ -592,8 +593,7 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                                                         && analisisFinanciero.listaSiguienteEfectiva.id !== analisisFinanciero.listaAnticipada?.id && (
                                                         <p className="text-sm font-semibold text-amber-700 dark:text-amber-400 leading-relaxed m-0 p-3 rounded-xl bg-amber-500/5 border border-amber-500/20">
                                                             Faltan <span className="font-medium tabular-nums">{fmtMonto(analisisFinanciero.faltanteBrutoParaSiguiente)}</span> brutos
-                                                            (umbral efectivo {fmtMonto(analisisFinanciero.umbralEfectivoSiguiente)} al{' '}
-                                                            {analisisFinanciero.porcentajeSiguiente.toFixed(2)}%) para{' '}
+                                                            (mínimo de lista {fmtMonto(analisisFinanciero.listaSiguienteEfectiva.monto_requerido)}) para{' '}
                                                             <span className="font-medium">{analisisFinanciero.listaSiguienteEfectiva.nombre}</span>.
                                                         </p>
                                                     )}
@@ -620,7 +620,7 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                                                                     {item.nombre}
                                                                 </span>
                                                                 <span className={`text-sm font-medium tabular-nums shrink-0 ${item.cubre ? 'text-emerald-700 dark:text-emerald-400' : 'theme-text-muted'}`}>
-                                                                    {fmtMonto(item.umbral_efectivo ?? item.monto_requerido)}
+                                                                    {fmtMonto(item.monto_requerido)}
                                                                 </span>
                                                             </div>
                                                         ))}
@@ -642,7 +642,7 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                                 className={`${THEME_SELECT} w-full py-4 text-sm disabled:opacity-60`}
                             >
                                 <option value="">-- Mantener nivel actual --</option>
-                                {listas.filter(l => !l.nombre.toUpperCase().includes('COLABORADOR') && !l.nombre.toUpperCase().includes('PLATAFORMAS')).map(lista => {
+                                {listas.filter(listaVisibleEnSolicitudes).map(lista => {
                                     const baseClienteObj = obtenerListaActual();
                                     let estaDeshabilitada = false;
                                     let textoEstado = '';
@@ -651,9 +651,11 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                                         estaDeshabilitada = true;
                                         textoEstado = '(Nivel actual)';
                                     } else if (analisisFinanciero) {
-                                        const umbralLista = analisisFinanciero.desgloseListas?.find(d => d.id === lista.id)?.umbral_efectivo
-                                            ?? parseFloat(lista.monto_requerido);
-                                        if (umbralLista > analisisFinanciero.totalProyectadoBruto) {
+                                        const desglose = analisisFinanciero.desgloseListas?.find(d => d.id === lista.id);
+                                        const cubre = desglose
+                                            ? desglose.cubre
+                                            : analisisFinanciero.totalProyectadoBruto >= parseFloat(lista.monto_requerido);
+                                        if (!cubre) {
                                             estaDeshabilitada = true;
                                             textoEstado = '(Monto insuficiente)';
                                         }

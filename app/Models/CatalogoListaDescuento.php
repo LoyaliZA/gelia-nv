@@ -18,8 +18,13 @@ class CatalogoListaDescuento extends Model
         'monto_maximo',
         'activo',
         'participa_escalonamiento',
+        'visible_en_solicitudes',
         'tono_sala',
         'prioridad_cola_turnos',
+    ];
+
+    protected $attributes = [
+        'visible_en_solicitudes' => true,
     ];
 
     protected $casts = [
@@ -27,6 +32,7 @@ class CatalogoListaDescuento extends Model
         'porcentaje_descuento' => 'decimal:2',
         'activo' => 'boolean',
         'participa_escalonamiento' => 'boolean',
+        'visible_en_solicitudes' => 'boolean',
     ];
 
     protected $appends = [

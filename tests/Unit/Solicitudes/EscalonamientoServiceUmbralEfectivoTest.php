@@ -175,6 +175,39 @@ class EscalonamientoServiceUmbralEfectivoTest extends TestCase
         $this->assertEquals(960.0, $resultado['monto_final_tentativo']);
     }
 
+    public function test_cliente_plata_cotizacion_30620_alcanza_oro_con_2_por_ciento_adicional(): void
+    {
+        $plata = $this->listas->firstWhere('nombre', 'MAYOREO PLATA');
+        $resultado = $this->svc->evaluar(0.0, 30620.0, null, $this->listas, 5001.0, $plata);
+
+        $this->assertSame('MAYOREO ORO', $resultado['lista_anticipada']->nombre);
+        $this->assertSame('MAYOREO ORO', $resultado['lista_calificada_efectiva']->nombre);
+        $this->assertEquals(2.0, $resultado['porcentaje_descuento']);
+        $this->assertEquals(30007.60, $resultado['monto_final_tentativo']);
+        $this->assertEquals(30007.60, $resultado['total_proyectado_neto']);
+        $this->assertTrue($resultado['mantiene_lista_anticipada']);
+        $this->assertFalse($resultado['casi_alcanza_siguiente']);
+        $this->assertTrue($resultado['es_ascenso']);
+
+        $oro = collect($resultado['desglose_listas'])->firstWhere('nombre', 'MAYOREO ORO');
+        $this->assertEquals(30001.0, $oro['monto_requerido']);
+        $this->assertTrue($oro['cubre']);
+
+        $demo = new CatalogoListaDescuento([
+            'id' => 9,
+            'nombre' => 'Lista demostración',
+            'monto_requerido' => 0.00,
+            'porcentaje_descuento' => 0.00,
+            'activo' => true,
+            'visible_en_solicitudes' => false,
+        ]);
+        $conDemo = $this->listas->push($demo);
+        $filtradas = $this->svc->filtrarListasValidas($conDemo);
+
+        $this->assertNull($filtradas->firstWhere('nombre', 'Lista demostración'));
+        $this->assertNotNull($filtradas->firstWhere('nombre', 'MAYOREO ORO'));
+    }
+
     public function test_evaluar_cotizacion_5204_13_provisional_plata_neto_estable(): void
     {
         $resultado = $this->svc->evaluar(0.0, 5204.13, null, $this->listas, 0.0);

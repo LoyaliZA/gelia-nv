@@ -15,6 +15,7 @@ export default function TablaListas({ datos = [] }) {
         porcentaje_descuento: '',
         activo: true,
         participa_escalonamiento: false,
+        visible_en_solicitudes: false,
         tono_sala: '',
         prioridad_cola_turnos: '',
     });
@@ -37,6 +38,7 @@ export default function TablaListas({ datos = [] }) {
             porcentaje_descuento: item.porcentaje_descuento || '',
             activo: item.activo,
             participa_escalonamiento: Boolean(item.participa_escalonamiento),
+            visible_en_solicitudes: Boolean(item.visible_en_solicitudes),
             tono_sala: item.tono_sala || '',
             prioridad_cola_turnos: item.prioridad_cola_turnos ?? '',
         });
@@ -85,6 +87,7 @@ export default function TablaListas({ datos = [] }) {
                             <th className="px-6 py-4 text-left text-[9px] font-black text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">% Descuento_</th>
                             <th className="px-6 py-4 text-left text-[9px] font-black text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">Cola turnos_</th>
                             <th className="px-6 py-4 text-left text-[9px] font-black text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">Escalonamiento_</th>
+                            <th className="px-6 py-4 text-left text-[9px] font-black text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">Solicitudes_</th>
                             <th className="px-6 py-4 text-left text-[9px] font-black text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">Status_</th>
                             <th className="px-6 py-4 text-right text-[9px] font-black text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">Acciones_</th>
                         </tr>
@@ -111,6 +114,11 @@ export default function TablaListas({ datos = [] }) {
                                 <td className="px-6 py-5">
                                     <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest ${item.participa_escalonamiento ? 'bg-[var(--color-primario)]/10 text-[var(--color-primario)]' : 'bg-zinc-500/10 text-zinc-500'}`}>
                                         {item.participa_escalonamiento ? 'Suma ventas' : 'No participa'}
+                                    </span>
+                                </td>
+                                <td className="px-6 py-5">
+                                    <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest ${item.visible_en_solicitudes ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-zinc-500/10 text-zinc-500'}`}>
+                                        {item.visible_en_solicitudes ? 'Visible' : 'Oculta'}
                                     </span>
                                 </td>
                                 <td className="px-6 py-5">
@@ -240,6 +248,20 @@ export default function TablaListas({ datos = [] }) {
                                     </p>
                                 </div>
                                 <button type="button" onClick={() => setData('participa_escalonamiento', !data.participa_escalonamiento)} className="gelia-switch shrink-0 scale-125 origin-right shadow-sm" data-active={data.participa_escalonamiento}>
+                                    <div className="gelia-switch-thumb shadow-md" />
+                                </button>
+                            </div>
+
+                            <div className="flex items-center justify-between p-4 rounded-2xl border theme-border bg-black/5 dark:bg-white/5">
+                                <div>
+                                    <p className="text-sm font-black theme-text-main">Visible en solicitudes_</p>
+                                    <p className="text-[10px] font-bold theme-text-muted uppercase tracking-widest mt-0.5">
+                                        {data.visible_en_solicitudes
+                                            ? 'Aparece en tag, lista y cotización'
+                                            : 'No se ofrece al armar una solicitud'}
+                                    </p>
+                                </div>
+                                <button type="button" onClick={() => setData('visible_en_solicitudes', !data.visible_en_solicitudes)} className="gelia-switch shrink-0 scale-125 origin-right shadow-sm" data-active={data.visible_en_solicitudes}>
                                     <div className="gelia-switch-thumb shadow-md" />
                                 </button>
                             </div>
