@@ -12,14 +12,19 @@ const ComparativaSnapshot = ({
     etiquetaIzq = 'Antes',
     etiquetaDer = 'Después',
     titulo = 'Comparativa de cambios en cliente',
+    modoComparativa = 'default',
 }) => {
     if (!antes && !despues) return null;
+
+    const etiquetaTipo = modoComparativa === 'creacion'
+        ? 'Tipo de cliente solicitado'
+        : 'Tipo en ficha del cliente';
 
     const filas = [
         ['Acumulado de venta', 'monto_venta', money],
         ['Lista', 'lista_nombre', value => value || 'Sin lista'],
         ['TAG (vendedora)', 'tag_vendedor_nombre', value => value || 'Sin asignar'],
-        ['Tipo de cliente', 'tipo_cliente_nombre', value => value || 'Sin tipo'],
+        [etiquetaTipo, 'tipo_cliente_nombre', value => value || 'Sin tipo'],
     ];
     const mostrar = (valor, formato) => valor === undefined ? 'No registrado' : valor === null ? 'Sin asignar' : formato(valor);
     return <div className="gelia-tag-comparativa mb-4">
@@ -181,7 +186,7 @@ export default function ModalBitacoraSolicitud({ onClose, solicitud, listas = []
                                         {snapshot && (snapshot.antes || snapshot.despues || snapshot.monto_cotizado != null || lista || tipo || snapshot.compra_en_tienda || snapshot.compra_en_tienda_solo_tag) && <details className="gelia-tag-event-details"><summary>{paso.modoComparativa === 'creacion' ? 'Ver cotización solicitada' : 'Ver datos y cambios del registro'}<ChevronDown className="w-4 h-4" aria-hidden="true" /></summary><div>
                                             {snapshot.monto_cotizado != null && <p className="text-sm theme-text-muted mb-3">Monto cotizado: <strong className="theme-text-main tabular-nums">{money(snapshot.monto_cotizado)}</strong></p>}
                                             {paso.modoComparativa === 'creacion' && <p className="text-xs theme-text-muted mb-3">Propuesta de ventas; aún no aplicada al cliente. El acumulado cotizado es una proyección.</p>}
-                                            {(snapshot.antes || snapshot.despues) && <ComparativaSnapshot antes={snapshot.antes} despues={despues} etiquetaIzq={labels.izq} etiquetaDer={labels.der} titulo={labels.titulo} />}
+                                            {(snapshot.antes || snapshot.despues) && <ComparativaSnapshot antes={snapshot.antes} despues={despues} etiquetaIzq={labels.izq} etiquetaDer={labels.der} titulo={labels.titulo} modoComparativa={paso.modoComparativa} />}
                                             {lista && !despues && <p className="text-sm theme-text-main">Lista: {lista}</p>}{tipo && !despues && <p className="text-sm theme-text-main">Tipo de cliente: {tipo}</p>}
                                             {snapshot.compra_en_tienda && <p className="text-sm theme-text-muted">Compra en tienda</p>}{snapshot.compra_en_tienda_solo_tag && <p className="text-sm theme-text-muted">Compra realizada: solicitar TAG</p>}
                                         </div></details>}

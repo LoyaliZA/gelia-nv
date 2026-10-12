@@ -71,6 +71,15 @@ class CrearSolicitudService
                 }
             }
 
+            $tipoClienteId = null;
+            if (!$esOperativo && $clienteId) {
+                $clienteTipo = Cliente::find($clienteId);
+                $tipoEnFormulario = isset($datos['catalogo_tipo_cliente_id']) && $datos['catalogo_tipo_cliente_id'] !== ''
+                    ? (int) $datos['catalogo_tipo_cliente_id']
+                    : null;
+                $tipoClienteId = TipoClienteSolicitudResolver::resolver($tipoEnFormulario, $clienteTipo);
+            }
+
             // 3. Creación de la Solicitud
             $solicitud = SolicitudTag::create([
                 'cliente_id' => $clienteId,
@@ -82,7 +91,7 @@ class CrearSolicitudService
                 'pago_confirmado' => filter_var($datos['pago_confirmado'] ?? false, FILTER_VALIDATE_BOOLEAN),
                 'observaciones_vendedor' => $datos['observaciones_vendedor'] ?? null,
                 'evidencia_path' => $evidenciaPath,
-                'catalogo_tipo_cliente_id' => $esOperativo ? null : ($datos['catalogo_tipo_cliente_id'] ?? null),
+                'catalogo_tipo_cliente_id' => $esOperativo ? null : $tipoClienteId,
                 'catalogo_lista_descuento_id' => $esOperativo ? null : $listaDescuentoId,
                 'compra_en_tienda' => $compraEnTienda,
                 'compra_en_tienda_solo_tag' => $compraSoloTag,

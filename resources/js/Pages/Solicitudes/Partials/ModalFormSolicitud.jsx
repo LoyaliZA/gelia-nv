@@ -237,7 +237,10 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
         setInfoCliente(cliente);
         setMostrarDropdown(false);
         setAlertaHeredado(false);
-        setData('catalogo_tipo_cliente_id', '');
+        setData(
+            'catalogo_tipo_cliente_id',
+            cliente.catalogo_tipo_cliente_id ? String(cliente.catalogo_tipo_cliente_id) : ''
+        );
         setData('catalogo_lista_descuento_id', '');
         setData('confirmo_informacion_escalonamiento', false);
     };
@@ -432,8 +435,8 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                             <label htmlFor="solicitud-clasificacion" className="text-[10px] font-medium  theme-text-muted  ml-1">Tipo de cliente</label>
                             <div className="theme-field-with-icon theme-field-with-icon--has-trailing relative">
                                 <Users className="theme-field-icon w-4 h-4" aria-hidden />
-                                <select id="solicitud-clasificacion" name="catalogo_tipo_cliente_id" value={data.catalogo_tipo_cliente_id} onChange={e => setData('catalogo_tipo_cliente_id', e.target.value)} className={`${THEME_SELECT} w-full py-4 text-xs`}>
-                                    <option value="">Asignar Tipo</option>
+                                <select id="solicitud-clasificacion" name="catalogo_tipo_cliente_id" value={data.catalogo_tipo_cliente_id} onChange={e => setData('catalogo_tipo_cliente_id', e.target.value)} required={procesoFinancieroSeleccionado} className={`${THEME_SELECT} w-full py-4 text-xs`}>
+                                    <option value="">Seleccionar tipo</option>
                                     {opcionesTipoCliente.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
                                 </select>
                                 <ChevronDown className="theme-field-with-icon__trailing" aria-hidden />

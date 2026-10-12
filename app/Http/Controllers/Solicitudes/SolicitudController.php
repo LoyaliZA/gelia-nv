@@ -13,6 +13,7 @@ use App\Services\Solicitudes\CancelarSolicitudService;
 use App\Services\Solicitudes\SolicitarCancelacionSolicitudService;
 use App\Services\Solicitudes\ExportarReporteSolicitudesService;
 use App\Services\Solicitudes\AjustarMontoPorSolicitudService;
+use App\Services\Solicitudes\TipoClienteSolicitudResolver;
 use App\Services\Solicitudes\EscalonamientoService;
 use App\Services\Escalonamiento\ProyeccionClienteEscalonamiento;
 use Illuminate\Http\RedirectResponse;
@@ -419,6 +420,19 @@ class SolicitudController extends Controller
             }
         }
 
+        $clienteReparacion = $solicitud->cliente_id
+            ? Cliente::with('tipo')->find($solicitud->cliente_id)
+            : null;
+        $tipoReparacion = TipoClienteSolicitudResolver::resolver(
+            $request->catalogo_tipo_cliente_id ? (int) $request->catalogo_tipo_cliente_id : null,
+            $clienteReparacion
+        );
+        if (TipoClienteSolicitudResolver::faltaTipoComercial($tipoReparacion)) {
+            return back()->withErrors([
+                'catalogo_tipo_cliente_id' => 'Debes seleccionar el tipo de cliente solicitado.',
+            ]);
+        }
+
         DB::transaction(function () use (
             $solicitud,
             $request,
@@ -429,12 +443,13 @@ class SolicitudController extends Controller
             $listaDescuentoId,
             $montoCotizado,
             $montoFinalTentativo,
-            $totalProyectadoNeto
+            $totalProyectadoNeto,
+            $tipoReparacion
         ) {
             $solicitud->update([
                 'monto_cotizado' => $montoCotizado,
                 'catalogo_proceso_id' => $request->catalogo_proceso_id,
-                'catalogo_tipo_cliente_id' => $request->catalogo_tipo_cliente_id,
+                'catalogo_tipo_cliente_id' => $tipoReparacion,
                 'catalogo_lista_descuento_id' => $listaDescuentoId,
                 'observaciones_vendedor' => $request->observaciones_vendedor,
                 'compra_en_tienda' => $compraEnTienda,
@@ -466,14 +481,15 @@ class SolicitudController extends Controller
                 'datos_snapshot' => array_merge([
                     'monto_cotizado' => $montoCotizado,
                     'proceso_id' => $request->catalogo_proceso_id,
-                    'tipo_cliente_id' => $request->catalogo_tipo_cliente_id,
+                    'tipo_cliente_id' => $tipoReparacion,
                     'lista_descuento_id' => $listaDescuentoId,
                     'observaciones_vendedor' => $request->observaciones_vendedor,
                     'compra_en_tienda' => $compraEnTienda,
                     'compra_en_tienda_solo_tag' => $compraSoloTag,
                     'lista_bronce_autoasignada' => $compraEnTienda,
                 ], app(\App\Services\Solicitudes\SnapshotCotizacionSolicitudService::class)->construir(
-                    $solicitud, $clienteSnapshot['antes'] ?? null
+                    $solicitud->fresh(['tipoCliente', 'listaDescuento', 'proceso', 'vendedor']),
+                    $clienteSnapshot['antes'] ?? null
                 )),
             ]);
 
@@ -560,6 +576,16 @@ class SolicitudController extends Controller
             if ($estadoAnteriorId !== $idRespondida) {
                 abort(422, 'Solo puedes reportar error sobre una solicitud respondida.');
             }
+        }
+
+        $solicitud->loadMissing('proceso');
+        if (
+            in_array($estadoNuevoId, [$idRespondida, $idVerificada], true)
+            && $solicitud->proceso
+            && !$solicitud->proceso->esOperativo()
+            && TipoClienteSolicitudResolver::faltaTipoComercial($solicitud->catalogo_tipo_cliente_id)
+        ) {
+            abort(422, 'No se puede aprobar ni verificar una solicitud comercial sin tipo de cliente solicitado registrado.');
         }
 
         DB::transaction(function () use (

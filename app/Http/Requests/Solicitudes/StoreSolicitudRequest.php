@@ -8,6 +8,7 @@ use App\Models\CatalogoListaDescuento;
 use App\Models\CatalogoTipoCliente;
 use App\Services\Solicitudes\CrearSolicitudService;
 use App\Services\Solicitudes\EscalonamientoService;
+use App\Services\Solicitudes\TipoClienteSolicitudResolver;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Validator;
 
@@ -128,6 +129,28 @@ class StoreSolicitudRequest extends FormRequest
         return $this->aplicaFlujoCompraEnTienda() || $this->aplicaFlujoCompraEnTiendaSoloTag();
     }
 
+    private function validarTipoClienteSolicitado(Validator $validator): void
+    {
+        $numeroCliente = $this->input('numero_cliente');
+        if (!$numeroCliente) {
+            return;
+        }
+
+        $cliente = Cliente::where('numero_cliente', $numeroCliente)->first();
+        $tipoEnFormulario = $this->input('catalogo_tipo_cliente_id');
+        $tipoResuelto = TipoClienteSolicitudResolver::resolver(
+            $tipoEnFormulario !== null && $tipoEnFormulario !== '' ? (int) $tipoEnFormulario : null,
+            $cliente
+        );
+
+        if (TipoClienteSolicitudResolver::faltaTipoComercial($tipoResuelto)) {
+            $validator->errors()->add(
+                'catalogo_tipo_cliente_id',
+                'Debes seleccionar el tipo de cliente solicitado. Si el cliente no tiene tipo en ficha, asígnalo antes de enviar la solicitud.'
+            );
+        }
+    }
+
     public function after(): array
     {
         return [
@@ -141,6 +164,8 @@ class StoreSolicitudRequest extends FormRequest
                     );
                     return;
                 }
+
+                $this->validarTipoClienteSolicitado($validator);
 
                 $usuario = $this->user()->loadMissing(['departamentos', 'area']);
                 $tieneDepartamento = $usuario->departamentos->isNotEmpty() || $usuario->area?->departamento_id;
