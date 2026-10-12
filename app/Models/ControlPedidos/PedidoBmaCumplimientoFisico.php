@@ -30,6 +30,8 @@ class PedidoBmaCumplimientoFisico extends Model
 
     public const ESTADO_INCIDENCIA = 'INCIDENCIA';
 
+    public const ESTADO_APARTADO_CONFIRMADO = 'APARTADO_CONFIRMADO';
+
     public const ESTADOS = [
         self::ESTADO_POR_SEPARAR,
         self::ESTADO_SEPARADA,
@@ -40,12 +42,14 @@ class PedidoBmaCumplimientoFisico extends Model
         self::ESTADO_DEVOLUCION_PENDIENTE,
         self::ESTADO_DEVUELTA_ANAQUEL,
         self::ESTADO_INCIDENCIA,
+        self::ESTADO_APARTADO_CONFIRMADO,
     ];
 
     public const ESTADOS_CON_MERCANCIA = [
         self::ESTADO_SEPARADA,
         self::ESTADO_LISTA_PARA_SALIDA,
         self::ESTADO_EMPACADA,
+        self::ESTADO_APARTADO_CONFIRMADO,
     ];
 
     public const LABELS = [
@@ -58,6 +62,7 @@ class PedidoBmaCumplimientoFisico extends Model
         self::ESTADO_DEVOLUCION_PENDIENTE => 'Devolución pendiente',
         self::ESTADO_DEVUELTA_ANAQUEL => 'Devuelta al anaquel',
         self::ESTADO_INCIDENCIA => 'Incidencia',
+        self::ESTADO_APARTADO_CONFIRMADO => 'Apartado confirmado',
     ];
 
     protected $table = 'pedido_bma_cumplimiento_fisico';

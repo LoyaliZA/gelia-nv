@@ -130,6 +130,7 @@
 .gelia-pedidos-dialog {
     background: var(--theme-surface-solid);
     border-color: var(--theme-border);
+    color: var(--theme-text-main);
     overflow-wrap: anywhere;
 
     --pedidos-radius: min(var(--theme-radius-panel), 1.25rem);

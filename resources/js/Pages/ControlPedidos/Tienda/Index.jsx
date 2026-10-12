@@ -1,3 +1,4 @@
+import useActualizacionesPedidos from '../Partials/useActualizacionesPedidos';
 import React, { useEffect, useRef, useState } from 'react';
 import { Head, router, usePage } from '@inertiajs/react';
 import { Store, Loader2, Radio } from 'lucide-react';
@@ -9,7 +10,8 @@ import FiltrosTienda, { TABS_TIENDA } from './Partials/FiltrosTienda';
 import MetricasBandejaTienda from './Partials/MetricasBandejaTienda';
 import BandejasTienda from './Partials/BandejasTienda';
 import ListadoTienda from './Partials/ListadoTienda';
-import ModalAlertaPedido from '../Partials/ModalAlertaPedido';
+import ModalPreparacionTienda from './Partials/ModalPreparacionTienda';
+import AvisoResultadoTienda from './Partials/AvisoResultadoTienda';
 import useListadoDiscreto from '../Partials/useListadoDiscreto';
 import { ORIGEN_TABLERO } from './Partials/tiendaUi';
 
@@ -23,6 +25,9 @@ export default function Index({
     filtros = {},
 }) {
     const { flash } = usePage().props;
+    const [modalTarea, setModalTarea] = useState(null);
+    const tareaDesdeFiltro = useRef(null);
+    const abrirPreparacion = (tarea, atender = false) => setModalTarea({ id: tarea.id, atender });
     const {
         tareas: tareasVista,
         metricas: metricasVista,
@@ -57,26 +62,12 @@ export default function Index({
         almacen_id: almacenId || undefined,
         ...extra,
     });
-    const [alerta, setAlerta] = useState({ abierto: false, tipo: 'success', titulo: '', mensaje: '' });
     const debounceBusqueda = useRef(null);
 
     const tabLabel = (TABS_TIENDA.find((t) => t.id === tabActiva) || TABS_TIENDA[0]).label;
 
-    useEffect(() => {
-        if (flash?.success) {
-            setAlerta({ abierto: true, tipo: 'success', titulo: 'Operación exitosa', mensaje: flash.success });
-        } else if (flash?.error) {
-            setAlerta({ abierto: true, tipo: 'error', titulo: 'Error', mensaje: flash.error });
-        }
-    }, [flash?.success, flash?.error]);
+    useActualizacionesPedidos({ onActualizar: () => onActualizar(), pausado: Boolean(cargando) });
 
-    useEffect(() => {
-        const interval = setInterval(() => {
-            if (cargando) return;
-            cargar(paramsListado({ page: tareasVista?.current_page || 1 }), { silencioso: true });
-        }, 15000);
-        return () => clearInterval(interval);
-    }, [cargando, tabActiva, busqueda, origenSolicitud, prioridadMd, modalidad, almacenId, tareasVista?.current_page, cargar]);
 
     useEffect(() => {
         if (!cargando && tareasVista) {
@@ -87,7 +78,10 @@ export default function Index({
     useEffect(() => {
         if (filtros.tarea && tareasVista?.data?.length) {
             const t = tareasVista.data.find((x) => String(x.id) === String(filtros.tarea));
-            if (t) router.visit(route('control_pedidos.tienda.show', t.id));
+            if (t && tareaDesdeFiltro.current !== filtros.tarea) {
+                tareaDesdeFiltro.current = filtros.tarea;
+                abrirPreparacion(t);
+            }
         }
     }, [filtros.tarea, tareasVista]);
 
@@ -146,7 +140,7 @@ export default function Index({
                 ) : (
                     <Radio className="w-3.5 h-3.5 text-primario" aria-hidden />
                 )}
-                {cargando ? 'Sincronizando…' : 'En vivo · cada 15 s'}
+                {cargando ? 'Sincronizando…' : 'Actualización por cambios'}
             </span>
             {ultimaSync && !cargando && (
                 <span className="text-[11px] theme-text-muted font-medium">
@@ -181,6 +175,8 @@ export default function Index({
                         </div>
                     )}
                 </GeliaTituloCard>
+
+                <AvisoResultadoTienda flash={flash} />
 
                 {cola_estados_cuenta?.total > 0 && (
                     <div
@@ -231,6 +227,7 @@ export default function Index({
                 </div>
 
                 <ListadoTienda
+                    onAbrir={abrirPreparacion}
                     tareas={tareasVista}
                     auth={auth}
                     tabLabel={tabLabel}
@@ -241,7 +238,8 @@ export default function Index({
                     onIrAPagina={(page) => cargar(paramsListado({ page }))}
                 />
             </GeliaPageShell>
-            <ModalAlertaPedido {...alerta} onCerrar={() => setAlerta((a) => ({ ...a, abierto: false }))} />
+            {modalTarea && <ModalPreparacionTienda key={modalTarea.id} tareaId={modalTarea.id} atender={modalTarea.atender} auth={auth}
+                onClose={() => { setModalTarea(null); onActualizar(); }} onActualizado={onActualizar} />}
         </AppLayout>
     );
 }

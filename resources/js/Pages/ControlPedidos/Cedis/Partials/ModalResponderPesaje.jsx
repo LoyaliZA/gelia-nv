@@ -141,15 +141,14 @@ const previewsDesdeArchivos = (archivos) => (archivos || []).map((f) => ({
 }));
 
 /** Almacén del pedido, o el configurado con permite_busqueda_productos. */
-const resolverAlmacenBusqueda = (pedido, almacenesBusqueda = []) => {
+export const resolverAlmacenBusqueda = (pedido, almacenesBusqueda = []) => {
     const idPedido = pedido?.almacen_id || pedido?.almacen?.id || null;
     if (idPedido) {
-        if (pedido?.almacen?.id) return pedido.almacen;
         const match = (almacenesBusqueda || []).find((a) => String(a.id) === String(idPedido));
-        return match || { id: idPedido, codigo: null, nombre: `Almacén #${idPedido}` };
+        return match || null;
     }
     const lista = Array.isArray(almacenesBusqueda) ? almacenesBusqueda : [];
-    if (lista.length >= 1) return lista[0];
+    if (lista.length === 1) return lista[0];
     return null;
 };
 
@@ -158,8 +157,7 @@ export default function ModalResponderPesaje({
 }) {
     const soloRevisiones = Boolean(pedido?.consulta_cedis_modo_revision_mercancia)
         || Boolean(pedido?.es_consulta_mercancia)
-        || pedido?.origen?.requiere_logistica === false
-        || (pedido?.paqueteria?.categoria === 'local_regional' && pedido?.paqueteria?.requiere_peso === false);
+        || pedido?.origen?.requiere_logistica === false;
     const [envios, setEnvios] = useState([envioVacio()]);
     const [uuidsGuardados, setUuidsGuardados] = useState([]);
     const [motivoRetiro, setMotivoRetiro] = useState('');
@@ -175,6 +173,8 @@ export default function ModalResponderPesaje({
     const [revisiones, setRevisiones] = useState([]);
     const [galeria, setGaleria] = useState({ abierto: false, documentos: [], indice: 0 });
     const [skuQuery, setSkuQuery] = useState('');
+    const [almacenElegidoId, setAlmacenElegidoId] = useState('');
+    useEffect(() => { setAlmacenElegidoId(''); setSkuResultados([]); }, [pedido?.id]);
     const [skuResultados, setSkuResultados] = useState([]);
     const [skuCargando, setSkuCargando] = useState(false);
     const [skuError, setSkuError] = useState('');
@@ -266,6 +266,7 @@ export default function ModalResponderPesaje({
             try {
                 const draft = await leerBorradorPesaje(pedido.id);
                 if (cancelado) return;
+                setAlmacenElegidoId(draft?.almacenId || '');
 
                 if (draft?.envios?.length || (soloRevisiones && draft?.revisiones?.length) || draft?.evidenciasLote) {
                     setEnvios(
@@ -439,6 +440,7 @@ export default function ModalResponderPesaje({
 
         const timer = window.setTimeout(() => {
             const payload = {
+                almacenId: almacenElegidoId || resolverAlmacenBusqueda(pedido, almacenesBusqueda)?.id || null,
                 envios,
                 revisiones: revisiones.map(({ previews, expandido, ...rest }) => ({
                     ...rest,
@@ -458,7 +460,7 @@ export default function ModalResponderPesaje({
         }, 700);
 
         return () => window.clearTimeout(timer);
-    }, [abierto, pedido?.id, envios, revisiones, evidenciasPorEnvio, evidenciasLote, bultosAproximados]);
+    }, [abierto, pedido?.id, envios, revisiones, evidenciasPorEnvio, evidenciasLote, bultosAproximados, almacenElegidoId]);
 
     const anexarFotoRemota = (foto) => {
         if (!foto?.objetivo_uuid) return;
@@ -510,18 +512,23 @@ export default function ModalResponderPesaje({
                 if (payload?.tipo === 'foto' && payload.foto) anexarFotoRemota(payload.foto);
             });
         }
-        const poll = window.setInterval(async () => {
+        const recuperarFotos = async () => {
             try {
-                const { data, status } = await window.axios.get(route('control_pedidos.cedis.sesion_evidencia.show', pedido.id));
+                const { data } = await window.axios.get(route('control_pedidos.cedis.sesion_evidencia.show', pedido.id));
                 (data.fotos || []).forEach(anexarFotoRemota);
                 if (data.estado === 'activa') setCelularConectado(true);
-            } catch {
-                /* poll silencioso */
-            }
-        }, 4000);
+            } catch { /* La sesión pudo cerrarse mientras se recuperaba la conexión. */ }
+        };
+        const connection = window.Echo?.connector?.pusher?.connection;
+        connection?.bind('connected', recuperarFotos);
+        window.addEventListener('focus', recuperarFotos);
+        window.addEventListener('online', recuperarFotos);
+        recuperarFotos();
         return () => {
             window.Echo?.leave(canalName);
-            window.clearInterval(poll);
+            connection?.unbind('connected', recuperarFotos);
+            window.removeEventListener('focus', recuperarFotos);
+            window.removeEventListener('online', recuperarFotos);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [abierto, pedido?.id, sesionId]);
@@ -567,7 +574,7 @@ export default function ModalResponderPesaje({
 
     if (!abierto || !pedido) return null;
 
-    const almacenBusqueda = resolverAlmacenBusqueda(pedido, almacenesBusqueda);
+    const almacenBusqueda = almacenElegidoId ? (almacenesBusqueda || []).find((a) => String(a.id) === String(almacenElegidoId)) : resolverAlmacenBusqueda(pedido, almacenesBusqueda);
     const almacenBusquedaId = almacenBusqueda?.id || null;
 
     const esImagenDoc = (doc) => {
@@ -938,6 +945,7 @@ export default function ModalResponderPesaje({
                 peso_volumetrico_kg: Number(e.peso_volumetrico_kg),
             }));
         const form = new FormData();
+        if (almacenBusquedaId) form.append('almacen_id', String(almacenBusquedaId));
         cajas.forEach((c, i) => {
             Object.entries(c).forEach(([k, v]) => form.append(`cajas[${i}][${k}]`, String(v)));
             if (envios[i]?.client_uuid) {
@@ -1335,6 +1343,14 @@ export default function ModalResponderPesaje({
                         )}
 
                         </div>
+                        <label className="block text-sm font-bold mb-3">Almacén del catálogo de preparación
+                            <select className={`${THEME_SELECT} w-full`} value={almacenBusquedaId || ''} disabled={procesando || revisiones.length > 0}
+                                onChange={(e) => { clearTimeout(skuDebounceRef.current); skuAbortRef.current?.abort(); setSkuQuery(''); setSkuResultados([]); setSkuError(''); setAlmacenElegidoId(e.target.value); }}>
+                                <option value="">Seleccione almacén…</option>
+                                {(almacenesBusqueda || []).map((a) => <option key={a.id} value={a.id}>{etiquetaAlmacen(a)}</option>)}
+                            </select>
+                            {revisiones.length > 0 && <span className="block text-xs theme-text-muted">Las piezas conservan el almacén utilizado al registrarlas.</span>}
+                        </label>
                         <fieldset disabled={procesando} className="gelia-pedidos-respuesta-main min-w-0 border-0 p-0 m-0">
                         <section id="pesaje-productos" tabIndex={-1} hidden={paso !== 1} className="gelia-pedidos-paso gelia-pedidos-seccion space-y-4">
                             <div className="flex items-center justify-between gap-2 flex-wrap">

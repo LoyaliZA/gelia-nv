@@ -362,19 +362,27 @@ class CatalogoController extends Controller
     }
 
     // --- 11. CATÁLOGO DE BANCOS ---
-    public function storeBanco(Request $request) {
-        CatalogoBanco::create($request->validate([
-            'nombre' => 'required|string|max:255|unique:catalogo_bancos,nombre',
-            'activo' => 'boolean',
-        ]));
+    private function datosBanco(Request $request, ?int $id = null): array {
+        return $request->validate([
+            'nombre' => ['required', 'string', 'max:255', \Illuminate\Validation\Rule::unique('catalogo_bancos', 'nombre')->ignore($id)],
+            'activo' => ['required', 'boolean'],
+            'compartido' => ['required', 'boolean'],
+            'departamento_ids' => [\Illuminate\Validation\Rule::requiredIf(!$request->boolean('compartido')), 'array'],
+            'departamento_ids.*' => ['integer', 'distinct', 'exists:departamentos,id'],
+        ]);
+    }
+
+    public function storeBanco(Request $request, \App\Services\ControlPedidos\BancosDepartamentoService $service) {
+        $datos = $this->datosBanco($request);
+        if (!$datos['compartido'] && empty($datos['departamento_ids'])) throw \Illuminate\Validation\ValidationException::withMessages(['departamento_ids' => 'Seleccione al menos un departamento.']);
+        $service->guardar(new CatalogoBanco, $datos);
         return back()->with('success', 'Banco registrado correctamente.');
     }
 
-    public function updateBanco(Request $request, $id) {
-        CatalogoBanco::findOrFail($id)->update($request->validate([
-            'nombre' => 'required|string|max:255|unique:catalogo_bancos,nombre,' . $id,
-            'activo' => 'boolean',
-        ]));
+    public function updateBanco(Request $request, $id, \App\Services\ControlPedidos\BancosDepartamentoService $service) {
+        $datos = $this->datosBanco($request, (int) $id);
+        if (!$datos['compartido'] && empty($datos['departamento_ids'])) throw \Illuminate\Validation\ValidationException::withMessages(['departamento_ids' => 'Seleccione al menos un departamento.']);
+        $service->guardar(CatalogoBanco::findOrFail($id), $datos);
         return back()->with('success', 'Banco actualizado.');
     }
 

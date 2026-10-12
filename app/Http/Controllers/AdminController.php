@@ -114,7 +114,7 @@ class AdminController extends Controller
             'horarios_traspaso' => CatalogoHorarioTraspaso::orderBy('orden')->get(),
             'porcentajes_escalonamiento' => CatalogoPorcentajeEscalonamientoLista::with('listaDescuento')->get(),
             'porcentajes_listado' => CatalogoPorcentajeListadoLista::with('listaDescuento')->get(),
-            'bancos' => CatalogoBanco::orderBy('nombre')->get(),
+            'bancos' => CatalogoBanco::with('departamentos')->orderBy('nombre')->get(),
             'tipos_activo' => CatalogoTipoActivo::orderBy('nombre')->get(),
             'categorias_activo' => CatalogoCategoriaActivo::orderBy('nombre')->get(),
             'sucursales' => Sucursal::with(['almacenesOrigenTraspaso:id,codigo,nombre'])

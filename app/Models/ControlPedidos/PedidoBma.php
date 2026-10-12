@@ -35,6 +35,8 @@ class PedidoBma extends Model
     public const ESTATUS_ENVIO_PENDIENTE_CONSOLIDACION = 'pendiente_consolidacion';
     public const ESTATUS_ENVIO_CONSOLIDADO = 'consolidado';
     public const ESTATUS_ENVIO_PENDIENTE_PESAJE = 'pendiente_pesaje';
+
+    public const ESTATUS_ENVIO_APARTADO_CONFIRMADO = 'apartado_confirmado';
     public const ESTATUS_ENVIO_PESAJE_LISTO = 'pesaje_listo';
 
     public const ESTATUS_SUCURSAL_EN_TRANSITO = 'en_transito';
@@ -63,9 +65,12 @@ class PedidoBma extends Model
 
     public const ORIGEN_SOLICITUD_BELLAROMA = 'BELLAROMA';
 
+    public const ORIGEN_SOLICITUD_AROMAS = 'AROMAS';
+
     public const ORIGENES_SOLICITUD = [
         self::ORIGEN_SOLICITUD_CALL_CENTER,
         self::ORIGEN_SOLICITUD_BELLAROMA,
+        self::ORIGEN_SOLICITUD_AROMAS,
     ];
 
     public const DOCUMENTO_INICIAL_COTIZACION = 'COTIZACION';
@@ -85,6 +90,7 @@ class PedidoBma extends Model
         'folio_remision',
         'numero_remision',
         'origen_solicitud',
+        'departamento_operacion_id',
         'documento_inicial',
         'contacto_nombre_snapshot',
         'contacto_telefono_snapshot',
@@ -575,6 +581,16 @@ class PedidoBma extends Model
         return $this->hasMany(PedidoBmaTareaPreparacion::class, 'pedido_bma_id')->latest('id');
     }
 
+    public function esRecogeTiendaApartado(): bool
+    {
+        $this->loadMissing('tareasPreparacion.modalidad');
+
+        return $this->tareasPreparacion->contains(
+            fn (PedidoBmaTareaPreparacion $tarea) => $tarea->estado !== PedidoBmaTareaPreparacion::ESTADO_CANCELADA
+                && $tarea->modalidad?->codigo === CatalogoModalidadPreparacionPedido::CODIGO_RECOGE_TIENDA
+        );
+    }
+
     public function cancelacionesOperativas(): HasMany
     {
         return $this->hasMany(PedidoBmaCancelacionOperativa::class, 'pedido_bma_id')->latest('id');
@@ -678,7 +694,7 @@ class PedidoBma extends Model
 
     public function usaPreparacionTienda(): bool
     {
-        return $this->tareasPreparacion()->exists();
+        return $this->exists && $this->tareasPreparacion()->exists();
     }
 
     public function pesajeRespondidoPor(): BelongsTo
@@ -749,7 +765,7 @@ class PedidoBma extends Model
             return false;
         }
 
-        if ($this->tareaPreparacionVigente()->exists()) {
+        if ($this->exists && $this->tareaPreparacionVigente()->exists()) {
             return false;
         }
 
@@ -765,26 +781,11 @@ class PedidoBma extends Model
 
     /**
      * CEDIS responde solo revisiones de mercancía (sin cajas/pesos obligatorios).
-     * Origen sin logística, o logística + paquetería local con requiere_peso en falso.
-     * Sin paquetería: pesaje (conservador). Comercial nunca entra por este flag.
+     * Toda operación con logística usa pesaje, independientemente del departamento o tarifa.
      */
     public function consultaCedisModoRevisionMercancia(): bool
     {
-        if ($this->esConsultaMercancia()) {
-            return true;
-        }
-
-        $this->loadMissing(['origen', 'paqueteria']);
-        if (! ($this->origen?->requiere_logistica ?? false)) {
-            return false;
-        }
-
-        $paqueteria = $this->paqueteria;
-        if ($paqueteria === null || ! $paqueteria->esLocalRegional()) {
-            return false;
-        }
-
-        return ! (bool) $paqueteria->requiere_peso;
+        return $this->esConsultaMercancia();
     }
 
     public function consultaCerrada(): bool

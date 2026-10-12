@@ -23,6 +23,8 @@ Route::prefix('control-pedidos')->name('control_pedidos.')->group(function () {
             Route::put('/', [PlazosRetrasoPedidoBmaController::class, 'update'])->name('update');
         });
 
+    Route::get('/pedidos/{pedidoBma}/preparacion/{tarea}/documentos/{documento}', \App\Http\Controllers\ControlPedidos\DocumentoPreparacionController::class)->name('preparacion.documento');
+
     // Descarga autenticada de documentos (visibilidad por VisibilidadPedidoBma::puedeConsultar).
     Route::get('/pedidos/{pedidoBma}/documentos/{documento}', [PedidoBmaController::class, 'documento'])
         ->name('documentos.show');

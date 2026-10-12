@@ -31,6 +31,11 @@ class ConfirmarEntregaRecogeHoyService
         }
 
         $politica = PoliticaSalidaPreparacion::desdeTarea($tarea);
+        if ($politica->soloApartado()) {
+            throw ValidationException::withMessages([
+                'modalidad' => 'Recoge en tienda no confirma entrega. El cierre es la confirmación del apartado.',
+            ]);
+        }
         if (! $politica->entregaDirectaSinResguardo()) {
             throw ValidationException::withMessages([
                 'modalidad' => 'La transferencia diferida se entrega desde el resguardo de PDV, una sola vez y después del pago.',

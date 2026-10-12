@@ -1,3 +1,4 @@
+import useActualizacionesPedidos from '../Partials/useActualizacionesPedidos';
 import React, { useEffect, useRef, useState } from 'react';
 import { Head, router, usePage } from '@inertiajs/react';
 import { Warehouse, Clock, CheckCircle2, Package, Scale, Loader2, PackageOpen, AlertTriangle } from 'lucide-react';
@@ -85,16 +86,8 @@ export default function Index({
         modalAbiertoRef.current = modalDetalle.abierto || modalPesaje.abierto || modalErrorDatos.abierto || modalApartado.abierto || modalBitacora.abierto || modalLiberar.abierto;
     }, [modalDetalle.abierto, modalPesaje.abierto, modalErrorDatos.abierto, modalApartado.abierto, modalBitacora.abierto, modalLiberar.abierto]);
 
-    useEffect(() => {
-        const interval = setInterval(() => {
-            if (modalAbiertoRef.current || cargando || tabActiva === 'LIBERACIONES') return;
-            cargar(
-                { tab: tabActiva, q: busqueda || undefined, page: pedidosVista?.current_page || 1 },
-                { silencioso: true }
-            );
-        }, 15000);
-        return () => clearInterval(interval);
-    }, [cargando, tabActiva, busqueda, pedidosVista?.current_page, cargar]);
+    useActualizacionesPedidos({ onActualizar: () => tabActiva === 'LIBERACIONES' ? router.reload({ only: ['liberaciones', 'metricas'] }) : cargar({ tab: tabActiva, q: busqueda || undefined, page: pedidosVista?.current_page || 1 }, { silencioso: true }), pausado: () => modalAbiertoRef.current || cargando });
+
 
     const onBuscar = (valor) => {
         setBusqueda(valor);

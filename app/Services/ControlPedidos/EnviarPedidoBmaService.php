@@ -30,6 +30,10 @@ class EnviarPedidoBmaService
 
     public function ejecutar(PedidoBma $pedido, int $usuarioId): PedidoBma
     {
+        if ($pedido->esRecogeTiendaApartado()) {
+            throw new \RuntimeException('Recoge en tienda termina al confirmar el apartado. No se envía a pago ni a auditoría.');
+        }
+
         if (!$pedido->esEditablePorVendedora()) {
             throw new \RuntimeException('Solo se pueden enviar pedidos en borrador o rechazados.');
         }

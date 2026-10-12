@@ -163,9 +163,10 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
     const esRechazado = fase === 'RECHAZADO_VENDEDORA';
     const remision = remisionVigenteDe(pedido);
     const pagoValidado = Boolean(pedido.pago_validado_at);
+    const recogeTienda = Boolean(pedido.es_recoge_tienda_apartado);
     const puedeAprobar = esPendiente && pagoValidado && Boolean(remision)
-        && can('control_pedidos.auditar.aprobar');
-    const muestraAprobar = esPendiente && can('control_pedidos.auditar.aprobar');
+        && can('control_pedidos.auditar.aprobar') && !recogeTienda;
+    const muestraAprobar = esPendiente && can('control_pedidos.auditar.aprobar') && !recogeTienda;
     const anexoPendiente = anexoEnvioPendienteDe(pedido);
     const puedeRevisarAnexo = Boolean(anexoPendiente) && pedido.estatus_envio === 'pendiente_revision_anexo';
     const puedeAnexar = puedeAnexarPagoEnvio(pedido);
@@ -511,7 +512,12 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                             setBloqueosPago(r?.bloqueos || []);
                                         }}
                                     />
-                                    {esPendiente && (
+                                    {recogeTienda && (
+                                        <p className="text-sm font-bold theme-text-main m-0 mt-3">
+                                            Recoge en tienda: apartado confirmado en PDV. Sin validación de pago ni remisión.
+                                        </p>
+                                    )}
+                                    {esPendiente && !recogeTienda && (
                                         <div className="mt-4 flex flex-wrap gap-2">
                                             <button
                                                 type="button"
@@ -539,7 +545,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                 </section>
                                 <section id="auditoria-remision" tabIndex={-1} className={SECCION_WRAP}>
                                     <h3 className="gelia-pedidos-seccion-titulo">Remisión</h3>
-                                    {esPendiente && (
+                                    {esPendiente && !recogeTienda && (
                                         <div className="mb-4">
                                             <label htmlFor="auditoria-numero-remision" className="text-xs theme-text-muted">Número de remisión</label>
                                             <div className="gelia-pedidos-auditoria-folio flex flex-wrap gap-2 mt-1.5">
@@ -563,7 +569,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                             </div>
                                         </div>
                                     )}
-                                    {esPendiente && <p id="auditoria-remision-ayuda" className="text-xs theme-text-muted m-0 mb-3">Captura el número que aparece en el PDF de remisión; el número de pedido lo captura la vendedora.</p>}
+                                    {esPendiente && !recogeTienda && <p id="auditoria-remision-ayuda" className="text-xs theme-text-muted m-0 mb-3">Captura el número que aparece en el PDF de remisión; el número de pedido lo captura quien registra el pedido.</p>}
                                     {!esPendiente && <Campo label="Número de remisión" value={pedido.numero_remision} />}
                                     {remision ? (
                                         <div className="space-y-3">

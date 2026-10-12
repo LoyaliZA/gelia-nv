@@ -63,6 +63,7 @@ class ResponderPesajePedidoBmaRequest extends FormRequest
     public function messages(): array
     {
         return [
+            'almacen_id' => ['nullable', 'integer', 'exists:almacenes,id'],
             'cajas.required' => 'Indique al menos un envío.',
             'cajas.min' => 'Indique al menos un envío.',
             'cajas.*.catalogo_tipo_caja_id.required' => 'Cada envío requiere tipo de caja.',

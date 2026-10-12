@@ -157,7 +157,8 @@ class PreparacionTiendaConfig
     {
         $habilitados = $this->almacenesHabilitados();
         if ($habilitados === []) {
-            return true;
+            return \App\Models\Almacen::query()->whereKey($almacenId)->where('activo', true)
+                ->where('codigo', \App\Support\ControlPedidos\AlmacenPdv::CODIGO)->exists();
         }
 
         return in_array($almacenId, $habilitados, true);

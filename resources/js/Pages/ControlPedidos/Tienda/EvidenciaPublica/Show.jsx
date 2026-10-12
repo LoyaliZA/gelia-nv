@@ -53,30 +53,33 @@ export default function EvidenciaPublicaShow({
 
     if (error) {
         return (
-            <div className="min-h-screen px-4 py-10" style={{ background: 'var(--color-fondo, #f4f4f5)' }}>
+            <div className="gelia-pedidos-bma gelia-pedidos-captura min-h-screen px-4 py-10">
                 <Head title="Evidencias Tienda" />
                 <div className={`mx-auto max-w-lg ${geliaCardClass()} p-6`}>
-                    <p className="text-red-600 font-bold">{error}</p>
+                    <p className="text-xs font-semibold tracking-[0.35em] m-0" style={{ color: 'var(--color-primario)' }}>GELIA</p>
+                    <h1 className="mt-2 text-2xl font-semibold theme-text-main m-0">Sesión no disponible</h1>
+                    <p className="mt-3 text-sm theme-text-muted m-0">{error}</p>
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen px-4 py-8" style={{ background: 'var(--color-fondo, #f4f4f5)' }}>
+        <div className="gelia-pedidos-bma gelia-pedidos-captura min-h-screen px-4 py-8 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
             <Head title={`Evidencias Tienda ${folio || ''}`} />
             <div className={`mx-auto max-w-lg ${geliaCardClass()} p-6 space-y-4`}>
-                <h1 className="text-lg font-black">Evidencia — Tienda</h1>
-                {folio && <p className="text-sm theme-text-muted">Pedido {folio}</p>}
-                <p className="text-xs">Estado: {estado} · Fotos: {count}</p>
-                {expira_en && <p className="text-xs theme-text-muted">Expira: {new Date(expira_en).toLocaleTimeString('es-MX')}</p>}
+                <p className="text-xs font-semibold tracking-[0.35em] m-0" style={{ color: 'var(--color-primario)' }}>GELIA · TIENDA</p>
+                <h1 className="text-lg font-black theme-text-main m-0">Evidencia — Tienda</h1>
+                {folio && <p className="text-sm theme-text-muted m-0">Pedido {folio}</p>}
+                <p className="text-xs theme-text-muted m-0">Estado: {estado} · Fotos: {count}</p>
+                {expira_en && <p className="text-xs theme-text-muted m-0">Expira: {new Date(expira_en).toLocaleTimeString('es-MX')}</p>}
                 <input ref={camaraRef} type="file" accept="image/*" capture="environment" className="hidden"
                     onChange={(e) => tomar(e.target.files?.[0])} />
                 <button type="button" className={THEME_BTN_PRIMARY} disabled={subiendo}
                     onClick={() => camaraRef.current?.click()}>
                     {subiendo ? 'Subiendo…' : 'Tomar / subir foto'}
                 </button>
-                {msg && <p className="text-sm text-red-600">{msg}</p>}
+                {msg && <p role="alert" className="text-sm font-semibold theme-text-peligro m-0">{msg}</p>}
             </div>
         </div>
     );

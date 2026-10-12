@@ -214,39 +214,18 @@ class CoberturaPagoPedidoBmaService
      */
     public static function assertBancoPermitido(PedidoBma $pedido, ?int $bancoId): void
     {
-        if (! $bancoId) {
+        if (!$bancoId) return;
+        // Legacy databases remain compatible until the additive migration is applied.
+        if (\Illuminate\Support\Facades\Schema::hasColumn('catalogo_bancos', 'compartido')) {
+            app(\App\Services\ControlPedidos\BancosDepartamentoService::class)->validar($pedido, $bancoId);
             return;
         }
-
         $pedido->loadMissing(['vendedor.departamento', 'vendedor.departamentos']);
-        $deptoIds = collect([
-            $pedido->vendedor?->departamento_id,
-            ...($pedido->vendedor?->departamentos?->pluck('id')->all() ?? []),
-        ])->filter()->map(fn ($id) => (int) $id)->unique()->values();
-
-        if ($deptoIds->isEmpty()) {
-            return;
-        }
-
-        $hayMapeo = CatalogoBancoDepartamento::query()
-            ->whereIn('departamento_id', $deptoIds)
-            ->where('activo', true)
-            ->exists();
-
-        if (! $hayMapeo) {
-            return;
-        }
-
-        $ok = CatalogoBancoDepartamento::query()
-            ->whereIn('departamento_id', $deptoIds)
-            ->where('catalogo_banco_id', $bancoId)
-            ->where('activo', true)
-            ->exists();
-
-        if (! $ok) {
-            throw new InvalidArgumentException(
-                'El banco seleccionado no está permitido para el departamento del pedido.'
-            );
+        $id = $pedido->vendedor?->departamento_id;
+        if (!$id) return;
+        $mapeos = CatalogoBancoDepartamento::where('departamento_id', $id)->where('activo', true);
+        if ((clone $mapeos)->exists() && !(clone $mapeos)->where('catalogo_banco_id', $bancoId)->exists()) {
+            throw new InvalidArgumentException('El banco seleccionado no está permitido para el departamento del pedido.');
         }
     }
 }

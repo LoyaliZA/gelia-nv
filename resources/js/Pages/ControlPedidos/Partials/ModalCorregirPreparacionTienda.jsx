@@ -77,7 +77,7 @@ export default function ModalCorregirPreparacionTienda({
             <div className={`${THEME_MODAL_SHELL} max-w-2xl w-full max-h-[90vh] overflow-y-auto`} onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-start justify-between gap-4 mb-4">
                     <div>
-                        <p className="text-xs font-black uppercase tracking-widest text-orange-600 m-0">Corregir preparación</p>
+                        <p className="text-xs font-black uppercase tracking-widest theme-text-primario m-0">Corregir preparación</p>
                         <h3 className="text-lg font-black theme-text-main m-0 mt-1">Reenviar solicitud a Tienda</h3>
                     </div>
                     <button type="button" onClick={onClose} className="p-2 rounded-lg theme-element outline-none">
@@ -86,10 +86,10 @@ export default function ModalCorregirPreparacionTienda({
                 </div>
 
                 {(motivo || inc.tipo_incidencia) && (
-                    <div className="p-4 rounded-xl border border-orange-500/40 bg-orange-500/10 mb-4 flex gap-3">
-                        <AlertTriangle className="w-5 h-5 text-orange-600 shrink-0 mt-0.5" />
+                    <div className="p-4 rounded-xl gelia-callout-aviso mb-4 flex gap-3">
+                        <AlertTriangle className="w-5 h-5 theme-text-aviso shrink-0 mt-0.5" />
                         <div>
-                            <p className="text-sm font-black text-orange-700 m-0">Incidencia reportada por Tienda</p>
+                            <p className="text-sm font-black theme-text-main m-0">Incidencia reportada por Tienda</p>
                             {inc.tipo_incidencia && (
                                 <p className="text-xs font-bold theme-text-muted m-0 mt-1">Tipo: {inc.tipo_incidencia.replace(/_/g, ' ')}</p>
                             )}

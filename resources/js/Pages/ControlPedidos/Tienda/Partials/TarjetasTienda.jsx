@@ -34,7 +34,7 @@ export function TarjetaTareaVacia({ hayFiltrosActivos, onLimpiarFiltros }) {
     );
 }
 
-export function TarjetaTarea({ tarea: t, puedeTomar, compacto = false }) {
+export function TarjetaTarea({ tarea: t, puedeTomar, compacto = false, onAbrir }) {
     const venc = fmtVencimiento(t.fecha_limite);
     const badge = claseBadgeEstadoTienda(t.estado, t.estado_label);
     const aviso = avisoParaTarea(t, venc);
@@ -44,6 +44,13 @@ export function TarjetaTarea({ tarea: t, puedeTomar, compacto = false }) {
         || Boolean(venc?.urgente);
 
     const ctaPrincipal = () => {
+        if (onAbrir) {
+            return <button type="button" className={`${BTN_PRIMARY} w-full inline-flex items-center justify-center gap-2 py-3 min-h-[44px]`}
+                onClick={() => onAbrir(t, t.estado === 'PENDIENTE' && puedeTomar)}>
+                <Package className="w-4 h-4" /> {t.estado === 'PENDIENTE' && puedeTomar ? 'Atender pedido' : t.estado === 'EN_ATENCION' ? 'Responder preparación' : 'Ver apartado'}
+            </button>;
+        }
+
         if (t.estado === 'PENDIENTE' && puedeTomar) {
             return (
                 <button
@@ -209,7 +216,7 @@ export function TarjetaTarea({ tarea: t, puedeTomar, compacto = false }) {
                 <BotonAccionCubico
                     icon={Eye}
                     label="Ver detalle"
-                    onClick={() => router.visit(showUrl)}
+                    onClick={() => onAbrir ? onAbrir(t) : router.visit(showUrl)}
                     conLabel
                     className="w-full"
                 />

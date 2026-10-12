@@ -45,6 +45,11 @@ class CrearPedidoBmaService
             }
 
             $attrs = $this->atributosPedidoBase($datos);
+            if (\Illuminate\Support\Facades\Schema::hasColumn('pedidos_bma', 'departamento_operacion_id')) {
+                $vendedorContexto = User::findOrFail($vendedorId);
+                $attrs['departamento_operacion_id'] = $principal?->departamento_operacion_id
+                    ?? \App\Support\ControlPedidos\ContextoDepartamentoPedido::validar($vendedorContexto, !empty($datos['departamento_operacion_id']) ? (int) $datos['departamento_operacion_id'] : null);
+            }
             $folio = $principal
                 ? $this->folioService->ejecutarComplemento($principal)
                 : $this->folioService->ejecutar();

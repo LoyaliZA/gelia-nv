@@ -25,6 +25,7 @@ export default function PanelAccionesShowTienda({
     puedeTrasladar,
     puedeLiberar,
     esMunicipio,
+    esRecogeHoy = false,
     onTomar,
     onResponder,
     onConfirmarSalida,
@@ -79,7 +80,7 @@ export default function PanelAccionesShowTienda({
                         <Package className="w-4 h-4 inline mr-1" /> Tomar tarea
                     </button>
                 )}
-                {editable && (
+                {editable && !esRecogeHoy && (
                     <>
                         <button
                             type="button"
@@ -107,7 +108,7 @@ export default function PanelAccionesShowTienda({
                         <Truck className="w-4 h-4 inline mr-1" /> Confirmar salida a CEDIS
                     </button>
                 )}
-                {puedeLiberar && ['RESPONDIDA', 'LIBERACION_SOLICITADA', 'RECIBIDA_CEDIS'].includes(tarea.estado) && (
+                {puedeLiberar && !esRecogeHoy && ['RESPONDIDA', 'LIBERACION_SOLICITADA', 'RECIBIDA_CEDIS'].includes(tarea.estado) && (
                     <button type="button" className={`${BTN_SECONDARY} w-full min-h-[44px]`} onClick={onLiberar}>
                         Liberar mercancía
                     </button>

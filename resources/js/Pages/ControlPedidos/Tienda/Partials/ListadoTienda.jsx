@@ -15,7 +15,13 @@ import {
     fmtVencimiento,
 } from './tiendaUi';
 
-function CtaTabla({ t, puedeTomar, showUrl }) {
+function CtaTabla({ t, puedeTomar, showUrl, onAbrir }) {
+    if (onAbrir) {
+        return <button type="button" className={`${BTN_PRIMARY} inline-flex items-center gap-1.5 text-xs px-3 py-2 min-h-[36px]`}
+            onClick={() => onAbrir(t, t.estado === 'PENDIENTE' && puedeTomar)}>
+            <Package className="w-3.5 h-3.5" /> {t.estado === 'PENDIENTE' && puedeTomar ? 'Atender' : t.estado === 'EN_ATENCION' ? 'Responder' : 'Ver'}
+        </button>;
+    }
     if (t.estado === 'PENDIENTE' && puedeTomar) {
         return (
             <button
@@ -58,7 +64,7 @@ function CtaTabla({ t, puedeTomar, showUrl }) {
     );
 }
 
-function TablaTareas({ items, puedeTomar }) {
+function TablaTareas({ items, puedeTomar, onAbrir }) {
     return (
         <div className="gelia-tienda-op-table-wrap">
             <table className="gelia-tienda-op-table">
@@ -85,7 +91,7 @@ function TablaTareas({ items, puedeTomar }) {
                         return (
                             <tr key={t.id} data-alerta={alerta}>
                                 <td>
-                                    <Link href={showUrl} className="gelia-tienda-op-fila-link block truncate max-w-[10rem]" title={folio}>
+                                    <Link href={showUrl} onClick={(e) => { if (onAbrir) { e.preventDefault(); onAbrir(t); } }} className="gelia-tienda-op-fila-link block truncate max-w-[10rem]" title={folio}>
                                         {folio}
                                     </Link>
                                     {t.modalidad?.nombre && (
@@ -144,7 +150,7 @@ function TablaTareas({ items, puedeTomar }) {
                                     )}
                                 </td>
                                 <td className="text-right whitespace-nowrap">
-                                    <CtaTabla t={t} puedeTomar={puedeTomar} showUrl={showUrl} />
+                                    <CtaTabla t={t} puedeTomar={puedeTomar} showUrl={showUrl} onAbrir={onAbrir} />
                                 </td>
                             </tr>
                         );
@@ -163,6 +169,7 @@ export default function ListadoTienda({
     onIrAPagina,
     tabLabel = '',
     buscando = false,
+    onAbrir,
 }) {
     const permisos = auth?.user?.permissions || [];
     const puedeTomar = permisos.includes('control_pedidos.tienda.tomar')
@@ -241,14 +248,14 @@ export default function ListadoTienda({
 
             {usarTabla ? (
                 <div className="hidden md:block">
-                    <TablaTareas items={items} puedeTomar={puedeTomar} />
+                    <TablaTareas items={items} puedeTomar={puedeTomar} onAbrir={onAbrir} />
                 </div>
             ) : null}
 
             <div className={usarTabla ? 'md:hidden' : ''}>
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 md:gap-4">
                     {items.map((t) => (
-                        <TarjetaTarea key={t.id} tarea={t} puedeTomar={puedeTomar} compacto />
+                        <TarjetaTarea key={t.id} tarea={t} puedeTomar={puedeTomar} onAbrir={onAbrir} compacto />
                     ))}
                 </div>
             </div>

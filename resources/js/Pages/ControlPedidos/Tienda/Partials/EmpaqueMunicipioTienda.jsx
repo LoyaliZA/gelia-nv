@@ -10,8 +10,9 @@ const TIPOS_EVIDENCIA = [
     { key: 'evidencia_entrega', label: 'Entrega al transporte' },
 ];
 
-export default function EmpaqueMunicipioTienda({ tarea, apartado, auth, requisitos = {}, documentos = [] }) {
-    const permisos = auth?.user?.permissions || [];
+export default function EmpaqueMunicipioTienda({ onEnviar = null,  tarea, apartado, auth, requisitos = {}, documentos = [] }) {
+    const postOperacion = (url, data, opciones) => onEnviar ? onEnviar(url, data, opciones) : router.post(url, data, opciones);
+    const permisos = { includes: (p) => auth?.user?.roles?.includes('Super Admin') || (auth?.user?.permissions || []).includes(p) };
     const puedeEmpacar = permisos.includes('control_pedidos.tienda.empacar_municipio');
     const puedeDespachar = permisos.includes('control_pedidos.tienda.despachar_municipio');
     const [bultos, setBultos] = useState(String(apartado?.bultos_salida || 1));
@@ -24,18 +25,18 @@ export default function EmpaqueMunicipioTienda({ tarea, apartado, auth, requisit
         const form = new FormData();
         form.append('tipo', tipo);
         form.append('archivo', file);
-        router.post(route('control_pedidos.tienda.municipio.evidencia_empaque', tarea.id), form, { forceFormData: true });
+        postOperacion(route('control_pedidos.tienda.municipio.evidencia_empaque', tarea.id), form, { forceFormData: true });
     };
 
     const empacar = () => {
-        router.post(route('control_pedidos.tienda.municipio.empacar', tarea.id), {
+        postOperacion(route('control_pedidos.tienda.municipio.empacar', tarea.id), {
             bultos,
             version: apartado.version,
         });
     };
 
     const despachar = () => {
-        router.post(route('control_pedidos.tienda.municipio.despachar', tarea.id), {
+        postOperacion(route('control_pedidos.tienda.municipio.despachar', tarea.id), {
             receptor,
             version: apartado.version,
         });
@@ -50,8 +51,14 @@ export default function EmpaqueMunicipioTienda({ tarea, apartado, auth, requisit
     }
 
     return (
-        <section className="rounded-xl border border-teal-500/40 p-4 space-y-3 bg-teal-500/5">
-            <h3 className="text-[10px] font-black uppercase tracking-widest text-teal-800 dark:text-teal-200 m-0">Empaque y salida municipal</h3>
+        <section
+            className="rounded-xl border p-4 space-y-3"
+            style={{
+                borderColor: 'color-mix(in srgb, var(--color-info) 35%, var(--theme-border))',
+                backgroundColor: 'color-mix(in srgb, var(--color-info) 6%, var(--theme-surface-solid))',
+            }}
+        >
+            <h3 className="text-[10px] font-black uppercase tracking-widest theme-text-main m-0">Empaque y salida municipal</h3>
             {requisitos.causa_remision_salida && (
                 <p className="text-xs font-bold m-0 theme-text-muted">{requisitos.causa_remision_salida}</p>
             )}
@@ -60,7 +67,7 @@ export default function EmpaqueMunicipioTienda({ tarea, apartado, auth, requisit
             </p>
             <ul className="text-xs m-0 space-y-1">
                 {TIPOS_EVIDENCIA.map(({ key, label }) => (
-                    <li key={key} className={tiene(key) ? 'text-emerald-700 dark:text-emerald-300' : 'theme-text-muted'}>
+                    <li key={key} className={tiene(key) ? 'font-semibold theme-text-exito' : 'theme-text-muted'}>
                         {tiene(key) ? '✓' : '○'} {label}
                     </li>
                 ))}

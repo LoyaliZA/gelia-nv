@@ -33,6 +33,13 @@ class AutorizarSalidaPreparacionService
             ]);
         }
 
+        $politica = PoliticaSalidaPreparacion::desdeTarea($tarea);
+        if ($politica->soloApartado()) {
+            throw ValidationException::withMessages([
+                'modalidad' => 'Recoge en tienda no autoriza salida. El cierre es la confirmación del apartado.',
+            ]);
+        }
+
         $tarea->loadMissing('pedido');
         $pedido = $tarea->pedido;
         if ($pedido && (int) $pedido->vendedor_id === (int) $usuario->id) {

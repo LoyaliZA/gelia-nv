@@ -43,7 +43,7 @@ export default function ModalConfirmarAccion({
                 onClick={(e) => e.stopPropagation()}
             >
                 <div className="flex items-start gap-4">
-                    <AlertTriangle className="w-8 h-8 text-orange-500 shrink-0" />
+                    <AlertTriangle className="w-8 h-8 theme-text-aviso shrink-0" />
                     <div>
                         <h3 className="text-base font-black uppercase theme-text-main m-0">{titulo}</h3>
                         <p className="text-sm theme-text-muted mt-2 m-0 leading-relaxed">{mensaje}</p>

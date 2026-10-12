@@ -70,3 +70,10 @@ Broadcast::channel('pedido-bma.{pedidoId}.evidencias', function ($user, $pedidoI
 
     return \App\Support\ControlPedidos\VisibilidadPedidoBma::puedeConsultar($user, $pedido);
 });
+
+Broadcast::channel('control-pedidos.operaciones', function ($user) {
+    foreach (['control_pedidos.ver_listado', 'control_pedidos.tienda.ver', 'control_pedidos.cedis', 'control_pedidos.auditar', 'control_pedidos.delegado'] as $permiso) {
+        if ($user->can($permiso)) return true;
+    }
+    return false;
+});

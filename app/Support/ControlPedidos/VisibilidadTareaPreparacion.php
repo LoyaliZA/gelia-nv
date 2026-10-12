@@ -45,7 +45,7 @@ final class VisibilidadTareaPreparacion
     public static function payloadTienda(PedidoBmaTareaPreparacion $tarea, ?User $usuario = null): array
     {
         $tarea->loadMissing([
-            'pedido.cliente', 'pedido.vendedor', 'modalidad', 'almacen', 'productos', 'asignadaA',
+            'pedido.cliente', 'pedido.vendedor', 'pedido.origen', 'modalidad', 'almacen', 'productos', 'asignadaA',
             'solicitudTraspaso.estado', 'enviadaCedisPor', 'recibidaCedisPor', 'atendidaPor',
             'paqueteria', 'caratulas',
         ]);
@@ -59,6 +59,12 @@ final class VisibilidadTareaPreparacion
 
         return [
             'id' => $tarea->id,
+            'puede_responder' => $usuario !== null && $usuario->can('control_pedidos.tienda.responder') && (int) $tarea->asignada_a_id === (int) $usuario->id,
+            'puede_tomar' => (bool) $usuario?->can('control_pedidos.tienda.tomar'),
+            'puede_preparar' => $usuario !== null
+                && ($usuario->can('control_pedidos.tienda.apartado.separar') || $usuario->can('control_pedidos.tienda.responder'))
+                && (int) $tarea->asignada_a_id === (int) $usuario->id,
+            'puede_reportar_incidencia' => (bool) $usuario?->can('control_pedidos.tienda.reportar_error'),
             'estado' => $tarea->estado,
             'estado_label' => PedidoBmaTareaPreparacion::LABELS[$tarea->estado] ?? $tarea->estado,
             'version' => $tarea->version,
@@ -89,6 +95,8 @@ final class VisibilidadTareaPreparacion
                 'contacto_nombre' => $pedido->contacto_nombre_snapshot,
                 'prioridad_md' => (bool) $pedido->prioridad_md,
                 'origen_solicitud' => $pedido->origen_solicitud,
+                'requiere_logistica' => (bool) ($pedido->origen?->requiere_logistica ?? false),
+                'vendedora_nombre' => $pedido->vendedor?->name,
                 'cliente_nombre' => $pedido->cliente?->nombre_comercial ?: $pedido->cliente?->nombre ?: $pedido->contacto_nombre_snapshot,
                 'cantidad_piezas' => $pedido->cantidad_piezas,
             ] : null,
@@ -99,6 +107,7 @@ final class VisibilidadTareaPreparacion
             'productos' => $tarea->productos->map(fn ($p) => [
                 'id' => $p->id,
                 'pedido_bma_origen_id' => $p->pedido_bma_origen_id,
+                'producto_id' => $p->producto_id,
                 'sku' => $p->sku,
                 'descripcion_snapshot' => $p->descripcion_snapshot,
                 'cantidad_solicitada' => $p->cantidad_solicitada,

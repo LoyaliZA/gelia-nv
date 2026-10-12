@@ -10,7 +10,7 @@ class EvaluarVencimientoApartadoFisicoCommand extends Command
 {
     protected $signature = 'control-pedidos:evaluar-vencimiento-apartado-fisico';
 
-    protected $description = 'Pasa a devolución pendiente las recogidas de hoy ya vencidas. No mueve inventario.';
+    protected $description = 'Avisa del vencimiento de recoge en tienda y evalúa devoluciones de otras modalidades. No mueve inventario.';
 
     public function handle(PreparacionTiendaConfig $config, EvaluarVencimientoApartadoFisicoService $service): int
     {
@@ -21,7 +21,7 @@ class EvaluarVencimientoApartadoFisicoCommand extends Command
         }
 
         $movidas = $service->ejecutar();
-        $this->info("Apartados pasados a devolución pendiente: {$movidas}");
+        $this->info("Apartados con aviso de vencimiento o devolución pendiente: {$movidas}");
 
         return self::SUCCESS;
     }

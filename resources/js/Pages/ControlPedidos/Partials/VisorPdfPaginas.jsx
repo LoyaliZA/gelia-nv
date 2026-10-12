@@ -74,13 +74,13 @@ export default function VisorPdfPaginas({ url, titulo = 'PDF', className = '', m
             )}
             {estado.error && (
                 <div className="flex flex-col items-center justify-center gap-2 p-4 text-center">
-                    <AlertTriangle className="w-7 h-7 text-amber-500" />
+                    <AlertTriangle className="w-7 h-7 theme-text-aviso" />
                     <p className="text-xs font-bold theme-text-muted m-0">{estado.error}</p>
                 </div>
             )}
             <div
                 ref={hostRef}
-                className="overflow-auto bg-white"
+                className="overflow-auto theme-element"
                 style={{
                     maxHeight: estado.cargando || estado.error ? 0 : maxHeight,
                     minHeight: estado.cargando ? 0 : undefined,

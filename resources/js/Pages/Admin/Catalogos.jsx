@@ -276,7 +276,7 @@ export default function Catalogos({
                             {tabActiva === 'porcentajes_escalonamiento' && <TablaPorcentajesEscalonamiento datos={f(porcentajes_escalonamiento)} listas={listas} />}
                             {tabActiva === 'porcentajes_listado' && <TablaPorcentajesListado datos={f(porcentajes_listado)} listas={listas} />}
                             {tabActiva === 'estados' && <TablaEstados datos={f(estados)} />}
-                            {tabActiva === 'bancos' && <TablaBancos datos={f(bancos)} />}
+                            {tabActiva === 'bancos' && <TablaBancos datos={f(bancos)} departamentos={departamentos} />}
                             {tabActiva === 'regimenes_fiscales' && (
                                 <TablaCatalogoFiscal
                                     datos={f(regimenes_fiscales)}

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import {
     ArrowLeft, Camera, CheckCircle2, AlertTriangle, Store, Package, Truck, FileText, Printer,
@@ -12,11 +12,12 @@ import ProgresoOperacionTienda from './Partials/ProgresoOperacionTienda';
 import PanelAccionesShowTienda from './Partials/PanelAccionesShowTienda';
 import TablaProductosShowTienda from './Partials/TablaProductosShowTienda';
 import { BTN_PRIMARY, BTN_SECONDARY, formatearFechaNegocio } from '../Partials/pedidosBmaStyles';
-import ModalAlertaPedido from '../Partials/ModalAlertaPedido';
+import AvisoResultadoTienda from './Partials/AvisoResultadoTienda';
 import AvisoOperativoPedido from '../Partials/AvisoOperativoPedido';
 import ModalSesionEvidenciaTienda from './Partials/ModalSesionEvidenciaTienda';
 import ModalLiberarMercancia from '../Partials/ModalLiberarMercancia';
 import ApartadoFisicoTienda from './Partials/ApartadoFisicoTienda';
+import PrepararApartadoRecoge from './Partials/PrepararApartadoRecoge';
 import EmpaqueMunicipioTienda from './Partials/EmpaqueMunicipioTienda';
 
 const TIPOS_INCIDENCIA = [
@@ -41,6 +42,7 @@ export default function Show({
     requisitos = {},
     estados_fisicos = {},
     documentos = [],
+    documentos_solicitud = [],
     historial = [],
     almacenes = [],
     tipos_caja = [],
@@ -49,9 +51,13 @@ export default function Show({
     conciliacion_grupo = null,
     discrepancias_traspaso = [],
     config = {},
+    embedded = false,
+    onEnviar = null,
 }) {
     const { flash } = usePage().props;
-    const permisos = auth?.user?.permissions || [];
+    const Layout = embedded ? React.Fragment : AppLayout;
+    const postOperacion = (url, data, opciones) => onEnviar ? onEnviar(url, data, opciones) : router.post(url, data, opciones);
+    const permisos = auth?.user?.roles?.includes('Super Admin') ? [...(auth?.user?.permissions || []), 'control_pedidos.tienda.responder', 'control_pedidos.tienda.tomar', 'control_pedidos.tienda.reportar_error', 'control_pedidos.tienda.liberar', 'control_pedidos.tienda.evidencias', 'control_pedidos.tienda.trasladar', 'control_pedidos.tienda.generar_caratula', 'control_pedidos.tienda.imprimir_caratula', 'control_pedidos.tienda.regenerar_caratula', 'control_pedidos.tienda.confirmar_caratula', 'control_pedidos.tienda.cargar_identificacion'] : auth?.user?.permissions || [];
     const [productos, setProductos] = useState(() => (tarea.productos || []).map((p) => ({
         id: p.id,
         cantidad_encontrada: p.cantidad_encontrada ?? p.cantidad_solicitada ?? 0,
@@ -76,16 +82,7 @@ export default function Show({
         almacen_aparente_id: '',
         observacion: '',
     });
-    const [alerta, setAlerta] = useState({ abierto: false, tipo: 'success', titulo: '', mensaje: '' });
     const [modalLiberar, setModalLiberar] = useState(false);
-
-    useEffect(() => {
-        if (flash?.success) {
-            setAlerta({ abierto: true, tipo: 'success', titulo: 'Operación exitosa', mensaje: flash.success });
-        } else if (flash?.error) {
-            setAlerta({ abierto: true, tipo: 'error', titulo: 'Error', mensaje: flash.error });
-        }
-    }, [flash?.success, flash?.error]);
 
     const puedeTomar = permisos.includes('control_pedidos.tienda.tomar');
     const puedeResponder = permisos.includes('control_pedidos.tienda.responder');
@@ -129,7 +126,7 @@ export default function Show({
     }, [productos, tarea.productos, requisitos, documentos, evidencias, evidenciasProducto, pesoReal, pesoVol, obsFisicas, tipoCajaId]);
 
     const tomar = () => {
-        router.post(route('control_pedidos.tienda.tomar', tarea.id), { version: tarea.version });
+        postOperacion(route('control_pedidos.tienda.tomar', tarea.id), { version: tarea.version });
     };
 
     const responder = () => {
@@ -150,21 +147,21 @@ export default function Show({
         Object.entries(evidenciasProducto).forEach(([id, file]) => {
             if (file) form.append(`evidencias_producto[${id}]`, file);
         });
-        router.post(route('control_pedidos.tienda.responder', tarea.id), form, { forceFormData: true });
+        postOperacion(route('control_pedidos.tienda.responder', tarea.id), form, { forceFormData: true });
     };
 
     const confirmarSalida = () => {
         if (!window.confirm('¿Confirma que la mercancía salió hacia CEDIS?')) return;
-        router.post(route('control_pedidos.tienda.confirmar_salida', tarea.id), { version: tarea.version });
+        postOperacion(route('control_pedidos.tienda.confirmar_salida', tarea.id), { version: tarea.version });
     };
 
     const generarCaratula = () => {
-        router.post(route('control_pedidos.tienda.caratula.generar', tarea.id), { version: tarea.version });
+        postOperacion(route('control_pedidos.tienda.caratula.generar', tarea.id), { version: tarea.version });
     };
 
     const regenerarCaratula = () => {
         if (!motivoRegeneracion.trim()) return;
-        router.post(route('control_pedidos.tienda.caratula.regenerar', tarea.id), {
+        postOperacion(route('control_pedidos.tienda.caratula.regenerar', tarea.id), {
             version: tarea.version,
             motivo_regeneracion: motivoRegeneracion,
         }, { onSuccess: () => { setMostrarRegenerar(false); setMotivoRegeneracion(''); } });
@@ -172,7 +169,7 @@ export default function Show({
 
     const confirmarCaratula = () => {
         if (!window.confirm('¿Confirma que la carátula está colocada en el paquete?')) return;
-        router.post(route('control_pedidos.tienda.caratula.confirmar', tarea.id), {
+        postOperacion(route('control_pedidos.tienda.caratula.confirmar', tarea.id), {
             version: tarea.version,
             caratula_id: caratula?.id,
         });
@@ -183,19 +180,20 @@ export default function Show({
         const form = new FormData();
         form.append('tipo', tipo);
         form.append('archivo', file);
-        router.post(route('control_pedidos.tienda.documento_municipal.store', tarea.id), form, { forceFormData: true });
+        postOperacion(route('control_pedidos.tienda.documento_municipal.store', tarea.id), form, { forceFormData: true });
     };
 
     const reportarIncidencia = () => {
         const form = new FormData();
         Object.entries(incidencia).forEach(([k, v]) => { if (v !== '' && v != null) form.append(k, v); });
         form.append('version', tarea.version);
-        router.post(route('control_pedidos.tienda.reportar_incidencia', tarea.id), form, { forceFormData: true });
+        postOperacion(route('control_pedidos.tienda.reportar_incidencia', tarea.id), form, { forceFormData: true });
     };
 
     const liberar = () => setModalLiberar(true);
 
-    const editable = tarea.estado === 'EN_ATENCION' && puedeResponder;
+    const esRecogeHoy = tarea.modalidad?.codigo === 'RECOGE_TIENDA';
+    const editable = tarea.estado === 'EN_ATENCION' && puedeResponder && !esRecogeHoy;
     const enPendiente = tarea.estado === 'PENDIENTE' && puedeTomar;
     const listaTraslado = tarea.estado === 'LISTA_PARA_TRASLADO';
     const traspasoInfo = traspaso || tarea.solicitud_traspaso;
@@ -204,6 +202,17 @@ export default function Show({
     const badgeEstado = claseBadgeEstadoTienda(tarea.estado, tarea.estado_label);
     const progreso = tarea.progreso_traslado || [];
     const progresoCaratula = tarea.progreso_caratula || [];
+
+    if (tarea.estado === 'EN_ATENCION') {
+        return <Layout {...(!embedded ? { auth } : {})}>
+            {!embedded && <Head title={`Preparación Tienda — ${folio}`} />}
+            <GeliaPageShell className="gelia-tienda-op space-y-4">
+                {!embedded && <div className="flex items-center justify-between gap-3"><h1 className="text-lg font-bold">{folio}</h1><Link href={route('control_pedidos.tienda.index')} className={BTN_SECONDARY}>Volver al listado</Link></div>}
+                <AvisoResultadoTienda flash={flash} />
+                <PrepararApartadoRecoge key={`${tarea.id}-${tarea.version}-${tarea.apartado?.version}`} tarea={tarea} auth={auth} documentos={documentos_solicitud} documentosTarea={documentos} requisitos={requisitos} tiposCaja={tipos_caja} onEnviar={onEnviar} onRefrescarDocumentos={() => router.reload({ only: ['documentos'], preserveScroll: true })} />
+            </GeliaPageShell>
+        </Layout>;
+    }
 
     const avisoPrincipal = () => {
         if (tarea.estado === 'RECHAZADA_CEDIS' || tarea.estado === 'CON_INCIDENCIA') {
@@ -268,10 +277,10 @@ export default function Show({
     const aviso = avisoPrincipal();
 
     return (
-        <AppLayout auth={auth}>
-            <Head title={`Preparación Tienda — ${folio}`} />
+        <Layout {...(!embedded ? { auth } : {})}>
+            {!embedded && <Head title={`Preparación Tienda — ${folio}`} />}
             <GeliaPageShell className="gelia-tienda-op space-y-4 md:space-y-6">
-                <GeliaTituloCard
+                {!embedded && <GeliaTituloCard
                     eyebrow="Preparación tienda"
                     title={folio}
                     description={`${folioEtiqueta}${tarea.pedido?.folio && tarea.pedido.folio !== folio ? ` · Interno ${tarea.pedido.folio}` : ''}${tarea.pedido?.prioridad_md ? ' · Mismo día' : ''} · ${tarea.modalidad?.nombre || '—'}${tarea.almacen?.nombre ? ` · ${tarea.almacen.nombre}` : ''}`}
@@ -284,7 +293,9 @@ export default function Show({
                             </Link>
                         </div>
                     )}
-                />
+                />}
+
+                <AvisoResultadoTienda flash={flash} />
 
                 <div className="grid lg:grid-cols-3 gap-4">
                     <div className="lg:col-span-2 space-y-4">
@@ -308,17 +319,31 @@ export default function Show({
                             </section>
                         )}
 
-                        <ApartadoFisicoTienda
+                        {esRecogeHoy ? <PrepararApartadoRecoge key={`${tarea.id}-${tarea.apartado?.version}-${tarea.estado}`} tarea={tarea} auth={auth} documentos={documentos_solicitud} documentosTarea={documentos} requisitos={requisitos} tiposCaja={tipos_caja} onEnviar={onEnviar} /> : <ApartadoFisicoTienda
                             tarea={tarea}
+                            onEnviar={onEnviar}
                             auth={auth}
                             config={config}
                             eventos={eventos_apartado}
                             requisitos={requisitos}
-                        />
+                            onConfirmarApartado={null}
+                        />}
+
+                        {esRecogeHoy && documentos.some((d) => d.tipo_evidencia === 'caratula_recoge_tienda') && (
+                            <section className={`${geliaCardClass()} p-4 space-y-2`}>
+                                <h3 className="text-sm font-bold theme-text-main m-0">Carátula de recogida</h3>
+                                {documentos.filter((d) => d.tipo_evidencia === 'caratula_recoge_tienda').sort((a, b) => b.id - a.id).slice(0, 1).map((d) => (
+                                    <a key={d.id} className="text-sm font-bold underline" href={route('control_pedidos.tienda.evidencia.descargar', [tarea.id, d.id])}>
+                                        {d.nombre_original || 'Descargar carátula'}
+                                    </a>
+                                ))}
+                            </section>
+                        )}
 
                         {esMunicipio && (
                             <EmpaqueMunicipioTienda
                                 tarea={tarea}
+                                onEnviar={onEnviar}
                                 apartado={tarea.apartado}
                                 auth={auth}
                                 requisitos={requisitos}
@@ -326,7 +351,7 @@ export default function Show({
                             />
                         )}
 
-                        <TablaProductosShowTienda
+                        {!esRecogeHoy && <TablaProductosShowTienda
                             productos={tarea.productos || []}
                             productosState={productos}
                             estados_fisicos={estados_fisicos}
@@ -335,7 +360,7 @@ export default function Show({
                             evidenciasProducto={evidenciasProducto}
                             setProductos={setProductos}
                             setEvidenciasProducto={setEvidenciasProducto}
-                        />
+                        />}
 
                         {editable && (requisitos.peso_real_obligatorio || requisitos.peso_volumetrico_obligatorio || requisitos.observaciones_fisicas_obligatorias || requisitos.caja_obligatoria || tarea.requiere_traslado_cedis) && (
                             <section className={`${geliaCardClass()} p-4 space-y-3`}>
@@ -631,6 +656,7 @@ export default function Show({
                         puedeTrasladar={puedeTrasladar}
                         puedeLiberar={puedeLiberar}
                         esMunicipio={esMunicipio}
+                        esRecogeHoy={esRecogeHoy}
                         modoIncidencia={modoIncidencia}
                         onTomar={tomar}
                         onResponder={responder}
@@ -648,7 +674,6 @@ export default function Show({
                 tarea={tarea}
                 routeName="control_pedidos.tienda.liberar"
             />
-            <ModalAlertaPedido {...alerta} onCerrar={() => setAlerta((a) => ({ ...a, abierto: false }))} />
-        </AppLayout>
+        </Layout>
     );
 }

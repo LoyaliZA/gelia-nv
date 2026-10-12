@@ -15,8 +15,8 @@ class ResponderPreparacionTiendaRequest extends FormRequest
 
     public function rules(): array
     {
-        return [
-            'productos' => ['required', 'array', 'min:1'],
+        return array_merge(ReglasLineasPreparacion::reglas(false), [
+            'productos' => [$this->has('lineas') ? 'nullable' : 'required', 'array', 'min:1'],
             'productos.*.id' => ['required', 'integer'],
             'productos.*.cantidad_encontrada' => ['required', 'integer', 'min:0'],
             'productos.*.estado_fisico' => ['required', 'string', Rule::in(PedidoBmaRevisionProducto::ESTADOS)],
@@ -31,6 +31,6 @@ class ResponderPreparacionTiendaRequest extends FormRequest
             'evidencias.*' => ['file', 'max:10240', 'mimes:jpg,jpeg,png,webp,pdf'],
             'evidencias_producto' => ['nullable', 'array'],
             'evidencias_producto.*' => ['file', 'max:10240', 'mimes:jpg,jpeg,png,webp,pdf'],
-        ];
+        ]);
     }
 }

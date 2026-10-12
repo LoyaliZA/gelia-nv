@@ -8,7 +8,15 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class PedidoBmaCumplimientoEvento extends Model
 {
+    public const TIPO_VENCIMIENTO_AVISADO = 'VENCIMIENTO_AVISADO';
+
     public const TIPO_PIEZA_SEPARADA = 'PIEZA_SEPARADA';
+
+    public const TIPO_PIEZA_ANEXADA = 'PIEZA_ANEXADA';
+
+    public const TIPO_DETALLE_REPORTADO = 'DETALLE_REPORTADO';
+
+    public const TIPO_APARTADO_CONFIRMADO = 'APARTADO_CONFIRMADO';
 
     public const TIPO_PAGO_CONFIRMADO = 'PAGO_CONFIRMADO';
 
@@ -37,7 +45,11 @@ class PedidoBmaCumplimientoEvento extends Model
     public const TIPO_TRASPASO_RECHAZADO_CEDIS = 'TRASPASO_RECHAZADO_CEDIS';
 
     public const TIPOS = [
+        self::TIPO_VENCIMIENTO_AVISADO,
         self::TIPO_PIEZA_SEPARADA,
+        self::TIPO_PIEZA_ANEXADA,
+        self::TIPO_DETALLE_REPORTADO,
+        self::TIPO_APARTADO_CONFIRMADO,
         self::TIPO_PAGO_CONFIRMADO,
         self::TIPO_SALIDA_AUTORIZADA,
         self::TIPO_ENTREGADA,
@@ -54,7 +66,11 @@ class PedidoBmaCumplimientoEvento extends Model
     ];
 
     public const LABELS = [
+        self::TIPO_VENCIMIENTO_AVISADO => 'Plazo del apartado vencido',
         self::TIPO_PIEZA_SEPARADA => 'Pieza separada',
+        self::TIPO_PIEZA_ANEXADA => 'Pieza anexada',
+        self::TIPO_DETALLE_REPORTADO => 'Detalle reportado',
+        self::TIPO_APARTADO_CONFIRMADO => 'Apartado confirmado',
         self::TIPO_PAGO_CONFIRMADO => 'Pago confirmado',
         self::TIPO_SALIDA_AUTORIZADA => 'Salida autorizada',
         self::TIPO_ENTREGADA => 'Entregada',

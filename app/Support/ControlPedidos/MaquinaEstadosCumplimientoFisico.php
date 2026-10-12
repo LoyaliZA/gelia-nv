@@ -11,10 +11,12 @@ final class MaquinaEstadosCumplimientoFisico
     private const TRANSICIONES = [
         PedidoBmaCumplimientoFisico::ESTADO_POR_SEPARAR => [
             PedidoBmaCumplimientoFisico::ESTADO_SEPARADA,
+            PedidoBmaCumplimientoFisico::ESTADO_APARTADO_CONFIRMADO,
             PedidoBmaCumplimientoFisico::ESTADO_INCIDENCIA,
         ],
         PedidoBmaCumplimientoFisico::ESTADO_SEPARADA => [
             PedidoBmaCumplimientoFisico::ESTADO_LISTA_PARA_SALIDA,
+            PedidoBmaCumplimientoFisico::ESTADO_APARTADO_CONFIRMADO,
             PedidoBmaCumplimientoFisico::ESTADO_DEVOLUCION_PENDIENTE,
             PedidoBmaCumplimientoFisico::ESTADO_INCIDENCIA,
         ],
@@ -39,6 +41,7 @@ final class MaquinaEstadosCumplimientoFisico
         PedidoBmaCumplimientoFisico::ESTADO_ENTREGADA => [],
         PedidoBmaCumplimientoFisico::ESTADO_DESPACHADA => [],
         PedidoBmaCumplimientoFisico::ESTADO_DEVUELTA_ANAQUEL => [],
+        PedidoBmaCumplimientoFisico::ESTADO_APARTADO_CONFIRMADO => [],
     ];
 
     public static function puedeTransicionar(string $origen, string $destino): bool

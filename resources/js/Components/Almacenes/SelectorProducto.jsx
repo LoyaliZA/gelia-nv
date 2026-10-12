@@ -6,7 +6,7 @@ function etiquetaProducto(p) {
     return `${p.sku} - ${p.descripcion}`;
 }
 
-export default function SelectorProducto({ value, onChange, productoInicial, disabled = false, required = false }) {
+export default function SelectorProducto({ value, onChange, productoInicial, disabled = false, required = false, almacenId = null }) {
     const [texto, setTexto] = useState('');
     const [abierto, setAbierto] = useState(false);
     const [productos, setProductos] = useState([]);
@@ -18,6 +18,15 @@ export default function SelectorProducto({ value, onChange, productoInicial, dis
     const listaRef = useRef(null);
     const debounceRef = useRef(null);
     const abortRef = useRef(null);
+
+    useEffect(() => {
+        clearTimeout(debounceRef.current);
+        abortRef.current?.abort();
+        setProductos([]);
+        setPagina(1);
+        setUltimaPagina(1);
+        setAbierto(false);
+    }, [almacenId]);
 
     useEffect(() => {
         if (productoInicial) {
@@ -45,6 +54,7 @@ export default function SelectorProducto({ value, onChange, productoInicial, dis
                 page: String(paginaSolicitada),
                 per_page: '25',
             });
+            if (almacenId) params.set('almacen_id', String(almacenId));
             if (termino.trim()) {
                 params.set('q', termino.trim());
             }
@@ -71,7 +81,7 @@ export default function SelectorProducto({ value, onChange, productoInicial, dis
         } finally {
             setCargando(false);
         }
-    }, []);
+    }, [almacenId]);
 
     const programarBusqueda = useCallback((termino) => {
         clearTimeout(debounceRef.current);

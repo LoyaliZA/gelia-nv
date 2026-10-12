@@ -235,6 +235,7 @@ class PedidoBmaCedisController extends Controller
                 Auth::id(),
                 $request->validated('cajas') ?? [],
                 [
+                    'almacen_id' => $request->validated('almacen_id'),
                     'estado_fisico_general' => $request->validated('estado_fisico_general'),
                     'comentario_fisico_general' => $request->validated('comentario_fisico_general'),
                     'evidencias_generales' => $request->file('evidencias_generales', []),

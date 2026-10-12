@@ -10,6 +10,7 @@ abstract class PedidoBmaRequestBase extends FormRequest
     protected function reglasComunes(): array
     {
         return [
+            'departamento_operacion_id' => ['nullable', 'integer', 'exists:departamentos,id'],
             'cliente_id' => ['nullable', 'exists:clientes,id'],
             'origen_id' => ['nullable', 'exists:origenes_pedido,id'],
             'tipo_operacion_envio_id' => ['nullable', 'exists:catalogo_tipos_operacion_envio,id'],

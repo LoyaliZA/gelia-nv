@@ -57,10 +57,16 @@ final class PoliticaSalidaPreparacion
         return ! $this->cierraEnPdv() && ! $this->esEnvioMunicipio();
     }
 
+    /** Recoge en tienda el mismo día: solo apartado, sin cobro ni salida. */
+    public function soloApartado(): bool
+    {
+        return $this->esRecogeHoy();
+    }
+
     public function permitePorCobrar(): bool
     {
         if ($this->esRecogeHoy()) {
-            return true;
+            return false;
         }
         if ($this->esEnvioMunicipio()) {
             return (bool) ($this->paqueteria?->permite_por_cobrar);
@@ -77,6 +83,6 @@ final class PoliticaSalidaPreparacion
 
     public function entregaDirectaSinResguardo(): bool
     {
-        return $this->esRecogeHoy();
+        return false;
     }
 }

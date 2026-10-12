@@ -215,7 +215,7 @@ class ControlPedidosPesajeTest extends TestCase
         $pedidoLocal = new PedidoBma;
         $pedidoLocal->setRelation('origen', $origenEnvio);
         $pedidoLocal->setRelation('paqueteria', $local);
-        $this->assertTrue($pedidoLocal->consultaCedisModoRevisionMercancia());
+        $this->assertFalse($pedidoLocal->consultaCedisModoRevisionMercancia());
 
         $localPeso = new CatalogoPaqueteriaPedido([
             'categoria' => CatalogoPaqueteriaPedido::CATEGORIA_LOCAL_REGIONAL,

@@ -20,6 +20,8 @@ class PedidoBmaTareaDocumento extends Model
 
     public const TIPO_HOJA_SALIDA_INTERNA = 'hoja_salida_interna';
 
+    public const TIPO_CARATULA_RECOGE = 'caratula_recoge_tienda';
+
     public const TIPO_EVIDENCIA_BASCULA = 'evidencia_bascula';
 
     public const TIPO_EVIDENCIA_BULTO = 'evidencia_bulto';

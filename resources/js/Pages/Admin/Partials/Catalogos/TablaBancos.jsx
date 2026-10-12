@@ -4,7 +4,7 @@ import { useForm, router } from '@inertiajs/react';
 import { Landmark, Edit2, Trash2, Plus, X, Save, AlertTriangle } from 'lucide-react';
 import GeliaLoader from '../../../../Components/GeliaLoader';
 
-export default function TablaBancos({ datos = [] }) {
+export default function TablaBancos({ datos = [], departamentos = [] }) {
     const [modalAbierto, setModalAbierto] = useState(false);
     const [modalEliminar, setModalEliminar] = useState(false);
     const [itemActual, setItemActual] = useState(null);
@@ -12,6 +12,8 @@ export default function TablaBancos({ datos = [] }) {
     const { data, setData, post, put, processing, reset, errors } = useForm({
         nombre: '',
         activo: true,
+        compartido: true,
+        departamento_ids: [],
     });
 
     const abrirNuevo = () => {
@@ -25,6 +27,8 @@ export default function TablaBancos({ datos = [] }) {
         setData({
             nombre: item.nombre,
             activo: item.activo,
+            compartido: item.compartido ?? true,
+            departamento_ids: (item.departamentos || []).filter((d) => d.activo).map((d) => d.departamento_id),
         });
         setModalAbierto(true);
     };
@@ -112,6 +116,16 @@ export default function TablaBancos({ datos = [] }) {
                                 <input type="text" required value={data.nombre} onChange={e => setData('nombre', e.target.value)} className="w-full mt-2 px-4 py-3 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none focus:ring-2" />
                                 {errors.nombre && <p className="text-xs text-red-500 mt-1">{errors.nombre}</p>}
                             </div>
+                            <label className="flex items-center gap-3 cursor-pointer">
+                                <input type="checkbox" checked={data.compartido} onChange={(e) => setData('compartido', e.target.checked)} />
+                                Disponible para todos los departamentos
+                            </label>
+                            {!data.compartido && <fieldset className="space-y-2"><legend className="font-bold">Departamentos que pueden utilizarlo</legend>
+                                {departamentos.filter((d) => d.activo).map((d) => <label key={d.id} className="flex items-center gap-2">
+                                    <input type="checkbox" checked={data.departamento_ids.includes(d.id)} onChange={(e) => setData('departamento_ids', e.target.checked ? [...data.departamento_ids, d.id] : data.departamento_ids.filter((id) => id !== d.id))} />{d.nombre}
+                                </label>)}
+                                {errors.departamento_ids && <p role="alert" className="text-red-500">{errors.departamento_ids}</p>}
+                            </fieldset>}
                             <label className="flex items-center gap-3 cursor-pointer">
                                 <input type="checkbox" checked={data.activo} onChange={e => setData('activo', e.target.checked)} className="w-4 h-4" />
                                 <span className="text-sm font-bold theme-text-main">Activo</span>

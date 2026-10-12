@@ -2,6 +2,7 @@
 
 namespace App\Services\ControlPedidos;
 
+use App\Models\Almacen;
 use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\CatalogoModalidadPreparacionPedido;
 use App\Models\ControlPedidos\CatalogoPaqueteriaPedido;
@@ -11,6 +12,7 @@ use App\Models\ControlPedidos\PedidoBmaTareaPreparacion;
 use App\Models\ControlPedidos\PedidoBmaTareaProducto;
 use App\Models\User;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
+use App\Support\ControlPedidos\AlmacenPdv;
 use App\Support\ControlPedidos\MaquinaEstadosPedidoBma;
 use App\Support\ControlPedidos\VisibilidadPedidoBma;
 use Illuminate\Support\Facades\DB;
@@ -80,6 +82,19 @@ class CrearTareaPreparacionService
             ->where('activo', true)
             ->firstOrFail();
 
+        if ($modalidad->codigo === CatalogoModalidadPreparacionPedido::CODIGO_RECOGE_TIENDA) {
+            $almacen = Almacen::query()->find($almacenId);
+            if (! $almacen || ! AlmacenPdv::esCodigo($almacen->codigo)) {
+                throw ValidationException::withMessages([
+                    'almacen_id' => 'Recoge en tienda solo aplica para el almacén PDV.',
+                ]);
+            }
+            $origenDepto = $this->origenDesdeDepartamentoPrincipal($usuario);
+            if ($origenDepto !== null) {
+                $meta['origen_solicitud'] = $origenDepto;
+            }
+        }
+
         app(ValidarSucursalDestinoPedidoBma::class)->ejecutar(
             $pedido,
             $pedido->sucursal_destino_id !== null ? (int) $pedido->sucursal_destino_id : null,
@@ -118,6 +133,12 @@ class CrearTareaPreparacionService
             $pedido->loadMissing('estatus');
             $fechaLimite = $this->requisitosService->calcularFechaLimite($modalidad);
             $prioridadMd = (bool) ($meta['prioridad_md'] ?? false);
+            if ($modalidad->codigo === CatalogoModalidadPreparacionPedido::CODIGO_RECOGE_TIENDA) {
+                $prioridadMd = true;
+                $fechaLimite = \App\Support\ControlPedidos\PlazosApartadoFisico::cierreOperativo(
+                    now(), $this->config->zonaHoraria(), $this->config->cierreOperativoHora()
+                );
+            }
             if ($prioridadMd) {
                 $cierre = now()->endOfDay();
                 if ($fechaLimite === null || $fechaLimite->greaterThan($cierre)) {
@@ -139,8 +160,10 @@ class CrearTareaPreparacionService
                 'requiere_traslado_cedis' => $modalidad->requiereTrasladoCedisPorDefecto(),
             ], $datosMunicipio));
 
-            $this->sincronizarProductos($pedido, $tarea, $meta['lineas'] ?? []);
-            $this->asegurarCumplimiento->ejecutar($tarea);
+            $cumplimiento = $this->asegurarCumplimiento->ejecutar($tarea);
+            if ($modalidad->codigo === CatalogoModalidadPreparacionPedido::CODIGO_RECOGE_TIENDA) {
+                $cumplimiento->update(['vence_at' => $fechaLimite]);
+            }
 
             $estatusAnterior = $pedido->estatus;
             $estatusNuevo = CatalogoEstatusPedido::porFase(CatalogoEstatusPedido::FASE_PESAJE_PENDIENTE);
@@ -168,10 +191,9 @@ class CrearTareaPreparacionService
                 $pedidoUpdates['catalogo_paqueteria_id'] = $datosMunicipio['catalogo_paqueteria_id'];
                 $pedidoUpdates['envio_por_cobrar'] = ($datosMunicipio['modalidad_cobro'] ?? '') === PedidoBmaCaratula::COBRO_POR_COBRAR;
             }
-            $origen = trim((string) ($meta['origen_solicitud'] ?? ''));
-            if ($origen === '' && $prioridadMd) {
-                $origen = PedidoBma::ORIGEN_SOLICITUD_BELLAROMA;
-            }
+            $departamentoContexto = \App\Support\ControlPedidos\ContextoDepartamentoPedido::dePedido($pedido);
+            $codigoDepartamento = $departamentoContexto ? \App\Models\Departamento::find($departamentoContexto)?->codigo : null;
+            $origen = match ($codigoDepartamento) { 'BEL' => PedidoBma::ORIGEN_SOLICITUD_BELLAROMA, 'ARO' => PedidoBma::ORIGEN_SOLICITUD_AROMAS, default => '' };
             if ($origen !== '') {
                 $pedidoUpdates['origen_solicitud'] = $origen;
             }
@@ -291,6 +313,23 @@ class CrearTareaPreparacionService
             'catalogo_paqueteria_id' => $paq->id,
             'modalidad_cobro' => $cobro,
         ];
+    }
+
+    private function origenDesdeDepartamentoPrincipal(User $usuario): ?string
+    {
+        $usuario->loadMissing('departamento');
+        $nombre = mb_strtolower(trim((string) $usuario->departamento?->nombre));
+        if ($nombre === '') {
+            return null;
+        }
+        if (str_contains($nombre, 'bellaroma')) {
+            return PedidoBma::ORIGEN_SOLICITUD_BELLAROMA;
+        }
+        if (str_contains($nombre, 'aroma')) {
+            return PedidoBma::ORIGEN_SOLICITUD_AROMAS;
+        }
+
+        return null;
     }
 
     private function normalizarTelefono(string $raw): string

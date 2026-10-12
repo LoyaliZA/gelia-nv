@@ -63,6 +63,7 @@ final class AccionesHistorialPedidoBma
     public const COSTOS_ENVIO = 'costos_envio';
     public const REAPERTURA_PAGO_COSTOS = 'reapertura_pago_costos';
     public const SOLICITUD_PREPARACION_TIENDA = 'solicitud_preparacion_tienda';
+    public const APARTADO_CONFIRMADO = 'apartado_confirmado';
     public const RESPUESTA_PREPARACION_TIENDA = 'respuesta_preparacion_tienda';
     public const INCIDENCIA_PREPARACION_TIENDA = 'incidencia_preparacion_tienda';
     public const CORRECCION_PREPARACION_TIENDA = 'correccion_preparacion_tienda';
@@ -151,6 +152,7 @@ final class AccionesHistorialPedidoBma
         self::COSTOS_ENVIO => 'Actualización de costos de envío',
         self::REAPERTURA_PAGO_COSTOS => 'Reapertura de validación de pago por costos',
         self::SOLICITUD_PREPARACION_TIENDA => 'Solicitud de preparación en Tienda',
+        self::APARTADO_CONFIRMADO => 'Apartado confirmado en PDV',
         self::RESPUESTA_PREPARACION_TIENDA => 'Respuesta de preparación en Tienda',
         self::INCIDENCIA_PREPARACION_TIENDA => 'Incidencia de preparación en Tienda',
         self::CORRECCION_PREPARACION_TIENDA => 'Corrección de preparación en Tienda',

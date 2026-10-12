@@ -3,6 +3,7 @@
 namespace Tests\Unit\ControlPedidos;
 
 use App\Models\ControlPedidos\CatalogoModalidadPreparacionPedido;
+use App\Support\ControlPedidos\AlmacenPdv;
 use App\Models\ControlPedidos\PedidoBmaCumplimientoFisico;
 use App\Support\ControlPedidos\MaquinaEstadosCumplimientoFisico;
 use App\Support\ControlPedidos\PoliticaSalidaPreparacion;
@@ -36,17 +37,22 @@ class CumplimientoFisicoApartadoTest extends TestCase
         $this->assertSame('2026-10-05 20:00:00', $nuevo->format('Y-m-d H:i:s'));
     }
 
-    public function test_recoge_hoy_cierra_sin_remision_ni_resguardo_y_acepta_por_cobrar(): void
+    public function test_recoge_hoy_solo_confirma_apartado_sin_pago_ni_entrega(): void
     {
         $politica = new PoliticaSalidaPreparacion(CatalogoModalidadPreparacionPedido::CODIGO_RECOGE_TIENDA);
 
-        $this->assertTrue($politica->entregaDirectaSinResguardo());
+        $this->assertTrue($politica->soloApartado());
+        $this->assertFalse($politica->entregaDirectaSinResguardo());
         $this->assertFalse($politica->abreResguardo());
         $this->assertFalse($politica->exigeRemisionParaCierre());
-        $this->assertTrue($politica->permitePorCobrar());
+        $this->assertFalse($politica->permitePorCobrar());
         $this->assertTrue(MaquinaEstadosCumplimientoFisico::puedeTransicionar(
-            PedidoBmaCumplimientoFisico::ESTADO_LISTA_PARA_SALIDA,
-            PedidoBmaCumplimientoFisico::ESTADO_ENTREGADA
+            PedidoBmaCumplimientoFisico::ESTADO_SEPARADA,
+            PedidoBmaCumplimientoFisico::ESTADO_APARTADO_CONFIRMADO
+        ));
+        $this->assertFalse(MaquinaEstadosCumplimientoFisico::puedeTransicionar(
+            PedidoBmaCumplimientoFisico::ESTADO_APARTADO_CONFIRMADO,
+            PedidoBmaCumplimientoFisico::ESTADO_LISTA_PARA_SALIDA
         ));
         $this->assertFalse(MaquinaEstadosCumplimientoFisico::puedeTransicionar(
             PedidoBmaCumplimientoFisico::ESTADO_SEPARADA,
@@ -62,6 +68,10 @@ class CumplimientoFisicoApartadoTest extends TestCase
         $this->assertFalse($politica->permitePorCobrar());
         $this->assertFalse($politica->entregaDirectaSinResguardo());
         $this->assertFalse($politica->exigeRemisionParaCierre());
+        $this->assertFalse($politica->soloApartado());
+        $this->assertTrue(AlmacenPdv::esCodigo('PDV'));
+        $this->assertTrue(AlmacenPdv::esCodigo(' pdv '));
+        $this->assertFalse(AlmacenPdv::esCodigo('CEDIS'));
     }
 
     public function test_cierre_operativo_conserva_el_dia_en_la_zona_de_la_tienda(): void

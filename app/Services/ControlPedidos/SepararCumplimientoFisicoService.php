@@ -18,7 +18,6 @@ class SepararCumplimientoFisicoService
         private AsegurarCumplimientoFisicoService $asegurar,
         private RegistrarEventoCumplimientoFisicoService $eventos,
         private PreparacionTiendaConfig $config,
-        private SolicitarDevolucionCumplimientoService $devolucion,
     ) {}
 
     public function ejecutar(
@@ -48,6 +47,7 @@ class SepararCumplimientoFisicoService
         }
 
         $tarea->loadMissing('modalidad');
+        $esRecogeHoy = $tarea->modalidad?->codigo === CatalogoModalidadPreparacionPedido::CODIGO_RECOGE_TIENDA;
         if (in_array($tarea->estado, [
             PedidoBmaTareaPreparacion::ESTADO_CANCELADA,
             PedidoBmaTareaPreparacion::ESTADO_LIBERADA,
@@ -57,7 +57,7 @@ class SepararCumplimientoFisicoService
             ]);
         }
 
-        $cumplimiento = DB::transaction(function () use ($tarea, $usuario, $cantidad, $ubicacion, $versionEsperada) {
+        $cumplimiento = DB::transaction(function () use ($tarea, $usuario, $cantidad, $ubicacion, $versionEsperada, $esRecogeHoy) {
             $this->asegurar->ejecutar($tarea);
             $cumplimiento = PedidoBmaCumplimientoFisico::query()
                 ->where('pedido_bma_tarea_preparacion_id', $tarea->id)
@@ -117,17 +117,6 @@ class SepararCumplimientoFisicoService
 
             return $cumplimiento->fresh();
         });
-
-        if ($esRecogeHoy && $cumplimiento->vence_at && now()->greaterThanOrEqualTo($cumplimiento->vence_at)
-            && $cumplimiento->estado === PedidoBmaCumplimientoFisico::ESTADO_SEPARADA) {
-            return $this->devolucion->ejecutar(
-                $tarea,
-                $usuario,
-                'El cierre operativo de recoge hoy ya pasó.',
-                'vence:'.$cumplimiento->id.':'.$cumplimiento->vence_at->toIso8601String(),
-                null
-            );
-        }
 
         return $cumplimiento;
     }

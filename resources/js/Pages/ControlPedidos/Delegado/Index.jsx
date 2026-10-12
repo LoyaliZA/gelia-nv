@@ -1,3 +1,4 @@
+import useActualizacionesPedidos from '../Partials/useActualizacionesPedidos';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Head, usePage } from '@inertiajs/react';
 import { FileSpreadsheet, Loader2, Radio } from 'lucide-react';
@@ -140,13 +141,8 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
         }
     }, [flash?.success, flash?.error, cargarYMarcar, paramsListado]);
 
-    useEffect(() => {
-        const interval = setInterval(() => {
-            if (!puedeSincronizar()) return;
-            cargarYMarcar(paramsListado(), { silencioso: true });
-        }, POLL_MS);
-        return () => clearInterval(interval);
-    }, [cargarYMarcar, paramsListado, puedeSincronizar]);
+    useActualizacionesPedidos({ onActualizar: () => cargarYMarcar(paramsListado(), { silencioso: true }), pausado: () => modalAbiertoRef.current || cargando });
+
 
     useEffect(() => {
         if (!cargando && pedidosVista) {

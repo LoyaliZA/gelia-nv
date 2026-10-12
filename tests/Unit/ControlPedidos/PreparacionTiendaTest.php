@@ -65,7 +65,9 @@ class PreparacionTiendaTest extends TestCase
 
     public function test_payload_tienda_sin_datos_financieros(): void
     {
-        $tarea = new PedidoBmaTareaPreparacion([
+        $tarea = \Mockery::mock(PedidoBmaTareaPreparacion::class)->makePartial();
+        $tarea->shouldReceive('piezasSolicitadas')->andReturn(0);
+        $tarea->fill([
             'id' => 1,
             'estado' => PedidoBmaTareaPreparacion::ESTADO_PENDIENTE,
             'version' => 1,
@@ -87,6 +89,13 @@ class PreparacionTiendaTest extends TestCase
         $tarea->setRelation('productos', collect([]));
         $tarea->setRelation('asignadaA', null);
         $tarea->setRelation('pedido', $pedido);
+        foreach (['caratulas', 'paqueteria', 'atendidaPor', 'enviadaCedisPor', 'recibidaCedisPor', 'cumplimientoFisico'] as $relacion) {
+            $tarea->setRelation($relacion, $relacion === 'caratulas' ? collect() : null);
+        }
+        $tarea->setRelation('solicitudTraspaso', null);
+        $pedido->setRelation('referencias', collect());
+        $pedido->setRelation('cliente', null);
+        $pedido->setRelation('vendedor', null);
 
         $payload = VisibilidadTareaPreparacion::payloadTienda($tarea);
         $json = json_encode($payload);

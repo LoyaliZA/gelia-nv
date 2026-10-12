@@ -31,7 +31,7 @@ class CalcularRequisitosPreparacionService
      */
     public function efectivos(PedidoBmaTareaPreparacion $tarea): array
     {
-        $tarea->loadMissing(['modalidad', 'documentos', 'productos', 'paqueteria', 'pedido.vendedor.departamentos', 'pedido.vendedor.area.departamento']);
+        $tarea->loadMissing(['modalidad', 'documentos', 'productos', 'paqueteria', 'pedido.vendedor.departamento', 'pedido.vendedor.departamentos']);
         $base = $tarea->modalidad?->requisitos_json ?? [];
         $matriz = $this->resolverMatriz($tarea);
         $transporte = $this->reglasTransporte($tarea);
@@ -404,8 +404,9 @@ class CalcularRequisitosPreparacionService
             return null;
         }
 
-        $depto = $vendedor->departamentos?->first()
-            ?? $vendedor->area?->departamento;
+        $contexto = \App\Support\ControlPedidos\ContextoDepartamentoPedido::dePedido($tarea->pedido);
+        $depto = $contexto ? ($vendedor->departamento?->id === $contexto ? $vendedor->departamento : $vendedor->departamentos?->firstWhere('id', $contexto)) : null;
+        if (!$depto && $contexto) $depto = \App\Models\Departamento::find($contexto);
 
         $codigo = $depto?->codigo ?: null;
         if ($codigo) {

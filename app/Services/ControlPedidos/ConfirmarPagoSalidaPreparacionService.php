@@ -48,6 +48,11 @@ class ConfirmarPagoSalidaPreparacionService
         }
 
         $politica = PoliticaSalidaPreparacion::desdeTarea($tarea);
+        if ($politica->soloApartado()) {
+            throw ValidationException::withMessages([
+                'modalidad' => 'Recoge en tienda solo confirma el apartado. No hay pago ni transferencia.',
+            ]);
+        }
         if (! $politica->usaSalidaInterna()) {
             throw ValidationException::withMessages([
                 'modalidad' => 'Esta modalidad no usa validación de pago interna en Tienda.',

@@ -49,6 +49,9 @@ class ListarPedidosBmaService
             'tareaPreparacionVigente.modalidad',
             'tareaPreparacionVigente.almacen',
             'tareaPreparacionVigente.productos',
+            'tareaPreparacionVigente.atendidaPor',
+            'tareaPreparacionVigente.cumplimientoFisico',
+            'tareaPreparacionVigente.documentos',
             'cancelacionOperativaActiva.tareas.tarea.almacen',
             'cancelacionOperativaActiva.tareas.tarea.modalidad',
             'tareaPreparacionVigente.historial',
@@ -57,6 +60,9 @@ class ListarPedidosBmaService
             'tareaPreparacionRespondida.modalidad',
             'tareaPreparacionRespondida.almacen',
             'tareaPreparacionRespondida.productos',
+            'tareaPreparacionRespondida.atendidaPor',
+            'tareaPreparacionRespondida.cumplimientoFisico',
+            'tareaPreparacionRespondida.documentos',
             'tareaPreparacionRespondida.paqueteria',
             'tareaPreparacionRespondida.caratulas',
         ])->orderByDesc('created_at');
@@ -112,6 +118,7 @@ class ListarPedidosBmaService
             ? VisibilidadPedidoBma::puedeMutarComoVendedora($usuario, $pedido)
             : false;
 
+        $pedido->setAttribute('departamento_operacion_id', \App\Support\ControlPedidos\ContextoDepartamentoPedido::dePedido($pedido));
         $pedido->setAttribute('puede_editar', $puedeEditar);
         $pedido->setAttribute('puede_mutar', $puedeEditar);
         $pedido->setAttribute('puede_cancelar', $puedeEditar && $pedido->puedeCancelarDirecto());
@@ -206,6 +213,7 @@ class ListarPedidosBmaService
             'version' => $tarea->version,
             'observaciones_solicitud' => $tarea->observaciones_solicitud,
             'observaciones_respuesta' => $tarea->observaciones_respuesta,
+            'respuesta' => \App\Support\ControlPedidos\RespuestaPreparacionTienda::datos($tarea),
             'fecha_limite' => $tarea->fecha_limite?->toIso8601String(),
             'modalidad' => $tarea->modalidad ? [
                 'id' => $tarea->modalidad->id,

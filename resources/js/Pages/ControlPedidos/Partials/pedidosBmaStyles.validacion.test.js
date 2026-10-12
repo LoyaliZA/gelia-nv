@@ -77,8 +77,8 @@ describe('resguardo abierto — envío diferido', () => {
 });
 
 describe('pedidoModoRevisionMercancia', () => {
-    it('local sin peso es revisión; comercial y sin paquetería son pesaje', () => {
-        expect(pedidoModoRevisionMercancia(null, { categoria: 'local_regional', requiere_peso: false }, true)).toBe(true);
+    it('toda operación con logística es pesaje, incluso una tarifa local sin peso', () => {
+        expect(pedidoModoRevisionMercancia(null, { categoria: 'local_regional', requiere_peso: false }, true)).toBe(false);
         expect(pedidoModoRevisionMercancia(null, { categoria: 'local_regional', requiere_peso: true }, true)).toBe(false);
         expect(pedidoModoRevisionMercancia(null, { categoria: 'comercial', requiere_peso: false }, true)).toBe(false);
         expect(pedidoModoRevisionMercancia({}, null, true)).toBe(false);
@@ -96,7 +96,7 @@ describe('pedidoModoRevisionMercancia', () => {
             domicilio_entrega: 'Calle 1',
             costo_envio: 40,
         }, {
-            requiereLogistica: true,
+            requiereLogistica: false,
             tienePesajeRespondido: true,
             tienePdfPedido: true,
             pagoPendiente: 0,

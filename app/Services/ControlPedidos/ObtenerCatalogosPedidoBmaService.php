@@ -102,34 +102,14 @@ class ObtenerCatalogosPedidoBmaService
 
     /**
      * @param  list<int>|null  $departamentoIds
-     * @return \Illuminate\Support\Collection<int, CatalogoBanco>
+     * @return \Illuminate\Support\Collection
      */
     private function bancosParaDepartamentos(?array $departamentoIds)
     {
-        $query = CatalogoBanco::where('activo', true)->orderBy('nombre');
-
-        $ids = collect($departamentoIds ?? [])->filter()->map(fn ($id) => (int) $id)->unique()->values();
-        if ($ids->isEmpty()) {
-            return $query->get(['id', 'nombre']);
-        }
-
-        $hayMapeo = CatalogoBancoDepartamento::query()
-            ->whereIn('departamento_id', $ids)
-            ->where('activo', true)
-            ->exists();
-
-        if (! $hayMapeo) {
-            return $query->get(['id', 'nombre']);
-        }
-
-        $bancoIds = CatalogoBancoDepartamento::query()
-            ->whereIn('departamento_id', $ids)
-            ->where('activo', true)
-            ->orderBy('orden')
-            ->pluck('catalogo_banco_id')
-            ->unique()
-            ->all();
-
-        return $query->whereIn('id', $bancoIds ?: [0])->get(['id', 'nombre']);
+        return CatalogoBanco::query()->where('activo', true)->with('departamentos')->orderBy('nombre')->get()->filter(fn ($banco) => $departamentoIds === null || ($banco->compartido ?? true) || $banco->departamentos->where('activo', true)->whereIn('departamento_id', $departamentoIds)->isNotEmpty())->values()->map(fn ($banco) => [
+            'id' => $banco->id, 'nombre' => $banco->nombre,
+            'compartido' => $banco->compartido ?? true,
+            'departamento_ids' => $banco->departamentos->where('activo', true)->pluck('departamento_id')->values()->all(),
+        ]);
     }
 }

@@ -11,6 +11,7 @@ Route::middleware(['can:control_pedidos.tienda.ver'])
         Route::get('/listado', [PedidoBmaTiendaController::class, 'listado'])->name('listado');
         Route::get('/tareas/{tarea}', [PedidoBmaTiendaController::class, 'show'])->name('show');
         Route::post('/tareas/{tarea}/tomar', [PedidoBmaTiendaController::class, 'tomar'])->middleware('can:control_pedidos.tienda.tomar')->name('tomar');
+        Route::post('/tareas/{tarea}/preparacion/guardar', [PedidoBmaTiendaController::class, 'guardarAvance'])->middleware('can:control_pedidos.tienda.responder')->name('preparacion.guardar');
         Route::post('/tareas/{tarea}/responder', [PedidoBmaTiendaController::class, 'responder'])->middleware('can:control_pedidos.tienda.responder')->name('responder');
         Route::post('/tareas/{tarea}/confirmar-salida', [PedidoBmaTiendaController::class, 'confirmarSalida'])->middleware('can:control_pedidos.tienda.trasladar')->name('confirmar_salida');
         Route::post('/tareas/{tarea}/regenerar-traspaso', [PedidoBmaTiendaController::class, 'regenerarTraspaso'])->middleware('can:control_pedidos.tienda.trasladar')->name('regenerar_traspaso');
@@ -29,6 +30,11 @@ Route::middleware(['can:control_pedidos.tienda.ver'])
         Route::post('/tareas/{tarea}/sesion-evidencia/cancelar', [PedidoBmaTiendaController::class, 'cancelarSesionEvidencia'])->middleware('can:control_pedidos.tienda.evidencias')->name('sesion_evidencia.cancelar');
         Route::post('/tareas/{tarea}/sesion-evidencia/promover', [PedidoBmaTiendaController::class, 'promoverSesionEvidencia'])->middleware('can:control_pedidos.tienda.evidencias')->name('sesion_evidencia.promover');
         Route::post('/tareas/{tarea}/apartado/separar', [PedidoBmaTiendaController::class, 'separarApartado'])->middleware('can:control_pedidos.tienda.apartado.separar')->name('apartado.separar');
+        Route::post('/tareas/{tarea}/apartado/anexar', [PedidoBmaTiendaController::class, 'anexarPiezaApartado'])->middleware('can:control_pedidos.tienda.apartado.separar')->name('apartado.anexar');
+        Route::post('/tareas/{tarea}/apartado/detalle', [PedidoBmaTiendaController::class, 'reportarDetalleApartado'])->middleware('can:control_pedidos.tienda.apartado.separar')->name('apartado.detalle');
+        Route::get('/tareas/{tarea}/solicitud/{documento}', [PedidoBmaTiendaController::class, 'documentoSolicitud'])->name('solicitud.documento');
+        Route::post('/tareas/{tarea}/apartado/guardar', [PedidoBmaTiendaController::class, 'guardarApartado'])->middleware('role_or_permission:control_pedidos.tienda.apartado.separar|control_pedidos.tienda.responder')->name('apartado.guardar');
+        Route::post('/tareas/{tarea}/apartado/confirmar', [PedidoBmaTiendaController::class, 'confirmarApartado'])->middleware('role_or_permission:control_pedidos.tienda.apartado.separar|control_pedidos.tienda.responder')->name('apartado.confirmar');
         Route::post('/tareas/{tarea}/apartado/devolucion', [PedidoBmaTiendaController::class, 'solicitarDevolucionApartado'])->middleware('can:control_pedidos.tienda.apartado.separar')->name('apartado.devolucion');
         Route::post('/tareas/{tarea}/apartado/confirmar-devolucion', [PedidoBmaTiendaController::class, 'confirmarDevolucionApartado'])->middleware('can:control_pedidos.tienda.apartado.confirmar_devolucion')->name('apartado.confirmar_devolucion');
         Route::post('/tareas/{tarea}/apartado/prorroga', [PedidoBmaTiendaController::class, 'prorrogarApartado'])->middleware('can:control_pedidos.tienda.apartado.aprobar_prorroga')->name('apartado.prorroga');
@@ -52,3 +58,6 @@ Route::prefix('control-pedidos/tareas-preparacion')
     ->group(function () {
         Route::post('/{tarea}/cambiar-modalidad', [PedidoBmaTiendaController::class, 'cambiarModalidad'])->name('cambiar_modalidad');
     });
+
+Route::post('/control-pedidos/tareas-preparacion/{tarea}/reabrir-apartado', [PedidoBmaTiendaController::class, 'reabrirApartado'])
+    ->middleware('can:control_pedidos.preparacion.solicitar')->name('control_pedidos.preparacion.reabrir_apartado');

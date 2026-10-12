@@ -17,6 +17,10 @@ class CerrarConsultaPedidoBmaService
     {
         $pedido->loadMissing(['estatus', 'origen', 'vendedor']);
 
+        if ($pedido->esRecogeTiendaApartado()) {
+            throw new \RuntimeException('Recoge en tienda no cierra consulta ni abre monto o pago.');
+        }
+
         $actor = \App\Models\User::find($usuarioId);
         if (! $actor || ! VisibilidadPedidoBma::puedeMutarComoVendedora($actor, $pedido)) {
             throw new \RuntimeException('Solo la vendedora del pedido puede cerrar la consulta.');

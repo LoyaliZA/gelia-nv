@@ -1,3 +1,4 @@
+import useActualizacionesPedidos from './Partials/useActualizacionesPedidos';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Head, router, usePage } from '@inertiajs/react';
 import AppLayout from '../../Layouts/AppLayout';
@@ -128,26 +129,8 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
         || Boolean(pedidoRestaurar)
         || Boolean(pedidoAuditoria);
 
-    useEffect(() => {
-        const params = {
-            tab: tabActiva,
-            q: busqueda || undefined,
-            page: pedidosVista?.current_page || 1,
-        };
-        const refrescar = () => cargarYMarcar(params, { silencioso: true });
+    useActualizacionesPedidos({ onActualizar: () => cargarYMarcar({ tab: tabActiva, q: busqueda || undefined, page: pedidosVista?.current_page || 1 }, { silencioso: true }), pausado: Boolean(pausarPollingListado) });
 
-        if (pausarPollingListado) {
-            refrescoPendiente.current = true;
-            return undefined;
-        }
-        if (refrescoPendiente.current) {
-            refrescoPendiente.current = false;
-            refrescar();
-        }
-
-        const intervalo = setInterval(refrescar, REFRESCO_LISTADO_MS);
-        return () => clearInterval(intervalo);
-    }, [pausarPollingListado, tabActiva, busqueda, pedidosVista?.current_page, cargarYMarcar]);
 
     // Notificación en vivo (pesaje listo, errores CEDIS, etc.): refrescar al instante si el modal está abierto.
     useEffect(() => {

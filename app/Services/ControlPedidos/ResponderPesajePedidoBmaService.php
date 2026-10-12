@@ -133,6 +133,17 @@ class ResponderPesajePedidoBmaService
             $numeroBultosTienda
         ) {
             $pedido = PedidoBma::query()->lockForUpdate()->findOrFail($pedido->id);
+            if (!empty($revisionFisica['almacen_id'])) {
+                $almacen = \App\Models\Almacen::where('activo', true)->where('permite_busqueda_productos', true)->find($revisionFisica['almacen_id']);
+                if (!$almacen) throw new \InvalidArgumentException('El almacén no está habilitado para buscar productos.');
+                foreach ($revisiones as $revision) {
+                    if (!empty($revision['producto_id']) && !\App\Models\Producto::whereKey($revision['producto_id'])->whereHas('inventarios', fn ($q) => $q->where('almacen_id', $almacen->id))->exists()) {
+                        throw new \InvalidArgumentException('Una pieza no pertenece al catálogo del almacén seleccionado.');
+                    }
+                }
+                $pedido->update(['almacen_id' => $almacen->id]);
+            }
+
 
             $pesoRealTotal = 0.0;
             $pesoVolumetricoTotal = 0.0;

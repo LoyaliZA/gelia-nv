@@ -114,7 +114,7 @@ export const DESCRIPCIONES_PERMISOS = {
     'control_pedidos.tienda.empacar_municipio': 'Permite registrar empaque municipal con evidencias y bultos tras autorizar la salida.',
     'control_pedidos.tienda.despachar_municipio': 'Permite registrar el despacho al transportista con receptor y hora.',
     'control_pedidos.tienda.apartado.ver': 'Permite ver el apartado físico de una tarea de preparación.',
-    'control_pedidos.tienda.apartado.separar': 'Permite registrar el apartado físico de mercancía, sin descontar inventario.',
+    'control_pedidos.tienda.apartado.separar': 'Permite separar mercancía, anexar piezas, reportar un detalle y confirmar el apartado, sin descontar inventario.',
     'control_pedidos.tienda.apartado.confirmar_devolucion': 'Permite confirmar la devolución al anaquel con ubicación y foto.',
     'control_pedidos.tienda.apartado.aprobar_prorroga': 'Permite aprobar una prórroga VIP del vencimiento, una sola vez.',
     'control_pedidos.salida.validar_pago': 'Permite validar el pago o el permiso de por cobrar para liberar la salida. Quien vendió no valida su propio cobro. Tienda no registra el cobro.',

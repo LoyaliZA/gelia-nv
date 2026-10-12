@@ -1,3 +1,4 @@
+import useActualizacionesPedidos from '../Partials/useActualizacionesPedidos';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Head, usePage } from '@inertiajs/react';
 import AppLayout from '../../../Layouts/AppLayout';
@@ -74,13 +75,8 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
         modalAbiertoRef.current = modalRevisar.abierto || modalAnexo.abierto || modalBitacora.abierto;
     }, [modalRevisar.abierto, modalAnexo.abierto, modalBitacora.abierto]);
 
-    useEffect(() => {
-        const interval = setInterval(() => {
-            if (modalAbiertoRef.current || cargando) return;
-            cargarYMarcar(paramsListado(), { silencioso: true });
-        }, REFRESCO_LISTADO_MS);
-        return () => clearInterval(interval);
-    }, [cargando, tabActiva, busqueda, paqueteriaId, departamentoId, clienteFiltro, ordenar, pedidosVista?.current_page, cargarYMarcar]);
+    useActualizacionesPedidos({ onActualizar: () => cargarYMarcar(paramsListado(), { silencioso: true }), pausado: () => modalAbiertoRef.current || cargando });
+
 
     const onTabChange = (tab) => {
         setTabActiva(tab);

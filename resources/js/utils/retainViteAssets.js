@@ -6,8 +6,8 @@ export function archivosDeManifiesto(manifiesto) {
         if (typeof entrada?.file === 'string' && entrada.file !== '') {
             archivos.add(entrada.file);
         }
-        if (Array.isArray(entrada?.css)) {
-            for (const css of entrada.css) {
+        if (Array.isArray(entrada?.css) || Array.isArray(entrada?.assets)) {
+            for (const css of [...(entrada.css || []), ...(entrada.assets || [])]) {
                 if (typeof css === 'string' && css !== '') archivos.add(css);
             }
         }

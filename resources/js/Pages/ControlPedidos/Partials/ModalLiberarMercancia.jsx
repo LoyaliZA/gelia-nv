@@ -101,7 +101,7 @@ export default function ModalLiberarMercancia({
                     <button type="button" onClick={onClose} className="p-2" aria-label="Cerrar"><X className="w-5 h-5" /></button>
                 </div>
                 <div className="gelia-modal-body p-5 space-y-4">
-                    <p className="text-sm font-bold text-amber-800 m-0 p-3 rounded-xl border border-amber-300 bg-amber-50">
+                    <p className="text-sm font-semibold theme-text-main m-0 p-3 gelia-callout-aviso">
                         Confirme solo si devolvió físicamente estas piezas a disponibilidad en el almacén.
                     </p>
                     <div className="space-y-1 text-xs font-bold theme-text-muted">
@@ -124,7 +124,7 @@ export default function ModalLiberarMercancia({
                         <input type="checkbox" className="mt-1" checked={confirmado} onChange={(e) => setConfirmado(e.target.checked)} />
                         <span>Ya devolví estas piezas a disponibilidad</span>
                     </label>
-                    {error && <p className="text-xs font-bold text-red-600 m-0">{error}</p>}
+                    {error && <p role="alert" className="text-xs font-semibold theme-text-peligro m-0">{error}</p>}
                 </div>
                 <div className="gelia-modal-footer p-5 border-t theme-border flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
                     <button type="button" className={`${BTN_SECONDARY} min-h-[44px]`} onClick={onClose} disabled={procesando}>Cerrar</button>

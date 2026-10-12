@@ -2,6 +2,7 @@
 
 namespace App\Services\ControlPedidos;
 
+use App\Models\ControlPedidos\CatalogoModalidadPreparacionPedido;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Models\ControlPedidos\PedidoBmaRevisionProducto;
 use App\Models\ControlPedidos\PedidoBmaTareaDocumento;
@@ -18,6 +19,7 @@ use Illuminate\Validation\ValidationException;
 class ResponderPreparacionTiendaService
 {
     public function __construct(
+        private RegistrarProductosPreparacionService $registrarProductos,
         private CalcularRequisitosPreparacionService $requisitosService,
         private TransicionEstadoTareaPreparacionService $transicionService,
         private CrearTraspasoDesdeTareaPreparacionService $crearTraspasoService,
@@ -62,6 +64,12 @@ class ResponderPreparacionTiendaService
             $tarea = PedidoBmaTareaPreparacion::query()->lockForUpdate()->findOrFail($tarea->id);
             $tarea->loadMissing(['modalidad', 'productos']);
 
+            if ($tarea->modalidad?->codigo === CatalogoModalidadPreparacionPedido::CODIGO_RECOGE_TIENDA) {
+                throw ValidationException::withMessages([
+                    'modalidad' => 'Recoge en tienda se cierra con la confirmación del apartado, sin respuesta de cobro.',
+                ]);
+            }
+
             if ($tarea->estado !== PedidoBmaTareaPreparacion::ESTADO_EN_ATENCION) {
                 throw ValidationException::withMessages([
                     'estado' => 'Solo puede responder una tarea en atención.',
@@ -74,6 +82,11 @@ class ResponderPreparacionTiendaService
                 ]);
             }
 
+            if (array_key_exists('lineas', $datosExtra)) {
+                $rutasNuevas = array_merge($rutasNuevas, $this->registrarProductos->ejecutar($tarea, $usuario, $datosExtra['lineas']));
+                $tarea->load('productos');
+                $productos = $tarea->productos->map(fn ($p) => ['id' => $p->id, 'cantidad_encontrada' => $p->cantidad_encontrada, 'estado_fisico' => $p->estado_fisico, 'observacion' => $p->observacion])->all();
+            }
             $faltanteSku = DesgloseSkuPreparacion::mensaje($tarea);
             if ($faltanteSku !== null) {
                 throw ValidationException::withMessages(['productos' => $faltanteSku]);

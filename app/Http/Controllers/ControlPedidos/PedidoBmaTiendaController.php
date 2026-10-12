@@ -20,7 +20,9 @@ use App\Models\ControlPedidos\CatalogoTipoCajaPedido;
 use App\Models\ControlPedidos\PedidoBmaCaratula;
 use App\Models\ControlPedidos\PedidoBmaTareaPreparacion;
 use App\Models\ControlPedidos\PedidoBmaTareaDocumento;
+use App\Services\ControlPedidos\AnexarPiezaPreparacionTiendaService;
 use App\Services\ControlPedidos\AsegurarCumplimientoFisicoService;
+use App\Services\ControlPedidos\ReportarDetallePreparacionTiendaService;
 use App\Services\ControlPedidos\AutorizarSalidaPreparacionService;
 use App\Services\ControlPedidos\ConfirmarEntregaRecogeHoyService;
 use App\Services\ControlPedidos\ConfirmarPagoSalidaPreparacionService;
@@ -66,6 +68,18 @@ use Inertia\Response;
 
 class PedidoBmaTiendaController extends Controller
 {
+    public function callAction($method, $parameters)
+    {
+        $response = $this->{$method}(...array_values($parameters));
+        if (request()->wantsJson() && !request()->isMethod('get') && $response instanceof RedirectResponse) {
+            $error = session('error');
+            $mensaje = $error ?: session('success', 'Operación actualizada.');
+            session()->forget(['error', 'success']);
+            return response()->json(['message' => $mensaje], $error ? 422 : 200);
+        }
+        return $response;
+    }
+
     public function index(
         Request $request,
         ListarTareasTiendaService $listarService,
@@ -103,11 +117,12 @@ class PedidoBmaTiendaController extends Controller
 
     public function show(
         PedidoBmaTareaPreparacion $tarea,
+        Request $request,
         PreparacionTiendaConfig $config,
         CalcularRequisitosPreparacionService $requisitos,
         AsegurarCumplimientoFisicoService $asegurar,
         ConciliarGrupoComplementoEnvioBodegaService $conciliarGrupo,
-    ): Response {
+    ): Response|JsonResponse {
         Gate::authorize('control_pedidos.tienda.ver');
         abort_unless(VisibilidadTareaPreparacion::puedeVer(Auth::user(), $tarea), 403);
 
@@ -128,7 +143,7 @@ class PedidoBmaTiendaController extends Controller
             'cumplimientoFisico.eventos.usuario',
         ]);
 
-        return Inertia::render('ControlPedidos/Tienda/Show', [
+        $datos = [
             'tarea' => VisibilidadTareaPreparacion::payloadTienda($tarea, Auth::user()),
             'requisitos' => array_merge($requisitos->efectivos($tarea), [
                 'causa_remision_salida' => $requisitos->causaRemisionSalida($tarea),
@@ -144,12 +159,15 @@ class PedidoBmaTiendaController extends Controller
                 'usuario' => $h->usuario?->name,
                 'created_at' => $h->created_at?->toIso8601String(),
             ]),
+            'documentos_solicitud' => $tarea->pedido->documentos()->where('activo', true)->whereIn('tipo', ['pdf_pedido', 'cotizacion', 'anexo_piezas'])->get(['id', 'nombre_original', 'tipo', 'mime_type']),
             'documentos' => $tarea->documentos->map(fn ($d) => [
                 'id' => $d->id,
                 'tipo_evidencia' => $d->tipo_evidencia,
                 'nombre_original' => $d->nombre_original,
                 'inmutable' => $d->inmutable,
                 'pedido_bma_tarea_producto_id' => $d->pedido_bma_tarea_producto_id,
+                'mime_type' => $d->mime_type,
+                'url' => route('control_pedidos.tienda.evidencia.descargar', [$tarea->id, $d->id]),
             ]),
             'almacenes' => Almacen::query()
                 ->where('activo', true)
@@ -193,20 +211,23 @@ class PedidoBmaTiendaController extends Controller
                     ])
                     ->values()
                 : [],
-        ]);
+        ];
+
+        return $request->wantsJson() ? response()->json($datos) : Inertia::render('ControlPedidos/Tienda/Show', $datos);
     }
 
-    public function tomar(PedidoBmaTareaPreparacion $tarea, Request $request, TomarTareaPreparacionService $service): RedirectResponse
+    public function tomar(PedidoBmaTareaPreparacion $tarea, Request $request, TomarTareaPreparacionService $service): RedirectResponse|JsonResponse
     {
         Gate::authorize('control_pedidos.tienda.tomar');
 
         try {
             $service->ejecutar($tarea, Auth::user(), $request->integer('version') ?: null);
         } catch (\Throwable $e) {
-            return redirect()->back()->with('error', $e->getMessage());
+            return $request->wantsJson() ? response()->json(['message' => $e->getMessage()], 422) : redirect()->back()->with('error', $e->getMessage());
         }
 
-        return redirect()->route('control_pedidos.tienda.show', $tarea)->with('success', 'Tarea tomada correctamente.');
+        return $request->wantsJson() ? response()->json(['message' => 'Tarea lista para preparar.'])
+            : redirect()->route('control_pedidos.tienda.show', $tarea)->with('success', 'Tarea tomada correctamente.');
     }
 
     public function responder(PedidoBmaTareaPreparacion $tarea, ResponderPreparacionTiendaRequest $request, ResponderPreparacionTiendaService $service): RedirectResponse
@@ -217,11 +238,12 @@ class PedidoBmaTiendaController extends Controller
             $service->ejecutar(
                 $tarea,
                 Auth::user(),
-                $datos['productos'],
+                $datos['productos'] ?? [],
                 $request->file('evidencias', []) ?: [],
                 $datos['observaciones_respuesta'] ?? null,
                 $datos['version'] ?? null,
                 [
+                    ...($request->has('lineas') ? ['lineas' => $datos['lineas']] : []),
                     'peso_real_kg' => $datos['peso_real_kg'] ?? null,
                     'peso_volumetrico_kg' => $datos['peso_volumetrico_kg'] ?? null,
                     'catalogo_tipo_caja_id' => $datos['catalogo_tipo_caja_id'] ?? null,
@@ -622,6 +644,109 @@ class PedidoBmaTiendaController extends Controller
         }
 
         return redirect()->route('control_pedidos.tienda.show', $tarea)->with('success', 'Mercancía apartada. Este registro no sincroniza inventario.');
+    }
+
+    public function anexarPiezaApartado(
+        PedidoBmaTareaPreparacion $tarea,
+        Request $request,
+        AnexarPiezaPreparacionTiendaService $service,
+    ): RedirectResponse {
+        $datos = $request->validate([
+            'sku' => ['required', 'string', 'max:80'],
+            'descripcion' => ['nullable', 'string', 'max:255'],
+            'cantidad' => ['required', 'integer', 'min:1'],
+        ]);
+        try {
+            $service->ejecutar($tarea, Auth::user(), $datos['sku'], (string) ($datos['descripcion'] ?? ''), (int) $datos['cantidad']);
+        } catch (ValidationException $e) {
+            return redirect()->back()->with('error', collect($e->errors())->flatten()->first() ?: $e->getMessage());
+        }
+
+        return redirect()->route('control_pedidos.tienda.show', $tarea)->with('success', 'Pieza anexada al apartado.');
+    }
+
+    public function reportarDetalleApartado(
+        PedidoBmaTareaPreparacion $tarea,
+        Request $request,
+        ReportarDetallePreparacionTiendaService $service,
+    ): RedirectResponse {
+        $datos = $request->validate([
+            'producto_id' => ['required', 'integer'],
+            'estado_fisico' => ['required', 'string', 'max:40'],
+            'observacion' => ['required', 'string', 'max:500'],
+        ]);
+        try {
+            $service->ejecutar($tarea, Auth::user(), (int) $datos['producto_id'], $datos['estado_fisico'], $datos['observacion']);
+        } catch (ValidationException $e) {
+            return redirect()->back()->with('error', collect($e->errors())->flatten()->first() ?: $e->getMessage());
+        }
+
+        return redirect()->route('control_pedidos.tienda.show', $tarea)->with('success', 'Detalle registrado.');
+    }
+
+    public function guardarAvance(PedidoBmaTareaPreparacion $tarea, \App\Http\Requests\ControlPedidos\GuardarAvancePreparacionRequest $request, \App\Services\ControlPedidos\GuardarAvancePreparacionService $service): RedirectResponse|JsonResponse
+    {
+        $service->ejecutar($tarea, Auth::user(), $request->validated());
+        $mensaje = $request->filled('motivo_incidencia') ? 'Problema reportado a Ventas. Las piezas se conservaron.' : 'Avance de preparación guardado.';
+        return $request->wantsJson() ? response()->json(['message' => $mensaje]) : redirect()->back()->with('success', $mensaje);
+    }
+
+    public function confirmarApartado(
+        PedidoBmaTareaPreparacion $tarea,
+        \App\Http\Requests\ControlPedidos\GuardarApartadoRecogeHoyRequest $request,
+        \App\Services\ControlPedidos\GuardarApartadoRecogeHoyService $service,
+    ): RedirectResponse|JsonResponse {
+        $service->ejecutar($tarea, Auth::user(), $request->validated(), true);
+
+        $mensaje = 'Apartado confirmado. Ventas recibió el aviso y la carátula está lista.';
+
+        return $request->wantsJson() ? response()->json(['message' => $mensaje]) : redirect()->back()->with('success', $mensaje);
+    }
+
+    public function guardarApartado(
+        PedidoBmaTareaPreparacion $tarea,
+        \App\Http\Requests\ControlPedidos\GuardarApartadoRecogeHoyRequest $request,
+        \App\Services\ControlPedidos\GuardarApartadoRecogeHoyService $service,
+    ): RedirectResponse|JsonResponse {
+        $datos = $request->validated();
+        $service->ejecutar($tarea, Auth::user(), $datos);
+
+        $mensaje = ! empty($datos['motivo_incidencia'])
+            ? 'Incidencia enviada a Ventas. Las piezas registradas se conservaron.' : 'Preparación guardada. Puede continuar antes de confirmar.';
+
+        return $request->wantsJson() ? response()->json(['message' => $mensaje]) : redirect()->back()->with('success', $mensaje);
+    }
+
+    public function reabrirApartado(
+        PedidoBmaTareaPreparacion $tarea,
+        Request $request,
+        \App\Services\ControlPedidos\ReabrirApartadoRecogeHoyService $service,
+    ): RedirectResponse {
+        Gate::authorize('control_pedidos.preparacion.solicitar');
+        $datos = $request->validate([
+            'motivo' => ['required', 'string', 'max:500'],
+            'version' => ['required', 'integer', 'min:1'],
+            'archivo' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png,webp', 'max:10240'],
+        ]);
+        $service->ejecutar($tarea, Auth::user(), $datos['motivo'], $datos['version'], $request->file('archivo'));
+
+        return redirect()->back()->with('success', 'Solicitud reenviada a PDV. Las piezas apartadas se conservan.');
+    }
+
+    public function documentoSolicitud(PedidoBmaTareaPreparacion $tarea, \App\Models\ControlPedidos\PedidoBmaDocumento $documento)
+    {
+        Gate::authorize('control_pedidos.tienda.ver');
+        abort_unless(VisibilidadTareaPreparacion::puedeVer(Auth::user(), $tarea), 403);
+        abort_unless((int) $documento->pedido_bma_id === (int) $tarea->pedido_bma_id, 404);
+        abort_unless(in_array($documento->tipo, [
+            \App\Models\ControlPedidos\PedidoBmaDocumento::TIPO_PDF_PEDIDO,
+            \App\Models\ControlPedidos\PedidoBmaDocumento::TIPO_COTIZACION,
+            \App\Models\ControlPedidos\PedidoBmaDocumento::TIPO_ANEXO_PIEZAS,
+        ], true) && $documento->activo, 404);
+        abort_unless(Storage::disk('public')->exists($documento->ruta_archivo), 404);
+
+        return Storage::disk('public')->response($documento->ruta_archivo, $documento->nombre_original,
+            ['Content-Type' => $documento->mime_type ?: 'application/octet-stream']);
     }
 
     public function solicitarDevolucionApartado(

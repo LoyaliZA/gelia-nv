@@ -205,6 +205,10 @@ class AppServiceProvider extends ServiceProvider
         CatalogoListaDescuento::observe(CatalogoListaDescuentoObserver::class);
         Cliente::observe(\App\Observers\ClienteObserver::class);
         PedidoBmaTareaPreparacion::observe(\App\Observers\PedidoBmaTareaPreparacionCaratulaObserver::class);
+        \App\Models\ControlPedidos\PedidoBma::observe(\App\Observers\PreparacionPedidosRealtimeObserver::class);
+        PedidoBmaTareaPreparacion::observe(\App\Observers\PreparacionPedidosRealtimeObserver::class);
+        \App\Models\ControlPedidos\PedidoBmaCumplimientoFisico::observe(\App\Observers\PreparacionPedidosRealtimeObserver::class);
+        \App\Models\ControlPedidos\PedidoBmaTareaDocumento::observe(\App\Observers\PreparacionPedidosRealtimeObserver::class);
 
         Broadcast::routes([
             'middleware' => ['auth:sanctum'],

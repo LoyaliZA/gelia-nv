@@ -3,6 +3,8 @@
 namespace App\Services\ControlPedidos;
 
 use App\Models\ControlPedidos\CatalogoEstatusPedido;
+use App\Models\ControlPedidos\CatalogoModalidadPreparacionPedido;
+use App\Models\ControlPedidos\PedidoBmaTareaPreparacion;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Models\User;
 use App\Support\ControlPedidos\MaquinaEstadosPedidoBma;
@@ -76,6 +78,7 @@ class ListarPedidosAuditoriaService
             'totales_envio',
             app(CalcularTotalesEnvioPedidoService::class)->calcular($pedido)
         );
+        $pedido->setAttribute('es_recoge_tienda_apartado', $pedido->esRecogeTiendaApartado());
 
         return $pedido;
     }
@@ -103,11 +106,11 @@ class ListarPedidosAuditoriaService
         $anexoRechazado = (clone $base)->where('estatus_envio', PedidoBma::ESTATUS_ENVIO_ANEXO_RECHAZADO)->count();
         $consolidados = (clone $base)->whereNull('pedido_principal_id')->whereHas('complementos')->count();
         $pendienteId = $idsPorFase['PENDIENTE_AUXILIAR'] ?? 0;
-        $pagoEnRevision = (clone $base)->where('catalogo_estatus_pedido_id', $pendienteId)->whereNull('pago_validado_at')->count();
-        $pendienteRemision = (clone $base)->where('catalogo_estatus_pedido_id', $pendienteId)
-            ->whereNotNull('pago_validado_at')->whereDoesntHave('remision')->count();
-        $pagoValidado = (clone $base)->where('catalogo_estatus_pedido_id', $pendienteId)
-            ->whereNotNull('pago_validado_at')->whereHas('remision')->count();
+        $pagoEnRevision = $this->sinRecogeTiendaApartado((clone $base)->where('catalogo_estatus_pedido_id', $pendienteId)->whereNull('pago_validado_at'))->count();
+        $pendienteRemision = $this->sinRecogeTiendaApartado((clone $base)->where('catalogo_estatus_pedido_id', $pendienteId)
+            ->whereNotNull('pago_validado_at')->whereDoesntHave('remision'))->count();
+        $pagoValidado = $this->sinRecogeTiendaApartado((clone $base)->where('catalogo_estatus_pedido_id', $pendienteId)
+            ->whereNotNull('pago_validado_at')->whereHas('remision'))->count();
         $corregidos = (clone $base)->where('catalogo_estatus_pedido_id', $pendienteId);
         $this->aplicarFiltroCorregidos($corregidos);
         $corregidosCount = $corregidos->count();
@@ -183,6 +186,16 @@ class ListarPedidosAuditoriaService
         return $query;
     }
 
+    private function sinRecogeTiendaApartado(Builder $query): Builder
+    {
+        return $query->whereDoesntHave('tareasPreparacion', function (Builder $tarea) {
+            $tarea->where('estado', '!=', PedidoBmaTareaPreparacion::ESTADO_CANCELADA)
+                ->whereHas('modalidad', function (Builder $modalidad) {
+                    $modalidad->where('codigo', CatalogoModalidadPreparacionPedido::CODIGO_RECOGE_TIENDA);
+                });
+        });
+    }
+
     private function aplicarFiltros(Builder $query, array $filtros): void
     {
         if (!empty($filtros['q'])) {
@@ -237,14 +250,14 @@ class ListarPedidosAuditoriaService
                 $q->where('catalogo_estatus_pedido_id', $idsPorFase['PENDIENTE_AUXILIAR'] ?? 0);
                 $this->aplicarFiltroCorregidos($q);
             }),
-            'PAGO_EN_REVISION' => $query->where('catalogo_estatus_pedido_id', $idsPorFase['PENDIENTE_AUXILIAR'] ?? 0)
-                ->whereNull('pago_validado_at'),
-            'PENDIENTE_REMISION' => $query->where('catalogo_estatus_pedido_id', $idsPorFase['PENDIENTE_AUXILIAR'] ?? 0)
+            'PAGO_EN_REVISION' => $this->sinRecogeTiendaApartado($query->where('catalogo_estatus_pedido_id', $idsPorFase['PENDIENTE_AUXILIAR'] ?? 0)
+                ->whereNull('pago_validado_at')),
+            'PENDIENTE_REMISION' => $this->sinRecogeTiendaApartado($query->where('catalogo_estatus_pedido_id', $idsPorFase['PENDIENTE_AUXILIAR'] ?? 0)
                 ->whereNotNull('pago_validado_at')
-                ->whereDoesntHave('remision'),
-            'PAGO_VALIDADO' => $query->where('catalogo_estatus_pedido_id', $idsPorFase['PENDIENTE_AUXILIAR'] ?? 0)
+                ->whereDoesntHave('remision')),
+            'PAGO_VALIDADO' => $this->sinRecogeTiendaApartado($query->where('catalogo_estatus_pedido_id', $idsPorFase['PENDIENTE_AUXILIAR'] ?? 0)
                 ->whereNotNull('pago_validado_at')
-                ->whereHas('remision'),
+                ->whereHas('remision')),
             'APROBADOS' => $query->whereIn('catalogo_estatus_pedido_id', array_filter([
                 $idsPorFase['EN_CEDIS'] ?? null,
                 $idsPorFase['INCIDENCIA_CEDIS'] ?? null,

@@ -12,10 +12,12 @@ class CatalogoBanco extends Model
     protected $fillable = [
         'nombre',
         'activo',
+        'compartido',
     ];
 
     protected $casts = [
         'activo' => 'boolean',
+        'compartido' => 'boolean',
     ];
 
     public function solicitudes(): HasMany

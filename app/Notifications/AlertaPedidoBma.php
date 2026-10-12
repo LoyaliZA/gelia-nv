@@ -56,6 +56,8 @@ class AlertaPedidoBma extends Notification implements ShouldQueue, ShouldBroadca
         'pedido_enviado' => 'Paquetería recogió el pedido',
         'pedido_resguardo_liberado' => 'Resguardo liberado',
         'pedido_sin_existencia' => 'Producto sin existencias',
+        'pedido_apartado_confirmado' => 'Apartado confirmado en PDV',
+        'pedido_apartado_vencido' => 'Revisar apartado en PDV',
         'pedido_preparacion_tienda_nueva' => 'Nueva preparación en Tienda',
         'pedido_preparacion_tienda_respondida' => 'Preparación en Tienda respondida',
         'pedido_preparacion_tienda_incidencia' => 'Incidencia en preparación Tienda',

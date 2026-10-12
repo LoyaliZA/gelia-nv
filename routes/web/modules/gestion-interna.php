@@ -7,7 +7,7 @@ use App\Http\Controllers\GestionInterna\ProductoController as GestionInternaProd
 Route::prefix('gestion-interna')->name('gestion_interna.')->group(function () {
     // Lookup catálogo (CEDIS pesaje + almacén); fuera del grupo "ver productos" para no bloquear CEDIS.
     Route::get('/productos/buscar', [GestionInternaProductoController::class, 'buscar'])
-        ->middleware('role_or_permission:gestion_interna.productos.ver|almacenes.productos.ver|almacenes.inventarios.ver|almacenes.costos.ver|catalogos.gestionar|reportes.ventas.ver|control_pedidos.cedis')
+        ->middleware('role_or_permission:gestion_interna.productos.ver|almacenes.productos.ver|almacenes.inventarios.ver|almacenes.costos.ver|catalogos.gestionar|reportes.ventas.ver|control_pedidos.cedis|control_pedidos.tienda.apartado.separar|control_pedidos.tienda.responder|control_pedidos.preparacion.solicitar')
         ->name('productos.buscar');
 
     Route::middleware(['role_or_permission:gestion_interna.productos.ver|catalogos.gestionar|almacenes.productos.ver'])->prefix('productos')->name('productos.')->group(function () {

@@ -1126,16 +1126,7 @@ export const textoWhatsAppPedido = (pedido) => {
  * Origen sin logística, o paquetería local/regional con requiere_peso === false.
  * Sin paquetería: pesaje (conservador).
  */
-export const pedidoModoRevisionMercancia = (pedido, paqueteria, requiereLogistica = true) => {
-    if (pedido?.es_consulta_mercancia || requiereLogistica === false) {
-        return true;
-    }
-    const paq = paqueteria ?? pedido?.paqueteria ?? null;
-    if (paq) {
-        return paq.categoria === 'local_regional' && paq.requiere_peso === false;
-    }
-    return Boolean(pedido?.consulta_cedis_modo_revision_mercancia);
-};
+export const pedidoModoRevisionMercancia = (pedido, paqueteria, requiereLogistica = true) => requiereLogistica === false;
 
 /** Espeja EnviarPedidoBmaService::validarCamposRequeridos para feedback inmediato en UI. */
 export const validarCamposEnvioPedido = (data, {
