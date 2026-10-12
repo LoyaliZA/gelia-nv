@@ -55,6 +55,7 @@ class AlmacenCatalogoController extends Controller
             'visible_en_pedidos' => 'boolean',
             'visible_en_traspasos' => 'boolean',
             'permite_busqueda_productos' => 'boolean',
+            'permite_salida_pedidos' => 'boolean',
         ]);
 
         $alcance->asegurarSucursalOperable($user, (int) $data['sucursal_id']);
@@ -78,6 +79,7 @@ class AlmacenCatalogoController extends Controller
             'visible_en_pedidos' => 'boolean',
             'visible_en_traspasos' => 'boolean',
             'permite_busqueda_productos' => 'boolean',
+            'permite_salida_pedidos' => 'boolean',
         ]);
 
         $alcance->asegurarSucursalOperable($user, (int) $data['sucursal_id']);

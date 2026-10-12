@@ -24,6 +24,7 @@ class CrearPedidoBmaService
         private SincronizarAplicacionesPedidoSafService $safPedido,
         private CrearSnapshotDireccionPedido $crearSnapshot,
         private AsignarSucursalDestinoPedidoService $asignarDestino,
+        private ValidarAlmacenSalidaPedido $validarAlmacenSalida,
     ) {}
 
     public function ejecutar(array $datos, int $vendedorId): PedidoBma
@@ -45,6 +46,10 @@ class CrearPedidoBmaService
             }
 
             $attrs = $this->atributosPedidoBase($datos);
+            $this->validarAlmacenSalida->ejecutar(
+                $attrs['almacen_id'] ?? null,
+                $principal?->almacen_id
+            );
             if (\Illuminate\Support\Facades\Schema::hasColumn('pedidos_bma', 'departamento_operacion_id')) {
                 $vendedorContexto = User::findOrFail($vendedorId);
                 $attrs['departamento_operacion_id'] = $principal?->departamento_operacion_id

@@ -22,6 +22,7 @@ class ActualizarPedidoBmaService
         private ActualizarCostosCajasPedidoBmaService $actualizarCostosCajas,
         private CalcularTotalesEnvioPedidoService $totalesEnvio,
         private AsignarSucursalDestinoPedidoService $asignarDestino,
+        private ValidarAlmacenSalidaPedido $validarAlmacenSalida,
     ) {}
 
     public function ejecutar(PedidoBma $pedido, array $datos, int $usuarioId): PedidoBma
@@ -52,6 +53,7 @@ class ActualizarPedidoBmaService
             if (empty($attrs['almacen_id']) && $pedido->almacen_id) {
                 $attrs['almacen_id'] = $pedido->almacen_id;
             }
+            $this->validarAlmacenSalida->ejecutar($attrs['almacen_id'] ?? null, $pedido->almacen_id);
             if (empty($attrs['catalogo_paqueteria_id']) && $pedido->catalogo_paqueteria_id) {
                 $attrs['catalogo_paqueteria_id'] = $pedido->catalogo_paqueteria_id;
             }

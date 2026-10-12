@@ -24,7 +24,7 @@ import {
     BTN_SECONDARY,
     anexoEnvioPendienteDe,
     puedeAnexarPagoEnvio,
-    LABELS_ESTATUS_ENVIO,
+    etiquetaEstatusEnvio,
     LABELS_ESTADO_SAF_APLICACION,
     etiquetaCodigo,
     tieneErrorRemision,
@@ -149,7 +149,10 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
     const fase = pedido.estatus?.fase_ciclo;
     const badge = badgeAuditoriaRevision(pedido) || badgeAuditoriaSemantico(fase, pedido.es_resguardo);
     const badgeHito = badgeHitoAuditoria(pedido.hito_auditoria);
-    const badgeEnvio = badgeEstatusEnvio(pedido.estatus_envio, { faseCiclo: fase });
+    const badgeEnvio = badgeEstatusEnvio(pedido.estatus_envio, {
+        faseCiclo: fase,
+        respondeTienda: Boolean(pedido.usa_preparacion_tienda),
+    });
     const badgeComp = badgeConComplementos(pedido);
     const badgeRemision = tieneErrorRemision(pedido) ? badgeCorregirRemision() : null;
     const reRevision = esPendienteReRevision(pedido);
@@ -618,7 +621,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                     <h3 className="gelia-pedidos-seccion-titulo">Envío y costos</h3>
                                     <div className="grid grid-cols-2 gap-4 mb-3">
                                         <Campo label="Tipo operación" value={pedido.tipo_operacion_envio?.nombre} />
-                                        <Campo label="Estatus envío" value={LABELS_ESTATUS_ENVIO[pedido.estatus_envio] || pedido.estatus_envio} />
+                                        <Campo label="Estatus envío" value={etiquetaEstatusEnvio(pedido.estatus_envio, { respondeTienda: Boolean(pedido.usa_preparacion_tienda) }) || pedido.estatus_envio} />
                                     </div>
                                     {badgeEnvio && (
                                         <span className={`${badgeEnvio.className} mb-3 inline-flex`} style={badgeEnvio.style}>{badgeEnvio.label}</span>
@@ -630,7 +633,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                         <Campo label="Paquetería" value={pedido.paqueteria?.nombre} />
                                         <Campo label="Origen de la guía" value={etiquetaOrigenGuia(pedido)} />
                                         <Campo label="Reexpedición" value={pedido.zona?.nombre} />
-                                        <Campo label="Pesaje CEDIS" value={pedido.pesaje_respondido_at ? 'Respondido' : (pedido.estatus_envio === 'pendiente_pesaje' ? 'Pendiente' : '—')} />
+                                        <Campo label={pedido.usa_preparacion_tienda ? 'Respuesta de Tienda' : 'Pesaje CEDIS'} value={pedido.pesaje_respondido_at ? 'Respondido' : (pedido.estatus_envio === 'pendiente_pesaje' ? 'Pendiente' : '—')} />
                                     </div>
                                     {tienePesajeRespondido && (
                                         <div className="mt-4 space-y-3">

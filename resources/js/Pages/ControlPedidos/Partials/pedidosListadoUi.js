@@ -27,14 +27,17 @@ export function badgesListaPedido(pedido) {
     const items = [{ key: 'estatus', className: badge.className, style: badge.style, label: badge.label }];
 
     const fase = pedido.estatus?.fase_ciclo;
-    const badgeEnvio = badgeEstatusEnvio(pedido.estatus_envio, { faseCiclo: fase });
+    const badgeEnvio = badgeEstatusEnvio(pedido.estatus_envio, {
+        faseCiclo: fase,
+        respondeTienda: Boolean(pedido.usa_preparacion_tienda),
+    });
     if (badgeEnvio) items.push({ key: 'envio', ...badgeEnvio });
 
     const badgeRevision = badgeAuditoriaRevision(pedido);
     if (badgeRevision) items.push({ key: 'revision', ...badgeRevision });
 
     if (pedido.tiene_observaciones_fisicas && esFasePreVenta(fase)) {
-        const obs = badgeObservacionesCedis();
+        const obs = badgeObservacionesCedis({ respondeTienda: Boolean(pedido.usa_preparacion_tienda) });
         items.push({ key: 'obs', className: obs.className, label: obs.label });
     }
     if (mostrarBadgeSinExistencias(pedido)) {

@@ -219,6 +219,15 @@ export const LABELS_ESTATUS_ENVIO = {
     pesaje_listo: 'Pesaje listo — cotizar envío',
 };
 
+export const etiquetaEstatusEnvio = (estatusEnvio, { respondeTienda = false } = {}) => {
+    if (!estatusEnvio) return estatusEnvio;
+    if (estatusEnvio === 'pendiente_pesaje' && respondeTienda) {
+        return 'Pendiente de respuesta de Tienda';
+    }
+
+    return LABELS_ESTATUS_ENVIO[estatusEnvio] || estatusEnvio;
+};
+
 /** Fases pre-venta donde badges de pesaje / obs. CEDIS pueden mostrarse junto al ciclo. */
 export const FASES_PRE_VENTA = ['BORRADOR', 'PESAJE_PENDIENTE', 'PESAJE_RESPONDIDO', 'RECHAZADO_VENDEDORA'];
 
@@ -377,7 +386,7 @@ export const badgeEstadoFisico = (estado) => {
     };
 };
 
-export const badgeEstatusEnvio = (estatusEnvio, { faseCiclo = null, forzarPesaje = false } = {}) => {
+export const badgeEstatusEnvio = (estatusEnvio, { faseCiclo = null, forzarPesaje = false, respondeTienda = false } = {}) => {
     if (!estatusEnvio || estatusEnvio === 'completo') return null;
     // Pesaje no debe encimarse con fases posteriores (salvo vista CEDIS / forzarPesaje).
     if (['pendiente_pesaje', 'pesaje_listo'].includes(estatusEnvio)
@@ -403,7 +412,7 @@ export const badgeEstatusEnvio = (estatusEnvio, { faseCiclo = null, forzarPesaje
     };
     const hex = colores[estatusEnvio] || '#94A3B8';
     return {
-        label: LABELS_ESTATUS_ENVIO[estatusEnvio] || estatusEnvio,
+        label: etiquetaEstatusEnvio(estatusEnvio, { respondeTienda }),
         ...badgeClaseEstatusPedido({ color_hex: hex }),
     };
 };
@@ -776,9 +785,9 @@ export const badgeGuiaLista = () => ({
     label: 'Guía Lista',
 });
 
-export const badgeObservacionesCedis = () => ({
+export const badgeObservacionesCedis = ({ respondeTienda = false } = {}) => ({
     className: 'inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-semibold bg-orange-500/15 text-orange-600',
-    label: 'Observaciones CEDIS',
+    label: respondeTienda ? 'Observaciones de Tienda' : 'Observaciones CEDIS',
 });
 
 export const badgeSinExistencias = () => ({

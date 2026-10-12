@@ -57,6 +57,32 @@ function routeHref(name, fallback) {
     return fallback;
 }
 
+function compareNavByLabel(a, b) {
+    if (!a || !b) return 0;
+    return String(a.label ?? '').localeCompare(String(b.label ?? ''), 'es', {
+        sensitivity: 'base',
+        numeric: true,
+    });
+}
+
+/** Orden alfabético de hijos en cada grupo (no reordena las secciones principales del sidebar). */
+export function sortNavigationGroupChildren(nodes) {
+    return (nodes || []).map((node) => {
+        if (!node || node.type !== 'group' || !node.children?.length) {
+            return node;
+        }
+        const children = [...node.children]
+            .sort(compareNavByLabel)
+            .map((child) => {
+                if (child?.type === 'group' && child.children?.length) {
+                    return sortNavigationGroupChildren([child])[0];
+                }
+                return child;
+            });
+        return { ...node, children };
+    });
+}
+
 /** Árbol de navegación del menú lateral (permisos aplicados al renderizar). */
 export function buildSidebarNavigation({ can, showAdminMenu, manualesHubVisible = false, geliaAiVisible = false, saldosFavorPendientes = 0 }) {
     const showReportes = can('solicitudes.exportar');
@@ -643,24 +669,20 @@ export function buildSidebarNavigation({ can, showAdminMenu, manualesHubVisible 
         },
     ].filter(Boolean);
 
+    const sistemaAdminLinks = showAdminMenu
+        ? ADMIN_MODULES.map((item) => isAdminModuleAllowed(item, can) && {
+            type: 'link',
+            id: item.id,
+            label: item.title,
+            description: item.description,
+            icon: item.icon,
+            href: () => adminModuleHref(item),
+            active: (url) => url.startsWith(item.path),
+        }).filter(Boolean)
+        : [];
+
     const sistemaChildren = [
-        showAdminMenu && {
-            type: 'group',
-            id: 'admin',
-            label: 'Administración',
-            icon: Shield,
-            children: ADMIN_MODULES.map((item) => {
-                return isAdminModuleAllowed(item, can) && {
-                    type: 'link',
-                    id: item.id,
-                    label: item.title,
-                    description: item.description,
-                    icon: item.icon,
-                    href: () => adminModuleHref(item),
-                    active: (url) => url.startsWith(item.path),
-                };
-            }).filter(Boolean),
-        },
+        ...sistemaAdminLinks,
         can('mensajeria.monitorear') && {
             type: 'link',
             id: 'mensajeria_monitoreo',
@@ -671,7 +693,7 @@ export function buildSidebarNavigation({ can, showAdminMenu, manualesHubVisible 
         },
     ].filter(Boolean);
 
-    return [
+    return sortNavigationGroupChildren([
         { type: 'header', id: 'accesos', label: 'Accesos' },
         {
             type: 'group',
@@ -816,7 +838,7 @@ export function buildSidebarNavigation({ can, showAdminMenu, manualesHubVisible 
             icon: Lock,
             children: sistemaChildren,
         },
-    ].filter(Boolean);
+    ].filter(Boolean));
 }
 
 /** IDs de grupos ancestros de la ruta activa (para expandir al navegar). */

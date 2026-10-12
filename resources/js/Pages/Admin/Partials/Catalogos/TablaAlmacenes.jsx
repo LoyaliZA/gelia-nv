@@ -22,7 +22,7 @@ export default function TablaAlmacenes({
     const [modalImportar, setModalImportar] = useState(false);
     const [itemActual, setItemActual] = useState(null);
     const { data, setData, post, put, processing, reset, errors } = useForm({
-        codigo: '', nombre: '', sucursal_id: '', tipo_almacen_id: '', activo: true, visible_en_pedidos: false, visible_en_traspasos: false, permite_busqueda_productos: true,
+        codigo: '', nombre: '', sucursal_id: '', tipo_almacen_id: '', activo: true, visible_en_pedidos: false, visible_en_traspasos: false, permite_busqueda_productos: true, permite_salida_pedidos: true,
     });
 
     const abrirNuevo = () => {
@@ -44,6 +44,7 @@ export default function TablaAlmacenes({
             visible_en_pedidos: item.visible_en_pedidos ?? false,
             visible_en_traspasos: item.visible_en_traspasos ?? false,
             permite_busqueda_productos: item.permite_busqueda_productos ?? true,
+            permite_salida_pedidos: item.permite_salida_pedidos !== false,
         });
         setModalAbierto(true);
     };
@@ -69,7 +70,7 @@ export default function TablaAlmacenes({
                 )}
             </div>
             <table className="w-full">
-                <thead><tr className="border-b theme-border text-[9px] font-black uppercase theme-text-muted"><th className="px-6 py-3 text-left">Código / Nombre</th><th className="px-6 py-3 text-left">Sucursal</th><th className="px-6 py-3 text-left">Tipo</th><th className="px-6 py-3 text-left">Pedidos</th><th className="px-6 py-3 text-left">Traspasos</th><th className="px-6 py-3 text-left">Búsqueda</th><th className="px-6 py-3 text-right">Acciones</th></tr></thead>
+                <thead><tr className="border-b theme-border text-[9px] font-black uppercase theme-text-muted"><th className="px-6 py-3 text-left">Código / Nombre</th><th className="px-6 py-3 text-left">Sucursal</th><th className="px-6 py-3 text-left">Tipo</th><th className="px-6 py-3 text-left">Pedidos</th><th className="px-6 py-3 text-left">Salida</th><th className="px-6 py-3 text-left">Traspasos</th><th className="px-6 py-3 text-left">Búsqueda</th><th className="px-6 py-3 text-right">Acciones</th></tr></thead>
                 <tbody>
                     {datos.map((item) => (
                         <tr key={item.id} className="border-b theme-border">
@@ -79,6 +80,11 @@ export default function TablaAlmacenes({
                             <td className="px-6 py-4">
                                 <span className={`inline-flex px-2 py-1 rounded-lg text-[9px] font-black uppercase ${item.visible_en_pedidos ? 'bg-emerald-500/10 text-emerald-600' : 'theme-text-muted'}`}>
                                     {item.visible_en_pedidos ? 'Visible' : 'Oculto'}
+                                </span>
+                            </td>
+                            <td className="px-6 py-4">
+                                <span className={`inline-flex px-2 py-1 rounded-lg text-[9px] font-black uppercase ${item.permite_salida_pedidos !== false ? 'bg-emerald-500/10 text-emerald-600' : 'theme-text-muted'}`}>
+                                    {item.permite_salida_pedidos !== false ? 'Sale' : 'Solo destino'}
                                 </span>
                             </td>
                             <td className="px-6 py-4">
@@ -122,6 +128,7 @@ export default function TablaAlmacenes({
                             </select>
                             <label className="flex gap-2 items-center"><input type="checkbox" checked={data.activo} onChange={(e) => setData('activo', e.target.checked)} /><span className="font-bold text-sm theme-text-main">Activo</span></label>
                             <label className="flex gap-2 items-center"><input type="checkbox" checked={data.visible_en_pedidos} onChange={(e) => setData('visible_en_pedidos', e.target.checked)} /><span className="font-bold text-sm theme-text-main">Visible en Gestión de pedidos</span></label>
+                            <label className="flex gap-2 items-start"><input type="checkbox" className="mt-1" checked={data.permite_salida_pedidos} onChange={(e) => setData('permite_salida_pedidos', e.target.checked)} /><span className="font-bold text-sm theme-text-main">Permite salida de mercancía en pedidos. Si se desmarca, no aparece como almacén de salida; la sucursal vinculada sigue disponible como destino.</span></label>
                             <label className="flex gap-2 items-center"><input type="checkbox" checked={data.visible_en_traspasos} onChange={(e) => setData('visible_en_traspasos', e.target.checked)} /><span className="font-bold text-sm theme-text-main">Visible en Traspasos</span></label>
                             <label className="flex gap-2 items-center"><input type="checkbox" checked={data.permite_busqueda_productos} onChange={(e) => setData('permite_busqueda_productos', e.target.checked)} /><span className="font-bold text-sm theme-text-main">Permite búsqueda de productos (CEDIS)</span></label>
                             {errors.codigo && <p className="text-xs text-red-500 dark:text-red-400">{errors.codigo}</p>}

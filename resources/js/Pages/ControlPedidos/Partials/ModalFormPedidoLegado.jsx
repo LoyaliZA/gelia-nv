@@ -34,6 +34,7 @@ import {
     pedidoModoRevisionMercancia,
     etiquetaEstatusPedido,
     LABELS_ESTATUS_ENVIO,
+    etiquetaEstatusEnvio,
     LABELS_MOTIVO_REPESAJE,
     LABELS_ESTATUS_POR_FASE,
     formatearFechaNegocio,
@@ -475,11 +476,14 @@ export default function ModalFormPedidoLegado({
         && can('control_pedidos.preparacion.solicitar')
         && ((preparacionConfig.modalidades_catalogo || []).some((m) => (preparacionConfig.modalidades_habilitadas || []).includes(m.codigo)))
     );
-    const almacenesPreparacion = (catalogos.almacenes || []).filter((a) => {
+    const almacenesSalida = (catalogos.almacenes || []).filter((a) => (
+        a.permite_salida_pedidos !== false || String(a.id) === String(data.almacen_id)
+    ));
+    const almacenesPreparacion = almacenesSalida.filter((a) => {
         const hab = preparacionConfig.almacenes_habilitados || [];
         return hab.length === 0 ? esAlmacenTipoPdv(a) : hab.some((id) => String(id) === String(a.id));
     });
-    const almacenesPdv = (catalogos.almacenes || []).filter((a) => {
+    const almacenesPdv = almacenesSalida.filter((a) => {
         if (!esAlmacenTipoPdv(a)) return false;
         const hab = preparacionConfig.almacenes_habilitados || [];
         return hab.length === 0 || hab.some((id) => String(id) === String(a.id));
@@ -751,7 +755,7 @@ export default function ModalFormPedidoLegado({
     const fasesRegistro = [
         { id: FASE_DATOS, label: 'Datos del cliente y pedido' },
         (pendientePesaje || tienePesajeRespondido || consultaCerrada)
-            ? { id: FASE_RESPUESTA, label: 'Respuesta CEDIS' }
+            ? { id: FASE_RESPUESTA, label: enFlujoTienda ? 'Respuesta de Tienda' : 'Respuesta CEDIS' }
             : null,
         (consultaCerrada || esResguardoComplementario)
             ? { id: FASE_COTIZACION, label: 'Cotización' }
@@ -1761,7 +1765,12 @@ export default function ModalFormPedidoLegado({
                 return;
             }
             if (requiereLogistica && pendientePesaje) {
-                setAvisoForm({ tipo: 'error', mensaje: 'Espere la respuesta de pesaje de CEDIS antes de enviar.' });
+                setAvisoForm({
+                    tipo: 'error',
+                    mensaje: enFlujoTienda
+                        ? 'Espere la respuesta de Tienda antes de enviar.'
+                        : 'Espere la respuesta de pesaje de CEDIS antes de enviar.',
+                });
                 return;
             }
             // Misma validación que enviarPedidoListo (tienePdfPedido, consultaCerrada, etc.).
@@ -2476,7 +2485,7 @@ export default function ModalFormPedidoLegado({
                                     <option value="">Seleccionar...</option>
                                     {(esRecogeTienda
                                         ? almacenesPdv
-                                        : (enFlujoTienda ? almacenesPreparacion : (catalogos.almacenes || []))).map((a) => (
+                                        : (enFlujoTienda ? almacenesPreparacion : almacenesSalida)).map((a) => (
                                         <option key={a.id} value={String(a.id)}>{etiquetaAlmacen(a)}</option>
                                     ))}
                                 </select>
@@ -3024,7 +3033,7 @@ export default function ModalFormPedidoLegado({
                             && !(pedido.estatus_envio === 'pendiente_pesaje' && fasePedido === 'PESAJE_PENDIENTE')
                             && !(pedido.estatus_envio === 'pesaje_listo' && fasePedido === 'PESAJE_RESPONDIDO') && (
                             <p className="text-xs font-bold theme-text-muted mb-3 m-0">
-                                Estado envío: {LABELS_ESTATUS_ENVIO[pedido.estatus_envio]}
+                                Estado envío: {etiquetaEstatusEnvio(pedido.estatus_envio, { respondeTienda: enFlujoTienda })}
                             </p>
                         )}
                         {progresoTraslado.length > 0 && (
@@ -3091,7 +3100,7 @@ export default function ModalFormPedidoLegado({
                         )}
                         {pendientePesaje && (
                             <AvisoOperativoPedido
-                                label={enFlujoTienda ? 'Esperando Tienda' : 'Esperando CEDIS'}
+                                label={enFlujoTienda ? 'Esperando respuesta de Tienda' : 'Esperando CEDIS'}
                                 tono="warning"
                                 icon={Scale}
                                 className="mb-4"
@@ -3226,8 +3235,8 @@ export default function ModalFormPedidoLegado({
 
                     <PanelFase codigo={FASE_RESPUESTA} activa={faseActiva} montada={verEtapa(FASE_RESPUESTA)}>
                     {!tienePesajeRespondido && (pendientePesaje || consultaCerrada) && (
-                        <AvisoOperativoPedido label="Esperando CEDIS" tono="warning" icon={Scale}>
-                            La consulta ya fue enviada. La respuesta, el anexo de piezas y el cierre aparecen aquí cuando CEDIS responda.
+                        <AvisoOperativoPedido label={enFlujoTienda ? 'Esperando respuesta de Tienda' : 'Esperando CEDIS'} tono="warning" icon={Scale}>
+                            La consulta ya fue enviada. La respuesta, el anexo de piezas y el cierre aparecen aquí cuando {enFlujoTienda ? 'Tienda responda' : 'CEDIS responda'}.
                         </AvisoOperativoPedido>
                     )}
                     {tienePesajeRespondido && !pendientePesaje && !pedido?.empacado_at && !puedeContinuarPedido && !enFlujoTienda && !consultaCerrada && (
@@ -3289,7 +3298,7 @@ export default function ModalFormPedidoLegado({
                                     pedido={pedido}
                                     onVerDoc={abrirVistaPrevia}
                                     onVerGaleria={abrirVistaPrevia}
-                                    titulo={esConsultaMercancia ? 'Registro de productos CEDIS' : 'Revisión física CEDIS'}
+                                    titulo={enFlujoTienda ? 'Revisión física de Tienda' : (esConsultaMercancia ? 'Registro de productos CEDIS' : 'Revisión física CEDIS')}
                                     puedeAtender={Boolean(pedido?.puede_mutar)}
                                     puedeCancelar={Boolean(pedido?.puede_cancelar)}
                                 />
@@ -3460,7 +3469,7 @@ export default function ModalFormPedidoLegado({
                     <section className={SECCION_WRAP} data-campo="total_mercancia">
                         <p className={SECCION}>{nSec.monto}. Total de mercancía</p>
                         <AvisoOperativoPedido label="Pedido final" tono="info" icon={CheckCircle2} className="mb-4">
-                            Capture el monto solo cuando la mercancía ya está confirmada con el cliente (consulta CEDIS cerrada).
+                            Capture el monto solo cuando la mercancía ya está confirmada con el cliente (consulta {enFlujoTienda ? 'de Tienda' : 'CEDIS'} cerrada).
                         </AvisoOperativoPedido>
                         <div className={wrapCampo('total_mercancia')}>
                             <label className={SECCION}>Total mercancía *</label>
@@ -3995,7 +4004,9 @@ export default function ModalFormPedidoLegado({
                                 limiteCreditoAutorizado={infoCliente?.monto_credito_autorizado ?? pedido?.cliente?.monto_credito_autorizado}
                                 onResumenChange={(r) => setPagoResumen(r)}
                                 mensajeBloqueo={!consultaCerrada
-                                    ? 'Cierre la consulta CEDIS antes de registrar el pago.'
+                                    ? (enFlujoTienda
+                                        ? 'Cierre la consulta de Tienda antes de registrar el pago.'
+                                        : 'Cierre la consulta CEDIS antes de registrar el pago.')
                                     : (requiereLogistica && !cotizacionLista
                                         ? 'Complete la cotización de envío antes de registrar el pago.'
                                         : null)}
@@ -4043,8 +4054,12 @@ export default function ModalFormPedidoLegado({
                         <AvisoOperativoPedido label="Más adelante" tono="info" icon={Scale} className="mb-0">
                             {requiereLogistica
                                 ? (tienePesajeRespondido && !consultaCerrada
-                                    ? 'Cierre la consulta CEDIS y complete la cotización. Luego registre banco y comprobante.'
-                                    : 'Complete el pesaje CEDIS, cierre la consulta y la cotización. El pago se captura después.')
+                                    ? (enFlujoTienda
+                                        ? 'Cierre la consulta de Tienda y complete la cotización. Luego registre banco y comprobante.'
+                                        : 'Cierre la consulta CEDIS y complete la cotización. Luego registre banco y comprobante.')
+                                    : (enFlujoTienda
+                                        ? 'Espere la respuesta de Tienda, cierre la consulta y complete la cotización. El pago se captura después.'
+                                        : 'Complete el pesaje CEDIS, cierre la consulta y la cotización. El pago se captura después.'))
                                 : 'Solicite la separación de mercancía, ciérrela con el cliente y capture el monto. Luego registre el pago.'}
                         </AvisoOperativoPedido>
                     </section>

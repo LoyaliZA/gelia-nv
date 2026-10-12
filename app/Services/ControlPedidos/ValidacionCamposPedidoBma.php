@@ -41,15 +41,19 @@ trait ValidacionCamposPedidoBma
 
         if ($requiereLogistica && ! $esComplementario && ! $tienePesaje) {
             throw new \InvalidArgumentException(
-                $pedido->consultaCedisModoRevisionMercancia()
-                    ? 'Debe solicitar y recibir la consulta de mercancía de CEDIS antes de enviar el pedido al auxiliar.'
-                    : 'Debe solicitar y recibir el pesaje de CEDIS antes de enviar el pedido al auxiliar.'
+                $pedido->usaPreparacionTienda()
+                    ? 'Debe solicitar y recibir la respuesta de Tienda antes de enviar el pedido al auxiliar.'
+                    : ($pedido->consultaCedisModoRevisionMercancia()
+                        ? 'Debe solicitar y recibir la consulta de mercancía de CEDIS antes de enviar el pedido al auxiliar.'
+                        : 'Debe solicitar y recibir el pesaje de CEDIS antes de enviar el pedido al auxiliar.')
             );
         }
 
-                        if ($pedido->requiereConsultaCerradaParaProceder() && ! $pedido->consultaCerrada()) {
+        if ($pedido->requiereConsultaCerradaParaProceder() && ! $pedido->consultaCerrada()) {
             throw new \InvalidArgumentException(
-                'Debe cerrar la consulta CEDIS (confirmar mercancía con el cliente) antes de enviar el pedido.'
+                $pedido->usaPreparacionTienda()
+                    ? 'Debe cerrar la consulta de Tienda (confirmar mercancía con el cliente) antes de enviar el pedido.'
+                    : 'Debe cerrar la consulta CEDIS (confirmar mercancía con el cliente) antes de enviar el pedido.'
             );
         }
 

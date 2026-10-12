@@ -6,6 +6,7 @@ use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\CatalogoOrigenPedido;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Models\ControlPedidos\PedidoBmaDocumento;
+use App\Models\ControlPedidos\PedidoBmaTareaPreparacion;
 use App\Models\User;
 use App\Services\ControlPedidos\CalcularProgresoPedidoBmaService;
 use App\Services\ControlPedidos\FormularioProgresivoPedidoBmaConfig;
@@ -65,6 +66,40 @@ class Fase3FormularioProgresivoTest extends TestCase
         $r = $this->progreso->calcular($pedido->fresh(['origen', 'estatus', 'documentos']));
         $this->assertSame('Esperar respuesta de CEDIS', $r['accion_recomendada']);
         $this->assertSame('bloqueada', $this->etapa($r, 'confirmacion')['estado']);
+    }
+
+    public function test_preparacion_tienda_espera_respuesta_de_tienda(): void
+    {
+        $pedido = $this->pedidoBase(requiereLogistica: false, completoSolicitud: true);
+        $pedido->update([
+            'estatus_envio' => PedidoBma::ESTATUS_ENVIO_PENDIENTE_PESAJE,
+            'catalogo_estatus_pedido_id' => $this->estatus(CatalogoEstatusPedido::FASE_PESAJE_PENDIENTE)->id,
+        ]);
+        PedidoBmaDocumento::query()->create([
+            'pedido_bma_id' => $pedido->id,
+            'tipo' => PedidoBmaDocumento::TIPO_PDF_PEDIDO,
+            'ruta_archivo' => 't.pdf',
+            'nombre_original' => 't.pdf',
+            'mime_type' => 'application/pdf',
+            'tamano_bytes' => 1,
+            'orden' => 0,
+        ]);
+
+        $modalidadId = DB::table('catalogo_modalidades_preparacion_pedido')->where('codigo', 'RECOGE_TIENDA')->value('id');
+        $this->assertNotNull($modalidadId);
+
+        PedidoBmaTareaPreparacion::query()->create([
+            'pedido_bma_id' => $pedido->id,
+            'catalogo_modalidad_preparacion_id' => $modalidadId,
+            'almacen_id' => $pedido->almacen_id,
+            'estado' => 'PENDIENTE',
+            'solicitada_at' => now(),
+        ]);
+
+        $r = $this->progreso->calcular($pedido->fresh(['origen', 'estatus', 'documentos']));
+        $this->assertSame('Esperar respuesta de Tienda', $r['accion_recomendada']);
+        $this->assertSame('Esperando respuesta de Tienda.', $this->etapa($r, 'consulta')['motivo_bloqueo']);
+        $this->assertStringContainsString('Tienda', $this->etapa($r, 'confirmacion')['motivo_bloqueo']);
     }
 
     public function test_consulta_cerrada_habilita_cotizacion(): void

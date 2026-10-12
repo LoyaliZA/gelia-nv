@@ -505,6 +505,7 @@ class CatalogoController extends Controller
             'visible_en_pedidos' => 'boolean',
             'visible_en_traspasos' => 'boolean',
             'permite_busqueda_productos' => 'boolean',
+            'permite_salida_pedidos' => 'boolean',
         ]);
         $guardar->crear($data);
         return back()->with('success', 'Almacén registrado.');
@@ -520,6 +521,7 @@ class CatalogoController extends Controller
             'visible_en_pedidos' => 'boolean',
             'visible_en_traspasos' => 'boolean',
             'permite_busqueda_productos' => 'boolean',
+            'permite_salida_pedidos' => 'boolean',
         ]);
         $almacen = Almacen::findOrFail($id);
         $guardar->actualizar($almacen, $data);

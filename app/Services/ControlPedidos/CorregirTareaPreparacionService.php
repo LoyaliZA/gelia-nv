@@ -18,6 +18,7 @@ class CorregirTareaPreparacionService
         private NotificarPedidoBmaService $notificarService,
         private RegistrarCierreApartadoService $cierreApartado,
         private AsegurarCumplimientoFisicoService $asegurarCumplimiento,
+        private ValidarAlmacenSalidaPedido $validarAlmacenSalida,
     ) {}
 
     /**
@@ -40,6 +41,8 @@ class CorregirTareaPreparacionService
         if (! VisibilidadPedidoBma::puedeMutarComoVendedora($usuario, $pedido)) {
             throw new \RuntimeException('No puede corregir este pedido.');
         }
+
+        $this->validarAlmacenSalida->ejecutar($almacenId, $pedido->almacen_id);
 
         if ($tareaAnterior->estado !== PedidoBmaTareaPreparacion::ESTADO_CON_INCIDENCIA) {
             throw ValidationException::withMessages([

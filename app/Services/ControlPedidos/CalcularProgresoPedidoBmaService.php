@@ -56,12 +56,14 @@ class CalcularProgresoPedidoBmaService
         $cotizacionOk = $this->cotizacionLista($pedido, $requiereLogistica, $respondido, $consultaCerrada);
         $pagoOk = $this->pagoListo($pedido, $cotizacionOk);
 
+        $area = $this->areaRespuesta($pedido);
+
         $bloqueos = [];
         if ($actualizacionPendiente) {
-            $bloqueos[] = 'Hay una actualización de consulta pendiente de respuesta CEDIS.';
+            $bloqueos[] = "Hay una actualización de consulta pendiente de respuesta de {$area}.";
         }
         if ($pendientePesaje) {
-            $bloqueos[] = 'Espere la respuesta de CEDIS.';
+            $bloqueos[] = "Espere la respuesta de {$area}.";
         }
 
         $etapas = [
@@ -76,22 +78,25 @@ class CalcularProgresoPedidoBmaService
                 $respondido,
                 $pendientePesaje,
                 $consultaCerrada,
-                $actualizacionPendiente
+                $actualizacionPendiente,
+                $area
             ),
             $this->etapaConfirmacion(
                 $solicitudOk,
                 $respondido,
                 $pendientePesaje,
                 $consultaCerrada,
-                $actualizacionPendiente
+                $actualizacionPendiente,
+                $area
             ),
             $this->etapaCotizacion(
                 $consultaCerrada,
                 $actualizacionPendiente,
                 $pendientePesaje,
-                $cotizacionOk
+                $cotizacionOk,
+                $area
             ),
-            $this->etapaPago($cotizacionOk, $consultaCerrada, $actualizacionPendiente, $pagoOk),
+            $this->etapaPago($cotizacionOk, $consultaCerrada, $actualizacionPendiente, $pagoOk, $area),
         ];
 
         $etapaActual = $this->resolverEtapaActual($etapas);
@@ -102,7 +107,8 @@ class CalcularProgresoPedidoBmaService
             $consultaCerrada,
             $actualizacionPendiente,
             $cotizacionOk,
-            $pagoOk
+            $pagoOk,
+            $area
         );
 
         return [
@@ -209,7 +215,8 @@ class CalcularProgresoPedidoBmaService
         bool $respondido,
         bool $pendientePesaje,
         bool $consultaCerrada,
-        bool $actualizacionPendiente
+        bool $actualizacionPendiente,
+        string $area
     ): array {
         if (! $solicitudOk) {
             return $this->etapa(self::ETAPA_CONSULTA, self::ESTADO_BLOQUEADA, false, 'Complete la solicitud inicial.');
@@ -219,7 +226,7 @@ class CalcularProgresoPedidoBmaService
                 self::ETAPA_CONSULTA,
                 $actualizacionPendiente ? self::ESTADO_CORRECCION : self::ESTADO_ACTIVA,
                 true,
-                $pendientePesaje ? 'Esperando respuesta de CEDIS.' : null
+                $pendientePesaje ? "Esperando respuesta de {$area}." : null
             );
         }
         if ($respondido || $consultaCerrada) {
@@ -237,7 +244,8 @@ class CalcularProgresoPedidoBmaService
         bool $respondido,
         bool $pendientePesaje,
         bool $consultaCerrada,
-        bool $actualizacionPendiente
+        bool $actualizacionPendiente,
+        string $area
     ): array {
         if (! $solicitudOk) {
             return $this->etapa(self::ETAPA_CONFIRMACION, self::ESTADO_BLOQUEADA, false, 'Complete la solicitud inicial.');
@@ -248,8 +256,8 @@ class CalcularProgresoPedidoBmaService
                 self::ESTADO_BLOQUEADA,
                 false,
                 $actualizacionPendiente
-                    ? 'Espere la nueva respuesta de CEDIS.'
-                    : 'Espere la respuesta de CEDIS.'
+                    ? "Espere la nueva respuesta de {$area}."
+                    : "Espere la respuesta de {$area}."
             );
         }
         if ($consultaCerrada) {
@@ -266,7 +274,8 @@ class CalcularProgresoPedidoBmaService
         bool $consultaCerrada,
         bool $actualizacionPendiente,
         bool $pendientePesaje,
-        bool $cotizacionOk
+        bool $cotizacionOk,
+        string $area
     ): array {
         if ($actualizacionPendiente || $pendientePesaje || ! $consultaCerrada) {
             return $this->etapa(
@@ -274,7 +283,7 @@ class CalcularProgresoPedidoBmaService
                 self::ESTADO_BLOQUEADA,
                 false,
                 $actualizacionPendiente
-                    ? 'La cotización se bloquea hasta nueva respuesta CEDIS.'
+                    ? "La cotización se bloquea hasta nueva respuesta de {$area}."
                     : 'Cierre la consulta con el cliente primero.'
             );
         }
@@ -292,7 +301,8 @@ class CalcularProgresoPedidoBmaService
         bool $cotizacionOk,
         bool $consultaCerrada,
         bool $actualizacionPendiente,
-        bool $pagoOk
+        bool $pagoOk,
+        string $area
     ): array {
         if ($actualizacionPendiente || ! $consultaCerrada || ! $cotizacionOk) {
             return $this->etapa(
@@ -300,7 +310,7 @@ class CalcularProgresoPedidoBmaService
                 self::ESTADO_BLOQUEADA,
                 false,
                 $actualizacionPendiente
-                    ? 'El pago se bloquea hasta nueva respuesta CEDIS.'
+                    ? "El pago se bloquea hasta nueva respuesta de {$area}."
                     : 'Complete la cotización primero.'
             );
         }
@@ -330,6 +340,11 @@ class CalcularProgresoPedidoBmaService
         return self::ETAPA_SOLICITUD;
     }
 
+    private function areaRespuesta(PedidoBma $pedido): string
+    {
+        return $pedido->usaPreparacionTienda() ? 'Tienda' : 'CEDIS';
+    }
+
     private function accionRecomendada(
         string $etapaActual,
         bool $pendientePesaje,
@@ -337,17 +352,18 @@ class CalcularProgresoPedidoBmaService
         bool $consultaCerrada,
         bool $actualizacionPendiente,
         bool $cotizacionOk,
-        bool $pagoOk
+        bool $pagoOk,
+        string $area
     ): string {
         if ($actualizacionPendiente || $pendientePesaje) {
-            return 'Esperar respuesta de CEDIS';
+            return "Esperar respuesta de {$area}";
         }
 
         return match ($etapaActual) {
-            self::ETAPA_SOLICITUD => 'Complete la solicitud y envíe la consulta a CEDIS.',
+            self::ETAPA_SOLICITUD => "Complete la solicitud y envíe la consulta a {$area}.",
             self::ETAPA_CONSULTA => $respondido
-                ? 'Revise la respuesta de CEDIS.'
-                : 'Solicite la revisión a CEDIS.',
+                ? "Revise la respuesta de {$area}."
+                : "Solicite la revisión a {$area}.",
             self::ETAPA_CONFIRMACION => 'Confirme condiciones con el cliente y cierre la consulta.',
             self::ETAPA_COTIZACION => $cotizacionOk
                 ? 'Revise la cotización.'

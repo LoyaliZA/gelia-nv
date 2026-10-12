@@ -25,8 +25,13 @@ describe('buildSidebarNavigation permissions', () => {
         const ids = collectLinkIds(tree);
         expect(ids).toContain('dashboard');
         expect(ids.length).toBeGreaterThan(5);
-        const sistema = tree.find((n) => n?.id === 'sistema' || n?.label === 'Sistema');
-        expect(sistema || ids.some((id) => id.includes('admin') || id.includes('usuarios'))).toBeTruthy();
+        const sistema = tree.find((n) => n?.id === 'sistema');
+        expect(sistema).toBeTruthy();
+        expect(sistema.children.some((n) => n?.id === 'admin')).toBe(false);
+        expect(sistema.children.some((n) => n?.id === 'usuarios')).toBe(true);
+        const labels = sistema.children.map((n) => n.label);
+        const sorted = [...labels].sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
+        expect(labels).toEqual(sorted);
     });
 
     it('usuario sin permisos solo ve enlaces públicos del árbol', () => {

@@ -26,6 +26,7 @@ class CrearTareaPreparacionService
         private RegistrarHistorialPedidoService $historialService,
         private NotificarPedidoBmaService $notificarService,
         private AsegurarCumplimientoFisicoService $asegurarCumplimiento,
+        private ValidarAlmacenSalidaPedido $validarAlmacenSalida,
     ) {}
 
     /**
@@ -66,6 +67,8 @@ class CrearTareaPreparacionService
                 'almacen_id' => 'El almacén seleccionado no está habilitado para preparación en Tienda.',
             ]);
         }
+
+        $this->validarAlmacenSalida->ejecutar($almacenId, $pedido->almacen_id);
 
         if (! VisibilidadPedidoBma::puedeMutarComoVendedora($usuario, $pedido)) {
             throw new \RuntimeException('No tiene permiso para solicitar preparación en este pedido.');

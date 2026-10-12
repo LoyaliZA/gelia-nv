@@ -271,6 +271,7 @@ export default function TablaAuditoria({
                     const badge = badgeAuditoriaRevision(pedido) || badgeAuditoriaSemantico(pedido.estatus?.fase_ciclo, pedido.es_resguardo);
                     const badgeEnvio = badgeEstatusEnvio(pedido.estatus_envio, {
                         faseCiclo: pedido.estatus?.fase_ciclo,
+                        respondeTienda: Boolean(pedido.usa_preparacion_tienda),
                     });
                     const fase = pedido.estatus?.fase_ciclo;
                     return (
@@ -315,6 +316,7 @@ export default function TablaAuditoria({
                             const badge = badgeAuditoriaRevision(pedido) || badgeAuditoriaSemantico(pedido.estatus?.fase_ciclo, pedido.es_resguardo);
                             const badgeEnvio = badgeEstatusEnvio(pedido.estatus_envio, {
                                 faseCiclo: pedido.estatus?.fase_ciclo,
+                                respondeTienda: Boolean(pedido.usa_preparacion_tienda),
                             });
                             const fase = pedido.estatus?.fase_ciclo;
                             const esRechazado = fase === 'RECHAZADO_VENDEDORA';

@@ -21,6 +21,7 @@ class Almacen extends Model
         'visible_en_pedidos',
         'visible_en_traspasos',
         'permite_busqueda_productos',
+        'permite_salida_pedidos',
     ];
 
     protected function casts(): array
@@ -30,6 +31,7 @@ class Almacen extends Model
             'visible_en_pedidos' => 'boolean',
             'visible_en_traspasos' => 'boolean',
             'permite_busqueda_productos' => 'boolean',
+            'permite_salida_pedidos' => 'boolean',
         ];
     }
 

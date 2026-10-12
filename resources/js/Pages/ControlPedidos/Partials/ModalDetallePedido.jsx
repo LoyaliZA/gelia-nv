@@ -66,6 +66,7 @@ export default function ModalDetallePedido({ abierto, onClose, pedido }) {
     const evidenciasApartado = (pedido.documentos || []).filter((d) => d.tipo === 'evidencia_apartado');
     const badgeFisico = pedido.estado_fisico_general ? badgeEstadoFisico(pedido.estado_fisico_general) : null;
     const badgesSla = badgesRetrasoSla(pedido);
+    const respondeTienda = Boolean(pedido.usa_preparacion_tienda);
     const snap = pedido.direccion_vigente || pedido.direccionVigente;
 
     return createPortal(
@@ -108,7 +109,7 @@ export default function ModalDetallePedido({ abierto, onClose, pedido }) {
                                 ))}
                                 {pedido.tiene_observaciones_fisicas && (
                                     <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold gelia-estado-vivo gelia-estado-vivo--aviso">
-                                        Observaciones CEDIS
+                                        {respondeTienda ? 'Observaciones de Tienda' : 'Observaciones CEDIS'}
                                     </span>
                                 )}
                         </div>
@@ -120,7 +121,7 @@ export default function ModalDetallePedido({ abierto, onClose, pedido }) {
                         )}
                     </header>
                     <NavegacionPedido secciones={[
-                        { id: 'detalle-respuesta', label: 'Respuesta CEDIS' },
+                        { id: 'detalle-respuesta', label: respondeTienda ? 'Respuesta de Tienda' : 'Respuesta CEDIS' },
                         { id: 'detalle-compartido', label: 'Pedido compartido' },
                         { id: 'detalle-datos', label: 'Datos del pedido' },
                         { id: 'detalle-envio', label: 'Entrega' },
@@ -129,17 +130,25 @@ export default function ModalDetallePedido({ abierto, onClose, pedido }) {
                     <div className="gelia-modal-body p-4 md:p-6">
                         <div className="gelia-pedidos-detalle-grid">
                         <aside className="gelia-pedidos-referencia">
-                            <ReferenciaPedidoCompartido id="detalle-compartido" pedido={pedido} onVerGaleria={(documentos, indice) => setDocPreview({ documentos, indice })} />
+                            <ReferenciaPedidoCompartido
+                                id="detalle-compartido"
+                                pedido={pedido}
+                                descripcion={respondeTienda
+                                    ? 'Compara las piezas solicitadas con la revisión y las evidencias de Tienda.'
+                                    : undefined}
+                                onVerGaleria={(documentos, indice) => setDocPreview({ documentos, indice })}
+                            />
                         </aside>
                         <div className="min-w-0 space-y-4">
                         <section id="detalle-respuesta" tabIndex={-1} className="space-y-3">
                             <dl className="gelia-pedidos-resumen">
-                                <div><dt>Respuesta CEDIS</dt><dd>{pedido.pesaje_respondido_at ? 'Recibida' : (pedido.resguardo_apartado_at ? 'Apartado confirmado' : 'Pendiente')}</dd></div>
+                                <div><dt>{respondeTienda ? 'Respuesta de Tienda' : 'Respuesta CEDIS'}</dt><dd>{pedido.pesaje_respondido_at ? 'Recibida' : (pedido.resguardo_apartado_at ? 'Apartado confirmado' : 'Pendiente')}</dd></div>
                                 <div><dt>{pedidoRequiereLogistica(pedido) ? 'Peso cobrado' : 'Bultos aproximados'}</dt><dd>{pedidoRequiereLogistica(pedido) ? `${pedido.peso_cobrado_guia_kg ?? '—'} kg` : (pedido.numero_cajas ?? '—')}</dd></div>
                                 <div><dt>Total a cobrar</dt><dd>{formatearMoneda(pedido.total_a_cobrar)}</dd></div>
                             </dl>
                         <SeccionRevisionFisicaPedido
                             pedido={pedido}
+                            titulo={respondeTienda ? 'Revisión física de Tienda' : undefined}
                             onVerDoc={setDocPreview}
                             onVerGaleria={(documentos, indice) => setDocPreview({ documentos, indice })}
                             puedeAtender={puedeAtender}
@@ -147,7 +156,7 @@ export default function ModalDetallePedido({ abierto, onClose, pedido }) {
                         />
 
                             {!pedido.estado_fisico_general && !(pedido.revisiones_producto || pedido.revisionesProducto || []).length && !pedido.pesaje_respondido_at && (
-                                <p className="text-sm theme-text-muted m-0 px-1">La revisión y sus evidencias aparecerán aquí cuando CEDIS registre su respuesta.</p>
+                                <p className="text-sm theme-text-muted m-0 px-1">La revisión y sus evidencias aparecerán aquí cuando {respondeTienda ? 'Tienda registre su respuesta' : 'CEDIS registre su respuesta'}.</p>
                             )}
                         </section>
                         <section id="detalle-datos" tabIndex={-1} className="gelia-pedidos-seccion space-y-4">
