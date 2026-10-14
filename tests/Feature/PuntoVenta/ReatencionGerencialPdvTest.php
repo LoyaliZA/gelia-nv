@@ -6,6 +6,7 @@ use App\Events\PuntoVenta\TurnoAsignado;
 use App\Events\PuntoVenta\TurnoReatencion;
 use App\Models\ConfiguracionSistema;
 use App\Models\PuntoVenta\MotivoPausaPdv;
+use App\Models\PuntoVenta\SucursalDiaOperacionPdv;
 use App\Models\PuntoVenta\TurnoPdv;
 use App\Models\PuntoVenta\TurnoPdvAtencion;
 use App\Models\PuntoVenta\TurnoPdvEvento;
@@ -53,7 +54,7 @@ class ReatencionGerencialPdvTest extends TestCase
         $this->seedPlazos();
 
         $this->sucursal = Sucursal::factory()->create(['nombre' => 'Sucursal Reatención']);
-        \App\Models\PuntoVenta\SucursalDiaOperacionPdv::factory()->create([
+        SucursalDiaOperacionPdv::factory()->create([
             'sucursal_id' => $this->sucursal->id,
             'fecha_operativa' => now()->toDateString(),
             'acepta_altas' => true,
@@ -90,6 +91,20 @@ class ReatencionGerencialPdvTest extends TestCase
         $candidatos = collect($response->json('reatencion.0.candidatos'))->pluck('id');
         $this->assertTrue($candidatos->contains($this->vendedorDestino->id));
         $this->assertFalse($candidatos->contains($this->vendedorAnterior->id));
+    }
+
+    public function test_gerente_cierra_y_reasigna_con_datos_de_operacion_general(): void
+    {
+        $this->assertCierreYReasignacionDesdeOperacionGeneral();
+    }
+
+    public function test_super_admin_cierra_y_reasigna_con_datos_de_operacion_general(): void
+    {
+        Role::findByName('Super Admin', 'web')->syncPermissions(PuntoVentaModulo::permisosIniciales());
+        $this->gerente->syncPermissions([]);
+        $this->gerente->assignRole('Super Admin');
+
+        $this->assertCierreYReasignacionDesdeOperacionGeneral();
     }
 
     public function test_matchmaker_no_toma_re_atenciones(): void
@@ -397,6 +412,52 @@ class ReatencionGerencialPdvTest extends TestCase
             ->assertJsonPath('atencion.user_id', $this->vendedorAnterior->id);
 
         Event::assertDispatched(TurnoReatencion::class, 1);
+    }
+
+    private function assertCierreYReasignacionDesdeOperacionGeneral(): void
+    {
+        $this->activarVendedor($this->vendedorAnterior);
+        $this->activarVendedor($this->vendedorDestino);
+        $contexto = $this->crearTurnoAsignado($this->vendedorAnterior);
+        $contexto['turno']->update(['version' => 7]);
+
+        $response = $this->actingAs($this->gerente)
+            ->getJson(route('punto_venta.operacion.datos'))
+            ->assertOk();
+        $atencion = collect($response->json('equipo'))
+            ->firstWhere('id', $this->vendedorAnterior->id)['atencion_actual'];
+
+        $this->assertSame(7, $atencion['turno_version']);
+        $this->postJson(route('punto_venta.turnos.cerrar_atencion', $atencion['turno_id']), [
+            'version' => $atencion['turno_version'],
+            'idempotency_key' => 'pdv:cierre:operacion-general',
+            'motivo' => MotivosCierreAtencionTurnoPdv::VENTA,
+        ])->assertOk()
+            ->assertJsonPath('turno.estado', TurnoPdv::ESTADO_EN_REATENCION)
+            ->assertJsonPath('turno.version', 8);
+
+        $this->assertNotNull($contexto['atencion']->fresh()->fin_at);
+
+        $response = $this->getJson(route('punto_venta.operacion.datos'))->assertOk();
+        $turno = collect($response->json('reatencion'))
+            ->firstWhere('id', $contexto['turno']->id);
+        $this->assertNotNull($turno);
+        $this->assertContains($this->vendedorDestino->id, array_column($turno['candidatos'], 'id'));
+
+        $this->postJson(route('punto_venta.turnos.asignar_reatencion', $turno['id']), [
+            'version' => $turno['version'],
+            'destino_user_id' => $this->vendedorDestino->id,
+            'idempotency_key' => 'pdv:reasignacion:operacion-general',
+        ])->assertOk()
+            ->assertJsonPath('turno.estado', TurnoPdv::ESTADO_ASIGNADO)
+            ->assertJsonPath('atencion.user_id', $this->vendedorDestino->id);
+
+        $response = $this->getJson(route('punto_venta.operacion.datos'))->assertOk();
+        $atencionDestino = collect($response->json('equipo'))
+            ->firstWhere('id', $this->vendedorDestino->id)['atencion_actual'];
+        $this->assertSame($contexto['turno']->id, $atencionDestino['turno_id']);
+        $this->assertSame(9, $atencionDestino['turno_version']);
+        $response->assertJsonCount(0, 'reatencion');
     }
 
     private function activarVendedor(User $vendedor): void

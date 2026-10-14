@@ -138,6 +138,7 @@ class GestionVendedoresPdvTest extends TestCase
             'estado' => TurnoPdv::ESTADO_ASIGNADO,
             'snapshot_cliente_nombre' => 'Cliente Compacto',
             'snapshot_nombre_llamado' => 'Cliente Compacto',
+            'version' => 7,
         ]);
 
         $atencion = TurnoPdvAtencion::factory()->create([
@@ -155,6 +156,8 @@ class GestionVendedoresPdvTest extends TestCase
         $this->assertSame('atendiendo', $miembro['estado_vendedor']);
         $this->assertSame('Cliente Compacto', $miembro['atencion_actual']['cliente']);
         $this->assertSame($turno->folio, $miembro['atencion_actual']['folio']);
+        $this->assertSame($turno->id, $miembro['atencion_actual']['turno_id']);
+        $this->assertSame(7, $miembro['atencion_actual']['turno_version']);
         $this->assertFalse($miembro['atencion_actual']['atencion_en_curso']);
         $this->assertNotEmpty($miembro['atencion_actual']['espera_inicial_expira_at']);
         $this->assertArrayHasKey('plazos_turnos', $response->json());

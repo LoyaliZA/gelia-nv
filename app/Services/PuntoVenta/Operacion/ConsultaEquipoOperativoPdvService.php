@@ -75,7 +75,7 @@ class ConsultaEquipoOperativoPdvService
 
         $atencionesAbiertas = TurnoPdvAtencion::query()
             ->with([
-                'turno:id,folio,snapshot_nombre_llamado,snapshot_cliente_nombre,servicio',
+                'turno:id,folio,snapshot_nombre_llamado,snapshot_cliente_nombre,servicio,version',
                 'prorroga',
             ])
             ->whereIn('user_id', $userIds)

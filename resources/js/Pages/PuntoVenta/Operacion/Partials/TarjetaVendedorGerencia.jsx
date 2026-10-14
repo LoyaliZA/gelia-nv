@@ -123,7 +123,11 @@ export default function TarjetaVendedorGerencia({
     const cerrarAtencion = async ({ motivo, motivoDetalle }) => {
         const turnoId = persona.atencion_actual?.turno_id;
         const version = persona.atencion_actual?.turno_version;
-        if (!turnoId || !version || cargando) return;
+        if (cargando) return;
+        if (!turnoId || !Number.isInteger(version) || version < 1) {
+            onError?.('No se pudo obtener el estado de la atención. Actualiza la operación e intenta de nuevo.');
+            return;
+        }
 
         setCargando(true);
         onError?.(null);
