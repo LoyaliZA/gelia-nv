@@ -2,11 +2,11 @@
 
 namespace Tests\Feature\PuntoVenta;
 
+use App\Models\Almacen;
 use App\Models\CatalogoListaDescuento;
 use App\Models\Cliente;
 use App\Models\ConfiguracionSistema;
 use App\Models\Departamento;
-use App\Models\Almacen;
 use App\Models\Producto;
 use App\Models\PuntoVenta\ResguardoPdv;
 use App\Models\PuntoVenta\ResguardoPdvBulto;
@@ -21,6 +21,7 @@ use App\Services\PuntoVenta\Resguardos\CrearResguardoManualPdvService;
 use App\Services\PuntoVenta\Resguardos\RegistroManualResguardoPdvConfig;
 use App\Support\PuntoVenta\Resguardos\BandejaResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\BultosEsperadosResguardoPdv;
+use App\Support\PuntoVenta\Resguardos\TraductorMetadataEventoResguardoPdv;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -311,6 +312,210 @@ class RegistroManualResguardoPdvTest extends TestCase
             ->assertJsonValidationErrors(['piezas']);
     }
 
+    public function test_custodia_sin_piezas_continua_con_omision_en_bitacora(): void
+    {
+        $this->activarRegistroManual();
+        $this->usuario->givePermissionTo([
+            PuntoVentaModulo::PERMISO_RESGUARDOS_FLUJO_COMPLETO,
+            PuntoVentaModulo::PERMISO_RESGUARDOS_CONFIRMAR_LLEGADA,
+            PuntoVentaModulo::PERMISO_RESGUARDOS_CONFIRMAR_CUSTODIA,
+        ]);
+        $producto = $this->crearProducto();
+        $resguardo = $this->resguardoManualEnRecepcion($producto);
+
+        $sinPiezas = $resguardo->snapshot_json;
+        $sinPiezas['piezas'] = [];
+        $resguardo->update(['snapshot_json' => $sinPiezas]);
+        $resguardo->refresh();
+
+        $folio = $resguardo->bultos()->value('folio');
+        $almacenId = (int) $resguardo->almacen_id;
+
+        $this->actingAs($this->usuario)
+            ->putJson(route('punto_venta.resguardos.custodia', $resguardo), [
+                'version' => $resguardo->version,
+                'idempotency_key' => 'pdv:custodia:omitir:sin-motivo',
+                'almacen_id' => $almacenId,
+                'bultos' => [[
+                    'folio' => $folio,
+                    'tipo' => 'caja',
+                    'condicion' => 'bueno',
+                    'piezas' => 1,
+                ]],
+                'omisiones' => [[
+                    'campo' => 'piezas',
+                    'motivo' => 'corto',
+                ]],
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['omisiones.0.motivo']);
+
+        $this->actingAs($this->usuario)
+            ->putJson(route('punto_venta.resguardos.custodia', $resguardo), [
+                'version' => $resguardo->version,
+                'idempotency_key' => 'pdv:custodia:omitir:1',
+                'almacen_id' => $almacenId,
+                'bultos' => [[
+                    'folio' => $folio,
+                    'tipo' => 'caja',
+                    'condicion' => 'bueno',
+                    'piezas' => 1,
+                ]],
+                'omisiones' => [[
+                    'campo' => 'piezas',
+                    'motivo' => 'El pedido se registró sin detalle',
+                ]],
+            ])
+            ->assertOk()
+            ->assertJsonPath('resguardo.custodia_completa', true);
+
+        $evento = ResguardoPdvEvento::query()
+            ->where('resguardo_id', $resguardo->id)
+            ->where('tipo_evento', ResguardoPdvEvento::TIPO_CUSTODIA_COMPLETA)
+            ->first();
+        $this->assertNotNull($evento);
+        $this->assertSame('piezas', $evento->snapshot_json['omisiones'][0]['campo'] ?? null);
+        $this->assertSame('El pedido se registró sin detalle', $evento->snapshot_json['omisiones'][0]['motivo'] ?? null);
+        $this->assertSame($this->usuario->id, $evento->snapshot_json['omisiones'][0]['actor_id'] ?? null);
+
+        $filas = TraductorMetadataEventoResguardoPdv::metadataLegible(
+            $evento->snapshot_json,
+            $evento->tipo_evento,
+            true,
+            true,
+        );
+        $omitidas = collect($filas)->firstWhere('clave', 'omisiones');
+        $this->assertSame(
+            'Piezas omitidas: El pedido se registró sin detalle',
+            $omitidas['valor'] ?? null,
+        );
+    }
+
+    public function test_custodia_registra_piezas_tardias_sin_marcar_omision(): void
+    {
+        $this->activarRegistroManual();
+        $this->usuario->givePermissionTo([
+            PuntoVentaModulo::PERMISO_RESGUARDOS_FLUJO_COMPLETO,
+            PuntoVentaModulo::PERMISO_RESGUARDOS_CONFIRMAR_LLEGADA,
+            PuntoVentaModulo::PERMISO_RESGUARDOS_CONFIRMAR_CUSTODIA,
+        ]);
+        $producto = $this->crearProducto();
+        $resguardo = $this->resguardoManualEnRecepcion($producto);
+
+        $this->actingAs($this->usuario)
+            ->putJson(route('punto_venta.resguardos.custodia', $resguardo), [
+                'version' => $resguardo->version,
+                'idempotency_key' => 'pdv:custodia:omitir-presente',
+                'almacen_id' => $resguardo->almacen_id,
+                'bultos' => [[
+                    'folio' => $resguardo->bultos()->value('folio'),
+                    'tipo' => 'caja',
+                    'condicion' => 'bueno',
+                    'piezas' => 1,
+                ]],
+                'omisiones' => [[
+                    'campo' => 'piezas',
+                    'motivo' => 'No aplica porque ya están',
+                ]],
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['omisiones.0.campo']);
+
+        $sinPiezas = $resguardo->snapshot_json;
+        $sinPiezas['piezas'] = [];
+        $resguardo->update(['snapshot_json' => $sinPiezas]);
+        $resguardo->refresh();
+
+        $this->actingAs($this->usuario)
+            ->putJson(route('punto_venta.resguardos.custodia', $resguardo), [
+                'version' => $resguardo->version,
+                'idempotency_key' => 'pdv:custodia:piezas-tardias',
+                'almacen_id' => $resguardo->almacen_id,
+                'bultos' => [[
+                    'folio' => $resguardo->bultos()->value('folio'),
+                    'tipo' => 'caja',
+                    'condicion' => 'bueno',
+                    'piezas' => 1,
+                ]],
+                'piezas' => [[
+                    'producto_id' => $producto->id,
+                    'cantidad' => 2,
+                    'nota' => 'Conteo en custodia',
+                ]],
+            ])
+            ->assertOk();
+
+        $resguardo->refresh();
+        $this->assertSame(2, (int) ($resguardo->snapshot_json['piezas'][0]['cantidad'] ?? 0));
+        $this->assertSame('Conteo en custodia', $resguardo->snapshot_json['piezas'][0]['nota'] ?? null);
+
+        $evento = ResguardoPdvEvento::query()
+            ->where('resguardo_id', $resguardo->id)
+            ->where('tipo_evento', ResguardoPdvEvento::TIPO_CUSTODIA_COMPLETA)
+            ->first();
+        $this->assertNotNull($evento);
+        $this->assertArrayNotHasKey('omisiones', $evento->snapshot_json ?? []);
+    }
+
+    public function test_recepcion_sin_imagenes_avanza_solo_con_omision(): void
+    {
+        $this->activarRegistroManual();
+        $this->usuario->givePermissionTo(PuntoVentaModulo::PERMISO_RESGUARDOS_CONFIRMAR_LLEGADA);
+
+        $payload = $this->payloadAlta([
+            'idempotency_key' => 'pdv:man:sin-img',
+            'folio' => 'REM-SIN-IMG',
+        ]);
+        unset($payload['archivo_ticket'], $payload['foto_paquete']);
+
+        $this->actingAs($this->usuario)
+            ->post(route('punto_venta.resguardos.store'), $payload, ['Accept' => 'application/json'])
+            ->assertCreated()
+            ->assertJsonPath('resguardo.estado', ResguardoPdv::ESTADO_PENDIENTE_RECEPCION);
+
+        $resguardo = ResguardoPdv::query()->where('snapshot_folio', 'REM-SIN-IMG')->firstOrFail();
+
+        $this->actingAs($this->usuario)
+            ->putJson(route('punto_venta.resguardos.recepcion', $resguardo), [
+                'version' => $resguardo->version,
+                'idempotency_key' => 'pdv:rec:sin-img:bloqueada',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['archivo_ticket', 'foto_paquete']);
+
+        $this->actingAs($this->usuario)
+            ->putJson(route('punto_venta.resguardos.recepcion', $resguardo), [
+                'version' => $resguardo->version,
+                'idempotency_key' => 'pdv:rec:sin-img:1',
+                'omisiones' => [
+                    ['campo' => 'ticket', 'motivo' => 'El pedido se registró sin ticket'],
+                    ['campo' => 'foto_paquete', 'motivo' => 'El pedido se registró sin foto'],
+                ],
+            ])
+            ->assertOk();
+
+        $resguardo->refresh();
+        $this->assertNotSame(ResguardoPdv::ESTADO_PENDIENTE_RECEPCION, $resguardo->estado);
+
+        $evento = ResguardoPdvEvento::query()
+            ->where('resguardo_id', $resguardo->id)
+            ->where('tipo_evento', ResguardoPdvEvento::TIPO_RECEPCION_COMPLETA)
+            ->first();
+        $this->assertNotNull($evento);
+        $campos = collect($evento->snapshot_json['omisiones'] ?? [])->pluck('campo')->all();
+        $this->assertEqualsCanonicalizing(['ticket', 'foto_paquete'], $campos);
+
+        $filas = TraductorMetadataEventoResguardoPdv::metadataLegible(
+            $evento->snapshot_json,
+            $evento->tipo_evento,
+            true,
+            true,
+        );
+        $omitidas = collect($filas)->firstWhere('clave', 'omisiones');
+        $this->assertStringContainsString('Ticket omitido: El pedido se registró sin ticket', (string) ($omitidas['valor'] ?? ''));
+        $this->assertStringContainsString('Foto del paquete omitida: El pedido se registró sin foto', (string) ($omitidas['valor'] ?? ''));
+    }
+
     public function test_reintento_idempotente_no_duplica(): void
     {
         $this->activarRegistroManual();
@@ -491,6 +696,50 @@ class RegistroManualResguardoPdvTest extends TestCase
             ->getJson(route('punto_venta.resguardos.productos.buscar', ['q' => 'Reloj']))
             ->assertOk()
             ->assertJsonPath('data.0.id', $producto->id);
+    }
+
+    private function resguardoManualEnRecepcion(Producto $producto): ResguardoPdv
+    {
+        $folio = 'REM-'.$producto->id;
+
+        $this->actingAs($this->usuario)
+            ->post(route('punto_venta.resguardos.store'), $this->payloadAlta([
+                'idempotency_key' => 'pdv:man:'.$producto->id,
+                'folio' => $folio,
+                'cantidad_bultos_esperada' => 1,
+                'piezas' => [
+                    ['producto_id' => $producto->id, 'cantidad' => 1],
+                ],
+            ]), ['Accept' => 'application/json'])
+            ->assertCreated();
+
+        $resguardo = ResguardoPdv::query()->where('snapshot_folio', $folio)->firstOrFail();
+
+        $this->actingAs($this->usuario)
+            ->putJson(route('punto_venta.resguardos.recepcion', $resguardo), [
+                'version' => $resguardo->version,
+                'idempotency_key' => 'pdv:rec:'.$producto->id,
+                'piezas' => [
+                    ['producto_id' => $producto->id, 'cantidad' => 1],
+                ],
+            ])
+            ->assertOk();
+
+        $almacen = Almacen::query()->create([
+            'codigo' => 'PISO-'.$producto->id,
+            'nombre' => 'Piso '.$producto->id,
+            'sucursal_id' => $this->sucursal->id,
+            'activo' => true,
+        ]);
+
+        $resguardo->refresh();
+        $resguardo->update([
+            'estado' => ResguardoPdv::ESTADO_EN_RECEPCION,
+            'almacen_id' => $almacen->id,
+        ]);
+        $resguardo->bultos()->update(['estado' => ResguardoPdvBulto::ESTADO_RECIBIDO_GERENTE]);
+
+        return $resguardo->fresh();
     }
 
     /**

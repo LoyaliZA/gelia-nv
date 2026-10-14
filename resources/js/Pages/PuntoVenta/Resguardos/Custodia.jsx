@@ -14,6 +14,7 @@ export default function Custodia({
     almacenes = [],
     catalogos = {},
     admite_confirmacion_custodia: admiteConfirmacion = false,
+    flujo_completo: flujoCompleto = false,
 }) {
     const titulo = resguardo?.snapshot_folio || `Resguardo #${resguardo?.id}`;
     const { enviar, enviando, error, exito } = useConfirmacionCustodia({
@@ -62,6 +63,7 @@ export default function Custodia({
                         resguardo={resguardo}
                         almacenes={almacenes}
                         catalogos={catalogos}
+                        flujoCompleto={Boolean(flujoCompleto)}
                         enviando={enviando}
                         error={error}
                         onEnviar={enviar}

@@ -4,6 +4,8 @@ import { geliaCardClass, THEME_BTN_PRIMARY } from '../../../../utils/geliaTheme'
 import { titularResguardo, etiquetaRetiroResguardo } from './resguardosUtils';
 import { ChipEvidenciasBultosEmpaque } from './ModalEvidenciasBultosEmpaque';
 import BusquedaProductoResguardo from './BusquedaProductoResguardo';
+import BotonesCapturaEvidencia from './BotonesCapturaEvidencia';
+import PanelFaltantesResguardo from './PanelFaltantesResguardo';
 import useToastAlCambiar from '../../../../hooks/useToastAlCambiar';
 
 function CampoSoloLectura({ label, value }) {
@@ -29,8 +31,12 @@ export default function FormularioConfirmarRecepcionResguardo({
     const etiquetaRetiro = etiquetaRetiroResguardo(resguardo);
     const registroManual = resguardo?.registro_manual;
     const corrigePiezas = Boolean(flujoCompleto && registroManual);
+    const usosEvidencia = new Set((registroManual?.evidencias || []).map((item) => item.uso));
     const [piezas, setPiezas] = useState([]);
     const [errorPiezas, setErrorPiezas] = useState(null);
+    const [archivoTicket, setArchivoTicket] = useState(null);
+    const [fotoPaquete, setFotoPaquete] = useState(null);
+    const [motivoOmision, setMotivoOmision] = useState('');
 
     useEffect(() => {
         const iniciales = (registroManual?.piezas || []).map((linea) => ({
@@ -49,15 +55,26 @@ export default function FormularioConfirmarRecepcionResguardo({
 
     useToastAlCambiar(error, 'error');
 
+    const faltaTicket = Boolean(registroManual) && !usosEvidencia.has('ticket') && !archivoTicket;
+    const faltaPaquete = Boolean(registroManual) && !usosEvidencia.has('paquete') && !fotoPaquete;
+    const faltaPiezas = corrigePiezas && piezas.length < 1;
+    const hayFaltantes = faltaPiezas || faltaTicket || faltaPaquete;
+
     const confirmarEnvio = async (e) => {
         e.preventDefault();
-        if (corrigePiezas && piezas.length < 1) {
-            setErrorPiezas('Registre las piezas del pedido antes de confirmar la recepción.');
+        const motivo = motivoOmision.trim();
+        if (hayFaltantes && motivo.length < 8) {
+            setErrorPiezas('Indique el motivo para omitir los datos que faltan, o regístrelos ahora.');
             return;
         }
         setErrorPiezas(null);
-        await onEnviar?.(corrigePiezas ? {
-            piezas: piezas.map((linea) => ({
+        const omisiones = [];
+        if (faltaPiezas) omisiones.push({ campo: 'piezas', motivo });
+        if (faltaTicket) omisiones.push({ campo: 'ticket', motivo });
+        if (faltaPaquete) omisiones.push({ campo: 'foto_paquete', motivo });
+        const payload = {};
+        if (corrigePiezas && piezas.length > 0) {
+            payload.piezas = piezas.map((linea) => ({
                 producto_id: linea.producto_id,
                 cantidad: Number.parseInt(linea.cantidad, 10) || 1,
                 nota: String(linea.nota || '').trim() || null,
@@ -65,8 +82,12 @@ export default function FormularioConfirmarRecepcionResguardo({
                 unica_pieza: Boolean(linea.unica_pieza),
                 mejor_ejemplar: Boolean(linea.mejor_ejemplar),
                 evidencia_ids: linea.evidencia_ids || [],
-            })),
-        } : undefined);
+            }));
+        }
+        if (omisiones.length > 0) payload.omisiones = omisiones;
+        if (archivoTicket) payload.archivoTicket = archivoTicket;
+        if (fotoPaquete) payload.fotoPaquete = fotoPaquete;
+        await onEnviar?.(payload);
     };
 
     return (
@@ -103,6 +124,41 @@ export default function FormularioConfirmarRecepcionResguardo({
                 </p>
             </div>
 
+            {hayFaltantes && (
+                <PanelFaltantesResguardo
+                    detalle="Registre las piezas o las imágenes que faltan, u omítalas con un motivo para que el pedido continúe."
+                    motivo={motivoOmision}
+                    onMotivo={setMotivoOmision}
+                    error={errorPiezas}
+                    deshabilitado={enviando}
+                >
+                    {faltaTicket && (
+                        <div className="space-y-2">
+                            <p className="text-xs font-semibold theme-text-main m-0">Ticket</p>
+                            <BotonesCapturaEvidencia
+                                onAgregar={(archivos) => setArchivoTicket(archivos?.[0] || null)}
+                                deshabilitado={enviando}
+                                camaraMultiple={false}
+                                galeriaMultiple={false}
+                                acceptGaleria="image/*,application/pdf"
+                                etiquetaGaleria="Archivo"
+                            />
+                        </div>
+                    )}
+                    {faltaPaquete && (
+                        <div className="space-y-2">
+                            <p className="text-xs font-semibold theme-text-main m-0">Foto del paquete</p>
+                            <BotonesCapturaEvidencia
+                                onAgregar={(archivos) => setFotoPaquete(archivos?.[0] || null)}
+                                deshabilitado={enviando}
+                                camaraMultiple={false}
+                                galeriaMultiple={false}
+                            />
+                        </div>
+                    )}
+                </PanelFaltantesResguardo>
+            )}
+
             {corrigePiezas && (
                 <div className={`${geliaCardClass()} p-5 space-y-3`}>
                     <h2 className="text-sm font-black uppercase tracking-widest theme-text-main m-0">Piezas del pedido</h2>
@@ -134,7 +190,6 @@ export default function FormularioConfirmarRecepcionResguardo({
                         )))}
                         deshabilitado={enviando}
                     />
-                    {errorPiezas && <p className="text-xs font-semibold theme-text-peligro m-0">{errorPiezas}</p>}
                 </div>
             )}
 

@@ -12,7 +12,8 @@ use App\Models\PuntoVenta\ResguardoPdvEvidencia;
 use App\Models\User;
 use App\Services\PuntoVenta\PuntoVentaModulo;
 use App\Support\PuntoVenta\Resguardos\EstadoResguardoPdv;
-use App\Support\PuntoVenta\Resguardos\EvidenciaMinimaRegistroManualPdv;
+use App\Support\PuntoVenta\Resguardos\NormalizadorPiezasRegistroManualPdv;
+use App\Support\PuntoVenta\Resguardos\OmisionRequisitoResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\RutaAlmacenamientoResguardoPdv;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -39,6 +40,8 @@ class RegistrarConfirmacionCustodiaPdvService
     /**
      * @param  list<array{folio: string, tipo?: string, condicion: string, piezas?: int}>  $bultos
      * @param  list<UploadedFile>  $evidencias
+     * @param  list<array{producto_id: int, sku: string|null, descripcion: string|null, cantidad: int, nota: string|null}>|null  $piezas
+     * @param  list<array{campo?: string, motivo?: string}>  $omisiones
      */
     public function ejecutar(
         ResguardoPdv $resguardo,
@@ -48,6 +51,8 @@ class RegistrarConfirmacionCustodiaPdvService
         int $almacenId,
         array $bultos,
         array $evidencias = [],
+        ?array $piezas = null,
+        array $omisiones = [],
     ): ResguardoPdv {
         $this->alcance->asegurarMutacionPiso(
             $actor,
@@ -66,6 +71,8 @@ class RegistrarConfirmacionCustodiaPdvService
                 $almacenId,
                 $bultos,
                 $evidencias,
+                $piezas,
+                $omisiones,
                 &$pathsEscritos,
             ) {
                 $resguardo = ResguardoPdv::query()
@@ -79,7 +86,15 @@ class RegistrarConfirmacionCustodiaPdvService
                 }
 
                 $this->assertVersionYEstado($resguardo, $versionEsperada);
-                $this->exigirPiezasSiCompleto($resguardo, $actor);
+                if (is_array($piezas) && $piezas !== [] && $this->flujoCompleto($actor)) {
+                    $this->guardarPiezas($resguardo, $piezas);
+                }
+                $omisionesRegistradas = OmisionRequisitoResguardoPdv::resolver(
+                    $omisiones,
+                    OmisionRequisitoResguardoPdv::faltantes($resguardo, $this->flujoCompleto($actor), false),
+                    $actor->id,
+                    'custodia',
+                );
                 $almacen = $this->resolverAlmacenUbicacion($resguardo, $almacenId);
                 $bultosNormalizados = $this->normalizarBultosCustodia($resguardo, $bultos);
 
@@ -141,7 +156,7 @@ class RegistrarConfirmacionCustodiaPdvService
                             'cantidad_esperada' => $esperada,
                             'cantidad_pendiente_custodia' => EstadoResguardoPdv::cantidadPendienteCustodia($resguardo),
                             'custodia_completa' => $totalEnCustodia >= $esperada,
-                        ],
+                        ] + ($omisionesRegistradas === [] ? [] : ['omisiones' => $omisionesRegistradas]),
                         'idempotency_key' => $idempotencyKey,
                     ]);
                 } catch (UniqueConstraintViolationException $e) {
@@ -377,22 +392,20 @@ class RegistrarConfirmacionCustodiaPdvService
         }
     }
 
-    private function exigirPiezasSiCompleto(ResguardoPdv $resguardo, User $actor): void
+    private function flujoCompleto(User $actor): bool
     {
-        if (! $this->alcance->tienePermisoPdv($actor, PuntoVentaModulo::PERMISO_RESGUARDOS_FLUJO_COMPLETO)) {
-            return;
-        }
+        return $this->alcance->tienePermisoPdv($actor, PuntoVentaModulo::PERMISO_RESGUARDOS_FLUJO_COMPLETO);
+    }
 
-        if (! EvidenciaMinimaRegistroManualPdv::esManual($resguardo)) {
-            return;
-        }
-
+    /**
+     * @param  list<array{producto_id: int, cantidad: int, nota?: string|null}>  $piezas
+     */
+    private function guardarPiezas(ResguardoPdv $resguardo, array $piezas): void
+    {
         $snapshot = is_array($resguardo->snapshot_json) ? $resguardo->snapshot_json : [];
-        $piezas = $snapshot['piezas'] ?? [];
-        if (! is_array($piezas) || $piezas === []) {
-            throw ValidationException::withMessages([
-                'piezas' => 'Registre las piezas del pedido antes de confirmar la custodia.',
-            ]);
-        }
+        $snapshot['piezas'] = $piezas;
+        $snapshot['cantidad_piezas'] = NormalizadorPiezasRegistroManualPdv::cantidad($piezas);
+        $resguardo->update(['snapshot_json' => $snapshot]);
+        $resguardo->refresh();
     }
 }

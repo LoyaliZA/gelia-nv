@@ -6,6 +6,8 @@ use App\Http\Requests\PuntoVenta\PdvOperacionPisoRequest;
 use App\Models\PuntoVenta\ResguardoPdv;
 use App\Models\PuntoVenta\ResguardoPdvBulto;
 use App\Services\PuntoVenta\PuntoVentaModulo;
+use App\Support\PuntoVenta\Resguardos\NormalizadorPiezasRegistroManualPdv;
+use App\Support\PuntoVenta\Resguardos\OmisionRequisitoResguardoPdv;
 use Illuminate\Validation\Rule;
 
 class RegistrarConfirmacionCustodiaPdvRequest extends PdvOperacionPisoRequest
@@ -41,6 +43,16 @@ class RegistrarConfirmacionCustodiaPdvRequest extends PdvOperacionPisoRequest
             'bultos.*.piezas' => ['sometimes', 'integer', 'min:1'],
             'evidencias' => ['sometimes', 'array'],
             'evidencias.*' => ['file', 'image', 'max:10240'],
+            'piezas' => ['sometimes', 'array', 'max:200'],
+            'piezas.*.producto_id' => ['required', 'integer', 'exists:productos,id'],
+            'piezas.*.cantidad' => ['required', 'integer', 'min:1', 'max:9999'],
+            'piezas.*.nota' => ['nullable', 'string', 'max:500'],
+            'piezas.*.estado_fisico' => ['nullable', 'string', 'in:'.implode(',', NormalizadorPiezasRegistroManualPdv::ESTADOS)],
+            'piezas.*.unica_pieza' => ['sometimes', 'boolean'],
+            'piezas.*.mejor_ejemplar' => ['sometimes', 'boolean'],
+            'piezas.*.evidencia_ids' => ['sometimes', 'array', 'max:8'],
+            'piezas.*.evidencia_ids.*' => ['integer', 'min:1'],
+            ...OmisionRequisitoResguardoPdv::reglas(),
         ];
     }
 
@@ -49,6 +61,11 @@ class RegistrarConfirmacionCustodiaPdvRequest extends PdvOperacionPisoRequest
      */
     public function payloadOperacion(): array
     {
-        return $this->validated();
+        $datos = $this->validated();
+        if ($this->exists('piezas')) {
+            $datos['piezas'] = NormalizadorPiezasRegistroManualPdv::normalizar($datos['piezas'] ?? []);
+        }
+
+        return $datos;
     }
 }

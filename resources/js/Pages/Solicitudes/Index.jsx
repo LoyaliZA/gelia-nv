@@ -8,9 +8,9 @@ import { createPortal } from 'react-dom';
 import { Head, Link, router } from '@inertiajs/react';
 import {
     Clock, Plus, MoreVertical, Edit2, CheckCircle2, AlertOctagon, Sparkles,
-    History, CheckSquare, CreditCard, User, Copy, Check, Tag, TrendingUp, ShieldAlert, Users,
+    History, CheckSquare, CreditCard, User, Copy, Check, Tag, TrendingUp, ShieldAlert,
     ChevronLeft, ChevronRight, Trash2, FileImage, X, MessageSquare, AlertTriangle, Eye, Ban, XCircle,
-    FileSpreadsheet, FileText, FolderOpen, Download, Calculator, ChevronDown
+    FileSpreadsheet, FileText, FolderOpen, Download, Calculator, ChevronDown, ArrowRight, Store
 } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
 import GeliaLoader from '../../Components/GeliaLoader';
@@ -25,19 +25,21 @@ import ModalEjercicioEscalonamiento from './Partials/ModalEjercicioEscalonamient
 import FiltrosSolicitudes from '@/Components/Filtros/FiltrosSolicitudes';
 import useFiltrosSolicitudesPage from '@/hooks/useFiltrosSolicitudesPage';
 import { GELIA_ESTADO_VIVO_TONO, THEME_BTN_PRIMARY } from '../../utils/geliaTheme';
-import { badgeClaseEstadoSolicitud, claseEtiquetaLista, claseEtiquetaTipoCliente, esListaDiamante, PANEL_AVISO, PANEL_ERROR, PANEL_EXITO, PANEL_NOTA } from './Partials/solicitudesStyles';
+import { badgeClaseEstadoSolicitud, CHIP_NEUTRO, claseEtiquetaLista, claseEtiquetaTipoCliente, esListaDiamante, iconoTipoCliente, PANEL_AVISO, PANEL_ERROR, PANEL_EXITO, PANEL_NOTA } from './Partials/solicitudesStyles';
 import { puedeEmitirConsultaSolicitud, puedeResponderConsultaSolicitud } from '../../utils/permisos';
 import { idEstadoPorNombre } from '../Facturas/Partials/facturasFiltros';
 
 const BTN_SECUNDARIO = 'inline-flex items-center justify-center gap-2 rounded-xl border theme-border theme-element px-3 py-2 text-sm font-medium theme-text-main transition-colors duration-200 hover:border-[var(--color-primario)] hover:text-[var(--color-primario)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primario)]';
 const ITEM_EXPORTAR = 'flex items-center gap-2 rounded-lg px-3 py-2 text-sm theme-text-main hover:bg-black/5 focus-visible:outline focus-visible:outline-2 dark:hover:bg-white/5';
-const CHIP_AVISO = `gelia-estado-vivo gelia-estado-vivo--compacto gap-1 text-xs font-medium ${GELIA_ESTADO_VIVO_TONO.aviso}`;
-const CHIP_ERROR = `gelia-estado-vivo gelia-estado-vivo--compacto gap-1 text-xs font-medium ${GELIA_ESTADO_VIVO_TONO.error}`;
-const CHIP_INFO = `gelia-estado-vivo gelia-estado-vivo--compacto gap-1 text-xs font-medium ${GELIA_ESTADO_VIVO_TONO.info}`;
+const CHIP_AVISO = `gelia-estado-vivo gelia-estado-vivo--compacto gap-1 text-xs font-semibold ${GELIA_ESTADO_VIVO_TONO.aviso}`;
+const CHIP_ERROR = `gelia-estado-vivo gelia-estado-vivo--compacto gap-1 text-xs font-semibold ${GELIA_ESTADO_VIVO_TONO.error}`;
+const CHIP_INFO = `gelia-estado-vivo gelia-estado-vivo--compacto gap-1 text-xs font-semibold ${GELIA_ESTADO_VIVO_TONO.info}`;
 
 // Función para calcular tiempo relativo y formatear lecturas de marcas de tiempo
-const formatearTiempoRelativo = (fechaString) => {
+// `compacto` acorta el texto para columnas angostas ("Hoy, 9:00 a.m." en vez de "Hoy a las 9:00 a.m.").
+const formatearTiempoRelativo = (fechaString, compacto = false) => {
     if (!fechaString) return '';
+    const aLas = compacto ? ', ' : ' a las ';
     const fecha = new Date(fechaString);
     const ahora = new Date();
     const diffMs = ahora - fecha;
@@ -57,16 +59,16 @@ const formatearTiempoRelativo = (fechaString) => {
 
     const horaFormateada = fecha.toLocaleTimeString('es-MX', { hour: 'numeric', minute: '2-digit', hour12: true });
 
-    if (diffMinutos < 1) return 'Hace menos de un minuto';
-    if (diffMinutos < 60) return `Hace ${diffMinutos} minutos`;
-    if (diffHoras < 24 && esHoy) return `Hoy a las ${horaFormateada}`;
-    if (esAyer) return `Ayer a las ${horaFormateada}`;
-    if (diffDias < 7) return `Hace ${diffDias} días`;
+    if (diffMinutos < 1) return compacto ? 'Ahora' : 'Hace menos de un minuto';
+    if (diffMinutos < 60) return compacto ? `Hace ${diffMinutos} min` : `Hace ${diffMinutos} minutos`;
+    if (diffHoras < 24 && esHoy) return `Hoy${aLas}${horaFormateada}`;
+    if (esAyer) return `Ayer${aLas}${horaFormateada}`;
+    if (diffDias < 7) return `Hace ${diffDias} ${diffDias === 1 ? 'día' : 'días'}`;
 
-    return `${fecha.toLocaleDateString('es-MX', { day: '2-digit', month: 'short' })} a las ${horaFormateada}`;
+    return `${fecha.toLocaleDateString('es-MX', { day: '2-digit', month: 'short' })}${aLas}${horaFormateada}`;
 };
 
-const EtiquetasOperacion = ({ solicitud, listas }) => {
+const EtiquetasOperacion = ({ solicitud, children }) => {
     const nombreProceso = solicitud.proceso?.nombre || '';
     const esTag = nombreProceso.toUpperCase().includes('TAG');
     const esCambioLista = nombreProceso.toUpperCase().includes('LISTA');
@@ -76,46 +78,63 @@ const EtiquetasOperacion = ({ solicitud, listas }) => {
 
     const listaActual = solicitud.cliente?.lista_descuento?.nombre || solicitud.cliente?.lista_actual || 'Público General';
 
-    const etiquetaLista = (nombre, contenido) => (
+    const etiquetaLista = (nombre) => (
         esListaDiamante(nombre) ? (
             <span className={claseEtiquetaLista(nombre)}>
                 <Sparkles className="h-3 w-3 text-cyan-600 dark:text-cyan-300" aria-hidden="true" />
-                <span className="text-cyan-700 drop-shadow-sm dark:text-cyan-300">{contenido}</span>
+                <span className="text-cyan-700 drop-shadow-sm dark:text-cyan-300">{nombre}</span>
             </span>
         ) : (
-            <span className={claseEtiquetaLista(nombre)}>{contenido}</span>
+            <span className={claseEtiquetaLista(nombre)}>{nombre}</span>
         )
     );
 
     return (
-        <div className="flex flex-wrap gap-1.5">
-            <span className="inline-flex items-center gap-1 rounded-md border theme-border bg-black/[0.04] px-2 py-1 text-[11px] font-medium uppercase tracking-wide theme-text-muted dark:bg-white/[0.06]">
-                Lista actual: {listaActual}
-            </span>
-            {esCambioLista && objLista && etiquetaLista(objLista.nombre, <><TrendingUp className="h-3 w-3" aria-hidden="true" /> Ascenso a: {objLista.nombre}</>)}
-            {esTag && (
-                <span className={`${CHIP_AVISO} normal-case tracking-normal`}>
-                    <Tag className="h-3 w-3" aria-hidden="true" /> TAG: {responsableTag}
+        <div className="gelia-tag-etiquetas flex flex-col items-start">
+            <div className="gelia-tag-flujo">
+                <span className="gelia-tag-flujo-paso">
+                    <span className="gelia-tag-flujo-etiqueta">Lista actual</span>
+                    {etiquetaLista(listaActual)}
                 </span>
-            )}
-            {objTipo && (
-                <span className={claseEtiquetaTipoCliente(objTipo.nombre)}>
-                    <Users className="h-3 w-3" aria-hidden="true" /> {objTipo.nombre}
-                </span>
-            )}
-            {solicitud.compra_en_tienda && (
-                <span className={claseEtiquetaLista('Bronce')}>Compra en tienda</span>
-            )}
-            {solicitud.compra_en_tienda_solo_tag && (
-                <span className={`${CHIP_INFO} normal-case tracking-normal`}>
-                    <Tag className="h-3 w-3" aria-hidden="true" /> Compra realizada: solicitar tag
-                </span>
-            )}
-            {solicitud.cancelacion_solicitada_at && solicitud.estado?.nombre !== 'Cancelada' && (
-                <span className={CHIP_ERROR}>
-                    <Ban className="h-3 w-3" aria-hidden="true" /> Cancelación solicitada
-                </span>
-            )}
+                {esCambioLista && objLista && (
+                    <span className="gelia-tag-flujo-paso">
+                        <ArrowRight className="gelia-tag-flujo-flecha" aria-hidden="true" />
+                        <span className="gelia-tag-flujo-etiqueta">Ascenso a</span>
+                        {etiquetaLista(objLista.nombre)}
+                    </span>
+                )}
+            </div>
+            <div className="flex flex-wrap items-center gap-2 empty:hidden">
+                {esTag && (
+                    <span className={CHIP_NEUTRO}>
+                        <Tag className="h-3 w-3" aria-hidden="true" /> TAG: {responsableTag}
+                    </span>
+                )}
+                {objTipo && (() => {
+                    const IconoTipo = iconoTipoCliente(objTipo.nombre);
+                    return (
+                        <span className={claseEtiquetaTipoCliente(objTipo.nombre)}>
+                            <IconoTipo className="h-3 w-3" aria-hidden="true" /> {objTipo.nombre}
+                        </span>
+                    );
+                })()}
+                {solicitud.compra_en_tienda && (
+                    <span className={CHIP_NEUTRO}>
+                        <Store className="h-3 w-3" aria-hidden="true" /> Compra en tienda
+                    </span>
+                )}
+                {solicitud.compra_en_tienda_solo_tag && (
+                    <span className={`${CHIP_INFO} normal-case tracking-normal`}>
+                        <Tag className="h-3 w-3" aria-hidden="true" /> Compra realizada: solicitar tag
+                    </span>
+                )}
+                {solicitud.cancelacion_solicitada_at && solicitud.estado?.nombre !== 'Cancelada' && (
+                    <span className={CHIP_ERROR}>
+                        <Ban className="h-3 w-3" aria-hidden="true" /> Cancelación solicitada
+                    </span>
+                )}
+                {children}
+            </div>
         </div>
     );
 };
@@ -220,13 +239,15 @@ const FeedbackYComentarios = ({ solicitud }) => {
 const obtenerListaRebajaNombre = solicitud => solicitud?.lista_rebaja?.nombre || solicitud?.listaRebaja?.nombre || null;
 
 const TiemposSolicitud = ({ solicitud }) => (
-    <div className="mt-1 space-y-0.5">
-        <div className="flex items-center gap-1 text-xs theme-text-muted" title={solicitud.created_at}>
-            <Clock className="h-3 w-3" aria-hidden="true" /> Emitida: {formatearTiempoRelativo(solicitud.created_at)}
+    <div className="gelia-tag-tiempos mt-1 space-y-0.5">
+        <div className="gelia-tag-tiempo flex items-center gap-1 text-xs theme-text-muted" title={`Emitida: ${solicitud.created_at}`}>
+            <Clock className="h-3 w-3 shrink-0" aria-hidden="true" />
+            <span className="gelia-tag-tiempo-etiqueta">Emitida:</span>{formatearTiempoRelativo(solicitud.created_at, true)}
         </div>
         {solicitud.updated_at && solicitud.updated_at !== solicitud.created_at && (
-            <div className="flex items-center gap-1 text-xs theme-text-info" title={solicitud.updated_at}>
-                <History className="h-3 w-3" aria-hidden="true" /> Actualizada: {formatearTiempoRelativo(solicitud.updated_at)}
+            <div className="gelia-tag-tiempo flex items-center gap-1 text-xs theme-text-info" title={`Actualizada: ${solicitud.updated_at}`}>
+                <History className="h-3 w-3 shrink-0" aria-hidden="true" />
+                <span className="gelia-tag-tiempo-etiqueta">Actualizada:</span>{formatearTiempoRelativo(solicitud.updated_at, true)}
             </div>
         )}
     </div>
@@ -234,43 +255,52 @@ const TiemposSolicitud = ({ solicitud }) => (
 
 const ClienteSolicitud = ({ solicitud, esHeredado, copiadoId, onCopiar }) => (
     <div className="min-w-0">
-        <div className="mb-1 flex items-center gap-2">
-            <span className="rounded border theme-border theme-element px-1.5 py-0.5 text-xs font-medium theme-text-main">{solicitud.cliente?.numero_cliente || 'N/A'}</span>
+        <div className="mb-1 flex flex-wrap items-center gap-2">
+            <span className="rounded border theme-border theme-element px-1.5 py-0.5 text-xs font-semibold tabular-nums theme-text-main">{solicitud.cliente?.numero_cliente || 'N/A'}</span>
             {solicitud.cliente?.numero_cliente && (
                 <button type="button" onClick={(e) => onCopiar(e, solicitud.cliente.numero_cliente, solicitud.id)} className="rounded p-1 theme-text-muted transition-colors hover:text-[var(--color-primario)] focus-visible:outline focus-visible:outline-2" aria-label={`Copiar número de cliente ${solicitud.cliente.numero_cliente}`}>
                     {copiadoId === solicitud.id ? <Check className="h-3 w-3 theme-text-exito" aria-hidden="true" /> : <Copy className="h-3 w-3" aria-hidden="true" />}
                 </button>
             )}
-            {esHeredado && <span className={CHIP_INFO}><ShieldAlert className="h-3 w-3" aria-hidden="true" /> Heredado</span>}
+            {esHeredado && <span className={CHIP_NEUTRO}><ShieldAlert className="h-3 w-3" aria-hidden="true" /> Heredado</span>}
         </div>
-        <div className="text-sm font-medium break-words theme-text-main">{solicitud.cliente?.nombre || 'Nuevo prospecto'}</div>
+        <div className="line-clamp-2 text-sm font-semibold break-words theme-text-main" title={solicitud.cliente?.nombre || undefined}>{solicitud.cliente?.nombre || 'Nuevo prospecto'}</div>
     </div>
 );
 
-const CotizacionSolicitud = ({ solicitud }) => {
+const CotizacionSolicitud = ({ solicitud, alinearDerecha = false }) => {
     const aprobada = ['Respondida', 'Verificada'].includes(solicitud.estado?.nombre);
     const concluida = (solicitud.compra_en_tienda || solicitud.compra_en_tienda_solo_tag) && aprobada;
     const vencido = solicitud.motivo_incorrecta === 'vencimiento_pago';
     const exito = solicitud.pago_confirmado || concluida;
     const etiqueta = concluida ? 'Atención concluida' : solicitud.pago_confirmado ? 'Pago confirmado' : vencido ? 'Pago vencido' : 'Pago pendiente';
-    const chip = vencido ? CHIP_ERROR : exito ? `gelia-estado-vivo gelia-estado-vivo--compacto ${GELIA_ESTADO_VIVO_TONO.exito}` : CHIP_AVISO;
+    const tono = vencido ? 'peligro' : exito ? 'exito' : 'aviso';
     const mostrarPago = solicitud.estado?.nombre !== 'Cancelada' && (aprobada || solicitud.pago_confirmado || vencido);
     return (
-        <div className="inline-flex flex-col items-start gap-1.5">
+        <div className={`inline-flex flex-col gap-1 ${alinearDerecha ? 'items-end text-right' : 'items-start'}`}>
             <div className="text-sm font-semibold tabular-nums theme-text-main">{new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(solicitud.monto_cotizado || 0)}</div>
-            {mostrarPago && <div className={`${chip} flex items-center gap-1 text-xs`}>
-                {exito ? <CheckCircle2 className="h-3 w-3" aria-hidden="true" /> : <Clock className="h-3 w-3" aria-hidden="true" />}
-                {etiqueta}
-            </div>}
+            {mostrarPago
+                ? <div className="gelia-tag-pago" data-tono={tono}>{etiqueta}</div>
+                : <div className="text-xs theme-text-muted"><span className="sr-only">Sin pago aplicable</span><span aria-hidden="true">—</span></div>}
         </div>
     );
 };
 
 const MotivoIncidencia = ({ motivo }) => (
-    <span className={`mt-1 ${CHIP_ERROR}`}>
+    <span className={CHIP_ERROR}>
         <AlertOctagon className="h-3 w-3" aria-hidden="true" />
         {motivo === 'vencimiento_pago' ? 'Pago vencido' : motivo === 'error_reportado' ? 'Error reportado' : motivo === 'pago_insuficiente' ? 'Pago insuficiente' : motivo}
     </span>
+);
+
+const OperacionSolicitud = ({ solicitud, listas }) => (
+    <div className="gelia-tag-operacion flex flex-col">
+        <div className="gelia-tag-operacion-titulo text-sm font-semibold break-words theme-text-main">{solicitud.proceso?.nombre || ''}</div>
+        <EtiquetasOperacion solicitud={solicitud} listas={listas}>
+            <ConsultasPendientes solicitud={solicitud} />
+            {solicitud.motivo_incorrecta && <MotivoIncidencia motivo={solicitud.motivo_incorrecta} />}
+        </EtiquetasOperacion>
+    </div>
 );
 
 const EstadoVacioLista = ({ hayFiltros, puedeCrear, onLimpiar, onCrear }) => (
@@ -295,7 +325,7 @@ const ConsultasPendientes = ({ solicitud }) => {
     if (!pendientes.length) return null;
 
     return (
-        <div className="mt-1 flex flex-wrap gap-1.5">
+        <>
             {pendientes.map((c) => (
                 <React.Fragment key={c.id}>
                     {c.consulta_tag && (
@@ -310,7 +340,7 @@ const ConsultasPendientes = ({ solicitud }) => {
                     )}
                 </React.Fragment>
             ))}
-        </div>
+        </>
     );
 };
 
@@ -360,14 +390,38 @@ const leerSnapshot = (snapshot) => {
     try { return JSON.parse(snapshot); } catch { return null; }
 };
 
-const ResumenDetalle = ({ solicitud, auth, onAbrir }) => {
+// Texto del motivo: resalta el origen en mayúsculas ("SISTEMA AUTOMÁTICO:") o el estado inicial
+// ("Aprobado (Compra en tienda).") y deja el resto como contenido. Solo presentación.
+const ORIGEN_RESUMEN = /^([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ ]{3,39}):\s*([\s\S]+)$/;
+const ESTADO_RESUMEN = /^(Aprobad[oa]|Verificad[oa])\b(\s*\([^)]{1,60}\))?\s*[.:]?\s*([\s\S]*)$/i;
+
+const separarResumen = (texto) => {
+    const estado = ESTADO_RESUMEN.exec(texto);
+    if (estado) return { etiqueta: estado[1] + (estado[2] || ''), resto: estado[3], tono: 'exito' };
+    const origen = ORIGEN_RESUMEN.exec(texto);
+    if (origen) return { etiqueta: origen[1][0] + origen[1].slice(1).toLowerCase(), resto: origen[2] };
+    return { resto: texto };
+};
+
+const TextoResumen = ({ texto, tono }) => {
+    const { etiqueta, resto, tono: tonoEtiqueta } = separarResumen(texto.trim());
+    return (
+        <p className="gelia-tag-resumen-texto line-clamp-2 m-0 text-sm" data-tono={tonoEtiqueta ?? tono}>
+            {etiqueta
+                ? <><span className="gelia-tag-resumen-origen">{etiqueta}{resto ? ':' : ''}</span> {resto}</>
+                : resto}
+        </p>
+    );
+};
+
+const ResumenDetalle = ({ solicitud, auth, onAbrir, tono }) => {
     const sinLeer = (solicitud.consultas || []).filter(c => c.estado === 'respondida' && !c.leido_vendedor_at && Number(solicitud.vendedor_id) === Number(auth?.user?.id)).length;
     const cancelacion = tieneMotivoCancelacionVisible(solicitud);
     const ultima = [...(solicitud.auditorias || [])].sort((a, b) => b.id - a.id)[0];
     const resumen = cancelacion ? solicitud.motivo_cancelacion : ultima?.motivo_reporte || solicitud.observaciones_vendedor;
     return <div className="gelia-tag-resumen">
         {sinLeer > 0 && <span className="gelia-tag-unread"><MessageSquare className="w-3.5 h-3.5" aria-hidden="true" />{sinLeer} {sinLeer === 1 ? 'respuesta sin leer' : 'respuestas sin leer'}</span>}
-        {resumen && <p className="line-clamp-2 text-sm theme-text-muted m-0">{resumen}</p>}
+        {resumen && <TextoResumen texto={resumen} tono={tono} />}
         <button type="button" onClick={onAbrir} className="gelia-tag-detail-link"><Eye className="w-4 h-4" aria-hidden="true" />{cancelacion ? 'Ver cancelación y detalle' : sinLeer ? 'Leer respuesta' : 'Ver detalle y respuestas'}</button>
     </div>;
 };
@@ -797,6 +851,24 @@ export default function Index({
         }
     };
 
+    // Solo presentación: tinte de fila a partir de banderas ya existentes.
+    const atencionSolicitud = (solicitud) => {
+        const estado = solicitud.estado?.nombre;
+        if (estado === 'Cancelada') return undefined;
+        if (estado === 'Incorrecta' || solicitud.motivo_incorrecta) return 'peligro';
+        const consultas = solicitud.consultas || [];
+        const sinLeer = consultas.some(c => c.estado === 'respondida' && !c.leido_vendedor_at && Number(solicitud.vendedor_id) === Number(auth?.user?.id));
+        if (solicitud.cancelacion_solicitada_at || sinLeer || consultas.some(c => c.estado === 'pendiente')) return 'aviso';
+        return undefined;
+    };
+
+    const accionesSolicitud = (solicitud) => (
+        <div className="flex flex-wrap items-center justify-end gap-2">
+            {accionPrincipal(solicitud)}
+            <button type="button" onClick={(e) => abrirMenu(e, solicitud)} aria-haspopup="menu" aria-expanded={menuAbierto === solicitud.id} aria-label={`Acciones de FOL-${solicitud.id}`} className="gelia-tag-menu-trigger rounded-lg border theme-border theme-element p-2 transition-colors duration-200 hover:border-[var(--color-primario)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"><MoreVertical className="h-5 w-5 theme-text-main" aria-hidden="true" /></button>
+        </div>
+    );
+
     const irAPagina = (pagina) => {
         const totalPaginas = solicitudes.last_page || 1;
         if (pagina < 1 || pagina > totalPaginas) return;
@@ -934,69 +1006,88 @@ export default function Index({
                     onLimpiarAdicionales={limpiarFiltrosAdicionales}
                 />
 
-                <div className="block space-y-3 lg:hidden">
-                    {consultando ? (
-                        <div className="space-y-3" aria-hidden="true">
-                            {Array.from({ length: 4 }, (_, i) => (
-                                <div key={i} className="h-28 animate-pulse rounded-xl border theme-border theme-element" />
-                            ))}
-                        </div>
-                    ) : solicitudesFiltradas.length === 0 ? (
-                        <EstadoVacioLista hayFiltros={hayFiltros} puedeCrear={can('solicitudes.crear')} onLimpiar={limpiarConsulta} onCrear={() => setModalForm({ abierto: true, modoEdicion: false, solicitud: null })} />
-                    ) : (
-                        solicitudesFiltradas.map((solicitud) => {
-                            const estatus = obtenerEstiloEstado(solicitud.estado?.nombre); const StatusIcon = estatus.icon; const nombreProceso = solicitud.proceso?.nombre || ''; const esHeredado = solicitud.cliente?.es_heredado;
-                            return (
-                                <article key={solicitud.id} className="gelia-tag-card flex flex-col gap-3 rounded-xl border theme-border theme-surface p-4">
-                                    <div className="flex items-start justify-between gap-3 border-b theme-border pb-3">
-                                        <div className="min-w-0">
-                                            <div className="text-sm font-semibold theme-text-main">FOL-{solicitud.id}</div>
-                                            <div className="mt-0.5 flex items-center gap-1 text-xs theme-text-muted">
-                                                <User className="h-3 w-3" aria-hidden="true" /> {solicitud.vendedor?.name}
+                <section className="gelia-tag-listado" aria-label="Listado de solicitudes">
+                    <div className="gelia-tag-listado-tarjetas flex flex-col gap-3">
+                        {consultando ? (
+                            <div className="flex flex-col gap-3" aria-hidden="true">
+                                {Array.from({ length: 4 }, (_, i) => (
+                                    <div key={i} className="h-40 animate-pulse rounded-xl border theme-border theme-element" />
+                                ))}
+                            </div>
+                        ) : solicitudesFiltradas.length === 0 ? (
+                            <EstadoVacioLista hayFiltros={hayFiltros} puedeCrear={can('solicitudes.crear')} onLimpiar={limpiarConsulta} onCrear={() => setModalForm({ abierto: true, modoEdicion: false, solicitud: null })} />
+                        ) : (
+                            solicitudesFiltradas.map((solicitud) => {
+                                const estatus = obtenerEstiloEstado(solicitud.estado?.nombre); const StatusIcon = estatus.icon; const esHeredado = solicitud.cliente?.es_heredado;
+                                return (
+                                    <article key={solicitud.id} className="gelia-tag-card rounded-xl border theme-border theme-surface" data-atencion={atencionSolicitud(solicitud)}>
+                                        <div className="gelia-tag-card-main">
+                                            <div className="gelia-tag-card-id">
+                                                <div className="gelia-tag-card-folio min-w-0">
+                                                    <div className="gelia-tag-folio text-sm font-semibold tabular-nums theme-text-main">FOL-{solicitud.id}</div>
+                                                </div>
+                                                <div className="gelia-tag-card-cliente">
+                                                    <ClienteSolicitud solicitud={solicitud} esHeredado={esHeredado} copiadoId={copiadoId} onCopiar={copiarAlPortapapeles} />
+                                                </div>
+                                                <div className="gelia-tag-card-meta">
+                                                    <div className="flex items-center gap-1 text-xs theme-text-muted">
+                                                        <User className="h-3 w-3" aria-hidden="true" /> {solicitud.vendedor?.name}
+                                                    </div>
+                                                    <TiemposSolicitud solicitud={solicitud} />
+                                                </div>
                                             </div>
-                                            <TiemposSolicitud solicitud={solicitud} />
+                                            <div className="gelia-tag-card-detalle">
+                                                <div className="gelia-tag-card-operacion">
+                                                    <OperacionSolicitud solicitud={solicitud} listas={listas} />
+                                                </div>
+                                                <div className="gelia-tag-card-resumen">
+                                                    <ResumenDetalle solicitud={solicitud} auth={auth} tono={atencionSolicitud(solicitud)} onAbrir={() => setDetalleId(solicitud.id)} />
+                                                </div>
+                                            </div>
                                         </div>
-                                        <div className={`${estatus.clase} whitespace-nowrap`}>
-                                            <StatusIcon className="h-3.5 w-3.5" aria-hidden="true" />
-                                            <span>{estatus.label}</span>
+                                        <div className="gelia-tag-card-rail">
+                                            <div className="gelia-tag-card-estado">
+                                                <div className={`${estatus.clase} whitespace-nowrap`}>
+                                                    <StatusIcon className="h-3.5 w-3.5" aria-hidden="true" />
+                                                    <span>{estatus.label}</span>
+                                                </div>
+                                            </div>
+                                            <div className="gelia-tag-card-pago">
+                                                <CotizacionSolicitud solicitud={solicitud} />
+                                            </div>
+                                            <div className="gelia-tag-card-acciones">{accionesSolicitud(solicitud)}</div>
                                         </div>
-                                    </div>
-                                    <ClienteSolicitud solicitud={solicitud} esHeredado={esHeredado} copiadoId={copiadoId} onCopiar={copiarAlPortapapeles} />
-                                    <div className="flex flex-col gap-2">
-                                        <span className="text-sm font-medium theme-text-main">{nombreProceso}</span>
-                                        <EtiquetasOperacion solicitud={solicitud} listas={listas} />
-                                        <ConsultasPendientes solicitud={solicitud} />
-                                        {solicitud.motivo_incorrecta && <MotivoIncidencia motivo={solicitud.motivo_incorrecta} />}
-                                    </div>
-                                    <ResumenDetalle solicitud={solicitud} auth={auth} onAbrir={() => setDetalleId(solicitud.id)} />
-                                    <div className="flex items-center justify-between border-t theme-border pt-2">
-                                        <CotizacionSolicitud solicitud={solicitud} />
-                                        <div className="flex flex-wrap items-center justify-end gap-2">{accionPrincipal(solicitud)}<button type="button" onClick={(e) => abrirMenu(e, solicitud)} aria-haspopup="menu" aria-expanded={menuAbierto === solicitud.id} aria-label={`Acciones de FOL-${solicitud.id}`} className="rounded-lg border theme-border theme-element p-2 transition-colors duration-200 hover:border-[var(--color-primario)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"><MoreVertical className="h-5 w-5 theme-text-main" aria-hidden="true" /></button></div>
-                                    </div>
-                                </article>
-                            );
-                        })
-                    )}
-                </div>
+                                    </article>
+                                );
+                            })
+                        )}
+                    </div>
 
-                <div className="hidden overflow-hidden rounded-xl border theme-border theme-surface lg:block">
-                    <div className="overflow-x-auto">
-                        <table className="gelia-tag-table w-full min-w-[1000px] border-collapse text-left">
+                    <div className="gelia-tag-listado-tabla overflow-hidden rounded-xl border theme-border theme-surface">
+                        <table className="gelia-tag-table w-full table-fixed border-collapse text-left">
+                            <colgroup>
+                                <col className="w-44" />
+                                <col className="w-[16%]" />
+                                <col />
+                                <col className="w-[9.5rem]" />
+                                <col className="w-32" />
+                                <col className="w-48" />
+                            </colgroup>
                             <thead className="theme-surface">
                                 <tr className="border-b theme-border">
                                     <th className="px-4 py-3 text-xs font-medium theme-text-muted">Folio</th>
                                     <th className="px-4 py-3 text-xs font-medium theme-text-muted">Cliente</th>
                                     <th className="px-4 py-3 text-xs font-medium theme-text-muted">Operación</th>
-                                    <th className="px-4 py-3 text-xs font-medium theme-text-muted">Cotización</th>
-                                    <th className="px-4 py-3 text-xs font-medium theme-text-muted">Estado</th>
-                                    <th className="sticky-actions px-4 py-3 text-center text-xs font-medium theme-text-muted">Acciones</th>
+                                    <th className="px-4 py-3 text-right text-xs font-medium theme-text-muted">Cotización y pago</th>
+                                    <th className="px-4 py-3 text-xs font-medium theme-text-muted">Aprobación</th>
+                                    <th className="px-4 py-3 text-right text-xs font-medium theme-text-muted">Acciones</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {consultando ? (
                                     Array.from({ length: 6 }, (_, i) => (
                                         <tr key={`esqueleto-${i}`} className="border-b theme-border">
-                                            <td colSpan={6} className="px-4 py-3"><div className="h-8 animate-pulse rounded-md theme-element" /></td>
+                                            <td colSpan={6} className="px-4 py-3"><div className="h-20 animate-pulse rounded-md theme-element" /></td>
                                         </tr>
                                     ))
                                 ) : solicitudesFiltradas.length === 0 ? (
@@ -1006,34 +1097,31 @@ export default function Index({
                                         </td>
                                     </tr>
                                 ) : solicitudesFiltradas.map((solicitud) => {
-                                    const estatus = obtenerEstiloEstado(solicitud.estado?.nombre); const StatusIcon = estatus.icon; const nombreProceso = solicitud.proceso?.nombre || ''; const esHeredado = solicitud.cliente?.es_heredado;
+                                    const estatus = obtenerEstiloEstado(solicitud.estado?.nombre); const StatusIcon = estatus.icon; const esHeredado = solicitud.cliente?.es_heredado;
                                     return (
-                                        <tr key={solicitud.id} className="border-b theme-border transition-colors duration-200 hover:bg-black/5 dark:hover:bg-white/5">
+                                        <tr key={solicitud.id} className="gelia-tag-fila border-b theme-border transition-colors duration-200" data-atencion={atencionSolicitud(solicitud)}>
                                             <td className="px-4 py-3 align-top">
-                                                <div className="text-sm font-semibold theme-text-main">FOL-{solicitud.id}</div>
+                                                <div className="text-sm font-semibold tabular-nums theme-text-main">FOL-{solicitud.id}</div>
                                                 <div className="mt-1 text-xs theme-text-muted">
                                                     <User className="mr-1 inline h-3 w-3" aria-hidden="true" /> {solicitud.vendedor?.name}
                                                 </div>
                                                 <TiemposSolicitud solicitud={solicitud} />
                                             </td>
-                                            <td className="max-w-[220px] px-4 py-3 align-top">
+                                            <td className="px-4 py-3 align-top">
                                                 <ClienteSolicitud solicitud={solicitud} esHeredado={esHeredado} copiadoId={copiadoId} onCopiar={copiarAlPortapapeles} />
                                             </td>
                                             <td className="px-4 py-3 align-top">
-                                                <div className="mb-1 text-sm font-medium theme-text-main">{nombreProceso}</div>
-                                                <EtiquetasOperacion solicitud={solicitud} listas={listas} />
-                                                <ConsultasPendientes solicitud={solicitud} />
-                                                {solicitud.motivo_incorrecta && <MotivoIncidencia motivo={solicitud.motivo_incorrecta} />}
-                                                <ResumenDetalle solicitud={solicitud} auth={auth} onAbrir={() => setDetalleId(solicitud.id)} />
+                                                <OperacionSolicitud solicitud={solicitud} listas={listas} />
+                                                <ResumenDetalle solicitud={solicitud} auth={auth} tono={atencionSolicitud(solicitud)} onAbrir={() => setDetalleId(solicitud.id)} />
                                             </td>
-                                            <td className="px-4 py-3 align-top">
-                                                <CotizacionSolicitud solicitud={solicitud} />
+                                            <td className="px-4 py-3 text-right align-top">
+                                                <CotizacionSolicitud solicitud={solicitud} alinearDerecha />
                                             </td>
                                             <td className="px-4 py-3 align-top">
                                                 <div className={`${estatus.clase} whitespace-nowrap`}><StatusIcon className="h-3.5 w-3.5" aria-hidden="true" /><span>{estatus.label}</span></div>
                                             </td>
-                                            <td className="sticky-actions px-4 py-3 text-center align-top">
-                                                <div className="flex flex-wrap items-center justify-end gap-2">{accionPrincipal(solicitud)}<button type="button" onClick={(e) => abrirMenu(e, solicitud)} aria-haspopup="menu" aria-expanded={menuAbierto === solicitud.id} aria-label={`Acciones de FOL-${solicitud.id}`} className="rounded-lg border theme-border theme-element p-2 transition-colors duration-200 hover:border-[var(--color-primario)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"><MoreVertical className="h-5 w-5 theme-text-main" aria-hidden="true" /></button></div>
+                                            <td className="px-4 py-3 text-right align-top">
+                                                {accionesSolicitud(solicitud)}
                                             </td>
                                         </tr>
                                     );
@@ -1041,7 +1129,7 @@ export default function Index({
                             </tbody>
                         </table>
                     </div>
-                </div>
+                </section>
 
                 <Paginacion solicitudes={solicitudes} onIrAPagina={irAPagina} />
             </GeliaPageShell>

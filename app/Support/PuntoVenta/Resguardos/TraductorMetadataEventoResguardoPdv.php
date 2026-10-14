@@ -168,6 +168,13 @@ final class TraductorMetadataEventoResguardoPdv
                     'valor' => self::formatearBultos($valor),
                 ]
                 : null,
+            'omisiones' => is_array($valor)
+                ? [
+                    'clave' => $clave,
+                    'etiqueta' => 'Datos omitidos',
+                    'valor' => self::formatearOmisiones($valor),
+                ]
+                : null,
             'valores_anteriores', 'valores_nuevos' => is_array($valor)
                 ? [
                     'clave' => $clave,
@@ -249,6 +256,27 @@ final class TraductorMetadataEventoResguardoPdv
     }
 
     /**
+     * @param  list<array<string, mixed>>|array<int, mixed>  $omisiones
+     */
+    private static function formatearOmisiones(array $omisiones): string
+    {
+        $partes = [];
+        foreach ($omisiones as $omision) {
+            if (! is_array($omision)) {
+                continue;
+            }
+            $campo = (string) ($omision['campo'] ?? '');
+            $motivo = trim((string) ($omision['motivo'] ?? ''));
+            if ($campo === '' || $motivo === '') {
+                continue;
+            }
+            $partes[] = OmisionRequisitoResguardoPdv::etiqueta($campo).': '.$motivo;
+        }
+
+        return $partes === [] ? '—' : implode(' · ', $partes);
+    }
+
+    /**
      * @param  array<string, mixed>  $pares
      */
     private static function formatearPares(array $pares, bool $verDetalleCompleto): string
@@ -301,6 +329,7 @@ final class TraductorMetadataEventoResguardoPdv
             'anotacion' => 'Anotación',
             'etiquetas_generadas' => 'Etiquetas generadas',
             'codigos' => 'Códigos de etiqueta',
+            'omisiones' => 'Datos omitidos',
             default => str_replace('_', ' ', ucfirst($clave)),
         };
     }

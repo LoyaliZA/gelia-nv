@@ -67,8 +67,8 @@ export default function TarjetaResguardoOperativa({
             ? (resguardo.cantidad_bultos_en_custodia ?? resguardo.cantidad_bultos_esperada ?? 0)
             : (resguardo.cantidad_bultos_recibida ?? 0);
     const faltaEvidencia = faltaEvidenciaManual(resguardo);
-    const admiteRecepcion = esPorRecibir && !esPasoRecepcionista && !faltaEvidencia && puedeConfirmarLlegada && resguardoAdmiteRecepcion(resguardo);
-    const admitePasarARecepcion = esPorRecibir && !esPasoRecepcionista && !faltaEvidencia && puedeEnviarACustodia && Boolean(resguardo?.admite_pasar_a_recepcion ?? resguardo?.puede_pasar_a_recepcion);
+    const admiteRecepcion = esPorRecibir && !esPasoRecepcionista && puedeConfirmarLlegada && resguardoAdmiteRecepcion(resguardo);
+    const admitePasarARecepcion = esPorRecibir && !esPasoRecepcionista && puedeEnviarACustodia && Boolean(resguardo?.admite_pasar_a_recepcion ?? resguardo?.puede_pasar_a_recepcion);
     const admiteCustodia = esPasoRecepcionista && puedeConfirmarCustodia && Boolean(resguardo?.admite_confirmacion_custodia ?? resguardo?.puede_confirmar_custodia);
     const admiteEntrega = puedeEntregar && resguardo.estado === 'en_custodia' && !resguardo.entrega_bloqueada;
     const plazos = plazosOperativosResguardo(resguardo);
@@ -203,13 +203,14 @@ export default function TarjetaResguardoOperativa({
             )}
 
             <div className="flex flex-col gap-2 pt-1">
-                {faltaEvidencia && permisos.registrar_manual ? (
+                {faltaEvidencia && permisos.registrar_manual && (
                     <AccionEvidenciaRegistroManual
                         resguardo={resguardo}
                         onExito={onRecepcionExito}
                         className={BTN_ACCION_RECEPCION_TARJETA}
                     />
-                ) : admiteRecepcion ? (
+                )}
+                {admiteRecepcion ? (
                     <BotonConfirmarRecepcionResguardo
                         resguardo={resguardo}
                         variant="pie"

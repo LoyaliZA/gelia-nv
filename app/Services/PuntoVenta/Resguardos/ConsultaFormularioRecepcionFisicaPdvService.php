@@ -46,6 +46,7 @@ class ConsultaFormularioRecepcionFisicaPdvService
             'pedido.cajas' => fn ($q) => $q->orderBy('orden')->orderBy('id'),
             'pedido.bultosEmpaque.documentos',
             'bultos' => fn ($q) => $q->orderBy('folio')->orderBy('id'),
+            'evidencias',
         ]);
 
         return [

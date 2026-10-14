@@ -46,12 +46,44 @@ export default function useRecepcionFisica({
         setError(null);
 
         try {
-            const cuerpo = {
-                version: versionRef.current,
-                idempotency_key: idempotencyRef.current,
-            };
-            if (Array.isArray(extras?.piezas)) {
-                cuerpo.piezas = extras.piezas;
+            const tieneArchivos = Boolean(extras?.archivoTicket || extras?.fotoPaquete);
+            let cuerpo;
+            if (tieneArchivos) {
+                cuerpo = new FormData();
+                cuerpo.append('version', String(versionRef.current));
+                cuerpo.append('idempotency_key', idempotencyRef.current);
+                (extras.piezas || []).forEach((linea, indice) => {
+                    Object.entries(linea).forEach(([clave, valor]) => {
+                        if (valor === null || valor === undefined) return;
+                        if (Array.isArray(valor)) {
+                            valor.forEach((item, itemIndice) => {
+                                cuerpo.append(`piezas[${indice}][${clave}][${itemIndice}]`, String(item));
+                            });
+                            return;
+                        }
+                        cuerpo.append(
+                            `piezas[${indice}][${clave}]`,
+                            typeof valor === 'boolean' ? (valor ? '1' : '0') : String(valor),
+                        );
+                    });
+                });
+                (extras.omisiones || []).forEach((omision, indice) => {
+                    cuerpo.append(`omisiones[${indice}][campo]`, omision.campo);
+                    cuerpo.append(`omisiones[${indice}][motivo]`, omision.motivo);
+                });
+                if (extras.archivoTicket) cuerpo.append('archivo_ticket', extras.archivoTicket);
+                if (extras.fotoPaquete) cuerpo.append('foto_paquete', extras.fotoPaquete);
+            } else {
+                cuerpo = {
+                    version: versionRef.current,
+                    idempotency_key: idempotencyRef.current,
+                };
+                if (Array.isArray(extras?.piezas)) {
+                    cuerpo.piezas = extras.piezas;
+                }
+                if (Array.isArray(extras?.omisiones) && extras.omisiones.length > 0) {
+                    cuerpo.omisiones = extras.omisiones;
+                }
             }
 
             const { data } = await axios.put(

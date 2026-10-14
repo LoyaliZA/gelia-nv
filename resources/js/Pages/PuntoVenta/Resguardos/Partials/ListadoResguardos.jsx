@@ -145,14 +145,14 @@ function FilaTablaResguardo({
                             className={`${BTN_SECONDARY} inline-flex items-center gap-2`}
                         />
                     )}
-                    {puedeConfirmarLlegada && !faltaEvidenciaManual(resguardo) && resguardoAdmiteRecepcion(resguardo) && (
+                    {puedeConfirmarLlegada && resguardoAdmiteRecepcion(resguardo) && (
                         <BotonConfirmarRecepcionResguardo
                             resguardo={resguardo}
                             onExito={onRecepcionExito}
                             className="inline-flex w-auto"
                         />
                     )}
-                    {puedeEnviarACustodia && !faltaEvidenciaManual(resguardo) && resguardo.estado === 'recibido' && (
+                    {puedeEnviarACustodia && resguardo.estado === 'recibido' && (
                         <BotonPasarARecepcionResguardo
                             resguardo={resguardo}
                             onExito={onRecepcionExito}

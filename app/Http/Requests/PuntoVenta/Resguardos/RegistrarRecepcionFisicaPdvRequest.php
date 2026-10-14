@@ -6,6 +6,7 @@ use App\Http\Requests\PuntoVenta\PdvOperacionPisoRequest;
 use App\Models\PuntoVenta\ResguardoPdv;
 use App\Services\PuntoVenta\PuntoVentaModulo;
 use App\Support\PuntoVenta\Resguardos\NormalizadorPiezasRegistroManualPdv;
+use App\Support\PuntoVenta\Resguardos\OmisionRequisitoResguardoPdv;
 
 class RegistrarRecepcionFisicaPdvRequest extends PdvOperacionPisoRequest
 {
@@ -38,6 +39,9 @@ class RegistrarRecepcionFisicaPdvRequest extends PdvOperacionPisoRequest
             'piezas.*.mejor_ejemplar' => ['sometimes', 'boolean'],
             'piezas.*.evidencia_ids' => ['sometimes', 'array', 'max:8'],
             'piezas.*.evidencia_ids.*' => ['integer', 'min:1'],
+            'archivo_ticket' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:5120'],
+            'foto_paquete' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+            ...OmisionRequisitoResguardoPdv::reglas(),
         ];
     }
 

@@ -1,3 +1,4 @@
+import { RotateCcw, UserCheck, UserPlus, Users } from 'lucide-react';
 import { GELIA_ESTADO_VIVO_TONO } from '@/utils/geliaTheme';
 
 const BADGE_BASE = 'gelia-estado-vivo gelia-estado-vivo--compacto text-xs font-semibold';
@@ -22,7 +23,10 @@ export function badgeClaseEstadoSolicitud(nombreEstado) {
     return ESTADO_SOLICITUD_BADGE_MAP[key] ?? ESTADO_SOLICITUD_BADGE.revision;
 }
 
-const ETIQUETA_BASE = 'inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-semibold uppercase tracking-wide';
+const ETIQUETA_BASE = 'inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-semibold';
+
+/** Condición informativa sin semántica de estado: contorno neutro + icono + texto. */
+export const CHIP_NEUTRO = 'inline-flex items-center gap-1 rounded-md border theme-border px-2 py-1 text-xs font-medium theme-text-main';
 
 function nivelLista(nombre) {
     return (nombre || '').toUpperCase().replace('MAYOREO ', '').trim();
@@ -46,7 +50,7 @@ export function claseEtiquetaLista(nombre) {
         return `${ETIQUETA_BASE} border-yellow-500/30 bg-yellow-500/10 text-yellow-600`;
     }
     if (nivel.includes('DIAMANTE')) {
-        return 'relative inline-flex items-center gap-1.5 overflow-hidden rounded-md border border-cyan-400/40 bg-gradient-to-r from-cyan-500/10 to-blue-500/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-cyan-700 shadow-[0_0_8px_rgba(34,211,238,0.2)] dark:text-cyan-300';
+        return 'relative inline-flex items-center gap-1.5 overflow-hidden rounded-md border border-cyan-400/40 bg-gradient-to-r from-cyan-500/10 to-blue-500/10 px-2.5 py-1 text-xs font-semibold text-cyan-700 shadow-[0_0_8px_rgba(34,211,238,0.2)] dark:text-cyan-300';
     }
     if (nivel.includes('PUBLICO') || nivel.includes('PÚBLICO')) {
         return `${ETIQUETA_BASE} theme-element theme-border theme-text-muted`;
@@ -62,19 +66,24 @@ export function esListaDiamante(nombre) {
     return nivelLista(nombre).includes('DIAMANTE');
 }
 
-export function claseEtiquetaTipoCliente(nombre) {
+// Orden relevante: "REACTIVADO" contiene "ACTIV". Color en CSS (.gelia-tag-tipo--*); el icono evita depender solo del color.
+const TIPOS_CLIENTE = [
+    ['REACTIV', 'reactivado', RotateCcw],
+    ['NUEVO', 'nuevo', UserPlus],
+    ['ACTIV', 'activo', UserCheck],
+];
+
+function tipoCliente(nombre) {
     const tipo = (nombre || '').toUpperCase();
-    if (tipo.includes('REACTIV')) {
-        return `${ETIQUETA_BASE} border-amber-500/30 bg-amber-500/10 text-amber-600`;
-    }
-    if (tipo.includes('NUEVO')) {
-        return `${ETIQUETA_BASE} border-sky-500/30 bg-sky-500/10 text-sky-600`;
-    }
-    if (tipo.includes('ACTIV')) {
-        return `${ETIQUETA_BASE} border-emerald-500/30 bg-emerald-500/10 text-emerald-600`;
-    }
-    return `${ETIQUETA_BASE} border-indigo-500/30 bg-indigo-500/10 text-indigo-600`;
+    return TIPOS_CLIENTE.find(([clave]) => tipo.includes(clave));
 }
+
+export function claseEtiquetaTipoCliente(nombre) {
+    const tipo = tipoCliente(nombre);
+    return `${ETIQUETA_BASE} gelia-tag-tipo${tipo ? ` gelia-tag-tipo--${tipo[1]}` : ''}`;
+}
+
+export const iconoTipoCliente = (nombre) => tipoCliente(nombre)?.[2] ?? Users;
 
 export const PANEL_AVISO = 'rounded-lg border border-[color-mix(in_srgb,var(--color-aviso)_35%,transparent)] bg-[color-mix(in_srgb,var(--color-aviso)_12%,transparent)] p-2.5';
 export const PANEL_ERROR = 'rounded-lg border border-[color-mix(in_srgb,var(--color-peligro)_35%,transparent)] bg-[color-mix(in_srgb,var(--color-peligro)_12%,transparent)] p-2.5';

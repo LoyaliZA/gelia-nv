@@ -20,7 +20,7 @@ export default function useConfirmacionCustodia({
         }
     }, [versionInicial]);
 
-    const enviar = useCallback(async ({ almacenId, bultos, evidencias = [] }) => {
+    const enviar = useCallback(async ({ almacenId, bultos, evidencias = [], piezas, omisiones = [] }) => {
         if (!almacenId || !bultos?.length) {
             setError('Selecciona almacén y al menos un bulto.');
             return;
@@ -46,6 +46,27 @@ export default function useConfirmacionCustodia({
             form.append(`bultos[${indice}][piezas]`, String(bulto.piezas));
         });
         evidencias.forEach((archivo, indice) => form.append(`evidencias[${indice}]`, archivo));
+        if (Array.isArray(piezas)) {
+            piezas.forEach((linea, indice) => {
+                Object.entries(linea).forEach(([clave, valor]) => {
+                    if (valor === null || valor === undefined) return;
+                    if (Array.isArray(valor)) {
+                        valor.forEach((item, itemIndice) => {
+                            form.append(`piezas[${indice}][${clave}][${itemIndice}]`, String(item));
+                        });
+                        return;
+                    }
+                    form.append(
+                        `piezas[${indice}][${clave}]`,
+                        typeof valor === 'boolean' ? (valor ? '1' : '0') : String(valor),
+                    );
+                });
+            });
+        }
+        omisiones.forEach((omision, indice) => {
+            form.append(`omisiones[${indice}][campo]`, omision.campo);
+            form.append(`omisiones[${indice}][motivo]`, omision.motivo);
+        });
 
         try {
             const { data } = await axios.put(route('punto_venta.resguardos.custodia', resguardoId), form, {

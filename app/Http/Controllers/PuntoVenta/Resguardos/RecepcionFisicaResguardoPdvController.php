@@ -28,6 +28,9 @@ class RecepcionFisicaResguardoPdvController extends Controller
             (int) $datos['version'],
             (string) $datos['idempotency_key'],
             array_key_exists('piezas', $datos) ? $datos['piezas'] : null,
+            $datos['omisiones'] ?? [],
+            $request->file('archivo_ticket'),
+            $request->file('foto_paquete'),
         );
 
         return response()->json([

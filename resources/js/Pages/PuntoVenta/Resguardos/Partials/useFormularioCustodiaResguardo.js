@@ -20,6 +20,7 @@ export default function useFormularioCustodiaResguardo(resguardoId) {
     const [catalogos, setCatalogos] = useState({});
     const [admiteConfirmacion, setAdmiteConfirmacion] = useState(false);
     const [motivoNoConfirmacion, setMotivoNoConfirmacion] = useState(null);
+    const [flujoCompleto, setFlujoCompleto] = useState(false);
 
     const cargar = useCallback(async () => {
         if (!resguardoId) return null;
@@ -37,6 +38,7 @@ export default function useFormularioCustodiaResguardo(resguardoId) {
             setCatalogos(data?.catalogos || {});
             setAdmiteConfirmacion(Boolean(data?.admite_confirmacion_custodia));
             setMotivoNoConfirmacion(data?.motivo_no_confirmacion_custodia || null);
+            setFlujoCompleto(Boolean(data?.flujo_completo));
 
             return data;
         } catch (err) {
@@ -54,6 +56,7 @@ export default function useFormularioCustodiaResguardo(resguardoId) {
         setCatalogos({});
         setAdmiteConfirmacion(false);
         setMotivoNoConfirmacion(null);
+        setFlujoCompleto(false);
         setError(null);
     }, []);
 
@@ -67,5 +70,6 @@ export default function useFormularioCustodiaResguardo(resguardoId) {
         catalogos,
         admiteConfirmacion,
         motivoNoConfirmacion,
+        flujoCompleto,
     };
 }

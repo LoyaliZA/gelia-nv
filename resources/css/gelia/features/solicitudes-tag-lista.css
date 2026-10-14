@@ -199,16 +199,8 @@ html:not(.glass-active) .gelia-tag-lista .gelia-tag-resultados-tipo {
     transition: background-color var(--tag-motion), border-color var(--tag-motion);
 }
 
-.gelia-tag-card:hover {
-    border-color: color-mix(in srgb, var(--color-primario) 30%, var(--theme-border));
-}
-
 .gelia-tag-table td {
-    padding-block: 1rem;
-}
-
-.gelia-tag-table td:nth-child(3) {
-    max-width: 25rem;
+    padding-block: 0.75rem;
 }
 
 .gelia-tag-table tbody tr:last-child {
@@ -220,37 +212,413 @@ html:not(.glass-active) .gelia-tag-lista .gelia-tag-resultados-tipo {
 }
 
 .gelia-tag-resumen {
-    margin-top: 0.75rem;
-    max-width: 42ch;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.25rem 0.75rem;
+    margin-top: 0.5rem;
 }
 
+
 .gelia-tag-resumen > p {
+    flex: 0 1 auto;
+    min-width: 0;
     white-space: normal;
     overflow-wrap: anywhere;
     line-height: 1.5;
+}
+
+/* Listado: tabla o fila-tarjeta según el ancho real del contenedor (no del viewport). */
+.gelia-tag-listado {
+    container: tag-listado / inline-size;
+}
+
+.gelia-tag-listado-tabla {
+    display: none;
+}
+
+@container tag-listado (width >= 75rem) {
+    .gelia-tag-listado-tabla {
+        display: block;
+    }
+
+    .gelia-tag-listado-tarjetas {
+        display: none;
+    }
+}
+
+.gelia-tag-table :is(th, td) {
+    padding-inline: 0.75rem;
+}
+
+@container tag-listado (width >= 90rem) {
+    .gelia-tag-table :is(th, td) {
+        padding-inline: 1rem;
+    }
+}
+
+.gelia-tag-fila[data-atencion="peligro"],
+.gelia-tag-card[data-atencion="peligro"] {
+    background: color-mix(in srgb, var(--color-peligro) 5%, var(--theme-surface-solid));
+}
+
+.gelia-tag-fila[data-atencion="aviso"],
+.gelia-tag-card[data-atencion="aviso"] {
+    background: color-mix(in srgb, var(--color-aviso) 5%, var(--theme-surface-solid));
+}
+
+.gelia-tag-pago {
+    --tag-pago-color: var(--theme-text-muted);
+
+    display: inline-block;
+    color: color-mix(in srgb, var(--tag-pago-color) 70%, var(--theme-text-main));
+    font-size: 0.8125rem;
+    font-weight: 500;
+    line-height: 1.3;
+}
+
+.gelia-tag-pago::before {
+    content: '';
+    display: inline-block;
+    width: 0.5rem;
+    height: 0.5rem;
+    margin-right: 0.375rem;
+    vertical-align: middle;
+    border-radius: 50%;
+    background: var(--tag-pago-color);
+}
+
+.gelia-tag-pago[data-tono="exito"] {
+    --tag-pago-color: var(--color-exito);
+}
+
+.gelia-tag-pago[data-tono="aviso"] {
+    --tag-pago-color: var(--color-aviso);
+}
+
+.gelia-tag-pago[data-tono="peligro"] {
+    --tag-pago-color: var(--color-peligro);
+}
+
+/*
+ * Legibilidad del listado. Inter solo carga 400/700, así que 500 se ve como 400:
+ * la solidez se logra con contraste y con 600 (700 real) solo en datos principales.
+ */
+.gelia-tag-listado .theme-text-muted {
+    color: color-mix(in srgb, var(--theme-text-muted) 70%, var(--theme-text-main));
+}
+
+.gelia-tag-listado .theme-text-info {
+    color: color-mix(in srgb, var(--color-info) 70%, var(--theme-text-main));
+}
+
+.gelia-tag-table thead th {
+    font-weight: 600;
+}
+
+/*
+ * Motivo / resumen: el origen o estado inicial ("Sistema automático:", "Aprobado (…):") toma el tono
+ * del mensaje (incidencia, aviso, aprobación) y se distingue del contenido, sin contenedor extra.
+ */
+.gelia-tag-resumen > .gelia-tag-resumen-texto {
+    --tag-msg-tono: var(--theme-text-muted);
+
+    color: color-mix(in srgb, var(--theme-text-main) 88%, var(--theme-text-muted));
+}
+
+.gelia-tag-resumen-texto[data-tono="peligro"] {
+    --tag-msg-tono: var(--color-peligro);
+
+    color: var(--theme-text-main);
+}
+
+.gelia-tag-resumen-texto[data-tono="aviso"] {
+    --tag-msg-tono: var(--color-aviso);
+}
+
+.gelia-tag-resumen-texto[data-tono="exito"] {
+    --tag-msg-tono: var(--color-exito);
+}
+
+.gelia-tag-resumen-origen {
+    font-weight: 700;
+    color: color-mix(in srgb, var(--tag-msg-tono) 70%, var(--theme-text-main));
+}
+
+/* Equilibrio de pesos: con solo 400/700 disponibles, el cliente conserva la negrita y el título de la operación pasa a regular. */
+.gelia-tag-listado .gelia-tag-operacion-titulo {
+    font-weight: 400;
+}
+
+/* Fechas: una línea por fecha. En columnas angostas el rótulo queda solo para lectores de pantalla (el icono y el tooltip lo explican). */
+.gelia-tag-tiempo {
+    white-space: nowrap;
+}
+
+.gelia-tag-table .gelia-tag-tiempo-etiqueta {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+}
+
+/* Operación: más aire entre título, listas, etiquetas y mensaje; el flujo de listas va en su propia línea. */
+.gelia-tag-operacion,
+.gelia-tag-etiquetas {
+    gap: 0.5rem;
+}
+
+.gelia-tag-flujo {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.375rem 0.625rem;
+    max-width: 100%;
+    padding: 0.25rem 0.625rem;
+    border-radius: 0.625rem;
+    background: color-mix(in srgb, var(--theme-text-main) 4%, transparent);
+}
+
+.gelia-tag-flujo-paso {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem 0.5rem;
+}
+
+.gelia-tag-flujo-etiqueta,
+.gelia-tag-flujo-flecha {
+    color: color-mix(in srgb, var(--theme-text-muted) 55%, var(--theme-text-main));
+}
+
+.gelia-tag-flujo-etiqueta {
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.gelia-tag-flujo-flecha {
+    width: 1rem;
+    height: 1rem;
+    flex-shrink: 0;
+}
+
+/*
+ * Tipo de cliente: matices fríos derivados de tokens, distintos de los verdes/ámbar/rojo
+ * de aprobación y pago. El icono y el texto comunican el tipo; el color solo refuerza.
+ */
+.gelia-tag-tipo {
+    --tag-tipo-color: var(--theme-text-muted);
+
+    border-color: color-mix(in srgb, var(--tag-tipo-color) 32%, var(--theme-border));
+    background-color: color-mix(in srgb, var(--tag-tipo-color) 9%, var(--theme-surface-solid));
+    color: color-mix(in srgb, var(--tag-tipo-color) 62%, var(--theme-text-main));
+}
+
+.gelia-tag-tipo--nuevo {
+    --tag-tipo-color: var(--color-info);
+}
+
+.gelia-tag-tipo--activo {
+    --tag-tipo-color: color-mix(in srgb, var(--color-exito) 60%, var(--color-info));
+}
+
+.gelia-tag-tipo--reactivado {
+    --tag-tipo-color: color-mix(in srgb, var(--color-info) 60%, var(--color-peligro));
+}
+
+/* Fila-tarjeta: apilada en ancho reducido; con ancho medio, contenido + riel de estado y acciones. */
+.gelia-tag-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+        "folio estado"
+        "cliente cliente"
+        "operacion operacion"
+        "resumen resumen"
+        "meta meta"
+        "pago acciones";
+    align-items: start;
+    gap: 0.875rem 1rem;
+    padding: 1rem;
+}
+
+.gelia-tag-card-main,
+.gelia-tag-card-rail,
+.gelia-tag-card-id,
+.gelia-tag-card-detalle {
+    display: contents;
+}
+
+.gelia-tag-card:hover {
+    border-color: color-mix(in srgb, var(--color-primario) 30%, var(--theme-border));
+}
+
+.gelia-tag-card-folio {
+    grid-area: folio;
+}
+
+.gelia-tag-card-estado {
+    grid-area: estado;
+    justify-self: end;
+}
+
+.gelia-tag-card-cliente {
+    grid-area: cliente;
+}
+
+.gelia-tag-card-operacion {
+    grid-area: operacion;
+}
+
+.gelia-tag-card-resumen {
+    grid-area: resumen;
+}
+
+/* Pie de datos secundarios: responsable y fechas en una línea que envuelve. */
+.gelia-tag-card-meta {
+    grid-area: meta;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 1rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--theme-border);
+}
+
+.gelia-tag-card-meta .gelia-tag-tiempos {
+    display: contents;
+}
+
+.gelia-tag-card-meta .gelia-tag-tiempos > * {
+    margin: 0;
+}
+
+/* Jerarquía en tarjeta: cliente como dato principal; folio y operación una nota más suaves. */
+.gelia-tag-card .gelia-tag-folio {
+    color: color-mix(in srgb, var(--theme-text-main) 78%, var(--theme-text-muted));
+}
+
+.gelia-tag-card-cliente .line-clamp-2 {
+    font-size: 1rem;
+    line-height: 1.35;
+}
+
+.gelia-tag-card .gelia-tag-operacion-titulo {
+    color: color-mix(in srgb, var(--theme-text-main) 82%, var(--theme-text-muted));
+}
+
+.gelia-tag-card-pago {
+    grid-area: pago;
+    align-self: center;
+}
+
+.gelia-tag-card-acciones {
+    grid-area: acciones;
+    place-self: center end;
+}
+
+.gelia-tag-card-resumen .gelia-tag-resumen {
+    margin-top: 0;
+}
+
+@container tag-listado (width >= 36rem) {
+    .gelia-tag-card {
+        grid-template-columns: minmax(0, 1fr) minmax(12rem, 15rem);
+        grid-template-areas: "main rail";
+        align-items: stretch;
+        gap: 1.5rem;
+        padding: 1.25rem;
+    }
+
+    .gelia-tag-card-main,
+    .gelia-tag-card-rail {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        gap: 0.75rem;
+    }
+
+    .gelia-tag-card-main {
+        grid-area: main;
+    }
+
+    /* Orden de lectura: folio, cliente, operación, mensaje, datos secundarios. */
+    .gelia-tag-card-folio { order: 1; }
+    .gelia-tag-card-cliente { order: 2; }
+    .gelia-tag-card-operacion { order: 3; }
+    .gelia-tag-card-resumen { order: 4; }
+    .gelia-tag-card-meta { order: 5; }
+
+    .gelia-tag-card-rail {
+        grid-area: rail;
+        align-items: flex-end;
+        padding-left: 1.5rem;
+        border-left: 1px solid var(--theme-border);
+    }
+
+    .gelia-tag-card-estado,
+    .gelia-tag-card-pago,
+    .gelia-tag-card-acciones {
+        align-self: auto;
+    }
+}
+
+@container tag-listado (width >= 52rem) {
+    .gelia-tag-card-main {
+        display: grid;
+        grid-template-columns: 11rem minmax(0, 1fr);
+        gap: 1.5rem;
+        align-items: start;
+    }
+
+    .gelia-tag-card-id,
+    .gelia-tag-card-detalle {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        gap: 0.75rem;
+    }
+
+    .gelia-tag-card-meta {
+        flex-direction: column;
+        padding-top: 0;
+        border-top: 0;
+    }
+
+    .gelia-tag-card-meta .gelia-tag-tiempo-etiqueta {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+    }
 }
 
 .gelia-tag-detail-link {
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
-    min-height: 2.75rem;
-    margin-top: 0.25rem;
-    padding: 0.375rem 0;
-    color: var(--solicitudes-acento-accion);
+    min-height: 1.75rem;
+    margin-top: 0;
+    padding: 0.125rem 0;
+    /* Enlace secundario neutro: el verde queda para estados y la acción principal (p. ej. Verificar). */
+    color: color-mix(in srgb, var(--theme-text-main) 78%, var(--theme-text-muted));
     font-size: 0.8125rem;
-    font-weight: 600;
+    font-weight: 500;
     cursor: pointer;
     text-align: left;
-}
-
-.gelia-tag-detail-link:hover {
     text-decoration: underline;
+    text-decoration-color: color-mix(in srgb, currentColor 35%, transparent);
     text-underline-offset: 3px;
 }
 
+.gelia-tag-detail-link:hover {
+    color: var(--solicitudes-acento-accion);
+    text-decoration-color: currentColor;
+}
+
 .gelia-tag-quick-action {
-    min-height: 2.75rem;
+    min-height: 2.5rem;
     padding: 0.5rem 0.75rem;
     border: 1px solid var(--theme-border);
     border-radius: 0.625rem;
@@ -266,7 +634,15 @@ html:not(.glass-active) .gelia-tag-lista .gelia-tag-resultados-tipo {
     border-color: var(--solicitudes-acento-accion);
 }
 
+@media (pointer: coarse) {
+    .gelia-tag-detail-link,
+    .gelia-tag-quick-action {
+        min-height: 2.75rem;
+    }
+}
+
 .gelia-tag-unread {
+    flex-basis: 100%;
     display: inline-flex;
     align-items: center;
     gap: 0.375rem;

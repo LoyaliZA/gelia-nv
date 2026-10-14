@@ -27,6 +27,7 @@ export default function ModalCustodiaResguardo({
         catalogos,
         admiteConfirmacion,
         motivoNoConfirmacion,
+        flujoCompleto,
     } = useFormularioCustodiaResguardo(resguardoId);
 
     const {
@@ -142,6 +143,7 @@ export default function ModalCustodiaResguardo({
                                 resguardo={resguardo}
                                 almacenes={almacenes}
                                 catalogos={catalogos}
+                                flujoCompleto={flujoCompleto}
                                 enviando={enviando}
                                 error={error}
                                 onEnviar={enviar}

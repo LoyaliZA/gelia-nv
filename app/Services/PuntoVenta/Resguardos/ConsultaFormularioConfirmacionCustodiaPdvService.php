@@ -11,8 +11,8 @@ use App\Services\PuntoVenta\PuntoVentaModulo;
 use App\Support\PuntoVenta\Resguardos\EstadoResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\EtiquetasResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\SerializadorBultosEmpaqueCedisPdv;
-use App\Support\PuntoVenta\Resguardos\SerializadorRegistroManualResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\SerializadorPedidoRevisionResguardoPdv;
+use App\Support\PuntoVenta\Resguardos\SerializadorRegistroManualResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\SerializadorRetiroPedidoResguardoPdv;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 
@@ -75,6 +75,7 @@ class ConsultaFormularioConfirmacionCustodiaPdvService
             ],
             'admite_confirmacion_custodia' => EstadoResguardoPdv::admiteConfirmacionCustodia($resguardo),
             'motivo_no_confirmacion_custodia' => EstadoResguardoPdv::motivoNoConfirmacionCustodia($resguardo),
+            'flujo_completo' => $this->alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_FLUJO_COMPLETO),
         ];
     }
 

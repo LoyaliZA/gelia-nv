@@ -30,6 +30,8 @@ class ConfirmacionCustodiaResguardoPdvController extends Controller
             (int) $datos['almacen_id'],
             $datos['bultos'],
             $request->file('evidencias', []) ?? [],
+            array_key_exists('piezas', $datos) ? $datos['piezas'] : null,
+            $datos['omisiones'] ?? [],
         );
 
         return response()->json([

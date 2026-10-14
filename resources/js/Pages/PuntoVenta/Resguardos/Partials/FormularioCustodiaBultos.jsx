@@ -8,6 +8,8 @@ import { titularResguardo, etiquetaRetiroResguardo, evidenciaManualCompleta } fr
 import PanelPedidoRevisionResguardo from './PanelPedidoRevisionResguardo';
 import BotonesCapturaEvidencia from './BotonesCapturaEvidencia';
 import { ChipEvidenciasBultosEmpaque } from './ModalEvidenciasBultosEmpaque';
+import BusquedaProductoResguardo from './BusquedaProductoResguardo';
+import PanelFaltantesResguardo from './PanelFaltantesResguardo';
 import useToastAlCambiar from '../../../../hooks/useToastAlCambiar';
 
 function crearBultosIniciales(resguardo) {
@@ -25,6 +27,7 @@ export default function FormularioCustodiaBultos({
     resguardo,
     almacenes = [],
     catalogos = {},
+    flujoCompleto = false,
     enviando = false,
     error = null,
     onEnviar,
@@ -32,6 +35,14 @@ export default function FormularioCustodiaBultos({
     const [almacenId, setAlmacenId] = useState(almacenes.length === 1 ? String(almacenes[0].id) : '');
     const [bultos, setBultos] = useState(() => crearBultosIniciales(resguardo));
     const [evidencias, setEvidencias] = useState([]);
+    const [piezasPedido, setPiezasPedido] = useState(() => (resguardo?.registro_manual?.piezas || []).map((linea) => ({
+        producto_id: linea.producto_id,
+        sku: linea.sku,
+        descripcion: linea.descripcion,
+        cantidad: linea.cantidad || 1,
+        nota: linea.nota || '',
+    })));
+    const [motivoOmision, setMotivoOmision] = useState('');
     const [confirmar, setConfirmar] = useState(false);
     const [erroresLocales, setErroresLocales] = useState({});
 
@@ -42,6 +53,8 @@ export default function FormularioCustodiaBultos({
     const titular = titularResguardo(resguardo);
     const etiquetaRetiro = etiquetaRetiroResguardo(resguardo);
     const reutilizaEvidencia = evidenciaManualCompleta(resguardo);
+    const exigePiezasPedido = Boolean(flujoCompleto && resguardo?.registro_manual);
+    const faltaPiezasPedido = exigePiezasPedido && piezasPedido.length < 1;
 
     const previews = useMemo(() => evidencias.map((archivo) => ({
         archivo,
@@ -66,8 +79,27 @@ export default function FormularioCustodiaBultos({
                 errores[`bultos.${indice}.piezas`] = 'Las piezas deben ser al menos 1.';
             }
         });
+        if (faltaPiezasPedido && motivoOmision.trim().length < 8) {
+            errores.omision = 'Indique el motivo para omitir las piezas, o regístrelas ahora.';
+        }
         return errores;
     };
+
+    const payloadEnvio = () => ({
+        almacenId: Number(almacenId),
+        bultos,
+        evidencias: reutilizaEvidencia ? [] : evidencias,
+        piezas: exigePiezasPedido && piezasPedido.length > 0
+            ? piezasPedido.map((linea) => ({
+                producto_id: linea.producto_id,
+                cantidad: Number.parseInt(linea.cantidad, 10) || 1,
+                nota: String(linea.nota || '').trim() || null,
+            }))
+            : undefined,
+        omisiones: faltaPiezasPedido
+            ? [{ campo: 'piezas', motivo: motivoOmision.trim() }]
+            : [],
+    });
 
     const solicitarConfirmacion = async (e) => {
         e.preventDefault();
@@ -75,11 +107,7 @@ export default function FormularioCustodiaBultos({
         setErroresLocales(errores);
         if (Object.keys(errores).length > 0) return;
         if (reutilizaEvidencia) {
-            await onEnviar({
-                almacenId: Number(almacenId),
-                bultos,
-                evidencias: [],
-            });
+            await onEnviar(payloadEnvio());
             return;
         }
         setConfirmar(true);
@@ -87,11 +115,7 @@ export default function FormularioCustodiaBultos({
 
     const confirmarEnvio = async () => {
         setConfirmar(false);
-        await onEnviar({
-            almacenId: Number(almacenId),
-            bultos,
-            evidencias,
-        });
+        await onEnviar(payloadEnvio());
     };
 
     const agregarEvidencias = (archivos) => {
@@ -239,6 +263,50 @@ export default function FormularioCustodiaBultos({
                     </div>
                 )}
             </div>
+
+            {exigePiezasPedido && (
+                <div className={`${geliaCardClass()} p-5 space-y-3`}>
+                    <h2 className="text-sm font-black uppercase tracking-widest theme-text-main m-0">Piezas del pedido</h2>
+                    <BusquedaProductoResguardo
+                        lineas={piezasPedido}
+                        onAgregar={(producto) => setPiezasPedido((prev) => {
+                            const existente = prev.find((linea) => linea.producto_id === producto.id);
+                            if (existente) {
+                                return prev.map((linea) => (
+                                    linea.producto_id === producto.id
+                                        ? { ...linea, cantidad: Math.min(9999, Number(linea.cantidad) + 1) }
+                                        : linea
+                                ));
+                            }
+                            return [...prev, {
+                                producto_id: producto.id,
+                                sku: producto.sku,
+                                descripcion: producto.descripcion,
+                                cantidad: 1,
+                                nota: '',
+                            }];
+                        })}
+                        onQuitar={(productoId) => setPiezasPedido((prev) => prev.filter((linea) => linea.producto_id !== productoId))}
+                        onCambiarCantidad={(productoId, cantidad) => setPiezasPedido((prev) => prev.map((linea) => (
+                            linea.producto_id === productoId ? { ...linea, cantidad } : linea
+                        )))}
+                        onCambiarNota={(productoId, nota) => setPiezasPedido((prev) => prev.map((linea) => (
+                            linea.producto_id === productoId ? { ...linea, nota } : linea
+                        )))}
+                        deshabilitado={enviando}
+                    />
+                </div>
+            )}
+
+            {faltaPiezasPedido && (
+                <PanelFaltantesResguardo
+                    detalle="Este pedido se registró sin piezas. Regístrelas ahora u omítalas con un motivo para continuar la custodia."
+                    motivo={motivoOmision}
+                    onMotivo={setMotivoOmision}
+                    error={erroresLocales.omision}
+                    deshabilitado={enviando}
+                />
+            )}
 
             <button
                 type="submit"

@@ -7,6 +7,7 @@ use App\Events\PuntoVenta\RecepcionFisicaPdvCompletada;
 use App\Models\PuntoVenta\ResguardoPdv;
 use App\Models\PuntoVenta\ResguardoPdvBulto;
 use App\Models\PuntoVenta\ResguardoPdvEvento;
+use App\Models\PuntoVenta\ResguardoPdvEvidencia;
 use App\Models\User;
 use App\Services\PuntoVenta\PuntoVentaModulo;
 use App\Support\PuntoVenta\Resguardos\BultosEsperadosResguardoPdv;
@@ -14,8 +15,11 @@ use App\Support\PuntoVenta\Resguardos\EstadoRecepcionResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\EvidenciaMinimaRegistroManualPdv;
 use App\Support\PuntoVenta\Resguardos\GeneradorCodigoEtiquetaResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\NormalizadorPiezasRegistroManualPdv;
+use App\Support\PuntoVenta\Resguardos\OmisionRequisitoResguardoPdv;
 use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 
@@ -35,6 +39,7 @@ class RegistrarRecepcionFisicaPdvService
 
     /**
      * @param  list<array{producto_id: int, sku: string|null, descripcion: string|null, cantidad: int, nota: string|null}>|null  $piezas
+     * @param  list<array{campo?: string, motivo?: string}>  $omisiones
      */
     public function ejecutar(
         ResguardoPdv $resguardo,
@@ -42,6 +47,9 @@ class RegistrarRecepcionFisicaPdvService
         int $versionEsperada,
         string $idempotencyKey,
         ?array $piezas = null,
+        array $omisiones = [],
+        ?UploadedFile $archivoTicket = null,
+        ?UploadedFile $fotoPaquete = null,
     ): ResguardoPdv {
         $this->alcance->asegurarMutacionPiso(
             $actor,
@@ -49,109 +57,141 @@ class RegistrarRecepcionFisicaPdvService
             (int) $resguardo->sucursal_id
         );
 
-        return DB::transaction(function () use (
-            $resguardo,
-            $actor,
-            $versionEsperada,
-            $idempotencyKey,
-            $piezas,
-        ) {
-            $resguardo = ResguardoPdv::query()
-                ->with(['bultos', 'pedido.bultosEmpaque'])
-                ->lockForUpdate()
-                ->findOrFail($resguardo->id);
+        $pathsEscritos = [];
 
-            $reintento = $this->resolverReintentoIdempotente($resguardo, $idempotencyKey);
-            if ($reintento !== null) {
-                return $reintento;
-            }
-
-            if ((int) $resguardo->cantidad_bultos_esperada < 1) {
-                $resguardo = app(SincronizarCantidadBultosEsperadaResguardoPdvService::class)->ejecutar($resguardo);
-            }
-
-            $estadoAnterior = $resguardo->estado;
-            $this->assertVersionYEstado($resguardo, $versionEsperada);
-            $this->assertEvidenciaManual($resguardo);
-            if (is_array($piezas) && $this->flujoCompleto($actor)) {
-                $this->guardarPiezas($resguardo, $piezas);
-            }
-            $this->exigirPiezasSiCompleto($resguardo, $actor);
-            $bultosNormalizados = BultosEsperadosResguardoPdv::desdeResguardo($resguardo);
-            $esperada = (int) $resguardo->cantidad_bultos_esperada;
-            $ahora = now();
-
-            foreach ($bultosNormalizados as $dato) {
-                try {
-                    ResguardoPdvBulto::query()->create([
-                        'resguardo_id' => $resguardo->id,
-                        'pedido_bma_id' => $resguardo->pedido_bma_id,
-                        'folio' => $dato['folio'],
-                        'codigo_etiqueta' => GeneradorCodigoEtiquetaResguardoPdv::generar(),
-                        'tipo' => $dato['tipo'],
-                        'piezas' => $dato['piezas'],
-                        'estado' => ResguardoPdvBulto::ESTADO_RECIBIDO_GERENTE,
-                        'recepcion_at' => $ahora,
-                        'recepcion_por_id' => $actor->id,
-                        'version' => 1,
-                    ]);
-                } catch (UniqueConstraintViolationException) {
-                    throw ValidationException::withMessages([
-                        'bultos' => 'Uno o más folios ya fueron recibidos en este resguardo.',
-                    ]);
-                }
-            }
-
-            $resguardo->update([
-                'estado' => ResguardoPdv::ESTADO_RECIBIDO,
-                'recepcion_fisica_at' => $resguardo->recepcion_fisica_at ?? $ahora,
-                'version' => $resguardo->version + 1,
-            ]);
-
-            try {
-                $evento = ResguardoPdvEvento::query()->create([
-                    'resguardo_id' => $resguardo->id,
-                    'tipo_evento' => ResguardoPdvEvento::TIPO_RECEPCION_COMPLETA,
-                    'estado_anterior' => $estadoAnterior,
-                    'estado_nuevo' => ResguardoPdv::ESTADO_RECIBIDO,
-                    'actor_id' => $actor->id,
-                    'ocurrido_at' => $ahora,
-                    'snapshot_json' => [
-                        'paso' => 'gerente',
-                        'bultos' => $bultosNormalizados,
-                        'cantidad_llegada' => count($bultosNormalizados),
-                        'cantidad_recibida' => count($bultosNormalizados),
-                        'cantidad_esperada' => $esperada,
-                        'cantidad_pendiente' => 0,
-                        'recepcion_completa' => true,
-                    ],
-                    'idempotency_key' => $idempotencyKey,
-                ]);
-            } catch (UniqueConstraintViolationException $e) {
-                $recuperado = $this->resolverReintentoIdempotente($resguardo, $idempotencyKey);
-                if ($recuperado !== null) {
-                    return $recuperado;
-                }
-
-                throw $e;
-            }
-
-            $resguardo = $resguardo->fresh(['bultos', 'almacen', 'evidencias']);
-            $ingresoManual = EvidenciaMinimaRegistroManualPdv::esManual($resguardo);
-            if ($ingresoManual && ! $this->flujoCompleto($actor)) {
-                return $this->ingresarManual->cerrarConfirmacionDoble($resguardo, $actor, $idempotencyKey);
-            }
-
-            $this->sincronizarEstatusSucursal->desdeResguardo($resguardo);
-
-            RecepcionFisicaPdvCompletada::dispatch(
+        try {
+            return DB::transaction(function () use (
                 $resguardo,
-                $evento,
-                (int) $resguardo->sucursal_id
-            );
+                $actor,
+                $versionEsperada,
+                $idempotencyKey,
+                $piezas,
+                $omisiones,
+                $archivoTicket,
+                $fotoPaquete,
+                &$pathsEscritos,
+            ) {
+                $resguardo = ResguardoPdv::query()
+                    ->with(['bultos', 'pedido.bultosEmpaque'])
+                    ->lockForUpdate()
+                    ->findOrFail($resguardo->id);
 
-            return $resguardo;
-        });
+                $reintento = $this->resolverReintentoIdempotente($resguardo, $idempotencyKey);
+                if ($reintento !== null) {
+                    return $reintento;
+                }
+
+                if ((int) $resguardo->cantidad_bultos_esperada < 1) {
+                    $resguardo = app(SincronizarCantidadBultosEsperadaResguardoPdvService::class)->ejecutar($resguardo);
+                }
+
+                $estadoAnterior = $resguardo->estado;
+                $this->assertVersionYEstado($resguardo, $versionEsperada);
+                if (is_array($piezas) && $piezas !== [] && $this->flujoCompleto($actor)) {
+                    $this->guardarPiezas($resguardo, $piezas);
+                }
+                $omisionesRegistradas = $this->resolverOmisiones(
+                    $resguardo,
+                    $actor,
+                    $omisiones,
+                    $archivoTicket,
+                    $fotoPaquete,
+                );
+                $bultosNormalizados = BultosEsperadosResguardoPdv::desdeResguardo($resguardo);
+                $esperada = (int) $resguardo->cantidad_bultos_esperada;
+                $ahora = now();
+
+                foreach ($bultosNormalizados as $dato) {
+                    try {
+                        ResguardoPdvBulto::query()->create([
+                            'resguardo_id' => $resguardo->id,
+                            'pedido_bma_id' => $resguardo->pedido_bma_id,
+                            'folio' => $dato['folio'],
+                            'codigo_etiqueta' => GeneradorCodigoEtiquetaResguardoPdv::generar(),
+                            'tipo' => $dato['tipo'],
+                            'piezas' => $dato['piezas'],
+                            'estado' => ResguardoPdvBulto::ESTADO_RECIBIDO_GERENTE,
+                            'recepcion_at' => $ahora,
+                            'recepcion_por_id' => $actor->id,
+                            'version' => 1,
+                        ]);
+                    } catch (UniqueConstraintViolationException) {
+                        throw ValidationException::withMessages([
+                            'bultos' => 'Uno o más folios ya fueron recibidos en este resguardo.',
+                        ]);
+                    }
+                }
+
+                $resguardo->update([
+                    'estado' => ResguardoPdv::ESTADO_RECIBIDO,
+                    'recepcion_fisica_at' => $resguardo->recepcion_fisica_at ?? $ahora,
+                    'version' => $resguardo->version + 1,
+                ]);
+
+                try {
+                    $evento = ResguardoPdvEvento::query()->create([
+                        'resguardo_id' => $resguardo->id,
+                        'tipo_evento' => ResguardoPdvEvento::TIPO_RECEPCION_COMPLETA,
+                        'estado_anterior' => $estadoAnterior,
+                        'estado_nuevo' => ResguardoPdv::ESTADO_RECIBIDO,
+                        'actor_id' => $actor->id,
+                        'ocurrido_at' => $ahora,
+                        'snapshot_json' => $this->snapshotRecepcion(
+                            $bultosNormalizados,
+                            $esperada,
+                            $omisionesRegistradas,
+                        ),
+                        'idempotency_key' => $idempotencyKey,
+                    ]);
+                } catch (UniqueConstraintViolationException $e) {
+                    $recuperado = $this->resolverReintentoIdempotente($resguardo, $idempotencyKey);
+                    if ($recuperado !== null) {
+                        return $recuperado;
+                    }
+
+                    throw $e;
+                }
+
+                $this->adjuntarEvidenciaSiFalta(
+                    $resguardo,
+                    $evento,
+                    $archivoTicket,
+                    ResguardoPdvEvidencia::USO_TICKET,
+                    $actor->id,
+                    $pathsEscritos,
+                );
+                $this->adjuntarEvidenciaSiFalta(
+                    $resguardo,
+                    $evento,
+                    $fotoPaquete,
+                    ResguardoPdvEvidencia::USO_PAQUETE,
+                    $actor->id,
+                    $pathsEscritos,
+                );
+
+                $resguardo = $resguardo->fresh(['bultos', 'almacen', 'evidencias']);
+                $ingresoManual = EvidenciaMinimaRegistroManualPdv::esManual($resguardo);
+                if ($ingresoManual && ! $this->flujoCompleto($actor)) {
+                    return $this->ingresarManual->cerrarConfirmacionDoble($resguardo, $actor, $idempotencyKey);
+                }
+
+                $this->sincronizarEstatusSucursal->desdeResguardo($resguardo);
+
+                RecepcionFisicaPdvCompletada::dispatch(
+                    $resguardo,
+                    $evento,
+                    (int) $resguardo->sucursal_id
+                );
+
+                return $resguardo;
+            });
+        } catch (\Throwable $e) {
+            foreach ($pathsEscritos as $ruta) {
+                Storage::disk('local')->delete($ruta);
+            }
+
+            throw $e;
+        }
     }
 
     private function resolverReintentoIdempotente(ResguardoPdv $resguardo, string $idempotencyKey): ?ResguardoPdv
@@ -179,19 +219,82 @@ class RegistrarRecepcionFisicaPdvService
         return $resguardo->fresh(['bultos', 'almacen']);
     }
 
-    private function assertEvidenciaManual(ResguardoPdv $resguardo): void
+    /**
+     * @param  list<array<string, mixed>>  $bultos
+     * @param  list<array{campo: string, motivo: string, actor_id: int}>  $omisiones
+     * @return array<string, mixed>
+     */
+    private function snapshotRecepcion(array $bultos, int $esperada, array $omisiones): array
     {
-        if (! EvidenciaMinimaRegistroManualPdv::esManual($resguardo)) {
+        $snapshot = [
+            'paso' => 'gerente',
+            'bultos' => $bultos,
+            'cantidad_llegada' => count($bultos),
+            'cantidad_recibida' => count($bultos),
+            'cantidad_esperada' => $esperada,
+            'cantidad_pendiente' => 0,
+            'recepcion_completa' => true,
+        ];
+
+        if ($omisiones !== []) {
+            $snapshot['omisiones'] = $omisiones;
+        }
+
+        return $snapshot;
+    }
+
+    /**
+     * @param  list<array{campo?: string, motivo?: string}>  $omisiones
+     * @return list<array{campo: string, motivo: string, actor_id: int}>
+     */
+    private function resolverOmisiones(
+        ResguardoPdv $resguardo,
+        User $actor,
+        array $omisiones,
+        ?UploadedFile $archivoTicket,
+        ?UploadedFile $fotoPaquete,
+    ): array {
+        $faltantes = OmisionRequisitoResguardoPdv::faltantes(
+            $resguardo,
+            $this->flujoCompleto($actor),
+            true,
+        );
+        $faltantes = OmisionRequisitoResguardoPdv::cubrirConArchivo(
+            $faltantes,
+            OmisionRequisitoResguardoPdv::TICKET,
+            $archivoTicket,
+        );
+        $faltantes = OmisionRequisitoResguardoPdv::cubrirConArchivo(
+            $faltantes,
+            OmisionRequisitoResguardoPdv::FOTO_PAQUETE,
+            $fotoPaquete,
+        );
+
+        return OmisionRequisitoResguardoPdv::resolver($omisiones, $faltantes, $actor->id, 'recepcion');
+    }
+
+    /**
+     * @param  list<string>  $pathsEscritos
+     */
+    private function adjuntarEvidenciaSiFalta(
+        ResguardoPdv $resguardo,
+        ResguardoPdvEvento $evento,
+        ?UploadedFile $archivo,
+        string $uso,
+        int $actorId,
+        array &$pathsEscritos,
+    ): void {
+        if (! $archivo instanceof UploadedFile || ! EvidenciaMinimaRegistroManualPdv::esManual($resguardo)) {
             return;
         }
 
-        if (EvidenciaMinimaRegistroManualPdv::completa($resguardo)) {
+        $resguardo->unsetRelation('evidencias');
+        if (in_array($uso, EvidenciaMinimaRegistroManualPdv::usosPresentes($resguardo), true)) {
             return;
         }
 
-        throw ValidationException::withMessages([
-            'archivo_ticket' => 'Adjunte el ticket y la foto del paquete. Esa evidencia cubre el ingreso completo.',
-        ]);
+        $this->ingresarManual->guardar($resguardo, $evento, $archivo, $uso, $actorId, $pathsEscritos);
+        $resguardo->unsetRelation('evidencias');
     }
 
     private function assertVersionYEstado(ResguardoPdv $resguardo, int $versionEsperada): void
@@ -228,20 +331,5 @@ class RegistrarRecepcionFisicaPdvService
         $snapshot['cantidad_piezas'] = NormalizadorPiezasRegistroManualPdv::cantidad($piezas);
         $resguardo->update(['snapshot_json' => $snapshot]);
         $resguardo->refresh();
-    }
-
-    private function exigirPiezasSiCompleto(ResguardoPdv $resguardo, User $actor): void
-    {
-        if (! $this->flujoCompleto($actor) || ! EvidenciaMinimaRegistroManualPdv::esManual($resguardo)) {
-            return;
-        }
-
-        $snapshot = is_array($resguardo->snapshot_json) ? $resguardo->snapshot_json : [];
-        $piezas = $snapshot['piezas'] ?? [];
-        if (! is_array($piezas) || $piezas === []) {
-            throw ValidationException::withMessages([
-                'piezas' => 'Registre las piezas del pedido antes de confirmar la recepción.',
-            ]);
-        }
     }
 }
