@@ -12,6 +12,7 @@ use App\Models\SaldosAFavor\SafIncidencia;
 use App\Models\SaldosAFavor\SafPedidoAplicacion;
 use App\Models\Concerns\BelongsToUsuario;
 use App\Models\User;
+use App\Support\ControlPedidos\AlmacenPdv;
 use App\Support\ControlPedidos\MaquinaEstadosPedidoBma;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -23,7 +24,7 @@ class PedidoBma extends Model
 {
     use BelongsToUsuario, SoftDeletes;
 
-    protected $appends = ['requiere_sucursal_destino', 'solicitud_preparacion', 'base_captura'];
+    protected $appends = ['requiere_sucursal_destino', 'es_traslado_interno_pdv', 'requiere_bultos_empaque', 'solicitud_preparacion', 'base_captura'];
 
     protected $hidden = ['captura_creacion_clave', 'captura_creacion_hash', 'captura_creacion_base'];
 
@@ -165,6 +166,8 @@ class PedidoBma extends Model
         'pago_validado_por_id',
         'empacado_at',
         'empacado_por_id',
+        'retraso_empaque_alertado_at',
+        'retraso_recoleccion_alertado_at',
         'detalle_incidencia_empaque',
         'incidencia_empaque_at',
         'incidencia_empaque_por_id',
@@ -185,6 +188,8 @@ class PedidoBma extends Model
     protected $casts = [
         'pago_validado_at' => 'datetime',
         'empacado_at' => 'datetime',
+        'retraso_empaque_alertado_at' => 'datetime',
+        'retraso_recoleccion_alertado_at' => 'datetime',
         'guia_subida_at' => 'datetime',
         'guia_corregida_at' => 'datetime',
         'guia_retraso' => 'boolean',
@@ -493,9 +498,18 @@ class PedidoBma extends Model
         return $this->tareaPreparacionVigente?->modalidad?->codigo;
     }
 
+    private function codigoModalidadDestinoFisico(): ?string
+    {
+        $this->loadMissing('tareaPreparacionRespondida.modalidad');
+
+        return $this->codigoModalidadPreparacionVigente()
+            ?? $this->tareaPreparacionRespondida?->modalidad?->codigo
+            ?? ($this->solicitud_preparacion['codigo_modalidad'] ?? null);
+    }
+
     public function requiereSucursalDestino(?string $codigoModalidad = null): bool
     {
-        $codigo = $codigoModalidad ?? $this->codigoModalidadPreparacionVigente();
+        $codigo = $codigoModalidad ?? $this->codigoModalidadDestinoFisico();
         if ($codigo !== null) {
             return in_array($codigo, CatalogoModalidadPreparacionPedido::CODIGOS_FASE4, true);
         }
@@ -507,14 +521,63 @@ class PedidoBma extends Model
 
     public function prohibeSucursalDestino(?string $codigoModalidad = null): bool
     {
-        $codigo = $codigoModalidad ?? $this->codigoModalidadPreparacionVigente();
+        $codigo = $codigoModalidad ?? $this->codigoModalidadDestinoFisico();
         if ($codigo !== null) {
             return ! in_array($codigo, CatalogoModalidadPreparacionPedido::CODIGOS_FASE4, true);
         }
 
-        $this->loadMissing('origen');
+        return false;
+    }
 
-        return $this->origen !== null && (bool) $this->origen->requiere_logistica;
+    /**
+     * El destino físico es sucursal salvo que la preparación declare otro recorrido.
+     * Una sucursal comercial, la del vendedor o la del almacén no son destino.
+     * Funciona también en borradores sin ID; no infiere un abastecimiento a otra tarea.
+     */
+    public function esTrasladoInternoAPdv(): bool
+    {
+        if (! $this->sucursal_destino_id || ! $this->almacen_id) {
+            return false;
+        }
+
+        $codigo = $this->codigoModalidadDestinoFisico();
+        if ($codigo && ! in_array($codigo, CatalogoModalidadPreparacionPedido::CODIGOS_FASE4, true)) {
+            return false;
+        }
+
+        $this->loadMissing('almacen.tipoAlmacen');
+        if (! $this->almacen) {
+            return false;
+        }
+
+        // Recoger en el mismo PDV no implica salida hacia otro almacén.
+        if (! AlmacenPdv::esAlmacen($this->almacen)) {
+            return true;
+        }
+
+        return $this->almacen->sucursal_id !== null
+            && (int) $this->almacen->sucursal_id !== (int) $this->sucursal_destino_id;
+    }
+
+    /** Compatibilidad para consumidores que necesitan específicamente salida CEDIS. */
+    public function esTrasladoInternoCedisAPdv(): bool
+    {
+        return $this->esTrasladoInternoAPdv() && ! AlmacenPdv::esAlmacen($this->almacen);
+    }
+
+    public function requiereBultosEmpaque(): bool
+    {
+        return $this->requiereSucursalDestino() || $this->esTrasladoInternoAPdv();
+    }
+
+    public function getEsTrasladoInternoPdvAttribute(): bool
+    {
+        return $this->esTrasladoInternoAPdv();
+    }
+
+    public function getRequiereBultosEmpaqueAttribute(): bool
+    {
+        return $this->requiereBultosEmpaque();
     }
 
     public function banco(): BelongsTo
@@ -815,12 +878,24 @@ class PedidoBma extends Model
     }
 
     /**
-     * CEDIS responde solo revisiones de mercancía (sin cajas/pesos obligatorios).
-     * Toda operación con logística usa pesaje, independientemente del departamento o tarifa.
+     * Consulta CEDIS sin kilogramos obligatorios.
+     * Los traslados internos y el origen sin logística usan este modo. Un transporte local/regional con
+     * requiere_peso = false también, aunque el origen tenga logística. Una paquetería
+     * comercial, o una local que sí exige peso, conserva el pesaje.
      */
     public function consultaCedisModoRevisionMercancia(): bool
     {
-        return $this->esConsultaMercancia();
+        if ($this->esTrasladoInternoAPdv() || $this->esConsultaMercancia()) {
+            return true;
+        }
+
+        $this->loadMissing('paqueteria');
+        $paqueteria = $this->paqueteria;
+        if ($paqueteria === null || ! $paqueteria->esLocalRegional()) {
+            return false;
+        }
+
+        return ! $paqueteria->requiere_peso;
     }
 
     public function consultaCerrada(): bool
@@ -1216,6 +1291,10 @@ class PedidoBma extends Model
 
     public function ofreceRastreo(): bool
     {
+        if ($this->esTrasladoInternoAPdv()) {
+            return false;
+        }
+
         if ($this->cliente_proporciona_guia) {
             return true;
         }
@@ -1238,7 +1317,8 @@ class PedidoBma extends Model
     public function puedeMarcarEnviado(): bool
     {
         return $this->estatus?->fase_ciclo === CatalogoEstatusPedido::FASE_PENDIENTE_DE_ENVIO
-            && $this->empacado_at !== null;
+            && $this->empacado_at !== null
+            && ! $this->consulta_actualizacion_pendiente;
     }
 
     public function puedeMarcarEmpacado(): bool
@@ -1246,7 +1326,7 @@ class PedidoBma extends Model
         return in_array($this->estatus?->fase_ciclo, [
             CatalogoEstatusPedido::FASE_EN_CEDIS,
             CatalogoEstatusPedido::FASE_INCIDENCIA_CEDIS,
-        ], true);
+        ], true) && ! $this->consulta_actualizacion_pendiente;
     }
 
     public function puedeRevertirEmpacado(): bool

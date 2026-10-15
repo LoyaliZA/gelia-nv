@@ -56,6 +56,8 @@ class AlertaPedidoBma extends Notification implements ShouldQueue, ShouldBroadca
         'pedido_enviado' => 'Paquetería recogió el pedido',
         'pedido_resguardo_liberado' => 'Resguardo liberado',
         'pedido_sin_existencia' => 'Producto sin existencias',
+        'pedido_retraso_empaque' => 'Retraso de empaque',
+        'pedido_retraso_recoleccion' => 'Retraso de recolección',
         'pedido_apartado_confirmado' => 'Apartado confirmado en PDV',
         'pedido_apartado_vencido' => 'Revisar apartado en PDV',
         'pedido_preparacion_tienda_nueva' => 'Nueva preparación en Tienda',
@@ -217,6 +219,8 @@ class AlertaPedidoBma extends Notification implements ShouldQueue, ShouldBroadca
             'pedido_enviado' => "Atención {$nombre}, la paquetería recogió el pedido {$folio}.",
             'pedido_resguardo_liberado' => "Atención {$nombre}, se liberó el resguardo del pedido {$folio}, listo para CEDIS.",
             'pedido_sin_existencia' => "Atención {$nombre}, {$actor} reportó producto sin existencias en el pedido {$folio}. El pedido está detenido hasta que elijas una acción.",
+            'pedido_retraso_empaque' => "Atención {$nombre}, hay un retraso de empaque en el pedido {$folio}.",
+            'pedido_retraso_recoleccion' => "Atención {$nombre}, hay un retraso de recolección en el pedido {$folio}.",
             default => "{$nombre}, tienes una notificación sobre el pedido {$folio}.",
         };
     }

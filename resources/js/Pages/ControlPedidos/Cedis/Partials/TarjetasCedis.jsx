@@ -20,6 +20,7 @@ import {
     BTN_PRIMARY,
     tieneGuiaPdfDisponible,
     cedisConsultaEsRevisionMercancia,
+    pedidoRequiereLogistica,
     etiquetaOrigenGuia,
     LABELS_MOTIVO_REPESAJE,
     mostrarNotaCompraCedis,
@@ -57,8 +58,9 @@ function TarjetaPedido({
     const anexosPiezas = anexosPiezasDe(pedido);
     const esErrorCedis = fase === 'INCIDENCIA_CEDIS';
     const esEmpacado = esPedidoEmpacadoCedis(fase);
-    const puedeEmpacar = (fase === 'EN_CEDIS' || fase === 'INCIDENCIA_CEDIS') && !pedido.es_resguardo;
-    const puedeMarcarEnviado = fase === 'PENDIENTE_DE_ENVIO' && Boolean(puedeEnviar);
+    const actualizacionMercanciaPendiente = Boolean(pedido.consulta_actualizacion_pendiente);
+    const puedeEmpacar = (fase === 'EN_CEDIS' || fase === 'INCIDENCIA_CEDIS') && !pedido.es_resguardo && !actualizacionMercanciaPendiente;
+    const puedeMarcarEnviado = fase === 'PENDIENTE_DE_ENVIO' && Boolean(puedeEnviar) && !actualizacionMercanciaPendiente;
     const puedeReabrirEnvio = fase === 'ENVIADO' && Boolean(puedeReabrir);
     const cajasPedido = pedido.cajas || [];
     const cajasPendientesCount = pedido.cajas_pendientes
@@ -69,7 +71,7 @@ function TarjetaPedido({
     const puedeReportarError = ['EN_CEDIS', 'INCIDENCIA_CEDIS', 'PENDIENTE_DE_GUIA', 'PENDIENTE_DE_ENVIO'].includes(fase) && !pedido.es_resguardo;
     const puedeApartar = Boolean(pedido.es_resguardo) && fase === 'EN_CEDIS' && !pedido.resguardo_apartado_at;
     const tieneGuiaPdf = tieneGuiaPdfDisponible(pedido);
-    const requiereLogistica = pedido.origen?.requiere_logistica ?? true;
+    const requiereLogistica = pedidoRequiereLogistica(pedido);
     const ringRetraso = pedido.guia_retraso
         || tieneRetrasoEmpaqueActivo(pedido)
         || tieneRetrasoRecoleccionActivo(pedido);
@@ -128,8 +130,8 @@ function TarjetaPedido({
                     {pedido.consulta_actualizacion_pendiente || pedido.motivo_repesaje
                         ? `Actualización (${LABELS_MOTIVO_REPESAJE[pedido.motivo_repesaje] || pedido.motivo_repesaje || 'cambio'}). Revise el anexo/PDF y confirme.`
                         : (soloMercancia
-                            ? 'Revise el PDF o foto, registre las piezas, los bultos a preparar (aprox.) y la evidencia final del lote. Este recorrido no pide kilogramos.'
-                            : 'Revise el PDF o foto del pedido y registre peso, cajas y la foto de cada envío. La tarifa no exime el pesaje.')}
+                            ? `Revise el PDF o foto, registre piezas, disponibilidad, condición y evidencia.${pedido.paqueteria?.requiere_caja ? ' El transporte pide tipo de caja y bultos, sin kilogramos.' : ' Este recorrido no pide kilogramos de CEDIS.'}`
+                            : 'Revise el PDF o foto del pedido y registre peso, cajas y la foto de cada envío. La tarifa local solo exime kilos cuando requiere_peso es falso.')}
                 </AvisoOperativoPedido>
             )}
 
@@ -218,6 +220,11 @@ function TarjetaPedido({
             {fase === 'PENDIENTE_GUIA_CLIENTE' && (
                 <AvisoOperativoPedido label={etiquetaOrigenGuia(pedido)} tono="info">
                     Esperando guía del cliente (vendedora). Solo lectura hasta que cargue la guía.
+                </AvisoOperativoPedido>
+            )}
+            {actualizacionMercanciaPendiente && (puedeEmpacar || fase === 'EN_CEDIS' || fase === 'INCIDENCIA_CEDIS' || fase === 'PENDIENTE_DE_ENVIO') && (
+                <AvisoOperativoPedido label="Mercancía" tono="warning">
+                    Hay un cambio de piezas pendiente. Confirme la consulta antes de empacar o marcar el envío.
                 </AvisoOperativoPedido>
             )}
 

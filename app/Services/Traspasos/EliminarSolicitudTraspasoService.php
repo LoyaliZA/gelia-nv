@@ -12,6 +12,7 @@ class EliminarSolicitudTraspasoService
 {
     public function ejecutar(SolicitudTraspaso $solicitud, string $motivo, User $usuario): void
     {
+        abort_if($solicitud->esAbastecimiento(), 422, 'El abastecimiento conserva su trazabilidad. Resuelva sus incidencias desde la preparación receptora.');
         DB::transaction(function () use ($solicitud, $motivo, $usuario) {
             AuditoriaSolicitudTraspaso::create([
                 'solicitud_traspaso_id' => $solicitud->id,

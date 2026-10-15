@@ -15,6 +15,8 @@ class SolicitudTraspaso extends Model
     protected $table = 'solicitudes_traspasos';
 
     protected $fillable = [
+        'proposito', 'tarea_receptora_id', 'pedido_receptor_id', 'almacen_destino_id',
+        'version_operativa', 'salida_fisica_at',
         'folio',
         'tarea_preparacion_id',
         'origen_codigo',
@@ -42,6 +44,8 @@ class SolicitudTraspaso extends Model
         return [
             'fecha_entrega_estimada' => 'date',
             'respondida_at' => 'datetime',
+            'salida_fisica_at' => 'datetime',
+            'version_operativa' => 'integer',
             'total_piezas' => 'integer',
         ];
     }
@@ -50,6 +54,28 @@ class SolicitudTraspaso extends Model
         'tiene_evidencia_respuesta',
         'tiene_detalle_dano',
     ];
+
+    public const PROPOSITO_ABASTECIMIENTO = 'ABASTECIMIENTO_PREPARACION';
+
+    public function esAbastecimiento(): bool
+    {
+        return $this->proposito === self::PROPOSITO_ABASTECIMIENTO;
+    }
+
+    public function tareaReceptora(): BelongsTo
+    {
+        return $this->belongsTo(\App\Models\ControlPedidos\PedidoBmaTareaPreparacion::class, 'tarea_receptora_id')->withTrashed();
+    }
+
+    public function almacenDestino(): BelongsTo
+    {
+        return $this->belongsTo(Almacen::class, 'almacen_destino_id');
+    }
+
+    public function operaciones(): HasMany
+    {
+        return $this->hasMany(TraspasoOperacion::class, 'solicitud_traspaso_id')->orderBy('id');
+    }
 
     public function vendedor(): BelongsTo
     {

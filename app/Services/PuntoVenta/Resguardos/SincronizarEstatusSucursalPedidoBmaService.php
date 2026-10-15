@@ -21,7 +21,7 @@ class SincronizarEstatusSucursalPedidoBmaService
         }
 
         $pedido = PedidoBma::query()->find($pedidoId);
-        if (! $pedido instanceof PedidoBma || ! $pedido->requiereSucursalDestino()) {
+        if (! $pedido instanceof PedidoBma || ! $pedido->requiereBultosEmpaque()) {
             return;
         }
 
@@ -35,7 +35,7 @@ class SincronizarEstatusSucursalPedidoBmaService
 
     public function marcarEnTransito(PedidoBma $pedido): void
     {
-        if (! $pedido->requiereSucursalDestino()) {
+        if (! $pedido->requiereBultosEmpaque()) {
             return;
         }
 

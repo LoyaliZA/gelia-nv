@@ -18,9 +18,19 @@ class ResponderPesajePedidoBmaRequest extends FormRequest
     {
         $estados = PedidoBmaRevisionProducto::ESTADOS;
         $pedido = $this->route('pedidoBma');
+        if ($pedido instanceof PedidoBma) {
+            $pedido = clone $pedido;
+            if ($this->filled('almacen_id')) {
+                $pedido->almacen_id = (int) $this->input('almacen_id');
+                $pedido->unsetRelation('almacen');
+            }
+            $pedido->loadMissing('paqueteria');
+        }
         $soloRevisiones = $pedido instanceof PedidoBma && $pedido->consultaCedisModoRevisionMercancia();
+        $exigeCaja = $soloRevisiones && ! $pedido->esTrasladoInternoAPdv() && (bool) $pedido->paqueteria?->requiere_caja;
 
         $rules = [
+            'almacen_id' => ['nullable', 'integer', 'exists:almacenes,id'],
             'estado_fisico_general' => ['nullable', 'string', Rule::in($estados)],
             'comentario_fisico_general' => ['nullable', 'string', 'max:2000'],
             'evidencias_generales' => ['nullable', 'array'],
@@ -31,6 +41,8 @@ class ResponderPesajePedidoBmaRequest extends FormRequest
             'revisiones' => [$soloRevisiones ? 'required' : 'nullable', 'array', $soloRevisiones ? 'min:1' : 'nullable'],
             'revisiones.*.descripcion_producto' => ['required_with:revisiones', 'string', 'max:255'],
             'revisiones.*.producto_id' => ['nullable', 'integer'],
+            'revisiones.*.cantidad_solicitada' => [$pedido instanceof PedidoBma && $pedido->esTrasladoInternoAPdv() ? 'required' : 'nullable', 'integer', 'min:1'],
+            'revisiones.*.cantidad_encontrada' => [$pedido instanceof PedidoBma && $pedido->esTrasladoInternoAPdv() ? 'required' : 'nullable', 'integer', 'min:0', 'lte:revisiones.*.cantidad_solicitada'],
             'revisiones.*.sku' => ['nullable', 'string', 'max:64'],
             'revisiones.*.estado_fisico' => ['required_with:revisiones', 'string', Rule::in($estados)],
             'revisiones.*.comentario' => ['nullable', 'string', 'max:2000'],
@@ -44,6 +56,9 @@ class ResponderPesajePedidoBmaRequest extends FormRequest
         if ($soloRevisiones) {
             $rules['cajas'] = ['nullable', 'array'];
             $rules['numero_cajas'] = ['required', 'integer', 'min:1', 'max:999'];
+            $rules['catalogo_tipo_caja_id'] = $exigeCaja
+                ? ['required', 'integer', 'exists:catalogo_tipos_caja_pedido,id']
+                : ['nullable', 'integer'];
         } else {
             $rules['cajas'] = ['required', 'array', 'min:1'];
             $rules['cajas.*.catalogo_tipo_caja_id'] = ['required', 'integer', 'exists:catalogo_tipos_caja_pedido,id'];
@@ -63,7 +78,6 @@ class ResponderPesajePedidoBmaRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'almacen_id' => ['nullable', 'integer', 'exists:almacenes,id'],
             'cajas.required' => 'Indique al menos un envío.',
             'cajas.min' => 'Indique al menos un envío.',
             'cajas.*.catalogo_tipo_caja_id.required' => 'Cada envío requiere tipo de caja.',

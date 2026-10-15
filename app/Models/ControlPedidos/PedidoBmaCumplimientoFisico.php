@@ -60,7 +60,7 @@ class PedidoBmaCumplimientoFisico extends Model
         self::ESTADO_DESPACHADA => 'Despachada',
         self::ESTADO_ENTREGADA => 'Entregada',
         self::ESTADO_DEVOLUCION_PENDIENTE => 'Devolución pendiente',
-        self::ESTADO_DEVUELTA_ANAQUEL => 'Devuelta al anaquel',
+        self::ESTADO_DEVUELTA_ANAQUEL => 'Devuelta al almacén',
         self::ESTADO_INCIDENCIA => 'Incidencia',
         self::ESTADO_APARTADO_CONFIRMADO => 'Apartado confirmado',
     ];

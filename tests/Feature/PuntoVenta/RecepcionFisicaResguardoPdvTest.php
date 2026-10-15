@@ -38,6 +38,8 @@ class RecepcionFisicaResguardoPdvTest extends TestCase
             ValidateCsrfToken::class,
             PreventRequestForgery::class,
         ]);
+        $this->withHeader('Accept', 'application/json');
+        \Illuminate\Support\Facades\Storage::fake('local');
         $this->activarModulo();
         $this->seedPermisos();
 
@@ -59,7 +61,7 @@ class RecepcionFisicaResguardoPdvTest extends TestCase
         $resguardo = $this->crearResguardoPendiente(cantidadEsperada: 2);
         $clave = 'pdv:rec:'.$resguardo->id.':terminal-1';
 
-        $response = $this->actingAs($this->usuario)->putJson(
+        $response = $this->actingAs($this->usuario)->put(
             route('punto_venta.resguardos.recepcion', $resguardo),
             $this->payloadRecepcion($resguardo, $clave)
         );
@@ -86,7 +88,7 @@ class RecepcionFisicaResguardoPdvTest extends TestCase
     {
         $resguardo = $this->crearResguardoPendiente();
 
-        $this->actingAs($this->usuario)->putJson(
+        $this->actingAs($this->usuario)->put(
             route('punto_venta.resguardos.recepcion', $resguardo),
             []
         )->assertUnprocessable()
@@ -99,7 +101,7 @@ class RecepcionFisicaResguardoPdvTest extends TestCase
         ]);
         $sinRecibir->concederAccesoSucursal($this->sucursal, esPrincipal: true);
 
-        $this->actingAs($sinRecibir)->putJson(
+        $this->actingAs($sinRecibir)->put(
             route('punto_venta.resguardos.recepcion', $resguardo),
             $this->payloadRecepcion($resguardo)
         )->assertForbidden();
@@ -111,12 +113,12 @@ class RecepcionFisicaResguardoPdvTest extends TestCase
 
         $resguardo = $this->crearResguardoPendiente();
 
-        $this->actingAs($this->usuario)->putJson(
+        $this->actingAs($this->usuario)->put(
             route('punto_venta.resguardos.recepcion', $resguardo),
             $this->payloadRecepcion($resguardo, clave: 'pdv:rec:'.$resguardo->id.':a')
         )->assertOk();
 
-        $this->actingAs($this->usuario)->putJson(
+        $this->actingAs($this->usuario)->put(
             route('punto_venta.resguardos.recepcion', $resguardo->fresh()),
             $this->payloadRecepcion($resguardo->fresh(), clave: 'pdv:rec:'.$resguardo->id.':b')
         )->assertStatus(409);
@@ -133,12 +135,12 @@ class RecepcionFisicaResguardoPdvTest extends TestCase
         $resguardo = $this->crearResguardoPendiente();
         $payload = $this->payloadRecepcion($resguardo);
 
-        $this->actingAs($this->usuario)->putJson(
+        $this->actingAs($this->usuario)->put(
             route('punto_venta.resguardos.recepcion', $resguardo),
             $payload
         )->assertOk();
 
-        $this->actingAs($this->usuario)->putJson(
+        $this->actingAs($this->usuario)->put(
             route('punto_venta.resguardos.recepcion', $resguardo->fresh()),
             $payload
         )->assertOk()
@@ -156,7 +158,7 @@ class RecepcionFisicaResguardoPdvTest extends TestCase
         $payload = $this->payloadRecepcion($resguardo);
         $payload['version'] = 99;
 
-        $this->actingAs($this->usuario)->putJson(
+        $this->actingAs($this->usuario)->put(
             route('punto_venta.resguardos.recepcion', $resguardo),
             $payload
         )->assertUnprocessable()
@@ -184,6 +186,8 @@ class RecepcionFisicaResguardoPdvTest extends TestCase
                 $this->usuario,
                 1,
                 'pdv:rec:'.$resguardo->id.':rollback',
+                fotoPaquete: \Illuminate\Http\UploadedFile::fake()->image('llegada.jpg'),
+                folios: array_column(\App\Support\PuntoVenta\Resguardos\BultosEsperadosResguardoPdv::desdeResguardo($resguardo), 'folio'),
             );
             $this->fail('Debía revertir la transacción');
         } catch (\RuntimeException $e) {
@@ -196,12 +200,75 @@ class RecepcionFisicaResguardoPdvTest extends TestCase
         Event::assertDispatchedTimes(RecepcionFisicaPdvCompletada::class, 0);
     }
 
+    public function test_dos_de_tres_bultos_y_llegada_complementaria_sin_duplicar(): void
+    {
+        Event::fake([RecepcionFisicaPdvCompletada::class]);
+        $resguardo = $this->crearResguardoPendiente(3);
+        $payload = $this->payloadRecepcion($resguardo, 'q61-parcial');
+        $todos = $payload['folios'];
+        $payload['folios'] = array_slice($todos, 0, 2);
+        $url = route('punto_venta.resguardos.recepcion', $resguardo);
+        $this->actingAs($this->usuario)->put($url, $payload)->assertOk()
+            ->assertJsonPath('resguardo.cantidad_bultos_recibida', 2)
+            ->assertJsonPath('resguardo.cantidad_bultos_pendiente', 1)
+            ->assertJsonPath('resguardo.recepcion_completa', false)
+            ->assertJsonPath('resguardo.estado', ResguardoPdv::ESTADO_PENDIENTE_RECEPCION);
+        $this->put($url, $payload)->assertOk();
+        $this->assertSame(2, $resguardo->bultos()->count());
+        $this->assertDatabaseMissing('pdv_resguardo_bultos', ['resguardo_id' => $resguardo->id, 'folio' => $todos[2]]);
+        $stale = $payload;
+        $stale['idempotency_key'] = 'q61-otra-terminal';
+        $this->put($url, $stale)->assertUnprocessable()->assertJsonValidationErrors('version');
+        $repetido = $this->payloadRecepcion($resguardo->fresh(), 'q61-duplicado');
+        $repetido['folios'] = [$todos[0]];
+        $this->put($url, $repetido)->assertUnprocessable()->assertJsonValidationErrors('folios');
+        $complemento = $this->payloadRecepcion($resguardo->fresh(), 'q61-complemento');
+        $complemento['folios'] = [$todos[2]];
+        $this->put($url, $complemento)->assertOk()->assertJsonPath('resguardo.recepcion_completa', true);
+        $this->assertSame(3, $resguardo->bultos()->count());
+        $this->assertSame(0, $resguardo->bultos()->where('estado', ResguardoPdvBulto::ESTADO_EN_CUSTODIA)->count());
+        $this->assertSame(1, $resguardo->eventos()->where('tipo_evento', ResguardoPdvEvento::TIPO_RECEPCION_PARCIAL)->count());
+        $this->assertSame(1, $resguardo->eventos()->where('tipo_evento', ResguardoPdvEvento::TIPO_RECEPCION_COMPLETA)->count());
+    }
+
+    public function test_llegada_con_dano_conserva_incidencia_y_evidencia(): void
+    {
+        $resguardo = $this->crearResguardoPendiente(2);
+        $payload = $this->payloadRecepcion($resguardo, 'q61-dano');
+        $payload['folios'] = [$payload['folios'][0]];
+        $payload['condicion'] = 'danado';
+        $payload['observacion'] = 'Caja rota en recepción';
+        $this->actingAs($this->usuario)->put(route('punto_venta.resguardos.recepcion', $resguardo), $payload)->assertOk()
+            ->assertJsonPath('resguardo.cantidad_bultos_pendiente', 1);
+        $bulto = $resguardo->bultos()->sole();
+        $this->assertSame('danado', $bulto->condicion);
+        $incidencia = \App\Models\PuntoVenta\ResguardoPdvIncidencia::where('bulto_id', $bulto->id)->sole();
+        $this->assertSame('abierta', $incidencia->estado);
+        $this->assertSame(1, $incidencia->evidencias()->count());
+    }
+
+    public function test_no_se_confirma_implicitamente_todo_ni_folios_ajenos(): void
+    {
+        $resguardo = $this->crearResguardoPendiente(3);
+        $payload = $this->payloadRecepcion($resguardo);
+        unset($payload['folios']);
+        $this->actingAs($this->usuario)->put(route('punto_venta.resguardos.recepcion', $resguardo), $payload)
+            ->assertUnprocessable()->assertJsonValidationErrors('folios');
+        $payload['folios'] = ['AJENO-B1'];
+        $this->put(route('punto_venta.resguardos.recepcion', $resguardo), $payload)
+            ->assertUnprocessable()->assertJsonValidationErrors('folios');
+        $this->assertSame(0, $resguardo->bultos()->count());
+    }
+
     /**
      * @return array<string, mixed>
      */
     private function payloadRecepcion(ResguardoPdv $resguardo, ?string $clave = null): array
     {
         return [
+            'condicion' => 'bueno',
+            'foto_paquete' => \Illuminate\Http\UploadedFile::fake()->image('llegada.jpg'),
+            'folios' => array_column(\App\Support\PuntoVenta\Resguardos\BultosEsperadosResguardoPdv::desdeResguardo($resguardo), 'folio'),
             'version' => (int) $resguardo->version,
             'idempotency_key' => $clave ?? 'pdv:rec:'.$resguardo->id.':default',
         ];

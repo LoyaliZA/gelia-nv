@@ -36,7 +36,29 @@ class ResponderPesajePedidoBmaService
      */
     public function ejecutar(PedidoBma $pedido, int $usuarioId, array $lineasCaja, array $revisionFisica = []): PedidoBma
     {
-        $pedido->loadMissing(['estatus', 'origen']);
+        return DB::transaction(function () use ($pedido, $usuarioId, $lineasCaja, $revisionFisica) {
+            $pedido = PedidoBma::query()->lockForUpdate()->findOrFail($pedido->id);
+            if (! empty($revisionFisica['almacen_id'])) {
+                $almacen = \App\Models\Almacen::where('activo', true)->where('permite_busqueda_productos', true)->find($revisionFisica['almacen_id']);
+                if (! $almacen) {
+                    throw new \InvalidArgumentException('El almacén no está habilitado para buscar productos.');
+                }
+                foreach ($revisionFisica['revisiones'] ?? [] as $revision) {
+                    if (! empty($revision['producto_id']) && ! \App\Models\Producto::whereKey($revision['producto_id'])->whereHas('inventarios', fn ($q) => $q->where('almacen_id', $almacen->id))->exists()) {
+                        throw new \InvalidArgumentException('Una pieza no pertenece al catálogo del almacén seleccionado.');
+                    }
+                }
+                app(ValidarAlmacenSalidaPedido::class)->ejecutar($almacen->id, $pedido->almacen_id);
+                $pedido->update(['almacen_id' => $almacen->id]);
+            }
+
+            return $this->responder($pedido, $usuarioId, $lineasCaja, $revisionFisica);
+        });
+    }
+
+    private function responder(PedidoBma $pedido, int $usuarioId, array $lineasCaja, array $revisionFisica): PedidoBma
+    {
+        $pedido->loadMissing(['estatus', 'origen', 'paqueteria']);
 
         if (! $pedido->puedeResponderPesaje()) {
             throw new \RuntimeException(
@@ -44,6 +66,10 @@ class ResponderPesajePedidoBmaService
                     ? 'Este pedido no está pendiente de consulta de mercancía.'
                     : 'Este pedido no está pendiente de pesaje.'
             );
+        }
+
+        if ($pedido->esTrasladoInternoAPdv()) {
+            app(ValidarSucursalDestinoPedidoBma::class)->ejecutar($pedido, (int) $pedido->sucursal_destino_id, exigirSiAplica: true);
         }
 
         $soloRevisiones = $pedido->consultaCedisModoRevisionMercancia();
@@ -64,7 +90,7 @@ class ResponderPesajePedidoBmaService
             fn ($f) => $f instanceof UploadedFile
         ));
 
-        $revisiones = $this->normalizarRevisiones($revisionFisica['revisiones'] ?? []);
+        $revisiones = $this->normalizarRevisiones($revisionFisica['revisiones'] ?? [], $pedido->esTrasladoInternoAPdv());
         if ($soloRevisiones && $revisiones === []) {
             throw new \InvalidArgumentException('Debe revisar al menos un producto para la consulta de mercancía.');
         }
@@ -74,6 +100,14 @@ class ResponderPesajePedidoBmaService
             : 0;
         if ($soloRevisiones && $numeroBultosTienda < 1) {
             throw new \InvalidArgumentException('Indique los bultos a preparar (aprox.).');
+        }
+
+        $tipoCajaRevision = null;
+        if ($soloRevisiones && $pedido->paqueteria?->requiere_caja && ! $pedido->esTrasladoInternoAPdv()) {
+            $tipoCajaRevision = (int) ($revisionFisica['catalogo_tipo_caja_id'] ?? 0);
+            if ($tipoCajaRevision < 1 || ! CatalogoTipoCajaPedido::query()->whereKey($tipoCajaRevision)->exists()) {
+                throw new \InvalidArgumentException('El transporte exige tipo de caja. No se piden kilogramos.');
+            }
         }
 
         foreach ($revisiones as $rev) {
@@ -130,21 +164,9 @@ class ResponderPesajePedidoBmaService
             $pedido, $usuarioId, $lineas, $tipos,
             $estadoGeneral, $comentarioGeneral, $evidenciasGenerales, $evidenciasEnvios, $revisiones,
             $soloRevisiones, $pesoAntes, $cajasAntes, $costoEnvioAntes, $esActualizacion, $revisionFisica,
-            $numeroBultosTienda
+            $numeroBultosTienda, $tipoCajaRevision
         ) {
             $pedido = PedidoBma::query()->lockForUpdate()->findOrFail($pedido->id);
-            if (!empty($revisionFisica['almacen_id'])) {
-                $almacen = \App\Models\Almacen::where('activo', true)->where('permite_busqueda_productos', true)->find($revisionFisica['almacen_id']);
-                if (!$almacen) throw new \InvalidArgumentException('El almacén no está habilitado para buscar productos.');
-                foreach ($revisiones as $revision) {
-                    if (!empty($revision['producto_id']) && !\App\Models\Producto::whereKey($revision['producto_id'])->whereHas('inventarios', fn ($q) => $q->where('almacen_id', $almacen->id))->exists()) {
-                        throw new \InvalidArgumentException('Una pieza no pertenece al catálogo del almacén seleccionado.');
-                    }
-                }
-                $pedido->update(['almacen_id' => $almacen->id]);
-            }
-
-
             $pesoRealTotal = 0.0;
             $pesoVolumetricoTotal = 0.0;
             $pesoCobradoTotal = 0.0;
@@ -194,7 +216,7 @@ class ResponderPesajePedidoBmaService
             }
 
             $tieneSinExistencia = collect($revisiones)->contains(
-                fn (array $r) => $r['estado_fisico'] === PedidoBmaRevisionProducto::ESTADO_SIN_EXISTENCIA
+                fn (array $r) => $r['estado_fisico'] === PedidoBmaRevisionProducto::ESTADO_SIN_EXISTENCIA || ($r['cantidad_solicitada'] !== null && $r['cantidad_encontrada'] < $r['cantidad_solicitada'])
             );
             $tieneObs = $tieneSinExistencia
                 || PedidoBmaRevisionProducto::esObservacionParaVentas($estadoGeneral)
@@ -249,7 +271,7 @@ class ResponderPesajePedidoBmaService
                 $datosPedido['peso_cobrado_guia_kg'] = null;
                 // ponytail: en tienda reutiliza numero_cajas como bultos esperados en resguardos PDV (CantidadBultosEsperadaResguardoPdv).
                 $datosPedido['numero_cajas'] = $numeroBultosTienda;
-                $datosPedido['catalogo_tipo_caja_id'] = null;
+                $datosPedido['catalogo_tipo_caja_id'] = $tipoCajaRevision;
             } else {
                 $datosPedido['peso_real_kg'] = round($pesoRealTotal, 4);
                 $datosPedido['peso_volumetrico_kg'] = round($pesoVolumetricoTotal, 4);
@@ -457,6 +479,8 @@ class ResponderPesajePedidoBmaService
                 'descripcion_producto' => $rev['descripcion_producto'],
                 'producto_id' => $rev['producto_id'],
                 'sku' => $rev['sku'],
+                'cantidad_solicitada' => $rev['cantidad_solicitada'],
+                'cantidad_encontrada' => $rev['cantidad_encontrada'],
                 'estado_fisico' => $rev['estado_fisico'],
                 'comentario' => $rev['comentario'],
                 'unica_pieza' => $rev['unica_pieza'],
@@ -464,6 +488,11 @@ class ResponderPesajePedidoBmaService
             ];
 
             if ($match) {
+                if ($rev['cantidad_solicitada'] !== null
+                    && ((int) $match->cantidad_solicitada !== $rev['cantidad_solicitada']
+                        || (int) $match->cantidad_encontrada !== $rev['cantidad_encontrada'])) {
+                    $attrs += ['resolucion' => null, 'resolucion_nota' => null, 'resolucion_por_id' => null, 'resolucion_at' => null];
+                }
                 $match->update($attrs);
                 $row = $match;
             } else {
@@ -599,13 +628,16 @@ class ResponderPesajePedidoBmaService
      *   evidencias:list<UploadedFile>
      * }>
      */
-    private function normalizarRevisiones(array $revisiones): array
+    private function normalizarRevisiones(array $revisiones, bool $trasladoInterno = false): array
     {
         $out = [];
         foreach ($revisiones as $rev) {
             $desc = trim((string) ($rev['descripcion_producto'] ?? ''));
             $estado = (string) ($rev['estado_fisico'] ?? '');
             if ($desc === '' || ! in_array($estado, PedidoBmaRevisionProducto::ESTADOS, true)) {
+                if ($trasladoInterno) {
+                    throw new \InvalidArgumentException('Cada producto requiere identificación y condición física.');
+                }
                 continue;
             }
             $comentario = trim((string) ($rev['comentario'] ?? ''));
@@ -637,7 +669,28 @@ class ResponderPesajePedidoBmaService
                 ? (int) $rev['producto_id']
                 : null;
 
+            $solicitada = $rev['cantidad_solicitada'] ?? null;
+            $encontrada = $rev['cantidad_encontrada'] ?? null;
+            if ($trasladoInterno || $solicitada !== null || $encontrada !== null) {
+                if (filter_var($solicitada, FILTER_VALIDATE_INT) === false || (int) $solicitada < 1
+                    || filter_var($encontrada, FILTER_VALIDATE_INT) === false || (int) $encontrada < 0
+                    || (int) $encontrada > (int) $solicitada) {
+                    throw new \InvalidArgumentException('Indique cantidades solicitadas y encontradas válidas para cada producto.');
+                }
+                if ($estado === PedidoBmaRevisionProducto::ESTADO_SIN_EXISTENCIA && (int) $encontrada !== 0) {
+                    throw new \InvalidArgumentException('Un producto sin existencias debe indicar cero piezas encontradas.');
+                }
+                if ((int) $encontrada < (int) $solicitada && $comentario === '') {
+                    throw new \InvalidArgumentException('Describa el faltante observado del producto.');
+                }
+            }
+            if ($productoId && ! \App\Models\Producto::whereKey($productoId)->exists()) {
+                throw new \InvalidArgumentException('El producto no existe en el catálogo.');
+            }
+
             $out[] = [
+                'cantidad_solicitada' => $solicitada !== null ? (int) $solicitada : null,
+                'cantidad_encontrada' => $encontrada !== null ? (int) $encontrada : null,
                 'descripcion_producto' => mb_substr($desc, 0, 255),
                 'producto_id' => $productoId && $productoId > 0 ? $productoId : null,
                 'sku' => $sku !== '' ? mb_substr($sku, 0, 64) : null,

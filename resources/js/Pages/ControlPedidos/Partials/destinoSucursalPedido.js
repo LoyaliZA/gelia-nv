@@ -6,6 +6,27 @@ export function modalidadesRequierenDestino(catalogos = {}) {
     return catalogos?.destino_sucursal_config?.modalidades_requieren_destino || [];
 }
 
+export function destinoSucursalVisible({
+    requiereLogistica = false,
+    codigoModalidad = '',
+    modalidadesRequierenDestino = [],
+    salidaEsPdv = false,
+    tieneAlmacenSalida = false,
+} = {}) {
+    const obligatorio = requiereCapturaDestinoSucursal({
+        requiereLogistica,
+        codigoModalidad,
+        modalidadesRequierenDestino,
+    });
+    const codigo = String(codigoModalidad || '').trim();
+    const opcionalTraslado = !obligatorio
+        && Boolean(requiereLogistica)
+        && Boolean(tieneAlmacenSalida)
+        && codigo === '';
+
+    return { muestra: obligatorio || opcionalTraslado, obligatorio };
+}
+
 export function requiereCapturaDestinoSucursal({
     requiereLogistica = false,
     codigoModalidad = '',
@@ -37,4 +58,21 @@ export function resolverCodigoModalidadEfectiva({
     tareaPreparacion = null,
 } = {}) {
     return tareaPreparacion?.modalidad?.codigo || codigoModalidadPreparacion || '';
+}
+
+/** Espejo de PedidoBma::esTrasladoInternoAPdv para captura sin ID. */
+export function esTrasladoInternoPdv(pedido, almacen = pedido?.almacen, codigoModalidad) {
+    const codigo = codigoModalidad ?? pedido?.tarea_preparacion?.modalidad?.codigo
+        ?? pedido?.tarea_preparacion_vigente?.modalidad?.codigo
+        ?? pedido?.solicitud_preparacion?.codigo_modalidad
+        ?? pedido?.solicitud_preparacion_json?.codigo_modalidad;
+    if (codigo && !['RECOGE_TIENDA', 'RECOGE_TIENDA_TRANSFERENCIA'].includes(codigo)) return false;
+    if (!pedido?.sucursal_destino_id || !pedido?.almacen_id || !almacen) return false;
+    const esPdv = String(almacen.tipo_almacen?.nombre || almacen.tipoAlmacen?.nombre || '').trim().toUpperCase() === 'PDV'
+        || String(almacen.codigo || '').trim().toUpperCase() === 'PDV';
+    return !esPdv || (almacen.sucursal_id != null && Number(almacen.sucursal_id) !== Number(pedido.sucursal_destino_id));
+}
+
+export function pedidoEsTrasladoInternoPdv(pedido) {
+    return pedido?.es_traslado_interno_pdv ?? esTrasladoInternoPdv(pedido);
 }

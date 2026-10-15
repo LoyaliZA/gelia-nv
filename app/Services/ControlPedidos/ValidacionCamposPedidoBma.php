@@ -94,7 +94,7 @@ trait ValidacionCamposPedidoBma
         }
 
         if ($requiereLogistica) {
-            if ($pedido->enRutaPreparacionTienda()) {
+            if ($pedido->enRutaPreparacionTienda() && ! $pedido->esTrasladoInternoAPdv()) {
                 $this->validarPesoPreparacionTienda($pedido, $faltantes);
             } elseif ($tienePesaje && ! $modoRevisionMercancia) {
                 if ($pedido->peso_real_kg === null) {
@@ -124,6 +124,16 @@ trait ValidacionCamposPedidoBma
                         }
                     }
                 }
+            } elseif ($tienePesaje && $modoRevisionMercancia) {
+                $pedido->loadMissing('paqueteria');
+                if ($pedido->paqueteria?->requiere_caja && ! $pedido->esTrasladoInternoAPdv()) {
+                    if (! $pedido->catalogo_tipo_caja_id) {
+                        $faltantes[] = 'tipo de caja';
+                    }
+                    if ($pedido->numero_cajas === null) {
+                        $faltantes[] = 'bultos';
+                    }
+                }
             } elseif (! $omiteCosto && ! $modoRevisionMercancia) {
                 if ($pedido->peso_real_kg === null) {
                     $faltantes[] = 'peso real';
@@ -136,7 +146,7 @@ trait ValidacionCamposPedidoBma
                 }
             }
 
-            if (! $guiaCliente) {
+            if (! $guiaCliente && ! $pedido->esTrasladoInternoAPdv()) {
                 if (! $pedido->catalogo_paqueteria_id) {
                     $faltantes[] = 'paquetería';
                 }

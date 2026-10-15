@@ -33,7 +33,9 @@ it('confirma productos seleccionados con una sola solicitud, sin captura manual 
     await click('Elegir crema'); await click('Agregar pieza'); await click('Confirmar apartado');
     expect(post).toHaveBeenCalledTimes(1);
     expect(post.mock.calls[0][0]).toBe('control_pedidos.tienda.apartado.confirmar/1');
-    expect(post.mock.calls[0][1]).toMatchObject({ version: 2, ubicacion: 'Anaquel A', lineas: [{ producto_id: 7, sku: 'CREMA-7', cantidad: 1, estado_fisico: 'bueno' }] });
+    expect(post.mock.calls[0][1]).toMatchObject({ version: 2, lineas: [{ producto_id: 7, sku: 'CREMA-7', cantidad: 1, estado_fisico: 'bueno' }] });
+    expect(post.mock.calls[0][1].ubicacion).toBeUndefined();
+    expect(container.querySelector('#tienda-ubicacion')).toBeNull();
     expect(container.querySelector('[placeholder="SKU"]')).toBeNull();
 });
 it('permite guardar sin confirmar y suma selecciones repetidas', async () => {
@@ -104,10 +106,10 @@ it('señala requisitos de pesaje antes de enviar y acepta evidencias ya guardada
     expect(post.mock.calls[0][0]).toBe('control_pedidos.tienda.responder/1');
     expect(post.mock.calls[0][1].peso_real_kg).toBe('1.250');
 });
-it('al confirmar sin ubicación lleva el foco al campo pendiente', async () => {
+it('confirma el apartado sin capturar anaquel ni ubicación', async () => {
     await mount({ tarea: { ...tarea, apartado: { version: 2, ubicacion: '' } } });
     await click('Elegir crema'); await click('Agregar pieza'); await click('Confirmar apartado');
-    expect(document.activeElement.id).toBe('tienda-ubicacion');
-    expect(document.activeElement.getAttribute('aria-invalid')).toBe('true');
-    expect(post).not.toHaveBeenCalled();
+    expect(container.querySelector('#tienda-ubicacion')).toBeNull();
+    expect(post).toHaveBeenCalledTimes(1);
+    expect(post.mock.calls[0][1].ubicacion).toBeUndefined();
 });

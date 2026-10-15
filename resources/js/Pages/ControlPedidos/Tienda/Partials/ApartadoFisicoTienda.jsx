@@ -16,9 +16,7 @@ export default function ApartadoFisicoTienda({ onEnviar = null,  tarea, auth, co
     const puedeModalidad = permisos.includes('control_pedidos.preparacion.solicitar')
         || permisos.includes('control_pedidos.preparacion.corregir');
     const [cantidad, setCantidad] = useState(String(tarea.piezas_solicitadas || 1));
-    const [ubicacion, setUbicacion] = useState('');
     const [motivoDevolucion, setMotivoDevolucion] = useState('');
-    const [ubicacionFinal, setUbicacionFinal] = useState(apartado?.ubicacion || '');
     const [foto, setFoto] = useState(null);
     const [motivoProrroga, setMotivoProrroga] = useState('');
     const [codigoModalidad, setCodigoModalidad] = useState('');
@@ -37,7 +35,6 @@ export default function ApartadoFisicoTienda({ onEnviar = null,  tarea, auth, co
     const separar = () => {
         postOperacion(route('control_pedidos.tienda.apartado.separar', tarea.id), {
             cantidad,
-            ubicacion,
             version: apartado.version,
         });
     };
@@ -51,7 +48,6 @@ export default function ApartadoFisicoTienda({ onEnviar = null,  tarea, auth, co
 
     const confirmarDevolucion = () => {
         const form = new FormData();
-        form.append('ubicacion', ubicacionFinal);
         form.append('version', apartado.version);
         if (foto) form.append('foto', foto);
         postOperacion(route('control_pedidos.tienda.apartado.confirmar_devolucion', tarea.id), form, { forceFormData: true });
@@ -136,7 +132,9 @@ export default function ApartadoFisicoTienda({ onEnviar = null,  tarea, auth, co
             <p className="text-xs font-bold m-0 theme-text-muted">{apartado.aviso}</p>
             <div className="grid sm:grid-cols-3 gap-3 text-sm">
                 <p className="m-0"><span className="theme-text-muted">Cantidad</span><br /><strong>{apartado.cantidad || '—'}</strong></p>
-                <p className="m-0"><span className="theme-text-muted">Ubicación</span><br /><strong>{apartado.ubicacion || '—'}</strong></p>
+                {apartado.ubicacion ? (
+                    <p className="m-0"><span className="theme-text-muted">Ubicación registrada</span><br /><strong>{apartado.ubicacion}</strong></p>
+                ) : null}
                 <p className="m-0"><span className="theme-text-muted">Vence</span><br /><strong>{apartado.vence_at ? formatearFechaNegocio(apartado.vence_at) : '—'}</strong></p>
                 {!esRecogeHoy && (
                     <>
@@ -226,14 +224,10 @@ export default function ApartadoFisicoTienda({ onEnviar = null,  tarea, auth, co
             )}
 
             {apartado.estado === 'POR_SEPARAR' && puedeSeparar && (
-                <div className="grid sm:grid-cols-3 gap-3 items-end">
+                <div className="grid sm:grid-cols-2 gap-3 items-end">
                     <div>
                         <label className={THEME_LABEL}>Cantidad</label>
                         <input className={`${THEME_INPUT} w-full mt-1`} type="number" min="1" value={cantidad} onChange={(e) => setCantidad(e.target.value)} />
-                    </div>
-                    <div>
-                        <label className={THEME_LABEL}>Ubicación</label>
-                        <input className={`${THEME_INPUT} w-full mt-1`} value={ubicacion} onChange={(e) => setUbicacion(e.target.value)} placeholder="Anaquel o zona" />
                     </div>
                     <button type="button" className={BTN_PRIMARY} onClick={separar}>Separar</button>
                 </div>
@@ -258,14 +252,10 @@ export default function ApartadoFisicoTienda({ onEnviar = null,  tarea, auth, co
             {apartado.estado === 'DEVOLUCION_PENDIENTE' && puedeDevolver && (
                 <div className="grid sm:grid-cols-2 gap-3 items-end">
                     <div>
-                        <label className={THEME_LABEL}>Ubicación final</label>
-                        <input className={`${THEME_INPUT} w-full mt-1`} value={ubicacionFinal} onChange={(e) => setUbicacionFinal(e.target.value)} />
-                    </div>
-                    <div>
-                        <label className={THEME_LABEL}>Foto</label>
+                        <label className={THEME_LABEL}>Foto del retorno al almacén</label>
                         <input className="mt-1 block w-full text-sm" type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => setFoto(e.target.files?.[0] || null)} />
                     </div>
-                    <button type="button" className={BTN_PRIMARY} onClick={confirmarDevolucion}>Confirmar devolución al anaquel</button>
+                    <button type="button" className={BTN_PRIMARY} onClick={confirmarDevolucion}>Confirmar retorno al almacén</button>
                 </div>
             )}
 

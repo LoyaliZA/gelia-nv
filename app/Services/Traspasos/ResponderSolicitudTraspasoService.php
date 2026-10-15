@@ -20,6 +20,7 @@ class ResponderSolicitudTraspasoService
     public function ejecutar(SolicitudTraspaso $solicitud, array $datos, User $usuario, array $revisionesInput = []): SolicitudTraspaso
     {
         return DB::transaction(function () use ($solicitud, $datos, $usuario, $revisionesInput) {
+            abort_if($solicitud->esAbastecimiento(), 422, 'Opere este traslado desde Abastecimiento a preparación.');
             $estadoAnteriorId = $solicitud->catalogo_estado_solicitud_id;
             $estadoNuevoId = (int) $datos['catalogo_estado_solicitud_id'];
             $idIncorrecta = CatalogoEstadoSolicitud::idDe('Incorrecta');

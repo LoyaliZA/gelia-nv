@@ -72,7 +72,7 @@ class SembrarVistaPreparacionTiendaCommand extends Command
         $escenarios = [
             ['estado' => PedidoBmaTareaPreparacion::ESTADO_PENDIENTE, 'label' => 'Pendientes', 'md' => true, 'origen' => PedidoBma::ORIGEN_SOLICITUD_CALL_CENTER],
             ['estado' => PedidoBmaTareaPreparacion::ESTADO_EN_ATENCION, 'label' => 'En atención', 'asignada' => true],
-            ['estado' => PedidoBmaTareaPreparacion::ESTADO_CON_INCIDENCIA, 'label' => 'Incidencia', 'obs' => 'Faltante en anaquel A3'],
+            ['estado' => PedidoBmaTareaPreparacion::ESTADO_CON_INCIDENCIA, 'label' => 'Incidencia', 'obs' => 'Faltante en almacén'],
             ['estado' => PedidoBmaTareaPreparacion::ESTADO_LISTA_PARA_TRASLADO, 'label' => 'Lista traslado', 'traslado' => true, 'transfer' => true],
             ['estado' => PedidoBmaTareaPreparacion::ESTADO_LISTA_PARA_CARATULA, 'label' => 'Lista carátula', 'municipio' => 'Guadalajara'],
             ['estado' => PedidoBmaTareaPreparacion::ESTADO_EN_TRASLADO, 'label' => 'En traslado', 'traslado' => true, 'transfer' => true],
@@ -80,7 +80,7 @@ class SembrarVistaPreparacionTiendaCommand extends Command
             ['estado' => PedidoBmaTareaPreparacion::ESTADO_RESPONDIDA, 'label' => 'Respondida hoy', 'atendida_hoy' => true],
             ['estado' => PedidoBmaTareaPreparacion::ESTADO_LIBERACION_SOLICITADA, 'label' => 'Liberación'],
             ['estado' => PedidoBmaTareaPreparacion::ESTADO_RESPONDIDA, 'label' => 'Devolución pendiente', 'cumplimiento' => PedidoBmaCumplimientoFisico::ESTADO_DEVOLUCION_PENDIENTE],
-            ['estado' => PedidoBmaTareaPreparacion::ESTADO_RESPONDIDA, 'label' => 'Devuelta anaquel', 'cumplimiento' => PedidoBmaCumplimientoFisico::ESTADO_DEVUELTA_ANAQUEL],
+            ['estado' => PedidoBmaTareaPreparacion::ESTADO_RESPONDIDA, 'label' => 'Devuelta al almacén', 'cumplimiento' => PedidoBmaCumplimientoFisico::ESTADO_DEVUELTA_ANAQUEL],
             ['estado' => PedidoBmaTareaPreparacion::ESTADO_LIBERADA, 'label' => 'Historial liberada'],
         ];
 

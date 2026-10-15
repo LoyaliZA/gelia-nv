@@ -14,7 +14,7 @@ class ConfirmarDevolucionAnaquelRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'ubicacion' => ['required', 'string', 'max:160'],
+            'ubicacion' => ['nullable', 'string', 'max:160'],
             'foto' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:8192'],
             'version' => ['nullable', 'integer', 'min:1'],
         ];

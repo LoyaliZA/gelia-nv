@@ -22,6 +22,17 @@ class MarcarEmpacadoPedidoBmaService
      */
     public function ejecutar(PedidoBma $pedido, int $usuarioId, array $bultosPorPedido = []): PedidoBma
     {
+        return DB::transaction(function () use ($pedido, $usuarioId, $bultosPorPedido) {
+            $raiz = $pedido->raizEmpaque();
+            $ids = collect([$raiz->id])->merge($raiz->complementos()->pluck('id'))->sort()->values();
+            PedidoBma::query()->whereIn('id', $ids)->orderBy('id')->lockForUpdate()->get();
+
+            return $this->empacar($pedido->fresh(), $usuarioId, $bultosPorPedido);
+        });
+    }
+
+    private function empacar(PedidoBma $pedido, int $usuarioId, array $bultosPorPedido): PedidoBma
+    {
         $pedido->loadMissing(['estatus', 'paqueteria', 'origen', 'complementos.estatus', 'complementos.paqueteria', 'complementos.origen']);
 
         $raiz = $pedido->raizEmpaque()->loadMissing([
@@ -51,7 +62,7 @@ class MarcarEmpacadoPedidoBmaService
 
         foreach ($aEmpacar as $miembro) {
             $this->assertPuedeEmpacar($miembro);
-            if ($miembro->requiereSucursalDestino()) {
+            if ($miembro->requiereBultosEmpaque()) {
                 $bultos = $bultosPorPedido[(int) $miembro->id] ?? [];
                 if ($bultos === []) {
                     throw new \InvalidArgumentException("Debe registrar bultos con evidencia para el pedido {$miembro->folio}.");
@@ -61,7 +72,7 @@ class MarcarEmpacadoPedidoBmaService
 
         return DB::transaction(function () use ($aEmpacar, $raiz, $usuarioId, $bultosPorPedido) {
             foreach ($aEmpacar as $miembro) {
-                if ($miembro->requiereSucursalDestino()) {
+                if ($miembro->requiereBultosEmpaque()) {
                     $this->registrarBultosEmpaque->ejecutar(
                         $miembro,
                         $usuarioId,
@@ -84,6 +95,14 @@ class MarcarEmpacadoPedidoBmaService
     {
         if (!$pedido->esGestionablePorCedis()) {
             throw new \RuntimeException("El pedido {$pedido->folio} no está en la bandeja de CEDIS.");
+        }
+
+        if ($pedido->esTrasladoInternoAPdv()) {
+            app(ValidarSucursalDestinoPedidoBma::class)->ejecutar($pedido, (int) $pedido->sucursal_destino_id, exigirSiAplica: true);
+        }
+
+        if ($pedido->consulta_actualizacion_pendiente) {
+            throw new \RuntimeException("El pedido {$pedido->folio} tiene una actualización de mercancía pendiente. CEDIS debe confirmarla antes del empaque.");
         }
 
         if (!$pedido->puedeMarcarEmpacado()) {

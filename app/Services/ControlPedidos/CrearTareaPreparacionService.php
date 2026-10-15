@@ -159,6 +159,10 @@ class CrearTareaPreparacionService
             }
         }
 
+        if (blank($pedido->folio_remision)) {
+            throw ValidationException::withMessages(['folio_remision' => 'Capture el folio del pedido antes de solicitar preparación.']);
+        }
+
         $activa = $pedido->tareaPreparacionVigente()->first();
         if ($activa) {
             throw ValidationException::withMessages([

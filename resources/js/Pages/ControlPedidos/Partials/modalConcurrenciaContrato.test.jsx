@@ -80,6 +80,7 @@ const catalogos = {
 };
 
 const pedidoServidor = {
+    folio_remision: 'PED-Q3-41',
     cliente_id: 123,
     cliente: { id: 123, nombre: 'Cliente Q3' },
     folio: 'Q3-41',
@@ -153,7 +154,7 @@ afterEach(async () => {
 const diferida = () => { let resolver, rechazar; const promesa = new Promise((r, e) => { resolver = r; rechazar = e; }); return { promesa, resolver, rechazar }; };
 const tick = async () => act(async () => { await vi.advanceTimersByTimeAsync(60); });
 const editarFolio = async (valor) => act(() => {
-    const input = document.querySelector('input[placeholder="Folio"]');
+    const input = document.querySelector('input[aria-label="Referencia adicional opcional"]');
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, valor);
     input.dispatchEvent(new Event('input', { bubbles: true }));
 });
@@ -175,7 +176,7 @@ describe('Q3 modal montado: coordinación y confirmaciones', () => {
         await editarFolio('COT-SEGUNDA'); await tick();
         expect(axios.post).toHaveBeenCalledTimes(1);
         await act(async () => primera.resolver(respuesta(1)));
-        expect(document.querySelector('input[placeholder="Folio"]').value).toBe('COT-SEGUNDA');
+        expect(document.querySelector('input[aria-label="Referencia adicional opcional"]').value).toBe('COT-SEGUNDA');
         expect(document.body.textContent).toContain('cambios pendientes');
         await tick();
         expect(axios.post).toHaveBeenCalledTimes(2);
@@ -199,7 +200,7 @@ describe('Q3 modal montado: coordinación y confirmaciones', () => {
         await act(async () => primera.rechazar({ response: { status: 409, data: { updated_at: 'futuro', base_captura: 'ajena', message: 'Conflicto Q3' } } }));
         await editarFolio('LOCAL-CONSERVADO'); await tick(); await guardarManual();
         expect(axios.post).toHaveBeenCalledTimes(1);
-        expect(document.querySelector('input[placeholder="Folio"]').value).toBe('LOCAL-CONSERVADO');
+        expect(document.querySelector('input[aria-label="Referencia adicional opcional"]').value).toBe('LOCAL-CONSERVADO');
         expect(document.body.textContent).toContain('conflicto');
         expect(document.body.textContent).toContain('Conservar copia local y recargar');
     });
@@ -235,7 +236,7 @@ describe('Q3 modal montado: coordinación y confirmaciones', () => {
         await act(() => root.render(<ModalFormPedido abierto={false} onClose={() => {}} catalogos={catalogos} pedido={pedidoServidor} />));
         await montar({ pedido: { ...pedidoServidor, base_captura: 'base-nueva', solicitud_preparacion: { ...pedidoServidor.solicitud_preparacion, folio_referencia: 'NUEVA-APERTURA' } } });
         await act(async () => primera.resolver(respuesta(99)));
-        expect(document.querySelector('input[placeholder="Folio"]').value).toBe('NUEVA-APERTURA');
+        expect(document.querySelector('input[aria-label="Referencia adicional opcional"]').value).toBe('NUEVA-APERTURA');
         expect(document.body.textContent).not.toContain('Servidor · Q3-41');
         expect(document.body.textContent).not.toContain('Servidor · error');
     });

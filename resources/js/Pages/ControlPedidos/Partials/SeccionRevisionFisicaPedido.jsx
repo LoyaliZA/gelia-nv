@@ -23,7 +23,8 @@ export default function SeccionRevisionFisicaPedido({
         (d) => d.relacion_tipo === 'revision_producto' && String(d.relacion_id) === String(revId),
     );
     const revisionConDetalle = (r) => (
-        r.estado_fisico !== 'bueno'
+        r.cantidad_solicitada != null
+        || r.estado_fisico !== 'bueno'
         || Boolean(r.comentario)
         || Boolean(r.unica_pieza)
         || Boolean(r.mejor_ejemplar)
@@ -122,6 +123,7 @@ export default function SeccionRevisionFisicaPedido({
                                         </span>
                                     )}
                                 </div>
+                                {r.cantidad_solicitada != null && <p className="text-xs theme-text-main m-0">Solicitadas: {r.cantidad_solicitada} · Encontradas: {r.cantidad_encontrada ?? '—'} · Faltantes: {r.cantidad_encontrada == null ? '—' : r.cantidad_solicitada - r.cantidad_encontrada}</p>}
                                 {r.comentario && <p className="text-xs theme-text-muted font-medium m-0">{r.comentario}</p>}
                                 {r.resolucion_nota && <p className="text-xs theme-text-muted font-medium m-0">Decisión: {r.resolucion_nota}</p>}
                                 {r.estado_fisico === 'sin_existencia' && !r.resolucion && (

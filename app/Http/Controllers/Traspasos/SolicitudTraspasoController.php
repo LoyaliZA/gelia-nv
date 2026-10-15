@@ -174,6 +174,7 @@ class SolicitudTraspasoController extends Controller
         SincronizarTareaDesdeTraspasoService $sincronizarTarea,
     ): RedirectResponse {
         Gate::authorize('traspasos.verificar');
+        abort_if($traspaso->esAbastecimiento(), 422, 'La llegada de abastecimiento se confirma en el destino físico.');
 
         $idRespondida = CatalogoEstadoSolicitud::idDe('Respondida');
         $idVerificada = CatalogoEstadoSolicitud::idDe('Verificada');

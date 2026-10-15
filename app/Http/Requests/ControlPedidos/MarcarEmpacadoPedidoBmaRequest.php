@@ -48,7 +48,7 @@ class MarcarEmpacadoPedidoBmaRequest extends FormRequest
             $requierenBultos = $grupo->filter(
                 fn (PedidoBma $miembro) => $miembro->esGestionablePorCedis()
                     && $miembro->puedeMarcarEmpacado()
-                    && $miembro->requiereSucursalDestino()
+                    && $miembro->requiereBultosEmpaque()
             );
 
             if ($requierenBultos->isEmpty()) {

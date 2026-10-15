@@ -78,7 +78,7 @@ class PedidoBmaCumplimientoEvento extends Model
         self::TIPO_DESPACHADA => 'Despachada',
         self::TIPO_PLAZO_EXTENDIDO => 'Plazo extendido',
         self::TIPO_DEVOLUCION_SOLICITADA => 'Devolución solicitada',
-        self::TIPO_DEVUELTA_ANAQUEL => 'Devuelta al anaquel',
+        self::TIPO_DEVUELTA_ANAQUEL => 'Devuelta al almacén',
         self::TIPO_CAMBIO_MODALIDAD => 'Cambio de modalidad',
         self::TIPO_CANCELACION => 'Cancelación',
         self::TIPO_TRASPASO_SALIDA => 'Salida hacia CEDIS',

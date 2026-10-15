@@ -15,6 +15,15 @@ class CerrarConsultaPedidoBmaService
 
     public function ejecutar(PedidoBma $pedido, int $usuarioId): PedidoBma
     {
+        return DB::transaction(function () use ($pedido, $usuarioId) {
+            $pedido = PedidoBma::query()->lockForUpdate()->findOrFail($pedido->id);
+
+            return $this->cerrar($pedido, $usuarioId);
+        });
+    }
+
+    private function cerrar(PedidoBma $pedido, int $usuarioId): PedidoBma
+    {
         $pedido->loadMissing(['estatus', 'origen', 'vendedor']);
 
         if ($pedido->esRecogeTiendaApartado()) {

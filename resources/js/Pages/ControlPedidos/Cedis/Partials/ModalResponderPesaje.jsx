@@ -1,3 +1,4 @@
+import { pedidoEsTrasladoInternoPdv } from '../../Partials/destinoSucursalPedido';
 import usePedidoDialog from '../../Partials/usePedidoDialog';
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -14,6 +15,7 @@ import {
     LABELS_ESTADO_FISICO,
     badgeEstadoFisico,
     calcularPesoCobradoGuia,
+    cedisConsultaEsRevisionMercancia,
     etiquetaAlmacen,
     etiquetaSucursal,
     etiquetasInstanciaRevision,
@@ -74,6 +76,8 @@ const revisionDesdeProducto = (producto) => ({
     descripcion_producto: producto
         ? `${producto.sku} — ${producto.descripcion}`
         : '',
+    cantidad_solicitada: 1,
+    cantidad_encontrada: 1,
     estado_fisico: 'bueno',
     comentario: '',
     unica_pieza: false,
@@ -155,9 +159,9 @@ export const resolverAlmacenBusqueda = (pedido, almacenesBusqueda = []) => {
 export default function ModalResponderPesaje({
     abierto, onClose, pedido, tiposCaja = [], almacenesBusqueda = [],
 }) {
-    const soloRevisiones = Boolean(pedido?.consulta_cedis_modo_revision_mercancia)
-        || Boolean(pedido?.es_consulta_mercancia)
-        || pedido?.origen?.requiere_logistica === false;
+    const soloRevisiones = cedisConsultaEsRevisionMercancia(pedido);
+    const trasladoInterno = pedidoEsTrasladoInternoPdv(pedido);
+    const exigeCajaSinPeso = soloRevisiones && !trasladoInterno && Boolean(pedido?.paqueteria?.requiere_caja);
     const [envios, setEnvios] = useState([envioVacio()]);
     const [uuidsGuardados, setUuidsGuardados] = useState([]);
     const [motivoRetiro, setMotivoRetiro] = useState('');
@@ -169,6 +173,7 @@ export default function ModalResponderPesaje({
     const [evidenciasLote, setEvidenciasLote] = useState(slotEnvioVacio());
     /** Tienda: bultos a preparar (aprox.) — se guarda en numero_cajas para resguardos PDV. */
     const [bultosAproximados, setBultosAproximados] = useState('');
+    const [tipoCajaRevision, setTipoCajaRevision] = useState('');
     const loteUuidRef = useRef(nuevoUuid());
     const [revisiones, setRevisiones] = useState([]);
     const [galeria, setGaleria] = useState({ abierto: false, documentos: [], indice: 0 });
@@ -373,6 +378,8 @@ export default function ModalResponderPesaje({
                                 producto_id: r.producto_id,
                                 sku: r.sku || '',
                                 descripcion_producto: r.descripcion_producto || '',
+                                cantidad_solicitada: r.cantidad_solicitada ?? '',
+                                cantidad_encontrada: r.cantidad_encontrada ?? '',
                                 estado_fisico: r.estado_fisico || 'bueno',
                                 comentario: r.comentario || '',
                                 unica_pieza: Boolean(r.unica_pieza),
@@ -587,6 +594,9 @@ export default function ModalResponderPesaje({
         || (pedido.documentos || []).find((d) => d.tipo === 'cotizacion');
     const anexosPiezas = (pedido.documentos || []).filter((d) => d.tipo === 'anexo_piezas');
     const severidadEstado = { bueno: 0, regular: 1, sin_existencia: 2, malo: 3, danado: 4 };
+    const cantidadSolicitadaRevisada = trasladoInterno
+        ? revisiones.reduce((total, r) => total + Number(r.cantidad_solicitada || 0), 0)
+        : revisiones.length;
     const estadoGeneralDerivado = revisiones.reduce((acc, r) => {
         const s = r.estado_fisico || 'bueno';
         return (severidadEstado[s] ?? 0) > (severidadEstado[acc] ?? 0) ? s : acc;
@@ -876,6 +886,10 @@ export default function ModalResponderPesaje({
                 avisarCampo('pesaje-bultos', 'Indica cuántos bultos aproximados llevará el pedido.');
                 return;
             }
+            if (exigeCajaSinPeso && !Number(tipoCajaRevision)) {
+                avisarCampo('pesaje-tipo-caja-revision', 'Selecciona el tipo de caja. No se piden kilogramos.');
+                return;
+            }
             const hayLocal = evidenciasLote.archivos?.length;
             const hayRemota = evidenciasLote.previews?.some((p) => p.remoto);
             if (!hayLocal && !hayRemota) {
@@ -885,13 +899,13 @@ export default function ModalResponderPesaje({
         }
 
         const piezasPedido = Number(pedido.cantidad_piezas || 0);
-        if (piezasPedido > 0 && revisiones.length < piezasPedido && !avisoPiezasRef.current) {
+        if (piezasPedido > 0 && cantidadSolicitadaRevisada < piezasPedido && !avisoPiezasRef.current) {
             avisoPiezasRef.current = true;
             setAlerta({
                 abierto: true,
                 tipo: 'warning',
                 titulo: 'Piezas por revisar',
-                mensaje: `El pedido tiene ${piezasPedido} piezas y solo revisó ${revisiones.length}. Confirme de nuevo para continuar, o agregue las piezas faltantes. Si falta stock, márquela Sin existencias; si agregó una de más, elimínela.`,
+                mensaje: `El pedido tiene ${piezasPedido} piezas y solo revisó ${cantidadSolicitadaRevisada}. Confirme de nuevo para continuar, o agregue las piezas faltantes. Si falta stock, márquela Sin existencias; si agregó una de más, elimínela.`,
             });
             return;
         }
@@ -902,7 +916,15 @@ export default function ModalResponderPesaje({
                 setAlerta({ abierto: true, tipo: 'error', titulo: `Producto ${i + 1}`, mensaje: 'Producto sin descripción.' });
                 return;
             }
-            if (requiereComentario(r.estado_fisico)) {
+            if (trasladoInterno && (!Number.isInteger(Number(r.cantidad_solicitada)) || Number(r.cantidad_solicitada) < 1
+                || r.cantidad_encontrada === '' || r.cantidad_encontrada == null || !Number.isInteger(Number(r.cantidad_encontrada))
+                || Number(r.cantidad_encontrada) < 0 || Number(r.cantidad_encontrada) > Number(r.cantidad_solicitada)
+                || (r.estado_fisico === 'sin_existencia' && Number(r.cantidad_encontrada) !== 0))) {
+                actualizarRevision(i, 'expandido', true);
+                setAlerta({ abierto: true, tipo: 'error', titulo: `Producto ${i + 1}`, mensaje: 'Revise las cantidades solicitadas y encontradas.' });
+                return;
+            }
+            if (requiereComentario(r.estado_fisico) || (trasladoInterno && Number(r.cantidad_encontrada) < Number(r.cantidad_solicitada))) {
                 if (!r.comentario.trim()) {
                     actualizarRevision(i, 'expandido', true);
                     avisarCampo(`pesaje-comentario-${r.client_uuid}`, r.estado_fisico === 'sin_existencia'
@@ -962,6 +984,7 @@ export default function ModalResponderPesaje({
         form.append('comentario_fisico_general', '');
         if (soloRevisiones) {
             form.append('numero_cajas', String(Number(bultosAproximados)));
+            if (exigeCajaSinPeso) form.append('catalogo_tipo_caja_id', String(Number(tipoCajaRevision)));
             (evidenciasLote.archivos || []).forEach((f, j) => form.append(`evidencias_generales[${j}]`, f));
         }
         if (!soloRevisiones) {
@@ -973,6 +996,10 @@ export default function ModalResponderPesaje({
             form.append(`revisiones[${i}][descripcion_producto]`, r.descripcion_producto);
             if (r.producto_id) form.append(`revisiones[${i}][producto_id]`, String(r.producto_id));
             if (r.sku) form.append(`revisiones[${i}][sku]`, String(r.sku));
+            if (trasladoInterno) {
+                form.append(`revisiones[${i}][cantidad_solicitada]`, String(r.cantidad_solicitada));
+                form.append(`revisiones[${i}][cantidad_encontrada]`, String(r.cantidad_encontrada));
+            }
             form.append(`revisiones[${i}][estado_fisico]`, r.estado_fisico);
             form.append(`revisiones[${i}][comentario]`, r.comentario || '');
             form.append(`revisiones[${i}][unica_pieza]`, r.unica_pieza ? '1' : '0');
@@ -1103,6 +1130,18 @@ export default function ModalResponderPesaje({
                 </summary>
                 <div className="px-3 pb-3 space-y-3 border-t theme-border pt-3">
                     <p className="text-xs theme-text-muted font-normal m-0">Agregue detalle solo si el estado no es Bueno o necesita foto/comentario.</p>
+                    {trasladoInterno && (
+                        <div className="grid grid-cols-2 gap-3">
+                            <label className={SECCION}>Cantidad solicitada
+                                <input type="number" min="1" step="1" required value={rev.cantidad_solicitada ?? ''}
+                                    onChange={(e) => actualizarRevision(idx, 'cantidad_solicitada', e.target.value)} className={`${THEME_INPUT} w-full`} />
+                            </label>
+                            <label className={SECCION}>Cantidad encontrada
+                                <input type="number" min="0" step="1" max={rev.cantidad_solicitada} required value={rev.cantidad_encontrada ?? ''}
+                                    onChange={(e) => actualizarRevision(idx, 'cantidad_encontrada', e.target.value)} className={`${THEME_INPUT} w-full`} />
+                            </label>
+                        </div>
+                    )}
                     <div>
                         <label htmlFor={`pesaje-estado-${rev.client_uuid}`} className={SECCION}>Estado físico</label>
                         <select id={`pesaje-estado-${rev.client_uuid}`} name={`estado-${rev.client_uuid}`} value={rev.estado_fisico} onChange={(e) => actualizarRevision(idx, 'estado_fisico', e.target.value)} className={`${THEME_SELECT} w-full py-2.5 min-h-[44px]`}>
@@ -1356,7 +1395,7 @@ export default function ModalResponderPesaje({
                         <section id="pesaje-productos" tabIndex={-1} hidden={paso !== 1} className="gelia-pedidos-paso gelia-pedidos-seccion space-y-4">
                             <div className="flex items-center justify-between gap-2 flex-wrap">
                                 <h3 className="gelia-pedidos-seccion-titulo">{soloRevisiones ? 'Registro de productos' : 'Revisión física de productos'}</h3>
-                                <span className="text-xs theme-text-muted tabular-nums">{revisiones.length} de {pedido.cantidad_piezas || '—'} piezas</span>
+                                <span className="text-xs theme-text-muted tabular-nums">{cantidadSolicitadaRevisada} de {pedido.cantidad_piezas || '—'} piezas</span>
                                 {borradorMsg && (
                                     <p className="text-xs font-medium theme-text-muted m-0" role="status">{borradorMsg}</p>
                                 )}
@@ -1496,6 +1535,27 @@ export default function ModalResponderPesaje({
                                         Cantidad aproximada de bultos en los que se empacará el pedido.
                                     </p>
                                 </div>
+                                {exigeCajaSinPeso && (
+                                <div>
+                                    <label htmlFor="pesaje-tipo-caja-revision" className={SECCION}>Tipo de caja</label>
+                                    <select
+                                        id="pesaje-tipo-caja-revision"
+                                        {...atributosError('pesaje-tipo-caja-revision')}
+                                        value={tipoCajaRevision}
+                                        onChange={(e) => setTipoCajaRevision(e.target.value)}
+                                        className={`${THEME_SELECT} w-full py-3 min-h-[44px]`}
+                                    >
+                                        <option value="">Seleccionar…</option>
+                                        {tiposCaja.map((c) => (
+                                            <option key={c.id} value={c.id}>{c.nombre}</option>
+                                        ))}
+                                    </select>
+                                    {mensajeError('pesaje-tipo-caja-revision')}
+                                    <p className="text-xs theme-text-muted font-normal m-0 mt-1">
+                                        El transporte pide caja. No captura kilogramos ni peso volumétrico.
+                                    </p>
+                                </div>
+                                )}
                                 <GaleriaEvidencias
                                     id="pesaje-evidencia-lote" error={errorCampo?.id === 'pesaje-evidencia-lote' ? errorCampo.mensaje : undefined} disabled={procesando}
                                     archivos={evidenciasLote.archivos}

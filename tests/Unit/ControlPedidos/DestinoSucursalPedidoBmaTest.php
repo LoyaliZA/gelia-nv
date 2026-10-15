@@ -74,18 +74,41 @@ class DestinoSucursalPedidoBmaTest extends TestCase
         $this->assertNull($cargado->sucursalDestino);
     }
 
-    public function test_no_asigna_destino_artificial_a_envio(): void
+    public function test_salida_pdv_con_logistica_acepta_destino_de_traslado_interno(): void
     {
+        $pdvId = DB::table('almacenes')->insertGetId([
+            'codigo' => 'PDV',
+            'nombre' => 'PDV destino',
+            'sucursal_id' => Sucursal::factory()->create()->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
         $pedido = $this->crearPedidoForaneoListo();
+        $pedido->update(['almacen_id' => $pdvId]);
         $sucursal = Sucursal::factory()->create();
 
-        $this->expectException(ValidationException::class);
-
         app(AsignarSucursalDestinoPedidoService::class)->ejecutar(
-            $pedido->fresh('origen'),
+            $pedido->fresh(['origen', 'almacen']),
             $this->usuario,
             $sucursal->id
         );
+        $this->assertTrue($pedido->fresh()->esTrasladoInternoAPdv());
+    }
+
+    public function test_salida_cedis_con_logistica_puede_llevar_sucursal_destino(): void
+    {
+        $pedido = $this->crearPedidoForaneoListo();
+        $sucursal = Sucursal::factory()->create(['activo' => true]);
+
+        app(AsignarSucursalDestinoPedidoService::class)->ejecutar(
+            $pedido->fresh(['origen', 'almacen']),
+            $this->usuario,
+            $sucursal->id
+        );
+
+        $fresco = $pedido->fresh(['almacen.tipoAlmacen']);
+        $this->assertSame($sucursal->id, $fresco->sucursal_destino_id);
+        $this->assertTrue($fresco->esTrasladoInternoCedisAPdv());
     }
 
     public function test_rechaza_sucursal_inactiva(): void
@@ -174,7 +197,8 @@ class DestinoSucursalPedidoBmaTest extends TestCase
         $this->assertSame($pedido->folio, $cargado->folio);
         $this->assertNull($cargado->sucursal_destino_id);
         $this->assertFalse($cargado->requiereSucursalDestino());
-        $this->assertTrue($cargado->prohibeSucursalDestino());
+        $this->assertFalse($cargado->prohibeSucursalDestino());
+        $this->assertFalse($cargado->esTrasladoInternoCedisAPdv());
         $this->assertNotSame($cargado->almacen_id, $cargado->sucursal_destino_id);
     }
 

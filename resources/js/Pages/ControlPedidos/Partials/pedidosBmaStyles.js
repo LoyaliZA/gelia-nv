@@ -1,3 +1,4 @@
+import { pedidoEsTrasladoInternoPdv } from './destinoSucursalPedido';
 import {
     THEME_BTN_PRIMARY,
     THEME_BTN_SECONDARY,
@@ -15,10 +16,11 @@ export const LABEL_GUIA_EMPRESA = 'Guía generada por la empresa';
 export const LABEL_GUIA_CLIENTE = 'Guía proporcionada por el cliente';
 export const LABEL_ENVIO_PARA_TIENDA = 'Envío para tienda';
 
-export const pedidoRequiereLogistica = (pedido) => pedido?.origen?.requiere_logistica ?? true;
+export const pedidoRequiereLogistica = (pedido) => !pedidoEsTrasladoInternoPdv(pedido) && (pedido?.origen?.requiere_logistica ?? true);
 
 /** Paquetería en envío o modalidad de entrega en pedido de tienda/mostrador. */
 export const etiquetaTransportePedido = (pedido) => {
+    if (pedidoEsTrasladoInternoPdv(pedido)) return 'Traslado interno';
     const paq = pedido?.paqueteria?.nombre
         || pedido?.tarea_preparacion?.paqueteria?.nombre;
     if (paq) return paq;
@@ -431,7 +433,7 @@ export const miembrosGrupoEmpaque = (pedido) => {
 };
 
 export const pedidosRequierenBultosEmpaque = (pedido) => miembrosGrupoEmpaque(pedido).filter(
-    (p) => Boolean(p.requiere_sucursal_destino) && !p.es_resguardo,
+    (p) => Boolean(p.requiere_bultos_empaque || p.requiere_sucursal_destino || pedidoEsTrasladoInternoPdv(p)) && !p.es_resguardo,
 );
 
 export const empacarRequiereModalBultos = (pedido) => pedidosRequierenBultosEmpaque(pedido).length > 0;
@@ -564,7 +566,7 @@ export const TABS_TIENDA_CIERRE = [
 ];
 
 export const TABS_TIENDA_HISTORIAL = [
-    { id: 'HISTORIAL_DEVUELTAS', label: 'Devueltas al anaquel' },
+    { id: 'HISTORIAL_DEVUELTAS', label: 'Devueltas al almacén' },
     { id: 'HISTORIAL', label: 'Historial' },
 ];
 
@@ -817,7 +819,8 @@ export const LABELS_RESOLUCION_SIN_EXISTENCIA = {
 };
 
 export const revisionSinExistenciaAbierta = (r) => (
-    r?.estado_fisico === 'sin_existencia'
+    (r?.estado_fisico === 'sin_existencia'
+        || (r?.cantidad_solicitada != null && r?.cantidad_encontrada != null && Number(r.cantidad_encontrada) < Number(r.cantidad_solicitada)))
     && !['retirar', 'sustituir', 'stock_ok'].includes(r?.resolucion)
 );
 
@@ -1160,17 +1163,23 @@ export const textoWhatsAppPedido = (pedido) => {
 };
 
 /**
- * Consulta CEDIS en modo revisión de mercancía (sin kilogramos obligatorios).
- * Solo el origen sin logística. Una tarifa local con requiere_peso false sigue siendo pesaje.
+ * Consulta CEDIS sin kilogramos obligatorios.
+ * Origen sin logística, o transporte local/regional con requiere_peso false.
+ * Una paquetería comercial no entra, aunque requiere_peso sea false.
  */
-export const pedidoModoRevisionMercancia = (pedido, paqueteria, requiereLogistica = true) => requiereLogistica === false;
+export const pedidoModoRevisionMercancia = (pedido, paqueteria, requiereLogistica = true) => {
+    if (pedidoEsTrasladoInternoPdv(pedido) || requiereLogistica === false) return true;
+    const paq = paqueteria || pedido?.paqueteria;
+    if (!paq || paq.categoria !== 'local_regional') return false;
+    return paq.requiere_peso === false;
+};
 
-/** Misma regla que PedidoBma::consultaCedisModoRevisionMercancia. No usa la tarifa. */
-export const cedisConsultaEsRevisionMercancia = (pedido) => Boolean(
-    pedido?.consulta_cedis_modo_revision_mercancia
-    || pedido?.es_consulta_mercancia
-    || pedido?.origen?.requiere_logistica === false
-);
+/** Misma regla que PedidoBma::consultaCedisModoRevisionMercancia. */
+export const cedisConsultaEsRevisionMercancia = (pedido) => pedidoModoRevisionMercancia(
+    pedido,
+    pedido?.paqueteria,
+    !(pedido?.es_consulta_mercancia || pedido?.origen?.requiere_logistica === false),
+) || pedido?.consulta_cedis_modo_revision_mercancia === true;
 
 /** Espeja EnviarPedidoBmaService::validarCamposRequeridos para feedback inmediato en UI. */
 export const validarCamposEnvioPedido = (data, {
@@ -1191,9 +1200,10 @@ export const validarCamposEnvioPedido = (data, {
     enRutaPreparacionTienda = false,
     preparacionPesoObligatorio = false,
     preparacionPesoCapturado = false,
+    trasladoInternoCedisPdv = false,
 } = {}) => {
     const faltantes = [];
-    const modoRevisionMercancia = pedidoModoRevisionMercancia(null, paqueteria, requiereLogistica);
+    const modoRevisionMercancia = trasladoInternoCedisPdv || pedidoModoRevisionMercancia(data, paqueteria, requiereLogistica);
     const sinPesoCapturado = (data.peso_real_kg === '' || data.peso_real_kg == null)
         && (data.peso_cobrado_guia_kg === '' || data.peso_cobrado_guia_kg == null || Number(data.peso_cobrado_guia_kg) <= 0);
     const tarifaPorPesoLocal = Boolean(
@@ -1260,13 +1270,16 @@ export const validarCamposEnvioPedido = (data, {
             if (data.peso_real_kg === '' || data.peso_real_kg == null) marcar('peso_real', 'peso real (pesaje CEDIS)');
             if (!data.catalogo_tipo_caja_id) marcar('tipo_caja', 'tipo de caja (pesaje CEDIS)');
             if (data.numero_cajas === '' || data.numero_cajas == null) marcar('numero_envios', 'número de envíos (pesaje CEDIS)');
+        } else if (tienePesajeRespondido && modoRevisionMercancia && requiereLogistica && !trasladoInternoCedisPdv && paqueteria?.requiere_caja) {
+            if (!data.catalogo_tipo_caja_id) marcar('tipo_caja', 'tipo de caja');
+            if (data.numero_cajas === '' || data.numero_cajas == null) marcar('numero_envios', 'bultos');
         } else if (!omiteCosto && !modoRevisionMercancia) {
             if (data.peso_real_kg === '' || data.peso_real_kg == null) marcar('peso_real', 'peso real');
             if (!data.catalogo_tipo_caja_id) marcar('tipo_caja', 'tipo de caja');
             if (data.numero_cajas === '' || data.numero_cajas == null) marcar('numero_envios', 'número de envíos');
         }
 
-        if (!guiaCliente) {
+        if (!guiaCliente && !trasladoInternoCedisPdv) {
             if (!data.catalogo_paqueteria_id) marcar('paqueteria', 'paquetería');
             if (!esResguardoAbierto) {
                 if (!data.catalogo_tipo_guia_id) marcar('tipo_guia', 'tipo de guía');

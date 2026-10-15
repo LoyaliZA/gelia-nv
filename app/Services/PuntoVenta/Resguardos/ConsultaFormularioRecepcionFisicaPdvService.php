@@ -76,6 +76,7 @@ class ConsultaFormularioRecepcionFisicaPdvService
             'snapshot_cliente_nombre' => $resguardo->snapshot_cliente_nombre,
             'referencia_cliente' => $this->referenciaCliente($resguardo),
             'cantidad_bultos_esperada' => $resguardo->cantidad_bultos_esperada,
+            'bultos_esperados' => array_map(fn ($b) => [...$b, 'recibido' => $resguardo->bultos->contains('folio', $b['folio'])], \App\Support\PuntoVenta\Resguardos\BultosEsperadosResguardoPdv::desdeResguardo($resguardo)),
             'cantidad_bultos_recibida' => EstadoRecepcionResguardoPdv::cantidadRecibida($resguardo),
             'cantidad_bultos_pendiente' => EstadoRecepcionResguardoPdv::cantidadPendiente($resguardo),
             'recepcion_completa' => EstadoRecepcionResguardoPdv::recepcionCompleta($resguardo),

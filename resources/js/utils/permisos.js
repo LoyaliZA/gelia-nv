@@ -115,7 +115,7 @@ export const DESCRIPCIONES_PERMISOS = {
     'control_pedidos.tienda.despachar_municipio': 'Permite registrar el despacho al transportista con receptor y hora.',
     'control_pedidos.tienda.apartado.ver': 'Permite ver el apartado físico de una tarea de preparación.',
     'control_pedidos.tienda.apartado.separar': 'Permite separar mercancía, anexar piezas, reportar un detalle y confirmar el apartado, sin descontar inventario.',
-    'control_pedidos.tienda.apartado.confirmar_devolucion': 'Permite confirmar la devolución al anaquel con ubicación y foto.',
+    'control_pedidos.tienda.apartado.confirmar_devolucion': 'Permite confirmar el retorno al almacén con foto.',
     'control_pedidos.tienda.apartado.aprobar_prorroga': 'Permite aprobar una prórroga VIP del vencimiento, una sola vez.',
     'control_pedidos.salida.validar_pago': 'Permite validar el pago o el permiso de por cobrar para liberar la salida. Quien vendió no valida su propio cobro. Tienda no registra el cobro.',
     'control_pedidos.salida.autorizar': 'Permite autorizar la salida física tras el pago o el permiso de por cobrar. Quien vendió no autoriza la salida.',
@@ -363,7 +363,7 @@ export const ETIQUETAS_PERMISOS = {
     'control_pedidos.tienda.despachar_municipio': 'despachar envío municipal',
     'control_pedidos.tienda.apartado.ver': 'ver apartado físico',
     'control_pedidos.tienda.apartado.separar': 'separar mercancía',
-    'control_pedidos.tienda.apartado.confirmar_devolucion': 'confirmar devolución al anaquel',
+    'control_pedidos.tienda.apartado.confirmar_devolucion': 'confirmar retorno al almacén',
     'control_pedidos.tienda.apartado.aprobar_prorroga': 'aprobar prórroga VIP',
     'control_pedidos.salida.validar_pago': 'validar pago de salida',
     'control_pedidos.salida.autorizar': 'autorizar salida',
@@ -579,7 +579,7 @@ export const SUBMODULOS_UI_POR_MODULO = {
         {
             id: 'tienda_apartado',
             label: 'Apartado físico (tienda)',
-            descripcion: 'Separación de mercancía, devolución al anaquel y prórrogas VIP',
+            descripcion: 'Separación de mercancía, retorno al almacén y prórrogas VIP',
             permisos: [
                 'control_pedidos.tienda.apartado.ver',
                 'control_pedidos.tienda.apartado.separar',

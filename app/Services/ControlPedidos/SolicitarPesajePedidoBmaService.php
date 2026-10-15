@@ -53,8 +53,14 @@ class SolicitarPesajePedidoBmaService
             );
         }
 
-        $pedido->loadMissing('paqueteria');
-        if (($pedido->origen?->requiere_logistica ?? true) && ! $pedido->catalogo_paqueteria_id) {
+        if ($pedido->esTrasladoInternoAPdv()) {
+            app(ValidarSucursalDestinoPedidoBma::class)->ejecutar($pedido, (int) $pedido->sucursal_destino_id, exigirSiAplica: true);
+        }
+
+        $pedido->loadMissing(['paqueteria', 'almacen.tipoAlmacen']);
+        if (($pedido->origen?->requiere_logistica ?? true)
+            && ! $pedido->catalogo_paqueteria_id
+            && ! $pedido->esTrasladoInternoAPdv()) {
             throw new \InvalidArgumentException(
                 'Seleccione la paquetería antes de solicitar la consulta a CEDIS.'
             );
@@ -65,6 +71,10 @@ class SolicitarPesajePedidoBmaService
             throw new \RuntimeException(
                 'La salida es un almacén de Tienda. Solicite la preparación en ese almacén; la consulta de mercancía de CEDIS no aplica.'
             );
+        }
+
+        if (blank($pedido->folio_remision)) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['folio_remision' => 'Capture el folio del pedido antes de solicitar la consulta.']);
         }
 
         if (! $pedido->tieneSoporteSolicitud()) {
@@ -132,7 +142,7 @@ class SolicitarPesajePedidoBmaService
      */
     private function consultaCedisBloqueadaPorSalidaTienda(PedidoBma $pedido, User $usuario): bool
     {
-        if (! $pedido->esConsultaMercancia() || ! $this->preparacionConfig->activo() || ! $this->preparacionConfig->usuarioHabilitado($usuario)) {
+        if ($pedido->esTrasladoInternoAPdv() || ! $pedido->esConsultaMercancia() || ! $this->preparacionConfig->activo() || ! $this->preparacionConfig->usuarioHabilitado($usuario)) {
             return false;
         }
 

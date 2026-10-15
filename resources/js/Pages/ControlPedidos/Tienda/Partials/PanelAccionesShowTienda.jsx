@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from '@inertiajs/react';
 import {
     Package, CheckCircle2, Truck, User, Clock,
 } from 'lucide-react';
@@ -75,6 +76,7 @@ export default function PanelAccionesShowTienda({
 
             <div className={`${geliaCardClass()} p-4 space-y-2`}>
                 <p className="text-xs font-semibold theme-text-muted m-0 mb-1">Acciones</p>
+                {tarea.puede_preparar && ['PENDIENTE', 'EN_ATENCION', 'CON_INCIDENCIA'].includes(tarea.estado) && <Link className={`${BTN_SECONDARY} block text-center min-h-[44px]`} href={route('traspasos.abastecimiento.index', { tarea: tarea.id })}>Abastecer preparación</Link>}
                 {enPendiente && (
                     <button type="button" className={`${BTN_PRIMARY} w-full min-h-[44px]`} onClick={onTomar}>
                         <Package className="w-4 h-4 inline mr-1" /> Tomar tarea

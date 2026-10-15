@@ -29,7 +29,7 @@ class ListarSolicitudesTraspasoService
             'tareaPreparacion:id,pedido_bma_id,almacen_id,estado',
             'tareaPreparacion.pedido:id,folio,folio_remision',
             'tareaPreparacion.almacen:id,codigo,nombre',
-        ])->orderByDesc('created_at');
+        ])->where(fn ($q) => $q->whereNull('proposito')->orWhere('proposito', '!=', SolicitudTraspaso::PROPOSITO_ABASTECIMIENTO))->orderByDesc('created_at');
 
         if ($usuario) {
             $this->aplicarAislamiento($query, $usuario);
@@ -42,7 +42,7 @@ class ListarSolicitudesTraspasoService
 
     public function metricas(?User $usuario): array
     {
-        $query = SolicitudTraspaso::query();
+        $query = SolicitudTraspaso::query()->where(fn ($q) => $q->whereNull('proposito')->orWhere('proposito', '!=', SolicitudTraspaso::PROPOSITO_ABASTECIMIENTO));
         if ($usuario) {
             $this->aplicarAislamiento($query, $usuario);
         }
@@ -65,6 +65,7 @@ class ListarSolicitudesTraspasoService
 
     public function usuarioPuedeVer(User $usuario, SolicitudTraspaso $solicitud): bool
     {
+        if ($solicitud->esAbastecimiento()) return false;
         if ($usuario->hasAnyRole(['Super Admin', 'Administrador'])) {
             return true;
         }

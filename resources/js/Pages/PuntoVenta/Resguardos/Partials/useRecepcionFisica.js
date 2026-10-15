@@ -50,8 +50,12 @@ export default function useRecepcionFisica({
             let cuerpo;
             if (tieneArchivos) {
                 cuerpo = new FormData();
+                cuerpo.append('_method', 'PUT');
                 cuerpo.append('version', String(versionRef.current));
+                cuerpo.append('condicion', extras.condicion || 'bueno');
+                cuerpo.append('observacion', extras.observacion || '');
                 cuerpo.append('idempotency_key', idempotencyRef.current);
+                (extras.folios || []).forEach((folio, i) => cuerpo.append(`folios[${i}]`, folio));
                 (extras.piezas || []).forEach((linea, indice) => {
                     Object.entries(linea).forEach(([clave, valor]) => {
                         if (valor === null || valor === undefined) return;
@@ -75,6 +79,9 @@ export default function useRecepcionFisica({
                 if (extras.fotoPaquete) cuerpo.append('foto_paquete', extras.fotoPaquete);
             } else {
                 cuerpo = {
+                    folios: extras.folios || [],
+                    condicion: extras.condicion || 'bueno',
+                    observacion: extras.observacion || null,
                     version: versionRef.current,
                     idempotency_key: idempotencyRef.current,
                 };
@@ -86,7 +93,7 @@ export default function useRecepcionFisica({
                 }
             }
 
-            const { data } = await axios.put(
+            const { data } = await (tieneArchivos ? axios.post : axios.put)(
                 route('punto_venta.resguardos.recepcion', resguardoId),
                 cuerpo,
                 { headers: { Accept: 'application/json' } },

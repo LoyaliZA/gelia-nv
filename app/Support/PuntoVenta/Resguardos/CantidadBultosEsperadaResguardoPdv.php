@@ -29,7 +29,7 @@ final class CantidadBultosEsperadaResguardoPdv
         }
 
         // ponytail: pedidos a sucursal sin envíos explícitos se reciben como un bulto operativo.
-        if ($pedido->requiereSucursalDestino()) {
+        if ($pedido->requiereSucursalDestino() || $pedido->esTrasladoInternoAPdv()) {
             return 1;
         }
 

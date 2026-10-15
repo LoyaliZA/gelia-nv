@@ -15,7 +15,7 @@ class RegistrarBultosEmpaquePedidoBmaService
      */
     public function ejecutar(PedidoBma $pedido, int $usuarioId, array $bultos): PedidoBma
     {
-        if (! $pedido->requiereSucursalDestino()) {
+        if (! $pedido->requiereBultosEmpaque()) {
             throw new \InvalidArgumentException('Este pedido no requiere registro de bultos de empaque.');
         }
 

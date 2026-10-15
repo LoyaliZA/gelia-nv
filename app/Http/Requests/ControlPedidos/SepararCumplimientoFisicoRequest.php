@@ -15,7 +15,7 @@ class SepararCumplimientoFisicoRequest extends FormRequest
     {
         return [
             'cantidad' => ['required', 'integer', 'min:1'],
-            'ubicacion' => ['required', 'string', 'max:160'],
+            'ubicacion' => ['nullable', 'string', 'max:160'],
             'version' => ['nullable', 'integer', 'min:1'],
         ];
     }

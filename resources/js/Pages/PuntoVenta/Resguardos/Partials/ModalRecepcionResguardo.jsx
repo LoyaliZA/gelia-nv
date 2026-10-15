@@ -175,7 +175,7 @@ function ResultadoExito({ onDetalle, onBandeja }) {
             <div className="space-y-2">
                 <h3 className="text-lg font-black uppercase theme-text-main m-0">Recepción confirmada</h3>
                 <p className="text-sm theme-text-muted m-0">
-                    El resguardo quedó en estado Recibido. Pásalo a recepción cuando esté listo para revisión.
+                    Se registraron los bultos seleccionados. Los pendientes conservan su llegada abierta; la custodia se confirma por separado.
                 </p>
             </div>
             <div className="flex flex-col sm:flex-row gap-2 justify-center">

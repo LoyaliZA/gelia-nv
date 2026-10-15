@@ -22,6 +22,7 @@ class ConfirmarTraspasoCedisService
     public function ejecutar(SolicitudTraspaso $solicitud, User $usuario, array $revisionesInput = []): SolicitudTraspaso
     {
         return DB::transaction(function () use ($solicitud, $usuario, $revisionesInput) {
+            abort_if($solicitud->esAbastecimiento(), 422, 'Opere este traslado desde Abastecimiento a preparación.');
             $idRespondida = CatalogoEstadoSolicitud::idDe('Respondida');
             $idVerificada = CatalogoEstadoSolicitud::idDe('Verificada');
 

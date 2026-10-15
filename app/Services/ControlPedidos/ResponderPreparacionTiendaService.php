@@ -62,6 +62,7 @@ class ResponderPreparacionTiendaService
                 &$rutasNuevas,
             ) {
             $tarea = PedidoBmaTareaPreparacion::query()->lockForUpdate()->findOrFail($tarea->id);
+            app(\App\Services\Traspasos\AbastecerPreparacionService::class)->asegurarSatisfecho($tarea);
             $tarea->loadMissing(['modalidad', 'productos']);
 
             if ($tarea->modalidad?->codigo === CatalogoModalidadPreparacionPedido::CODIGO_RECOGE_TIENDA) {
@@ -113,6 +114,7 @@ class ResponderPreparacionTiendaService
 
             $tarea->unsetRelation('documentos');
             $tarea->load('documentos');
+            app(\App\Services\Traspasos\AbastecerPreparacionService::class)->asegurarSatisfecho($tarea);
             $faltantes = $this->requisitosService->validarRespuesta($tarea, $productos, $datosExtra);
             if ($faltantes !== []) {
                 throw ValidationException::withMessages(['requisitos' => $faltantes]);

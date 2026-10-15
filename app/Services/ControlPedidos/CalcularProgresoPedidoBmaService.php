@@ -47,7 +47,7 @@ class CalcularProgresoPedidoBmaService
         $pedido->loadMissing(['origen', 'estatus', 'documentos', 'paqueteria', 'zona', 'tipoGuia']);
 
         $solicitudOk = $this->solicitudCompleta($pedido);
-        $requiereLogistica = (bool) ($pedido->origen?->requiere_logistica ?? false);
+        $requiereLogistica = (bool) ($pedido->origen?->requiere_logistica ?? false) && ! $pedido->esTrasladoInternoAPdv();
         $pendientePesaje = $pedido->estatus_envio === PedidoBma::ESTATUS_ENVIO_PENDIENTE_PESAJE
             || $pedido->estatus?->fase_ciclo === CatalogoEstatusPedido::FASE_PESAJE_PENDIENTE;
         $respondido = $pedido->tienePesajeRespondido();
@@ -150,7 +150,7 @@ class CalcularProgresoPedidoBmaService
                 PedidoBmaDocumento::TIPO_COTIZACION,
             ], true));
 
-        return $tieneSoporte || filled($pedido->folio_remision);
+        return $tieneSoporte && filled($pedido->folio_remision);
     }
 
     private function cotizacionLista(

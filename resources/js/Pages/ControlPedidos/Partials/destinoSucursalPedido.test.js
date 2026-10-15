@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
     destinoSucursalParaPayload,
+    esTrasladoInternoPdv,
+    destinoSucursalVisible,
     modalidadesRequierenDestino,
     requiereCapturaDestinoSucursal,
     resolverCodigoModalidadEfectiva,
@@ -53,6 +55,26 @@ describe('requiereCapturaDestinoSucursal', () => {
     });
 });
 
+describe('destinoSucursalVisible', () => {
+    it('ofrece sucursal opcional en salida CEDIS con logística', () => {
+        expect(destinoSucursalVisible({
+            requiereLogistica: true,
+            tieneAlmacenSalida: true,
+            salidaEsPdv: false,
+            modalidadesRequierenDestino: MODALIDADES,
+        })).toEqual({ muestra: true, obligatorio: false });
+    });
+
+    it('ofrece traslado a otro PDV desde salida PDV', () => {
+        expect(destinoSucursalVisible({
+            requiereLogistica: true,
+            tieneAlmacenSalida: true,
+            salidaEsPdv: true,
+            modalidadesRequierenDestino: MODALIDADES,
+        })).toEqual({ muestra: true, obligatorio: false });
+    });
+});
+
 describe('destinoSucursalParaPayload', () => {
     it('conserva opción válida al guardar', () => {
         expect(destinoSucursalParaPayload({
@@ -91,5 +113,21 @@ describe('resolverCodigoModalidadEfectiva', () => {
             codigoModalidadPreparacion: 'RECOGE_TIENDA',
             tareaPreparacion: { modalidad: { codigo: 'ENVIO_BODEGA_NORMAL' } },
         })).toBe('ENVIO_BODEGA_NORMAL');
+    });
+});
+
+describe('Q6 recorrido físico durante captura', () => {
+    const cedis = { id: 1, codigo: 'CEDIS', sucursal_id: 1 };
+    const pdv = { id: 2, codigo: 'PDV-1', tipo_almacen: { nombre: 'PDV' }, sucursal_id: 1 };
+    it.each([cedis, pdv])('reconoce traslado sin ID desde $codigo', (almacen) => {
+        expect(esTrasladoInternoPdv({ almacen_id: almacen.id, sucursal_destino_id: 2 }, almacen)).toBe(true);
+    });
+    it('mantiene como externo un envío municipal con sucursal asociada', () => {
+        expect(esTrasladoInternoPdv({ almacen_id: 1, sucursal_destino_id: 2,
+            solicitud_preparacion: { codigo_modalidad: 'ENVIO_MUNICIPIO' } }, cedis)).toBe(false);
+    });
+    it('la sucursal del almacén y la comercial no son un destino implícito', () => {
+        expect(esTrasladoInternoPdv({ almacen_id: 2, sucursal_id: 2 }, pdv)).toBe(false);
+        expect(esTrasladoInternoPdv({ almacen_id: 2, sucursal_destino_id: 1 }, pdv)).toBe(false);
     });
 });

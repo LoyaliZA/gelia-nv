@@ -154,6 +154,7 @@ export default function Index({
         <AppLayout auth={auth}>
             <Head title="Preparación Tienda | GELIANV" />
             <GeliaPageShell className="gelia-tienda-op space-y-4 md:space-y-6">
+                <a className="text-primario underline text-sm" href={route('traspasos.abastecimiento.index')}>Abastecimiento a preparación en PDV</a>
                 <GeliaTituloCard
                     eyebrow="Gestión de pedidos"
                     title="Preparación"

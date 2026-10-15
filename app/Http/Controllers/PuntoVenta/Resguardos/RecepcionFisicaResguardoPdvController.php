@@ -31,6 +31,9 @@ class RecepcionFisicaResguardoPdvController extends Controller
             $datos['omisiones'] ?? [],
             $request->file('archivo_ticket'),
             $request->file('foto_paquete'),
+            $datos['folios'],
+            $datos['condicion'],
+            $datos['observacion'] ?? null,
         );
 
         return response()->json([

@@ -23,26 +23,22 @@ class ConfirmarDevolucionAnaquelService
     public function ejecutar(
         PedidoBmaTareaPreparacion $tarea,
         User $usuario,
-        string $ubicacion,
+        ?string $ubicacion,
         UploadedFile $foto,
         ?int $versionEsperada = null,
     ): PedidoBmaCumplimientoFisico {
         if (! $usuario->can('control_pedidos.tienda.apartado.confirmar_devolucion')) {
             throw ValidationException::withMessages([
-                'permiso' => 'No tiene permiso para confirmar la devolución al anaquel.',
+                'permiso' => 'No tiene permiso para confirmar el retorno al almacén.',
             ]);
         }
 
-        $ubicacion = trim($ubicacion);
-        if ($ubicacion === '') {
-            throw ValidationException::withMessages([
-                'ubicacion' => 'Indique la ubicación final en el anaquel.',
-            ]);
-        }
+        $ubicacion = trim((string) $ubicacion);
+        $ubicacion = $ubicacion !== '' ? $ubicacion : null;
 
         if (! $foto->isValid()) {
             throw ValidationException::withMessages([
-                'foto' => 'Adjunte la foto de la mercancía devuelta al anaquel.',
+                'foto' => 'Adjunte la foto de la mercancía devuelta al almacén.',
             ]);
         }
 
@@ -99,7 +95,7 @@ class ConfirmarDevolucionAnaquelService
                     PedidoBmaCumplimientoEvento::TIPO_DEVUELTA_ANAQUEL,
                     $usuario,
                     $clave,
-                    'Devolución confirmada con ubicación y foto.',
+                    'Retorno al almacén confirmado con evidencia fotográfica.',
                     [
                         'ubicacion' => $ubicacion,
                         'documento_id' => $documento->id,

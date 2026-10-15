@@ -13,6 +13,7 @@ class SolicitudTraspasoProducto extends Model
     protected $fillable = [
         'solicitud_traspaso_id',
         'pedido_bma_origen_id',
+        'tarea_producto_receptor_id',
         'producto_id',
         'sku',
         'descripcion',

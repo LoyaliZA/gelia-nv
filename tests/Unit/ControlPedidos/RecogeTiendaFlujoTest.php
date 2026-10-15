@@ -43,6 +43,8 @@ class RecogeTiendaFlujoTest extends TestCase
         $this->assertSame(':memory:', config('database.connections.sqlite.database'));
         $this->travelTo(now()->setDate(2026, 10, 10)->setTime(12, 0));
         $tablas = [
+            'solicitudes_traspasos' => ['tarea_receptora_id', 'proposito', 'deleted_at'],
+            'solicitud_traspaso_productos' => ['tarea_producto_receptor_id'],
             'users' => ['name', 'deleted_at'],
             'productos' => ['sku', 'descripcion', 'activo', 'es_demo'],
             'inventarios' => ['producto_id', 'almacen_id', 'existencia'],
@@ -92,6 +94,28 @@ class RecogeTiendaFlujoTest extends TestCase
         return ['version' => 1, 'ubicacion' => 'Anaquel A', 'lineas' => [[
             'sku' => 'SKU-1', 'descripcion' => 'Crema', 'cantidad' => $cantidad, 'estado_fisico' => 'bueno', 'observacion' => $cantidad === 0 ? 'Sin disponibilidad' : '',
         ]]];
+    }
+
+    public function test_confirma_sin_ubicacion_ni_anaquel(): void
+    {
+        $datos = $this->datos();
+        unset($datos['ubicacion']);
+
+        $apartado = app(GuardarApartadoRecogeHoyService::class)->ejecutar($this->tarea, $this->auxiliar, $datos, true);
+
+        $this->assertSame('APARTADO_CONFIRMADO', $apartado->estado);
+        $this->assertNull($apartado->ubicacion);
+        $this->assertSame('RESPONDIDA', $this->tarea->fresh()->estado);
+    }
+
+    public function test_separa_cumplimiento_sin_ubicacion(): void
+    {
+        $apartado = app(\App\Services\ControlPedidos\SepararCumplimientoFisicoService::class)
+            ->ejecutar($this->tarea, $this->auxiliar, 2, null, 1);
+
+        $this->assertSame('SEPARADA', $apartado->estado);
+        $this->assertNull($apartado->ubicacion);
+        $this->assertSame(2, $apartado->cantidad);
     }
 
     public function test_confirma_en_una_accion_y_calcula_total_sin_pago(): void
@@ -207,17 +231,17 @@ class RecogeTiendaFlujoTest extends TestCase
         app(GuardarApartadoRecogeHoyService::class)->ejecutar($this->tarea, $this->auxiliar, $datos);
     }
 
-    public function test_confirmacion_sin_ubicacion_no_guarda_piezas(): void
+    public function test_confirmacion_con_ubicacion_vacia_guarda_las_piezas(): void
     {
         $datos = $this->datos();
         $datos['ubicacion'] = '';
-        try {
-            app(GuardarApartadoRecogeHoyService::class)->ejecutar($this->tarea, $this->auxiliar, $datos, true);
-            $this->fail('La ubicación es necesaria para localizar las piezas.');
-        } catch (ValidationException $e) {
-            $this->assertArrayHasKey('ubicacion', $e->errors());
-            $this->assertSame(0, $this->tarea->productos()->count());
-        }
+
+        $apartado = app(GuardarApartadoRecogeHoyService::class)->ejecutar($this->tarea, $this->auxiliar, $datos, true);
+
+        $this->assertSame('APARTADO_CONFIRMADO', $apartado->estado);
+        $this->assertNull($apartado->ubicacion);
+        $this->assertSame(3, $apartado->cantidad);
+        $this->assertSame(1, $this->tarea->productos()->count());
     }
 
     public function test_otro_auxiliar_no_puede_confirmar_una_tarea_tomada(): void

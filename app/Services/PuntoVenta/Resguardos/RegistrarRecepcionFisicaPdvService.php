@@ -50,6 +50,9 @@ class RegistrarRecepcionFisicaPdvService
         array $omisiones = [],
         ?UploadedFile $archivoTicket = null,
         ?UploadedFile $fotoPaquete = null,
+        ?array $folios = null,
+        string $condicion = 'bueno',
+        ?string $observacion = null,
     ): ResguardoPdv {
         $this->alcance->asegurarMutacionPiso(
             $actor,
@@ -69,6 +72,9 @@ class RegistrarRecepcionFisicaPdvService
                 $omisiones,
                 $archivoTicket,
                 $fotoPaquete,
+                $folios,
+                $condicion,
+                $observacion,
                 &$pathsEscritos,
             ) {
                 $resguardo = ResguardoPdv::query()
@@ -85,6 +91,15 @@ class RegistrarRecepcionFisicaPdvService
                     $resguardo = app(SincronizarCantidadBultosEsperadaResguardoPdvService::class)->ejecutar($resguardo);
                 }
 
+                if (! in_array($condicion, ['bueno', 'regular', 'malo', 'danado'], true)) {
+                    throw ValidationException::withMessages(['condicion' => 'Indique la condición física observada.']);
+                }
+                if (! EvidenciaMinimaRegistroManualPdv::esManual($resguardo) && ! $fotoPaquete instanceof UploadedFile) {
+                    throw ValidationException::withMessages(['foto_paquete' => 'Adjunte evidencia física de esta llegada.']);
+                }
+                if ($condicion !== 'bueno' && mb_strlen(trim((string) $observacion)) < 8) {
+                    throw ValidationException::withMessages(['observacion' => 'Describa la incidencia física (mínimo 8 caracteres).']);
+                }
                 $estadoAnterior = $resguardo->estado;
                 $this->assertVersionYEstado($resguardo, $versionEsperada);
                 if (is_array($piezas) && $piezas !== [] && $this->flujoCompleto($actor)) {
@@ -99,22 +114,44 @@ class RegistrarRecepcionFisicaPdvService
                 );
                 $bultosNormalizados = BultosEsperadosResguardoPdv::desdeResguardo($resguardo);
                 $esperada = (int) $resguardo->cantidad_bultos_esperada;
+                $recibidos = $resguardo->bultos->pluck('folio')->all();
+                if ($folios === null || $folios === [] || count($folios) !== count(array_unique($folios))) {
+                    throw ValidationException::withMessages(['folios' => 'Seleccione los folios de los bultos que llegaron.']);
+                }
+                $esperados = array_column($bultosNormalizados, 'folio');
+                if (array_diff($folios, $esperados) || array_intersect($folios, $recibidos)) {
+                    throw ValidationException::withMessages(['folios' => 'Hay folios ajenos o ya recibidos. Actualice la llegada.']);
+                }
+                $bultosNormalizados = array_values(array_filter($bultosNormalizados, fn ($b) => in_array($b['folio'], $folios, true)));
+                $totalRecibido = count($recibidos) + count($bultosNormalizados);
+                $completa = $totalRecibido === $esperada;
+                $estadoNuevo = $completa ? ResguardoPdv::ESTADO_RECIBIDO : ResguardoPdv::ESTADO_PENDIENTE_RECEPCION;
                 $ahora = now();
 
                 foreach ($bultosNormalizados as $dato) {
                     try {
-                        ResguardoPdvBulto::query()->create([
+                        $bulto = ResguardoPdvBulto::query()->create([
                             'resguardo_id' => $resguardo->id,
                             'pedido_bma_id' => $resguardo->pedido_bma_id,
                             'folio' => $dato['folio'],
                             'codigo_etiqueta' => GeneradorCodigoEtiquetaResguardoPdv::generar(),
                             'tipo' => $dato['tipo'],
+                            'condicion' => $condicion,
                             'piezas' => $dato['piezas'],
                             'estado' => ResguardoPdvBulto::ESTADO_RECIBIDO_GERENTE,
                             'recepcion_at' => $ahora,
                             'recepcion_por_id' => $actor->id,
                             'version' => 1,
                         ]);
+                        if ($condicion !== 'bueno') {
+                            \App\Models\PuntoVenta\ResguardoPdvIncidencia::create([
+                                'resguardo_id' => $resguardo->id, 'bulto_id' => $bulto->id,
+                                'tipo' => 'dano', 'estado' => 'abierta', 'descripcion' => $observacion,
+                                'reportado_por_id' => $actor->id, 'reportado_at' => $ahora,
+                                'idempotency_key' => hash('sha256', $idempotencyKey.':'.$bulto->folio), 'version' => 1,
+                                'snapshot_json' => ['origen' => 'llegada', 'condicion' => $condicion],
+                            ]);
+                        }
                     } catch (UniqueConstraintViolationException) {
                         throw ValidationException::withMessages([
                             'bultos' => 'Uno o más folios ya fueron recibidos en este resguardo.',
@@ -123,7 +160,7 @@ class RegistrarRecepcionFisicaPdvService
                 }
 
                 $resguardo->update([
-                    'estado' => ResguardoPdv::ESTADO_RECIBIDO,
+                    'estado' => $estadoNuevo,
                     'recepcion_fisica_at' => $resguardo->recepcion_fisica_at ?? $ahora,
                     'version' => $resguardo->version + 1,
                 ]);
@@ -131,15 +168,16 @@ class RegistrarRecepcionFisicaPdvService
                 try {
                     $evento = ResguardoPdvEvento::query()->create([
                         'resguardo_id' => $resguardo->id,
-                        'tipo_evento' => ResguardoPdvEvento::TIPO_RECEPCION_COMPLETA,
+                        'tipo_evento' => $completa ? ResguardoPdvEvento::TIPO_RECEPCION_COMPLETA : ResguardoPdvEvento::TIPO_RECEPCION_PARCIAL,
                         'estado_anterior' => $estadoAnterior,
-                        'estado_nuevo' => ResguardoPdv::ESTADO_RECIBIDO,
+                        'estado_nuevo' => $estadoNuevo,
                         'actor_id' => $actor->id,
                         'ocurrido_at' => $ahora,
                         'snapshot_json' => $this->snapshotRecepcion(
                             $bultosNormalizados,
                             $esperada,
                             $omisionesRegistradas,
+                            $totalRecibido,
                         ),
                         'idempotency_key' => $idempotencyKey,
                     ]);
@@ -160,18 +198,23 @@ class RegistrarRecepcionFisicaPdvService
                     $actor->id,
                     $pathsEscritos,
                 );
-                $this->adjuntarEvidenciaSiFalta(
-                    $resguardo,
-                    $evento,
-                    $fotoPaquete,
-                    ResguardoPdvEvidencia::USO_PAQUETE,
-                    $actor->id,
-                    $pathsEscritos,
-                );
+                if ($fotoPaquete instanceof UploadedFile) {
+                    $foto = $this->ingresarManual->guardar($resguardo, $evento, $fotoPaquete, ResguardoPdvEvidencia::USO_PAQUETE, $actor->id, $pathsEscritos, ['origen' => 'llegada', 'folios' => $folios, 'condicion' => $condicion, 'observacion' => $observacion]);
+                    // Cada daño conserva su evidencia y se resuelve con el circuito vigente de incidencias.
+                    foreach ($resguardo->bultos()->whereIn('folio', $folios)->get() as $bultoLlegada) {
+                        $incidencia = \App\Models\PuntoVenta\ResguardoPdvIncidencia::where('bulto_id', $bultoLlegada->id)->where('idempotency_key', hash('sha256', $idempotencyKey.':'.$bultoLlegada->folio))->first();
+                        if ($incidencia) {
+                            $copia = $foto->replicate();
+                            $copia->incidencia_id = $incidencia->id;
+                            $copia->save();
+                        }
+                    }
+                }
 
                 $resguardo = $resguardo->fresh(['bultos', 'almacen', 'evidencias']);
                 $ingresoManual = EvidenciaMinimaRegistroManualPdv::esManual($resguardo);
-                if ($ingresoManual && ! $this->flujoCompleto($actor)) {
+                if ($completa && $condicion === 'bueno' && $ingresoManual && ! $this->flujoCompleto($actor)
+                    && ! $resguardo->incidencias()->where('estado', 'abierta')->exists()) {
                     return $this->ingresarManual->cerrarConfirmacionDoble($resguardo, $actor, $idempotencyKey);
                 }
 
@@ -224,16 +267,16 @@ class RegistrarRecepcionFisicaPdvService
      * @param  list<array{campo: string, motivo: string, actor_id: int}>  $omisiones
      * @return array<string, mixed>
      */
-    private function snapshotRecepcion(array $bultos, int $esperada, array $omisiones): array
+    private function snapshotRecepcion(array $bultos, int $esperada, array $omisiones, int $totalRecibido): array
     {
         $snapshot = [
             'paso' => 'gerente',
             'bultos' => $bultos,
             'cantidad_llegada' => count($bultos),
-            'cantidad_recibida' => count($bultos),
+            'cantidad_recibida' => $totalRecibido,
             'cantidad_esperada' => $esperada,
-            'cantidad_pendiente' => 0,
-            'recepcion_completa' => true,
+            'cantidad_pendiente' => max(0, $esperada - $totalRecibido),
+            'recepcion_completa' => $totalRecibido === $esperada,
         ];
 
         if ($omisiones !== []) {

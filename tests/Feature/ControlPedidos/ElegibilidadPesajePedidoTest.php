@@ -56,13 +56,51 @@ class ElegibilidadPesajePedidoTest extends TestCase
         );
     }
 
-    public function test_envio_cedis_con_logistica_exige_cajas_y_peso_aunque_la_tarifa_local_no_pese(): void
+    public function test_local_sin_peso_avanza_sin_kilogramos_de_cedis(): void
     {
         $pedido = $this->pedidoListo(true, CatalogoPaqueteriaPedido::CATEGORIA_LOCAL_REGIONAL, false);
+
+        $this->validar($pedido);
+        $this->assertNull($pedido->fresh()->peso_real_kg);
+        $this->assertTrue($pedido->fresh()->consultaCedisModoRevisionMercancia());
+    }
+
+    public function test_local_con_peso_obligatorio_sigue_exigiendo_kilogramos(): void
+    {
+        $pedido = $this->pedidoListo(true, CatalogoPaqueteriaPedido::CATEGORIA_LOCAL_REGIONAL, true);
 
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('peso real (pesaje CEDIS)');
         $this->validar($pedido);
+    }
+
+    public function test_comercial_conserva_pesaje_aunque_requiere_peso_sea_falso(): void
+    {
+        $pedido = $this->pedidoListo(true, CatalogoPaqueteriaPedido::CATEGORIA_COMERCIAL, false);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('peso real (pesaje CEDIS)');
+        $this->validar($pedido);
+    }
+
+    public function test_caja_se_exige_sin_pedir_kilogramos_cuando_el_transporte_local_la_marca(): void
+    {
+        $pedido = $this->pedidoListo(true, CatalogoPaqueteriaPedido::CATEGORIA_LOCAL_REGIONAL, false);
+        $pedido->paqueteria->update(['requiere_caja' => true]);
+
+        try {
+            $this->validar($pedido->fresh());
+            $this->fail('La caja sigue siendo obligatoria.');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('tipo de caja', $e->getMessage());
+            $this->assertStringNotContainsString('peso real', $e->getMessage());
+        }
+
+        $tipo = CatalogoTipoCajaPedido::query()->create(['nombre' => 'Caja local Q5', 'activo' => true]);
+        $pedido->update(['catalogo_tipo_caja_id' => $tipo->id, 'numero_cajas' => 2]);
+
+        $this->validar($pedido->fresh());
+        $this->assertNull($pedido->fresh()->peso_real_kg);
     }
 
     public function test_envio_cedis_con_pesaje_completo_no_hereda_el_bloqueo_de_peso(): void

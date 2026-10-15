@@ -299,6 +299,9 @@ class RegistrarConfirmacionCustodiaPdvService
                 ]);
             }
 
+            if (\App\Models\PuntoVenta\ResguardoPdvIncidencia::where('bulto_id', $bulto->id)->where('estado', 'abierta')->exists()) {
+                throw ValidationException::withMessages(["bultos.{$indice}.folio" => 'Resuelva o autorice la incidencia del bulto antes de incorporarlo a custodia.']);
+            }
             if ($bulto->estado !== ResguardoPdvBulto::ESTADO_RECIBIDO_GERENTE) {
                 throw ValidationException::withMessages([
                     "bultos.{$indice}.folio" => 'El bulto no está pendiente de confirmación en custodia.',

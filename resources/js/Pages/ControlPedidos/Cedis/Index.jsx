@@ -127,6 +127,7 @@ export default function Index({
         <AppLayout auth={auth}>
             <Head title="Gestión de pedidos CEDIS | GELIANV" />
             <GeliaPageShell className="gelia-pedidos-bma gelia-pedidos-cedis space-y-4 md:space-y-6">
+                <a className="text-primario underline text-sm" href={route('traspasos.abastecimiento.index')}>Abastecimiento a preparación en PDV</a>
                 <header className={`${geliaCardClass()} gelia-pedidos-encabezado p-4 md:p-6`}>
                     <div className="flex items-center gap-3">
                         <span className="gelia-pedidos-icono" aria-hidden="true"><Warehouse className="w-6 h-6" /></span>

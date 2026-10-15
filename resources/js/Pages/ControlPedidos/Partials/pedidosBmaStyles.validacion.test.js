@@ -77,8 +77,8 @@ describe('resguardo abierto — envío diferido', () => {
 });
 
 describe('pedidoModoRevisionMercancia', () => {
-    it('toda operación con logística es pesaje, incluso una tarifa local sin peso', () => {
-        expect(pedidoModoRevisionMercancia(null, { categoria: 'local_regional', requiere_peso: false }, true)).toBe(false);
+    it('exime kilos solo en local/regional sin peso, y conserva el pesaje comercial', () => {
+        expect(pedidoModoRevisionMercancia(null, { categoria: 'local_regional', requiere_peso: false }, true)).toBe(true);
         expect(pedidoModoRevisionMercancia(null, { categoria: 'local_regional', requiere_peso: true }, true)).toBe(false);
         expect(pedidoModoRevisionMercancia(null, { categoria: 'comercial', requiere_peso: false }, true)).toBe(false);
         expect(pedidoModoRevisionMercancia({}, null, true)).toBe(false);
@@ -109,14 +109,61 @@ describe('pedidoModoRevisionMercancia', () => {
         expect(out.valido).toBe(true);
     });
 
-    it('no trata una tarifa local sin peso como consulta de mercancía', () => {
+    it('trata el local sin peso como consulta de mercancía y no el comercial', () => {
         const local = {
-            consulta_cedis_modo_revision_mercancia: false,
             origen: { requiere_logistica: true },
             paqueteria: { categoria: 'local_regional', requiere_peso: false },
         };
-        expect(cedisConsultaEsRevisionMercancia(local)).toBe(false);
+        expect(cedisConsultaEsRevisionMercancia(local)).toBe(true);
+        expect(cedisConsultaEsRevisionMercancia({
+            origen: { requiere_logistica: true },
+            paqueteria: { categoria: 'comercial', requiere_peso: false },
+        })).toBe(false);
         expect(cedisConsultaEsRevisionMercancia({ origen: { requiere_logistica: false } })).toBe(true);
+    });
+
+    it('pide caja sin kilogramos cuando el transporte local la exige', () => {
+        const out = validarCamposEnvioPedido({
+            ...baseTienda,
+            catalogo_paqueteria_id: 4,
+            catalogo_tipo_guia_id: 1,
+            catalogo_zona_id: 1,
+            codigo_postal: '86000',
+            domicilio_entrega: 'Calle 1',
+            costo_envio: 40,
+        }, {
+            requiereLogistica: true,
+            tienePesajeRespondido: true,
+            tienePdfPedido: true,
+            pagoPendiente: 0,
+            consultaCerrada: true,
+            requiereConsultaCerrada: true,
+            paqueteria: { categoria: 'local_regional', requiere_peso: false, requiere_caja: true },
+        });
+        expect(out.claves).toContain('tipo_caja');
+        expect(out.claves).not.toContain('peso_real');
+    });
+
+    it('el traslado CEDIS a sucursal no pide paquetería ni guía', () => {
+        const out = validarCamposEnvioPedido({
+            ...baseTienda,
+            peso_real_kg: '',
+            catalogo_tipo_caja_id: '',
+            numero_cajas: 2,
+            sucursal_destino_id: 8,
+        }, {
+            requiereLogistica: true,
+            tienePesajeRespondido: true,
+            tienePdfPedido: true,
+            pagoPendiente: 0,
+            consultaCerrada: true,
+            requiereConsultaCerrada: true,
+            paqueteria: { categoria: 'comercial', requiere_peso: true },
+            trasladoInternoCedisPdv: true,
+        });
+        expect(out.claves).not.toContain('paqueteria');
+        expect(out.claves).not.toContain('tipo_guia');
+        expect(out.valido).toBe(true);
     });
 
     it('en preparación de Tienda no pide el detalle de pesaje CEDIS', () => {

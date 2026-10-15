@@ -203,7 +203,11 @@ final class MaquinaEstadosPedidoBma
 
     public static function faseDestinoEmpaque(PedidoBma $pedido): string
     {
-        $pedido->loadMissing(['paqueteria', 'origen']);
+        $pedido->loadMissing(['paqueteria', 'origen', 'almacen.tipoAlmacen']);
+        if ($pedido->esTrasladoInternoAPdv()) {
+            return CatalogoEstatusPedido::FASE_PENDIENTE_DE_ENVIO;
+        }
+
         $tieneGuia = ! empty($pedido->numero_rastreo);
 
         if ($pedido->cliente_proporciona_guia && ! $tieneGuia) {

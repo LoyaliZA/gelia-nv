@@ -37,7 +37,6 @@ export default function PrepararApartadoRecoge({ tarea, auth, documentos = [], d
     const [lineas, setLineas] = useState(() => (tarea.productos || []).filter((p) => p.sku).map((p) => ({ id: p.id, producto_id: p.producto_id, sku: p.sku, descripcion: p.descripcion_snapshot, cantidad: p.cantidad_encontrada ?? '', estado_fisico: p.estado_fisico || 'bueno', observacion: p.observacion || '', evidencias: [], previews: [], detalle: p.estado_fisico && p.estado_fisico !== 'bueno' })));
     const [seleccion, setSeleccion] = useState(null);
     const [codigo, setCodigo] = useState('');
-    const [ubicacion, setUbicacion] = useState(tarea.apartado?.ubicacion || '');
     const [motivo, setMotivo] = useState('');
     const [modoIncidencia, setModoIncidencia] = useState(false);
     const [extra, setExtra] = useState({ peso_real_kg: tarea.peso_real_kg || '', peso_volumetrico_kg: tarea.peso_volumetrico_kg || '', catalogo_tipo_caja_id: tarea.catalogo_tipo_caja_id || '', observaciones_fisicas: tarea.observaciones_fisicas || '', observaciones_respuesta: tarea.observaciones_respuesta || '' });
@@ -71,7 +70,7 @@ export default function PrepararApartadoRecoge({ tarea, auth, documentos = [], d
     const escaneo = useEscaneoPreparacion({ almacenId: tarea.almacen?.id, onProducto: agregar });
     useEffect(() => { onDirtyChange?.(dirty || escaneo.pendientes > 0); }, [dirty, escaneo.pendientes, onDirtyChange]);
     const guardando = ocupado || escaneo.pendientes > 0;
-    const faltantes = faltantesRespuesta({ lineas, esRecoge, ubicacion, extra, requisitos, documentos: documentosTarea, evidencias: evidencias.archivos });
+    const faltantes = faltantesRespuesta({ lineas, esRecoge, extra, requisitos, documentos: documentosTarea, evidencias: evidencias.archivos });
     const irACampo = (id) => {
         const campo = formRef.current?.querySelector(`[id="${id}"]`);
         campo?.scrollIntoView?.({ block: 'nearest', behavior: 'auto' });
@@ -94,9 +93,8 @@ export default function PrepararApartadoRecoge({ tarea, auth, documentos = [], d
         }
         if (!lineas.length && !incidencia) { setError('Agregue los productos preparados o reporte el problema.'); return; }
         if (incidencia && !motivo.trim()) { setError('Describa qué necesita resolver Ventas.'); irACampo('tienda-motivo'); return; }
-        if (confirmar && esRecoge && !ubicacion.trim()) { setError('Indique dónde queda el apartado.'); formRef.current?.querySelector('[name="ubicacion"]')?.focus(); return; }
         setProcesando(true);
-        const datos = { version: esRecoge ? tarea.apartado?.version : tarea.version, ubicacion,
+        const datos = { version: esRecoge ? tarea.apartado?.version : tarea.version,
             lineas: lineas.map(({ previews, detalle, ...l }) => l), motivo_incidencia: incidencia ? motivo : undefined,
             ...(!esRecoge ? extra : {}), evidencias: evidencias.archivos };
         const tieneArchivos = lineas.some((l) => l.evidencias.length) || evidencias.archivos.length;
@@ -124,13 +122,15 @@ export default function PrepararApartadoRecoge({ tarea, auth, documentos = [], d
     const puedeFotosCelular = esAdmin || permisos.includes('control_pedidos.tienda.evidencias');
     const conPesaje = !esRecoge && (requisitos.peso_real_obligatorio || requisitos.peso_volumetrico_obligatorio || requisitos.caja_obligatoria);
     const actualizarExtra = (campo, valor) => { setDirty(true); setExtra((prev) => ({ ...prev, [campo]: valor })); };
-    const tituloCierre = esRecoge ? 'Ubicación y confirmación' : conPesaje ? 'Pesaje y respuesta' : 'Revisar y responder';
+    const tituloCierre = esRecoge ? 'Confirmación' : conPesaje ? 'Pesaje y respuesta' : 'Revisar y responder';
     const evidenciaGeneralObligatoria = !esRecoge && requisitos.evidencia_general_obligatoria;
     const fotosProducto = (l, i) => <GaleriaEvidencias id={`tienda-fotos-${i}`} label="Evidencia del producto" obligatorio={!esRecoge && requisitos.evidencia_por_producto}
         maxArchivos={10} archivos={l.evidencias} previews={l.previews} error={validando ? faltantes.find((f) => f.campo === `tienda-fotos-${i}`)?.texto : undefined}
         onChange={(files, previews) => { cambiar(i, 'evidencias', files); cambiar(i, 'previews', previews); }} onVer={verDocs} disabled={ocupado} />;
 
     return <section className="gelia-preparacion" aria-label="Espacio de preparación">
+        {editable && <a className={`${BTN_SECONDARY} inline-flex min-h-[44px] items-center`} href={route('traspasos.abastecimiento.index', { tarea: tarea.id })}>Abastecer preparación</a>}
+        {tarea.abastecimiento_pendiente && <p role="status" className="theme-text-aviso">Hay abastecimiento pendiente de salida, llegada o resolución de incidencias. Confirme las llegadas antes de cerrar la preparación.</p>}
         <header className="gelia-preparacion-contexto">
             <div className="min-w-0">
                 <h3 className="text-base font-bold m-0">{esRecoge ? 'Separación y apartado en tienda' : conPesaje ? 'Preparación para pesaje' : 'Separación de mercancía'}</h3>
@@ -206,7 +206,7 @@ export default function PrepararApartadoRecoge({ tarea, auth, documentos = [], d
                 {editable && <>
                     <section id="tienda-evidencias" tabIndex={-1} className="gelia-preparacion-seccion">
                         <div className="gelia-preparacion-seccion-titulo"><h4>2. Evidencias finales</h4><span>{evidenciaGeneralObligatoria ? 'Obligatorias' : 'Opcionales'}</span></div>
-                        <p className="gelia-preparacion-ayuda">Fotografíe el conjunto de productos {esRecoge ? 'y su ubicación en el apartado' : 'que está preparando'}. Revise las imágenes antes de enviar.</p>
+                        <p className="gelia-preparacion-ayuda">Fotografíe el conjunto de productos que está preparando. Revise las imágenes antes de enviar.</p>
                         {puedeFotosCelular && <button type="button" className={`${BTN_SECONDARY} gelia-preparacion-celular`} disabled={ocupado} onClick={() => setModalQr(true)}><Smartphone className="w-4 h-4" aria-hidden="true" />Fotos con celular</button>}
                         <GaleriaEvidencias id="tienda-evidencia-general" maxArchivos={10} label={esRecoge ? 'Fotos del apartado (opcional)' : 'Evidencia del conjunto preparado'} obligatorio={evidenciaGeneralObligatoria} archivos={evidencias.archivos} previews={evidencias.previews}
                             error={validando ? faltantes.find((f) => f.campo === 'tienda-evidencia-general')?.texto : undefined} onChange={(files, previews) => { setDirty(true); setEvidencias({ archivos: files, previews }); }} onVer={verDocs} disabled={ocupado} />
@@ -214,7 +214,7 @@ export default function PrepararApartadoRecoge({ tarea, auth, documentos = [], d
                     </section>
                     <section id="tienda-cierre" tabIndex={-1} className="gelia-preparacion-seccion">
                         <div className="gelia-preparacion-seccion-titulo"><h4>3. {tituloCierre}</h4></div>
-                        {esRecoge ? <><p className="gelia-preparacion-ayuda">Indique dónde encontrará la mercancía el auxiliar que entrega el pedido.</p><label htmlFor="tienda-ubicacion" className={THEME_LABEL}>Ubicación del apartado <span aria-hidden="true">*</span><input {...atributosCampo('tienda-ubicacion')} aria-required="true" name="ubicacion" maxLength={255} autoComplete="off" className={`${THEME_INPUT} w-full mt-1`} value={ubicacion} disabled={ocupado} onChange={(e) => { setDirty(true); setUbicacion(e.target.value); }} placeholder="Ej. Anaquel A, nivel 2, zona de apartados…" /></label>{errorCampo('tienda-ubicacion')}</>
+                        {esRecoge ? <p className="gelia-preparacion-ayuda">Confirme las piezas separadas para avisar a Ventas.</p>
                             : <div className="gelia-preparacion-pesaje">
                                 {['peso_real_kg', 'peso_volumetrico_kg'].filter((campo) => requisitos[campo === 'peso_real_kg' ? 'peso_real_obligatorio' : 'peso_volumetrico_obligatorio']).map((campo) => <div key={campo}><label htmlFor={`tienda-${campo}`} className={THEME_LABEL}>{campo === 'peso_real_kg' ? 'Peso real (kg)' : 'Peso volumétrico (kg)'} *<input {...atributosCampo(`tienda-${campo}`)} aria-required="true" name={campo} type="number" inputMode="decimal" step="0.001" min="0.001" disabled={ocupado} className={`${THEME_INPUT} w-full mt-1`} value={extra[campo]} onChange={(e) => actualizarExtra(campo, e.target.value)} placeholder="Ej. 1.250" /></label>{errorCampo(`tienda-${campo}`)}</div>)}
                                 {requisitos.caja_obligatoria && <div><label htmlFor="tienda-catalogo_tipo_caja_id" className={THEME_LABEL}>Tipo de caja *<select {...atributosCampo('tienda-catalogo_tipo_caja_id')} aria-required="true" name="catalogo_tipo_caja_id" disabled={ocupado} className={`${THEME_SELECT} w-full mt-1`} value={extra.catalogo_tipo_caja_id} onChange={(e) => actualizarExtra('catalogo_tipo_caja_id', e.target.value)}><option value="">Seleccione una caja…</option>{tiposCaja.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}</select></label>{errorCampo('tienda-catalogo_tipo_caja_id')}</div>}
@@ -225,7 +225,7 @@ export default function PrepararApartadoRecoge({ tarea, auth, documentos = [], d
                             {(esAdmin || permisos.includes('control_pedidos.tienda.cargar_identificacion')) && ['identificacion', 'remision'].map((tipo) => <div key={tipo}><label htmlFor={`tienda-${tipo}`} className={THEME_LABEL}>{tipo === 'identificacion' ? 'Identificación' : 'Remisión'}{tipo === 'identificacion' && requisitos.requiere_identificacion ? ' *' : ''}<input {...atributosCampo(`tienda-${tipo}`)} name={tipo} type="file" accept="image/jpeg,image/png,image/webp,application/pdf" disabled={ocupado} onChange={(e) => { subirDocumentoMunicipal(tipo, e.target.files?.[0]); e.target.value = ''; }} /></label>{errorCampo(`tienda-${tipo}`)}</div>)}
                             {documentosTarea.filter((d) => ['identificacion', 'remision'].includes(d.tipo_evidencia)).map((d) => <button key={d.id} type="button" className={BTN_SECONDARY} onClick={() => verDocs([d])}>{d.nombre_original}</button>)}
                         </div>}
-                        <div className="gelia-preparacion-resumen" aria-label="Revisión de la respuesta"><strong>{total} piezas · {lineas.length} productos</strong><p>{esRecoge ? 'Al confirmar, Ventas recibirá el resultado y la ubicación del apartado.' : 'Al responder, Ventas recibirá las cantidades, el estado de la mercancía y las evidencias registradas.'}</p>
+                        <div className="gelia-preparacion-resumen" aria-label="Revisión de la respuesta"><strong>{total} piezas · {lineas.length} productos</strong><p>{esRecoge ? 'Al confirmar, Ventas recibirá las piezas y su estado.' : 'Al responder, Ventas recibirá las cantidades, el estado de la mercancía y las evidencias registradas.'}</p>
                             {faltantes.length > 0 && <div className="gelia-preparacion-pendientes"><span>Por completar antes de enviar:</span><ul>{faltantes.map((f) => <li key={f.campo}><button type="button" onClick={() => { setValidando(true); irACampo(f.campo); }}>{f.texto}</button></li>)}</ul></div>}
                         </div>
                     </section>

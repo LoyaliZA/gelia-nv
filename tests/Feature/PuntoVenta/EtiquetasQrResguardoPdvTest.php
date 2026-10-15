@@ -55,11 +55,14 @@ class EtiquetasQrResguardoPdvTest extends TestCase
     {
         $resguardo = $this->crearResguardoPendiente();
 
-        $this->actingAs($this->usuario)->putJson(
+        $this->withHeader('Accept', 'application/json')->actingAs($this->usuario)->put(
             route('punto_venta.resguardos.recepcion', $resguardo),
             [
                 'version' => 1,
                 'idempotency_key' => 'pdv:rec:'.$resguardo->id.':etiqueta',
+                'folios' => array_column(\App\Support\PuntoVenta\Resguardos\BultosEsperadosResguardoPdv::desdeResguardo($resguardo), 'folio'),
+                'condicion' => 'bueno',
+                'foto_paquete' => \Illuminate\Http\UploadedFile::fake()->image('llegada.jpg'),
             ]
         )->assertOk();
 

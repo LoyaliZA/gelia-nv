@@ -141,9 +141,9 @@ afterEach(async () => {
 describe('Registrar Pedidos: recuperación de captura', () => {
     it('restaura modalidad, prioridad, referencia y entrega municipal al reabrir', async () => {
         await montar({ pedido: pedidoServidor });
-        expect(controlTrasEtiqueta('Modalidad de recolección')?.value).toBe('ENVIO_MUNICIPIO');
+        expect(controlTrasEtiqueta('Preparación del envío desde Tienda')?.value).toBe('ENVIO_MUNICIPIO');
         expect(controlTrasEtiqueta('Prioridad del mismo día')?.checked).toBe(true);
-        expect(document.querySelector('input[placeholder="Folio"]')?.value).toBe('COT-014');
+        expect(document.querySelector('input[aria-label="Referencia adicional opcional"]')?.value).toBe('COT-014');
         expect(controlTrasEtiqueta('Municipio / destino')?.value).toBe('San Pedro');
         expect(controlTrasEtiqueta('Nombre destinatario')?.value).toBe('Receptor alterno');
         expect(controlTrasEtiqueta('Teléfono')?.value).toBe('2221112233');
@@ -152,7 +152,7 @@ describe('Registrar Pedidos: recuperación de captura', () => {
         expect(controlTrasEtiqueta('Cobro')?.value).toBe('POR_COBRAR');
         expect(controlTrasEtiqueta('Almacén')?.value || document.querySelector('[data-campo="almacen"] select')?.value).toBe('9');
 
-        const modalidad = controlTrasEtiqueta('Modalidad de recolección');
+        const modalidad = controlTrasEtiqueta('Preparación del envío desde Tienda');
         await act(async () => {
             modalidad.value = 'ENVIO_BODEGA_NORMAL';
             modalidad.dispatchEvent(new Event('change', { bubbles: true }));
@@ -200,7 +200,7 @@ describe('Registrar Pedidos: recuperación de captura', () => {
         }));
         await montar({ pedido: null, recuperarBorrador: true });
         expect(controlTrasEtiqueta('Municipio / destino')?.value).toBe('Tlaxcala');
-        expect(document.querySelector('input[placeholder="Folio"]')?.value).toBe('PED-2');
+        expect(document.querySelector('input[aria-label="Referencia adicional opcional"]')?.value).toBe('PED-2');
 
         await act(async () => root.unmount());
         localStorage.clear();

@@ -68,7 +68,7 @@ class CrearRecepcionEsperadaPdvService
 
     private function assertElegible(PedidoBma $pedido): void
     {
-        if (! $pedido->requiereSucursalDestino()) {
+        if (! $pedido->requiereSucursalDestino() && ! $pedido->esTrasladoInternoAPdv()) {
             throw ValidationException::withMessages([
                 'modalidad' => 'Este pedido no tiene una modalidad compatible con recepción en sucursal.',
             ]);
@@ -116,6 +116,11 @@ class CrearRecepcionEsperadaPdvService
                 'folio_remision' => $pedido->folio_remision,
                 'sucursal_id' => $sucursalId,
                 'handoff' => self::HANDOFF,
+                'traslado_interno' => $pedido->esTrasladoInternoAPdv(),
+                'inventario_sincronizado' => false,
+                'revision_fisica' => $pedido->revisionesProducto()->get()->toArray(),
+                'revisada_por_id' => $pedido->pesaje_respondido_por_id,
+                'revisada_at' => $pedido->pesaje_respondido_at?->toIso8601String(),
                 'envia_a_otra_persona' => (bool) $pedido->envia_a_otra_persona,
                 'envia_otra_persona' => $pedido->envia_otra_persona,
             ],

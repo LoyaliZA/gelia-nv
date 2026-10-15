@@ -102,6 +102,8 @@ class ElegibilidadCedisPdvPedidoTest extends TestCase
             'permite_salida_pedidos' => true,
         ]);
         $pedido = $this->pedido(false, $pdv->id);
+        // Recogida local en el mismo PDV; el traslado a otro PDV sí admite consulta Q6.
+        $pdv->update(['sucursal_id' => $pedido->sucursal_destino_id]);
 
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('almacén de Tienda');
@@ -179,6 +181,7 @@ class ElegibilidadCedisPdvPedidoTest extends TestCase
         $sucursal = Sucursal::factory()->create(['activo' => true]);
         $pedido = PedidoBma::query()->create([
             'folio' => 'Q4-'.uniqid(),
+            'folio_remision' => 'PED-Q4-'.uniqid(),
             'fecha' => now()->toDateString(),
             'vendedor_id' => $this->usuario->id,
             'origen_id' => $origen->id,

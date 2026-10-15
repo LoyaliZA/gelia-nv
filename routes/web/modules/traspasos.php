@@ -5,6 +5,11 @@ use App\Http\Controllers\Traspasos\SolicitudTraspasoController;
 use App\Http\Controllers\Traspasos\TraspasoCedisController;
 
 Route::prefix('traspasos')->name('traspasos.')->group(function () {
+    Route::get('/abastecimiento', [\App\Http\Controllers\Traspasos\AbastecimientoPreparacionController::class, 'index'])->name('abastecimiento.index');
+    Route::post('/abastecimiento/tareas/{tarea}', [\App\Http\Controllers\Traspasos\AbastecimientoPreparacionController::class, 'crear'])->name('abastecimiento.crear');
+    Route::post('/abastecimiento/{traspaso}', [\App\Http\Controllers\Traspasos\AbastecimientoPreparacionController::class, 'operar'])->name('abastecimiento.operar');
+    Route::get('/abastecimiento/{traspaso}/evidencia/{operacion}', [\App\Http\Controllers\Traspasos\AbastecimientoPreparacionController::class, 'evidencia'])->name('abastecimiento.evidencia');
+
     Route::middleware(['can:traspasos.crear'])
         ->post('/', [SolicitudTraspasoController::class, 'store'])
         ->name('store');

@@ -94,7 +94,7 @@ class SolicitarDevolucionCumplimientoService
                 $this->notificar->ejecutar(
                     $pedido,
                     'pedido_apartado_devolucion_pendiente',
-                    'Una recogida no concretada quedó en devolución pendiente. Confirme ubicación y foto para devolverla al anaquel.',
+                    'Una recogida no concretada quedó en devolución pendiente. Confirme el retorno al almacén con la foto de la mercancía.',
                     ['control_pedidos.tienda.apartado.confirmar_devolucion', 'control_pedidos.tienda.ver'],
                     $usuario?->id,
                     true,

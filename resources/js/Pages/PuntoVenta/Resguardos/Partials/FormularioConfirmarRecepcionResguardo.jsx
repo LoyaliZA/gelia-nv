@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Loader2, Package, UserRound } from 'lucide-react';
-import { geliaCardClass, THEME_BTN_PRIMARY } from '../../../../utils/geliaTheme';
+import { geliaCardClass, THEME_BTN_PRIMARY, THEME_INPUT, THEME_SELECT } from '../../../../utils/geliaTheme';
 import { titularResguardo, etiquetaRetiroResguardo } from './resguardosUtils';
 import { ChipEvidenciasBultosEmpaque } from './ModalEvidenciasBultosEmpaque';
 import BusquedaProductoResguardo from './BusquedaProductoResguardo';
@@ -32,6 +32,9 @@ export default function FormularioConfirmarRecepcionResguardo({
     const registroManual = resguardo?.registro_manual;
     const corrigePiezas = Boolean(flujoCompleto && registroManual);
     const usosEvidencia = new Set((registroManual?.evidencias || []).map((item) => item.uso));
+    const [condicion, setCondicion] = useState('bueno');
+    const [observacion, setObservacion] = useState('');
+    const [folios, setFolios] = useState([]);
     const [piezas, setPiezas] = useState([]);
     const [errorPiezas, setErrorPiezas] = useState(null);
     const [archivoTicket, setArchivoTicket] = useState(null);
@@ -72,7 +75,7 @@ export default function FormularioConfirmarRecepcionResguardo({
         if (faltaPiezas) omisiones.push({ campo: 'piezas', motivo });
         if (faltaTicket) omisiones.push({ campo: 'ticket', motivo });
         if (faltaPaquete) omisiones.push({ campo: 'foto_paquete', motivo });
-        const payload = {};
+        const payload = { folios, condicion, observacion };
         if (corrigePiezas && piezas.length > 0) {
             payload.piezas = piezas.map((linea) => ({
                 producto_id: linea.producto_id,
@@ -102,6 +105,31 @@ export default function FormularioConfirmarRecepcionResguardo({
                 </div>
             </div>
 
+            <fieldset className={`${geliaCardClass()} p-5 space-y-3`}>
+                <legend className="theme-text-main font-bold">Bultos de esta llegada</legend>
+                <p className="theme-text-muted text-sm">Esperados: {cantidadBultos}. Recibidos: {resguardo.cantidad_bultos_recibida || 0}. Pendientes: {resguardo.cantidad_bultos_pendiente ?? cantidadBultos}. Seleccione únicamente los que llegaron ahora.</p>
+                {(resguardo.bultos_esperados || []).map((bulto) => (
+                    <label key={bulto.folio} className="flex gap-3 items-center min-h-[44px] theme-text-main">
+                        <input type="checkbox" disabled={enviando || bulto.recibido} checked={bulto.recibido || folios.includes(bulto.folio)}
+                            onChange={(e) => setFolios((prev) => e.target.checked ? [...prev, bulto.folio] : prev.filter((f) => f !== bulto.folio))} />
+                        {bulto.folio} · {bulto.recibido ? 'Ya recibido' : 'Pendiente de llegada'}
+                    </label>
+                ))}
+            </fieldset>
+            <div className={`${geliaCardClass()} p-5 space-y-3`}>
+                <label className="block theme-text-main">Condición observada de los bultos seleccionados
+                    <select className={THEME_SELECT} value={condicion} onChange={(e) => setCondicion(e.target.value)} required disabled={enviando}>
+                        <option value="bueno">Buena</option><option value="regular">Regular</option><option value="malo">Mala</option><option value="danado">Dañada</option>
+                    </select>
+                </label>
+                <p className="text-sm theme-text-muted">Si llegaron con distinta condición, regístrelos en llegadas separadas. Los daños abren incidencia.</p>
+                <label className="block theme-text-main">Observaciones de llegada
+                    <textarea className={THEME_INPUT} value={observacion} onChange={(e) => setObservacion(e.target.value)} required={condicion !== 'bueno'} minLength={condicion !== 'bueno' ? 8 : undefined} disabled={enviando} />
+                </label>
+                {!registroManual && <label className="block theme-text-main">Evidencia física de esta llegada
+                    <input type="file" accept="image/jpeg,image/png,image/webp" required disabled={enviando} onChange={(e) => setFotoPaquete(e.target.files[0] || null)} />
+                </label>}
+            </div>
             {bultosCedis.length > 0 && (
                 <div className={`${geliaCardClass()} p-5 space-y-3`}>
                     <div className="flex items-center gap-2">
@@ -120,7 +148,7 @@ export default function FormularioConfirmarRecepcionResguardo({
                 <p className="text-sm theme-text-muted m-0">
                     {corrigePiezas
                         ? 'Confirme la llegada y ajuste las piezas si el conteo no coincide. Ticket y foto del paquete ya capturados se reutilizan.'
-                        : 'Solo confirma que el paquete llegó a sucursal. El recepcionista revisará bultos y piezas después.'}
+                        : 'Confirme los bultos presentes. Los restantes siguen en tránsito. La revisión para custodia se realiza después.'}
                 </p>
             </div>
 
@@ -196,7 +224,7 @@ export default function FormularioConfirmarRecepcionResguardo({
             <div className="flex flex-col sm:flex-row gap-2">
                 <button
                     type="submit"
-                    disabled={enviando}
+                    disabled={enviando || folios.length === 0}
                     className={`${THEME_BTN_PRIMARY} flex-1 min-h-[48px] inline-flex items-center justify-center gap-2`}
                 >
                     {enviando ? (

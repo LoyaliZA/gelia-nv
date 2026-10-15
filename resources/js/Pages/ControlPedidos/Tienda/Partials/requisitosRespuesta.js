@@ -1,4 +1,4 @@
-export function faltantesRespuesta({ lineas, esRecoge, ubicacion, extra, requisitos, documentos, evidencias }) {
+export function faltantesRespuesta({ lineas, esRecoge, extra, requisitos, documentos, evidencias }) {
     const faltantes = [];
     if (!lineas.length) faltantes.push({ campo: 'tienda-escanear', texto: 'Agregue los productos preparados o reporte el problema.' });
     lineas.forEach((l, i) => {
@@ -10,10 +10,7 @@ export function faltantesRespuesta({ lineas, esRecoge, ubicacion, extra, requisi
             faltantes.push({ campo: `tienda-fotos-${i}`, texto: `Adjunte evidencia de ${l.descripcion}.` });
         }
     });
-    if (esRecoge) {
-        if (!ubicacion.trim()) faltantes.push({ campo: 'tienda-ubicacion', texto: 'Indique dónde queda el apartado.' });
-        return faltantes;
-    }
+    if (esRecoge) return faltantes;
     for (const [requisito, campo, texto] of [
         ['peso_real_obligatorio', 'peso_real_kg', 'Capture el peso real en kg.'],
         ['peso_volumetrico_obligatorio', 'peso_volumetrico_kg', 'Capture el peso volumétrico en kg.'],

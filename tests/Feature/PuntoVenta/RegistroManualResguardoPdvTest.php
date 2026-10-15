@@ -268,6 +268,8 @@ class RegistroManualResguardoPdvTest extends TestCase
 
         $this->actingAs($this->usuario)
             ->putJson(route('punto_venta.resguardos.recepcion', $resguardo), [
+                'folios' => array_column(\App\Support\PuntoVenta\Resguardos\BultosEsperadosResguardoPdv::desdeResguardo($resguardo), 'folio'),
+                'condicion' => 'bueno',
                 'version' => $resguardo->version,
                 'idempotency_key' => 'pdv:rec:completo:1',
                 'piezas' => [
@@ -477,6 +479,8 @@ class RegistroManualResguardoPdvTest extends TestCase
 
         $this->actingAs($this->usuario)
             ->putJson(route('punto_venta.resguardos.recepcion', $resguardo), [
+                'folios' => array_column(\App\Support\PuntoVenta\Resguardos\BultosEsperadosResguardoPdv::desdeResguardo($resguardo), 'folio'),
+                'condicion' => 'bueno',
                 'version' => $resguardo->version,
                 'idempotency_key' => 'pdv:rec:sin-img:bloqueada',
             ])
@@ -485,6 +489,8 @@ class RegistroManualResguardoPdvTest extends TestCase
 
         $this->actingAs($this->usuario)
             ->putJson(route('punto_venta.resguardos.recepcion', $resguardo), [
+                'folios' => array_column(\App\Support\PuntoVenta\Resguardos\BultosEsperadosResguardoPdv::desdeResguardo($resguardo), 'folio'),
+                'condicion' => 'bueno',
                 'version' => $resguardo->version,
                 'idempotency_key' => 'pdv:rec:sin-img:1',
                 'omisiones' => [
@@ -717,6 +723,8 @@ class RegistroManualResguardoPdvTest extends TestCase
 
         $this->actingAs($this->usuario)
             ->putJson(route('punto_venta.resguardos.recepcion', $resguardo), [
+                'folios' => array_column(\App\Support\PuntoVenta\Resguardos\BultosEsperadosResguardoPdv::desdeResguardo($resguardo), 'folio'),
+                'condicion' => 'bueno',
                 'version' => $resguardo->version,
                 'idempotency_key' => 'pdv:rec:'.$producto->id,
                 'piezas' => [

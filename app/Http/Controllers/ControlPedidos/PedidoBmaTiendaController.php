@@ -638,7 +638,7 @@ class PedidoBmaTiendaController extends Controller
     ): RedirectResponse {
         $datos = $request->validated();
         try {
-            $service->ejecutar($tarea, Auth::user(), (int) $datos['cantidad'], $datos['ubicacion'], $datos['version'] ?? null);
+            $service->ejecutar($tarea, Auth::user(), (int) $datos['cantidad'], $datos['ubicacion'] ?? null, $datos['version'] ?? null);
         } catch (ValidationException $e) {
             return redirect()->back()->with('error', collect($e->errors())->flatten()->first() ?: $e->getMessage());
         }
@@ -778,13 +778,13 @@ class PedidoBmaTiendaController extends Controller
     ): RedirectResponse {
         $datos = $request->validated();
         try {
-            $service->ejecutar($tarea, Auth::user(), $datos['ubicacion'], $request->file('foto'), $datos['version'] ?? null);
+            $service->ejecutar($tarea, Auth::user(), $datos['ubicacion'] ?? null, $request->file('foto'), $datos['version'] ?? null);
         } catch (ValidationException $e) {
             return redirect()->back()->with('error', collect($e->errors())->flatten()->first() ?: $e->getMessage());
         }
 
         return redirect()->route('control_pedidos.tienda.index', ['tab' => 'HISTORIAL_DEVUELTAS'])
-            ->with('success', 'Devolución al anaquel confirmada con ubicación y foto.');
+            ->with('success', 'Retorno al almacén confirmado con foto.');
     }
 
     public function prorrogarApartado(

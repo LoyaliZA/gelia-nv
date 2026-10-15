@@ -30,6 +30,15 @@ class EnviarPedidoBmaService
 
     public function ejecutar(PedidoBma $pedido, int $usuarioId): PedidoBma
     {
+        return DB::transaction(function () use ($pedido, $usuarioId) {
+            $pedido = PedidoBma::query()->lockForUpdate()->findOrFail($pedido->id);
+
+            return $this->enviar($pedido, $usuarioId);
+        });
+    }
+
+    private function enviar(PedidoBma $pedido, int $usuarioId): PedidoBma
+    {
         if ($pedido->esRecogeTiendaApartado()) {
             throw new \RuntimeException('Recoge en tienda termina al confirmar el apartado. No se envía a pago ni a auditoría.');
         }
@@ -54,6 +63,7 @@ class EnviarPedidoBmaService
             if (
                 ! $pedido->esResguardoAbierto()
                 && $pedido->origen?->requiere_logistica
+                && ! $pedido->esTrasladoInternoAPdv()
                 && ! $pedido->cliente_proporciona_guia
                 && ! $pedido->cliente_direccion_id
                 && ! CrearSnapshotDireccionPedido::manualEstaCompleta($pedido->direccionVigente)

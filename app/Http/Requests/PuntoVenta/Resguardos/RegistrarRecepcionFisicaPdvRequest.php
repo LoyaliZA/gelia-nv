@@ -28,6 +28,10 @@ class RegistrarRecepcionFisicaPdvRequest extends PdvOperacionPisoRequest
     public function rules(): array
     {
         return [
+            'condicion' => ['required', 'in:bueno,regular,malo,danado'],
+            'observacion' => ['nullable', 'string', 'max:2000'],
+            'folios' => ['required', 'array', 'min:1', 'max:200'],
+            'folios.*' => ['required', 'string', 'max:100', 'distinct'],
             'version' => ['required', 'integer', 'min:1'],
             'idempotency_key' => ['required', 'string', 'max:64'],
             'piezas' => ['sometimes', 'array', 'max:200'],

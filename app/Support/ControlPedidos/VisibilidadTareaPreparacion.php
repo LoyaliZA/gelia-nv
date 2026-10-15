@@ -117,6 +117,7 @@ final class VisibilidadTareaPreparacion
                 'orden' => $p->orden,
             ])->values()->all(),
             'piezas_solicitadas' => $tarea->piezasSolicitadas(),
+            'abastecimiento_pendiente' => collect(app(\App\Services\Traspasos\AbastecerPreparacionService::class)->pendientes($tarea))->contains(fn ($p) => $p['comprometidas'] > 0),
             'requiere_traslado_cedis' => (bool) $tarea->requiere_traslado_cedis,
             'peso_real_kg' => $tarea->peso_real_kg,
             'peso_volumetrico_kg' => $tarea->peso_volumetrico_kg,

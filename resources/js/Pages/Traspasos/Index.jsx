@@ -248,6 +248,7 @@ export default function Index({
         <AppLayout>
             <Head title="Traspasos | GELIA" />
             <GeliaPageShell className="space-y-6 md:space-y-8">
+                <a className="text-primario underline text-sm" href={route('traspasos.abastecimiento.index')}>Abastecimiento a preparación en PDV</a>
                 <header className={`${geliaCardClass()} p-6 md:p-10 flex flex-col md:flex-row items-center justify-between gap-4 md:gap-6`}>
                     <div className="w-full md:w-auto text-center md:text-left">
                         <div className="flex items-center justify-center md:justify-start space-x-3 mb-2">

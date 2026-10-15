@@ -23,6 +23,18 @@ class MarcarEnviadoPedidoBmaService
      */
     public function ejecutar(PedidoBma $pedido, int $usuarioId, ?array $cajasSeleccion = null): PedidoBma
     {
+        return DB::transaction(function () use ($pedido, $usuarioId, $cajasSeleccion) {
+            $pedido = PedidoBma::query()->lockForUpdate()->findOrFail($pedido->id);
+            if ($pedido->estatus?->fase_ciclo === CatalogoEstatusPedido::FASE_ENVIADO) {
+                return $pedido;
+            }
+
+            return $this->enviar($pedido, $usuarioId, $cajasSeleccion);
+        });
+    }
+
+    private function enviar(PedidoBma $pedido, int $usuarioId, ?array $cajasSeleccion): PedidoBma
+    {
         if ($pedido->estatus?->fase_ciclo !== CatalogoEstatusPedido::FASE_PENDIENTE_DE_ENVIO) {
             throw new \RuntimeException('El pedido no está pendiente de recolección o envío.');
         }
@@ -31,9 +43,17 @@ class MarcarEnviadoPedidoBmaService
             throw new \RuntimeException('El pedido debe estar empacado antes de marcarlo como enviado.');
         }
 
+        if ($pedido->consulta_actualizacion_pendiente) {
+            throw new \RuntimeException('Hay una actualización de mercancía pendiente. CEDIS debe confirmarla antes de marcar el envío.');
+        }
+
+        if ($pedido->esTrasladoInternoAPdv()) {
+            app(ValidarSucursalDestinoPedidoBma::class)->ejecutar($pedido, (int) $pedido->sucursal_destino_id, exigirSiAplica: true);
+        }
+
         $pedido->loadMissing(['paqueteria', 'origen', 'cajas']);
 
-        if ($pedido->tienePaqueteriaPendiente()) {
+        if (! $pedido->esTrasladoInternoAPdv() && $pedido->tienePaqueteriaPendiente()) {
             throw new \RuntimeException(
                 'Actualice la paquetería (ya no use PAQ. PENDIENTE) antes de marcar el pedido como enviado.'
             );
@@ -129,7 +149,7 @@ class MarcarEnviadoPedidoBmaService
                 $usuarioId,
                 $estatusAnterior,
                 $estatusEnviado,
-                'Paquetería recogió el paquete.',
+                $pedido->esTrasladoInternoAPdv() ? 'Salida de traslado interno confirmada.' : 'Paquetería recogió el paquete.',
                 AccionesHistorialPedidoBma::ENVIO_FINAL
             );
 
@@ -139,14 +159,14 @@ class MarcarEnviadoPedidoBmaService
                 'origen', 'sucursalDestino', 'tareaPreparacionVigente.modalidad',
             ]);
 
-            if ($pedido->requiereSucursalDestino()) {
+            if ($pedido->requiereSucursalDestino() || $pedido->esTrasladoInternoAPdv()) {
                 $this->crearRecepcionEsperadaPdv->ejecutar($pedido, $usuarioId);
             }
 
             $this->notificarService->ejecutar(
                 $pedido,
                 'pedido_enviado',
-                'Paquetería recogió el paquete',
+                $pedido->esTrasladoInternoAPdv() ? 'Salida de traslado interno confirmada' : 'Paquetería recogió el paquete',
                 [],
                 $usuarioId,
                 true,

@@ -24,6 +24,15 @@ class AprobarPedidoBmaService
 
     public function ejecutar(PedidoBma $pedido, int $usuarioId): PedidoBma
     {
+        return DB::transaction(function () use ($pedido, $usuarioId) {
+            $pedido = PedidoBma::query()->lockForUpdate()->findOrFail($pedido->id);
+
+            return $this->aprobar($pedido, $usuarioId);
+        });
+    }
+
+    private function aprobar(PedidoBma $pedido, int $usuarioId): PedidoBma
+    {
         if (!$pedido->esAuditablePorAuxiliar()) {
             throw new \RuntimeException('Solo se pueden aprobar pedidos pendientes de revisión.');
         }

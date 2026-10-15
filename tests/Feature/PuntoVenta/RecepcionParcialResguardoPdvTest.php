@@ -36,6 +36,8 @@ class RecepcionParcialResguardoPdvTest extends TestCase
             ValidateCsrfToken::class,
             PreventRequestForgery::class,
         ]);
+        $this->withHeader('Accept', 'application/json');
+        \Illuminate\Support\Facades\Storage::fake('local');
         $this->activarModulo();
         $this->seedPermisos();
 
@@ -62,7 +64,7 @@ class RecepcionParcialResguardoPdvTest extends TestCase
     {
         $resguardo = $this->crearResguardoPendiente(cantidadEsperada: 2);
 
-        $this->actingAs($this->usuario)->putJson(
+        $this->actingAs($this->usuario)->put(
             route('punto_venta.resguardos.recepcion', $resguardo),
             $this->payloadRecepcion($resguardo, 'pdv:rec:'.$resguardo->id.':1')
         )->assertOk()
@@ -72,10 +74,13 @@ class RecepcionParcialResguardoPdvTest extends TestCase
         $resguardo->refresh();
         $folios = $resguardo->bultos->pluck('folio')->all();
 
-        $this->actingAs($this->usuario)->putJson(
+        $this->actingAs($this->usuario)->put(
             route('punto_venta.resguardos.pasar_recepcion', $resguardo),
             [
-                'version' => (int) $resguardo->version,
+                'condicion' => 'bueno',
+            'foto_paquete' => \Illuminate\Http\UploadedFile::fake()->image('llegada.jpg'),
+            'folios' => array_column(\App\Support\PuntoVenta\Resguardos\BultosEsperadosResguardoPdv::desdeResguardo($resguardo), 'folio'),
+            'version' => (int) $resguardo->version,
                 'idempotency_key' => 'pdv:pasar:'.$resguardo->id.':1',
             ]
         )->assertOk()
@@ -88,10 +93,13 @@ class RecepcionParcialResguardoPdvTest extends TestCase
 
         $resguardo->refresh();
 
-        $this->actingAs($this->usuario)->putJson(
+        $this->actingAs($this->usuario)->put(
             route('punto_venta.resguardos.custodia', $resguardo),
             [
-                'version' => (int) $resguardo->version,
+                'condicion' => 'bueno',
+            'foto_paquete' => \Illuminate\Http\UploadedFile::fake()->image('llegada.jpg'),
+            'folios' => array_column(\App\Support\PuntoVenta\Resguardos\BultosEsperadosResguardoPdv::desdeResguardo($resguardo), 'folio'),
+            'version' => (int) $resguardo->version,
                 'idempotency_key' => 'pdv:custodia:'.$resguardo->id.':1',
                 'almacen_id' => $this->almacen->id,
                 'bultos' => [
@@ -109,10 +117,13 @@ class RecepcionParcialResguardoPdvTest extends TestCase
 
         $resguardo->refresh();
 
-        $this->actingAs($this->usuario)->putJson(
+        $this->actingAs($this->usuario)->put(
             route('punto_venta.resguardos.custodia', $resguardo),
             [
-                'version' => (int) $resguardo->version,
+                'condicion' => 'bueno',
+            'foto_paquete' => \Illuminate\Http\UploadedFile::fake()->image('llegada.jpg'),
+            'folios' => array_column(\App\Support\PuntoVenta\Resguardos\BultosEsperadosResguardoPdv::desdeResguardo($resguardo), 'folio'),
+            'version' => (int) $resguardo->version,
                 'idempotency_key' => 'pdv:custodia:'.$resguardo->id.':2',
                 'almacen_id' => $this->almacen->id,
                 'bultos' => [
@@ -137,14 +148,14 @@ class RecepcionParcialResguardoPdvTest extends TestCase
     {
         $resguardo = $this->crearResguardoPendiente();
 
-        $this->actingAs($this->usuario)->putJson(
+        $this->actingAs($this->usuario)->put(
             route('punto_venta.resguardos.recepcion', $resguardo),
             $this->payloadRecepcion($resguardo, 'pdv:rec:'.$resguardo->id.':solo')
         )->assertOk();
 
         $folio = $resguardo->fresh()->bultos->first()->folio;
 
-        $this->actingAs($this->usuario)->putJson(
+        $this->actingAs($this->usuario)->put(
             route('punto_venta.resguardos.custodia', $resguardo->fresh()),
             [
                 'version' => (int) $resguardo->fresh()->version,
@@ -169,6 +180,9 @@ class RecepcionParcialResguardoPdvTest extends TestCase
     private function payloadRecepcion(ResguardoPdv $resguardo, string $clave): array
     {
         return [
+            'condicion' => 'bueno',
+            'foto_paquete' => \Illuminate\Http\UploadedFile::fake()->image('llegada.jpg'),
+            'folios' => array_column(\App\Support\PuntoVenta\Resguardos\BultosEsperadosResguardoPdv::desdeResguardo($resguardo), 'folio'),
             'version' => (int) $resguardo->version,
             'idempotency_key' => $clave,
         ];

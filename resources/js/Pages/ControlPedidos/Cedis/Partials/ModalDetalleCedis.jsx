@@ -1,3 +1,4 @@
+import { pedidoEsTrasladoInternoPdv } from '../../Partials/destinoSucursalPedido';
 import ListaProductosOk from '../../Partials/ListaProductosOk';
 import usePedidoDialog from '../../Partials/usePedidoDialog';
 import NavegacionPedido from '../../Partials/NavegacionPedido';
@@ -9,6 +10,7 @@ import {
 } from 'lucide-react';
 import {
     badgeEmpaqueSemantico,
+    cedisConsultaEsRevisionMercancia,
     badgeRetrasoGuia,
     badgesRetrasoSla,
     badgeConComplementos,
@@ -105,7 +107,8 @@ export default function ModalDetalleCedis({
 
     if (!abierto || !pedido) return null;
 
-    const esTienda = pedido.origen?.requiere_logistica === false;
+    const esTienda = cedisConsultaEsRevisionMercancia(pedido);
+    const trasladoInterno = pedidoEsTrasladoInternoPdv(pedido);
     const fase = pedido.estatus?.fase_ciclo;
     const badgeEmpaque = badgeEmpaqueSemantico(fase, pedido.es_resguardo, Boolean(pedido.resguardo_apartado_at));
     const badgeRetraso = pedido.guia_retraso ? badgeRetrasoGuia() : null;
@@ -123,7 +126,8 @@ export default function ModalDetalleCedis({
         (d) => d.relacion_tipo === 'revision_producto' && String(d.relacion_id) === String(revId),
     );
     const revisionConDetalle = (r) => (
-        r.estado_fisico !== 'bueno'
+        r.cantidad_solicitada != null
+        || r.estado_fisico !== 'bueno'
         || Boolean(r.comentario)
         || Boolean(r.unica_pieza)
         || Boolean(r.mejor_ejemplar)
@@ -150,9 +154,10 @@ export default function ModalDetalleCedis({
     const esErrorCedis = fase === 'INCIDENCIA_CEDIS';
     const esEmpacado = esPedidoEmpacadoCedis(fase);
     const haySinExAbierta = revisiones.some(revisionSinExistenciaAbierta);
-    const puedeEmpacar = (fase === 'EN_CEDIS' || fase === 'INCIDENCIA_CEDIS') && !pedido.es_resguardo && !haySinExAbierta;
+    const actualizacionMercanciaPendiente = Boolean(pedido.consulta_actualizacion_pendiente);
+    const puedeEmpacar = (fase === 'EN_CEDIS' || fase === 'INCIDENCIA_CEDIS') && !pedido.es_resguardo && !haySinExAbierta && !actualizacionMercanciaPendiente;
     const puedeReportarSinEx = (fase === 'EN_CEDIS' || fase === 'INCIDENCIA_CEDIS') && !pedido.empacado_at;
-    const puedeMarcarEnviado = fase === 'PENDIENTE_DE_ENVIO' && Boolean(puedeEnviar);
+    const puedeMarcarEnviado = fase === 'PENDIENTE_DE_ENVIO' && Boolean(puedeEnviar) && !actualizacionMercanciaPendiente;
     const puedeReabrirEnvio = fase === 'ENVIADO' && Boolean(puedeReabrir);
     const cajasPendientes = cajasOrdenadas.filter((c) => (c.estatus_recoleccion || 'pendiente') === 'pendiente');
     const cajasRecolectadasCount = pedido.cajas_recolectadas
@@ -513,6 +518,7 @@ export default function ModalDetalleCedis({
                                                             <p className="text-xs font-semibold theme-text-main m-0">{r.descripcion_producto}</p>
                                                             <span className={b.className} style={b.style}>{b.label}</span>
                                                         </div>
+                                                        {r.cantidad_solicitada != null && <p className="text-xs theme-text-main m-0">Solicitadas: {r.cantidad_solicitada} · Encontradas: {r.cantidad_encontrada ?? '—'} · Faltantes: {r.cantidad_encontrada == null ? '—' : r.cantidad_solicitada - r.cantidad_encontrada}</p>}
                                                         {r.comentario && <p className="text-xs theme-text-muted font-bold m-0">{r.comentario}</p>}
                                                         {r.estado_fisico === 'sin_existencia' && esFasePreVenta(pedido?.estatus?.fase_ciclo) && (
                                                             <p className="text-xs font-semibold theme-text-info m-0">
@@ -697,11 +703,15 @@ export default function ModalDetalleCedis({
                                 <Campo label="N° Cliente" value={pedido.cliente?.numero_cliente} />
                                 <Campo label="Tipo de pedido" value={pedido.origen?.nombre} />
                                 <Campo label="Almacén" value={etiquetaAlmacen(pedido.almacen)} />
-                                <Campo label="Paquetería" value={pedido.paqueteria?.nombre} />
+                                {trasladoInterno
+                                    ? <Campo label="Recorrido" value="Traslado interno" />
+                                    : <Campo label="Paquetería" value={pedido.paqueteria?.nombre} />}
                                 <Campo label={esTienda ? 'Bultos a preparar (Aprox)' : 'N° de envíos'} value={pedido.numero_cajas} />
+                                {!trasladoInterno && <>
                                 <Campo label="Origen de la guía" value={etiquetaOrigenGuia(pedido)} />
                                 <Campo label="Tipo de guía" value={pedido.tipo_guia?.nombre} />
                                 <Campo label="Peso real" value={pedido.peso_real_kg != null ? `${pedido.peso_real_kg} kg` : null} />
+                                </>}
                                 <Campo label="Registrado" value={formatearFechaHoraAuditoria(pedido.created_at)} />
                                 <Campo label="Seguro" value={pedido.aplica_seguro ? formatearMoneda(pedido.costo_seguro) : 'No aplica'} />
                             </div>

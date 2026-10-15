@@ -17,6 +17,7 @@ vi.mock('./Partials/ModalPreparacionTienda', () => ({ default: ({ tareaId, atend
 let root;
 let container;
 beforeEach(() => {
+    globalThis.route = (name) => name;
     globalThis.IS_REACT_ACT_ENVIRONMENT = true;
     container = document.createElement('div'); document.body.append(container); root = createRoot(container);
     cargar.mockReset();

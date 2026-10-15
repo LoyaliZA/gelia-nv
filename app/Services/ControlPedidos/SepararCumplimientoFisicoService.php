@@ -24,7 +24,7 @@ class SepararCumplimientoFisicoService
         PedidoBmaTareaPreparacion $tarea,
         User $usuario,
         int $cantidad,
-        string $ubicacion,
+        ?string $ubicacion = null,
         ?int $versionEsperada = null,
     ): PedidoBmaCumplimientoFisico {
         if (! $usuario->can('control_pedidos.tienda.apartado.separar')) {
@@ -39,12 +39,8 @@ class SepararCumplimientoFisicoService
             ]);
         }
 
-        $ubicacion = trim($ubicacion);
-        if ($ubicacion === '') {
-            throw ValidationException::withMessages([
-                'ubicacion' => 'Indique la ubicación física del apartado.',
-            ]);
-        }
+        $ubicacion = trim((string) $ubicacion);
+        $ubicacion = $ubicacion === '' ? null : $ubicacion;
 
         $tarea->loadMissing('modalidad');
         $esRecogeHoy = $tarea->modalidad?->codigo === CatalogoModalidadPreparacionPedido::CODIGO_RECOGE_TIENDA;

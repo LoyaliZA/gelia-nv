@@ -46,6 +46,7 @@ class ConfirmarApartadoRecogeHoyService
 
         return DB::transaction(function () use ($tarea, $usuario, $versionEsperada, $productos) {
             $tarea = PedidoBmaTareaPreparacion::query()->lockForUpdate()->findOrFail($tarea->id);
+            app(\App\Services\Traspasos\AbastecerPreparacionService::class)->asegurarSatisfecho($tarea);
             $tarea->load(['modalidad', 'pedido.estatus']);
             if ((int) $tarea->asignada_a_id !== (int) $usuario->id) {
                 throw ValidationException::withMessages(['tarea' => 'Solo el auxiliar que tomó la tarea puede registrar y confirmar las piezas.']);
@@ -67,11 +68,9 @@ class ConfirmarApartadoRecogeHoyService
                 throw ValidationException::withMessages(['estado' => 'Tome la tarea antes de confirmar el apartado.']);
             }
             $this->aplicarRevision($tarea, $productos);
+            app(\App\Services\Traspasos\AbastecerPreparacionService::class)->asegurarSatisfecho($tarea);
             $tarea->load('productos');
             $cantidad = $this->cantidadConfirmable($tarea->productos);
-            if (trim((string) $cumplimiento->ubicacion) === '') {
-                throw ValidationException::withMessages(['ubicacion' => 'Indique dónde quedan las piezas apartadas.']);
-            }
             $venceAt = PlazosApartadoFisico::cierreOperativo(
                 now(), $this->config->zonaHoraria(), $this->config->cierreOperativoHora()
             );
@@ -149,8 +148,10 @@ class ConfirmarApartadoRecogeHoyService
 
             $this->caratula->ejecutar($tarea->fresh(['modalidad', 'productos', 'pedido.cliente', 'pedido.estatus']), $usuario, true);
             if ($pedido) {
+                $lugar = trim((string) $cumplimiento->ubicacion);
+                $detalle = $lugar !== '' ? "{$cantidad} piezas en {$lugar}." : "{$cantidad} piezas.";
                 $this->notificar->ejecutar($pedido->fresh(['cliente', 'vendedor']), 'pedido_apartado_confirmado',
-                    "Apartado confirmado en PDV: {$cantidad} piezas en {$cumplimiento->ubicacion}.", [], $usuario->id, true);
+                    "Apartado confirmado en PDV: {$detalle}", [], $usuario->id, true);
             }
 
             return $cumplimiento->fresh();

@@ -149,6 +149,22 @@ class ControlPedidosFlujoParaleloTest extends TestCase
         );
     }
 
+    public function test_empacar_rechaza_actualizacion_de_mercancia_pendiente(): void
+    {
+        $pedido = $this->crearPedidoAprobadoCedis([
+            'catalogo_paqueteria_id' => $this->paqueteriaComercialId(),
+            'consulta_actualizacion_pendiente' => true,
+        ]);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('actualización de mercancía pendiente');
+
+        app(MarcarEmpacadoPedidoBmaService::class)->ejecutar(
+            $pedido->fresh(['estatus', 'paqueteria', 'origen']),
+            $this->usuario->id
+        );
+    }
+
     public function test_empacar_sin_guia_comercial_va_a_pendiente_de_guia(): void
     {
         $pedido = $this->crearPedidoAprobadoCedis([

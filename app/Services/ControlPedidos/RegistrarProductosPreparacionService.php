@@ -32,7 +32,8 @@ class RegistrarProductosPreparacionService
                     throw ValidationException::withMessages(['lineas' => 'La pieza no pertenece a esta tarea.']);
                 }
                 $producto = ! empty($linea['producto_id']) ? Producto::where('activo', true)->find($linea['producto_id']) : null;
-                if (! empty($linea['producto_id']) && (! $producto || ! $producto->inventarios()->where('almacen_id', $tarea->almacen_id)->exists())) {
+                if (! empty($linea['producto_id']) && (! $producto || ! $producto->inventarios()->where('almacen_id', $tarea->almacen_id)->exists()
+                    && ! ($fila && (int) $fila->producto_id === (int) $producto->id && app(\App\Services\Traspasos\AbastecerPreparacionService::class)->productoRecibido($fila->id)))) {
                     throw ValidationException::withMessages(['lineas' => 'Seleccione un producto del catálogo del almacén de preparación.']);
                 }
                 $sku = trim((string) ($producto?->sku ?? $fila?->sku ?? $linea['sku'] ?? ''));
@@ -48,6 +49,10 @@ class RegistrarProductosPreparacionService
                     'sku' => $sku, 'descripcion_snapshot' => $descripcion, 'cantidad_solicitada' => $fila?->cantidad_solicitada ?? $cantidad,
                     'cantidad_encontrada' => $cantidad, 'estado_fisico' => $estado, 'observacion' => $observacion ?: null, 'orden' => $orden];
                 if ($fila) {
+                    if (((int) $valores['producto_id'] !== (int) $fila->producto_id || (int) $valores['cantidad_encontrada'] !== (int) $fila->cantidad_encontrada)
+                        && \App\Models\SolicitudTraspasoProducto::where('tarea_producto_receptor_id', $fila->id)->exists()) {
+                        throw ValidationException::withMessages(['lineas' => 'La pieza está vinculada a abastecimiento. Sus cantidades se actualizan por llegada; tramite una corrección autorizada para sustituir o ajustar.']);
+                    }
                     $fila->update($valores);
                 } else {
                     $fila = $tarea->productos()->create($valores);

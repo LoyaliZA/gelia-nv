@@ -78,6 +78,25 @@ class PreparacionTiendaWorkspaceTest extends TestCase
         $this->get($caratula['url'])->assertOk()->assertHeader('Content-Type', 'application/pdf');
     }
 
+    public function test_confirma_apartado_sin_anaquel_y_conserva_respuesta_vacia(): void
+    {
+        $this->postJson(route('control_pedidos.tienda.tomar', $this->tarea), ['version' => 1])->assertOk();
+        $vista = $this->getJson(route('control_pedidos.tienda.show', $this->tarea))->assertOk();
+        $this->postJson(route('control_pedidos.tienda.apartado.confirmar', $this->tarea), [
+            'version' => $vista->json('tarea.apartado.version'),
+            'lineas' => [['producto_id' => $this->producto->id, 'cantidad' => 2, 'estado_fisico' => 'bueno']],
+        ])->assertOk();
+
+        $this->assertSame('RESPONDIDA', $this->tarea->fresh()->estado);
+        $this->assertNull($this->tarea->pedido->fresh()->pesaje_respondido_at);
+        $this->actingAs($this->ventas);
+        $listado = $this->getJson(route('control_pedidos.listado', ['q' => 'PRUEBA-WORKSPACE']))->assertOk();
+        $pedido = collect($listado->json('pedidos.data'))->firstWhere('id', $this->tarea->pedido_bma_id);
+        $this->assertTrue($pedido['tarea_preparacion']['respuesta']['respondida']);
+        $this->assertSame(2, $pedido['tarea_preparacion']['respuesta']['cantidad']);
+        $this->assertTrue(($pedido['tarea_preparacion']['respuesta']['ubicacion'] ?? null) === null || $pedido['tarea_preparacion']['respuesta']['ubicacion'] === '');
+    }
+
     public function test_incidente_sin_piezas_regresa_a_ventas_y_no_cierra_apartado(): void
     {
         $this->postJson(route('control_pedidos.tienda.tomar', $this->tarea), ['version' => 1])->assertOk();

@@ -242,6 +242,7 @@ class PedidoBmaCedisController extends Controller
                     'evidencias_envios' => $request->file('evidencias_envios', []),
                     'motivo_retiro' => $request->validated('motivo_retiro'),
                     'numero_cajas' => $request->validated('numero_cajas'),
+                    'catalogo_tipo_caja_id' => $request->validated('catalogo_tipo_caja_id'),
                     'revisiones' => collect($request->validated('revisiones') ?? [])->map(function (array $rev, int $i) use ($request) {
                         $files = $request->file("revisiones.{$i}.evidencias") ?? [];
 

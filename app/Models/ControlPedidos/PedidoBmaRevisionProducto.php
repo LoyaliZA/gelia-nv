@@ -76,6 +76,8 @@ class PedidoBmaRevisionProducto extends Model
         'descripcion_producto',
         'producto_id',
         'sku',
+        'cantidad_solicitada',
+        'cantidad_encontrada',
         'estado_fisico',
         'comentario',
         'unica_pieza',
@@ -90,6 +92,8 @@ class PedidoBmaRevisionProducto extends Model
         'unica_pieza' => 'boolean',
         'mejor_ejemplar' => 'boolean',
         'orden' => 'integer',
+        'cantidad_solicitada' => 'integer',
+        'cantidad_encontrada' => 'integer',
         'producto_id' => 'integer',
         'resolucion_at' => 'datetime',
     ];
@@ -136,7 +140,9 @@ class PedidoBmaRevisionProducto extends Model
 
     public function estaSinExistenciaAbierta(): bool
     {
-        if ($this->estado_fisico !== self::ESTADO_SIN_EXISTENCIA) {
+        if ($this->estado_fisico !== self::ESTADO_SIN_EXISTENCIA
+            && ! ($this->cantidad_solicitada !== null && $this->cantidad_encontrada !== null
+                && $this->cantidad_encontrada < $this->cantidad_solicitada)) {
             return false;
         }
 
@@ -159,7 +165,8 @@ class PedidoBmaRevisionProducto extends Model
 
     public function scopeSinExistenciaAbierta(Builder $query): Builder
     {
-        return $query->where('estado_fisico', self::ESTADO_SIN_EXISTENCIA)
+        return $query->where(fn (Builder $q) => $q->where('estado_fisico', self::ESTADO_SIN_EXISTENCIA)
+            ->orWhereColumn('cantidad_encontrada', '<', 'cantidad_solicitada'))
             ->where(function (Builder $q) {
                 $q->whereNull('resolucion')
                     ->orWhereNotIn('resolucion', self::RESOLUCIONES_CIERRAN);

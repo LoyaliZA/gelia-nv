@@ -50,11 +50,12 @@ class ObtenerCatalogosPedidoBmaService
                 ->where('visible_en_pedidos', true)
                 ->with('tipoAlmacen:id,nombre')
                 ->orderBy('nombre')
-                ->get(['id', 'codigo', 'nombre', 'tipo_almacen_id', 'permite_salida_pedidos'])
+                ->get(['id', 'codigo', 'nombre', 'sucursal_id', 'tipo_almacen_id', 'permite_salida_pedidos'])
                 ->map(fn (Almacen $almacen) => [
                     'id' => $almacen->id,
                     'codigo' => $almacen->codigo,
                     'nombre' => $almacen->nombre,
+                    'sucursal_id' => $almacen->sucursal_id,
                     'permite_salida_pedidos' => $almacen->permite_salida_pedidos !== false,
                     'tipo_almacen' => $almacen->tipoAlmacen
                         ? ['id' => $almacen->tipoAlmacen->id, 'nombre' => $almacen->tipoAlmacen->nombre]
