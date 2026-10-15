@@ -195,7 +195,7 @@ class CerrarAtencionTurnoPdvService
             VencerVentanaReatencionTurnoPdvJob::dispatch($turnoBloqueado->id)
                 ->delay($reatencionExpira);
 
-            $this->aplicarCooldown($actor->id, (int) $turnoBloqueado->sucursal_id, $ahora, $plazos);
+            $this->aplicarCooldown((int) $atencion->user_id, (int) $turnoBloqueado->sucursal_id, $ahora, $plazos);
 
             $turnoActualizado = $turnoBloqueado->fresh(['cliente', 'sucursal', 'atencionActual']);
             $atencionActualizada = $atencion->fresh();

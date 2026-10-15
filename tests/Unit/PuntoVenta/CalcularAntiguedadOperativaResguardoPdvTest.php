@@ -2,6 +2,7 @@
 
 namespace Tests\Unit\PuntoVenta;
 
+use App\Models\PuntoVenta\ResguardoPdv;
 use App\Services\PuntoVenta\Resguardos\CalcularAntiguedadOperativaResguardoPdvService;
 use App\Services\PuntoVenta\Resguardos\PlazosCustodiaResguardoPdvConfig;
 use App\Support\PuntoVenta\Resguardos\AntiguedadOperativaResguardoPdv;
@@ -55,10 +56,11 @@ class CalcularAntiguedadOperativaResguardoPdvTest extends TestCase
 
     public function test_clasificacion_vencido_tras_plazo_de_custodia(): void
     {
-        $resguardo = new \App\Models\PuntoVenta\ResguardoPdv([
+        $resguardo = new ResguardoPdv([
             'sucursal_id' => 1,
-            'estado' => \App\Models\PuntoVenta\ResguardoPdv::ESTADO_EN_CUSTODIA,
+            'estado' => ResguardoPdv::ESTADO_EN_CUSTODIA,
             'recepcion_fisica_at' => Carbon::parse('2026-07-01 10:00:00'),
+            'custodia_confirmada_at' => Carbon::parse('2026-07-02 10:00:00', 'America/Mexico_City'),
         ]);
 
         $config = new PlazosCustodiaResguardoPdvConfig;
@@ -75,10 +77,11 @@ class CalcularAntiguedadOperativaResguardoPdvTest extends TestCase
 
     public function test_clasificacion_proximo_a_vencer_en_ventana_de_aviso(): void
     {
-        $resguardo = new \App\Models\PuntoVenta\ResguardoPdv([
+        $resguardo = new ResguardoPdv([
             'sucursal_id' => 1,
-            'estado' => \App\Models\PuntoVenta\ResguardoPdv::ESTADO_EN_CUSTODIA,
-            'recepcion_fisica_at' => Carbon::parse('2026-08-06 10:00:00', 'America/Mexico_City'),
+            'estado' => ResguardoPdv::ESTADO_EN_CUSTODIA,
+            'recepcion_fisica_at' => Carbon::parse('2026-08-05 10:00:00', 'America/Mexico_City'),
+            'custodia_confirmada_at' => Carbon::parse('2026-08-06 10:00:00', 'America/Mexico_City'),
         ]);
 
         $config = new PlazosCustodiaResguardoPdvConfig;
@@ -102,9 +105,9 @@ class CalcularAntiguedadOperativaResguardoPdvTest extends TestCase
         ];
         $config->guardar($inicial);
 
-        $resguardo = new \App\Models\PuntoVenta\ResguardoPdv([
+        $resguardo = new ResguardoPdv([
             'sucursal_id' => 99,
-            'estado' => \App\Models\PuntoVenta\ResguardoPdv::ESTADO_PENDIENTE_RECEPCION,
+            'estado' => ResguardoPdv::ESTADO_PENDIENTE_RECEPCION,
             'salida_cedis_at' => Carbon::parse('2026-08-18 10:00:00', 'America/Mexico_City'),
         ]);
 

@@ -13,6 +13,7 @@ use App\Models\PuntoVenta\TurnoPdvAtencion;
 use App\Models\Sucursal;
 use App\Models\User;
 use App\Services\PuntoVenta\AlcancePdv;
+use App\Services\PuntoVenta\Operacion\AbrirJornadaPdvService;
 use App\Services\PuntoVenta\Operacion\CompletarCierreJornadaTrasAtencionPdvService;
 use App\Services\PuntoVenta\Operacion\GestionarEquipoOperativoPdvService;
 use App\Services\PuntoVenta\Operacion\OperacionPdvConfig;
@@ -51,6 +52,19 @@ class GestionEquipoOperativoPdvTest extends TestCase
         $this->sucursal = Sucursal::factory()->create(['nombre' => 'Sucursal Equipo Gerencia']);
         $this->vendedor = $this->crearVendedor('Vendedor Gerencia');
         $this->gerente = $this->crearGerente('Gerente Equipo');
+    }
+
+    public function test_gestionar_sin_equipo_ver_no_expone_equipo_en_consulta_general(): void
+    {
+        $this->gerente->revokePermissionTo(PuntoVentaModulo::PERMISO_OPERACION_EQUIPO_VER);
+        $this->actingAs($this->gerente)
+            ->postJson(route('punto_venta.operacion.equipo.activar', $this->vendedor))
+            ->assertOk();
+        $this->actingAs($this->gerente)
+            ->getJson(route('punto_venta.operacion.datos'))
+            ->assertOk()
+            ->assertJsonPath('equipo', []);
+        $this->assertDatabaseHas('pdv_jornadas', ['user_id' => $this->vendedor->id, 'estado' => EstadoJornadaPdv::Abierta->value]);
     }
 
     public function test_gerente_activa_vendedor(): void
@@ -228,7 +242,7 @@ class GestionEquipoOperativoPdvTest extends TestCase
     public function test_doble_activacion_no_duplica_jornada(): void
     {
         $servicio = app(GestionarEquipoOperativoPdvService::class);
-        $abrir = app(\App\Services\PuntoVenta\Operacion\AbrirJornadaPdvService::class);
+        $abrir = app(AbrirJornadaPdvService::class);
 
         $servicio->activar($this->gerente, $this->vendedor, now());
         $abrir->abrirParaUsuario(
@@ -448,6 +462,7 @@ class GestionEquipoOperativoPdvTest extends TestCase
         $user->givePermissionTo([
             PuntoVentaModulo::PERMISO_ACCEDER,
             PuntoVentaModulo::PERMISO_TURNOS_VER,
+            PuntoVentaModulo::PERMISO_OPERACION_EQUIPO_VER,
             PuntoVentaModulo::PERMISO_OPERACION_EQUIPO_GESTIONAR,
             PuntoVentaModulo::PERMISO_OPERACION_JORNADA_CERRAR_SUCURSAL,
             PuntoVentaModulo::PERMISO_OPERACION_JORNADA_AMPLIAR,

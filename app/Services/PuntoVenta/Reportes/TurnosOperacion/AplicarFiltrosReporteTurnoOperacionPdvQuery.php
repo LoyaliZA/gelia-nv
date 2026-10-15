@@ -271,7 +271,7 @@ class AplicarFiltrosReporteTurnoOperacionPdvQuery
         Carbon $desde,
         Carbon $hasta,
     ): bool {
-        if ($momento->lt($desde) || $momento->gte($hasta)) {
+        if ($momento->lt($desde) || $momento->gte($hasta) || $momento->gt($filtros['corte_reporte_at'])) {
             return false;
         }
 

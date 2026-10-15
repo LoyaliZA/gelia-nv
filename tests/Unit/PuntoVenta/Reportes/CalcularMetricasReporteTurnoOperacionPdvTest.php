@@ -289,7 +289,9 @@ class CalcularMetricasReporteTurnoOperacionPdvTest extends TestCase
 
         $this->assertSame(3600, $payload['metricas'][MetricaTurnoOperacionPdvIds::O_03_TIEMPO_PAUSA]['valor']);
         $this->assertTrue($payload['metricas'][MetricaTurnoOperacionPdvIds::O_03_TIEMPO_PAUSA]['en_curso']);
-        $this->assertSame(11.11, $payload['metricas'][MetricaTurnoOperacionPdvIds::O_06_OCUPACION]['valor']);
+        // La jornada termina después del corte: todavía no integra la muestra cerrada.
+        $this->assertNull($payload['metricas'][MetricaTurnoOperacionPdvIds::O_06_OCUPACION]['valor']);
+        $this->assertTrue($payload['metricas'][MetricaTurnoOperacionPdvIds::O_06_OCUPACION]['en_curso']);
     }
 
     public function test_cm10_percentiles_con_muestra_insuficiente(): void

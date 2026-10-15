@@ -297,22 +297,23 @@ class CalcularMetricasReporteTurnoOperacionPdvService
         $duraciones = [];
         $desde = $filtros['desde'];
         $hasta = $filtros['hasta'];
+        $corte = $filtros['corte_reporte_at'];
 
         $this->filtrosQuery->queryTurnos($user, $filtros)
             ->whereNotNull('alta_at')
-            ->whereNull('baja_at')
             ->whereHas('atenciones')
             ->with(['atenciones' => fn ($q) => $q->orderBy('numero_secuencia')->orderBy('inicio_at')])
-            ->select(['id', 'sucursal_id', 'alta_at'])
+            ->select(['id', 'sucursal_id', 'alta_at', 'baja_at'])
             ->orderBy('id')
-            ->chunkById(100, function ($turnos) use (&$duraciones, $filtros, $desde, $hasta) {
+            ->chunkById(100, function ($turnos) use (&$duraciones, $filtros, $desde, $hasta, $corte) {
                 foreach ($turnos as $turno) {
                     if (! $this->filtrosQuery->cumpleAtribucion($turno->alta_at, (int) $turno->sucursal_id, $filtros, $desde, $hasta)) {
                         continue;
                     }
 
                     $primera = $turno->atenciones->first();
-                    if ($primera === null || $primera->inicio_at === null) {
+                    if ($primera === null || $primera->inicio_at === null || $primera->inicio_at->gt($corte)
+                        || ($turno->baja_at !== null && $turno->baja_at->lte($corte))) {
                         continue;
                     }
 
@@ -351,7 +352,7 @@ class CalcularMetricasReporteTurnoOperacionPdvService
                     }
 
                     $finEspera = $atencion->atencion_inicio_at ?? $atencion->fin_at;
-                    if ($finEspera === null) {
+                    if ($finEspera === null || $finEspera->gt($corte)) {
                         $finEspera = $corte;
                         $enCurso++;
                     }
@@ -394,7 +395,7 @@ class CalcularMetricasReporteTurnoOperacionPdvService
 
                     $sucursalId = (int) $atencion->turno->sucursal_id;
 
-                    if ($atencion->fin_at === null) {
+                    if ($atencion->fin_at === null || $atencion->fin_at->gt($corte)) {
                         if ($atencion->atencion_inicio_at->lte($corte)) {
                             $enCurso++;
                         }
@@ -491,7 +492,7 @@ class CalcularMetricasReporteTurnoOperacionPdvService
                         continue;
                     }
 
-                    if ($turno->baja_at !== null) {
+                    if ($turno->baja_at !== null && $turno->baja_at->lte($filtros['corte_reporte_at'])) {
                         $abandonos[$turno->id] = true;
 
                         continue;
@@ -500,6 +501,7 @@ class CalcularMetricasReporteTurnoOperacionPdvService
                     $tieneNoSePresento = TurnoPdvAtencion::query()
                         ->where('turno_id', $turno->id)
                         ->where('motivo_cierre', MotivosCierreAtencionTurnoPdv::NO_SE_PRESENTO)
+                        ->where('fin_at', '<=', $filtros['corte_reporte_at']->copy()->timezone(config('app.timezone')))
                         ->exists();
 
                     if ($tieneNoSePresento) {
@@ -525,7 +527,7 @@ class CalcularMetricasReporteTurnoOperacionPdvService
         $this->filtrosQuery->queryAtenciones($user, $filtros)
             ->whereNotNull('inicio_at')
             ->with(['turno:id,sucursal_id'])
-            ->select(['id', 'turno_id', 'inicio_at', 'motivo_cierre'])
+            ->select(['id', 'turno_id', 'inicio_at', 'fin_at', 'motivo_cierre'])
             ->orderBy('id')
             ->chunkById(200, function ($atenciones) use (&$asignaciones, &$noSePresento, $filtros, $desde, $hasta) {
                 foreach ($atenciones as $atencion) {
@@ -535,7 +537,8 @@ class CalcularMetricasReporteTurnoOperacionPdvService
                     }
 
                     $asignaciones++;
-                    if ($atencion->motivo_cierre === MotivosCierreAtencionTurnoPdv::NO_SE_PRESENTO) {
+                    if ($atencion->motivo_cierre === MotivosCierreAtencionTurnoPdv::NO_SE_PRESENTO
+                        && $atencion->fin_at !== null && $atencion->fin_at->lte($filtros['corte_reporte_at'])) {
                         $noSePresento++;
                     }
                 }
@@ -791,7 +794,7 @@ class CalcularMetricasReporteTurnoOperacionPdvService
                     }
 
                     $conteo++;
-                    $abierta = $jornada->cierre_at === null;
+                    $abierta = $jornada->cierre_at === null || $jornada->cierre_at->gt($corte);
 
                     if ($abierta) {
                         $enCurso++;
@@ -843,12 +846,19 @@ class CalcularMetricasReporteTurnoOperacionPdvService
             ->orderBy('id')
             ->chunkById(200, function ($intervalos) use (&$totales, $filtros, $desde, $hasta, $corte) {
                 foreach ($intervalos as $intervalo) {
-                    if (! $this->filtrosQuery->cumpleAtribucion($intervalo->inicio_at, (int) $intervalo->sucursal_id, $filtros, $desde, $hasta)) {
+                    // Los acumulados miden la intersección con el periodo; los filtros
+                    // de fecha operativa y franja conservan su atribución por inicio.
+                    if (! $this->filtrosQuery->cumpleFechaOperativa($intervalo->inicio_at, (int) $intervalo->sucursal_id, $filtros)
+                        || ! $this->filtrosQuery->cumpleFranja($intervalo->inicio_at, (int) $intervalo->sucursal_id, $filtros)) {
                         continue;
                     }
 
-                    $fin = $intervalo->fin_at ?? $corte;
-                    $segundos = max(0, (int) $intervalo->inicio_at->diffInSeconds($fin, false));
+                    $inicio = $intervalo->inicio_at->copy()->max($desde);
+                    $fin = ($intervalo->fin_at ?? $corte)->copy()->min($corte)->min($hasta);
+                    if ($inicio->gte($fin)) {
+                        continue;
+                    }
+                    $segundos = (int) $inicio->diffInSeconds($fin, false);
 
                     $clave = match ($intervalo->tipo) {
                         TipoIntervaloOperativoPdv::EnPausa => 'en_pausa',
@@ -858,7 +868,7 @@ class CalcularMetricasReporteTurnoOperacionPdvService
 
                     $totales[$clave] += $segundos;
 
-                    if ($intervalo->fin_at === null) {
+                    if ($intervalo->fin_at === null || $intervalo->fin_at->gt($corte)) {
                         $totales[$clave.'_en_curso']++;
                     }
                 }

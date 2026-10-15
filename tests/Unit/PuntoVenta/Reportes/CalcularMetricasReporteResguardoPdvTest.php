@@ -10,14 +10,18 @@ use App\Models\Sucursal;
 use App\Models\User;
 use App\Services\PuntoVenta\AlcancePdv;
 use App\Services\PuntoVenta\PuntoVentaModulo;
+use App\Services\PuntoVenta\Reportes\Resguardos\AplicarFiltrosReporteResguardoPdvQuery;
 use App\Services\PuntoVenta\Reportes\Resguardos\CalcularMetricasReporteResguardoPdvService;
+use App\Services\PuntoVenta\Resguardos\CalcularAntiguedadOperativaResguardoPdvService;
 use App\Services\PuntoVenta\Resguardos\PlazosCustodiaResguardoPdvConfig;
 use App\Support\PuntoVenta\Reportes\MetricaResguardoPdvIds;
+use App\Support\PuntoVenta\Resguardos\AntiguedadOperativaResguardoPdv;
 use Carbon\Carbon;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
@@ -180,6 +184,123 @@ class CalcularMetricasReporteResguardoPdvTest extends TestCase
         $this->assertSame(1, $payload['metricas'][MetricaResguardoPdvIds::R_09_TASA_ENTREGA]['devueltos']);
         $this->assertSame(50.0, $payload['metricas'][MetricaResguardoPdvIds::R_10_TASA_INCIDENCIA]['valor']);
         $this->assertSame(1, $payload['metricas'][MetricaResguardoPdvIds::R_03_INCIDENCIAS_ABIERTAS]['valor']);
+    }
+
+    public function test_clasificaciones_cargan_confirmacion_de_custodia_y_excluyen_casos_no_elegibles(): void
+    {
+        $casos = $this->crearCasosClasificacionCustodia();
+        $corte = Carbon::parse('2026-09-07 12:00:00', 'America/Mexico_City');
+        $evaluador = app(CalcularAntiguedadOperativaResguardoPdvService::class);
+
+        // El evaluador operativo recibe el modelo completo; el reporte debe coincidir.
+        $this->assertTrue($evaluador->evaluar($casos['proximo_a_vencer'], $corte)['clasificaciones']['proximo_a_vencer']);
+        $this->assertTrue($evaluador->evaluar($casos['vencido'], $corte)['clasificaciones']['vencido']);
+
+        $payload = $this->metricas([
+            'sucursal_id' => $this->sucursalA->id,
+            'corte_reporte_at' => $corte->toIso8601String(),
+        ]);
+
+        $this->assertSame(['proximo_a_vencer' => 1, 'vencido' => 1], [
+            'proximo_a_vencer' => $payload['metricas'][MetricaResguardoPdvIds::R_05_PROXIMOS_VENCER]['valor'],
+            'vencido' => $payload['metricas'][MetricaResguardoPdvIds::R_06_VENCIDOS]['valor'],
+        ]);
+    }
+
+    /** @return array<string, array{string, string}> */
+    public static function clasificacionesCustodia(): array
+    {
+        return [
+            'proximo_a_vencer' => [AntiguedadOperativaResguardoPdv::PROXIMO_A_VENCER, MetricaResguardoPdvIds::R_05_PROXIMOS_VENCER],
+            'vencido' => [AntiguedadOperativaResguardoPdv::VENCIDO, MetricaResguardoPdvIds::R_06_VENCIDOS],
+        ];
+    }
+
+    #[DataProvider('clasificacionesCustodia')]
+    public function test_filtros_de_custodia_seleccionan_los_resguardos_correctos(string $clasificacion, string $metricaId): void
+    {
+        $casos = $this->crearCasosClasificacionCustodia();
+        $corte = Carbon::parse('2026-09-07 12:00:00', 'America/Mexico_City');
+        $consultas = app(AplicarFiltrosReporteResguardoPdvQuery::class);
+
+        $filtros = [
+            'sucursal_id' => $this->sucursalA->id,
+            'antiguedad' => $clasificacion,
+            'corte_reporte_at' => $corte,
+        ];
+        $query = $consultas->aplicarFiltrosResguardo(
+            $consultas->queryResguardos($this->analista),
+            $this->analista,
+            $filtros,
+        );
+
+        $this->assertSame([$casos[$clasificacion]->id], $query->pluck('id')->all(), $clasificacion);
+
+        $payload = $this->metricas($filtros);
+        $this->assertSame(1, $payload['metricas'][$metricaId]['valor'], $clasificacion);
+    }
+
+    public function test_clasificacion_de_custodia_respeta_el_fin_del_dia_limite(): void
+    {
+        $this->crearResguardo($this->sucursalA, [
+            'estado' => ResguardoPdv::ESTADO_EN_CUSTODIA,
+            'recepcion_fisica_at' => Carbon::parse('2026-07-01 10:00:00', 'America/Mexico_City'),
+            'custodia_confirmada_at' => Carbon::parse('2026-08-03 10:00:00', 'America/Mexico_City'),
+        ]);
+
+        // Quince días hábiles desde el 3 de agosto: 24 de agosto al final del día.
+        foreach ([
+            ['2026-08-24T23:59:59.999999-06:00', 1, 0],
+            ['2026-08-25T00:00:00-06:00', 0, 1],
+        ] as [$corte, $proximos, $vencidos]) {
+            $payload = $this->metricas([
+                'sucursal_id' => $this->sucursalA->id,
+                'corte_reporte_at' => $corte,
+            ]);
+
+            $this->assertSame($proximos, $payload['metricas'][MetricaResguardoPdvIds::R_05_PROXIMOS_VENCER]['valor'], $corte);
+            $this->assertSame($vencidos, $payload['metricas'][MetricaResguardoPdvIds::R_06_VENCIDOS]['valor'], $corte);
+        }
+    }
+
+    /** @return array<string, ResguardoPdv> */
+    private function crearCasosClasificacionCustodia(): array
+    {
+        $casos = [];
+        foreach ([
+            'proximo_a_vencer' => ['custodia_confirmada_at' => '2026-08-20 10:00:00'],
+            'vencido' => ['custodia_confirmada_at' => '2026-08-03 10:00:00'],
+            'vigente' => ['custodia_confirmada_at' => '2026-09-07 10:00:00'],
+            'sin_confirmacion' => ['custodia_confirmada_at' => null],
+            'entregado' => [
+                'estado' => ResguardoPdv::ESTADO_ENTREGADO,
+                'custodia_confirmada_at' => '2026-08-03 10:00:00',
+                'entrega_completada_at' => '2026-09-01 10:00:00',
+            ],
+            'devuelto' => [
+                'estado' => ResguardoPdv::ESTADO_DEVUELTO,
+                'custodia_confirmada_at' => '2026-08-03 10:00:00',
+                'devolucion_confirmada_at' => '2026-09-01 10:00:00',
+            ],
+            'otra_sucursal' => [
+                'sucursal_id' => $this->sucursalB->id,
+                'custodia_confirmada_at' => '2026-08-03 10:00:00',
+            ],
+        ] as $nombre => $atributos) {
+            foreach (['custodia_confirmada_at', 'entrega_completada_at', 'devolucion_confirmada_at'] as $campo) {
+                if (isset($atributos[$campo])) {
+                    $atributos[$campo] = Carbon::parse($atributos[$campo], 'America/Mexico_City');
+                }
+            }
+
+            $casos[$nombre] = $this->crearResguardo($this->sucursalA, array_merge([
+                'estado' => ResguardoPdv::ESTADO_EN_CUSTODIA,
+                'salida_cedis_at' => Carbon::parse('2026-06-30 10:00:00', 'America/Mexico_City'),
+                'recepcion_fisica_at' => Carbon::parse('2026-07-01 10:00:00', 'America/Mexico_City'),
+            ], $atributos));
+        }
+
+        return $casos;
     }
 
     public function test_rechaza_sucursal_no_autorizada(): void

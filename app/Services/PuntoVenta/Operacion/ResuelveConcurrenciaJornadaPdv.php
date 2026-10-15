@@ -18,20 +18,22 @@ trait ResuelveConcurrenciaJornadaPdv
         }
     }
 
-    protected function jornadaActivaAbierta(int $userId, int $sucursalId): ?JornadaPdv
+    protected function jornadaActivaAbierta(int $userId, int $sucursalId, bool $bloquear = false): ?JornadaPdv
     {
         return JornadaPdv::query()
             ->where('user_id', $userId)
             ->where('sucursal_id', $sucursalId)
+            ->when($bloquear, fn ($query) => $query->lockForUpdate())
             ->where('estado', EstadoJornadaPdv::Abierta)
             ->first();
     }
 
-    protected function jornadaActiva(int $userId, int $sucursalId): ?JornadaPdv
+    protected function jornadaActiva(int $userId, int $sucursalId, bool $bloquear = false): ?JornadaPdv
     {
         return JornadaPdv::query()
             ->where('user_id', $userId)
             ->where('sucursal_id', $sucursalId)
+            ->when($bloquear, fn ($query) => $query->lockForUpdate())
             ->whereIn('estado', [
                 EstadoJornadaPdv::Abierta,
                 EstadoJornadaPdv::CerradaConAtencion,

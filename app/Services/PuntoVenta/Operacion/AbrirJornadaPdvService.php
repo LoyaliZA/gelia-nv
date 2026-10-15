@@ -8,11 +8,13 @@ use App\Models\PuntoVenta\IntervaloOperativoPdv;
 use App\Models\PuntoVenta\JornadaPdv;
 use App\Models\User;
 use App\Services\PuntoVenta\PuntoVentaModulo;
+use App\Support\PuntoVenta\Medicion\CatalogoEventosMedicionPdv;
 use App\Support\PuntoVenta\Operacion\EstadoJornadaPdv;
 use App\Support\PuntoVenta\Operacion\TipoIntervaloOperativoPdv;
 use Carbon\CarbonInterface;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class AbrirJornadaPdvService
@@ -22,6 +24,8 @@ class AbrirJornadaPdvService
     public function __construct(
         private readonly ResuelveAlcancePdv $alcance,
         private readonly OperacionPdvConfig $config,
+        private readonly InstrumentacionMedicionPdvConfig $medicion,
+        private readonly RegistrarTransicionMedicionPdvService $registrador,
     ) {}
 
     /**
@@ -53,11 +57,18 @@ class AbrirJornadaPdvService
     public function abrirParaUsuario(int $userId, int $sucursalId, CarbonInterface $ahora, int $actorId): array
     {
         return DB::transaction(function () use ($userId, $sucursalId, $ahora, $actorId): array {
-            $existente = $this->jornadaActivaAbierta($userId, $sucursalId);
+            $instrumentar = $this->medicion->activaParaSucursal($sucursalId);
+            if ($instrumentar) {
+                // Serializa también la primera apertura y su secuencia histórica.
+                User::withTrashed()->whereKey($userId)->lockForUpdate()->firstOrFail();
+            }
+
+            $existente = $this->jornadaActivaAbierta($userId, $sucursalId, $instrumentar);
             if ($existente instanceof JornadaPdv) {
                 $intervalo = IntervaloOperativoPdv::query()
                     ->where('jornada_id', $existente->id)
                     ->whereNull('fin_at')
+                    ->when($instrumentar, fn ($query) => $query->lockForUpdate())
                     ->first();
 
                 return [
@@ -67,7 +78,7 @@ class AbrirJornadaPdvService
                 ];
             }
 
-            if ($this->jornadaActiva($userId, $sucursalId) instanceof JornadaPdv) {
+            if ($this->jornadaActiva($userId, $sucursalId, $instrumentar) instanceof JornadaPdv) {
                 throw ValidationException::withMessages([
                     'jornada' => 'Ya existe una jornada activa que no puede reabrirse.',
                 ]);
@@ -88,11 +99,12 @@ class AbrirJornadaPdvService
                 $this->limpiarMarcadorActivoObsoleto($userId, $sucursalId);
                 $this->limpiarIntervaloAbiertoObsoleto($userId, $sucursalId);
 
-                $recuperada = $this->jornadaActivaAbierta($userId, $sucursalId);
+                $recuperada = $this->jornadaActivaAbierta($userId, $sucursalId, $instrumentar);
                 if ($recuperada instanceof JornadaPdv) {
                     $intervalo = IntervaloOperativoPdv::query()
                         ->where('jornada_id', $recuperada->id)
                         ->whereNull('fin_at')
+                        ->when($instrumentar, fn ($query) => $query->lockForUpdate())
                         ->first();
 
                     return [
@@ -115,6 +127,26 @@ class AbrirJornadaPdvService
                 'inicio_at' => $ahora,
                 'version' => 1,
             ]);
+
+            if ($instrumentar) {
+                $jornada->refresh();
+                $this->registrador->ejecutar([
+                    'tipo' => CatalogoEventosMedicionPdv::APERTURA,
+                    'user_id' => $userId,
+                    'actor_id' => $actorId,
+                    'sucursal_id' => $sucursalId,
+                    'jornada_id' => $jornada->id,
+                    'intervalo_id' => $intervalo->id,
+                    'efectivo_at' => $jornada->apertura_at,
+                    'origen' => $actorId === $userId ? 'personal' : 'gerencial',
+                    'sesion_uuid' => (string) Str::uuid(),
+                    'correlacion_uuid' => (string) Str::uuid(),
+                    'idempotency_key' => 'pdv:medicion:apertura:'.$jornada->id,
+                    'zona_horaria' => $this->config->zonaHorariaOperativa($sucursalId),
+                    'fecha_operativa' => $this->config->fechaOperativa($sucursalId, $jornada->apertura_at),
+                    'contexto' => [],
+                ]);
+            }
 
             JornadaAbierta::dispatch($jornada->fresh(), $intervalo, $sucursalId, $actorId);
 
