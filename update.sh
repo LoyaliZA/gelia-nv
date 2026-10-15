@@ -27,7 +27,31 @@ docker exec -i gelianv_app composer install --no-dev --optimize-autoloader --no-
 # 5. Ejecutar migraciones de base de datos
 echo "Sincronizando estructura de base de datos..."
 backup_db_antes_de_migrar
+
+# MySQL 8 con binlog rechaza CREATE TRIGGER si el usuario no tiene SUPER
+# ni SET_USER_ID (error 1419). No se concede ninguno de esos privilegios:
+# permiten fijar DEFINER ajeno. La opción se abre solo mientras corre migrate
+# y se cierra aunque la migración falle.
+# ponytail: ventana global durante migrate; para quitarla, migrar con un
+# usuario que ya tenga SET_USER_ID y borrar este bloque.
+mysql_root() {
+  docker exec gelianv_db sh -c 'export MYSQL_PWD="$MYSQL_ROOT_PASSWORD"; mysql --user=root --batch --skip-column-names -e "$1"; unset MYSQL_PWD' sh "$1"
+}
+cerrar_creacion_de_triggers() {
+  mysql_root "SET GLOBAL log_bin_trust_function_creators = 0" || true
+  local valor
+  valor="$(mysql_root "SELECT @@GLOBAL.log_bin_trust_function_creators" || true)"
+  if [ "$valor" != "0" ]; then
+    echo "ERROR: log_bin_trust_function_creators quedó en '${valor}'." >&2
+    exit 1
+  fi
+}
+echo "Abriendo creación de triggers solo para esta migración..."
+mysql_root "SET GLOBAL log_bin_trust_function_creators = 1"
+trap 'status=$?; cerrar_creacion_de_triggers; exit "$status"' EXIT
 docker exec -i gelianv_app php artisan migrate --force
+trap - EXIT
+cerrar_creacion_de_triggers
 
 # 6. Reconstruir assets del frontend (Vite)
 echo "Compilando nueva versión del frontend..."
