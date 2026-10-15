@@ -65,6 +65,7 @@ class ListarPedidosBmaService
             'tareaPreparacionRespondida.documentos',
             'tareaPreparacionRespondida.paqueteria',
             'tareaPreparacionRespondida.caratulas',
+            'referencias',
         ])->orderByDesc('created_at');
 
         if ($usuario) {
@@ -138,6 +139,7 @@ class ListarPedidosBmaService
         $pedido->setAttribute('tarea_preparacion', $this->serializarTareaPreparacion(
             $this->resolverTareaPreparacionVista($pedido)
         ));
+        $pedido->setAttribute('referencia_captura', $this->referenciaCaptura($pedido));
 
         $canc = $pedido->relationLoaded('cancelacionOperativaActiva')
             ? $pedido->cancelacionOperativaActiva
@@ -174,6 +176,35 @@ class ListarPedidosBmaService
         ] : null);
 
         return $pedido;
+    }
+
+    /**
+     * Folio adicional ya registrado. No rellena con el folio interno ni con la remisión.
+     *
+     * @return array{tipo: string, folio: string}|null
+     */
+    private function referenciaCaptura(PedidoBma $pedido): ?array
+    {
+        $referencia = $pedido->relationLoaded('referencias')
+            ? $pedido->referencias
+                ->where('vigente', true)
+                ->whereIn('tipo', [
+                    \App\Models\ControlPedidos\PedidoBmaReferencia::TIPO_COTIZACION,
+                    \App\Models\ControlPedidos\PedidoBmaReferencia::TIPO_PEDIDO,
+                    \App\Models\ControlPedidos\PedidoBmaReferencia::TIPO_OTRO,
+                ])
+                ->sortByDesc('id')
+                ->first()
+            : null;
+
+        if (! $referencia) {
+            return null;
+        }
+
+        return [
+            'tipo' => (string) $referencia->tipo,
+            'folio' => (string) $referencia->folio,
+        ];
     }
 
     private function resolverTareaPreparacionVista(PedidoBma $pedido): ?PedidoBmaTareaPreparacion
@@ -243,8 +274,12 @@ class ListarPedidosBmaService
             'enviada_cedis_at' => $tarea->enviada_cedis_at?->toIso8601String(),
             'recibida_cedis_at' => $tarea->recibida_cedis_at?->toIso8601String(),
             'entrega_municipal' => $tarea->modalidad?->esEnvioMunicipio() ? [
+                'destinatario_es_cliente' => $tarea->destinatario_es_cliente,
                 'destinatario_nombre' => $tarea->destinatario_nombre,
+                'destinatario_telefono' => $tarea->destinatario_telefono,
                 'municipio_destino' => $tarea->municipio_destino,
+                'direccion_referencia' => $tarea->direccion_referencia,
+                'catalogo_paqueteria_id' => $tarea->catalogo_paqueteria_id,
                 'modalidad_cobro' => $tarea->modalidad_cobro,
                 'transporte' => $tarea->paqueteria?->nombre,
             ] : null,

@@ -510,12 +510,17 @@ export const OPCIONES_BUSQUEDA_DELEGADO = [
     {
         id: Q_CAMPO_DELEGADO_GENERAL,
         label: 'Todo',
-        placeholder: 'Remisión, folio de compra, cliente o guía…',
+        placeholder: 'Número de remisión, folio, cliente o guía…',
+    },
+    {
+        id: 'numero_remision',
+        label: 'Número de remisión',
+        placeholder: 'Número de remisión registrado por Auxiliar…',
     },
     {
         id: 'folio_remision',
-        label: 'Remisión',
-        placeholder: 'Folio de nota de remisión…',
+        label: 'Folio del pedido',
+        placeholder: 'Folio documental del pedido…',
     },
     {
         id: 'folio',

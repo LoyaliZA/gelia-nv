@@ -171,6 +171,8 @@ class PedidoBmaController extends Controller
             'saved_at' => now()->toIso8601String(),
             'updated_at' => optional($pedido->updated_at)?->toIso8601String(),
             'progreso' => $progresoService->calcular($pedido),
+            'prioridad_md' => (bool) $pedido->prioridad_md,
+            'solicitud_preparacion' => $pedido->solicitud_preparacion,
         ]);
     }
 

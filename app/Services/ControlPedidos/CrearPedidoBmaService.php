@@ -25,6 +25,7 @@ class CrearPedidoBmaService
         private CrearSnapshotDireccionPedido $crearSnapshot,
         private AsignarSucursalDestinoPedidoService $asignarDestino,
         private ValidarAlmacenSalidaPedido $validarAlmacenSalida,
+        private PersistirIntencionPreparacionPedido $intencionPreparacion,
     ) {}
 
     public function ejecutar(array $datos, int $vendedorId): PedidoBma
@@ -86,6 +87,7 @@ class CrearPedidoBmaService
             }
 
             $this->historialService->registrarCreacion($pedido->id, $vendedorId, $estatusBorrador->id);
+            $this->intencionPreparacion->ejecutar($pedido, $datos);
 
             $destExplicito = array_key_exists('sucursal_destino_id', $datos);
             $dest = $destExplicito

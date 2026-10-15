@@ -8,6 +8,7 @@ use App\Models\ControlPedidos\PedidoBmaTareaPreparacion;
 use App\Models\User;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
 class ConfirmarCaratulaColocadaService
@@ -30,7 +31,7 @@ class ConfirmarCaratulaColocadaService
             throw new \RuntimeException('No tiene permiso para confirmar colocación de carátula.');
         }
 
-        return DB::transaction(function () use ($tarea, $usuario, $versionEsperada) {
+        return DB::transaction(function () use ($tarea, $usuario, $versionEsperada, $caratulaId) {
             $tarea = PedidoBmaTareaPreparacion::query()->lockForUpdate()->findOrFail($tarea->id);
 
             if ($tarea->estado !== PedidoBmaTareaPreparacion::ESTADO_LISTA_PARA_CARATULA) {
@@ -60,7 +61,7 @@ class ConfirmarCaratulaColocadaService
                 $caratula = $vigente;
             }
 
-            if (! $caratula || ! $caratula->ruta_pdf) {
+            if (! $caratula || ! $caratula->ruta_pdf || ! Storage::disk('local')->exists($caratula->ruta_pdf)) {
                 throw ValidationException::withMessages([
                     'caratula' => 'Debe generar la carátula PDF antes de confirmar la colocación.',
                 ]);

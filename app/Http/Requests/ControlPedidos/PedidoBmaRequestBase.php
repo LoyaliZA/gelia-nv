@@ -2,6 +2,9 @@
 
 namespace App\Http\Requests\ControlPedidos;
 
+use App\Models\ControlPedidos\CatalogoModalidadPreparacionPedido;
+use App\Models\ControlPedidos\PedidoBmaCaratula;
+use App\Models\ControlPedidos\PedidoBmaReferencia;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -84,6 +87,28 @@ abstract class PedidoBmaRequestBase extends FormRequest
             'motivo_reapertura_pago' => ['nullable', 'string', 'min:5', 'max:2000'],
             'updated_at_esperado' => ['nullable', 'date'],
             'comentarios_drive' => ['nullable', 'string'],
+            'prioridad_md' => ['sometimes', 'boolean'],
+            'solicitud_preparacion' => ['sometimes', 'nullable', 'array'],
+            'solicitud_preparacion.version' => ['nullable', 'integer', 'in:1'],
+            'solicitud_preparacion.codigo_modalidad' => ['nullable', 'string', Rule::in(CatalogoModalidadPreparacionPedido::CODIGOS_SOLICITABLES)],
+            'solicitud_preparacion.tipo_referencia' => ['nullable', 'string', Rule::in([
+                PedidoBmaReferencia::TIPO_COTIZACION,
+                PedidoBmaReferencia::TIPO_PEDIDO,
+                PedidoBmaReferencia::TIPO_REMISION,
+                PedidoBmaReferencia::TIPO_OTRO,
+            ])],
+            'solicitud_preparacion.folio_referencia' => ['nullable', 'string', 'max:64'],
+            'solicitud_preparacion.entrega_municipal' => ['nullable', 'array'],
+            'solicitud_preparacion.entrega_municipal.destinatario_es_cliente' => ['nullable', 'boolean'],
+            'solicitud_preparacion.entrega_municipal.destinatario_nombre' => ['nullable', 'string', 'max:255'],
+            'solicitud_preparacion.entrega_municipal.destinatario_telefono' => ['nullable', 'string', 'max:40'],
+            'solicitud_preparacion.entrega_municipal.municipio_destino' => ['nullable', 'string', 'max:255'],
+            'solicitud_preparacion.entrega_municipal.direccion_referencia' => ['nullable', 'string', 'max:2000'],
+            'solicitud_preparacion.entrega_municipal.catalogo_paqueteria_id' => ['nullable', 'integer', 'exists:catalogo_paqueterias_pedido,id'],
+            'solicitud_preparacion.entrega_municipal.modalidad_cobro' => ['nullable', 'string', Rule::in([
+                PedidoBmaCaratula::COBRO_PAGADO,
+                PedidoBmaCaratula::COBRO_POR_COBRAR,
+            ])],
             'comprobantes' => ['nullable', 'array'],
             'comprobantes.*' => ['file', 'image', 'max:10240'],
             'enviar' => ['nullable', 'boolean'],

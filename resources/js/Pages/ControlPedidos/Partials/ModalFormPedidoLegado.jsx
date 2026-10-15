@@ -79,6 +79,15 @@ import {
     requiereCapturaDestinoSucursal,
     resolverCodigoModalidadEfectiva,
 } from './destinoSucursalPedido';
+import {
+    borradorLocalAplicable,
+    camposPreparacionParaGuardar,
+    capturaLocalDesdeEstado,
+    estadoPreparacionDesdeLocal,
+    estadoPreparacionDesdePedido,
+    estadoPreparacionVacio,
+    serializarCapturaPreparacion,
+} from './capturaPreparacionPedido';
 
 const FASE_DATOS = 'datos';
 const FASE_RESPUESTA = 'respuesta';
@@ -136,8 +145,11 @@ function serializarBorrador(data) {
     return resto;
 }
 
-function fingerprintBd(data) {
-    return JSON.stringify(serializarBorrador(data));
+function fingerprintBd(data, preparacion) {
+    return JSON.stringify({
+        formulario: serializarBorrador(data),
+        preparacion: serializarCapturaPreparacion(preparacion),
+    });
 }
 
 function tieneContenidoParaBd(data) {
@@ -154,31 +166,32 @@ function tieneContenidoParaBd(data) {
 }
 
 /** Hay un borrador local con datos útiles (para preguntar al abrir Nuevo pedido). */
-export function hayBorradorPedidoLocal() {
-    const borrador = leerBorradorLocal();
+export function hayBorradorPedidoLocal(usuarioId = null) {
+    const borrador = leerBorradorLocal({ usuarioId });
     if (!borrador) return false;
-    return Boolean(borrador.pedido_id) || tieneContenidoParaBd(borrador);
+    return Boolean(borrador.pedido_id) || tieneContenidoParaBd(borrador) || Boolean(borrador.captura_preparacion?.codigo_modalidad);
 }
 
-function leerBorradorLocal() {
+function leerBorradorLocal(contexto = {}) {
     if (typeof window === 'undefined') return null;
     try {
         const raw = localStorage.getItem(STORAGE_BORRADOR);
-        if (raw) return JSON.parse(raw);
-        // migración suave desde v1
-        const legacy = localStorage.getItem('control_pedidos.borrador_pedido_v1');
-        return legacy ? JSON.parse(legacy) : null;
+        const legacy = !raw ? localStorage.getItem('control_pedidos.borrador_pedido_v1') : null;
+        const parsed = raw ? JSON.parse(raw) : (legacy ? JSON.parse(legacy) : null);
+        return borradorLocalAplicable(parsed, contexto);
     } catch {
         return null;
     }
 }
 
-function guardarBorradorLocal(data) {
+function guardarBorradorLocal(data, preparacion, usuarioId) {
     if (typeof window === 'undefined') return;
     localStorage.setItem(STORAGE_BORRADOR, JSON.stringify({
         ...serializarBorrador(data),
         ...(data.pedido_id ? { pedido_id: data.pedido_id } : {}),
         ...(data._nombre_cliente ? { _nombre_cliente: data._nombre_cliente } : {}),
+        ...(usuarioId != null ? { usuario_id: usuarioId } : {}),
+        captura_preparacion: capturaLocalDesdeEstado(preparacion),
     }));
 }
 
@@ -343,24 +356,20 @@ export default function ModalFormPedidoLegado({
     const [consultaPendienteLocal, setConsultaPendienteLocal] = useState(
         () => pedido?.estatus_envio === 'pendiente_pesaje'
     );
-    const [codigoModalidadPreparacion, setCodigoModalidadPreparacion] = useState(
-        () => pedido?.tarea_preparacion?.modalidad?.codigo || ''
-    );
-    const [prioridadMd, setPrioridadMd] = useState(false);
+    const preparacionInicial = pedido?.id ? estadoPreparacionDesdePedido(pedido) : estadoPreparacionVacio();
+    const [codigoModalidadPreparacion, setCodigoModalidadPreparacion] = useState(preparacionInicial.codigoModalidad);
+    const [prioridadMd, setPrioridadMd] = useState(preparacionInicial.prioridadMd);
     const [recogeEnTienda, setRecogeEnTienda] = useState(
-        () => pedido?.tarea_preparacion?.modalidad?.codigo === 'RECOGE_TIENDA'
+        () => preparacionInicial.codigoModalidad === 'RECOGE_TIENDA'
+            || pedido?.tarea_preparacion?.modalidad?.codigo === 'RECOGE_TIENDA'
     );
-    const [folioReferencia, setFolioReferencia] = useState('');
-    const [tipoReferencia, setTipoReferencia] = useState('COTIZACION');
-    const [entregaMunicipal, setEntregaMunicipal] = useState(() => ({
-        destinatario_es_cliente: true,
-        destinatario_nombre: '',
-        destinatario_telefono: '',
-        municipio_destino: '',
-        direccion_referencia: '',
-        catalogo_paqueteria_id: '',
-        modalidad_cobro: 'PAGADO',
-    }));
+    const [folioReferencia, setFolioReferencia] = useState(preparacionInicial.folioReferencia);
+    const [tipoReferencia, setTipoReferencia] = useState(preparacionInicial.tipoReferencia);
+    const [entregaMunicipal, setEntregaMunicipal] = useState(preparacionInicial.entregaMunicipal);
+    const intencionConfirmadaRef = useRef(pedido?.id ? {
+        ...(pedido.solicitud_preparacion || null),
+        prioridad_md: Boolean(pedido.prioridad_md),
+    } : null);
     const [modalCorregirPreparacion, setModalCorregirPreparacion] = useState(false);
     const [pdfLocalOk, setPdfLocalOk] = useState(false);
     const [vistaPrevia, setVistaPrevia] = useState(null);
@@ -824,6 +833,24 @@ export default function ModalFormPedidoLegado({
         setFaseUi(FASE_DATOS);
     }, [modoProgresivo, faseUi, pendientePesaje, tienePesajeRespondido, consultaCerrada, esResguardoComplementario]);
 
+    const estadoPreparacionActual = () => ({
+        codigoModalidad: codigoModalidadPreparacion,
+        prioridadMd,
+        folioReferencia,
+        tipoReferencia,
+        entregaMunicipal,
+    });
+
+    const aplicarPreparacion = (estado, confirmada = null) => {
+        setCodigoModalidadPreparacion(estado.codigoModalidad || '');
+        setPrioridadMd(Boolean(estado.prioridadMd));
+        setFolioReferencia(estado.folioReferencia || '');
+        setTipoReferencia(estado.tipoReferencia || 'COTIZACION');
+        setEntregaMunicipal(estado.entregaMunicipal || estadoPreparacionVacio().entregaMunicipal);
+        setRecogeEnTienda(estado.codigoModalidad === 'RECOGE_TIENDA');
+        intencionConfirmadaRef.current = confirmada;
+    };
+
     useEffect(() => {
         if (!abierto) return;
         setVistaPrevia(null);
@@ -836,6 +863,10 @@ export default function ModalFormPedidoLegado({
         if (pedido) {
             pedidoBdIdRef.current = pedido.id;
             setPedidoBdId(pedido.id);
+            aplicarPreparacion(estadoPreparacionDesdePedido(pedido), {
+                ...(pedido.solicitud_preparacion || null),
+                prioridad_md: Boolean(pedido.prioridad_md),
+            });
             setData(formDefaults(pedido, catalogos.tipos_operacion_envio || []));
             ultimoSyncCedis.current = [
                 pedido.updated_at,
@@ -884,12 +915,18 @@ export default function ModalFormPedidoLegado({
                 });
             }
         } else if (recuperarBorrador) {
-            const borrador = leerBorradorLocal();
+            const borrador = leerBorradorLocal({ usuarioId: auth?.user?.id });
             const idBd = borrador?.pedido_id || null;
+            aplicarPreparacion(
+                borrador?.captura_preparacion ? estadoPreparacionDesdeLocal(borrador) : estadoPreparacionVacio(),
+                null,
+            );
             pedidoBdIdRef.current = idBd;
             setPedidoBdId(idBd);
             if (borrador) {
-                const { pedido_id: _pid, _nombre_cliente: nombreCli, ...restoBorrador } = borrador;
+                const {
+                    pedido_id: _pid, _nombre_cliente: nombreCli, usuario_id: _usuario, captura_preparacion: _captura, ...restoBorrador
+                } = borrador;
                 setData({ ...formDefaults(null, catalogos.tipos_operacion_envio || []), ...restoBorrador, comprobantes: [], documentos_eliminar: [], enviar: false });
                 if (borrador.cliente_id) {
                     setInfoCliente({
@@ -934,6 +971,7 @@ export default function ModalFormPedidoLegado({
         } else {
             // Nuevo pedido en limpio: no reutilizar borrador local ni el id en BD.
             limpiarBorradorLocal();
+            aplicarPreparacion(estadoPreparacionVacio(), null);
             pedidoBdIdRef.current = null;
             setPedidoBdId(null);
             setData(formDefaults(null, catalogos.tipos_operacion_envio || []));
@@ -1129,6 +1167,7 @@ export default function ModalFormPedidoLegado({
                 ? `${data.comentarios_drive || ''}\n[Excepción dirección] ${data.motivo_direccion_manual}`.trim()
                 : data.comentarios_drive;
             payload.enviar = false;
+            Object.assign(payload, camposPreparacionParaGuardar(estadoPreparacionActual(), intencionConfirmadaRef.current));
             if (updatedAtEsperado) {
                 payload.updated_at_esperado = updatedAtEsperado;
             }
@@ -1149,13 +1188,19 @@ export default function ModalFormPedidoLegado({
             if (res.progreso) {
                 setProgresoLocal(res.progreso);
             }
-            ultimoFingerprintBd.current = fingerprintBd(data);
+            ultimoFingerprintBd.current = fingerprintBd(data, estadoPreparacionActual());
+            if (res.solicitud_preparacion !== undefined || Object.prototype.hasOwnProperty.call(res, 'prioridad_md')) {
+                intencionConfirmadaRef.current = {
+                    ...(res.solicitud_preparacion || null),
+                    prioridad_md: Boolean(res.prioridad_md),
+                };
+            }
             if (!modoEdicion) {
                 guardarBorradorLocal({
                     ...data,
                     pedido_id: res.id,
                     _nombre_cliente: infoCliente?.nombre || '',
-                });
+                }, estadoPreparacionActual(), auth?.user?.id);
             }
             setEstadoAuto((s) => ({ ...s, bd: `Servidor · ${res.folio || `#${res.id}`}` }));
             if (eraNuevo) {
@@ -1214,23 +1259,23 @@ export default function ModalFormPedidoLegado({
                 ...data,
                 pedido_id: pedidoBdIdRef.current || undefined,
                 _nombre_cliente: infoCliente?.nombre || '',
-            });
+            }, estadoPreparacionActual(), auth?.user?.id);
             setEstadoAuto((s) => ({ ...s, local: 'Local · guardado' }));
         }, AUTOSAVE_LOCAL_MS);
         return () => clearTimeout(timer);
-    }, [data, abierto, modoEdicion, infoCliente?.nombre]);
+    }, [data, abierto, modoEdicion, infoCliente?.nombre, codigoModalidadPreparacion, prioridadMd, folioReferencia, tipoReferencia, entregaMunicipal]);
 
     // Autoguardado BD (lento)
     useEffect(() => {
         if (!abierto || !puedeAutoguardarBd || processing) return;
         if (!tieneContenidoParaBd(data)) return;
 
-        const fp = fingerprintBd(data);
+        const fp = fingerprintBd(data, estadoPreparacionActual());
         if (fp === ultimoFingerprintBd.current) return;
 
         const timer = setTimeout(async () => {
             if (autoguardandoBd.current || processing) return;
-            const fpNow = fingerprintBd(data);
+            const fpNow = fingerprintBd(data, estadoPreparacionActual());
             if (fpNow === ultimoFingerprintBd.current) return;
             if (!tieneContenidoParaBd(data)) return;
 
@@ -1244,7 +1289,7 @@ export default function ModalFormPedidoLegado({
         }, autosaveBdMs);
 
         return () => clearTimeout(timer);
-    }, [data, abierto, puedeAutoguardarBd, processing, modoEdicion, infoCliente?.nombre]);
+    }, [data, abierto, puedeAutoguardarBd, processing, modoEdicion, infoCliente?.nombre, codigoModalidadPreparacion, prioridadMd, folioReferencia, tipoReferencia, entregaMunicipal]);
 
     useEffect(() => {
         if (pedido?.pesaje_respondido_at) {
@@ -1837,6 +1882,7 @@ export default function ModalFormPedidoLegado({
                 comentarios_drive: d.direccion_manual_excepcion && d.motivo_direccion_manual
                     ? `${d.comentarios_drive || ''}\n[Excepción dirección] ${d.motivo_direccion_manual}`.trim()
                     : d.comentarios_drive,
+                ...camposPreparacionParaGuardar(estadoPreparacionActual(), intencionConfirmadaRef.current),
             });
         };
         const config = {

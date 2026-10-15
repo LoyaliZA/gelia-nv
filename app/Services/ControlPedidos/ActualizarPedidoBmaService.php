@@ -23,6 +23,7 @@ class ActualizarPedidoBmaService
         private CalcularTotalesEnvioPedidoService $totalesEnvio,
         private AsignarSucursalDestinoPedidoService $asignarDestino,
         private ValidarAlmacenSalidaPedido $validarAlmacenSalida,
+        private PersistirIntencionPreparacionPedido $intencionPreparacion,
     ) {}
 
     public function ejecutar(PedidoBma $pedido, array $datos, int $usuarioId): PedidoBma
@@ -44,7 +45,7 @@ class ActualizarPedidoBmaService
 
             $eraRechazado = $pedido->estatus?->fase_ciclo === 'RECHAZADO_VENDEDORA';
 
-            $attrs = $this->atributosPedidoBase($datos);
+            $attrs = $this->atributosActualizacionParcial($pedido, $datos);
 
             // No borrar captura temprana si el form/autoguard manda vacío (sync CEDIS / reload).
             if (empty($attrs['origen_id']) && $pedido->origen_id) {
@@ -118,6 +119,8 @@ class ActualizarPedidoBmaService
                 $this->agregarDocumentos($pedido, $datos['comprobantes']);
             }
 
+            $this->intencionPreparacion->ejecutar($pedido, $datos);
+
             if (array_key_exists('saf_aplicaciones', $datos)) {
                 $this->safPedido->reservarParaPedido($pedido->fresh(), $datos['saf_aplicaciones'] ?? [], $usuarioId);
             }
@@ -134,6 +137,111 @@ class ActualizarPedidoBmaService
 
             return $pedido->fresh(['cliente', 'estatus', 'envioTienda', 'documentos', 'almacen', 'banco', 'cajas.tipoCaja', 'cajas.tipoGuia', 'direccionVigente', 'sucursalDestino']);
         });
+    }
+
+    /**
+     * Solo escribe columnas cuya entrada vino en el request.
+     * Los defaults de creación no borran costo, dirección ni SAF omitidos.
+     *
+     * @param  array<string, mixed>  $datos
+     * @return array<string, mixed>
+     */
+    private function atributosActualizacionParcial(PedidoBma $pedido, array $datos): array
+    {
+        $calculado = $this->atributosPedidoBase($this->sembrarDesdePedido($pedido, $datos));
+        $attrs = [];
+        $directos = [
+            'folio_remision', 'fecha', 'origen_id', 'almacen_id', 'catalogo_tipo_caja_id', 'numero_cajas',
+            'peso_real_kg', 'catalogo_paqueteria_id', 'catalogo_tipo_guia_id', 'catalogo_zona_id',
+            'codigo_postal', 'domicilio_entrega', 'cliente_direccion_id', 'es_resguardo',
+            'cliente_proporciona_guia', 'envio_por_cobrar', 'anexar_remision', 'comentarios_drive',
+        ];
+
+        foreach ($directos as $columna) {
+            if (array_key_exists($columna, $datos)) {
+                $attrs[$columna] = $calculado[$columna] ?? null;
+            }
+        }
+
+        if (array_key_exists('envia_a_otra_persona', $datos)) {
+            $attrs['envia_a_otra_persona'] = $calculado['envia_a_otra_persona'] ?? false;
+            $attrs['envia_otra_persona'] = $calculado['envia_otra_persona'] ?? null;
+        }
+
+        if (array_key_exists('origen_id', $datos)) {
+            $attrs['catalogo_envio_tienda_id'] = $calculado['catalogo_envio_tienda_id'] ?? null;
+            $attrs['envio_tienda_otro'] = $calculado['envio_tienda_otro'] ?? null;
+        }
+
+        $tocaFinanzas = array_intersect(array_keys($datos), [
+            'total_mercancia', 'costo_envio', 'aplica_seguro', 'saldo_a_favor', 'aplica_saldo_favor',
+            'saf_aplicaciones', 'catalogo_paqueteria_id', 'envio_por_cobrar', 'cliente_proporciona_guia',
+            'es_resguardo', 'modo_resguardo', 'tipo_operacion_envio_id', 'catalogo_zona_id',
+            'catalogo_tipo_guia_id', 'peso_real_kg', 'peso_cobrado_guia_kg', 'catalogo_tipo_caja_id',
+            'numero_cajas', 'pedido_principal_id',
+        ]) !== [];
+
+        if ($tocaFinanzas) {
+            foreach ([
+                'tipo_operacion_envio_id', 'pedido_principal_id', 'total_mercancia', 'costo_envio',
+                'aplica_seguro', 'costo_seguro', 'saldo_a_favor', 'total_a_cobrar',
+                'peso_volumetrico_kg', 'peso_cobrado_guia_kg', 'numero_cajas', 'peso_real_kg',
+                'es_resguardo',
+            ] as $columna) {
+                if (array_key_exists($columna, $calculado)) {
+                    $attrs[$columna] = $calculado[$columna];
+                }
+            }
+        }
+
+        return $attrs;
+    }
+
+    /**
+     * @param  array<string, mixed>  $datos
+     * @return array<string, mixed>
+     */
+    private function sembrarDesdePedido(PedidoBma $pedido, array $datos): array
+    {
+        $semilla = [
+            'folio_remision' => $pedido->folio_remision,
+            'fecha' => $pedido->fecha?->toDateString(),
+            'origen_id' => $pedido->origen_id,
+            'tipo_operacion_envio_id' => $pedido->tipo_operacion_envio_id,
+            'pedido_principal_id' => $pedido->pedido_principal_id,
+            'almacen_id' => $pedido->almacen_id,
+            'catalogo_tipo_caja_id' => $pedido->catalogo_tipo_caja_id,
+            'numero_cajas' => $pedido->numero_cajas,
+            'peso_real_kg' => $pedido->peso_real_kg,
+            'peso_cobrado_guia_kg' => $pedido->peso_cobrado_guia_kg,
+            'catalogo_paqueteria_id' => $pedido->catalogo_paqueteria_id,
+            'catalogo_tipo_guia_id' => $pedido->catalogo_tipo_guia_id,
+            'catalogo_zona_id' => $pedido->catalogo_zona_id,
+            'codigo_postal' => $pedido->codigo_postal,
+            'domicilio_entrega' => $pedido->domicilio_entrega,
+            'cliente_direccion_id' => $pedido->cliente_direccion_id,
+            'envia_a_otra_persona' => (bool) $pedido->envia_a_otra_persona,
+            'envia_otra_persona' => $pedido->envia_otra_persona,
+            'es_resguardo' => (bool) $pedido->es_resguardo,
+            'anexar_remision' => (bool) $pedido->anexar_remision,
+            'total_mercancia' => $pedido->total_mercancia,
+            'costo_envio' => $pedido->costo_envio,
+            'aplica_seguro' => (bool) $pedido->aplica_seguro,
+            'cliente_proporciona_guia' => (bool) $pedido->cliente_proporciona_guia,
+            'envio_por_cobrar' => (bool) $pedido->envio_por_cobrar,
+            'saldo_a_favor' => $pedido->saldo_a_favor,
+            'aplica_saldo_favor' => (float) $pedido->saldo_a_favor > 0,
+            'comentarios_drive' => $pedido->comentarios_drive,
+        ];
+
+        foreach ($datos as $clave => $valor) {
+            if (in_array($clave, ['solicitud_preparacion', 'prioridad_md', 'comprobantes', 'documentos_eliminar', 'enviar', 'pedido_id', 'updated_at_esperado'], true)) {
+                continue;
+            }
+            $semilla[$clave] = $valor;
+        }
+
+        return $semilla;
     }
 
     /**

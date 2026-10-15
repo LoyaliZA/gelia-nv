@@ -176,7 +176,7 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
     };
 
     const abrirNuevo = () => {
-        if (hayBorradorPedidoLocal()) {
+        if (hayBorradorPedidoLocal(auth?.user?.id)) {
             setConfirmarBorradorNuevo(true);
             return;
         }

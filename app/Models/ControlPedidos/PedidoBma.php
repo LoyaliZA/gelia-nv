@@ -23,7 +23,7 @@ class PedidoBma extends Model
 {
     use BelongsToUsuario, SoftDeletes;
 
-    protected $appends = ['requiere_sucursal_destino'];
+    protected $appends = ['requiere_sucursal_destino', 'solicitud_preparacion'];
 
     protected $table = 'pedidos_bma';
 
@@ -95,6 +95,7 @@ class PedidoBma extends Model
         'contacto_nombre_snapshot',
         'contacto_telefono_snapshot',
         'prioridad_md',
+        'solicitud_preparacion_json',
         'fecha',
         'vendedor_id',
         'cliente_id',
@@ -210,7 +211,19 @@ class PedidoBma extends Model
         'numero_cajas' => 'integer',
         'cantidad_piezas' => 'integer',
         'prioridad_md' => 'boolean',
+        'solicitud_preparacion_json' => 'array',
     ];
+
+    /**
+     * Intención confirmada del borrador. null en históricos sin la estructura nueva.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function getSolicitudPreparacionAttribute(): ?array
+    {
+        return app(\App\Services\ControlPedidos\FusionarSolicitudPreparacionPedido::class)
+            ->normalizar($this->solicitud_preparacion_json);
+    }
 
     public function vendedor(): BelongsTo
     {

@@ -11,6 +11,8 @@ class BusquedaDelegadoPedidoBma
 {
     public const CAMPO_GENERAL = 'general';
 
+    public const CAMPO_NUMERO_REMISION = 'numero_remision';
+
     public const CAMPO_FOLIO_REMISION = 'folio_remision';
 
     public const CAMPO_FOLIO = 'folio';
@@ -24,6 +26,7 @@ class BusquedaDelegadoPedidoBma
     {
         return [
             self::CAMPO_GENERAL,
+            self::CAMPO_NUMERO_REMISION,
             self::CAMPO_FOLIO_REMISION,
             self::CAMPO_FOLIO,
             self::CAMPO_GUIA,
@@ -51,6 +54,7 @@ class BusquedaDelegadoPedidoBma
 
         $query->where(function (Builder $q) use ($termino, $campo) {
             match ($campo) {
+                self::CAMPO_NUMERO_REMISION => $q->where('numero_remision', 'like', "%{$termino}%"),
                 self::CAMPO_FOLIO_REMISION => $q->where('folio_remision', 'like', "%{$termino}%"),
                 self::CAMPO_FOLIO => $q->where(function (Builder $f) use ($termino) {
                     $f->where('folio', 'like', "%{$termino}%")
@@ -69,6 +73,7 @@ class BusquedaDelegadoPedidoBma
     private static function aplicarGeneral(Builder $q, string $termino): void
     {
         $q->where('folio', 'like', "%{$termino}%")
+            ->orWhere('numero_remision', 'like', "%{$termino}%")
             ->orWhere('folio_remision', 'like', "%{$termino}%")
             ->orWhere('numero_rastreo', 'like', "%{$termino}%")
             ->orWhereHas('cliente', function (Builder $c) use ($termino) {
