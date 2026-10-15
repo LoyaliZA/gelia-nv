@@ -256,7 +256,8 @@ class CalcularRequisitosPreparacionService
             $faltantes[] = 'Evidencia del producto';
         }
 
-        if ($docs->where('tipo_evidencia', PedidoBmaTareaDocumento::TIPO_EVIDENCIA_BASCULA)->isEmpty()) {
+        if (! empty($req['peso_real_obligatorio'])
+            && $docs->where('tipo_evidencia', PedidoBmaTareaDocumento::TIPO_EVIDENCIA_BASCULA)->isEmpty()) {
             $faltantes[] = 'Foto de báscula / peso';
         }
         if ($docs->where('tipo_evidencia', PedidoBmaTareaDocumento::TIPO_EVIDENCIA_BULTO)->isEmpty()) {

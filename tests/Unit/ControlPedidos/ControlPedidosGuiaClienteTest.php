@@ -97,9 +97,19 @@ class ControlPedidosGuiaClienteTest extends TestCase
             'cliente_proporciona_guia' => true,
             'aplica_seguro' => false,
             'pesaje_respondido_at' => now(),
+            'consulta_cerrada_at' => now(),
             'estatus_envio' => PedidoBma::ESTATUS_ENVIO_PESAJE_LISTO,
         ]);
 
+        PedidoBmaDocumento::create([
+            'pedido_bma_id' => $pedido->id,
+            'tipo' => PedidoBmaDocumento::TIPO_PDF_PEDIDO,
+            'ruta_archivo' => 'test/pedido.pdf',
+            'nombre_original' => 'pedido.pdf',
+            'mime_type' => 'application/pdf',
+            'tamano_bytes' => 50,
+            'orden' => 1,
+        ]);
         PedidoBmaDocumento::create([
             'pedido_bma_id' => $pedido->id,
             'tipo' => PedidoBmaDocumento::TIPO_COMPROBANTE,

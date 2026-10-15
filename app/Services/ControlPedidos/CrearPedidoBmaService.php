@@ -30,6 +30,28 @@ class CrearPedidoBmaService
 
     public function ejecutar(array $datos, int $vendedorId): PedidoBma
     {
+        $clave = !empty($datos['captura_clave']) ? hash('sha256', $vendedorId.':'.$datos['captura_clave']) : null;
+        $hash = \App\Support\ControlPedidos\HuellaSolicitudPedido::de($datos);
+        $replay = function () use ($clave, $hash, $vendedorId) {
+            $p = PedidoBma::where('captura_creacion_clave', $clave)->first();
+            if (!$p || (int) $p->vendedor_id !== $vendedorId || !hash_equals((string) $p->captura_creacion_hash, $hash) || !hash_equals((string) $p->captura_creacion_base, \App\Support\ControlPedidos\RevisionCapturaPedido::base($p))) throw new \App\Exceptions\ControlPedidos\ConflictoCapturaPedido('La clave de creación ya corresponde a otra captura.');
+            return $p;
+        };
+        try {
+            return DB::transaction(function () use ($datos, $vendedorId, $clave, $hash, $replay) {
+                if ($clave && PedidoBma::where('captura_creacion_clave', $clave)->exists()) return $replay();
+                $pedido = $this->crear($datos, $vendedorId)->fresh();
+                if ($clave) $pedido->forceFill(['captura_creacion_clave' => $clave, 'captura_creacion_hash' => $hash, 'captura_creacion_base' => \App\Support\ControlPedidos\RevisionCapturaPedido::base($pedido)])->save();
+                return $pedido->fresh();
+            }, 3);
+        } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
+            if (!$clave) throw $e;
+            return $replay();
+        }
+    }
+
+    private function crear(array $datos, int $vendedorId): PedidoBma
+    {
         return DB::transaction(function () use ($datos, $vendedorId) {
             $estatusBorrador = CatalogoEstatusPedido::porFase(CatalogoEstatusPedido::FASE_BORRADOR)
                 ?? CatalogoEstatusPedido::porCodigo('BORRADOR');

@@ -41,7 +41,7 @@ trait ValidacionCamposPedidoBma
 
         if ($requiereLogistica && ! $esComplementario && ! $tienePesaje) {
             throw new \InvalidArgumentException(
-                $pedido->usaPreparacionTienda()
+                $pedido->enRutaPreparacionTienda()
                     ? 'Debe solicitar y recibir la respuesta de Tienda antes de enviar el pedido al auxiliar.'
                     : ($pedido->consultaCedisModoRevisionMercancia()
                         ? 'Debe solicitar y recibir la consulta de mercancía de CEDIS antes de enviar el pedido al auxiliar.'
@@ -51,7 +51,7 @@ trait ValidacionCamposPedidoBma
 
         if ($pedido->requiereConsultaCerradaParaProceder() && ! $pedido->consultaCerrada()) {
             throw new \InvalidArgumentException(
-                $pedido->usaPreparacionTienda()
+                $pedido->enRutaPreparacionTienda()
                     ? 'Debe cerrar la consulta de Tienda (confirmar mercancía con el cliente) antes de enviar el pedido.'
                     : 'Debe cerrar la consulta CEDIS (confirmar mercancía con el cliente) antes de enviar el pedido.'
             );
@@ -94,7 +94,9 @@ trait ValidacionCamposPedidoBma
         }
 
         if ($requiereLogistica) {
-            if ($tienePesaje && ! $modoRevisionMercancia) {
+            if ($pedido->enRutaPreparacionTienda()) {
+                $this->validarPesoPreparacionTienda($pedido, $faltantes);
+            } elseif ($tienePesaje && ! $modoRevisionMercancia) {
                 if ($pedido->peso_real_kg === null) {
                     $faltantes[] = 'peso real (pesaje CEDIS)';
                 }
@@ -193,5 +195,30 @@ trait ValidacionCamposPedidoBma
         }
 
         return PedidoBma::ESTATUS_ENVIO_COMPLETO;
+    }
+
+    /**
+     * La respuesta de Tienda no es un pesaje CEDIS. El peso solo aplica si el transporte o la modalidad lo exigen.
+     *
+     * @param  list<string>  $faltantes
+     */
+    protected function validarPesoPreparacionTienda(PedidoBma $pedido, array &$faltantes): void
+    {
+        $pedido->loadMissing(['tareaPreparacionVigente.modalidad', 'tareaPreparacionVigente.paqueteria', 'tareaPreparacionRespondida.modalidad', 'tareaPreparacionRespondida.paqueteria']);
+        $tarea = $pedido->tareaPreparacionVigente ?? $pedido->tareaPreparacionRespondida;
+        if (! $tarea) {
+            return;
+        }
+
+        $req = app(CalcularRequisitosPreparacionService::class)->efectivos($tarea);
+        if (! empty($req['peso_real_obligatorio'])) {
+            $peso = $tarea->peso_real_kg ?? $pedido->peso_real_kg;
+            if ($peso === null || $peso === '' || (float) $peso <= 0) {
+                $faltantes[] = 'peso real (preparación de Tienda)';
+            }
+        }
+        if (! empty($req['caja_obligatoria']) && ! $tarea->catalogo_tipo_caja_id && ! $pedido->catalogo_tipo_caja_id) {
+            $faltantes[] = 'tipo de caja (preparación de Tienda)';
+        }
     }
 }

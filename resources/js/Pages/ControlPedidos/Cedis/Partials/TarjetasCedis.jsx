@@ -19,6 +19,7 @@ import {
     formatearFechaHoraAuditoria,
     BTN_PRIMARY,
     tieneGuiaPdfDisponible,
+    cedisConsultaEsRevisionMercancia,
     etiquetaOrigenGuia,
     LABELS_MOTIVO_REPESAJE,
     mostrarNotaCompraCedis,
@@ -43,7 +44,7 @@ function TarjetaPedido({
     pedido, onVerDetalle, onResponderPesaje, onReportarErrorDatos, onMarcarApartado, onSolicitarConfirmacion, onVerDocumento, onBitacora, puedeReabrir, puedeEnviar,
 }) {
     const fase = pedido.estatus?.fase_ciclo;
-    const soloMercancia = Boolean(pedido.consulta_cedis_modo_revision_mercancia || pedido.es_consulta_mercancia || pedido.origen?.requiere_logistica === false || (pedido.paqueteria?.categoria === 'local_regional' && pedido.paqueteria?.requiere_peso === false));
+    const soloMercancia = cedisConsultaEsRevisionMercancia(pedido);
     const pendientePesaje = pedido.estatus_envio === 'pendiente_pesaje';
     const badgeEmpaque = badgeEmpaqueSemantico(fase, pedido.es_resguardo, Boolean(pedido.resguardo_apartado_at));
     const badgeEnvio = badgeEstatusEnvio(pedido.estatus_envio, { forzarPesaje: true });
@@ -120,15 +121,15 @@ function TarjetaPedido({
 
             {pendientePesaje && (
                 <AvisoOperativoPedido
-                    label={pedido.consulta_cedis_modo_revision_mercancia || pedido.es_consulta_mercancia || pedido.origen?.requiere_logistica === false || (pedido.paqueteria?.categoria === 'local_regional' && pedido.paqueteria?.requiere_peso === false) ? 'Consulta mercancía' : 'Consulta de pesaje'}
+                    label={soloMercancia ? 'Consulta mercancía' : 'Consulta de pesaje'}
                     tono="warning"
                     icon={Scale}
                 >
                     {pedido.consulta_actualizacion_pendiente || pedido.motivo_repesaje
                         ? `Actualización (${LABELS_MOTIVO_REPESAJE[pedido.motivo_repesaje] || pedido.motivo_repesaje || 'cambio'}). Revise el anexo/PDF y confirme.`
-                        : (pedido.consulta_cedis_modo_revision_mercancia || pedido.es_consulta_mercancia || pedido.origen?.requiere_logistica === false || (pedido.paqueteria?.categoria === 'local_regional' && pedido.paqueteria?.requiere_peso === false)
-                            ? 'Revise el PDF o foto, registre las piezas, los bultos a preparar (aprox.) y la evidencia final del lote.'
-                            : 'Revise el PDF o foto del pedido y registre peso y cajas.')}
+                        : (soloMercancia
+                            ? 'Revise el PDF o foto, registre las piezas, los bultos a preparar (aprox.) y la evidencia final del lote. Este recorrido no pide kilogramos.'
+                            : 'Revise el PDF o foto del pedido y registre peso, cajas y la foto de cada envío. La tarifa no exime el pesaje.')}
                 </AvisoOperativoPedido>
             )}
 

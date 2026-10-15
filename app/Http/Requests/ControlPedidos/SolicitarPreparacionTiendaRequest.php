@@ -21,6 +21,8 @@ class SolicitarPreparacionTiendaRequest extends FormRequest
         $esMunicipio = $this->input('codigo_modalidad') === CatalogoModalidadPreparacionPedido::CODIGO_ENVIO_MUNICIPIO;
 
         return [
+            'revision_esperada' => ['nullable', 'integer', 'min:0'],
+            'base_captura' => ['nullable', 'string', 'size:64'],
             'codigo_modalidad' => ['required', 'string', Rule::in(CatalogoModalidadPreparacionPedido::CODIGOS_SOLICITABLES)],
             'almacen_id' => ['required', 'integer', 'exists:almacenes,id'],
             'observaciones' => ['nullable', 'string', 'max:4000'],

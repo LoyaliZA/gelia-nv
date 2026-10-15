@@ -1,3 +1,4 @@
+import { ColaGuardadoPedido } from './colaGuardadoPedido';
 import RespuestaPreparacionTienda from './RespuestaPreparacionTienda';
 import ReabrirApartadoRecoge from './ReabrirApartadoRecoge';
 import usePedidoDialog from './usePedidoDialog';
@@ -184,15 +185,19 @@ function leerBorradorLocal(contexto = {}) {
     }
 }
 
-function guardarBorradorLocal(data, preparacion, usuarioId) {
-    if (typeof window === 'undefined') return;
+function guardarBorradorLocal(data, preparacion, usuarioId, base = null) {
+    if (typeof window === 'undefined') return false;
+    try {
     localStorage.setItem(STORAGE_BORRADOR, JSON.stringify({
         ...serializarBorrador(data),
+        _base_confirmada: base,
         ...(data.pedido_id ? { pedido_id: data.pedido_id } : {}),
         ...(data._nombre_cliente ? { _nombre_cliente: data._nombre_cliente } : {}),
         ...(usuarioId != null ? { usuario_id: usuarioId } : {}),
         captura_preparacion: capturaLocalDesdeEstado(preparacion),
     }));
+    return true;
+    } catch { return false; }
 }
 
 function limpiarBorradorLocal() {
@@ -341,6 +346,15 @@ export default function ModalFormPedidoLegado({
     const matchReexpedicionKey = useRef(null);
     const rexStripHechoRef = useRef(false);
     const [costoReexpedicion, setCostoReexpedicion] = useState(0);
+    const colaCaptura = useRef(new ColaGuardadoPedido());
+    const capturaActual = useRef({});
+    const baseConfirmada = useRef({ revision_esperada: pedido?.revision_registro ?? 0, base_captura: pedido?.base_captura });
+    const claveCreacion = useRef(globalThis.crypto?.randomUUID?.() || `alta-${Date.now()}-${Math.random()}`);
+    const claveSolicitud = useRef(null);
+    const comandoPendiente = useRef(false);
+    const ultimoFpVisto = useRef(null);
+    const manualPendiente = useRef(false);
+    const [guardandoManual, setGuardandoManual] = useState(false);
     const pedidoBdIdRef = useRef(pedido?.id || null);
     const ultimoFingerprintBd = useRef('');
     const ultimoSyncCedis = useRef('');
@@ -383,7 +397,8 @@ export default function ModalFormPedidoLegado({
     const [safFifoItems, setSafFifoItems] = useState([]);
     const [pagoResumen, setPagoResumen] = useState(null);
 
-    const { data, setData, post, processing, reset, errors, transform } = useForm(formDefaults(pedido, catalogos.tipos_operacion_envio || []));
+    const { data, setData, post, processing: processingForm, reset, errors, transform } = useForm(formDefaults(pedido, catalogos.tipos_operacion_envio || []));
+    const processing = processingForm || guardandoManual;
 
     const saldoFavorCalculado = data.aplica_saldo_favor ? Number(data.saldo_a_favor || 0) : 0;
 
@@ -502,12 +517,30 @@ export default function ModalFormPedidoLegado({
         || (preparacionConfig.modalidades_habilitadas || []).includes('RECOGE_TIENDA');
     const modalidadesPreparacionResto = modalidadesPreparacion.filter((m) => m.codigo !== 'RECOGE_TIENDA_TRANSFERENCIA');
     const tareaPreparacion = pedido?.tarea_preparacion || null;
-    const usaPreparacionTienda = Boolean(pedido?.usa_preparacion_tienda || tareaPreparacion);
+    const tareaPreparacionVigente = ['PENDIENTE', 'EN_ATENCION', 'CON_INCIDENCIA', 'LIBERACION_SOLICITADA', 'LISTA_PARA_TRASLADO', 'LISTA_PARA_CARATULA', 'EN_TRASLADO', 'RECHAZADA_CEDIS'].includes(tareaPreparacion?.estado);
+    const usaPreparacionTienda = tareaPreparacionVigente;
     const esRecogeTienda = recogeEnTienda || tareaPreparacion?.modalidad?.codigo === 'RECOGE_TIENDA';
     const modalidadTiendaSeleccionada = Boolean(codigoModalidadPreparacion) && codigoModalidadPreparacion !== 'RECOGE_TIENDA';
+    const almacenSeleccionado = (catalogos.almacenes || []).find((a) => String(a.id) === String(data.almacen_id));
+    const salidaEsPdv = esAlmacenTipoPdv(almacenSeleccionado);
+    const almacenElegiblePreparacion = almacenesPreparacion.some((a) => String(a.id) === String(data.almacen_id));
     const enFlujoTienda = esRecogeTienda
         || (usaPreparacionTienda && tareaPreparacion?.modalidad?.codigo !== 'RECOGE_TIENDA')
-        || (flujoPreparacionTienda && modalidadTiendaSeleccionada && !esRecogeTienda);
+        || (flujoPreparacionTienda && modalidadTiendaSeleccionada && !esRecogeTienda && almacenElegiblePreparacion);
+    const opcionesAlmacenSalida = (() => {
+        const base = esRecogeTienda ? almacenesPdv : (enFlujoTienda ? almacenesPreparacion : almacenesSalida);
+        if (!almacenSeleccionado || base.some((a) => String(a.id) === String(almacenSeleccionado.id))) return base;
+        if (almacenSeleccionado.permite_salida_pedidos === false) return base;
+        return [...base, almacenSeleccionado];
+    })();
+    const modalidadIncompatibleConSalida = Boolean(
+        flujoPreparacionTienda
+        && modalidadTiendaSeleccionada
+        && !esRecogeTienda
+        && data.almacen_id
+        && !almacenElegiblePreparacion
+        && !usaPreparacionTienda
+    );
     const tareaConIncidencia = ['CON_INCIDENCIA', 'RECHAZADA_CEDIS'].includes(tareaPreparacion?.estado);
     const puedeCorregirPreparacion = can('control_pedidos.preparacion.corregir') && tareaConIncidencia;
     const esModalidadTransferencia = codigoModalidadPreparacion === 'RECOGE_TIENDA_TRANSFERENCIA'
@@ -518,6 +551,7 @@ export default function ModalFormPedidoLegado({
         && !usaPreparacionTienda
         && !esRecogeTienda
         && !esModalidadTransferencia
+        && salidaEsPdv
         && (recogeHoyDisponible || modalidadTransferenciaDisponible)
     );
     const almacenPdv = almacenesPdv.length === 1 ? almacenesPdv[0] : (almacenesPdv.find((a) => String(a.id) === String(data.almacen_id)) || null);
@@ -582,13 +616,6 @@ export default function ModalFormPedidoLegado({
             setData('almacen_id', '');
         }
     }, [esRecogeTienda, almacenesPdv.map((a) => a.id).join(','), data.almacen_id, setData]);
-
-    useEffect(() => {
-        if (!abierto || !enFlujoTienda || esRecogeTienda || usaPreparacionTienda) return;
-        if (almacenesPreparacion.some((a) => String(a.id) === String(data.almacen_id))) return;
-        const valor = almacenesPreparacion.length === 1 ? String(almacenesPreparacion[0].id) : '';
-        if (String(data.almacen_id || '') !== valor) setData('almacen_id', valor);
-    }, [abierto, enFlujoTienda, esRecogeTienda, usaPreparacionTienda, almacenesPreparacion.map((a) => a.id).join(','), data.almacen_id, setData]);
 
     useEffect(() => {
         if (!abierto || muestraDestinoSucursal || !data.sucursal_destino_id) return;
@@ -712,6 +739,11 @@ export default function ModalFormPedidoLegado({
             && manualDireccionCompleta(camposDireccion),
         detalleCajas: detalleCajasUi,
         cajasPesaje,
+        enRutaPreparacionTienda: Boolean(pedido?.en_ruta_preparacion_tienda)
+            || usaPreparacionTienda
+            || ['RESPONDIDA', 'RECIBIDA_CEDIS'].includes(tareaPreparacion?.estado),
+        preparacionPesoObligatorio: Boolean(pedido?.preparacion_peso_real_obligatorio),
+        preparacionPesoCapturado: Boolean(pedido?.preparacion_peso_capturado),
     });
     const enviarPedidoListo = validacionEnvio.valido
         && !(esResguardoComplementario && !data.pedido_principal_id)
@@ -774,11 +806,11 @@ export default function ModalFormPedidoLegado({
             : null,
     ].filter(Boolean);
     const faseActiva = modoProgresivo ? faseUi : null;
-    const estadoGuardadoProg = estadoAuto.bd?.includes('guardando')
-        ? 'guardando'
-        : estadoAuto.bd?.includes('error')
-            ? 'error'
-            : (estadoAuto.bd && !estadoAuto.bd.includes('guardando') ? 'guardado' : null);
+    const estadoGuardadoProg = estadoAuto.bd?.includes('conflicto') ? 'conflicto'
+        : estadoAuto.bd?.includes('error') ? 'error'
+        : estadoAuto.bd?.includes('guardando') ? 'guardando'
+        : estadoAuto.bd?.includes('pendientes') ? 'pendiente'
+        : estadoAuto.bd ? 'guardado' : null;
     const tieneCoberturaSeguro = paqueteriaTieneCobertura(paqueteriaSeleccionada?.nombre);
     const esPaqPendienteNombre = (nombre) => String(nombre || '').trim().toUpperCase() === 'PAQ. PENDIENTE';
     const paqueteriasPendientes = (catalogos.paqueterias || []).filter((p) => esPaqPendienteNombre(p.nombre));
@@ -853,6 +885,16 @@ export default function ModalFormPedidoLegado({
 
     useEffect(() => {
         if (!abierto) return;
+        colaCaptura.current.cerrada = true;
+        colaCaptura.current = new ColaGuardadoPedido();
+        baseConfirmada.current = { revision_esperada: pedido?.revision_registro ?? 0, base_captura: pedido?.base_captura };
+        claveSolicitud.current = null;
+        claveCreacion.current = globalThis.crypto?.randomUUID?.() || `alta-${Date.now()}-${Math.random()}`;
+        autoguardandoBd.current = false;
+        comandoPendiente.current = false;
+        manualPendiente.current = false;
+        setGuardandoManual(false);
+        ultimoFpVisto.current = null;
         setVistaPrevia(null);
         costoReexpedicionAplicado.current = 0;
         matchReexpedicionKey.current = null;
@@ -917,6 +959,8 @@ export default function ModalFormPedidoLegado({
         } else if (recuperarBorrador) {
             const borrador = leerBorradorLocal({ usuarioId: auth?.user?.id });
             const idBd = borrador?.pedido_id || null;
+            baseConfirmada.current = borrador?._base_confirmada || { revision_esperada: 0 };
+            if (borrador?._base_confirmada?.captura_clave) claveCreacion.current = borrador._base_confirmada.captura_clave;
             aplicarPreparacion(
                 borrador?.captura_preparacion ? estadoPreparacionDesdeLocal(borrador) : estadoPreparacionVacio(),
                 null,
@@ -925,7 +969,7 @@ export default function ModalFormPedidoLegado({
             setPedidoBdId(idBd);
             if (borrador) {
                 const {
-                    pedido_id: _pid, _nombre_cliente: nombreCli, usuario_id: _usuario, captura_preparacion: _captura, ...restoBorrador
+                    pedido_id: _pid, _nombre_cliente: nombreCli, usuario_id: _usuario, captura_preparacion: _captura, _base_confirmada: _base, ...restoBorrador
                 } = borrador;
                 setData({ ...formDefaults(null, catalogos.tipos_operacion_envio || []), ...restoBorrador, comprobantes: [], documentos_eliminar: [], enviar: false });
                 if (borrador.cliente_id) {
@@ -1016,6 +1060,11 @@ export default function ModalFormPedidoLegado({
         }
         if (fp === ultimoSyncCedis.current) return;
         ultimoSyncCedis.current = fp;
+
+        if (capturaActual.current.fp !== ultimoFingerprintBd.current || autoguardandoBd.current) {
+            setAvisoForm({ tipo: 'error', mensaje: 'El servidor actualizó este pedido. Se conservaron sus cambios locales; revise la versión del servidor antes de continuar.' });
+            return;
+        }
 
         // Inertia setData(object) REEMPLAZA todo el form; hay que mergear con updater.
         // Almacén/paquetería: preferir form local si el listado/servidor viene null (no pisar captura).
@@ -1132,7 +1181,14 @@ export default function ModalFormPedidoLegado({
     };
 
     /** Guarda el borrador en BD (sin archivos) y devuelve su id. */
-    const persistirBorradorBd = async () => {
+    const persistirBorradorBd = () => colaCaptura.current.ejecutar(async () => {
+        if (capturaActual.current.fp === ultimoFingerprintBd.current && pedidoBdIdRef.current) return pedidoBdIdRef.current;
+        return capturaActual.current.persistir();
+    });
+
+    const persistirCapturaActual = async () => {
+        const sesion = colaCaptura.current;
+        const fpEnviado = fingerprintBd(data, estadoPreparacionActual());
         autoguardandoBd.current = true;
         setEstadoAuto((s) => ({ ...s, bd: 'Servidor · guardando…' }));
         try {
@@ -1155,6 +1211,8 @@ export default function ModalFormPedidoLegado({
                 payload.costo_envio = costoEnvioParaPersistir(data.costo_envio, costoReexpedicion);
             }
             payload.pedido_id = pedidoBdIdRef.current || undefined;
+            Object.assign(payload, baseConfirmada.current);
+            payload.captura_clave = claveCreacion.current;
             payload.saldo_a_favor = data.aplica_saldo_favor
                 ? (Number(data.saldo_a_favor) || (data.saf_aplicaciones || []).reduce((a, i) => a + (Number(i.monto) || 0), 0) || 0)
                 : 0;
@@ -1181,6 +1239,9 @@ export default function ModalFormPedidoLegado({
             const { data: res } = await axios.post(url, payload, {
                 headers: headersJsonCsrf(),
             });
+            if (sesion !== colaCaptura.current || sesion.cerrada) throw new Error('La respuesta pertenece a otra apertura del formulario.');
+            if (!res.id || res.revision_registro == null || !res.base_captura) throw new Error('El servidor no confirmó la revisión. Recargue el formulario.');
+            baseConfirmada.current = { revision_esperada: res.revision_registro, base_captura: res.base_captura };
             const eraNuevo = !pedidoBdIdRef.current;
             pedidoBdIdRef.current = res.id;
             setPedidoBdId(res.id);
@@ -1188,7 +1249,7 @@ export default function ModalFormPedidoLegado({
             if (res.progreso) {
                 setProgresoLocal(res.progreso);
             }
-            ultimoFingerprintBd.current = fingerprintBd(data, estadoPreparacionActual());
+            ultimoFingerprintBd.current = fpEnviado;
             if (res.solicitud_preparacion !== undefined || Object.prototype.hasOwnProperty.call(res, 'prioridad_md')) {
                 intencionConfirmadaRef.current = {
                     ...(res.solicitud_preparacion || null),
@@ -1200,17 +1261,19 @@ export default function ModalFormPedidoLegado({
                     ...data,
                     pedido_id: res.id,
                     _nombre_cliente: infoCliente?.nombre || '',
-                }, estadoPreparacionActual(), auth?.user?.id);
+                }, estadoPreparacionActual(), auth?.user?.id, { ...baseConfirmada.current, captura_clave: claveCreacion.current });
             }
-            setEstadoAuto((s) => ({ ...s, bd: `Servidor · ${res.folio || `#${res.id}`}` }));
+            setEstadoAuto((s) => ({ ...s, bd: capturaActual.current.fp === fpEnviado ? `Servidor · ${res.folio || `#${res.id}`}` : 'Servidor · cambios pendientes' }));
             if (eraNuevo) {
                 onPedidoCreado?.({ id: res.id, folio: res.folio });
             }
             return res.id;
         } catch (err) {
+            if (sesion !== colaCaptura.current || sesion.cerrada) throw err;
             if (err?.response?.status === 409) {
+                sesion.conflicto = true;
                 setEstadoAuto((s) => ({ ...s, bd: 'Servidor · conflicto' }));
-                if (err.response.data?.updated_at) setUpdatedAtEsperado(err.response.data.updated_at);
+                guardarBorradorLocal({ ...capturaActual.current.data, pedido_id: pedidoBdIdRef.current }, capturaActual.current.preparacion, auth?.user?.id, { ...baseConfirmada.current, captura_clave: claveCreacion.current });
                 if (err.response.data?.progreso) setProgresoLocal(err.response.data.progreso);
                 setAvisoForm({
                     tipo: 'error',
@@ -1222,17 +1285,20 @@ export default function ModalFormPedidoLegado({
                     tipo: 'error',
                     mensaje: mensajeAxios(err, 'No se pudo guardar la sucursal destino.'),
                 });
-                return null;
+            } else {
+                setEstadoAuto((s) => ({ ...s, bd: 'Servidor · error' }));
             }
             throw err;
         } finally {
-            autoguardandoBd.current = false;
+            if (sesion === colaCaptura.current) autoguardandoBd.current = false;
         }
     };
 
     /** Devuelve el id del pedido en BD, creando el borrador si aún no existe. */
     const asegurarPedidoEnBd = async ({ zona = 'form' } = {}) => {
-        if (idPedidoAcciones) return idPedidoAcciones;
+        const sesion = colaCaptura.current;
+        // El id no prueba que la captura visible haya sido confirmada.
+        if (idPedidoAcciones && !puedeAutoguardarBd) return idPedidoAcciones;
         if (!tieneContenidoParaBd(data)) {
             const msg = 'Capture al menos el origen y el cliente antes de continuar.';
             if (zona === 'pdf') setAvisoPdf({ tipo: 'error', mensaje: msg });
@@ -1241,8 +1307,12 @@ export default function ModalFormPedidoLegado({
             return null;
         }
         try {
-            return await persistirBorradorBd();
+            let id;
+            do { id = await persistirBorradorBd(); }
+            while (capturaActual.current.fp !== ultimoFingerprintBd.current);
+            return id;
         } catch (err) {
+            if (sesion !== colaCaptura.current || sesion.cerrada) return null;
             const msg = mensajeAxios(err, 'No se pudo guardar el borrador en el servidor.');
             if (zona === 'pdf') setAvisoPdf({ tipo: 'error', mensaje: msg });
             else if (zona === 'pesaje') setAvisoPesaje({ tipo: 'error', mensaje: msg });
@@ -1255,12 +1325,12 @@ export default function ModalFormPedidoLegado({
     useEffect(() => {
         if (!abierto || modoEdicion) return;
         const timer = setTimeout(() => {
-            guardarBorradorLocal({
+            const copiaOk = guardarBorradorLocal({
                 ...data,
                 pedido_id: pedidoBdIdRef.current || undefined,
                 _nombre_cliente: infoCliente?.nombre || '',
-            }, estadoPreparacionActual(), auth?.user?.id);
-            setEstadoAuto((s) => ({ ...s, local: 'Local · guardado' }));
+            }, estadoPreparacionActual(), auth?.user?.id, { ...baseConfirmada.current, captura_clave: claveCreacion.current });
+            setEstadoAuto((s) => ({ ...s, local: copiaOk ? 'Local · guardado' : 'Local · no se pudo guardar copia' }));
         }, AUTOSAVE_LOCAL_MS);
         return () => clearTimeout(timer);
     }, [data, abierto, modoEdicion, infoCliente?.nombre, codigoModalidadPreparacion, prioridadMd, folioReferencia, tipoReferencia, entregaMunicipal]);
@@ -1272,9 +1342,14 @@ export default function ModalFormPedidoLegado({
 
         const fp = fingerprintBd(data, estadoPreparacionActual());
         if (fp === ultimoFingerprintBd.current) return;
+        const cambioLocal = ultimoFpVisto.current !== fp;
+        ultimoFpVisto.current = fp;
+        if (cambioLocal && !colaCaptura.current.conflicto && !autoguardandoBd.current) setEstadoAuto((s) => ({ ...s, bd: 'Servidor · cambios pendientes' }));
+        if (!cambioLocal && estadoAuto.bd?.includes('error')) return;
 
+        const sesionAuto = colaCaptura.current;
         const timer = setTimeout(async () => {
-            if (autoguardandoBd.current || processing) return;
+            if (autoguardandoBd.current || processing || comandoPendiente.current || colaCaptura.current.conflicto) return;
             const fpNow = fingerprintBd(data, estadoPreparacionActual());
             if (fpNow === ultimoFingerprintBd.current) return;
             if (!tieneContenidoParaBd(data)) return;
@@ -1282,14 +1357,15 @@ export default function ModalFormPedidoLegado({
             try {
                 await persistirBorradorBd();
             } catch (err) {
+                if (sesionAuto !== colaCaptura.current || sesionAuto.cerrada) return;
                 const msg = err?.response?.data?.message || 'No se pudo autoguardar en servidor';
-                setEstadoAuto((s) => ({ ...s, bd: 'Servidor · error' }));
+                setEstadoAuto((s) => ({ ...s, bd: err?.response?.status === 409 || colaCaptura.current.conflicto ? 'Servidor · conflicto' : 'Servidor · error' }));
                 console.warn('[autoguardar pedido]', msg);
             }
         }, autosaveBdMs);
 
         return () => clearTimeout(timer);
-    }, [data, abierto, puedeAutoguardarBd, processing, modoEdicion, infoCliente?.nombre, codigoModalidadPreparacion, prioridadMd, folioReferencia, tipoReferencia, entregaMunicipal]);
+    }, [data, abierto, puedeAutoguardarBd, processing, modoEdicion, infoCliente?.nombre, codigoModalidadPreparacion, prioridadMd, folioReferencia, tipoReferencia, entregaMunicipal, estadoAuto.bd]);
 
     useEffect(() => {
         if (pedido?.pesaje_respondido_at) {
@@ -1800,7 +1876,40 @@ export default function ModalFormPedidoLegado({
         });
     };
 
+    const payloadEnvio = (d) => {
+        const omitEnvio = Boolean(d.cliente_proporciona_guia) || Boolean(d.envio_por_cobrar);
+        const cajasCostos = detalleCajasUi
+            ? (d.cajas_costos || []).filter((row) => row?.uuid_operativo)
+            : undefined;
+        return conDireccionManual({
+            ...d,
+            ...destinoSucursalParaPayload({
+                muestra: muestraDestinoSucursal,
+                sucursalDestinoId: d.sucursal_destino_id,
+                esAutoguardado: false,
+            }),
+            costo_envio: omitEnvio
+                ? (d.costo_envio === '' || d.costo_envio == null ? '' : 0)
+                : costoEnvioParaPersistir(d.costo_envio, costoReexpedicion),
+            cajas_costos: cajasCostos,
+            enviar: undefined,
+            saldo_a_favor: d.aplica_saldo_favor
+                ? (Number(d.saldo_a_favor) || (d.saf_aplicaciones || []).reduce((a, i) => a + (Number(i.monto) || 0), 0) || 0)
+                : 0,
+            saf_aplicaciones: d.aplica_saldo_favor && Number(d.saldo_a_favor) > 0
+                ? (d.saf_aplicaciones?.length
+                    ? d.saf_aplicaciones.filter((i) => Number(i.monto) > 0)
+                    : [{ monto: Number(d.saldo_a_favor) }])
+                : [],
+            comentarios_drive: d.direccion_manual_excepcion && d.motivo_direccion_manual
+                ? `${d.comentarios_drive || ''}\n[Excepción dirección] ${d.motivo_direccion_manual}`.trim()
+                : d.comentarios_drive,
+            ...camposPreparacionParaGuardar(estadoPreparacionActual(), intencionConfirmadaRef.current),
+        });
+    };
+
     const guardar = (enviarPedido = false, { cerrar = true, alTerminar = null } = {}) => {
+        if (comandoPendiente.current || manualPendiente.current) return;
         setAvisoForm(null);
 
         if (enviarPedido) {
@@ -1854,72 +1963,48 @@ export default function ModalFormPedidoLegado({
         }
 
         const idDestino = modoEdicion ? pedido.id : pedidoBdIdRef.current;
-        const payloadEnvio = (d) => {
-            const omitEnvio = Boolean(d.cliente_proporciona_guia) || Boolean(d.envio_por_cobrar);
-            const cajasCostos = detalleCajasUi
-                ? (d.cajas_costos || []).filter((row) => row?.uuid_operativo)
-                : undefined;
-            return conDireccionManual({
-                ...d,
-                ...destinoSucursalParaPayload({
-                    muestra: muestraDestinoSucursal,
-                    sucursalDestinoId: d.sucursal_destino_id,
-                    esAutoguardado: false,
-                }),
-                costo_envio: omitEnvio
-                    ? (d.costo_envio === '' || d.costo_envio == null ? '' : 0)
-                    : costoEnvioParaPersistir(d.costo_envio, costoReexpedicion),
-                cajas_costos: cajasCostos,
-                enviar: undefined,
-                saldo_a_favor: d.aplica_saldo_favor
-                    ? (Number(d.saldo_a_favor) || (d.saf_aplicaciones || []).reduce((a, i) => a + (Number(i.monto) || 0), 0) || 0)
-                    : 0,
-                saf_aplicaciones: d.aplica_saldo_favor && Number(d.saldo_a_favor) > 0
-                    ? (d.saf_aplicaciones?.length
-                        ? d.saf_aplicaciones.filter((i) => Number(i.monto) > 0)
-                        : [{ monto: Number(d.saldo_a_favor) }])
-                    : [],
-                comentarios_drive: d.direccion_manual_excepcion && d.motivo_direccion_manual
-                    ? `${d.comentarios_drive || ''}\n[Excepción dirección] ${d.motivo_direccion_manual}`.trim()
-                    : d.comentarios_drive,
-                ...camposPreparacionParaGuardar(estadoPreparacionActual(), intencionConfirmadaRef.current),
-            });
-        };
-        const config = {
-            forceFormData: true,
-            preserveScroll: true,
-            onSuccess: (page) => {
-                if (page?.props?.flash?.error) {
-                    setAvisoForm({ tipo: 'error', mensaje: page.props.flash.error });
-                    return;
-                }
-                if (!cerrar) {
-                    setData('comprobantes', []);
-                    setPreviews([]);
-                    alTerminar?.(idDestino);
-                    return;
-                }
-                limpiarBorradorLocal();
-                pedidoBdIdRef.current = null;
-                setPedidoBdId(null);
-                onClose();
-                reset();
-            },
-        };
-        if (idDestino) {
-            transform((d) => ({ ...payloadEnvio(d), _method: 'put', enviar: enviarPedido }));
-            post(route('control_pedidos.update', idDestino), config);
-        } else {
-            transform((d) => ({ ...payloadEnvio(d), enviar: enviarPedido }));
-            post(route('control_pedidos.store'), config);
-        }
+        if (guardandoManual) return;
+        manualPendiente.current = true;
+        setGuardandoManual(true);
+        const sesion = colaCaptura.current;
+        sesion.ejecutar(async () => {
+            const objetivo = pedidoBdIdRef.current || idDestino;
+            const enviado = capturaActual.current.payloadManual(capturaActual.current.data);
+            const fp = capturaActual.current.fp;
+            const { data: res } = await axios.post(objetivo ? route('control_pedidos.update', objetivo) : route('control_pedidos.store'), {
+                ...enviado, ...baseConfirmada.current, captura_clave: claveCreacion.current,
+                ...(objetivo ? { _method: 'put' } : {}), enviar: enviarPedido,
+            }, { headers: { ...headersJsonCsrf(), 'Content-Type': 'multipart/form-data' } });
+            if (sesion !== colaCaptura.current || sesion.cerrada) return;
+            if (!res.id || !res.base_captura) throw new Error('El servidor no confirmó el guardado.');
+            baseConfirmada.current = { revision_esperada: res.revision_registro, base_captura: res.base_captura };
+            pedidoBdIdRef.current = res.id;
+            setPedidoBdId(res.id);
+            if (capturaActual.current.data.comprobantes === enviado.comprobantes) { setData('comprobantes', []); setPreviews([]); }
+            ultimoFingerprintBd.current = fp;
+            const pendiente = capturaActual.current.fp !== fp;
+            setEstadoAuto((s) => ({ ...s, bd: pendiente ? 'Servidor · cambios pendientes' : `Servidor · ${res.folio || res.id}` }));
+            if (!cerrar || pendiente) { alTerminar?.(res.id); return; }
+            limpiarBorradorLocal();
+            onClose();
+            reset();
+        }).catch((err) => {
+            if (sesion !== colaCaptura.current || sesion.cerrada) return;
+            setEstadoAuto((s) => ({ ...s, bd: err?.response?.status === 409 || sesion.conflicto ? 'Servidor · conflicto' : 'Servidor · error' }));
+            guardarBorradorLocal({ ...capturaActual.current.data, pedido_id: pedidoBdIdRef.current }, capturaActual.current.preparacion, auth?.user?.id, { ...baseConfirmada.current, captura_clave: claveCreacion.current });
+            setAvisoForm({ tipo: 'error', mensaje: mensajeAxios(err, 'No se pudo confirmar el guardado. Conserve sus cambios y recargue para revisarlos.') });
+        }).finally(() => { if (sesion === colaCaptura.current) { manualPendiente.current = false; setGuardandoManual(false); } });
     };
+
+    capturaActual.current = { ...capturaActual.current, data, preparacion: estadoPreparacionActual(), fp: fingerprintBd(data, estadoPreparacionActual()), persistir: persistirCapturaActual, payloadManual: payloadEnvio, solicitarTienda: (id) => postSolicitudPreparacionTienda(id) };
+    useEffect(() => () => { colaCaptura.current.cerrada = true; }, []);
+    useEffect(() => { if (!abierto) colaCaptura.current.cerrada = true; }, [abierto]);
 
     const optsPesaje = {
         preserveState: true,
         preserveScroll: true,
         onStart: () => setProcesandoPesaje(true),
-        onFinish: () => setProcesandoPesaje(false),
+        onFinish: () => { setProcesandoPesaje(false); comandoPendiente.current = false; },
         onError: (errs) => {
             const msg = Object.values(errs || {})[0];
             setAvisoPesaje({
@@ -2001,8 +2086,27 @@ export default function ModalFormPedidoLegado({
         }
     };
 
+    const enviarSolicitudOperativa = async (url, payload, opciones) => {
+        const sesion = colaCaptura.current;
+        opciones.onStart?.();
+        try {
+            const { data: res } = await axios.post(url, payload, { headers: headersJsonCsrf() });
+            if (sesion !== colaCaptura.current || sesion.cerrada) return;
+            if (!res.ok) throw new Error('El servidor no confirmó la solicitud.');
+            opciones.onSuccess?.({ props: { flash: {} } });
+        } catch (error) {
+            if (sesion !== colaCaptura.current || sesion.cerrada) return;
+            if (error?.response?.status === 409) {
+                colaCaptura.current.conflicto = true;
+                setEstadoAuto((s) => ({ ...s, bd: 'Servidor · conflicto' }));
+                guardarBorradorLocal({ ...capturaActual.current.data, pedido_id: pedidoBdIdRef.current }, capturaActual.current.preparacion, auth?.user?.id, baseConfirmada.current);
+            }
+            setAvisoPesaje({ tipo: 'error', mensaje: mensajeAxios(error, 'No se pudo confirmar la solicitud. Conserve su captura para reintentar.') });
+        } finally { if (sesion === colaCaptura.current && !sesion.cerrada) opciones.onFinish?.(); }
+    };
+
     const postSolicitudPesaje = (id) => {
-        router.post(route('control_pedidos.solicitar_pesaje', id), {}, {
+        enviarSolicitudOperativa(route('control_pedidos.solicitar_pesaje', id), { ...baseConfirmada.current }, {
             ...optsPesaje,
             onSuccess: (page) => {
                 const err = page?.props?.flash?.error;
@@ -2023,7 +2127,7 @@ export default function ModalFormPedidoLegado({
         const payload = {
             codigo_modalidad: esRecogeTienda ? 'RECOGE_TIENDA' : codigoModalidadPreparacion,
             almacen_id: esRecogeTienda ? (data.almacen_id || almacenPdv?.id || '') : data.almacen_id,
-            idempotencia_clave: `prep-${id}-${Date.now()}`,
+            ...baseConfirmada.current,
         };
         Object.assign(payload, {
             documento_inicial: 'PEDIDO',
@@ -2042,7 +2146,10 @@ export default function ModalFormPedidoLegado({
                 modalidad_cobro: entregaMunicipal.modalidad_cobro || 'PAGADO',
             });
         }
-        router.post(route('control_pedidos.solicitar_preparacion_tienda', id), payload, {
+        const firma = JSON.stringify({ ...payload, revision_esperada: undefined, base_captura: undefined });
+        if (claveSolicitud.current?.firma !== firma) claveSolicitud.current = { firma, clave: globalThis.crypto?.randomUUID?.() || `prep-${id}-${Date.now()}-${Math.random()}` };
+        payload.idempotencia_clave = claveSolicitud.current.clave;
+        enviarSolicitudOperativa(route('control_pedidos.solicitar_preparacion_tienda', id), payload, {
             ...optsPesaje,
             onSuccess: (page) => {
                 const err = page?.props?.flash?.error;
@@ -2073,11 +2180,15 @@ export default function ModalFormPedidoLegado({
             setAvisoPesaje({ tipo: 'error', mensaje: 'Seleccione la paquetería antes de solicitar la consulta a CEDIS.' });
             return;
         }
-        if (procesandoPesaje || pendientePesaje) return;
+        if (procesandoPesaje || pendientePesaje || comandoPendiente.current) return;
+        comandoPendiente.current = true;
         setProcesandoPesaje(true);
+        const sesion = colaCaptura.current;
         const id = await asegurarPedidoEnBd({ zona: 'pesaje' });
+        if (sesion !== colaCaptura.current || sesion.cerrada) return;
         if (!id) {
             setProcesandoPesaje(false);
+            comandoPendiente.current = false;
             return;
         }
         postSolicitudPesaje(id);
@@ -2132,14 +2243,18 @@ export default function ModalFormPedidoLegado({
                 return;
             }
         }
-        if (procesandoPesaje || pendientePesaje) return;
+        if (procesandoPesaje || pendientePesaje || comandoPendiente.current) return;
+        comandoPendiente.current = true;
         setProcesandoPesaje(true);
+        const sesion = colaCaptura.current;
         const id = await asegurarPedidoEnBd({ zona: 'pesaje' });
+        if (sesion !== colaCaptura.current || sesion.cerrada) return;
         if (!id) {
             setProcesandoPesaje(false);
+            comandoPendiente.current = false;
             return;
         }
-        postSolicitudPreparacionTienda(id);
+        capturaActual.current.solicitarTienda(id);
     };
 
     const cerrarConsulta = () => {
@@ -2321,9 +2436,20 @@ export default function ModalFormPedidoLegado({
         </>
     );
 
+    const conservarYRecargar = () => {
+        const copiaOk = guardarBorradorLocal({ ...data, pedido_id: pedidoBdIdRef.current }, estadoPreparacionActual(), auth?.user?.id, { ...baseConfirmada.current, captura_clave: claveCreacion.current });
+        if (!copiaOk) { setAvisoForm({ tipo: 'error', mensaje: 'No se pudo conservar la copia local. Mantenga abierto el pedido y copie sus cambios antes de recargar.' }); return; }
+        window.location.reload();
+    };
+
+    const cerrarConCopia = () => {
+        if (capturaActual.current.fp !== ultimoFingerprintBd.current) guardarBorradorLocal({ ...data, pedido_id: pedidoBdIdRef.current }, estadoPreparacionActual(), auth?.user?.id, { ...baseConfirmada.current, captura_clave: claveCreacion.current });
+        onClose();
+    };
+
     const dialog = usePedidoDialog({
         abierto,
-        onClose,
+        onClose: cerrarConCopia,
         bloqueado: processing || procesandoPesaje,
         cerrarConEscape: false,
     });
@@ -2348,7 +2474,7 @@ export default function ModalFormPedidoLegado({
                         esResguardo={Boolean(data.es_resguardo)}
                         requiereLogistica={origenSeleccionado ? Boolean(origenSeleccionado.requiere_logistica) : true}
                         estadoGuardado={estadoGuardadoProg}
-                        onClose={onClose}
+                        onClose={cerrarConCopia}
                     />
                 ) : (
                 <div className="p-5 md:p-6 border-b theme-border flex justify-between items-start gap-3 shrink-0">
@@ -2357,6 +2483,7 @@ export default function ModalFormPedidoLegado({
                             {modoEdicion ? 'Editar pedido' : 'Nuevo pedido'}
                             {data.es_resguardo ? ' · Resguardo' : ''}
                         </h2>
+                        {estadoAuto.bd?.includes('conflicto') && <button type="button" className={BTN_SECONDARY} onClick={conservarYRecargar}>Conservar copia local y recargar</button>}
                         {(estadoAuto.local || estadoAuto.bd || pedidoBdId) && (
                             <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-[10px] font-bold uppercase tracking-widest theme-text-muted">
                                 {estadoAuto.local && (
@@ -2390,6 +2517,7 @@ export default function ModalFormPedidoLegado({
                 <div className={`gelia-modal-body p-5 md:p-8 ${modoProgresivo ? 'space-y-4' : 'space-y-8'}`} ref={cuerpoFormRef}>
                     <div className={modoProgresivo ? `flex flex-col ${faseUi === FASE_RESPUESTA ? 'lg:flex-row-reverse' : 'lg:flex-row'} gap-6 items-start` : undefined}>
                     <div className={modoProgresivo ? 'lg:w-[70%] w-full min-w-0' : 'contents'}>
+                    {modoProgresivo && estadoAuto.bd && <div role="status" aria-live="polite" className="text-xs theme-text-muted">{estadoAuto.bd}{estadoAuto.bd.includes('conflicto') && <button type="button" className={BTN_SECONDARY} onClick={conservarYRecargar}>Conservar copia local y recargar</button>}</div>}
                     {avisoForm && (
                         <div
                             className="p-4 rounded-xl border flex items-start gap-3"
@@ -2508,7 +2636,7 @@ export default function ModalFormPedidoLegado({
                                                 : 'Envío: solicite el pesaje a CEDIS; al responder y cerrar la consulta podrá capturar el monto, cotizar y pagar.')
                                             : (esRecogeTienda
                                                 ? 'Recoge en tienda: mismo día en el almacén PDV. Personal de preparación revisa las piezas, confirma el apartado y genera la carátula. Sin pago ni transferencia.'
-                                                : (flujoPreparacionTienda && modalidadTiendaSeleccionada
+                                                : (enFlujoTienda && modalidadTiendaSeleccionada
                                                     ? 'Tienda/mostrador: seleccione modalidad y almacén, luego solicite preparación en Tienda; al responder y cerrar la consulta capture el monto y el pago.'
                                                     : 'Tienda/mostrador: solicite separación de mercancía a CEDIS; al cerrarla capture el monto y el pago (sin cajas ni guía).'))}
                                     </p>
@@ -2529,12 +2657,15 @@ export default function ModalFormPedidoLegado({
                                     className={`${THEME_SELECT} w-full py-3 ${logisticaBloqueada ? 'opacity-50' : ''}`}
                                 >
                                     <option value="">Seleccionar...</option>
-                                    {(esRecogeTienda
-                                        ? almacenesPdv
-                                        : (enFlujoTienda ? almacenesPreparacion : almacenesSalida)).map((a) => (
+                                    {opcionesAlmacenSalida.map((a) => (
                                         <option key={a.id} value={String(a.id)}>{etiquetaAlmacen(a)}</option>
                                     ))}
                                 </select>
+                                {modalidadIncompatibleConSalida && (
+                                    <p className="text-[10px] font-bold text-amber-600 m-0 mt-1.5" role="status">
+                                        Este almacén de salida se conserva. La modalidad elegida solo prepara en un almacén de Tienda; la consulta de mercancía sigue en CEDIS.
+                                    </p>
+                                )}
                                 {esRecogeTienda && almacenesPdv.length === 0 && (
                                     <p className="text-[10px] font-bold text-amber-600 m-0 mt-1.5" role="status">
                                         No hay almacenes tipo PDV activos y visibles en pedidos.
@@ -4285,7 +4416,7 @@ export default function ModalFormPedidoLegado({
                 abierto={Boolean(abierto) && modalCorregirPreparacion}
                 onClose={() => setModalCorregirPreparacion(false)}
                 tarea={tareaPreparacion}
-                almacenes={enFlujoTienda ? almacenesPreparacion : (catalogos.almacenes || [])}
+                almacenes={enFlujoTienda ? opcionesAlmacenSalida : (catalogos.almacenes || [])}
                 onAviso={setAvisoPesaje}
             />
         </>

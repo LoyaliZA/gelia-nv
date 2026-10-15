@@ -86,7 +86,13 @@ class CambiarModalidadPreparacionService
             ->firstOrFail();
 
         return DB::transaction(function () use ($tarea, $usuario, $modalidad, $motivo, $versionEsperada, $pedido) {
+            \App\Models\ControlPedidos\PedidoBma::query()->lockForUpdate()->findOrFail($tarea->pedido_bma_id);
+
             $tarea = PedidoBmaTareaPreparacion::query()->lockForUpdate()->findOrFail($tarea->id);
+            if (in_array($tarea->estado, self::ESTADOS_BLOQUEADOS, true) || $pedido->tareaPreparacionVigente()->whereKeyNot($tarea->id)->exists()) {
+                throw ValidationException::withMessages(['estado' => 'La solicitud cambió o ya existe otra preparación vigente.']);
+            }
+
             if ($versionEsperada !== null && (int) $tarea->version !== $versionEsperada) {
                 throw ValidationException::withMessages([
                     'version' => 'Otra persona modificó esta tarea. Actualice la página e intente de nuevo.',

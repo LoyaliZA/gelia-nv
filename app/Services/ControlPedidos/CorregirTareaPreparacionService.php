@@ -51,6 +51,13 @@ class CorregirTareaPreparacionService
         }
 
         return DB::transaction(function () use ($tareaAnterior, $usuario, $almacenId, $productos, $observaciones, $pedido) {
+            \App\Models\ControlPedidos\PedidoBma::query()->lockForUpdate()->findOrFail($tareaAnterior->pedido_bma_id);
+            $tareaAnterior = PedidoBmaTareaPreparacion::query()->lockForUpdate()->findOrFail($tareaAnterior->id);
+            if ($tareaAnterior->estado !== PedidoBmaTareaPreparacion::ESTADO_CON_INCIDENCIA || $pedido->tareaPreparacionVigente()->whereKeyNot($tareaAnterior->id)->exists()) {
+                throw ValidationException::withMessages(['estado' => 'La solicitud cambió o ya existe otra preparación vigente.']);
+            }
+
+
             $this->transicionService->ejecutar(
                 $tareaAnterior,
                 PedidoBmaTareaPreparacion::ESTADO_CANCELADA,

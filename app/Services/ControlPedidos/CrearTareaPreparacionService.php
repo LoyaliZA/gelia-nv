@@ -49,6 +49,40 @@ class CrearTareaPreparacionService
         ?string $idempotenciaClave = null,
         array $entregaMunicipal = [],
         array $meta = [],
+        ?array $baseCaptura = null,
+    ): PedidoBmaTareaPreparacion {
+        $baseCaptura ??= ['revision_esperada' => (int) $pedido->revision_registro, 'base_captura' => $pedido->base_captura];
+        $hash = \App\Support\ControlPedidos\HuellaSolicitudPedido::de([$pedido->id, $usuario->id, $codigoModalidad, $almacenId, $observaciones, $entregaMunicipal, $meta]);
+        try {
+        return DB::transaction(function () use ($pedido, $usuario, $codigoModalidad, $almacenId, $observaciones, $idempotenciaClave, $entregaMunicipal, $meta, $baseCaptura, $hash) {
+            $pedido = PedidoBma::query()->lockForUpdate()->findOrFail($pedido->id);
+            if (!VisibilidadPedidoBma::puedeMutarComoVendedora($usuario, $pedido)) throw new \RuntimeException('No tiene permiso para solicitar preparación en este pedido.');
+            if ($idempotenciaClave) {
+                $existente = PedidoBmaTareaPreparacion::where('idempotencia_clave', $idempotenciaClave)->first();
+                if ($existente) {
+                    if ((int) $existente->pedido_bma_id !== (int) $pedido->id || !hash_equals((string) $existente->solicitud_hash, $hash)) throw new \App\Exceptions\ControlPedidos\ConflictoCapturaPedido('La clave de preparación corresponde a otra solicitud.');
+                    return $existente;
+                }
+            }
+            if ($baseCaptura !== null) \App\Support\ControlPedidos\RevisionCapturaPedido::comprobar($pedido, $baseCaptura);
+            $tarea = $this->crear($pedido, $usuario, $codigoModalidad, $almacenId, $observaciones, $idempotenciaClave, $entregaMunicipal, $meta);
+            $tarea->forceFill(['solicitud_hash' => $hash])->save();
+            return $tarea;
+        }, 3);
+        } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
+            throw new \App\Exceptions\ControlPedidos\ConflictoCapturaPedido('La clave de preparación ya está en uso. Revise la solicitud.');
+        }
+    }
+
+    private function crear(
+        PedidoBma $pedido,
+        User $usuario,
+        string $codigoModalidad,
+        int $almacenId,
+        ?string $observaciones = null,
+        ?string $idempotenciaClave = null,
+        array $entregaMunicipal = [],
+        array $meta = [],
     ): PedidoBmaTareaPreparacion {
         if (! $this->config->activo() || ! $this->config->usuarioHabilitado($usuario)) {
             throw ValidationException::withMessages([

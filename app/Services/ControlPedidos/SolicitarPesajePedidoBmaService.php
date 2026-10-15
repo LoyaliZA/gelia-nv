@@ -2,9 +2,11 @@
 
 namespace App\Services\ControlPedidos;
 
+use App\Models\Almacen;
 use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Models\User;
+use App\Support\ControlPedidos\AlmacenPdv;
 use Illuminate\Support\Facades\DB;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
 use App\Support\ControlPedidos\MaquinaEstadosPedidoBma;
@@ -17,7 +19,19 @@ class SolicitarPesajePedidoBmaService
         private PreparacionTiendaConfig $preparacionConfig,
     ) {}
 
-    public function ejecutar(PedidoBma $pedido, int $usuarioId): PedidoBma
+    public function ejecutar(PedidoBma $pedido, int $usuarioId, ?array $baseCaptura = null): PedidoBma
+    {
+        $baseCaptura ??= ['revision_esperada' => (int) $pedido->revision_registro, 'base_captura' => $pedido->base_captura];
+        return DB::transaction(function () use ($pedido, $usuarioId, $baseCaptura) {
+            $pedido = PedidoBma::query()->lockForUpdate()->findOrFail($pedido->id);
+            app(ListarPedidosBmaService::class)->asegurarAcceso($pedido, User::findOrFail($usuarioId));
+            $replay = $pedido->estatus_envio === PedidoBma::ESTATUS_ENVIO_PENDIENTE_PESAJE && $pedido->estatus?->fase_ciclo === CatalogoEstatusPedido::FASE_PESAJE_PENDIENTE && !$pedido->tienePesajeRespondido();
+            if (!$replay) \App\Support\ControlPedidos\RevisionCapturaPedido::comprobar($pedido, $baseCaptura);
+            return $this->solicitar($pedido, $usuarioId);
+        }, 3);
+    }
+
+    private function solicitar(PedidoBma $pedido, int $usuarioId): PedidoBma
     {
         $pedido->loadMissing(['estatus', 'origen']);
         $fase = $pedido->estatus?->fase_ciclo;
@@ -47,12 +61,9 @@ class SolicitarPesajePedidoBmaService
         }
 
         $usuario = User::find($usuarioId);
-        if ($pedido->esConsultaMercancia()
-            && $usuario
-            && $this->preparacionConfig->activo()
-            && $this->preparacionConfig->usuarioHabilitado($usuario)) {
+        if ($usuario && $this->consultaCedisBloqueadaPorSalidaTienda($pedido, $usuario)) {
             throw new \RuntimeException(
-                'Este pedido debe solicitar preparación en Tienda. Use la opción de recolección en tienda.'
+                'La salida es un almacén de Tienda. Solicite la preparación en ese almacén; la consulta de mercancía de CEDIS no aplica.'
             );
         }
 
@@ -113,5 +124,23 @@ class SolicitarPesajePedidoBmaService
                 'cliente', 'estatus', 'documentos', 'cajas.tipoCaja', 'cajas.tipoGuia', 'tipoCaja', 'origen',
             ]);
         });
+    }
+
+    /**
+     * La consulta CEDIS se conserva si la salida no es un PDV habilitado para preparación.
+     * El origen comercial Tienda no basta para bloquearla.
+     */
+    private function consultaCedisBloqueadaPorSalidaTienda(PedidoBma $pedido, User $usuario): bool
+    {
+        if (! $pedido->esConsultaMercancia() || ! $this->preparacionConfig->activo() || ! $this->preparacionConfig->usuarioHabilitado($usuario)) {
+            return false;
+        }
+
+        $almacenId = (int) $pedido->almacen_id;
+        if ($almacenId <= 0 || ! $this->preparacionConfig->almacenPermitido($almacenId)) {
+            return false;
+        }
+
+        return AlmacenPdv::esAlmacen(Almacen::query()->find($almacenId));
     }
 }

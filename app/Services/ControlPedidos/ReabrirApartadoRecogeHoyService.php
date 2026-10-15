@@ -25,6 +25,11 @@ class ReabrirApartadoRecogeHoyService
     {
         abort_unless($usuario->can('control_pedidos.preparacion.solicitar'), 403);
         DB::transaction(function () use ($tarea, $usuario, $motivo, $version, $archivo) {
+            $pedidoBloqueado = PedidoBma::query()->lockForUpdate()->findOrFail($tarea->pedido_bma_id);
+            if ($pedidoBloqueado->tareaPreparacionVigente()->whereKeyNot($tarea->id)->exists()) {
+                throw ValidationException::withMessages(['estado' => 'Ya existe otra solicitud de preparación vigente.']);
+            }
+
             $tarea = PedidoBmaTareaPreparacion::query()->lockForUpdate()->findOrFail($tarea->id);
             $tarea->load(['pedido', 'modalidad']);
             abort_unless(VisibilidadPedidoBma::puedeMutarComoVendedora($usuario, $tarea->pedido), 403);

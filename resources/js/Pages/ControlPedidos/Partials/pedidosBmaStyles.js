@@ -1160,11 +1160,17 @@ export const textoWhatsAppPedido = (pedido) => {
 };
 
 /**
- * Consulta CEDIS en modo revisión de mercancía (sin pesaje obligatorio).
- * Origen sin logística, o paquetería local/regional con requiere_peso === false.
- * Sin paquetería: pesaje (conservador).
+ * Consulta CEDIS en modo revisión de mercancía (sin kilogramos obligatorios).
+ * Solo el origen sin logística. Una tarifa local con requiere_peso false sigue siendo pesaje.
  */
 export const pedidoModoRevisionMercancia = (pedido, paqueteria, requiereLogistica = true) => requiereLogistica === false;
+
+/** Misma regla que PedidoBma::consultaCedisModoRevisionMercancia. No usa la tarifa. */
+export const cedisConsultaEsRevisionMercancia = (pedido) => Boolean(
+    pedido?.consulta_cedis_modo_revision_mercancia
+    || pedido?.es_consulta_mercancia
+    || pedido?.origen?.requiere_logistica === false
+);
 
 /** Espeja EnviarPedidoBmaService::validarCamposRequeridos para feedback inmediato en UI. */
 export const validarCamposEnvioPedido = (data, {
@@ -1182,6 +1188,9 @@ export const validarCamposEnvioPedido = (data, {
     manualDireccionCompleta = null,
     detalleCajas = false,
     cajasPesaje = [],
+    enRutaPreparacionTienda = false,
+    preparacionPesoObligatorio = false,
+    preparacionPesoCapturado = false,
 } = {}) => {
     const faltantes = [];
     const modoRevisionMercancia = pedidoModoRevisionMercancia(null, paqueteria, requiereLogistica);
@@ -1207,7 +1216,9 @@ export const validarCamposEnvioPedido = (data, {
     if (requiereLogistica && !esResguardoComplementario && !tienePesajeRespondido) {
         return {
             valido: false,
-            faltantes: [modoRevisionMercancia ? 'consulta CEDIS' : 'pesaje CEDIS'],
+            faltantes: [enRutaPreparacionTienda
+                ? 'respuesta de Tienda'
+                : (modoRevisionMercancia ? 'consulta CEDIS' : 'pesaje CEDIS')],
             claves: ['pesaje'],
             mensaje: 'Hay campos faltantes.',
         };
@@ -1239,7 +1250,13 @@ export const validarCamposEnvioPedido = (data, {
     }
 
     if (requiereLogistica) {
-        if (tienePesajeRespondido && !modoRevisionMercancia) {
+        if (enRutaPreparacionTienda) {
+            const pesoCapturado = preparacionPesoCapturado
+                || (data.peso_real_kg !== '' && data.peso_real_kg != null && Number(data.peso_real_kg) > 0);
+            if (preparacionPesoObligatorio && !pesoCapturado) {
+                marcar('peso_real', 'peso real (preparación de Tienda)');
+            }
+        } else if (tienePesajeRespondido && !modoRevisionMercancia) {
             if (data.peso_real_kg === '' || data.peso_real_kg == null) marcar('peso_real', 'peso real (pesaje CEDIS)');
             if (!data.catalogo_tipo_caja_id) marcar('tipo_caja', 'tipo de caja (pesaje CEDIS)');
             if (data.numero_cajas === '' || data.numero_cajas == null) marcar('numero_envios', 'número de envíos (pesaje CEDIS)');

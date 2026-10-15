@@ -23,7 +23,9 @@ class PedidoBma extends Model
 {
     use BelongsToUsuario, SoftDeletes;
 
-    protected $appends = ['requiere_sucursal_destino', 'solicitud_preparacion'];
+    protected $appends = ['requiere_sucursal_destino', 'solicitud_preparacion', 'base_captura'];
+
+    protected $hidden = ['captura_creacion_clave', 'captura_creacion_hash', 'captura_creacion_base'];
 
     protected $table = 'pedidos_bma';
 
@@ -84,6 +86,11 @@ class PedidoBma extends Model
         self::DOCUMENTO_INICIAL_PEDIDO,
         self::DOCUMENTO_INICIAL_OTRO,
     ];
+
+    public function getBaseCapturaAttribute(): string
+    {
+        return \App\Support\ControlPedidos\RevisionCapturaPedido::base($this);
+    }
 
     protected $fillable = [
         'folio',
@@ -705,9 +712,24 @@ class PedidoBma extends Model
         );
     }
 
+    /**
+     * Hay una tarea de Tienda todavía en curso. Una tarea respondida, liberada o cancelada no cuenta.
+     */
     public function usaPreparacionTienda(): bool
     {
-        return $this->exists && $this->tareasPreparacion()->exists();
+        return $this->exists && $this->tareaPreparacionVigente()->exists();
+    }
+
+    /** La última preparación de Tienda ya fue respondida o recibida en CEDIS. No reabre una tarea. */
+    public function preparacionTiendaRespondida(): bool
+    {
+        return $this->exists && $this->tareaPreparacionRespondida()->exists();
+    }
+
+    /** Cierre, espera de pago y textos de una preparación que sigue siendo el recorrido de este pedido. */
+    public function enRutaPreparacionTienda(): bool
+    {
+        return $this->usaPreparacionTienda() || $this->preparacionTiendaRespondida();
     }
 
     public function pesajeRespondidoPor(): BelongsTo
@@ -821,7 +843,7 @@ class PedidoBma extends Model
             return false;
         }
 
-        if ($this->usaPreparacionTienda()) {
+        if ($this->enRutaPreparacionTienda()) {
             if ($this->tareasPreparacion()->where('requiere_traslado_cedis', true)->exists()) {
                 return $this->todasTareasTrasladoRecibidas();
             }

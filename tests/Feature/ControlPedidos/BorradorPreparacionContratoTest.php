@@ -58,6 +58,8 @@ class BorradorPreparacionContratoTest extends TestCase
 
         $respuesta = $this->actingAs($this->usuario)->postJson('/control-pedidos/autoguardar', [
             'pedido_id' => $pedido->id,
+            'revision_esperada' => (int) $pedido->fresh()->revision_registro,
+            'base_captura' => $pedido->fresh()->base_captura,
             'origen_id' => $pedido->origen_id,
             'almacen_id' => $pedido->almacen_id,
             'comentarios_drive' => 'Dejar en mostrador',
@@ -127,6 +129,8 @@ class BorradorPreparacionContratoTest extends TestCase
 
         $this->actingAs($this->usuario)->postJson('/control-pedidos/autoguardar', [
             'pedido_id' => $pedido->id,
+            'revision_esperada' => (int) $pedido->fresh()->revision_registro,
+            'base_captura' => $pedido->fresh()->base_captura,
             'comentarios_drive' => 'Nota previa',
         ])->assertOk();
 
@@ -166,6 +170,8 @@ class BorradorPreparacionContratoTest extends TestCase
 
         $this->actingAs($this->usuario)->postJson('/control-pedidos/autoguardar', [
             'pedido_id' => $pedido->id,
+            'revision_esperada' => (int) $pedido->fresh()->revision_registro,
+            'base_captura' => $pedido->fresh()->base_captura,
             'numero_cajas' => 0,
             'aplica_seguro' => false,
             'prioridad_md' => false,
@@ -192,6 +198,8 @@ class BorradorPreparacionContratoTest extends TestCase
 
         $this->actingAs($this->usuario)->postJson('/control-pedidos/autoguardar', [
             'pedido_id' => $pedido->id,
+            'revision_esperada' => (int) $pedido->fresh()->revision_registro,
+            'base_captura' => $pedido->fresh()->base_captura,
             'comentarios_drive' => 'Sin preparación',
         ])->assertOk();
 
@@ -228,6 +236,8 @@ class BorradorPreparacionContratoTest extends TestCase
 
         $this->actingAs($this->usuario)->postJson('/control-pedidos/autoguardar', [
             'pedido_id' => $pedido->id,
+            'revision_esperada' => (int) $pedido->fresh()->revision_registro,
+            'base_captura' => $pedido->fresh()->base_captura,
             'solicitud_preparacion' => [
                 'codigo_modalidad' => 'ENVIO_MUNICIPIO',
                 'entrega_municipal' => [
@@ -258,6 +268,8 @@ class BorradorPreparacionContratoTest extends TestCase
 
         $this->actingAs($this->usuario)->postJson('/control-pedidos/autoguardar', [
             'pedido_id' => $pedido->id,
+            'revision_esperada' => (int) $pedido->fresh()->revision_registro,
+            'base_captura' => $pedido->fresh()->base_captura,
             'solicitud_preparacion' => [
                 'codigo_modalidad' => 'ENVIO_BODEGA_NORMAL',
             ],
@@ -277,6 +289,8 @@ class BorradorPreparacionContratoTest extends TestCase
 
         $respuesta = $this->actingAs($this->usuario)->postJson('/control-pedidos/autoguardar', [
             'pedido_id' => $pedido->id,
+            'revision_esperada' => (int) $pedido->fresh()->revision_registro,
+            'base_captura' => $pedido->fresh()->base_captura,
             'comentarios_drive' => 'Nota que no debe confirmarse',
             'solicitud_preparacion' => [
                 'version' => 1,

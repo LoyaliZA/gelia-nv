@@ -28,11 +28,18 @@ class ActualizarPedidoBmaService
 
     public function ejecutar(PedidoBma $pedido, array $datos, int $usuarioId): PedidoBma
     {
+        $datos['revision_esperada'] ??= (int) $pedido->revision_registro;
+        $datos['base_captura'] ??= \App\Support\ControlPedidos\RevisionCapturaPedido::base($pedido);
         if (!$pedido->esEditablePorVendedora()) {
             throw new \RuntimeException('Este pedido no puede editarse en su estado actual.');
         }
 
         return DB::transaction(function () use ($pedido, $datos, $usuarioId) {
+            $pedido = PedidoBma::query()->lockForUpdate()->findOrFail($pedido->id);
+            \App\Support\ControlPedidos\RevisionCapturaPedido::comprobar($pedido, $datos);
+            app(ListarPedidosBmaService::class)->asegurarAcceso($pedido, User::findOrFail($usuarioId));
+            if (!$pedido->esEditablePorVendedora()) throw new \App\Exceptions\ControlPedidos\ConflictoCapturaPedido('El pedido ya no admite edición. Recargue para revisar su estado.');
+
             $clienteId = $pedido->cliente_id;
             if (!empty($datos['cliente_id'])) {
                 $clienteId = (int) $datos['cliente_id'];
@@ -135,6 +142,7 @@ class ActualizarPedidoBmaService
                 );
             }
 
+            $pedido->increment('revision_registro');
             return $pedido->fresh(['cliente', 'estatus', 'envioTienda', 'documentos', 'almacen', 'banco', 'cajas.tipoCaja', 'cajas.tipoGuia', 'direccionVigente', 'sucursalDestino']);
         });
     }
@@ -235,7 +243,7 @@ class ActualizarPedidoBmaService
         ];
 
         foreach ($datos as $clave => $valor) {
-            if (in_array($clave, ['solicitud_preparacion', 'prioridad_md', 'comprobantes', 'documentos_eliminar', 'enviar', 'pedido_id', 'updated_at_esperado'], true)) {
+            if (in_array($clave, ['solicitud_preparacion', 'prioridad_md', 'comprobantes', 'documentos_eliminar', 'enviar', 'pedido_id', 'updated_at_esperado', 'revision_esperada', 'base_captura', 'captura_clave'], true)) {
                 continue;
             }
             $semilla[$clave] = $valor;

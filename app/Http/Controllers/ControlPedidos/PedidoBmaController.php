@@ -95,19 +95,24 @@ class PedidoBmaController extends Controller
         ]);
     }
 
-    public function store(StorePedidoBmaRequest $request, CrearPedidoBmaService $crearService, EnviarPedidoBmaService $enviarService): RedirectResponse
+    public function store(StorePedidoBmaRequest $request, CrearPedidoBmaService $crearService, EnviarPedidoBmaService $enviarService)
     {
         try {
             $pedido = $crearService->ejecutar($request->validated(), Auth::id());
 
             if ($request->boolean('enviar')) {
                 $enviarService->ejecutar($pedido, Auth::id());
+                if ($request->expectsJson()) return $this->capturaConfirmada($pedido);
                 return redirect()->back()->with('success', 'Pedido enviado al auxiliar.');
             }
+        } catch (\App\Exceptions\ControlPedidos\ConflictoCapturaPedido $e) {
+            throw $e;
         } catch (\InvalidArgumentException|\RuntimeException $e) {
+            if ($request->expectsJson()) return response()->json(['message' => $e->getMessage()], 422);
             return redirect()->back()->with('error', $e->getMessage());
         }
 
+        if ($request->expectsJson()) return $this->capturaConfirmada($pedido);
         return redirect()->back()->with('success', 'Pedido guardado como borrador.');
     }
 
@@ -120,7 +125,6 @@ class PedidoBmaController extends Controller
     ) {
         $datos = $request->validated();
         $pedidoId = $datos['pedido_id'] ?? null;
-        $updatedEsperado = $datos['updated_at_esperado'] ?? null;
         unset(
             $datos['comprobantes'],
             $datos['enviar'],
@@ -139,41 +143,35 @@ class PedidoBmaController extends Controller
                 if (! $pedido->esEditablePorVendedora()) {
                     return response()->json(['message' => 'Este pedido ya no admite autoguardado.'], 422);
                 }
-                if ($updatedEsperado) {
-                    $esperado = \Illuminate\Support\Carbon::parse($updatedEsperado)->timestamp;
-                    $actual = optional($pedido->updated_at)->timestamp;
-                    if ($actual && abs($actual - $esperado) > 1) {
-                        \Illuminate\Support\Facades\Log::info('control_pedidos.autosave_conflicto', [
-                            'pedido_bma_id' => $pedido->id,
-                            'updated_at' => optional($pedido->updated_at)?->toIso8601String(),
-                        ]);
-
-                        return response()->json([
-                            'message' => 'El pedido cambió en otro lugar. Recargue antes de seguir editando.',
-                            'updated_at' => optional($pedido->updated_at)?->toIso8601String(),
-                            'progreso' => $progresoService->calcular($pedido),
-                        ], 409);
-                    }
-                }
+                \App\Support\ControlPedidos\RevisionCapturaPedido::comprobar($pedido, $datos);
                 $pedido = $actualizarService->ejecutar($pedido, $datos, Auth::id());
             } else {
                 $pedido = $crearService->ejecutar($datos, Auth::id());
             }
+        } catch (\App\Exceptions\ControlPedidos\ConflictoCapturaPedido $e) {
+            throw $e;
         } catch (\InvalidArgumentException|\RuntimeException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
-        $pedido = $pedido->fresh(['origen', 'estatus', 'documentos', 'paqueteria', 'zona', 'tipoGuia']);
+        $pedido->load(['origen', 'estatus', 'documentos', 'paqueteria', 'zona', 'tipoGuia']);
 
         return response()->json([
             'id' => $pedido->id,
             'folio' => $pedido->folio,
+            'revision_registro' => (int) $pedido->revision_registro,
+            'base_captura' => $pedido->base_captura,
             'saved_at' => now()->toIso8601String(),
             'updated_at' => optional($pedido->updated_at)?->toIso8601String(),
             'progreso' => $progresoService->calcular($pedido),
             'prioridad_md' => (bool) $pedido->prioridad_md,
             'solicitud_preparacion' => $pedido->solicitud_preparacion,
         ]);
+    }
+
+    private function capturaConfirmada(PedidoBma $pedido)
+    {
+        return response()->json(['id' => $pedido->id, 'folio' => $pedido->folio, 'revision_registro' => (int) $pedido->revision_registro, 'base_captura' => $pedido->base_captura, 'updated_at' => $pedido->updated_at?->toIso8601String(), 'solicitud_preparacion' => $pedido->solicitud_preparacion, 'prioridad_md' => (bool) $pedido->prioridad_md]);
     }
 
     public function candidatosPrincipal(Request $request): JsonResponse
@@ -225,23 +223,29 @@ class PedidoBmaController extends Controller
         ListarPedidosBmaService $listarService,
         ActualizarPedidoBmaService $actualizarService,
         EnviarPedidoBmaService $enviarService
-    ): RedirectResponse {
+    ) {
         if (! Auth::user()->can('control_pedidos.editar') && ! Auth::user()->can('control_pedidos.crear')) {
             abort(403);
         }
         $listarService->asegurarAcceso($pedidoBma, Auth::user());
 
         try {
+            \App\Support\ControlPedidos\RevisionCapturaPedido::comprobar($pedidoBma, $request->validated());
             $pedido = $actualizarService->ejecutar($pedidoBma, $request->validated(), Auth::id());
 
             if ($request->boolean('enviar')) {
                 $enviarService->ejecutar($pedido, Auth::id());
+                if ($request->expectsJson()) return $this->capturaConfirmada($pedido);
                 return redirect()->back()->with('success', 'Pedido enviado al auxiliar.');
             }
+        } catch (\App\Exceptions\ControlPedidos\ConflictoCapturaPedido $e) {
+            throw $e;
         } catch (\InvalidArgumentException|\RuntimeException $e) {
+            if ($request->expectsJson()) return response()->json(['message' => $e->getMessage()], 422);
             return redirect()->back()->with('error', $e->getMessage());
         }
 
+        if ($request->expectsJson()) return $this->capturaConfirmada($pedido);
         return redirect()->back()->with('success', 'Pedido actualizado correctamente.');
     }
 
@@ -537,15 +541,19 @@ class PedidoBmaController extends Controller
 
     public function solicitarPesaje(
         PedidoBma $pedidoBma,
+        Request $request,
         ListarPedidosBmaService $listarService,
         SolicitarPesajePedidoBmaService $service
-    ): RedirectResponse {
+    ) {
         Gate::authorize('control_pedidos.crear');
         $listarService->asegurarAcceso($pedidoBma, Auth::user());
 
         try {
-            $service->ejecutar($pedidoBma->load(['estatus', 'origen']), Auth::id());
+            $service->ejecutar($pedidoBma->load(['estatus', 'origen']), Auth::id(), $request->only(['revision_esperada', 'base_captura']));
+        } catch (\App\Exceptions\ControlPedidos\ConflictoCapturaPedido $e) {
+            throw $e;
         } catch (Throwable $e) {
+            if ($request->expectsJson()) return response()->json(['message' => $e->getMessage()], 422);
             return $this->responderErrorOperacionPedido(
                 $e,
                 $pedidoBma,
@@ -554,6 +562,7 @@ class PedidoBmaController extends Controller
             );
         }
 
+        if ($request->expectsJson()) return response()->json(['ok' => true]);
         return redirect()->back()->with('success', 'Consulta de pesaje enviada a CEDIS.');
     }
 
@@ -562,7 +571,7 @@ class PedidoBmaController extends Controller
         PedidoBma $pedidoBma,
         ListarPedidosBmaService $listarService,
         CrearTareaPreparacionService $service,
-    ): RedirectResponse {
+    ) {
         $listarService->asegurarAcceso($pedidoBma, Auth::user());
 
         try {
@@ -593,8 +602,12 @@ class PedidoBmaController extends Controller
                     'tipo_referencia' => $datos['tipo_referencia'] ?? null,
                     'lineas' => $datos['lineas'] ?? [],
                 ],
+                $request->only(['revision_esperada', 'base_captura']),
             );
+        } catch (\App\Exceptions\ControlPedidos\ConflictoCapturaPedido $e) {
+            throw $e;
         } catch (Throwable $e) {
+            if ($request->expectsJson()) return response()->json(['message' => $e->getMessage()], 422);
             return $this->responderErrorOperacionPedido(
                 $e,
                 $pedidoBma,
@@ -603,6 +616,7 @@ class PedidoBmaController extends Controller
             );
         }
 
+        if ($request->expectsJson()) return response()->json(['ok' => true]);
         return redirect()->back()->with('success', 'Solicitud de preparación enviada a Tienda.');
     }
 

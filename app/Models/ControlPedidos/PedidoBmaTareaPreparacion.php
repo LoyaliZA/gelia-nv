@@ -106,7 +106,7 @@ class PedidoBmaTareaPreparacion extends Model
         'destinatario_es_cliente',
         'requiere_traslado_cedis',
         'tarea_anterior_id',
-        'idempotencia_clave',
+        'idempotencia_clave', 'solicitud_hash',
         'version',
     ];
 

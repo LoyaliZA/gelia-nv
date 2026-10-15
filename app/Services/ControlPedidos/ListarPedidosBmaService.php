@@ -134,6 +134,21 @@ class ListarPedidosBmaService
         $pedido->setAttribute('progreso', $this->progreso->calcular($pedido));
         app(AnexarEstatusSucursalPedidoBmaService::class)->ejecutar($pedido);
         $pedido->setAttribute('usa_preparacion_tienda', $pedido->usaPreparacionTienda());
+        $enRutaPreparacion = $pedido->enRutaPreparacionTienda();
+        $pedido->setAttribute('en_ruta_preparacion_tienda', $enRutaPreparacion);
+        $pesoPreparacionObligatorio = false;
+        $pesoPreparacionCapturado = false;
+        if ($enRutaPreparacion) {
+            $tareaRuta = $pedido->tareaPreparacionVigente ?? $pedido->tareaPreparacionRespondida;
+            if ($tareaRuta) {
+                $reqRuta = app(CalcularRequisitosPreparacionService::class)->efectivos($tareaRuta);
+                $pesoPreparacionObligatorio = (bool) ($reqRuta['peso_real_obligatorio'] ?? false);
+                $pesoRuta = $tareaRuta->peso_real_kg ?? $pedido->peso_real_kg;
+                $pesoPreparacionCapturado = $pesoRuta !== null && $pesoRuta !== '' && (float) $pesoRuta > 0;
+            }
+        }
+        $pedido->setAttribute('preparacion_peso_real_obligatorio', $pesoPreparacionObligatorio);
+        $pedido->setAttribute('preparacion_peso_capturado', $pesoPreparacionCapturado);
         $pedido->setAttribute('tiene_traslado_cedis_pendiente', $pedido->tieneTrasladoCedisPendiente());
         $pedido->setAttribute('tiene_caratula_municipal_pendiente', $pedido->tieneCaratulaMunicipalPendiente());
         $pedido->setAttribute('tarea_preparacion', $this->serializarTareaPreparacion(
@@ -155,7 +170,7 @@ class ListarPedidosBmaService
         $pedido->setAttribute('puede_espera_pago', $puedeEditar
             && ! $pedido->estaEsperandoPago()
             && ! $canc
-            && $pedido->usaPreparacionTienda()
+            && $pedido->enRutaPreparacionTienda()
             && in_array($pedido->tarea_preparacion['estado'] ?? '', ['RESPONDIDA', 'RECIBIDA_CEDIS'], true));
         $pedido->setAttribute('cancelacion_operativa', $canc ? [
             'id' => $canc->id,

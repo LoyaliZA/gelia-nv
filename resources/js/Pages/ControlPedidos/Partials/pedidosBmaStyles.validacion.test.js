@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { calcularPesoCobradoGuia, esCotizacionLista, pedidoModoRevisionMercancia, soportePedidoDe, validarCamposEnvioPedido } from './pedidosBmaStyles';
+import { calcularPesoCobradoGuia, cedisConsultaEsRevisionMercancia, esCotizacionLista, pedidoModoRevisionMercancia, soportePedidoDe, validarCamposEnvioPedido } from './pedidosBmaStyles';
 
 const baseTienda = {
     folio_remision: 'F-1',
@@ -107,6 +107,48 @@ describe('pedidoModoRevisionMercancia', () => {
         expect(out.claves).not.toContain('peso_real');
         expect(out.claves).not.toContain('tipo_caja');
         expect(out.valido).toBe(true);
+    });
+
+    it('no trata una tarifa local sin peso como consulta de mercancía', () => {
+        const local = {
+            consulta_cedis_modo_revision_mercancia: false,
+            origen: { requiere_logistica: true },
+            paqueteria: { categoria: 'local_regional', requiere_peso: false },
+        };
+        expect(cedisConsultaEsRevisionMercancia(local)).toBe(false);
+        expect(cedisConsultaEsRevisionMercancia({ origen: { requiere_logistica: false } })).toBe(true);
+    });
+
+    it('en preparación de Tienda no pide el detalle de pesaje CEDIS', () => {
+        const datos = {
+            ...baseTienda,
+            catalogo_paqueteria_id: 4,
+            catalogo_tipo_guia_id: 1,
+            catalogo_zona_id: 1,
+            codigo_postal: '86000',
+            domicilio_entrega: 'Calle 1',
+            costo_envio: 40,
+        };
+        const comun = {
+            requiereLogistica: true,
+            tienePesajeRespondido: true,
+            tienePdfPedido: true,
+            pagoPendiente: 0,
+            consultaCerrada: true,
+            requiereConsultaCerrada: true,
+            enRutaPreparacionTienda: true,
+        };
+        const pendiente = validarCamposEnvioPedido(datos, { ...comun, tienePesajeRespondido: false, consultaCerrada: false });
+        expect(pendiente.faltantes).toContain('respuesta de Tienda');
+        expect(pendiente.faltantes).not.toContain('pesaje CEDIS');
+
+        const sinPeso = validarCamposEnvioPedido(datos, comun);
+        expect(sinPeso.claves).not.toContain('peso_real');
+        expect(sinPeso.valido).toBe(true);
+
+        const obligatorio = validarCamposEnvioPedido(datos, { ...comun, preparacionPesoObligatorio: true });
+        expect(obligatorio.claves).toContain('peso_real');
+        expect(obligatorio.faltantes).toContain('peso real (preparación de Tienda)');
     });
 });
 

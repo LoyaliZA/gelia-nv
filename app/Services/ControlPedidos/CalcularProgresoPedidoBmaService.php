@@ -56,7 +56,7 @@ class CalcularProgresoPedidoBmaService
         $cotizacionOk = $this->cotizacionLista($pedido, $requiereLogistica, $respondido, $consultaCerrada);
         $pagoOk = $this->pagoListo($pedido, $cotizacionOk);
 
-        $area = $this->areaRespuesta($pedido);
+        $area = $this->areaRespuesta($pedido, $pendientePesaje && ! $respondido);
 
         $bloqueos = [];
         if ($actualizacionPendiente) {
@@ -340,9 +340,17 @@ class CalcularProgresoPedidoBmaService
         return self::ETAPA_SOLICITUD;
     }
 
-    private function areaRespuesta(PedidoBma $pedido): string
+    private function areaRespuesta(PedidoBma $pedido, bool $esperaRespuesta): string
     {
-        return $pedido->usaPreparacionTienda() ? 'Tienda' : 'CEDIS';
+        if ($pedido->usaPreparacionTienda()) {
+            return 'Tienda';
+        }
+
+        if (! $esperaRespuesta && $pedido->preparacionTiendaRespondida()) {
+            return 'Tienda';
+        }
+
+        return 'CEDIS';
     }
 
     private function accionRecomendada(

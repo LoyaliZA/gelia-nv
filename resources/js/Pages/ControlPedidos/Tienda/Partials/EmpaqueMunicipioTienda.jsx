@@ -42,6 +42,8 @@ export default function EmpaqueMunicipioTienda({ onEnviar = null,  tarea, aparta
         });
     };
 
+    const exigePeso = Boolean(requisitos.peso_real_obligatorio);
+    const tiposEvidencia = TIPOS_EVIDENCIA.filter((tipo) => tipo.key !== 'evidencia_bascula' || exigePeso);
     const tiene = (tipo) => documentos.some((d) => d.tipo_evidencia === tipo);
     const hojaInterna = documentos.some((d) => d.tipo_evidencia === 'hoja_salida_interna');
     const remision = documentos.some((d) => d.tipo_evidencia === 'remision');
@@ -65,8 +67,13 @@ export default function EmpaqueMunicipioTienda({ onEnviar = null,  tarea, aparta
             <p className="text-xs m-0 theme-text-muted">
                 Documental: {remision ? 'Remisión adjunta' : hojaInterna ? 'Hoja interna de salida (no es remisión)' : 'Pendiente al autorizar o adjuntar remisión'}
             </p>
+            <p className="text-xs m-0 theme-text-muted">
+                {exigePeso
+                    ? 'Este transporte exige peso. La foto de báscula bloquea la confirmación del empaque hasta que esté adjunta.'
+                    : 'Este transporte no exige peso. La foto de báscula no bloquea el empaque. El bulto, la carátula y la entrega al transporte sí.'}
+            </p>
             <ul className="text-xs m-0 space-y-1">
-                {TIPOS_EVIDENCIA.map(({ key, label }) => (
+                {tiposEvidencia.map(({ key, label }) => (
                     <li key={key} className={tiene(key) ? 'font-semibold theme-text-exito' : 'theme-text-muted'}>
                         {tiene(key) ? '✓' : '○'} {label}
                     </li>
@@ -75,7 +82,7 @@ export default function EmpaqueMunicipioTienda({ onEnviar = null,  tarea, aparta
             {apartado.estado === 'LISTA_PARA_SALIDA' && puedeEmpacar && (
                 <>
                     <div className="flex flex-wrap gap-2">
-                        {TIPOS_EVIDENCIA.map(({ key, label }) => (
+                        {tiposEvidencia.map(({ key, label }) => (
                             <label key={key} className={`${BTN_SECONDARY} cursor-pointer text-xs`}>
                                 {label}
                                 <input type="file" accept="image/*" className="hidden" onChange={(e) => subir(key, e.target.files?.[0])} />
