@@ -90,8 +90,15 @@ trait ResuelveDatosPedidoBma
         $envioParaSeguro = $this->envioBaseSinReexpedicion($datos, $envio);
         $aplicaSeguro = $calc->tieneCobertura($paqueteria?->nombre)
             && filter_var($datos['aplica_seguro'] ?? false, FILTER_VALIDATE_BOOLEAN);
+        $basesCapturadas = array_key_exists('total_mercancia', $datos)
+            && $datos['total_mercancia'] !== ''
+            && $datos['total_mercancia'] !== null
+            && array_key_exists('costo_envio', $datos)
+            && $datos['costo_envio'] !== ''
+            && $datos['costo_envio'] !== null;
+        // Sin mercancía y flete capturados, DHL no debe inventar la cuota fija de $51.
         $costo = $aplicaSeguro
-            ? $calc->calcularCosto($paqueteria?->nombre, $envioParaSeguro, $mercancia)
+            ? ($basesCapturadas ? $calc->calcularCosto($paqueteria?->nombre, $envioParaSeguro, $mercancia) : 0.0)
             : 0.0;
 
         return [

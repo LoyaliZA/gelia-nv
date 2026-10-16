@@ -8,7 +8,6 @@ import {
     THEME_MODAL_OVERLAY, THEME_MODAL_SHELL, BTN_PRIMARY, BTN_SECONDARY, deferModalAction,
     formatearFechaHoraAuditoria,
 } from './pedidosBmaStyles';
-import useDispositivoCampo from '../../Activos/Partials/useDispositivoCampo';
 import VisorPdfPaginas from './VisorPdfPaginas';
 
 const esPdf = (doc) => {
@@ -47,8 +46,6 @@ export default function ModalVistaPreviaDocumento({
     const [idx, setIdx] = useState(0);
     const [zoom, setZoom] = useState(1);
     const [rotacion, setRotacion] = useState(0);
-    const { esCampo, esMovil } = useDispositivoCampo();
-
     const ir = useCallback((delta) => {
         setIdx((prev) => {
             const len = lista.length || 1;
@@ -93,7 +90,6 @@ export default function ModalVistaPreviaDocumento({
     const pdf = esPdf(actual);
     const imagen = esImagen(actual);
     const titulo = actual.nombre_original || actual.tipo || 'Vista previa';
-    const pdfEnPaginas = pdf && (esCampo || esMovil);
 
     const cerrar = (e) => {
         e?.stopPropagation?.();
@@ -109,8 +105,8 @@ export default function ModalVistaPreviaDocumento({
             <div
                 {...dialog}
                 aria-label="Visor de evidencia"
-                className={`${THEME_MODAL_SHELL} gelia-pedidos-dialog-workspace max-w-5xl w-full flex flex-col`}
-                style={{ maxHeight: 'calc(100dvh - 2rem)' }}
+                className={`${THEME_MODAL_SHELL} gelia-pedidos-dialog-workspace w-full max-w-[min(72rem,calc(100vw-1.5rem))] flex flex-col`}
+                style={{ maxHeight: 'calc(100dvh - 1.5rem)' }}
                 onClick={(e) => e.stopPropagation()}
             >
                 <div className="p-5 md:p-6 border-b theme-border flex justify-between items-start gap-3 shrink-0">
@@ -165,16 +161,7 @@ export default function ModalVistaPreviaDocumento({
                         </>
                     )}
                     {pdf ? (
-                        pdfEnPaginas ? (
-                            <VisorPdfPaginas url={actual.url} titulo={titulo} className="w-full self-stretch" />
-                        ) : (
-                            <iframe
-                                src={actual.url}
-                                title={titulo}
-                                className="w-full border-0"
-                                style={{ height: 'min(70vh, calc(100dvh - 14rem))' }}
-                            />
-                        )
+                        <VisorPdfPaginas url={actual.url} titulo={titulo} className="w-full self-stretch" maxHeight="min(82dvh, calc(100dvh - 8rem))" />
                     ) : imagen ? (
                         <img
                             src={actual.url}

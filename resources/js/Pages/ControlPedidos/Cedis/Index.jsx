@@ -170,7 +170,7 @@ export default function Index({
                 <div className="relative min-h-[12rem] space-y-3" aria-busy={cargando}>
                     <div className="flex flex-wrap justify-between items-center gap-2 px-1">
                         <h2 className="text-sm font-semibold theme-text-main m-0">{tabActiva === 'LIBERACIONES' ? 'Liberaciones' : 'Pedidos'}</h2>
-                        <p className="text-xs theme-text-muted m-0 tabular-nums">{(tabActiva === 'LIBERACIONES' ? liberaciones : pedidosVista)?.total ?? 0} resultados{busqueda ? ` para “${busqueda}”` : ''}</p>
+                        <p className="text-xs theme-text-muted m-0 tabular-nums">{(() => { const total = (tabActiva === 'LIBERACIONES' ? liberaciones : pedidosVista)?.total ?? 0; return `${total} ${total === 1 ? 'resultado' : 'resultados'}${busqueda ? ` para “${busqueda}”` : ''}`; })()}</p>
                     </div>
                     <p className="sr-only" role="status">{cargando ? 'Actualizando pedidos…' : 'Listado actualizado'}</p>
                     {cargando && tabActiva !== 'LIBERACIONES' && (

@@ -4,6 +4,7 @@ namespace App\Services\SaldosAFavor;
 
 use App\Models\ControlPedidos\PedidoBma;
 use App\Models\SaldosAFavor\SafPedidoAplicacion;
+use App\Services\ControlPedidos\CalcularTotalesEnvioPedidoService;
 use App\Support\SaldosAFavor\AlcanceSaf;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -34,6 +35,7 @@ class SincronizarAplicacionesPedidoSafService
 
             if ($montoTotal <= 0) {
                 $pedido->saldo_a_favor = 0;
+                $this->refrescarTotalACobrar($pedido);
                 $pedido->save();
 
                 return 0.0;
@@ -62,6 +64,7 @@ class SincronizarAplicacionesPedidoSafService
             }
 
             $pedido->saldo_a_favor = $total;
+            $this->refrescarTotalACobrar($pedido);
             $pedido->save();
 
             return $total;
@@ -101,10 +104,30 @@ class SincronizarAplicacionesPedidoSafService
                     ->where('pedido_bma_id', $pedido->id)
                     ->where('estado', SafPedidoAplicacion::ESTADO_APLICADO)
                     ->sum('monto');
+            $this->refrescarTotalACobrar($pedido);
             $pedido->save();
 
             return (float) $pedido->saldo_a_favor;
         });
+    }
+
+    private function refrescarTotalACobrar(PedidoBma $pedido): void
+    {
+        $totales = app(CalcularTotalesEnvioPedidoService::class)->calcular($pedido);
+        $envio = $totales['incompleto']
+            ? (float) ($pedido->costo_envio ?? 0)
+            : (float) $totales['costo_para_cobertura'];
+        $aplica = (bool) $pedido->aplica_seguro;
+        $seguro = $aplica
+            ? ($totales['incompleto'] ? (float) ($pedido->costo_seguro ?? 0) : (float) $totales['costo_seguro'])
+            : 0.0;
+        $pedido->total_a_cobrar = PedidoBma::calcularTotal(
+            (float) ($pedido->total_mercancia ?? 0),
+            $envio,
+            $aplica,
+            $seguro,
+            (float) ($pedido->saldo_a_favor ?? 0),
+        );
     }
 
     public function liberarReservasPendientes(PedidoBma $pedido, ?int $usuarioId = null): void

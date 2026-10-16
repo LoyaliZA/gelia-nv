@@ -40,6 +40,7 @@ export default function useListadoDiscreto({
     const [metricas, setMetricas] = useState(metricasProp ?? {});
     const [clientes, setClientes] = useState(clientesProp);
     const [cargando, setCargando] = useState(false);
+    const [errorListado, setErrorListado] = useState('');
     const abortRef = useRef(null);
 
     useEffect(() => {
@@ -69,6 +70,7 @@ export default function useListadoDiscreto({
         const controller = new AbortController();
         abortRef.current = controller;
         if (!silencioso) setCargando(true);
+        setErrorListado('');
         try {
             const { data } = await axios.get(route(listadoRoute), {
                 params: paramsLimpios(params),
@@ -84,11 +86,12 @@ export default function useListadoDiscreto({
             return data;
         } catch (err) {
             if (err?.code === 'ERR_CANCELED' || err?.name === 'CanceledError') return null;
+            setErrorListado('No se pudo actualizar el listado. Los resultados en pantalla pueden estar desactualizados.');
             return null;
         } finally {
             if (abortRef.current === controller) setCargando(false);
         }
     }, [listadoRoute, sincronizarUrl]);
 
-    return { pedidos, tareas, metricas, clientes, cargando, cargar };
+    return { pedidos, tareas, metricas, clientes, cargando, errorListado, cargar };
 }

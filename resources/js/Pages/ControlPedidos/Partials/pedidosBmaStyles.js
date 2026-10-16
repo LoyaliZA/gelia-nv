@@ -955,6 +955,7 @@ export const calcularTotalACubrirPedido = ({
     aplicaSeguro = false,
     costoSeguro = 0,
     separarCostoEnvio = null,
+    envioEsBase = false,
 } = {}) => {
     const merc = Number(totalMercancia || 0);
     if (omiteEnvio) {
@@ -962,9 +963,11 @@ export const calcularTotalACubrirPedido = ({
     }
     const rex = Number(costoReexpedicion || 0);
     const envioFull = Number(costoEnvio || 0);
-    const base = typeof separarCostoEnvio === 'function'
-        ? Number(separarCostoEnvio(envioFull, rex)?.base ?? envioFull)
-        : envioFull;
+    const base = envioEsBase
+        ? envioFull
+        : (typeof separarCostoEnvio === 'function'
+            ? Number(separarCostoEnvio(envioFull, rex)?.base ?? envioFull)
+            : envioFull);
     return round2(merc + base + rex + (aplicaSeguro ? Number(costoSeguro || 0) : 0));
 };
 
@@ -1019,15 +1022,17 @@ export const mezclarResumenCoberturaConPedido = (base, vivo) => {
     return {
         ...base,
         ...vivo,
-        cobertura: base.cobertura ?? vivo.cobertura,
-        cubierto: base.cubierto ?? vivo.cubierto,
+        cobertura: vivo.cobertura,
+        cubierto: vivo.cubierto,
         bloqueos: base.bloqueos ?? [],
         tolerancia_aplicada: base.tolerancia_aplicada ?? base.tolerancia,
         revision: base.revision ?? null,
         fuentes_pago: base.fuentes_pago,
         estado_pago: base.estado_pago,
-        diferencia: base.diferencia ?? vivo.diferencia,
-        pendiente: base.pendiente ?? vivo.pendiente,
+        diferencia: vivo.diferencia,
+        pendiente: vivo.pendiente,
+        excedente_generado: vivo.excedente_generado,
+        excedente: vivo.excedente,
     };
 };
 
@@ -1074,6 +1079,26 @@ export const calcSeguroPedido = (nombrePaqueteria, envio, totalMercancia) => ({
     aplica_seguro: paqueteriaTieneCobertura(nombrePaqueteria),
     costo_seguro: calcCostoSeguro(nombrePaqueteria, envio, totalMercancia),
 });
+
+/**
+ * El seguro es del pedido (fórmula de paquetería), no una tarifa por caja.
+ * Si el desglose de envíos está completo, el total calculado va en la primera línea
+ * para que la suma de cajas coincida con la fórmula. Si falta un costo de envío,
+ * no se escribe seguro: un cero contaría como monto y anularía el total legado.
+ */
+export const distribuirSeguroEnLineas = (lineas, costoSeguro) => {
+    const filas = (lineas || []).filter((row) => row?.uuid_operativo);
+    if (!filas.length) return filas;
+    const completas = filas.every((row) => row.costo_envio !== '' && row.costo_envio != null);
+    if (!completas) {
+        return filas.map((row) => {
+            const { costo_seguro: _omitido, ...resto } = row;
+            return resto;
+        });
+    }
+    const monto = Math.round(Number(costoSeguro || 0) * 100) / 100;
+    return filas.map((row, indice) => ({ ...row, costo_seguro: indice === 0 ? monto : 0 }));
+};
 
 /** Etiqueta de costo según categoría de paquetería (comercial vs local/taxi). */
 export const etiquetaCostoEnvio = (paqueteria) => {

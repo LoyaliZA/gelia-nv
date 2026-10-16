@@ -18,6 +18,9 @@ export default function BarraAccionesRevision({
     if (!puedeLiberarResguardo && !esPendiente && !muestraAprobar) return null;
     return (
         <div className="gelia-pedidos-auditoria-acciones flex flex-wrap items-center justify-end gap-2 min-w-0">
+            {(puedeLiberarResguardo || esPendiente) && <details className="gelia-pedidos-acciones-secundarias">
+                <summary>Más acciones</summary>
+                <div className="flex flex-wrap gap-2 pt-2">
             {puedeLiberarResguardo && (
                 <button
                     type="button"
@@ -38,6 +41,8 @@ export default function BarraAccionesRevision({
                     Reportar error
                 </button>
             )}
+                </div>
+            </details>}
             {muestraAprobar && (
                 <button
                     type="button"

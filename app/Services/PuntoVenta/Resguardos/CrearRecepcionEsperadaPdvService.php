@@ -5,6 +5,7 @@ namespace App\Services\PuntoVenta\Resguardos;
 use App\Events\PuntoVenta\RecepcionEsperadaPdvCreada;
 use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\PedidoBma;
+use App\Models\ControlPedidos\PedidoBmaRevisionProducto;
 use App\Models\PuntoVenta\ResguardoPdv;
 use App\Models\PuntoVenta\ResguardoPdvEvento;
 use App\Services\ControlPedidos\ValidarSucursalDestinoPedidoBma;
@@ -118,7 +119,9 @@ class CrearRecepcionEsperadaPdvService
                 'handoff' => self::HANDOFF,
                 'traslado_interno' => $pedido->esTrasladoInternoAPdv(),
                 'inventario_sincronizado' => false,
-                'revision_fisica' => $pedido->revisionesProducto()->get()->toArray(),
+                'revision_fisica' => $pedido->revisionesProducto()
+                ->when(PedidoBmaRevisionProducto::conservaRetiradas(), fn ($q) => $q->whereNull('retirada_at'))
+                ->get()->toArray(),
                 'revisada_por_id' => $pedido->pesaje_respondido_por_id,
                 'revisada_at' => $pedido->pesaje_respondido_at?->toIso8601String(),
                 'envia_a_otra_persona' => (bool) $pedido->envia_a_otra_persona,

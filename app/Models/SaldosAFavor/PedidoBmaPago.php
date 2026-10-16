@@ -92,6 +92,7 @@ class PedidoBmaPago extends Model
 
     protected $fillable = [
         'pedido_bma_id',
+        'idempotency_key',
         'reemplaza_pago_id',
         'numero_exhibicion',
         'monto',

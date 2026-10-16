@@ -53,7 +53,12 @@ class CalcularTotalesEnvioPedidoService
                 $seguroCent += PagosPedidoBmaConfig::aCentavos((string) ($caja->costo_seguro ?? '0'));
                 $adicionalCent += PagosPedidoBmaConfig::aCentavos((string) ($caja->costo_adicional ?? '0'));
             }
-            $paraCobertura = $enviosCent + $adicionalCent;
+            $rexCent = 0;
+            if ($this->config->reexpedicionAlcance() === EnviosPedidoBmaConfig::ALCANCE_PEDIDO) {
+                $pedido->loadMissing('zona');
+                $rexCent = PagosPedidoBmaConfig::aCentavos((string) ($pedido->zona?->costoReexpedicion() ?? 0));
+            }
+            $paraCobertura = $enviosCent + $adicionalCent + $rexCent;
 
             return [
                 'fuente' => self::FUENTE_DETALLE,

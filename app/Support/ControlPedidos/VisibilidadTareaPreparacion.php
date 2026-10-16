@@ -9,6 +9,7 @@ use App\Models\ControlPedidos\PedidoBmaTareaPreparacion;
 use App\Models\User;
 use App\Services\ControlPedidos\PreparacionTiendaConfig;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Schema;
 
 final class VisibilidadTareaPreparacion
 {
@@ -117,7 +118,7 @@ final class VisibilidadTareaPreparacion
                 'orden' => $p->orden,
             ])->values()->all(),
             'piezas_solicitadas' => $tarea->piezasSolicitadas(),
-            'abastecimiento_pendiente' => collect(app(\App\Services\Traspasos\AbastecerPreparacionService::class)->pendientes($tarea))->contains(fn ($p) => $p['comprometidas'] > 0),
+            ...self::abastecimientoPreparacion($tarea),
             'requiere_traslado_cedis' => (bool) $tarea->requiere_traslado_cedis,
             'peso_real_kg' => $tarea->peso_real_kg,
             'peso_volumetrico_kg' => $tarea->peso_volumetrico_kg,
@@ -371,5 +372,32 @@ final class VisibilidadTareaPreparacion
                 PedidoBmaTareaPreparacion::ESTADO_LISTA_PARA_CARATULA,
             ])
             ->exists();
+    }
+
+    /**
+     * @return array{abastecimiento_esquema: bool, abastecimiento_pendiente: bool, abastecimiento_aviso: ?string}
+     */
+    private static function abastecimientoPreparacion(PedidoBmaTareaPreparacion $tarea): array
+    {
+        $esquema = Schema::hasColumn('solicitudes_traspasos', 'tarea_receptora_id')
+            && Schema::hasColumn('solicitudes_traspasos', 'proposito')
+            && Schema::hasTable('traspaso_operaciones');
+
+        if (! $esquema) {
+            return [
+                'abastecimiento_esquema' => false,
+                'abastecimiento_pendiente' => false,
+                'abastecimiento_aviso' => 'El abastecimiento a esta preparación no está disponible hasta aplicar la migración correspondiente. La preparación puede consultarse y continuar.',
+            ];
+        }
+
+        $pendiente = collect(app(\App\Services\Traspasos\AbastecerPreparacionService::class)->pendientes($tarea))
+            ->contains(fn ($p) => $p['comprometidas'] > 0);
+
+        return [
+            'abastecimiento_esquema' => true,
+            'abastecimiento_pendiente' => $pendiente,
+            'abastecimiento_aviso' => null,
+        ];
     }
 }

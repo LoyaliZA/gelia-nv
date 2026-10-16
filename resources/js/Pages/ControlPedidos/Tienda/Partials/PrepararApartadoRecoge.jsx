@@ -45,7 +45,7 @@ export default function PrepararApartadoRecoge({ tarea, auth, documentos = [], d
     const [error, setError] = useState('');
     const [galeria, setGaleria] = useState({ abierto: false, documentos: [], indice: 0 });
     const [dirty, setDirty] = useState(false);
-    const [mostrarPedido, setMostrarPedido] = useState(true);
+    const [mostrarPedido, setMostrarPedido] = useState(() => !window.matchMedia?.('(max-width: 760px)').matches);
     const [validando, setValidando] = useState(false);
     const [quitarLinea, setQuitarLinea] = useState(null);
     const [modalQr, setModalQr] = useState(false);
@@ -128,21 +128,28 @@ export default function PrepararApartadoRecoge({ tarea, auth, documentos = [], d
         maxArchivos={10} archivos={l.evidencias} previews={l.previews} error={validando ? faltantes.find((f) => f.campo === `tienda-fotos-${i}`)?.texto : undefined}
         onChange={(files, previews) => { cambiar(i, 'evidencias', files); cambiar(i, 'previews', previews); }} onVer={verDocs} disabled={ocupado} />;
 
+    const alternarPedido = () => {
+        setMostrarPedido((v) => !v);
+        if (!mostrarPedido && window.matchMedia?.('(max-width: 760px)').matches) {
+            requestAnimationFrame(() => {
+                const referencia = document.getElementById('tienda-pedido-referencia');
+                referencia?.scrollIntoView({ block: 'start' });
+                referencia?.focus({ preventScroll: true });
+            });
+        }
+    };
+
     return <section className="gelia-preparacion" aria-label="Espacio de preparación">
-        {editable && <a className={`${BTN_SECONDARY} inline-flex min-h-[44px] items-center`} href={route('traspasos.abastecimiento.index', { tarea: tarea.id })}>Abastecer preparación</a>}
-        {tarea.abastecimiento_pendiente && <p role="status" className="theme-text-aviso">Hay abastecimiento pendiente de salida, llegada o resolución de incidencias. Confirme las llegadas antes de cerrar la preparación.</p>}
         <header className="gelia-preparacion-contexto">
             <div className="min-w-0">
-                <h3 className="text-base font-bold m-0">{esRecoge ? 'Separación y apartado en tienda' : conPesaje ? 'Preparación para pesaje' : 'Separación de mercancía'}</h3>
+                <h3 className="text-sm font-semibold m-0">{esRecoge ? 'Separación y apartado en tienda' : conPesaje ? 'Preparación para pesaje' : 'Separación de mercancía'}</h3>
                 <dl className="gelia-preparacion-meta">
                     <div><dt>Almacén</dt><dd>{tarea.almacen?.nombre || tarea.almacen?.codigo || 'No asignado'}</dd></div>
                     {tarea.pedido?.cliente_nombre && <div><dt>Cliente</dt><dd>{tarea.pedido.cliente_nombre}</dd></div>}
-                    {tarea.pedido?.vendedora_nombre && <div><dt>Vendedora</dt><dd>{tarea.pedido.vendedora_nombre}</dd></div>}
                 </dl>
             </div>
             <div className="gelia-preparacion-contexto-acciones">
-                <span className="gelia-preparacion-total">{total} piezas preparadas</span>
-                <button type="button" className={BTN_SECONDARY} aria-expanded={mostrarPedido} aria-controls="tienda-pedido-referencia" onClick={() => setMostrarPedido((v) => !v)}>
+                <button type="button" className={BTN_SECONDARY} aria-expanded={mostrarPedido} aria-controls="tienda-pedido-referencia" onClick={alternarPedido}>
                     <FileText className="w-4 h-4" aria-hidden="true" />{mostrarPedido ? 'Ocultar pedido' : 'Ver pedido'}
                 </button>
             </div>
@@ -151,6 +158,14 @@ export default function PrepararApartadoRecoge({ tarea, auth, documentos = [], d
         {error && <p role="alert" className="gelia-preparacion-aviso">{error}</p>}
         <div className="gelia-preparacion-workspace" data-pedido-visible={mostrarPedido}>
             <div className="gelia-preparacion-captura" ref={formRef}>
+                <details className="gelia-preparacion-opciones">
+                    <summary>Datos y opciones de preparación</summary>
+                    {tarea.pedido?.vendedora_nombre && <p className="text-sm">Vendedora: {tarea.pedido.vendedora_nombre}</p>}
+                    {editable && <a className={`${BTN_SECONDARY} inline-flex min-h-[44px] items-center`} href={route('traspasos.abastecimiento.index', { tarea: tarea.id })}>Abastecer preparación</a>}
+                    {editable && puedeIncidencia && <button type="button" className={BTN_SECONDARY} disabled={ocupado} onClick={() => { setModoIncidencia(true); requestAnimationFrame(() => irACampo('tienda-motivo')); }}><AlertTriangle className="w-4 h-4" aria-hidden="true" />Reportar problema</button>}
+                </details>
+                {tarea.abastecimiento_aviso && <p role="status" className="theme-text-aviso">{tarea.abastecimiento_aviso}</p>}
+                {tarea.abastecimiento_pendiente && <p role="status" className="theme-text-aviso">Hay abastecimiento pendiente de salida, llegada o resolución de incidencias. Confirme las llegadas antes de cerrar la preparación.</p>}
                 {tarea.observaciones_solicitud && <aside className="gelia-preparacion-instrucciones"><h4>Indicaciones de Ventas</h4><p>{tarea.observaciones_solicitud}</p></aside>}
                 {editable && <nav className="gelia-preparacion-guia" aria-label="Pasos para responder">
                     {[['tienda-productos', 'Productos'], ['tienda-evidencias', 'Evidencias'], ['tienda-cierre', 'Cierre']].map(([id, label], i) => <button key={id} type="button" onClick={() => irACampo(id)}><span>{i + 1}</span>{label}</button>)}
@@ -232,13 +247,12 @@ export default function PrepararApartadoRecoge({ tarea, auth, documentos = [], d
                     {modoIncidencia && <section className="gelia-preparacion-seccion gelia-preparacion-incidencia"><h4>Reportar problema a Ventas</h4><p className="gelia-preparacion-ayuda">Describa qué impide continuar. Puede reportarlo aunque no haya encontrado piezas.</p><label htmlFor="tienda-motivo" className={THEME_LABEL}>Qué necesita resolver Ventas *<textarea id="tienda-motivo" name="motivo_incidencia" maxLength={2000} className={`${THEME_TEXTAREA} w-full mt-1`} rows={3} value={motivo} disabled={ocupado} onChange={(e) => { setDirty(true); setMotivo(e.target.value); }} /></label><div className="flex flex-wrap gap-2 mt-3"><button type="button" className={BTN_PRIMARY} disabled={guardando} onClick={() => guardar(false, true)}>Enviar problema a Ventas</button><button type="button" className={BTN_SECONDARY} disabled={ocupado} onClick={() => setModoIncidencia(false)}>Cancelar reporte</button></div></section>}
                 </>}
             </div>
-            {mostrarPedido && <aside id="tienda-pedido-referencia" className="gelia-preparacion-documento" aria-label="Pedido de referencia"><DocumentoSolicitudTienda tareaId={tarea.id} documentos={documentos} /></aside>}
+            {mostrarPedido && <aside id="tienda-pedido-referencia" tabIndex={-1} className="gelia-preparacion-documento" aria-label="Pedido de referencia"><button type="button" className={`${BTN_SECONDARY} mb-3 min-h-[44px]`} onClick={() => { setMostrarPedido(false); irACampo('tienda-productos'); }}>Volver a productos</button><DocumentoSolicitudTienda tareaId={tarea.id} documentos={documentos} /></aside>}
         </div>
         <footer className="gelia-preparacion-footer">
             {editable ? <>
                 <div className="gelia-preparacion-estado-guardado" role="status"><strong>{guardando ? escaneo.pendientes ? 'Procesando lecturas…' : 'Guardando…' : dirty ? 'Cambios sin guardar' : 'Sin cambios pendientes'}</strong><span>{vencida ? 'Solicitud vencida. Guarde su avance o reporte a Ventas.' : faltantes.length ? `${faltantes.length} pendiente(s) para enviar. Puede guardar su avance.` : 'Respuesta completa. Revise y confirme para avisar a Ventas.'}</span></div>
                 <div className="gelia-preparacion-footer-acciones">
-                    {puedeIncidencia && <button type="button" className={BTN_SECONDARY} disabled={ocupado} onClick={() => { setModoIncidencia(true); requestAnimationFrame(() => irACampo('tienda-motivo')); }}><AlertTriangle className="w-4 h-4" aria-hidden="true" />Reportar problema</button>}
                     <button type="button" className={BTN_SECONDARY} disabled={guardando} onClick={() => guardar()}>Guardar y continuar después</button>
                     <button type="button" className={BTN_PRIMARY} disabled={guardando || vencida} onClick={() => guardar(true)}><CheckCircle2 className="w-4 h-4" aria-hidden="true" />{procesando ? 'Guardando…' : esRecoge ? 'Confirmar apartado' : 'Responder preparación'}</button>
                 </div>

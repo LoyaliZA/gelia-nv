@@ -3,6 +3,8 @@
 namespace Tests\Feature\ControlPedidos;
 
 use App\Models\Almacen;
+use App\Models\CatalogoListaDescuento;
+use App\Models\Cliente;
 use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\CatalogoModalidadPreparacionPedido;
 use App\Models\ControlPedidos\CatalogoOrigenPedido;
@@ -55,6 +57,36 @@ class PreparacionTiendaWorkspaceTest extends TestCase
         $this->producto = Producto::create(['folio' => 9971, 'sku' => 'PDV-PRUEBA', 'descripcion' => 'Crema de prueba', 'activo' => true]);
         $this->producto->inventarios()->create(['almacen_id' => $almacen->id, 'existencia' => 0]);
         $this->actingAs($this->auxiliar);
+    }
+
+    public function test_busqueda_de_bandeja_encuentra_remision_y_razon_social(): void
+    {
+        $lista = CatalogoListaDescuento::firstOrCreate(
+            ['nombre' => 'PUBLICO GENERAL'],
+            ['monto_requerido' => 0, 'activo' => true]
+        );
+        $cliente = Cliente::create([
+            'numero_cliente' => 'Q82-BUSQ',
+            'nombre' => 'Nombre corto Q82',
+            'nombre_razon_social' => 'Razon Social Q82 Verificacion',
+            'lista_actual_id' => $lista->id,
+            'monto_venta_actual' => 0,
+        ]);
+        $this->tarea->update(['area_responsable_codigo' => 'TIENDA']);
+        $this->tarea->pedido->update([
+            'folio_remision' => 'Q82-REM-325235',
+            'cliente_id' => $cliente->id,
+        ]);
+
+        $this->getJson(route('control_pedidos.tienda.listado', ['tab' => 'PENDIENTES', 'q' => 'Q82-REM-325235']))
+            ->assertOk()
+            ->assertJsonPath('tareas.total', 1);
+        $this->getJson(route('control_pedidos.tienda.listado', ['tab' => 'PENDIENTES', 'q' => 'Razon Social Q82']))
+            ->assertOk()
+            ->assertJsonPath('tareas.total', 1);
+        $this->getJson(route('control_pedidos.tienda.listado', ['tab' => 'PENDIENTES', 'q' => 'sin-coincidencia-q82']))
+            ->assertOk()
+            ->assertJsonPath('tareas.total', 0);
     }
 
     public function test_auxiliar_atender_buscar_confirmar_y_ventas_ve_respuesta_sin_pesaje(): void

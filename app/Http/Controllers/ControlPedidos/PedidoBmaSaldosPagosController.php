@@ -75,6 +75,7 @@ class PedidoBmaSaldosPagosController extends Controller
         $forma = $request->input('forma_pago');
         $datos = $request->validate([
             'monto' => ['required', 'numeric', 'min:0.01'],
+            'idempotency_key' => ['nullable', 'string', 'max:64'],
             'catalogo_banco_id' => [
                 Rule::requiredIf(fn () => PedidoBmaPago::formaRequiereBanco($forma)),
                 'nullable',

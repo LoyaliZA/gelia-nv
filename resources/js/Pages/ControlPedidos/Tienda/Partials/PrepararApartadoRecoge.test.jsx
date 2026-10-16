@@ -113,3 +113,21 @@ it('confirma el apartado sin capturar anaquel ni ubicación', async () => {
     expect(post).toHaveBeenCalledTimes(1);
     expect(post.mock.calls[0][1].ubicacion).toBeUndefined();
 });
+
+it('en móvil abre el pedido de referencia y vuelve a productos sin perder las cantidades', async () => {
+    const media = window.matchMedia;
+    window.matchMedia = vi.fn(() => ({ matches: true }));
+    try {
+        await mount();
+        expect(container.querySelector('#tienda-pedido-referencia')).toBeNull();
+        await click('Elegir crema'); await click('Agregar pieza');
+        await click('Ver pedido');
+        expect(container.querySelector('#tienda-pedido-referencia')).not.toBeNull();
+        expect(button('Ocultar pedido').getAttribute('aria-expanded')).toBe('true');
+        await click('Volver a productos');
+        expect(container.querySelector('#tienda-pedido-referencia')).toBeNull();
+        expect(container.querySelector('#tienda-cantidad-0').value).toBe('1');
+        await click('Guardar y continuar después');
+        expect(post.mock.calls[0][1].lineas[0].cantidad).toBe(1);
+    } finally { window.matchMedia = media; }
+});

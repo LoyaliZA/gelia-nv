@@ -1,4 +1,9 @@
 import { ColaGuardadoPedido } from './colaGuardadoPedido';
+import {
+    esEcoDeEstaSesion,
+    etapaAlReabrir,
+    guardarEtapaUi,
+} from './persistenciaFormularioPedido';
 import RespuestaPreparacionTienda from './RespuestaPreparacionTienda';
 import ReabrirApartadoRecoge from './ReabrirApartadoRecoge';
 import usePedidoDialog from './usePedidoDialog';
@@ -15,8 +20,10 @@ import InputMoneda from './InputMoneda';
 import { codigoDireccionCliente, labelOpcionDireccion } from './codigoDireccionCliente';
 import {
     calcularTotalCobrar,
+    calcularTotalACubrirPedido,
     calcularResumenCoberturaPago,
     calcCostoSeguro,
+    distribuirSeguroEnLineas,
     calcularPesoCobradoGuia,
     paqueteriaTieneCobertura,
     etiquetaCostoEnvio,
@@ -215,12 +222,20 @@ const COLOR_INFO = { color: 'var(--color-info)' };
 
 const mensajeAxios = (err, fallback) => {
     const payload = err?.response?.data;
-    if (typeof payload?.message === 'string' && payload.message) return payload.message;
     const errs = payload?.errors;
     if (errs && typeof errs === 'object') {
-        const msgs = Object.values(errs).flatMap((v) => (Array.isArray(v) ? v : [v])).filter(Boolean);
-        if (msgs.length) return msgs.slice(0, 4).join(' · ');
+        const msgs = Object.values(errs)
+            .flatMap((v) => (Array.isArray(v) ? v : [v]))
+            .filter((v) => typeof v === 'string' && v);
+        if (msgs.length) {
+            const visibles = msgs.slice(0, 3);
+            const resto = msgs.length - visibles.length;
+            const base = visibles.join(' ');
+            if (resto === 0) return base;
+            return `${base} (y ${resto} ${resto === 1 ? 'error' : 'errores'} más)`;
+        }
     }
+    if (typeof payload?.message === 'string' && payload.message) return payload.message;
     return fallback;
 };
 
@@ -296,6 +311,17 @@ function formDefaults(pedido = null, tiposOperacion = []) {
     };
 }
 
+function safAplicacionesParaGuardar(data, safCuenta) {
+    if (!data.aplica_saldo_favor) return [];
+    const filas = (data.saf_aplicaciones || [])
+        .filter((i) => i.saf_credito_id && Number(i.monto) > 0)
+        .map((i) => ({ saf_credito_id: i.saf_credito_id, monto: Number(i.monto) }));
+    if (filas.length) return filas;
+    const hayLibro = (safCuenta?.creditos_usables || []).length > 0;
+    if (!hayLibro && Number(data.saldo_a_favor) > 0) return undefined;
+    return [];
+}
+
 export default function ModalFormPedidoLegado({
     abierto,
     onClose,
@@ -346,6 +372,7 @@ export default function ModalFormPedidoLegado({
     const costoReexpedicionAplicado = useRef(0);
     const matchReexpedicionKey = useRef(null);
     const rexStripHechoRef = useRef(false);
+    const [envioEsBase, setEnvioEsBase] = useState(false);
     const [costoReexpedicion, setCostoReexpedicion] = useState(0);
     const colaCaptura = useRef(new ColaGuardadoPedido());
     const capturaActual = useRef({});
@@ -362,6 +389,9 @@ export default function ModalFormPedidoLegado({
     const direccionSuciaRef = useRef(false);
     const capturaManualRef = useRef(false);
     const autoguardandoBd = useRef(false);
+    const updatedAtEsperadoRef = useRef(pedido?.updated_at || null);
+    const seguroOptOutRef = useRef(Boolean(pedido?.id) && !pedido?.aplica_seguro);
+    const seguroPaqueteriaRef = useRef(null);
     const cuerpoFormRef = useRef(null);
     const [pedidoBdId, setPedidoBdId] = useState(pedido?.id || null);
     const [estadoAuto, setEstadoAuto] = useState({ local: null, bd: null });
@@ -401,7 +431,12 @@ export default function ModalFormPedidoLegado({
     const { data, setData, post, processing: processingForm, reset, errors, transform } = useForm(formDefaults(pedido, catalogos.tipos_operacion_envio || []));
     const processing = processingForm || guardandoManual;
 
-    const saldoFavorCalculado = data.aplica_saldo_favor ? Number(data.saldo_a_favor || 0) : 0;
+    const saldoFavorCalculado = (() => {
+        if (!data.aplica_saldo_favor) return 0;
+        const filas = (data.saf_aplicaciones || []).filter((i) => i.saf_credito_id && Number(i.monto) > 0);
+        if (filas.length) return Math.round(filas.reduce((a, i) => a + Number(i.monto), 0) * 100) / 100;
+        return Number(data.saldo_a_favor || 0);
+    })();
 
     const aplicarFifoSaf = (montoDeseado) => {
         const monto = Math.max(0, Number(montoDeseado) || 0);
@@ -671,6 +706,12 @@ export default function ModalFormPedidoLegado({
         costo_envio: data.costo_envio,
         total_mercancia: data.total_mercancia,
     });
+    const motivosCotizacion = !requiereLogistica || cotizacionLista ? [] : [
+        !data.catalogo_paqueteria_id ? 'paquetería' : null,
+        !omiteCosto && (data.costo_envio === '' || data.costo_envio == null) ? 'costo de envío' : null,
+        !data.catalogo_tipo_guia_id ? 'tipo de guía' : null,
+        !data.catalogo_zona_id ? 'zona' : null,
+    ].filter(Boolean);
     const labelCostoEnvio = etiquetaCostoEnvio(paqueteriaSeleccionada);
     const idPedidoAcciones = modoEdicion ? pedido?.id : pedidoBdId;
     direccionSuciaRef.current = direccionSucia;
@@ -700,18 +741,26 @@ export default function ModalFormPedidoLegado({
         ? { cliente: 1, tipo: 2, pdf: 3, solPesaje: 4, resp: 5, monto: 6, dir: 7, paq: 8, saf: 9, cot: 10, pago: 11, rem: 12 }
         : { cliente: 1, tipo: 2, pdf: 3, solPesaje: 4, resp: 5, monto: 6, pago: 7, rem: 8 };
     const mostrarMontoMercancia = consultaCerrada && !pendientePesaje && !esResguardoComplementario && !esRecogeTienda;
+    const alcanceReexpedicion = catalogos?.envios_config?.reexpedicion_alcance || 'pedido';
+    const rexEnPedido = alcanceReexpedicion === 'pedido' ? Number(costoReexpedicion || 0) : 0;
+    const envioCobertura = (guiaCliente || envioPorCobrar)
+        ? 0
+        : (calcularTotalACubrirPedido({
+            costoEnvio: data.costo_envio,
+            costoReexpedicion: rexEnPedido,
+            envioEsBase,
+            separarCostoEnvio: separarCostoEnvioDeReexpedicion,
+        }));
     const totalCobrar = calcularTotalCobrar(
         data.total_mercancia,
-        (guiaCliente ? 0 : Number(data.costo_envio || 0)) + (guiaCliente ? 0 : Number(costoReexpedicion || 0)),
+        envioCobertura,
         data.aplica_seguro,
         data.costo_seguro,
         saldoFavorCalculado
     );
     const resumenCoberturaVivo = calcularResumenCoberturaPago({
         totalMercancia: data.total_mercancia,
-        costoEnvio: guiaCliente
-            ? 0
-            : Number(data.costo_envio || 0) + Number(costoReexpedicion || 0),
+        costoEnvio: envioCobertura,
         aplicaSeguro: Boolean(data.aplica_seguro),
         costoSeguro: data.costo_seguro,
         saldoAFavorAplicado: data.aplica_saldo_favor ? saldoFavorCalculado : 0,
@@ -845,19 +894,33 @@ export default function ModalFormPedidoLegado({
 
     useEffect(() => {
         if (!abierto) return;
-        setFaseUi(FASE_DATOS);
-        setFasesMontadas(new Set([FASE_DATOS]));
+        const decision = pedido?.id
+            ? etapaAlReabrir(auth?.user?.id, pedido.id, fasesRegistro)
+            : { codigo: FASE_DATOS, aviso: null };
+        const codigo = decision.codigo || FASE_DATOS;
+        setFaseUi(codigo);
+        setFasesMontadas(new Set([FASE_DATOS, codigo]));
+        if (decision.aviso) {
+            setAvisoForm({ tipo: 'info', mensaje: decision.aviso });
+        }
         setConsultaCerradaLocal(null);
         consultaCerradaPrevia.current = Boolean(pedido?.consulta_cerrada || pedido?.consulta_cerrada_at);
         setProgresoLocal(pedido?.progreso || null);
+        updatedAtEsperadoRef.current = pedido?.updated_at || null;
         setUpdatedAtEsperado(pedido?.updated_at || null);
+        seguroOptOutRef.current = Boolean(pedido?.id) && !pedido?.aplica_seguro;
+        seguroPaqueteriaRef.current = null;
     }, [abierto, pedido?.id]);
+
+    useEffect(() => {
+        if (!abierto || !pedidoBdId || !modoProgresivo) return;
+        guardarEtapaUi(auth?.user?.id, pedidoBdId, faseUi);
+    }, [abierto, pedidoBdId, faseUi, modoProgresivo]);
 
     useEffect(() => {
         if (!abierto) return;
         setProgresoLocal(pedido?.progreso || null);
-        setUpdatedAtEsperado(pedido?.updated_at || null);
-    }, [abierto, pedido?.progreso, pedido?.updated_at]);
+    }, [abierto, pedido?.progreso]);
 
     useEffect(() => {
         const previa = consultaCerradaPrevia.current;
@@ -883,7 +946,9 @@ export default function ModalFormPedidoLegado({
     useEffect(() => {
         if (!modoProgresivo) return;
         if (fasesRegistro.some((fase) => fase.id === faseUi)) return;
-        setFaseUi(FASE_DATOS);
+        const decision = etapaAlReabrir(auth?.user?.id, pedido?.id, fasesRegistro);
+        setFaseUi(decision.codigo || FASE_DATOS);
+        if (decision.aviso) setAvisoForm({ tipo: 'info', mensaje: decision.aviso });
     }, [modoProgresivo, faseUi, pendientePesaje, tienePesajeRespondido, consultaCerrada, esResguardoComplementario]);
 
     const estadoPreparacionActual = () => ({
@@ -920,6 +985,7 @@ export default function ModalFormPedidoLegado({
         costoReexpedicionAplicado.current = 0;
         matchReexpedicionKey.current = null;
         rexStripHechoRef.current = false;
+        setEnvioEsBase(false);
         setCostoReexpedicion(0);
         ultimoFingerprintBd.current = '';
         ultimoSyncCedis.current = '';
@@ -940,6 +1006,8 @@ export default function ModalFormPedidoLegado({
                 pedido.peso_cobrado_guia_kg,
                 pedido.numero_cajas,
                 pedido.catalogo_estatus_pedido_id,
+                pedido.revision_registro,
+                pedido.base_captura,
                 (pedido.cajas || []).map((c) => `${c.id}:${c.peso_kg ?? ''}`).join(','),
             ].join('|');
             setInfoCliente(pedido.cliente || null);
@@ -967,9 +1035,11 @@ export default function ModalFormPedidoLegado({
             setAnexoLocalOk(false);
             setAnexoDocsLocal([]);
             setIntentoEnviar(false);
-            setAvisoForm(null);
             setAvisoPdf(null);
             setAvisoPesaje(null);
+            const datosHidratados = formDefaults(pedido, catalogos.tipos_operacion_envio || []);
+            const prepHidratada = estadoPreparacionDesdePedido(pedido);
+            ultimoFingerprintBd.current = fingerprintBd(datosHidratados, prepHidratada);
             if (pedido.cliente_id) {
                 cargarDireccionCliente(pedido.cliente_id, {
                     silencioso: true,
@@ -1073,6 +1143,8 @@ export default function ModalFormPedidoLegado({
             pedido.peso_cobrado_guia_kg,
             pedido.numero_cajas,
             pedido.catalogo_estatus_pedido_id,
+            pedido.revision_registro,
+            pedido.base_captura,
             (pedido.cajas || []).map((c) => `${c.id}:${c.peso_kg ?? ''}`).join(','),
         ].join('|');
         if (!ultimoSyncCedis.current) {
@@ -1080,9 +1152,18 @@ export default function ModalFormPedidoLegado({
             return;
         }
         if (fp === ultimoSyncCedis.current) return;
+        if (autoguardandoBd.current) return;
         ultimoSyncCedis.current = fp;
 
-        if (capturaActual.current.fp !== ultimoFingerprintBd.current || autoguardandoBd.current) {
+        const ecoPropio = esEcoDeEstaSesion({
+            pedido,
+            baseConfirmada: baseConfirmada.current,
+            updatedAtEsperado: updatedAtEsperadoRef.current,
+        });
+        if (ecoPropio) return;
+        if (capturaActual.current.fp !== ultimoFingerprintBd.current) {
+            colaCaptura.current.conflicto = true;
+            setEstadoAuto((s) => ({ ...s, bd: 'Servidor · conflicto' }));
             setAvisoForm({ tipo: 'error', mensaje: 'El servidor actualizó este pedido. Se conservaron sus cambios locales; revise la versión del servidor antes de continuar.' });
             return;
         }
@@ -1110,6 +1191,7 @@ export default function ModalFormPedidoLegado({
                 matchReexpedicionKey.current = rex.matchKey;
                 setCostoReexpedicion(rex.costoAplicado);
             }
+            if (rex.costoAplicado > 0) setEnvioEsBase(true);
             return {
                 ...prev,
                 ...(origenId ? { origen_id: origenId } : {}),
@@ -1135,7 +1217,17 @@ export default function ModalFormPedidoLegado({
                 direccionId: pedido.cliente_direccion_id,
             });
         }
-        setEstadoAuto((s) => ({ ...s, bd: 'Actualizado desde servidor' }));
+        if (pedido.base_captura) {
+            baseConfirmada.current = {
+                revision_esperada: pedido.revision_registro ?? 0,
+                base_captura: pedido.base_captura,
+            };
+        }
+        if (pedido.updated_at) {
+            updatedAtEsperadoRef.current = pedido.updated_at;
+            setUpdatedAtEsperado(pedido.updated_at);
+        }
+        setEstadoAuto((s) => ({ ...s, bd: 'Servidor · guardado' }));
     }, [
         abierto,
         pedido?.id,
@@ -1229,22 +1321,27 @@ export default function ModalFormPedidoLegado({
                 esAutoguardado: true,
             }));
             if (!data.cliente_proporciona_guia && !data.envio_por_cobrar) {
-                payload.costo_envio = costoEnvioParaPersistir(data.costo_envio, costoReexpedicion);
+                payload.costo_envio = envioEsBase
+                    ? costoEnvioParaPersistir(data.costo_envio, alcanceReexpedicion === 'pedido' ? costoReexpedicion : 0)
+                    : data.costo_envio;
             }
             payload.pedido_id = pedidoBdIdRef.current || undefined;
             Object.assign(payload, baseConfirmada.current);
             payload.captura_clave = claveCreacion.current;
-            payload.saldo_a_favor = data.aplica_saldo_favor
-                ? (Number(data.saldo_a_favor) || (data.saf_aplicaciones || []).reduce((a, i) => a + (Number(i.monto) || 0), 0) || 0)
-                : 0;
-            payload.saf_aplicaciones = data.aplica_saldo_favor && Number(data.saldo_a_favor) > 0
-                ? (data.saf_aplicaciones?.length
-                    ? data.saf_aplicaciones.filter((i) => Number(i.monto) > 0)
-                    : [{ monto: Number(data.saldo_a_favor) }])
-                : [];
+            const safPayload = safAplicacionesParaGuardar(data, safCuenta);
+            if (safPayload !== undefined) {
+                payload.saf_aplicaciones = safPayload;
+                payload.saldo_a_favor = safPayload.reduce((a, i) => a + Number(i.monto || 0), 0);
+            } else {
+                delete payload.saf_aplicaciones;
+                delete payload.saldo_a_favor;
+            }
             payload.comentarios_drive = data.direccion_manual_excepcion && data.motivo_direccion_manual
                 ? `${data.comentarios_drive || ''}\n[Excepción dirección] ${data.motivo_direccion_manual}`.trim()
                 : data.comentarios_drive;
+            if (detalleCajasUi && Array.isArray(payload.cajas_costos)) {
+                payload.cajas_costos = distribuirSeguroEnLineas(payload.cajas_costos, data.aplica_seguro ? data.costo_seguro : 0);
+            }
             payload.enviar = false;
             Object.assign(payload, camposPreparacionParaGuardar(estadoPreparacionActual(), intencionConfirmadaRef.current));
             if (updatedAtEsperado) {
@@ -1266,7 +1363,10 @@ export default function ModalFormPedidoLegado({
             const eraNuevo = !pedidoBdIdRef.current;
             pedidoBdIdRef.current = res.id;
             setPedidoBdId(res.id);
-            if (res.updated_at) setUpdatedAtEsperado(res.updated_at);
+            if (res.updated_at) {
+                updatedAtEsperadoRef.current = res.updated_at;
+                setUpdatedAtEsperado(res.updated_at);
+            }
             if (res.progreso) {
                 setProgresoLocal(res.progreso);
             }
@@ -1379,8 +1479,12 @@ export default function ModalFormPedidoLegado({
                 await persistirBorradorBd();
             } catch (err) {
                 if (sesionAuto !== colaCaptura.current || sesionAuto.cerrada) return;
-                const msg = err?.response?.data?.message || 'No se pudo autoguardar en servidor';
-                setEstadoAuto((s) => ({ ...s, bd: err?.response?.status === 409 || colaCaptura.current.conflicto ? 'Servidor · conflicto' : 'Servidor · error' }));
+                const msg = err?.response?.data?.message || 'No se pudo autoguardar en servidor. Los cambios siguen en este formulario.';
+                const status = err?.response?.status;
+                if (status !== 409 && status !== 422) {
+                    setEstadoAuto((s) => ({ ...s, bd: 'Servidor · error' }));
+                    setAvisoForm({ tipo: 'error', mensaje: msg });
+                }
                 console.warn('[autoguardar pedido]', msg);
             }
         }, autosaveBdMs);
@@ -1436,7 +1540,7 @@ export default function ModalFormPedidoLegado({
         }
 
         // Pedidos viejos: costo_envio traía flete+reexpedición mezclados; separar una vez al abrir.
-        if (!rexStripHechoRef.current) {
+        if (!rexStripHechoRef.current && (catalogos.zonas || []).length > 0) {
             rexStripHechoRef.current = true;
             const costoZona = costoReexpedicionDeZona(catalogos.zonas, data.catalogo_zona_id || resolved.zonaIdSugerida);
             if (costoZona > 0 && data.costo_envio !== '' && data.costo_envio != null) {
@@ -1445,6 +1549,7 @@ export default function ModalFormPedidoLegado({
                     setData('costo_envio', base);
                 }
             }
+            setEnvioEsBase(true);
         }
     }, [abierto, requiereLogistica, data.codigo_postal, data.catalogo_paqueteria_id, catalogos.reexpediciones, catalogos.zonas]);
 
@@ -1478,14 +1583,32 @@ export default function ModalFormPedidoLegado({
         }
 
         const paq = (catalogos.paqueterias || []).find((p) => String(p.id) === String(data.catalogo_paqueteria_id));
+        if (seguroPaqueteriaRef.current == null) {
+            seguroPaqueteriaRef.current = data.catalogo_paqueteria_id || '';
+        } else if (String(seguroPaqueteriaRef.current) !== String(data.catalogo_paqueteria_id || '')) {
+            seguroPaqueteriaRef.current = data.catalogo_paqueteria_id || '';
+            seguroOptOutRef.current = false;
+        }
         if (!paqueteriaTieneCobertura(paq?.nombre)) {
             setData('aplica_seguro', false);
             setData('costo_seguro', 0);
             return;
         }
 
+        const mercanciaLista = data.total_mercancia !== '' && data.total_mercancia != null;
+        const envioListo = data.costo_envio !== '' && data.costo_envio != null;
         // Sin seguro: monto 0. Con seguro: recalcular sobre flete base + mercancía.
         if (!data.aplica_seguro) {
+            if (!seguroOptOutRef.current && mercanciaLista && envioListo) {
+                setData('aplica_seguro', true);
+                return;
+            }
+            if (Number(data.costo_seguro || 0) !== 0) {
+                setData('costo_seguro', 0);
+            }
+            return;
+        }
+        if (!mercanciaLista || !envioListo) {
             if (Number(data.costo_seguro || 0) !== 0) {
                 setData('costo_seguro', 0);
             }
@@ -1897,12 +2020,32 @@ export default function ModalFormPedidoLegado({
         });
     };
 
+    const actualizarCostosEnvio = (next) => {
+        const prev = data.cajas_costos || [];
+        const sin = prev.filter((x) => x.uuid_operativo !== next.uuid_operativo);
+        const actualizados = [...sin, next];
+        const completo = actualizados.length > 0
+            && cajasPesaje.every((caja) => {
+                const row = actualizados.find((x) => x.uuid_operativo === caja.uuid_operativo);
+                return row && row.costo_envio !== '' && row.costo_envio != null;
+            });
+        const suma = actualizados.reduce((acc, row) => (
+            acc + (Number(row.costo_envio) || 0) + (Number(row.costo_adicional) || 0)
+        ), 0);
+        if (completo && alcanceReexpedicion === 'pedido') setEnvioEsBase(true);
+        setData({
+            ...data,
+            cajas_costos: actualizados,
+            ...(completo ? { costo_envio: String(Math.round(suma * 100) / 100) } : {}),
+        });
+    };
+
     const payloadEnvio = (d) => {
         const omitEnvio = Boolean(d.cliente_proporciona_guia) || Boolean(d.envio_por_cobrar);
         const cajasCostos = detalleCajasUi
-            ? (d.cajas_costos || []).filter((row) => row?.uuid_operativo)
+            ? distribuirSeguroEnLineas(d.cajas_costos, d.aplica_seguro ? d.costo_seguro : 0)
             : undefined;
-        return conDireccionManual({
+        const cuerpo = conDireccionManual({
             ...d,
             ...destinoSucursalParaPayload({
                 muestra: muestraDestinoSucursal,
@@ -1911,22 +2054,25 @@ export default function ModalFormPedidoLegado({
             }),
             costo_envio: omitEnvio
                 ? (d.costo_envio === '' || d.costo_envio == null ? '' : 0)
-                : costoEnvioParaPersistir(d.costo_envio, costoReexpedicion),
+                : (envioEsBase
+                    ? costoEnvioParaPersistir(d.costo_envio, alcanceReexpedicion === 'pedido' ? costoReexpedicion : 0)
+                    : d.costo_envio),
             cajas_costos: cajasCostos,
             enviar: undefined,
-            saldo_a_favor: d.aplica_saldo_favor
-                ? (Number(d.saldo_a_favor) || (d.saf_aplicaciones || []).reduce((a, i) => a + (Number(i.monto) || 0), 0) || 0)
-                : 0,
-            saf_aplicaciones: d.aplica_saldo_favor && Number(d.saldo_a_favor) > 0
-                ? (d.saf_aplicaciones?.length
-                    ? d.saf_aplicaciones.filter((i) => Number(i.monto) > 0)
-                    : [{ monto: Number(d.saldo_a_favor) }])
-                : [],
             comentarios_drive: d.direccion_manual_excepcion && d.motivo_direccion_manual
                 ? `${d.comentarios_drive || ''}\n[Excepción dirección] ${d.motivo_direccion_manual}`.trim()
                 : d.comentarios_drive,
             ...camposPreparacionParaGuardar(estadoPreparacionActual(), intencionConfirmadaRef.current),
         });
+        const safPayload = safAplicacionesParaGuardar(d, safCuenta);
+        if (safPayload === undefined) {
+            delete cuerpo.saf_aplicaciones;
+            delete cuerpo.saldo_a_favor;
+        } else {
+            cuerpo.saf_aplicaciones = safPayload;
+            cuerpo.saldo_a_favor = safPayload.reduce((a, i) => a + Number(i.monto || 0), 0);
+        }
+        return cuerpo;
     };
 
     const guardar = (enviarPedido = false, { cerrar = true, alTerminar = null } = {}) => {
@@ -1992,10 +2138,39 @@ export default function ModalFormPedidoLegado({
             const objetivo = pedidoBdIdRef.current || idDestino;
             const enviado = capturaActual.current.payloadManual(capturaActual.current.data);
             const fp = capturaActual.current.fp;
-            const { data: res } = await axios.post(objetivo ? route('control_pedidos.update', objetivo) : route('control_pedidos.store'), {
+            const cuerpo = {
                 ...enviado, ...baseConfirmada.current, captura_clave: claveCreacion.current,
                 ...(objetivo ? { _method: 'put' } : {}), enviar: enviarPedido,
-            }, { headers: { ...headersJsonCsrf(), 'Content-Type': 'multipart/form-data' } });
+            };
+            const archivos = Array.isArray(cuerpo.comprobantes) ? cuerpo.comprobantes.filter(Boolean) : [];
+            let dataEnvio = cuerpo;
+            const headers = headersJsonCsrf();
+            if (archivos.length > 0) {
+                const fd = new FormData();
+                const anexar = (clave, valor) => {
+                    if (valor === undefined || valor === null) return;
+                    if (typeof File !== 'undefined' && valor instanceof File) {
+                        fd.append(clave, valor);
+                        return;
+                    }
+                    if (typeof valor === 'boolean') {
+                        fd.append(clave, valor ? '1' : '0');
+                        return;
+                    }
+                    if (Array.isArray(valor)) {
+                        valor.forEach((item, i) => anexar(`${clave}[${i}]`, item));
+                        return;
+                    }
+                    if (typeof valor === 'object') {
+                        Object.entries(valor).forEach(([k, v]) => anexar(`${clave}[${k}]`, v));
+                        return;
+                    }
+                    fd.append(clave, String(valor));
+                };
+                Object.entries(cuerpo).forEach(([k, v]) => anexar(k, v));
+                dataEnvio = fd;
+            }
+            const { data: res } = await axios.post(objetivo ? route('control_pedidos.update', objetivo) : route('control_pedidos.store'), dataEnvio, { headers });
             if (sesion !== colaCaptura.current || sesion.cerrada) return;
             if (!res.id || !res.base_captura) throw new Error('El servidor no confirmó el guardado.');
             baseConfirmada.current = { revision_esperada: res.revision_registro, base_captura: res.base_captura };
@@ -2423,9 +2598,12 @@ export default function ModalFormPedidoLegado({
                     <label className={SECCION}>Monto a aplicar (FIFO: vence primero)</label>
                     <InputMoneda
                         value={data.saldo_a_favor}
+                        disabled={!safCuenta || Number(safCuenta.disponible || 0) <= 0}
                         onChange={(v) => {
-                            setData('saldo_a_favor', v);
-                            aplicarFifoSaf(v);
+                            const tope = Number(safCuenta?.disponible || 0);
+                            const n = Math.min(Math.max(0, Number(v) || 0), tope);
+                            setData('saldo_a_favor', tope > 0 ? n : '');
+                            aplicarFifoSaf(n);
                         }}
                         className="w-full max-w-xs py-3"
                     />
@@ -2488,7 +2666,7 @@ export default function ModalFormPedidoLegado({
             <div
                 {...dialog}
                 aria-label="Registro del pedido"
-                className={`${THEME_MODAL_SHELL} gelia-pedidos-dialog-workspace ${modoProgresivo ? 'max-w-6xl' : 'max-w-4xl'} w-full flex flex-col text-left ${data.es_resguardo ? 'ring-2 ring-blue-500/50' : ''}`}
+                className={`${THEME_MODAL_SHELL} gelia-pedidos-dialog-workspace gelia-pedidos-formulario ${modoProgresivo ? 'max-w-6xl' : 'max-w-4xl'} w-full flex flex-col text-left ${data.es_resguardo ? 'ring-2 ring-blue-500/50' : ''}`}
                 style={{ maxHeight: 'calc(100dvh - 2rem)', ...(data.es_resguardo ? { backgroundColor: 'color-mix(in srgb, var(--color-info) 6%, var(--theme-surface-solid))' } : {}) }}
                 onClick={(e) => e.stopPropagation()}
                 onPaste={handlePaste}
@@ -2506,7 +2684,7 @@ export default function ModalFormPedidoLegado({
                         onClose={cerrarConCopia}
                     />
                 ) : (
-                <div className="p-5 md:p-6 border-b theme-border flex justify-between items-start gap-3 shrink-0">
+                <div className="gelia-pedidos-captura-cabecera border-b theme-border">
                     <div className="min-w-0">
                         <h2 className="text-xl md:text-2xl font-black italic theme-text-main uppercase tracking-tighter m-0">
                             {modoEdicion ? 'Editar pedido' : 'Nuevo pedido'}
@@ -2546,22 +2724,31 @@ export default function ModalFormPedidoLegado({
                 <div className={`gelia-modal-body p-5 md:p-8 ${modoProgresivo ? 'space-y-4' : 'space-y-8'}`} ref={cuerpoFormRef}>
                     <div className={modoProgresivo ? `flex flex-col ${faseUi === FASE_RESPUESTA ? 'lg:flex-row-reverse' : 'lg:flex-row'} gap-6 items-start` : undefined}>
                     <div className={modoProgresivo ? 'lg:w-[70%] w-full min-w-0' : 'contents'}>
-                    {modoProgresivo && estadoAuto.bd && <div role="status" aria-live="polite" className="text-xs theme-text-muted">{estadoAuto.bd}{estadoAuto.bd.includes('conflicto') && <button type="button" className={BTN_SECONDARY} onClick={conservarYRecargar}>Conservar copia local y recargar</button>}</div>}
                     {avisoForm && (
                         <div
-                            className="p-4 rounded-xl border flex items-start gap-3"
+                            role={avisoForm.tipo === 'error' ? 'alert' : 'status'}
+                            className="px-3 py-2 rounded-lg border flex flex-wrap items-center gap-2"
                             style={{
-                                borderColor: avisoForm.tipo === 'success' ? 'color-mix(in srgb, var(--color-exito) 45%, transparent)' : 'color-mix(in srgb, var(--color-peligro) 50%, transparent)',
-                                backgroundColor: avisoForm.tipo === 'success' ? 'color-mix(in srgb, var(--color-exito) 10%, transparent)' : 'color-mix(in srgb, var(--color-peligro) 10%, transparent)',
+                                borderColor: avisoForm.tipo === 'error'
+                                    ? 'color-mix(in srgb, var(--color-peligro) 50%, transparent)'
+                                    : avisoForm.tipo === 'info'
+                                        ? 'color-mix(in srgb, var(--color-info) 45%, transparent)'
+                                        : 'color-mix(in srgb, var(--color-exito) 45%, transparent)',
+                                backgroundColor: avisoForm.tipo === 'error'
+                                    ? 'color-mix(in srgb, var(--color-peligro) 10%, transparent)'
+                                    : avisoForm.tipo === 'info'
+                                        ? 'color-mix(in srgb, var(--color-info) 10%, transparent)'
+                                        : 'color-mix(in srgb, var(--color-exito) 10%, transparent)',
                             }}
                         >
-                            <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" style={{ color: avisoForm.tipo === 'success' ? 'var(--color-exito)' : 'var(--color-peligro)' }} />
-                            <div className="min-w-0">
-                                <p className="text-sm font-black m-0" style={{ color: avisoForm.tipo === 'success' ? 'var(--color-exito)' : 'var(--color-peligro)' }}>
-                                    {avisoForm.tipo === 'success' ? 'Listo' : 'Atención'}
-                                </p>
-                                <p className="text-xs font-bold theme-text-main mt-1 m-0">{avisoForm.mensaje}</p>
-                            </div>
+                            <AlertTriangle className="w-3.5 h-3.5 shrink-0" style={{ color: avisoForm.tipo === 'error' ? 'var(--color-peligro)' : avisoForm.tipo === 'info' ? 'var(--color-info)' : 'var(--color-exito)' }} />
+                            <p className="text-xs font-semibold theme-text-main m-0 min-w-0 flex-1">{avisoForm.mensaje}</p>
+                            {estadoAuto.bd?.includes('conflicto') && (
+                                <button type="button" className={`${BTN_SECONDARY} text-xs min-h-[44px]`} onClick={conservarYRecargar}>Conservar copia y recargar</button>
+                            )}
+                            {estadoAuto.bd?.includes('error') && !estadoAuto.bd?.includes('conflicto') && (
+                                <button type="button" className={`${BTN_SECONDARY} text-xs min-h-[44px]`} onClick={() => persistirBorradorBd().catch(() => {})}>Reintentar</button>
+                            )}
                         </div>
                     )}
                     {intentoEnviar && !enviarPedidoListo && (
@@ -3521,6 +3708,7 @@ export default function ModalFormPedidoLegado({
                                     titulo={enFlujoTienda ? 'Revisión física de Tienda' : (esConsultaMercancia ? 'Registro de productos CEDIS' : 'Revisión física CEDIS')}
                                     puedeAtender={Boolean(pedido?.puede_mutar)}
                                     puedeCancelar={Boolean(pedido?.puede_cancelar)}
+                                    ocultarFotosEnvio={!esConsultaMercancia && cajasPesaje.length > 0}
                                 />
                                 {esConsultaMercancia && pedido?.numero_cajas != null && (
                                     <div className="mt-3">
@@ -3533,62 +3721,26 @@ export default function ModalFormPedidoLegado({
                                 {cajasPesaje.length > 0 ? (
                                     <div className="space-y-3" data-campo="tipo_caja">
                                         <p className="text-[9px] font-black uppercase theme-text-muted m-0">Envíos (pesaje)</p>
-                                        {detalleCajasUi ? (
-                                            [...cajasPesaje].sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)).map((c, idx) => {
-                                                const costos = (data.cajas_costos || []).find((x) => x.uuid_operativo === c.uuid_operativo) || {
-                                                    uuid_operativo: c.uuid_operativo,
-                                                    costo_envio: c.costo_envio ?? '',
-                                                    costo_seguro: c.costo_seguro ?? '',
-                                                    costo_adicional: c.costo_adicional ?? '',
-                                                    concepto_adicional: c.concepto_adicional ?? '',
-                                                };
-                                                const incompleto = !omiteCosto && (costos.costo_envio === '' || costos.costo_envio == null);
+                                        {[...cajasPesaje].sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)).map((c, idx) => {
+                                            const fotosEnvio = (pedido?.documentos || []).filter((d) => (
+                                                d.pedido_bma_caja_id === c.id
+                                                || (d.relacion_tipo === 'envio_caja' && Number(d.relacion_id) === Number(c.id))
+                                            ));
+                                            if (detalleCajasUi) {
                                                 return (
                                                     <TarjetaEnvioPedido
                                                         key={c.uuid_operativo || c.id || idx}
                                                         caja={c}
                                                         indice={idx}
-                                                        abiertoInicial={cajasPesaje.length === 1}
-                                                        modo={puedeEditarCostosCaja ? 'costos' : 'lectura'}
-                                                        costos={costos}
-                                                        incompleto={incompleto}
-                                                        bloqueado={!puedeEditarCostosCaja}
-                                                        onCostosChange={(next) => {
-                                                            const prev = data.cajas_costos || [];
-                                                            const sin = prev.filter((x) => x.uuid_operativo !== next.uuid_operativo);
-                                                            const actualizados = [...sin, next];
-                                                            const completo = actualizados.length > 0
-                                                                && cajasPesaje.every((caja) => {
-                                                                    const row = actualizados.find((x) => x.uuid_operativo === caja.uuid_operativo);
-                                                                    return row && row.costo_envio !== '' && row.costo_envio != null;
-                                                                });
-                                                            const suma = actualizados.reduce((acc, row) => (
-                                                                acc + (Number(row.costo_envio) || 0) + (Number(row.costo_adicional) || 0)
-                                                            ), 0);
-                                                            const sumaSeg = actualizados.reduce((acc, row) => acc + (Number(row.costo_seguro) || 0), 0);
-                                                            const aplicaSeg = Boolean(data.aplica_seguro) || sumaSeg > 0;
-                                                            setData({
-                                                                ...data,
-                                                                cajas_costos: actualizados,
-                                                                ...(completo ? {
-                                                                    costo_envio: String(Math.round(suma * 100) / 100),
-                                                                    costo_seguro: aplicaSeg
-                                                                        ? String(Math.round(sumaSeg * 100) / 100)
-                                                                        : '0',
-                                                                    aplica_seguro: aplicaSeg,
-                                                                } : {}),
-                                                            });
-                                                        }}
-                                                        documentos={(pedido?.documentos || []).filter((d) => (
-                                                            d.pedido_bma_caja_id === c.id
-                                                            || (d.relacion_tipo === 'envio_caja' && Number(d.relacion_id) === Number(c.id))
-                                                        ))}
+                                                        abiertoInicial={cajasPesaje.length === 1 || fotosEnvio.length > 0}
+                                                        modo="lectura"
+                                                        mostrarCostos={false}
+                                                        documentos={fotosEnvio}
                                                         onVerDoc={abrirVistaPrevia}
                                                     />
                                                 );
-                                            })
-                                        ) : (
-                                            [...cajasPesaje].sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)).map((c, idx) => (
+                                            }
+                                            return (
                                                 <div key={c.id || idx} className="p-4 rounded-xl border theme-border theme-element space-y-2">
                                                     <p className="text-sm font-black theme-text-main m-0">{etiquetaEnvio(idx, c)}</p>
                                                     <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
@@ -3600,9 +3752,16 @@ export default function ModalFormPedidoLegado({
                                                         <p className="m-0 theme-text-muted font-bold">Vol.: <span className="theme-text-main">{c.peso_volumetrico_kg != null ? `${c.peso_volumetrico_kg} kg` : '—'}</span></p>
                                                         <p className="m-0 theme-text-muted font-bold">Cobrado: <span className="theme-text-main">{c.peso_cobrado_kg != null ? `${c.peso_cobrado_kg} kg` : '—'}</span></p>
                                                     </div>
+                                                    {fotosEnvio.length > 0 && (
+                                                        <div className="flex flex-wrap gap-2">
+                                                            {fotosEnvio.map((doc, fotoIdx) => (
+                                                                <MiniaturaDocumento key={doc.id || fotoIdx} documento={doc} onVer={() => abrirVistaPrevia(fotosEnvio, fotoIdx)} />
+                                                            ))}
+                                                        </div>
+                                                    )}
                                                 </div>
-                                            ))
-                                        )}
+                                            );
+                                        })}
                                     </div>
                                 ) : null}
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -3688,9 +3847,9 @@ export default function ModalFormPedidoLegado({
                     <SeccionCotizacionPedido soloHijos>
                     <section className={SECCION_WRAP} data-campo="total_mercancia">
                         <p className={SECCION}>{nSec.monto}. Total de mercancía</p>
-                        <AvisoOperativoPedido label="Pedido final" tono="info" icon={CheckCircle2} className="mb-4">
-                            Capture el monto solo cuando la mercancía ya está confirmada con el cliente (consulta {enFlujoTienda ? 'de Tienda' : 'CEDIS'} cerrada).
-                        </AvisoOperativoPedido>
+                        <p className="text-xs theme-text-muted m-0 mb-3">
+                            Capture el monto cuando la mercancía ya está confirmada (consulta {enFlujoTienda ? 'de Tienda' : 'CEDIS'} cerrada).
+                        </p>
                         <div className={wrapCampo('total_mercancia')}>
                             <label className={SECCION}>Total mercancía *</label>
                             <InputMoneda value={data.total_mercancia} onChange={(v) => setData('total_mercancia', v)} className="w-full py-3" />
@@ -4044,6 +4203,7 @@ export default function ModalFormPedidoLegado({
                                             checked={data.aplica_seguro}
                                             onChange={(e) => {
                                                 const on = e.target.checked;
+                                                seguroOptOutRef.current = !on;
                                                 setData('aplica_seguro', on);
                                                 if (!on) {
                                                     setData('costo_seguro', 0);
@@ -4057,8 +4217,13 @@ export default function ModalFormPedidoLegado({
                                             }}
                                         />
                                         <span className="text-sm font-bold">
-                                            {data.aplica_seguro ? 'Con seguro' : 'Sin seguro'}
+                                            Con seguro
                                         </span>
+                                        {tieneCoberturaSeguro && (data.total_mercancia === '' || data.total_mercancia == null || data.costo_envio === '' || data.costo_envio == null) && (
+                                            <span className="block text-xs font-semibold mt-1" style={{ color: 'var(--color-aviso)' }}>
+                                                Indique el total de mercancía y el costo de envío para calcular el seguro.
+                                            </span>
+                                        )}
                                     </label>
                                 )}
                                 <label className={`flex items-center gap-2 theme-text-main ${logisticaBloqueada ? 'opacity-50' : 'cursor-pointer'}`}>
@@ -4101,10 +4266,39 @@ export default function ModalFormPedidoLegado({
                     <section className={SECCION_WRAP}>
                         <p className={SECCION}>{nSec.cot}. Cotización</p>
                         <div className="space-y-4">
+                            {!guiaCliente && !envioPorCobrar && detalleCajasUi && cajasPesaje.length > 0 && (
+                                <div className="space-y-3">
+                                    <p className="text-xs theme-text-muted m-0">Costo de envío por caja. El seguro se calcula con la paquetería, no se captura aquí.</p>
+                                    {[...cajasPesaje].sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)).map((c, idx) => {
+                                        const costos = (data.cajas_costos || []).find((x) => x.uuid_operativo === c.uuid_operativo) || {
+                                            uuid_operativo: c.uuid_operativo,
+                                            costo_envio: c.costo_envio ?? '',
+                                            costo_seguro: c.costo_seguro ?? '',
+                                            costo_adicional: c.costo_adicional ?? '',
+                                            concepto_adicional: c.concepto_adicional ?? '',
+                                        };
+                                        const incompleto = !omiteCosto && (costos.costo_envio === '' || costos.costo_envio == null);
+                                        return (
+                                            <TarjetaEnvioPedido
+                                                key={`cot-${c.uuid_operativo || c.id || idx}`}
+                                                caja={c}
+                                                indice={idx}
+                                                abiertoInicial
+                                                modo={puedeEditarCostosCaja ? 'costos' : 'lectura'}
+                                                mostrarSeguro={false}
+                                                costos={costos}
+                                                incompleto={incompleto}
+                                                bloqueado={!puedeEditarCostosCaja}
+                                                onCostosChange={actualizarCostosEnvio}
+                                            />
+                                        );
+                                    })}
+                                </div>
+                            )}
                             {!guiaCliente && !envioPorCobrar && (
                                 <div className={`max-w-md ${wrapCampo('costo_envio')}`} data-campo="costo_envio">
-                                    <label className={SECCION}>{labelCostoEnvio}{esMunicipioDiferido || omiteCostoPorTarifaPeso ? ' (opcional)' : ''}{camposEnvioBloqueados ? ' (bloqueado)' : ''}</label>
-                                    <InputMoneda value={camposEnvioBloqueados ? '' : data.costo_envio} onChange={(v) => setData('costo_envio', v)} className={`w-full py-3 ${camposEnvioBloqueados ? 'opacity-50 pointer-events-none' : ''}`} placeholder="" />
+                                    <label className={SECCION}>{labelCostoEnvio}{esMunicipioDiferido || omiteCostoPorTarifaPeso ? ' (opcional)' : ''}{camposEnvioBloqueados ? ' (bloqueado)' : ''}{detalleCajasUi && cajasPesaje.length > 0 ? ' (suma de envíos)' : ''}</label>
+                                    <InputMoneda value={camposEnvioBloqueados ? '' : data.costo_envio} onChange={(v) => setData('costo_envio', v)} readOnly={detalleCajasUi && cajasPesaje.length > 0} className={`w-full py-3 ${camposEnvioBloqueados || (detalleCajasUi && cajasPesaje.length > 0) ? 'opacity-50 pointer-events-none' : ''}`} placeholder="" />
                                     {omiteCostoPorTarifaPeso && (
                                         <p className="text-[10px] theme-text-muted font-bold mt-1 m-0">
                                             {esConsultaMercancia
@@ -4174,12 +4368,16 @@ export default function ModalFormPedidoLegado({
                                     <span>{data.aplica_seguro ? formatearMoneda(data.costo_seguro) : formatearMoneda(0)}</span>
                                 </div>
                                 <div className="flex justify-between theme-text-muted font-bold">
-                                    <span>Total a cubrir</span>
+                                    <span>Total exigible del pedido</span>
                                     <span>{formatearMoneda(resumenCoberturaVivo.total_a_cubrir)}</span>
                                 </div>
                                 <div className="flex justify-between font-bold" style={COLOR_EXITO}>
                                     <span>Saldo a favor aplicado</span>
                                     <span>- {formatearMoneda(data.aplica_saldo_favor ? saldoFavorCalculado : 0)}</span>
+                                </div>
+                                <div className="flex justify-between theme-text-muted font-bold">
+                                    <span>Pagos válidos acumulados</span>
+                                    <span>{formatearMoneda(resumenCoberturaVivo.total_pagado)}</span>
                                 </div>
                                 {resumenCoberturaVivo.excedente_generado > 0.01 && (
                                     <div className="flex justify-between font-bold" style={COLOR_INFO}>
@@ -4189,9 +4387,9 @@ export default function ModalFormPedidoLegado({
                                 )}
                             </div>
                             <div className="mt-4 p-4 rounded-2xl border-2" style={{ borderColor: 'var(--color-primario)' }}>
-                                <p className="text-[10px] font-black uppercase theme-text-muted m-0">Total a cobrar ahora</p>
-                                <p className="text-[10px] theme-text-muted font-bold m-0">Después del saldo a favor aplicado</p>
-                                <p className="text-2xl font-black m-0" style={{ color: 'var(--color-primario)' }}>{formatearMoneda(totalCobrar)}</p>
+                                <p className="text-[10px] font-black uppercase theme-text-muted m-0">Importe neto restante por pagar</p>
+                                <p className="text-[10px] theme-text-muted font-bold m-0">Total exigible menos saldo a favor aplicado y pagos válidos</p>
+                                <p className="text-2xl font-black m-0" style={{ color: 'var(--color-primario)' }}>{formatearMoneda(resumenCoberturaVivo.pendiente)}</p>
                             </div>
                         </div>
                     </section>
@@ -4215,9 +4413,9 @@ export default function ModalFormPedidoLegado({
                                 puedeRegistrar={puedeRegistrarPago}
                                 puedeGenerarSaldo={false}
                                 totalMercancia={data.total_mercancia}
-                                costoEnvio={guiaCliente
-                                    ? 0
-                                    : Number(data.costo_envio || 0) + Number(costoReexpedicion || 0)}
+                                costoEnvio={envioCobertura}
+                                costoReexpedicion={0}
+                                envioEsBase
                                 aplicaSeguro={Boolean(data.aplica_seguro)}
                                 costoSeguro={data.costo_seguro}
                                 saldoAFavorAplicado={data.aplica_saldo_favor ? saldoFavorCalculado : 0}
@@ -4228,7 +4426,7 @@ export default function ModalFormPedidoLegado({
                                         ? 'Cierre la consulta de Tienda antes de registrar el pago.'
                                         : 'Cierre la consulta CEDIS antes de registrar el pago.')
                                     : (requiereLogistica && !cotizacionLista
-                                        ? 'Complete la cotización de envío antes de registrar el pago.'
+                                        ? `Complete la cotización antes de registrar el pago${motivosCotizacion.length ? `: ${motivosCotizacion.join(', ')}.` : '.'}`
                                         : null)}
                             />
                             {docsExistentes.length > 0 && (
@@ -4257,8 +4455,8 @@ export default function ModalFormPedidoLegado({
                                         <span>- {formatearMoneda(data.aplica_saldo_favor ? saldoFavorCalculado : 0)}</span>
                                     </div>
                                     <div className="mt-4 p-4 rounded-2xl border-2" style={{ borderColor: 'var(--color-primario)' }}>
-                                        <p className="text-[10px] font-black uppercase theme-text-muted m-0">Total a cobrar ahora</p>
-                                        <p className="text-2xl font-black m-0" style={{ color: 'var(--color-primario)' }}>{formatearMoneda(totalCobrar)}</p>
+                                        <p className="text-[10px] font-black uppercase theme-text-muted m-0">Importe neto restante por pagar</p>
+                                        <p className="text-2xl font-black m-0" style={{ color: 'var(--color-primario)' }}>{formatearMoneda(resumenCoberturaVivo.pendiente)}</p>
                                     </div>
                                 </div>
                             )}
@@ -4345,49 +4543,25 @@ export default function ModalFormPedidoLegado({
                             <SeccionResumenEnvioPedido
                                 progreso={progresoLocal || progresoDto}
                                 totalMercancia={data.total_mercancia}
-                                costoEnvio={guiaCliente || envioPorCobrar ? 0 : Number(data.costo_envio || 0) + Number(costoReexpedicion || 0)}
+                                costoEnvio={envioCobertura}
+                                costoReexpedicion={0}
                                 costoSeguro={data.aplica_seguro ? data.costo_seguro : 0}
                                 saldoFavor={saldoFavorCalculado}
-                                totalCobrar={totalCobrar}
+                                totalCobrar={resumenCoberturaVivo.pendiente}
                                 accionLabel={mostrarEnviarPedido ? 'Enviar pedido' : null}
                                 onAccion={() => guardar(true)}
                                 accionDisabled={processing || !enviarPedidoListo}
                                 secundarioLabel="Guardar borrador"
-                                onSecundario={() => guardar(false)}
+                                onSecundario={() => guardar(false, { cerrar: false })}
                             />
                             <HistorialPedidoAcordeon historial={pedido?.historial || []} />
                         </div>
                     )}
                     </div>
 
-                </div>
-                    <section className="gelia-modal-footer flex flex-col gap-3 p-5 md:p-6 shrink-0">
-                        {mostrarEnviarPedido && intentoEnviar && !enviarPedidoListo ? (
-                            <p className="text-xs font-bold m-0 leading-snug" style={{ color: 'var(--color-peligro)' }}>
-                                {(validacionEnvio.faltantes || []).length
-                                    ? `Falta: ${validacionEnvio.faltantes.join(', ')}.`
-                                    : 'Hay campos faltantes.'}
-                            </p>
-                        ) : null}
-                        {Object.keys(errors).length > 0 && (
-                            <p className="text-xs text-red-500 font-bold m-0">Revise los campos del formulario.</p>
-                        )}
-                        <div className="flex flex-wrap gap-3">
-                        {mostrarEnviarPedido && (
-                            <button
-                                type="button"
-                                onClick={() => guardar(true)}
-                                disabled={processing}
-                                title={!enviarPedidoListo ? (validacionEnvio.mensaje || 'Complete los datos necesarios para enviar') : undefined}
-                                className={`${BTN_PRIMARY} flex items-center gap-2 outline-none`}
-                            >
-                                <Send className="w-4 h-4" /> Enviar pedido
-                            </button>
-                        )}
-                        <button type="button" onClick={() => guardar(false)} disabled={processing} className={`${BTN_SECONDARY} theme-element border theme-border flex items-center gap-2 outline-none`}>
-                            <Save className="w-4 h-4" /> Guardar borrador
-                        </button>
-                        <button type="button" onClick={() => {
+                    <details className="gelia-pedidos-acciones-secundarias">
+                        <summary>Opciones de captura</summary>
+                        <button type="button" disabled={processing} onClick={() => {
                             setData(formDefaults(pedido, catalogos.tipos_operacion_envio || []));
                             setPreviews([]);
                             setInfoCliente(pedido?.cliente || null);
@@ -4410,6 +4584,35 @@ export default function ModalFormPedidoLegado({
                         }} className={`${BTN_SECONDARY} theme-element border theme-border flex items-center gap-2 outline-none`}>
                             <RotateCcw className="w-4 h-4" /> Limpiar
                         </button>
+                    </details>
+                </div>
+                    <section className="gelia-modal-footer gelia-pedidos-captura-acciones shrink-0">
+                        {mostrarEnviarPedido && intentoEnviar && !enviarPedidoListo ? (
+                            <p className="text-xs font-bold m-0 leading-snug" style={{ color: 'var(--color-peligro)' }}>
+                                {(validacionEnvio.faltantes || []).length
+                                    ? `Falta: ${validacionEnvio.faltantes.join(', ')}.`
+                                    : 'Hay campos faltantes.'}
+                            </p>
+                        ) : null}
+                        {Object.keys(errors).length > 0 && (
+                            <p className="text-xs theme-text-peligro font-bold m-0">Revise los campos del formulario.</p>
+                        )}
+                        <div className="flex flex-wrap gap-2">
+                        {mostrarEnviarPedido && (
+                            <button
+                                type="button"
+                                onClick={() => guardar(true)}
+                                disabled={processing}
+                                title={!enviarPedidoListo ? (validacionEnvio.mensaje || 'Complete los datos necesarios para enviar') : undefined}
+                                className={`${BTN_PRIMARY} flex items-center gap-2 outline-none`}
+                            >
+                                <Send className="w-4 h-4" /> Enviar pedido
+                            </button>
+                        )}
+                        <button type="button" onClick={() => guardar(false, { cerrar: false })} disabled={processing} className={`${mostrarEnviarPedido ? BTN_SECONDARY : BTN_PRIMARY} flex items-center gap-2`}>
+                            <Save className="w-4 h-4" /> Guardar borrador
+                        </button>
+
                         </div>
                     </section>
             </div>

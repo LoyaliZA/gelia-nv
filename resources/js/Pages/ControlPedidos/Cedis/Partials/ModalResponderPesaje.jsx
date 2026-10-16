@@ -1,3 +1,4 @@
+import { resumenActualizacionConsulta } from './resumenActualizacionConsulta';
 import { pedidoEsTrasladoInternoPdv } from '../../Partials/destinoSucursalPedido';
 import usePedidoDialog from '../../Partials/usePedidoDialog';
 import React, { useEffect, useRef, useState } from 'react';
@@ -28,8 +29,6 @@ import ModalAlertaPedido from '../../Partials/ModalAlertaPedido';
 import ModalVistaPreviaDocumento from '../../Partials/ModalVistaPreviaDocumento';
 import VisorPdfPaginas from '../../Partials/VisorPdfPaginas';
 import ModalConfirmarAccion from '../../Partials/ModalConfirmarAccion';
-import DireccionPedidoResumen from '../../Partials/DireccionPedidoResumen';
-import { codigoDireccionCliente } from '../../Partials/codigoDireccionCliente';
 import GaleriaEvidencias from '../../Partials/GaleriaEvidenciasPedido';
 import InputConEscanner from '../../../../Components/Escanner/InputConEscanner';
 import { desbloquearBipAudio, reproducirBipConfirmacion, reproducirBipError } from '../../../../Components/Escanner/bipScanner';
@@ -156,6 +155,30 @@ export const resolverAlmacenBusqueda = (pedido, almacenesBusqueda = []) => {
     return null;
 };
 
+const previewsVigentes = (pedido, relacionTipo, relacionId) => (pedido?.documentos || [])
+    .filter((d) => d.tipo === 'evidencia_condicion'
+        && d.relacion_tipo === relacionTipo
+        && String(d.relacion_id) === String(relacionId)
+        && d.activo !== false
+        && d.url)
+    .map((d) => ({
+        url: d.url,
+        name: d.nombre_original || 'Evidencia vigente',
+        mime: d.mime_type || '',
+        remoto: true,
+        vigente: true,
+        documento_id: d.id,
+    }));
+
+const evidenciaProductoSigue = (rev) => (rev.previews || []).some((p) => {
+    if (p.vigente) {
+        return rev.estado_fisico === rev.estado_fisico_original
+            && String(rev.producto_id || '') === String(rev.producto_id_original || '')
+            && String(rev.sku || '') === String(rev.sku_original || '');
+    }
+    return Boolean(p.remoto);
+});
+
 export default function ModalResponderPesaje({
     abierto, onClose, pedido, tiposCaja = [], almacenesBusqueda = [],
 }) {
@@ -208,7 +231,7 @@ export default function ModalResponderPesaje({
 
     const revocarPreviews = (lista) => {
         (lista || []).forEach((p) => {
-            if (p?.url) URL.revokeObjectURL(p.url);
+            if (p?.url && !p.vigente) URL.revokeObjectURL(p.url);
         });
     };
 
@@ -242,10 +265,16 @@ export default function ModalResponderPesaje({
     const claveProducto = (r) => String(r.sku || r.descripcion_producto || '').trim().toLowerCase();
 
     const snapshotConsulta = (revs, cajas) => ({
-        productos: (revs || []).map((r) => ({
+        productos: (revs || []).filter((r) => !r.retirada_at).map((r) => ({
             clave: claveProducto(r),
+            revision_id: r.revision_id || r.id || null,
+            client_uuid: r.client_uuid || null,
+            producto_id: r.producto_id || null,
+            sku: r.sku || '',
             label: r.descripcion_producto || r.sku || '—',
             estado: r.estado_fisico || 'bueno',
+            cantidad_solicitada: r.cantidad_solicitada ?? null,
+            cantidad_encontrada: r.cantidad_encontrada ?? null,
         })),
         envios: (cajas || []).length,
         pesoCobrado: (cajas || []).reduce((acc, c) => {
@@ -285,14 +314,29 @@ export default function ModalResponderPesaje({
                     );
                     setRevisiones((prev) => {
                         prev.forEach((r) => revocarPreviews(r.previews));
+                        const previas = (pedido.revisiones_producto || pedido.revisionesProducto || []).filter((row) => !row.retirada_at);
+                        const usadas = new Set();
                         return (draft.revisiones || []).map((r) => {
                             const evidencias = Array.isArray(r.evidencias) ? r.evidencias.filter((f) => f instanceof Blob) : [];
+                            const previa = previas.find((row) => !usadas.has(row.id) && (
+                                String(row.id) === String(r.revision_id)
+                                || (r.producto_id && String(row.producto_id) === String(r.producto_id))
+                                || (r.descripcion_producto && row.descripcion_producto === r.descripcion_producto)
+                            ));
+                            if (previa) usadas.add(previa.id);
                             return {
                                 ...revisionDesdeProducto({ id: r.producto_id, sku: r.sku, descripcion: '' }),
                                 ...r,
+                                revision_id: r.revision_id || previa?.id || null,
+                                estado_fisico_original: previa?.estado_fisico || r.estado_fisico_original || r.estado_fisico || 'bueno',
+                                producto_id_original: previa?.producto_id ?? r.producto_id_original ?? r.producto_id ?? null,
+                                sku_original: previa?.sku ?? r.sku_original ?? r.sku ?? '',
                                 client_uuid: uuidOperativo(r.client_uuid),
                                 evidencias,
-                                previews: previewsDesdeArchivos(evidencias),
+                                previews: [
+                                    ...previewsDesdeArchivos(evidencias),
+                                    ...(previa ? previewsVigentes(pedido, 'revision_producto', previa.id) : []),
+                                ],
                                 expandido: false,
                             };
                         });
@@ -362,33 +406,54 @@ export default function ModalResponderPesaje({
                             setUuidsGuardados(cajasPrevias
                                 .map((c) => (esUuidValido(c.uuid_operativo) ? c.uuid_operativo : null))
                                 .filter(Boolean));
-                            setEvidenciasPorEnvio(cajasPrevias.map(() => slotEnvioVacio()));
+                            setEvidenciasPorEnvio(cajasPrevias.map((c) => ({
+                                archivos: [],
+                                previews: previewsVigentes(pedido, 'envio_caja', c.id),
+                            })));
                         } else {
                             setEnvios([envioVacio()]);
                             setEvidenciasPorEnvio([slotEnvioVacio()]);
                         }
                         setRevisiones((prev) => {
                             prev.forEach((r) => revocarPreviews(r.previews));
-                            return revsPrevias.map((r) => ({
+                            return revsPrevias.filter((r) => !r.retirada_at).map((r) => ({
                                 ...revisionDesdeProducto({
                                     id: r.producto_id,
                                     sku: r.sku,
                                     descripcion: String(r.descripcion_producto || '').replace(/^[^—]+—\s*/, ''),
                                 }),
+                                revision_id: r.id,
                                 producto_id: r.producto_id,
+                                producto_id_original: r.producto_id || null,
                                 sku: r.sku || '',
+                                sku_original: r.sku || '',
                                 descripcion_producto: r.descripcion_producto || '',
                                 cantidad_solicitada: r.cantidad_solicitada ?? '',
                                 cantidad_encontrada: r.cantidad_encontrada ?? '',
                                 estado_fisico: r.estado_fisico || 'bueno',
+                                estado_fisico_original: r.estado_fisico || 'bueno',
                                 comentario: r.comentario || '',
                                 unica_pieza: Boolean(r.unica_pieza),
                                 mejor_ejemplar: Boolean(r.mejor_ejemplar),
                                 evidencias: [],
-                                previews: [],
+                                previews: previewsVigentes(pedido, 'revision_producto', r.id),
                                 expandido: false,
                             }));
                         });
+                        const loteDocs = (pedido.documentos || []).filter((d) => d.tipo === 'evidencia_condicion' && d.relacion_tipo === 'revision_general' && d.activo !== false && d.url);
+                        if (loteDocs.length) {
+                            setEvidenciasLote({
+                                archivos: [],
+                                previews: loteDocs.map((d) => ({
+                                    url: d.url,
+                                    name: d.nombre_original || 'Evidencia vigente',
+                                    mime: d.mime_type || '',
+                                    remoto: true,
+                                    vigente: true,
+                                    documento_id: d.id,
+                                })),
+                            });
+                        }
                         if (pedido.consulta_actualizacion_pendiente || pedido.motivo_repesaje) {
                             setBaselineConsulta(snapshotConsulta(
                                 revsPrevias,
@@ -869,9 +934,13 @@ export default function ModalResponderPesaje({
                 }
             }
 
+            const cambiosPiezas = baselineConsulta
+                ? resumenActualizacionConsulta(baselineConsulta.productos, snapshotConsulta(revisiones, envios).productos)
+                : null;
+            const paqueteIgual = !cambiosPiezas || cambiosPiezas.sinCambioPiezas;
             for (let i = 0; i < envios.length; i++) {
                 const hayLocal = evidenciasPorEnvio[i]?.archivos?.length;
-                const hayRemota = evidenciasPorEnvio[i]?.previews?.some((p) => p.remoto);
+                const hayRemota = evidenciasPorEnvio[i]?.previews?.some((p) => p.remoto && (!p.vigente || paqueteIgual));
                 if (!hayLocal && !hayRemota) {
                     avisarCampo(`pesaje-evidencia-${envios[i].client_uuid}`, 'Adjunta una foto del contenido de esta caja.');
                     return;
@@ -891,7 +960,12 @@ export default function ModalResponderPesaje({
                 return;
             }
             const hayLocal = evidenciasLote.archivos?.length;
-            const hayRemota = evidenciasLote.previews?.some((p) => p.remoto);
+            const cambiosLote = baselineConsulta
+                ? resumenActualizacionConsulta(baselineConsulta.productos, snapshotConsulta(revisiones, []).productos)
+                : null;
+            const loteIgual = (!cambiosLote || cambiosLote.sinCambioPiezas)
+                && Number(bultosAproximados) === Number(pedido.numero_cajas);
+            const hayRemota = evidenciasLote.previews?.some((p) => p.remoto && (!p.vigente || loteIgual));
             if (!hayLocal && !hayRemota) {
                 avisarCampo('pesaje-evidencia-lote', 'Adjunta una foto de todos los productos del pedido juntos.');
                 return;
@@ -933,7 +1007,7 @@ export default function ModalResponderPesaje({
                     return;
                 }
             }
-            if (requiereEvidencia(r.estado_fisico) && !r.evidencias?.length && !(r.previews || []).some((p) => p.remoto)) {
+            if (requiereEvidencia(r.estado_fisico) && !r.evidencias?.length && !evidenciaProductoSigue(r)) {
                 actualizarRevision(i, 'expandido', true);
                 avisarCampo(`pesaje-evidencia-producto-${r.client_uuid}`, 'Adjunta una foto que muestre el daño o problema de esta pieza.');
                 return;
@@ -1005,6 +1079,9 @@ export default function ModalResponderPesaje({
             form.append(`revisiones[${i}][unica_pieza]`, r.unica_pieza ? '1' : '0');
             form.append(`revisiones[${i}][mejor_ejemplar]`, r.mejor_ejemplar ? '1' : '0');
             if (r.client_uuid) form.append(`revisiones[${i}][client_uuid]`, r.client_uuid);
+            const mismoProducto = String(r.producto_id || '') === String(r.producto_id_original || '')
+                && String(r.sku || '') === String(r.sku_original || '');
+            if (r.revision_id && mismoProducto) form.append(`revisiones[${i}][revision_id]`, String(r.revision_id));
             (r.evidencias || []).forEach((f, j) => form.append(`revisiones[${i}][evidencias][${j}]`, f));
         });
 
@@ -1050,17 +1127,11 @@ export default function ModalResponderPesaje({
     const resumenAntesDespues = (() => {
         if (!baselineConsulta) return null;
         const despues = snapshotConsulta(revisiones, soloRevisiones ? [] : envios);
-        const antesKeys = new Set(baselineConsulta.productos.map((p) => p.clave).filter(Boolean));
-        const despuesKeys = new Set(despues.productos.map((p) => p.clave).filter(Boolean));
-        const agregados = despues.productos.filter((p) => p.clave && !antesKeys.has(p.clave));
-        const retirados = baselineConsulta.productos.filter((p) => p.clave && !despuesKeys.has(p.clave));
-        const mismos = despues.productos.filter((p) => p.clave && antesKeys.has(p.clave));
+        const piezas = resumenActualizacionConsulta(baselineConsulta.productos, despues.productos);
         return {
             antes: baselineConsulta,
             despues,
-            agregados,
-            retirados,
-            mismos,
+            piezas,
             cambioEnvios: !soloRevisiones && baselineConsulta.envios !== despues.envios,
             cambioPeso: !soloRevisiones
                 && Math.abs((baselineConsulta.pesoCobrado || 0) - (despues.pesoCobrado || 0)) > 0.0001,
@@ -1069,7 +1140,7 @@ export default function ModalResponderPesaje({
 
     const pasos = ['Pedido', 'Productos', soloRevisiones ? 'Bultos' : 'Cajas'];
     const instrucciones = [
-        'Consulta el pedido y su destino.',
+        'Consulta el archivo del pedido.',
         'Registra las piezas y su condición.',
         soloRevisiones ? 'Indica los bultos y fotografía el lote.' : 'Registra el peso y fotografía el contenido de cada caja.',
     ];
@@ -1173,12 +1244,12 @@ export default function ModalResponderPesaje({
                             Sin existencias: Ventas verá este aviso en el detalle del pedido (no hace falta adjuntar foto).
                         </p>
                     )}
-                    <div className="flex flex-wrap gap-4">
-                        <label className="flex items-center gap-2 text-xs font-bold theme-text-main">
+                    <div className="gelia-pedidos-atributos" aria-label="Características de la pieza">
+                        <label className="gelia-pedidos-atributo gelia-pedidos-atributo-control">
                             <input type="checkbox" checked={rev.unica_pieza} onChange={(e) => actualizarRevision(idx, 'unica_pieza', e.target.checked)} className="w-4 h-4" />
                             Única pieza
                         </label>
-                        <label className="flex items-center gap-2 text-xs font-bold theme-text-main">
+                        <label className="gelia-pedidos-atributo gelia-pedidos-atributo-control">
                             <input type="checkbox" checked={rev.mejor_ejemplar} onChange={(e) => actualizarRevision(idx, 'mejor_ejemplar', e.target.checked)} className="w-4 h-4" />
                             Mejor ejemplar
                         </label>
@@ -1199,6 +1270,19 @@ export default function ModalResponderPesaje({
         );
     });
 
+    const accionesRespuesta = (
+        <>
+            <button type="button" onClick={() => paso > 0 ? cambiarPaso(paso - 1) : pedirCerrar()} className={`${BTN_SECONDARY} outline-none min-h-[44px]`} disabled={procesando}>{paso > 0 ? 'Atrás' : 'Cerrar'}</button>
+            {paso < 2 ? (
+                <button type="button" onClick={() => cambiarPaso(paso + 1)} disabled={procesando} className={`${BTN_PRIMARY} min-h-[44px]`}>{paso === 0 ? 'Revisar productos' : (soloRevisiones ? 'Bultos y evidencias' : 'Cajas y evidencias')}</button>
+            ) : (
+                <button type="button" onClick={confirmar} disabled={procesando} aria-busy={procesando} className={`${BTN_PRIMARY} flex items-center justify-center gap-2 outline-none min-h-[44px]`}>
+                    <Scale className="w-4 h-4" aria-hidden="true" /> <span>{procesando ? 'Guardando…' : (soloRevisiones ? 'Registrar consulta' : 'Registrar pesaje')}</span>
+                </button>
+            )}
+        </>
+    );
+
     return createPortal(
         <>
             <div className={`${THEME_MODAL_OVERLAY} items-start sm:items-center py-4 sm:py-6`}>
@@ -1209,19 +1293,24 @@ export default function ModalResponderPesaje({
                     style={{ maxHeight: 'calc(100dvh - 2rem)' }}
                     onClick={(e) => e.stopPropagation()}
                 >
-                    <div className="p-4 md:p-6 border-b theme-border flex justify-between items-start gap-3 shrink-0">
-                        <div className="min-w-0">
-                            <h2 id="pesaje-titulo" className="text-lg font-semibold theme-text-main m-0 mb-2">
-                                {soloRevisiones ? 'Responder consulta de mercancía' : 'Responder pesaje'}
-                            </h2>
-                            <EncabezadoFolioPedido pedido={pedido} />
-                            <p className="text-xs theme-text-muted m-0 mt-1">
-                                {pedido.cliente?.nombre || '—'} · {formatearFechaNegocio(pedido.fecha)}
-                            </p>
+                    <div className="p-4 md:p-6 border-b theme-border shrink-0 space-y-3">
+                        <div className="flex justify-between items-start gap-3">
+                            <div className="min-w-0">
+                                <h2 id="pesaje-titulo" className="text-lg font-semibold theme-text-main m-0 mb-2">
+                                    {soloRevisiones ? 'Responder consulta de mercancía' : 'Responder pesaje'}
+                                </h2>
+                                <EncabezadoFolioPedido pedido={pedido} />
+                                <p className="text-xs theme-text-muted m-0 mt-1">
+                                    {pedido.cliente?.nombre || '—'} · {formatearFechaNegocio(pedido.fecha)}
+                                </p>
+                            </div>
+                            <button type="button" disabled={procesando} onClick={pedirCerrar} className="p-2 min-h-[44px] min-w-[44px] rounded-xl theme-element border theme-border outline-none shrink-0 inline-flex items-center justify-center theme-text-main" aria-label="Cerrar">
+                                <X className="w-4 h-4" />
+                            </button>
                         </div>
-                        <button type="button" disabled={procesando} onClick={pedirCerrar} className="p-2 min-h-[44px] min-w-[44px] rounded-xl theme-element border theme-border outline-none shrink-0 inline-flex items-center justify-center theme-text-main" aria-label="Cerrar">
-                            <X className="w-4 h-4" />
-                        </button>
+                        <div className="flex flex-wrap gap-2 sm:justify-end">
+                            {accionesRespuesta}
+                        </div>
                     </div>
 
                     <nav className="gelia-pedidos-pasos" aria-label="Pasos para responder">
@@ -1282,19 +1371,34 @@ export default function ModalResponderPesaje({
                                     </div>
                                 </div>
                                 <div className="flex flex-wrap gap-2 text-xs font-semibold">
-                                    {resumenAntesDespues.agregados.length > 0 && (
-                                        <span className="px-2 py-1 rounded-lg bg-emerald-500/15 text-emerald-700">
-                                            +{resumenAntesDespues.agregados.length} agregada(s)
-                                        </span>
-                                    )}
-                                    {resumenAntesDespues.retirados.length > 0 && (
-                                        <span className="px-2 py-1 rounded-lg bg-rose-500/15 text-rose-700">
-                                            −{resumenAntesDespues.retirados.length} retirada(s)
-                                        </span>
-                                    )}
-                                    {resumenAntesDespues.mismos.length > 0 && (
+                                    {resumenAntesDespues.piezas.sinCambioPiezas && (
                                         <span className="px-2 py-1 rounded-lg theme-element theme-text-muted border theme-border">
-                                            {resumenAntesDespues.mismos.length} sin cambio de SKU
+                                            Sin cambios de piezas. Se conserva el motivo de la actualización.
+                                        </span>
+                                    )}
+                                    {resumenAntesDespues.piezas.agregadas.length > 0 && (
+                                        <span className="px-2 py-1 rounded-lg bg-emerald-500/15 text-emerald-700">
+                                            {resumenAntesDespues.piezas.agregadas.length} agregada(s): {resumenAntesDespues.piezas.agregadas.map((p) => p.etiqueta).join(', ')}
+                                        </span>
+                                    )}
+                                    {resumenAntesDespues.piezas.retiradas.length > 0 && (
+                                        <span className="px-2 py-1 rounded-lg bg-rose-500/15 text-rose-700">
+                                            {resumenAntesDespues.piezas.retiradas.length} retirada(s): {resumenAntesDespues.piezas.retiradas.map((p) => p.etiqueta).join(', ')}
+                                        </span>
+                                    )}
+                                    {resumenAntesDespues.piezas.sustituidas.length > 0 && (
+                                        <span className="px-2 py-1 rounded-lg gelia-estado-vivo gelia-estado-vivo--aviso">
+                                            {resumenAntesDespues.piezas.sustituidas.length} sustituida(s)
+                                        </span>
+                                    )}
+                                    {resumenAntesDespues.piezas.cantidades.length > 0 && (
+                                        <span className="px-2 py-1 rounded-lg gelia-estado-vivo gelia-estado-vivo--aviso">
+                                            {resumenAntesDespues.piezas.cantidades.length} con cantidad modificada
+                                        </span>
+                                    )}
+                                    {resumenAntesDespues.piezas.condiciones.length > 0 && (
+                                        <span className="px-2 py-1 rounded-lg gelia-estado-vivo gelia-estado-vivo--aviso">
+                                            {resumenAntesDespues.piezas.condiciones.length} con condición modificada
                                         </span>
                                     )}
                                     {resumenAntesDespues.cambioEnvios && (
@@ -1354,7 +1458,7 @@ export default function ModalResponderPesaje({
                             )}
                         </section>
 
-                        {soloRevisiones ? (
+                        {soloRevisiones && (
                         <div className="space-y-2 p-4 rounded-xl border theme-border theme-element">
                             <p className={`${SECCION} m-0`}>Sucursal destino</p>
                             <p className="text-sm font-bold theme-text-main m-0">
@@ -1365,23 +1469,16 @@ export default function ModalResponderPesaje({
                                 })}
                             </p>
                         </div>
-                        ) : (
-                        <div className="space-y-2 p-4 rounded-xl border theme-border theme-element">
-                            <p className={`${SECCION} m-0`}>Dirección de entrega</p>
-                            <DireccionPedidoResumen
-                                compact
-                                conCopia
-                                direccion={pedido.direccion_vigente || pedido.direccionVigente}
-                                domicilioLegacy={pedido.domicilio_entrega}
-                                codigoPostal={pedido.codigo_postal}
-                                codigoDireccion={codigoDireccionCliente(
-                                    pedido.cliente?.numero_cliente,
-                                    (pedido.direccion_vigente || pedido.direccionVigente)?.numero_direccion,
-                                )}
-                            />
-                        </div>
                         )}
 
+                        </div>
+                        <div className="flex flex-wrap items-end justify-between gap-2 mb-3">
+                            <p className="text-sm font-bold theme-text-main m-0">Almacén y pedido</p>
+                            {pdfPedido?.url && (
+                                <button type="button" onClick={() => abrirGaleria([pdfPedido], 0)} className={`${BTN_SECONDARY} inline-flex items-center justify-center gap-1.5 text-xs min-h-[44px]`}>
+                                    <FileText className="w-3.5 h-3.5" /> Ver PDF del pedido
+                                </button>
+                            )}
                         </div>
                         <label className="block text-sm font-bold mb-3">Almacén del catálogo de preparación
                             <select className={`${THEME_SELECT} w-full`} value={almacenBusquedaId || ''} disabled={procesando || revisiones.length > 0}
@@ -1676,23 +1773,17 @@ export default function ModalResponderPesaje({
                         </section>
                         )}
                         </fieldset>
+                        <div className="flex flex-col gap-3 pt-2">
+                            <p className="m-0 text-xs theme-text-muted" role="status">
+                                <strong className="theme-text-main tabular-nums">{revisiones.length} piezas</strong>
+                                {soloRevisiones ? ` · ${bultosAproximados || '—'} bultos` : ` · ${envios.length} envíos · ${new Intl.NumberFormat('es-MX', { maximumFractionDigits: 4 }).format(totalCobrado)} kg cobrados`}
+                                <span className="block mt-0.5">{borradorMsg || 'Revisa los datos antes de registrar la respuesta.'}</span>
+                            </p>
+                            <div className="flex flex-wrap gap-2 sm:justify-end">
+                                {accionesRespuesta}
+                            </div>
                         </div>
-                    </div>
-
-                    <div className="gelia-modal-footer gelia-pedidos-respuesta-footer flex flex-row gap-2 sm:justify-end p-4 md:p-6 pb-[max(1rem,env(safe-area-inset-bottom))] border-t theme-border shrink-0">
-                        <p className="gelia-pedidos-resumen-guardar m-0 text-xs theme-text-muted" role="status">
-                            <strong className="theme-text-main tabular-nums">{revisiones.length} piezas</strong>
-                            {soloRevisiones ? ` · ${bultosAproximados || '—'} bultos` : ` · ${envios.length} envíos · ${new Intl.NumberFormat('es-MX', { maximumFractionDigits: 4 }).format(totalCobrado)} kg cobrados`}
-                            <span className="block mt-0.5">{borradorMsg || 'Revisa los datos antes de registrar la respuesta.'}</span>
-                        </p>
-                        <button type="button" onClick={() => paso > 0 ? cambiarPaso(paso - 1) : pedirCerrar()} className={`${BTN_SECONDARY} outline-none min-h-[44px] sm:w-auto`} disabled={procesando}>{paso > 0 ? 'Atrás' : 'Cerrar'}</button>
-                        {paso < 2 ? (
-                            <button type="button" onClick={() => cambiarPaso(paso + 1)} disabled={procesando} className={`${BTN_PRIMARY} min-h-[44px] flex-1 sm:flex-none`}>{paso === 0 ? 'Revisar productos' : (soloRevisiones ? 'Bultos y evidencias' : 'Cajas y evidencias')}</button>
-                        ) : (
-                            <button type="button" onClick={confirmar} disabled={procesando} aria-busy={procesando} className={`${BTN_PRIMARY} flex items-center justify-center gap-2 outline-none min-h-[44px] flex-1 sm:flex-none sm:w-auto`}>
-                                <Scale className="w-4 h-4" aria-hidden="true" /> <span>{procesando ? 'Guardando…' : (soloRevisiones ? 'Registrar consulta' : 'Registrar pesaje')}</span>
-                            </button>
-                        )}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1723,8 +1814,9 @@ export default function ModalResponderPesaje({
                 mensaje={confirmacion === 'registrar'
                     ? (resumenAntesDespues
                         ? `Antes ${resumenAntesDespues.antes.productos.length} prod. → después ${resumenAntesDespues.despues.productos.length} prod.`
-                            + (resumenAntesDespues.agregados.length ? ` (+${resumenAntesDespues.agregados.length})` : '')
-                            + (resumenAntesDespues.retirados.length ? ` (−${resumenAntesDespues.retirados.length})` : '')
+                            + (resumenAntesDespues.piezas.agregadas.length ? ` (+${resumenAntesDespues.piezas.agregadas.length})` : '')
+                            + (resumenAntesDespues.piezas.retiradas.length ? ` (−${resumenAntesDespues.piezas.retiradas.length})` : '')
+                            + (resumenAntesDespues.piezas.sinCambioPiezas ? ' Sin cambios de piezas.' : '')
                             + (soloRevisiones
                                 ? '.'
                                 : ` · ${envios.length} envío(s), ${Math.round(totalCobrado * 10000) / 10000} kg.`)

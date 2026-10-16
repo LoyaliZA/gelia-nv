@@ -54,6 +54,10 @@ class PedidoBmaAuditoriaController extends Controller
             'ordenar' => ['nullable', 'string', 'max:32'],
         ]);
 
+        if (empty($filtros['tab'])) {
+            $filtros['tab'] = 'PENDIENTES';
+        }
+
         $filtrosEcho = collect($filtros)->only([
             'tab', 'q', 'page', 'catalogo_paqueteria_id', 'departamento_id', 'cliente', 'ordenar',
         ])->all();

@@ -11,13 +11,16 @@ import ModalAtenderSinExistencia from './ModalAtenderSinExistencia';
  */
 export default function SeccionRevisionFisicaPedido({
     pedido, onVerDoc, onVerGaleria, titulo = 'Revisión física CEDIS', puedeAtender = false, puedeCancelar = false,
+    ocultarFotosEnvio = false,
 }) {
     const [revisionActiva, setRevisionActiva] = useState(null);
     if (!pedido) return null;
     const badgeFisico = pedido.estado_fisico_general ? badgeEstadoFisico(pedido.estado_fisico_general) : null;
     const evidenciasCondicion = (pedido.documentos || []).filter((d) => d.tipo === 'evidencia_condicion');
-    const revisiones = [...(pedido.revisiones_producto || pedido.revisionesProducto || [])]
+    const revisionesTodas = [...(pedido.revisiones_producto || pedido.revisionesProducto || [])]
         .sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0));
+    const revisiones = revisionesTodas.filter((r) => !r.retirada_at);
+    const retiradas = revisionesTodas.filter((r) => r.retirada_at);
     const instancias = etiquetasInstanciaRevision(revisiones);
     const docsDeProducto = (revId) => evidenciasCondicion.filter(
         (d) => d.relacion_tipo === 'revision_producto' && String(d.relacion_id) === String(revId),
@@ -45,9 +48,9 @@ export default function SeccionRevisionFisicaPedido({
         return doc.comentario || 'Envío';
     };
     const tieneRevisionFisica = Boolean(pedido.estado_fisico_general)
-        || revisiones.length > 0
+        || revisionesTodas.length > 0
         || evidenciasLote.length > 0
-        || evidenciasEnvio.length > 0
+        || (!ocultarFotosEnvio && evidenciasEnvio.length > 0)
         || Boolean(pedido.tiene_observaciones_fisicas);
     const abiertas = revisiones.filter(revisionSinExistenciaAbierta).length;
     const hayAbierta = abiertas > 0;
@@ -115,8 +118,10 @@ export default function SeccionRevisionFisicaPedido({
                                     )}
                                     <p className="text-sm font-semibold theme-text-main m-0">{r.descripcion_producto}</p>
                                     {b && <span className={b.className} style={b.style}>{b.label}</span>}
-                                    {r.unica_pieza && <span className="text-xs font-semibold theme-text-info">Única pieza</span>}
-                                    {r.mejor_ejemplar && <span className="text-xs font-semibold theme-text-exito">Mejor ejemplar</span>}
+                                    {(r.unica_pieza || r.mejor_ejemplar) && <div className="gelia-pedidos-atributos" aria-label="Características de la pieza">
+                                        {r.unica_pieza && <span className="gelia-pedidos-atributo">Única pieza</span>}
+                                        {r.mejor_ejemplar && <span className="gelia-pedidos-atributo">Mejor ejemplar</span>}
+                                    </div>}
                                     {r.resolucion && (
                                         <span className="text-xs font-semibold theme-text-info">
                                             {r.resolucion_etiqueta || LABELS_RESOLUCION_SIN_EXISTENCIA[r.resolucion] || r.resolucion}
@@ -169,7 +174,7 @@ export default function SeccionRevisionFisicaPedido({
                     </div>
                 </div>
             )}
-            {evidenciasEnvio.length > 0 && onVerDoc && (
+            {!ocultarFotosEnvio && evidenciasEnvio.length > 0 && onVerDoc && (
                 <div className="space-y-2">
                     <h4 className="text-sm font-semibold theme-text-main m-0">Foto por envío</h4>
                     {gruposEnvio.map((docs) => (
@@ -180,6 +185,18 @@ export default function SeccionRevisionFisicaPedido({
                     ))}
                 </div>
             )}
+            {retiradas.length > 0 && <details className="rounded-xl border theme-border p-3">
+                <summary className="min-h-[44px] content-center cursor-pointer text-sm font-semibold theme-text-main">Historial de piezas retiradas ({retiradas.length})</summary>
+                <p className="text-xs theme-text-muted">Estas piezas conservan su evidencia y no forman parte de la revisión actual.</p>
+                {retiradas.map((r) => {
+                    const docs = docsDeProducto(r.id);
+                    return <div key={r.id} className="py-2 border-t theme-border space-y-2">
+                        <p className="text-sm theme-text-main m-0">{r.descripcion_producto} · Retirada el {formatearFechaHoraAuditoria(r.retirada_at)}</p>
+                        {r.comentario && <p className="text-sm theme-text-muted m-0">{r.comentario}</p>}
+                        {(onVerDoc || onVerGaleria) && docs.length > 0 && <button type="button" className={`${BTN_SECONDARY} min-h-[44px]`} onClick={() => verDoc(docs, 0)}>Ver evidencia conservada ({docs.length})</button>}
+                    </div>;
+                })}
+            </details>}
             <ModalAtenderSinExistencia
                 abierto={Boolean(revisionActiva)}
                 pedido={pedido}

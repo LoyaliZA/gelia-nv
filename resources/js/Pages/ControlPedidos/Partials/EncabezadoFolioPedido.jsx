@@ -1,6 +1,6 @@
 import React from 'react';
 
-export default function EncabezadoFolioPedido({ pedido, size = 'md', className = '' }) {
+export default function EncabezadoFolioPedido({ pedido, size = 'md', className = '', mostrarInterno = true }) {
     const folioRemision = pedido?.folio_remision || '—';
     const folioPadre = pedido?.principal?.folio;
     const folioInterno = folioPadre
@@ -13,9 +13,9 @@ export default function EncabezadoFolioPedido({ pedido, size = 'md', className =
             <p className={`${sizeClass} font-bold theme-text-main m-0 leading-tight`}>
                 {folioRemision}
             </p>
-            {folioInterno && (
+            {mostrarInterno && folioInterno && (
                 <p className="text-xs theme-text-muted font-medium m-0 mt-0.5">
-                    {folioInterno}
+                    Folio interno GELIA (generado por el sistema): {folioInterno}
                 </p>
             )}
         </div>

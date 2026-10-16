@@ -83,7 +83,7 @@ class ListarTareasTiendaService
 
         $this->aplicarFiltros($query, $filtros);
 
-        $query->orderByRaw('CASE WHEN fecha_limite IS NOT NULL AND fecha_limite < NOW() THEN 0 ELSE 1 END')
+        $query->orderByRaw('CASE WHEN fecha_limite IS NOT NULL AND fecha_limite < ? THEN 0 ELSE 1 END', [now()])
             ->orderBy('solicitada_at');
 
         return $query->paginate(15)->withQueryString();
@@ -183,7 +183,7 @@ class ListarTareasTiendaService
                     ->orWhere('contacto_telefono_snapshot', 'like', "%{$q}%")
                     ->orWhereHas('referencias', fn ($r) => $r->where('folio', 'like', "%{$q}%"))
                     ->orWhereHas('cliente', fn ($c) => $c->where('nombre', 'like', "%{$q}%")
-                        ->orWhere('nombre_comercial', 'like', "%{$q}%"));
+                        ->orWhere('nombre_razon_social', 'like', "%{$q}%"));
             });
         }
 

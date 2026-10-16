@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import axios from 'axios';
 import { Copy, Link2, Search, X } from 'lucide-react';
+import usePedidoDialog from './usePedidoDialog';
 import {
     THEME_INPUT,
     THEME_SELECT,
@@ -62,6 +63,7 @@ export default function ModalGenerarLinkDireccion({
     const [error, setError] = useState('');
     const [copiado, setCopiado] = useState(false);
     const debounce = useRef(null);
+    const dialog = usePedidoDialog({ abierto, onClose, bloqueado: enviando });
 
     const tieneDirecciones = direccionesCliente.length > 0;
     const direccionSeleccionada = direccionesCliente.find((d) => String(d.id) === String(direccionId)) || null;
@@ -185,13 +187,15 @@ export default function ModalGenerarLinkDireccion({
     return createPortal(
         <div
             className={`${THEME_MODAL_OVERLAY} items-center`}
-            style={{ zIndex: 'calc(var(--gelia-z-modal) + 20)' }}
+            style={{ zIndex: 'calc(var(--gelia-z-toast) + 2)' }}
             onClick={(e) => {
                 e.stopPropagation();
                 deferModalAction(onClose);
             }}
         >
             <div
+                {...dialog}
+                aria-label="Link de dirección"
                 className={`${THEME_MODAL_SHELL} max-w-lg w-full`}
                 onClick={(e) => e.stopPropagation()}
             >

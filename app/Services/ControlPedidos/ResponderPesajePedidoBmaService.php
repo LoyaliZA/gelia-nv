@@ -110,10 +110,13 @@ class ResponderPesajePedidoBmaService
             }
         }
 
+        $cambioPaquete = $this->paqueteCambio($pedido, $revisiones, $soloRevisiones, $numeroBultosTienda, $lineas);
+
         foreach ($revisiones as $rev) {
             if (PedidoBmaRevisionProducto::requiereEvidencia($rev['estado_fisico'])
                 && $rev['evidencias'] === []
-                && ! $this->sesionEvidencia->tieneFotoProducto($pedido, $rev['client_uuid'])) {
+                && ! $this->sesionEvidencia->tieneFotoProducto($pedido, $rev['client_uuid'])
+                && ! $this->evidenciaProductoVigente($pedido, $rev)) {
                 throw new \InvalidArgumentException(
                     "El producto «{$rev['descripcion_producto']}» en estado malo/dañado requiere evidencia."
                 );
@@ -138,11 +141,12 @@ class ResponderPesajePedidoBmaService
                 $uuid = (string) ($linea['client_uuid'] ?? '');
                 $hayLocal = ($evidenciasEnvios[$i] ?? []) !== [];
                 $haySesion = $uuid !== '' && $this->sesionEvidencia->tieneFotoCaja($pedido, $uuid, $i);
-                if (! $hayLocal && ! $haySesion) {
+                $fotoPrevia = ! $cambioPaquete && $this->cajaTieneFoto($pedido, $uuid);
+                if (! $hayLocal && ! $haySesion && ! $fotoPrevia) {
                     throw new \InvalidArgumentException('Adjunte al menos una foto del contenido del envío '.($i + 1).'.');
                 }
             }
-        } elseif ($evidenciasGenerales === [] && ! $this->sesionEvidencia->tieneAlgunaFotoCaja($pedido)) {
+        } elseif ($evidenciasGenerales === [] && ! $this->sesionEvidencia->tieneAlgunaFotoCaja($pedido) && ! (! $cambioPaquete && $this->tieneLoteVigente($pedido))) {
             throw new \InvalidArgumentException(
                 'Adjunte al menos una foto de cómo quedan los productos (evidencia final del pedido).'
             );
@@ -458,20 +462,37 @@ class ResponderPesajePedidoBmaService
             ->where('pedido_bma_id', $pedido->id)
             ->orderBy('orden')
             ->get();
+        if ($existentes->isNotEmpty() && ! PedidoBmaRevisionProducto::conservaRetiradas()) {
+            throw new \RuntimeException('Falta aplicar la migración que conserva las piezas retiradas. La actualización no se guardó para no perder su evidencia.');
+        }
         $usados = [];
 
         foreach ($revisiones as $i => $rev) {
-            $match = $existentes->first(function (PedidoBmaRevisionProducto $row) use ($rev, $usados) {
-                if (isset($usados[$row->id])) {
-                    return false;
+            $revisionId = (int) ($rev['revision_id'] ?? 0);
+            $match = null;
+            if ($revisionId > 0) {
+                $candidato = $existentes->first(function (PedidoBmaRevisionProducto $row) use ($revisionId, $usados) {
+                    return $row->id === $revisionId
+                        && ! isset($usados[$row->id])
+                        && $row->retirada_at === null;
+                });
+                if ($candidato && ! $this->productoDistinto($candidato, $rev)) {
+                    $match = $candidato;
                 }
-                if ($rev['producto_id'] && (int) $row->producto_id === (int) $rev['producto_id']) {
-                    return true;
-                }
+            }
+            if (! $match && $revisionId === 0) {
+                $match = $existentes->first(function (PedidoBmaRevisionProducto $row) use ($rev, $usados) {
+                    if (isset($usados[$row->id]) || $row->retirada_at !== null) {
+                        return false;
+                    }
+                    if ($rev['producto_id'] && (int) $row->producto_id === (int) $rev['producto_id']) {
+                        return true;
+                    }
 
-                return $row->descripcion_producto === $rev['descripcion_producto']
-                    && (string) $row->sku === (string) ($rev['sku'] ?? '');
-            });
+                    return $row->descripcion_producto === $rev['descripcion_producto']
+                        && (string) $row->sku === (string) ($rev['sku'] ?? '');
+                });
+            }
 
             $attrs = [
                 'pedido_bma_id' => $pedido->id,
@@ -506,18 +527,10 @@ class ResponderPesajePedidoBmaService
         }
 
         foreach ($existentes as $row) {
-            if (isset($usados[$row->id])) {
+            if (isset($usados[$row->id]) || $row->retirada_at !== null) {
                 continue;
             }
-            $tieneDocs = PedidoBmaDocumento::query()
-                ->where('pedido_bma_id', $pedido->id)
-                ->where('relacion_tipo', PedidoBmaDocumento::RELACION_REVISION_PRODUCTO)
-                ->where('relacion_id', $row->id)
-                ->exists();
-            if ($tieneDocs) {
-                continue;
-            }
-            $row->delete();
+            $row->update(['retirada_at' => now()]);
         }
     }
 
@@ -654,10 +667,11 @@ class ResponderPesajePedidoBmaService
                     "El producto «{$desc}» en estado {$motivo} requiere comentario."
                 );
             }
+            $revisionId = (int) ($rev['revision_id'] ?? 0);
             if (PedidoBmaRevisionProducto::requiereEvidencia($estado) && $evidencias === []) {
                 $uuid = trim((string) ($rev['client_uuid'] ?? ''));
-                // ponytail: la foto de sesión se valida con el pedido en ejecutar(); aquí solo archivos locales.
-                if ($uuid === '') {
+                // ponytail: la foto de sesión o la evidencia vigente se validan con el pedido en responder().
+                if ($uuid === '' && $revisionId < 1) {
                     throw new \InvalidArgumentException(
                         "El producto «{$desc}» en estado malo/dañado requiere evidencia."
                     );
@@ -700,9 +714,134 @@ class ResponderPesajePedidoBmaService
                 'mejor_ejemplar' => filter_var($rev['mejor_ejemplar'] ?? false, FILTER_VALIDATE_BOOLEAN),
                 'evidencias' => $evidencias,
                 'client_uuid' => trim((string) ($rev['client_uuid'] ?? '')),
+                'revision_id' => $revisionId > 0 ? $revisionId : null,
             ];
         }
 
         return $out;
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $revisiones
+     * @param  list<array<string, mixed>>  $lineas
+     */
+    private function paqueteCambio(PedidoBma $pedido, array $revisiones, bool $solo, int $bultos, array $lineas): bool
+    {
+        $antes = PedidoBmaRevisionProducto::conservaRetiradas()
+            ? $pedido->revisionesProducto()->whereNull('retirada_at')->get()
+            : $pedido->revisionesProducto()->get();
+        if ($antes->isEmpty()) {
+            return true;
+        }
+        if ($this->firmaPiezas($antes) !== $this->firmaPiezas($revisiones)) {
+            return true;
+        }
+        if ($solo) {
+            return (int) $pedido->numero_cajas !== $bultos;
+        }
+        $pedido->loadMissing('cajas');
+
+        return $this->firmaCajas($pedido->cajas->filter(fn (PedidoBmaCaja $c) => $c->estaActiva())) !== $this->firmaCajas($lineas);
+    }
+
+    private function firmaPiezas(iterable $revisiones): string
+    {
+        $partes = [];
+        foreach ($revisiones as $rev) {
+            $producto = is_array($rev) ? ($rev['producto_id'] ?? '') : $rev->producto_id;
+            $sku = is_array($rev) ? ($rev['sku'] ?? '') : $rev->sku;
+            $sol = is_array($rev) ? ($rev['cantidad_solicitada'] ?? '') : $rev->cantidad_solicitada;
+            $enc = is_array($rev) ? ($rev['cantidad_encontrada'] ?? '') : $rev->cantidad_encontrada;
+            $partes[] = implode('|', [(string) $producto, (string) $sku, (string) $sol, (string) $enc]);
+        }
+        sort($partes);
+
+        return implode(';', $partes);
+    }
+
+    private function firmaCajas(iterable $cajas): string
+    {
+        $partes = [];
+        foreach ($cajas as $caja) {
+            $real = is_array($caja) ? ($caja['peso_real_kg'] ?? 0) : $caja->peso_real_kg;
+            $vol = is_array($caja) ? ($caja['peso_volumetrico_kg'] ?? 0) : $caja->peso_volumetrico_kg;
+            $partes[] = round((float) $real, 4).'|'.round((float) $vol, 4);
+        }
+        sort($partes);
+
+        return implode(';', $partes);
+    }
+
+    /**
+     * @param  array<string, mixed>  $rev
+     */
+    private function evidenciaProductoVigente(PedidoBma $pedido, array $rev): bool
+    {
+        $id = (int) ($rev['revision_id'] ?? 0);
+        if ($id < 1) {
+            return false;
+        }
+        $consulta = PedidoBmaRevisionProducto::query()
+            ->where('pedido_bma_id', $pedido->id)
+            ->whereKey($id);
+        if (PedidoBmaRevisionProducto::conservaRetiradas()) {
+            $consulta->whereNull('retirada_at');
+        }
+        $row = $consulta->first();
+        if (! $row || $row->estado_fisico !== $rev['estado_fisico'] || $this->productoDistinto($row, $rev)) {
+            return false;
+        }
+
+        return $row->evidencias()->where(function ($q) {
+            $q->where('activo', true)->orWhereNull('activo');
+        })->exists();
+    }
+
+    /**
+     * @param  array<string, mixed>  $rev
+     */
+    private function productoDistinto(PedidoBmaRevisionProducto $row, array $rev): bool
+    {
+        $idRow = (int) ($row->producto_id ?? 0);
+        $idRev = (int) ($rev['producto_id'] ?? 0);
+        if ($idRow > 0 && $idRev > 0) {
+            return $idRow !== $idRev;
+        }
+        $skuRow = trim((string) ($row->sku ?? ''));
+        $skuRev = trim((string) ($rev['sku'] ?? ''));
+
+        return $skuRow !== '' && $skuRev !== '' && $skuRow !== $skuRev;
+    }
+
+    private function tieneLoteVigente(PedidoBma $pedido): bool
+    {
+        return $pedido->documentos()
+            ->where('tipo', PedidoBmaDocumento::TIPO_EVIDENCIA_CONDICION)
+            ->where('relacion_tipo', PedidoBmaDocumento::RELACION_REVISION_GENERAL)
+            ->where(function ($q) {
+                $q->where('activo', true)->orWhereNull('activo');
+            })
+            ->exists();
+    }
+
+    private function cajaTieneFoto(PedidoBma $pedido, string $uuid): bool
+    {
+        if ($uuid === '') {
+            return false;
+        }
+        $pedido->loadMissing('cajas');
+        $caja = $pedido->cajas->first(fn (PedidoBmaCaja $c) => (string) $c->uuid_operativo === $uuid && $c->estaActiva());
+        if (! $caja) {
+            return false;
+        }
+
+        return $pedido->documentos()
+            ->where('tipo', PedidoBmaDocumento::TIPO_EVIDENCIA_CONDICION)
+            ->where('relacion_tipo', PedidoBmaDocumento::RELACION_ENVIO_CAJA)
+            ->where('relacion_id', $caja->id)
+            ->where(function ($q) {
+                $q->where('activo', true)->orWhereNull('activo');
+            })
+            ->exists();
     }
 }

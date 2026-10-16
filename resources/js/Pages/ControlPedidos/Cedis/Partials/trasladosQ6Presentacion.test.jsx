@@ -36,6 +36,12 @@ it('detalle interno muestra cantidades y bultos y no presenta peso ni guía come
     expect(document.body.textContent).not.toContain('Peso real');
     expect(empacarRequiereModalBultos(pedido)).toBe(true);
 });
+it('detalle muestra badges de única pieza y mejor ejemplar', async () => {
+    const pedido = { ...base, revisiones_producto: [{ id: 2, descripcion_producto: 'Pieza marcada', estado_fisico: 'bueno', unica_pieza: true, mejor_ejemplar: true }] };
+    await act(() => root.render(<ModalDetalleCedis abierto pedido={pedido} onClose={() => {}} />));
+    expect(document.body.textContent).toContain('Única pieza');
+    expect(document.body.textContent).toContain('Mejor ejemplar');
+});
 it('detalle externo conserva campos de peso y guía', async () => {
     await act(() => root.render(<ModalDetalleCedis abierto pedido={{ ...base, es_traslado_interno_pdv: false }} onClose={() => {}} />));
     expect(document.body.textContent).toContain('Origen de la guía');

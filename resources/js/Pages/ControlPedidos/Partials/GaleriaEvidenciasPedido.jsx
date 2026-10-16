@@ -90,7 +90,8 @@ export default function GaleriaEvidenciasPedido({
                             {/pdf/i.test(preview.mime || '') || /\.pdf$/i.test(preview.name || '')
                                 ? <span className="h-full flex flex-col items-center justify-center gap-1 theme-text-muted text-xs"><FileText className="w-6 h-6" aria-hidden="true" /> PDF</span>
                                 : <img src={preview.url} alt={preview.name || `Evidencia ${idx + 1}`} width="112" height="112" loading="lazy" className="w-full h-full object-cover" />}
-                            {preview.remoto && <span className="gelia-pedidos-evidencia-remota">Desde celular</span>}
+                            {preview.vigente && <span className="gelia-pedidos-evidencia-remota">Evidencia vigente</span>}
+                            {preview.remoto && !preview.vigente && <span className="gelia-pedidos-evidencia-remota">Desde celular</span>}
                         </button>
                         <p className="gelia-pedidos-evidencia-nombre" title={preview.name}>{preview.name || `Evidencia ${idx + 1}`}</p>
                         <button type="button" disabled={disabled} onClick={() => setQuitarIdx(idx)} className="gelia-pedidos-evidencia-quitar" aria-label={`Quitar evidencia ${idx + 1}: ${preview.name}`}>

@@ -80,7 +80,7 @@ export default function VisorPdfPaginas({ url, titulo = 'PDF', className = '', m
             )}
             <div
                 ref={hostRef}
-                className="overflow-auto theme-element"
+                className="overflow-auto bg-white"
                 style={{
                     maxHeight: estado.cargando || estado.error ? 0 : maxHeight,
                     minHeight: estado.cargando ? 0 : undefined,

@@ -4,6 +4,7 @@ namespace App\Models\ControlPedidos;
 
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -86,6 +87,7 @@ class PedidoBmaRevisionProducto extends Model
         'resolucion_nota',
         'resolucion_por_id',
         'resolucion_at',
+        'retirada_at',
     ];
 
     protected $casts = [
@@ -96,6 +98,7 @@ class PedidoBmaRevisionProducto extends Model
         'cantidad_encontrada' => 'integer',
         'producto_id' => 'integer',
         'resolucion_at' => 'datetime',
+        'retirada_at' => 'datetime',
     ];
 
     protected $appends = [
@@ -140,6 +143,10 @@ class PedidoBmaRevisionProducto extends Model
 
     public function estaSinExistenciaAbierta(): bool
     {
+        if ($this->retirada_at !== null) {
+            return false;
+        }
+
         if ($this->estado_fisico !== self::ESTADO_SIN_EXISTENCIA
             && ! ($this->cantidad_solicitada !== null && $this->cantidad_encontrada !== null
                 && $this->cantidad_encontrada < $this->cantidad_solicitada)) {
@@ -163,9 +170,15 @@ class PedidoBmaRevisionProducto extends Model
         return self::LABELS_RESOLUCION[$this->resolucion] ?? $this->resolucion;
     }
 
+    public static function conservaRetiradas(): bool
+    {
+        return Schema::hasColumn('pedido_bma_revisiones_producto', 'retirada_at');
+    }
+
     public function scopeSinExistenciaAbierta(Builder $query): Builder
     {
-        return $query->where(fn (Builder $q) => $q->where('estado_fisico', self::ESTADO_SIN_EXISTENCIA)
+        return $query->when(self::conservaRetiradas(), fn (Builder $q) => $q->whereNull('retirada_at'))
+            ->where(fn (Builder $q) => $q->where('estado_fisico', self::ESTADO_SIN_EXISTENCIA)
             ->orWhereColumn('cantidad_encontrada', '<', 'cantidad_solicitada'))
             ->where(function (Builder $q) {
                 $q->whereNull('resolucion')

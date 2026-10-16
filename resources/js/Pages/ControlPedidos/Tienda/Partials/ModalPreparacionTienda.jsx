@@ -83,9 +83,9 @@ export default function ModalPreparacionTienda({ tareaId, atender = false, auth,
 
     return createPortal(<div className={`gelia-pedidos-bma ${THEME_MODAL_OVERLAY} items-center p-2 md:p-4`}>
         <div {...dialog} aria-label={`Preparar ${folio}`} className={`${THEME_MODAL_SHELL} gelia-preparacion-modal w-full max-w-7xl max-h-[95dvh] flex flex-col overflow-hidden`}>
-            <header className="flex items-center justify-between gap-3 p-4 border-b theme-border theme-surface-solid shrink-0">
-                <div><h2 className="text-lg font-bold theme-text-main m-0">{folio}</h2><p className="text-sm theme-text-muted m-0">{tarea?.estado_label || 'Cargando preparación…'}</p></div>
-                <button type="button" className={BTN_SECONDARY} onClick={pedirCerrar} disabled={procesando} aria-label="Cerrar preparación"><X className="w-5 h-5" /></button>
+            <header className="flex items-center justify-between gap-3 px-3 py-2 border-b theme-border theme-surface-solid shrink-0">
+                <div className="min-w-0 break-words"><h2 className="text-base font-bold theme-text-main m-0">{folio}</h2><p className="text-sm theme-text-muted m-0">{tarea?.estado_label || 'Cargando preparación…'}</p></div>
+                <button type="button" className={`${BTN_SECONDARY} min-h-[44px] shrink-0`} onClick={pedirCerrar} disabled={procesando} aria-label="Cerrar preparación"><X className="w-5 h-5" /></button>
             </header>
             <div className="gelia-modal-body flex flex-col">
                 <AvisoResultadoTienda flash={{ error, success: mensaje }} />

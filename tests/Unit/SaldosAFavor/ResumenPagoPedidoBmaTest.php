@@ -7,6 +7,17 @@ use PHPUnit\Framework\TestCase;
 
 class ResumenPagoPedidoBmaTest extends TestCase
 {
+    public function test_caso_operativo_6620_48_con_saf_5000_deja_1620_48(): void
+    {
+        $r = RegistrarPagoPedidoBmaService::calcularResumenCobertura(6620.48, 0, false, 0, 5000, 0);
+
+        $this->assertEquals(6620.48, $r['total_a_cubrir']);
+        $this->assertEquals(5000.0, $r['saldo_a_favor_aplicado']);
+        $this->assertEquals(0.0, $r['total_pagado']);
+        $this->assertEquals(1620.48, $r['pendiente']);
+        $this->assertSame('parcial', $r['cobertura']);
+    }
+
     public function test_saf_mas_pago_exacto_al_neto_es_cubierto_sin_excedente(): void
     {
         $r = RegistrarPagoPedidoBmaService::calcularResumenCobertura(800, 150, true, 50, 200, 800);

@@ -51,6 +51,7 @@ class ResponderPesajePedidoBmaRequest extends FormRequest
             'revisiones.*.evidencias' => ['nullable', 'array'],
             'revisiones.*.evidencias.*' => ['file', 'max:10240', 'mimes:jpg,jpeg,png,webp,pdf'],
             'revisiones.*.client_uuid' => ['nullable', 'string', 'max:64'],
+            'revisiones.*.revision_id' => ['nullable', 'integer'],
         ];
 
         if ($soloRevisiones) {

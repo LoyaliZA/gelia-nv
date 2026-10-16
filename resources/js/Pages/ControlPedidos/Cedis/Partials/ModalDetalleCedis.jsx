@@ -119,8 +119,10 @@ export default function ModalDetalleCedis({
     const remision = remisionDe(pedido);
     const evidenciasApartado = (pedido?.documentos || []).filter((d) => d.tipo === 'evidencia_apartado');
     const evidenciasCondicion = (pedido?.documentos || []).filter((d) => d.tipo === 'evidencia_condicion');
-    const revisiones = [...(pedido.revisiones_producto || pedido.revisionesProducto || [])]
+    const revisionesTodas = [...(pedido.revisiones_producto || pedido.revisionesProducto || [])]
         .sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0));
+    const revisiones = revisionesTodas.filter((r) => !r.retirada_at);
+    const revisionesRetiradas = revisionesTodas.filter((r) => r.retirada_at);
     const instancias = etiquetasInstanciaRevision(revisiones);
     const docsDeProducto = (revId) => evidenciasCondicion.filter(
         (d) => d.relacion_tipo === 'revision_producto' && String(d.relacion_id) === String(revId),
@@ -517,6 +519,12 @@ export default function ModalDetalleCedis({
                                                             )}
                                                             <p className="text-xs font-semibold theme-text-main m-0">{r.descripcion_producto}</p>
                                                             <span className={b.className} style={b.style}>{b.label}</span>
+                                                            {(r.unica_pieza || r.mejor_ejemplar) && (
+                                                                <div className="gelia-pedidos-atributos" aria-label="Características de la pieza">
+                                                                    {r.unica_pieza && <span className="gelia-pedidos-atributo">Única pieza</span>}
+                                                                    {r.mejor_ejemplar && <span className="gelia-pedidos-atributo">Mejor ejemplar</span>}
+                                                                </div>
+                                                            )}
                                                         </div>
                                                         {r.cantidad_solicitada != null && <p className="text-xs theme-text-main m-0">Solicitadas: {r.cantidad_solicitada} · Encontradas: {r.cantidad_encontrada ?? '—'} · Faltantes: {r.cantidad_encontrada == null ? '—' : r.cantidad_solicitada - r.cantidad_encontrada}</p>}
                                                         {r.comentario && <p className="text-xs theme-text-muted font-bold m-0">{r.comentario}</p>}
@@ -539,6 +547,26 @@ export default function ModalDetalleCedis({
                                                                 Ya hay existencias
                                                             </button>
                                                         )}
+                                                        {docs.length > 0 && (
+                                                            <div className="flex flex-wrap gap-2">
+                                                                {docs.map((doc) => (
+                                                                    <MiniaturaDocumento key={doc.id} documento={doc} onVer={setDocPreview} />
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                    {revisionesRetiradas.length > 0 && (
+                                        <div className="space-y-2">
+                                            <p className="text-xs font-semibold theme-text-muted m-0">Piezas retiradas</p>
+                                            {revisionesRetiradas.map((r) => {
+                                                const docs = docsDeProducto(r.id);
+                                                return (
+                                                    <div key={r.id} className="p-3 rounded-xl border theme-border space-y-2">
+                                                        <p className="text-xs font-semibold theme-text-main m-0">{r.descripcion_producto} · Retirada</p>
                                                         {docs.length > 0 && (
                                                             <div className="flex flex-wrap gap-2">
                                                                 {docs.map((doc) => (

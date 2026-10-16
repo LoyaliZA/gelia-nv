@@ -32,6 +32,7 @@ export default function Index({
         tareas: tareasVista,
         metricas: metricasVista,
         cargando,
+        errorListado,
         cargar,
     } = useListadoDiscreto({
         listadoRoute: 'control_pedidos.tienda.listado',
@@ -207,6 +208,9 @@ export default function Index({
                         metricas={metricasVista}
                     />
                     <div className="gelia-tienda-op-divider" aria-hidden />
+                    {errorListado && (
+                        <p className="text-sm font-medium m-0 theme-text-peligro" role="alert">{errorListado}</p>
+                    )}
                     <FiltrosTienda
                         tabActiva={tabActiva}
                         busqueda={busqueda}

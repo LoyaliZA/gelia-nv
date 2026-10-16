@@ -10,8 +10,10 @@ use App\Services\ControlPedidos\PagosPedidoBmaConfig;
 use App\Services\ControlPedidos\RegistrarHistorialPedidoService;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
 use App\Support\ControlPedidos\SnapshotHistorialPedidoBma;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use InvalidArgumentException;
 
 class RegistrarPagoPedidoBmaService
@@ -62,11 +64,54 @@ class RegistrarPagoPedidoBmaService
             throw new InvalidArgumentException('Cada exhibición de pago debe incluir su comprobante.');
         }
 
-        return DB::transaction(function () use ($pedido, $datos, $comprobante, $usuarioId, $monto, $forma, $bancoId) {
+        $clave = Schema::hasColumn('pedido_bma_pagos', 'idempotency_key')
+            ? trim((string) ($datos['idempotency_key'] ?? ''))
+            : '';
+
+        try {
+            return $this->registrarExhibicion($pedido, $datos, $comprobante, $usuarioId, $monto, $forma, $bancoId, $clave);
+        } catch (UniqueConstraintViolationException $e) {
+            if ($clave === '') {
+                throw $e;
+            }
+            $existente = PedidoBmaPago::query()
+                ->where('pedido_bma_id', $pedido->id)
+                ->where('idempotency_key', $clave)
+                ->first();
+            if ($existente) {
+                return $existente->fresh(['banco']);
+            }
+            throw $e;
+        }
+    }
+
+    private function registrarExhibicion(
+        PedidoBma $pedido,
+        array $datos,
+        ?UploadedFile $comprobante,
+        ?int $usuarioId,
+        float $monto,
+        ?string $forma,
+        ?int $bancoId,
+        string $clave,
+    ): PedidoBmaPago {
+        return DB::transaction(function () use ($pedido, $datos, $comprobante, $usuarioId, $monto, $forma, $bancoId, $clave) {
+            $pedido = PedidoBma::query()->lockForUpdate()->findOrFail($pedido->id);
+            if ($clave !== '') {
+                $existente = PedidoBmaPago::query()
+                    ->where('pedido_bma_id', $pedido->id)
+                    ->where('idempotency_key', $clave)
+                    ->first();
+                if ($existente) {
+                    return $existente->fresh(['banco']);
+                }
+            }
+
             $siguiente = ((int) PedidoBmaPago::where('pedido_bma_id', $pedido->id)->max('numero_exhibicion')) + 1;
 
             $attrs = [
                 'pedido_bma_id' => $pedido->id,
+                ...($clave !== '' ? ['idempotency_key' => $clave] : []),
                 'numero_exhibicion' => $siguiente,
                 'monto' => $monto,
                 'catalogo_banco_id' => $bancoId,

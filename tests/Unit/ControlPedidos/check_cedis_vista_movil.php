@@ -28,7 +28,7 @@ $checks = [
     ['filtro min-h 44', str_contains($filtros, 'min-h-[44px]')],
     ['PDF móvil VisorPdfPaginas', str_contains($pesaje, 'VisorPdfPaginas') && str_contains($pesaje, 'Abrir en pestaña')],
     ['iframe PDF desktop conservado', str_contains($pesaje, '<iframe')],
-    ['visor PDF páginas en campo', str_contains($visor, 'VisorPdfPaginas') && str_contains($visor, 'esCampo')],
+    ['visor PDF en páginas', str_contains($visor, 'VisorPdfPaginas') && ! str_contains($visor, '<iframe')],
     ['loadPdfJs en preview libs', str_contains($libs, 'function loadPdfJs')],
     ['dirección en pesaje', str_contains($pesaje, 'DireccionPedidoResumen') && str_contains($pesaje, 'conCopia')],
     ['tel en dirección', str_contains($dir, 'tel:') && str_contains($dir, 'Copiar dirección')],

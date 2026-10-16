@@ -177,7 +177,7 @@ describe('Q3 modal montado: coordinación y confirmaciones', () => {
         expect(axios.post).toHaveBeenCalledTimes(1);
         await act(async () => primera.resolver(respuesta(1)));
         expect(document.querySelector('input[aria-label="Referencia adicional opcional"]').value).toBe('COT-SEGUNDA');
-        expect(document.body.textContent).toContain('cambios pendientes');
+        expect(document.body.textContent).toContain('Cambios pendientes');
         await tick();
         expect(axios.post).toHaveBeenCalledTimes(2);
         expect(axios.post.mock.lastCall[1].revision_esperada).toBe(1);
@@ -186,7 +186,9 @@ describe('Q3 modal montado: coordinación y confirmaciones', () => {
     it('el guardado manual espera el automático y envía su revisión confirmada', async () => {
         const primera = diferida();
         axios.post.mockReturnValueOnce(primera.promesa).mockResolvedValue(respuesta(2));
-        await montar({ pedido: pedidoServidor }); await tick();
+        await montar({ pedido: pedidoServidor });
+        await editarFolio('COT-MANUAL');
+        await tick();
         await guardarManual();
         expect(postFormulario).not.toHaveBeenCalled();
         expect(axios.post).toHaveBeenCalledTimes(1);
@@ -201,12 +203,14 @@ describe('Q3 modal montado: coordinación y confirmaciones', () => {
         await editarFolio('LOCAL-CONSERVADO'); await tick(); await guardarManual();
         expect(axios.post).toHaveBeenCalledTimes(1);
         expect(document.querySelector('input[aria-label="Referencia adicional opcional"]').value).toBe('LOCAL-CONSERVADO');
-        expect(document.body.textContent).toContain('conflicto');
-        expect(document.body.textContent).toContain('Conservar copia local y recargar');
+        expect(document.body.textContent).toContain('Cambio en otra sesión');
+        expect(document.body.textContent).toContain('Conservar copia y recargar');
     });
     it('permite reintentar un error de red con la misma base sin fingir guardado', async () => {
         axios.post.mockRejectedValueOnce(new Error('sin red')).mockResolvedValue(respuesta(1));
-        await montar({ pedido: pedidoServidor }); await tick();
+        await montar({ pedido: pedidoServidor });
+        await editarFolio('COT-RED');
+        await tick();
         expect(document.body.textContent).toMatch(/error/i);
         await guardarManual();
         expect(axios.post.mock.lastCall[1]).toMatchObject({ revision_esperada: 0, base_captura: 'base-inicial' });
@@ -215,8 +219,9 @@ describe('Q3 modal montado: coordinación y confirmaciones', () => {
         const primera = diferida(), segunda = diferida();
         axios.post.mockReturnValueOnce(primera.promesa).mockReturnValueOnce(segunda.promesa).mockResolvedValue({ data: { ok: true } });
         router.post.mockClear();
-        await montar({ pedido: pedidoServidor }); await tick();
+        await montar({ pedido: pedidoServidor });
         await editarFolio('REFERENCIA-RECIENTE');
+        await tick();
         await act(() => {
             const boton = Array.from(document.querySelectorAll('button')).find((b) => b.textContent.includes('Solicitar preparación en Tienda'));
             expect(boton).toBeTruthy(); boton.click(); boton.click();
@@ -226,8 +231,8 @@ describe('Q3 modal montado: coordinación y confirmaciones', () => {
         expect(axios.post).toHaveBeenCalledTimes(2);
         expect(router.post).not.toHaveBeenCalled();
         await act(async () => segunda.resolver(respuesta(2)));
-        expect(axios.post).toHaveBeenCalledTimes(3);
-        expect(axios.post.mock.lastCall[1]).toMatchObject({ folio_referencia: 'REFERENCIA-RECIENTE', revision_esperada: 2, base_captura: 'base-2' });
+        expect(axios.post).toHaveBeenCalledTimes(2);
+        expect(axios.post.mock.lastCall[1]).toMatchObject({ folio_referencia: 'REFERENCIA-RECIENTE', revision_esperada: 1, base_captura: 'base-1' });
         expect(axios.post.mock.lastCall[1].idempotencia_clave).toBeTruthy();
     });
     it('una respuesta de otra apertura no confirma ni reemplaza la nueva captura', async () => {
@@ -249,6 +254,53 @@ describe('Q3 modal montado: coordinación y confirmaciones', () => {
         expect(document.body.textContent).not.toContain('Esperando respuesta de Tienda');
         expect(document.body.textContent).toContain('Esperando CEDIS');
         expect(router.post).not.toHaveBeenCalled();
+    });
+
+    it('guardar borrador confirma sin cerrar el formulario', async () => {
+        const onClose = vi.fn();
+        axios.post.mockResolvedValue(respuesta(1));
+        await montar({ pedido: pedidoServidor, onClose });
+        await editarFolio('COT-ABIERTA');
+        await tick();
+        await guardarManual();
+        await act(async () => { await Promise.resolve(); });
+        expect(onClose).not.toHaveBeenCalled();
+        expect(document.querySelector('[aria-label="Registro del pedido"]')).toBeTruthy();
+        expect(document.querySelector('input[aria-label="Referencia adicional opcional"]').value).toBe('COT-ABIERTA');
+    });
+
+    it('el eco del propio guardado no se anuncia como conflicto', async () => {
+        axios.post.mockResolvedValue({ data: { ...respuesta(1).data, updated_at: '2026-10-16T19:00:00+00:00' } });
+        await montar({ pedido: pedidoServidor });
+        await editarFolio('COT-ECO');
+        await tick();
+        await act(async () => { await Promise.resolve(); });
+        await act(async () => {
+            root.render(<ModalFormPedido abierto onClose={() => {}} catalogos={catalogos} pedido={{
+                ...pedidoServidor,
+                revision_registro: 1,
+                base_captura: 'base-1',
+                updated_at: '2026-10-16T19:00:00.000000Z',
+                solicitud_preparacion: { ...pedidoServidor.solicitud_preparacion, folio_referencia: 'COT-SERVIDOR' },
+            }} />);
+        });
+        expect(document.body.textContent).not.toContain('El servidor actualizó este pedido');
+        expect(document.querySelector('input[aria-label="Referencia adicional opcional"]').value).toBe('COT-ECO');
+    });
+
+    it('reabre en la última etapa válida', async () => {
+        axios.post.mockResolvedValue(respuesta(1));
+        await montar({ pedido: pedidoServidor });
+        await act(() => {
+            const enlace = Array.from(document.querySelectorAll('a')).find((n) => n.textContent.includes('Pago y remisión'));
+            expect(enlace).toBeTruthy();
+            enlace.click();
+        });
+        expect(document.querySelector('a[aria-current="page"]').textContent).toContain('Pago y remisión');
+        await act(async () => root.unmount());
+        root = createRoot(container);
+        await montar({ pedido: pedidoServidor });
+        expect(document.querySelector('a[aria-current="page"]').textContent).toContain('Pago y remisión');
     });
 
 });

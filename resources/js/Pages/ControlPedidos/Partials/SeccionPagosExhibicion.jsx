@@ -27,6 +27,7 @@ import InputMoneda from './InputMoneda';
 import ModalVistaPreviaDocumento, { MiniaturaDocumento } from './ModalVistaPreviaDocumento';
 import ModalMotivoRechazo from './ModalMotivoRechazo';
 import { archivosImagenDesdeClipboard, documentoDesdeArchivoLocal } from './archivosDesdeClipboard';
+import { importeNetoRestante } from './persistenciaFormularioPedido';
 
 const formaRequiereBanco = (forma, formasPago = []) => {
     const found = formasPago.find((f) => f.codigo === forma);
@@ -101,6 +102,7 @@ export default function SeccionPagosExhibicion({
     zonas = [],
     zonaId = null,
     limiteCreditoAutorizado = null,
+    envioEsBase = false,
 }) {
     const [resumen, setResumen] = useState(null);
     const [pagos, setPagos] = useState([]);
@@ -120,6 +122,7 @@ export default function SeccionPagosExhibicion({
         referencia: '',
         fecha_pago: '',
         comprobante: null,
+        idempotency_key: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `pago-${Date.now()}`,
     });
 
     const requiereBanco = formaRequiereBanco(form.data.forma_pago, formas);
@@ -167,6 +170,7 @@ export default function SeccionPagosExhibicion({
             aplicaSeguro: Boolean(aplicaSeguro),
             costoSeguro: costoSeguro ?? 0,
             separarCostoEnvio: separarCostoEnvioDeReexpedicion,
+            envioEsBase,
         });
         const envioParaCobertura = omiteEnvio
             ? 0
@@ -275,8 +279,15 @@ export default function SeccionPagosExhibicion({
         const opts = {
             forceFormData: true,
             preserveScroll: true,
-            onSuccess: () => {
+            preserveState: true,
+            onSuccess: (page) => {
+                const errorFlash = page?.props?.flash?.error;
+                if (errorFlash) {
+                    form.setError('monto', typeof errorFlash === 'string' ? errorFlash : 'No se pudo registrar el pago.');
+                    return;
+                }
                 resetForm();
+                form.setData('idempotency_key', (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `pago-${Date.now()}`);
                 // Editar no implica dividir: si queda un solo pago, volver a modo único.
                 if (eraEdicion && pagos.length <= 1) {
                     setDividido(false);
@@ -436,7 +447,6 @@ export default function SeccionPagosExhibicion({
     const modoUnicoConPago = !dividido && pagos.length === 1 && !editandoId;
     const totalACubrir = resumen?.total_a_cubrir ?? resumen?.total_final;
     const totalPagado = resumen?.total_pagado ?? resumen?.total_recibido;
-    const safAplicado = resumen?.saldo_a_favor_aplicado ?? resumen?.saldos_aplicados ?? 0;
     const pendiente = Number(resumen?.pendiente || 0);
     const excedenteGenerado = Number(resumen?.excedente_generado ?? resumen?.excedente ?? 0);
 
@@ -618,16 +628,20 @@ export default function SeccionPagosExhibicion({
             {resumen && !ocultarResumen && (
                 <div className="grid grid-cols-2 gap-2 p-3 rounded-xl border theme-border theme-element text-xs font-bold">
                     <div className="theme-text-muted col-span-2">
-                        Total a cubrir:{' '}
+                        Total exigible del pedido:{' '}
                         <strong className="theme-text-main">{formatearMoneda(totalACubrir)}</strong>
                     </div>
                     <div className="theme-text-muted col-span-2">
-                        Total pagado por el cliente:{' '}
+                        Saldo a favor aplicado:{' '}
+                        <strong className="theme-text-main">{formatearMoneda(resumen.saldo_a_favor_aplicado ?? resumen.saldos_aplicados ?? 0)}</strong>
+                    </div>
+                    <div className="theme-text-muted col-span-2">
+                        Pagos válidos acumulados:{' '}
                         <strong className="theme-text-main">{formatearMoneda(totalPagado)}</strong>
                     </div>
                     {pendiente > 0.01 ? (
                         <div className="col-span-2 text-amber-700 dark:text-amber-400">
-                            Saldo pendiente:{' '}
+                            Importe neto restante por pagar:{' '}
                             <strong>{formatearMoneda(pendiente)}</strong>
                         </div>
                     ) : excedenteGenerado > 0.01 ? (
@@ -637,14 +651,8 @@ export default function SeccionPagosExhibicion({
                         </div>
                     ) : (
                         <div className="theme-text-muted col-span-2">
-                            Saldo pendiente:{' '}
+                            Importe neto restante por pagar:{' '}
                             <strong className="theme-text-main">{formatearMoneda(0)}</strong>
-                        </div>
-                    )}
-                    {Number(safAplicado) > 0.01 && (
-                        <div className="col-span-2" style={{ color: 'var(--color-exito)' }}>
-                            Saldo a favor aplicado:{' '}
-                            <strong>- {formatearMoneda(safAplicado)}</strong>
                         </div>
                     )}
                     {pendiente > 0.01 && (
@@ -662,6 +670,9 @@ export default function SeccionPagosExhibicion({
                     </div>
                 </div>
             )}
+            {(resumen?.bloqueos || []).filter((bloqueo) => !/Faltan \$|Falta registrar exhibiciones/.test(bloqueo)).map((bloqueo) => (
+                <p key={bloqueo} className="text-xs font-bold m-0" style={{ color: 'var(--color-peligro)' }}>{bloqueo}</p>
+            ))}
             {mostrarFormulario && (
                 <form
                     onSubmit={registrar}
@@ -670,11 +681,37 @@ export default function SeccionPagosExhibicion({
                 >
                     <div>
                         <label className={`${THEME_LABEL} mb-1.5 block`}>Monto</label>
-                        <InputMoneda
-                            value={form.data.monto}
-                            onChange={(v) => form.setData('monto', v)}
-                            className="w-full py-2.5"
-                        />
+                        <div className="flex flex-wrap items-center gap-2">
+                            <InputMoneda
+                                value={form.data.monto}
+                                onChange={(v) => form.setData('monto', v)}
+                                className="w-full min-w-[8rem] flex-1 py-2.5"
+                            />
+                            <button
+                                type="button"
+                                className={`${BTN_SECONDARY} text-xs min-h-[44px] outline-none`}
+                                disabled={importeNetoRestante(resumen) <= 0}
+                                onClick={() => form.setData('monto', importeNetoRestante(resumen))}
+                            >
+                                Usar saldo restante
+                            </button>
+                        </div>
+                        {form.errors.monto && (
+                            <p className="text-[10px] font-bold mt-1 m-0" style={{ color: 'var(--color-peligro)' }}>{form.errors.monto}</p>
+                        )}
+                        {Number(form.data.monto) > 0 && resumen && (
+                            <p className="text-[10px] theme-text-muted font-bold mt-1 m-0">
+                                {(() => {
+                                    const tol = Number(resumen.tolerancia_aplicada ?? resumen.tolerancia ?? 0.44);
+                                    const pend = Number(resumen.pendiente || 0);
+                                    const monto = Number(form.data.monto || 0);
+                                    const delta = Math.round((pend - monto) * 100) / 100;
+                                    if (Math.abs(delta) <= tol) return 'Este pago cubre el pendiente. No genera excedente.';
+                                    if (delta > tol) return `Quedaría pendiente ${formatearMoneda(delta)}.`;
+                                    return `Excedente de este pago: ${formatearMoneda(Math.abs(delta))}.`;
+                                })()}
+                            </p>
+                        )}
                     </div>
                     <div>
                         <label className={`${THEME_LABEL} mb-1.5 block`}>Forma de pago</label>

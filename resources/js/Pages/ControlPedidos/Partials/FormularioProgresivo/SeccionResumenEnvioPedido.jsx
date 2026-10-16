@@ -29,7 +29,7 @@ export default function SeccionResumenEnvioPedido({
                 <div className="flex justify-between theme-text-muted font-bold"><span>Seguro</span><span>{formatearMoneda(costoSeguro)}</span></div>
                 <div className="flex justify-between font-bold" style={{ color: 'var(--color-exito)' }}><span>Saldo a favor</span><span>- {formatearMoneda(saldoFavor)}</span></div>
                 <div className="flex justify-between font-black pt-2 border-t theme-border" style={{ color: 'var(--color-primario)' }}>
-                    <span>A cobrar</span><span>{formatearMoneda(totalCobrar)}</span>
+                    <span>Neto restante</span><span>{formatearMoneda(totalCobrar)}</span>
                 </div>
             </div>
             {accionLabel && (

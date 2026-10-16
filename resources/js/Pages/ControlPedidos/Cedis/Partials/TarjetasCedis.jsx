@@ -15,6 +15,7 @@ import {
     complementosDe,
     esPedidoEmpacadoCedis,
     etiquetaAlmacen,
+    etiquetaSucursal,
     formatearFechaNegocio,
     formatearFechaHoraAuditoria,
     BTN_PRIMARY,
@@ -26,6 +27,7 @@ import {
     mostrarNotaCompraCedis,
     nombresDepartamentosVendedor,
 } from '../../Partials/pedidosBmaStyles';
+import { pedidoEsTrasladoInternoPdv } from '../../Partials/destinoSucursalPedido';
 import EncabezadoFolioPedido from '../../Partials/EncabezadoFolioPedido';
 import BloqueVendedorPedido from '../../Partials/BloqueVendedorPedido';
 import BotonAccionCubico from '../../Partials/BotonAccionCubico';
@@ -49,6 +51,10 @@ function TarjetaPedido({
     const pendientePesaje = pedido.estatus_envio === 'pendiente_pesaje';
     const badgeEmpaque = badgeEmpaqueSemantico(fase, pedido.es_resguardo, Boolean(pedido.resguardo_apartado_at));
     const badgeEnvio = badgeEstatusEnvio(pedido.estatus_envio, { forzarPesaje: true });
+    if (badgeEnvio && soloMercancia) {
+        if (pedido.estatus_envio === 'pendiente_pesaje') badgeEnvio.label = 'Pendiente de consulta de mercancía';
+        if (pedido.estatus_envio === 'pesaje_listo') badgeEnvio.label = 'Consulta de mercancía respondida';
+    }
     const badgeRetraso = pedido.guia_retraso ? badgeRetrasoGuia() : null;
     const badgesSla = badgesRetrasoSla(pedido);
     const badgeComp = badgeConComplementos(pedido);
@@ -72,17 +78,21 @@ function TarjetaPedido({
     const puedeApartar = Boolean(pedido.es_resguardo) && fase === 'EN_CEDIS' && !pedido.resguardo_apartado_at;
     const tieneGuiaPdf = tieneGuiaPdfDisponible(pedido);
     const requiereLogistica = pedidoRequiereLogistica(pedido);
+    const trasladoInterno = pedidoEsTrasladoInternoPdv(pedido);
+    const preparacion = pedido.tarea_preparacion_vigente || pedido.tarea_preparacion_respondida || pedido.tarea_preparacion;
+    const destino = pedido.sucursal_destino || pedido.sucursalDestino;
+    const revisiones = (pedido.revisiones_producto || pedido.revisionesProducto || []).filter((r) => !r.retirada_at);
     const ringRetraso = pedido.guia_retraso
         || tieneRetrasoEmpaqueActivo(pedido)
         || tieneRetrasoRecoleccionActivo(pedido);
 
     return (
         <article aria-label={`Pedido ${pedido.folio_remision || pedido.folio}`} className={`${geliaCardClass()} gelia-pedidos-tarjeta p-4 ${esErrorCedis ? 'ring-1 ring-[color:color-mix(in_srgb,var(--color-aviso)_40%,transparent)]' : ''} ${ringRetraso ? 'ring-1 ring-[color:color-mix(in_srgb,var(--color-aviso)_40%,transparent)]' : ''}`}>
-            {pedido.origen?.nombre && (
-                <p className="gelia-pedidos-tarjeta-origen m-0">
-                    Origen: {pedido.origen.nombre}
-                </p>
-            )}
+            <header className="gelia-cedis-tipo">
+                <span className="text-xs theme-text-muted">Tipo de pedido</span>
+                <strong>{pedido.origen?.nombre || 'Tipo no disponible'}</strong>
+                {trasladoInterno && <span className="text-sm font-semibold theme-text-info">Traslado interno a punto de venta</span>}
+            </header>
             <div className="gelia-pedidos-tarjeta-cabecera flex flex-col gap-3">
                 <div className="min-w-0">
                     <EncabezadoFolioPedido pedido={pedido} size="sm" />
@@ -128,13 +138,18 @@ function TarjetaPedido({
                     icon={Scale}
                 >
                     {pedido.consulta_actualizacion_pendiente || pedido.motivo_repesaje
-                        ? `Actualización (${LABELS_MOTIVO_REPESAJE[pedido.motivo_repesaje] || pedido.motivo_repesaje || 'cambio'}). Revise el anexo/PDF y confirme.`
+                        ? `Actualización (${LABELS_MOTIVO_REPESAJE[pedido.motivo_repesaje] || 'revise el detalle'}). Revise el anexo/PDF y confirme.`
                         : (soloMercancia
                             ? `Revise el PDF o foto, registre piezas, disponibilidad, condición y evidencia.${pedido.paqueteria?.requiere_caja ? ' El transporte pide tipo de caja y bultos, sin kilogramos.' : ' Este recorrido no pide kilogramos de CEDIS.'}`
                             : 'Revise el PDF o foto del pedido y registre peso, cajas y la foto de cada envío. La tarifa local solo exime kilos cuando requiere_peso es falso.')}
+                    {actualizacionMercanciaPendiente && <span className="block mt-1">Empaque y salida bloqueados hasta resolver la actualización.</span>}
                 </AvisoOperativoPedido>
             )}
 
+            {actualizacionMercanciaPendiente && !pendientePesaje && <AvisoOperativoPedido label="Actualización pendiente" tono="warning">
+                {revisiones.length > 0 ? `${revisiones.length} producto(s) en la revisión vigente. ` : ''}
+                Revise los cambios solicitados en el detalle y responda la consulta. Empaque y salida bloqueados.
+            </AvisoOperativoPedido>}
             {complementos.length > 0 && (
                 <div className="rounded-xl border theme-border theme-element p-2.5 space-y-1">
                     <p className="text-xs font-semibold theme-text-info m-0">Complementos</p>
@@ -161,12 +176,15 @@ function TarjetaPedido({
             <div className="gelia-pedidos-tarjeta-datos grid grid-cols-2 gap-x-3 gap-y-3 text-xs font-medium theme-text-muted">
                 <div>
                     <p className="text-xs font-medium m-0">Cliente</p>
-                    <p className="text-xs theme-text-main m-0 mt-0.5 normal-case">{pedido.cliente?.nombre || '—'}</p>
+                    <p className="text-sm font-semibold theme-text-main m-0 mt-0.5 normal-case">{pedido.cliente?.nombre || '—'}</p>
                 </div>
                 <div>
-                    <p className="text-xs font-medium m-0">Almacén</p>
+                    <p className="text-xs font-medium m-0">Almacén de salida</p>
                     <p className="text-xs theme-text-main m-0 mt-0.5 normal-case">{etiquetaAlmacen(pedido.almacen)}</p>
                 </div>
+                {destino && <div><p className="text-xs font-medium m-0">Destino</p><p className="text-sm theme-text-main m-0 mt-0.5">{etiquetaSucursal(destino)}</p></div>}
+                {preparacion?.modalidad?.nombre && <div><p className="text-xs font-medium m-0">Preparación</p><p className="text-sm theme-text-main m-0 mt-0.5">{preparacion.modalidad.nombre}</p></div>}
+                {!requiereLogistica && pedido.numero_cajas != null && <div><p className="text-xs font-medium m-0">Bultos a preparar</p><p className="text-sm theme-text-main m-0 mt-0.5">{pedido.numero_cajas}</p></div>}
                 {requiereLogistica && (
                 <>
                 <div>
@@ -222,11 +240,7 @@ function TarjetaPedido({
                     Esperando guía del cliente (vendedora). Solo lectura hasta que cargue la guía.
                 </AvisoOperativoPedido>
             )}
-            {actualizacionMercanciaPendiente && (puedeEmpacar || fase === 'EN_CEDIS' || fase === 'INCIDENCIA_CEDIS' || fase === 'PENDIENTE_DE_ENVIO') && (
-                <AvisoOperativoPedido label="Mercancía" tono="warning">
-                    Hay un cambio de piezas pendiente. Confirme la consulta antes de empacar o marcar el envío.
-                </AvisoOperativoPedido>
-            )}
+
 
             <div className="gelia-pedidos-tarjeta-acciones pt-2">
                 {pendientePesaje && (

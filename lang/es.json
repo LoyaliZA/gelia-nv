@@ -3,5 +3,8 @@
     "All rights reserved.": "Todos los derechos reservados.",
     "Hello!": "¡Hola!",
     "Whoops!": "¡Ups!",
-    "If you're having trouble clicking the \":actionText\" button, copy and paste the URL below\ninto your web browser:": "Si tienes problemas para hacer clic en el botón \":actionText\", copia y pega la siguiente URL en tu navegador:"
+    "If you're having trouble clicking the \":actionText\" button, copy and paste the URL below\ninto your web browser:": "Si tienes problemas para hacer clic en el botón \":actionText\", copia y pega la siguiente URL en tu navegador:",
+    "The given data was invalid.": "Los datos enviados no son válidos.",
+    "(and :count more error)": "(y :count error más)",
+    "(and :count more errors)": "(y :count errores más)"
 }

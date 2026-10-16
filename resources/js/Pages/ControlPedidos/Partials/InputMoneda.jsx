@@ -42,6 +42,7 @@ export default function InputMoneda({
     onChange,
     className = '',
     readOnly = false,
+    disabled = false,
     placeholder = '0.00',
 }) {
     const [focused, setFocused] = useState(false);
@@ -78,6 +79,7 @@ export default function InputMoneda({
             type="text"
             inputMode="decimal"
             readOnly={readOnly}
+            disabled={disabled}
             placeholder={placeholder}
             value={focused ? texto : (value === '' || value == null ? '' : formatearMonedaInput(value))}
             onFocus={handleFocus}

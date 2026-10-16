@@ -6,10 +6,74 @@ use App\Models\ControlPedidos\CatalogoModalidadPreparacionPedido;
 use App\Models\ControlPedidos\PedidoBmaCaratula;
 use App\Models\ControlPedidos\PedidoBmaReferencia;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Arr;
 use Illuminate\Validation\Rule;
 
 abstract class PedidoBmaRequestBase extends FormRequest
 {
+    /** Casillas que el formulario envía como texto en multipart/form-data. */
+    private const CAMPOS_BOOLEANOS = [
+        'aplica_saldo_favor',
+        'direccion_manual_excepcion',
+        'envia_a_otra_persona',
+        'es_resguardo',
+        'anexar_remision',
+        'aplica_seguro',
+        'cliente_proporciona_guia',
+        'envio_por_cobrar',
+        'reabrir_pago_costos',
+        'prioridad_md',
+        'enviar',
+        'direccion.domicilio_irregular',
+        'solicitud_preparacion.entrega_municipal.destinatario_es_cliente',
+    ];
+
+    protected function prepareForValidation(): void
+    {
+        // La interfaz está en español; APP_LOCALE sigue en inglés y, sin esto, Laravel responde en inglés.
+        app()->setLocale('es');
+
+        $datos = $this->all();
+        $cambios = [];
+
+        foreach (self::CAMPOS_BOOLEANOS as $campo) {
+            if (! Arr::has($datos, $campo)) {
+                continue;
+            }
+
+            $actual = Arr::get($datos, $campo);
+            $normalizado = self::booleanoDeFormulario($actual);
+            if ($normalizado === $actual) {
+                continue;
+            }
+
+            Arr::set($datos, $campo, $normalizado);
+            $raiz = strstr($campo, '.', true) ?: $campo;
+            $cambios[$raiz] = $datos[$raiz];
+        }
+
+        if ($cambios !== []) {
+            $this->merge($cambios);
+        }
+    }
+
+    /**
+     * Laravel solo acepta true, false, 0, 1, "0" y "1".
+     * Axios, al usar multipart, manda las cadenas "true" y "false".
+     */
+    public static function booleanoDeFormulario(mixed $valor): mixed
+    {
+        if (! is_string($valor)) {
+            return $valor;
+        }
+
+        return match (strtolower(trim($valor))) {
+            '1', 'true', 'on', 'yes', 'si', 'sí' => 1,
+            '0', 'false', 'off', 'no' => 0,
+            default => $valor,
+        };
+    }
+
     protected function reglasComunes(): array
     {
         return [

@@ -3,6 +3,7 @@ import { ChevronDown, ChevronUp } from 'lucide-react';
 import { THEME_INPUT } from '../../../utils/geliaTheme';
 import { THEME_LABEL, etiquetaEnvio, formatearMoneda } from './pedidosBmaStyles';
 import InputMoneda from './InputMoneda';
+import { MiniaturaDocumento } from './ModalVistaPreviaDocumento';
 
 /**
  * Tarjeta reutilizable de un envío (caja) del pedido.
@@ -22,6 +23,8 @@ export default function TarjetaEnvioPedido({
     incompleto = false,
     /** false = modo legado: no mostrar costos por caja (evita "—" leído como incompleto). */
     mostrarCostos = true,
+    /** El seguro del pedido se calcula en cotización; no se captura por caja. */
+    mostrarSeguro = true,
 }) {
     const [abierto, setAbierto] = useState(Boolean(abiertoInicial));
     const uuid = caja?.uuid_operativo || caja?.client_uuid || '';
@@ -99,6 +102,7 @@ export default function TarjetaEnvioPedido({
                                     <p className="text-sm font-bold theme-text-main m-0">{formatearMoneda(costoEnvio)}</p>
                                 )}
                             </div>
+                            {mostrarSeguro && (
                             <div>
                                 <label className={`${THEME_LABEL} mb-1 block`}>Costo seguro</label>
                                 {modo === 'costos' && !bloqueado ? (
@@ -107,6 +111,7 @@ export default function TarjetaEnvioPedido({
                                     <p className="text-sm font-bold theme-text-main m-0">{formatearMoneda(costoSeguro)}</p>
                                 )}
                             </div>
+                            )}
                             <div>
                                 <label className={`${THEME_LABEL} mb-1 block`}>Costo adicional</label>
                                 {modo === 'costos' && !bloqueado ? (
@@ -133,18 +138,17 @@ export default function TarjetaEnvioPedido({
                     )}
 
                     {documentos.length > 0 && (
-                        <div className="space-y-1">
+                        <div className="space-y-2">
                             <p className="text-[9px] font-black uppercase theme-text-muted m-0">Documentos</p>
-                            {documentos.map((d) => (
-                                <button
-                                    key={d.id}
-                                    type="button"
-                                    onClick={() => onVerDoc?.(d)}
-                                    className="block text-xs font-bold underline theme-text-main outline-none"
-                                >
-                                    {d.nombre_original || d.tipo || `Doc ${d.id}`}
-                                </button>
-                            ))}
+                            <div className="flex flex-wrap gap-2">
+                                {documentos.map((d, indice) => (
+                                    <MiniaturaDocumento
+                                        key={d.id || indice}
+                                        documento={d}
+                                        onVer={(doc) => onVerDoc?.(documentos, Math.max(0, documentos.indexOf(doc)))}
+                                    />
+                                ))}
+                            </div>
                         </div>
                     )}
                 </div>
