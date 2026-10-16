@@ -255,7 +255,14 @@ export default function TarjetaVendedorGerencia({
                         referenciaAt={cronometro.referenciaAt}
                         servidorAt={servidorAt}
                         modo={cronometro.modo}
+                        alerta={persona.estado_vendedor === 'en_espera'}
                     />
+                )}
+
+                {persona.estado_vendedor === 'en_espera' && (
+                    <p className="text-xs font-semibold theme-text-muted m-0">
+                        Volverá a la cola al terminar la cuenta regresiva.
+                    </p>
                 )}
 
                 {mostrarCierrePendiente && (

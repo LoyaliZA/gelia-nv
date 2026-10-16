@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\PuntoVenta;
 
+use App\Events\PuntoVenta\AtencionCerrada;
 use App\Models\ConfiguracionSistema;
 use App\Models\PuntoVenta\TurnoPdv;
 use App\Models\PuntoVenta\TurnoPdvAtencion;
@@ -15,6 +16,8 @@ use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Queue;
 use Inertia\Testing\AssertableInertia as Assert;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
@@ -162,6 +165,52 @@ class GestionVendedoresPdvTest extends TestCase
         $this->assertNotEmpty($miembro['atencion_actual']['espera_inicial_expira_at']);
         $this->assertArrayHasKey('plazos_turnos', $response->json());
         $this->assertSame(5, $response->json('plazos_turnos.espera_inicial_minutos'));
+    }
+
+    public function test_cierre_desde_operacion_respeta_espera_configurada_y_expone_cuenta_regresiva(): void
+    {
+        $this->travelTo(now()->startOfSecond());
+        Queue::fake();
+        Event::fake([AtencionCerrada::class]);
+        $plazos = app(PlazosTurnosPdvConfig::class);
+        $plazos->persistir(array_merge($plazos->configuracionInicialAprobada(), ['cooldown_segundos' => 45]));
+        app(GestionarEquipoOperativoPdvService::class)->activar($this->gerente, $this->vendedor, now());
+        $turno = TurnoPdv::factory()->create([
+            'sucursal_id' => $this->sucursal->id,
+            'estado' => TurnoPdv::ESTADO_ASIGNADO,
+        ]);
+        $atencion = TurnoPdvAtencion::factory()->create([
+            'turno_id' => $turno->id,
+            'user_id' => $this->vendedor->id,
+            'fin_at' => null,
+        ]);
+        $turno->update(['atencion_actual_id' => $atencion->id]);
+        $limite = now()->addSeconds(45)->toIso8601String();
+
+        $this->actingAs($this->gerente)
+            ->postJson(route('punto_venta.turnos.cerrar_atencion', $turno), [
+                'version' => $turno->version,
+                'idempotency_key' => 'pdv:operacion:espera-configurada',
+                'motivo' => 'no_se_presento',
+            ])->assertOk();
+
+        $this->getJson(route('punto_venta.operacion.datos'))
+            ->assertOk()
+            ->assertJsonPath('equipo.0.estado_vendedor', 'en_espera')
+            ->assertJsonPath('equipo.0.recibe_turnos', false)
+            ->assertJsonPath('equipo.0.atencion_actual', null)
+            ->assertJsonPath('equipo.0.cronometro.modo', 'restante')
+            ->assertJsonPath('equipo.0.cronometro.referencia_at', $limite);
+
+        $this->travel(44)->seconds();
+        $this->getJson(route('punto_venta.operacion.datos'))
+            ->assertJsonPath('equipo.0.estado_vendedor', 'en_espera')
+            ->assertJsonPath('equipo.0.recibe_turnos', false);
+
+        $this->travel(1)->seconds();
+        $this->getJson(route('punto_venta.operacion.datos'))
+            ->assertJsonPath('equipo.0.estado_vendedor', 'disponible')
+            ->assertJsonPath('equipo.0.recibe_turnos', true);
     }
 
     public function test_gerencia_consulta_plazos_turnos(): void

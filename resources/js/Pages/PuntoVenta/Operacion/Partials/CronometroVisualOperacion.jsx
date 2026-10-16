@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Clock } from 'lucide-react';
 import { formatearCronometro } from '../../Turnos/Partials/tableroVentasUtils';
 
@@ -23,14 +23,25 @@ export default function CronometroVisualOperacion({
     compacto = false,
     alerta = false,
 }) {
-    const [milisegundos, setMilisegundos] = useState(() => calcularDisplay(modo, referenciaAt, servidorAt));
+    const [, setTick] = useState(0);
+    const reloj = useMemo(() => ({
+        servidor: new Date(servidorAt).getTime(),
+        cliente: Date.now(),
+    }), [servidorAt]);
 
     useEffect(() => {
-        const actualizar = () => setMilisegundos(calcularDisplay(modo, referenciaAt, servidorAt));
-        actualizar();
-        const intervalo = setInterval(actualizar, 1000);
+        const intervalo = setInterval(() => setTick((tick) => tick + 1), 1000);
         return () => clearInterval(intervalo);
-    }, [modo, referenciaAt, servidorAt]);
+    }, []);
+
+    const ahora = reloj.servidor + Math.max(0, Date.now() - reloj.cliente);
+    const milisegundos = Number.isFinite(ahora)
+        ? calcularDisplay(modo, referenciaAt, ahora)
+        : null;
+    // La espera solo debe mostrar cero cuando ya se cumplió el plazo completo.
+    const display = modo === 'restante' && milisegundos !== null
+        ? Math.ceil(milisegundos / 1000) * 1000
+        : milisegundos;
 
     if (!referenciaAt) return null;
 
@@ -43,7 +54,7 @@ export default function CronometroVisualOperacion({
                     className={`${compacto ? 'text-sm' : 'text-lg'} font-black tabular-nums m-0 ${alerta ? 'text-amber-700 dark:text-amber-300' : 'theme-text-main'}`}
                     aria-live="off"
                 >
-                    {formatearCronometro(milisegundos)}
+                    {formatearCronometro(display)}
                 </p>
             </div>
         </div>

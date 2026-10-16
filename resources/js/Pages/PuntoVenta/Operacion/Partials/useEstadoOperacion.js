@@ -10,9 +10,12 @@ export default function useEstadoOperacion({
     const [estado, setEstado] = useState(estadoProp ?? null);
     const [cargando, setCargando] = useState(false);
     const [error, setError] = useState(null);
-    const [, setRelojTick] = useState(0);
+    const [relojTick, setRelojTick] = useState(0);
     const abortRef = useRef(null);
-    const desplazamientoServidorRef = useRef(0);
+    const esperasActualizadasRef = useRef(new Set());
+    const desplazamientoServidorRef = useRef(
+        estadoProp?.servidor_at ? new Date(estadoProp.servidor_at).getTime() - Date.now() : 0,
+    );
 
     useEffect(() => {
         const intervalo = setInterval(() => setRelojTick((valor) => valor + 1), 1000);
@@ -66,6 +69,29 @@ export default function useEstadoOperacion({
             if (abortRef.current === controller) setCargando(false);
         }
     }, [aplicarPayload, datosRoute]);
+
+    useEffect(() => {
+        const personas = [estado, ...(estado?.equipo ?? [])];
+        const esperas = new Set(personas
+            .filter((persona) => persona?.estado_vendedor === 'en_espera'
+                && persona.cronometro?.modo === 'restante')
+            .map((persona) => persona.cronometro.referencia_at)
+            .filter(Boolean));
+        const revisadas = esperasActualizadasRef.current;
+        for (const espera of revisadas) {
+            if (!esperas.has(espera)) revisadas.delete(espera);
+        }
+
+        const ahora = new Date(ahoraServidor()).getTime();
+        let vencioEspera = false;
+        for (const espera of esperas) {
+            if (!revisadas.has(espera) && new Date(espera).getTime() <= ahora) {
+                revisadas.add(espera);
+                vencioEspera = true;
+            }
+        }
+        if (vencioEspera) refrescar({ silencioso: true });
+    }, [estado, relojTick, ahoraServidor, refrescar]);
 
     useEffect(() => {
         if (!refrescoMs || refrescoMs < 1000) return undefined;
