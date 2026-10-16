@@ -2,8 +2,10 @@
 
 namespace App\Services\CancelacionesCotizaciones;
 
+use App\Models\Area;
 use App\Models\CatalogoEstadoSolicitud;
 use App\Models\CatalogoProceso;
+use App\Models\Departamento;
 use App\Models\SolicitudTag;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
@@ -15,6 +17,7 @@ class ListarSolicitudesOperativasService
         $query = SolicitudTag::with([
             'cliente',
             'vendedor.departamento',
+            'vendedor.area:id,nombre',
             'departamento',
             'proceso',
             'estado',
@@ -38,7 +41,7 @@ class ListarSolicitudesOperativasService
         return $paginar ? $query->paginate(15)->withQueryString() : $query->get();
     }
 
-    public function metricas(?User $usuario): array
+    public function metricas(?User $usuario, array $filtros = []): array
     {
         $query = SolicitudTag::query()
             ->whereHas('proceso', function (Builder $proceso) {
@@ -48,6 +51,8 @@ class ListarSolicitudesOperativasService
         if ($usuario) {
             $this->aplicarAislamiento($query, $usuario);
         }
+
+        $this->aplicarFiltroUbicacion($query, $filtros);
 
         $hoy = now()->toDateString();
         $idRespondida = CatalogoEstadoSolicitud::where('nombre', 'Respondida')->value('id');
@@ -71,6 +76,20 @@ class ListarSolicitudesOperativasService
                     ->whereDate('updated_at', $hoy)->count()
                 : 0,
             'incorrectas' => (clone $query)->where('catalogo_estado_solicitud_id', 4)->count(),
+        ];
+    }
+
+    public function opcionesFiltros(User $usuario): array
+    {
+        $visibles = SolicitudTag::query()
+            ->whereHas('proceso', fn (Builder $proceso) => $proceso->where('categoria_flujo', CatalogoProceso::CATEGORIA_OPERATIVO));
+        $this->aplicarAislamiento($visibles, $usuario);
+        $vendedores = User::withTrashed()->whereIn('id', (clone $visibles)->select('vendedor_id'));
+
+        return [
+            'vendedores' => (clone $vendedores)->orderBy('name')->get(['id', 'name']),
+            'departamentos' => Departamento::whereIn('id', (clone $visibles)->select('departamento_id'))->orderBy('nombre')->get(['id', 'nombre']),
+            'areas' => Area::whereIn('id', (clone $vendedores)->select('area_id'))->orderBy('nombre')->get(['id', 'nombre', 'departamento_id']),
         ];
     }
 
@@ -169,6 +188,8 @@ class ListarSolicitudesOperativasService
             $query->where('catalogo_proceso_id', $filtros['proceso_id']);
         }
 
+        $this->aplicarFiltroUbicacion($query, $filtros);
+
         if (!empty($filtros['vendedor_id'])) {
             $query->where('vendedor_id', $filtros['vendedor_id']);
         }
@@ -200,6 +221,17 @@ class ListarSolicitudesOperativasService
                             ->orWhere('nombre_razon_social', 'like', $like);
                     });
             });
+        }
+    }
+
+    private function aplicarFiltroUbicacion(Builder $query, array $filtros): void
+    {
+        if (!empty($filtros['departamento_id'])) {
+            $query->where('departamento_id', $filtros['departamento_id']);
+        }
+
+        if (!empty($filtros['area_id'])) {
+            $query->whereHas('vendedor', fn (Builder $q) => $q->where('area_id', $filtros['area_id']));
         }
     }
 

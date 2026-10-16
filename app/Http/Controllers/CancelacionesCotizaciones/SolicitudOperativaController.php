@@ -10,7 +10,6 @@ use App\Models\CatalogoBanco;
 use App\Models\CatalogoEstadoSolicitud;
 use App\Models\CatalogoProceso;
 use App\Models\SolicitudTag;
-use App\Models\User;
 use App\Notifications\AlertaSolicitud;
 use App\Services\CancelacionesCotizaciones\ListarSolicitudesOperativasService;
 use App\Services\Solicitudes\CancelarSolicitudService;
@@ -35,26 +34,21 @@ class SolicitudOperativaController extends Controller
         Gate::authorize('cancelaciones_cotizaciones.ver_listado');
 
         $solicitudes = $listarService->ejecutar(Auth::user(), $request->all());
-        $metricas = $listarService->metricas(Auth::user());
+        $metricas = $listarService->metricas(Auth::user(), $request->all());
 
         $procesos = CatalogoProceso::where('activo', true)
             ->where('categoria_flujo', CatalogoProceso::CATEGORIA_OPERATIVO)
             ->orderBy('nombre')
             ->get();
 
-        $vendedores = User::permission('cancelaciones_cotizaciones.crear')
-            ->orderBy('name')
-            ->get(['id', 'name']);
-
-        return Inertia::render('CancelacionesCotizaciones/Index', [
+        return Inertia::render('CancelacionesCotizaciones/Index', array_merge([
             'solicitudes' => $solicitudes,
             'metricas' => $metricas,
             'filtros' => $request->all(),
             'procesos' => $procesos,
             'bancos' => CatalogoBanco::where('activo', true)->orderBy('nombre')->get(),
-            'vendedores' => $vendedores,
             'estados' => CatalogoEstadoSolicitud::orderBy('id')->get(['id', 'nombre']),
-        ]);
+        ], $listarService->opcionesFiltros(Auth::user())));
     }
 
     public function store(StoreSolicitudOperativaRequest $request, CrearSolicitudService $crearService): RedirectResponse

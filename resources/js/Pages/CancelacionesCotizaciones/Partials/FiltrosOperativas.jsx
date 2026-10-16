@@ -7,7 +7,7 @@ const TABS = [
     ['VERIFICADAS', 'Verificadas'], ['INCORRECTAS', 'Incorrectas'], ['CANCELADAS', 'Canceladas'],
 ];
 
-export default function FiltrosOperativas({ tabActiva, busqueda = '', tipoOperativo, fechaInicio = '', fechaFin = '', filtroVendedor = '', vendedores = [], filtrosActivos = 0, onCambiarTab, onAplicarFiltros, onCambiarTipo, onLimpiarAdicionales, listaCargando = false }) {
+export default function FiltrosOperativas({ tabActiva, busqueda = '', tipoOperativo, fechaInicio = '', fechaFin = '', filtroVendedor = '', vendedores = [], filtroDepartamento = '', departamentos = [], filtroArea = '', areas = [], filtrosActivos = 0, onCambiarTab, onAplicarFiltros, onCambiarTipo, onLimpiarAdicionales, listaCargando = false }) {
     const [mostrarAdicionales, setMostrarAdicionales] = useState(filtrosActivos > 0);
     const [busquedaLocal, setBusquedaLocal] = useState(busqueda);
     useEffect(() => setBusquedaLocal(busqueda), [busqueda]);
@@ -26,11 +26,17 @@ export default function FiltrosOperativas({ tabActiva, busqueda = '', tipoOperat
                 <div className="min-w-0"><p className="text-xs theme-text-muted mb-1.5 mt-0">Estado</p><div className="gelia-filtros-scroll"><div className="gelia-segment p-1" role="group" aria-label="Estado de solicitudes">{TABS.map(([id, label]) => <button key={id} type="button" className="gelia-segment-btn whitespace-nowrap" aria-pressed={tabActiva === id} data-active={tabActiva === id} onClick={() => onCambiarTab(id)}>{label}</button>)}</div></div></div>
                 <div className="min-w-0"><p className="text-xs theme-text-muted mb-1.5 mt-0">Tipo de operación</p><div className="gelia-filtros-scroll"><div className="gelia-segment p-1" role="group" aria-label="Tipo de operación">{TIPOS_OPERATIVO.map(({ id, label }) => <button key={id || 'todos'} type="button" className="gelia-segment-btn whitespace-nowrap" aria-pressed={tipoOperativo === id} data-active={tipoOperativo === id} onClick={() => onCambiarTipo(id)}>{label}</button>)}</div></div></div>
             </div>
-            {mostrarAdicionales && <div id="operativas-filtros-extra" className="grid grid-cols-1 sm:grid-cols-3 gap-3 border-t theme-border pt-4">
+            {mostrarAdicionales && <div id="operativas-filtros-extra" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 border-t theme-border pt-4">
+                {[
+                    { key: 'departamento_id', id: 'operativas-departamento', label: 'Departamento', valor: filtroDepartamento, opciones: departamentos },
+                    { key: 'area_id', id: 'operativas-area', label: 'Área principal', valor: filtroArea, opciones: areas },
+                ].map(({ key, id, label, valor, opciones }) => (
+                    <div key={key}><label htmlFor={id} className="theme-label block mb-1.5">{label}</label><select id={id} name={key} value={valor} className="theme-select w-full" onChange={(event) => onAplicarFiltros({ [key]: event.target.value || undefined, page: 1 })}><option value="">Todos</option>{opciones.map((op) => <option key={op.id} value={String(op.id)}>{op.nombre}</option>)}</select></div>
+                ))}
                 <div><label htmlFor="operativas-vendedor" className="theme-label block mb-1.5">Vendedor</label><select id="operativas-vendedor" name="vendedor_id" value={filtroVendedor} className="theme-select w-full" onChange={(event) => onAplicarFiltros({ vendedor_id: event.target.value || undefined, page: 1 })}><option value="">Todos</option>{vendedores.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}</select></div>
                 <div><label htmlFor="operativas-desde" className="theme-label block mb-1.5">Desde</label><input id="operativas-desde" name="fecha_inicio" type="date" value={fechaInicio} max={fechaFin || undefined} className="theme-input w-full" onChange={(event) => onAplicarFiltros({ fecha_inicio: event.target.value, fecha_fin: fechaFin, page: 1 })} /></div>
                 <div><label htmlFor="operativas-hasta" className="theme-label block mb-1.5">Hasta</label><input id="operativas-hasta" name="fecha_fin" type="date" value={fechaFin} min={fechaInicio || undefined} className="theme-input w-full" onChange={(event) => onAplicarFiltros({ fecha_inicio: fechaInicio, fecha_fin: event.target.value, page: 1 })} /></div>
-                {filtrosActivos > 0 && <button type="button" className={`${BTN_SECONDARY} sm:col-span-3 justify-self-end`} onClick={() => onLimpiarAdicionales?.()}><X className="w-4 h-4" aria-hidden="true" /> Limpiar filtros avanzados</button>}
+                {filtrosActivos > 0 && <button type="button" className={`${BTN_SECONDARY} sm:col-span-2 lg:col-span-3 justify-self-end`} onClick={() => onLimpiarAdicionales?.()}><X className="w-4 h-4" aria-hidden="true" /> Limpiar filtros avanzados</button>}
             </div>}
         </section>
     );

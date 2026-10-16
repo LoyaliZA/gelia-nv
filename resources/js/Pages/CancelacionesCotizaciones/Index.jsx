@@ -22,7 +22,7 @@ import { geliaCardClass, GELIA_LISTADO_GRID } from '../../utils/geliaTheme';
 import { recargarModuloInertia } from '../../utils/recargarModuloInertia';
 import useSolicitudRealtime from '../../hooks/useSolicitudRealtime';
 
-const PROPS_LISTADO = ['solicitudes', 'metricas', 'filtros'];
+const PROPS_LISTADO = ['solicitudes', 'metricas', 'filtros', 'vendedores', 'departamentos', 'areas'];
 
 const OPCIONES_LISTADO = {
     preserveState: true,
@@ -101,7 +101,7 @@ const MenuAcciones = ({
     );
 };
 
-export default function Index({ auth, solicitudes, metricas, filtros = {}, procesos = [], bancos = [], vendedores = [] }) {
+export default function Index({ auth, solicitudes, metricas, filtros = {}, procesos = [], bancos = [], vendedores = [], departamentos = [], areas = [] }) {
     const permisos = auth?.user?.permissions || [];
     const can = (permiso) => permisos.includes(permiso) || auth?.user?.roles?.includes('Super Admin');
     const puedeCrear = can('cancelaciones_cotizaciones.crear');
@@ -134,6 +134,8 @@ export default function Index({ auth, solicitudes, metricas, filtros = {}, proce
             const p = {
                 q: filtros.q || undefined,
                 vendedor_id: filtros.vendedor_id || undefined,
+                departamento_id: filtros.departamento_id || undefined,
+                area_id: filtros.area_id || undefined,
                 fecha_inicio: filtros.fecha_inicio || undefined,
                 fecha_fin: filtros.fecha_fin || undefined,
                 tab: tabActiva,
@@ -145,7 +147,7 @@ export default function Index({ auth, solicitudes, metricas, filtros = {}, proce
                 Object.entries(p).filter(([, v]) => v !== '' && v !== null && v !== undefined)
             );
         },
-        [filtros.q, filtros.vendedor_id, filtros.fecha_inicio, filtros.fecha_fin, tabActiva, tipoOperativo]
+        [filtros.q, filtros.vendedor_id, filtros.departamento_id, filtros.area_id, filtros.fecha_inicio, filtros.fecha_fin, tabActiva, tipoOperativo]
     );
 
     const recargarListado = useCallback(
@@ -196,7 +198,7 @@ export default function Index({ auth, solicitudes, metricas, filtros = {}, proce
         setMenuAbierto(solicitud.id);
     };
 
-    const filtrosActivos = [filtros.vendedor_id, filtros.fecha_inicio, filtros.fecha_fin].filter(Boolean).length;
+    const filtrosActivos = [filtros.vendedor_id, filtros.departamento_id, filtros.area_id, filtros.fecha_inicio, filtros.fecha_fin].filter(Boolean).length;
 
     const recargarTrasAccion = useCallback(() => {
         recargarModuloInertia(PROPS_LISTADO);
@@ -295,12 +297,16 @@ export default function Index({ auth, solicitudes, metricas, filtros = {}, proce
                     fechaFin={filtros.fecha_fin || ''}
                     filtroVendedor={filtros.vendedor_id || ''}
                     vendedores={vendedores}
+                    filtroDepartamento={filtros.departamento_id || ''}
+                    departamentos={departamentos}
+                    filtroArea={filtros.area_id || ''}
+                    areas={areas}
                     filtrosActivos={filtrosActivos}
                     listaCargando={listaCargando}
                     onCambiarTab={cambiarTab}
                     onCambiarTipo={cambiarTipo}
                     onAplicarFiltros={recargarListado}
-                    onLimpiarAdicionales={() => recargarListado({ vendedor_id: undefined, fecha_inicio: undefined, fecha_fin: undefined, page: 1 })}
+                    onLimpiarAdicionales={() => recargarListado({ vendedor_id: undefined, departamento_id: undefined, area_id: undefined, fecha_inicio: undefined, fecha_fin: undefined, page: 1 })}
                 />
 
                 {listaVisible.length === 0 && !listaCargando ? (

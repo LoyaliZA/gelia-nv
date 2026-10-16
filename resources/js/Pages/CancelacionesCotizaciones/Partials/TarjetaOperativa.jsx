@@ -1,5 +1,5 @@
 import React from 'react';
-import { User, Calendar, Hash, FileText, Landmark, Ban, MoreVertical, CheckCircle2, XCircle } from 'lucide-react';
+import { User, Building2, Calendar, Hash, FileText, Landmark, Ban, MoreVertical, CheckCircle2, XCircle } from 'lucide-react';
 import { ESTADO_BADGE, DEPARTAMENTO_BADGE, tipoOperativoDeProceso } from './operativasStyles';
 import { geliaCardClass } from '../../../utils/geliaTheme';
 import FeedbackResolucion from './FeedbackResolucion';
@@ -21,12 +21,13 @@ export default function TarjetaOperativa({ solicitud, auth, onMenu, onAprobar, o
         || solicitud.departamento?.nombre
         || solicitud.departamento?.codigo
         || null;
+    const areaLabel = solicitud.vendedor?.area?.nombre || null;
 
     return (
         <article
-            className={`${geliaCardClass(
-                'h-full flex flex-col min-w-0 p-5 md:p-6 border-l-4 transition-shadow hover:shadow-lg'
-            )} border-l-[var(--color-primario)]`}
+            className={geliaCardClass(
+                'h-full flex flex-col min-w-0 p-5 md:p-6 transition-shadow hover:shadow-lg hover:border-[var(--color-primario)]'
+            )}
         >
             <div className="flex flex-wrap items-start justify-between gap-3 mb-4 min-w-0">
                 <div className="min-w-0 flex-1">
@@ -109,16 +110,24 @@ export default function TarjetaOperativa({ solicitud, auth, onMenu, onAprobar, o
                 </div>
             )}
 
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[10px] font-bold theme-text-muted mb-4 min-w-0">
-                <span className="inline-flex items-center gap-1 min-w-0">
-                    <User className="w-3.5 h-3.5 shrink-0" />
-                    <span className="truncate">{solicitud.vendedor?.name}</span>
-                </span>
-                <span className="inline-flex items-center gap-1 shrink-0">
-                    <Calendar className="w-3.5 h-3.5 shrink-0" />
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-3 mb-4 min-w-0 m-0">
+                <div className="min-w-0">
+                    <dt className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest theme-text-muted">
+                        <User className="w-3 h-3 shrink-0" aria-hidden="true" /> Vendedor
+                    </dt>
+                    <dd className="m-0 mt-0.5 text-xs font-bold theme-text-main break-words">{solicitud.vendedor?.name || 'Sin asignar'}</dd>
+                </div>
+                <div className="min-w-0">
+                    <dt className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest theme-text-muted">
+                        <Building2 className="w-3 h-3 shrink-0" aria-hidden="true" /> Área
+                    </dt>
+                    <dd className="m-0 mt-0.5 text-xs font-bold theme-text-main break-words">{areaLabel || 'Sin área'}</dd>
+                </div>
+                <div className="col-span-2 flex items-center gap-1 text-[10px] font-bold theme-text-muted">
+                    <Calendar className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
                     {new Date(solicitud.created_at).toLocaleDateString('es-MX')}
-                </span>
-            </div>
+                </div>
+            </dl>
 
             <FeedbackResolucion solicitud={solicitud} />
 
