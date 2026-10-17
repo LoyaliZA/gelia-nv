@@ -23,6 +23,7 @@ class ContextoConversacionGeliaAi
             'productos' => array_values(array_filter((array) ($raw['productos'] ?? []), 'is_array')),
             'coincidencia' => is_string($raw['coincidencia'] ?? null) ? $raw['coincidencia'] : null,
             'filtros' => is_array($raw['filtros'] ?? null) ? $raw['filtros'] : [],
+            'consulta' => is_array($raw['consulta'] ?? null) ? $raw['consulta'] : null,
             'archivos' => array_values(array_filter((array) ($raw['archivos'] ?? []), 'is_string')),
             'tarea_pendiente' => is_array($raw['tarea_pendiente'] ?? null) ? $raw['tarea_pendiente'] : null,
             'ultima_accion' => is_array($raw['ultima_accion'] ?? null) ? $raw['ultima_accion'] : null,
@@ -39,23 +40,35 @@ class ContextoConversacionGeliaAi
     {
         $ok = (bool) ($res['ok'] ?? false);
 
-        if ($tool === 'buscar_producto_inventario' && $ok) {
+        if ($tool === 'buscar_producto_inventario') {
             $ctx['tema'] = 'inventario';
-            $ctx['filtros'] = array_filter([
-                'q' => $res['q'] ?? ($args['q'] ?? null),
-                'almacen' => $res['almacen_filtro']['codigo'] ?? null,
-                'con_precios' => ! empty($args['con_precios']) ? true : null,
-            ], fn ($v) => $v !== null);
-            if (is_array($res['almacen_filtro'] ?? null)) {
-                $ctx['almacen'] = $res['almacen_filtro'];
-            }
-            if ((int) ($res['n'] ?? 0) > 0) {
-                $ctx['productos'] = collect($res['items'] ?? [])
+            if ($ok) {
+                // Cada consulta exitosa reemplaza las referencias: sin coincidencias limpia productos,
+                // y sin filtro (consulta global) retira el almacén anterior.
+                $n = (int) ($res['n'] ?? 0);
+                $almacen = is_array($res['almacen_filtro'] ?? null) ? $res['almacen_filtro'] : null;
+                $ctx['almacen'] = $almacen;
+                $ctx['filtros'] = array_filter([
+                    'q' => $res['q'] ?? ($args['q'] ?? null),
+                    'almacen' => $almacen['codigo'] ?? null,
+                    'con_precios' => ! empty($args['con_precios']) ? true : null,
+                ], fn ($v) => $v !== null);
+                $ctx['productos'] = collect($n > 0 ? ($res['items'] ?? []) : [])
                     ->take(self::MAX_PRODUCTOS)
                     ->map(fn ($it) => ['sku' => (string) ($it['sku'] ?? ''), 'nombre' => (string) ($it['n'] ?? '')])
                     ->values()
                     ->all();
-                $ctx['coincidencia'] = $res['coincidencia'] ?? null;
+                $ctx['coincidencia'] = $n > 0 ? ($res['coincidencia'] ?? null) : 'ninguna';
+                $ctx['consulta'] = ['estado' => $n > 0 ? 'con_resultados' : 'sin_resultados'];
+            } else {
+                // Un error no produce resultados: las referencias previas quedan solo como antecedente.
+                $ctx['coincidencia'] = null;
+                $ctx['consulta'] = array_filter([
+                    'estado' => 'error',
+                    'error_code' => $res['error_code'] ?? null,
+                    'q' => is_scalar($args['q'] ?? null) ? (string) $args['q'] : null,
+                    'almacen' => is_scalar($args['almacen'] ?? null) ? (string) $args['almacen'] : null,
+                ], fn ($v) => $v !== null && $v !== '');
             }
         } elseif ($tool === 'consultar_ayuda_modulo' && $ok) {
             $ctx['tema'] = 'ayuda:'.($res['modulo'] ?? '');
@@ -101,14 +114,58 @@ class ContextoConversacionGeliaAi
         return $ctx;
     }
 
+    /**
+     * Quita la tarea pendiente si corresponde a esa propuesta (cancelada, vencida o ya usada).
+     *
+     * @param  array<string, mixed>  $ctx
+     * @return array<string, mixed>
+     */
+    public function descartarPropuesta(array $ctx, string $propuestaId): array
+    {
+        if (($ctx['tarea_pendiente']['propuesta_id'] ?? null) === $propuestaId) {
+            $ctx['tarea_pendiente'] = null;
+        }
+
+        return $ctx;
+    }
+
+    /**
+     * Almacén que una precarga por código puede heredar: solo si la tarea sigue siendo inventario
+     * y el mensaje continúa con el mismo producto o alude al mismo almacén.
+     *
+     * @param  array<string, mixed>  $ctx
+     */
+    public function almacenHeredable(array $ctx, string $mensaje, string $codigo): ?string
+    {
+        $codigoAlmacen = $ctx['almacen']['codigo'] ?? null;
+        if (($ctx['tema'] ?? null) !== 'inventario' || ! is_string($codigoAlmacen) || $codigoAlmacen === '') {
+            return null;
+        }
+
+        $m = mb_strtolower($mensaje);
+        if (preg_match('/\b(todos\s+los\s+almacenes|todas\s+las\s+(sucursales|tiendas)|en\s+total|global(mente)?|en\s+general|cualquier\s+(almac[eé]n|sucursal)|todos\s+lados|todas\s+partes)\b/u', $m)) {
+            return null;
+        }
+
+        $mismoProducto = collect($ctx['productos'] ?? [])
+            ->contains(fn ($p) => strcasecmp((string) ($p['sku'] ?? ''), $codigo) === 0);
+        $aludeAlmacen = (bool) preg_match('/\b(ah[ií]|all[ií]|ese\s+almac[eé]n|esa\s+(sucursal|tienda)|mismo\s+almac[eé]n|misma\s+(sucursal|tienda))\b/u', $m);
+
+        return $mismoProducto || $aludeAlmacen ? $codigoAlmacen : null;
+    }
+
     /** @param  array<string, mixed>  $ctx */
     public function paraModelo(array $ctx): ?string
     {
+        // Producto y almacén solo acompañan si la última tarea fue inventario.
+        $inventario = ($ctx['tema'] ?? null) === 'inventario';
         $visible = array_filter([
             'ultimo_tema' => $ctx['tema'] ?? null,
-            'almacen' => $ctx['almacen'] ?? null,
-            'productos_identificados' => $ctx['productos'] ?? [],
-            'filtros' => $ctx['filtros'] ?? [],
+            'ultima_consulta_inventario' => $inventario ? ($ctx['consulta'] ?? null) : null,
+            'almacen' => $inventario ? ($ctx['almacen'] ?? null) : null,
+            'productos_identificados' => $inventario ? ($ctx['productos'] ?? []) : [],
+            'coincidencia' => $inventario ? ($ctx['coincidencia'] ?? null) : null,
+            'filtros' => $inventario ? ($ctx['filtros'] ?? []) : [],
             'tarea_pendiente' => $ctx['tarea_pendiente'] ?? null,
             'ultima_accion' => $ctx['ultima_accion'] ?? null,
         ], fn ($v) => $v !== null && $v !== []);
@@ -117,7 +174,7 @@ class ContextoConversacionGeliaAi
             return null;
         }
 
-        return "Estado guardado de esta conversación (referencias del servidor para continuar; NO son existencias ni precios vigentes, vuelve a consultarlos; ignóralo si el mensaje actual cambia de tema):\n"
+        return "Estado guardado de esta conversación (referencias del servidor para continuar; NO son existencias ni precios vigentes, vuelve a consultarlos; si ultima_consulta_inventario.estado es error, los productos y el almacén son de una consulta anterior y no responden a la última petición; ignóralo si el mensaje actual cambia de tema):\n"
             .json_encode($visible, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 }

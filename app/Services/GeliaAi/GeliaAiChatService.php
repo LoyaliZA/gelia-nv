@@ -2,14 +2,25 @@
 
 namespace App\Services\GeliaAi;
 
+use App\Models\Almacen;
 use App\Models\User;
 use App\Services\GeliaAi\Acciones\AccionRegistry;
+use App\Services\GeliaAi\Acciones\PropuestasAccionGeliaAi;
 use App\Services\GeliaAi\Tools\BuscarProductoInventarioTool;
 use App\Services\GeliaAi\Tools\EjecutorHerramientasGeliaAi;
 use RuntimeException;
 
 class GeliaAiChatService
 {
+    private const ETIQUETAS_HERRAMIENTA = [
+        'buscar_producto_inventario' => 'Búsqueda de inventario',
+        'listar_almacenes' => 'Lista de almacenes',
+        'consultar_ayuda_modulo' => 'Ayuda de módulos',
+    ];
+
+    /** Cierres en los que la respuesta no cubre todo lo pedido. */
+    private const STOPS_INCOMPLETOS = ['tiempo', 'truncada', 'vacia', 'limite_pasos', 'length'];
+
     public function __construct(
         private DeepSeekClient $client,
         private EjecutorHerramientasGeliaAi $herramientas,
@@ -19,7 +30,8 @@ class GeliaAiChatService
         private PromptSistemaGeliaAi $prompt,
         private ContextoConversacionGeliaAi $contexto,
         private SanitizarContextoAi $sanitizer,
-        private AccionRegistry $acciones,
+        private PropuestasAccionGeliaAi $propuestas,
+        private ResolverAlmacenGeliaAi $almacenes,
     ) {}
 
     /**
@@ -71,13 +83,21 @@ class GeliaAiChatService
         }
 
         if ($ruta['ruta'] === InterpretarIntencionGeliaAi::CODIGO) {
-            if ($this->inventarioTool->disponiblePara($user)) {
-                $args = ['q' => $ruta['codigo'], 'limit' => 3, 'con_precios' => true];
+            // Un almacén nombrado en el mensaje gana; si no, se hereda solo en continuaciones válidas.
+            // Varios almacenes nombrados: sin precarga, la IA pregunta o consulta con herramientas.
+            $mencion = $this->almacenes->mencionadoEn($mensaje, $ruta['codigo']);
+            $almacen = $mencion instanceof Almacen
+                ? (string) $mencion->codigo
+                : ($mencion === null ? $this->contexto->almacenHeredable($ctx, $mensaje, $ruta['codigo']) : null);
+
+            if ($mencion !== false && $this->inventarioTool->disponiblePara($user)) {
+                $args = array_filter(['q' => $ruta['codigo'], 'almacen' => $almacen, 'limit' => 3, 'con_precios' => true], fn ($v) => $v !== null);
                 $facts = $this->sanitizer->limpiar($this->inventarioTool->ejecutar($user, $args));
                 $ctx = $this->contexto->aplicarResultado($ctx, $this->inventarioTool->name(), $args, $facts);
+                $firma = "q={$ruta['codigo']}".($almacen !== null ? ", almacen={$almacen}" : '');
                 $messages[] = [
                     'role' => 'system',
-                    'content' => "Consulta previa del servidor buscar_producto_inventario(q={$ruta['codigo']}):\n"
+                    'content' => "Consulta previa del servidor buscar_producto_inventario({$firma}):\n"
                         .json_encode($facts, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
                 ];
                 $modo = 'prefetch_inventario';
@@ -88,7 +108,10 @@ class GeliaAiChatService
 
         $messages[] = ['role' => 'user', 'content' => $mensaje];
 
-        return $this->ejecutarCiclo($user, $messages, $tools, $archivos, $ctx, $modo, $inicio);
+        $resultado = $this->ejecutarCiclo($user, $messages, $tools, $archivos, $ctx, $modo, $inicio);
+        $resultado['archivos'] = array_map([$this->archivos, 'resumenPublico'], $archivos);
+
+        return $resultado;
     }
 
     /**
@@ -178,7 +201,15 @@ class GeliaAiChatService
                         $content = $r['content'];
                         $ejecutadas[$firma] = $content;
                         $progreso = true;
-                        $registro[] = ['tool' => $nombre, 'ok' => (bool) ($r['resultado']['ok'] ?? false), 'error_code' => $r['resultado']['error_code'] ?? null];
+                        $registro[] = [
+                            'tool' => $nombre,
+                            'ok' => (bool) ($r['resultado']['ok'] ?? false),
+                            'error_code' => $r['resultado']['error_code'] ?? null,
+                            'faltantes' => array_values(array_filter(array_map(
+                                fn ($f) => is_array($f) ? (string) ($f['detalle'] ?? '') : '',
+                                (array) ($r['resultado']['faltantes'] ?? []),
+                            ))),
+                        ];
                         $ctx = $this->contexto->aplicarResultado($ctx, $nombre, $r['args'], $r['resultado']);
                         $propuesta = $r['propuesta'] ?? $propuesta;
                     }
@@ -189,7 +220,7 @@ class GeliaAiChatService
                 if ($propuesta !== null) {
                     $acc['stop'] = 'propuesta';
 
-                    return $this->resultado($this->textoPropuesta($propuesta), $ultimoUsage, $acc, $modo, $registro, $this->propuestaPublica($user, $propuesta), $ctx);
+                    return $this->resultado($this->textoPropuesta($propuesta), $ultimoUsage, $acc, $modo, $registro, $this->propuestas->publica($user, $propuesta), $ctx);
                 }
 
                 if (! $progreso) {
@@ -296,6 +327,13 @@ class GeliaAiChatService
      */
     private function resultado(string $reply, array $ultimoUsage, array $acc, string $modo, array $registro, ?array $propuesta, array $ctx): array
     {
+        $faltantes = [];
+        foreach ($registro as $r) {
+            if (str_starts_with($r['tool'], AccionRegistry::PREFIJO_TOOL)) {
+                $faltantes = $r['faltantes'] ?? [];
+            }
+        }
+
         return [
             'reply' => $reply,
             'usage' => [
@@ -305,6 +343,8 @@ class GeliaAiChatService
                 'gelia_tools' => array_column($registro, 'tool'),
             ],
             'propuesta_accion' => $propuesta,
+            'incompleta' => in_array($acc['stop'], self::STOPS_INCOMPLETOS, true),
+            'faltantes' => $propuesta === null ? $faltantes : [],
             'contexto' => $ctx,
         ];
     }
@@ -322,24 +362,6 @@ class GeliaAiChatService
         return implode("\n", $lineas);
     }
 
-    /**
-     * @param  array<string, mixed>  $propuesta
-     * @return array<string, mixed>
-     */
-    private function propuestaPublica(User $user, array $propuesta): array
-    {
-        $permiso = $this->acciones->obtener($propuesta['accion'])->permiso();
-
-        return [
-            'id' => $propuesta['id'],
-            'accion' => $propuesta['accion'],
-            'resumen_corto' => $propuesta['resumen'],
-            'advertencias' => $propuesta['advertencias'] ?? [],
-            'permiso' => $permiso,
-            'puede' => $user->can($permiso),
-        ];
-    }
-
     /** @param  list<array<string, mixed>>  $registro */
     private function textoLimite(string $stop, array $registro): string
     {
@@ -351,7 +373,9 @@ class GeliaAiChatService
         };
 
         $hechas = array_map(
-            fn ($r) => "- {$r['tool']}: ".($r['ok'] ? 'consultada' : 'sin resultado ('.($r['error_code'] ?? 'error').')'),
+            fn ($r) => '- '.(self::ETIQUETAS_HERRAMIENTA[$r['tool']]
+                ?? (str_starts_with($r['tool'], AccionRegistry::PREFIJO_TOOL) ? 'Preparación de la acción' : 'Consulta interna'))
+                .': '.($r['ok'] ? 'completada' : 'sin resultado'),
             $registro
         );
 

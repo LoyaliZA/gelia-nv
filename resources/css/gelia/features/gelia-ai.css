@@ -1,13 +1,13 @@
 .gelia-ai-main {
     background: transparent;
     /* El layout fullscreen aplica overflow-hidden; el halo del logo necesita escapar. */
-    overflow: visible !important;
+    overflow: hidden !important;
     padding-bottom: 0 !important;
 }
 
 .gelia-app-body:has(.gelia-ai-main) {
     overflow-x: hidden !important;
-    overflow-y: visible !important;
+    overflow-y: hidden !important;
     padding-top: 0 !important;
     padding-bottom: 0 !important;
 }
@@ -20,7 +20,7 @@
     min-height: 0;
     width: 100%;
     max-width: 100%;
-    overflow: visible;
+    overflow: hidden;
     background: var(--bg-app);
 }
 
@@ -28,7 +28,7 @@
     pointer-events: none;
     position: absolute;
     left: 50%;
-    top: -2rem;
+    top: 0;
     transform: translateX(-50%);
     width: min(48rem, 140%);
     height: 18rem;
@@ -37,14 +37,14 @@
         color-mix(in srgb, var(--color-primario) 28%, transparent) 0%,
         transparent 72%
     );
-    opacity: 0.5;
+    opacity: 0.18;
     transition: opacity 0.35s ease;
     z-index: 0;
 }
 
 .gelia-ai-page[data-state='thinking'] .gelia-ai-glow {
-    opacity: 0.95;
-    animation: gelia-ai-page-glow-pulse 0.55s ease-in-out infinite;
+    opacity: 0.3;
+    animation: gelia-ai-page-glow-pulse 2s ease-in-out infinite;
 }
 
 .gelia-ai-page[data-state='ready'] .gelia-ai-glow {
@@ -55,11 +55,11 @@
 @keyframes gelia-ai-page-glow-pulse {
     0%,
     100% {
-        opacity: 0.5;
+        opacity: 0.18;
         transform: translateX(-50%) scale(1);
     }
     50% {
-        opacity: 1;
+        opacity: 0.3;
         transform: translateX(-50%) scale(1.06);
     }
 }
@@ -77,12 +77,14 @@
     position: relative;
     z-index: 2;
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     align-items: center;
     justify-content: center;
-    gap: 0.65rem;
-    padding: 2.25rem 1rem 0.75rem;
-    text-align: center;
+    gap: 0.6rem;
+    min-height: 5rem;
+    padding: 1rem 9rem;
+    text-align: left;
+    border-bottom: 1px solid color-mix(in srgb, var(--theme-border) 50%, transparent);
     overflow: visible;
     flex-shrink: 0;
 }
@@ -92,7 +94,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 1.75rem;
+    padding: 0.25rem;
     overflow: visible;
     /* Halo en ::after; no uses filter aquí — aplana y puede recortar el brillo. */
     transition: opacity 0.3s ease;
@@ -146,7 +148,7 @@
 
 .gelia-ai-title {
     margin: 0;
-    font-size: clamp(1.5rem, 3.5vw, 2rem);
+    font-size: 1.35rem;
     font-weight: 900;
     font-style: italic;
     letter-spacing: -0.04em;
@@ -159,9 +161,33 @@
     color: var(--color-primario);
 }
 
+.gelia-ai-brand p {
+    margin: 0.3rem 0 0;
+    font-size: 0.7rem;
+    color: var(--theme-text-muted);
+}
+
+.gelia-ai-session {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    max-width: 9rem;
+    padding: 0.5rem 0.7rem;
+    border-radius: 9999px;
+    background: color-mix(in srgb, var(--theme-text-main) 4%, var(--bg-app));
+    font-size: 0.78rem;
+    color: var(--theme-text-muted);
+}
+
+.gelia-ai-session span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .gelia-ai-toolbar {
     position: absolute;
-    top: 1rem;
+    top: 1.3rem;
     left: 1rem;
     right: 1rem;
     z-index: 3;
@@ -183,30 +209,118 @@
     min-height: 0;
     overflow-y: auto;
     overflow-x: hidden;
-    padding: 0.75rem 1.25rem 10.5rem;
+    padding: 2rem 1.5rem 1rem;
     display: flex;
     flex-direction: column;
     gap: 1.1rem;
     width: 100%;
-    max-width: 44rem;
+    max-width: none;
     margin-inline: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--theme-text-muted) 35%, transparent) transparent;
+}
+
+.gelia-ai-thread,
+.gelia-ai-thread-status {
+    width: 100%;
+    max-width: 48rem;
+    margin-inline: auto;
+    flex-shrink: 0;
+}
+
+.gelia-ai-thread {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+}
+
+.gelia-ai-welcome {
+    width: min(46rem, 100%);
+    margin: auto;
+    padding-block: 2rem;
+    flex-shrink: 0;
+}
+
+.gelia-ai-welcome-mark {
+    margin-bottom: 1.5rem;
+    color: var(--color-primario);
+}
+
+.gelia-ai-welcome h2 {
+    margin: 0;
+    font-size: clamp(1.8rem, 4vw, 2.8rem);
+    line-height: 1.2;
+    letter-spacing: -0.04em;
+    font-weight: 650;
+    color: var(--theme-text-main);
+    overflow-wrap: anywhere;
+}
+
+.gelia-ai-welcome > p {
+    max-width: 35rem;
+    margin: 1.15rem 0 2rem;
+    color: var(--theme-text-muted);
+    font-size: 0.95rem;
+    line-height: 1.7;
+}
+
+.gelia-ai-starters {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.75rem;
+}
+
+.gelia-ai-starters button {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.65rem;
+    padding: 1rem 0.5rem 1rem 0;
+    border: 0;
+    border-top: 1px solid var(--theme-border);
+    background: transparent;
+    color: var(--theme-text-main);
+    text-align: left;
+    font: inherit;
+    font-size: 0.82rem;
+    cursor: pointer;
+}
+
+.gelia-ai-starters button:hover {
+    border-color: var(--color-primario);
+    color: var(--color-primario);
+}
+
+.gelia-ai-starters button > svg {
+    width: 1.1rem;
+    height: 1.1rem;
+    flex-shrink: 0;
+    color: var(--color-primario);
+}
+
+.gelia-ai-starters small {
+    display: block;
+    margin-top: 0.4rem;
+    font-size: 0.72rem;
+    line-height: 1.5;
+    color: var(--theme-text-muted);
 }
 
 .gelia-ai-msg {
     max-width: 100%;
     font-size: 0.95rem;
-    line-height: 1.6;
+    line-height: 1.75;
     word-break: break-word;
 }
 
 .gelia-ai-msg--user {
     align-self: flex-end;
-    max-width: min(92%, 28rem);
-    padding: 0.7rem 1rem;
-    border-radius: 1.35rem 1.35rem 0.4rem 1.35rem;
-    color: #fff;
-    background: var(--color-primario);
-    white-space: pre-wrap;
+    max-width: min(88%, 34rem);
+    padding: 0.9rem 1.15rem;
+    border-radius: 1.15rem 1.15rem 0.3rem 1.15rem;
+    color: var(--theme-text-main);
+    background: color-mix(in srgb, var(--color-primario) 7%, var(--bg-app));
+    border: 1px solid color-mix(in srgb, var(--color-primario) 18%, var(--theme-border));
     animation: gelia-ai-msg-in 0.28s ease-out;
 }
 
@@ -218,11 +332,23 @@
     padding: 0.15rem 0.15rem;
 }
 
-.gelia-ai-msg--thinking {
+.gelia-ai-msg-author {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin-bottom: 0.5rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    line-height: 1.4;
     color: var(--theme-text-muted);
-    font-style: italic;
-    font-size: 0.875rem;
-    animation: gelia-ai-msg-in 0.2s ease-out;
+}
+
+.gelia-ai-msg--assistant .gelia-ai-msg-author svg {
+    color: var(--color-primario);
+}
+
+.gelia-ai-user-text {
+    white-space: pre-wrap;
 }
 
 @keyframes gelia-ai-msg-in {
@@ -237,17 +363,15 @@
 }
 
 .gelia-ai-composer-wrap {
-    position: absolute;
+    position: relative;
     z-index: 4;
-    left: 0;
-    right: 0;
-    bottom: 0;
+    flex-shrink: 0;
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 0.45rem;
     justify-content: center;
-    padding: 0 1rem calc(1rem + env(safe-area-inset-bottom, 0px));
+    padding: 0.75rem 1.5rem calc(0.8rem + env(safe-area-inset-bottom, 0px));
     pointer-events: none;
     background: linear-gradient(
         to top,
@@ -258,23 +382,24 @@
 
 .gelia-ai-composer {
     pointer-events: auto;
-    width: min(40rem, 100%);
+    width: min(50rem, 100%);
     display: flex;
     flex-direction: column;
     align-items: stretch;
     gap: 0.55rem;
     padding: 0.65rem 0.65rem 0.55rem;
-    border-radius: 1.65rem;
-    border: 1px solid color-mix(in srgb, var(--color-primario) 22%, var(--theme-border, #8883));
+    border-radius: 1.25rem;
+    border: 1px solid color-mix(in srgb, var(--color-primario) 22%, var(--theme-border));
     background: color-mix(in srgb, var(--bg-app) 88%, var(--color-primario) 6%);
-    box-shadow: 0 10px 36px color-mix(in srgb, #000 18%, transparent);
+    box-shadow: 0 10px 36px color-mix(in srgb, black 18%, transparent);
     backdrop-filter: blur(10px);
 }
 
 .gelia-ai-composer textarea {
     flex: 1;
+    min-width: 0;
     min-height: 2.4rem;
-    max-height: 7rem;
+    max-height: 10rem;
     resize: none;
     border: 0 !important;
     background: transparent !important;
@@ -299,7 +424,7 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    color: #fff;
+    color: var(--theme-text-on-primary, black);
     background: var(--color-primario);
     border: 0;
     cursor: pointer;
@@ -316,25 +441,93 @@
 }
 
 .gelia-ai-error {
-    position: absolute;
-    bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
-    left: 50%;
-    transform: translateX(-50%);
+    position: relative;
+    flex-shrink: 0;
+    align-self: center;
     z-index: 5;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
     max-width: min(36rem, calc(100% - 2rem));
     margin: 0;
-    padding: 0.45rem 0.85rem;
-    border-radius: 9999px;
+    padding: 0.45rem 0.5rem 0.45rem 0.85rem;
+    border-radius: 1rem;
     font-size: 0.75rem;
     font-weight: 700;
-    color: #b91c1c;
-    background: color-mix(in srgb, #fecaca 80%, var(--bg-app));
+    color: var(--color-peligro);
+    background: color-mix(in srgb, var(--color-peligro) 12%, var(--bg-app));
+    border: 1px solid color-mix(in srgb, var(--color-peligro) 35%, transparent);
+}
+
+.gelia-ai-error-x {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 9999px;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+}
+
+.gelia-ai-error-x:hover {
+    background: color-mix(in srgb, var(--color-peligro) 14%, transparent);
 }
 
 .gelia-ai-md {
     display: flex;
     flex-direction: column;
-    gap: 0.35rem;
+    gap: 0.85rem;
+}
+
+.gelia-ai-md-list {
+    margin: 0;
+    padding-left: 1.35rem;
+    list-style: disc;
+}
+
+ol.gelia-ai-md-list {
+    list-style: decimal;
+}
+
+.gelia-ai-md-list li + li {
+    margin-top: 0.4rem;
+}
+
+.gelia-ai-md-heading {
+    margin: 0.3rem 0 0;
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+.gelia-ai-md-table-wrap {
+    max-width: 100%;
+    overflow-x: auto;
+}
+
+.gelia-ai-md-table-wrap:focus-visible {
+    outline: 2px solid var(--color-primario);
+    outline-offset: 2px;
+}
+
+.gelia-ai-md-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+.gelia-ai-md-table th,
+.gelia-ai-md-table td {
+    padding: 0.65rem 0.8rem;
+    border-bottom: 1px solid var(--theme-border);
+    text-align: left;
+}
+
+.gelia-ai-md-table th {
+    background: color-mix(in srgb, var(--color-primario) 6%, var(--bg-app));
 }
 
 .gelia-ai-md-p {
@@ -377,7 +570,7 @@
 .gelia-ai-drawer-backdrop {
     position: absolute;
     inset: 0;
-    background: color-mix(in srgb, #000 45%, transparent);
+    background: var(--theme-modal-overlay-bg);
     border: 0;
     cursor: pointer;
     opacity: 0;
@@ -399,7 +592,7 @@
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
-    box-shadow: 8px 0 32px color-mix(in srgb, #000 18%, transparent);
+    box-shadow: 8px 0 32px color-mix(in srgb, black 18%, transparent);
     transform: translateX(-105%);
     transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
 }
@@ -412,6 +605,7 @@
     flex: 1;
     min-height: 0;
     overflow-y: auto;
+    overscroll-behavior: contain;
     display: flex;
     flex-direction: column;
     gap: 0.35rem;
@@ -426,9 +620,8 @@
     border-radius: 0.9rem;
     border: 1px solid transparent;
     background: transparent;
-    padding: 0.55rem 0.65rem;
+    padding: 0.2rem 0.25rem 0.2rem 0.4rem;
     color: var(--theme-text-main);
-    cursor: pointer;
     opacity: 0;
     transform: translateX(-10px);
     animation: gelia-ai-hist-item-in 0.28s ease-out forwards;
@@ -457,11 +650,24 @@
 .gelia-ai-hist-title {
     flex: 1;
     min-width: 0;
+    min-height: 2.5rem;
+    padding: 0.35rem 0.3rem;
+    border: 0;
+    border-radius: 0.6rem;
+    background: transparent;
+    color: inherit;
+    text-align: left;
     font-size: 0.8rem;
     font-weight: 700;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    cursor: pointer;
+}
+
+.gelia-ai-hist-title:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
 }
 
 .gelia-ai-icon-btn {
@@ -489,13 +695,13 @@
     font-size: 0.75rem;
     font-weight: 700;
     text-align: center;
-    color: #92400e;
-    background: color-mix(in srgb, #fbbf24 22%, var(--bg-app));
-    border: 1px solid color-mix(in srgb, #f59e0b 35%, transparent);
+    color: var(--theme-text-main);
+    background: color-mix(in srgb, var(--color-aviso) 16%, var(--bg-app));
+    border: 1px solid color-mix(in srgb, var(--color-aviso) 40%, transparent);
 }
 
 .gelia-ai-composer[data-plain='true'] {
-    border-radius: 9999px;
+    border-radius: 1.25rem;
     padding: 0.45rem 0.55rem 0.45rem 0.65rem;
     gap: 0;
 }
@@ -515,8 +721,8 @@
     width: min(14.5rem, 100%);
     padding: 0.55rem 1.85rem 0.55rem 0.55rem;
     border-radius: 0.85rem;
-    border: 1px solid color-mix(in srgb, var(--theme-border, #888) 45%, transparent);
-    background: color-mix(in srgb, var(--bg-app) 75%, #000 8%);
+    border: 1px solid color-mix(in srgb, var(--theme-border) 45%, transparent);
+    background: color-mix(in srgb, var(--bg-app) 75%, black 8%);
 }
 
 .gelia-ai-file-icon {
@@ -527,8 +733,8 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    color: #fff;
-    background: #1d9e57;
+    color: white;
+    background: var(--color-exito);
 }
 
 .gelia-ai-file-meta {
@@ -614,62 +820,410 @@
     padding-right: 0.55rem;
 }
 
-.gelia-ai-confirm {
-    margin-top: 0.75rem;
-    padding: 0.75rem 0.9rem;
-    border-radius: 1rem;
-    border: 1px solid color-mix(in srgb, var(--color-primario) 28%, transparent);
-    background: color-mix(in srgb, var(--color-primario) 8%, var(--bg-app));
-}
-
-.gelia-ai-confirm-text {
-    margin: 0 0 0.55rem;
-    font-size: 0.875rem;
-    font-weight: 600;
-}
-
-.gelia-ai-confirm-warn {
-    margin: 0 0 0.55rem;
-    font-size: 0.75rem;
-    color: #b45309;
-    font-weight: 700;
-}
-
-.gelia-ai-confirm-actions {
+.gelia-ai-context-files {
     display: flex;
-    gap: 0.5rem;
-    flex-wrap: wrap;
+    flex-direction: column;
+    gap: 0.3rem;
 }
 
-.gelia-ai-confirm-btn {
-    border-radius: 9999px;
-    border: 1px solid color-mix(in srgb, var(--theme-border, #888) 50%, transparent);
-    background: transparent;
-    padding: 0.4rem 0.9rem;
-    font-size: 0.75rem;
+.gelia-ai-context-label {
+    margin: 0;
+    padding: 0 0.4rem;
+    font-size: 0.68rem;
     font-weight: 800;
-    cursor: pointer;
+    color: var(--theme-text-muted);
+}
+
+/* Tarjetas de propuesta y resultado */
+.gelia-ai-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    padding: 0.9rem 1rem;
+    border-radius: 1.1rem;
+    border: 1px solid color-mix(in srgb, var(--color-primario) 26%, transparent);
+    background: color-mix(in srgb, var(--color-primario) 6%, var(--bg-app));
+    animation: gelia-ai-msg-in 0.28s ease-out;
+}
+
+.gelia-ai-card[data-estado='ejecutada'],
+.gelia-ai-card[data-estado='resultado'] {
+    border-color: color-mix(in srgb, var(--color-exito) 32%, transparent);
+    background: color-mix(in srgb, var(--color-exito) 6%, var(--bg-app));
+}
+
+.gelia-ai-card[data-estado='fallida'],
+.gelia-ai-card[data-estado='inexistente'] {
+    border-color: color-mix(in srgb, var(--color-peligro) 32%, transparent);
+    background: color-mix(in srgb, var(--color-peligro) 5%, var(--bg-app));
+}
+
+.gelia-ai-card[data-estado='vencida'],
+.gelia-ai-card[data-estado='procesando'] {
+    border-color: color-mix(in srgb, var(--color-aviso) 40%, transparent);
+}
+
+.gelia-ai-card[data-estado='cancelada'],
+.gelia-ai-card[data-estado='usada'] {
+    border-color: var(--theme-border);
+    background: transparent;
+}
+
+.gelia-ai-card-head {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.gelia-ai-card-title {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 800;
+    line-height: 1.35;
+    color: var(--theme-text-main);
+    text-wrap: balance;
+}
+
+.gelia-ai-card-text {
+    margin: 0;
+    font-size: 0.875rem;
     color: var(--theme-text-main);
 }
 
-.gelia-ai-confirm-btn--ok {
-    background: var(--color-primario);
-    border-color: transparent;
-    color: #fff;
+.gelia-ai-card-note {
+    margin: 0;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    color: var(--theme-text-muted);
 }
 
-.gelia-ai-confirm-btn:disabled {
-    opacity: 0.45;
+.gelia-ai-card-note strong {
+    color: var(--theme-text-main);
+}
+
+.gelia-ai-card-note[data-tono='aviso'] {
+    color: var(--theme-text-main);
+    padding: 0.45rem 0.65rem;
+    border-radius: 0.7rem;
+    background: color-mix(in srgb, var(--color-aviso) 14%, transparent);
+}
+
+.gelia-ai-dl {
+    margin: 0;
+    display: grid;
+    gap: 0.45rem;
+    padding: 0.65rem 0.75rem;
+    border-radius: 0.85rem;
+    background: color-mix(in srgb, var(--bg-app) 70%, transparent);
+    border: 1px solid color-mix(in srgb, var(--theme-border) 60%, transparent);
+}
+
+.gelia-ai-dl-row {
+    display: grid;
+    grid-template-columns: minmax(6.5rem, max-content) 1fr;
+    gap: 0.75rem;
+    font-size: 0.82rem;
+}
+
+.gelia-ai-dl-row dt {
+    font-weight: 700;
+    color: var(--theme-text-muted);
+}
+
+.gelia-ai-dl-row dd {
+    margin: 0;
+    min-width: 0;
+    color: var(--theme-text-main);
+    overflow-wrap: anywhere;
+}
+
+.gelia-ai-card-files,
+.gelia-ai-card-warn,
+.gelia-ai-aviso-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+.gelia-ai-card-files li,
+.gelia-ai-card-warn li {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.4rem;
+}
+
+.gelia-ai-card-files svg {
+    margin-top: 0.2rem;
+    color: var(--color-exito);
+}
+
+.gelia-ai-card-warn {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--theme-text-main);
+}
+
+.gelia-ai-card-warn svg {
+    margin-top: 0.15rem;
+    color: var(--color-aviso);
+}
+
+.gelia-ai-card-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding-top: 0.15rem;
+}
+
+.gelia-ai-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    min-height: 2.5rem;
+    padding: 0.5rem 1rem;
+    border-radius: 9999px;
+    border: 1px solid var(--theme-border);
+    background: transparent;
+    font-size: 0.8rem;
+    font-weight: 800;
+    color: var(--theme-text-main);
+    text-decoration: none;
+    cursor: pointer;
+    touch-action: manipulation;
+    transition: background-color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+}
+
+.gelia-ai-btn:hover:not(:disabled) {
+    border-color: color-mix(in srgb, var(--color-primario) 45%, transparent);
+    background: color-mix(in srgb, var(--color-primario) 8%, transparent);
+}
+
+.gelia-ai-btn--primary {
+    border-color: transparent;
+    background: var(--color-primario);
+    color: white;
+}
+
+.gelia-ai-btn--primary:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--color-primario) 88%, black);
+}
+
+.gelia-ai-btn:disabled {
+    opacity: 0.5;
     cursor: not-allowed;
 }
 
-.gelia-ai-download {
-    margin-top: 0.65rem;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    font-size: 0.8rem;
+/* Avisos dentro de la conversación */
+.gelia-ai-aviso {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+    margin-top: 0.5rem;
+    padding: 0.7rem 0.85rem;
+    border-radius: 0.95rem;
+    border: 1px solid color-mix(in srgb, var(--color-aviso) 40%, transparent);
+    background: color-mix(in srgb, var(--color-aviso) 10%, var(--bg-app));
+}
+
+.gelia-ai-aviso[data-tono='error'] {
+    margin-top: 0;
+    border-color: color-mix(in srgb, var(--color-peligro) 38%, transparent);
+    background: color-mix(in srgb, var(--color-peligro) 8%, var(--bg-app));
+}
+
+.gelia-ai-aviso-icon {
+    flex-shrink: 0;
+    margin-top: 0.15rem;
+    color: var(--color-aviso);
+}
+
+.gelia-ai-aviso[data-tono='error'] .gelia-ai-aviso-icon {
+    color: var(--color-peligro);
+}
+
+.gelia-ai-aviso-body {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.3rem;
+    font-size: 0.85rem;
+}
+
+.gelia-ai-aviso-title {
+    margin: 0;
     font-weight: 800;
+    color: var(--theme-text-main);
+}
+
+.gelia-ai-aviso-text {
+    margin: 0;
+    color: var(--theme-text-main);
+}
+
+.gelia-ai-aviso-list {
+    padding-left: 1rem;
+    list-style: disc;
+}
+
+/* Trabajo en curso */
+.gelia-ai-status {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem 0.5rem;
+    font-size: 0.85rem;
+    color: var(--theme-text-muted);
+    animation: gelia-ai-msg-in 0.2s ease-out;
+}
+
+.gelia-ai-status svg {
     color: var(--color-primario);
-    text-decoration: none;
+}
+
+.gelia-ai-status-text {
+    font-weight: 600;
+}
+
+.gelia-ai-status-time {
+    font-variant-numeric: tabular-nums;
+}
+
+.gelia-ai-status-hint {
+    flex-basis: 100%;
+    font-size: 0.78rem;
+}
+
+/* Foco visible en controles del módulo */
+.gelia-ai-icon-btn:focus-visible,
+.gelia-ai-starters button:focus-visible,
+.gelia-ai-send:focus-visible,
+.gelia-ai-attach:focus-visible,
+.gelia-ai-file-x:focus-visible,
+.gelia-ai-error-x:focus-visible,
+.gelia-ai-btn:focus-visible,
+.gelia-ai-hist-title:focus-visible {
+    outline: 2px solid var(--color-primario);
+    outline-offset: 2px;
+}
+
+.gelia-ai-composer:focus-within {
+    border-color: color-mix(in srgb, var(--color-primario) 55%, transparent);
+    box-shadow:
+        0 0 0 3px color-mix(in srgb, var(--color-primario) 22%, transparent),
+        0 10px 36px color-mix(in srgb, black 18%, transparent);
+}
+
+.gelia-ai-composer-help {
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.3rem 1rem;
+    width: min(48rem, 100%);
+    margin: 0.15rem 0 0;
+    font-size: 0.65rem;
+    color: var(--theme-text-muted);
+}
+
+.gelia-ai-jump {
+    position: absolute;
+    bottom: calc(100% + 0.25rem);
+    background: var(--bg-app);
+    pointer-events: auto;
+    font-size: 0.72rem;
+}
+
+@media (max-width: 640px) {
+    .gelia-ai-top {
+        justify-content: flex-start;
+        min-height: 4.5rem;
+        padding: 1rem 1rem 1rem 7.25rem;
+    }
+
+    .gelia-ai-toolbar {
+        top: 1rem;
+    }
+
+    .gelia-ai-session {
+        display: none;
+    }
+
+    .gelia-ai-messages {
+        padding: 1.5rem 1rem 0.5rem;
+    }
+
+    .gelia-ai-welcome {
+        padding-block: 1rem;
+    }
+
+    .gelia-ai-starters {
+        grid-template-columns: 1fr;
+        gap: 0;
+    }
+
+    .gelia-ai-starters button {
+        padding-block: 0.8rem;
+    }
+
+    .gelia-ai-starters small {
+        margin-top: 0.15rem;
+    }
+
+    .gelia-ai-composer-wrap {
+        padding-inline: 0.75rem;
+    }
+
+    .gelia-ai-composer-help {
+        justify-content: center;
+    }
+
+    .gelia-ai-composer-help span:first-child {
+        display: none;
+    }
+
+    .gelia-ai-composer textarea {
+        font-size: 1rem;
+    }
+
+    .gelia-ai-card-actions .gelia-ai-btn {
+        flex: 1 1 100%;
+    }
+
+    .gelia-ai-dl-row {
+        grid-template-columns: 1fr;
+        gap: 0.1rem;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .gelia-ai-page[data-state] .gelia-ai-glow,
+    .gelia-ai-page[data-state] .gelia-ai-logo-wrap::after,
+    .gelia-ai-page[data-state] .animate-sparkle polygon,
+    .gelia-ai-page[data-state] .animate-fluid-sparkle polygon,
+    .gelia-ai-msg--user,
+    .gelia-ai-card,
+    .gelia-ai-status,
+    .gelia-ai-hist-item {
+        animation: none;
+    }
+
+    .gelia-ai-hist-item {
+        opacity: 1;
+        transform: none;
+    }
+
+    .gelia-ai-md--reveal .gelia-ai-md-p {
+        animation: none;
+        opacity: 1;
+        transform: none;
+    }
+
+    .gelia-ai-drawer-panel,
+    .gelia-ai-drawer-backdrop {
+        transition: none;
+    }
 }

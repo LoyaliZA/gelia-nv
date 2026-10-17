@@ -6,6 +6,7 @@ use App\Jobs\Almacenes\ImportarAlmacenCatalogoJob;
 use App\Models\Almacen;
 use App\Models\Sucursal;
 use App\Models\User;
+use App\Services\GeliaAi\Acciones\PropuestasAccionGeliaAi;
 use App\Services\GeliaAi\GeliaAiArchivoService;
 use App\Services\GeliaAi\InspeccionarArchivoGeliaAiService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -93,15 +94,16 @@ class GeliaAiFase2ArchivosTest extends TestCase
         $almacen = Almacen::create(['codigo' => 'CEDIS', 'nombre' => 'CEDIS', 'activo' => true]);
         $meta = $this->subirCsvComoUsuario($user, "sku,costo\nX1,1\n");
 
+        $propuesta = app(PropuestasAccionGeliaAi::class)->registrar($user, 'importar_costos', [
+            'file_id' => $meta['file_id'],
+            'almacen_id' => $almacen->id,
+            'mapping' => ['sku' => 'sku', 'costo' => 'costo'],
+        ], 'x');
+
         $this->actingAs($user)
             ->postJson(route('gelia_ai.acciones.ejecutar'), [
-                'accion' => 'importar_costos',
+                'propuesta_id' => $propuesta['id'],
                 'confirmado' => true,
-                'payload' => [
-                    'file_id' => $meta['file_id'],
-                    'almacen_id' => $almacen->id,
-                    'mapping' => ['sku' => 'sku', 'costo' => 'costo'],
-                ],
             ])
             ->assertForbidden();
     }
@@ -118,17 +120,19 @@ class GeliaAiFase2ArchivosTest extends TestCase
         $almacen = Almacen::create(['codigo' => 'CEDIS', 'nombre' => 'CEDIS Central', 'activo' => true, 'sucursal_id' => $sucursal->id]);
         $meta = $this->subirCsvComoUsuario($admin, "sku,costo\nABC,9.9\n");
 
+        $propuesta = app(PropuestasAccionGeliaAi::class)->registrar($admin, 'importar_costos', [
+            'file_id' => $meta['file_id'],
+            'almacen_codigo' => 'CEDIS',
+            'mapping' => ['sku' => 'sku', 'costo' => 'costo'],
+        ], 'x');
+
         $this->actingAs($admin)
             ->postJson(route('gelia_ai.acciones.ejecutar'), [
-                'accion' => 'importar_costos',
+                'propuesta_id' => $propuesta['id'],
                 'confirmado' => true,
-                'payload' => [
-                    'file_id' => $meta['file_id'],
-                    'almacen_codigo' => 'CEDIS',
-                    'mapping' => ['sku' => 'sku', 'costo' => 'costo'],
-                ],
             ])
             ->assertOk()
+            ->assertJsonPath('estado_propuesta', 'ejecutada')
             ->assertJsonPath('ok', true)
             ->assertJsonPath('accion', 'importar_costos')
             ->assertJsonPath('reporte.estado', 'en_cola')

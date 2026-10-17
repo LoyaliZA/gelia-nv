@@ -52,6 +52,18 @@ class GeliaAiConversacionService
         return $conv && is_array($conv->contexto) ? $conv->contexto : [];
     }
 
+    /** @param  callable(array<string, mixed>): array<string, mixed>  $fn */
+    public function actualizarContexto(User $user, int $conversacionId, callable $fn): void
+    {
+        $conv = GeliaAiConversacion::query()->where('user_id', $user->id)->whereKey($conversacionId)->first();
+        if (! $conv) {
+            return;
+        }
+
+        $conv->contexto = $fn(is_array($conv->contexto) ? $conv->contexto : []);
+        $conv->save();
+    }
+
     /** @return list<array{role: string, content: string}> */
     public function mensajesDe(GeliaAiConversacion $conversacion): array
     {

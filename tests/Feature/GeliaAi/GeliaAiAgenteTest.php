@@ -160,6 +160,96 @@ class GeliaAiAgenteTest extends TestCase
         $this->assertStringNotContainsString('TEXTO_CLIENTE_NO_CONFIABLE', json_encode($segunda));
     }
 
+    public function test_producto_a_en_cedis_y_luego_b_sin_resultados_no_conserva_a_ni_cedis(): void
+    {
+        $admin = $this->adminConInventario();
+        Http::fake(['api.deepseek.test/*' => Http::sequence()
+            ->push($this->tools([['b1', 'buscar_producto_inventario', ['q' => 'MSKY100', 'almacen' => 'CEDIS']]]))
+            ->push($this->texto('Hay 10 disponibles en CEDIS.'))
+            ->push($this->tools([['b2', 'buscar_producto_inventario', ['q' => 'ZZZ Fantasma']]]))
+            ->push($this->texto('No encontré ese producto.'))
+            ->push($this->texto('¿Qué otro producto busco?'))]);
+
+        $convId = $this->actingAs($admin)->postJson(route('gelia_ai.chat'), ['message' => '¿Cuánto hay del Mandarin Sky en el CEDIS?'])
+            ->assertOk()->json('conversacion_id');
+        $this->actingAs($admin)->postJson(route('gelia_ai.chat'), ['message' => '¿Y del ZZZ Fantasma?', 'conversacion_id' => $convId])
+            ->assertOk();
+
+        $ctx = GeliaAiConversacion::find($convId)->contexto;
+        $this->assertSame([], $ctx['productos']);
+        $this->assertSame('ninguna', $ctx['coincidencia']);
+        $this->assertNull($ctx['almacen']);
+        $this->assertSame(['q' => 'ZZZ Fantasma'], $ctx['filtros']);
+
+        $this->actingAs($admin)->postJson(route('gelia_ai.chat'), ['message' => '¿y cuánto cuesta?', 'conversacion_id' => $convId])->assertOk();
+        $estado = $this->estadoGuardado($this->peticiones()[4]);
+        $this->assertStringNotContainsString('MSKY100', $estado);
+        $this->assertStringNotContainsString('CEDIS', $estado);
+    }
+
+    public function test_consulta_de_almacen_seguida_de_consulta_global_retira_el_almacen(): void
+    {
+        $admin = $this->adminConInventario();
+        Http::fake(['api.deepseek.test/*' => Http::sequence()
+            ->push($this->tools([['b1', 'buscar_producto_inventario', ['q' => 'MSKY100', 'almacen' => 'CEDIS']]]))
+            ->push($this->texto('En CEDIS hay 10.'))
+            ->push($this->tools([['b2', 'buscar_producto_inventario', ['q' => 'MSKY100']]]))
+            ->push($this->texto('En total hay 10.'))]);
+
+        $convId = $this->actingAs($admin)->postJson(route('gelia_ai.chat'), ['message' => '¿Cuánto Mandarin Sky hay en CEDIS?'])
+            ->assertOk()->json('conversacion_id');
+        $this->assertSame('CEDIS', GeliaAiConversacion::find($convId)->contexto['almacen']['codigo']);
+
+        $this->actingAs($admin)->postJson(route('gelia_ai.chat'), ['message' => '¿Y en todos los almacenes?', 'conversacion_id' => $convId])
+            ->assertOk();
+
+        $ctx = GeliaAiConversacion::find($convId)->contexto;
+        $this->assertNull($ctx['almacen']);
+        $this->assertSame(['q' => 'MSKY100'], $ctx['filtros']);
+        $this->assertSame('MSKY100', $ctx['productos'][0]['sku']);
+    }
+
+    public function test_precarga_por_codigo_respeta_almacen_pedido_y_heredado(): void
+    {
+        $admin = $this->adminConInventario();
+        Http::fake(['api.deepseek.test/*' => Http::sequence()
+            ->push($this->texto('En CEDIS hay 10.'))
+            ->push($this->texto('En CEDIS hay 2 apartados.'))
+            ->push($this->texto('No encontré ese código.'))]);
+
+        $convId = $this->actingAs($admin)->postJson(route('gelia_ai.chat'), ['message' => '¿Cuántos MSKY100 hay en CEDIS?'])
+            ->assertOk()
+            ->assertJsonPath('usage.gelia_mode', 'prefetch_inventario')
+            ->json('conversacion_id');
+        $this->assertStringContainsString('buscar_producto_inventario(q=MSKY100, almacen=CEDIS)', $this->textoSistema($this->peticiones()[0]));
+        $this->assertSame('CEDIS', GeliaAiConversacion::find($convId)->contexto['almacen']['codigo']);
+
+        // Continuación con el mismo producto: hereda el almacén.
+        $this->actingAs($admin)->postJson(route('gelia_ai.chat'), ['message' => '¿Y cuántos MSKY100 están apartados?', 'conversacion_id' => $convId])
+            ->assertOk()->assertJsonPath('usage.gelia_mode', 'prefetch_inventario');
+        $this->assertStringContainsString('buscar_producto_inventario(q=MSKY100, almacen=CEDIS)', $this->textoSistema($this->peticiones()[1]));
+
+        // Otro producto sin almacén pedido: consulta global, no hereda CEDIS.
+        $this->actingAs($admin)->postJson(route('gelia_ai.chat'), ['message' => '¿Cuántos ZX9000 hay?', 'conversacion_id' => $convId])
+            ->assertOk();
+        $this->assertStringContainsString('buscar_producto_inventario(q=ZX9000):', $this->textoSistema($this->peticiones()[2]));
+        $ctx = GeliaAiConversacion::find($convId)->contexto;
+        $this->assertNull($ctx['almacen']);
+        $this->assertSame([], $ctx['productos']);
+    }
+
+    public function test_precarga_con_varios_almacenes_nombrados_deja_que_la_ia_pregunte(): void
+    {
+        $admin = $this->adminConInventario();
+        Almacen::create(['codigo' => 'TIENDA1', 'nombre' => 'Tienda Uno', 'activo' => true, 'sucursal_id' => Almacen::where('codigo', 'CEDIS')->value('sucursal_id')]);
+        Http::fake(['api.deepseek.test/*' => Http::response($this->texto('¿En cuál de los dos almacenes?'))]);
+
+        $this->actingAs($admin)->postJson(route('gelia_ai.chat'), ['message' => '¿Cuántos MSKY100 hay en CEDIS y en TIENDA1?'])
+            ->assertOk()
+            ->assertJsonPath('usage.gelia_mode', 'general');
+        $this->assertStringNotContainsString('Consulta previa', $this->textoSistema($this->peticiones()[0]));
+    }
+
     public function test_tarea_multipaso_usa_varias_herramientas(): void
     {
         $admin = $this->adminConInventario();
@@ -247,11 +337,14 @@ class GeliaAiAgenteTest extends TestCase
         ])->assertOk()->assertJsonPath('propuesta_accion', null);
         $this->assertSame('sin_permiso_almacen', $this->mensajesTool($this->peticiones()[1])['i1']['error_code']);
 
+        // Aunque exista una propuesta guardada con ese almacén, al ejecutar se vuelve a validar el acceso.
+        $propuesta = app(PropuestasAccionGeliaAi::class)->registrar($admin, 'importar_costos', [
+            'file_id' => $meta['file_id'], 'almacen_id' => $ajeno->id, 'mapping' => ['sku' => 'sku', 'costo' => 'costo'],
+        ], 'x');
         $this->actingAs($admin)->postJson(route('gelia_ai.acciones.ejecutar'), [
-            'accion' => 'importar_costos',
+            'propuesta_id' => $propuesta['id'],
             'confirmado' => true,
-            'payload' => ['file_id' => $meta['file_id'], 'almacen_id' => $ajeno->id, 'mapping' => ['sku' => 'sku', 'costo' => 'costo']],
-        ])->assertForbidden();
+        ])->assertForbidden()->assertJsonPath('estado_propuesta', 'fallida');
 
         Queue::assertNothingPushed();
     }
@@ -267,8 +360,12 @@ class GeliaAiAgenteTest extends TestCase
         $this->actingAs($otra)->postJson(route('gelia_ai.acciones.ejecutar'), [
             'propuesta_id' => $propuesta['id'],
             'confirmado' => true,
-        ])->assertStatus(422);
+        ])->assertNotFound()
+            ->assertJsonPath('estado_propuesta', 'inexistente')
+            ->assertJsonPath('message', 'No encontramos esta propuesta en tu cuenta. Pide a GELIA que la prepare de nuevo.');
 
+        // La propuesta sigue intacta para su dueña.
+        $this->assertNotNull(app(PropuestasAccionGeliaAi::class)->pendiente($duena, $propuesta['id']));
         Queue::assertNothingPushed();
     }
 
@@ -314,10 +411,12 @@ class GeliaAiAgenteTest extends TestCase
         $reply = $this->actingAs($admin)->postJson(route('gelia_ai.chat'), ['message' => 'stock del mandarin en todos lados'])
             ->assertOk()
             ->assertJsonPath('usage.gelia_acc.stop', 'vacia')
+            ->assertJsonPath('incompleta', true)
             ->json('reply');
 
         $this->assertStringContainsString('no devolvió una respuesta utilizable', $reply);
-        $this->assertStringContainsString('buscar_producto_inventario: consultada', $reply);
+        $this->assertStringContainsString('Búsqueda de inventario: completada', $reply);
+        $this->assertStringNotContainsString('buscar_producto_inventario', $reply);
         $this->assertSame('none', $this->peticiones()[1]['tool_choice']);
     }
 
@@ -377,7 +476,11 @@ class GeliaAiAgenteTest extends TestCase
             'file_ids' => [$exist['file_id'], $precios['file_id']],
         ])->assertOk()
             ->assertJsonPath('propuesta_accion.accion', 'generar_listado')
-            ->assertJsonPath('propuesta_accion.puede', true);
+            ->assertJsonPath('propuesta_accion.puede', true)
+            ->assertJsonPath('propuesta_accion.detalle.confirmar', 'Generar listado')
+            ->assertJsonPath('propuesta_accion.detalle.archivos.0.rol', 'Existencias')
+            ->assertJsonMissingPath('propuesta_accion.payload')
+            ->assertJsonCount(2, 'archivos');
         Http::assertSentCount(1);
         $this->assertStringContainsString('aún no se ha ejecutado', $res->json('reply'));
         $this->assertStringContainsString('existencias=«existencias.csv»', $res->json('propuesta_accion.resumen_corto'));
@@ -419,7 +522,7 @@ class GeliaAiAgenteTest extends TestCase
         $this->actingAs($admin)->postJson(route('gelia_ai.acciones.ejecutar'), [
             'propuesta_id' => $res->json('propuesta_accion.id'),
             'confirmado' => true,
-        ])->assertStatus(422);
+        ])->assertStatus(409)->assertJsonPath('estado_propuesta', 'ejecutada');
     }
 
     public function test_listado_sin_existencias_pide_solo_el_archivo_faltante(): void
@@ -527,6 +630,12 @@ class GeliaAiAgenteTest extends TestCase
             fn ($m) => (string) $m['content'],
             array_filter($data['messages'], fn ($m) => $m['role'] === 'system')
         ));
+    }
+
+    private function estadoGuardado(array $data): string
+    {
+        return (string) collect($data['messages'])
+            ->first(fn ($m) => $m['role'] === 'system' && str_starts_with((string) $m['content'], 'Estado guardado'))['content'] ?? '';
     }
 
     /** @return array<string, mixed> tool_call_id => resultado decodificado */

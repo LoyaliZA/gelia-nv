@@ -148,6 +148,21 @@ abstract class ImportarCatalogoAlmacenAccion implements AccionGeliaAi
                 .($filas > 0 ? " (≈{$filas} filas)" : '')
                 ." al almacén {$almacen->codigo} · {$almacen->nombre}. Columnas: {$columnas}.",
             'advertencias' => $advertencias,
+            'detalle' => [
+                'operacion' => 'Importar '.$this->etiqueta(),
+                'almacen' => "{$almacen->codigo} · {$almacen->nombre}",
+                'archivos' => [array_filter([
+                    'nombre' => (string) $meta['original_name'],
+                    'filas' => $filas > 0 ? $filas : null,
+                ])],
+                'columnas' => array_map(
+                    fn ($campo, $col) => ['campo' => str_replace('_', ' ', $campo), 'columna' => $col],
+                    array_keys($mapping),
+                    $mapping,
+                ),
+                'efecto' => 'Se enviará a la cola de importaciones de Almacenes. El resultado por fila se revisa en Almacenes → Importaciones.',
+                'confirmar' => 'Confirmar importación',
+            ],
         ];
     }
 

@@ -126,6 +126,20 @@ class GenerarListadoAccion implements AccionGeliaAi
             ],
             'resumen' => "Generar listado {$nombreTipo} con {$archivosTxt}.",
             'advertencias' => $advertencias,
+            'detalle' => [
+                'operacion' => "Generar listado {$nombreTipo}",
+                'archivos' => array_map(
+                    fn ($rol, $m) => array_filter([
+                        'nombre' => (string) $m['original_name'],
+                        'rol' => ucfirst($rol),
+                        'filas' => (int) ($m['rows'] ?? 0) ?: null,
+                    ]),
+                    array_keys($metas),
+                    $metas,
+                ),
+                'efecto' => 'Se generará un archivo Excel para descargar. No modifica inventario, costos ni precios.',
+                'confirmar' => 'Generar listado',
+            ],
         ];
     }
 

@@ -37,6 +37,7 @@ class GeliaAiController extends Controller
         return Inertia::render('GeliaAi/Index', [
             'configurado' => $client->estaConfigurado(),
             'conversaciones' => $conversaciones->listar($request->user()),
+            'limiteSegundos' => max(10, (int) config('gelia_ai.max_turn_seconds', 90)),
         ]);
     }
 
@@ -158,58 +159,66 @@ class GeliaAiController extends Controller
     ): JsonResponse {
         abort_unless($acceso->puedeUsar($request->user()), 403);
 
-        $validated = $request->validate([
-            'propuesta_id' => ['nullable', 'string', 'uuid'],
-            'accion' => ['required_without:propuesta_id', 'string', 'max:64'],
-            'payload' => ['required_without:propuesta_id', 'array'],
-            'confirmado' => ['required', 'accepted'],
-            'conversacion_id' => [
-                'nullable',
-                'integer',
-                Rule::exists('gelia_ai_conversaciones', 'id')->where(
-                    fn ($q) => $q->where('user_id', $request->user()->id)
-                ),
-            ],
-        ]);
-
+        // Solo se ejecuta una propuesta guardada en el servidor; accion/payload del navegador se ignoran.
+        $validated = $this->validarPropuesta($request);
         $user = $request->user();
-        if (! empty($validated['propuesta_id'])) {
-            // Se ejecuta exactamente lo propuesto y mostrado; uso único para evitar dobles importaciones.
-            $propuesta = $propuestas->consumir($user, $validated['propuesta_id']);
-            if (! $propuesta) {
-                return response()->json(['message' => 'La propuesta expiró o ya se ejecutó. Pide a GELIA que la prepare de nuevo.'], 422);
+        $id = $validated['propuesta_id'];
+        $convId = isset($validated['conversacion_id']) ? (int) $validated['conversacion_id'] : null;
+
+        $reclamo = $propuestas->reclamar($user, $id);
+        if (! isset($reclamo['propuesta'])) {
+            if ($convId && $reclamo['estado'] !== PropuestasAccionGeliaAi::OCUPADA && $reclamo['estado'] !== PropuestasAccionGeliaAi::PROCESANDO) {
+                $conversaciones->actualizarContexto($user, $convId, fn ($ctx) => $contexto->descartarPropuesta($contexto->normalizar($ctx), $id));
             }
-            $accion = (string) $propuesta['accion'];
-            $payload = (array) $propuesta['payload'];
-        } else {
-            $accion = (string) $validated['accion'];
-            $payload = (array) $validated['payload'];
+
+            return $this->rechazoPropuesta($propuestas, $reclamo['estado']);
         }
 
-        if (! $registry->soporta($accion)) {
-            return response()->json(['message' => 'Acción no soportada.'], 422);
-        }
+        $accion = (string) $reclamo['propuesta']['accion'];
+        $payload = (array) $reclamo['propuesta']['payload'];
+        $error = null;
 
         try {
+            if (! $registry->soporta($accion)) {
+                throw new RuntimeException('Esta acción ya no está disponible.');
+            }
             $result = $registry->ejecutar($user, $accion, $payload);
         } catch (AuthorizationException $e) {
-            return response()->json(['message' => $e->getMessage() ?: 'No autorizado.'], 403);
+            $error = [$e->getMessage() ?: 'No tienes permiso para esta acción.', 403];
         } catch (ValidationException $e) {
-            return response()->json(['message' => collect($e->errors())->flatten()->first() ?: 'Datos inválidos.'], 422);
+            $error = [collect($e->errors())->flatten()->first() ?: 'Los datos de la propuesta ya no son válidos.', 422];
         } catch (RuntimeException $e) {
-            $code = preg_match('/permiso|acceso operable/iu', $e->getMessage()) ? 403 : 422;
-
-            return response()->json(['message' => $e->getMessage()], $code);
+            $error = [$e->getMessage(), preg_match('/permiso|acceso operable/iu', $e->getMessage()) ? 403 : 422];
         } catch (Throwable $e) {
             report($e);
+            $error = ['No se pudo completar la acción. Revisa el módulo correspondiente antes de prepararla de nuevo.', 500];
+        }
 
-            return response()->json(['message' => 'No se pudo completar la acción. Revisa el módulo correspondiente antes de reintentar.'], 500);
+        // Fallida no vuelve a pendiente: un error o timeout nunca habilita una segunda ejecución automática.
+        $propuestas->finalizar($user, $id, $error === null);
+
+        if ($error !== null) {
+            [$mensaje, $code] = $error;
+            if ($convId) {
+                $conversaciones->registrarEventoAccion(
+                    $user,
+                    $convId,
+                    "**No se completó la acción.** {$mensaje}\n\nNo se reintentó automáticamente.",
+                    $contexto->registrarAccionEjecutada(
+                        $contexto->normalizar($conversaciones->contextoDe($user, $convId)),
+                        $accion,
+                        ['estado' => PropuestasAccionGeliaAi::FALLIDA, 'resumen' => $mensaje],
+                    ),
+                );
+            }
+
+            return response()->json(['message' => $mensaje, 'estado_propuesta' => PropuestasAccionGeliaAi::FALLIDA], $code);
         }
 
         $result['mensaje'] = $this->mensajeReporte($result);
+        $result['estado_propuesta'] = PropuestasAccionGeliaAi::EJECUTADA;
 
-        if (! empty($validated['conversacion_id'])) {
-            $convId = (int) $validated['conversacion_id'];
+        if ($convId) {
             $ctx = $contexto->registrarAccionEjecutada(
                 $contexto->normalizar($conversaciones->contextoDe($user, $convId)),
                 $accion,
@@ -219,6 +228,67 @@ class GeliaAiController extends Controller
         }
 
         return response()->json($result);
+    }
+
+    public function cancelarAccion(
+        Request $request,
+        ResolverAccesoGeliaAi $acceso,
+        PropuestasAccionGeliaAi $propuestas,
+        GeliaAiConversacionService $conversaciones,
+        ContextoConversacionGeliaAi $contexto,
+    ): JsonResponse {
+        abort_unless($acceso->puedeUsar($request->user()), 403);
+
+        $validated = $this->validarPropuesta($request, false);
+        $user = $request->user();
+        $id = $validated['propuesta_id'];
+        $convId = isset($validated['conversacion_id']) ? (int) $validated['conversacion_id'] : null;
+
+        $res = $propuestas->cancelar($user, $id);
+        if (! isset($res['propuesta'])) {
+            return $this->rechazoPropuesta($propuestas, $res['estado']);
+        }
+
+        if ($convId) {
+            $ctx = $contexto->descartarPropuesta($contexto->normalizar($conversaciones->contextoDe($user, $convId)), $id);
+            $conversaciones->registrarEventoAccion(
+                $user,
+                $convId,
+                'Propuesta cancelada; no se ejecutó nada: '.$res['propuesta']['resumen'],
+                $ctx,
+            );
+        }
+
+        return response()->json(['ok' => true, 'estado_propuesta' => PropuestasAccionGeliaAi::CANCELADA]);
+    }
+
+    /** @return array{propuesta_id: string, conversacion_id?: int|string|null} */
+    private function validarPropuesta(Request $request, bool $confirmar = true): array
+    {
+        return $request->validate([
+            'propuesta_id' => ['required', 'string', 'uuid'],
+            'confirmado' => $confirmar ? ['required', 'accepted'] : ['nullable'],
+            'conversacion_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('gelia_ai_conversaciones', 'id')->where(
+                    fn ($q) => $q->where('user_id', $request->user()->id)
+                ),
+            ],
+        ], [
+            'propuesta_id.required' => 'Falta la propuesta a confirmar. Pide a GELIA que prepare la acción y confírmala desde su tarjeta.',
+            'propuesta_id.uuid' => 'La propuesta indicada no es válida. Pide a GELIA que la prepare de nuevo.',
+            'confirmado.required' => 'Confirma la acción desde su tarjeta para ejecutarla.',
+            'confirmado.accepted' => 'Confirma la acción desde su tarjeta para ejecutarla.',
+        ]);
+    }
+
+    private function rechazoPropuesta(PropuestasAccionGeliaAi $propuestas, string $estado): JsonResponse
+    {
+        return response()->json([
+            'message' => $propuestas->mensajeRechazo($estado),
+            'estado_propuesta' => $estado,
+        ], $propuestas->codigoHttp($estado));
     }
 
     /** @param  array<string, mixed>  $result */
@@ -272,16 +342,31 @@ class GeliaAiController extends Controller
         int $conversacion,
         ResolverAccesoGeliaAi $acceso,
         GeliaAiConversacionService $svc,
+        ContextoConversacionGeliaAi $contexto,
+        PropuestasAccionGeliaAi $propuestas,
+        GeliaAiArchivoService $archivos,
     ): JsonResponse {
         abort_unless($acceso->puedeUsar($request->user()), 403);
 
-        $conv = $svc->obtenerDeUsuario($request->user(), $conversacion);
+        $user = $request->user();
+        $conv = $svc->obtenerDeUsuario($user, $conversacion);
+        $ctx = $contexto->normalizar(is_array($conv->contexto) ? $conv->contexto : null);
+
+        $pendiente = null;
+        $idPendiente = ($ctx['tarea_pendiente']['estado'] ?? null) === 'esperando_confirmacion'
+            ? (string) ($ctx['tarea_pendiente']['propuesta_id'] ?? '')
+            : '';
+        if ($idPendiente !== '' && ($p = $propuestas->pendiente($user, $idPendiente))) {
+            $pendiente = $propuestas->publica($user, $p);
+        }
 
         return response()->json([
             'id' => $conv->id,
             'titulo' => $conv->titulo,
             'temporal' => (bool) $conv->temporal,
             'messages' => $svc->mensajesDe($conv),
+            'propuesta_pendiente' => $pendiente,
+            'archivos' => array_map([$archivos, 'resumenPublico'], $archivos->metasDisponibles($user, $ctx['archivos'])),
         ]);
     }
 

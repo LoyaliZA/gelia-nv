@@ -62,6 +62,43 @@ class ResolverAlmacenGeliaAi
         return ['ok' => true, 'almacen' => $almacen];
     }
 
+    /**
+     * Almacén activo nombrado en el texto por código o nombre completo.
+     * Devuelve false si se mencionan varios distintos (que la IA pregunte) y null si ninguno.
+     */
+    public function mencionadoEn(string $texto, ?string $excluir = null): Almacen|false|null
+    {
+        $t = mb_strtolower($texto);
+        $excluir = $excluir !== null ? mb_strtolower($excluir) : null;
+        $hallados = [];
+        foreach (Almacen::query()->where('activo', true)->get(['id', 'codigo', 'nombre']) as $almacen) {
+            foreach ([(string) $almacen->codigo, (string) $almacen->nombre] as $termino) {
+                $termino = mb_strtolower(trim($termino));
+                if (mb_strlen($termino) < 2 || $termino === $excluir) {
+                    continue;
+                }
+                if (preg_match('/(?<![\p{L}\p{N}])'.preg_quote($termino, '/').'(?![\p{L}\p{N}])/u', $t)
+                    && mb_strlen($termino) > mb_strlen($hallados[$almacen->id][1] ?? '')) {
+                    $hallados[$almacen->id] = [$almacen, $termino];
+                }
+            }
+        }
+        if ($hallados === []) {
+            return null;
+        }
+
+        // «CEDIS Norte» también contiene «CEDIS»: gana la mención más larga si incluye a las demás.
+        usort($hallados, fn ($a, $b) => mb_strlen($b[1]) <=> mb_strlen($a[1]));
+        [$principal, $mayor] = $hallados[0];
+        foreach (array_slice($hallados, 1) as [, $termino]) {
+            if (! str_contains($mayor, $termino)) {
+                return false;
+            }
+        }
+
+        return $principal;
+    }
+
     public function resolver(?int $almacenId, ?string $codigoONombre): ?Almacen
     {
         $res = $this->buscar($almacenId, $codigoONombre);

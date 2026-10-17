@@ -38,6 +38,36 @@ class GeliaAiChatTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_contexto_identifica_solo_a_la_cuenta_autenticada(): void
+    {
+        Http::fake(['api.deepseek.test/*' => Http::response([
+            'choices' => [['message' => ['role' => 'assistant', 'content' => 'Con gusto.'], 'finish_reason' => 'stop']],
+        ])]);
+
+        foreach (['Gabriel', 'Ana'] as $nombre) {
+            $user = User::factory()->create(['name' => $nombre]);
+            $user->assignRole('Super Admin');
+            $this->actingAs($user)->postJson(route('gelia_ai.chat'), [
+                'message' => '¿Sabes cómo me llamo?',
+                'nombre' => 'Nombre inyectado desde el cliente',
+            ])->assertOk();
+
+            $request = Http::recorded()->last()[0];
+            $system = $request['messages'][0]['content'];
+            $this->assertStringContainsString('"nombre":"'.$nombre.'"', $system);
+            $this->assertStringNotContainsString('Nombre inyectado desde el cliente', $system);
+            $this->assertStringNotContainsString($user->email, $system);
+        }
+    }
+
+    public function test_nombre_vacio_no_se_sustituye_por_correo(): void
+    {
+        $user = User::factory()->make(['name' => '   ']);
+        $prompt = app(\App\Services\GeliaAi\PromptSistemaGeliaAi::class)->construir($user, []);
+        $this->assertStringContainsString('"nombre":null', $prompt);
+        $this->assertStringNotContainsString($user->email, $prompt);
+    }
+
     public function test_sin_api_token_503_en_chat(): void
     {
         config(['deepseek.api_token' => '']);

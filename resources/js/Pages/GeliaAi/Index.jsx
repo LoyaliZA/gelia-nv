@@ -1,103 +1,164 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Head } from '@inertiajs/react';
 import axios from 'axios';
-import { Download, FileSpreadsheet, History, Paperclip, Plus, Send, Trash2, X } from 'lucide-react';
+import { ArrowDown, Boxes, FileSpreadsheet, History, Paperclip, Plus, RotateCcw, Send, Sparkles, Trash2, UserRound, X } from 'lucide-react';
 import AppLayout from '@/Layouts/AppLayout';
 import GeliaLogo from '@/Components/GeliaLogo';
 import GeliaAiMarkdown from '@/Components/GeliaAi/GeliaAiMarkdown';
+import PropuestaAccionCard from '@/Components/GeliaAi/PropuestaAccionCard';
+import ResultadoAccionCard from '@/Components/GeliaAi/ResultadoAccionCard';
+import { EstadoBadge, EstadoTrabajoGelia, GeliaAiAviso } from '@/Components/GeliaAi/GeliaAiEstado';
+import {
+    estadoTarjetaDesdeServidor,
+    etiquetaArchivo,
+    mensajeErrorHttp,
+    textoPrepararDeNuevo,
+} from '@/Components/GeliaAi/geliaAiEstados';
 import { THEME_BTN_PRIMARY } from '@/utils/geliaTheme';
 
 const MAX_FILES = 10;
 const DRAWER_MS = 320;
 
-const GREETING =
-    'Hola, soy GELIA. Puedo explicarte listados y solicitudes, consultar inventario, y con archivos proponer importaciones o listados. ¿En qué te ayudo?';
+const SIN_CONFIGURAR = 'GELIA aún no está configurada. Una persona administradora debe completar la conexión del servicio de IA en Configuración del sistema.';
 
-function etiquetaArchivo(kind, name = '') {
-    const ext = (name.split('.').pop() || '').toLowerCase();
-    if (ext === 'csv' || ext === 'xlsx' || ext === 'xls') {
-        return 'Hoja de cálculo';
-    }
-    const labels = {
-        costos: 'Costos',
-        existencias: 'Existencias',
-        precios: 'Precios',
-        desconocido: 'Hoja de cálculo',
-    };
-    return labels[kind] || 'Hoja de cálculo';
-}
+let secuenciaMensaje = 0;
+const conId = (m) => ({ id: `m${++secuenciaMensaje}`, ...m });
+const saludo = () => [];
 
 function mensajeErrorUpload(err) {
-    const errors = err?.response?.data?.errors;
-    if (errors && typeof errors === 'object') {
-        const first = Object.values(errors).flat().find(Boolean);
-        if (typeof first === 'string') {
-            if (/csv|xlsx|xls|mimes|type/i.test(first)) {
-                return 'Solo se permiten archivos CSV, XLSX o XLS.';
-            }
-            if (/max/i.test(first) && /10|archivos/i.test(first)) {
-                return `Máximo ${MAX_FILES} archivos.`;
-            }
-            return first;
-        }
-    }
-    return err?.response?.data?.message || 'No se pudieron subir los archivos.';
+    const msg = mensajeErrorHttp(err, 'No se pudieron subir los archivos.');
+    if (/csv|xlsx|xls|mimes|extensions/i.test(msg)) return 'Solo se permiten archivos CSV, XLSX o XLS.';
+    return msg;
 }
 
-function formatearReporte(data) {
-    const r = data?.reporte || {};
-    const lines = [
-        `**${r.resumen || 'Acción completada'}**`,
-        '',
-        `- Acción: \`${data.accion || '—'}\``,
-    ];
-    if (r.log_id) {
-        lines.push(`- Log importación: \`${r.log_id}\` (seguimiento en Almacenes)`);
+function enlaceImportaciones() {
+    try {
+        return route().has('almacenes.importaciones.index') ? route('almacenes.importaciones.index') : null;
+    } catch {
+        return null;
     }
-    if (r.conteos) {
-        lines.push(`- Conteos: ok ${r.conteos.ok ?? 0}, error ${r.conteos.error ?? 0}`);
-    }
-    const detalles = Array.isArray(r.detalles) ? r.detalles.slice(0, 8) : [];
-    if (detalles.length) {
-        lines.push('', 'Errores / avisos:');
-        detalles.forEach((d) => {
-            lines.push(`- ${d.sku || '—'}: ${d.error || JSON.stringify(d)}`);
-        });
-        if ((r.detalles?.length || 0) > 8) {
-            lines.push(`- …y ${(r.detalles.length - 8)} más`);
-        }
-    }
-    return lines.join('\n');
+}
+
+/** Ubica la tarjeta pendiente en el mensaje que la anunció (su texto incluye el resumen). */
+function restaurarPropuesta(mensajes, propuesta) {
+    if (!propuesta) return mensajes;
+    const idx = mensajes.findLastIndex(
+        (m) => m.role === 'assistant' && propuesta.resumen_corto && m.content.includes(propuesta.resumen_corto),
+    );
+    const tarjeta = { propuesta, propuestaEstado: 'pendiente' };
+    if (idx === -1) return [...mensajes, conId({ role: 'assistant', content: '', ...tarjeta })];
+    return mensajes.map((m, i) => (i === idx ? { ...m, ...tarjeta } : m));
+}
+
+function ArchivoChip({ nombre, kind, onQuitar }) {
+    return (
+        <div className={`gelia-ai-file-card ${onQuitar ? '' : 'gelia-ai-file-card--static'}`}>
+            <span className="gelia-ai-file-icon" aria-hidden>
+                <FileSpreadsheet className="w-4 h-4" />
+            </span>
+            <span className="gelia-ai-file-meta">
+                <span className="gelia-ai-file-name" title={nombre}>{nombre}</span>
+                <span className="gelia-ai-file-sub">{etiquetaArchivo(kind)}</span>
+            </span>
+            {onQuitar && (
+                <button type="button" className="gelia-ai-file-x" onClick={onQuitar} aria-label={`Quitar ${nombre}`}>
+                    <X className="w-3 h-3" aria-hidden />
+                </button>
+            )}
+        </div>
+    );
 }
 
 export default function Index({
     auth,
     configurado = false,
     conversaciones: conversacionesIniciales = [],
+    limiteSegundos = 90,
 }) {
-    const [messages, setMessages] = useState([{ role: 'assistant', content: GREETING, reveal: false }]);
+    const nombre = String(auth?.user?.name || '').replace(/[\p{C}\s]+/gu, ' ').trim().slice(0, 80);
+    const [messages, setMessages] = useState(saludo);
     const [input, setInput] = useState('');
-    const [state, setState] = useState('idle');
+    const [trabajo, setTrabajo] = useState(null);
+    const [destello, setDestello] = useState(false);
     const [error, setError] = useState('');
     const [conversacionId, setConversacionId] = useState(null);
     const [conversaciones, setConversaciones] = useState(conversacionesIniciales);
     const [drawerMounted, setDrawerMounted] = useState(false);
     const [drawerOpen, setDrawerOpen] = useState(false);
     const [adjuntos, setAdjuntos] = useState([]);
-    const [subiendo, setSubiendo] = useState(false);
+    const [archivosContexto, setArchivosContexto] = useState([]);
     const bottomRef = useRef(null);
+    const seguirFinal = useRef(true);
+    const [lejosDelFinal, setLejosDelFinal] = useState(false);
     const fileRef = useRef(null);
+    const inputRef = useRef(null);
+    const historialBtnRef = useRef(null);
+    const drawerCloseRef = useRef(null);
+    const enCurso = useRef(false);
     const readyTimer = useRef(null);
     const drawerTimer = useRef(null);
 
+    const ocupado = trabajo !== null;
+
     useEffect(() => {
-        bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-    }, [messages, state]);
+        if (seguirFinal.current) {
+            bottomRef.current?.scrollIntoView({ behavior: 'instant', block: 'end' });
+        }
+    }, [messages, trabajo]);
+
+    useEffect(() => {
+        const campo = inputRef.current;
+        if (!campo) return;
+        campo.style.height = 'auto';
+        campo.style.height = `${Math.min(campo.scrollHeight, 160)}px`;
+    }, [input]);
+
+    const irAlFinal = () => {
+        seguirFinal.current = true;
+        setLejosDelFinal(false);
+        bottomRef.current?.scrollIntoView({ behavior: 'instant', block: 'end' });
+    };
+
+    const prepararConsulta = (texto) => {
+        setInput(texto);
+        inputRef.current?.focus();
+    };
 
     useEffect(() => () => {
         clearTimeout(readyTimer.current);
         clearTimeout(drawerTimer.current);
     }, []);
+
+    useEffect(() => {
+        if (!drawerOpen) return undefined;
+        drawerCloseRef.current?.focus();
+        const onKey = (ev) => {
+            if (ev.key === 'Escape') cerrarDrawer();
+        };
+        document.addEventListener('keydown', onKey);
+        return () => document.removeEventListener('keydown', onKey);
+    }, [drawerOpen]);
+
+    const iniciarTrabajo = (tipo) => {
+        enCurso.current = true;
+        setTrabajo({ tipo, desde: Date.now() });
+    };
+
+    const terminarTrabajo = (exito) => {
+        enCurso.current = false;
+        setTrabajo(null);
+        if (exito) {
+            setDestello(true);
+            clearTimeout(readyTimer.current);
+            readyTimer.current = setTimeout(() => setDestello(false), 550);
+        }
+    };
+
+    const actualizarMensaje = (id, cambios) => {
+        setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, ...cambios } : m)));
+    };
+
+    const agregarMensaje = (m) => setMessages((prev) => [...prev, conId(m)]);
 
     const abrirDrawer = () => {
         clearTimeout(drawerTimer.current);
@@ -112,45 +173,52 @@ export default function Index({
         setDrawerOpen(false);
         clearTimeout(drawerTimer.current);
         drawerTimer.current = setTimeout(() => setDrawerMounted(false), DRAWER_MS);
+        if (drawerMounted) historialBtnRef.current?.focus();
+    };
+
+    const reiniciarChat = () => {
+        seguirFinal.current = true;
+        setLejosDelFinal(false);
+        setConversacionId(null);
+        setMessages(saludo());
+        setAdjuntos([]);
+        setArchivosContexto([]);
+        setError('');
     };
 
     const nuevoChat = () => {
-        setConversacionId(null);
-        setMessages([{ role: 'assistant', content: GREETING, reveal: false }]);
-        setAdjuntos([]);
-        setError('');
+        if (ocupado) return;
+        reiniciarChat();
         cerrarDrawer();
     };
 
     const cargarConversacion = async (id) => {
+        if (ocupado) return;
         try {
             const { data } = await axios.get(route('gelia_ai.conversaciones.show', id));
             const loaded = (data.messages || [])
                 .filter((m) => m.role === 'user' || m.role === 'assistant')
-                .map((m) => ({ ...m, reveal: false }));
+                .map((m) => conId({ ...m, reveal: false }));
             setConversacionId(data.id);
-            setMessages(loaded.length ? loaded : [{ role: 'assistant', content: GREETING, reveal: false }]);
+            seguirFinal.current = true;
+            setLejosDelFinal(false);
+            setMessages(restaurarPropuesta(loaded.length ? loaded : saludo(), data.propuesta_pendiente));
+            setArchivosContexto(Array.isArray(data.archivos) ? data.archivos : []);
             setAdjuntos([]);
             setError('');
             cerrarDrawer();
-        } catch {
-            setError('No se pudo cargar el chat.');
+        } catch (err) {
+            setError(mensajeErrorHttp(err, 'No se pudo abrir el chat. Vuelve a intentarlo.'));
         }
     };
 
-    const eliminarConversacion = async (id, e) => {
-        e?.stopPropagation?.();
+    const eliminarConversacion = async (id) => {
         try {
             await axios.delete(route('gelia_ai.conversaciones.destroy', id));
             setConversaciones((prev) => prev.filter((c) => c.id !== id));
-            if (conversacionId === id) {
-                setConversacionId(null);
-                setMessages([{ role: 'assistant', content: GREETING, reveal: false }]);
-                setAdjuntos([]);
-                setError('');
-            }
-        } catch {
-            setError('No se pudo eliminar el chat.');
+            if (conversacionId === id) reiniciarChat();
+        } catch (err) {
+            setError(mensajeErrorHttp(err, 'No se pudo eliminar el chat. Vuelve a intentarlo.'));
         }
     };
 
@@ -159,29 +227,29 @@ export default function Index({
             const { data } = await axios.get(route('gelia_ai.conversaciones.index'));
             setConversaciones(data.data || []);
         } catch {
-            /* ignore */
+            /* la lista local sigue siendo válida */
         }
     };
 
     const onPickFiles = async (ev) => {
         const files = Array.from(ev.target.files || []);
         ev.target.value = '';
-        if (!files.length) return;
+        if (!files.length || enCurso.current) return;
         if (adjuntos.length + files.length > MAX_FILES) {
-            setError(`Máximo ${MAX_FILES} archivos.`);
+            setError(`Puedes adjuntar hasta ${MAX_FILES} archivos por mensaje.`);
             return;
         }
-        setSubiendo(true);
         setError('');
+        iniciarTrabajo('subida');
         try {
             const fd = new FormData();
             files.forEach((f) => fd.append('archivos[]', f));
             const { data } = await axios.post(route('gelia_ai.archivos.store'), fd);
             setAdjuntos((prev) => [...prev, ...(data.files || [])].slice(0, MAX_FILES));
+            terminarTrabajo(false);
         } catch (err) {
             setError(mensajeErrorUpload(err));
-        } finally {
-            setSubiendo(false);
+            terminarTrabajo(false);
         }
     };
 
@@ -189,81 +257,88 @@ export default function Index({
         setAdjuntos((prev) => prev.filter((f) => f.file_id !== fileId));
     };
 
-    const confirmarAccion = async (msgIndex, propuesta) => {
-        if (!propuesta?.accion || state === 'thinking') return;
-        setState('thinking');
-        setError('');
+    const confirmarAccion = async (msg) => {
+        if (enCurso.current || msg.propuestaEstado !== 'pendiente') return;
+        iniciarTrabajo('accion');
+        actualizarMensaje(msg.id, { propuestaEstado: 'ejecutando' });
         try {
             const { data } = await axios.post(route('gelia_ai.acciones.ejecutar'), {
-                propuesta_id: propuesta.id,
+                propuesta_id: msg.propuesta.id,
                 conversacion_id: conversacionId || undefined,
                 confirmado: true,
             });
-            setMessages((prev) => {
-                const next = [...prev];
-                if (next[msgIndex]) {
-                    next[msgIndex] = { ...next[msgIndex], propuesta: null, propuesta_done: true };
-                }
-                next.push({
-                    role: 'assistant',
-                    content: data.mensaje || formatearReporte(data),
-                    reveal: true,
-                    reporte: data.reporte || null,
-                });
-                return next;
+            actualizarMensaje(msg.id, { propuestaEstado: 'ejecutada' });
+            agregarMensaje({
+                role: 'assistant',
+                kind: 'resultado',
+                content: data.mensaje || data.reporte?.resumen || 'Acción terminada.',
+                reporte: data.reporte || {},
             });
-            setState('ready');
-            clearTimeout(readyTimer.current);
-            readyTimer.current = setTimeout(() => setState('idle'), 550);
+            terminarTrabajo(true);
         } catch (err) {
-            const msg = err?.response?.data?.message || 'No se pudo ejecutar.';
-            setError(msg);
-            setMessages((prev) => [
-                ...prev,
-                { role: 'assistant', content: `No pude ejecutar: ${msg}`, reveal: true },
-            ]);
-            setState('idle');
+            if (!err?.response) {
+                // Sin respuesta no se sabe si el servidor llegó a ejecutarla: no se ofrece repetirla.
+                actualizarMensaje(msg.id, {
+                    propuestaEstado: 'procesando',
+                    propuestaMensaje: 'No recibimos respuesta del servidor. La acción pudo haberse ejecutado: revisa el módulo correspondiente antes de preparar otra.',
+                });
+            } else {
+                actualizarMensaje(msg.id, {
+                    propuestaEstado: estadoTarjetaDesdeServidor(err.response.data?.estado_propuesta),
+                    propuestaMensaje: mensajeErrorHttp(err, 'No se pudo ejecutar la acción.'),
+                });
+            }
+            terminarTrabajo(false);
         }
     };
 
-    const cancelarPropuesta = (msgIndex) => {
-        setMessages((prev) => {
-            const next = [...prev];
-            if (next[msgIndex]) {
-                next[msgIndex] = { ...next[msgIndex], propuesta: null };
-            }
-            return next;
-        });
+    const cancelarPropuesta = async (msg) => {
+        if (enCurso.current || msg.propuestaEstado !== 'pendiente') return;
+        iniciarTrabajo('cancelacion');
+        actualizarMensaje(msg.id, { propuestaEstado: 'cancelando' });
+        try {
+            await axios.post(route('gelia_ai.acciones.cancelar'), {
+                propuesta_id: msg.propuesta.id,
+                conversacion_id: conversacionId || undefined,
+            });
+            actualizarMensaje(msg.id, { propuestaEstado: 'cancelada', propuestaMensaje: 'Cancelaste la propuesta; no se ejecutó nada.' });
+        } catch (err) {
+            const estado = err?.response?.data?.estado_propuesta;
+            actualizarMensaje(msg.id, estado
+                ? { propuestaEstado: estadoTarjetaDesdeServidor(estado), propuestaMensaje: mensajeErrorHttp(err, '') }
+                : { propuestaEstado: 'pendiente' });
+            if (!estado) setError(mensajeErrorHttp(err, 'No se pudo cancelar la propuesta. Vuelve a intentarlo.'));
+        }
+        terminarTrabajo(false);
     };
 
-    const enviar = async (e) => {
-        e?.preventDefault?.();
-        const text = input.trim();
-        if ((!text && adjuntos.length === 0) || state === 'thinking') return;
+    const prepararDeNuevo = (msg) => {
+        setInput(textoPrepararDeNuevo(msg.propuesta));
+        inputRef.current?.focus();
+    };
+
+    const enviarTexto = async (messageText, reintentoDe = null) => {
+        if (enCurso.current) return;
         if (!configurado) {
-            setError('DeepSeek no está configurado. Un admin debe cargar api_token y base_url en Configuración del sistema.');
+            setError(SIN_CONFIGURAR);
             return;
         }
 
-        const messageText = text || (adjuntos.length
-            ? `Tengo ${adjuntos.length} archivo(s) adjunto(s). ¿Qué acción operativa propones?`
-            : '');
-        if (!messageText) return;
-
         setError('');
-        setInput('');
+        seguirFinal.current = true;
+        setLejosDelFinal(false);
         const fileIds = adjuntos.map((f) => f.file_id);
-        const nextMessages = [
-            ...messages,
-            {
+        if (reintentoDe) {
+            setMessages((prev) => prev.filter((m) => m.id !== reintentoDe));
+        } else {
+            setInput('');
+            agregarMensaje({
                 role: 'user',
                 content: messageText,
-                reveal: false,
                 files: adjuntos.map((f) => ({ name: f.original_name, kind: f.kind })),
-            },
-        ];
-        setMessages(nextMessages);
-        setState('thinking');
+            });
+        }
+        iniciarTrabajo('consulta');
 
         try {
             // El historial y los archivos ya adjuntos se recuperan en el servidor por conversacion_id.
@@ -273,181 +348,224 @@ export default function Index({
                 file_ids: fileIds.length ? fileIds : undefined,
             });
             setAdjuntos([]);
-            setMessages((prev) => [
-                ...prev,
-                {
-                    role: 'assistant',
-                    content: data.reply || 'Sin respuesta.',
-                    reveal: true,
-                    propuesta: data.propuesta_accion || null,
-                },
-            ]);
+            if (Array.isArray(data.archivos)) setArchivosContexto(data.archivos);
+            agregarMensaje({
+                role: 'assistant',
+                content: data.reply || 'GELIA no devolvió texto en esta respuesta.',
+                reveal: true,
+                kind: data.incompleta ? 'incompleta' : undefined,
+                faltantes: Array.isArray(data.faltantes) ? data.faltantes : [],
+                propuesta: data.propuesta_accion || null,
+                propuestaEstado: data.propuesta_accion ? 'pendiente' : undefined,
+            });
             if (data.conversacion_id) {
                 setConversacionId(data.conversacion_id);
-                setConversaciones((prev) => {
-                    const rest = prev.filter((c) => c.id !== data.conversacion_id);
-                    return [
-                        {
-                            id: data.conversacion_id,
-                            titulo: data.titulo || messageText.slice(0, 80),
-                            temporal: false,
-                            updated_at: new Date().toISOString(),
-                        },
-                        ...rest,
-                    ];
-                });
+                setConversaciones((prev) => [
+                    {
+                        id: data.conversacion_id,
+                        titulo: data.titulo || messageText.slice(0, 80),
+                        temporal: false,
+                        updated_at: new Date().toISOString(),
+                    },
+                    ...prev.filter((c) => c.id !== data.conversacion_id),
+                ]);
             }
-            setState('ready');
-            clearTimeout(readyTimer.current);
-            readyTimer.current = setTimeout(() => setState('idle'), 550);
+            terminarTrabajo(true);
         } catch (err) {
-            const msg = err?.response?.data?.message || 'No se pudo contactar a GELIA.';
-            setError(msg);
-            setMessages((prev) => [
-                ...prev,
-                { role: 'assistant', content: `No pude completar la consulta: ${msg}`, reveal: true },
-            ]);
-            setState('idle');
+            // Los adjuntos se conservan en el compositor para volver a enviar sin subirlos otra vez.
+            agregarMensaje({
+                role: 'assistant',
+                kind: 'error',
+                content: mensajeErrorHttp(err, 'No se pudo contactar a GELIA.'),
+                reintentar: messageText,
+            });
+            terminarTrabajo(false);
         }
     };
 
+    const enviar = (e) => {
+        e?.preventDefault?.();
+        const text = input.trim();
+        if (!text && adjuntos.length === 0) return;
+        enviarTexto(text || `Tengo ${adjuntos.length} archivo(s) adjunto(s). ¿Qué acción operativa propones?`);
+    };
+
     const onKeyDown = (ev) => {
-        if (ev.key === 'Enter' && !ev.shiftKey) {
+        if (ev.key === 'Enter' && !ev.shiftKey && !ev.nativeEvent.isComposing) {
             ev.preventDefault();
             enviar();
         }
+    };
+
+    const importaciones = enlaceImportaciones();
+    const archivosVisibles = archivosContexto.filter((a) => !adjuntos.some((f) => f.file_id === a.file_id));
+
+    const renderAsistente = (m) => {
+        if (m.kind === 'error') {
+            return (
+                <GeliaAiAviso
+                    tono="error"
+                    titulo="No se pudo completar la consulta"
+                    accion={m.reintentar && (
+                        <button
+                            type="button"
+                            className="gelia-ai-btn mt-2"
+                            disabled={ocupado}
+                            onClick={() => enviarTexto(m.reintentar, m.id)}
+                        >
+                            <RotateCcw className="w-3.5 h-3.5" aria-hidden />
+                            Volver a enviar
+                        </button>
+                    )}
+                >
+                    <p className="gelia-ai-aviso-text">{m.content}</p>
+                </GeliaAiAviso>
+            );
+        }
+        if (m.kind === 'resultado') {
+            return <ResultadoAccionCard reporte={m.reporte} enlaceImportaciones={importaciones} />;
+        }
+        if (m.propuesta) {
+            return (
+                <PropuestaAccionCard
+                    propuesta={m.propuesta}
+                    estado={m.propuestaEstado}
+                    mensaje={m.propuestaMensaje}
+                    bloqueado={ocupado}
+                    onConfirmar={() => confirmarAccion(m)}
+                    onCancelar={() => cancelarPropuesta(m)}
+                    onPrepararDeNuevo={() => prepararDeNuevo(m)}
+                />
+            );
+        }
+        return (
+            <>
+                {m.kind === 'incompleta' && (
+                    <div className="mb-1.5">
+                        <EstadoBadge etiqueta="Respuesta incompleta" tono="aviso" icono="aviso" />
+                    </div>
+                )}
+                <GeliaAiMarkdown text={m.content} reveal={Boolean(m.reveal)} />
+                {m.faltantes?.length > 0 && (
+                    <GeliaAiAviso tono="aviso" titulo="Falta información para preparar la acción">
+                        <ul className="gelia-ai-aviso-list">
+                            {m.faltantes.map((f) => <li key={f}>{f}</li>)}
+                        </ul>
+                        {archivosContexto.length > 0 && (
+                            <p className="gelia-ai-aviso-text">
+                                Los archivos de este chat siguen disponibles; no necesitas subirlos de nuevo.
+                            </p>
+                        )}
+                    </GeliaAiAviso>
+                )}
+            </>
+        );
     };
 
     return (
         <AppLayout user={auth.user} fullScreen>
             <Head title="GELIA" />
 
-            <div className="gelia-ai-page" data-state={state}>
+            <div className="gelia-ai-page" data-empty={messages.length === 0} data-state={ocupado ? 'thinking' : destello ? 'ready' : 'idle'}>
                 <div className="gelia-ai-glow" aria-hidden />
 
                 <div className="gelia-ai-toolbar">
                     <div className="flex items-center gap-2">
                         <button
+                            ref={historialBtnRef}
                             type="button"
                             className="gelia-ai-icon-btn"
                             onClick={abrirDrawer}
                             aria-label="Historial de chats"
+                            title="Historial de chats"
                         >
-                            <History className="w-4 h-4" />
+                            <History className="w-4 h-4" aria-hidden />
                         </button>
                         <button
                             type="button"
                             className="gelia-ai-icon-btn"
                             onClick={nuevoChat}
-                            aria-label="Nuevo chat temporal"
+                            disabled={ocupado}
+                            aria-label="Nuevo chat"
                             title="Nuevo chat"
                         >
-                            <Plus className="w-4 h-4" />
+                            <Plus className="w-4 h-4" aria-hidden />
                         </button>
                     </div>
+                    {nombre && <span className="gelia-ai-session"><UserRound className="w-3.5 h-3.5" aria-hidden /><span>{nombre}</span></span>}
                 </div>
 
                 <header className="gelia-ai-top">
                     <div className="gelia-ai-logo-wrap">
                         <GeliaLogo
                             variant="sparkle"
-                            className="w-16 h-16 md:w-[4.5rem] md:h-[4.5rem]"
+                            className="w-8 h-8"
                         />
                     </div>
-                    <h1 className="gelia-ai-title">
-                        GEL<span className="gelia-ai-title-ia">IA</span>
-                    </h1>
+                    <div className="gelia-ai-brand">
+                        <h1 className="gelia-ai-title">GEL<span className="gelia-ai-title-ia">IA</span></h1>
+                        <p>Tu asistente en Gelia-NV</p>
+                    </div>
                 </header>
 
-                {!configurado && (
-                    <p className="gelia-ai-warn">
-                        Falta configurar DeepSeek en Configuración del sistema (`deepseek.api_token` y `deepseek.base_url`).
-                    </p>
-                )}
+                {!configurado && <p className="gelia-ai-warn" role="status">{SIN_CONFIGURAR}</p>}
 
-                <div className="gelia-ai-messages custom-scrollbar" role="log" aria-live="polite">
-                    {messages.map((m, i) => (
-                        m.role === 'user' ? (
-                            <div key={`${m.role}-${i}`} className="gelia-ai-msg gelia-ai-msg--user">
-                                {m.content}
-                                {Array.isArray(m.files) && m.files.length > 0 && (
-                                    <div className="gelia-ai-msg-files">
-                                        {m.files.map((f) => (
-                                            <div key={f.name} className="gelia-ai-file-card gelia-ai-file-card--static">
-                                                <span className="gelia-ai-file-icon" aria-hidden>
-                                                    <FileSpreadsheet className="w-4 h-4" />
-                                                </span>
-                                                <span className="gelia-ai-file-meta">
-                                                    <span className="gelia-ai-file-name">{f.name}</span>
-                                                    <span className="gelia-ai-file-sub">
-                                                        {etiquetaArchivo(f.kind, f.name)}
-                                                        {f.kind ? ` · ${f.kind}` : ''}
-                                                    </span>
-                                                </span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
+                <div className="gelia-ai-messages" onScroll={(ev) => {
+                    const { scrollHeight, scrollTop, clientHeight } = ev.currentTarget;
+                    const lejos = scrollHeight - scrollTop - clientHeight > 96;
+                    seguirFinal.current = !lejos;
+                    setLejosDelFinal(lejos);
+                }}>
+                    {messages.length === 0 && (
+                        <section className="gelia-ai-welcome" aria-label="Bienvenida">
+                            <div className="gelia-ai-welcome-mark" aria-hidden><GeliaLogo variant="sparkle" className="w-14 h-14" /></div>
+                            <h2>{nombre ? `Hola, ${nombre}.` : 'Hola, soy GELIA.'}<br />¿Qué resolvemos hoy?</h2>
+                            <p>Consulta tu inventario, prepara un listado o trabaja con tus archivos. Vamos paso a paso.</p>
+                            <div className="gelia-ai-starters">
+                                <button type="button" disabled={ocupado} onClick={() => prepararConsulta('Quiero consultar el inventario de ')}><Boxes aria-hidden /><span>Consultar inventario<small>Busca un producto o SKU</small></span></button>
+                                <button type="button" disabled={ocupado} onClick={() => prepararConsulta('Quiero generar un listado. ¿Qué archivos necesito?')}><FileSpreadsheet aria-hidden /><span>Preparar un listado<small>Revisa qué archivos necesitas</small></span></button>
+                                <button type="button" disabled={ocupado} onClick={() => fileRef.current?.click()}><Paperclip aria-hidden /><span>Adjuntar archivos<small>Trabaja con CSV o Excel</small></span></button>
                             </div>
-                        ) : (
-                            <div key={`${m.role}-${i}`} className="gelia-ai-msg gelia-ai-msg--assistant">
-                                <GeliaAiMarkdown text={m.content} reveal={Boolean(m.reveal)} />
-                                {m.propuesta && !m.propuesta_done && (
-                                    <div className="gelia-ai-confirm">
-                                        <p className="gelia-ai-confirm-text">
-                                            {m.propuesta.resumen_corto || `Confirmar ${m.propuesta.accion}`}
-                                        </p>
-                                        {!m.propuesta.puede && (
-                                            <p className="gelia-ai-confirm-warn">
-                                                Sin permiso ({m.propuesta.permiso}).
-                                            </p>
-                                        )}
-                                        <div className="gelia-ai-confirm-actions">
-                                            <button
-                                                type="button"
-                                                className="gelia-ai-confirm-btn gelia-ai-confirm-btn--ok"
-                                                disabled={!m.propuesta.puede || state === 'thinking'}
-                                                onClick={() => confirmarAccion(i, m.propuesta)}
-                                            >
-                                                Confirmar
-                                            </button>
-                                            <button
-                                                type="button"
-                                                className="gelia-ai-confirm-btn"
-                                                disabled={state === 'thinking'}
-                                                onClick={() => cancelarPropuesta(i)}
-                                            >
-                                                Cancelar
-                                            </button>
-                                        </div>
-                                    </div>
-                                )}
-                                {m.reporte?.download_url && (
-                                    <a
-                                        href={m.reporte.download_url}
-                                        className="gelia-ai-download"
-                                        target="_blank"
-                                        rel="noreferrer"
-                                    >
-                                        <Download className="w-3.5 h-3.5" />
-                                        Descargar listado
-                                    </a>
-                                )}
-                            </div>
-                        )
-                    ))}
-                    {state === 'thinking' && (
-                        <div className="gelia-ai-msg gelia-ai-msg--thinking">Pensando…</div>
+                        </section>
                     )}
+                    <div className="gelia-ai-thread" role="log" aria-live="polite" aria-label="Conversación con GELIA">
+                        {messages.map((m) => (
+                            m.role === 'user' ? (
+                                <div key={m.id} className="gelia-ai-msg gelia-ai-msg--user">
+                                    <div className="gelia-ai-msg-author">{nombre || 'Tú'}</div>
+                                    <div className="gelia-ai-user-text">{m.content}</div>
+                                    {Array.isArray(m.files) && m.files.length > 0 && (
+                                        <div className="gelia-ai-msg-files">
+                                            {m.files.map((f) => <ArchivoChip key={f.name} nombre={f.name} kind={f.kind} />)}
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                <div key={m.id} className="gelia-ai-msg gelia-ai-msg--assistant">
+                                    <div className="gelia-ai-msg-author"><Sparkles className="w-3.5 h-3.5" aria-hidden />GELIA</div>
+                                    {renderAsistente(m)}
+                                </div>
+                            )
+                        ))}
+                    </div>
+                    <div className="gelia-ai-thread-status"><EstadoTrabajoGelia trabajo={trabajo} limiteSegundos={limiteSegundos} /></div>
                     <div ref={bottomRef} />
                 </div>
 
-                {error && <p className="gelia-ai-error">{error}</p>}
+                {error && (
+                    <div className="gelia-ai-error" role="alert">
+                        <span>{error}</span>
+                        <button type="button" className="gelia-ai-error-x" onClick={() => setError('')} aria-label="Cerrar aviso">
+                            <X className="w-3.5 h-3.5" aria-hidden />
+                        </button>
+                    </div>
+                )}
 
                 <div className="gelia-ai-composer-wrap">
+                    {lejosDelFinal && <button type="button" className="gelia-ai-jump gelia-ai-btn" onClick={irAlFinal}><ArrowDown className="w-3.5 h-3.5" aria-hidden />Ir al último mensaje</button>}
                     <form
                         className="gelia-ai-composer"
-                        data-plain={adjuntos.length === 0 ? 'true' : 'false'}
+                        data-plain={adjuntos.length === 0 && archivosVisibles.length === 0 ? 'true' : 'false'}
                         onSubmit={enviar}
                     >
                         <input
@@ -457,32 +575,28 @@ export default function Index({
                             accept=".csv,.xlsx,.xls,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                             multiple
                             onChange={onPickFiles}
+                            tabIndex={-1}
+                            aria-hidden
                         />
+                        {archivosVisibles.length > 0 && (
+                            <div className="gelia-ai-context-files">
+                                <p className="gelia-ai-context-label">Disponibles en este chat</p>
+                                <div className="gelia-ai-attach-row">
+                                    {archivosVisibles.map((f) => (
+                                        <ArchivoChip key={f.file_id} nombre={f.original_name} kind={f.kind} />
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                         {adjuntos.length > 0 && (
                             <div className="gelia-ai-attach-row">
                                 {adjuntos.map((f) => (
-                                    <div key={f.file_id} className="gelia-ai-file-card">
-                                        <span className="gelia-ai-file-icon" aria-hidden>
-                                            <FileSpreadsheet className="w-4 h-4" />
-                                        </span>
-                                        <span className="gelia-ai-file-meta">
-                                            <span className="gelia-ai-file-name" title={f.original_name}>
-                                                {f.original_name}
-                                            </span>
-                                            <span className="gelia-ai-file-sub">
-                                                {etiquetaArchivo(f.kind, f.original_name)}
-                                                {f.kind ? ` · ${f.kind}` : ''}
-                                            </span>
-                                        </span>
-                                        <button
-                                            type="button"
-                                            className="gelia-ai-file-x"
-                                            onClick={() => quitarAdjunto(f.file_id)}
-                                            aria-label="Quitar archivo"
-                                        >
-                                            <X className="w-3 h-3" />
-                                        </button>
-                                    </div>
+                                    <ArchivoChip
+                                        key={f.file_id}
+                                        nombre={f.original_name}
+                                        kind={f.kind}
+                                        onQuitar={() => quitarAdjunto(f.file_id)}
+                                    />
                                 ))}
                             </div>
                         )}
@@ -490,33 +604,37 @@ export default function Index({
                             <button
                                 type="button"
                                 className="gelia-ai-attach"
-                                disabled={subiendo || state === 'thinking' || adjuntos.length >= MAX_FILES}
+                                disabled={ocupado || adjuntos.length >= MAX_FILES}
                                 onClick={() => fileRef.current?.click()}
-                                aria-label="Adjuntar archivos"
-                                title="Adjuntar CSV/XLSX (máx. 10)"
+                                aria-label="Adjuntar archivos CSV o Excel"
+                                title={`Adjuntar CSV o Excel (hasta ${MAX_FILES})`}
                             >
-                                <Paperclip className="w-4 h-4" />
+                                <Paperclip className="w-4 h-4" aria-hidden />
                             </button>
                             <textarea
+                                ref={inputRef}
+                                name="mensaje"
                                 value={input}
                                 onChange={(ev) => setInput(ev.target.value)}
                                 onKeyDown={onKeyDown}
                                 placeholder="Pregunta a GELIA…"
                                 rows={1}
-                                disabled={state === 'thinking'}
                                 maxLength={2000}
-                                aria-label="Mensaje"
+                                autoComplete="off"
+                                aria-label="Mensaje para GELIA"
+                                aria-describedby="gelia-ai-composer-help"
                             />
                             <button
                                 type="submit"
                                 className="gelia-ai-send"
-                                disabled={state === 'thinking' || (!input.trim() && adjuntos.length === 0)}
-                                aria-label="Enviar"
+                                disabled={ocupado || (!input.trim() && adjuntos.length === 0)}
+                                aria-label="Enviar mensaje"
                             >
-                                <Send className="w-4 h-4" />
+                                <Send className="w-4 h-4" aria-hidden />
                             </button>
                         </div>
                     </form>
+                    <p id="gelia-ai-composer-help" className="gelia-ai-composer-help"><span>Enter para enviar · Mayús + Enter para otra línea</span><span>Verifica los datos importantes.</span></p>
                 </div>
 
                 {drawerMounted && (
@@ -524,40 +642,42 @@ export default function Index({
                         className="gelia-ai-drawer"
                         data-open={drawerOpen ? 'true' : 'false'}
                         role="dialog"
-                        aria-label="Historial"
+                        aria-modal="true"
+                        aria-label="Historial de chats"
                     >
                         <button
                             type="button"
                             className="gelia-ai-drawer-backdrop"
                             aria-label="Cerrar historial"
+                            tabIndex={-1}
                             onClick={cerrarDrawer}
                         />
                         <aside className="gelia-ai-drawer-panel">
                             <div className="flex items-center justify-between gap-2">
-                                <p className="m-0 text-xs font-black uppercase tracking-widest theme-text-muted">
-                                    Chats
-                                </p>
+                                <h2 className="m-0 text-sm font-black theme-text-main">Chats</h2>
                                 <button
+                                    ref={drawerCloseRef}
                                     type="button"
                                     className="gelia-ai-icon-btn"
                                     onClick={cerrarDrawer}
-                                    aria-label="Cerrar"
+                                    aria-label="Cerrar historial"
                                 >
-                                    <X className="w-4 h-4" />
+                                    <X className="w-4 h-4" aria-hidden />
                                 </button>
                             </div>
                             <button
                                 type="button"
                                 className={`${THEME_BTN_PRIMARY} w-full !py-2.5 text-[11px] inline-flex items-center justify-center gap-2`}
                                 onClick={nuevoChat}
+                                disabled={ocupado}
                             >
-                                <Plus className="w-4 h-4" />
-                                Chat temporal nuevo
+                                <Plus className="w-4 h-4" aria-hidden />
+                                Nuevo chat
                             </button>
                             <div className="gelia-ai-drawer-list custom-scrollbar">
                                 {conversaciones.length === 0 && (
-                                    <p className="text-xs theme-text-muted italic m-0 px-1">
-                                        Aún no hay chats guardados.
+                                    <p className="text-xs theme-text-muted m-0 px-1">
+                                        Aún no hay chats guardados. Se guardan al recibir la primera respuesta.
                                     </p>
                                 )}
                                 {conversaciones.map((c, idx) => (
@@ -566,21 +686,23 @@ export default function Index({
                                         className="gelia-ai-hist-item"
                                         data-active={conversacionId === c.id}
                                         style={{ animationDelay: `${Math.min(idx * 35, 280)}ms` }}
-                                        role="button"
-                                        tabIndex={0}
-                                        onClick={() => cargarConversacion(c.id)}
-                                        onKeyDown={(ev) => {
-                                            if (ev.key === 'Enter') cargarConversacion(c.id);
-                                        }}
                                     >
-                                        <span className="gelia-ai-hist-title">{c.titulo}</span>
+                                        <button
+                                            type="button"
+                                            className="gelia-ai-hist-title"
+                                            onClick={() => cargarConversacion(c.id)}
+                                            aria-current={conversacionId === c.id ? 'true' : undefined}
+                                            disabled={ocupado}
+                                        >
+                                            {c.titulo}
+                                        </button>
                                         <button
                                             type="button"
                                             className="gelia-ai-icon-btn !w-8 !h-8"
-                                            onClick={(ev) => eliminarConversacion(c.id, ev)}
-                                            aria-label="Eliminar chat"
+                                            onClick={() => eliminarConversacion(c.id)}
+                                            aria-label={`Eliminar chat «${c.titulo}»`}
                                         >
-                                            <Trash2 className="w-3.5 h-3.5" />
+                                            <Trash2 className="w-3.5 h-3.5" aria-hidden />
                                         </button>
                                     </div>
                                 ))}

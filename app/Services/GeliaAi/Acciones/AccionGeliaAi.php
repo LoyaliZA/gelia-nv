@@ -25,7 +25,9 @@ interface AccionGeliaAi
      *
      * @param  array<string, mixed>  $args
      * @param  list<array<string, mixed>>  $archivos  metadatos de archivos disponibles en la conversación
-     * @return array{ok: true, payload: array<string, mixed>, resumen: string, advertencias: list<string>}|array{ok: false, error_code: string, error: string, faltantes?: list<array{dato: string, detalle: string}>, opciones?: list<mixed>}
+     * `detalle` alimenta la tarjeta de confirmación: operacion, almacen?, archivos (nombre, rol?, filas?), columnas?, efecto, confirmar (texto del botón).
+     *
+     * @return array{ok: true, payload: array<string, mixed>, resumen: string, advertencias: list<string>, detalle: array<string, mixed>}|array{ok: false, error_code: string, error: string, faltantes?: list<array{dato: string, detalle: string}>, opciones?: list<mixed>}
      */
     public function preparar(User $user, array $args, array $archivos = []): array;
 

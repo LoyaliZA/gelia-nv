@@ -123,7 +123,7 @@ class EjecutorHerramientasGeliaAi
                     return [$prep, null];
                 }
 
-                $propuesta = $this->propuestas->registrar($user, $accion->id(), $prep['payload'], $prep['resumen'], $prep['advertencias']);
+                $propuesta = $this->propuestas->registrar($user, $accion->id(), $prep['payload'], $prep['resumen'], $prep['advertencias'], $prep['detalle'] ?? []);
 
                 return [[
                     'ok' => true,
