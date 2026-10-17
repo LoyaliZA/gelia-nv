@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { calcularPesoCobradoGuia, cedisConsultaEsRevisionMercancia, esCotizacionLista, pedidoModoRevisionMercancia, soportePedidoDe, validarCamposEnvioPedido } from './pedidosBmaStyles';
+import {
+    calcularPesoCobradoGuia,
+    cedisConsultaEsRevisionMercancia,
+    esCotizacionLista,
+    pedidoModoRevisionMercancia,
+    soportePedidoDe,
+    terminologiaEmpaqueConsultaCedis,
+    validarCamposEnvioPedido,
+} from './pedidosBmaStyles';
 
 const baseTienda = {
     folio_remision: 'F-1',
@@ -120,6 +128,35 @@ describe('pedidoModoRevisionMercancia', () => {
             paqueteria: { categoria: 'comercial', requiere_peso: false },
         })).toBe(false);
         expect(cedisConsultaEsRevisionMercancia({ origen: { requiere_logistica: false } })).toBe(true);
+    });
+
+    it('QF-01: terminología de empaque prioriza sucursal/traslado sobre paquetería', () => {
+        expect(terminologiaEmpaqueConsultaCedis({
+            es_traslado_interno_pdv: true,
+            paqueteria: { requiere_caja: true },
+        }).clave).toBe('bolsas');
+        expect(terminologiaEmpaqueConsultaCedis({
+            requiere_sucursal_destino: true,
+        }).campo).toBe('Bolsas a preparar (aprox.)');
+        expect(terminologiaEmpaqueConsultaCedis({
+            requiere_bultos_empaque: true,
+        }).paso).toBe('Bolsas');
+        expect(terminologiaEmpaqueConsultaCedis({
+            origen: { requiere_logistica: false },
+            paqueteria: { requiere_caja: true },
+        }).clave).toBe('cajas');
+        expect(terminologiaEmpaqueConsultaCedis({
+            origen: { requiere_logistica: true },
+            paqueteria: { requiere_caja: true },
+        }).campo).toBe('Cajas a preparar (aprox.)');
+        expect(terminologiaEmpaqueConsultaCedis({
+            origen: { requiere_logistica: false },
+            paqueteria: { requiere_caja: false },
+        }).clave).toBe('bultos');
+        expect(terminologiaEmpaqueConsultaCedis({
+            origen: { requiere_logistica: true },
+            paqueteria: { categoria: 'local_regional', requiere_peso: false },
+        }).clave).toBe('bultos');
     });
 
     it('pide caja sin kilogramos cuando el transporte local la exige', () => {

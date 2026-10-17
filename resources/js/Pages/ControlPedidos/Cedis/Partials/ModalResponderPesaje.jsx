@@ -17,6 +17,7 @@ import {
     badgeEstadoFisico,
     calcularPesoCobradoGuia,
     cedisConsultaEsRevisionMercancia,
+    terminologiaEmpaqueConsultaCedis,
     etiquetaAlmacen,
     etiquetaSucursal,
     etiquetasInstanciaRevision,
@@ -185,6 +186,9 @@ export default function ModalResponderPesaje({
     const soloRevisiones = cedisConsultaEsRevisionMercancia(pedido);
     const trasladoInterno = pedidoEsTrasladoInternoPdv(pedido);
     const exigeCajaSinPeso = soloRevisiones && !trasladoInterno && Boolean(pedido?.paqueteria?.requiere_caja);
+    const empaqueConsulta = soloRevisiones
+        ? terminologiaEmpaqueConsultaCedis(pedido)
+        : null;
     const [envios, setEnvios] = useState([envioVacio()]);
     const [uuidsGuardados, setUuidsGuardados] = useState([]);
     const [motivoRetiro, setMotivoRetiro] = useState('');
@@ -952,7 +956,7 @@ export default function ModalResponderPesaje({
         } else {
             const bultos = Number(bultosAproximados);
             if (bultosAproximados === '' || Number.isNaN(bultos) || bultos < 1) {
-                avisarCampo('pesaje-bultos', 'Indica cuántos bultos aproximados llevará el pedido.');
+                avisarCampo('pesaje-bultos', empaqueConsulta.mensajeRequerido);
                 return;
             }
             if (exigeCajaSinPeso && !Number(tipoCajaRevision)) {
@@ -1138,11 +1142,11 @@ export default function ModalResponderPesaje({
         };
     })();
 
-    const pasos = ['Pedido', 'Productos', soloRevisiones ? 'Bultos' : 'Cajas'];
+    const pasos = ['Pedido', 'Productos', soloRevisiones ? empaqueConsulta.paso : 'Cajas'];
     const instrucciones = [
         'Consulta el archivo del pedido.',
         'Registra las piezas y su condición.',
-        soloRevisiones ? 'Indica los bultos y fotografía el lote.' : 'Registra el peso y fotografía el contenido de cada caja.',
+        soloRevisiones ? empaqueConsulta.instruccion : 'Registra el peso y fotografía el contenido de cada caja.',
     ];
     const cambiarPaso = (siguiente) => {
         if (procesando) return;
@@ -1274,7 +1278,7 @@ export default function ModalResponderPesaje({
         <>
             <button type="button" onClick={() => paso > 0 ? cambiarPaso(paso - 1) : pedirCerrar()} className={`${BTN_SECONDARY} outline-none min-h-[44px]`} disabled={procesando}>{paso > 0 ? 'Atrás' : 'Cerrar'}</button>
             {paso < 2 ? (
-                <button type="button" onClick={() => cambiarPaso(paso + 1)} disabled={procesando} className={`${BTN_PRIMARY} min-h-[44px]`}>{paso === 0 ? 'Revisar productos' : (soloRevisiones ? 'Bultos y evidencias' : 'Cajas y evidencias')}</button>
+                <button type="button" onClick={() => cambiarPaso(paso + 1)} disabled={procesando} className={`${BTN_PRIMARY} min-h-[44px]`}>{paso === 0 ? 'Revisar productos' : (soloRevisiones ? empaqueConsulta.ctaPaso : 'Cajas y evidencias')}</button>
             ) : (
                 <button type="button" onClick={confirmar} disabled={procesando} aria-busy={procesando} className={`${BTN_PRIMARY} flex items-center justify-center gap-2 outline-none min-h-[44px]`}>
                     <Scale className="w-4 h-4" aria-hidden="true" /> <span>{procesando ? 'Guardando…' : (soloRevisiones ? 'Registrar consulta' : 'Registrar pesaje')}</span>
@@ -1611,11 +1615,11 @@ export default function ModalResponderPesaje({
                         <section id="pesaje-envios" tabIndex={-1} hidden={paso !== 2} className="gelia-pedidos-paso gelia-pedidos-seccion">
                             <h3 className="gelia-pedidos-seccion-titulo mb-3">Evidencia final del pedido</h3>
                             <p className="text-xs theme-text-muted font-normal m-0 mb-3">
-                                Adjunte foto(s) de cómo quedan todos los productos juntos e indique los bultos a preparar.
+                                {empaqueConsulta.introEvidencia}
                             </p>
                             <div className="p-4 rounded-xl border theme-border theme-element space-y-3">
                                 <div>
-                                    <label htmlFor="pesaje-bultos" className={SECCION}>Bultos a preparar (Aprox)</label>
+                                    <label htmlFor="pesaje-bultos" className={SECCION}>{empaqueConsulta.campo}</label>
                                     <input
                                         id="pesaje-bultos" {...atributosError('pesaje-bultos')} name="bultos" aria-required="true"
                                         type="number"
@@ -1629,7 +1633,7 @@ export default function ModalResponderPesaje({
                                     />
                                     {mensajeError('pesaje-bultos')}
                                     <p className="text-xs theme-text-muted font-normal m-0 mt-1">
-                                        Cantidad aproximada de bultos en los que se empacará el pedido.
+                                        {empaqueConsulta.ayuda}
                                     </p>
                                 </div>
                                 {exigeCajaSinPeso && (
@@ -1776,7 +1780,7 @@ export default function ModalResponderPesaje({
                         <div className="flex flex-col gap-3 pt-2">
                             <p className="m-0 text-xs theme-text-muted" role="status">
                                 <strong className="theme-text-main tabular-nums">{revisiones.length} piezas</strong>
-                                {soloRevisiones ? ` · ${bultosAproximados || '—'} bultos` : ` · ${envios.length} envíos · ${new Intl.NumberFormat('es-MX', { maximumFractionDigits: 4 }).format(totalCobrado)} kg cobrados`}
+                                {soloRevisiones ? ` · ${bultosAproximados || '—'} ${empaqueConsulta.unidad}` : ` · ${envios.length} envíos · ${new Intl.NumberFormat('es-MX', { maximumFractionDigits: 4 }).format(totalCobrado)} kg cobrados`}
                                 <span className="block mt-0.5">{borradorMsg || 'Revisa los datos antes de registrar la respuesta.'}</span>
                             </p>
                             <div className="flex flex-wrap gap-2 sm:justify-end">

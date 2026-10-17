@@ -14,12 +14,14 @@ class GeliaAiConversacion extends Model
         'user_id',
         'titulo',
         'temporal',
+        'contexto',
     ];
 
     protected function casts(): array
     {
         return [
             'temporal' => 'boolean',
+            'contexto' => 'array',
         ];
     }
 

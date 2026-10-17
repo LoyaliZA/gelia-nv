@@ -78,7 +78,7 @@ class GeliaAiChatTest extends TestCase
             ->assertJsonPath('usage.total_tokens', 42);
     }
 
-    public function test_chat_nombre_producto_usa_prefetch_una_ronda(): void
+    public function test_chat_nombre_producto_ofrece_tools_sin_prefetch_por_palabras(): void
     {
         Http::fake([
             'api.deepseek.test/*' => Http::response([
@@ -100,9 +100,15 @@ class GeliaAiChatTest extends TestCase
         $result = app(GeliaAiChatService::class)->chat($admin, 'busca el producto vainilla mist', []);
 
         $this->assertStringContainsString('vainilla', mb_strtolower($result['reply']));
-        $this->assertSame('prefetch_inventario', $result['usage']['gelia_mode'] ?? null);
+        $this->assertSame('general', $result['usage']['gelia_mode'] ?? null);
         $this->assertSame(1, $result['usage']['gelia_acc']['rounds'] ?? null);
         Http::assertSentCount(1);
+        Http::assertSent(function ($request) {
+            $tools = array_column(array_column($request->data()['tools'] ?? [], 'function'), 'name');
+
+            return in_array('buscar_producto_inventario', $tools, true)
+                && ($request->data()['tool_choice'] ?? null) === 'auto';
+        });
     }
 
     public function test_codigo_barra_usa_una_sola_ronda(): void

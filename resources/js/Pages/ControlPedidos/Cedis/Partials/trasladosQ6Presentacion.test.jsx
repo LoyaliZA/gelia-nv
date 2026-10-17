@@ -31,7 +31,7 @@ it('detalle interno muestra cantidades y bultos y no presenta peso ni guía come
     await act(() => root.render(<ModalDetalleCedis abierto pedido={pedido} onClose={() => {}} />));
     expect(document.body.textContent).toContain('Traslado interno');
     expect(document.body.textContent).toContain('Solicitadas: 3 · Encontradas: 2 · Faltantes: 1');
-    expect(document.body.textContent).toContain('Bultos a preparar');
+    expect(document.body.textContent).toContain('Bolsas a preparar');
     expect(document.body.textContent).not.toContain('Origen de la guía');
     expect(document.body.textContent).not.toContain('Peso real');
     expect(empacarRequiereModalBultos(pedido)).toBe(true);

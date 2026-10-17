@@ -1206,6 +1206,61 @@ export const cedisConsultaEsRevisionMercancia = (pedido) => pedidoModoRevisionMe
     !(pedido?.es_consulta_mercancia || pedido?.origen?.requiere_logistica === false),
 ) || pedido?.consulta_cedis_modo_revision_mercancia === true;
 
+/**
+ * Terminología contextual de empaque en consulta CEDIS (QF-01).
+ * Solo etiquetas de UI; no cambia el significado ni la persistencia de `numero_cajas`.
+ * Prioridad: traslado interno / envío a sucursal → bolsas;
+ * paquetería con requiere_caja → cajas; resto → bultos (genérico).
+ * No usa solo `origen.requiere_logistica === false` como señal de sucursal.
+ */
+export const terminologiaEmpaqueConsultaCedis = (pedido) => {
+    const esSucursalOTraslado = Boolean(
+        pedidoEsTrasladoInternoPdv(pedido)
+        || pedido?.requiere_bultos_empaque
+        || pedido?.requiere_sucursal_destino
+    );
+    if (esSucursalOTraslado) {
+        return {
+            clave: 'bolsas',
+            paso: 'Bolsas',
+            campo: 'Bolsas a preparar (aprox.)',
+            campoCorto: 'Bolsas a preparar',
+            ayuda: 'Cantidad estimada de bolsas necesarias para preparar el pedido',
+            unidad: 'bolsas',
+            ctaPaso: 'Bolsas y evidencias',
+            instruccion: 'Indica las bolsas y fotografía el lote.',
+            introEvidencia: 'Adjunte foto(s) de cómo quedan todos los productos juntos e indique las bolsas a preparar.',
+            mensajeRequerido: 'Indica cuántas bolsas aproximadas llevará el pedido.',
+        };
+    }
+    if (pedido?.paqueteria?.requiere_caja === true) {
+        return {
+            clave: 'cajas',
+            paso: 'Cajas',
+            campo: 'Cajas a preparar (aprox.)',
+            campoCorto: 'Cajas a preparar',
+            ayuda: 'Cantidad estimada de cajas necesarias para preparar el pedido',
+            unidad: 'cajas',
+            ctaPaso: 'Cajas y evidencias',
+            instruccion: 'Indica las cajas y fotografía el lote.',
+            introEvidencia: 'Adjunte foto(s) de cómo quedan todos los productos juntos e indique las cajas a preparar.',
+            mensajeRequerido: 'Indica cuántas cajas aproximadas llevará el pedido.',
+        };
+    }
+    return {
+        clave: 'bultos',
+        paso: 'Bultos',
+        campo: 'Bultos a preparar (Aprox)',
+        campoCorto: 'Bultos a preparar',
+        ayuda: 'Cantidad aproximada de bultos en los que se empacará el pedido.',
+        unidad: 'bultos',
+        ctaPaso: 'Bultos y evidencias',
+        instruccion: 'Indica los bultos y fotografía el lote.',
+        introEvidencia: 'Adjunte foto(s) de cómo quedan todos los productos juntos e indique los bultos a preparar.',
+        mensajeRequerido: 'Indica cuántos bultos aproximados llevará el pedido.',
+    };
+};
+
 /** Espeja EnviarPedidoBmaService::validarCamposRequeridos para feedback inmediato en UI. */
 export const validarCamposEnvioPedido = (data, {
     requiereLogistica = true,

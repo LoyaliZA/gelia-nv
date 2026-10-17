@@ -100,26 +100,75 @@ class GeliaAiArchivoService
     }
 
     /**
+     * Metadatos de archivos del usuario que siguen existiendo (los más recientes primero en caso de exceso).
+     *
      * @param  list<string>  $fileIds
-     * @return list<array{file_id: string, original_name: string, kind: string}>
+     * @return list<array<string, mixed>>
      */
-    public function resúmenesParaLlm(User $user, array $fileIds): array
+    public function metasDisponibles(User $user, array $fileIds): array
     {
         $out = [];
-        foreach (array_slice($fileIds, 0, self::MAX_FILES) as $id) {
-            $meta = $this->metaDeUsuario($user, (string) $id);
-            if (! $meta) {
+        foreach (array_slice(array_values(array_unique(array_map('strval', $fileIds))), -self::MAX_FILES) as $id) {
+            if (! Str::isUuid($id)) {
                 continue;
             }
-            // Mínimo para el LLM: sin headers/filas/mapping (el servidor ya los tiene).
-            $out[] = [
-                'file_id' => (string) $meta['file_id'],
-                'original_name' => (string) ($meta['original_name'] ?? ''),
-                'kind' => (string) ($meta['kind'] ?? 'desconocido'),
-            ];
+            $meta = $this->metaDeUsuario($user, $id);
+            if ($meta && ! empty($meta['path']) && Storage::exists($meta['path'])) {
+                $out[] = $meta;
+            }
         }
 
         return $out;
+    }
+
+    /**
+     * Resumen para el modelo: estructura del archivo, nunca valores de celdas.
+     *
+     * @param  array<string, mixed>  $meta
+     * @return array<string, mixed>
+     */
+    public function resumenParaLlm(array $meta): array
+    {
+        return [
+            'file_id' => (string) $meta['file_id'],
+            'nombre' => (string) ($meta['original_name'] ?? ''),
+            'kind' => (string) ($meta['kind'] ?? 'desconocido'),
+            'headers' => array_values(array_slice(array_map('strval', $meta['headers'] ?? []), 0, 15)),
+            'filas_aprox' => (int) ($meta['rows'] ?? 0),
+            'columnas_detectadas' => is_array($meta['guess_mapping'] ?? null) ? $meta['guess_mapping'] : [],
+        ];
+    }
+
+    /**
+     * Resuelve un archivo por file_id, nombre original o, si no se indicó, por kind único entre los disponibles.
+     *
+     * @param  list<array<string, mixed>>  $disponibles
+     * @return array<string, mixed>|null
+     */
+    public function resolverReferencia(User $user, mixed $ref, array $disponibles, ?string $kind = null): ?array
+    {
+        $ref = is_string($ref) ? trim($ref) : '';
+
+        if ($ref !== '') {
+            if (Str::isUuid($ref)) {
+                $meta = $this->metaDeUsuario($user, $ref);
+
+                return $meta && ! empty($meta['path']) && Storage::exists($meta['path']) ? $meta : null;
+            }
+            $porNombre = array_values(array_filter(
+                $disponibles,
+                fn ($m) => mb_strtolower((string) ($m['original_name'] ?? '')) === mb_strtolower($ref)
+            ));
+
+            return count($porNombre) === 1 ? $porNombre[0] : null;
+        }
+
+        if ($kind === null) {
+            return null;
+        }
+        $porKind = array_values(array_filter($disponibles, fn ($m) => ($m['kind'] ?? '') === $kind));
+
+        return count($porKind) === 1 ? $porKind[0] : null;
     }
 
     public function rutaAbsoluta(User $user, string $fileId): string

@@ -22,7 +22,7 @@ const renderTarjeta = (extra = {}, props = {}) => act(() => root.render(<Tarjeta
 it('distingue tipo, almacén, destino, recorrido y folios en un traslado sin guía comercial', async () => {
     await renderTarjeta({ tarea_preparacion_vigente: { modalidad: { nombre: 'Preparación desde tienda' } } });
     expect(container.querySelector('header').textContent).toContain('Tipo de pedidoTienda');
-    for (const texto of ['Almacén de salida', 'Almacén salida', 'Destino', 'Sucursal destino', 'Traslado interno', 'Preparación desde tienda', 'PED-81', 'Folio interno GELIA (generado por el sistema): GELIA-81', 'Bultos a preparar']) expect(container.textContent).toContain(texto);
+    for (const texto of ['Almacén de salida', 'Almacén salida', 'Destino', 'Sucursal destino', 'Traslado interno', 'Preparación desde tienda', 'PED-81', 'Folio interno GELIA (generado por el sistema): GELIA-81', 'Bolsas a preparar']) expect(container.textContent).toContain(texto);
     expect(container.textContent).not.toContain('Envíos / Guía');
     expect(container.textContent).not.toContain('Paquetería');
 });

@@ -44,6 +44,14 @@ class GeliaAiConversacionService
             ->firstOrFail();
     }
 
+    /** @return array<string, mixed> */
+    public function contextoDe(User $user, int $conversacionId): array
+    {
+        $conv = GeliaAiConversacion::query()->where('user_id', $user->id)->whereKey($conversacionId)->first();
+
+        return $conv && is_array($conv->contexto) ? $conv->contexto : [];
+    }
+
     /** @return list<array{role: string, content: string}> */
     public function mensajesDe(GeliaAiConversacion $conversacion): array
     {
@@ -63,11 +71,59 @@ class GeliaAiConversacionService
     }
 
     /**
+     * Últimos mensajes de una conversación propia (el presupuesto final lo aplica el chat).
+     *
+     * @return array{historial: list<array{role: string, content: string}>, contexto: array<string, mixed>}
+     */
+    public function cargarParaChat(User $user, ?int $conversacionId): array
+    {
+        if (! $conversacionId) {
+            return ['historial' => [], 'contexto' => []];
+        }
+
+        $conv = $this->obtenerDeUsuario($user, $conversacionId);
+        $limite = max(0, (int) config('gelia_ai.history_max_messages', 24));
+        $historial = $conv->mensajes()
+            ->reorder('id', 'desc')
+            ->limit($limite)
+            ->get(['role', 'content'])
+            ->reverse()
+            ->map(fn (GeliaAiMensaje $m) => ['role' => $m->role, 'content' => $m->content])
+            ->values()
+            ->all();
+
+        return ['historial' => $historial, 'contexto' => is_array($conv->contexto) ? $conv->contexto : []];
+    }
+
+    /**
+     * Agrega el resultado real de una acción confirmada para que la conversación pueda continuar con ese hecho.
+     *
+     * @param  array<string, mixed>  $contexto
+     */
+    public function registrarEventoAccion(User $user, int $conversacionId, string $texto, array $contexto): void
+    {
+        $conv = GeliaAiConversacion::query()->where('user_id', $user->id)->whereKey($conversacionId)->first();
+        if (! $conv) {
+            return;
+        }
+
+        GeliaAiMensaje::create([
+            'conversacion_id' => $conv->id,
+            'role' => 'assistant',
+            'content' => $texto,
+            'created_at' => now(),
+        ]);
+        $conv->contexto = $contexto;
+        $conv->save();
+    }
+
+    /**
      * Crea o reutiliza conversación, persiste turno user+assistant y marca no temporal.
      *
+     * @param  array<string, mixed>|null  $contexto
      * @return array{conversacion_id: int, titulo: string|null}
      */
-    public function persistirTurno(User $user, ?int $conversacionId, string $mensajeUsuario, string $respuesta): array
+    public function persistirTurno(User $user, ?int $conversacionId, string $mensajeUsuario, string $respuesta, ?array $contexto = null): array
     {
         $conversacion = null;
         if ($conversacionId) {
@@ -86,6 +142,9 @@ class GeliaAiConversacionService
         }
 
         $conversacion->temporal = false;
+        if ($contexto !== null) {
+            $conversacion->contexto = $contexto;
+        }
         $conversacion->save();
 
         $now = now();

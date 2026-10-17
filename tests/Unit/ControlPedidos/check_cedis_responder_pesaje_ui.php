@@ -26,9 +26,10 @@ $checks = [
     ['visor cierre móvil', str_contains($visor, 'Cerrar vista de la foto')],
     ['middleware CEDIS en buscar', str_contains($routes, 'control_pedidos.cedis')
         && str_contains($routes, "name('productos.buscar')")],
-    ['evidencia final tienda con bultos', str_contains($modal, 'Evidencia final del pedido')
+    ['evidencia final tienda con empaque contextual', str_contains($modal, 'Evidencia final del pedido')
         && str_contains($modal, 'evidencias_generales')
-        && str_contains($modal, 'Bultos a preparar (Aprox)')],
+        && str_contains($modal, 'terminologiaEmpaqueConsultaCedis')
+        && str_contains($modal, 'empaqueConsulta.campo')],
     ['loteUuid para QR celular tienda', str_contains($modal, 'loteUuidRef')
         && str_contains($modal, 'Evidencia final (lote)')],
 ];

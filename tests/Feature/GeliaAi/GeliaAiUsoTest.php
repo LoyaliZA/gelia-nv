@@ -71,7 +71,7 @@ class GeliaAiUsoTest extends TestCase
         $this->assertSame(20, $uso->completion_tokens);
         $this->assertSame(100, $uso->total_tokens);
         $this->assertSame(1, $uso->rounds);
-        $this->assertSame('prefetch_ayuda', $uso->mode);
+        $this->assertSame('general', $uso->mode);
         $this->assertNotNull($uso->conversacion_id);
         $this->assertSame('deepseek-chat', $uso->modelo);
     }

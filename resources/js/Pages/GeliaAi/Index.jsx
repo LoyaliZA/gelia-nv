@@ -7,21 +7,11 @@ import GeliaLogo from '@/Components/GeliaLogo';
 import GeliaAiMarkdown from '@/Components/GeliaAi/GeliaAiMarkdown';
 import { THEME_BTN_PRIMARY } from '@/utils/geliaTheme';
 
-const MAX_TURNS = 4;
 const MAX_FILES = 10;
 const DRAWER_MS = 320;
 
 const GREETING =
     'Hola, soy GELIA. Puedo explicarte listados y solicitudes, consultar inventario, y con archivos proponer importaciones o listados. ¿En qué te ayudo?';
-
-function isGreeting(content) {
-    return typeof content === 'string' && (
-        content === GREETING
-        || content.startsWith('Hola, soy GELIA')
-        || content.startsWith('Hola, soy Gel-IA')
-        || content.startsWith('Hola, soy GEL-IA')
-    );
-}
 
 function etiquetaArchivo(kind, name = '') {
     const ext = (name.split('.').pop() || '').toLowerCase();
@@ -205,8 +195,8 @@ export default function Index({
         setError('');
         try {
             const { data } = await axios.post(route('gelia_ai.acciones.ejecutar'), {
-                accion: propuesta.accion,
-                payload: propuesta.payload || {},
+                propuesta_id: propuesta.id,
+                conversacion_id: conversacionId || undefined,
                 confirmado: true,
             });
             setMessages((prev) => {
@@ -216,7 +206,7 @@ export default function Index({
                 }
                 next.push({
                     role: 'assistant',
-                    content: formatearReporte(data),
+                    content: data.mensaje || formatearReporte(data),
                     reveal: true,
                     reporte: data.reporte || null,
                 });
@@ -275,25 +265,14 @@ export default function Index({
         setMessages(nextMessages);
         setState('thinking');
 
-        const history = nextMessages
-            .filter((m) => m.role === 'user' || m.role === 'assistant')
-            .filter((m) => !isGreeting(m.content))
-            .slice(0, -1)
-            .slice(-MAX_TURNS)
-            .map((m) => ({
-                role: m.role,
-                content: m.role === 'assistant' && m.content.length > 400
-                    ? `${m.content.slice(0, 400)}…`
-                    : m.content,
-            }));
-
         try {
+            // El historial y los archivos ya adjuntos se recuperan en el servidor por conversacion_id.
             const { data } = await axios.post(route('gelia_ai.chat'), {
                 message: messageText,
-                messages: history,
                 conversacion_id: conversacionId || undefined,
                 file_ids: fileIds.length ? fileIds : undefined,
             });
+            setAdjuntos([]);
             setMessages((prev) => [
                 ...prev,
                 {

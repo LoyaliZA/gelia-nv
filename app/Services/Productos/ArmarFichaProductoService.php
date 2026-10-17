@@ -21,9 +21,10 @@ class ArmarFichaProductoService
     ) {}
 
     /**
+     * @param  list<int>|null  $almacenIdsPermitidos  null = sin restricción de alcance
      * @return array<string, mixed>
      */
-    public function paraProducto(Producto $producto, ?int $almacenContextoId = null, int $stockMax = 5): array
+    public function paraProducto(Producto $producto, ?int $almacenContextoId = null, int $stockMax = 5, ?array $almacenIdsPermitidos = null): array
     {
         $producto->loadMissing([
             'marca:id,nombre',
@@ -62,8 +63,8 @@ class ArmarFichaProductoService
                 'activo' => (bool) $r->relacionado?->activo,
             ])->filter(fn ($x) => $x['sku'])->values()->all(),
             'contenido' => $this->mapContenido($producto->contenidos),
-            'stock' => $this->mapStock($producto->id, $almacenContextoId, $stockMax),
-            'ventas' => $this->mapVentas($producto->id, $almacenContextoId),
+            'stock' => $this->mapStock($producto->id, $almacenContextoId, $stockMax, $almacenIdsPermitidos),
+            'ventas' => $this->mapVentas($producto->id, $almacenContextoId, $almacenIdsPermitidos),
         ];
     }
 
@@ -124,11 +125,13 @@ class ArmarFichaProductoService
         ];
     }
 
-    private function mapStock(int $productoId, ?int $almacenContextoId, int $max): array
+    /** @param  list<int>|null  $almacenIdsPermitidos */
+    private function mapStock(int $productoId, ?int $almacenContextoId, int $max, ?array $almacenIdsPermitidos = null): array
     {
         $rows = Inventario::query()
             ->with(['almacen:id,codigo,nombre,tipo_almacen_id', 'almacen.tipoAlmacen:id,nombre'])
             ->where('producto_id', $productoId)
+            ->when($almacenIdsPermitidos !== null, fn ($q) => $q->whereIn('almacen_id', $almacenIdsPermitidos))
             ->get();
 
         $sorted = $rows->sortBy(function (Inventario $inv) use ($almacenContextoId) {
@@ -146,16 +149,21 @@ class ArmarFichaProductoService
             'a' => $inv->almacen?->codigo ?: $inv->almacen?->nombre,
             'tipo' => $inv->almacen?->tipoAlmacen?->nombre,
             'e' => (float) $inv->existencia,
+            'ap' => (float) $inv->apartado,
             'd' => (float) $inv->disponible,
+            'toc' => (float) $inv->transito_oc,
+            'tot' => (float) $inv->transito_ot,
             'contexto' => $almacenContextoId !== null && (int) $inv->almacen_id === $almacenContextoId,
         ])->all();
     }
 
-    private function mapVentas(int $productoId, ?int $almacenId): array
+    /** @param  list<int>|null  $almacenIdsPermitidos */
+    private function mapVentas(int $productoId, ?int $almacenId, ?array $almacenIdsPermitidos = null): array
     {
         $q = ProductoVentaAlmacen::query()
             ->with(['almacen:id,codigo,nombre'])
             ->where('producto_id', $productoId)
+            ->when($almacenIdsPermitidos !== null, fn ($w) => $w->whereIn('almacen_id', $almacenIdsPermitidos))
             ->orderByDesc('periodo')
             ->limit(3);
 

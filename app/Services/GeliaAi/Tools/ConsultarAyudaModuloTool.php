@@ -5,7 +5,7 @@ namespace App\Services\GeliaAi\Tools;
 use App\Models\User;
 use App\Services\GeliaAi\Knowledge\ModulosKnowledge;
 
-class ConsultarAyudaModuloTool
+class ConsultarAyudaModuloTool implements HerramientaGeliaAi
 {
     public function __construct(private ModulosKnowledge $knowledge) {}
 
@@ -21,13 +21,13 @@ class ConsultarAyudaModuloTool
             'type' => 'function',
             'function' => [
                 'name' => $this->name(),
-                'description' => 'Obtiene ayuda compacta sobre cómo funciona un módulo de Gelia (listados, solicitudes o inventario).',
+                'description' => 'Devuelve la guía documentada de un módulo de Gelia (qué hace, flujo, permisos). Úsala para preguntas de "cómo funciona" o "para qué sirve". No consulta datos.',
                 'parameters' => [
                     'type' => 'object',
                     'properties' => [
                         'modulo' => [
                             'type' => 'string',
-                            'enum' => ['listados', 'solicitudes', 'inventario'],
+                            'enum' => ModulosKnowledge::MODULOS,
                             'description' => 'Módulo a explicar',
                         ],
                     ],
@@ -37,17 +37,26 @@ class ConsultarAyudaModuloTool
         ];
     }
 
+    public function disponiblePara(User $user): bool
+    {
+        return true;
+    }
+
     /**
      * @param  array<string, mixed>  $args
-     * @return array{ok: bool, texto?: string, error?: string}
+     * @return array{ok: bool, modulo?: string, texto?: string, error?: string, error_code?: string}
      */
-    public function ejecutar(User $user, array $args): array
+    public function ejecutar(User $user, array $args, array $archivos = []): array
     {
         $modulo = (string) ($args['modulo'] ?? '');
-        if ($modulo === '') {
-            return ['ok' => false, 'error' => 'Indica el módulo: listados, solicitudes o inventario.'];
+        if (! in_array($modulo, ModulosKnowledge::MODULOS, true)) {
+            return [
+                'ok' => false,
+                'error_code' => 'argumento_invalido',
+                'error' => 'Indica el módulo: '.implode(', ', ModulosKnowledge::MODULOS).'.',
+            ];
         }
 
-        return ['ok' => true, 'texto' => $this->knowledge->fragmento($modulo)];
+        return ['ok' => true, 'modulo' => $modulo, 'texto' => $this->knowledge->fragmento($modulo)];
     }
 }

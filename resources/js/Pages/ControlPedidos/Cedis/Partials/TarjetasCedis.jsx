@@ -21,6 +21,7 @@ import {
     BTN_PRIMARY,
     tieneGuiaPdfDisponible,
     cedisConsultaEsRevisionMercancia,
+    terminologiaEmpaqueConsultaCedis,
     pedidoRequiereLogistica,
     etiquetaOrigenGuia,
     LABELS_MOTIVO_REPESAJE,
@@ -48,6 +49,7 @@ function TarjetaPedido({
 }) {
     const fase = pedido.estatus?.fase_ciclo;
     const soloMercancia = cedisConsultaEsRevisionMercancia(pedido);
+    const empaqueConsulta = soloMercancia ? terminologiaEmpaqueConsultaCedis(pedido) : null;
     const pendientePesaje = pedido.estatus_envio === 'pendiente_pesaje';
     const badgeEmpaque = badgeEmpaqueSemantico(fase, pedido.es_resguardo, Boolean(pedido.resguardo_apartado_at));
     const badgeEnvio = badgeEstatusEnvio(pedido.estatus_envio, { forzarPesaje: true });
@@ -184,7 +186,12 @@ function TarjetaPedido({
                 </div>
                 {destino && <div><p className="text-xs font-medium m-0">Destino</p><p className="text-sm theme-text-main m-0 mt-0.5">{etiquetaSucursal(destino)}</p></div>}
                 {preparacion?.modalidad?.nombre && <div><p className="text-xs font-medium m-0">Preparación</p><p className="text-sm theme-text-main m-0 mt-0.5">{preparacion.modalidad.nombre}</p></div>}
-                {!requiereLogistica && pedido.numero_cajas != null && <div><p className="text-xs font-medium m-0">Bultos a preparar</p><p className="text-sm theme-text-main m-0 mt-0.5">{pedido.numero_cajas}</p></div>}
+                {!requiereLogistica && pedido.numero_cajas != null && (
+                    <div>
+                        <p className="text-xs font-medium m-0">{empaqueConsulta?.campoCorto || 'Bultos a preparar'}</p>
+                        <p className="text-sm theme-text-main m-0 mt-0.5">{pedido.numero_cajas}</p>
+                    </div>
+                )}
                 {requiereLogistica && (
                 <>
                 <div>
@@ -192,7 +199,9 @@ function TarjetaPedido({
                     <p className="text-xs theme-text-main m-0 mt-0.5 normal-case">{pedido.paqueteria?.nombre || '—'}</p>
                 </div>
                 <div>
-                    <p className="text-xs font-medium m-0">Envíos / Guía</p>
+                    <p className="text-xs font-medium m-0">
+                        {soloMercancia ? `${empaqueConsulta.campoCorto} / Guía` : 'Envíos / Guía'}
+                    </p>
                     <p className="text-xs theme-text-main m-0 mt-0.5 normal-case">
                         {pedido.numero_cajas ?? '—'} · {etiquetaOrigenGuia(pedido)}
                     </p>

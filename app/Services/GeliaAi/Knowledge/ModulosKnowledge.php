@@ -4,6 +4,9 @@ namespace App\Services\GeliaAi\Knowledge;
 
 class ModulosKnowledge
 {
+    /** @var list<string> */
+    public const MODULOS = ['listados', 'solicitudes', 'inventario', 'productos', 'ventas'];
+
     public function fragmento(string $modulo): string
     {
         return match (strtolower(trim($modulo))) {
@@ -42,9 +45,9 @@ TXT;
     private function inventario(): string
     {
         return <<<'TXT'
-Inventario (Almacenes): stock por producto+almacén (existencia, apartado, disponible=existencia-apartado).
-Buscar por SKU, descripción, código de barras o folio. Filtrar por almacén/sucursal en la UI.
-GELIA consulta existencias de referencia (no stock confirmado para venta); con permiso almacenes.costos.ver también puede reportar costo y precio_venta de referencia por almacén. Importaciones unificadas en /almacenes/importaciones.
+Inventario (Almacenes): stock por producto+almacén (existencia, apartado, disponible=existencia-apartado; tránsito OC y tránsito OT como campos aparte).
+Buscar por SKU, descripción, código de barras o folio. Filtrar por almacén/sucursal en la UI. Cada persona ve solo almacenes de sus sucursales operables.
+GELIA consulta existencias de referencia (no stock confirmado para venta); con permiso almacenes.costos.ver también puede reportar costo y precio_venta de referencia por almacén. Importaciones unificadas en /almacenes/importaciones; GELIA puede preparar importaciones de costos/inventarios desde archivos adjuntos, que se ejecutan solo al confirmar.
 GELIA no crea ni ajusta inventario. No inventa precios.
 Permisos: almacenes.inventarios.ver, almacenes.costos.ver (precios).
 TXT;

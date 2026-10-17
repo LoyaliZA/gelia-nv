@@ -4,6 +4,7 @@ namespace Tests\Feature\GeliaAi;
 
 use App\Jobs\Almacenes\ImportarAlmacenCatalogoJob;
 use App\Models\Almacen;
+use App\Models\Sucursal;
 use App\Models\User;
 use App\Services\GeliaAi\GeliaAiArchivoService;
 use App\Services\GeliaAi\InspeccionarArchivoGeliaAiService;
@@ -112,7 +113,9 @@ class GeliaAiFase2ArchivosTest extends TestCase
         $admin->assignRole('Super Admin');
         $admin->givePermissionTo('almacenes.costos.importar');
 
-        $almacen = Almacen::create(['codigo' => 'CEDIS', 'nombre' => 'CEDIS Central', 'activo' => true]);
+        $sucursal = Sucursal::factory()->create();
+        $admin->concederAccesoSucursal($sucursal, true);
+        $almacen = Almacen::create(['codigo' => 'CEDIS', 'nombre' => 'CEDIS Central', 'activo' => true, 'sucursal_id' => $sucursal->id]);
         $meta = $this->subirCsvComoUsuario($admin, "sku,costo\nABC,9.9\n");
 
         $this->actingAs($admin)
@@ -128,10 +131,13 @@ class GeliaAiFase2ArchivosTest extends TestCase
             ->assertOk()
             ->assertJsonPath('ok', true)
             ->assertJsonPath('accion', 'importar_costos')
-            ->assertJsonStructure(['reporte' => ['resumen', 'log_id', 'conteos']]);
+            ->assertJsonPath('reporte.estado', 'en_cola')
+            ->assertJsonStructure(['reporte' => ['resumen', 'log_id'], 'mensaje']);
 
         Queue::assertPushed(ImportarAlmacenCatalogoJob::class);
         $this->assertNotNull($almacen->id);
+        // El adjunto del chat se conserva para reutilizarlo.
+        Storage::assertExists("temp/gelia_ai/{$admin->id}/{$meta['file_id']}.csv");
     }
 
     public function test_chat_con_file_ids_no_envia_filas_a_deepseek(): void

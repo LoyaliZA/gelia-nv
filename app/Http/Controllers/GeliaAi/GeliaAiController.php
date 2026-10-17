@@ -4,16 +4,21 @@ namespace App\Http\Controllers\GeliaAi;
 
 use App\Http\Controllers\Controller;
 use App\Services\GeliaAi\Acciones\AccionRegistry;
+use App\Services\GeliaAi\Acciones\PropuestasAccionGeliaAi;
+use App\Services\GeliaAi\ContextoConversacionGeliaAi;
 use App\Services\GeliaAi\DeepSeekClient;
+use App\Services\GeliaAi\DeepSeekException;
 use App\Services\GeliaAi\GeliaAiArchivoService;
 use App\Services\GeliaAi\GeliaAiChatService;
 use App\Services\GeliaAi\GeliaAiConversacionService;
 use App\Services\GeliaAi\GeliaAiUsoService;
 use App\Services\GeliaAi\InspeccionarArchivoGeliaAiService;
 use App\Services\GeliaAi\ResolverAccesoGeliaAi;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 use RuntimeException;
@@ -62,19 +67,26 @@ class GeliaAiController extends Controller
 
         try {
             $fileIds = $validated['file_ids'] ?? [];
+            $conversacionId = isset($validated['conversacion_id']) ? (int) $validated['conversacion_id'] : null;
+            // El historial se toma del servidor; `messages` del cliente se ignora (no es fuente confiable).
+            $previo = $conversaciones->cargarParaChat($request->user(), $conversacionId);
+
             $result = $chatService->chat(
                 $request->user(),
                 $validated['message'],
-                $validated['messages'] ?? [],
+                $previo['historial'],
                 $fileIds,
+                $previo['contexto'],
             );
 
             $saved = $conversaciones->persistirTurno(
                 $request->user(),
-                isset($validated['conversacion_id']) ? (int) $validated['conversacion_id'] : null,
+                $conversacionId,
                 $validated['message'],
                 $result['reply'],
+                $result['contexto'],
             );
+            unset($result['contexto']);
 
             $result['conversacion_id'] = $saved['conversacion_id'];
             $result['titulo'] = $saved['titulo'];
@@ -86,6 +98,8 @@ class GeliaAiController extends Controller
                 $result,
                 $fileIds !== [],
             );
+        } catch (DeepSeekException $e) {
+            return response()->json(['message' => $e->getMessage()], $e->httpStatus);
         } catch (RuntimeException $e) {
             $code = str_contains($e->getMessage(), 'no está configurado') ? 503 : 422;
 
@@ -138,36 +152,99 @@ class GeliaAiController extends Controller
         Request $request,
         ResolverAccesoGeliaAi $acceso,
         AccionRegistry $registry,
+        PropuestasAccionGeliaAi $propuestas,
+        GeliaAiConversacionService $conversaciones,
+        ContextoConversacionGeliaAi $contexto,
     ): JsonResponse {
         abort_unless($acceso->puedeUsar($request->user()), 403);
 
         $validated = $request->validate([
-            'accion' => ['required', 'string', 'max:64'],
-            'payload' => ['required', 'array'],
+            'propuesta_id' => ['nullable', 'string', 'uuid'],
+            'accion' => ['required_without:propuesta_id', 'string', 'max:64'],
+            'payload' => ['required_without:propuesta_id', 'array'],
             'confirmado' => ['required', 'accepted'],
+            'conversacion_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('gelia_ai_conversaciones', 'id')->where(
+                    fn ($q) => $q->where('user_id', $request->user()->id)
+                ),
+            ],
         ]);
 
-        if (! $registry->soporta($validated['accion'])) {
+        $user = $request->user();
+        if (! empty($validated['propuesta_id'])) {
+            // Se ejecuta exactamente lo propuesto y mostrado; uso único para evitar dobles importaciones.
+            $propuesta = $propuestas->consumir($user, $validated['propuesta_id']);
+            if (! $propuesta) {
+                return response()->json(['message' => 'La propuesta expiró o ya se ejecutó. Pide a GELIA que la prepare de nuevo.'], 422);
+            }
+            $accion = (string) $propuesta['accion'];
+            $payload = (array) $propuesta['payload'];
+        } else {
+            $accion = (string) $validated['accion'];
+            $payload = (array) $validated['payload'];
+        }
+
+        if (! $registry->soporta($accion)) {
             return response()->json(['message' => 'Acción no soportada.'], 422);
         }
 
         try {
-            $result = $registry->ejecutar(
-                $request->user(),
-                $validated['accion'],
-                $validated['payload'],
-            );
+            $result = $registry->ejecutar($user, $accion, $payload);
+        } catch (AuthorizationException $e) {
+            return response()->json(['message' => $e->getMessage() ?: 'No autorizado.'], 403);
+        } catch (ValidationException $e) {
+            return response()->json(['message' => collect($e->errors())->flatten()->first() ?: 'Datos inválidos.'], 422);
         } catch (RuntimeException $e) {
-            $code = str_contains(mb_strtolower($e->getMessage()), 'permiso') ? 403 : 422;
+            $code = preg_match('/permiso|acceso operable/iu', $e->getMessage()) ? 403 : 422;
 
             return response()->json(['message' => $e->getMessage()], $code);
         } catch (Throwable $e) {
             report($e);
 
-            return response()->json(['message' => 'No se pudo ejecutar la acción.'], 500);
+            return response()->json(['message' => 'No se pudo completar la acción. Revisa el módulo correspondiente antes de reintentar.'], 500);
+        }
+
+        $result['mensaje'] = $this->mensajeReporte($result);
+
+        if (! empty($validated['conversacion_id'])) {
+            $convId = (int) $validated['conversacion_id'];
+            $ctx = $contexto->registrarAccionEjecutada(
+                $contexto->normalizar($conversaciones->contextoDe($user, $convId)),
+                $accion,
+                (array) ($result['reporte'] ?? []),
+            );
+            $conversaciones->registrarEventoAccion($user, $convId, $result['mensaje'], $ctx);
         }
 
         return response()->json($result);
+    }
+
+    /** @param  array<string, mixed>  $result */
+    private function mensajeReporte(array $result): string
+    {
+        $r = (array) ($result['reporte'] ?? []);
+        $lineas = ['**'.($r['resumen'] ?? 'Acción ejecutada.').'**'];
+        if (! empty($r['log_id'])) {
+            $lineas[] = "- Registro de importación: `{$r['log_id']}` (el resultado por fila se revisa en Almacenes → Importaciones).";
+        }
+        if (isset($r['conteos'])) {
+            $lineas[] = "- Filas generadas: {$r['conteos']['ok']}; con inconsistencia: {$r['conteos']['error']}.";
+        }
+        $detalles = array_slice((array) ($r['detalles'] ?? []), 0, 8);
+        if ($detalles !== []) {
+            $lineas[] = '';
+            $lineas[] = 'Avisos:';
+            foreach ($detalles as $d) {
+                $lineas[] = '- '.($d['sku'] ?? '—').': '.($d['error'] ?? '');
+            }
+            if (count((array) $r['detalles']) > 8) {
+                $lineas[] = '- …y '.(count((array) $r['detalles']) - 8).' más';
+            }
+        }
+
+        return implode("\n", $lineas);
     }
 
     public function conversaciones(Request $request, ResolverAccesoGeliaAi $acceso, GeliaAiConversacionService $svc): JsonResponse

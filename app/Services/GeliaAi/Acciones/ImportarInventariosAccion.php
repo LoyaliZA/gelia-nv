@@ -2,20 +2,8 @@
 
 namespace App\Services\GeliaAi\Acciones;
 
-use App\Models\User;
-use App\Services\Almacenes\IniciarImportacionAlmacenService;
-use App\Services\GeliaAi\GeliaAiArchivoService;
-use App\Services\GeliaAi\ResolverAlmacenGeliaAi;
-use RuntimeException;
-
-class ImportarInventariosAccion implements AccionGeliaAi
+class ImportarInventariosAccion extends ImportarCatalogoAlmacenAccion
 {
-    public function __construct(
-        private GeliaAiArchivoService $archivos,
-        private IniciarImportacionAlmacenService $importacion,
-        private ResolverAlmacenGeliaAi $almacenes,
-    ) {}
-
     public function id(): string
     {
         return 'importar_inventarios';
@@ -26,72 +14,33 @@ class ImportarInventariosAccion implements AccionGeliaAi
         return 'almacenes.inventarios.importar';
     }
 
-    public function proponerSchema(): array
+    public function descripcion(): string
     {
-        return [
-            'parameters' => [
-                'type' => 'object',
-                'properties' => [
-                    'file_id' => ['type' => 'string'],
-                    'almacen_codigo' => ['type' => 'string'],
-                    'almacen_id' => ['type' => 'integer'],
-                    'mapping' => ['type' => 'object'],
-                ],
-                'required' => ['file_id'],
-            ],
-        ];
+        return 'Prepara (no ejecuta) la importación de existencias de un archivo adjunto a un almacén. La persona usuaria confirma en la interfaz. Si faltan archivo, almacén o columnas, la respuesta indica qué falta.';
     }
 
-    public function ejecutar(User $user, array $payload): array
+    protected function tipo(): string
     {
-        $fileId = (string) ($payload['file_id'] ?? '');
-        if ($fileId === '') {
-            throw new RuntimeException('Falta file_id.');
-        }
+        return 'inventarios';
+    }
 
-        $meta = $this->archivos->metaDeUsuario($user, $fileId);
-        if (! $meta) {
-            throw new RuntimeException('Archivo no encontrado o expirado.');
-        }
+    protected function etiqueta(): string
+    {
+        return 'inventarios';
+    }
 
-        $almacen = $this->almacenes->resolver(
-            isset($payload['almacen_id']) ? (int) $payload['almacen_id'] : null,
-            isset($payload['almacen_codigo']) ? (string) $payload['almacen_codigo'] : null,
-        );
-        if (! $almacen) {
-            throw new RuntimeException('Indica un almacén válido (código o id).');
-        }
+    protected function kindEsperado(): string
+    {
+        return 'existencias';
+    }
 
-        $mapping = is_array($payload['mapping'] ?? null) ? $payload['mapping'] : [];
-        $guess = is_array($meta['guess_mapping'] ?? null) ? $meta['guess_mapping'] : [];
-        $mapping = array_merge($guess, $mapping);
+    protected function columnasObligatorias(): array
+    {
+        return ['sku', 'folio', 'descripcion', 'existencia'];
+    }
 
-        foreach (['sku', 'folio', 'descripcion', 'existencia'] as $req) {
-            if (empty($mapping[$req])) {
-                throw new RuntimeException("Falta mapping.{$req} (no se pudo detectar en headers).");
-            }
-        }
-
-        $path = $this->archivos->rutaRelativa($user, $fileId);
-        $result = $this->importacion->ejecutarDesdeRuta(
-            $user->id,
-            'inventarios',
-            $path,
-            $mapping,
-            $almacen->id,
-            conservarOrigen: true,
-        );
-
-        return [
-            'ok' => true,
-            'accion' => $this->id(),
-            'reporte' => [
-                'resumen' => "Importación de inventarios iniciada en {$almacen->codigo}. Seguimiento en Almacenes.",
-                'detalles' => [],
-                'conteos' => ['ok' => (int) ($meta['rows'] ?? 0), 'error' => 0],
-                'log_id' => $result['log_id'],
-                'download_url' => null,
-            ],
-        ];
+    protected function columnasOpcionales(): array
+    {
+        return [];
     }
 }

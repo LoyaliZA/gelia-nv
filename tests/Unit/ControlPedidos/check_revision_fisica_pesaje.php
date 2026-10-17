@@ -33,7 +33,8 @@ $checks = [
     ['UI Única pieza', str_contains($modal, 'Única pieza')],
     ['UI Mejor ejemplar', str_contains($modal, 'Mejor ejemplar')],
     ['UI evidencia final tienda', str_contains($modal, 'Evidencia final del pedido')],
-    ['UI bultos a preparar tienda', str_contains($modal, 'Bultos a preparar (Aprox)')],
+    ['UI empaque contextual consulta', str_contains($modal, 'terminologiaEmpaqueConsultaCedis')
+        && str_contains($modal, 'empaqueConsulta.campo')],
     ['UI sucursal destino tienda', str_contains($modal, 'Sucursal destino')],
     ['UI fotos lote tienda', str_contains($modal, 'Fotos del lote (productos del pedido)')],
 ];

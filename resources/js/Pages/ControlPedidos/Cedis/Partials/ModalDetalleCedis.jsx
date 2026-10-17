@@ -11,6 +11,7 @@ import {
 import {
     badgeEmpaqueSemantico,
     cedisConsultaEsRevisionMercancia,
+    terminologiaEmpaqueConsultaCedis,
     badgeRetrasoGuia,
     badgesRetrasoSla,
     badgeConComplementos,
@@ -108,6 +109,7 @@ export default function ModalDetalleCedis({
     if (!abierto || !pedido) return null;
 
     const esTienda = cedisConsultaEsRevisionMercancia(pedido);
+    const empaqueConsulta = esTienda ? terminologiaEmpaqueConsultaCedis(pedido) : null;
     const trasladoInterno = pedidoEsTrasladoInternoPdv(pedido);
     const fase = pedido.estatus?.fase_ciclo;
     const badgeEmpaque = badgeEmpaqueSemantico(fase, pedido.es_resguardo, Boolean(pedido.resguardo_apartado_at));
@@ -734,7 +736,7 @@ export default function ModalDetalleCedis({
                                 {trasladoInterno
                                     ? <Campo label="Recorrido" value="Traslado interno" />
                                     : <Campo label="Paquetería" value={pedido.paqueteria?.nombre} />}
-                                <Campo label={esTienda ? 'Bultos a preparar (Aprox)' : 'N° de envíos'} value={pedido.numero_cajas} />
+                                <Campo label={esTienda ? empaqueConsulta.campo : 'N° de envíos'} value={pedido.numero_cajas} />
                                 {!trasladoInterno && <>
                                 <Campo label="Origen de la guía" value={etiquetaOrigenGuia(pedido)} />
                                 <Campo label="Tipo de guía" value={pedido.tipo_guia?.nombre} />

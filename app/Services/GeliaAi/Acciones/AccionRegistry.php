@@ -8,6 +8,8 @@ use RuntimeException;
 
 class AccionRegistry
 {
+    public const PREFIJO_TOOL = 'proponer_';
+
     /** @var array<string, AccionGeliaAi> */
     private array $acciones = [];
 
@@ -40,41 +42,32 @@ class AccionRegistry
         return isset($this->acciones[$id]);
     }
 
-    /**
-     * @return list<array<string, mixed>>
-     */
-    public function schemasParaTools(): array
+    /** @return list<AccionGeliaAi> */
+    public function todas(): array
     {
-        $props = [];
-        $enum = [];
-        foreach ($this->acciones as $accion) {
-            $enum[] = $accion->id();
-            $schema = $accion->proponerSchema();
-            $props[$accion->id()] = $schema['parameters'] ?? ['type' => 'object'];
+        return array_values($this->acciones);
+    }
+
+    public function accionDeTool(string $toolName): ?AccionGeliaAi
+    {
+        if (! str_starts_with($toolName, self::PREFIJO_TOOL)) {
+            return null;
         }
 
-        return [[
+        return $this->acciones[substr($toolName, strlen(self::PREFIJO_TOOL))] ?? null;
+    }
+
+    /** @return array<string, mixed> */
+    public function schemaTool(AccionGeliaAi $accion): array
+    {
+        return [
             'type' => 'function',
             'function' => [
-                'name' => 'proponer_accion_operativa',
-                'description' => 'Propone importar costos/inventarios o generar listado. No ejecuta; el usuario confirma.',
-                'parameters' => [
-                    'type' => 'object',
-                    'properties' => [
-                        'accion' => ['type' => 'string', 'enum' => $enum],
-                        'payload' => [
-                            'type' => 'object',
-                            'description' => 'Params según acción (file_id, almacen_codigo, tipo_lista, file_ids).',
-                        ],
-                        'resumen_corto' => [
-                            'type' => 'string',
-                            'description' => '1 frase para mostrar al usuario antes de confirmar.',
-                        ],
-                    ],
-                    'required' => ['accion', 'payload', 'resumen_corto'],
-                ],
+                'name' => self::PREFIJO_TOOL.$accion->id(),
+                'description' => $accion->descripcion(),
+                'parameters' => $accion->parametros(),
             ],
-        ]];
+        ];
     }
 
     /**

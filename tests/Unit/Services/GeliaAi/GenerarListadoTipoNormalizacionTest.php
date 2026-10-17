@@ -3,18 +3,13 @@
 namespace Tests\Unit\Services\GeliaAi;
 
 use App\Services\GeliaAi\GenerarListadoDesdeRutasService;
-use App\Services\Listados\PorcentajesListadoService;
 use Tests\TestCase;
 
 class GenerarListadoTipoNormalizacionTest extends TestCase
 {
     public function test_normaliza_meli_mayusculas_y_aliases(): void
     {
-        $porcentajes = new class extends PorcentajesListadoService
-        {
-            public function __construct() {}
-        };
-        $svc = new GenerarListadoDesdeRutasService($porcentajes);
+        $svc = app(GenerarListadoDesdeRutasService::class);
 
         $this->assertSame('meli', $svc->normalizarTipoLista('MELI'));
         $this->assertSame('meli', $svc->normalizarTipoLista('Lista MELI'));
