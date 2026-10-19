@@ -217,6 +217,18 @@ class PedidoBmaController extends Controller
         return response()->json(['data' => $pedidos]);
     }
 
+    public function candidatosResguardoEnvio(Request $request, \App\Services\ControlPedidos\ResguardosEnvioPedido $resguardos): JsonResponse
+    {
+        Gate::authorize('control_pedidos.crear');
+
+        $clienteId = (int) $request->query('cliente_id');
+        $envioId = (int) $request->query('pedido_id');
+        $q = trim((string) $request->query('q', ''));
+        return response()->json([
+            'data' => $resguardos->listar($clienteId, $envioId > 0 ? $envioId : null, $q),
+        ]);
+    }
+
     public function update(
         UpdatePedidoBmaRequest $request,
         PedidoBma $pedidoBma,

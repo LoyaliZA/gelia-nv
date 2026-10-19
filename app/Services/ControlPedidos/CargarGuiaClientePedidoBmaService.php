@@ -27,6 +27,7 @@ class CargarGuiaClientePedidoBmaService
         }
 
         $pedido->loadMissing(['estatus']);
+        app(ResguardosEnvioPedido::class)->assertNoSalePorSuCuenta($pedido);
 
         if (! $pedido->puedeCargarGuiaCliente()) {
             throw new \RuntimeException('El pedido no está pendiente de guía del cliente.');

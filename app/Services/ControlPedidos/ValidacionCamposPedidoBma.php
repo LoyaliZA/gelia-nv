@@ -57,7 +57,9 @@ trait ValidacionCamposPedidoBma
             );
         }
 
-        if (empty(trim((string) ($pedido->folio_remision ?? '')))) {
+        $soloResguardos = $pedido->esEnvioSoloResguardos();
+
+        if (! $soloResguardos && empty(trim((string) ($pedido->folio_remision ?? '')))) {
             $faltantes[] = 'folio de pedido';
         }
         if (! $pedido->cliente_id) {
@@ -86,11 +88,17 @@ trait ValidacionCamposPedidoBma
             }
         }
         // Pedido final: monto obligatorio al enviar (solo se llega aquí con consulta cerrada, salvo complemento).
-        if ((float) $pedido->total_mercancia <= 0) {
+        if (! $soloResguardos && (float) $pedido->total_mercancia <= 0) {
             $faltantes[] = 'total de mercancía';
         }
-        if (! $pedido->tienePdfPedido()) {
+        if (! $soloResguardos && ! $pedido->tienePdfPedido()) {
             $faltantes[] = 'PDF o foto del pedido';
+        }
+        if ($soloResguardos && ! $pedido->tieneResguardosParaEnviar()) {
+            $faltantes[] = 'resguardo de GELIA o remisión externa';
+        }
+        if ($soloResguardos && ! $pedido->tieneAnexoPagoEnvioRegistrado()) {
+            $faltantes[] = 'pago de envío';
         }
 
         if ($requiereLogistica) {
@@ -147,7 +155,7 @@ trait ValidacionCamposPedidoBma
             }
 
             if (! $guiaCliente && ! $pedido->esTrasladoInternoAPdv()) {
-                if (! $pedido->catalogo_paqueteria_id) {
+                if (! $esResguardoAbierto && ! $pedido->catalogo_paqueteria_id) {
                     $faltantes[] = 'paquetería';
                 }
                 if (! $esResguardoAbierto) {
@@ -198,6 +206,10 @@ trait ValidacionCamposPedidoBma
 
         if ($pedido->esResguardoAbierto()) {
             return PedidoBma::ESTATUS_ENVIO_PENDIENTE_LIBERACION;
+        }
+
+        if ($pedido->esEnvioSoloResguardos() && ! $pedido->anexoEnvioResguardosAprobado()) {
+            return PedidoBma::ESTATUS_ENVIO_PENDIENTE_REVISION_ANEXO;
         }
 
         if ($pedido->esMunicipioDiferido() && $pedido->costo_envio === null) {

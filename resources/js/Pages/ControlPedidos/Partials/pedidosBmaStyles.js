@@ -455,10 +455,11 @@ export const badgeConsolidadoEmpaque = (operacion) => {
     };
 };
 
-export const puedeAnexarPagoEnvio = (pedido) => [
-    'pendiente_regularizacion',
-    'anexo_rechazado',
-].includes(pedido?.estatus_envio);
+export const puedeAnexarPagoEnvio = (pedido) => {
+    if (pedido?.puede_anexar_pago_envio === true) return true;
+    if (pedido?.puede_anexar_pago_envio === false) return false;
+    return ['pendiente_regularizacion', 'anexo_rechazado'].includes(pedido?.estatus_envio);
+};
 
 /** Raíz en resguardo abierto pendiente de liberación (vendedora/auxiliar puede completar envío). */
 export const puedeCompletarEnvioResguardo = (pedido) => {
@@ -1282,6 +1283,8 @@ export const validarCamposEnvioPedido = (data, {
     preparacionPesoObligatorio = false,
     preparacionPesoCapturado = false,
     trasladoInternoCedisPdv = false,
+    envioSoloResguardos = false,
+    tienePagoEnvioAnexo = false,
 } = {}) => {
     const faltantes = [];
     const modoRevisionMercancia = trasladoInternoCedisPdv || pedidoModoRevisionMercancia(data, paqueteria, requiereLogistica);
@@ -1324,19 +1327,25 @@ export const validarCamposEnvioPedido = (data, {
         };
     }
 
-    if (!String(data.folio_remision || '').trim()) marcar('folio_remision', 'folio de pedido');
+    if (!String(data.folio_remision || '').trim() && !envioSoloResguardos) marcar('folio_remision', 'folio de pedido');
     if (!data.cliente_id) marcar('cliente', 'cliente');
     if (!data.origen_id) marcar('origen', 'tipo de pedido');
     if (!data.almacen_id) marcar('almacen', 'almacén de salida');
     // Monto solo obligatorio con consulta cerrada (pedido final post-pesaje/consulta).
-    if (consultaCerrada || !requiereConsultaCerrada) {
+    if (!envioSoloResguardos && (consultaCerrada || !requiereConsultaCerrada)) {
         if (Number(data.total_mercancia || 0) <= 0) marcar('total_mercancia', 'total de mercancía');
     }
-    if (!tienePdfPedido) marcar('pdf_pedido', 'PDF o foto del pedido');
+    if (!envioSoloResguardos && !tienePdfPedido) marcar('pdf_pedido', 'PDF o foto del pedido');
+    if (envioSoloResguardos) {
+        const tieneResguardo = (data.resguardo_ids || []).length > 0
+            || String(data.notas_resguardos_externos || '').trim() !== '';
+        if (!tieneResguardo) marcar('resguardos_envio', 'resguardo de GELIA o remisión externa');
+        if (!tienePagoEnvioAnexo) marcar('pago_envio', 'pago de envío');
+    }
 
-    if (pagoPendiente == null) {
+    if (!envioSoloResguardos && pagoPendiente == null) {
         marcar('pago', 'exhibiciones de pago (guarde el borrador y registre los abonos que cubran el total)');
-    } else if (Number(pagoPendiente) > 0.01) {
+    } else if (!envioSoloResguardos && Number(pagoPendiente) > 0.01) {
         marcar('pago', mensajePagoFaltante(pagoPendiente));
     }
 
@@ -1361,7 +1370,7 @@ export const validarCamposEnvioPedido = (data, {
         }
 
         if (!guiaCliente && !trasladoInternoCedisPdv) {
-            if (!data.catalogo_paqueteria_id) marcar('paqueteria', 'paquetería');
+            if (!esResguardoAbierto && !data.catalogo_paqueteria_id) marcar('paqueteria', 'paquetería');
             if (!esResguardoAbierto) {
                 if (!data.catalogo_tipo_guia_id) marcar('tipo_guia', 'tipo de guía');
                 if (!data.catalogo_zona_id) marcar('reexpedicion', 'reexpedición');

@@ -45,11 +45,15 @@ class AprobarAnexoEnvioPedidoBmaService
                 'motivo_rechazo' => null,
             ]);
 
+            $costo = $anexo->tipo === PedidoBmaAnexoEnvio::TIPO_ENVIO_ADICIONAL
+                ? (float) $pedido->costo_envio + $monto
+                : $monto;
+
             $pedido->update([
-                'costo_envio' => $monto,
+                'costo_envio' => $costo,
                 'total_a_cobrar' => PedidoBma::calcularTotal(
                     $mercancia,
-                    $monto,
+                    $costo,
                     $seguro,
                     $costoSeguro,
                     $saldoFavor

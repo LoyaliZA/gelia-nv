@@ -127,6 +127,7 @@ class ActualizarPedidoBmaService
             }
 
             $this->intencionPreparacion->ejecutar($pedido, $datos);
+            app(ResguardosEnvioPedido::class)->aplicar($pedido->fresh(), $datos, $usuarioId);
 
             if (array_key_exists('saf_aplicaciones', $datos)) {
                 $this->safPedido->reservarParaPedido($pedido->fresh(), $datos['saf_aplicaciones'] ?? [], $usuarioId);
@@ -162,6 +163,7 @@ class ActualizarPedidoBmaService
             'folio_remision', 'fecha', 'origen_id', 'almacen_id', 'catalogo_tipo_caja_id', 'numero_cajas',
             'peso_real_kg', 'catalogo_paqueteria_id', 'catalogo_tipo_guia_id', 'catalogo_zona_id',
             'codigo_postal', 'domicilio_entrega', 'cliente_direccion_id', 'es_resguardo',
+            'envio_solo_resguardos', 'notas_resguardos_externos',
             'cliente_proporciona_guia', 'envio_por_cobrar', 'anexar_remision', 'comentarios_drive',
         ];
 
@@ -231,6 +233,8 @@ class ActualizarPedidoBmaService
             'envia_a_otra_persona' => (bool) $pedido->envia_a_otra_persona,
             'envia_otra_persona' => $pedido->envia_otra_persona,
             'es_resguardo' => (bool) $pedido->es_resguardo,
+            'envio_solo_resguardos' => (bool) $pedido->envio_solo_resguardos,
+            'notas_resguardos_externos' => $pedido->notas_resguardos_externos,
             'anexar_remision' => (bool) $pedido->anexar_remision,
             'total_mercancia' => $pedido->total_mercancia,
             'costo_envio' => $pedido->costo_envio,

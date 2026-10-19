@@ -14,10 +14,17 @@ class PedidoBmaAnexoEnvio extends Model
     public const ESTATUS_APROBADO = 'aprobado';
     public const ESTATUS_RECHAZADO = 'rechazado';
 
+    public const TIPO_DIFERIDO = 'diferido';
+
+    public const TIPO_SOLO_RESGUARDOS = 'solo_resguardos';
+
+    public const TIPO_ENVIO_ADICIONAL = 'envio_adicional';
+
     protected $table = 'pedido_bma_anexos_envio';
 
     protected $fillable = [
         'pedido_bma_id',
+        'tipo',
         'monto',
         'catalogo_banco_id',
         'comentarios',

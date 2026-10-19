@@ -109,6 +109,7 @@ class CrearPedidoBmaService
             }
 
             $this->historialService->registrarCreacion($pedido->id, $vendedorId, $estatusBorrador->id);
+            app(ResguardosEnvioPedido::class)->aplicar($pedido, $datos, $vendedorId);
             $this->intencionPreparacion->ejecutar($pedido, $datos);
 
             $destExplicito = array_key_exists('sucursal_destino_id', $datos);

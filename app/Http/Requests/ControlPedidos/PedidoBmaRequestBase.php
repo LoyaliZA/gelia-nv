@@ -127,6 +127,10 @@ abstract class PedidoBmaRequestBase extends FormRequest
                 Rule::requiredIf(fn () => filter_var($this->input('envia_a_otra_persona'), FILTER_VALIDATE_BOOLEAN)),
             ],
             'es_resguardo' => ['nullable', 'boolean'],
+            'envio_solo_resguardos' => ['nullable', 'boolean'],
+            'notas_resguardos_externos' => ['nullable', 'string', 'max:2000'],
+            'resguardo_ids' => ['nullable', 'array'],
+            'resguardo_ids.*' => ['integer', 'exists:pedidos_bma,id'],
             'modo_resguardo' => ['nullable', 'in:abierto,complementario'],
             'pedido_principal_id' => [
                 'nullable',

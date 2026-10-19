@@ -41,17 +41,21 @@ class AprobarPedidoBmaService
             throw new \RuntimeException('La recogida en tienda se cierra en PDV, sin aprobación de CEDIS y sin PDF de remisión.');
         }
 
-        if (!$pedido->tienePagoValidado()) {
+        if ($pedido->esEnvioSoloResguardos()) {
+            if (! $pedido->anexoEnvioResguardosAprobado()) {
+                throw new \RuntimeException('Apruebe el pago de envío antes de aprobar. Este envío no lleva remisión de mercancía.');
+            }
+        } elseif (!$pedido->tienePagoValidado()) {
             throw new \RuntimeException('Valide el pago antes de aprobar.');
-        }
-
-        if (!$pedido->tieneRemision()) {
+        } elseif (!$pedido->tieneRemision()) {
             throw new \RuntimeException('Adjunte la remisión PDF antes de aprobar.');
         }
 
         $pedido->assertSinExistenciaAtendida();
 
-        $this->pagos->assertPagoListoParaAvanzar($pedido, RegistrarPagoPedidoBmaService::FASE_APROBAR);
+        if (! $pedido->esEnvioSoloResguardos()) {
+            $this->pagos->assertPagoListoParaAvanzar($pedido, RegistrarPagoPedidoBmaService::FASE_APROBAR);
+        }
 
         AssertPedidoNoBloqueadoFase7::assert($pedido);
 

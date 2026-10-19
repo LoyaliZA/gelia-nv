@@ -44,6 +44,7 @@ class ListarPedidosBmaService
             'historial.estatusAnterior',
             'historial.estatusNuevo',
             'complementos',
+            'resguardosAnexados.resguardo:id,folio,folio_remision,numero_remision',
             'safAplicaciones.credito',
             'pagosExhibicion.banco',
             'tareaPreparacionVigente.modalidad',
@@ -121,6 +122,7 @@ class ListarPedidosBmaService
 
         $pedido->setAttribute('departamento_operacion_id', \App\Support\ControlPedidos\ContextoDepartamentoPedido::dePedido($pedido));
         $pedido->setAttribute('puede_editar', $puedeEditar);
+        $pedido->setAttribute('puede_anexar_pago_envio', $pedido->puedeAnexarPagoEnvio());
         $pedido->setAttribute('puede_mutar', $puedeEditar);
         $pedido->setAttribute('puede_cancelar', $puedeEditar && $pedido->puedeCancelarDirecto());
         $pedido->setAttribute('tiene_sin_existencia_abierta', $pedido->tieneSinExistenciaAbierta());
@@ -151,9 +153,37 @@ class ListarPedidosBmaService
         $pedido->setAttribute('preparacion_peso_capturado', $pesoPreparacionCapturado);
         $pedido->setAttribute('tiene_traslado_cedis_pendiente', $pedido->tieneTrasladoCedisPendiente());
         $pedido->setAttribute('tiene_caratula_municipal_pendiente', $pedido->tieneCaratulaMunicipalPendiente());
-        $pedido->setAttribute('tarea_preparacion', $this->serializarTareaPreparacion(
-            $this->resolverTareaPreparacionVista($pedido)
-        ));
+        $tareaVista = $this->resolverTareaPreparacionVista($pedido);
+        $pedido->setAttribute('tarea_preparacion', $this->serializarTareaPreparacion($tareaVista));
+        // #region agent log
+        if (($pedido->estatus_envio === PedidoBma::ESTATUS_ENVIO_APARTADO_CONFIRMADO)
+            || ($tareaVista?->modalidad?->codigo === 'RECOGE_TIENDA')) {
+            $docsPedido = $pedido->relationLoaded('documentos') ? $pedido->documentos : collect();
+            $revs = $pedido->relationLoaded('revisionesProducto') ? $pedido->revisionesProducto : collect();
+            @file_put_contents(base_path('.cursor/debug-7b09e7.log'), json_encode([
+                'sessionId' => '7b09e7',
+                'hypothesisId' => 'A',
+                'location' => 'ListarPedidosBmaService.php:anexarFlagsVista',
+                'message' => 'Pedido recoge/apartado serializado para Ventas',
+                'data' => [
+                    'pedido_id' => $pedido->id,
+                    'estatus_envio' => $pedido->estatus_envio,
+                    'fase_ciclo' => $pedido->estatus?->fase_ciclo,
+                    'pesaje_respondido_at' => $pedido->pesaje_respondido_at?->toIso8601String(),
+                    'pesaje_respondido_por_id' => $pedido->pesaje_respondido_por_id,
+                    'tarea_id' => $tareaVista?->id,
+                    'tarea_estado' => $tareaVista?->estado,
+                    'tarea_modalidad' => $tareaVista?->modalidad?->codigo,
+                    'docs_pedido' => $docsPedido->count(),
+                    'docs_pedido_tipos' => $docsPedido->pluck('tipo')->values()->all(),
+                    'evidencia_condicion' => $docsPedido->where('tipo', 'evidencia_condicion')->count(),
+                    'revisiones_producto' => $revs->count(),
+                    'usa_preparacion_tienda' => (bool) $pedido->getAttribute('usa_preparacion_tienda'),
+                ],
+                'timestamp' => (int) (microtime(true) * 1000),
+            ]).PHP_EOL, FILE_APPEND);
+        }
+        // #endregion
         $pedido->setAttribute('referencia_captura', $this->referenciaCaptura($pedido));
 
         $canc = $pedido->relationLoaded('cancelacionOperativaActiva')

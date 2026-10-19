@@ -121,6 +121,7 @@ class CancelarPedidoBmaService
                 'estatus_envio' => PedidoBma::ESTATUS_ENVIO_COMPLETO,
             ]);
             $pedido->save();
+            app(ResguardosEnvioPedido::class)->liberarVinculosDe($pedido);
 
             $detalle = sprintf(
                 'Pedido cancelado. Motivo: %s. Fase anterior: %s. Pagos registrados: $%s. Resolución financiera: %s.%s',

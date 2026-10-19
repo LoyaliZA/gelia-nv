@@ -33,6 +33,7 @@ Route::prefix('control-pedidos')->name('control_pedidos.')->group(function () {
         Route::post('/', [PedidoBmaController::class, 'store'])->name('store');
         Route::post('/autoguardar', [PedidoBmaController::class, 'autoguardar'])->name('autoguardar');
         Route::get('/candidatos-principal', [PedidoBmaController::class, 'candidatosPrincipal'])->name('candidatos_principal');
+        Route::get('/candidatos-resguardo-envio', [PedidoBmaController::class, 'candidatosResguardoEnvio'])->name('candidatos_resguardo_envio');
         Route::post('/{pedidoBma}/completar-envio-resguardo', [PedidoBmaController::class, 'completarEnvioResguardo'])->name('completar_envio_resguardo');
         Route::post('/{pedidoBma}/cargar-guia-cliente', [PedidoBmaController::class, 'cargarGuiaCliente'])->name('cargar_guia_cliente');
         Route::put('/{pedidoBma}/enviar', [PedidoBmaController::class, 'enviar'])->name('enviar');

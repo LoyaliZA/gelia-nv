@@ -60,7 +60,8 @@ class SolicitarPesajePedidoBmaService
         $pedido->loadMissing(['paqueteria', 'almacen.tipoAlmacen']);
         if (($pedido->origen?->requiere_logistica ?? true)
             && ! $pedido->catalogo_paqueteria_id
-            && ! $pedido->esTrasladoInternoAPdv()) {
+            && ! $pedido->esTrasladoInternoAPdv()
+            && ! $pedido->esResguardoAbierto()) {
             throw new \InvalidArgumentException(
                 'Seleccione la paquetería antes de solicitar la consulta a CEDIS.'
             );

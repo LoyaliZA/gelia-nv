@@ -39,6 +39,7 @@ final class AccionesHistorialPedidoBma
     public const ANEXO_PAGO_ENVIO = 'anexo_pago_envio';
     public const APROBAR_ANEXO = 'aprobar_anexo';
     public const RECHAZAR_ANEXO = 'rechazar_anexo';
+    public const ANEXO_RESGUARDOS = 'anexo_resguardos';
     public const RESGUARDO = 'resguardo';
     public const LIBERAR_RESGUARDO = 'liberar_resguardo';
     public const CAMBIO_DIRECCION = 'cambio_direccion';
@@ -131,6 +132,7 @@ final class AccionesHistorialPedidoBma
         self::ANEXO_PAGO_ENVIO => 'Anexo de pago de envío',
         self::APROBAR_ANEXO => 'Aprobación de anexo',
         self::RECHAZAR_ANEXO => 'Rechazo de anexo',
+        self::ANEXO_RESGUARDOS => 'Resguardos del envío',
         self::RESGUARDO => 'Resguardo / apartado',
         self::LIBERAR_RESGUARDO => 'Liberación de resguardo',
         self::CAMBIO_DIRECCION => 'Cambio de dirección',

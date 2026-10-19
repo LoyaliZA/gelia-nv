@@ -36,7 +36,14 @@ class AnexarPagoEnvioPedidoBmaService
         return DB::transaction(function () use ($pedido, $datos, $comprobante, $usuarioId, $monto) {
             $ruta = $comprobante->store("pedidos_bma/anexos_envio/{$pedido->id}", 'public');
 
+            $tipo = $pedido->esEnvioSoloResguardos()
+                ? PedidoBmaAnexoEnvio::TIPO_SOLO_RESGUARDOS
+                : ($pedido->requiereAnexoPagoEnvioResguardos()
+                    ? PedidoBmaAnexoEnvio::TIPO_ENVIO_ADICIONAL
+                    : PedidoBmaAnexoEnvio::TIPO_DIFERIDO);
+
             $anexo = $pedido->anexosEnvio()->create([
+                'tipo' => $tipo,
                 'monto' => $monto,
                 'catalogo_banco_id' => $datos['catalogo_banco_id'] ?? null,
                 'comentarios' => $datos['comentarios'] ?? null,

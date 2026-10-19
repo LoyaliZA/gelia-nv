@@ -293,6 +293,13 @@ trait ResuelveDatosPedidoBma
             'es_resguardo' => $esResguardoAbierto || $esComplementario
                 ? true
                 : filter_var($datos['es_resguardo'] ?? false, FILTER_VALIDATE_BOOLEAN),
+            'envio_solo_resguardos' => ! $esResguardoAbierto && ! $esComplementario
+                && filter_var($datos['envio_solo_resguardos'] ?? false, FILTER_VALIDATE_BOOLEAN),
+            'notas_resguardos_externos' => ($esResguardoAbierto || $esComplementario)
+                ? null
+                : (trim((string) ($datos['notas_resguardos_externos'] ?? '')) !== ''
+                    ? trim((string) $datos['notas_resguardos_externos'])
+                    : null),
             'cliente_proporciona_guia' => $clienteProporcionaGuia,
             'envio_por_cobrar' => $envioPorCobrar,
             'anexar_remision' => filter_var($datos['anexar_remision'] ?? false, FILTER_VALIDATE_BOOLEAN),
@@ -330,6 +337,8 @@ trait ResuelveDatosPedidoBma
             $attrs['peso_cobrado_guia_kg'] = null;
             $attrs['peso_volumetrico_kg'] = null;
             $attrs['es_resguardo'] = true;
+            $attrs['envio_solo_resguardos'] = false;
+            $attrs['notas_resguardos_externos'] = null;
         }
 
         return $attrs;

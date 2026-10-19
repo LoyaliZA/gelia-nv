@@ -130,6 +130,8 @@ class PedidoBma extends Model
         'domicilio_entrega',
         'envia_otra_persona',
         'es_resguardo',
+        'envio_solo_resguardos',
+        'notas_resguardos_externos',
         'resguardo_apartado_at',
         'resguardo_apartado_por_id',
         'detalle_resguardo_apartado',
@@ -205,6 +207,7 @@ class PedidoBma extends Model
         'cliente_proporciona_guia' => 'boolean',
         'envio_por_cobrar' => 'boolean',
         'es_resguardo' => 'boolean',
+        'envio_solo_resguardos' => 'boolean',
         'resguardo_apartado_at' => 'datetime',
         'anexar_remision' => 'boolean',
         'envia_a_otra_persona' => 'boolean',
@@ -373,6 +376,95 @@ class PedidoBma extends Model
         return $this->pedido_principal_id !== null;
     }
 
+    public function resguardosAnexados(): HasMany
+    {
+        return $this->hasMany(PedidoBmaEnvioResguardo::class, 'pedido_envio_id');
+    }
+
+    public function envioQueLoAnexa(): HasOne
+    {
+        return $this->hasOne(PedidoBmaEnvioResguardo::class, 'pedido_resguardo_id');
+    }
+
+    public function esEnvioSoloResguardos(): bool
+    {
+        return (bool) $this->envio_solo_resguardos && ! $this->es_resguardo;
+    }
+
+    public function tieneResguardosParaEnviar(): bool
+    {
+        if (trim((string) $this->notas_resguardos_externos) !== '') {
+            return true;
+        }
+
+        if ($this->relationLoaded('resguardosAnexados')) {
+            return $this->resguardosAnexados->isNotEmpty();
+        }
+
+        if (! $this->exists) {
+            return false;
+        }
+
+        return $this->resguardosAnexados()->exists();
+    }
+
+    public function declaraVariosEnvios(): bool
+    {
+        if ($this->relationLoaded('cajas')) {
+            $activas = $this->cajas->filter(fn ($caja) => $caja->estaActiva())->count();
+            if ($activas > 1) {
+                return true;
+            }
+        } elseif ($this->exists && $this->cajas()->where(function ($q) {
+            $q->where('estado_operativo', PedidoBmaCaja::ESTADO_ACTIVA)->orWhereNull('estado_operativo');
+        })->count() > 1) {
+            return true;
+        }
+
+        return (int) ($this->numero_cajas ?? 0) > 1;
+    }
+
+    /** Pago de envío sin remisión: solo resguardos, o varios envíos con seguro. */
+    public function requiereAnexoPagoEnvioResguardos(): bool
+    {
+        if ($this->esEnvioSoloResguardos()) {
+            return true;
+        }
+
+        return $this->tieneResguardosParaEnviar()
+            && $this->declaraVariosEnvios()
+            && (bool) $this->aplica_seguro;
+    }
+
+    public function tieneAnexoPagoEnvioRegistrado(): bool
+    {
+        return $this->anexosEnvio()
+            ->whereIn('estatus', [
+                PedidoBmaAnexoEnvio::ESTATUS_PENDIENTE,
+                PedidoBmaAnexoEnvio::ESTATUS_APROBADO,
+            ])
+            ->exists();
+    }
+
+    public function anexoEnvioResguardosAprobado(): bool
+    {
+        $tipos = $this->esEnvioSoloResguardos()
+            ? [PedidoBmaAnexoEnvio::TIPO_SOLO_RESGUARDOS]
+            : [PedidoBmaAnexoEnvio::TIPO_ENVIO_ADICIONAL];
+        if (! $this->relationLoaded('anexosEnvio') && ! $this->exists) {
+            return false;
+        }
+
+        $anexos = $this->relationLoaded('anexosEnvio')
+            ? $this->anexosEnvio
+            : $this->anexosEnvio()->get();
+
+        return $anexos->contains(
+            fn ($anexo) => $anexo->estatus === PedidoBmaAnexoEnvio::ESTATUS_APROBADO
+                && in_array($anexo->tipo, $tipos, true)
+        );
+    }
+
     public function esPrincipalConComplementos(): bool
     {
         if ($this->esComplemento()) {
@@ -459,10 +551,22 @@ class PedidoBma extends Model
 
     public function puedeAnexarPagoEnvio(): bool
     {
-        return in_array($this->estatus_envio, [
+        if (in_array($this->estatus_envio, [
             self::ESTATUS_ENVIO_PENDIENTE_REGULARIZACION,
             self::ESTATUS_ENVIO_ANEXO_RECHAZADO,
-        ], true);
+        ], true)) {
+            return true;
+        }
+
+        if (! $this->requiereAnexoPagoEnvioResguardos() || $this->empacado_at !== null) {
+            return false;
+        }
+
+        if (! $this->tienePesajeRespondido()) {
+            return false;
+        }
+
+        return ! $this->anexoEnvioResguardosAprobado();
     }
 
     public function tieneAnexoEnvioPorRevisar(): bool

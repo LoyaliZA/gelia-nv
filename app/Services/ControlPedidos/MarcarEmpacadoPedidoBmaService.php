@@ -109,8 +109,16 @@ class MarcarEmpacadoPedidoBmaService
             throw new \RuntimeException("El pedido {$pedido->folio} no puede marcarse como empacado.");
         }
 
-        if (!$pedido->tienePagoValidado() || !$pedido->tieneRemision()) {
+        if ($pedido->esEnvioSoloResguardos()) {
+            if (! $pedido->anexoEnvioResguardosAprobado()) {
+                throw new \RuntimeException("El pedido {$pedido->folio} necesita el pago de envío aprobado. No lleva remisión de mercancía.");
+            }
+        } elseif (!$pedido->tienePagoValidado() || !$pedido->tieneRemision()) {
             throw new \RuntimeException("El pedido {$pedido->folio} debe tener pago validado y remisión adjunta.");
+        }
+
+        if ($pedido->requiereAnexoPagoEnvioResguardos() && ! $pedido->esEnvioSoloResguardos() && ! $pedido->anexoEnvioResguardosAprobado()) {
+            throw new \RuntimeException("El pedido {$pedido->folio} tiene varios envíos con seguro. Apruebe el pago de envío adicional antes de empacar.");
         }
 
         if ($pedido->tieneErroresGravesBloqueanEmpaque()) {

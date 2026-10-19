@@ -55,8 +55,10 @@ class EnviarPedidoBmaService
         $pedido->assertSinExistenciaAtendida();
         AssertPedidoNoBloqueadoFase7::assert($pedido);
         $this->validarCamposRequeridos($pedido);
-        $this->pagosService->assertCubiertoParaEnviar($pedido);
-        $this->pagosService->generarExcedenteSiAplica($pedido, $usuarioId);
+        if (! $pedido->esEnvioSoloResguardos()) {
+            $this->pagosService->assertCubiertoParaEnviar($pedido);
+            $this->pagosService->generarExcedenteSiAplica($pedido, $usuarioId);
+        }
 
         if (config('control_pedidos.direcciones_normalizadas')) {
             $pedido->loadMissing(['origen', 'direccionVigente', 'tipoOperacionEnvio']);

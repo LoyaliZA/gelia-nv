@@ -44,7 +44,7 @@ describe('resguardo abierto — envío diferido', () => {
         numero_cajas: 1,
     };
 
-    it('no exige dirección al enviar (sí paquetería)', () => {
+    it('no exige paquetería ni dirección al enviar el apartado', () => {
         const sinPaq = validarCamposEnvioPedido(baseEnvio, {
             requiereLogistica: true,
             direccionesNormalizadas: true,
@@ -55,8 +55,8 @@ describe('resguardo abierto — envío diferido', () => {
             consultaCerrada: true,
             requiereConsultaCerrada: true,
         });
-        expect(sinPaq.valido).toBe(false);
-        expect(sinPaq.claves).toContain('paqueteria');
+        expect(sinPaq.valido).toBe(true);
+        expect(sinPaq.claves).not.toContain('paqueteria');
         expect(sinPaq.claves).not.toContain('domicilio');
 
         const conPaq = validarCamposEnvioPedido({ ...baseEnvio, catalogo_paqueteria_id: 9 }, {
@@ -72,6 +72,38 @@ describe('resguardo abierto — envío diferido', () => {
         expect(conPaq.valido).toBe(true);
         expect(conPaq.claves).not.toContain('domicilio');
         expect(conPaq.claves).not.toContain('codigo_postal');
+    });
+
+    it('el envío solo de resguardos no exige mercancía ni archivo', () => {
+        const out = validarCamposEnvioPedido({
+            cliente_id: 1,
+            origen_id: 2,
+            almacen_id: 3,
+            catalogo_paqueteria_id: 9,
+            catalogo_tipo_guia_id: 1,
+            catalogo_zona_id: 1,
+            codigo_postal: '86000',
+            domicilio_entrega: 'Calle 1',
+            costo_envio: 40,
+            peso_real_kg: 2,
+            catalogo_tipo_caja_id: 1,
+            numero_cajas: 1,
+            resguardo_ids: [10],
+        }, {
+            requiereLogistica: true,
+            esResguardoAbierto: false,
+            tienePesajeRespondido: true,
+            tienePdfPedido: false,
+            pagoPendiente: null,
+            consultaCerrada: true,
+            requiereConsultaCerrada: true,
+            envioSoloResguardos: true,
+            tienePagoEnvioAnexo: true,
+        });
+        expect(out.claves).not.toContain('pdf_pedido');
+        expect(out.claves).not.toContain('total_mercancia');
+        expect(out.claves).not.toContain('pago');
+        expect(out.valido).toBe(true);
     });
 
     it('cotización lista sin paquetería (pago mercancía)', () => {

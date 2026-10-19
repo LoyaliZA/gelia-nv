@@ -5,6 +5,7 @@ import {
     guardarEtapaUi,
 } from './persistenciaFormularioPedido';
 import RespuestaPreparacionTienda from './RespuestaPreparacionTienda';
+import SelectorResguardosEnvio from './SelectorResguardosEnvio';
 import ReabrirApartadoRecoge from './ReabrirApartadoRecoge';
 import usePedidoDialog from './usePedidoDialog';
 import React, { useEffect, useRef, useState } from 'react';
@@ -303,6 +304,11 @@ function formDefaults(pedido = null, tiposOperacion = []) {
         envia_a_otra_persona: pedido?.envia_a_otra_persona || false,
         envia_otra_persona: pedido?.envia_otra_persona || '',
         es_resguardo: pedido?.es_resguardo || false,
+        envio_solo_resguardos: Boolean(pedido?.envio_solo_resguardos),
+        notas_resguardos_externos: pedido?.notas_resguardos_externos || '',
+        resguardo_ids: (pedido?.resguardos_anexados || [])
+            .map((v) => v.pedido_resguardo_id || v.resguardo?.id)
+            .filter(Boolean),
         anexar_remision: Boolean(pedido?.anexar_remision),
         catalogo_zona_id: pedido?.catalogo_zona_id || '',
         comentarios_drive: pedido?.comentarios_drive || '',
@@ -837,6 +843,8 @@ export default function ModalFormPedidoLegado({
         preparacionPesoObligatorio: Boolean(pedido?.preparacion_peso_real_obligatorio),
         preparacionPesoCapturado: Boolean(pedido?.preparacion_peso_capturado),
         trasladoInternoCedisPdv: trasladoInterno,
+        envioSoloResguardos: Boolean(data.envio_solo_resguardos) && !data.es_resguardo,
+        tienePagoEnvioAnexo: (pedido?.anexos_envio || []).some((a) => a.estatus === 'pendiente' || a.estatus === 'aprobado'),
     });
     const enviarPedidoListo = validacionEnvio.valido
         && !(esResguardoComplementario && !data.pedido_principal_id)
@@ -985,6 +993,14 @@ export default function ModalFormPedidoLegado({
         setFaseUi(decision.codigo || FASE_DATOS);
         if (decision.aviso) setAvisoForm({ tipo: 'info', mensaje: decision.aviso });
     }, [modoProgresivo, faseUi, pendientePesaje, tienePesajeRespondido, consultaCerrada, esResguardoComplementario]);
+
+    useEffect(() => {
+        if (!abierto || !pedido) return;
+        if (pedido.estatus_envio !== 'apartado_confirmado' && !esRecogeTienda) return;
+        // #region agent log
+        fetch('http://127.0.0.1:7456/ingest/0314f2b3-9e85-489d-a856-bf4dff6d8e9e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'7b09e7'},body:JSON.stringify({sessionId:'7b09e7',hypothesisId:'A',location:'ModalFormPedidoLegado.jsx:flags',message:'Flags UI pedido recoge/apartado',data:{pedidoId:pedido.id,estatusEnvio:pedido.estatus_envio,fase:pedido?.estatus?.fase_ciclo,faseUi,pesajeRespondidoAt:pedido?.pesaje_respondido_at||null,tienePesajeRespondido,apartadoConfirmado,esRecogeTienda,usaPreparacionTienda,mostrarPesaje,tareaId:tareaPreparacion?.id||null,tareaEstado:tareaPreparacion?.estado||null,respuestaRespondida:Boolean(tareaPreparacion?.respuesta?.respondida),respuestaDocs:(tareaPreparacion?.respuesta?.documentos||[]).length,docsPedido:(pedido?.documentos||[]).length,evidenciaCondicion:(pedido?.documentos||[]).filter((d)=>d.tipo==='evidencia_condicion').length,revisiones:(pedido?.revisiones_producto||pedido?.revisionesProducto||[]).length,faseRespuestaEnTabs:Boolean(pendientePesaje||tienePesajeRespondido||consultaCerrada),muestraBloqueFotosCedis:Boolean(tienePesajeRespondido)},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
+    }, [abierto, pedido?.id, pedido?.estatus_envio, esRecogeTienda, tienePesajeRespondido, apartadoConfirmado, faseUi, mostrarPesaje, pendientePesaje, consultaCerrada, usaPreparacionTienda, tareaPreparacion]);
 
     const estadoPreparacionActual = () => ({
         codigoModalidad: codigoModalidadPreparacion,
@@ -2418,7 +2434,7 @@ export default function ModalFormPedidoLegado({
             setAvisoPesaje({ tipo: 'error', mensaje: `Adjunte el PDF o una foto del pedido antes de solicitar la ${labelConsulta.toLowerCase()}.` });
             return;
         }
-        if (requiereLogistica && !data.catalogo_paqueteria_id) {
+        if (requiereLogistica && !esResguardoAbierto && !data.catalogo_paqueteria_id) {
             setAvisoPesaje({ tipo: 'error', mensaje: 'Seleccione la paquetería antes de solicitar la consulta a CEDIS.' });
             return;
         }
@@ -3077,7 +3093,7 @@ export default function ModalFormPedidoLegado({
                                 </p>
                             </ContenedorDestino>
                             )}
-                            {paqueteriaVisible && (
+                            {paqueteriaVisible && !esResguardoAbierto && (
                                 <div className={wrapCampo('paqueteria')} data-campo="paqueteria">
                                     <label className={SECCION}>Paquetería *</label>
                                     <select
@@ -3244,6 +3260,9 @@ export default function ModalFormPedidoLegado({
                                                 setData({
                                                     ...data,
                                                     es_resguardo: true,
+                                                    envio_solo_resguardos: false,
+                                                    resguardo_ids: [],
+                                                    notas_resguardos_externos: '',
                                                     modo_resguardo: data.modo_resguardo || 'abierto',
                                                     ...(data.modo_resguardo !== 'complementario' ? {
                                                         costo_envio: '',
@@ -3286,7 +3305,7 @@ export default function ModalFormPedidoLegado({
                                         >
                                             <p className="text-sm font-black uppercase theme-text-main m-0">Resguardo abierto</p>
                                             <p className="text-[11px] theme-text-muted font-bold mt-1 m-0">
-                                                Cliente indeciso: peso, cajas y costo bloqueados hasta liberar.
+                                                Apartado: la paquetería, el peso y el costo se capturan en el envío que lo incluye.
                                             </p>
                                         </button>
                                         <button
@@ -3316,7 +3335,7 @@ export default function ModalFormPedidoLegado({
                                         <div className="flex items-start gap-2 p-3 rounded-xl border border-blue-500/40 bg-blue-500/10">
                                             <AlertTriangle className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
                                             <p className="text-xs font-bold text-blue-700 dark:text-blue-400 m-0">
-                                                Envío diferido: dirección y costo se capturan al Completar envío. Capture ya el folio y la paquetería junto al archivo del pedido.
+                                                Apartado sin paquetería. El folio y el archivo identifican la mercancía. La dirección, el peso y el costo se capturan en el pedido que envía este resguardo.
                                             </p>
                                         </div>
                                     )}
@@ -3437,6 +3456,22 @@ export default function ModalFormPedidoLegado({
                             )}
                             </>
                             )}
+                            {requiereLogistica && !data.es_resguardo && !trasladoInterno && (
+                                <SelectorResguardosEnvio
+                                    clienteId={data.cliente_id}
+                                    pedidoId={idPedidoAcciones}
+                                    ids={data.resguardo_ids || []}
+                                    notas={data.notas_resguardos_externos || ''}
+                                    solo={Boolean(data.envio_solo_resguardos)}
+                                    seleccionInicial={(pedido?.resguardos_anexados || []).map((v) => v.resguardo || {
+                                        id: v.pedido_resguardo_id,
+                                        folio: v.resguardo?.folio,
+                                        numero_remision: v.resguardo?.numero_remision,
+                                        folio_remision: v.resguardo?.folio_remision,
+                                    }).filter((p) => p.id)}
+                                    onChange={(parcial) => setData({ ...data, ...parcial })}
+                                />
+                            )}
                         </div>
                     </section>
                     </SeccionClientePedido>
@@ -3457,7 +3492,7 @@ export default function ModalFormPedidoLegado({
                         )}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className={wrapCampo('folio_remision')} data-campo="folio_remision">
-                                <label className={SECCION}>{etiquetaFolio} *</label>
+                                <label className={SECCION}>{etiquetaFolio}{data.envio_solo_resguardos ? '' : ' *'}</label>
                                 <input
                                     type="text"
                                     value={data.folio_remision}
@@ -3704,7 +3739,7 @@ export default function ModalFormPedidoLegado({
                                     <button
                                         type="button"
                                         onClick={solicitarPesaje}
-                                        disabled={procesandoPesaje || processing || !data.cliente_id || !tienePdfPedido || (requiereLogistica && !data.catalogo_paqueteria_id)}
+                                        disabled={procesandoPesaje || processing || !data.cliente_id || !tienePdfPedido || (requiereLogistica && !esResguardoAbierto && !data.catalogo_paqueteria_id)}
                                         className={`${BTN_PRIMARY} flex items-center gap-2 outline-none`}
                                     >
                                         <Scale className="w-4 h-4" /> Solicitar {labelConsulta.toLowerCase()} a CEDIS
@@ -3717,7 +3752,7 @@ export default function ModalFormPedidoLegado({
                             {data.cliente_id && !tienePdfPedido && !tienePesajeRespondido && !pendientePesaje && (
                                 <p className="text-[10px] font-bold text-amber-600 m-0">Adjunte el PDF o foto del pedido para solicitar la consulta.</p>
                             )}
-                            {requiereLogistica && !enFlujoTienda && data.cliente_id && !data.catalogo_paqueteria_id && !tienePesajeRespondido && !pendientePesaje && (
+                            {requiereLogistica && !esResguardoAbierto && !enFlujoTienda && data.cliente_id && !data.catalogo_paqueteria_id && !tienePesajeRespondido && !pendientePesaje && (
                                 <p className="text-[10px] font-bold text-amber-600 m-0">Seleccione la paquetería antes de solicitar la consulta.</p>
                             )}
                             {enFlujoTienda && !esRecogeTienda && !usaPreparacionTienda && !codigoModalidadPreparacion && !tienePesajeRespondido && !pendientePesaje && (

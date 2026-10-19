@@ -27,6 +27,8 @@ class LiberarResguardoPedidoBmaService
             throw new \InvalidArgumentException('Este pedido no está en resguardo.');
         }
 
+        app(ResguardosEnvioPedido::class)->assertNoSalePorSuCuenta($pedido);
+
         $fase = $pedido->estatus?->fase_ciclo;
         $enPendienteAuxiliar = $fase === CatalogoEstatusPedido::FASE_PENDIENTE_AUXILIAR;
         $enCedisConResguardo = $fase === CatalogoEstatusPedido::FASE_EN_CEDIS;

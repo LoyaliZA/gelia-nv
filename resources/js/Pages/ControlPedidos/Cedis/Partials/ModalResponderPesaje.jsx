@@ -1307,6 +1307,24 @@ export default function ModalResponderPesaje({
                                 <p className="text-xs theme-text-muted m-0 mt-1">
                                     {pedido.cliente?.nombre || '—'} · {formatearFechaNegocio(pedido.fecha)}
                                 </p>
+                                {(pedido.resguardos_anexados?.length > 0 || pedido.notas_resguardos_externos) && (
+                                    <div className="mt-2 rounded-xl border theme-border p-2">
+                                        <p className="text-[11px] font-bold theme-text-main m-0">Incluya estos resguardos en el peso y en las cajas</p>
+                                        {pedido.resguardos_anexados?.length > 0 && (
+                                            <ul className="m-0 mt-1 pl-4 text-xs theme-text-main">
+                                                {pedido.resguardos_anexados.map((v) => (
+                                                    <li key={v.id}>
+                                                        {v.resguardo?.folio || `Pedido ${v.pedido_resguardo_id}`}
+                                                        {v.resguardo?.numero_remision ? ` · Remisión ${v.resguardo.numero_remision}` : ''}
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        )}
+                                        {pedido.notas_resguardos_externos && (
+                                            <p className="text-xs theme-text-muted m-0 mt-1">{pedido.notas_resguardos_externos}</p>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                             <button type="button" disabled={procesando} onClick={pedirCerrar} className="p-2 min-h-[44px] min-w-[44px] rounded-xl theme-element border theme-border outline-none shrink-0 inline-flex items-center justify-center theme-text-main" aria-label="Cerrar">
                                 <X className="w-4 h-4" />
