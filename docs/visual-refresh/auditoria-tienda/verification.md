@@ -13,3 +13,7 @@
 | Ancho 390 px | Emulación del mismo diálogo | Los datos del cliente se apilan y el total permanece visible. |
 
 No se validó un pago, no se aprobó el pedido y no se guardó un número ni un PDF reales. Los pedidos con logística conservan la revisión amplia porque la ficha solo aplica cuando el origen no requiere logística y el pedido no es recoge en tienda.
+
+## Corrección del panel lateral
+
+Al abrir «Resto del pedido» la ficha pasaba al escritorio de dos columnas y la cobertura quedaba a la izquierda, sin el control de ocultar a la vista. Ahora el pedido de tienda permanece en una columna de 48 rem. El resto se despliega debajo y «Ocultar el resto del pedido» lo vuelve a guardar. Comprobado en el pedido 3425235: el diálogo mide 768 px en una ventana de 1607 px y la cobertura queda en la misma columna que los datos.

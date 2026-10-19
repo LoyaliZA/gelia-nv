@@ -174,7 +174,6 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
     const pagoValidado = Boolean(pedido.pago_validado_at);
     const recogeTienda = Boolean(pedido.es_recoge_tienda_apartado);
     const fichaTienda = !pedidoRequiereLogistica(pedido) && !recogeTienda;
-    const fichaCompacta = fichaTienda && !masInformacion;
     const puedeAprobar = esPendiente && pagoValidado && Boolean(remision)
         && can('control_pedidos.auditar.aprobar') && !recogeTienda;
     const muestraAprobar = esPendiente && can('control_pedidos.auditar.aprobar') && !recogeTienda;
@@ -450,7 +449,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                 <div
                     {...dialog}
                     aria-labelledby="auditoria-revision-titulo"
-                    className={`${THEME_MODAL_SHELL} gelia-pedidos-dialog-workspace gelia-pedidos-auditoria ${fichaCompacta ? 'max-w-3xl' : 'max-w-6xl'} w-full flex flex-col`}
+                    className={`${THEME_MODAL_SHELL} gelia-pedidos-dialog-workspace gelia-pedidos-auditoria ${fichaTienda ? 'max-w-3xl' : 'max-w-6xl'} w-full flex flex-col`}
                     style={{ maxHeight: 'calc(100dvh - 2rem)' }}
                     onClick={(e) => e.stopPropagation()}
                 >
@@ -500,8 +499,8 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                         } : null}
                         secciones={fichaTienda ? [
                         { id: 'auditoria-ficha', label: 'Datos' },
-                        { id: 'auditoria-pagos', label: 'Comprobantes' },
-                        { id: 'auditoria-remision', label: 'Remisión' },
+                        { id: 'auditoria-pagos', label: 'Comprobante' },
+                        { id: 'auditoria-remision', label: 'Archivo' },
                         { id: 'auditoria-mas', label: 'Resto del pedido' },
                     ] : [
                         { id: 'auditoria-pagos', label: 'Comprobantes' },
@@ -513,8 +512,8 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                         (anexoPendiente || puedeAnexar || (pedido.anexos_envio || []).length > 0) && { id: 'auditoria-anexo', label: 'Anexo de envío' },
                     ]} />
                     <div className="gelia-modal-body p-4 md:p-5">
-                        <div className={fichaCompacta ? 'space-y-4' : 'gelia-pedidos-auditoria-grid'}>
-                            <aside className={`gelia-pedidos-auditoria-panel gelia-pedidos-auditoria-cobertura space-y-4 ${fichaCompacta ? 'hidden' : ''}`} aria-label="Cobertura y pedido compartido">
+                        <div className={fichaTienda ? 'flex min-h-0 flex-1 flex-col' : 'gelia-pedidos-auditoria-grid'}>
+                            {!fichaTienda && <aside className="gelia-pedidos-auditoria-panel gelia-pedidos-auditoria-cobertura space-y-4" aria-label="Cobertura y pedido compartido">
                                 <section id="auditoria-cobertura" tabIndex={-1} className={SECCION_WRAP}>
                                     <h3 className="gelia-pedidos-seccion-titulo">Cobertura</h3>
                                     <ResumenCoberturaPedido
@@ -525,8 +524,8 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                     />
                                 </section>
                                 <ReferenciaPedidoCompartido id="auditoria-compartido" descripcion="Consulta el pedido compartido para contrastar importes, piezas y remisión." pedido={pedido} onVerGaleria={(documentos, indice) => setDocPreview({ documentos, indice })} />
-                            </aside>
-                            <div className="gelia-pedidos-auditoria-panel min-w-0 space-y-4">
+                            </aside>}
+                            <div className={`gelia-pedidos-auditoria-panel min-w-0 space-y-4 ${fichaTienda ? 'min-h-0 flex-1 overflow-y-auto' : ''}`}>
                                 {alerta.abierto && (
                                     <div role={alerta.tipo === 'error' ? 'alert' : 'status'} className={`flex items-start gap-3 p-3 rounded-xl border theme-border theme-element text-sm ${alerta.tipo === 'error' ? 'theme-text-peligro' : 'theme-text-exito'}`}>
                                         <p className="m-0 flex-1">{alerta.mensaje}</p>
@@ -546,16 +545,12 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                             {Number(pedido.saldo_a_favor) > 0 && <Campo label="Saldo a favor" value={formatearMoneda(pedido.saldo_a_favor)} />}
                                         </dl>
                                         {pedido.comentarios_drive && <Campo label="Comentarios" value={pedido.comentarios_drive} />}
-                                        <p className="flex justify-between gap-4 items-baseline m-0 pt-3 border-t theme-border font-semibold">
-                                            <span>Total de la compra</span>
-                                            <strong className="text-xl tabular-nums">{formatearMoneda(pedido.total_mercancia)}</strong>
-                                        </p>
                                     </section>
                                 )}
                                 <p className="text-xs theme-text-muted m-0">{indicacionRevisionPedido({ reRevision, esRechazado, pagoValidado, badgeRemision })}</p>
                                 <AvisosRevisionPedido pedido={pedido} badgeRemision={badgeRemision} esRechazado={esRechazado} procesando={procesando} can={can} onResolverSaf={resolverSaf} />
                                 <section id="auditoria-pagos" tabIndex={-1} className={SECCION_WRAP}>
-                                    <h3 className="gelia-pedidos-seccion-titulo">Exhibiciones de pago</h3>
+                                    <h3 className="gelia-pedidos-seccion-titulo">{fichaTienda ? 'Comprobante y validación' : 'Exhibiciones de pago'}</h3>
                                     {(pedido.saf_aplicaciones || []).filter((a) => a.estado !== 'liberado').length > 0 && (
                                         <div className="mb-4 space-y-2">
                                             <p className="text-xs font-bold theme-text-muted uppercase m-0">Saldos a favor aplicados/reservados</p>
@@ -607,7 +602,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                                 disabled={procesando || pagoValidado}
                                                 className={`${BTN_SECONDARY} border border-red-500/40 text-red-500 outline-none disabled:opacity-50`}
                                             >
-                                                Rechazar pago
+                                                {fichaTienda ? 'Rechazado' : 'Rechazar pago'}
                                             </button>
                                             <button
                                                 type="button"
@@ -617,7 +612,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                                 className={`${BTN_PRIMARY} flex items-center gap-2 outline-none disabled:opacity-50`}
                                             >
                                                 {procesando ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-                                                {pagoValidado ? 'Pago validado' : procesando ? 'Validando pago…' : 'Validar pago'}
+                                                {pagoValidado ? 'Pagado y validado' : procesando ? 'Validando pago…' : (fichaTienda ? 'Pagado y validado' : 'Validar pago')}
                                             </button>
                                             {bloqueosPago.length > 0 && !pagoValidado && (
                                                 <p className="w-full text-xs font-bold text-amber-600 m-0">{bloqueosPago[0]}</p>
@@ -625,8 +620,14 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                         </div>
                                     )}
                                 </section>
+                                {fichaTienda && (
+                                    <p className="flex justify-between gap-4 items-baseline m-0 px-4 py-3 border theme-border rounded-xl font-semibold">
+                                        <span>Total de la compra</span>
+                                        <strong className="text-xl tabular-nums">{formatearMoneda(pedido.total_mercancia)}</strong>
+                                    </p>
+                                )}
                                 <section id="auditoria-remision" tabIndex={-1} className={SECCION_WRAP}>
-                                    <h3 className="gelia-pedidos-seccion-titulo">Remisión</h3>
+                                    <h3 className="gelia-pedidos-seccion-titulo">{fichaTienda ? 'Archivo de tienda' : 'Remisión'}</h3>
                                     {esPendiente && !recogeTienda && (
                                         <div className="mb-4">
                                             <label htmlFor="auditoria-numero-remision" className="text-xs theme-text-muted">Número de remisión</label>
@@ -685,7 +686,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                     ) : esPendiente ? (
                                         <label className="flex flex-col items-center justify-center gap-2 p-8 border-2 border-dashed theme-border rounded-xl cursor-pointer theme-element hover:border-[var(--color-primario)]">
                                             <Upload className="w-8 h-8 theme-text-muted" />
-                                            <span className="text-xs font-black uppercase theme-text-main">Adjuntar remisión PDF</span>
+                                            <span className="text-xs font-black uppercase theme-text-main">{fichaTienda ? 'Seleccionar archivo de remisión' : 'Adjuntar remisión PDF'}</span>
                                             <span className="text-[10px] theme-text-muted">Solo archivos .pdf</span>
                                             <input
                                                 type="file"
@@ -698,21 +699,33 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                         <p className="text-xs theme-text-muted font-bold italic">Sin remisión adjunta</p>
                                     )}
                                 </section>
-                                {fichaTienda && (
-                                    <details
-                                        id="auditoria-mas"
-                                        tabIndex={-1}
-                                        open={masInformacion}
-                                        className="border theme-border rounded-xl"
-                                        onToggle={(event) => setMasInformacion(event.currentTarget.open)}
-                                    >
-                                        <summary className="min-h-11 px-4 py-3 text-sm font-semibold theme-text-main cursor-pointer">
+                                <div className={fichaTienda ? 'border theme-border rounded-xl' : undefined}>
+                                    {fichaTienda && (
+                                        <button
+                                            id="auditoria-mas"
+                                            type="button"
+                                            aria-expanded={masInformacion}
+                                            onClick={() => setMasInformacion((abierto) => !abierto)}
+                                            className="sticky top-0 z-10 min-h-11 w-full px-4 py-3 text-left text-sm font-semibold theme-text-main theme-surface cursor-pointer outline-none"
+                                        >
                                             {masInformacion ? 'Ocultar el resto del pedido' : 'Ver el resto del pedido'}
-                                        </summary>
-                                        <p className="px-4 pb-3 m-0 text-xs theme-text-muted">Cobertura, envío, datos generales y pedido compartido siguen disponibles.</p>
-                                    </details>
-                                )}
-                                {!fichaCompacta && (<>
+                                        </button>
+                                    )}
+                                    {fichaTienda && masInformacion && (
+                                        <div className="space-y-4 px-4 pb-4">
+                                            <section id="auditoria-cobertura" tabIndex={-1} className={SECCION_WRAP}>
+                                                <h3 className="gelia-pedidos-seccion-titulo">Cobertura</h3>
+                                                <ResumenCoberturaPedido
+                                                    resumen={resumenCobertura}
+                                                    bloqueos={bloqueosPago}
+                                                    pedido={pedido}
+                                                    zonas={catalogos?.zonas || []}
+                                                />
+                                            </section>
+                                            <ReferenciaPedidoCompartido id="auditoria-compartido" descripcion="Consulta el pedido compartido para contrastar importes, piezas y remisión." pedido={pedido} onVerGaleria={(documentos, indice) => setDocPreview({ documentos, indice })} />
+                                        </div>
+                                    )}
+                                {(!fichaTienda || masInformacion) && (<>
                                 <section id="auditoria-envios" tabIndex={-1} className={SECCION_WRAP}>
                                     <h3 className="gelia-pedidos-seccion-titulo">Envío y costos</h3>
                                     <div className="grid grid-cols-2 gap-4 mb-3">
@@ -867,6 +880,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                     </section>
                                 )}
                                 </>)}
+                                </div>
                             </div>
                         </div>
                     </div>
