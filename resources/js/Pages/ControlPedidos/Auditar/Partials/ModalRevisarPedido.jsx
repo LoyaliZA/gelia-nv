@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { router, usePage } from '@inertiajs/react';
 import axios from 'axios';
 import {
-    X, CheckCircle2, FileText, Upload, Trash2, Loader2,
+    X, CheckCircle2, FileText, Upload, Trash2, Loader2, ChevronDown,
 } from 'lucide-react';
 import {
     badgeAuditoriaSemantico,
@@ -443,6 +443,166 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
 
     const cfgConfirm = confirmacion ? confirmaciones[confirmacion.accion] : null;
 
+    function bloquesOperativos() {
+        return (
+            <>
+                                <section id="auditoria-envios" tabIndex={-1} className={SECCION_WRAP}>
+                                    <h3 className="gelia-pedidos-seccion-titulo">Envío y costos</h3>
+                                    <div className="grid grid-cols-2 gap-4 mb-3">
+                                        <Campo label="Tipo operación" value={pedido.tipo_operacion_envio?.nombre} />
+                                        <Campo label="Estatus envío" value={etiquetaEstatusEnvio(pedido.estatus_envio, { respondeTienda: Boolean(pedido.usa_preparacion_tienda) }) || pedido.estatus_envio} />
+                                    </div>
+                                    {badgeEnvio && (
+                                        <span className={`${badgeEnvio.className} mb-3 inline-flex`} style={badgeEnvio.style}>{badgeEnvio.label}</span>
+                                    )}
+                                    {badgeComp && (
+                                        <span className={`${badgeComp.className} mb-3 ml-2 inline-flex`} style={badgeComp.style}>{badgeComp.label}</span>
+                                    )}
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <Campo label="Paquetería" value={pedido.paqueteria?.nombre} />
+                                        <Campo label="Origen de la guía" value={etiquetaOrigenGuia(pedido)} />
+                                        <Campo label="Reexpedición" value={pedido.zona?.nombre} />
+                                        <Campo label={pedido.usa_preparacion_tienda ? 'Respuesta de Tienda' : 'Pesaje CEDIS'} value={pedido.pesaje_respondido_at ? 'Respondido' : (pedido.estatus_envio === 'pendiente_pesaje' ? 'Pendiente' : '—')} />
+                                    </div>
+                                    {tienePesajeRespondido && (
+                                        <div className="mt-4 space-y-3">
+                                            <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0">
+                                                Respuesta de cajas y pesos
+                                            </p>
+                                            {(pedido.pesaje_respondido_por?.name || pedido.pesajeRespondidoPor?.name) && (
+                                                <p className="text-xs font-bold theme-text-main m-0">
+                                                    Respondió: {pedido.pesaje_respondido_por?.name || pedido.pesajeRespondidoPor?.name}
+                                                    {pedido.pesaje_respondido_at
+                                                        ? ` · ${formatearFechaNegocio(pedido.pesaje_respondido_at)}`
+                                                        : ''}
+                                                </p>
+                                            )}
+                                            {cajasActivas.length > 0 && (
+                                                <div className="space-y-3">
+                                                    <div className="flex items-center justify-between gap-2">
+                                                        <p className="text-[9px] font-black uppercase theme-text-muted m-0">Envíos (pesaje)</p>
+                                                        {detalleCajasUi && (
+                                                            <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${chipFuenteEnvio.ok ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' : desgloseRequerido ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300' : 'bg-slate-500/15 theme-text-muted'}`}>
+                                                                {chipFuenteEnvio.label}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    {desgloseIncompleto && desgloseRequerido && (
+                                                        <p className="text-xs font-bold text-amber-700 dark:text-amber-300 m-0">
+                                                            Ventas debe capturar el costo de envío por caja.
+                                                        </p>
+                                                    )}
+                                                    {!desgloseRequerido && !fuenteEnvioDetalle && (
+                                                        <p className="text-[10px] font-bold theme-text-muted m-0">
+                                                            Costos de envío registrados en la cotización.
+                                                        </p>
+                                                    )}
+                                                    {[...cajasActivas].sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)).map((c, idx) => {
+                                                        const cajaSinCosto = c.costo_envio === null || c.costo_envio === '' || c.costo_envio === undefined;
+                                                        const incompletoCaja = desgloseRequerido && cajaSinCosto;
+                                                        const mostrarCostosCaja = desgloseRequerido || fuenteEnvioDetalle || !cajaSinCosto;
+                                                        return (
+                                                        <TarjetaEnvioPedido
+                                                            key={c.uuid_operativo || c.id || idx}
+                                                            caja={c}
+                                                            indice={idx}
+                                                            abiertoInicial={cajasActivas.length === 1}
+                                                            modo="lectura"
+                                                            incompleto={incompletoCaja}
+                                                            mostrarCostos={mostrarCostosCaja}
+                                                            documentos={[]}
+                                                        />
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                    <TotalesEnviosAuditoria pedido={pedido} cajasActivas={cajasActivas} />
+                                    {(pedido.documentos || []).some((d) => d.tipo === 'pdf_pedido' || d.tipo === 'cotizacion') && (
+                                        <div className="mt-3">
+                                            <button
+                                                type="button"
+                                                onClick={() => setDocPreview((pedido.documentos || []).find((d) => d.tipo === 'pdf_pedido') || (pedido.documentos || []).find((d) => d.tipo === 'cotizacion'))}
+                                                className={`${BTN_SECONDARY} text-xs outline-none`}
+                                            >
+                                                Ver PDF del pedido
+                                            </button>
+                                        </div>
+                                    )}
+                                    <SeccionGuiaRastreo pedido={pedido} onVerPdf={setDocPreview} compact />
+                                </section>
+                                <section id="auditoria-datos" tabIndex={-1} className={SECCION_WRAP}>
+                                    <h3 className="gelia-pedidos-seccion-titulo">Datos generales</h3>
+                                    <DatosGeneralesAuditoria pedido={pedido} />
+                                </section>
+                                {(anexoPendiente || puedeAnexar || (pedido.anexos_envio || []).length > 0) && (
+                                <section id="auditoria-anexo" tabIndex={-1} className={SECCION_WRAP}>
+                                        <h3 className="gelia-pedidos-seccion-titulo">Anexo de pago de envío</h3>
+                                        {anexoPendiente ? (
+                                            <div className="space-y-3">
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <Campo label="Monto" value={formatearMoneda(anexoPendiente.monto)} />
+                                                    <Campo label="Banco" value={anexoPendiente.banco?.nombre} />
+                                                    <Campo label="Registrado por" value={anexoPendiente.registrado_por?.name} />
+                                                    <Campo label="Fecha" value={formatearFechaHoraAuditoria(anexoPendiente.created_at)} />
+                                                </div>
+                                                {anexoPendiente.comentarios && (
+                                                    <Campo label="Comentarios" value={anexoPendiente.comentarios} />
+                                                )}
+                                                <MiniaturaDocumento
+                                                    documento={{
+                                                        ...anexoPendiente,
+                                                        tipo: 'comprobante',
+                                                        nombre_original: anexoPendiente.nombre_original || 'Comprobante envío',
+                                                    }}
+                                                    onVer={setDocPreview}
+                                                />
+                                                {puedeRevisarAnexo && (
+                                                    <div className="flex flex-wrap gap-2 pt-2">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setConfirmacion({ accion: 'aprobar_anexo' })}
+                                                            disabled={procesando}
+                                                            className={`${BTN_PRIMARY} outline-none`}
+                                                        >
+                                                            Aprobar anexo
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setMotivoAnexoAbierto(true)}
+                                                            disabled={procesando}
+                                                            className={`${BTN_SECONDARY} border border-red-500/40 text-red-500 outline-none`}
+                                                        >
+                                                            Rechazar anexo
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <p className="text-xs theme-text-muted font-bold italic m-0">
+                                                {puedeAnexar
+                                                    ? 'Sin anexo pendiente. Use la acción Anexar pago de envío desde el listado.'
+                                                    : 'Sin anexo de envío pendiente.'}
+                                            </p>
+                                        )}
+                                        {(pedido.anexos_envio || []).filter((a) => a.estatus !== 'pendiente').length > 0 && (
+                                            <div className="mt-4 space-y-2">
+                                                <p className="text-[9px] font-black uppercase theme-text-muted m-0">Historial de anexos</p>
+                                                {(pedido.anexos_envio || []).filter((a) => a.estatus !== 'pendiente').map((a) => (
+                                                    <p key={a.id} className="text-xs font-bold theme-text-muted m-0">
+                                                        {a.estatus} · {formatearMoneda(a.monto)} · {formatearFechaHoraAuditoria(a.created_at)}
+                                                        {a.motivo_rechazo ? ` · ${a.motivo_rechazo}` : ''}
+                                                    </p>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </section>
+                                )}
+            </>
+        );
+    }
+
     return createPortal(
         <>
             <div className={`${THEME_MODAL_OVERLAY} items-start sm:items-center py-4 sm:py-6`} onClick={cerrar}>
@@ -699,20 +859,23 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                         <p className="text-xs theme-text-muted font-bold italic">Sin remisión adjunta</p>
                                     )}
                                 </section>
-                                <div className={fichaTienda ? 'border theme-border rounded-xl' : undefined}>
-                                    {fichaTienda && (
-                                        <button
-                                            id="auditoria-mas"
-                                            type="button"
-                                            aria-expanded={masInformacion}
-                                            onClick={() => setMasInformacion((abierto) => !abierto)}
-                                            className="sticky top-0 z-10 min-h-11 w-full px-4 py-3 text-left text-sm font-semibold theme-text-main theme-surface cursor-pointer outline-none"
-                                        >
-                                            {masInformacion ? 'Ocultar el resto del pedido' : 'Ver el resto del pedido'}
-                                        </button>
-                                    )}
-                                    {fichaTienda && masInformacion && (
-                                        <div className="space-y-4 px-4 pb-4">
+                                {fichaTienda ? (
+                                <details
+                                    id="auditoria-mas"
+                                    tabIndex={-1}
+                                    className="rounded-xl border theme-border"
+                                    open={masInformacion}
+                                    onToggle={(event) => setMasInformacion(event.currentTarget.open)}
+                                >
+                                    <summary className="flex items-center justify-between gap-3 px-4 py-3 cursor-pointer list-none theme-element [&::-webkit-details-marker]:hidden">
+                                        <span className="min-w-0">
+                                            <span className="block text-sm font-semibold theme-text-main">Resto del pedido</span>
+                                            <span className="mt-0.5 block text-xs font-medium theme-text-muted">{masInformacion ? 'Ocultar' : 'Mostrar'}</span>
+                                        </span>
+                                        <ChevronDown className={`w-4 h-4 shrink-0 theme-text-muted transition-transform ${masInformacion ? 'rotate-180' : ''}`} aria-hidden="true" />
+                                    </summary>
+                                    {masInformacion && (
+                                    <div className="space-y-4 border-t theme-border px-4 py-4">
                                             <section id="auditoria-cobertura" tabIndex={-1} className={SECCION_WRAP}>
                                                 <h3 className="gelia-pedidos-seccion-titulo">Cobertura</h3>
                                                 <ResumenCoberturaPedido
@@ -723,164 +886,11 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                                 />
                                             </section>
                                             <ReferenciaPedidoCompartido id="auditoria-compartido" descripcion="Consulta el pedido compartido para contrastar importes, piezas y remisión." pedido={pedido} onVerGaleria={(documentos, indice) => setDocPreview({ documentos, indice })} />
-                                        </div>
-                                    )}
-                                {(!fichaTienda || masInformacion) && (<>
-                                <section id="auditoria-envios" tabIndex={-1} className={SECCION_WRAP}>
-                                    <h3 className="gelia-pedidos-seccion-titulo">Envío y costos</h3>
-                                    <div className="grid grid-cols-2 gap-4 mb-3">
-                                        <Campo label="Tipo operación" value={pedido.tipo_operacion_envio?.nombre} />
-                                        <Campo label="Estatus envío" value={etiquetaEstatusEnvio(pedido.estatus_envio, { respondeTienda: Boolean(pedido.usa_preparacion_tienda) }) || pedido.estatus_envio} />
+                                            {bloquesOperativos()}
                                     </div>
-                                    {badgeEnvio && (
-                                        <span className={`${badgeEnvio.className} mb-3 inline-flex`} style={badgeEnvio.style}>{badgeEnvio.label}</span>
                                     )}
-                                    {badgeComp && (
-                                        <span className={`${badgeComp.className} mb-3 ml-2 inline-flex`} style={badgeComp.style}>{badgeComp.label}</span>
-                                    )}
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <Campo label="Paquetería" value={pedido.paqueteria?.nombre} />
-                                        <Campo label="Origen de la guía" value={etiquetaOrigenGuia(pedido)} />
-                                        <Campo label="Reexpedición" value={pedido.zona?.nombre} />
-                                        <Campo label={pedido.usa_preparacion_tienda ? 'Respuesta de Tienda' : 'Pesaje CEDIS'} value={pedido.pesaje_respondido_at ? 'Respondido' : (pedido.estatus_envio === 'pendiente_pesaje' ? 'Pendiente' : '—')} />
-                                    </div>
-                                    {tienePesajeRespondido && (
-                                        <div className="mt-4 space-y-3">
-                                            <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0">
-                                                Respuesta de cajas y pesos
-                                            </p>
-                                            {(pedido.pesaje_respondido_por?.name || pedido.pesajeRespondidoPor?.name) && (
-                                                <p className="text-xs font-bold theme-text-main m-0">
-                                                    Respondió: {pedido.pesaje_respondido_por?.name || pedido.pesajeRespondidoPor?.name}
-                                                    {pedido.pesaje_respondido_at
-                                                        ? ` · ${formatearFechaNegocio(pedido.pesaje_respondido_at)}`
-                                                        : ''}
-                                                </p>
-                                            )}
-                                            {cajasActivas.length > 0 && (
-                                                <div className="space-y-3">
-                                                    <div className="flex items-center justify-between gap-2">
-                                                        <p className="text-[9px] font-black uppercase theme-text-muted m-0">Envíos (pesaje)</p>
-                                                        {detalleCajasUi && (
-                                                            <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${chipFuenteEnvio.ok ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' : desgloseRequerido ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300' : 'bg-slate-500/15 theme-text-muted'}`}>
-                                                                {chipFuenteEnvio.label}
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                    {desgloseIncompleto && desgloseRequerido && (
-                                                        <p className="text-xs font-bold text-amber-700 dark:text-amber-300 m-0">
-                                                            Ventas debe capturar el costo de envío por caja.
-                                                        </p>
-                                                    )}
-                                                    {!desgloseRequerido && !fuenteEnvioDetalle && (
-                                                        <p className="text-[10px] font-bold theme-text-muted m-0">
-                                                            Costos de envío registrados en la cotización.
-                                                        </p>
-                                                    )}
-                                                    {[...cajasActivas].sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)).map((c, idx) => {
-                                                        const cajaSinCosto = c.costo_envio === null || c.costo_envio === '' || c.costo_envio === undefined;
-                                                        const incompletoCaja = desgloseRequerido && cajaSinCosto;
-                                                        const mostrarCostosCaja = desgloseRequerido || fuenteEnvioDetalle || !cajaSinCosto;
-                                                        return (
-                                                        <TarjetaEnvioPedido
-                                                            key={c.uuid_operativo || c.id || idx}
-                                                            caja={c}
-                                                            indice={idx}
-                                                            abiertoInicial={cajasActivas.length === 1}
-                                                            modo="lectura"
-                                                            incompleto={incompletoCaja}
-                                                            mostrarCostos={mostrarCostosCaja}
-                                                            documentos={[]}
-                                                        />
-                                                        );
-                                                    })}
-                                                </div>
-                                            )}
-                                        </div>
-                                    )}
-                                    <TotalesEnviosAuditoria pedido={pedido} cajasActivas={cajasActivas} />
-                                    {(pedido.documentos || []).some((d) => d.tipo === 'pdf_pedido' || d.tipo === 'cotizacion') && (
-                                        <div className="mt-3">
-                                            <button
-                                                type="button"
-                                                onClick={() => setDocPreview((pedido.documentos || []).find((d) => d.tipo === 'pdf_pedido') || (pedido.documentos || []).find((d) => d.tipo === 'cotizacion'))}
-                                                className={`${BTN_SECONDARY} text-xs outline-none`}
-                                            >
-                                                Ver PDF del pedido
-                                            </button>
-                                        </div>
-                                    )}
-                                    <SeccionGuiaRastreo pedido={pedido} onVerPdf={setDocPreview} compact />
-                                </section>
-                                <section id="auditoria-datos" tabIndex={-1} className={SECCION_WRAP}>
-                                    <h3 className="gelia-pedidos-seccion-titulo">Datos generales</h3>
-                                    <DatosGeneralesAuditoria pedido={pedido} />
-                                </section>
-                                {(anexoPendiente || puedeAnexar || (pedido.anexos_envio || []).length > 0) && (
-                                <section id="auditoria-anexo" tabIndex={-1} className={SECCION_WRAP}>
-                                        <h3 className="gelia-pedidos-seccion-titulo">Anexo de pago de envío</h3>
-                                        {anexoPendiente ? (
-                                            <div className="space-y-3">
-                                                <div className="grid grid-cols-2 gap-4">
-                                                    <Campo label="Monto" value={formatearMoneda(anexoPendiente.monto)} />
-                                                    <Campo label="Banco" value={anexoPendiente.banco?.nombre} />
-                                                    <Campo label="Registrado por" value={anexoPendiente.registrado_por?.name} />
-                                                    <Campo label="Fecha" value={formatearFechaHoraAuditoria(anexoPendiente.created_at)} />
-                                                </div>
-                                                {anexoPendiente.comentarios && (
-                                                    <Campo label="Comentarios" value={anexoPendiente.comentarios} />
-                                                )}
-                                                <MiniaturaDocumento
-                                                    documento={{
-                                                        ...anexoPendiente,
-                                                        tipo: 'comprobante',
-                                                        nombre_original: anexoPendiente.nombre_original || 'Comprobante envío',
-                                                    }}
-                                                    onVer={setDocPreview}
-                                                />
-                                                {puedeRevisarAnexo && (
-                                                    <div className="flex flex-wrap gap-2 pt-2">
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => setConfirmacion({ accion: 'aprobar_anexo' })}
-                                                            disabled={procesando}
-                                                            className={`${BTN_PRIMARY} outline-none`}
-                                                        >
-                                                            Aprobar anexo
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => setMotivoAnexoAbierto(true)}
-                                                            disabled={procesando}
-                                                            className={`${BTN_SECONDARY} border border-red-500/40 text-red-500 outline-none`}
-                                                        >
-                                                            Rechazar anexo
-                                                        </button>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        ) : (
-                                            <p className="text-xs theme-text-muted font-bold italic m-0">
-                                                {puedeAnexar
-                                                    ? 'Sin anexo pendiente. Use la acción Anexar pago de envío desde el listado.'
-                                                    : 'Sin anexo de envío pendiente.'}
-                                            </p>
-                                        )}
-                                        {(pedido.anexos_envio || []).filter((a) => a.estatus !== 'pendiente').length > 0 && (
-                                            <div className="mt-4 space-y-2">
-                                                <p className="text-[9px] font-black uppercase theme-text-muted m-0">Historial de anexos</p>
-                                                {(pedido.anexos_envio || []).filter((a) => a.estatus !== 'pendiente').map((a) => (
-                                                    <p key={a.id} className="text-xs font-bold theme-text-muted m-0">
-                                                        {a.estatus} · {formatearMoneda(a.monto)} · {formatearFechaHoraAuditoria(a.created_at)}
-                                                        {a.motivo_rechazo ? ` · ${a.motivo_rechazo}` : ''}
-                                                    </p>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </section>
-                                )}
-                                </>)}
-                                </div>
+                                </details>
+                                ) : bloquesOperativos()}
                             </div>
                         </div>
                     </div>
