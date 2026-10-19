@@ -127,6 +127,16 @@ class Producto extends Model
         return ltrim(trim($sku), '0') ?: '0';
     }
 
+    /** Quita el identificador AIM de la pistola (]E0, ]C1) y caracteres de control. */
+    public static function normalizarLectura(string $texto): string
+    {
+        $texto = trim($texto);
+        $texto = preg_replace('/^\][A-Za-z]\d/u', '', $texto) ?? $texto;
+        $texto = preg_replace('/[\x00-\x1F]+/u', '', $texto) ?? $texto;
+
+        return trim($texto);
+    }
+
     /**
      * Palabras útiles para coincidencia parcial (AND en descripción).
      * Compacta "100 ml" → "100ml"; omite partículas cortas.
@@ -162,29 +172,49 @@ class Producto extends Model
 
     public function scopeBuscarPorTexto(Builder $query, string $texto): Builder
     {
-        $texto = trim($texto);
+        $texto = self::normalizarLectura($texto);
         if ($texto === '') {
             return $query;
         }
 
         $sku = self::normalizarSku($texto);
         $tokens = self::tokensBusqueda($texto);
+        $digitos = preg_replace('/\s+/', '', $texto) ?? $texto;
+        $codigoCompacto = preg_match('/^\d{8,}$/', $digitos) === 1 && $digitos !== $texto ? $digitos : null;
         $driver = DB::connection()->getDriverName();
         $castFolio = in_array($driver, ['pgsql', 'sqlite'], true)
             ? 'CAST(folio AS TEXT)'
             : 'CAST(folio AS CHAR)';
 
-        return $query->where(function (Builder $q) use ($texto, $sku, $castFolio, $tokens) {
+        return $query->where(function (Builder $q) use ($texto, $sku, $castFolio, $tokens, $codigoCompacto) {
             $q->where('sku', 'like', "%{$sku}%")
                 ->orWhere('descripcion', 'like', "%{$texto}%")
                 ->orWhere('codigo_barras', 'like', "%{$texto}%")
                 ->orWhereRaw("{$castFolio} LIKE ?", ["%{$texto}%"]);
+
+            if ($codigoCompacto !== null) {
+                $q->orWhere('sku', 'like', "%{$codigoCompacto}%")
+                    ->orWhere('codigo_barras', 'like', "%{$codigoCompacto}%");
+            }
 
             // Frase no contigua: ARMAF … MANDARIN SKY (palabras AND en descripción).
             if (count($tokens) >= 2) {
                 $q->orWhere(function (Builder $and) use ($tokens) {
                     foreach ($tokens as $token) {
                         $and->where('descripcion', 'like', "%{$token}%");
+                    }
+                });
+            }
+
+            // «BA HA MAS» también responde a bahamas o baha mas.
+            if ($tokens !== []) {
+                $q->orWhere(function (Builder $and) use ($tokens) {
+                    foreach ($tokens as $token) {
+                        $compacto = str_replace([' ', '-'], '', $token);
+                        if ($compacto === '') {
+                            continue;
+                        }
+                        $and->whereRaw("REPLACE(REPLACE(descripcion, ' ', ''), '-', '') LIKE ?", ['%'.$compacto.'%']);
                     }
                 });
             }

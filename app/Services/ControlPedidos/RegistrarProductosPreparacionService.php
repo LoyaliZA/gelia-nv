@@ -32,22 +32,24 @@ class RegistrarProductosPreparacionService
                     throw ValidationException::withMessages(['lineas' => 'La pieza no pertenece a esta tarea.']);
                 }
                 $producto = ! empty($linea['producto_id']) ? Producto::where('activo', true)->find($linea['producto_id']) : null;
-                if (! empty($linea['producto_id']) && (! $producto || ! $producto->inventarios()->where('almacen_id', $tarea->almacen_id)->exists()
-                    && ! ($fila && (int) $fila->producto_id === (int) $producto->id && app(\App\Services\Traspasos\AbastecerPreparacionService::class)->productoRecibido($fila->id)))) {
-                    throw ValidationException::withMessages(['lineas' => 'Seleccione un producto del catálogo del almacén de preparación.']);
+                if (! empty($linea['producto_id']) && ! $producto) {
+                    throw ValidationException::withMessages(['lineas' => 'Seleccione un producto activo del catálogo.']);
                 }
                 $sku = trim((string) ($producto?->sku ?? $fila?->sku ?? $linea['sku'] ?? ''));
                 $descripcion = trim((string) ($producto?->descripcion ?? $fila?->descripcion_snapshot ?? $linea['descripcion'] ?? ''));
                 $cantidad = (int) ($linea['cantidad'] ?? 0);
                 $estado = $linea['estado_fisico'] ?? 'bueno';
                 $observacion = trim((string) ($linea['observacion'] ?? ''));
+                $unicaPieza = filter_var($linea['unica_pieza'] ?? false, FILTER_VALIDATE_BOOLEAN);
+                $mejorEjemplar = filter_var($linea['mejor_ejemplar'] ?? false, FILTER_VALIDATE_BOOLEAN);
                 if ($sku === '' || $descripcion === '' || $cantidad < 0 || ! in_array($estado, PedidoBmaRevisionProducto::ESTADOS, true)
                     || (($cantidad === 0 || $estado !== 'bueno') && $observacion === '') || ($estado === 'sin_existencia' && $cantidad > 0)) {
                     throw ValidationException::withMessages(['lineas.'.$orden => 'Seleccione producto y cantidad; describa el faltante, retiro o detalle.']);
                 }
                 $valores = ['pedido_bma_origen_id' => $tarea->pedido_bma_id, 'producto_id' => $producto?->id ?? $fila?->producto_id,
                     'sku' => $sku, 'descripcion_snapshot' => $descripcion, 'cantidad_solicitada' => $fila?->cantidad_solicitada ?? $cantidad,
-                    'cantidad_encontrada' => $cantidad, 'estado_fisico' => $estado, 'observacion' => $observacion ?: null, 'orden' => $orden];
+                    'cantidad_encontrada' => $cantidad, 'estado_fisico' => $estado, 'observacion' => $observacion ?: null,
+                    'unica_pieza' => $unicaPieza, 'mejor_ejemplar' => $mejorEjemplar, 'orden' => $orden];
                 if ($fila) {
                     if (((int) $valores['producto_id'] !== (int) $fila->producto_id || (int) $valores['cantidad_encontrada'] !== (int) $fila->cantidad_encontrada)
                         && \App\Models\SolicitudTraspasoProducto::where('tarea_producto_receptor_id', $fila->id)->exists()) {

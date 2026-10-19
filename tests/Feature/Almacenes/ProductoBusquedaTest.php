@@ -96,6 +96,59 @@ class ProductoBusquedaTest extends TestCase
         $this->assertNotEquals($paginaUno[0]['id'], $paginaDos[0]['id']);
     }
 
+    public function test_buscar_nombre_partido_y_lectura_con_prefijo_de_pistola(): void
+    {
+        $this->crearProducto([
+            'sku' => '6295199813966',
+            'descripcion' => 'C BODY ARMAF ODYSSEY BA HA MAS 200ML.',
+            'codigo_barras' => '6295199813966',
+        ]);
+
+        $this->actingAs($this->usuario)
+            ->getJson(route('gestion_interna.productos.buscar', ['q' => 'bahamas']))
+            ->assertOk()
+            ->assertJsonPath('data.0.sku', '6295199813966');
+
+        $this->actingAs($this->usuario)
+            ->getJson(route('gestion_interna.productos.buscar', ['q' => 'baha mas']))
+            ->assertOk()
+            ->assertJsonPath('data.0.sku', '6295199813966');
+
+        $this->actingAs($this->usuario)
+            ->getJson(route('gestion_interna.productos.buscar', ['q' => ']E06295199813966']))
+            ->assertOk()
+            ->assertJsonPath('data.0.codigo_barras', '6295199813966');
+    }
+
+    public function test_buscar_en_almacen_incluye_producto_sin_fila_de_inventario(): void
+    {
+        $almacen = $this->crearAlmacen();
+        $almacen->update(['permite_busqueda_productos' => true]);
+        $conFila = $this->crearProducto(['sku' => 'CON-FILA', 'descripcion' => 'Crema con existencia']);
+        $sinFila = $this->crearProducto(['sku' => 'SIN-FILA', 'descripcion' => 'Crema sin fila', 'codigo_barras' => '7500000000018']);
+        Inventario::create(['producto_id' => $conFila->id, 'almacen_id' => $almacen->id, 'existencia' => 1, 'apartado' => 0]);
+
+        $this->actingAs($this->usuario)
+            ->getJson(route('gestion_interna.productos.buscar', ['q' => 'Crema sin fila', 'almacen_id' => $almacen->id]))
+            ->assertOk()
+            ->assertJsonCount(0, 'data');
+
+        $this->actingAs($this->usuario)
+            ->getJson(route('gestion_interna.productos.buscar', ['q' => 'SIN-FILA', 'almacen_id' => $almacen->id]))
+            ->assertOk()
+            ->assertJsonPath('data.0.id', $sinFila->id)
+            ->assertJsonPath('data.0.existencia', null);
+
+        $this->actingAs($this->usuario)
+            ->getJson(route('gestion_interna.productos.buscar', [
+                'q' => '7500000000018',
+                'almacen_id' => $almacen->id,
+            ]))
+            ->assertOk()
+            ->assertJsonPath('data.0.id', $sinFila->id)
+            ->assertJsonPath('data.0.existencia', null);
+    }
+
     public function test_buscar_requiere_permiso(): void
     {
         $sinPermiso = User::factory()->create();

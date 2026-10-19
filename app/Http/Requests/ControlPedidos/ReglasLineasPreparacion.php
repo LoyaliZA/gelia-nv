@@ -18,6 +18,8 @@ final class ReglasLineasPreparacion
             'lineas.*.cantidad' => ['required', 'integer', 'min:0'],
             'lineas.*.estado_fisico' => ['required', Rule::in(PedidoBmaRevisionProducto::ESTADOS)],
             'lineas.*.observacion' => ['nullable', 'string', 'max:2000'],
+            'lineas.*.unica_pieza' => ['nullable', 'boolean'],
+            'lineas.*.mejor_ejemplar' => ['nullable', 'boolean'],
             'lineas.*.evidencias' => ['nullable', 'array', 'max:10'],
             'lineas.*.evidencias.*' => ['file', 'max:10240', 'mimes:jpg,jpeg,png,webp,pdf'],
         ];

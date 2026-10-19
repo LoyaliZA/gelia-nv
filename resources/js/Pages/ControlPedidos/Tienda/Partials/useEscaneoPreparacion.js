@@ -30,11 +30,13 @@ export default function useEscaneoPreparacion({ almacenId, onProducto }) {
             if (controller.signal.aborted) return;
             try {
                 const { data } = await axios.get(route('gestion_interna.productos.buscar'), {
-                    params: { q: codigo, almacen_id: almacenId, per_page: 25 }, signal: controller.signal,
+                    params: { q: codigo, almacen_id: almacenId, per_page: 25, incluir_sin_inventario: 1 }, signal: controller.signal,
                 });
                 if (controller.signal.aborted) return;
                 const encontrados = data.data || [];
-                const producto = encontrados.find((p) => [p.sku, p.codigo_barras, p.folio].some((v) => String(v || '').toLowerCase() === codigo.toLowerCase()))
+                const normalizar = (v) => String(v || '').trim().toLowerCase().replace(/^\][a-z]\d/, '').replace(/^0+(?=\d)/, '');
+                const buscado = normalizar(codigo);
+                const producto = encontrados.find((p) => [p.sku, p.codigo_barras, p.folio].some((v) => normalizar(v) === buscado))
                     || (encontrados.length === 1 ? encontrados[0] : null);
                 if (!producto) throw new Error(encontrados.length ? 'Hay varios resultados. Seleccione el producto en el buscador.' : 'No se encontró en este almacén. Busque por nombre o reporte el problema.');
                 agregar.current(producto);

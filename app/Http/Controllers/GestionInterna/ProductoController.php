@@ -134,10 +134,26 @@ class ProductoController extends Controller
                 ], 422);
             }
 
-            $query->whereHas(
-                'inventarios',
-                fn ($q) => $q->where('almacen_id', $almacenId)
-            );
+            // El nombre sigue limitado al almacén. SKU, código de barras o folio exacto se resuelven
+            // aunque ese almacén todavía no tenga fila de inventario.
+            if (! $request->boolean('incluir_sin_inventario')) {
+                $lectura = Producto::normalizarLectura((string) $request->input('q', ''));
+                $sku = Producto::normalizarSku($lectura);
+                $query->where(function ($q) use ($almacenId, $lectura, $sku) {
+                    $q->whereHas('inventarios', fn ($inv) => $inv->where('almacen_id', $almacenId));
+                    if ($lectura !== '') {
+                        $q->orWhere(function ($codigo) use ($lectura, $sku) {
+                            $codigo->where('sku', $lectura)
+                                ->orWhere('codigo_barras', $lectura)
+                                ->orWhere('sku', $sku)
+                                ->orWhere('codigo_barras', $sku);
+                            if (ctype_digit($lectura) && strlen($lectura) <= 9) {
+                                $codigo->orWhere('folio', (int) $lectura);
+                            }
+                        });
+                    }
+                });
+            }
         }
 
         $paginator = $query->paginate($perPage, ['id', 'sku', 'descripcion', 'folio', 'codigo_barras']);

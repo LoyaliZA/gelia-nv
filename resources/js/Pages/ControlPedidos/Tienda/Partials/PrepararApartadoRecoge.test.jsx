@@ -38,6 +38,35 @@ it('confirma productos seleccionados con una sola solicitud, sin captura manual 
     expect(container.querySelector('#tienda-ubicacion')).toBeNull();
     expect(container.querySelector('[placeholder="SKU"]')).toBeNull();
 });
+it('en recoge y transferencia muestra estado, comentario y marcas de la pieza', async () => {
+    await mount({ tarea: { ...tarea, modalidad: { codigo: 'RECOGE_TIENDA' } } });
+    await click('Elegir crema'); await click('Agregar pieza');
+    expect(button('Reportar detalle')).toBeUndefined();
+    expect(container.textContent).toContain('Única pieza');
+    expect(container.textContent).toContain('Mejor ejemplar');
+    const estado = container.querySelector('[name="estado-0"]');
+    await act(() => { estado.value = 'sin_existencia'; estado.dispatchEvent(new Event('change', { bubbles: true })); });
+    const obs = container.querySelector('[name="observacion-0"]');
+    await act(() => {
+        Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(obs, 'Sin existencia en anaquel');
+        obs.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    const cantidad = container.querySelector('#tienda-cantidad-0');
+    await act(() => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(cantidad, '0');
+        cantidad.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(() => { container.querySelectorAll('input[type="checkbox"]').forEach((c) => c.click()); });
+    await click('Guardar y continuar después');
+    expect(post.mock.calls[0][1].lineas[0]).toMatchObject({
+        estado_fisico: 'sin_existencia', observacion: 'Sin existencia en anaquel', unica_pieza: true, mejor_ejemplar: true, cantidad: '0',
+    });
+    post.mockClear();
+    await mount({ tarea: { ...tarea, modalidad: { codigo: 'RECOGE_TIENDA_TRANSFERENCIA' }, puede_responder: true } });
+    await click('Elegir crema'); await click('Agregar pieza');
+    expect(container.textContent).toContain('Única pieza');
+    expect(button('Reportar detalle')).toBeUndefined();
+});
 it('permite guardar sin confirmar y suma selecciones repetidas', async () => {
     await mount(); await click('Elegir crema'); await click('Agregar pieza');
     await click('Elegir crema'); await click('Agregar pieza'); await click('Guardar y continuar después');

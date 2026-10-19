@@ -116,6 +116,8 @@ final class VisibilidadTareaPreparacion
                 'cantidad_encontrada' => $p->cantidad_encontrada,
                 'estado_fisico' => $p->estado_fisico,
                 'observacion' => $p->observacion,
+                'unica_pieza' => (bool) $p->unica_pieza,
+                'mejor_ejemplar' => (bool) $p->mejor_ejemplar,
                 'orden' => $p->orden,
             ])->values()->all(),
             'piezas_solicitadas' => $tarea->piezasSolicitadas(),

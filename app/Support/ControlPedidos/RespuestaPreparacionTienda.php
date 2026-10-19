@@ -23,6 +23,7 @@ final class RespuestaPreparacionTienda
             'productos' => $tarea->productos->map(fn ($p) => [
                 'id' => $p->id, 'sku' => $p->sku, 'descripcion' => $p->descripcion_snapshot,
                 'cantidad' => $p->cantidad_encontrada, 'estado_fisico' => $p->estado_fisico, 'observacion' => $p->observacion,
+                'unica_pieza' => (bool) $p->unica_pieza, 'mejor_ejemplar' => (bool) $p->mejor_ejemplar,
             ])->values()->all(),
             'documentos' => $tarea->documentos->whereIn('tipo_evidencia', $tipos)->map(fn ($d) => [
                 'id' => $d->id, 'producto_id' => $d->pedido_bma_tarea_producto_id, 'tipo' => $d->tipo_evidencia,

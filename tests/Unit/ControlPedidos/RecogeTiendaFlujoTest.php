@@ -53,7 +53,7 @@ class RecogeTiendaFlujoTest extends TestCase
             'catalogo_modalidades_preparacion_pedido' => ['codigo', 'nombre'],
             'pedidos_bma' => ['estatus_envio', 'pesaje_respondido_at', 'consulta_cerrada_at', 'consulta_actualizacion_pendiente', 'cantidad_piezas', 'cliente_id', 'vendedor_id', 'catalogo_estatus_pedido_id', 'deleted_at'],
             'pedido_bma_tareas_preparacion' => ['pedido_bma_id', 'catalogo_modalidad_preparacion_id', 'almacen_id', 'estado', 'version', 'fecha_limite', 'atendida_por_id', 'atendida_at', 'deleted_at', 'asignada_a_id', 'observaciones_solicitud'],
-            'pedido_bma_tarea_productos' => ['pedido_bma_tarea_preparacion_id', 'pedido_bma_origen_id', 'producto_id', 'sku', 'descripcion_snapshot', 'cantidad_solicitada', 'cantidad_encontrada', 'estado_fisico', 'observacion', 'orden'],
+            'pedido_bma_tarea_productos' => ['pedido_bma_tarea_preparacion_id', 'pedido_bma_origen_id', 'producto_id', 'sku', 'descripcion_snapshot', 'cantidad_solicitada', 'cantidad_encontrada', 'estado_fisico', 'observacion', 'unica_pieza', 'mejor_ejemplar', 'orden'],
             'pedido_bma_cumplimiento_fisico' => ['pedido_bma_tarea_preparacion_id', 'estado', 'cantidad', 'ubicacion', 'version', 'vence_at'],
             'pedido_bma_cumplimiento_eventos' => ['pedido_bma_cumplimiento_fisico_id', 'pedido_bma_tarea_preparacion_id', 'tipo', 'usuario_id', 'motivo', 'idempotencia_clave', 'datos'],
             'pedido_bma_tarea_historial' => ['pedido_bma_tarea_preparacion_id', 'usuario_id', 'estado_anterior', 'estado_nuevo', 'accion', 'comentario', 'meta_json'],
@@ -168,6 +168,33 @@ class RecogeTiendaFlujoTest extends TestCase
         $this->tarea->productos()->create(['descripcion_snapshot' => 'Piezas del pedido', 'cantidad_encontrada' => 0, 'estado_fisico' => 'regular', 'observacion' => 'No disponible']);
         $this->expectException(ValidationException::class);
         app(ConfirmarApartadoRecogeHoyService::class)->ejecutar($this->tarea, $this->auxiliar, 1);
+    }
+
+    public function test_guarda_marcas_y_comentario_de_pieza_sin_existencias(): void
+    {
+        $datos = $this->datos();
+        $datos['lineas'][] = [
+            'sku' => 'SKU-2',
+            'descripcion' => 'Perfume',
+            'cantidad' => 0,
+            'estado_fisico' => 'sin_existencia',
+            'observacion' => 'Sin existencia en anaquel',
+            'unica_pieza' => true,
+            'mejor_ejemplar' => true,
+        ];
+
+        app(GuardarApartadoRecogeHoyService::class)->ejecutar($this->tarea, $this->auxiliar, $datos);
+
+        $pieza = $this->tarea->productos()->where('sku', 'SKU-2')->first();
+        $this->assertSame('sin_existencia', $pieza->estado_fisico);
+        $this->assertSame('Sin existencia en anaquel', $pieza->observacion);
+        $this->assertTrue($pieza->unica_pieza);
+        $this->assertTrue($pieza->mejor_ejemplar);
+        $respuesta = RespuestaPreparacionTienda::datos($this->tarea->fresh());
+        $publicada = collect($respuesta['productos'])->firstWhere('sku', 'SKU-2');
+        $this->assertTrue($publicada['unica_pieza']);
+        $this->assertTrue($publicada['mejor_ejemplar']);
+        $this->assertSame('Sin existencia en anaquel', $publicada['observacion']);
     }
 
     public function test_faltante_impide_confirmar_hasta_resolverse(): void

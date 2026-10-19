@@ -6,7 +6,7 @@ function etiquetaProducto(p) {
     return `${p.sku} - ${p.descripcion}`;
 }
 
-export default function SelectorProducto({ value, onChange, productoInicial, disabled = false, required = false, almacenId = null, inputId }) {
+export default function SelectorProducto({ value, onChange, productoInicial, disabled = false, required = false, almacenId = null, incluirSinInventario = false, inputId }) {
     const [texto, setTexto] = useState('');
     const [abierto, setAbierto] = useState(false);
     const [productos, setProductos] = useState([]);
@@ -55,6 +55,7 @@ export default function SelectorProducto({ value, onChange, productoInicial, dis
                 per_page: '25',
             });
             if (almacenId) params.set('almacen_id', String(almacenId));
+            if (incluirSinInventario) params.set('incluir_sin_inventario', '1');
             if (termino.trim()) {
                 params.set('q', termino.trim());
             }
@@ -81,7 +82,7 @@ export default function SelectorProducto({ value, onChange, productoInicial, dis
         } finally {
             setCargando(false);
         }
-    }, [almacenId]);
+    }, [almacenId, incluirSinInventario]);
 
     const programarBusqueda = useCallback((termino) => {
         clearTimeout(debounceRef.current);

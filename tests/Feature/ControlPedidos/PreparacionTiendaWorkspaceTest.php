@@ -110,6 +110,29 @@ class PreparacionTiendaWorkspaceTest extends TestCase
         $this->get($caratula['url'])->assertOk()->assertHeader('Content-Type', 'application/pdf');
     }
 
+    public function test_registra_producto_del_catalogo_aunque_el_pdv_no_tenga_inventario(): void
+    {
+        $sinFila = Producto::create([
+            'folio' => 9972,
+            'sku' => '6295199813966',
+            'codigo_barras' => '6295199813966',
+            'descripcion' => 'C BODY ARMAF ODYSSEY BA HA MAS 200ML.',
+            'activo' => true,
+        ]);
+        $this->postJson(route('control_pedidos.tienda.tomar', $this->tarea), ['version' => 1])->assertOk();
+        $vista = $this->getJson(route('control_pedidos.tienda.show', $this->tarea))->assertOk();
+        $this->getJson(route('gestion_interna.productos.buscar', [
+            'almacen_id' => $this->tarea->almacen_id,
+            'q' => 'bahamas',
+            'incluir_sin_inventario' => 1,
+        ]))->assertOk()->assertJsonPath('data.0.id', $sinFila->id);
+        $this->postJson(route('control_pedidos.tienda.apartado.guardar', $this->tarea), [
+            'version' => $vista->json('tarea.apartado.version'),
+            'lineas' => [['producto_id' => $sinFila->id, 'cantidad' => 1, 'estado_fisico' => 'bueno']],
+        ])->assertOk();
+        $this->assertSame('6295199813966', $this->tarea->productos()->value('sku'));
+    }
+
     public function test_confirma_apartado_sin_anaquel_y_conserva_respuesta_vacia(): void
     {
         $this->postJson(route('control_pedidos.tienda.tomar', $this->tarea), ['version' => 1])->assertOk();

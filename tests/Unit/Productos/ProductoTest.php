@@ -23,4 +23,11 @@ class ProductoTest extends TestCase
         $this->assertSame(['zeta'], Producto::tokensBusqueda('Zeta'));
         $this->assertSame([], Producto::tokensBusqueda(' de  '));
     }
+
+    public function test_normaliza_lectura_de_pistola(): void
+    {
+        $this->assertSame('8011003861224', Producto::normalizarLectura(']E08011003861224'));
+        $this->assertSame('6295199813966', Producto::normalizarLectura("]C16295199813966\n"));
+        $this->assertSame('C BODY ARMAF', Producto::normalizarLectura('C BODY ARMAF'));
+    }
 }

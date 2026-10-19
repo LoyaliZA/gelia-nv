@@ -29,12 +29,13 @@ function formData(datos) {
 
 export default function PrepararApartadoRecoge({ tarea, auth, documentos = [], documentosTarea = [], requisitos = {}, tiposCaja = [], onEnviar = null, bloqueado = false, onDirtyChange = null, onRefrescarDocumentos = null }) {
     const esRecoge = tarea.modalidad?.codigo === 'RECOGE_TIENDA' || !tarea.modalidad;
+    const capturaEstadoPieza = esRecoge || tarea.modalidad?.codigo === 'RECOGE_TIENDA_TRANSFERENCIA';
     const permisos = auth?.user?.permissions || [];
     const esAdmin = auth?.user?.roles?.includes('Super Admin');
     const autorizado = (esRecoge ? tarea.puede_preparar : tarea.puede_responder) ?? ((esAdmin || permisos.includes('control_pedidos.tienda.responder') || (esRecoge && permisos.includes('control_pedidos.tienda.apartado.separar'))) && Number(tarea.responsable?.id) === Number(auth?.user?.id));
     const editable = tarea.estado === 'EN_ATENCION' && autorizado;
     const puedeIncidencia = tarea.puede_reportar_incidencia ?? (esAdmin || permisos.includes('control_pedidos.tienda.reportar_error'));
-    const [lineas, setLineas] = useState(() => (tarea.productos || []).filter((p) => p.sku).map((p) => ({ id: p.id, producto_id: p.producto_id, sku: p.sku, descripcion: p.descripcion_snapshot, cantidad: p.cantidad_encontrada ?? '', estado_fisico: p.estado_fisico || 'bueno', observacion: p.observacion || '', evidencias: [], previews: [], detalle: p.estado_fisico && p.estado_fisico !== 'bueno' })));
+    const [lineas, setLineas] = useState(() => (tarea.productos || []).filter((p) => p.sku).map((p) => ({ id: p.id, producto_id: p.producto_id, sku: p.sku, descripcion: p.descripcion_snapshot, cantidad: p.cantidad_encontrada ?? '', estado_fisico: p.estado_fisico || 'bueno', observacion: p.observacion || '', unica_pieza: Boolean(p.unica_pieza), mejor_ejemplar: Boolean(p.mejor_ejemplar), evidencias: [], previews: [], detalle: p.estado_fisico && p.estado_fisico !== 'bueno' })));
     const [seleccion, setSeleccion] = useState(null);
     const [codigo, setCodigo] = useState('');
     const [motivo, setMotivo] = useState('');
@@ -63,7 +64,7 @@ export default function PrepararApartadoRecoge({ tarea, auth, documentos = [], d
         setLineas((prev) => {
             const i = prev.findIndex((l) => (l.producto_id && Number(l.producto_id) === Number(producto.id)) || String(l.sku).toLowerCase() === String(producto.sku).toLowerCase());
             return i >= 0 ? prev.map((l, j) => j === i ? { ...l, cantidad: (Number(l.cantidad) || 0) + 1 } : l)
-                : [...prev, { producto_id: producto.id, sku: producto.sku, descripcion: producto.descripcion, cantidad: 1, estado_fisico: 'bueno', observacion: '', evidencias: [], previews: [], detalle: false }];
+                : [...prev, { producto_id: producto.id, sku: producto.sku, descripcion: producto.descripcion, cantidad: 1, estado_fisico: 'bueno', observacion: '', unica_pieza: false, mejor_ejemplar: false, evidencias: [], previews: [], detalle: false }];
         });
         setSeleccion(null);
     };
@@ -189,7 +190,7 @@ export default function PrepararApartadoRecoge({ tarea, auth, documentos = [], d
                             {escaneo.fallos.map((f, i) => <div key={`${f.codigo}-${i}`} className="gelia-preparacion-error-escaneo" role="alert"><span><strong>{f.codigo}</strong>: {f.mensaje}</span><button type="button" className={BTN_SECONDARY} disabled={ocupado} onClick={() => { escaneo.quitarFallo(i); escaneo.encolar(f.codigo); }}>Reintentar</button><button type="button" className={BTN_SECONDARY} onClick={() => escaneo.quitarFallo(i)} aria-label={`Descartar aviso de ${f.codigo}`}>Descartar aviso</button></div>)}
                         </div>
                         <div className="gelia-preparacion-busqueda">
-                            <div className="min-w-0 gelia-preparacion-selector"><label htmlFor="tienda-buscar-producto" className={THEME_LABEL}>O buscar por nombre o código</label><SelectorProducto inputId="tienda-buscar-producto" almacenId={tarea.almacen?.id} value={seleccion?.id || ''} onChange={(_, p) => setSeleccion(p)} disabled={ocupado || !tarea.almacen?.id} /></div>
+                            <div className="min-w-0 gelia-preparacion-selector"><label htmlFor="tienda-buscar-producto" className={THEME_LABEL}>O buscar por nombre o código</label><SelectorProducto inputId="tienda-buscar-producto" almacenId={tarea.almacen?.id} incluirSinInventario value={seleccion?.id || ''} onChange={(_, p) => setSeleccion(p)} disabled={ocupado || !tarea.almacen?.id} /></div>
                             <button type="button" className={BTN_SECONDARY} onClick={() => agregar()} disabled={!seleccion || ocupado}>Agregar pieza</button>
                         </div>
                     </>}
@@ -204,16 +205,21 @@ export default function PrepararApartadoRecoge({ tarea, auth, documentos = [], d
                                     : <span className="gelia-preparacion-total">{l.cantidad === '' ? 'Pendiente' : `${l.cantidad} piezas`}</span>}
                             </div>
                             {errorCampo(`tienda-cantidad-${i}`)}
-                            {editable && <div className="gelia-preparacion-producto-acciones"><button type="button" className={BTN_SECONDARY} aria-expanded={l.detalle || Number(l.cantidad) === 0} aria-controls={`tienda-detalle-${i}`} disabled={ocupado} onClick={() => cambiar(i, 'detalle', !l.detalle)}>{l.detalle ? 'Ocultar detalle' : 'Reportar detalle'}</button>
+                            {editable && (!capturaEstadoPieza || !l.id) && <div className="gelia-preparacion-producto-acciones">{!capturaEstadoPieza && <button type="button" className={BTN_SECONDARY} aria-expanded={l.detalle || Number(l.cantidad) === 0} aria-controls={`tienda-detalle-${i}`} disabled={ocupado} onClick={() => cambiar(i, 'detalle', !l.detalle)}>{l.detalle ? 'Ocultar detalle' : 'Reportar detalle'}</button>}
                                 {!l.id && <button type="button" className={BTN_SECONDARY} disabled={guardando} onClick={() => setQuitarLinea(i)}><Trash2 className="w-4 h-4" aria-hidden="true" />Quitar pieza</button>}</div>}
-                            {editable && (l.detalle || Number(l.cantidad) === 0) && <div id={`tienda-detalle-${i}`} className="gelia-preparacion-detalle">
+                            {editable && (capturaEstadoPieza || l.detalle || Number(l.cantidad) === 0) && <div id={`tienda-detalle-${i}`} className="gelia-preparacion-detalle">
                                 <label className={THEME_LABEL}>Estado de la pieza<select name={`estado-${i}`} className={`${THEME_SELECT} w-full mt-1`} value={l.estado_fisico} onChange={(e) => cambiar(i, 'estado_fisico', e.target.value)} disabled={ocupado}>
                                     {Object.entries(estados).filter(([estado]) => !requisitos.estados_fisicos_permitidos || requisitos.estados_fisicos_permitidos.includes(estado)).map(([estado, texto]) => <option key={estado} value={estado}>{texto}</option>)}
                                 </select></label>
-                                <label className={THEME_LABEL}>Detalle o motivo<textarea name={`observacion-${i}`} rows={2} maxLength={2000} className={`${THEME_TEXTAREA} w-full mt-1`} value={l.observacion} onChange={(e) => cambiar(i, 'observacion', e.target.value)} disabled={ocupado} placeholder="Describa el daño, faltante o detalle…" /></label>
+                                <label className={THEME_LABEL}>Detalle o motivo<textarea name={`observacion-${i}`} rows={2} maxLength={2000} className={`${THEME_TEXTAREA} w-full mt-1`} value={l.observacion} onChange={(e) => cambiar(i, 'observacion', e.target.value)} disabled={ocupado} placeholder={l.estado_fisico === 'sin_existencia' ? 'Indique qué falta y cómo debe continuar Ventas…' : 'Describa el daño, faltante o detalle…'} /></label>
+                                {capturaEstadoPieza && <div className="gelia-pedidos-atributos" aria-label="Características de la pieza">
+                                    <label className="gelia-pedidos-atributo gelia-pedidos-atributo-control"><input type="checkbox" checked={l.unica_pieza} onChange={(e) => cambiar(i, 'unica_pieza', e.target.checked)} disabled={ocupado} />Única pieza</label>
+                                    <label className="gelia-pedidos-atributo gelia-pedidos-atributo-control"><input type="checkbox" checked={l.mejor_ejemplar} onChange={(e) => cambiar(i, 'mejor_ejemplar', e.target.checked)} disabled={ocupado} />Mejor ejemplar</label>
+                                </div>}
+                                {l.estado_fisico === 'sin_existencia' && <p className="text-xs font-bold theme-text-info m-0">Sin existencias: Ventas verá este aviso. Confirme el apartado solo cuando el faltante esté resuelto.</p>}
                                 {fotosProducto(l, i)}
                             </div>}
-                            {editable && !esRecoge && requisitos.evidencia_por_producto && !l.detalle && Number(l.cantidad) > 0 && fotosProducto(l, i)}
+                            {editable && !capturaEstadoPieza && !esRecoge && requisitos.evidencia_por_producto && !l.detalle && Number(l.cantidad) > 0 && fotosProducto(l, i)}
                             {registrados.length > 0 && <button type="button" className={`${BTN_SECONDARY} mt-2`} onClick={() => verDocs(registrados)}>Ver evidencia registrada ({registrados.length})</button>}
                         </article>;
                     })}</div>

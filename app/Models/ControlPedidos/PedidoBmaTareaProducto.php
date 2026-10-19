@@ -20,6 +20,8 @@ class PedidoBmaTareaProducto extends Model
         'cantidad_encontrada',
         'estado_fisico',
         'observacion',
+        'unica_pieza',
+        'mejor_ejemplar',
         'orden',
     ];
 
@@ -30,6 +32,8 @@ class PedidoBmaTareaProducto extends Model
             'cantidad_encontrada' => 'integer',
             'orden' => 'integer',
             'producto_id' => 'integer',
+            'unica_pieza' => 'boolean',
+            'mejor_ejemplar' => 'boolean',
         ];
     }
 
