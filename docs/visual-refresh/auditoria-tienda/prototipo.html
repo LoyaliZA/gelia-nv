@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f4f5">
+  <title>Prototipo · Ficha de tienda para auditoría</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --color-primario: #ec4899;
+      --color-peligro: #b91c1c;
+      --color-exito: #065f46;
+      --theme-surface-bg: #ffffff;
+      --theme-element-bg: #fafafa;
+      --theme-text-main: #18181b;
+      --theme-text-muted: #3f3f46;
+      --theme-border: #e4e4e7;
+      --theme-placeholder: #52525b;
+      --theme-radius-modal: 1.5rem;
+      --theme-radius-input: 0.75rem;
+      --theme-shadow-modal: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+      --overlay: rgba(0, 0, 0, 0.6);
+      --font: "Inter", sans-serif;
+      color-scheme: light;
+    }
+
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    html { scroll-padding-top: 5.5rem; }
+    body {
+      margin: 0;
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      font-family: var(--font);
+      font-size: 0.9375rem;
+      line-height: 1.45;
+      color: var(--theme-text-main);
+      background: #f4f4f5;
+      -webkit-tap-highlight-color: color-mix(in srgb, var(--color-primario) 15%, transparent);
+    }
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+    :focus { outline: none; }
+    :focus-visible {
+      outline: 2px solid var(--color-primario);
+      outline-offset: 3px;
+    }
+    button, a, summary, label { touch-action: manipulation; }
+    h1, h2, h3 { text-wrap: balance; }
+    .num { font-variant-numeric: tabular-nums; }
+
+    .barra {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem 1rem;
+      align-items: flex-end;
+      padding: 0.75rem 1rem;
+      background: var(--theme-surface-bg);
+      border-bottom: 1px solid var(--theme-border);
+    }
+    .barra h1 {
+      margin: 0;
+      font-size: 1rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+    .aviso-sim {
+      margin: 0.15rem 0 0;
+      max-width: 42rem;
+      color: var(--theme-text-muted);
+      font-size: 0.8125rem;
+    }
+    .grupo { display: flex; flex-wrap: wrap; gap: 0.375rem; }
+    .grupo p {
+      width: 100%;
+      margin: 0;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--theme-text-muted);
+    }
+    .chip, .btn, .icono { font: inherit; cursor: pointer; }
+    .chip {
+      min-height: 44px;
+      padding: 0.4rem 0.75rem;
+      border-radius: 999px;
+      border: 1px solid var(--theme-border);
+      background: var(--theme-element-bg);
+      color: var(--theme-text-main);
+    }
+    .chip:hover { border-color: #9d174d; }
+    .chip[aria-pressed="true"] {
+      border-color: #9d174d;
+      background: #fce7f3;
+      color: #18181b;
+      font-weight: 600;
+    }
+
+    .escenario {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      align-items: stretch;
+      justify-content: center;
+      padding: 0.75rem;
+    }
+    .velo {
+      position: fixed;
+      inset: 0;
+      background: var(--overlay);
+      z-index: 1;
+      pointer-events: none;
+    }
+    .dialogo {
+      position: relative;
+      z-index: 1;
+      width: min(40rem, 100%);
+      max-height: 100%;
+      display: flex;
+      flex-direction: column;
+      background: var(--theme-surface-bg);
+      color: var(--theme-text-main);
+      border: 1px solid var(--theme-border);
+      border-radius: var(--theme-radius-modal);
+      box-shadow: var(--theme-shadow-modal);
+      overflow: hidden;
+    }
+    .dialogo[data-direccion="b"] { width: min(72rem, 100%); }
+    .cuerpo {
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+      overscroll-behavior: contain;
+      padding: 0 1.25rem 1.25rem;
+      scroll-padding-bottom: 1rem;
+    }
+    .cabecera, .pie {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: flex-start;
+      justify-content: space-between;
+      padding: 1rem 1.25rem;
+    }
+    .cabecera { border-bottom: 1px solid var(--theme-border); }
+    .pie { border-top: 1px solid var(--theme-border); align-items: center; }
+    .identidad { min-width: 0; flex: 1; }
+    .identidad h2 {
+      margin: 0;
+      font-size: 1.75rem;
+      line-height: 1.1;
+      letter-spacing: -0.03em;
+    }
+    .cliente {
+      margin: 0.35rem 0 0;
+      font-weight: 600;
+      overflow-wrap: anywhere;
+    }
+    .estados { display: flex; flex-wrap: wrap; gap: 0.375rem; margin-top: 0.6rem; }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      min-height: 1.75rem;
+      padding: 0.15rem 0.6rem;
+      border-radius: 999px;
+      font-size: 0.8125rem;
+      font-weight: 600;
+    }
+    .badge svg { width: 0.95rem; height: 0.95rem; }
+    .badge-ok { color: #065f46; background: #d1fae5; }
+    .badge-espera { color: #78350f; background: #fef3c7; }
+    .badge-no { color: #991b1b; background: #fee2e2; }
+    .icono {
+      width: 44px;
+      height: 44px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 0;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--theme-text-muted);
+    }
+    .icono:hover { background: #f4f4f5; color: var(--theme-text-main); }
+
+    .bloque { margin-top: 1.25rem; }
+    .bloque h3 { margin: 0 0 0.75rem; font-size: 1rem; letter-spacing: -0.02em; }
+    .datos {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.85rem 1.25rem;
+      margin: 0;
+    }
+    .datos div { min-width: 0; }
+    .datos dt {
+      margin: 0;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--theme-text-muted);
+    }
+    .datos dd { margin: 0.15rem 0 0; font-weight: 600; overflow-wrap: anywhere; }
+    .comprobante, .archivo-lleno {
+      display: flex;
+      gap: 0.75rem;
+      align-items: center;
+      padding: 0.75rem;
+      border: 1px solid var(--theme-border);
+      border-radius: var(--theme-radius-input);
+      background: var(--theme-element-bg);
+    }
+    .comprobante p, .archivo-lleno p { margin: 0; min-width: 0; }
+    .nombre { font-weight: 600; overflow-wrap: anywhere; }
+    .meta { color: var(--theme-text-muted); font-size: 0.8125rem; }
+    .acciones { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.75rem; }
+    .btn {
+      min-height: 44px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.4rem;
+      padding: 0.45rem 0.9rem;
+      border-radius: 0.75rem;
+      border: 1px solid var(--theme-border);
+      background: var(--theme-surface-bg);
+      color: var(--theme-text-main);
+      font-size: 0.8125rem;
+      font-weight: 600;
+      letter-spacing: normal;
+      text-transform: none;
+    }
+    .btn:hover:not(:disabled) { background: var(--theme-element-bg); }
+    .btn:disabled {
+      color: #3f3f46;
+      background: #e4e4e7;
+      border-color: #d4d4d8;
+      cursor: not-allowed;
+    }
+    .btn-ok { color: #065f46; background: #ecfdf5; border-color: #6ee7b7; }
+    .btn-ok[aria-pressed="true"]:not(:disabled) {
+      background: #065f46;
+      color: #ffffff;
+      border-color: #064e3b;
+    }
+    .btn-no { color: #991b1b; background: #ffffff; border-color: #fca5a5; }
+    .btn-no[aria-pressed="true"]:not(:disabled) { background: #fee2e2; }
+    .btn-primario {
+      color: #ffffff;
+      background: #9d174d;
+      border-color: #831843;
+    }
+    .btn-primario:hover:not(:disabled) { background: #831843; color: #ffffff; }
+    .motivo {
+      margin-top: 0.75rem;
+      padding: 0.75rem;
+      border: 1px solid var(--theme-border);
+      border-radius: var(--theme-radius-input);
+      background: var(--theme-element-bg);
+    }
+    .motivo label { display: block; font-size: 0.8125rem; font-weight: 600; }
+    textarea {
+      width: 100%;
+      margin-top: 0.4rem;
+      min-height: 5.5rem;
+      padding: 0.65rem 0.75rem;
+      border: 1px solid var(--theme-border);
+      border-radius: var(--theme-radius-input);
+      background: #ffffff;
+      color: var(--theme-text-main);
+      font: inherit;
+      resize: vertical;
+    }
+    textarea::placeholder { color: var(--theme-placeholder); }
+    .error { margin: 0.4rem 0 0; color: var(--color-peligro); font-size: 0.8125rem; font-weight: 600; }
+    .nota { margin: 0.75rem 0 0; color: var(--theme-text-muted); font-size: 0.8125rem; }
+    .total {
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+      align-items: baseline;
+      margin: 0;
+      padding: 0.85rem 0.15rem 0;
+      border-top: 1px solid var(--theme-border);
+      font-weight: 600;
+    }
+    .total strong { font-size: 1.35rem; letter-spacing: -0.03em; }
+    .zona {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.35rem;
+      min-height: 8.5rem;
+      padding: 1rem;
+      text-align: center;
+      border: 1.5px dashed #a1a1aa;
+      border-radius: var(--theme-radius-input);
+      background: var(--theme-element-bg);
+      color: var(--theme-text-muted);
+    }
+    .zona.sobre { border-color: #9d174d; background: #fce7f3; }
+    .zona strong { color: var(--theme-text-main); font-weight: 600; }
+    .pie .sim { margin: 0; flex: 1; min-width: 12rem; color: var(--theme-text-muted); font-size: 0.75rem; }
+    .vivo {
+      position: fixed;
+      left: 1rem;
+      right: 1rem;
+      bottom: 1rem;
+      z-index: 3;
+      margin: 0 auto;
+      max-width: 36rem;
+      padding: 0.75rem 1rem;
+      border-radius: 0.75rem;
+      background: #18181b;
+      color: #ffffff;
+      box-shadow: var(--theme-shadow-modal);
+    }
+    .reabrir {
+      position: relative;
+      z-index: 1;
+      max-width: 28rem;
+      padding: 1.25rem;
+      border-radius: var(--theme-radius-modal);
+      background: #ffffff;
+      border: 1px solid var(--theme-border);
+    }
+    .b-cuerpo {
+      display: grid;
+      grid-template-columns: minmax(15rem, 18rem) minmax(0, 1fr);
+      gap: 1rem;
+      align-items: start;
+    }
+    .panel {
+      padding: 0.85rem;
+      border: 1px solid var(--theme-border);
+      border-radius: var(--theme-radius-input);
+      background: var(--theme-element-bg);
+    }
+    .panel + .panel { margin-top: 0.75rem; }
+    .panel h3 { margin-bottom: 0.5rem; }
+    .linea {
+      display: flex;
+      justify-content: space-between;
+      gap: 0.75rem;
+      margin: 0.35rem 0 0;
+      font-size: 0.875rem;
+    }
+    .dialogo[data-direccion="b"] .datos { gap: 0.55rem 0.85rem; }
+    .dialogo[data-direccion="b"] .bloque { margin-top: 1rem; }
+    .dialogo[data-direccion="b"] h2 { font-size: 1.35rem; }
+
+    @media (max-width: 720px) {
+      .datos, .b-cuerpo { grid-template-columns: 1fr; }
+      .identidad h2 { font-size: 1.5rem; }
+      .dialogo, .dialogo[data-direccion="b"] { width: 100%; max-height: 100%; }
+      body { overflow: auto; }
+      .escenario { overflow: visible; }
+      .cabecera, .cuerpo, .pie { padding-left: 1rem; padding-right: 1rem; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        scroll-behavior: auto !important;
+        transition: none !important;
+        animation: none !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <a class="sr-only" href="#ficha">Saltar a la ficha</a>
+  <header class="barra">
+    <div>
+      <h1>Prototipo de ficha de tienda</h1>
+      <p class="aviso-sim">Simulación aislada. Validar, rechazar, adjuntar y aprobar no guardan datos ni llaman a GELIA.</p>
+    </div>
+    <div class="grupo" role="group" aria-label="Dirección visual">
+      <p>Dirección</p>
+      <button type="button" class="chip" id="dir-a" aria-pressed="true">A · Ficha de mostrador</button>
+      <button type="button" class="chip" id="dir-b" aria-pressed="false">B · Hoja compacta</button>
+    </div>
+    <div class="grupo" role="group" aria-label="Estado del pedido">
+      <p>Estado</p>
+      <button type="button" class="chip" data-estado="pendiente">Pendiente de validar</button>
+      <button type="button" class="chip" data-estado="pagado">Pagado y validado</button>
+      <button type="button" class="chip" data-estado="rechazo">Rechazo con motivo</button>
+      <button type="button" class="chip" data-estado="sin-archivo">Sin archivo de tienda</button>
+    </div>
+  </header>
+
+  <div class="velo" aria-hidden="true"></div>
+  <main class="escenario" id="ficha">
+    <article class="dialogo" id="dialogo-a" data-direccion="a" role="dialog" aria-modal="true" aria-labelledby="titulo-a">
+      <header class="cabecera">
+        <div class="identidad">
+          <h2 id="titulo-a" tabindex="-1">Pedido <span class="num" translate="no">24595</span></h2>
+          <p class="cliente" translate="no">HUB JUAREZ CARRASCO LANDY CRISTEL</p>
+          <div class="estados" data-estados></div>
+        </div>
+        <button type="button" class="icono" data-cerrar aria-label="Cerrar revisión">
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </header>
+      <div class="cuerpo">
+        <section class="bloque" aria-labelledby="datos-a">
+          <h3 id="datos-a">Datos del cliente</h3>
+          <dl class="datos">
+            <div><dt>Nombre del cliente</dt><dd translate="no">HUB JUAREZ CARRASCO LANDY CRISTEL</dd></div>
+            <div><dt>Número de cuenta</dt><dd class="num" translate="no">24595</dd></div>
+            <div><dt>Pedido</dt><dd class="num" translate="no">24595</dd></div>
+            <div><dt>Almacén</dt><dd translate="no">VTA</dd></div>
+            <div><dt>Banco</dt><dd translate="no">BANORTE</dd></div>
+            <div><dt>Tipo de pedido</dt><dd>Tienda</dd></div>
+          </dl>
+        </section>
+        <section class="bloque" aria-labelledby="pago-a">
+          <h3 id="pago-a">Comprobante y validación</h3>
+          <div class="comprobante">
+            <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>
+            <p>
+              <span class="nombre" translate="no">comprobante-banorte-24595.pdf</span><br>
+              <span class="meta">Lo adjuntó quien registra el pedido. Aquí solo se revisa.</span>
+            </p>
+          </div>
+          <div class="acciones">
+            <button type="button" class="btn btn-ok" data-validar>Pagado y validado</button>
+            <button type="button" class="btn btn-no" data-rechazar>Rechazado</button>
+          </div>
+          <div class="motivo" data-forma-rechazo hidden>
+            <label for="motivo-a">Motivo de rechazo (obligatorio)</label>
+            <textarea id="motivo-a" name="motivo_rechazo" autocomplete="off" maxlength="500" placeholder="Ej. Comprobante ilegible…"></textarea>
+            <p class="error" id="error-motivo-a" data-error hidden></p>
+            <div class="acciones">
+              <button type="button" class="btn btn-primario" data-guardar-rechazo>Guardar rechazo</button>
+              <button type="button" class="btn" data-cancelar-rechazo>Cancelar</button>
+            </div>
+          </div>
+          <p class="nota" data-nota-pago></p>
+        </section>
+        <section class="bloque" aria-labelledby="total-a">
+          <h3 id="total-a" class="sr-only">Resumen</h3>
+          <p class="total"><span>Total de la compra</span><strong class="num" data-total></strong></p>
+        </section>
+        <section class="bloque" aria-labelledby="archivo-a">
+          <h3 id="archivo-a">Archivo de tienda</h3>
+          <div data-archivo></div>
+        </section>
+      </div>
+      <footer class="pie">
+        <p class="sim">Simulación: estas acciones no se envían.</p>
+        <button type="button" class="btn btn-primario" data-aprobar hidden>Aprobar pedido</button>
+        <button type="button" class="btn" data-cerrar>Cerrar</button>
+      </footer>
+    </article>
+
+    <article class="dialogo" id="dialogo-b" data-direccion="b" role="dialog" aria-modal="true" aria-labelledby="titulo-b" hidden>
+      <header class="cabecera">
+        <div class="identidad">
+          <h2 id="titulo-b" tabindex="-1">Pedido <span class="num" translate="no">24595</span></h2>
+          <p class="cliente" translate="no">HUB JUAREZ CARRASCO LANDY CRISTEL</p>
+          <div class="estados" data-estados></div>
+        </div>
+        <button type="button" class="btn btn-primario" data-aprobar hidden>Aprobar pedido</button>
+        <button type="button" class="icono" data-cerrar aria-label="Cerrar revisión">
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </header>
+      <div class="cuerpo b-cuerpo">
+        <aside>
+          <section class="panel" aria-labelledby="cob-b">
+            <h3 id="cob-b">Cobertura</h3>
+            <p class="linea"><span>Total de la compra</span><strong class="num" data-total></strong></p>
+            <p class="linea"><span>Pagos vigentes</span><strong class="num" data-pagado>$0.00</strong></p>
+            <p class="linea"><span>Pendiente</span><strong class="num" data-pendiente>$0.00</strong></p>
+          </section>
+          <section class="panel" aria-labelledby="comp-b">
+            <h3 id="comp-b">Pedido compartido</h3>
+            <p class="meta">Contraste de importes y piezas. No sustituye la validación del pago.</p>
+            <div class="acciones">
+              <button type="button" class="btn" id="ver-compartido">Consultar pedido compartido</button>
+            </div>
+          </section>
+        </aside>
+        <div>
+          <section class="bloque" aria-labelledby="datos-b">
+            <h3 id="datos-b">Datos del cliente</h3>
+            <dl class="datos">
+              <div><dt>Nombre del cliente</dt><dd translate="no">HUB JUAREZ CARRASCO LANDY CRISTEL</dd></div>
+              <div><dt>Número de cuenta</dt><dd class="num" translate="no">24595</dd></div>
+              <div><dt>Pedido</dt><dd class="num" translate="no">24595</dd></div>
+              <div><dt>Almacén</dt><dd translate="no">VTA</dd></div>
+              <div><dt>Banco</dt><dd translate="no">BANORTE</dd></div>
+              <div><dt>Tipo de pedido</dt><dd>Tienda</dd></div>
+            </dl>
+          </section>
+          <section class="bloque" aria-labelledby="pago-b">
+            <h3 id="pago-b">Comprobante y validación</h3>
+            <div class="comprobante">
+              <p>
+                <span class="nombre" translate="no">comprobante-banorte-24595.pdf</span><br>
+                <span class="meta">Lo adjuntó quien registra el pedido. Aquí solo se revisa.</span>
+              </p>
+            </div>
+            <div class="acciones">
+              <button type="button" class="btn btn-ok" data-validar>Pagado y validado</button>
+              <button type="button" class="btn btn-no" data-rechazar>Rechazado</button>
+            </div>
+            <div class="motivo" data-forma-rechazo hidden>
+              <label for="motivo-b">Motivo de rechazo (obligatorio)</label>
+              <textarea id="motivo-b" name="motivo_rechazo_b" autocomplete="off" maxlength="500" placeholder="Ej. Comprobante ilegible…"></textarea>
+              <p class="error" id="error-motivo-b" data-error hidden></p>
+              <div class="acciones">
+                <button type="button" class="btn btn-primario" data-guardar-rechazo>Guardar rechazo</button>
+                <button type="button" class="btn" data-cancelar-rechazo>Cancelar</button>
+              </div>
+            </div>
+            <p class="nota" data-nota-pago></p>
+          </section>
+          <section class="bloque" aria-labelledby="archivo-b">
+            <h3 id="archivo-b">Archivo de tienda</h3>
+            <div data-archivo></div>
+          </section>
+        </div>
+      </div>
+      <footer class="pie">
+        <p class="sim">Dirección B, pantalla de contraste. Tampoco guarda datos. Envío, cajas y pesos no aparecen.</p>
+        <button type="button" class="btn" data-cerrar>Cerrar</button>
+      </footer>
+    </article>
+
+    <section class="reabrir" id="reabrir" hidden>
+      <h2 tabindex="-1">Revisión cerrada</h2>
+      <p>En la aplicación este diálogo se cerraría y el pedido seguiría en la bandeja.</p>
+      <button type="button" class="btn btn-primario" id="volver">Volver a abrir</button>
+    </section>
+  </main>
+  <p class="vivo" id="vivo" role="status" hidden></p>
+
+  <template id="tpl-vacio">
+    <div class="zona" data-zona>
+      <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M12 16V4m0 0l-4 4m4-4l4 4"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+      <strong>Arrastre el archivo o elíjalo</strong>
+      <span>PDF, JPG o PNG (máx.&nbsp;10&nbsp;MB)</span>
+      <label class="btn">Seleccionar archivo
+        <input class="sr-only" type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" data-input-archivo>
+      </label>
+    </div>
+  </template>
+  <template id="tpl-lleno">
+    <div class="archivo-lleno">
+      <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>
+      <p>
+        <span class="nombre" data-nombre-archivo></span><br>
+        <span class="meta">Archivo de tienda listo para la aprobación. No se sube a ningún servidor.</span>
+      </p>
+      <button type="button" class="btn" data-quitar-archivo>Quitar</button>
+    </div>
+  </template>
+
+  <script>
+    const total = 3148.66;
+    const dinero = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" });
+    const reducido = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const estadoInicial = {
+      pendiente: { pago: "pendiente", motivo: "", rechazoAbierto: false, archivo: "remision-tienda-24595.pdf" },
+      pagado: { pago: "validado", motivo: "", rechazoAbierto: false, archivo: "remision-tienda-24595.pdf" },
+      rechazo: { pago: "rechazado", motivo: "Comprobante ilegible", rechazoAbierto: false, archivo: "remision-tienda-24595.pdf" },
+      "sin-archivo": { pago: "pendiente", motivo: "", rechazoAbierto: false, archivo: "" }
+    };
+
+    const params = new URLSearchParams(location.search);
+    let direccion = params.get("direccion") === "b" ? "b" : "a";
+    let preset = estadoInicial[params.get("estado")] ? params.get("estado") : "pendiente";
+    let modelo = { ...estadoInicial[preset] };
+    let cerrado = false;
+
+    const vivo = document.getElementById("vivo");
+    const reabrir = document.getElementById("reabrir");
+    const dialogos = {
+      a: document.getElementById("dialogo-a"),
+      b: document.getElementById("dialogo-b")
+    };
+
+    function decir(texto) {
+      vivo.hidden = !texto;
+      vivo.textContent = texto || "";
+    }
+
+    function syncUrl() {
+      const siguiente = new URLSearchParams();
+      siguiente.set("direccion", direccion);
+      siguiente.set("estado", preset);
+      history.replaceState(null, "", `${location.pathname}?${siguiente}`);
+    }
+
+    function icono(tipo) {
+      if (tipo === "ok") return '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.5l4.2 4.2L19 7.5"/></svg>';
+      if (tipo === "no") return '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+      return '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l2 2"/></svg>';
+    }
+
+    function pintarArchivo(raiz) {
+      const hueco = raiz.querySelector("[data-archivo]");
+      hueco.replaceChildren();
+      if (modelo.archivo) {
+        const nodo = document.getElementById("tpl-lleno").content.cloneNode(true);
+        nodo.querySelector("[data-nombre-archivo]").textContent = modelo.archivo;
+        nodo.querySelector("[data-quitar-archivo]").addEventListener("click", () => {
+          modelo.archivo = "";
+          preset = "sin-archivo";
+          pintar();
+          decir("Simulación: se quitó el archivo de tienda. La aprobación espera otro archivo.");
+        });
+        hueco.append(nodo);
+        return;
+      }
+      const vacio = document.getElementById("tpl-vacio").content.cloneNode(true);
+      const zona = vacio.querySelector("[data-zona]");
+      const input = vacio.querySelector("[data-input-archivo]");
+      input.addEventListener("change", () => {
+        const archivo = input.files && input.files[0];
+        if (!archivo) return;
+        modelo.archivo = archivo.name;
+        pintar();
+        decir("Simulación: el archivo queda solo en esta página.");
+      });
+      ["dragover", "dragenter"].forEach((evento) => zona.addEventListener(evento, (e) => {
+        e.preventDefault();
+        zona.classList.add("sobre");
+      }));
+      zona.addEventListener("dragleave", () => zona.classList.remove("sobre"));
+      zona.addEventListener("drop", (e) => {
+        e.preventDefault();
+        zona.classList.remove("sobre");
+        const archivo = e.dataTransfer.files && e.dataTransfer.files[0];
+        if (!archivo) return;
+        modelo.archivo = archivo.name;
+        pintar();
+        decir("Simulación: el archivo queda solo en esta página.");
+      });
+      hueco.append(vacio);
+    }
+
+    function pintarDialogo(raiz) {
+      const pago = modelo.pago;
+      const estados = raiz.querySelector("[data-estados]");
+      const badge = pago === "validado"
+        ? ["badge-ok", "ok", "Pagada"]
+        : pago === "rechazado"
+          ? ["badge-no", "no", "Rechazado"]
+          : ["badge-espera", "espera", "Pendiente de validar"];
+      estados.replaceChildren();
+      const insignia = document.createElement("span");
+      insignia.className = `badge ${badge[0]}`;
+      insignia.innerHTML = `${icono(badge[1])}<span>${badge[2]}</span>`;
+      estados.append(insignia);
+
+      raiz.querySelectorAll("[data-total]").forEach((nodo) => { nodo.textContent = dinero.format(total); });
+      const cubierto = pago === "validado" ? total : 0;
+      const nodoPagado = raiz.querySelector("[data-pagado]");
+      const nodoPendiente = raiz.querySelector("[data-pendiente]");
+      if (nodoPagado) nodoPagado.textContent = dinero.format(cubierto);
+      if (nodoPendiente) nodoPendiente.textContent = dinero.format(total - cubierto);
+
+      const validar = raiz.querySelector("[data-validar]");
+      const rechazar = raiz.querySelector("[data-rechazar]");
+      const bloqueado = pago !== "pendiente";
+      validar.disabled = bloqueado;
+      rechazar.disabled = bloqueado;
+      validar.setAttribute("aria-pressed", pago === "validado" ? "true" : "false");
+      rechazar.setAttribute("aria-pressed", pago === "rechazado" ? "true" : "false");
+
+      const forma = raiz.querySelector("[data-forma-rechazo]");
+      const abierta = modelo.rechazoAbierto && pago === "pendiente";
+      forma.hidden = !abierta;
+      const area = forma.querySelector("textarea");
+      if (document.activeElement !== area) area.value = modelo.motivo;
+
+      const nota = raiz.querySelector("[data-nota-pago]");
+      if (pago === "validado") {
+        nota.textContent = modelo.archivo
+          ? "Pago validado. Ya puede aprobar el pedido."
+          : "Pago validado. Falta el archivo de tienda para aprobar.";
+      } else if (pago === "rechazado") {
+        nota.textContent = `Motivo: ${modelo.motivo}. Quien registra debe sustituir el comprobante.`;
+      } else if (!modelo.archivo) {
+        nota.textContent = "Puede validar el pago. La aprobación espera el archivo de tienda.";
+      } else {
+        nota.textContent = "Revise que el comprobante cubra el total de la compra.";
+      }
+
+      raiz.querySelector("[data-aprobar]").hidden = !(pago === "validado" && modelo.archivo);
+      pintarArchivo(raiz);
+    }
+
+    function dialogoVisible() {
+      return direccion === "b" ? dialogos.b : dialogos.a;
+    }
+
+    function pintar() {
+      document.getElementById("dir-a").setAttribute("aria-pressed", direccion === "a" ? "true" : "false");
+      document.getElementById("dir-b").setAttribute("aria-pressed", direccion === "b" ? "true" : "false");
+      document.querySelectorAll("[data-estado]").forEach((boton) => {
+        boton.setAttribute("aria-pressed", boton.dataset.estado === preset ? "true" : "false");
+      });
+      dialogos.a.hidden = cerrado || direccion !== "a";
+      dialogos.b.hidden = cerrado || direccion !== "b";
+      dialogos.a.toggleAttribute("inert", dialogos.a.hidden);
+      dialogos.b.toggleAttribute("inert", dialogos.b.hidden);
+      reabrir.hidden = !cerrado;
+      document.querySelector(".velo").hidden = cerrado;
+      if (!cerrado) {
+        pintarDialogo(dialogos.a);
+        pintarDialogo(dialogos.b);
+      }
+      if (!modelo.rechazoAbierto) dialogoVisible().querySelector(".cuerpo").scrollTop = 0;
+      syncUrl();
+    }
+
+    function aplicarPreset(nombre) {
+      preset = nombre;
+      modelo = { ...estadoInicial[nombre] };
+      cerrado = false;
+      pintar();
+    }
+
+    function validar(boton) {
+      if (modelo.pago !== "pendiente") return;
+      boton.disabled = true;
+      boton.textContent = "Validando…";
+      boton.setAttribute("aria-busy", "true");
+      const seguir = () => {
+        modelo.pago = "validado";
+        modelo.rechazoAbierto = false;
+        preset = modelo.archivo ? "pagado" : "sin-archivo";
+        pintar();
+        decir("Simulación: el pago quedaría validado.");
+      };
+      if (reducido) seguir();
+      else window.setTimeout(seguir, 450);
+    }
+
+    document.getElementById("dir-a").addEventListener("click", () => {
+      direccion = "a";
+      cerrado = false;
+      pintar();
+      dialogoVisible().querySelector("h2").focus();
+    });
+    document.getElementById("dir-b").addEventListener("click", () => {
+      direccion = "b";
+      cerrado = false;
+      pintar();
+      dialogoVisible().querySelector("h2").focus();
+    });
+    document.querySelectorAll("[data-estado]").forEach((boton) => {
+      boton.addEventListener("click", () => aplicarPreset(boton.dataset.estado));
+    });
+    document.querySelectorAll("[data-validar]").forEach((boton) => {
+      boton.addEventListener("click", () => validar(boton));
+    });
+    document.querySelectorAll("[data-rechazar]").forEach((boton) => {
+      boton.addEventListener("click", () => {
+        if (modelo.pago !== "pendiente") return;
+        modelo.rechazoAbierto = true;
+        pintar();
+        const area = dialogoVisible().querySelector("textarea");
+        area.scrollIntoView({ block: "center" });
+        area.focus();
+      });
+    });
+    document.querySelectorAll("[data-cancelar-rechazo]").forEach((boton) => {
+      boton.addEventListener("click", () => {
+        modelo.rechazoAbierto = false;
+        pintar();
+      });
+    });
+    document.querySelectorAll("[data-guardar-rechazo]").forEach((boton) => {
+      boton.addEventListener("click", () => {
+        const visible = dialogoVisible();
+        const area = visible.querySelector("textarea");
+        const error = visible.querySelector("[data-error]");
+        const texto = area.value.trim();
+        modelo.motivo = texto;
+        if (texto.length < 3) {
+          error.hidden = false;
+          error.textContent = "Escriba el motivo del rechazo para que quien registra pueda corregir el comprobante.";
+          area.setAttribute("aria-invalid", "true");
+          area.setAttribute("aria-describedby", error.id);
+          area.focus();
+          return;
+        }
+        area.removeAttribute("aria-invalid");
+        error.hidden = true;
+        modelo.pago = "rechazado";
+        modelo.rechazoAbierto = false;
+        preset = "rechazo";
+        pintar();
+        decir("Simulación: el comprobante dejaría de contar para la cobertura.");
+      });
+    });
+    document.querySelectorAll("[data-aprobar]").forEach((boton) => {
+      boton.addEventListener("click", () => {
+        decir("Simulación: el pedido se aprobaría y saldría de la bandeja.");
+      });
+    });
+    document.querySelectorAll("[data-cerrar]").forEach((boton) => {
+      boton.addEventListener("click", () => {
+        cerrado = true;
+        pintar();
+        decir("Simulación: se cerraría la revisión.");
+        document.getElementById("volver").focus();
+      });
+    });
+    document.getElementById("volver").addEventListener("click", () => {
+      cerrado = false;
+      decir("");
+      pintar();
+      dialogoVisible().querySelector("h2").focus();
+    });
+    document.getElementById("ver-compartido").addEventListener("click", () => {
+      decir("Simulación: se abriría el pedido compartido para contrastar importes y piezas.");
+    });
+    document.addEventListener("keydown", (evento) => {
+      if (evento.key === "Escape" && !cerrado) {
+        cerrado = true;
+        pintar();
+        decir("Simulación: se cerraría la revisión.");
+        document.getElementById("volver").focus();
+      }
+    });
+
+    pintar();
+  </script>
+</body>
+</html>

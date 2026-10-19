@@ -47,6 +47,12 @@
         ],
         "createdAt": "2026-10-08T18:46:23.722Z",
         "reason": "Prototipo visual-discovery: tipografía system-ui alineada a fallback de tokens GELIA sin cargar Inter en HTML aislado"
+      },
+      {
+        "rule": "overused-font",
+        "value": "inter",
+        "createdAt": "2026-10-19T18:43:10.060Z",
+        "reason": "El plan aprobado y resources/css/gelia/tokens.css fijan Inter como --font-principal de GELIA; el prototipo aislado no introduce otra familia."
       }
     ]
   }
