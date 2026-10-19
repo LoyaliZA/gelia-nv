@@ -567,6 +567,7 @@ export default function ModalFormPedidoLegado({
     const tareaPreparacionVigente = ['PENDIENTE', 'EN_ATENCION', 'CON_INCIDENCIA', 'LIBERACION_SOLICITADA', 'LISTA_PARA_TRASLADO', 'LISTA_PARA_CARATULA', 'EN_TRASLADO', 'RECHAZADA_CEDIS'].includes(tareaPreparacion?.estado);
     const usaPreparacionTienda = tareaPreparacionVigente;
     const esRecogeTienda = recogeEnTienda || tareaPreparacion?.modalidad?.codigo === 'RECOGE_TIENDA';
+    const etiquetaFolio = esRecogeTienda ? 'Folio de la cotización' : 'Folio del pedido';
     const modalidadTiendaSeleccionada = Boolean(codigoModalidadPreparacion) && codigoModalidadPreparacion !== 'RECOGE_TIENDA';
     const almacenSeleccionado = (catalogos.almacenes || []).find((a) => String(a.id) === String(data.almacen_id));
     const salidaEsPdv = esAlmacenTipoPdv(almacenSeleccionado);
@@ -3432,22 +3433,24 @@ export default function ModalFormPedidoLegado({
                     <SeccionSolicitudInicialPedido soloHijos>
                     <section className={`${SECCION_WRAP} ${wrapCampo('pdf_pedido')}`} data-campo="pdf_pedido" onPaste={pegarPdfPedido}>
                         <p className={SECCION}>
-                            {nSec.pdf}. {requiereLogistica ? 'Folio, paquetería y archivo del pedido' : 'Folio y archivo del pedido'}
+                            {nSec.pdf}. {etiquetaFolio}
                         </p>
                         <div className="space-y-4">
                         {!requiereLogistica && (
                             <p className="text-[10px] font-bold theme-text-muted m-0 -mt-1">
-                                Capture el folio y adjunte la cotización o el soporte. El comprobante de pago se carga en la sección de pago.
+                                {esRecogeTienda
+                                    ? 'Capture el folio de la cotización y adjunte el soporte. El comprobante de pago se carga en la sección de pago.'
+                                    : 'Capture el folio y adjunte la cotización o el soporte. El comprobante de pago se carga en la sección de pago.'}
                             </p>
                         )}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className={wrapCampo('folio_remision')} data-campo="folio_remision">
-                                <label className={SECCION}>Folio del pedido *</label>
+                                <label className={SECCION}>{etiquetaFolio} *</label>
                                 <input
                                     type="text"
                                     value={data.folio_remision}
                                     onChange={(e) => setData('folio_remision', e.target.value)}
-                                    placeholder="Folio..."
+                                    placeholder={esRecogeTienda ? 'Folio de la cotización...' : 'Folio...'}
                                     className={`${THEME_INPUT} w-full py-3`}
                                 />
                             </div>
@@ -4569,7 +4572,7 @@ export default function ModalFormPedidoLegado({
                         <p className={SECCION}>{nSec.rem}. Remisión</p>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                                <label className={SECCION}>Folio del pedido</label>
+                                <label className={SECCION}>{etiquetaFolio}</label>
                                 <input
                                     type="text"
                                     readOnly
@@ -4630,7 +4633,7 @@ export default function ModalFormPedidoLegado({
                                 accionLabel={mostrarEnviarPedido ? 'Enviar pedido' : null}
                                 onAccion={() => guardar(true)}
                                 accionDisabled={processing || !enviarPedidoListo}
-                                secundarioLabel="Guardar borrador"
+                                secundarioLabel={puedeAutoguardarBd ? 'Guardar borrador' : null}
                                 onSecundario={() => guardar(false, { cerrar: false })}
                             />
                             <HistorialPedidoAcordeon historial={pedido?.historial || []} />
@@ -4688,9 +4691,11 @@ export default function ModalFormPedidoLegado({
                                 <Send className="w-4 h-4" /> Enviar pedido
                             </button>
                         )}
+                        {puedeAutoguardarBd && (
                         <button type="button" onClick={() => guardar(false, { cerrar: false })} disabled={processing} className={`${mostrarEnviarPedido ? BTN_SECONDARY : BTN_PRIMARY} flex items-center gap-2`}>
                             <Save className="w-4 h-4" /> Guardar borrador
                         </button>
+                        )}
 
                         </div>
                     </section>
