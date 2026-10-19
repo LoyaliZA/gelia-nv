@@ -22,6 +22,10 @@ trait ValidacionCamposPedidoBma
         $envioPorCobrar = (bool) $pedido->envio_por_cobrar;
         $tienePesaje = $pedido->tienePesajeRespondido();
         $modoRevisionMercancia = $pedido->consultaCedisModoRevisionMercancia();
+        $esMunicipalSinLogistica = $pedido->esEnvioMunicipalSinLogistica();
+        if ($esMunicipalSinLogistica) {
+            $omiteCosto = true;
+        }
 
         if ($guiaCliente || $envioPorCobrar) {
             $omiteCosto = true;
@@ -134,7 +138,7 @@ trait ValidacionCamposPedidoBma
                 }
             } elseif ($tienePesaje && $modoRevisionMercancia) {
                 $pedido->loadMissing('paqueteria');
-                if ($pedido->paqueteria?->requiere_caja && ! $pedido->esTrasladoInternoAPdv()) {
+                if (! $esMunicipalSinLogistica && $pedido->paqueteria?->requiere_caja && ! $pedido->esTrasladoInternoAPdv()) {
                     if (! $pedido->catalogo_tipo_caja_id) {
                         $faltantes[] = 'tipo de caja';
                     }
@@ -158,7 +162,7 @@ trait ValidacionCamposPedidoBma
                 if (! $esResguardoAbierto && ! $pedido->catalogo_paqueteria_id) {
                     $faltantes[] = 'paquetería';
                 }
-                if (! $esResguardoAbierto) {
+                if (! $esResguardoAbierto && ! $esMunicipalSinLogistica) {
                     if (! $pedido->catalogo_tipo_guia_id) {
                         $faltantes[] = 'tipo de guía';
                     }

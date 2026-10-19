@@ -73,7 +73,7 @@ class ObtenerCatalogosPedidoBmaService
             'formas_pago' => PedidoBmaPago::formasPagoCatalogo(),
             'tipos_caja' => CatalogoTipoCajaPedido::where('activo', true)->orderBy('nombre')->get(['id', 'nombre', 'peso_volumetrico', 'medidas', 'largo', 'ancho', 'alto']),
             'paqueterias' => CatalogoPaqueteriaPedido::where('activo', true)->orderBy('categoria')->orderBy('nombre')->get([
-                'id', 'nombre', 'categoria', 'permite_costo_diferido',
+                'id', 'nombre', 'categoria', 'permite_costo_diferido', 'sin_logistica',
                 'modalidad_tarifa', 'tarifa_monto', 'tarifa_unidad_peso', 'tarifa_paso_peso',
                 'requiere_caratula', 'requiere_identificacion', 'requiere_remision', 'permite_por_cobrar',
                 'requiere_peso', 'requiere_caja', 'requiere_evidencia_conjunto', 'campos_destino_obligatorios',
@@ -89,7 +89,7 @@ class ObtenerCatalogosPedidoBmaService
                 ->where('reglas_municipio_pendientes', false)
                 ->orderBy('nombre')
                 ->get([
-                    'id', 'nombre', 'categoria',
+                    'id', 'nombre', 'categoria', 'sin_logistica',
                     'requiere_caratula', 'requiere_identificacion', 'requiere_remision', 'permite_por_cobrar',
                     'requiere_peso', 'requiere_caja', 'requiere_evidencia_conjunto', 'campos_destino_obligatorios',
                     'plantilla_caratula', 'habilitado_envio_municipio',

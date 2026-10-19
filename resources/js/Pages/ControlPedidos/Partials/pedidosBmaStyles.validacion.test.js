@@ -121,6 +121,7 @@ describe('pedidoModoRevisionMercancia', () => {
         expect(pedidoModoRevisionMercancia(null, { categoria: 'local_regional', requiere_peso: false }, true)).toBe(true);
         expect(pedidoModoRevisionMercancia(null, { categoria: 'local_regional', requiere_peso: true }, true)).toBe(false);
         expect(pedidoModoRevisionMercancia(null, { categoria: 'comercial', requiere_peso: false }, true)).toBe(false);
+        expect(pedidoModoRevisionMercancia(null, { categoria: 'comercial', requiere_peso: true, sin_logistica: true }, true)).toBe(true);
         expect(pedidoModoRevisionMercancia({}, null, true)).toBe(false);
         expect(pedidoModoRevisionMercancia({}, null, false)).toBe(true);
     });
@@ -159,6 +160,10 @@ describe('pedidoModoRevisionMercancia', () => {
             origen: { requiere_logistica: true },
             paqueteria: { categoria: 'comercial', requiere_peso: false },
         })).toBe(false);
+        expect(cedisConsultaEsRevisionMercancia({
+            origen: { requiere_logistica: true },
+            paqueteria: { categoria: 'comercial', sin_logistica: true, requiere_peso: true },
+        })).toBe(true);
         expect(cedisConsultaEsRevisionMercancia({ origen: { requiere_logistica: false } })).toBe(true);
     });
 
@@ -211,6 +216,64 @@ describe('pedidoModoRevisionMercancia', () => {
         });
         expect(out.claves).toContain('tipo_caja');
         expect(out.claves).not.toContain('peso_real');
+    });
+
+    it('el municipal sin logística no pide dirección, guía ni peso', () => {
+        const out = validarCamposEnvioPedido({
+            ...baseTienda,
+            catalogo_paqueteria_id: 4,
+            catalogo_tipo_guia_id: '',
+            catalogo_zona_id: '',
+            codigo_postal: '',
+            domicilio_entrega: '',
+            costo_envio: '',
+            peso_real_kg: '',
+            catalogo_tipo_caja_id: '',
+            numero_cajas: '',
+        }, {
+            requiereLogistica: true,
+            tienePesajeRespondido: true,
+            tienePdfPedido: true,
+            pagoPendiente: 0,
+            consultaCerrada: true,
+            requiereConsultaCerrada: true,
+            paqueteria: { categoria: 'comercial', sin_logistica: true, requiere_peso: true, requiere_caja: true },
+        });
+        expect(out.claves).not.toContain('tipo_guia');
+        expect(out.claves).not.toContain('reexpedicion');
+        expect(out.claves).not.toContain('domicilio');
+        expect(out.claves).not.toContain('peso_real');
+        expect(out.claves).not.toContain('tipo_caja');
+        expect(out.claves).not.toContain('costo_envio');
+        expect(out.valido).toBe(true);
+        expect(esCotizacionLista({
+            requiereLogistica: true,
+            cotizacionHabilitada: true,
+            sinLogistica: true,
+            catalogo_paqueteria_id: 4,
+            total_mercancia: 100,
+        })).toBe(true);
+    });
+
+    it('el comercial sin marca sigue pidiendo guía y dirección', () => {
+        const out = validarCamposEnvioPedido({
+            ...baseTienda,
+            catalogo_paqueteria_id: 4,
+            peso_real_kg: 1,
+            catalogo_tipo_caja_id: 2,
+            numero_cajas: 1,
+        }, {
+            requiereLogistica: true,
+            tienePesajeRespondido: true,
+            tienePdfPedido: true,
+            pagoPendiente: 0,
+            consultaCerrada: true,
+            requiereConsultaCerrada: true,
+            paqueteria: { categoria: 'comercial', requiere_peso: true },
+            detalleCajas: false,
+        });
+        expect(out.claves).toContain('tipo_guia');
+        expect(out.claves).toContain('domicilio');
     });
 
     it('el traslado CEDIS a sucursal no pide paquetería ni guía', () => {

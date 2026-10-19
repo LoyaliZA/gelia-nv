@@ -14,6 +14,7 @@ const formVacio = () => ({
     nombre: '',
     categoria: 'local_regional',
     permite_costo_diferido: true,
+    sin_logistica: false,
     modalidad_tarifa: '',
     tarifa_monto: '',
     tarifa_unidad_peso: 'kg',
@@ -53,6 +54,7 @@ export default function TablaPaqueteriasPedido({ datos = [] }) {
             nombre: item.nombre,
             categoria: item.categoria || 'local_regional',
             permite_costo_diferido: item.permite_costo_diferido ?? item.categoria === 'local_regional',
+            sin_logistica: Boolean(item.sin_logistica),
             modalidad_tarifa: item.modalidad_tarifa || '',
             tarifa_monto: item.tarifa_monto ?? '',
             tarifa_unidad_peso: item.tarifa_unidad_peso || 'kg',
@@ -69,6 +71,7 @@ export default function TablaPaqueteriasPedido({ datos = [] }) {
             nombre: data.nombre,
             categoria: data.categoria,
             permite_costo_diferido: Boolean(data.permite_costo_diferido),
+            sin_logistica: Boolean(data.sin_logistica),
             modalidad_tarifa: data.modalidad_tarifa || null,
             tarifa_monto: data.tarifa_monto === '' ? null : data.tarifa_monto,
             tarifa_unidad_peso: data.tarifa_unidad_peso || null,
@@ -123,6 +126,7 @@ export default function TablaPaqueteriasPedido({ datos = [] }) {
                             <th className="px-6 py-4 text-left text-[9px] font-black theme-text-muted uppercase tracking-widest">Categoría_</th>
                             <th className="px-6 py-4 text-left text-[9px] font-black theme-text-muted uppercase tracking-widest">Tarifa local_</th>
                             <th className="px-6 py-4 text-left text-[9px] font-black theme-text-muted uppercase tracking-widest">Costo diferido_</th>
+                            <th className="px-6 py-4 text-left text-[9px] font-black theme-text-muted uppercase tracking-widest">Sin logística_</th>
                             <th className="px-6 py-4 text-left text-[9px] font-black theme-text-muted uppercase tracking-widest">Status_</th>
                             <th className="px-6 py-4 text-right text-[9px] font-black theme-text-muted uppercase tracking-widest">Acciones_</th>
                         </tr>
@@ -134,6 +138,7 @@ export default function TablaPaqueteriasPedido({ datos = [] }) {
                                 <td className="px-6 py-5 text-sm font-bold theme-text-muted">{ETIQUETAS_CATEGORIA[item.categoria] || item.categoria}</td>
                                 <td className="px-6 py-5 text-sm font-bold theme-text-muted">{etiquetaTarifa(item)}</td>
                                 <td className="px-6 py-5 text-sm font-bold theme-text-muted">{item.permite_costo_diferido ? 'Sí' : 'No'}</td>
+                                <td className="px-6 py-5 text-sm font-bold theme-text-muted">{item.sin_logistica ? 'Sí' : 'No'}</td>
                                 <td className="px-6 py-5">
                                     <span className={`inline-flex px-3 py-1.5 rounded-full text-[9px] font-black uppercase ${item.activo ? 'bg-emerald-500/10 text-emerald-600' : 'bg-red-500/10 text-red-600'}`}>
                                         {item.activo ? 'Activo' : 'Inactivo'}
@@ -188,6 +193,20 @@ export default function TablaPaqueteriasPedido({ datos = [] }) {
                                     className="w-4 h-4"
                                 />
                                 <span className="text-sm font-bold theme-text-main">Permite costo de envío diferido (municipio)</span>
+                            </label>
+                            <label className="flex items-start gap-3 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={Boolean(data.sin_logistica)}
+                                    onChange={(e) => setData('sin_logistica', e.target.checked)}
+                                    className="w-4 h-4 mt-0.5"
+                                />
+                                <span className="text-sm font-bold theme-text-main">
+                                    Sin logística / no genera guía
+                                    <span className="block text-[10px] font-bold theme-text-muted mt-1">
+                                        Envío foráneo o municipal: no pide dirección, guía ni reexpedición. CEDIS solo confirma piezas. No marcar paqueterías internas ni comerciales con logística.
+                                    </span>
+                                </span>
                             </label>
                             {esLocal && (
                                 <div className="space-y-4 p-4 rounded-2xl border theme-border">

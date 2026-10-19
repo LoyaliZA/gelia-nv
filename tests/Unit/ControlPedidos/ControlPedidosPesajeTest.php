@@ -2,6 +2,7 @@
 
 namespace Tests\Unit\ControlPedidos;
 
+use App\Models\Almacen;
 use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\CatalogoOrigenPedido;
 use App\Models\ControlPedidos\CatalogoPaqueteriaPedido;
@@ -234,6 +235,40 @@ class ControlPedidosPesajeTest extends TestCase
         $pedidoCom->setRelation('origen', $origenEnvio);
         $pedidoCom->setRelation('paqueteria', $comercial);
         $this->assertFalse($pedidoCom->consultaCedisModoRevisionMercancia());
+
+        $sinGuia = new CatalogoPaqueteriaPedido([
+            'categoria' => CatalogoPaqueteriaPedido::CATEGORIA_COMERCIAL,
+            'requiere_peso' => true,
+            'sin_logistica' => true,
+        ]);
+        $pedidoMunicipal = new PedidoBma;
+        $pedidoMunicipal->setRelation('origen', $origenEnvio);
+        $pedidoMunicipal->setRelation('paqueteria', $sinGuia);
+        $this->assertTrue($pedidoMunicipal->consultaCedisModoRevisionMercancia());
+        $this->assertTrue($pedidoMunicipal->esEnvioMunicipalSinLogistica());
+    }
+
+    public function test_traslado_interno_no_entra_en_envio_municipal_sin_logistica(): void
+    {
+        $almacen = new Almacen(['codigo' => 'CEDIS-INT']);
+        $almacen->setRelation('tipoAlmacen', null);
+        $pedido = new PedidoBma([
+            'almacen_id' => 3,
+            'sucursal_destino_id' => 9,
+        ]);
+        $pedido->setRelation('almacen', $almacen);
+        $pedido->setRelation('tareaPreparacionVigente', null);
+        $pedido->setRelation('tareaPreparacionRespondida', null);
+        $pedido->setRelation('origen', new CatalogoOrigenPedido(['requiere_logistica' => true]));
+        $pedido->setRelation('paqueteria', new CatalogoPaqueteriaPedido([
+            'categoria' => CatalogoPaqueteriaPedido::CATEGORIA_COMERCIAL,
+            'sin_logistica' => true,
+            'requiere_peso' => true,
+        ]));
+
+        $this->assertTrue($pedido->esTrasladoInternoAPdv());
+        $this->assertFalse($pedido->esEnvioMunicipalSinLogistica());
+        $this->assertTrue($pedido->consultaCedisModoRevisionMercancia());
     }
 
     public function test_enviar_revision_mercancia_no_exige_pesos(): void

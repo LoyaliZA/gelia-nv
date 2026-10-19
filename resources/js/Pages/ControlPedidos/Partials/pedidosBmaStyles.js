@@ -1155,6 +1155,7 @@ export const esCotizacionLista = ({
     esResguardoAbierto = false,
     esResguardoComplementario = false,
     omiteCosto = false,
+    sinLogistica = false,
     catalogo_paqueteria_id = '',
     catalogo_tipo_guia_id = '',
     catalogo_zona_id = '',
@@ -1168,6 +1169,7 @@ export const esCotizacionLista = ({
     // Resguardo: envío/dirección se capturan al Completar envío; basta mercancía/consulta.
     if (guiaCliente || envioPorCobrar || esResguardoAbierto || esResguardoComplementario) return true;
     if (!catalogo_paqueteria_id) return false;
+    if (sinLogistica) return true;
     if (!omiteCosto && (costo_envio === '' || costo_envio == null)) return false;
     if (!catalogo_tipo_guia_id) return false;
     if (!catalogo_zona_id) return false;
@@ -1191,13 +1193,15 @@ export const textoWhatsAppPedido = (pedido) => {
 
 /**
  * Consulta CEDIS sin kilogramos obligatorios.
- * Origen sin logística, o transporte local/regional con requiere_peso false.
- * Una paquetería comercial no entra, aunque requiere_peso sea false.
+ * Origen sin logística, paquetería marcada sin logística, o transporte local/regional con requiere_peso false.
+ * Una paquetería comercial sin esa marca no entra, aunque requiere_peso sea false.
  */
 export const pedidoModoRevisionMercancia = (pedido, paqueteria, requiereLogistica = true) => {
     if (pedidoEsTrasladoInternoPdv(pedido) || requiereLogistica === false) return true;
     const paq = paqueteria || pedido?.paqueteria;
-    if (!paq || paq.categoria !== 'local_regional') return false;
+    if (!paq) return false;
+    if (paq.sin_logistica) return true;
+    if (paq.categoria !== 'local_regional') return false;
     return paq.requiere_peso === false;
 };
 
@@ -1287,6 +1291,7 @@ export const validarCamposEnvioPedido = (data, {
     tienePagoEnvioAnexo = false,
 } = {}) => {
     const faltantes = [];
+    const envioMunicipalSinLogistica = Boolean(paqueteria?.sin_logistica) && !trasladoInternoCedisPdv;
     const modoRevisionMercancia = trasladoInternoCedisPdv || pedidoModoRevisionMercancia(data, paqueteria, requiereLogistica);
     const sinPesoCapturado = (data.peso_real_kg === '' || data.peso_real_kg == null)
         && (data.peso_cobrado_guia_kg === '' || data.peso_cobrado_guia_kg == null || Number(data.peso_cobrado_guia_kg) <= 0);
@@ -1296,6 +1301,7 @@ export const validarCamposEnvioPedido = (data, {
         && paqueteria.modalidad_tarifa === 'por_peso'
     );
     const omiteCosto = esMunicipioDiferido || esResguardoAbierto || esResguardoComplementario
+        || envioMunicipalSinLogistica
         || Boolean(data.cliente_proporciona_guia)
         || Boolean(data.envio_por_cobrar)
         || (tarifaPorPesoLocal && (!tienePesajeRespondido || (modoRevisionMercancia && sinPesoCapturado)));
@@ -1360,7 +1366,7 @@ export const validarCamposEnvioPedido = (data, {
             if (data.peso_real_kg === '' || data.peso_real_kg == null) marcar('peso_real', 'peso real (pesaje CEDIS)');
             if (!data.catalogo_tipo_caja_id) marcar('tipo_caja', 'tipo de caja (pesaje CEDIS)');
             if (data.numero_cajas === '' || data.numero_cajas == null) marcar('numero_envios', 'número de envíos (pesaje CEDIS)');
-        } else if (tienePesajeRespondido && modoRevisionMercancia && requiereLogistica && !trasladoInternoCedisPdv && paqueteria?.requiere_caja) {
+        } else if (tienePesajeRespondido && modoRevisionMercancia && requiereLogistica && !trasladoInternoCedisPdv && !envioMunicipalSinLogistica && paqueteria?.requiere_caja) {
             if (!data.catalogo_tipo_caja_id) marcar('tipo_caja', 'tipo de caja');
             if (data.numero_cajas === '' || data.numero_cajas == null) marcar('numero_envios', 'bultos');
         } else if (!omiteCosto && !modoRevisionMercancia) {
@@ -1371,7 +1377,7 @@ export const validarCamposEnvioPedido = (data, {
 
         if (!guiaCliente && !trasladoInternoCedisPdv) {
             if (!esResguardoAbierto && !data.catalogo_paqueteria_id) marcar('paqueteria', 'paquetería');
-            if (!esResguardoAbierto) {
+            if (!esResguardoAbierto && !envioMunicipalSinLogistica) {
                 if (!data.catalogo_tipo_guia_id) marcar('tipo_guia', 'tipo de guía');
                 if (!data.catalogo_zona_id) marcar('reexpedicion', 'reexpedición');
                 if (!String(data.codigo_postal || '').trim()) marcar('codigo_postal', 'código postal');

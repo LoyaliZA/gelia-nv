@@ -18,7 +18,7 @@ class CatalogoPaqueteriaPedido extends Model
     public const UNIDAD_G = 'g';
 
     protected $fillable = [
-        'nombre', 'categoria', 'permite_costo_diferido', 'activo', 'costo_seguro_default',
+        'nombre', 'categoria', 'permite_costo_diferido', 'sin_logistica', 'activo', 'costo_seguro_default',
         'modalidad_tarifa', 'tarifa_monto', 'tarifa_unidad_peso', 'tarifa_paso_peso',
         'requiere_caratula', 'requiere_identificacion', 'requiere_remision', 'permite_por_cobrar',
         'requiere_peso', 'requiere_caja', 'requiere_evidencia_conjunto', 'campos_destino_obligatorios',
@@ -28,6 +28,7 @@ class CatalogoPaqueteriaPedido extends Model
     protected $casts = [
         'activo' => 'boolean',
         'permite_costo_diferido' => 'boolean',
+        'sin_logistica' => 'boolean',
         'requiere_caratula' => 'boolean',
         'requiere_identificacion' => 'boolean',
         'requiere_remision' => 'boolean',
@@ -56,6 +57,15 @@ class CatalogoPaqueteriaPedido extends Model
     public function permiteCostoDiferido(): bool
     {
         return (bool) $this->permite_costo_diferido;
+    }
+
+    /**
+     * Foráneo o municipal: no genera guía ni usa dirección de catálogo.
+     * No se infiere de la categoría; una paquetería interna permanece en false.
+     */
+    public function sinLogistica(): bool
+    {
+        return (bool) $this->sin_logistica;
     }
 
     public function esLocalRegional(): bool

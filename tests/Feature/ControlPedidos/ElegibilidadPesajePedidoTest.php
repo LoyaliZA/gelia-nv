@@ -166,6 +166,92 @@ class ElegibilidadPesajePedidoTest extends TestCase
         }
     }
 
+    public function test_sin_logistica_desde_cedis_no_exige_direccion_guia_ni_peso(): void
+    {
+        $pedido = $this->pedidoListo(true, CatalogoPaqueteriaPedido::CATEGORIA_COMERCIAL, true);
+        $pedido->paqueteria->update([
+            'sin_logistica' => true,
+            'requiere_caja' => true,
+            'permite_costo_diferido' => true,
+        ]);
+        $pedido->update([
+            'catalogo_tipo_guia_id' => null,
+            'catalogo_zona_id' => null,
+            'codigo_postal' => null,
+            'domicilio_entrega' => null,
+            'costo_envio' => null,
+            'peso_real_kg' => null,
+            'catalogo_tipo_caja_id' => null,
+            'numero_cajas' => null,
+        ]);
+
+        $this->validar($pedido);
+        $fresco = $pedido->fresh();
+        $this->assertTrue($fresco->esEnvioMunicipalSinLogistica());
+        $this->assertTrue($fresco->consultaCedisModoRevisionMercancia());
+        $this->assertNull($fresco->domicilio_entrega);
+        $this->assertNull($fresco->peso_real_kg);
+    }
+
+    public function test_comercial_sin_marca_sigue_exigiendo_direccion_y_guia(): void
+    {
+        $pedido = $this->pedidoListo(true, CatalogoPaqueteriaPedido::CATEGORIA_COMERCIAL, true);
+        $tipo = CatalogoTipoCajaPedido::query()->create(['nombre' => 'Caja nacional Q5', 'activo' => true]);
+        $pedido->update([
+            'peso_real_kg' => 1.2,
+            'catalogo_tipo_caja_id' => $tipo->id,
+            'numero_cajas' => 1,
+            'catalogo_tipo_guia_id' => null,
+            'catalogo_zona_id' => null,
+            'codigo_postal' => null,
+            'domicilio_entrega' => null,
+        ]);
+        PedidoBmaCaja::query()->create([
+            'pedido_bma_id' => $pedido->id,
+            'catalogo_tipo_caja_id' => $tipo->id,
+            'cantidad' => 1,
+            'orden' => 1,
+            'peso_real_kg' => 1.2,
+            'peso_volumetrico_kg' => 1,
+            'estatus_recoleccion' => PedidoBmaCaja::ESTATUS_PENDIENTE,
+            'estado_operativo' => PedidoBmaCaja::ESTADO_ACTIVA,
+        ]);
+
+        try {
+            $this->validar($pedido->fresh());
+            $this->fail('El envío comercial sigue pidiendo guía y dirección.');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('tipo de guía', $e->getMessage());
+            $this->assertStringContainsString('domicilio de entrega', $e->getMessage());
+        }
+    }
+
+    public function test_tienda_municipal_sin_logistica_no_repite_direccion_ni_guia(): void
+    {
+        $pedido = $this->pedidoListo(true, CatalogoPaqueteriaPedido::CATEGORIA_LOCAL_REGIONAL, false);
+        $pedido->paqueteria->update(['sin_logistica' => true, 'requiere_peso' => false, 'requiere_caja' => false]);
+        $this->tarea(
+            $pedido,
+            PedidoBmaTareaPreparacion::ESTADO_LISTA_PARA_CARATULA,
+            CatalogoModalidadPreparacionPedido::CODIGO_ENVIO_MUNICIPIO,
+            false,
+            $pedido->catalogo_paqueteria_id
+        );
+        $pedido->update([
+            'catalogo_tipo_guia_id' => null,
+            'catalogo_zona_id' => null,
+            'codigo_postal' => null,
+            'domicilio_entrega' => null,
+            'costo_envio' => null,
+            'peso_real_kg' => null,
+            'catalogo_tipo_caja_id' => null,
+            'numero_cajas' => null,
+        ]);
+
+        $this->validar($pedido);
+        $this->assertTrue($pedido->fresh()->esEnvioMunicipalSinLogistica());
+    }
+
     public function test_nombre_de_departamento_no_cambia_la_obligacion_de_pesaje(): void
     {
         foreach (['Aromas Q5', 'Bellaroma Q5'] as $nombre) {

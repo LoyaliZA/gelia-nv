@@ -654,6 +654,9 @@ export default function ModalFormPedidoLegado({
     const transporteMunicipalSel = paqueteriasMunicipio.find(
         (p) => String(p.id) === String(entregaMunicipal.catalogo_paqueteria_id)
     );
+    const paqueteriaDelCaso = paqueteriaSeleccionada
+        || (esModalidadMunicipio ? transporteMunicipalSel : null);
+    const envioMunicipalSinLogistica = Boolean(paqueteriaDelCaso?.sin_logistica) && !trasladoInterno;
     const requisitosMunicipioUi = transporteMunicipalSel ? [
         transporteMunicipalSel.requiere_identificacion && 'Identificación',
         transporteMunicipalSel.requiere_remision && 'Remisión',
@@ -718,7 +721,7 @@ export default function ModalFormPedidoLegado({
         && !consultaCerrada
         && !pedido?.empacado_at;
     const puedeCerrarConsulta = Boolean(pedido?.puede_cerrar_consulta);
-    const esConsultaMercancia = pedidoModoRevisionMercancia({ ...data, es_traslado_interno_pdv: trasladoInterno }, paqueteriaSeleccionada, origenRequiereLogistica);
+    const esConsultaMercancia = pedidoModoRevisionMercancia({ ...data, es_traslado_interno_pdv: trasladoInterno }, paqueteriaDelCaso, origenRequiereLogistica);
     const labelConsulta = enFlujoTienda
         ? (esModalidadBodega || tareaPreparacion?.requiere_traslado_cedis
             ? 'Preparación Tienda → CEDIS'
@@ -734,7 +737,7 @@ export default function ModalFormPedidoLegado({
         && paqueteriaSeleccionada?.modalidad_tarifa === 'por_peso'
         && (!tienePesajeRespondido || (esConsultaMercancia && sinPesoOpcional));
     const omiteCosto = esMunicipioDiferido || esResguardoAbierto || esResguardoComplementario
-        || guiaCliente || envioPorCobrar || omiteCostoPorTarifaPeso;
+        || envioMunicipalSinLogistica || guiaCliente || envioPorCobrar || omiteCostoPorTarifaPeso;
     const cotizacionLista = esCotizacionLista({
         requiereLogistica,
         cotizacionHabilitada,
@@ -743,6 +746,7 @@ export default function ModalFormPedidoLegado({
         esResguardoAbierto,
         esResguardoComplementario,
         omiteCosto,
+        sinLogistica: envioMunicipalSinLogistica,
         catalogo_paqueteria_id: data.catalogo_paqueteria_id,
         catalogo_tipo_guia_id: data.catalogo_tipo_guia_id,
         catalogo_zona_id: data.catalogo_zona_id,
@@ -752,8 +756,8 @@ export default function ModalFormPedidoLegado({
     const motivosCotizacion = !requiereLogistica || cotizacionLista ? [] : [
         !data.catalogo_paqueteria_id ? 'paquetería' : null,
         !omiteCosto && (data.costo_envio === '' || data.costo_envio == null) ? 'costo de envío' : null,
-        !data.catalogo_tipo_guia_id ? 'tipo de guía' : null,
-        !data.catalogo_zona_id ? 'zona' : null,
+        !envioMunicipalSinLogistica && !data.catalogo_tipo_guia_id ? 'tipo de guía' : null,
+        !envioMunicipalSinLogistica && !data.catalogo_zona_id ? 'zona' : null,
     ].filter(Boolean);
     const labelCostoEnvio = etiquetaCostoEnvio(paqueteriaSeleccionada);
     const idPedidoAcciones = modoEdicion ? pedido?.id : pedidoBdId;
@@ -833,7 +837,7 @@ export default function ModalFormPedidoLegado({
         tienePesajeRespondido,
         tienePdfPedido,
         pagoPendiente: pagoPendienteVivo,
-        paqueteria: paqueteriaSeleccionada,
+        paqueteria: paqueteriaDelCaso,
         consultaCerrada,
         requiereConsultaCerrada: requiereConsultaCerradaUi,
         manualDireccionCompleta: Boolean(data.direccion_manual_excepcion)
@@ -3989,7 +3993,7 @@ export default function ModalFormPedidoLegado({
                     </section>
                     )}
 
-                    {mostrarLogisticaPostPesaje && !esResguardoAbierto && (
+                    {mostrarLogisticaPostPesaje && !esResguardoAbierto && !envioMunicipalSinLogistica && (
                     <>
                     {/* Dirección de envío */}
                     <section className={SECCION_WRAP}>
@@ -4419,7 +4423,7 @@ export default function ModalFormPedidoLegado({
                             )}
                             {!guiaCliente && !envioPorCobrar && (
                                 <div className={`max-w-md ${wrapCampo('costo_envio')}`} data-campo="costo_envio">
-                                    <label className={SECCION}>{labelCostoEnvio}{esMunicipioDiferido || omiteCostoPorTarifaPeso ? ' (opcional)' : ''}{camposEnvioBloqueados ? ' (bloqueado)' : ''}{detalleCajasUi && cajasPesaje.length > 0 ? ' (suma de envíos)' : ''}</label>
+                                    <label className={SECCION}>{labelCostoEnvio}{esMunicipioDiferido || omiteCostoPorTarifaPeso || envioMunicipalSinLogistica ? ' (opcional)' : ''}{camposEnvioBloqueados ? ' (bloqueado)' : ''}{detalleCajasUi && cajasPesaje.length > 0 ? ' (suma de envíos)' : ''}</label>
                                     <InputMoneda value={camposEnvioBloqueados ? '' : data.costo_envio} onChange={(v) => setData('costo_envio', v)} readOnly={detalleCajasUi && cajasPesaje.length > 0} className={`w-full py-3 ${camposEnvioBloqueados || (detalleCajasUi && cajasPesaje.length > 0) ? 'opacity-50 pointer-events-none' : ''}`} placeholder="" />
                                     {omiteCostoPorTarifaPeso && (
                                         <p className="text-[10px] theme-text-muted font-bold mt-1 m-0">

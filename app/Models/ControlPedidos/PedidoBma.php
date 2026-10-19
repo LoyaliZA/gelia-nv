@@ -507,6 +507,20 @@ class PedidoBma extends Model
         return (bool) $this->tipoOperacionEnvio?->esMunicipioDiferido();
     }
 
+    /**
+     * Envío foráneo o municipal sin guía. El traslado interno no entra, aunque la paquetería tenga la marca.
+     */
+    public function esEnvioMunicipalSinLogistica(): bool
+    {
+        if ($this->esTrasladoInternoAPdv()) {
+            return false;
+        }
+
+        $this->loadMissing('paqueteria');
+
+        return (bool) $this->paqueteria?->sinLogistica();
+    }
+
     public function tienePaqueteriaPendiente(): bool
     {
         return (bool) $this->paqueteria?->esPendienteConfirmacion();
@@ -990,9 +1004,10 @@ class PedidoBma extends Model
 
     /**
      * Consulta CEDIS sin kilogramos obligatorios.
-     * Los traslados internos y el origen sin logística usan este modo. Un transporte local/regional con
-     * requiere_peso = false también, aunque el origen tenga logística. Una paquetería
-     * comercial, o una local que sí exige peso, conserva el pesaje.
+     * Los traslados internos y el origen sin logística usan este modo. Una paquetería
+     * marcada sin logística también, aunque sea comercial. Un transporte local/regional con
+     * requiere_peso = false entra igual. Una paquetería comercial sin esa marca, o una local
+     * que sí exige peso, conserva el pesaje.
      */
     public function consultaCedisModoRevisionMercancia(): bool
     {
@@ -1002,7 +1017,13 @@ class PedidoBma extends Model
 
         $this->loadMissing('paqueteria');
         $paqueteria = $this->paqueteria;
-        if ($paqueteria === null || ! $paqueteria->esLocalRegional()) {
+        if ($paqueteria === null) {
+            return false;
+        }
+        if ($paqueteria->sinLogistica()) {
+            return true;
+        }
+        if (! $paqueteria->esLocalRegional()) {
             return false;
         }
 

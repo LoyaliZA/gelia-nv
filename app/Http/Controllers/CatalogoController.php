@@ -776,6 +776,7 @@ class CatalogoController extends Controller
             'nombre' => $unique,
             'categoria' => 'required|in:comercial,local_regional',
             'permite_costo_diferido' => 'boolean',
+            'sin_logistica' => 'boolean',
             'requiere_peso' => 'boolean',
             'activo' => 'boolean',
             'modalidad_tarifa' => 'nullable|in:fija,por_peso',
@@ -789,6 +790,10 @@ class CatalogoController extends Controller
     {
         if (($validated['categoria'] ?? '') === CatalogoPaqueteriaPedido::CATEGORIA_COMERCIAL) {
             $validated['requiere_peso'] = true;
+        }
+
+        if (array_key_exists('sin_logistica', $validated)) {
+            $validated['sin_logistica'] = (bool) $validated['sin_logistica'];
         }
 
         if (($validated['categoria'] ?? '') === CatalogoPaqueteriaPedido::CATEGORIA_COMERCIAL
