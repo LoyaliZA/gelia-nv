@@ -87,6 +87,7 @@ import {
     destinoSucursalVisible,
     resolverCodigoModalidadEfectiva,
     esTrasladoInternoPdv,
+    paqueteriaEnvioVisible,
 } from './destinoSucursalPedido';
 import {
     borradorLocalAplicable,
@@ -619,10 +620,11 @@ export default function ModalFormPedidoLegado({
         : esTrasladoInternoPdv(data, almacenSeleccionado, codigoModalidadEfectiva);
     const requiereLogistica = origenRequiereLogistica && !trasladoInterno;
     const envioComercialSinModalidad = origenRequiereLogistica && !codigoModalidadEfectiva && !trasladoInterno;
-    const paqueteriaVisible = requiereLogistica && (
-        !envioComercialSinModalidad
-        || (Boolean(data.almacen_id) && Boolean(data.sucursal_destino_id))
-    );
+    const paqueteriaVisible = paqueteriaEnvioVisible({
+        requiereLogistica,
+        envioComercialSinModalidad,
+        tieneAlmacenSalida: Boolean(data.almacen_id),
+    });
     const exigeEleccionEntregaTienda = Boolean(
         !trasladoInterno
         && flujoPreparacionTienda
@@ -2881,7 +2883,7 @@ export default function ModalFormPedidoLegado({
                                                 ? 'Traslado interno a PDV: revisión física, cantidades, evidencia, salida y recepción. Sin pesaje ni guía comercial.'
                                                 : enFlujoTienda
                                                     ? 'Envío preparado en Tienda: complete el transporte y la preparación elegida. La salida y la recepción se confirman en sus etapas.'
-                                                    : 'Envío: elija el almacén de salida y después la sucursal destino. La paquetería aparece al final de esos dos datos. Si el recorrido es interno, active Traslado interno a PDV.')
+                                                    : 'Envío: elija el almacén de salida. La paquetería aparece enseguida para envíos al cliente, también en resguardo. La sucursal destino es opcional y solo aplica si la mercancía se custodia o se traslada a una sucursal. Si el recorrido es interno, active Traslado interno a PDV.')
                                             : (esRecogeTienda
                                                 ? 'Recoge en tienda: mismo día en el almacén PDV. Personal de preparación revisa las piezas, confirma el apartado y genera la carátula. Sin pago ni transferencia.'
                                                 : (esModalidadCredito
@@ -3047,7 +3049,7 @@ export default function ModalFormPedidoLegado({
                                     <p className="text-[10px] font-bold theme-text-muted m-0 mt-1.5">
                                         {salidaEsPdv && almacenSeleccionado?.sucursal_id == null
                                             ? 'El almacén de salida no tiene sucursal vinculada. Corrija ese vínculo para identificar un traslado a otro PDV.'
-                                            : 'Sucursal donde se custodia o entrega la mercancía. Es distinta del almacén de salida. La paquetería se elige después.'}
+                                            : 'Opcional. Sucursal donde se custodia o se traslada la mercancía. Un envío nacional al cliente no la necesita.'}
                                     </p>
                                 )}
                                 {sucursalesDestino.length === 0 && (

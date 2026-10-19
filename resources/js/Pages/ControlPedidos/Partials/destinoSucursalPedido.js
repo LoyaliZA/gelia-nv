@@ -79,3 +79,17 @@ export function esTrasladoInternoPdv(pedido, almacen = pedido?.almacen, codigoMo
 export function pedidoEsTrasladoInternoPdv(pedido) {
     return pedido?.es_traslado_interno_pdv ?? esTrasladoInternoPdv(pedido);
 }
+
+/**
+ * Envío nacional desde CEDIS: la paquetería aparece con almacén de salida.
+ * La sucursal destino no la condiciona. El traslado interno no usa paquetería.
+ */
+export function paqueteriaEnvioVisible({
+    requiereLogistica = false,
+    envioComercialSinModalidad = false,
+    tieneAlmacenSalida = false,
+} = {}) {
+    if (!requiereLogistica) return false;
+    if (!envioComercialSinModalidad) return true;
+    return Boolean(tieneAlmacenSalida);
+}

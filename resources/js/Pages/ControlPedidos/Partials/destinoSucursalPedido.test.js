@@ -4,6 +4,7 @@ import {
     esTrasladoInternoPdv,
     destinoSucursalVisible,
     modalidadesRequierenDestino,
+    paqueteriaEnvioVisible,
     requiereCapturaDestinoSucursal,
     resolverCodigoModalidadEfectiva,
 } from './destinoSucursalPedido';
@@ -51,6 +52,32 @@ describe('requiereCapturaDestinoSucursal', () => {
             requiereLogistica: true,
             codigoModalidad: '',
             modalidadesRequierenDestino: MODALIDADES,
+        })).toBe(false);
+    });
+});
+
+describe('paqueteriaEnvioVisible', () => {
+    it('muestra paquetería en envío nacional CEDIS sin sucursal destino', () => {
+        expect(paqueteriaEnvioVisible({
+            requiereLogistica: true,
+            envioComercialSinModalidad: true,
+            tieneAlmacenSalida: true,
+        })).toBe(true);
+    });
+
+    it('oculta paquetería en traslado interno', () => {
+        expect(paqueteriaEnvioVisible({
+            requiereLogistica: false,
+            envioComercialSinModalidad: false,
+            tieneAlmacenSalida: true,
+        })).toBe(false);
+    });
+
+    it('oculta paquetería mientras no hay almacén de salida', () => {
+        expect(paqueteriaEnvioVisible({
+            requiereLogistica: true,
+            envioComercialSinModalidad: true,
+            tieneAlmacenSalida: false,
         })).toBe(false);
     });
 });
