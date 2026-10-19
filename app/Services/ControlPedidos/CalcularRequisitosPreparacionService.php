@@ -52,7 +52,7 @@ class CalcularRequisitosPreparacionService
             'permite_por_cobrar' => (bool) ($req['permite_por_cobrar'] ?? false),
             'campos_destino_obligatorios' => array_values($req['campos_destino_obligatorios'] ?? ['municipio', 'destinatario', 'telefono']),
             'estados_fisicos_permitidos' => array_values($req['estados_fisicos_permitidos'] ?? ['bueno', 'regular', 'malo', 'danado', 'sin_existencia']),
-            'resguardo' => (bool) ($req['resguardo'] ?? $tarea->modalidad?->esTransferencia()),
+            'resguardo' => (bool) ($req['resguardo'] ?? $tarea->modalidad?->esResguardoDiferido()),
             'fecha_limite' => $tarea->fecha_limite?->toIso8601String(),
             'faltantes' => [],
         ];
@@ -299,7 +299,7 @@ class CalcularRequisitosPreparacionService
 
     public function calcularFechaLimite(CatalogoModalidadPreparacionPedido $modalidad): ?\Carbon\Carbon
     {
-        if (! $modalidad->esTransferencia()) {
+        if (! $modalidad->esResguardoDiferido()) {
             return null;
         }
 

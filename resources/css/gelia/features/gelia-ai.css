@@ -267,7 +267,7 @@
 
 .gelia-ai-starters {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
     gap: 0.75rem;
 }
 
@@ -534,6 +534,19 @@ ol.gelia-ai-md-list {
     margin: 0;
 }
 
+.gelia-ai-md a {
+    color: inherit;
+    text-decoration: underline;
+    text-decoration-color: var(--color-primario);
+    text-underline-offset: 0.2em;
+    overflow-wrap: anywhere;
+}
+
+.gelia-ai-md a:focus-visible {
+    outline: 2px solid var(--color-primario);
+    outline-offset: 3px;
+}
+
 .gelia-ai-md--reveal .gelia-ai-md-p {
     opacity: 0;
     transform: translateY(6px);
@@ -788,6 +801,23 @@ ol.gelia-ai-md-list {
     display: flex;
     align-items: flex-end;
     gap: 0.35rem;
+}
+
+.gelia-ai-scanner-mode {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.2rem 0.45rem 0.45rem;
+    border-bottom: 1px solid var(--theme-border);
+    color: var(--theme-text-main);
+    font-size: 0.75rem;
+}
+
+.gelia-ai-scanner-mode > span {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
 }
 
 .gelia-ai-attach {
@@ -1137,7 +1167,208 @@ ol.gelia-ai-md-list {
     font-size: 0.72rem;
 }
 
+/* Ficha de asesoría: speech, pirámide olfativa y lectura rápida de usos. */
+.gelia-ai-perfume {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    min-width: 0;
+}
+
+.gelia-ai-perfume-header h3 {
+    margin: 0;
+    color: var(--theme-text-main);
+    font-size: 1.25rem;
+    font-weight: 750;
+    line-height: 1.4;
+    text-wrap: balance;
+}
+
+.gelia-ai-perfume-header > span,
+.gelia-ai-perfume-caption {
+    display: block;
+    margin: 0.3rem 0 0;
+    color: var(--theme-text-muted);
+    font-size: 0.78rem;
+}
+
+.gelia-ai-perfume-speech {
+    padding: 1.1rem 1.25rem 1.3rem;
+    border-radius: 1.1rem;
+    border: 1px solid color-mix(in srgb, var(--color-primario) 35%, var(--theme-border));
+    background: color-mix(in srgb, var(--color-primario) 8%, var(--bg-app));
+    color: var(--theme-text-main);
+}
+
+.gelia-ai-perfume-speech-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.6rem;
+    margin-bottom: 0.85rem;
+}
+
+.gelia-ai-perfume-speech-head h4 {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0;
+    font-size: 0.85rem;
+    font-weight: 700;
+}
+
+.gelia-ai-perfume-speech-head h4 > svg {
+    color: var(--color-primario);
+}
+
+.gelia-ai-perfume-speech > .gelia-ai-md {
+    font-size: 1.08rem;
+    line-height: 1.7;
+}
+
+.gelia-ai-perfume-section-title {
+    margin: 0 0 0.8rem;
+    color: var(--theme-text-main);
+    font-size: 0.95rem;
+    font-weight: 700;
+}
+
+.gelia-ai-perfume-notas {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    margin: 0;
+    padding: 0.9rem 0;
+    border-block: 1px solid var(--theme-border);
+}
+
+.gelia-ai-perfume-notas > div {
+    min-width: 0;
+    padding-inline: 1rem;
+}
+
+.gelia-ai-perfume-notas > div:first-child {
+    padding-left: 0;
+}
+
+.gelia-ai-perfume-notas > div + div {
+    border-left: 1px solid var(--theme-border);
+}
+
+.gelia-ai-perfume-notas dt {
+    color: var(--theme-text-main);
+    font-size: 0.9rem;
+    font-weight: 700;
+}
+
+.gelia-ai-perfume-notas dt span {
+    display: block;
+    margin-top: 0.2rem;
+    color: var(--theme-text-muted);
+    font-size: 0.7rem;
+    font-weight: 400;
+}
+
+.gelia-ai-perfume-notas dd {
+    margin: 0.7rem 0 0;
+    color: var(--theme-text-main);
+    font-size: 0.86rem;
+}
+
+.gelia-ai-perfume-usos {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1.1rem 1.5rem;
+    margin: 0.9rem 0 0;
+}
+
+.gelia-ai-perfume-usos > div {
+    min-width: 0;
+    border-top: 1px solid var(--theme-border);
+    padding-top: 0.75rem;
+}
+
+.gelia-ai-perfume-usos dt {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    color: var(--theme-text-main);
+    font-size: 0.8rem;
+    font-weight: 700;
+}
+
+.gelia-ai-perfume-usos dt svg {
+    color: var(--theme-text-muted);
+}
+
+.gelia-ai-perfume-usos dd {
+    margin: 0.45rem 0 0;
+    color: var(--theme-text-main);
+    font-size: 0.86rem;
+}
+
+.gelia-ai-perfume-aviso {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+    padding: 0.8rem 0.9rem;
+    border: 1px solid color-mix(in srgb, var(--color-aviso) 30%, var(--theme-border));
+    border-radius: 0.75rem;
+    color: var(--theme-text-main);
+    font-size: 0.8rem;
+    background: color-mix(in srgb, var(--color-aviso) 5%, var(--bg-app));
+}
+
+.gelia-ai-perfume-aviso > svg {
+    flex-shrink: 0;
+    margin-top: 0.2rem;
+    color: var(--color-aviso);
+}
+
+.gelia-ai-perfume-fuentes {
+    color: var(--theme-text-muted);
+    font-size: 0.8rem;
+}
+
+.gelia-ai-perfume-fuentes summary {
+    min-height: 2.75rem;
+    padding-block: 0.5rem;
+    cursor: pointer;
+    color: var(--theme-text-main);
+}
+
+.gelia-ai-perfume-fuentes > .gelia-ai-md + .gelia-ai-md {
+    margin-top: 0.75rem;
+}
+
+.gelia-ai-perfume-fuentes summary:focus-visible {
+    outline: 2px solid var(--color-primario);
+    outline-offset: 3px;
+}
+
+.gelia-ai-perfume-copy-error {
+    margin: 0.6rem 0 0;
+    font-size: 0.8rem;
+}
+
 @media (max-width: 640px) {
+    .gelia-ai-perfume-notas,
+    .gelia-ai-perfume-usos {
+        grid-template-columns: 1fr;
+    }
+
+    .gelia-ai-perfume-notas > div {
+        padding: 0.8rem 0;
+    }
+
+    .gelia-ai-perfume-notas > div + div {
+        border-left: 0;
+        border-top: 1px solid var(--theme-border);
+    }
+
+    .gelia-ai-perfume-speech {
+        padding-inline: 1rem;
+    }
+
     .gelia-ai-top {
         justify-content: flex-start;
         min-height: 4.5rem;

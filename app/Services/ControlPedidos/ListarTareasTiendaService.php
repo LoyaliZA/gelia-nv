@@ -2,6 +2,7 @@
 
 namespace App\Services\ControlPedidos;
 
+use App\Models\ControlPedidos\CatalogoModalidadPreparacionPedido;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Models\ControlPedidos\PedidoBmaCumplimientoFisico;
 use App\Models\ControlPedidos\PedidoBmaTareaPreparacion;
@@ -51,7 +52,7 @@ class ListarTareasTiendaService
                     })
                     ->orWhere(function ($q2) {
                         $q2->where('estado', PedidoBmaTareaPreparacion::ESTADO_RESPONDIDA)
-                            ->whereHas('modalidad', fn ($m) => $m->where('codigo', 'RECOGE_TIENDA_TRANSFERENCIA'));
+                            ->whereHas('modalidad', fn ($m) => $m->whereIn('codigo', CatalogoModalidadPreparacionPedido::CODIGOS_RESGUARDO_DIFERIDO));
                     });
             }),
             'LISTAS_TRASLADO' => $query->where('estado', PedidoBmaTareaPreparacion::ESTADO_LISTA_PARA_TRASLADO),
@@ -106,7 +107,7 @@ class ListarTareasTiendaService
                         $q2->where('estado', PedidoBmaTareaPreparacion::ESTADO_RESPONDIDA)
                             ->where(function ($q3) {
                                 $q3->whereNotNull('espera_pago_at')
-                                    ->orWhereHas('modalidad', fn ($m) => $m->where('codigo', 'RECOGE_TIENDA_TRANSFERENCIA'));
+                                    ->orWhereHas('modalidad', fn ($m) => $m->whereIn('codigo', CatalogoModalidadPreparacionPedido::CODIGOS_RESGUARDO_DIFERIDO));
                             });
                     });
             })->count(),

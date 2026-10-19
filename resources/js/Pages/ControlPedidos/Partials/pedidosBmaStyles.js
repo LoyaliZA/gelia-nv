@@ -589,6 +589,7 @@ export const MODALIDADES_TIENDA_FILTRO = [
     { id: '', label: 'Todas las modalidades' },
     { id: 'RECOGE_TIENDA', label: 'Recoge en tienda' },
     { id: 'RECOGE_TIENDA_TRANSFERENCIA', label: 'Transferencia' },
+    { id: 'RECOGE_TIENDA_CREDITO', label: 'Crédito' },
 ];
 
 export const badgeResguardoSemantico = () => ({

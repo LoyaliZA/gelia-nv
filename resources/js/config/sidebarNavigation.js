@@ -632,6 +632,14 @@ export function buildSidebarNavigation({ can, showAdminMenu, manualesHubVisible 
             href: () => routeHref('gestion_interna.directorio.index', '/gestion-interna/directorio'),
             active: (url) => url.startsWith('/gestion-interna/directorio'),
         },
+        can('gestion_interna.comisiones_empaque.ver') && {
+            type: 'link',
+            id: 'comisiones_empaque',
+            label: 'Comisiones de empaque',
+            icon: Boxes,
+            href: () => routeHref('gestion_interna.comisiones_empaque.index', '/gestion-interna/comisiones-empaque'),
+            active: (url) => url.startsWith('/gestion-interna/comisiones-empaque'),
+        },
     ].filter(Boolean);
 
     const soporteChildren = [

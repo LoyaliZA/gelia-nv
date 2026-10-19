@@ -31,6 +31,12 @@ class FusionarSolicitudPreparacionPedido
             }
         }
 
+        if (array_key_exists('traslado_interno_pdv', $entrada)) {
+            $salida['traslado_interno_pdv'] = filter_var($entrada['traslado_interno_pdv'], FILTER_VALIDATE_BOOLEAN);
+        } elseif (array_key_exists('traslado_interno_pdv', $base)) {
+            $salida['traslado_interno_pdv'] = filter_var($base['traslado_interno_pdv'], FILTER_VALIDATE_BOOLEAN);
+        }
+
         if (array_key_exists('entrega_municipal', $entrada)) {
             if ($entrada['entrega_municipal'] === null) {
                 $salida['entrega_municipal'] = null;
@@ -119,6 +125,9 @@ class FusionarSolicitudPreparacionPedido
             if (($salida[$clave] ?? null) !== null) {
                 return false;
             }
+        }
+        if (array_key_exists('traslado_interno_pdv', $salida)) {
+            return false;
         }
 
         return $this->municipalVacio(is_array($salida['entrega_municipal'] ?? null) ? $salida['entrega_municipal'] : []);

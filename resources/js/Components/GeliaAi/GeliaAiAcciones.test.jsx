@@ -139,6 +139,18 @@ describe('ResultadoAccionCard y avisos', () => {
 });
 
 describe('Página GELIA', () => {
+    it('ofrece recomendaciones solo cuando están habilitadas y activa el lector sin enviar una consulta', async () => {
+        await render(<Index auth={{ user: { name: 'Ana' } }} configurado recomendacionesDisponibles />);
+        const sugerencia = [...container.querySelectorAll('button')].find((b) => b.textContent.includes('Obtener recomendaciones'));
+        expect(sugerencia).toBeTruthy();
+        await act(() => sugerencia.click());
+        expect(container.querySelector('textarea').value).toBe('');
+        expect(container.querySelector('textarea').placeholder).toContain('Escanea el código');
+        expect(document.activeElement).toBe(container.querySelector('textarea'));
+        expect(axios.post).not.toHaveBeenCalled();
+        await render(<Index auth={{ user: { name: 'Ana' } }} configurado recomendacionesDisponibles={false} />);
+        expect(container.textContent).not.toContain('Obtener recomendaciones');
+    });
     it('personaliza la bienvenida sin enviar una consulta y prepara sugerencias editables', async () => {
         await render(<Index auth={{ user: { name: 'Ana' } }} configurado conversaciones={[]} />);
         expect(container.querySelector('h2').textContent).toContain('Hola, Ana.');
@@ -173,6 +185,24 @@ describe('Página GELIA', () => {
         await render(<Index auth={{ user: {} }} configurado conversaciones={[]} />);
         await enviar('importa costos en CEDIS');
     };
+
+    it('un lector que termina en Enter envía el código en modo asesor y permite escanear otro', async () => {
+        axios.post.mockResolvedValueOnce({ data: { reply: 'Ficha del perfume.', conversacion_id: 9, modo: 'recomendaciones', archivos: [] } });
+        await render(<Index auth={{ user: { name: 'Ana' } }} configurado recomendacionesDisponibles />);
+        await act(() => [...container.querySelectorAll('button')].find((b) => b.textContent.includes('Obtener recomendaciones')).click());
+        const textarea = container.querySelector('textarea');
+        await act(() => {
+            Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(textarea, '812256028611');
+            textarea.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+        await act(async () => textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })));
+        expect(axios.post).toHaveBeenLastCalledWith('/gelia_ai.chat', expect.objectContaining({ message: '812256028611', modo: 'recomendaciones' }));
+        expect(textarea.value).toBe('');
+        expect(document.activeElement).toBe(textarea);
+        expect(container.textContent).toContain('Listo para escanear');
+        await act(() => container.querySelector('[aria-label="Salir de recomendaciones"]').click());
+        expect(container.textContent).not.toContain('Listo para escanear');
+    });
 
     it('confirma solo con propuesta_id y muestra el resultado real', async () => {
         await conPropuesta();
@@ -235,6 +265,13 @@ describe('Página GELIA', () => {
 });
 
 describe('Lectura de respuestas', () => {
+    it('muestra enlaces de fuentes HTTP sin ejecutar enlaces con otros protocolos', async () => {
+        await render(<GeliaAiMarkdown text={'[Fabricante](https://fabricante.example/perfume) [No abrir](javascript:alert(1))'} />);
+        expect(container.querySelectorAll('a')).toHaveLength(1);
+        const link = container.querySelector('a');
+        expect(link.href).toBe('https://fabricante.example/perfume');
+        expect(link.rel).toBe('noopener noreferrer');
+    });
     it('presenta listas y tablas semánticas y conserva el texto como datos seguros', async () => {
         await render(<GeliaAiMarkdown text={'## Inventario\n\n- **Producto A**\n- Producto B\n\n| SKU | Disponible |\n| --- | ---: |\n| ABC | 12 |\n\n<img src=x onerror=alert(1)>'} />);
         expect(container.querySelectorAll('ul li')).toHaveLength(2);

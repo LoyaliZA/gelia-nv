@@ -18,6 +18,7 @@ class ContextoConversacionGeliaAi
         $raw = is_array($raw) ? $raw : [];
 
         return [
+            'modo' => ($raw['modo'] ?? null) === 'recomendaciones' ? 'recomendaciones' : 'general',
             'tema' => is_string($raw['tema'] ?? null) ? $raw['tema'] : null,
             'almacen' => is_array($raw['almacen'] ?? null) ? $raw['almacen'] : null,
             'productos' => array_values(array_filter((array) ($raw['productos'] ?? []), 'is_array')),
@@ -70,6 +71,16 @@ class ContextoConversacionGeliaAi
                     'almacen' => is_scalar($args['almacen'] ?? null) ? (string) $args['almacen'] : null,
                 ], fn ($v) => $v !== null && $v !== '');
             }
+        } elseif ($tool === 'consultar_perfiles_perfumes' && $ok) {
+            $ctx['tema'] = 'recomendaciones';
+            $ctx['productos'] = collect($res['perfiles'] ?? [])
+                ->filter(fn ($p) => isset($p['nombre'], $p['sku']))
+                ->map(fn ($p) => ['sku' => $p['sku'], 'nombre' => $p['nombre']])
+                ->take(self::MAX_PRODUCTOS)->values()->all();
+            $ctx['almacen'] = null;
+            $ctx['coincidencia'] = null;
+            $ctx['filtros'] = [];
+            $ctx['consulta'] = null;
         } elseif ($tool === 'consultar_ayuda_modulo' && $ok) {
             $ctx['tema'] = 'ayuda:'.($res['modulo'] ?? '');
         } elseif (str_starts_with($tool, AccionRegistry::PREFIJO_TOOL)) {
@@ -159,11 +170,12 @@ class ContextoConversacionGeliaAi
     {
         // Producto y almacén solo acompañan si la última tarea fue inventario.
         $inventario = ($ctx['tema'] ?? null) === 'inventario';
+        $productosVisibles = $inventario || ($ctx['tema'] ?? null) === 'recomendaciones';
         $visible = array_filter([
             'ultimo_tema' => $ctx['tema'] ?? null,
             'ultima_consulta_inventario' => $inventario ? ($ctx['consulta'] ?? null) : null,
             'almacen' => $inventario ? ($ctx['almacen'] ?? null) : null,
-            'productos_identificados' => $inventario ? ($ctx['productos'] ?? []) : [],
+            'productos_identificados' => $productosVisibles ? ($ctx['productos'] ?? []) : [],
             'coincidencia' => $inventario ? ($ctx['coincidencia'] ?? null) : null,
             'filtros' => $inventario ? ($ctx['filtros'] ?? []) : [],
             'tarea_pendiente' => $ctx['tarea_pendiente'] ?? null,

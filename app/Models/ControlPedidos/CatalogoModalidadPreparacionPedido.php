@@ -11,6 +11,8 @@ class CatalogoModalidadPreparacionPedido extends Model
 
     public const CODIGO_RECOGE_TIENDA_TRANSFERENCIA = 'RECOGE_TIENDA_TRANSFERENCIA';
 
+    public const CODIGO_RECOGE_TIENDA_CREDITO = 'RECOGE_TIENDA_CREDITO';
+
     public const CODIGO_ENVIO_BODEGA_NORMAL = 'ENVIO_BODEGA_NORMAL';
 
     public const CODIGO_ENVIO_BODEGA_COMPLEMENTO = 'ENVIO_BODEGA_COMPLEMENTO';
@@ -20,6 +22,13 @@ class CatalogoModalidadPreparacionPedido extends Model
     public const CODIGOS_FASE4 = [
         self::CODIGO_RECOGE_TIENDA,
         self::CODIGO_RECOGE_TIENDA_TRANSFERENCIA,
+        self::CODIGO_RECOGE_TIENDA_CREDITO,
+    ];
+
+    /** Recolección diferida: la mercancía queda en tienda hasta el pago y la entrega. */
+    public const CODIGOS_RESGUARDO_DIFERIDO = [
+        self::CODIGO_RECOGE_TIENDA_TRANSFERENCIA,
+        self::CODIGO_RECOGE_TIENDA_CREDITO,
     ];
 
     public const CODIGOS_FASE5 = [
@@ -72,6 +81,16 @@ class CatalogoModalidadPreparacionPedido extends Model
     public function esTransferencia(): bool
     {
         return $this->codigo === self::CODIGO_RECOGE_TIENDA_TRANSFERENCIA;
+    }
+
+    public function esCredito(): bool
+    {
+        return $this->codigo === self::CODIGO_RECOGE_TIENDA_CREDITO;
+    }
+
+    public function esResguardoDiferido(): bool
+    {
+        return in_array($this->codigo, self::CODIGOS_RESGUARDO_DIFERIDO, true);
     }
 
     public function esEnvioBodega(): bool

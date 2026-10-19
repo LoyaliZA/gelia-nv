@@ -55,12 +55,31 @@ class PreparacionTiendaTest extends TestCase
         $this->assertSame([], $def['modalidades_habilitadas']);
     }
 
-    public function test_modalidades_fase4_solo_dos_codigos(): void
+    public function test_modalidades_fase4_incluyen_resguardo_con_credito(): void
     {
         $this->assertSame([
             'RECOGE_TIENDA',
             'RECOGE_TIENDA_TRANSFERENCIA',
+            'RECOGE_TIENDA_CREDITO',
         ], CatalogoModalidadPreparacionPedido::CODIGOS_FASE4);
+        $this->assertContains(
+            'RECOGE_TIENDA_CREDITO',
+            CatalogoModalidadPreparacionPedido::CODIGOS_SOLICITABLES
+        );
+    }
+
+    public function test_resguardo_con_credito_espera_pago_en_tienda(): void
+    {
+        $politica = new \App\Support\ControlPedidos\PoliticaSalidaPreparacion(
+            CatalogoModalidadPreparacionPedido::CODIGO_RECOGE_TIENDA_CREDITO
+        );
+
+        $this->assertTrue($politica->esCreditoDiferido());
+        $this->assertTrue($politica->esResguardoDiferido());
+        $this->assertTrue($politica->abreResguardo());
+        $this->assertTrue($politica->cierraEnPdv());
+        $this->assertFalse($politica->permitePorCobrar());
+        $this->assertFalse($politica->soloApartado());
     }
 
     public function test_payload_tienda_sin_datos_financieros(): void

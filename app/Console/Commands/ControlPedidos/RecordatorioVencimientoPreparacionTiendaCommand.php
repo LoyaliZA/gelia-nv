@@ -14,7 +14,7 @@ class RecordatorioVencimientoPreparacionTiendaCommand extends Command
 {
     protected $signature = 'control-pedidos:recordatorio-vencimiento-preparacion-tienda';
 
-    protected $description = 'Notifica vencimiento próximo de resguardo en preparación Tienda (transferencia). No cancela ni libera.';
+    protected $description = 'Notifica vencimiento próximo de resguardo en preparación Tienda (transferencia o crédito). No cancela ni libera.';
 
     public function handle(PreparacionTiendaConfig $config, NotificarPedidoBmaService $notificar): int
     {
@@ -33,7 +33,7 @@ class RecordatorioVencimientoPreparacionTiendaCommand extends Command
             ->where('estado', PedidoBmaTareaPreparacion::ESTADO_RESPONDIDA)
             ->whereNotNull('fecha_limite')
             ->whereBetween('fecha_limite', [$hoy, $manana])
-            ->whereHas('modalidad', fn ($q) => $q->where('codigo', CatalogoModalidadPreparacionPedido::CODIGO_RECOGE_TIENDA_TRANSFERENCIA))
+            ->whereHas('modalidad', fn ($q) => $q->whereIn('codigo', CatalogoModalidadPreparacionPedido::CODIGOS_RESGUARDO_DIFERIDO))
             ->get();
 
         $enviados = 0;

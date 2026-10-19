@@ -111,10 +111,12 @@ export default function ApartadoFisicoTienda({ onEnviar = null,  tarea, auth, co
     const modalidades = (config.modalidades_catalogo || []).filter((m) => m.codigo !== tarea.modalidad?.codigo);
     const esRecogeHoy = tarea.modalidad?.codigo === 'RECOGE_TIENDA';
     const esTransferencia = tarea.modalidad?.codigo === 'RECOGE_TIENDA_TRANSFERENCIA';
+    const esCredito = tarea.modalidad?.codigo === 'RECOGE_TIENDA_CREDITO';
+    const esResguardoPago = esTransferencia || esCredito;
     const esMunicipio = tarea.modalidad?.codigo === 'ENVIO_MUNICIPIO';
     const caratulaColocada = tarea.caratula?.estado === 'COLOCADA';
     const municipioListoSalida = esMunicipio && caratulaColocada && tarea.estado === 'RESPONDIDA';
-    const cierrePdv = (esTransferencia || municipioListoSalida) && !esRecogeHoy;
+    const cierrePdv = (esResguardoPago || municipioListoSalida) && !esRecogeHoy;
     const apartadoConfirmado = apartado.estado === 'APARTADO_CONFIRMADO';
     const puedeEditarRecoge = esRecogeHoy && tarea.estado === 'EN_ATENCION' && !apartadoConfirmado && puedeSeparar;
     const productos = tarea.productos || [];
@@ -217,9 +219,9 @@ export default function ApartadoFisicoTienda({ onEnviar = null,  tarea, auth, co
                 </div>
             )}
 
-            {esTransferencia && apartado.resguardo_pdv_id && (
+            {esResguardoPago && apartado.resguardo_pdv_id && (
                 <p className="text-xs font-bold m-0">
-                    Custodia en PDV. La entrega se confirma una sola vez en el resguardo {apartado.resguardo_pdv_id}.
+                    Custodia en PDV{esCredito ? '. El pago es con crédito' : ''}. La entrega se confirma una sola vez en el resguardo {apartado.resguardo_pdv_id}.
                 </p>
             )}
 

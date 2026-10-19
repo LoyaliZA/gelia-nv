@@ -80,6 +80,7 @@ final class VisibilidadTareaPreparacion
                 'codigo' => $tarea->modalidad->codigo,
                 'nombre' => $tarea->modalidad->nombre,
                 'es_transferencia' => $tarea->modalidad->esTransferencia(),
+                'es_credito' => $tarea->modalidad->esCredito(),
                 'es_envio_municipio' => $tarea->modalidad->esEnvioMunicipio(),
             ] : null,
             'almacen' => $tarea->almacen ? [

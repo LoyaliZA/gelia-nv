@@ -194,8 +194,9 @@ describe('Q6 requisitos de captura', () => {
         expect(control('Sucursal destino')?.value).toBe('3');
     });
     it('envío externo desde PDV mantiene solicitud de pesaje y paquetería', async () => {
-        await montar({ ...base, almacen_id: 4, sucursal_destino_id: null, origen_id: 2,
-            origen: { id: 2, requiere_logistica: true, nombre: 'Envío' } });
+        await montar({ ...base, almacen_id: 4, sucursal_destino_id: 3, origen_id: 2,
+            origen: { id: 2, requiere_logistica: true, nombre: 'Envío' },
+            solicitud_preparacion: { traslado_interno_pdv: false } });
         expect(document.body.textContent).toContain('Solicitar pesaje a CEDIS');
         expect(control('Paquetería')).not.toBeNull();
     });
@@ -203,18 +204,25 @@ describe('Q6 requisitos de captura', () => {
 
 describe('Q6.1 prioridad de captura de Ventas', () => {
     const envio = { ...base, origen_id: 2, origen: { id: 2, requiere_logistica: true, nombre: 'Envío' }, sucursal_destino_id: null };
-    it('envío desde CEDIS muestra paquetería antes del almacén sin recolección ni preparación de Tienda', async () => {
+    it('envío desde CEDIS muestra el almacén antes de la paquetería', async () => {
         await montar(envio);
-        const paqueteria = control('Paquetería');
         const almacen = control('Almacén de salida');
-        expect(paqueteria).not.toBeNull();
-        expect(paqueteria.compareDocumentPosition(almacen) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+        expect(almacen).not.toBeNull();
+        expect(control('Paquetería')).toBeNull();
+        expect(control('Traslado interno a PDV')).not.toBeNull();
+        expect(control('Sucursal destino')).not.toBeNull();
+        expect(document.querySelector('[data-campo="sucursal_destino"]').tagName).not.toBe('DETAILS');
         expect(control('Modalidad de recolección')).toBeNull();
         expect(control('Preparación del envío desde Tienda')).toBeNull();
-        expect(document.body.textContent).not.toContain('Envío con piezas en Tienda: solicite');
         expect(document.body.textContent).not.toContain('Cómo entrega la tienda');
-        expect(document.querySelector('[data-campo="sucursal_destino"]').tagName).toBe('DETAILS');
-        expect(document.querySelector('[data-campo="sucursal_destino"]').open).toBe(false);
+        await act(() => {
+            control('Sucursal destino').value = '3';
+            control('Sucursal destino').dispatchEvent(new Event('change', { bubbles: true }));
+        });
+        const paqueteria = control('Paquetería');
+        expect(paqueteria).not.toBeNull();
+        expect(almacen.compareDocumentPosition(control('Sucursal destino')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+        expect(control('Sucursal destino').compareDocumentPosition(paqueteria) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     });
     it('Tienda ofrece recogida o resguardo antes del almacén y no solicita paquetería', async () => {
         await montar({ ...base, almacen_id: 4, sucursal_destino_id: 3 });
@@ -224,7 +232,8 @@ describe('Q6.1 prioridad de captura de Ventas', () => {
         expect(control('Modalidad de recolección')).toBeNull();
     });
     it('un envío desde PDV conserva sus opciones propias sin llamarlas recolección', async () => {
-        await montar({ ...envio, almacen_id: 4 });
+        await montar({ ...envio, almacen_id: 4, sucursal_destino_id: 3, solicitud_preparacion: { traslado_interno_pdv: false } });
+        expect(control('Almacén de salida').compareDocumentPosition(control('Paquetería')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
         expect(control('Preparación del envío desde Tienda')).not.toBeNull();
         expect(control('Preparación del envío desde Tienda').textContent).toContain('Envío bodega');
         expect(control('Paquetería').compareDocumentPosition(control('Preparación del envío desde Tienda')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -239,7 +248,7 @@ describe('Q6.1 prioridad de captura de Ventas', () => {
             control('Tipo de pedido').dispatchEvent(new Event('change', { bubbles: true }));
         });
         expect(control('Almacén de salida').value).toBe('4');
-        expect(control('Paquetería')).not.toBeNull();
+        expect(control('Paquetería')).toBeNull();
         expect(control('Preparación del envío desde Tienda').value).toBe('');
         expect(control('Sucursal destino').value).toBe('');
         expect(document.body.textContent).not.toContain('Cómo entrega la tienda');
@@ -248,10 +257,10 @@ describe('Q6.1 prioridad de captura de Ventas', () => {
     it('elegir explícitamente traslado interno conserva la exención y no muestra recogida', async () => {
         await montar(envio);
         await act(() => {
-            control('Sucursal destino').value = '3';
-            control('Sucursal destino').dispatchEvent(new Event('change', { bubbles: true }));
+            control('Traslado interno a PDV').click();
         });
         expect(control('Paquetería')).toBeNull();
+        expect(document.body.textContent).toContain('Revisión interna activa');
         expect(document.body.textContent).toContain('Traslado interno a PDV: revisión física');
         expect(document.body.textContent).not.toContain('Cómo entrega la tienda');
         expect(control('Almacén de salida').value).toBe('9');

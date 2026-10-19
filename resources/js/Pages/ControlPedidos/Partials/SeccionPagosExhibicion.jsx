@@ -103,6 +103,7 @@ export default function SeccionPagosExhibicion({
     zonaId = null,
     limiteCreditoAutorizado = null,
     envioEsBase = false,
+    formaPagoInicial = 'transferencia',
 }) {
     const [resumen, setResumen] = useState(null);
     const [pagos, setPagos] = useState([]);
@@ -118,7 +119,7 @@ export default function SeccionPagosExhibicion({
     const form = useForm({
         monto: '',
         catalogo_banco_id: '',
-        forma_pago: 'transferencia',
+        forma_pago: formaPagoInicial,
         referencia: '',
         fecha_pago: '',
         comprobante: null,
@@ -255,7 +256,7 @@ export default function SeccionPagosExhibicion({
 
     const resetForm = () => {
         form.reset('monto', 'referencia', 'comprobante', 'catalogo_banco_id');
-        form.setData('forma_pago', 'transferencia');
+        form.setData('forma_pago', formaPagoInicial);
         form.clearErrors();
         setEditandoId(null);
         setComprobantePreviewUrl((prev) => {

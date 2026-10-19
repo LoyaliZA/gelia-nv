@@ -133,6 +133,11 @@ function TablaTareas({ items, puedeTomar, onAbrir }) {
                                                 Transferencia
                                             </span>
                                         )}
+                                        {t.modalidad?.es_credito && (
+                                            <span className="gelia-estado-vivo gelia-estado-vivo--compacto gelia-estado-vivo--info text-[10px] font-semibold">
+                                                Crédito
+                                            </span>
+                                        )}
                                     </div>
                                     {aviso && (
                                         <p className="text-[10px] theme-text-muted m-0 mt-1 line-clamp-1" title={aviso.texto}>

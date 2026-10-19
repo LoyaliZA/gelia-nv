@@ -16,6 +16,11 @@ const MODALIDADES = [
         detalle: 'El pago es por transferencia. La mercancía queda resguardada hasta la recolección.',
     },
     {
+        codigo: 'RECOGE_TIENDA_CREDITO',
+        titulo: 'Resguardo con crédito',
+        detalle: 'El pago se registra con el crédito autorizado. La mercancía queda resguardada hasta la recolección.',
+    },
+    {
         codigo: 'ENVIO_BODEGA_NORMAL',
         titulo: 'Envío con piezas de tienda',
         detalle: 'Piezas en tienda que se trasladan a CEDIS para integrar el envío.',

@@ -112,7 +112,7 @@ class RegistrarPedidosVendedorManualContent
                 'acciones' => [
                     'Elige Almacén de salida. Si se pide Sucursal destino, selecciona dónde se custodiará o entregará la mercancía; es distinto del almacén de salida.',
                     'Captura el Folio del pedido y usa Adjuntar PDF o foto. El archivo debe mostrar claramente qué piezas y cantidades solicita el cliente.',
-                    'Para envíos, selecciona la paquetería que corresponda. Si aparece modalidad de recolección o preparación en Tienda, selecciona la opción acordada.',
+                    'Para envíos, selecciona la paquetería que corresponda. Si aparece modalidad de recolección o preparación en Tienda, selecciona la opción acordada: recoge hoy, resguardo con transferencia o resguardo con crédito.',
                     'Usa Guardar borrador y espera la confirmación. Si aparece un aviso de error de guardado, atiéndelo antes de cerrar.',
                 ],
                 'resultado' => 'La solicitud queda identificada y con un archivo para que el área responsable revise la mercancía.',

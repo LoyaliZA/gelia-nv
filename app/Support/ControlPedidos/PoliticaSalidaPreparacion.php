@@ -37,6 +37,16 @@ final class PoliticaSalidaPreparacion
         return $this->codigoModalidad === CatalogoModalidadPreparacionPedido::CODIGO_RECOGE_TIENDA_TRANSFERENCIA;
     }
 
+    public function esCreditoDiferido(): bool
+    {
+        return $this->codigoModalidad === CatalogoModalidadPreparacionPedido::CODIGO_RECOGE_TIENDA_CREDITO;
+    }
+
+    public function esResguardoDiferido(): bool
+    {
+        return $this->esTransferenciaDiferida() || $this->esCreditoDiferido();
+    }
+
     public function esEnvioMunicipio(): bool
     {
         return $this->codigoModalidad === CatalogoModalidadPreparacionPedido::CODIGO_ENVIO_MUNICIPIO;
@@ -44,7 +54,7 @@ final class PoliticaSalidaPreparacion
 
     public function cierraEnPdv(): bool
     {
-        return $this->esRecogeHoy() || $this->esTransferenciaDiferida();
+        return $this->esRecogeHoy() || $this->esResguardoDiferido();
     }
 
     public function usaSalidaInterna(): bool
@@ -75,10 +85,10 @@ final class PoliticaSalidaPreparacion
         return false;
     }
 
-    /** La transferencia espera en sucursal; recoge hoy se entrega en el momento. */
+    /** Transferencia o crédito esperan en sucursal; recoge hoy se entrega en el momento. */
     public function abreResguardo(): bool
     {
-        return $this->esTransferenciaDiferida();
+        return $this->esResguardoDiferido();
     }
 
     public function entregaDirectaSinResguardo(): bool

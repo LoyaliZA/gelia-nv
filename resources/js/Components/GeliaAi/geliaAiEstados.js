@@ -4,6 +4,7 @@
 export const TRABAJO = {
     subida: 'Subiendo archivos…',
     consulta: 'Esperando respuesta de GELIA…',
+    recomendacion: 'Preparando la ficha del perfume…',
     accion: 'Ejecutando la acción confirmada…',
     cancelacion: 'Cancelando la propuesta…',
 };

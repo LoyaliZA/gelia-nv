@@ -536,6 +536,13 @@ class PedidoBma extends Model
      */
     public function esTrasladoInternoAPdv(): bool
     {
+        $marca = is_array($this->solicitud_preparacion_json)
+            ? ($this->solicitud_preparacion_json['traslado_interno_pdv'] ?? null)
+            : null;
+        if ($marca === false) {
+            return false;
+        }
+
         if (! $this->sucursal_destino_id || ! $this->almacen_id) {
             return false;
         }

@@ -165,6 +165,7 @@ abstract class PedidoBmaRequestBase extends FormRequest
                 PedidoBmaReferencia::TIPO_OTRO,
             ])],
             'solicitud_preparacion.folio_referencia' => ['nullable', 'string', 'max:64'],
+            'solicitud_preparacion.traslado_interno_pdv' => ['nullable', 'boolean'],
             'solicitud_preparacion.entrega_municipal' => ['nullable', 'array'],
             'solicitud_preparacion.entrega_municipal.destinatario_es_cliente' => ['nullable', 'boolean'],
             'solicitud_preparacion.entrega_municipal.destinatario_nombre' => ['nullable', 'string', 'max:255'],

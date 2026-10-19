@@ -122,6 +122,13 @@ describe('Q6 recorrido físico durante captura', () => {
     it.each([cedis, pdv])('reconoce traslado sin ID desde $codigo', (almacen) => {
         expect(esTrasladoInternoPdv({ almacen_id: almacen.id, sucursal_destino_id: 2 }, almacen)).toBe(true);
     });
+    it('trata el resguardo con crédito como recorrido de tienda', () => {
+        expect(esTrasladoInternoPdv({
+            almacen_id: 1,
+            sucursal_destino_id: 2,
+            solicitud_preparacion: { codigo_modalidad: 'RECOGE_TIENDA_CREDITO' },
+        }, cedis)).toBe(true);
+    });
     it('mantiene como externo un envío municipal con sucursal asociada', () => {
         expect(esTrasladoInternoPdv({ almacen_id: 1, sucursal_destino_id: 2,
             solicitud_preparacion: { codigo_modalidad: 'ENVIO_MUNICIPIO' } }, cedis)).toBe(false);

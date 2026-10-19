@@ -97,10 +97,10 @@ class AutorizarSalidaPreparacionService
                 ]);
             }
 
-            if ($politica->esTransferenciaDiferida()
+            if ($politica->esResguardoDiferido()
                 && $cumplimiento->condicion_cobro !== PoliticaSalidaPreparacion::COBRO_PAGADO) {
                 throw ValidationException::withMessages([
-                    'pago' => 'La transferencia diferida se entrega después del pago.',
+                    'pago' => 'Este resguardo se entrega después de registrar el pago.',
                 ]);
             }
 

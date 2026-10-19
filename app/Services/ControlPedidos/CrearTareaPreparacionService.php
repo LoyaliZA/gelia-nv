@@ -261,7 +261,7 @@ class CrearTareaPreparacionService
                 );
             }
 
-            if ($modalidad->esTransferencia()) {
+            if ($modalidad->esResguardoDiferido()) {
                 $pedido->update(['es_resguardo' => true]);
             }
 

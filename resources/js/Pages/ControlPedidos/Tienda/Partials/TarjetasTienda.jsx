@@ -146,6 +146,11 @@ export function TarjetaTarea({ tarea: t, puedeTomar, compacto = false, onAbrir }
                             Transferencia
                         </span>
                     )}
+                    {t.modalidad?.es_credito && (
+                        <span className="gelia-estado-vivo gelia-estado-vivo--compacto gelia-estado-vivo--info text-[10px] font-semibold">
+                            Crédito
+                        </span>
+                    )}
                     {t.requiere_traslado_cedis && (
                         <span className="gelia-estado-vivo gelia-estado-vivo--compacto gelia-estado-vivo--info text-[10px] font-semibold">
                             Traslado CEDIS

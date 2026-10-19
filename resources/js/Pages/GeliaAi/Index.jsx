@@ -5,6 +5,8 @@ import { ArrowDown, Boxes, FileSpreadsheet, History, Paperclip, Plus, RotateCcw,
 import AppLayout from '@/Layouts/AppLayout';
 import GeliaLogo from '@/Components/GeliaLogo';
 import GeliaAiMarkdown from '@/Components/GeliaAi/GeliaAiMarkdown';
+import FichaPerfumeCard from '@/Components/GeliaAi/FichaPerfumeCard';
+import { parsearFichaPerfume } from '@/Components/GeliaAi/fichaPerfume';
 import PropuestaAccionCard from '@/Components/GeliaAi/PropuestaAccionCard';
 import ResultadoAccionCard from '@/Components/GeliaAi/ResultadoAccionCard';
 import { EstadoBadge, EstadoTrabajoGelia, GeliaAiAviso } from '@/Components/GeliaAi/GeliaAiEstado';
@@ -74,10 +76,12 @@ export default function Index({
     configurado = false,
     conversaciones: conversacionesIniciales = [],
     limiteSegundos = 90,
+    recomendacionesDisponibles = false,
 }) {
     const nombre = String(auth?.user?.name || '').replace(/[\p{C}\s]+/gu, ' ').trim().slice(0, 80);
     const [messages, setMessages] = useState(saludo);
     const [input, setInput] = useState('');
+    const [modo, setModo] = useState('general');
     const [trabajo, setTrabajo] = useState(null);
     const [destello, setDestello] = useState(false);
     const [error, setError] = useState('');
@@ -120,7 +124,14 @@ export default function Index({
     };
 
     const prepararConsulta = (texto) => {
+        setModo('general');
         setInput(texto);
+        inputRef.current?.focus();
+    };
+
+    const activarRecomendaciones = () => {
+        setModo('recomendaciones');
+        setInput('');
         inputRef.current?.focus();
     };
 
@@ -177,6 +188,7 @@ export default function Index({
     };
 
     const reiniciarChat = () => {
+        setModo('general');
         seguirFinal.current = true;
         setLejosDelFinal(false);
         setConversacionId(null);
@@ -200,6 +212,7 @@ export default function Index({
                 .filter((m) => m.role === 'user' || m.role === 'assistant')
                 .map((m) => conId({ ...m, reveal: false }));
             setConversacionId(data.id);
+            setModo(data.modo === 'recomendaciones' && recomendacionesDisponibles ? 'recomendaciones' : 'general');
             seguirFinal.current = true;
             setLejosDelFinal(false);
             setMessages(restaurarPropuesta(loaded.length ? loaded : saludo(), data.propuesta_pendiente));
@@ -338,17 +351,19 @@ export default function Index({
                 files: adjuntos.map((f) => ({ name: f.original_name, kind: f.kind })),
             });
         }
-        iniciarTrabajo('consulta');
+        iniciarTrabajo(modo === 'recomendaciones' ? 'recomendacion' : 'consulta');
 
         try {
             // El historial y los archivos ya adjuntos se recuperan en el servidor por conversacion_id.
             const { data } = await axios.post(route('gelia_ai.chat'), {
                 message: messageText,
+                modo,
                 conversacion_id: conversacionId || undefined,
                 file_ids: fileIds.length ? fileIds : undefined,
             });
             setAdjuntos([]);
             if (Array.isArray(data.archivos)) setArchivosContexto(data.archivos);
+            if (data.modo === 'recomendaciones' && recomendacionesDisponibles) setModo('recomendaciones');
             agregarMensaje({
                 role: 'assistant',
                 content: data.reply || 'GELIA no devolvió texto en esta respuesta.',
@@ -371,6 +386,7 @@ export default function Index({
                 ]);
             }
             terminarTrabajo(true);
+            if (modo === 'recomendaciones') inputRef.current?.focus({ preventScroll: true });
         } catch (err) {
             // Los adjuntos se conservan en el compositor para volver a enviar sin subirlos otra vez.
             agregarMensaje({
@@ -438,6 +454,7 @@ export default function Index({
                 />
             );
         }
+        const ficha = m.kind !== 'incompleta' ? parsearFichaPerfume(m.content) : null;
         return (
             <>
                 {m.kind === 'incompleta' && (
@@ -445,7 +462,7 @@ export default function Index({
                         <EstadoBadge etiqueta="Respuesta incompleta" tono="aviso" icono="aviso" />
                     </div>
                 )}
-                <GeliaAiMarkdown text={m.content} reveal={Boolean(m.reveal)} />
+                {ficha ? <FichaPerfumeCard ficha={ficha} /> : <GeliaAiMarkdown text={m.content} reveal={Boolean(m.reveal)} />}
                 {m.faltantes?.length > 0 && (
                     <GeliaAiAviso tono="aviso" titulo="Falta información para preparar la acción">
                         <ul className="gelia-ai-aviso-list">
@@ -519,9 +536,10 @@ export default function Index({
                     {messages.length === 0 && (
                         <section className="gelia-ai-welcome" aria-label="Bienvenida">
                             <div className="gelia-ai-welcome-mark" aria-hidden><GeliaLogo variant="sparkle" className="w-14 h-14" /></div>
-                            <h2>{nombre ? `Hola, ${nombre}.` : 'Hola, soy GELIA.'}<br />¿Qué resolvemos hoy?</h2>
-                            <p>Consulta tu inventario, prepara un listado o trabaja con tus archivos. Vamos paso a paso.</p>
+                            <h2>{modo === 'recomendaciones' ? 'Escanea un perfume.' : (nombre ? `Hola, ${nombre}.` : 'Hola, soy GELIA.')}<br />{modo === 'recomendaciones' ? 'Te ayudo a recomendarlo.' : '¿Qué resolvemos hoy?'}</h2>
+                            <p>{modo === 'recomendaciones' ? 'Usa tu lector en el campo de abajo o escribe el nombre. Consultaré su ficha y, si faltan notas, investigaré en internet para ayudarte a explicárselo al cliente.' : `Consulta tu catálogo${recomendacionesDisponibles ? ', compara perfumes' : ''}, prepara un listado o trabaja con tus archivos. Vamos paso a paso.`}</p>
                             <div className="gelia-ai-starters">
+                                {recomendacionesDisponibles && <button type="button" disabled={ocupado} onClick={activarRecomendaciones} aria-pressed={modo === 'recomendaciones'}><Sparkles aria-hidden /><span>Obtener recomendaciones<small>Escanea y conoce cómo recomendarlo</small></span></button>}
                                 <button type="button" disabled={ocupado} onClick={() => prepararConsulta('Quiero consultar el inventario de ')}><Boxes aria-hidden /><span>Consultar inventario<small>Busca un producto o SKU</small></span></button>
                                 <button type="button" disabled={ocupado} onClick={() => prepararConsulta('Quiero generar un listado. ¿Qué archivos necesito?')}><FileSpreadsheet aria-hidden /><span>Preparar un listado<small>Revisa qué archivos necesitas</small></span></button>
                                 <button type="button" disabled={ocupado} onClick={() => fileRef.current?.click()}><Paperclip aria-hidden /><span>Adjuntar archivos<small>Trabaja con CSV o Excel</small></span></button>
@@ -568,6 +586,7 @@ export default function Index({
                         data-plain={adjuntos.length === 0 && archivosVisibles.length === 0 ? 'true' : 'false'}
                         onSubmit={enviar}
                     >
+                        {modo === 'recomendaciones' && <div className="gelia-ai-scanner-mode"><span><Sparkles className="w-3.5 h-3.5" aria-hidden />Asesor de perfumes · Listo para escanear</span><button type="button" disabled={ocupado} className="gelia-ai-icon-btn" onClick={() => setModo('general')} aria-label="Salir de recomendaciones"><X className="w-3.5 h-3.5" aria-hidden /></button></div>}
                         <input
                             ref={fileRef}
                             type="file"
@@ -617,7 +636,7 @@ export default function Index({
                                 value={input}
                                 onChange={(ev) => setInput(ev.target.value)}
                                 onKeyDown={onKeyDown}
-                                placeholder="Pregunta a GELIA…"
+                                placeholder={modo === 'recomendaciones' ? 'Escanea el código de barras o escribe el nombre…' : 'Pregunta a GELIA…'}
                                 rows={1}
                                 maxLength={2000}
                                 autoComplete="off"

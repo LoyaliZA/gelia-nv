@@ -30,4 +30,17 @@ return [
     'propuesta_ttl_minutes' => (int) env('GELIA_AI_PROPUESTA_TTL', 30),
 
     'timeout_seconds' => (int) env('GELIA_AI_TIMEOUT', 45),
+
+    // Piloto: conocimiento de productos, separado de existencias y del modelo de chat elegido.
+    'recomendaciones' => [
+        'enabled' => (bool) env('GELIA_AI_RECOMENDACIONES', true),
+        'search_enabled' => (bool) env('GELIA_AI_SEARCH_ENABLED', true),
+        'search_base_url' => env('GELIA_AI_SEARCH_BASE_URL', 'https://api.deepseek.com'),
+        'search_timeout_seconds' => (int) env('GELIA_AI_SEARCH_TIMEOUT', 8),
+        'cache_days' => (int) env('GELIA_AI_PERFILES_CACHE_DAYS', 30),
+        // Alias de búsqueda: no cambia marcas ni notas del catálogo.
+        'fabricantes' => [
+            ['aliases' => ['Ariana Grande', 'Ariana G.', 'Ariana G'], 'nombre' => 'Ariana Grande', 'dominio' => 'arianagrandefragrances.com'],
+        ],
+    ],
 ];

@@ -1,3 +1,5 @@
+import { esTrasladoInternoPdv } from './destinoSucursalPedido';
+
 /** Serialización e hidratación de la intención de preparación. Sin binarios. */
 
 export const ENTREGA_MUNICIPAL_VACIA = {
@@ -61,6 +63,11 @@ export function estadoPreparacionDesdePedido(pedido) {
         folioReferencia: referencia?.folio || solicitud?.folio_referencia || '',
         tipoReferencia: referencia?.tipo || solicitud?.tipo_referencia || 'COTIZACION',
         entregaMunicipal: municipal ? normalizarEntrega(municipal) : entregaMunicipalVacia(),
+        trasladoInternoPdv: pedido?.origen?.requiere_logistica
+            ? (solicitud && Object.prototype.hasOwnProperty.call(solicitud, 'traslado_interno_pdv')
+                ? Boolean(solicitud.traslado_interno_pdv)
+                : esTrasladoInternoPdv(pedido))
+            : false,
     };
 }
 
@@ -73,6 +80,9 @@ export function estadoPreparacionDesdeLocal(borrador) {
         folioReferencia: captura.folio_referencia || '',
         tipoReferencia: captura.tipo_referencia || 'COTIZACION',
         entregaMunicipal: captura.entrega_municipal ? normalizarEntrega(captura.entrega_municipal) : entregaMunicipalVacia(),
+        trasladoInternoPdv: typeof captura.traslado_interno_pdv === 'boolean'
+            ? captura.traslado_interno_pdv
+            : Boolean(borrador?.origen?.requiere_logistica) && esTrasladoInternoPdv(borrador),
     };
 }
 
@@ -97,6 +107,7 @@ export function serializarCapturaPreparacion(estado) {
         codigo_modalidad: estado?.codigoModalidad || null,
         tipo_referencia: folio ? (estado?.tipoReferencia || null) : null,
         folio_referencia: folio || null,
+        traslado_interno_pdv: typeof estado?.trasladoInternoPdv === 'boolean' ? estado.trasladoInternoPdv : undefined,
         entrega_municipal: municipal ? {
             destinatario_es_cliente: Boolean(entrega.destinatario_es_cliente),
             destinatario_nombre: String(entrega.destinatario_nombre || '').trim() || null,
@@ -119,7 +130,8 @@ export function capturaLocalDesdeEstado(estado) {
 /** Omite la intención vacía para no inventar datos en un histórico. */
 export function camposPreparacionParaGuardar(estado, confirmada = null) {
     const solicitud = serializarCapturaPreparacion(estado);
-    const vacia = !solicitud.codigo_modalidad && !solicitud.folio_referencia && !solicitud.entrega_municipal;
+    const vacia = !solicitud.codigo_modalidad && !solicitud.folio_referencia && !solicitud.entrega_municipal
+        && typeof solicitud.traslado_interno_pdv !== 'boolean';
     const habia = Boolean(
         confirmada
         && (confirmada.codigo_modalidad || confirmada.folio_referencia || confirmada.entrega_municipal)

@@ -38,6 +38,7 @@ class GeliaAiController extends Controller
             'configurado' => $client->estaConfigurado(),
             'conversaciones' => $conversaciones->listar($request->user()),
             'limiteSegundos' => max(10, (int) config('gelia_ai.max_turn_seconds', 90)),
+            'recomendacionesDisponibles' => app(\App\Services\GeliaAi\Skills\RecomendacionesPerfumeria::class)->disponiblePara($request->user()),
         ]);
     }
 
@@ -52,6 +53,7 @@ class GeliaAiController extends Controller
 
         $validated = $request->validate([
             'message' => ['required', 'string', 'max:2000'],
+            'modo' => ['nullable', 'string', 'in:general,recomendaciones'],
             'messages' => ['nullable', 'array', 'max:12'],
             'messages.*.role' => ['required_with:messages', 'string', 'in:user,assistant'],
             'messages.*.content' => ['required_with:messages', 'string', 'max:4000'],
@@ -78,6 +80,7 @@ class GeliaAiController extends Controller
                 $previo['historial'],
                 $fileIds,
                 $previo['contexto'],
+                $validated['modo'] ?? null,
             );
 
             $saved = $conversaciones->persistirTurno(
@@ -332,6 +335,7 @@ class GeliaAiController extends Controller
 
         return response()->json([
             'id' => $conv->id,
+            'modo' => 'general',
             'titulo' => null,
             'temporal' => true,
         ], 201);
@@ -363,6 +367,7 @@ class GeliaAiController extends Controller
         return response()->json([
             'id' => $conv->id,
             'titulo' => $conv->titulo,
+            'modo' => $ctx['modo'],
             'temporal' => (bool) $conv->temporal,
             'messages' => $svc->mensajesDe($conv),
             'propuesta_pendiente' => $pendiente,

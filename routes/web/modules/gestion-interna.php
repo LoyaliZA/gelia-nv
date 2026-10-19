@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\GestionInterna\ComisionesEmpaqueController;
 use App\Http\Controllers\GestionInterna\DirectorioController;
 use App\Http\Controllers\GestionInterna\ProductoController as GestionInternaProductoController;
 
@@ -35,5 +36,35 @@ Route::prefix('gestion-interna')->name('gestion_interna.')->group(function () {
         Route::post('/directorio/extensiones', [DirectorioController::class, 'storeExtension'])->name('directorio.extensiones.store');
         Route::put('/directorio/extensiones/{id}', [DirectorioController::class, 'updateExtension'])->name('directorio.extensiones.update');
         Route::delete('/directorio/extensiones/{id}', [DirectorioController::class, 'destroyExtension'])->name('directorio.extensiones.destroy');
+    });
+
+    Route::middleware(['can:gestion_interna.comisiones_empaque.ver'])->prefix('comisiones-empaque')->name('comisiones_empaque.')->group(function () {
+        Route::get('/', [ComisionesEmpaqueController::class, 'index'])->name('index');
+        Route::post('/sincronizar', [ComisionesEmpaqueController::class, 'sincronizar'])->name('sincronizar');
+        Route::post('/manual', [ComisionesEmpaqueController::class, 'manual'])->name('manual');
+        Route::get('/pedido', [ComisionesEmpaqueController::class, 'pedido'])->name('pedido');
+        Route::put('/configuracion/alcance', [ComisionesEmpaqueController::class, 'guardarAlcance'])->name('alcance');
+        Route::post('/unidades/{unidad}/revisar', [ComisionesEmpaqueController::class, 'revisar'])->name('revisar');
+        Route::post('/unidades/{unidad}/clasificar', [ComisionesEmpaqueController::class, 'clasificar'])->name('clasificar');
+        Route::post('/unidades/{unidad}/decision', [ComisionesEmpaqueController::class, 'decision'])->name('decision');
+        Route::post('/unidades/{unidad}/resolver', [ComisionesEmpaqueController::class, 'resolver'])->name('resolver');
+        Route::post('/cortes/borrador', [ComisionesEmpaqueController::class, 'borrador'])->name('borrador');
+        Route::post('/cortes/confirmar', [ComisionesEmpaqueController::class, 'confirmar'])->name('confirmar');
+        Route::post('/cortes/{corte}/descartar', [ComisionesEmpaqueController::class, 'descartar'])->name('descartar');
+        Route::post('/pagos', [ComisionesEmpaqueController::class, 'pagar'])->name('pagar');
+        Route::post('/pagos/{pago}/revertir', [ComisionesEmpaqueController::class, 'revertirPago'])->name('pagos.revertir');
+        Route::post('/ajustes', [ComisionesEmpaqueController::class, 'ajustar'])->name('ajustar');
+        Route::put('/configuracion/fecha-inicio', [ComisionesEmpaqueController::class, 'fechaInicio'])->name('fecha_inicio');
+        Route::post('/configuracion/areas', [ComisionesEmpaqueController::class, 'guardarArea'])->name('areas.store');
+        Route::put('/configuracion/areas/{area}', [ComisionesEmpaqueController::class, 'actualizarArea'])->name('areas.update');
+        Route::post('/configuracion/participantes', [ComisionesEmpaqueController::class, 'guardarParticipante'])->name('participantes.store');
+        Route::post('/configuracion/tarifas', [ComisionesEmpaqueController::class, 'guardarTarifa'])->name('tarifas.store');
+        Route::post('/configuracion/repartos', [ComisionesEmpaqueController::class, 'guardarReparto'])->name('repartos.store');
+        Route::get('/configuracion/usuarios', [ComisionesEmpaqueController::class, 'buscarUsuarios'])->name('usuarios');
+        Route::get('/exportar/acumulado', [ComisionesEmpaqueController::class, 'exportarAcumulado'])->name('exportar.acumulado');
+        Route::get('/exportar/tipos', [ComisionesEmpaqueController::class, 'exportarTipos'])->name('exportar.tipos');
+        Route::get('/exportar/cortes/{corte}', [ComisionesEmpaqueController::class, 'exportarCorte'])->name('exportar.corte');
+        Route::get('/exportar/cortes/{corte}/reparto', [ComisionesEmpaqueController::class, 'exportarReparto'])->name('exportar.reparto');
+        Route::get('/exportar/pagos', [ComisionesEmpaqueController::class, 'exportarPagos'])->name('exportar.pagos');
     });
 });

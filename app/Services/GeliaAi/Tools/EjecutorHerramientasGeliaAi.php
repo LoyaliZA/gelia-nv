@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Services\GeliaAi\Acciones\AccionRegistry;
 use App\Services\GeliaAi\Acciones\PropuestasAccionGeliaAi;
 use App\Services\GeliaAi\SanitizarContextoAi;
+use App\Services\GeliaAi\Skills\RecomendacionesPerfumeria;
 use Throwable;
 
 /**
@@ -22,6 +23,7 @@ class EjecutorHerramientasGeliaAi
         private PropuestasAccionGeliaAi $propuestas,
         private ValidarArgumentosHerramienta $validador,
         private SanitizarContextoAi $sanitizer,
+        private RecomendacionesPerfumeria $recomendaciones,
     ) {}
 
     /**
@@ -49,6 +51,12 @@ class EjecutorHerramientasGeliaAi
         }
 
         return $out;
+    }
+
+    /** Comparte la misma skill y su presupuesto web con las llamadas posteriores del modelo. */
+    public function perfilPorCodigo(User $user, string $codigo): array
+    {
+        return $this->recomendaciones->porCodigo($user, $codigo);
     }
 
     /**
@@ -152,6 +160,6 @@ class EjecutorHerramientasGeliaAi
     /** @return list<HerramientaGeliaAi> */
     private function herramientas(): array
     {
-        return [$this->ayuda, $this->inventario, $this->almacenes];
+        return [$this->ayuda, $this->inventario, $this->almacenes, $this->recomendaciones];
     }
 }

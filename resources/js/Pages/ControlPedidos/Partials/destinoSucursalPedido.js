@@ -62,11 +62,14 @@ export function resolverCodigoModalidadEfectiva({
 
 /** Espejo de PedidoBma::esTrasladoInternoAPdv para captura sin ID. */
 export function esTrasladoInternoPdv(pedido, almacen = pedido?.almacen, codigoModalidad) {
+    const marca = pedido?.solicitud_preparacion?.traslado_interno_pdv
+        ?? pedido?.solicitud_preparacion_json?.traslado_interno_pdv;
+    if (marca === false) return false;
     const codigo = codigoModalidad ?? pedido?.tarea_preparacion?.modalidad?.codigo
         ?? pedido?.tarea_preparacion_vigente?.modalidad?.codigo
         ?? pedido?.solicitud_preparacion?.codigo_modalidad
         ?? pedido?.solicitud_preparacion_json?.codigo_modalidad;
-    if (codigo && !['RECOGE_TIENDA', 'RECOGE_TIENDA_TRANSFERENCIA'].includes(codigo)) return false;
+    if (codigo && !['RECOGE_TIENDA', 'RECOGE_TIENDA_TRANSFERENCIA', 'RECOGE_TIENDA_CREDITO'].includes(codigo)) return false;
     if (!pedido?.sucursal_destino_id || !pedido?.almacen_id || !almacen) return false;
     const esPdv = String(almacen.tipo_almacen?.nombre || almacen.tipoAlmacen?.nombre || '').trim().toUpperCase() === 'PDV'
         || String(almacen.codigo || '').trim().toUpperCase() === 'PDV';

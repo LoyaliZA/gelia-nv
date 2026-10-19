@@ -6,7 +6,7 @@ import React from 'react';
  */
 function tokenizeInline(text) {
     const nodes = [];
-    const re = /(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)/g;
+    const re = /(\[[^\]\n]+\]\(https?:\/\/[^\s)]+\)|\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)/g;
     let last = 0;
     let m;
     let key = 0;
@@ -16,7 +16,10 @@ function tokenizeInline(text) {
             nodes.push(text.slice(last, m.index));
         }
         const token = m[0];
-        if (token.startsWith('**') && token.endsWith('**')) {
+        const link = token.match(/^\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)$/);
+        if (link) {
+            nodes.push(<a key={`l${key++}`} href={link[2]} target="_blank" rel="noopener noreferrer">{link[1]}</a>);
+        } else if (token.startsWith('**') && token.endsWith('**')) {
             nodes.push(<strong key={`b${key++}`}>{token.slice(2, -2)}</strong>);
         } else if (token.startsWith('*') && token.endsWith('*')) {
             nodes.push(<em key={`i${key++}`}>{token.slice(1, -1)}</em>);

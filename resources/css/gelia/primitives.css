@@ -425,6 +425,7 @@ body > .gelia-modal-overlay {
     display: flex;
     flex-direction: column;
     background-color: var(--theme-surface-bg);
+    color: var(--theme-text-main);
     border: 1px solid var(--theme-surface-border);
     border-radius: var(--theme-radius-modal);
     box-shadow: var(--theme-shadow-modal);

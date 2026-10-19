@@ -77,7 +77,7 @@ class ConfirmarPagoSalidaPreparacionService
 
         if ($condicion === PoliticaSalidaPreparacion::COBRO_POR_COBRAR && ! $politica->permitePorCobrar()) {
             throw ValidationException::withMessages([
-                'condicion_cobro' => 'La transferencia diferida solo se libera después del pago.',
+                'condicion_cobro' => 'Este resguardo solo se libera después de registrar el pago.',
             ]);
         }
 
