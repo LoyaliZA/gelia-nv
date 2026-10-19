@@ -14,6 +14,8 @@ import {
     badgeHitoAuditoria,
     esPendienteReRevision,
     formatearMoneda,
+    etiquetaAlmacen,
+    pedidoRequiereLogistica,
     etiquetaOrigenGuia,
     formatearFechaNegocio,
     formatearFechaHoraAuditoria,
@@ -45,7 +47,7 @@ import ResumenCoberturaPedido from './ResumenCoberturaPedido';
 import DatosGeneralesAuditoria from './DatosGeneralesAuditoria';
 import TotalesEnviosAuditoria from './TotalesEnviosAuditoria';
 import BarraAccionesRevision from './BarraAccionesRevision';
-import { remisionVigenteDe } from './remisionVigente';
+import { prepararAdjuntoRemision, remisionVigenteDe } from './remisionVigente';
 import { THEME_INPUT } from '../../../../utils/geliaTheme';
 
 const SECCION_WRAP = 'gelia-pedidos-seccion space-y-4';
@@ -92,6 +94,8 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
     const [bloqueosPago, setBloqueosPago] = useState([]);
     const [errorRechazo, setErrorRechazo] = useState(null);
     const [resumenCobertura, setResumenCobertura] = useState(null);
+    const [masInformacion, setMasInformacion] = useState(false);
+    const [errorNumeroRemision, setErrorNumeroRemision] = useState('');
 
     useEffect(() => {
         if (abierto && pedidoInicial) {
@@ -108,6 +112,8 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
             setResumenCobertura(null);
             setBloqueosPago([]);
             setErrorRechazo(null);
+            setMasInformacion(false);
+            setErrorNumeroRemision('');
         }
     }, [abierto, pedidoInicial?.id]);
 
@@ -167,6 +173,8 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
     const remision = remisionVigenteDe(pedido);
     const pagoValidado = Boolean(pedido.pago_validado_at);
     const recogeTienda = Boolean(pedido.es_recoge_tienda_apartado);
+    const fichaTienda = !pedidoRequiereLogistica(pedido) && !recogeTienda;
+    const fichaCompacta = fichaTienda && !masInformacion;
     const puedeAprobar = esPendiente && pagoValidado && Boolean(remision)
         && can('control_pedidos.auditar.aprobar') && !recogeTienda;
     const muestraAprobar = esPendiente && can('control_pedidos.auditar.aprobar') && !recogeTienda;
@@ -247,8 +255,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
         });
     };
 
-    const subirRemision = (archivo) => {
-        if (!archivo || procesando) return;
+    const adjuntarArchivoRemision = (archivo) => {
         setProcesando(true);
         const formData = new FormData();
         formData.append('remision', archivo);
@@ -258,6 +265,44 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
             onSuccess: (page) => recargarPedido('Remisión adjuntada correctamente.', page),
             onError: (errors) => setAlerta({ abierto: true, tipo: 'error', titulo: 'Error', mensaje: errors?.remision || 'No se pudo adjuntar la remisión.' }),
             onFinish: () => setProcesando(false),
+        });
+    };
+
+    const subirRemision = (archivo) => {
+        if (!archivo || procesando) return;
+        if (!(esPendiente && !recogeTienda)) {
+            adjuntarArchivoRemision(archivo);
+            return;
+        }
+        const preparacion = prepararAdjuntoRemision(numeroRemision, pedido.numero_remision);
+        if (!preparacion.listo) {
+            setErrorNumeroRemision('Escribe el número de remisión antes de adjuntar el PDF.');
+            window.requestAnimationFrame(() => document.getElementById('auditoria-numero-remision')?.focus());
+            return;
+        }
+        setErrorNumeroRemision('');
+        if (!preparacion.guardarAntes) {
+            adjuntarArchivoRemision(archivo);
+            return;
+        }
+        setProcesando(true);
+        router.put(route('control_pedidos.auditar.numero_remision.update', pedido.id), {
+            numero_remision: preparacion.numero,
+        }, {
+            preserveScroll: true,
+            onSuccess: (page) => {
+                if (falloRespuesta(page)) {
+                    setProcesando(false);
+                    return;
+                }
+                adjuntarArchivoRemision(archivo);
+            },
+            onError: (errors) => {
+                setProcesando(false);
+                const mensaje = errors?.numero_remision || 'No se pudo registrar el número de remisión.';
+                setErrorNumeroRemision(mensaje);
+                setAlerta({ abierto: true, tipo: 'error', titulo: 'Número de remisión', mensaje });
+            },
         });
     };
 
@@ -405,7 +450,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                 <div
                     {...dialog}
                     aria-labelledby="auditoria-revision-titulo"
-                    className={`${THEME_MODAL_SHELL} gelia-pedidos-dialog-workspace gelia-pedidos-auditoria max-w-6xl w-full flex flex-col`}
+                    className={`${THEME_MODAL_SHELL} gelia-pedidos-dialog-workspace gelia-pedidos-auditoria ${fichaCompacta ? 'max-w-3xl' : 'max-w-6xl'} w-full flex flex-col`}
                     style={{ maxHeight: 'calc(100dvh - 2rem)' }}
                     onClick={(e) => e.stopPropagation()}
                 >
@@ -443,7 +488,22 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                         }
                     />
 
-                    <NavegacionPedido label="Secciones de la auditoría" secciones={[
+                    <NavegacionPedido
+                        label="Secciones de la auditoría"
+                        onSeleccionar={fichaTienda ? (id) => {
+                            if (id === 'auditoria-mas') setMasInformacion(true);
+                            window.requestAnimationFrame(() => {
+                                const destino = document.getElementById(id);
+                                destino?.scrollIntoView({ block: 'start', behavior: 'instant' });
+                                destino?.focus({ preventScroll: true });
+                            });
+                        } : null}
+                        secciones={fichaTienda ? [
+                        { id: 'auditoria-ficha', label: 'Datos' },
+                        { id: 'auditoria-pagos', label: 'Comprobantes' },
+                        { id: 'auditoria-remision', label: 'Remisión' },
+                        { id: 'auditoria-mas', label: 'Resto del pedido' },
+                    ] : [
                         { id: 'auditoria-pagos', label: 'Comprobantes' },
                         { id: 'auditoria-cobertura', label: 'Cobertura' },
                         { id: 'auditoria-remision', label: 'Remisión' },
@@ -453,8 +513,8 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                         (anexoPendiente || puedeAnexar || (pedido.anexos_envio || []).length > 0) && { id: 'auditoria-anexo', label: 'Anexo de envío' },
                     ]} />
                     <div className="gelia-modal-body p-4 md:p-5">
-                        <div className="gelia-pedidos-auditoria-grid">
-                            <aside className="gelia-pedidos-auditoria-panel gelia-pedidos-auditoria-cobertura space-y-4" aria-label="Cobertura y pedido compartido">
+                        <div className={fichaCompacta ? 'space-y-4' : 'gelia-pedidos-auditoria-grid'}>
+                            <aside className={`gelia-pedidos-auditoria-panel gelia-pedidos-auditoria-cobertura space-y-4 ${fichaCompacta ? 'hidden' : ''}`} aria-label="Cobertura y pedido compartido">
                                 <section id="auditoria-cobertura" tabIndex={-1} className={SECCION_WRAP}>
                                     <h3 className="gelia-pedidos-seccion-titulo">Cobertura</h3>
                                     <ResumenCoberturaPedido
@@ -472,6 +532,25 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                         <p className="m-0 flex-1">{alerta.mensaje}</p>
                                         <button type="button" aria-label="Descartar aviso" onClick={() => setAlerta((prev) => ({ ...prev, abierto: false }))} className="shrink-0 p-1"><X className="w-4 h-4" /></button>
                                     </div>
+                                )}
+                                {fichaTienda && (
+                                    <section id="auditoria-ficha" tabIndex={-1} className={SECCION_WRAP}>
+                                        <h3 className="gelia-pedidos-seccion-titulo">Datos del cliente</h3>
+                                        <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                            <Campo label="Nombre del cliente" value={pedido.cliente?.nombre} />
+                                            <Campo label="Número de cuenta" value={pedido.cliente?.numero_cliente} />
+                                            <Campo label="Pedido" value={pedido.folio_remision} />
+                                            <Campo label="Almacén" value={etiquetaAlmacen(pedido.almacen)} />
+                                            {pedido.banco?.nombre && <Campo label="Banco" value={pedido.banco.nombre} />}
+                                            <Campo label="Tipo de pedido" value={pedido.origen?.nombre || 'Tienda'} />
+                                            {Number(pedido.saldo_a_favor) > 0 && <Campo label="Saldo a favor" value={formatearMoneda(pedido.saldo_a_favor)} />}
+                                        </dl>
+                                        {pedido.comentarios_drive && <Campo label="Comentarios" value={pedido.comentarios_drive} />}
+                                        <p className="flex justify-between gap-4 items-baseline m-0 pt-3 border-t theme-border font-semibold">
+                                            <span>Total de la compra</span>
+                                            <strong className="text-xl tabular-nums">{formatearMoneda(pedido.total_mercancia)}</strong>
+                                        </p>
+                                    </section>
                                 )}
                                 <p className="text-xs theme-text-muted m-0">{indicacionRevisionPedido({ reRevision, esRechazado, pagoValidado, badgeRemision })}</p>
                                 <AvisosRevisionPedido pedido={pedido} badgeRemision={badgeRemision} esRechazado={esRechazado} procesando={procesando} can={can} onResolverSaf={resolverSaf} />
@@ -555,11 +634,12 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                                 <input id="auditoria-numero-remision" disabled={procesando}
                                                     type="text"
                                                     value={numeroRemision}
-                                                    onChange={(e) => setNumeroRemision(e.target.value)}
+                                                    aria-invalid={errorNumeroRemision ? true : undefined}
+                                                    aria-describedby={errorNumeroRemision ? 'auditoria-remision-numero-error auditoria-remision-ayuda' : 'auditoria-remision-ayuda'}
+                                                    onChange={(e) => { setErrorNumeroRemision(''); setNumeroRemision(e.target.value); }}
                                                     className={`${THEME_INPUT} flex-1 min-w-0 py-2 text-sm`}
                                                     placeholder="Ej. RM-00842"
                                                     maxLength={64}
-                                                    aria-describedby="auditoria-remision-ayuda"
                                                 />
                                                 <button
                                                     type="button"
@@ -572,7 +652,8 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                             </div>
                                         </div>
                                     )}
-                                    {esPendiente && !recogeTienda && <p id="auditoria-remision-ayuda" className="text-xs theme-text-muted m-0 mb-3">Captura el número que aparece en el PDF de remisión; el número de pedido lo captura quien registra el pedido.</p>}
+                                    {esPendiente && !recogeTienda && <p id="auditoria-remision-ayuda" className="text-xs theme-text-muted m-0 mb-3">Escribe el número de la remisión. Al adjuntar el PDF, ese número queda registrado. El número de pedido lo captura quien registra el pedido.</p>}
+                                    {errorNumeroRemision && <p id="auditoria-remision-numero-error" role="alert" className="text-sm font-semibold theme-text-peligro m-0 mb-3">{errorNumeroRemision}</p>}
                                     {!esPendiente && <Campo label="Número de remisión" value={pedido.numero_remision} />}
                                     {remision ? (
                                         <div className="space-y-3">
@@ -617,6 +698,21 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                         <p className="text-xs theme-text-muted font-bold italic">Sin remisión adjunta</p>
                                     )}
                                 </section>
+                                {fichaTienda && (
+                                    <details
+                                        id="auditoria-mas"
+                                        tabIndex={-1}
+                                        open={masInformacion}
+                                        className="border theme-border rounded-xl"
+                                        onToggle={(event) => setMasInformacion(event.currentTarget.open)}
+                                    >
+                                        <summary className="min-h-11 px-4 py-3 text-sm font-semibold theme-text-main cursor-pointer">
+                                            {masInformacion ? 'Ocultar el resto del pedido' : 'Ver el resto del pedido'}
+                                        </summary>
+                                        <p className="px-4 pb-3 m-0 text-xs theme-text-muted">Cobertura, envío, datos generales y pedido compartido siguen disponibles.</p>
+                                    </details>
+                                )}
+                                {!fichaCompacta && (<>
                                 <section id="auditoria-envios" tabIndex={-1} className={SECCION_WRAP}>
                                     <h3 className="gelia-pedidos-seccion-titulo">Envío y costos</h3>
                                     <div className="grid grid-cols-2 gap-4 mb-3">
@@ -770,6 +866,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                         )}
                                     </section>
                                 )}
+                                </>)}
                             </div>
                         </div>
                     </div>

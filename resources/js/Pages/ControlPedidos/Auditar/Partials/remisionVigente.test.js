@@ -1,5 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { remisionVigenteDe } from './remisionVigente';
+import { prepararAdjuntoRemision, remisionVigenteDe } from './remisionVigente';
+
+describe('número al adjuntar remisión', () => {
+    it('pide el número antes de aceptar el PDF', () => {
+        expect(prepararAdjuntoRemision('  ', null)).toEqual({ listo: false, guardarAntes: false, numero: '' });
+    });
+    it('guarda el número nuevo y luego permite el PDF', () => {
+        expect(prepararAdjuntoRemision(' RM-10 ', '')).toEqual({ listo: true, guardarAntes: true, numero: 'RM-10' });
+    });
+    it('no vuelve a guardar un número que ya está registrado', () => {
+        expect(prepararAdjuntoRemision('RM-10', 'RM-10')).toEqual({ listo: true, guardarAntes: false, numero: 'RM-10' });
+    });
+});
 
 describe('remisión vigente en auditoría', () => {
     it('muestra la sustitución aunque la anterior aparezca primero en el historial', () => {
