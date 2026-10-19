@@ -21,4 +21,12 @@ class GuardarApartadoRecogeHoyRequest extends FormRequest
             'motivo_incidencia' => ['nullable', 'string', 'max:2000'],
         ]);
     }
+
+    protected function prepareForValidation(): void
+    {
+        $lineas = $this->input('lineas');
+        if (is_array($lineas)) {
+            $this->merge(ReglasLineasPreparacion::normalizarMarcas(['lineas' => $lineas]));
+        }
+    }
 }

@@ -20,6 +20,7 @@ function formData(datos) {
         if (valor === null || valor === undefined) return;
         if (valor instanceof File || valor instanceof Blob) form.append(clave, valor);
         else if (Array.isArray(valor)) valor.forEach((v, i) => agregar(v, `${clave}[${i}]`));
+        else if (typeof valor === 'boolean') form.append(clave, valor ? '1' : '0');
         else if (typeof valor === 'object') Object.entries(valor).forEach(([k, v]) => agregar(v, `${clave}[${k}]`));
         else form.append(clave, String(valor));
     };
@@ -58,6 +59,33 @@ export default function PrepararApartadoRecoge({ tarea, auth, documentos = [], d
     previewsRef.current = [...lineas.flatMap((l) => l.previews), ...evidencias.previews];
     useEffect(() => () => previewsRef.current.forEach((p) => { if (p.url?.startsWith('blob:')) URL.revokeObjectURL(p.url); }), []);
     const cambiar = (i, campo, valor) => { setDirty(true); setLineas((prev) => prev.map((l, j) => j === i ? { ...l, [campo]: valor } : l)); };
+    const permitirSinExistencia = !requisitos.estados_fisicos_permitidos || requisitos.estados_fisicos_permitidos.includes('sin_existencia');
+    const MOTIVO_SIN_EXISTENCIA = 'Sin existencias';
+    const alternarEtiqueta = (i, clave) => {
+        setDirty(true);
+        setLineas((prev) => prev.map((l, j) => {
+            if (j !== i) return l;
+            if (clave === 'unica_pieza') return { ...l, unica_pieza: !l.unica_pieza, detalle: true };
+            if (clave === 'mejor_ejemplar') return { ...l, mejor_ejemplar: !l.mejor_ejemplar, detalle: true };
+            if (clave !== 'sin_existencia') return l;
+            if (l.estado_fisico === 'sin_existencia') {
+                return {
+                    ...l,
+                    estado_fisico: 'bueno',
+                    cantidad: Number(l.cantidad) === 0 ? 1 : l.cantidad,
+                    observacion: l.observacion === MOTIVO_SIN_EXISTENCIA ? '' : l.observacion,
+                    detalle: l.unica_pieza || l.mejor_ejemplar,
+                };
+            }
+            return {
+                ...l,
+                estado_fisico: 'sin_existencia',
+                cantidad: 0,
+                observacion: String(l.observacion || '').trim() || MOTIVO_SIN_EXISTENCIA,
+                detalle: true,
+            };
+        }));
+    };
     const agregar = (producto = seleccion) => {
         if (!producto || ocupado) return;
         setDirty(true);
@@ -207,16 +235,28 @@ export default function PrepararApartadoRecoge({ tarea, auth, documentos = [], d
                             {errorCampo(`tienda-cantidad-${i}`)}
                             {editable && (!capturaEstadoPieza || !l.id) && <div className="gelia-preparacion-producto-acciones">{!capturaEstadoPieza && <button type="button" className={BTN_SECONDARY} aria-expanded={l.detalle || Number(l.cantidad) === 0} aria-controls={`tienda-detalle-${i}`} disabled={ocupado} onClick={() => cambiar(i, 'detalle', !l.detalle)}>{l.detalle ? 'Ocultar detalle' : 'Reportar detalle'}</button>}
                                 {!l.id && <button type="button" className={BTN_SECONDARY} disabled={guardando} onClick={() => setQuitarLinea(i)}><Trash2 className="w-4 h-4" aria-hidden="true" />Quitar pieza</button>}</div>}
+                            {editable && <div className="gelia-pedidos-atributos" aria-label="Marcas rápidas de la pieza">
+                                <label className="gelia-pedidos-atributo gelia-pedidos-atributo-control"><input type="checkbox" checked={l.unica_pieza} onChange={() => alternarEtiqueta(i, 'unica_pieza')} disabled={ocupado} />Única pieza</label>
+                                <label className="gelia-pedidos-atributo gelia-pedidos-atributo-control"><input type="checkbox" checked={l.mejor_ejemplar} onChange={() => alternarEtiqueta(i, 'mejor_ejemplar')} disabled={ocupado} />Mejor ejemplar</label>
+                                {permitirSinExistencia && <label className="gelia-pedidos-atributo gelia-pedidos-atributo-control"><input type="checkbox" checked={l.estado_fisico === 'sin_existencia'} onChange={() => alternarEtiqueta(i, 'sin_existencia')} disabled={ocupado} />Sin existencias</label>}
+                            </div>}
                             {editable && (capturaEstadoPieza || l.detalle || Number(l.cantidad) === 0) && <div id={`tienda-detalle-${i}`} className="gelia-preparacion-detalle">
-                                <label className={THEME_LABEL}>Estado de la pieza<select name={`estado-${i}`} className={`${THEME_SELECT} w-full mt-1`} value={l.estado_fisico} onChange={(e) => cambiar(i, 'estado_fisico', e.target.value)} disabled={ocupado}>
+                                <label className={THEME_LABEL}>Estado de la pieza<select name={`estado-${i}`} className={`${THEME_SELECT} w-full mt-1`} value={l.estado_fisico} onChange={(e) => {
+                                    const estado = e.target.value;
+                                    if (estado !== 'sin_existencia') { cambiar(i, 'estado_fisico', estado); return; }
+                                    setDirty(true);
+                                    setLineas((prev) => prev.map((fila, j) => j !== i ? fila : {
+                                        ...fila,
+                                        estado_fisico: 'sin_existencia',
+                                        cantidad: 0,
+                                        observacion: String(fila.observacion || '').trim() || MOTIVO_SIN_EXISTENCIA,
+                                        detalle: true,
+                                    }));
+                                }} disabled={ocupado}>
                                     {Object.entries(estados).filter(([estado]) => !requisitos.estados_fisicos_permitidos || requisitos.estados_fisicos_permitidos.includes(estado)).map(([estado, texto]) => <option key={estado} value={estado}>{texto}</option>)}
                                 </select></label>
-                                <label className={THEME_LABEL}>Detalle o motivo<textarea name={`observacion-${i}`} rows={2} maxLength={2000} className={`${THEME_TEXTAREA} w-full mt-1`} value={l.observacion} onChange={(e) => cambiar(i, 'observacion', e.target.value)} disabled={ocupado} placeholder={l.estado_fisico === 'sin_existencia' ? 'Indique qué falta y cómo debe continuar Ventas…' : 'Describa el daño, faltante o detalle…'} /></label>
-                                {capturaEstadoPieza && <div className="gelia-pedidos-atributos" aria-label="Características de la pieza">
-                                    <label className="gelia-pedidos-atributo gelia-pedidos-atributo-control"><input type="checkbox" checked={l.unica_pieza} onChange={(e) => cambiar(i, 'unica_pieza', e.target.checked)} disabled={ocupado} />Única pieza</label>
-                                    <label className="gelia-pedidos-atributo gelia-pedidos-atributo-control"><input type="checkbox" checked={l.mejor_ejemplar} onChange={(e) => cambiar(i, 'mejor_ejemplar', e.target.checked)} disabled={ocupado} />Mejor ejemplar</label>
-                                </div>}
-                                {l.estado_fisico === 'sin_existencia' && <p className="text-xs font-bold theme-text-info m-0">Sin existencias: Ventas verá este aviso. Confirme el apartado solo cuando el faltante esté resuelto.</p>}
+                                <label className={THEME_LABEL}>Detalle o motivo<textarea name={`observacion-${i}`} rows={2} maxLength={2000} className={`${THEME_TEXTAREA} w-full mt-1`} value={l.observacion} onChange={(e) => cambiar(i, 'observacion', e.target.value)} disabled={ocupado} placeholder={l.estado_fisico === 'sin_existencia' ? 'Opcional si ya marcó Sin existencias' : 'Describa el daño, faltante o detalle…'} /></label>
+                                {l.estado_fisico === 'sin_existencia' && <p className="text-xs font-bold theme-text-info m-0">Sin existencias: Ventas verá este aviso. No hace falta redactar un motivo si ya marcó la etiqueta.</p>}
                                 {fotosProducto(l, i)}
                             </div>}
                             {editable && !capturaEstadoPieza && !esRecoge && requisitos.evidencia_por_producto && !l.detalle && Number(l.cantidad) > 0 && fotosProducto(l, i)}

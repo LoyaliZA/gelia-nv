@@ -33,4 +33,12 @@ class ResponderPreparacionTiendaRequest extends FormRequest
             'evidencias_producto.*' => ['file', 'max:10240', 'mimes:jpg,jpeg,png,webp,pdf'],
         ]);
     }
+
+    protected function prepareForValidation(): void
+    {
+        $lineas = $this->input('lineas');
+        if (is_array($lineas)) {
+            $this->merge(ReglasLineasPreparacion::normalizarMarcas(['lineas' => $lineas]));
+        }
+    }
 }

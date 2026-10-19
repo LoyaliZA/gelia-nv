@@ -155,35 +155,6 @@ class ListarPedidosBmaService
         $pedido->setAttribute('tiene_caratula_municipal_pendiente', $pedido->tieneCaratulaMunicipalPendiente());
         $tareaVista = $this->resolverTareaPreparacionVista($pedido);
         $pedido->setAttribute('tarea_preparacion', $this->serializarTareaPreparacion($tareaVista));
-        // #region agent log
-        if (($pedido->estatus_envio === PedidoBma::ESTATUS_ENVIO_APARTADO_CONFIRMADO)
-            || ($tareaVista?->modalidad?->codigo === 'RECOGE_TIENDA')) {
-            $docsPedido = $pedido->relationLoaded('documentos') ? $pedido->documentos : collect();
-            $revs = $pedido->relationLoaded('revisionesProducto') ? $pedido->revisionesProducto : collect();
-            @file_put_contents(base_path('.cursor/debug-7b09e7.log'), json_encode([
-                'sessionId' => '7b09e7',
-                'hypothesisId' => 'A',
-                'location' => 'ListarPedidosBmaService.php:anexarFlagsVista',
-                'message' => 'Pedido recoge/apartado serializado para Ventas',
-                'data' => [
-                    'pedido_id' => $pedido->id,
-                    'estatus_envio' => $pedido->estatus_envio,
-                    'fase_ciclo' => $pedido->estatus?->fase_ciclo,
-                    'pesaje_respondido_at' => $pedido->pesaje_respondido_at?->toIso8601String(),
-                    'pesaje_respondido_por_id' => $pedido->pesaje_respondido_por_id,
-                    'tarea_id' => $tareaVista?->id,
-                    'tarea_estado' => $tareaVista?->estado,
-                    'tarea_modalidad' => $tareaVista?->modalidad?->codigo,
-                    'docs_pedido' => $docsPedido->count(),
-                    'docs_pedido_tipos' => $docsPedido->pluck('tipo')->values()->all(),
-                    'evidencia_condicion' => $docsPedido->where('tipo', 'evidencia_condicion')->count(),
-                    'revisiones_producto' => $revs->count(),
-                    'usa_preparacion_tienda' => (bool) $pedido->getAttribute('usa_preparacion_tienda'),
-                ],
-                'timestamp' => (int) (microtime(true) * 1000),
-            ]).PHP_EOL, FILE_APPEND);
-        }
-        // #endregion
         $pedido->setAttribute('referencia_captura', $this->referenciaCaptura($pedido));
 
         $canc = $pedido->relationLoaded('cancelacionOperativaActiva')
@@ -334,6 +305,10 @@ class ListarPedidosBmaService
                 'id' => $c->id,
                 'version' => $c->version,
                 'estado' => $c->estado,
+            ] : null,
+            'apartado' => $tarea->cumplimientoFisico ? [
+                'estado' => $tarea->cumplimientoFisico->estado,
+                'version' => $tarea->cumplimientoFisico->version,
             ] : null,
         ];
     }

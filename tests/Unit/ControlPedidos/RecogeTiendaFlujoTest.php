@@ -338,6 +338,19 @@ class RecogeTiendaFlujoTest extends TestCase
         $this->assertCount(1, $respuesta['documentos']);
     }
 
+    public function test_acepta_marcas_de_pieza_enviadas_como_texto_de_formdata(): void
+    {
+        $datos = $this->datos();
+        $datos['lineas'][0]['unica_pieza'] = 'false';
+        $datos['lineas'][0]['mejor_ejemplar'] = 'true';
+        $request = GuardarApartadoRecogeHoyRequest::create('/', 'POST', $datos);
+        $this->assertFalse(Validator::make($datos, $request->rules())->passes());
+        $normalizado = \App\Http\Requests\ControlPedidos\ReglasLineasPreparacion::normalizarMarcas($datos);
+        $this->assertFalse($normalizado['lineas'][0]['unica_pieza']);
+        $this->assertTrue($normalizado['lineas'][0]['mejor_ejemplar']);
+        $this->assertTrue(Validator::make($normalizado, $request->rules())->passes());
+    }
+
     public function test_reporta_problema_sin_fabricar_productos(): void
     {
         $this->mock(ReportarIncidenciaPreparacionService::class)

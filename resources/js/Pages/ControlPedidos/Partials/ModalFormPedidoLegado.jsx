@@ -700,6 +700,9 @@ export default function ModalFormPedidoLegado({
         || pedido?.estatus_envio === 'pesaje_listo'
         || (pedido?.cajas || []).length > 0
         || pedido?.estatus?.fase_ciclo === 'PESAJE_RESPONDIDO';
+    const tieneRespuestaTienda = apartadoConfirmado
+        || Boolean(tareaPreparacion?.respuesta?.respondida)
+        || (tareaPreparacion?.respuesta?.documentos || []).some((d) => d?.url);
     const pendientePesaje = pedido?.estatus_envio === 'pendiente_pesaje' || consultaPendienteLocal;
     const consultaCerradaServidor = Boolean(pedido?.consulta_cerrada || pedido?.consulta_cerrada_at);
     const [consultaCerradaLocal, setConsultaCerradaLocal] = useState(null);
@@ -908,7 +911,7 @@ export default function ModalFormPedidoLegado({
     };
     const fasesRegistro = [
         { id: FASE_DATOS, label: 'Datos del cliente y pedido' },
-        (pendientePesaje || tienePesajeRespondido || consultaCerrada)
+        (pendientePesaje || tienePesajeRespondido || consultaCerrada || tieneRespuestaTienda)
             ? { id: FASE_RESPUESTA, label: enFlujoTienda ? 'Respuesta de Tienda' : 'Respuesta CEDIS' }
             : null,
         (consultaCerrada || esResguardoComplementario)
@@ -993,14 +996,6 @@ export default function ModalFormPedidoLegado({
         setFaseUi(decision.codigo || FASE_DATOS);
         if (decision.aviso) setAvisoForm({ tipo: 'info', mensaje: decision.aviso });
     }, [modoProgresivo, faseUi, pendientePesaje, tienePesajeRespondido, consultaCerrada, esResguardoComplementario]);
-
-    useEffect(() => {
-        if (!abierto || !pedido) return;
-        if (pedido.estatus_envio !== 'apartado_confirmado' && !esRecogeTienda) return;
-        // #region agent log
-        fetch('http://127.0.0.1:7456/ingest/0314f2b3-9e85-489d-a856-bf4dff6d8e9e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'7b09e7'},body:JSON.stringify({sessionId:'7b09e7',hypothesisId:'A',location:'ModalFormPedidoLegado.jsx:flags',message:'Flags UI pedido recoge/apartado',data:{pedidoId:pedido.id,estatusEnvio:pedido.estatus_envio,fase:pedido?.estatus?.fase_ciclo,faseUi,pesajeRespondidoAt:pedido?.pesaje_respondido_at||null,tienePesajeRespondido,apartadoConfirmado,esRecogeTienda,usaPreparacionTienda,mostrarPesaje,tareaId:tareaPreparacion?.id||null,tareaEstado:tareaPreparacion?.estado||null,respuestaRespondida:Boolean(tareaPreparacion?.respuesta?.respondida),respuestaDocs:(tareaPreparacion?.respuesta?.documentos||[]).length,docsPedido:(pedido?.documentos||[]).length,evidenciaCondicion:(pedido?.documentos||[]).filter((d)=>d.tipo==='evidencia_condicion').length,revisiones:(pedido?.revisiones_producto||pedido?.revisionesProducto||[]).length,faseRespuestaEnTabs:Boolean(pendientePesaje||tienePesajeRespondido||consultaCerrada),muestraBloqueFotosCedis:Boolean(tienePesajeRespondido)},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
-    }, [abierto, pedido?.id, pedido?.estatus_envio, esRecogeTienda, tienePesajeRespondido, apartadoConfirmado, faseUi, mostrarPesaje, pendientePesaje, consultaCerrada, usaPreparacionTienda, tareaPreparacion]);
 
     const estadoPreparacionActual = () => ({
         codigoModalidad: codigoModalidadPreparacion,
@@ -3682,7 +3677,6 @@ export default function ModalFormPedidoLegado({
                                 {esRecogeTienda ? 'Adjunte el PDF o foto del pedido y solicite el apartado en PDV.' : <>Adjunte el PDF o foto del pedido y solicite {enFlujoTienda ? 'la preparación en Tienda' : `la ${labelConsulta.toLowerCase()}`}. El monto se captura después de cerrarla.</>}
                             </AvisoOperativoPedido>
                         )}
-                        {tareaPreparacion && <RespuestaPreparacionTienda tarea={tareaPreparacion} onVerDocumentos={abrirVistaPrevia} />}
                         {puedeSolicitarAnexoTransferencia && <ReabrirApartadoRecoge tarea={tareaPreparacion} anexo />}
                         {esRecogeTienda && apartadoConfirmado && (
                             <AvisoOperativoPedido label="Apartado confirmado" tono="success" icon={CheckCircle2} className="mb-4">
@@ -3768,6 +3762,7 @@ export default function ModalFormPedidoLegado({
                     </PanelFase>
 
                     <PanelFase codigo={FASE_RESPUESTA} activa={faseActiva} montada={verEtapa(FASE_RESPUESTA)}>
+                    {tareaPreparacion && <RespuestaPreparacionTienda tarea={tareaPreparacion} onVerDocumentos={abrirVistaPrevia} />}
                     {!tienePesajeRespondido && (pendientePesaje || consultaCerrada) && (
                         <AvisoOperativoPedido label={enFlujoTienda ? 'Esperando respuesta de Tienda' : 'Esperando CEDIS'} tono="warning" icon={Scale}>
                             La consulta ya fue enviada. La respuesta, el anexo de piezas y el cierre aparecen aquí cuando {enFlujoTienda ? 'Tienda responda' : 'CEDIS responda'}.

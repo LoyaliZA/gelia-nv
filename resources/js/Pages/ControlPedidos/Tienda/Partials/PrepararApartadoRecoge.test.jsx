@@ -38,6 +38,20 @@ it('confirma productos seleccionados con una sola solicitud, sin captura manual 
     expect(container.querySelector('#tienda-ubicacion')).toBeNull();
     expect(container.querySelector('[placeholder="SKU"]')).toBeNull();
 });
+it('en separación de mercancía marca única pieza y sin existencias sin redactar', async () => {
+    await mount({ tarea: { ...tarea, modalidad: { codigo: 'RECOGE_TIENDA_CREDITO' }, puede_responder: true } });
+    await click('Elegir crema'); await click('Agregar pieza');
+    expect(container.textContent).toContain('Única pieza');
+    expect(container.textContent).toContain('Sin existencias');
+    const unica = [...container.querySelectorAll('.gelia-pedidos-atributo-control')].find((el) => el.textContent.includes('Única pieza'));
+    const sin = [...container.querySelectorAll('.gelia-pedidos-atributo-control')].find((el) => el.textContent.includes('Sin existencias'));
+    await act(() => { unica.querySelector('input').click(); sin.querySelector('input').click(); });
+    expect(container.querySelector('[name="estado-0"]').value).toBe('sin_existencia');
+    await click('Guardar y continuar después');
+    expect(post.mock.calls[0][1].lineas[0]).toMatchObject({
+        unica_pieza: true, estado_fisico: 'sin_existencia', observacion: 'Sin existencias', cantidad: 0,
+    });
+});
 it('en recoge y transferencia muestra estado, comentario y marcas de la pieza', async () => {
     await mount({ tarea: { ...tarea, modalidad: { codigo: 'RECOGE_TIENDA' } } });
     await click('Elegir crema'); await click('Agregar pieza');
@@ -56,10 +70,14 @@ it('en recoge y transferencia muestra estado, comentario y marcas de la pieza', 
         Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(cantidad, '0');
         cantidad.dispatchEvent(new Event('input', { bubbles: true }));
     });
-    await act(() => { container.querySelectorAll('input[type="checkbox"]').forEach((c) => c.click()); });
+    await act(() => {
+        [...container.querySelectorAll('.gelia-pedidos-atributo-control')]
+            .filter((el) => /Única pieza|Mejor ejemplar/.test(el.textContent))
+            .forEach((el) => el.querySelector('input').click());
+    });
     await click('Guardar y continuar después');
     expect(post.mock.calls[0][1].lineas[0]).toMatchObject({
-        estado_fisico: 'sin_existencia', observacion: 'Sin existencia en anaquel', unica_pieza: true, mejor_ejemplar: true, cantidad: '0',
+        estado_fisico: 'sin_existencia', observacion: 'Sin existencia en anaquel', unica_pieza: true, mejor_ejemplar: true, cantidad: 0,
     });
     post.mockClear();
     await mount({ tarea: { ...tarea, modalidad: { codigo: 'RECOGE_TIENDA_TRANSFERENCIA' }, puede_responder: true } });
@@ -135,6 +153,22 @@ it('señala requisitos de pesaje antes de enviar y acepta evidencias ya guardada
     expect(post.mock.calls[0][0]).toBe('control_pedidos.tienda.responder/1');
     expect(post.mock.calls[0][1].peso_real_kg).toBe('1.250');
 });
+it('envía marcas de pieza como 0/1 cuando hay fotos', async () => {
+    await mount({ tarea: { ...tarea, modalidad: { codigo: 'RECOGE_TIENDA' } } });
+    await click('Elegir crema'); await click('Agregar pieza');
+    const archivo = container.querySelector('input[type="file"][multiple]');
+    const foto = new File(['x'], 'perfume.jpg', { type: 'image/jpeg' });
+    await act(() => {
+        Object.defineProperty(archivo, 'files', { configurable: true, value: [foto] });
+        archivo.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await click('Confirmar apartado');
+    const payload = post.mock.calls[0][1];
+    expect(payload).toBeInstanceOf(FormData);
+    expect(payload.get('lineas[0][unica_pieza]')).toBe('0');
+    expect(payload.get('lineas[0][mejor_ejemplar]')).toBe('0');
+});
+
 it('confirma el apartado sin capturar anaquel ni ubicación', async () => {
     await mount({ tarea: { ...tarea, apartado: { version: 2, ubicacion: '' } } });
     await click('Elegir crema'); await click('Agregar pieza'); await click('Confirmar apartado');

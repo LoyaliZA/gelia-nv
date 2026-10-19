@@ -7,6 +7,30 @@ use Illuminate\Validation\Rule;
 
 final class ReglasLineasPreparacion
 {
+    /**
+     * FormData convierte booleanos JS en "true"/"false"; la regla boolean de Laravel no los acepta.
+     *
+     * @param  array<string, mixed>  $input
+     * @return array<string, mixed>
+     */
+    public static function normalizarMarcas(array $input): array
+    {
+        $lineas = $input['lineas'] ?? null;
+        if (! is_array($lineas)) {
+            return $input;
+        }
+        foreach ($lineas as $indice => $linea) {
+            if (! is_array($linea)) {
+                continue;
+            }
+            $lineas[$indice]['unica_pieza'] = filter_var($linea['unica_pieza'] ?? false, FILTER_VALIDATE_BOOLEAN);
+            $lineas[$indice]['mejor_ejemplar'] = filter_var($linea['mejor_ejemplar'] ?? false, FILTER_VALIDATE_BOOLEAN);
+        }
+        $input['lineas'] = $lineas;
+
+        return $input;
+    }
+
     public static function reglas(bool $obligatorio = true): array
     {
         return [
