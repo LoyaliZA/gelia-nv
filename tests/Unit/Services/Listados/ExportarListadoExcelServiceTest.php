@@ -99,4 +99,17 @@ class ExportarListadoExcelServiceTest extends TestCase
         $this->assertSame(['Folio', 'SKU', 'Descripcion'], $rows[1]);
         $this->assertCount(3, $rows);
     }
+
+    public function test_exportar_sin_filas_abre_un_libro_valido(): void
+    {
+        $this->service->exportar([], $this->tempPath, null);
+
+        $rows = [];
+        (new FastExcel)->withoutHeaders()->import($this->tempPath, function ($linea) use (&$rows) {
+            $rows[] = array_values((array) $linea);
+        });
+
+        $this->assertSame(['Resultado'], $rows[0]);
+        $this->assertSame(['Sin registros'], $rows[1]);
+    }
 }

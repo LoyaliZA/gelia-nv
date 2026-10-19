@@ -13,6 +13,7 @@ use App\Models\ListadoGenerado;
 use App\Models\User;
 use App\Services\Listados\PorcentajesListadoService;
 use App\Services\Listados\ListadoGeneradoService;
+use App\Services\GeliaAi\GenerarListadoDesdeRutasService;
 use App\Services\Listados\ExportarListadoExcelService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -406,11 +407,8 @@ class AromasListasController extends Controller
                 $descripcion = $linea[5] ?? '';
                 $marca = $linea[6] ?? '';
 
-                if ($esListaPersonalizadaBD && $configuracionBD->filtro_relojes) {
-                    $primeraLetra = strtoupper(substr(ltrim($descripcion), 0, 1));
-                    if ($primeraLetra !== 'R') {
-                        return;
-                    }
+                if ($esListaPersonalizadaBD && $configuracionBD->filtro_relojes && ! GenerarListadoDesdeRutasService::descripcionEsReloj($descripcion)) {
+                    return;
                 }
 
                 $pg = $diccionarioPrecios[$skuBuscador] ?? 0.0;

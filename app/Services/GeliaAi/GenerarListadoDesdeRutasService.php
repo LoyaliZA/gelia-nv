@@ -141,11 +141,8 @@ class GenerarListadoDesdeRutasService
             $descripcion = $linea[5] ?? '';
             $marca = $linea[6] ?? '';
 
-            if ($esListaPersonalizadaBD && $configuracionBD->filtro_relojes) {
-                $primeraLetra = strtoupper(substr(ltrim((string) $descripcion), 0, 1));
-                if ($primeraLetra !== 'R') {
-                    return;
-                }
+            if ($esListaPersonalizadaBD && $configuracionBD->filtro_relojes && ! self::descripcionEsReloj($descripcion)) {
+                return;
             }
 
             $pg = $diccionarioPrecios[$skuBuscador] ?? 0.0;
@@ -282,6 +279,33 @@ class GenerarListadoDesdeRutasService
             'filas' => count($listaCompleta),
             'inconsistencias' => array_slice($inconsistencias, 0, 50),
         ];
+    }
+
+    /**
+     * El filtro de relojes conserva descripciones cuya primera letra es R.
+     * Celdas que no son texto (fechas, booleanos) no coinciden y no detienen el listado.
+     */
+    public static function descripcionEsReloj(mixed $descripcion): bool
+    {
+        if (is_array($descripcion) || is_object($descripcion)) {
+            return false;
+        }
+
+        if (! is_string($descripcion) && ! is_numeric($descripcion)) {
+            return false;
+        }
+
+        $texto = ltrim((string) $descripcion);
+        $sinEspaciosUnicode = preg_replace('/^\p{Z}+/u', '', $texto);
+        if (is_string($sinEspaciosUnicode)) {
+            $texto = $sinEspaciosUnicode;
+        }
+
+        if ($texto === '') {
+            return false;
+        }
+
+        return mb_strtoupper(mb_substr($texto, 0, 1, 'UTF-8'), 'UTF-8') === 'R';
     }
 
     /**

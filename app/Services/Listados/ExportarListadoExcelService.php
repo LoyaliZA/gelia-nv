@@ -46,6 +46,11 @@ class ExportarListadoExcelService
      */
     public function exportar(array $filas, string $path, ?string $notaEncabezado = null): string
     {
+        if ($filas === []) {
+            // FastExcel sin filas escribe dimension A1:@0 y Excel rechaza el archivo.
+            $filas = [['Resultado' => 'Sin registros']];
+        }
+
         $nota = $notaEncabezado !== null ? trim($notaEncabezado) : '';
         if ($nota === '') {
             (new FastExcel($filas))->export($path);
