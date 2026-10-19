@@ -51,10 +51,10 @@ class RecogeTiendaFlujoTest extends TestCase
             'pedido_bma_tarea_documentos' => ['pedido_bma_tarea_preparacion_id', 'pedido_bma_tarea_producto_id', 'tipo_evidencia', 'ruta_interna', 'nombre_original', 'mime_type', 'tamano_bytes', 'hash_sha256', 'subido_por_id', 'subido_at', 'inmutable', 'version'],
             'pedido_bma_documentos' => ['pedido_bma_id', 'tipo', 'ruta_archivo', 'nombre_original', 'mime_type', 'tamano_bytes', 'activo', 'comentario'],
             'catalogo_modalidades_preparacion_pedido' => ['codigo', 'nombre'],
-            'pedidos_bma' => ['estatus_envio', 'pesaje_respondido_at', 'consulta_cerrada_at', 'consulta_actualizacion_pendiente', 'cantidad_piezas', 'cliente_id', 'vendedor_id', 'catalogo_estatus_pedido_id', 'deleted_at'],
-            'pedido_bma_tareas_preparacion' => ['pedido_bma_id', 'catalogo_modalidad_preparacion_id', 'almacen_id', 'estado', 'version', 'fecha_limite', 'atendida_por_id', 'atendida_at', 'deleted_at', 'asignada_a_id', 'observaciones_solicitud'],
+            'pedidos_bma' => ['estatus_envio', 'pesaje_respondido_at', 'pesaje_respondido_por_id', 'consulta_cerrada_at', 'consulta_actualizacion_pendiente', 'cantidad_piezas', 'cliente_id', 'vendedor_id', 'catalogo_estatus_pedido_id', 'deleted_at'],
+            'pedido_bma_tareas_preparacion' => ['pedido_bma_id', 'catalogo_modalidad_preparacion_id', 'almacen_id', 'estado', 'version', 'fecha_limite', 'atendida_por_id', 'atendida_at', 'deleted_at', 'asignada_a_id', 'observaciones_solicitud', 'requiere_traslado_cedis'],
             'pedido_bma_tarea_productos' => ['pedido_bma_tarea_preparacion_id', 'pedido_bma_origen_id', 'producto_id', 'sku', 'descripcion_snapshot', 'cantidad_solicitada', 'cantidad_encontrada', 'estado_fisico', 'observacion', 'unica_pieza', 'mejor_ejemplar', 'orden'],
-            'pedido_bma_cumplimiento_fisico' => ['pedido_bma_tarea_preparacion_id', 'estado', 'cantidad', 'ubicacion', 'version', 'vence_at'],
+            'pedido_bma_cumplimiento_fisico' => ['pedido_bma_tarea_preparacion_id', 'estado', 'cantidad', 'ubicacion', 'version', 'vence_at', 'pago_confirmado_at', 'salida_autorizada_at'],
             'pedido_bma_cumplimiento_eventos' => ['pedido_bma_cumplimiento_fisico_id', 'pedido_bma_tarea_preparacion_id', 'tipo', 'usuario_id', 'motivo', 'idempotencia_clave', 'datos'],
             'pedido_bma_tarea_historial' => ['pedido_bma_tarea_preparacion_id', 'usuario_id', 'estado_anterior', 'estado_nuevo', 'accion', 'comentario', 'meta_json'],
         ];
@@ -348,5 +348,116 @@ class RecogeTiendaFlujoTest extends TestCase
         app(GuardarApartadoRecogeHoyService::class)->ejecutar($this->tarea, $this->auxiliar, $datos);
         $this->assertSame(0, $this->tarea->productos()->count());
         $this->assertSame(0, PedidoBmaCumplimientoFisico::first()->cantidad);
+    }
+
+    public function test_transferencia_respondida_acepta_anexo_y_regresa_a_tienda(): void
+    {
+        Storage::fake('public');
+        $this->prepararTransferenciaRespondida();
+        $notificar = Mockery::mock(NotificarPedidoBmaService::class);
+        $notificar->shouldReceive('ejecutar')->once()->withArgs(function ($pedido, $tipo, $mensaje, $permisos) {
+            return $tipo === 'pedido_preparacion_tienda_corregida'
+                && str_contains($mensaje, 'anexo de piezas')
+                && $permisos === ['control_pedidos.tienda.ver']
+                && ! str_contains($mensaje, 'CEDIS');
+        });
+        $this->app->instance(NotificarPedidoBmaService::class, $notificar);
+
+        app(ReabrirApartadoRecogeHoyService::class)->ejecutar(
+            $this->tarea->fresh(),
+            $this->auxiliar,
+            'Agregar un labial',
+            2,
+            UploadedFile::fake()->create('anexo.pdf', 10, 'application/pdf')
+        );
+
+        $tarea = $this->tarea->fresh();
+        $pedido = $tarea->pedido->fresh();
+        $this->assertSame('PENDIENTE', $tarea->estado);
+        $this->assertNull($tarea->asignada_a_id);
+        $this->assertSame(3, $tarea->productos()->first()->cantidad_encontrada);
+        $this->assertSame('anexo_piezas', $pedido->documentos()->first()->tipo);
+        $this->assertNull($pedido->pesaje_respondido_at);
+        $this->assertNull($pedido->pesaje_respondido_por_id);
+        $this->assertSame(PedidoBma::ESTATUS_ENVIO_PENDIENTE_PESAJE, $pedido->estatus_envio);
+    }
+
+    public function test_transferencia_no_reabre_con_consulta_cerrada_pago_o_traslado(): void
+    {
+        Storage::fake('public');
+        $archivo = UploadedFile::fake()->create('anexo.pdf', 10, 'application/pdf');
+        $this->prepararTransferenciaRespondida(['consulta_cerrada_at' => now()]);
+        $this->expectException(ValidationException::class);
+        app(ReabrirApartadoRecogeHoyService::class)->ejecutar($this->tarea->fresh(), $this->auxiliar, 'Anexo', 2, $archivo);
+    }
+
+    public function test_transferencia_no_reabre_si_el_pago_ya_fue_confirmado(): void
+    {
+        Storage::fake('public');
+        $this->prepararTransferenciaRespondida([], [], ['pago_confirmado_at' => now()]);
+        $this->expectException(ValidationException::class);
+        app(ReabrirApartadoRecogeHoyService::class)->ejecutar(
+            $this->tarea->fresh(), $this->auxiliar, 'Anexo', 2,
+            UploadedFile::fake()->create('anexo.pdf', 10, 'application/pdf')
+        );
+    }
+
+    public function test_transferencia_no_reabre_si_hay_traslado_a_cedis(): void
+    {
+        Storage::fake('public');
+        $this->prepararTransferenciaRespondida([], ['requiere_traslado_cedis' => true]);
+        $this->expectException(ValidationException::class);
+        app(ReabrirApartadoRecogeHoyService::class)->ejecutar(
+            $this->tarea->fresh(), $this->auxiliar, 'Anexo', 2,
+            UploadedFile::fake()->create('anexo.pdf', 10, 'application/pdf')
+        );
+    }
+
+    public function test_credito_no_admite_anexo_de_piezas_por_esta_via(): void
+    {
+        Storage::fake('public');
+        $this->prepararTransferenciaRespondida();
+        $credito = CatalogoModalidadPreparacionPedido::create(['codigo' => 'RECOGE_TIENDA_CREDITO', 'nombre' => 'Crédito']);
+        $this->tarea->update(['catalogo_modalidad_preparacion_id' => $credito->id]);
+        $this->expectException(ValidationException::class);
+        app(ReabrirApartadoRecogeHoyService::class)->ejecutar(
+            $this->tarea->fresh(), $this->auxiliar, 'Anexo', 2,
+            UploadedFile::fake()->create('anexo.pdf', 10, 'application/pdf')
+        );
+    }
+
+    private function prepararTransferenciaRespondida(array $extraPedido = [], array $extraTarea = [], array $extraApartado = []): void
+    {
+        $modalidad = CatalogoModalidadPreparacionPedido::firstOrCreate(
+            ['codigo' => 'RECOGE_TIENDA_TRANSFERENCIA'],
+            ['nombre' => 'Transferencia']
+        );
+        if (! DB::table('users')->where('id', 10)->exists()) {
+            DB::table('users')->insert(['id' => 10, 'name' => 'Ventas']);
+        }
+        $this->tarea->pedido->update(array_merge([
+            'vendedor_id' => 10,
+            'pesaje_respondido_at' => now(),
+            'pesaje_respondido_por_id' => 9,
+        ], $extraPedido));
+        $this->tarea->update(array_merge([
+            'catalogo_modalidad_preparacion_id' => $modalidad->id,
+            'estado' => 'RESPONDIDA',
+            'version' => 2,
+            'fecha_limite' => null,
+            'requiere_traslado_cedis' => false,
+        ], $extraTarea));
+        $this->tarea->productos()->create([
+            'sku' => 'SKU-1',
+            'descripcion_snapshot' => 'Crema',
+            'cantidad_solicitada' => 3,
+            'cantidad_encontrada' => 3,
+            'estado_fisico' => 'bueno',
+            'orden' => 1,
+        ]);
+        $this->tarea->cumplimientoFisico()->update(array_merge([
+            'estado' => 'SEPARADA',
+            'cantidad' => 3,
+        ], $extraApartado));
     }
 }

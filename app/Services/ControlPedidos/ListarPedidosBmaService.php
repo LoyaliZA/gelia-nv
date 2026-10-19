@@ -283,6 +283,8 @@ class ListarPedidosBmaService
             ])->values()->all(),
             'incidencia' => $incidencia,
             'requiere_traslado_cedis' => (bool) $tarea->requiere_traslado_cedis,
+            'pago_confirmado' => $tarea->cumplimientoFisico?->pago_confirmado_at !== null,
+            'salida_autorizada' => $tarea->cumplimientoFisico?->salida_autorizada_at !== null,
             'progreso_traslado' => \App\Support\ControlPedidos\VisibilidadTareaPreparacion::progresoTraslado($tarea),
             'progreso_caratula' => \App\Support\ControlPedidos\VisibilidadTareaPreparacion::progresoCaratula($tarea),
             'motivo_rechazo_cedis' => $tarea->motivo_rechazo_cedis,

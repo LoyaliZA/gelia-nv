@@ -698,6 +698,16 @@ export default function ModalFormPedidoLegado({
     const consultaCerradaServidor = Boolean(pedido?.consulta_cerrada || pedido?.consulta_cerrada_at);
     const [consultaCerradaLocal, setConsultaCerradaLocal] = useState(null);
     const consultaCerrada = consultaCerradaLocal ?? consultaCerradaServidor;
+    const puedeSolicitarAnexoTransferencia = esModalidadTransferencia
+        && can('control_pedidos.preparacion.solicitar')
+        && tareaPreparacion?.estado === 'RESPONDIDA'
+        && !tareaPreparacion?.requiere_traslado_cedis
+        && !tareaPreparacion?.pago_confirmado
+        && !tareaPreparacion?.salida_autorizada
+        && tienePesajeRespondido
+        && !pendientePesaje
+        && !consultaCerrada
+        && !pedido?.empacado_at;
     const puedeCerrarConsulta = Boolean(pedido?.puede_cerrar_consulta);
     const esConsultaMercancia = pedidoModoRevisionMercancia({ ...data, es_traslado_interno_pdv: trasladoInterno }, paqueteriaSeleccionada, origenRequiereLogistica);
     const labelConsulta = enFlujoTienda
@@ -3638,6 +3648,7 @@ export default function ModalFormPedidoLegado({
                             </AvisoOperativoPedido>
                         )}
                         {tareaPreparacion && <RespuestaPreparacionTienda tarea={tareaPreparacion} onVerDocumentos={abrirVistaPrevia} />}
+                        {puedeSolicitarAnexoTransferencia && <ReabrirApartadoRecoge tarea={tareaPreparacion} anexo />}
                         {esRecogeTienda && apartadoConfirmado && (
                             <AvisoOperativoPedido label="Apartado confirmado" tono="success" icon={CheckCircle2} className="mb-4">
                                 Personal de preparación confirmó el apartado en PDV. Este pedido no captura pago ni pasa a auditoría.
