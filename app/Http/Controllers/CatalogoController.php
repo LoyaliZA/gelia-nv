@@ -328,7 +328,7 @@ class CatalogoController extends Controller
 
         $lista = CatalogoListaDescuento::find($data['catalogo_lista_descuento_id']);
         if ($lista) {
-            $porcentajesListado->sincronizarCatalogoTiendanubeASettings(
+            $porcentajesListado->sincronizarCatalogoASettings(
                 $lista,
                 (float) $data['porcentaje_descuento']
             );
@@ -349,7 +349,7 @@ class CatalogoController extends Controller
 
         $lista = CatalogoListaDescuento::find($data['catalogo_lista_descuento_id']);
         if ($lista) {
-            $porcentajesListado->sincronizarCatalogoTiendanubeASettings(
+            $porcentajesListado->sincronizarCatalogoASettings(
                 $lista,
                 (float) $data['porcentaje_descuento']
             );

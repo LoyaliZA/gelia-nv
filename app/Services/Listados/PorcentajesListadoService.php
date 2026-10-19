@@ -7,9 +7,15 @@ use Illuminate\Support\Facades\DB;
 
 class PorcentajesListadoService
 {
-    public const TIENDANUBE_SETTINGS_KEYS = [
-        'tiendanube' => 'pct_tiendanube',
-        'tiendanubemayoreo' => 'pct_tiendanubemayoreo',
+    /** Clave en gelia_settings => columna del Excel. El orden no empareja nombres. */
+    public const COLUMNA_POR_SETTING = [
+        'pct_bronce' => 'bronce',
+        'pct_plata' => 'plata',
+        'pct_oro' => 'oro',
+        'pct_diamante' => 'diamante',
+        'pct_plataformas' => 'plataformas',
+        'pct_tiendanube' => 'tiendanube',
+        'pct_tiendanubemayoreo' => 'tiendanubemayoreo',
     ];
 
     public const MELI_DEFAULTS = [
@@ -51,55 +57,59 @@ class PorcentajesListadoService
         return $numerador / $denominador;
     }
 
-    public static function settingKeyParaListaTiendanube(string $nombreLista): ?string
+    /**
+     * Clave de gelia_settings para una lista, o null si no participa en listados.
+     * PLATAFORMAS va antes que PLATA: el nombre contiene ambas palabras.
+     */
+    public static function settingKeyParaLista(string $nombreLista): ?string
     {
         $nombreUpper = strtoupper($nombreLista);
 
-        if (!str_contains($nombreUpper, 'TIENDANUBE')) {
-            return null;
+        if (str_contains($nombreUpper, 'TIENDANUBE')) {
+            return str_contains($nombreUpper, 'MAYOREO')
+                ? 'pct_tiendanubemayoreo'
+                : 'pct_tiendanube';
         }
 
-        if (str_contains($nombreUpper, 'MAYOREO')) {
-            return self::TIENDANUBE_SETTINGS_KEYS['tiendanubemayoreo'];
+        if (str_contains($nombreUpper, 'PLATAFORMAS')) {
+            return 'pct_plataformas';
         }
 
-        return self::TIENDANUBE_SETTINGS_KEYS['tiendanube'];
+        foreach ([
+            'BRONCE' => 'pct_bronce',
+            'DIAMANTE' => 'pct_diamante',
+            'ORO' => 'pct_oro',
+            'PLATA' => 'pct_plata',
+        ] as $keyword => $settingKey) {
+            if (str_contains($nombreUpper, $keyword)) {
+                return $settingKey;
+            }
+        }
+
+        return null;
     }
 
-    public function sincronizarSettingsTiendanubeACatalogo(array $settings): void
+    /**
+     * Copia al catálogo solo las claves presentes en $settings.
+     * No pisa created_at de una fila que ya existe.
+     */
+    public function sincronizarSettingsACatalogo(array $settings): void
     {
-        foreach (self::TIENDANUBE_SETTINGS_KEYS as $settingKey) {
-            if (!isset($settings[$settingKey]) || $settings[$settingKey] === '') {
+        $listas = CatalogoListaDescuento::query()->where('activo', true)->get(['id', 'nombre']);
+
+        foreach ($listas as $lista) {
+            $settingKey = self::settingKeyParaLista($lista->nombre);
+            if ($settingKey === null || !array_key_exists($settingKey, $settings) || $settings[$settingKey] === '' || $settings[$settingKey] === null) {
                 continue;
             }
 
-            $porcentaje = (float) $settings[$settingKey];
-            $esMayoreo = $settingKey === self::TIENDANUBE_SETTINGS_KEYS['tiendanubemayoreo'];
-
-            $listas = CatalogoListaDescuento::query()
-                ->where('activo', true)
-                ->whereRaw('UPPER(nombre) LIKE ?', ['%TIENDANUBE%'])
-                ->when($esMayoreo, fn ($q) => $q->whereRaw('UPPER(nombre) LIKE ?', ['%MAYOREO%']))
-                ->when(!$esMayoreo, fn ($q) => $q->whereRaw('UPPER(nombre) NOT LIKE ?', ['%MAYOREO%']))
-                ->get();
-
-            foreach ($listas as $lista) {
-                DB::table('catalogo_porcentajes_listado_lista')->updateOrInsert(
-                    ['catalogo_lista_descuento_id' => $lista->id],
-                    [
-                        'porcentaje_descuento' => $porcentaje,
-                        'activo' => true,
-                        'created_at' => now(),
-                        'updated_at' => now(),
-                    ]
-                );
-            }
+            $this->guardarPorcentajeCatalogo((int) $lista->id, (float) $settings[$settingKey]);
         }
     }
 
-    public function sincronizarCatalogoTiendanubeASettings(CatalogoListaDescuento $lista, float $porcentaje): void
+    public function sincronizarCatalogoASettings(CatalogoListaDescuento $lista, float $porcentaje): void
     {
-        $settingKey = self::settingKeyParaListaTiendanube($lista->nombre);
+        $settingKey = self::settingKeyParaLista($lista->nombre);
         if ($settingKey === null) {
             return;
         }
@@ -112,6 +122,33 @@ class PorcentajesListadoService
                 'updated_at' => now(),
             ]
         );
+    }
+
+    private function guardarPorcentajeCatalogo(int $listaId, float $porcentaje): void
+    {
+        $existe = DB::table('catalogo_porcentajes_listado_lista')
+            ->where('catalogo_lista_descuento_id', $listaId)
+            ->exists();
+
+        if ($existe) {
+            DB::table('catalogo_porcentajes_listado_lista')
+                ->where('catalogo_lista_descuento_id', $listaId)
+                ->update([
+                    'porcentaje_descuento' => $porcentaje,
+                    'activo' => true,
+                    'updated_at' => now(),
+                ]);
+
+            return;
+        }
+
+        DB::table('catalogo_porcentajes_listado_lista')->insert([
+            'catalogo_lista_descuento_id' => $listaId,
+            'porcentaje_descuento' => $porcentaje,
+            'activo' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
     }
 
     /**
@@ -136,13 +173,6 @@ class PorcentajesListadoService
             'tiendanubemayoreo'  => (float) ($settings['pct_tiendanubemayoreo'] ?? 22.00),
         ];
 
-        $mapaKeywords = [
-            'bronce'   => 'BRONCE',
-            'plata'    => 'PLATA',
-            'oro'      => 'ORO',
-            'diamante' => 'DIAMANTE',
-        ];
-
         $listas = CatalogoListaDescuento::with('porcentajeListado')->where('activo', true)->get();
 
         foreach ($listas as $lista) {
@@ -151,17 +181,13 @@ class PorcentajesListadoService
                 continue;
             }
 
-            $nombreUpper = strtoupper($lista->nombre);
-            foreach ($mapaKeywords as $key => $keyword) {
-                if (str_contains($nombreUpper, $keyword)) {
-                    $porcentajes[$key] = (float) $pct->porcentaje_descuento;
-                    break;
-                }
+            $settingKey = self::settingKeyParaLista($lista->nombre);
+            $columna = $settingKey === null ? null : (self::COLUMNA_POR_SETTING[$settingKey] ?? null);
+            if ($columna === null) {
+                continue;
             }
 
-            if (str_contains($nombreUpper, 'PLATAFORMAS')) {
-                $porcentajes['plataformas'] = (float) $pct->porcentaje_descuento;
-            }
+            $porcentajes[$columna] = (float) $pct->porcentaje_descuento;
         }
 
         $meli = [];

@@ -6,7 +6,7 @@ use App\Models\BellaromaTemplate;
 use App\Models\BellaromaConfig;
 use App\Models\User;
 use App\Notifications\PlantillaBellaromaGenerada;
-use Illuminate\Support\Facades\DB;
+use App\Services\Listados\PorcentajesListadoService;
 use Illuminate\Support\Facades\Storage;
 use Rap2hpoutre\FastExcel\FastExcel;
 use Vtiful\Kernel\Excel;
@@ -36,13 +36,11 @@ class PlantillaBellaromaService
 
         $rutaTemp = sys_get_temp_dir();
 
-        // 1. EXTRAER PORCENTAJES DE LA BASE DE DATOS
-        $settings = DB::table('gelia_settings')->pluck('value', 'key');
-        
-        $mBronce   = 1 - ((float)($settings['pct_bronce'] ?? 12.39) / 100);
-        $mPlata    = 1 - ((float)($settings['pct_plata'] ?? 14.14) / 100);
-        $mOro      = 1 - ((float)($settings['pct_oro'] ?? 15.89) / 100);
-        $mDiamante = 1 - ((float)($settings['pct_diamante'] ?? 17.65) / 100);
+        $multiplicadores = app(PorcentajesListadoService::class)->obtenerMultiplicadores();
+        $mBronce = $multiplicadores['bronce'];
+        $mPlata = $multiplicadores['plata'];
+        $mOro = $multiplicadores['oro'];
+        $mDiamante = $multiplicadores['diamante'];
 
         // 2. PROCESAR PRECIOS
         $diccionarioPrecios = [];

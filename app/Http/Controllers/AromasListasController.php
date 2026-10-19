@@ -776,7 +776,7 @@ class AromasListasController extends Controller
                 );
             }
 
-            app(PorcentajesListadoService::class)->sincronizarSettingsTiendanubeACatalogo($configuraciones);
+            app(PorcentajesListadoService::class)->sincronizarSettingsACatalogo($configuraciones);
 
             return response()->json(['message' => 'Configuración global actualizada con éxito']);
         } catch (Exception $e) {
