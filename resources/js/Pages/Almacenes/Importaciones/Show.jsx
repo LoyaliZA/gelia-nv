@@ -22,12 +22,14 @@ export default function Show({ auth, lote, operacionesLabels }) {
     const [mapping, setMapping] = useState(MAPPING_HUB_DEFAULT);
     const [resumen, setResumen] = useState(lote.resumen_simulacion);
     const [mappingSimulado, setMappingSimulado] = useState(null);
+    const [estadoLote, setEstadoLote] = useState(lote.estado);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
     useEffect(() => {
         const base = { ...MAPPING_HUB_DEFAULT, ...(lote.mapping || {}) };
         setMapping(headers.length ? autoMapearHub(headers, base) : base);
+        setEstadoLote(lote.estado);
         if (lote.estado === 'simulado' && lote.resumen_simulacion) {
             setStep(3);
             setMappingSimulado(JSON.stringify(base));
@@ -68,6 +70,7 @@ export default function Show({ auth, lote, operacionesLabels }) {
             const { data } = await axios.post(route('almacenes.importaciones.simular', lote.id), { mapping });
             setResumen(data.resumen);
             setMappingSimulado(JSON.stringify(mapping));
+            setEstadoLote(data.lote?.estado || 'simulado');
             setStep(3);
         } catch (err) {
             setError(mensajeErrorImportacion(err, 'Error en simulación.'));
@@ -84,7 +87,7 @@ export default function Show({ auth, lote, operacionesLabels }) {
             setError('El mapeo cambió después de la simulación. Vuelve a ejecutar «Simular cambios».');
             return;
         }
-        if (lote.estado !== 'simulado') {
+        if (estadoLote !== 'simulado') {
             setError('Debes simular los cambios antes de aplicar.');
             return;
         }
