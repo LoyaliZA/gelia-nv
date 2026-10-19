@@ -86,17 +86,103 @@ final class OperacionesImportacionAlmacen
     }
 
     /**
+     * @return array<string, list<string>>
+     */
+    public static function casos(): array
+    {
+        $definiciones = [];
+        foreach (self::definicionCasos() as $id => $caso) {
+            $definiciones[$id] = $caso['operaciones'];
+        }
+
+        return $definiciones;
+    }
+
+    /**
+     * @return array<string, array{titulo: string, frase: string, columnas: string, operaciones: list<string>, plantilla: string}>
+     */
+    public static function definicionCasos(): array
+    {
+        return [
+            'productos' => [
+                'titulo' => 'Productos',
+                'frase' => 'Crea los folios nuevos y actualiza los que ya existen. Cada fila válida se vincula al almacén elegido. No modifica costos ni existencias.',
+                'columnas' => 'Folio, SKU, descripción, marca, categoría, código de barras, peso, activo y ubicación',
+                'operaciones' => [self::FICHA_PRODUCTO, self::ASIGNACION_ALMACEN],
+                'plantilla' => 'productos',
+            ],
+            'costos' => [
+                'titulo' => 'Costos y precios',
+                'frase' => 'Solo costo, costo de reposición y precio de referencia de ese almacén. El folio tiene que existir.',
+                'columnas' => 'Folio, costo, costo de reposición y precio de referencia',
+                'operaciones' => [self::COSTOS_PRECIOS],
+                'plantilla' => 'costos',
+            ],
+            'existencias' => [
+                'titulo' => 'Existencias',
+                'frase' => 'Solo la existencia de referencia del almacén elegido. El folio tiene que existir.',
+                'columnas' => 'Folio y existencia',
+                'operaciones' => [self::CANTIDADES_REFERENCIA],
+                'plantilla' => 'existencias',
+            ],
+            'completa' => [
+                'titulo' => 'Carga completa',
+                'frase' => 'Ficha, vínculo, costos, precios y existencias en el mismo archivo. Una celda vacía no borra el dato guardado.',
+                'columnas' => 'Folio, SKU, descripción, marca, categoría, código de barras, peso, activo, ubicación, existencia, costo, costo de reposición y precio de referencia',
+                'operaciones' => self::todas(),
+                'plantilla' => 'completa',
+            ],
+        ];
+    }
+
+    /**
+     * @param  list<string>  $operaciones
+     */
+    public static function casoDesdeOperaciones(array $operaciones): ?string
+    {
+        $firma = self::firma($operaciones);
+        foreach (self::casos() as $caso => $ops) {
+            if (self::firma($ops) === $firma) {
+                return $caso;
+            }
+        }
+
+        return null;
+    }
+
+    public static function tituloCaso(string $caso): string
+    {
+        return self::definicionCasos()[$caso]['titulo'] ?? $caso;
+    }
+
+    /**
+     * @param  list<string>  $operaciones
+     */
+    public static function firma(array $operaciones): string
+    {
+        $operaciones = array_values(array_unique($operaciones));
+        sort($operaciones);
+
+        return implode(',', $operaciones);
+    }
+
+    /**
      * @return list<string>
      */
     public static function operacionesDesdePreset(string $preset): array
     {
-        return match ($preset) {
-            'productos' => [self::FICHA_PRODUCTO],
-            'costos' => [self::COSTOS_PRECIOS],
-            'inventario' => [self::FICHA_PRODUCTO, self::CANTIDADES_REFERENCIA, self::COSTOS_PRECIOS],
-            'existencias' => [self::CANTIDADES_REFERENCIA],
-            'asignacion' => [self::ASIGNACION_ALMACEN],
-            default => [],
+        $caso = match ($preset) {
+            'productos', 'asignacion' => 'productos',
+            'costos' => 'costos',
+            'existencias' => 'existencias',
+            'inventario', 'completa' => 'completa',
+            default => null,
         };
+
+        if ($caso === null) {
+            return [];
+        }
+
+        return self::casos()[$caso];
     }
 }

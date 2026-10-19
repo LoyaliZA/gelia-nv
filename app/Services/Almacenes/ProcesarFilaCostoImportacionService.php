@@ -7,37 +7,27 @@ use App\Models\ProductoCosto;
 
 class ProcesarFilaCostoImportacionService
 {
+    public function __construct(
+        private readonly ResolverProductoPorFolioImportacionService $folios,
+    ) {}
+
     /**
-     * @return array{accion: string}
+     * @return array{accion: string, producto: Producto}
      */
-    public function ejecutar(array $row, array $mapping, int $almacenId): array
+    public function ejecutar(array $row, array $mapping, int $almacenId, ?Producto $producto = null): array
     {
-        $sku = trim((string) ($row[$mapping['sku']] ?? ''));
-        if ($sku === '') {
-            throw new \RuntimeException('SKU obligatorio.');
-        }
+        $producto ??= $this->folios->exigirExistente($row, $mapping);
 
-        $sku = Producto::normalizarSku($sku);
-        $producto = Producto::where('sku', $sku)->first();
-        if (! $producto) {
-            throw new \RuntimeException("Producto con SKU {$sku} no encontrado.");
-        }
-
-        $costo = isset($mapping['costo'], $row[$mapping['costo']]) && $row[$mapping['costo']] !== ''
-            ? (float) $row[$mapping['costo']]
-            : null;
-        $costoReposicion = isset($mapping['costo_reposicion'], $row[$mapping['costo_reposicion']]) && $row[$mapping['costo_reposicion']] !== ''
-            ? (float) $row[$mapping['costo_reposicion']]
-            : null;
-        $precioVenta = isset($mapping['precio_venta'], $row[$mapping['precio_venta']]) && $row[$mapping['precio_venta']] !== ''
-            ? (float) $row[$mapping['precio_venta']]
-            : null;
+        $costo = $this->monto($row, $mapping, 'costo');
+        $costoReposicion = $this->monto($row, $mapping, 'costo_reposicion');
+        $precioVenta = $this->monto($row, $mapping, 'precio_venta');
 
         if ($costo === null && $costoReposicion === null && $precioVenta === null) {
             throw new \RuntimeException('Debe indicar al menos costo, costo de reposición o precio de venta.');
         }
 
-        $existente = ProductoCosto::where('producto_id', $producto->id)
+        $existente = ProductoCosto::query()
+            ->where('producto_id', $producto->id)
             ->where('almacen_id', $almacenId)
             ->first();
 
@@ -55,7 +45,7 @@ class ProcesarFilaCostoImportacionService
         if ($existente) {
             $existente->update($datos);
 
-            return ['accion' => 'actualizado'];
+            return ['accion' => 'actualizado', 'producto' => $producto];
         }
 
         ProductoCosto::create([
@@ -66,6 +56,24 @@ class ProcesarFilaCostoImportacionService
             'precio_venta' => $precioVenta,
         ]);
 
-        return ['accion' => 'importado'];
+        return ['accion' => 'importado', 'producto' => $producto];
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     * @param  array<string, mixed>  $mapping
+     */
+    private function monto(array $row, array $mapping, string $campo): ?float
+    {
+        if (empty($mapping[$campo]) || ! array_key_exists($mapping[$campo], $row)) {
+            return null;
+        }
+
+        $valor = trim((string) $row[$mapping[$campo]]);
+        if ($valor === '') {
+            return null;
+        }
+
+        return (float) $valor;
     }
 }

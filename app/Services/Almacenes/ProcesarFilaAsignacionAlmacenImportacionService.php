@@ -7,24 +7,19 @@ use App\Models\ProductoAlmacen;
 
 class ProcesarFilaAsignacionAlmacenImportacionService
 {
-    /**
-     * @return array{accion: string}
-     */
-    public function ejecutar(array $row, array $mapping, int $almacenId): array
-    {
-        $sku = trim((string) ($row[$mapping['sku']] ?? ''));
-        if ($sku === '') {
-            throw new \RuntimeException('SKU obligatorio.');
-        }
+    public function __construct(
+        private readonly ResolverProductoPorFolioImportacionService $folios,
+    ) {}
 
-        $sku = Producto::normalizarSku($sku);
-        $producto = Producto::where('sku', $sku)->first();
-        if (! $producto) {
-            throw new \RuntimeException("Producto con SKU {$sku} no encontrado. Importa la ficha primero o incluye la operación de productos.");
-        }
+    /**
+     * @return array{accion: string, producto: Producto}
+     */
+    public function ejecutar(array $row, array $mapping, int $almacenId, ?Producto $producto = null): array
+    {
+        $producto ??= $this->folios->exigirExistente($row, $mapping);
 
         $ubicacion = null;
-        if (! empty($mapping['ubicacion']) && isset($row[$mapping['ubicacion']]) && $row[$mapping['ubicacion']] !== '') {
+        if (! empty($mapping['ubicacion']) && isset($row[$mapping['ubicacion']]) && trim((string) $row[$mapping['ubicacion']]) !== '') {
             $ubicacion = trim((string) $row[$mapping['ubicacion']]);
         }
 
@@ -37,10 +32,10 @@ class ProcesarFilaAsignacionAlmacenImportacionService
             if ($ubicacion !== null && $existente->ubicacion !== $ubicacion) {
                 $existente->update(['ubicacion' => $ubicacion]);
 
-                return ['accion' => 'actualizado'];
+                return ['accion' => 'actualizado', 'producto' => $producto];
             }
 
-            return ['accion' => 'sin_cambios'];
+            return ['accion' => 'sin_cambios', 'producto' => $producto];
         }
 
         ProductoAlmacen::create([
@@ -51,6 +46,6 @@ class ProcesarFilaAsignacionAlmacenImportacionService
             'origen_asignacion' => 'importacion',
         ]);
 
-        return ['accion' => 'importado'];
+        return ['accion' => 'importado', 'producto' => $producto];
     }
 }

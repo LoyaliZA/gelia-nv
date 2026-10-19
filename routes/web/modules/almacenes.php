@@ -63,6 +63,7 @@ Route::prefix('almacenes')->name('almacenes.')->group(function () use ($permisoI
     Route::prefix('importaciones')->name('importaciones.')->group(function () use ($permisoImportar) {
         Route::middleware("role_or_permission:{$permisoImportar}")->group(function () {
             Route::get('/', [ImportacionLoteController::class, 'index'])->name('index');
+            Route::get('/plantilla/{caso}', [ImportacionLoteController::class, 'plantilla'])->name('plantilla');
             Route::post('/analizar', [ImportacionLoteController::class, 'analizar'])->name('analizar');
             Route::get('/lotes/{lote}', [ImportacionLoteController::class, 'show'])->name('show');
             Route::post('/lotes/{lote}/simular', [ImportacionLoteController::class, 'simular'])->name('simular');

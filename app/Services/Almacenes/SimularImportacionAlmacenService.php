@@ -8,13 +8,13 @@ use App\Models\Producto;
 use App\Models\ProductoAlmacen;
 use App\Models\ProductoCosto;
 use App\Support\Almacenes\OperacionesImportacionAlmacen;
-use App\Support\Almacenes\ReglasFichaProductoImportacion;
 
 class SimularImportacionAlmacenService
 {
     public function __construct(
         private readonly LeerFilasImportacionAlmacenService $lector,
         private readonly ResolverRelacionCatalogoService $catalogo,
+        private readonly ResolverProductoPorFolioImportacionService $folios,
     ) {}
 
     /**
@@ -50,10 +50,14 @@ class SimularImportacionAlmacenService
             'sin_cambios' => 0,
             'errores' => 0,
             'detalle_errores' => [],
+            'detalle_filas' => [],
+            'detalle_filas_omitidas' => 0,
+            'altas_total' => 0,
             'skus_duplicados' => [],
         ];
 
         $skusVistos = [];
+        $foliosVistos = [];
         $offset = 0;
         $tamano = 500;
         $catalogoCache = [];
@@ -70,35 +74,52 @@ class SimularImportacionAlmacenService
                 $resumen['total_filas']++;
                 $numeroFila = $item['numero_fila'];
                 $row = $item['row'];
-                $sku = trim((string) ($row[$mapping['sku'] ?? ''] ?? ''));
-                if ($sku !== '') {
-                    $clave = mb_strtolower($sku);
-                    if (isset($skusVistos[$clave])) {
-                        $resumen['skus_duplicados'][] = [
-                            'sku' => $sku,
-                            'fila' => $numeroFila,
-                            'primera_fila' => $skusVistos[$clave],
-                        ];
-                    } else {
-                        $skusVistos[$clave] = $numeroFila;
-                    }
-                }
+                $sku = $this->skuFila($row, $mapping);
+                $folio = $this->folios->desdeFila($row, $mapping);
 
                 try {
+                    if ($folio) {
+                        if (isset($foliosVistos[$folio])) {
+                            throw new \RuntimeException("El folio {$folio} está repetido en el archivo. La primera fila es {$foliosVistos[$folio]}.");
+                        }
+                        $foliosVistos[$folio] = $numeroFila;
+                    }
+                    if ($sku !== '') {
+                        $clave = mb_strtolower($sku);
+                        if (isset($skusVistos[$clave])) {
+                            $resumen['skus_duplicados'][] = [
+                                'sku' => $sku,
+                                'fila' => $numeroFila,
+                                'primera_fila' => $skusVistos[$clave],
+                            ];
+                            throw new \RuntimeException("El SKU {$sku} está repetido en el archivo. La primera fila es {$skusVistos[$clave]}.");
+                        }
+                        $skusVistos[$clave] = $numeroFila;
+                    }
+
                     $stats = $this->clasificarFila($row, $mapping, $almacenId, $operaciones, $contexto, $catalogoCache);
 
-                    foreach (['productos_creados', 'productos_actualizados', 'asignaciones_creadas', 'costos_creados', 'costos_actualizados', 'cantidades_actualizadas', 'sin_cambios'] as $k) {
-                        $resumen[$k] += (int) ($stats[$k] ?? 0);
+                    foreach (['productos_creados', 'productos_actualizados', 'asignaciones_creadas', 'costos_creados', 'costos_actualizados', 'cantidades_actualizadas', 'sin_cambios', 'ubicaciones_actualizadas'] as $k) {
+                        $resumen[$k] = ($resumen[$k] ?? 0) + (int) ($stats[$k] ?? 0);
+                    }
+                    if ((int) ($stats['productos_creados'] ?? 0) > 0) {
+                        $resumen['altas_total']++;
+                    }
+                    $accion = (string) ($stats['accion_texto'] ?? 'Sin cambios');
+                    if ($accion !== 'Sin cambios') {
+                        $this->anotarMuestra($resumen, $numeroFila, $folio, $sku, $accion, (int) ($stats['productos_creados'] ?? 0) > 0);
                     }
                 } catch (\Throwable $e) {
                     $resumen['errores']++;
                     if (count($resumen['detalle_errores']) < 100) {
                         $resumen['detalle_errores'][] = [
                             'fila' => $numeroFila,
-                            'sku' => $sku ?: '—',
+                            'folio' => $folio ?: 'vacío',
+                            'sku' => $sku !== '' ? $sku : '—',
                             'mensaje' => $e->getMessage(),
                         ];
                     }
+                    $this->anotarMuestra($resumen, $numeroFila, $folio, $sku, $e->getMessage(), true);
                 }
             }
 
@@ -135,18 +156,15 @@ class SimularImportacionAlmacenService
     {
         $skus = [];
         $folios = [];
-        $ficha = in_array(OperacionesImportacionAlmacen::FICHA_PRODUCTO, $operaciones, true);
         foreach ($filas as $item) {
             $row = $item['row'];
             $sku = $this->skuFila($row, $mapping);
             if ($sku !== '') {
                 $skus[$sku] = true;
             }
-            if ($ficha && ! empty($mapping['folio'])) {
-                $folio = (int) preg_replace('/\D/', '', (string) ($row[$mapping['folio']] ?? ''));
-                if ($folio > 0) {
-                    $folios[$folio] = true;
-                }
+            $folio = $this->folios->desdeFila($row, $mapping);
+            if ($folio) {
+                $folios[$folio] = true;
             }
         }
 
@@ -220,87 +238,105 @@ class SimularImportacionAlmacenService
             'costos_creados' => 0,
             'costos_actualizados' => 0,
             'cantidades_actualizadas' => 0,
+            'ubicaciones_actualizadas' => 0,
             'sin_cambios' => 0,
+            'accion_texto' => 'Sin cambios',
         ];
         $hubioCambio = false;
         $sku = $this->skuFila($row, $mapping);
+        $folio = $this->folios->desdeFila($row, $mapping);
         $creadoEnFila = false;
         $producto = null;
+        $acciones = [];
 
         if (in_array(OperacionesImportacionAlmacen::FICHA_PRODUCTO, $operaciones, true)) {
-            ReglasFichaProductoImportacion::asegurarValoresEnFila($row, $mapping);
             $this->exigirCatalogo($row, $mapping, $catalogoCache);
-            $folio = (int) preg_replace('/\D/', '', (string) $row[$mapping['folio']]);
-            $producto = $contexto['porFolio'][$folio] ?? $contexto['porSku'][mb_strtolower($sku)] ?? null;
-            if ($producto && $folio > 0 && isset($contexto['porFolio'][$folio]) && $contexto['porFolio'][$folio]['id'] !== $producto['id']) {
-                throw new \RuntimeException("El folio {$folio} ya está asignado a otro producto.");
-            }
-            if (! $producto && $folio > 0 && isset($contexto['porFolio'][$folio])) {
-                throw new \RuntimeException("El folio {$folio} ya está asignado a otro producto.");
-            }
-            if ($producto && $producto['sku'] !== $sku) {
+            $producto = ($folio && isset($contexto['porFolio'][$folio])) ? $contexto['porFolio'][$folio] : null;
+            if ($producto) {
+                if ($sku !== '' && $sku !== $producto['sku']) {
+                    $otro = $contexto['porSku'][mb_strtolower($sku)] ?? null;
+                    if ($otro && $otro['id'] !== $producto['id']) {
+                        throw new \RuntimeException("El SKU {$sku} ya pertenece a otro producto.");
+                    }
+                }
+                if ($this->filaTieneDatosDeFicha($row, $mapping, $sku)) {
+                    $stats['productos_actualizados']++;
+                    $hubioCambio = true;
+                    $acciones[] = 'Actualizar ficha';
+                }
+            } else {
+                if ($sku === '') {
+                    throw new \RuntimeException('SKU obligatorio.');
+                }
+                if (! $this->celdaConValor($row, $mapping['descripcion'] ?? null)) {
+                    throw new \RuntimeException('Descripción obligatoria.');
+                }
                 $otro = $contexto['porSku'][mb_strtolower($sku)] ?? null;
-                if ($otro && $otro['id'] !== $producto['id']) {
+                if ($otro) {
                     throw new \RuntimeException("El SKU {$sku} ya pertenece a otro producto.");
                 }
-            }
-            if ($producto) {
-                $stats['productos_actualizados']++;
-            } else {
                 $stats['productos_creados']++;
                 $creadoEnFila = true;
+                $hubioCambio = true;
+                $acciones[] = 'Alta';
             }
-            $hubioCambio = true;
         }
 
         if ($almacenId && in_array(OperacionesImportacionAlmacen::ASIGNACION_ALMACEN, $operaciones, true)) {
-            if ($sku === '') {
-                throw new \RuntimeException('SKU obligatorio.');
-            }
-            $producto ??= $contexto['porSku'][mb_strtolower($sku)] ?? null;
             if (! $producto && ! $creadoEnFila) {
-                throw new \RuntimeException("Producto con SKU {$sku} no encontrado. Importa la ficha primero o incluye la operación de productos.");
+                $producto = $this->productoPorFolioEnContexto($folio, $contexto);
             }
-            if ($creadoEnFila || ! array_key_exists($producto['id'] ?? 0, $contexto['asignaciones'])) {
+            $id = (int) ($producto['id'] ?? 0);
+            if ($creadoEnFila || ! array_key_exists($id, $contexto['asignaciones'])) {
                 $stats['asignaciones_creadas']++;
                 $hubioCambio = true;
+                $acciones[] = 'Vincular';
+            } elseif ($this->celdaConValor($row, $mapping['ubicacion'] ?? null)) {
+                $ubicacion = trim((string) $row[$mapping['ubicacion']]);
+                $actual = (string) ($contexto['asignaciones'][$id] ?? '');
+                if ($actual !== $ubicacion) {
+                    $stats['ubicaciones_actualizadas']++;
+                    $hubioCambio = true;
+                    $acciones[] = 'Actualizar ubicación';
+                }
             }
         }
 
-        if ($almacenId && in_array(OperacionesImportacionAlmacen::COSTOS_PRECIOS, $operaciones, true) && $this->filaTieneDatosDeCosto($row, $mapping)) {
-            if ($sku === '') {
-                throw new \RuntimeException('SKU obligatorio.');
+        if ($almacenId && in_array(OperacionesImportacionAlmacen::COSTOS_PRECIOS, $operaciones, true)) {
+            if ($this->filaTieneDatosDeCosto($row, $mapping)) {
+                if (! $producto && ! $creadoEnFila) {
+                    $producto = $this->productoPorFolioEnContexto($folio, $contexto);
+                }
+                $id = (int) ($producto['id'] ?? 0);
+                if ($creadoEnFila || ! isset($contexto['costos'][$id])) {
+                    $stats['costos_creados']++;
+                } else {
+                    $stats['costos_actualizados']++;
+                }
+                $hubioCambio = true;
+                $acciones[] = 'Costo';
+            } elseif ($operaciones === [OperacionesImportacionAlmacen::COSTOS_PRECIOS]) {
+                throw new \RuntimeException('Debe indicar al menos costo, costo de reposición o precio de venta.');
             }
-            $producto ??= $contexto['porSku'][mb_strtolower($sku)] ?? null;
-            if (! $producto && ! $creadoEnFila) {
-                throw new \RuntimeException("Producto con SKU {$sku} no encontrado.");
-            }
-            if ($creadoEnFila || ! isset($contexto['costos'][$producto['id'] ?? 0])) {
-                $stats['costos_creados']++;
-            } else {
-                $stats['costos_actualizados']++;
-            }
-            $hubioCambio = true;
         }
 
         if ($almacenId && in_array(OperacionesImportacionAlmacen::CANTIDADES_REFERENCIA, $operaciones, true) && ! empty($mapping['existencia'])) {
-            if ($sku === '') {
-                throw new \RuntimeException('SKU obligatorio.');
-            }
-            if (! isset($row[$mapping['existencia']]) || $row[$mapping['existencia']] === '') {
-                throw new \RuntimeException('Existencia obligatoria para cantidades de referencia.');
-            }
-            $producto ??= $contexto['porSku'][mb_strtolower($sku)] ?? null;
-            if (! $producto && ! $creadoEnFila) {
-                throw new \RuntimeException("Producto con SKU {$sku} no encontrado.");
-            }
-            $existencia = (float) $row[$mapping['existencia']];
-            $actual = $producto ? ($contexto['inventarios'][$producto['id']] ?? null) : null;
-            if (! $creadoEnFila && $actual !== null && (float) $actual === $existencia) {
-                $stats['sin_cambios']++;
+            $valorExistencia = trim((string) ($row[$mapping['existencia']] ?? ''));
+            if ($valorExistencia === '') {
+                if ($operaciones === [OperacionesImportacionAlmacen::CANTIDADES_REFERENCIA]) {
+                    throw new \RuntimeException('Existencia obligatoria para cantidades de referencia.');
+                }
             } else {
-                $stats['cantidades_actualizadas']++;
-                $hubioCambio = true;
+                if (! $producto && ! $creadoEnFila) {
+                    $producto = $this->productoPorFolioEnContexto($folio, $contexto);
+                }
+                $existencia = (float) $valorExistencia;
+                $actual = $producto ? ($contexto['inventarios'][$producto['id']] ?? null) : null;
+                if ($creadoEnFila || $actual === null || (float) $actual !== $existencia) {
+                    $stats['cantidades_actualizadas']++;
+                    $hubioCambio = true;
+                    $acciones[] = 'Existencia';
+                }
             }
         }
 
@@ -308,7 +344,83 @@ class SimularImportacionAlmacenService
             $stats['sin_cambios'] = 1;
         }
 
+        $stats['accion_texto'] = $acciones === [] ? 'Sin cambios' : implode(', ', $acciones);
+
         return $stats;
+    }
+
+    /**
+     * @param  array<string, mixed>  $contexto
+     * @return array{id: int, sku: string, folio: int}
+     */
+    private function productoPorFolioEnContexto(?int $folio, array $contexto): array
+    {
+        if ($folio === null) {
+            throw new \RuntimeException('Folio obligatorio. Este caso no crea productos.');
+        }
+
+        $producto = $contexto['porFolio'][$folio] ?? null;
+        if (! $producto) {
+            throw new \RuntimeException("El folio {$folio} no existe. Este caso no crea productos.");
+        }
+
+        return $producto;
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     * @param  array<string, mixed>  $mapping
+     */
+    private function filaTieneDatosDeFicha(array $row, array $mapping, string $sku): bool
+    {
+        if ($sku !== '') {
+            return true;
+        }
+
+        foreach (['descripcion', 'marca', 'categoria', 'codigo_barras', 'peso', 'activo'] as $campo) {
+            if ($this->celdaConValor($row, $mapping[$campo] ?? null)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     */
+    private function celdaConValor(array $row, mixed $columna): bool
+    {
+        if (! is_string($columna) || $columna === '' || ! array_key_exists($columna, $row)) {
+            return false;
+        }
+
+        return trim((string) $row[$columna]) !== '';
+    }
+
+    /**
+     * @param  array<string, mixed>  $resumen
+     */
+    private function anotarMuestra(array &$resumen, int $fila, ?int $folio, string $sku, string $accion, bool $prioritaria): void
+    {
+        if (! $prioritaria && count($resumen['detalle_filas']) >= 40) {
+            $resumen['detalle_filas_omitidas']++;
+
+            return;
+        }
+
+        if (count($resumen['detalle_filas']) >= 80) {
+            $resumen['detalle_filas_omitidas']++;
+
+            return;
+        }
+
+        $resumen['detalle_filas'][] = [
+            'fila' => $fila,
+            'folio' => $folio ?: 'vacío',
+            'sku' => $sku !== '' ? $sku : '—',
+            'accion' => $accion,
+        ];
     }
 
     /**

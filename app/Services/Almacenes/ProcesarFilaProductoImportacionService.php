@@ -4,7 +4,6 @@ namespace App\Services\Almacenes;
 
 use App\Models\Producto;
 use App\Services\Productos\GenerarFolioProductoService;
-use App\Support\Almacenes\ReglasFichaProductoImportacion;
 use Illuminate\Support\Str;
 
 class ProcesarFilaProductoImportacionService
@@ -13,6 +12,7 @@ class ProcesarFilaProductoImportacionService
         private readonly NormalizarTextoImportacionService $normalizador,
         private readonly ResolverRelacionCatalogoService $resolverCatalogo,
         private readonly GenerarFolioProductoService $generarFolio,
+        private readonly ResolverProductoPorFolioImportacionService $folios,
     ) {}
 
     /**
@@ -20,113 +20,165 @@ class ProcesarFilaProductoImportacionService
      */
     public function ejecutar(array $row, array $mapping): array
     {
-        ReglasFichaProductoImportacion::asegurarValoresEnFila($row, $mapping);
-
-        $sku = Producto::normalizarSku(trim((string) $row[$mapping['sku']]));
-
-        $productoExistente = $this->productoPorFolioEnFila($mapping, $row)
-            ?? Producto::where('sku', $sku)->first();
-
-        $descripcion = $this->normalizador->texto($row[$mapping['descripcion']]);
-
-        $categoriaId = null;
-        if (! empty($mapping['categoria']) && $this->celdaConValor($row, $mapping['categoria'])) {
-            $categoriaId = $this->resolverCatalogo->categoriaId($row[$mapping['categoria']] ?? null);
-        }
-
-        $marcaId = null;
-        if (! empty($mapping['marca']) && $this->celdaConValor($row, $mapping['marca'])) {
-            $marcaId = $this->resolverCatalogo->marcaId($row[$mapping['marca']] ?? null);
-        }
-
-        $codigoBarras = null;
-        if (! empty($mapping['codigo_barras']) && $this->celdaConValor($row, $mapping['codigo_barras'])) {
-            $codigoBarras = $this->normalizador->codigoBarras($row[$mapping['codigo_barras']] ?? null, $sku);
-        }
-
-        $peso = null;
-        if (! empty($mapping['peso']) && $this->celdaConValor($row, $mapping['peso'])) {
-            $peso = (float) $row[$mapping['peso']];
-        }
-
-        $activo = null;
-        if (! empty($mapping['activo']) && isset($row[$mapping['activo']]) && $row[$mapping['activo']] !== '') {
-            $activoStr = mb_strtolower(trim((string) $row[$mapping['activo']]));
-            $activo = ! in_array($activoStr, ['0', 'no', 'false', 'inactivo'], true);
-        }
-
-        $folio = $this->generarFolio->folioDesdeFilaImportacion($mapping, $row, $productoExistente?->id);
+        $sku = $this->skuEnFila($row, $mapping);
+        $folio = $this->folios->desdeFila($row, $mapping);
+        $productoExistente = $folio ? Producto::query()->where('folio', $folio)->first() : null;
 
         if ($productoExistente) {
-            $datos = [
-                'descripcion' => $descripcion,
-            ];
-
-            if ($productoExistente->sku !== $sku) {
-                $conflictoSku = Producto::where('sku', $sku)
-                    ->where('id', '!=', $productoExistente->id)
-                    ->exists();
-                if ($conflictoSku) {
-                    throw new \RuntimeException("El SKU {$sku} ya pertenece a otro producto.");
-                }
-                $datos['sku'] = $sku;
-            }
-
-            if ($categoriaId !== null) {
-                $datos['categoria_id'] = $categoriaId;
-            }
-            if ($marcaId !== null) {
-                $datos['marca_id'] = $marcaId;
-            }
-            if ($codigoBarras !== null) {
-                $datos['codigo_barras'] = $codigoBarras;
-            }
-            if ($peso !== null) {
-                $datos['peso'] = $peso;
-            }
-            if ($activo !== null) {
-                $datos['activo'] = $activo;
-            }
-
-            $productoExistente->update($datos);
-
-            return ['accion' => 'actualizado', 'producto' => $productoExistente->fresh()];
+            return $this->actualizar($productoExistente, $row, $mapping, $sku);
         }
 
-        $conflictoSku = Producto::where('sku', $sku)->exists();
-        if ($conflictoSku) {
-            throw new \RuntimeException("El SKU {$sku} ya pertenece a otro producto.");
+        return $this->crear($row, $mapping, $sku, $folio);
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     * @param  array<string, mixed>  $mapping
+     * @return array{accion: string, producto: Producto}
+     */
+    private function actualizar(Producto $producto, array $row, array $mapping, string $sku): array
+    {
+        $datos = [];
+
+        if ($sku !== '' && $producto->sku !== $sku) {
+            $this->asegurarSkuLibre($sku, $producto->id);
+            $datos['sku'] = $sku;
+        }
+
+        $descripcion = $this->textoOpcional($row, $mapping, 'descripcion');
+        if ($descripcion !== null) {
+            $datos['descripcion'] = $descripcion;
+        }
+
+        $categoriaId = $this->relacionOpcional($row, $mapping, 'categoria', 'categoriaId');
+        if ($categoriaId !== null) {
+            $datos['categoria_id'] = $categoriaId;
+        }
+
+        $marcaId = $this->relacionOpcional($row, $mapping, 'marca', 'marcaId');
+        if ($marcaId !== null) {
+            $datos['marca_id'] = $marcaId;
+        }
+
+        if ($this->celdaConValor($row, $mapping['codigo_barras'] ?? null)) {
+            $datos['codigo_barras'] = $this->normalizador->codigoBarras(
+                $row[$mapping['codigo_barras']] ?? null,
+                $sku !== '' ? $sku : $producto->sku,
+            );
+        }
+
+        if ($this->celdaConValor($row, $mapping['peso'] ?? null)) {
+            $datos['peso'] = (float) $row[$mapping['peso']];
+        }
+
+        if ($this->celdaConValor($row, $mapping['activo'] ?? null)) {
+            $activoStr = mb_strtolower(trim((string) $row[$mapping['activo']]));
+            $datos['activo'] = ! in_array($activoStr, ['0', 'no', 'false', 'inactivo'], true);
+        }
+
+        if ($datos === []) {
+            return ['accion' => 'sin_cambios', 'producto' => $producto];
+        }
+
+        $producto->update($datos);
+
+        return ['accion' => 'actualizado', 'producto' => $producto->fresh()];
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     * @param  array<string, mixed>  $mapping
+     * @return array{accion: string, producto: Producto}
+     */
+    private function crear(array $row, array $mapping, string $sku, ?int $folio): array
+    {
+        if ($sku === '') {
+            throw new \RuntimeException('SKU obligatorio.');
+        }
+
+        $descripcion = $this->textoOpcional($row, $mapping, 'descripcion');
+        if ($descripcion === null) {
+            throw new \RuntimeException('Descripción obligatoria.');
+        }
+
+        $this->asegurarSkuLibre($sku, null);
+
+        $folioAsignado = $folio ?? $this->generarFolio->ejecutar();
+        if ($folio !== null) {
+            $folioAsignado = $this->generarFolio->folioDesdeImportacion((string) $folio, null);
         }
 
         $producto = Producto::create([
             'sku' => $sku,
             'uuid' => (string) Str::uuid(),
-            'folio' => $folio,
+            'folio' => $folioAsignado,
             'descripcion' => $descripcion,
-            'categoria_id' => $categoriaId,
-            'marca_id' => $marcaId,
-            'codigo_barras' => $codigoBarras ?? $sku,
-            'peso' => $peso,
-            'activo' => $activo ?? true,
+            'categoria_id' => $this->relacionOpcional($row, $mapping, 'categoria', 'categoriaId'),
+            'marca_id' => $this->relacionOpcional($row, $mapping, 'marca', 'marcaId'),
+            'codigo_barras' => $this->celdaConValor($row, $mapping['codigo_barras'] ?? null)
+                ? $this->normalizador->codigoBarras($row[$mapping['codigo_barras']] ?? null, $sku)
+                : $sku,
+            'peso' => $this->celdaConValor($row, $mapping['peso'] ?? null) ? (float) $row[$mapping['peso']] : null,
+            'activo' => $this->celdaConValor($row, $mapping['activo'] ?? null)
+                ? ! in_array(mb_strtolower(trim((string) $row[$mapping['activo']])), ['0', 'no', 'false', 'inactivo'], true)
+                : true,
         ]);
 
         return ['accion' => 'importado', 'producto' => $producto];
     }
 
-    /**
-     * @param  array<string, mixed>  $mapping
-     * @param  array<string, mixed>  $row
-     */
-    private function productoPorFolioEnFila(array $mapping, array $row): ?Producto
+    private function asegurarSkuLibre(string $sku, ?int $exceptoId): void
     {
-        $columna = $mapping['folio'];
-        $valor = trim((string) $row[$columna]);
-        $folio = (int) preg_replace('/\D/', '', $valor);
-        if ($folio <= 0) {
+        $conflicto = Producto::query()
+            ->where('sku', $sku)
+            ->when($exceptoId, fn ($q) => $q->where('id', '!=', $exceptoId))
+            ->exists();
+
+        if ($conflicto) {
+            throw new \RuntimeException("El SKU {$sku} ya pertenece a otro producto.");
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     * @param  array<string, mixed>  $mapping
+     */
+    private function skuEnFila(array $row, array $mapping): string
+    {
+        $columna = $mapping['sku'] ?? null;
+        if (! is_string($columna) || $columna === '' || ! $this->celdaConValor($row, $columna)) {
+            return '';
+        }
+
+        return Producto::normalizarSku(trim((string) $row[$columna]));
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     * @param  array<string, mixed>  $mapping
+     */
+    private function textoOpcional(array $row, array $mapping, string $campo): ?string
+    {
+        $columna = $mapping[$campo] ?? null;
+        if (! $this->celdaConValor($row, is_string($columna) ? $columna : null)) {
             return null;
         }
 
-        return Producto::where('folio', $folio)->first();
+        return $this->normalizador->texto($row[$columna]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     * @param  array<string, mixed>  $mapping
+     */
+    private function relacionOpcional(array $row, array $mapping, string $campo, string $metodo): ?int
+    {
+        $columna = $mapping[$campo] ?? null;
+        if (! $this->celdaConValor($row, is_string($columna) ? $columna : null)) {
+            return null;
+        }
+
+        return $this->resolverCatalogo->{$metodo}($row[$columna] ?? null);
     }
 
     /**
@@ -134,11 +186,7 @@ class ProcesarFilaProductoImportacionService
      */
     private function celdaConValor(array $row, ?string $columna): bool
     {
-        if ($columna === null || $columna === '') {
-            return false;
-        }
-
-        if (! array_key_exists($columna, $row)) {
+        if ($columna === null || $columna === '' || ! array_key_exists($columna, $row)) {
             return false;
         }
 

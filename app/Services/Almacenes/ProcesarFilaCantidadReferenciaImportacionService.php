@@ -7,30 +7,24 @@ use App\Models\Producto;
 
 class ProcesarFilaCantidadReferenciaImportacionService
 {
-    /**
-     * @return array{accion: string}
-     */
-    public function ejecutar(array $row, array $mapping, int $almacenId): array
-    {
-        $sku = trim((string) ($row[$mapping['sku']] ?? ''));
-        if ($sku === '') {
-            throw new \RuntimeException('SKU obligatorio.');
-        }
+    public function __construct(
+        private readonly ResolverProductoPorFolioImportacionService $folios,
+    ) {}
 
+    /**
+     * @return array{accion: string, producto: Producto}
+     */
+    public function ejecutar(array $row, array $mapping, int $almacenId, ?Producto $producto = null): array
+    {
         if (empty($mapping['existencia'])) {
             throw new \RuntimeException('Columna de existencia no mapeada.');
         }
 
-        if (! isset($row[$mapping['existencia']]) || $row[$mapping['existencia']] === '') {
+        if (! isset($row[$mapping['existencia']]) || trim((string) $row[$mapping['existencia']]) === '') {
             throw new \RuntimeException('Existencia obligatoria para cantidades de referencia.');
         }
 
-        $sku = Producto::normalizarSku($sku);
-        $producto = Producto::where('sku', $sku)->first();
-        if (! $producto) {
-            throw new \RuntimeException("Producto con SKU {$sku} no encontrado.");
-        }
-
+        $producto ??= $this->folios->exigirExistente($row, $mapping);
         $existencia = (float) $row[$mapping['existencia']];
 
         $inventario = Inventario::query()
@@ -40,12 +34,12 @@ class ProcesarFilaCantidadReferenciaImportacionService
 
         if ($inventario) {
             if ((float) $inventario->existencia === $existencia) {
-                return ['accion' => 'sin_cambios'];
+                return ['accion' => 'sin_cambios', 'producto' => $producto];
             }
 
             $inventario->update(['existencia' => $existencia]);
 
-            return ['accion' => 'actualizado'];
+            return ['accion' => 'actualizado', 'producto' => $producto];
         }
 
         Inventario::create([
@@ -54,6 +48,6 @@ class ProcesarFilaCantidadReferenciaImportacionService
             'existencia' => $existencia,
         ]);
 
-        return ['accion' => 'importado'];
+        return ['accion' => 'importado', 'producto' => $producto];
     }
 }

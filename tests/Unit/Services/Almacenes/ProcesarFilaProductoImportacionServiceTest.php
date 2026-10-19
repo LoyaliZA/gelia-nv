@@ -39,15 +39,79 @@ class ProcesarFilaProductoImportacionServiceTest extends TestCase
         $this->assertSame(700001, (int) $producto->folio);
     }
 
-    public function test_fila_sin_folio_falla(): void
+    public function test_fila_sin_folio_crea_producto_con_folio_generado(): void
     {
         $svc = app(ProcesarFilaProductoImportacionService::class);
 
+        $resultado = $svc->ejecutar(
+            ['sku' => 'X1', 'folio' => '', 'descripcion' => 'DESC'],
+            $this->mappingBase(),
+        );
+
+        $this->assertSame('importado', $resultado['accion']);
+        $this->assertGreaterThanOrEqual(100001, (int) $resultado['producto']->folio);
+        $this->assertSame('X1', $resultado['producto']->sku);
+        $this->assertSame('DESC', $resultado['producto']->descripcion);
+    }
+
+    public function test_folio_nuevo_se_respeta_si_nadie_lo_usa(): void
+    {
+        $svc = app(ProcesarFilaProductoImportacionService::class);
+
+        $resultado = $svc->ejecutar(
+            ['sku' => 'NUEVO1', 'folio' => '880010', 'descripcion' => 'Nuevo'],
+            $this->mappingBase(),
+        );
+
+        $this->assertSame('importado', $resultado['accion']);
+        $this->assertSame(880010, (int) $resultado['producto']->folio);
+    }
+
+    public function test_sku_de_otro_producto_no_pisa_el_folio(): void
+    {
+        Producto::create([
+            'uuid' => (string) \Illuminate\Support\Str::uuid(),
+            'folio' => 500100,
+            'sku' => 'SKU-A',
+            'descripcion' => 'A',
+            'activo' => true,
+        ]);
+        Producto::create([
+            'uuid' => (string) \Illuminate\Support\Str::uuid(),
+            'folio' => 500200,
+            'sku' => 'SKU-B',
+            'descripcion' => 'B',
+            'activo' => true,
+        ]);
+
+        $svc = app(ProcesarFilaProductoImportacionService::class);
+
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('Folio obligatorio');
+        $this->expectExceptionMessage('ya pertenece a otro producto');
 
         $svc->ejecutar(
-            ['sku' => 'X1', 'folio' => '', 'descripcion' => 'DESC'],
+            ['sku' => 'SKU-B', 'folio' => '500100', 'descripcion' => 'A actualizado'],
+            $this->mappingBase(),
+        );
+    }
+
+    public function test_folio_vacio_no_actualiza_por_sku(): void
+    {
+        Producto::create([
+            'uuid' => (string) \Illuminate\Support\Str::uuid(),
+            'folio' => 500300,
+            'sku' => 'SKU-C',
+            'descripcion' => 'Original',
+            'activo' => true,
+        ]);
+
+        $svc = app(ProcesarFilaProductoImportacionService::class);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('ya pertenece a otro producto');
+
+        $svc->ejecutar(
+            ['sku' => 'SKU-C', 'folio' => '', 'descripcion' => 'No debe crear'],
             $this->mappingBase(),
         );
     }

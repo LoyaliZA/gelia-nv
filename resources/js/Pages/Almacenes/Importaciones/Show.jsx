@@ -3,9 +3,10 @@ import { Head, Link } from '@inertiajs/react';
 import axios from 'axios';
 import { startImportacionAlmacenTracking } from '@/utils/importacionAlmacenTracker';
 import AppLayout from '@/Layouts/AppLayout';
+import GeliaPageShell from '@/Components/GeliaPageShell';
 import ResumenSimulacionImportacion from '@/Components/Almacenes/ResumenSimulacionImportacion';
 import { geliaCardClass, THEME_BTN_PRIMARY } from '@/utils/geliaTheme';
-import { MAPPING_HUB_DEFAULT, MAPPING_HUB_FICHA_REQUIRED, MAPPING_HUB_LABELS, autoMapearHub } from '@/config/importacionHubAlmacenes';
+import { MAPPING_HUB_DEFAULT, MAPPING_HUB_LABELS, autoMapearHub } from '@/config/importacionHubAlmacenes';
 
 function mensajeErrorImportacion(err, fallback) {
     const data = err?.response?.data;
@@ -38,9 +39,9 @@ export default function Show({ auth, lote, operacionesLabels }) {
 
     const camposVisibles = useMemo(() => {
         const ops = lote.operaciones || [];
-        const keys = new Set(['sku']);
+        const keys = new Set(['folio']);
         if (ops.includes('ficha_producto')) {
-            ['folio', 'descripcion', 'marca', 'categoria', 'codigo_barras', 'peso', 'activo'].forEach((k) => keys.add(k));
+            ['sku', 'descripcion', 'marca', 'categoria', 'codigo_barras', 'peso', 'activo'].forEach((k) => keys.add(k));
         }
         if (ops.includes('asignacion_almacen')) keys.add('ubicacion');
         if (ops.includes('cantidades_referencia')) keys.add('existencia');
@@ -48,13 +49,20 @@ export default function Show({ auth, lote, operacionesLabels }) {
         return [...keys];
     }, [lote.operaciones]);
 
-    const requiereFichaProducto = (lote.operaciones || []).includes('ficha_producto');
+    const operacionesLote = lote.operaciones || [];
+    const requiereFichaProducto = operacionesLote.includes('ficha_producto');
 
     const validarMappingObligatorio = () => {
-        const keys = requiereFichaProducto ? MAPPING_HUB_FICHA_REQUIRED : ['sku'];
+        const keys = ['folio'];
+        if (requiereFichaProducto) keys.push('sku', 'descripcion');
+        if (operacionesLote.includes('cantidades_referencia')) keys.push('existencia');
         const faltantes = keys.filter((k) => !mapping[k]);
         if (faltantes.length) {
             setError(`Mapea las columnas obligatorias: ${faltantes.map((k) => MAPPING_HUB_LABELS[k] || k).join(', ')}.`);
+            return false;
+        }
+        if (operacionesLote.includes('costos_precios') && !mapping.costo && !mapping.costo_reposicion && !mapping.precio_venta) {
+            setError('Mapea al menos costo, costo de reposición o precio de referencia.');
             return false;
         }
         return true;
@@ -113,34 +121,36 @@ export default function Show({ auth, lote, operacionesLabels }) {
     return (
         <AppLayout auth={auth}>
             <Head title={`Importación #${lote.id}`} />
-            <div className="max-w-4xl mx-auto p-4 md:p-8 space-y-6">
+            <GeliaPageShell className="max-w-5xl mx-auto space-y-6">
                 <div className={geliaCardClass('p-6 space-y-2')}>
-                    <Link href={route('almacenes.importaciones.index')} className="text-[10px] font-black uppercase theme-text-muted">← Importaciones</Link>
-                    <h1 className="text-xl font-black uppercase theme-text-main">Lote #{lote.id}</h1>
-                    <p className="text-[11px] font-bold theme-text-muted">{etiquetasOperaciones}</p>
+                    <Link href={route('almacenes.importaciones.index')} className="text-sm theme-text-muted hover:underline">Volver a importaciones</Link>
+                    <h1 className="text-2xl font-semibold theme-text-main">Lote #{lote.id}</h1>
+                    <p className="text-sm theme-text-muted">{lote.etiqueta_tipo || etiquetasOperaciones}</p>
                     {lote.almacen && (
-                        <p className="text-[10px] font-bold theme-text-muted">
+                        <p className="text-sm theme-text-muted">
                             Almacén: {lote.almacen.codigo} — {lote.almacen.nombre}
                             {lote.almacen.sucursal ? ` · Sucursal: ${lote.almacen.sucursal.nombre}` : ''}
                         </p>
                     )}
-                    <p className="text-[10px] font-bold theme-text-muted">Estado: {lote.estado}</p>
+                    <p className="text-sm theme-text-muted">Estado: {lote.estado}</p>
                 </div>
 
                 {step === 2 && (
                     <div className={geliaCardClass('p-6 space-y-4')}>
-                        <p className="text-[10px] font-black uppercase theme-text-muted">Paso 2 — Columnas</p>
+                        <h2 className="text-base font-semibold theme-text-main">Columnas</h2>
+                        <p className="text-sm theme-text-muted">El folio es obligatorio en todos los casos. En productos, el SKU y la descripción también se mapean: si la celda viene vacía en un producto que ya existe, se conserva el dato.</p>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             {camposVisibles.map((key) => (
                                 <div key={key}>
-                                    <label className="text-[10px] font-black uppercase theme-text-muted">{MAPPING_HUB_LABELS[key]}</label>
+                                    <label className="text-sm theme-text-main" htmlFor={`map-${key}`}>{MAPPING_HUB_LABELS[key]}</label>
                                     <select
+                                        id={`map-${key}`}
                                         value={mapping[key] || ''}
                                         onChange={(e) => {
                                             setMapping({ ...mapping, [key]: e.target.value });
                                             if (step >= 3) setMappingSimulado(null);
                                         }}
-                                        className="theme-input w-full mt-1 px-3 py-2 text-[11px] font-bold"
+                                        className="theme-input w-full mt-1 px-3 py-2 text-sm"
                                     >
                                         <option value="">— No mapear —</option>
                                         {headers.map((h, i) => <option key={i} value={h}>{h}</option>)}
@@ -148,7 +158,7 @@ export default function Show({ auth, lote, operacionesLabels }) {
                                 </div>
                             ))}
                         </div>
-                        {error && <p className="text-red-500 text-[11px] font-bold">{error}</p>}
+                        {error && <p className="text-sm font-semibold theme-text-peligro" role="alert">{error}</p>}
                         <button type="button" disabled={loading} onClick={simular} className={`${THEME_BTN_PRIMARY} w-full py-3`}>
                             {loading ? 'Simulando…' : 'Paso 3: Simular cambios'}
                         </button>
@@ -157,16 +167,9 @@ export default function Show({ auth, lote, operacionesLabels }) {
 
                 {step >= 3 && resumen && (
                     <div className={geliaCardClass('p-6 space-y-3')}>
-                        <p className="text-[10px] font-black uppercase theme-text-muted">Paso 3 — Simulación</p>
+                        <h2 className="text-base font-semibold theme-text-main">Simulación</h2>
                         <ResumenSimulacionImportacion resumen={resumen} />
-                        {resumen.detalle_errores?.length > 0 && (
-                            <ul className="text-[10px] font-bold text-red-500 max-h-40 overflow-auto">
-                                {resumen.detalle_errores.map((e, i) => (
-                                    <li key={i}>Fila {e.fila} ({e.sku}): {e.mensaje}</li>
-                                ))}
-                            </ul>
-                        )}
-                        {error && <p className="text-red-500 text-[11px] font-bold">{error}</p>}
+                        {error && <p className="text-sm font-semibold theme-text-peligro" role="alert">{error}</p>}
                         {step === 3 && (
                             <button type="button" disabled={loading} onClick={aplicar} className={`${THEME_BTN_PRIMARY} w-full py-3`}>
                                 {loading ? 'Aplicando…' : 'Paso 4: Aplicar en segundo plano'}
@@ -177,10 +180,10 @@ export default function Show({ auth, lote, operacionesLabels }) {
 
                 {step === 4 && (
                     <div className={geliaCardClass('p-6')}>
-                        <p className="text-[11px] font-bold theme-text-main">La importación se está procesando. Puedes seguir el progreso en el indicador flotante.</p>
+                        <p className="text-sm theme-text-main">La importación se está procesando. El avance sigue en el indicador flotante.</p>
                     </div>
                 )}
-            </div>
+            </GeliaPageShell>
         </AppLayout>
     );
 }

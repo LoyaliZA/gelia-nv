@@ -17,9 +17,9 @@ export const MAPPING_HUB_DEFAULT = {
 export const MAPPING_HUB_FICHA_REQUIRED = ['sku', 'folio', 'descripcion'];
 
 export const MAPPING_HUB_LABELS = {
-    folio: 'Folio *',
-    sku: 'SKU *',
-    descripcion: 'Descripción *',
+    folio: 'Folio',
+    sku: 'SKU',
+    descripcion: 'Descripción',
     marca: 'Marca',
     categoria: 'Categoría',
     codigo_barras: 'Código de barras',

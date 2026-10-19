@@ -26,7 +26,7 @@ class ImportarCatalogoAlmacenService
 
     public function ejecutar(string $tipo, UploadedFile $archivo): array
     {
-        if (! in_array($tipo, $this->plantillas->tiposValidos(), true) || in_array($tipo, ['productos', 'inventarios'], true)) {
+        if (! in_array($tipo, $this->plantillas->tiposValidos(), true) || in_array($tipo, ['productos', 'inventarios', 'costos', 'existencias', 'completa'], true)) {
             throw ValidationException::withMessages([
                 'archivo' => 'Tipo de catálogo no válido para importación simple.',
             ]);

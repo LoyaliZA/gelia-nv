@@ -1,10 +1,11 @@
 /** @type {Record<string, string[]>} */
 export const PRESET_OPERACIONES = {
-    productos: ['ficha_producto'],
+    productos: ['ficha_producto', 'asignacion_almacen'],
     costos: ['costos_precios'],
-    inventario: ['ficha_producto', 'cantidades_referencia', 'costos_precios'],
     existencias: ['cantidades_referencia'],
-    asignacion: ['asignacion_almacen'],
+    inventario: ['ficha_producto', 'asignacion_almacen', 'costos_precios', 'cantidades_referencia'],
+    completa: ['ficha_producto', 'asignacion_almacen', 'costos_precios', 'cantidades_referencia'],
+    asignacion: ['ficha_producto', 'asignacion_almacen'],
 };
 
 export function operacionesDesdePreset(preset) {

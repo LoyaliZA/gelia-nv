@@ -8,6 +8,7 @@ use App\Services\Almacenes\AlcanceAlmacenesService;
 use App\Services\Almacenes\AplicarLoteImportacionAlmacenService;
 use App\Services\Almacenes\CrearLoteImportacionAlmacenService;
 use App\Services\Almacenes\SimularImportacionAlmacenService;
+use App\Services\Catalogos\PlantillaImportacionCatalogoService;
 use App\Support\Almacenes\OperacionesImportacionAlmacen;
 use App\Support\Almacenes\ReglasFichaProductoImportacion;
 use Illuminate\Http\JsonResponse;
@@ -33,14 +34,15 @@ class ImportacionLoteController extends Controller
         $sucursales = $alcance->sucursalesOperables($user);
         $sucursalActiva = $alcance->sucursalActivaId($user);
 
+        $casos = $this->casosParaUi($user);
+
         return Inertia::render('Almacenes/Importaciones/Index', [
             'lotes' => $lotes,
-            'operacionesDisponibles' => $this->operacionesParaUi($user),
+            'casos' => $casos,
+            'caso_inicial' => $this->casoInicial($request->query('preset'), $casos),
             'sucursales' => $sucursales,
             'almacenes' => $alcance->almacenesOperables($user),
             'sucursal_activa_id' => $sucursalActiva,
-            'preset' => $request->query('preset'),
-            'plantillas' => $this->plantillasPorPreset(),
             'sin_sucursales_operables' => $sucursales->isEmpty(),
         ]);
     }
@@ -54,9 +56,15 @@ class ImportacionLoteController extends Controller
             'archivo' => 'required|file|mimes:csv,xlsx,xls',
             'operaciones' => 'required|array|min:1',
             'operaciones.*' => 'string|in:'.implode(',', OperacionesImportacionAlmacen::todas()),
-            'almacen_id' => 'nullable|exists:almacenes,id',
+            'almacen_id' => 'required|exists:almacenes,id',
             'sucursal_id' => 'nullable|integer|exists:sucursales,id',
         ]);
+
+        foreach ($validated['operaciones'] as $operacion) {
+            if (! $this->puedeOperacion($user, $operacion)) {
+                abort(403);
+            }
+        }
 
         if (isset($validated['almacen_id'])) {
             $alcance->asegurarAlmacenOperable($user, (int) $validated['almacen_id']);
@@ -94,15 +102,7 @@ class ImportacionLoteController extends Controller
     {
         $this->autorizarVerLote($lote, $request->user());
 
-        $request->validate([
-            'mapping' => 'required|array',
-            'mapping.sku' => 'required|string',
-        ]);
-        $mapping = $request->input('mapping', []);
-        if (! is_array($mapping)) {
-            $mapping = [];
-        }
-        $this->validarMappingHubFichaProducto($lote, $mapping);
+        $mapping = $this->mappingValidado($request, $lote);
 
         $lote->update(['mapping' => $mapping]);
         $resumen = $simular->ejecutar($lote->fresh());
@@ -120,15 +120,7 @@ class ImportacionLoteController extends Controller
         AplicarLoteImportacionAlmacenService $aplicar,
         AlcanceAlmacenesService $alcance,
     ): JsonResponse {
-        $request->validate([
-            'mapping' => 'required|array',
-            'mapping.sku' => 'required|string',
-        ]);
-        $mapping = $request->input('mapping', []);
-        if (! is_array($mapping)) {
-            $mapping = [];
-        }
-        $this->validarMappingHubFichaProducto($lote, $mapping);
+        $mapping = $this->mappingValidado($request, $lote);
 
         if ($lote->almacen_id) {
             $alcance->asegurarAlmacenOperable($request->user(), (int) $lote->almacen_id);
@@ -137,6 +129,23 @@ class ImportacionLoteController extends Controller
         $resultado = $aplicar->ejecutar($lote, $request->user(), $mapping);
 
         return response()->json(array_merge(['success' => true], $resultado));
+    }
+
+    public function plantilla(string $caso, PlantillaImportacionCatalogoService $plantillas): StreamedResponse
+    {
+        $this->autorizarVer();
+        $definicion = OperacionesImportacionAlmacen::definicionCasos()[$caso] ?? null;
+        if ($definicion === null) {
+            abort(404);
+        }
+
+        foreach ($definicion['operaciones'] as $operacion) {
+            if (! $this->puedeOperacion(request()->user(), $operacion)) {
+                abort(403);
+            }
+        }
+
+        return $plantillas->descargar($definicion['plantilla']);
     }
 
     public function errores(Request $request, ImportacionAlmacenLog $lote): StreamedResponse
@@ -163,50 +172,108 @@ class ImportacionLoteController extends Controller
     /**
      * @return list<array<string, mixed>>
      */
-    private function operacionesParaUi($user): array
+    private function casosParaUi($user): array
     {
         $out = [];
-        foreach (OperacionesImportacionAlmacen::todas() as $op) {
-            $permiso = OperacionesImportacionAlmacen::permisoParaOperacion($op);
-            $puede = $user->can('catalogos.gestionar')
-                || ($permiso && $user->can($permiso))
-                || ($op === OperacionesImportacionAlmacen::FICHA_PRODUCTO && ($user->can('gestion_interna.productos.gestionar') || $user->can('almacenes.productos.gestionar')));
-            if ($puede) {
-                $out[] = [
-                    'id' => $op,
-                    'label' => OperacionesImportacionAlmacen::etiqueta($op),
-                    'descripcion' => OperacionesImportacionAlmacen::descripcionCorta($op),
-                ];
+        foreach (OperacionesImportacionAlmacen::definicionCasos() as $id => $caso) {
+            $permitido = true;
+            foreach ($caso['operaciones'] as $operacion) {
+                if (! $this->puedeOperacion($user, $operacion)) {
+                    $permitido = false;
+                    break;
+                }
             }
+            if (! $permitido) {
+                continue;
+            }
+            $out[] = [
+                'id' => $id,
+                'titulo' => $caso['titulo'],
+                'frase' => $caso['frase'],
+                'columnas' => $caso['columnas'],
+                'operaciones' => $caso['operaciones'],
+                'plantilla' => route('almacenes.importaciones.plantilla', ['caso' => $id]),
+            ];
         }
 
         return $out;
     }
 
     /**
-     * @return array<string, string>
+     * @param  list<array<string, mixed>>  $casos
      */
-    private function plantillasPorPreset(): array
+    private function casoInicial(mixed $preset, array $casos): ?string
     {
-        return [
-            'productos' => route('gestion_interna.productos.plantilla_importacion'),
-            'inventario' => route('almacenes.inventarios.plantilla_importacion'),
-            'costos' => route('almacenes.costos.plantilla_importacion'),
-            'existencias' => route('almacenes.inventarios.plantilla_importacion'),
-        ];
+        $id = match ((string) $preset) {
+            'productos', 'asignacion' => 'productos',
+            'costos' => 'costos',
+            'existencias' => 'existencias',
+            'inventario', 'completa' => 'completa',
+            default => null,
+        };
+        $ids = array_column($casos, 'id');
+        if ($id && in_array($id, $ids, true)) {
+            return $id;
+        }
+
+        return $ids[0] ?? null;
+    }
+
+    private function puedeOperacion($user, string $operacion): bool
+    {
+        if ($user->can('catalogos.gestionar')) {
+            return true;
+        }
+
+        $permiso = OperacionesImportacionAlmacen::permisoParaOperacion($operacion);
+        if ($permiso && $user->can($permiso)) {
+            return true;
+        }
+
+        return $operacion === OperacionesImportacionAlmacen::FICHA_PRODUCTO
+            && ($user->can('gestion_interna.productos.gestionar') || $user->can('almacenes.productos.gestionar'));
     }
 
     /**
-     * @param  array<string, mixed>  $mapping
+     * @return array<string, mixed>
      */
-    private function validarMappingHubFichaProducto(ImportacionAlmacenLog $lote, array $mapping): void
+    private function mappingValidado(Request $request, ImportacionAlmacenLog $lote): array
     {
-        $operaciones = $lote->operaciones ?? [];
-        if (! in_array(OperacionesImportacionAlmacen::FICHA_PRODUCTO, $operaciones, true)) {
-            return;
+        $request->validate([
+            'mapping' => 'required|array',
+            'mapping.folio' => 'required|string',
+        ]);
+        $mapping = $request->input('mapping', []);
+        if (! is_array($mapping)) {
+            $mapping = [];
         }
 
-        ReglasFichaProductoImportacion::asegurarColumnasMapeadas($mapping);
+        $operaciones = $lote->operaciones ?? [];
+        if (in_array(OperacionesImportacionAlmacen::FICHA_PRODUCTO, $operaciones, true)) {
+            ReglasFichaProductoImportacion::asegurarColumnasMapeadas($mapping);
+        }
+        if (in_array(OperacionesImportacionAlmacen::CANTIDADES_REFERENCIA, $operaciones, true) && empty($mapping['existencia'])) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'mapping' => 'Mapea la columna de existencia.',
+            ]);
+        }
+        if (in_array(OperacionesImportacionAlmacen::COSTOS_PRECIOS, $operaciones, true)) {
+            $tieneCosto = ! empty($mapping['costo']) || ! empty($mapping['costo_reposicion']) || ! empty($mapping['precio_venta']);
+            if (! $tieneCosto) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'mapping' => 'Mapea al menos costo, costo de reposición o precio de referencia.',
+                ]);
+            }
+        }
+
+        return $mapping;
+    }
+
+    private function etiquetaLote(ImportacionAlmacenLog $lote): string
+    {
+        $caso = OperacionesImportacionAlmacen::casoDesdeOperaciones($lote->operaciones ?? []);
+
+        return $caso ? OperacionesImportacionAlmacen::tituloCaso($caso) : $lote->etiquetaTipo();
     }
 
     private function autorizarVer(): void
@@ -241,10 +308,11 @@ class ImportacionLoteController extends Controller
     private function loteDetalle(ImportacionAlmacenLog $lote): array
     {
         return array_merge($lote->toArray(), [
-            'etiqueta_tipo' => $lote->etiquetaTipo(),
+            'etiqueta_tipo' => $this->etiquetaLote($lote),
             'resumen' => $lote->resumenParaUi(),
             'resumen_simulacion' => $lote->resumen_simulacion,
             'operaciones' => $lote->operaciones ?? [],
+            'caso' => OperacionesImportacionAlmacen::casoDesdeOperaciones($lote->operaciones ?? []),
             'headers' => $lote->payload['headers'] ?? [],
             'almacen' => $lote->almacen ? [
                 'id' => $lote->almacen->id,
@@ -270,7 +338,7 @@ class ImportacionLoteController extends Controller
             'id' => $lote->id,
             'estado' => $lote->estado,
             'tipo' => $lote->tipo,
-            'etiqueta_tipo' => $lote->etiquetaTipo(),
+            'etiqueta_tipo' => $this->etiquetaLote($lote),
             'created_at' => $lote->created_at?->toIso8601String(),
             'total_filas' => $lote->total_filas,
             'procesados' => $lote->procesados,

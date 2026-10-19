@@ -135,7 +135,7 @@ class ImportacionAlmacenAsyncTest extends TestCase
             'apartado' => 0,
         ]);
 
-        $csv = "sku,costo,costo_reposicion,precio_venta\nCOST01,10.50,11.00,19.99\n";
+        $csv = "folio,costo,costo_reposicion,precio_venta\n{$producto->folio},10.50,11.00,19.99\n";
         $persistente = 'importaciones_almacenes/2/source.csv';
         Storage::put($persistente, $csv);
 
@@ -145,7 +145,7 @@ class ImportacionAlmacenAsyncTest extends TestCase
             'almacen_id' => $almacen->id,
             'archivo_ruta' => $persistente,
             'mapping' => [
-                'sku' => 'sku',
+                'folio' => 'folio',
                 'costo' => 'costo',
                 'costo_reposicion' => 'costo_reposicion',
                 'precio_venta' => 'precio_venta',

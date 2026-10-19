@@ -10,6 +10,8 @@ use App\Services\Almacenes\ProcesarFilaImportacionHubService;
 use App\Services\Almacenes\ProcesarFilaInventarioImportacionService;
 use App\Services\Almacenes\ProcesarFilaProductoImportacionService;
 use App\Services\Almacenes\ProcesarFilaVentaImportacionService;
+use App\Services\Almacenes\ResolverProductoPorFolioImportacionService;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -78,6 +80,9 @@ class ImportarAlmacenCatalogoJob implements ShouldQueue
 
             $lote = $lector->leerLote($log, $this->offset, self::BATCH_SIZE);
             $mapping = $log->mapping ?? [];
+            $foliosCache = 'importacion_almacen_folios_'.$log->id;
+            $foliosVistos = $this->offset === 0 ? [] : Cache::get($foliosCache, []);
+            $resolverFolios = app(ResolverProductoPorFolioImportacionService::class);
             $stats = [
                 'importados' => 0,
                 'actualizados' => 0,
@@ -98,9 +103,17 @@ class ImportarAlmacenCatalogoJob implements ShouldQueue
 
                 $numeroFila = $item['numero_fila'];
                 $row = $item['row'];
-                $referencia = trim((string) ($row[$mapping['sku']] ?? ''));
+                $folioFila = $resolverFolios->desdeFila($row, $mapping);
+                $referencia = $folioFila ? (string) $folioFila : trim((string) ($row[$mapping['sku']] ?? ''));
 
                 try {
+                    if ($folioFila) {
+                        if (isset($foliosVistos[$folioFila])) {
+                            throw new \RuntimeException("El folio {$folioFila} está repetido en el archivo. La primera fila es {$foliosVistos[$folioFila]}.");
+                        }
+                        $foliosVistos[$folioFila] = $numeroFila;
+                    }
+
                     $resultado = DB::transaction(fn () => $this->procesarFila(
                         $log,
                         $row,
@@ -120,15 +133,20 @@ class ImportarAlmacenCatalogoJob implements ShouldQueue
                         } else {
                             $stats['actualizados']++;
                         }
+                    } elseif (($resultado['accion'] ?? '') === 'importado') {
+                        $stats['importados']++;
+                    } elseif (($resultado['accion'] ?? '') === 'sin_cambios') {
+                        $stats['omitidos']++;
                     } else {
-                        $clave = $resultado['accion'] === 'importado' ? 'importados' : 'actualizados';
-                        $stats[$clave]++;
+                        $stats['actualizados']++;
                     }
                 } catch (Throwable $e) {
                     $stats['omitidos']++;
                     $finalizador->registrarError($log, $numeroFila, $referencia ?: '—', 'general', $e->getMessage());
                 }
             }
+
+            Cache::put($foliosCache, $foliosVistos, now()->addHour());
 
             $procesadosEnLote = count($lote['filas']);
             $log->increment('procesados', $procesadosEnLote);

@@ -39,9 +39,11 @@ class ProcesarFilaImportacionHubService
         ];
 
         $hubioCambio = false;
+        $producto = null;
 
         if (in_array(OperacionesImportacionAlmacen::FICHA_PRODUCTO, $operaciones, true)) {
             $r = $this->fichaProducto->ejecutar($row, $mapping);
+            $producto = $r['producto'];
             if ($r['accion'] === 'importado') {
                 $stats['productos_creados']++;
                 $hubioCambio = true;
@@ -52,33 +54,44 @@ class ProcesarFilaImportacionHubService
         }
 
         if ($almacenId && in_array(OperacionesImportacionAlmacen::ASIGNACION_ALMACEN, $operaciones, true)) {
-            $r = $this->asignacion->ejecutar($row, $mapping, $almacenId);
+            $r = $this->asignacion->ejecutar($row, $mapping, $almacenId, $producto);
+            $producto = $r['producto'];
             if ($r['accion'] === 'importado') {
                 $stats['asignaciones_creadas']++;
                 $hubioCambio = true;
-            }
-        }
-
-        if ($almacenId && in_array(OperacionesImportacionAlmacen::COSTOS_PRECIOS, $operaciones, true)
-            && $this->filaTieneDatosDeCosto($row, $mapping)) {
-            $r = $this->costos->ejecutar($row, $mapping, $almacenId);
-            if ($r['accion'] === 'importado') {
-                $stats['costos_creados']++;
-                $hubioCambio = true;
             } elseif ($r['accion'] === 'actualizado') {
-                $stats['costos_actualizados']++;
                 $hubioCambio = true;
             }
         }
 
-        if ($almacenId && in_array(OperacionesImportacionAlmacen::CANTIDADES_REFERENCIA, $operaciones, true)
-            && ! empty($mapping['existencia'])) {
-            $r = $this->cantidades->ejecutar($row, $mapping, $almacenId);
-            if ($r['accion'] === 'importado' || $r['accion'] === 'actualizado') {
-                $stats['cantidades_actualizadas']++;
-                $hubioCambio = true;
-            } elseif ($r['accion'] === 'sin_cambios') {
-                $stats['sin_cambios']++;
+        if ($almacenId && in_array(OperacionesImportacionAlmacen::COSTOS_PRECIOS, $operaciones, true)) {
+            if ($this->filaTieneDatosDeCosto($row, $mapping)) {
+                $r = $this->costos->ejecutar($row, $mapping, $almacenId, $producto);
+                $producto = $r['producto'];
+                if ($r['accion'] === 'importado') {
+                    $stats['costos_creados']++;
+                    $hubioCambio = true;
+                } elseif ($r['accion'] === 'actualizado') {
+                    $stats['costos_actualizados']++;
+                    $hubioCambio = true;
+                }
+            } elseif ($this->operacionUnica($operaciones, OperacionesImportacionAlmacen::COSTOS_PRECIOS)) {
+                throw new \RuntimeException('Debe indicar al menos costo, costo de reposición o precio de venta.');
+            }
+        }
+
+        if ($almacenId && in_array(OperacionesImportacionAlmacen::CANTIDADES_REFERENCIA, $operaciones, true) && ! empty($mapping['existencia'])) {
+            $valor = trim((string) ($row[$mapping['existencia']] ?? ''));
+            if ($valor === '') {
+                if ($this->operacionUnica($operaciones, OperacionesImportacionAlmacen::CANTIDADES_REFERENCIA)) {
+                    throw new \RuntimeException('Existencia obligatoria para cantidades de referencia.');
+                }
+            } else {
+                $r = $this->cantidades->ejecutar($row, $mapping, $almacenId, $producto);
+                if ($r['accion'] === 'importado' || $r['accion'] === 'actualizado') {
+                    $stats['cantidades_actualizadas']++;
+                    $hubioCambio = true;
+                }
             }
         }
 
@@ -92,13 +105,21 @@ class ProcesarFilaImportacionHubService
     }
 
     /**
+     * @param  list<string>  $operaciones
+     */
+    private function operacionUnica(array $operaciones, string $operacion): bool
+    {
+        return $operaciones === [$operacion];
+    }
+
+    /**
      * @param  array<string, mixed>  $row
      * @param  array<string, mixed>  $mapping
      */
     private function filaTieneDatosDeCosto(array $row, array $mapping): bool
     {
         foreach (['costo', 'costo_reposicion', 'precio_venta'] as $campo) {
-            if (! empty($mapping[$campo]) && isset($row[$mapping[$campo]]) && $row[$mapping[$campo]] !== '') {
+            if (! empty($mapping[$campo]) && isset($row[$mapping[$campo]]) && trim((string) $row[$mapping[$campo]]) !== '') {
                 return true;
             }
         }
