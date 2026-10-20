@@ -31,12 +31,14 @@ class SustituirPagoPedidoBmaRequest extends FormRequest
             'fecha_pago' => ['nullable', 'date'],
             'referencia' => ['nullable', 'string', 'max:128'],
             'observaciones' => ['nullable', 'string', 'max:2000'],
-            'comprobante' => [
-                Rule::requiredIf(fn () => PedidoBmaPago::formaRequiereComprobante($forma)),
+            'comprobante' => ['nullable', 'file', 'max:10240'],
+            'comprobantes' => [
+                Rule::requiredIf(fn () => PedidoBmaPago::formaRequiereComprobante($forma) && ! $this->hasFile('comprobante')),
                 'nullable',
-                'file',
-                'max:10240',
+                'array',
+                'max:'.PedidoBmaPago::MAX_COMPROBANTES,
             ],
+            'comprobantes.*' => ['file', 'max:10240'],
         ];
     }
 }

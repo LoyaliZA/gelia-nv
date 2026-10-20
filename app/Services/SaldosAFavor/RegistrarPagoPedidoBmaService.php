@@ -31,9 +31,10 @@ class RegistrarPagoPedidoBmaService
         private CancelarCreditoSafService $cancelarCredito,
         private CoberturaPagoPedidoBmaService $cobertura,
         private PagosPedidoBmaConfig $pagosConfig,
+        private AdjuntarComprobantesPagoPedidoBma $comprobantes,
     ) {}
 
-    public function handle(PedidoBma $pedido, array $datos, ?UploadedFile $comprobante = null, ?int $usuarioId = null): PedidoBmaPago
+    public function handle(PedidoBma $pedido, array $datos, UploadedFile|array|null $comprobante = null, ?int $usuarioId = null): PedidoBmaPago
     {
         $monto = round((float) ($datos['monto'] ?? 0), 2);
         if ($monto <= 0) {
@@ -59,9 +60,15 @@ class RegistrarPagoPedidoBmaService
 
         CoberturaPagoPedidoBmaService::assertBancoPermitido($pedido, $bancoId);
 
+        $archivos = $this->comprobantes->normalizar($comprobante);
         $requiereComprobante = PedidoBmaPago::formaRequiereComprobante($forma);
-        if ($requiereComprobante && (! $comprobante || ! $comprobante->isValid())) {
+        if ($requiereComprobante && $archivos === []) {
             throw new InvalidArgumentException('Cada exhibición de pago debe incluir su comprobante.');
+        }
+        if (count($archivos) > PedidoBmaPago::MAX_COMPROBANTES) {
+            throw new InvalidArgumentException(
+                'Puede adjuntar hasta '.PedidoBmaPago::MAX_COMPROBANTES.' comprobantes por exhibición.'
+            );
         }
 
         $clave = Schema::hasColumn('pedido_bma_pagos', 'idempotency_key')
@@ -69,7 +76,7 @@ class RegistrarPagoPedidoBmaService
             : '';
 
         try {
-            return $this->registrarExhibicion($pedido, $datos, $comprobante, $usuarioId, $monto, $forma, $bancoId, $clave);
+            return $this->registrarExhibicion($pedido, $datos, $archivos, $usuarioId, $monto, $forma, $bancoId, $clave);
         } catch (UniqueConstraintViolationException $e) {
             if ($clave === '') {
                 throw $e;
@@ -79,23 +86,26 @@ class RegistrarPagoPedidoBmaService
                 ->where('idempotency_key', $clave)
                 ->first();
             if ($existente) {
-                return $existente->fresh(['banco']);
+                return $existente->fresh(['banco', 'archivos']);
             }
             throw $e;
         }
     }
 
+    /**
+     * @param  list<UploadedFile>  $archivos
+     */
     private function registrarExhibicion(
         PedidoBma $pedido,
         array $datos,
-        ?UploadedFile $comprobante,
+        array $archivos,
         ?int $usuarioId,
         float $monto,
         ?string $forma,
         ?int $bancoId,
         string $clave,
     ): PedidoBmaPago {
-        return DB::transaction(function () use ($pedido, $datos, $comprobante, $usuarioId, $monto, $forma, $bancoId, $clave) {
+        return DB::transaction(function () use ($pedido, $datos, $archivos, $usuarioId, $monto, $forma, $bancoId, $clave) {
             $pedido = PedidoBma::query()->lockForUpdate()->findOrFail($pedido->id);
             if ($clave !== '') {
                 $existente = PedidoBmaPago::query()
@@ -103,7 +113,7 @@ class RegistrarPagoPedidoBmaService
                     ->where('idempotency_key', $clave)
                     ->first();
                 if ($existente) {
-                    return $existente->fresh(['banco']);
+                    return $existente->fresh(['banco', 'archivos']);
                 }
             }
 
@@ -124,17 +134,13 @@ class RegistrarPagoPedidoBmaService
                 'observaciones' => $datos['observaciones'] ?? null,
             ];
 
-            $archivoHistorial = null;
-            if ($comprobante && $comprobante->isValid()) {
-                $ruta = $comprobante->store("pedidos_bma/pagos/{$pedido->id}", 'public');
-                $attrs['ruta_archivo'] = $ruta;
-                $attrs['nombre_original'] = $comprobante->getClientOriginalName();
-                $attrs['mime_type'] = $comprobante->getMimeType();
-                $attrs['tamano_bytes'] = $comprobante->getSize();
-                $archivoHistorial = ['ruta' => $ruta, 'nombre' => $comprobante->getClientOriginalName()];
-            }
-
             $pago = PedidoBmaPago::create($attrs);
+            $this->comprobantes->guardar($pago, $archivos);
+            $pago = $pago->fresh(['banco', 'archivos']);
+
+            $archivoHistorial = $pago->ruta_archivo
+                ? ['ruta' => $pago->ruta_archivo, 'nombre' => $pago->nombre_original]
+                : null;
 
             if ($usuarioId) {
                 $this->historial->ejecutar(
@@ -150,13 +156,13 @@ class RegistrarPagoPedidoBmaService
                     ),
                     AccionesHistorialPedidoBma::ALTA_EXHIBICION_PAGO,
                     $archivoHistorial,
-                    SnapshotHistorialPedidoBma::exhibicion($pago->fresh(['banco']), $pedido->fresh())
+                    SnapshotHistorialPedidoBma::exhibicion($pago, $pedido->fresh())
                 );
             }
 
             $this->reconciliarExcedenteTrasExhibicion($pedido->fresh(), $usuarioId);
 
-            return $pago->fresh(['banco']);
+            return $pago;
         });
     }
 

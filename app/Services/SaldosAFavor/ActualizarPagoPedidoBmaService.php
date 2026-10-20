@@ -19,12 +19,13 @@ class ActualizarPagoPedidoBmaService
     public function __construct(
         private RegistrarHistorialPedidoService $historial,
         private RegistrarPagoPedidoBmaService $registrarPago,
+        private AdjuntarComprobantesPagoPedidoBma $comprobantes,
     ) {}
 
     public function handle(
         PedidoBmaPago $pago,
         array $datos,
-        ?UploadedFile $comprobante = null,
+        UploadedFile|array|null $comprobante = null,
         ?int $usuarioId = null,
     ): PedidoBmaPago {
         $pedido = $pago->pedido;
@@ -43,9 +44,11 @@ class ActualizarPagoPedidoBmaService
             );
         }
 
-        if ($comprobante && $comprobante->isValid() && filled($pago->ruta_archivo)) {
+        $archivos = $this->comprobantes->normalizar($comprobante);
+        $cantidadTrasAgregar = $this->comprobantes->cantidadActual($pago) + count($archivos);
+        if ($cantidadTrasAgregar > PedidoBmaPago::MAX_COMPROBANTES) {
             throw new InvalidArgumentException(
-                'No se puede sobrescribir el comprobante. Use la sustitución de exhibición o elimine y registre de nuevo en borrador.'
+                'Puede adjuntar hasta '.PedidoBmaPago::MAX_COMPROBANTES.' comprobantes por exhibición.'
             );
         }
 
@@ -74,6 +77,10 @@ class ActualizarPagoPedidoBmaService
             $bancoId = null;
         }
 
+        if (PedidoBmaPago::formaRequiereComprobante($forma) && $cantidadTrasAgregar === 0) {
+            throw new InvalidArgumentException('Cada exhibición de pago debe incluir su comprobante.');
+        }
+
         CoberturaPagoPedidoBmaService::assertBancoPermitido($pedido, $bancoId);
 
         $referencia = array_key_exists('referencia', $datos)
@@ -84,26 +91,22 @@ class ActualizarPagoPedidoBmaService
             || $forma !== $pago->forma_pago
             || (int) ($bancoId ?? 0) !== (int) ($pago->catalogo_banco_id ?? 0)
             || (string) ($referencia ?? '') !== (string) ($pago->referencia ?? '')
-            || ($comprobante && $comprobante->isValid());
+            || $archivos !== [];
 
-        $rutaNueva = null;
+        $rutasNuevas = [];
         try {
-            if ($comprobante && $comprobante->isValid() && empty($pago->ruta_archivo)) {
-                $rutaNueva = $comprobante->store("pedidos_bma/pagos/{$pedido->id}", 'public');
-            }
-
             return DB::transaction(function () use (
                 $pago,
                 $pedido,
                 $datos,
-                $comprobante,
+                $archivos,
                 $usuarioId,
                 $monto,
                 $forma,
                 $bancoId,
                 $referencia,
                 $cambioMaterial,
-                $rutaNueva
+                &$rutasNuevas
             ) {
                 $antesRevision = $pago->estado_revision;
                 $montoAnterior = (float) $pago->monto;
@@ -121,13 +124,6 @@ class ActualizarPagoPedidoBmaService
                     $attrs['observaciones'] = $datos['observaciones'];
                 }
 
-                if ($rutaNueva) {
-                    $attrs['ruta_archivo'] = $rutaNueva;
-                    $attrs['nombre_original'] = $comprobante->getClientOriginalName();
-                    $attrs['mime_type'] = $comprobante->getMimeType();
-                    $attrs['tamano_bytes'] = $comprobante->getSize();
-                }
-
                 $invalidaRevision = $cambioMaterial
                     && $antesRevision !== PedidoBmaPago::REVISION_PENDIENTE;
 
@@ -138,6 +134,8 @@ class ActualizarPagoPedidoBmaService
                 }
 
                 $pago->update($attrs);
+                $rutasNuevas = $this->comprobantes->guardar($pago, $archivos);
+                $pago = $pago->fresh(['banco', 'archivos']);
 
                 if ($usuarioId) {
                     $comentario = sprintf(
@@ -151,7 +149,7 @@ class ActualizarPagoPedidoBmaService
                     }
                     $pedidoFresh = $pedido->fresh();
                     $snapshot = SnapshotHistorialPedidoBma::merge(
-                        SnapshotHistorialPedidoBma::exhibicion($pago->fresh(['banco']), $pedidoFresh),
+                        SnapshotHistorialPedidoBma::exhibicion($pago, $pedidoFresh),
                         [
                             'cambios' => [
                                 'monto_anterior' => number_format($montoAnterior, 2, '.', ''),
@@ -166,8 +164,8 @@ class ActualizarPagoPedidoBmaService
                         $pedido->catalogo_estatus_pedido_id,
                         $comentario,
                         AccionesHistorialPedidoBma::EDICION_EXHIBICION_PAGO,
-                        isset($attrs['ruta_archivo'])
-                            ? ['ruta' => $attrs['ruta_archivo'], 'nombre' => $attrs['nombre_original'] ?? null]
+                        $rutasNuevas !== []
+                            ? ['ruta' => $rutasNuevas[0], 'nombre' => $archivos[0]->getClientOriginalName()]
                             : null,
                         $snapshot
                     );
@@ -175,10 +173,10 @@ class ActualizarPagoPedidoBmaService
 
                 $this->registrarPago->reconciliarExcedenteTrasExhibicion($pedido->fresh(), $usuarioId);
 
-                return $pago->fresh(['banco']);
+                return $pago;
             });
         } catch (Throwable $e) {
-            if ($rutaNueva) {
+            foreach ($rutasNuevas as $rutaNueva) {
                 try {
                     Storage::disk('public')->delete($rutaNueva);
                 } catch (Throwable $cleanup) {

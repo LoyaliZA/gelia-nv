@@ -41,6 +41,37 @@ const formaRequiereComprobante = (forma, formasPago = []) => {
     return forma !== 'credito';
 };
 
+const MAX_COMPROBANTES = 5;
+const MAX_BYTES_COMPROBANTE = 10 * 1024 * 1024;
+
+const comprobantesDePago = (pago) => {
+    if (!pago) return [];
+    if (Array.isArray(pago.comprobantes) && pago.comprobantes.length) {
+        return pago.comprobantes.filter((c) => c?.url);
+    }
+    if (pago.url) {
+        return [{
+            id: null,
+            url: pago.url,
+            nombre_original: pago.nombre_original,
+            mime_type: pago.mime_type,
+            orden: 1,
+        }];
+    }
+    return [];
+};
+
+const etiquetaAdjunto = (archivos) => {
+    if (!archivos?.length) return 'Adjuntar comprobantes';
+    if (archivos.length === 1) return archivos[0].name;
+    return `${archivos.length} archivos`;
+};
+
+const errorComprobantesDe = (errors) => {
+    const valor = errors?.comprobantes || errors?.comprobante || errors?.['comprobantes.0'] || '';
+    return Array.isArray(valor) ? valor.filter(Boolean).join(' ') : valor;
+};
+
 const ESTADOS_DEFINITIVOS = new Set(['verificado', 'con_observaciones', 'rechazado', 'confirmado', 'con_diferencia']);
 
 const BTN_REV = {
@@ -114,7 +145,7 @@ export default function SeccionPagosExhibicion({
     const [docPreview, setDocPreview] = useState(null);
     const [revisionModal, setRevisionModal] = useState(null); // { pago, estado }
     const [sustituyendoId, setSustituyendoId] = useState(null);
-    const [comprobantePreviewUrl, setComprobantePreviewUrl] = useState(null);
+    const [previews, setPreviews] = useState([]);
 
     const form = useForm({
         monto: '',
@@ -122,21 +153,53 @@ export default function SeccionPagosExhibicion({
         forma_pago: formaPagoInicial,
         referencia: '',
         fecha_pago: '',
-        comprobante: null,
+        comprobantes: [],
         idempotency_key: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `pago-${Date.now()}`,
     });
 
     const requiereBanco = formaRequiereBanco(form.data.forma_pago, formas);
     const requiereComprobante = formaRequiereComprobante(form.data.forma_pago, formas);
     const limiteCredito = Number(limiteCreditoAutorizado || 0);
+    const errorComprobantes = errorComprobantesDe(form.errors);
 
-    const asignarComprobante = (file) => {
-        setComprobantePreviewUrl((prev) => {
-            if (prev) URL.revokeObjectURL(prev);
-            return file ? URL.createObjectURL(file) : null;
+    useEffect(() => {
+        const urls = (form.data.comprobantes || []).map((file) => URL.createObjectURL(file));
+        setPreviews(urls);
+        return () => urls.forEach((url) => URL.revokeObjectURL(url));
+    }, [form.data.comprobantes]);
+
+    const cupoOcupado = () => {
+        if (!editandoId || sustituyendoId) return 0;
+        return comprobantesDePago(pagos.find((p) => p.id === editandoId)).length;
+    };
+
+    const agregarComprobantes = (files) => {
+        const entrantes = Array.from(files || []).filter(Boolean);
+        if (!entrantes.length) return;
+        const actuales = [...(form.data.comprobantes || [])];
+        const ocupado = cupoOcupado();
+        let error = '';
+        entrantes.forEach((file) => {
+            if (ocupado + actuales.length >= MAX_COMPROBANTES) {
+                error = `Puede adjuntar hasta ${MAX_COMPROBANTES} comprobantes.`;
+                return;
+            }
+            if (file.size > MAX_BYTES_COMPROBANTE) {
+                error = `${file.name} supera 10 MB.`;
+                return;
+            }
+            const duplicado = actuales.some((v) => v.name === file.name && v.size === file.size && v.lastModified === file.lastModified);
+            if (duplicado) return;
+            actuales.push(file);
         });
-        form.setData('comprobante', file || null);
-        form.clearErrors('comprobante');
+        form.setData('comprobantes', actuales);
+        if (error) form.setError('comprobantes', error);
+        else form.clearErrors('comprobantes');
+    };
+
+    const quitarComprobante = (index) => {
+        form.setData('comprobantes', (form.data.comprobantes || []).filter((_, i) => i !== index));
+        form.clearErrors('comprobantes');
     };
 
     const pegarComprobante = (e) => {
@@ -145,9 +208,11 @@ export default function SeccionPagosExhibicion({
         if (!pasted.length) return;
         e.preventDefault();
         e.stopPropagation();
-        const img = pasted[0];
-        const file = new File([img], `comprobante-paste-${Date.now()}.png`, { type: img.type || 'image/png' });
-        asignarComprobante(file);
+        agregarComprobantes(pasted.map((img, i) => new File(
+            [img],
+            `comprobante-paste-${Date.now()}-${i}.png`,
+            { type: img.type || 'image/png' },
+        )));
     };
 
     const rexAplicado = useMemo(() => {
@@ -255,20 +320,19 @@ export default function SeccionPagosExhibicion({
     }, [formas]);
 
     const resetForm = () => {
-        form.reset('monto', 'referencia', 'comprobante', 'catalogo_banco_id');
+        form.reset('monto', 'referencia', 'comprobantes', 'catalogo_banco_id');
         form.setData('forma_pago', formaPagoInicial);
         form.clearErrors();
         setEditandoId(null);
-        setComprobantePreviewUrl((prev) => {
-            if (prev) URL.revokeObjectURL(prev);
-            return null;
-        });
     };
 
     const registrar = (e) => {
         e.preventDefault();
-        if (!editandoId && requiereComprobante && !form.data.comprobante) {
-            form.setError('comprobante', 'Adjunte el comprobante de esta exhibición.');
+        const guardados = editandoId
+            ? comprobantesDePago(pagos.find((p) => p.id === editandoId)).length
+            : 0;
+        if (requiereComprobante && guardados + (form.data.comprobantes?.length || 0) === 0) {
+            form.setError('comprobantes', 'Adjunte el comprobante de esta exhibición.');
             return;
         }
         if (requiereBanco && !form.data.catalogo_banco_id) {
@@ -314,13 +378,10 @@ export default function SeccionPagosExhibicion({
             forma_pago: p.forma_pago || 'transferencia',
             referencia: p.referencia || '',
             fecha_pago: '',
-            comprobante: null,
+            comprobantes: [],
+            idempotency_key: form.data.idempotency_key,
         });
         form.clearErrors();
-        setComprobantePreviewUrl((prev) => {
-            if (prev) URL.revokeObjectURL(prev);
-            return null;
-        });
     };
 
     const eliminarPago = (p) => {
@@ -338,8 +399,8 @@ export default function SeccionPagosExhibicion({
     };
 
     const sustituirPago = (p) => {
-        if (requiereComprobante && !form.data.comprobante) {
-            form.setError('comprobante', 'Adjunte el nuevo comprobante.');
+        if (requiereComprobante && !(form.data.comprobantes?.length)) {
+            form.setError('comprobantes', 'Adjunte el nuevo comprobante.');
             return;
         }
         form.post(route(rutaSustituir, p.id), {
@@ -411,26 +472,28 @@ export default function SeccionPagosExhibicion({
     };
 
     const comprobantesGaleria = useMemo(
-        () => pagos
-            .filter((p) => p.url)
-            .map((p) => ({
-                id: `pago-${p.id}`,
-                url: p.url,
-                nombre_original: p.nombre_original || `Comprobante #${p.numero_exhibicion}`,
+        () => pagos.flatMap((p) => {
+            const docs = comprobantesDePago(p);
+            return docs.map((c, indice) => ({
+                id: `pago-${p.id}-${c.id ?? indice}`,
+                url: c.url,
+                nombre_original: c.nombre_original || `Comprobante #${p.numero_exhibicion}`,
                 tipo: 'comprobante',
                 comentario: [
                     `#${p.numero_exhibicion}`,
                     p.banco?.nombre || etiquetaCodigo(p.forma_pago, LABELS_FORMA_PAGO),
                     formatearMoneda(p.monto),
                     p.referencia ? `Ref. ${p.referencia}` : null,
+                    docs.length > 1 ? `${indice + 1}/${docs.length}` : null,
                 ].filter(Boolean).join(' · '),
-                mime_type: p.mime_type,
-            })),
+                mime_type: c.mime_type,
+            }));
+        }),
         [pagos]
     );
 
     const abrirComprobante = (p) => {
-        const i = comprobantesGaleria.findIndex((d) => d.id === `pago-${p.id}`);
+        const i = comprobantesGaleria.findIndex((d) => String(d.id).startsWith(`pago-${p.id}-`));
         setDocPreview({ indice: i >= 0 ? i : 0 });
     };
 
@@ -459,8 +522,8 @@ export default function SeccionPagosExhibicion({
                     <p className={`${THEME_LABEL} mb-0`}>Exhibiciones de pago</p>
                     <p className="text-[10px] theme-text-muted font-bold m-0 -mt-1">
                         {dividido
-                            ? 'Un abono por banco o método. Cada exhibición lleva su comprobante.'
-                            : 'Pago único: una sola fuente de pago con su comprobante.'}
+                            ? 'Un abono por banco o método. Cada exhibición lleva sus comprobantes.'
+                            : 'Pago único: una sola fuente de pago con sus comprobantes.'}
                     </p>
                 </div>
                 {puedeRegistrar && (
@@ -486,24 +549,33 @@ export default function SeccionPagosExhibicion({
                         const badgeRevRow = badgeEstadoRevisionPago(p.estado_revision);
                         const forma = etiquetaCodigo(p.forma_pago, LABELS_FORMA_PAGO);
                         const inactivo = p.activo_para_cobertura === false;
+                        const docs = comprobantesDePago(p);
+                        const primero = docs[0];
                         return (
                             <div
                                 key={p.id}
                                 className={`flex flex-wrap items-center justify-between gap-2 text-sm border theme-border theme-element rounded-xl px-3 py-2.5 ${inactivo ? 'opacity-70' : ''}`}
                             >
                                 <div className="flex flex-wrap items-center gap-2 min-w-0">
-                                    {p.url && (
-                                        <MiniaturaDocumento
-                                            documento={{
-                                                id: `pago-${p.id}`,
-                                                url: p.url,
-                                                nombre_original: p.nombre_original || `Comprobante #${p.numero_exhibicion}`,
-                                                mime_type: p.mime_type,
-                                                tipo: 'comprobante',
-                                            }}
-                                            onVer={() => abrirComprobante(p)}
-                                            className="block w-12 h-12 rounded-lg overflow-hidden border theme-border theme-element cursor-pointer shrink-0"
-                                        />
+                                    {primero && (
+                                        <div className="relative shrink-0">
+                                            <MiniaturaDocumento
+                                                documento={{
+                                                    id: `pago-${p.id}-${primero.id ?? 0}`,
+                                                    url: primero.url,
+                                                    nombre_original: primero.nombre_original || `Comprobante #${p.numero_exhibicion}`,
+                                                    mime_type: primero.mime_type,
+                                                    tipo: 'comprobante',
+                                                }}
+                                                onVer={() => abrirComprobante(p)}
+                                                className="block w-12 h-12 rounded-lg overflow-hidden border theme-border theme-element cursor-pointer"
+                                            />
+                                            {docs.length > 1 && (
+                                                <span className="absolute -bottom-1 -right-1 min-w-4 h-4 px-1 rounded-full text-[9px] font-black theme-element border theme-border theme-text-main flex items-center justify-center">
+                                                    {docs.length}
+                                                </span>
+                                            )}
+                                        </div>
                                     )}
                                     <span className="font-bold theme-text-main">
                                         #{p.numero_exhibicion} · {p.banco?.nombre || forma || '—'}
@@ -512,7 +584,7 @@ export default function SeccionPagosExhibicion({
                                     {inactivo && (
                                         <span className="text-[9px] font-black uppercase text-rose-600">No suma a cobertura</span>
                                     )}
-                                    {p.url && (
+                                    {primero && (
                                         <button
                                             type="button"
                                             onClick={() => abrirComprobante(p)}
@@ -556,7 +628,8 @@ export default function SeccionPagosExhibicion({
                                                         forma_pago: p.forma_pago || 'transferencia',
                                                         referencia: p.referencia || '',
                                                         fecha_pago: '',
-                                                        comprobante: null,
+                                                        comprobantes: [],
+                                                        idempotency_key: form.data.idempotency_key,
                                                     });
                                                 }}
                                             >
@@ -594,17 +667,53 @@ export default function SeccionPagosExhibicion({
                                 {sustituyendoId === p.id && (
                                     <div className="w-full mt-2 space-y-2 border-t theme-border pt-2">
                                         <p className="text-[10px] font-black uppercase theme-text-muted m-0">
-                                            {requiereComprobante ? 'Nuevo comprobante' : 'Sustituir exhibición'}
+                                            {requiereComprobante ? 'Nuevos comprobantes' : 'Sustituir exhibición'}
                                         </p>
                                         {requiereComprobante && (
-                                            <input
-                                                type="file"
-                                                accept="image/*,application/pdf"
-                                                onChange={(e) => asignarComprobante(e.target.files?.[0] || null)}
-                                            />
+                                            <>
+                                                <label className="flex items-center gap-2 px-4 py-3 border theme-border border-dashed rounded-xl cursor-pointer w-fit theme-element theme-text-main">
+                                                    <ImagePlus className="w-4 h-4 theme-text-muted" />
+                                                    <span className="text-xs font-black uppercase">
+                                                        {etiquetaAdjunto(form.data.comprobantes)}
+                                                    </span>
+                                                    <input
+                                                        type="file"
+                                                        accept="image/*,application/pdf"
+                                                        multiple
+                                                        className="hidden"
+                                                        aria-label="Agregar comprobantes"
+                                                        onChange={(e) => {
+                                                            agregarComprobantes(e.target.files);
+                                                            e.target.value = '';
+                                                        }}
+                                                    />
+                                                </label>
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                    {(form.data.comprobantes || []).map((file, i) => previews[i] && (
+                                                        <div key={`${file.name}-${file.lastModified}-${i}`} className="flex items-center gap-1">
+                                                            <MiniaturaDocumento
+                                                                documento={documentoDesdeArchivoLocal(file, previews[i])}
+                                                                onVer={() => setDocPreview({
+                                                                    indice: i,
+                                                                    documentos: form.data.comprobantes.map((item, idx) => documentoDesdeArchivoLocal(item, previews[idx])),
+                                                                })}
+                                                                className="block w-12 h-12 rounded-lg overflow-hidden border theme-border theme-element cursor-pointer shrink-0"
+                                                            />
+                                                            <button
+                                                                type="button"
+                                                                className="theme-text-muted outline-none"
+                                                                aria-label={`Quitar ${file.name}`}
+                                                                onClick={() => quitarComprobante(i)}
+                                                            >
+                                                                <Trash2 className="w-3.5 h-3.5" />
+                                                            </button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </>
                                         )}
-                                        {form.errors.comprobante && (
-                                            <p className="text-[10px] text-red-500 font-bold m-0">{form.errors.comprobante}</p>
+                                        {errorComprobantes && (
+                                            <p className="text-[10px] font-bold m-0" style={{ color: 'var(--color-peligro)' }}>{errorComprobantes}</p>
                                         )}
                                         <div className="flex gap-2">
                                             <button type="button" className={BTN_PRIMARY} onClick={() => sustituirPago(p)}>
@@ -723,17 +832,11 @@ export default function SeccionPagosExhibicion({
                                 const next = e.target.value;
                                 const pideBanco = formaRequiereBanco(next, formas);
                                 const pideComp = formaRequiereComprobante(next, formas);
-                                if (!pideComp) {
-                                    setComprobantePreviewUrl((prev) => {
-                                        if (prev) URL.revokeObjectURL(prev);
-                                        return null;
-                                    });
-                                }
                                 form.setData({
                                     ...form.data,
                                     forma_pago: next,
                                     catalogo_banco_id: pideBanco ? form.data.catalogo_banco_id : '',
-                                    comprobante: pideComp ? form.data.comprobante : null,
+                                    comprobantes: pideComp ? form.data.comprobantes : [],
                                 });
                             }}
                         >
@@ -768,39 +871,65 @@ export default function SeccionPagosExhibicion({
                     {requiereComprobante && (
                     <div className="md:col-span-2">
                         <label className={`${THEME_LABEL} mb-1.5 block`}>
-                            {editandoId ? 'Comprobante (opcional al editar)' : 'Comprobante (obligatorio)'}
+                            {editandoId ? 'Comprobantes (opcional al editar)' : 'Comprobantes (obligatorio)'}
                         </label>
                         <p className="text-[10px] theme-text-muted font-bold m-0 mb-1.5 -mt-0.5">
-                            La referencia del cliente aparece en el comprobante. Puede pegar una captura (Ctrl+V).
+                            La referencia del cliente aparece en el comprobante. Puede seleccionar varios archivos o pegar capturas (Ctrl+V). Hasta 5, de 10 MB cada uno.
                         </p>
                         <div className="flex flex-wrap items-center gap-3">
                             <label className="flex items-center gap-2 px-4 py-3 border theme-border border-dashed rounded-xl cursor-pointer w-fit theme-element theme-text-main">
                                 <ImagePlus className="w-4 h-4 theme-text-muted" />
                                 <span className="text-xs font-black uppercase">
-                                    {form.data.comprobante?.name || 'Adjuntar comprobante'}
+                                    {etiquetaAdjunto(form.data.comprobantes)}
                                 </span>
                                 <input
                                     type="file"
                                     accept="image/*,application/pdf"
+                                    multiple
                                     className="hidden"
+                                    aria-label="Agregar comprobantes"
                                     onChange={(e) => {
-                                        asignarComprobante(e.target.files?.[0] || null);
+                                        agregarComprobantes(e.target.files);
                                         e.target.value = '';
                                     }}
                                 />
                             </label>
-                            {form.data.comprobante && comprobantePreviewUrl && (
+                            {editandoId && comprobantesDePago(pagos.find((p) => p.id === editandoId)).map((c) => (
                                 <MiniaturaDocumento
-                                    documento={documentoDesdeArchivoLocal(form.data.comprobante, comprobantePreviewUrl)}
-                                    onVer={(doc) => setDocPreview({
-                                        indice: 0,
-                                        documentos: [doc],
-                                    })}
+                                    key={`guardado-${c.id ?? c.orden}`}
+                                    documento={{
+                                        url: c.url,
+                                        nombre_original: c.nombre_original || 'Comprobante guardado',
+                                        mime_type: c.mime_type,
+                                        tipo: 'comprobante',
+                                    }}
+                                    onVer={() => abrirComprobante(pagos.find((p) => p.id === editandoId))}
+                                    className="block w-12 h-12 rounded-lg overflow-hidden border theme-border theme-element cursor-pointer shrink-0"
                                 />
-                            )}
+                            ))}
+                            {(form.data.comprobantes || []).map((file, i) => previews[i] && (
+                                <div key={`${file.name}-${file.lastModified}-${i}`} className="flex items-center gap-1">
+                                    <MiniaturaDocumento
+                                        documento={documentoDesdeArchivoLocal(file, previews[i])}
+                                        onVer={() => setDocPreview({
+                                            indice: i,
+                                            documentos: form.data.comprobantes.map((item, idx) => documentoDesdeArchivoLocal(item, previews[idx])),
+                                        })}
+                                        className="block w-12 h-12 rounded-lg overflow-hidden border theme-border theme-element cursor-pointer shrink-0"
+                                    />
+                                    <button
+                                        type="button"
+                                        className="theme-text-muted outline-none"
+                                        aria-label={`Quitar ${file.name}`}
+                                        onClick={() => quitarComprobante(i)}
+                                    >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                </div>
+                            ))}
                         </div>
-                        {form.errors.comprobante && (
-                            <p className="text-[10px] text-red-500 font-bold mt-1 m-0">{form.errors.comprobante}</p>
+                        {errorComprobantes && (
+                            <p className="text-[10px] font-bold mt-1 m-0" style={{ color: 'var(--color-peligro)' }}>{errorComprobantes}</p>
                         )}
                     </div>
                     )}

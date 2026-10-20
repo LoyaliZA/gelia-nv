@@ -49,7 +49,7 @@ final class SnapshotHistorialPedidoBma
     /** @return array<string, mixed> */
     public static function exhibicion(PedidoBmaPago $pago, ?PedidoBma $pedido = null): array
     {
-        $pago->loadMissing('banco');
+        $pago->loadMissing(['banco', 'archivos']);
 
         $snap = [
             'exhibicion' => [
@@ -63,13 +63,9 @@ final class SnapshotHistorialPedidoBma
             ],
         ];
 
-        if ($pago->ruta_archivo) {
-            $snap['archivos'] = [[
-                'tipo' => 'comprobante_pago',
-                'ruta' => $pago->ruta_archivo,
-                'nombre' => $pago->nombre_original,
-                'mime_type' => $pago->mime_type,
-            ]];
+        $archivos = self::archivosExhibicion($pago);
+        if ($archivos !== []) {
+            $snap['archivos'] = $archivos;
         }
 
         if ($pedido) {
@@ -123,6 +119,32 @@ final class SnapshotHistorialPedidoBma
         }
 
         return $out;
+    }
+
+    /**
+     * @return list<array{tipo: string, ruta: string, nombre: string|null, mime_type: string|null}>
+     */
+    private static function archivosExhibicion(PedidoBmaPago $pago): array
+    {
+        if ($pago->archivos->isNotEmpty()) {
+            return $pago->archivos->map(fn ($archivo) => [
+                'tipo' => 'comprobante_pago',
+                'ruta' => $archivo->ruta_archivo,
+                'nombre' => $archivo->nombre_original,
+                'mime_type' => $archivo->mime_type,
+            ])->values()->all();
+        }
+
+        if (! $pago->ruta_archivo) {
+            return [];
+        }
+
+        return [[
+            'tipo' => 'comprobante_pago',
+            'ruta' => $pago->ruta_archivo,
+            'nombre' => $pago->nombre_original,
+            'mime_type' => $pago->mime_type,
+        ]];
     }
 
     private static function m(mixed $valor): string

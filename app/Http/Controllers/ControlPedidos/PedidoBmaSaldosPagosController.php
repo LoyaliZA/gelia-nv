@@ -85,16 +85,18 @@ class PedidoBmaSaldosPagosController extends Controller
             'fecha_pago' => ['nullable', 'date'],
             'referencia' => ['nullable', 'string', 'max:128'],
             'observaciones' => ['nullable', 'string', 'max:2000'],
-            'comprobante' => [
-                Rule::requiredIf(fn () => PedidoBmaPago::formaRequiereComprobante($forma)),
+            'comprobante' => ['nullable', 'file', 'max:10240'],
+            'comprobantes' => [
+                Rule::requiredIf(fn () => PedidoBmaPago::formaRequiereComprobante($forma) && ! $request->hasFile('comprobante')),
                 'nullable',
-                'file',
-                'max:10240',
+                'array',
+                'max:'.PedidoBmaPago::MAX_COMPROBANTES,
             ],
+            'comprobantes.*' => ['file', 'max:10240'],
         ]);
 
         try {
-            $service->handle($pedidoBma, $datos, $request->file('comprobante'), Auth::id());
+            $service->handle($pedidoBma, $datos, $this->comprobantesSubidos($request), Auth::id());
         } catch (InvalidArgumentException $e) {
             return back()->with('error', $e->getMessage());
         }
@@ -121,10 +123,12 @@ class PedidoBmaSaldosPagosController extends Controller
             'referencia' => ['nullable', 'string', 'max:128'],
             'observaciones' => ['nullable', 'string', 'max:2000'],
             'comprobante' => ['nullable', 'file', 'max:10240'],
+            'comprobantes' => ['nullable', 'array', 'max:'.PedidoBmaPago::MAX_COMPROBANTES],
+            'comprobantes.*' => ['file', 'max:10240'],
         ]);
 
         try {
-            $service->handle($pago, $datos, $request->file('comprobante'), Auth::id());
+            $service->handle($pago, $datos, $this->comprobantesSubidos($request), Auth::id());
         } catch (InvalidArgumentException|RuntimeException $e) {
             return back()->with('error', $e->getMessage());
         }
@@ -151,6 +155,7 @@ class PedidoBmaSaldosPagosController extends Controller
         VisibilidadPedidoBma::assertPuedeConsultar(Auth::user(), $pedidoBma);
         $pedidoBma->load([
             'pagosExhibicion.banco',
+            'pagosExhibicion.archivos',
             'pagosExhibicion.reemplaza',
             'pagosExhibicion.sustituto',
             'banco',
@@ -255,7 +260,7 @@ class PedidoBmaSaldosPagosController extends Controller
             $service->ejecutar(
                 $pago,
                 $request->validated(),
-                $request->file('comprobante'),
+                $this->comprobantesSubidos($request),
                 (int) Auth::id()
             );
         } catch (InvalidArgumentException|RuntimeException $e) {
@@ -272,5 +277,28 @@ class PedidoBmaSaldosPagosController extends Controller
             abort(404);
         }
         VisibilidadPedidoBma::assertPuedeMutarComoVendedora(Auth::user(), $pago->pedido);
+    }
+
+    /**
+     * Acepta el archivo suelto histórico y la lista nueva.
+     *
+     * @return list<\Illuminate\Http\UploadedFile>
+     */
+    private function comprobantesSubidos(Request $request): array
+    {
+        $lista = $request->file('comprobantes', []);
+        if ($lista instanceof \Illuminate\Http\UploadedFile) {
+            $lista = [$lista];
+        }
+        if (! is_array($lista)) {
+            $lista = [];
+        }
+
+        $suelto = $request->file('comprobante');
+        if ($suelto instanceof \Illuminate\Http\UploadedFile) {
+            array_unshift($lista, $suelto);
+        }
+
+        return array_values($lista);
     }
 }

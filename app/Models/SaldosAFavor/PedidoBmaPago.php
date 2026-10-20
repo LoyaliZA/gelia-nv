@@ -78,6 +78,8 @@ class PedidoBmaPago extends Model
         'credito' => false,
     ];
 
+    public const MAX_COMPROBANTES = 5;
+
     /** @var array<string, string> */
     public const LABELS_FORMA_PAGO = [
         'transferencia' => 'Transferencia',
@@ -127,7 +129,7 @@ class PedidoBmaPago extends Model
         'sustituido_at' => 'datetime',
     ];
 
-    protected $appends = ['url'];
+    protected $appends = ['url', 'comprobantes'];
 
     public static function formaRequiereBanco(?string $formaPago): bool
     {
@@ -194,6 +196,41 @@ class PedidoBmaPago extends Model
     public function cierreItems(): HasMany
     {
         return $this->hasMany(PedidoBmaCierrePagoItem::class, 'pedido_bma_pago_id');
+    }
+
+    public function archivos(): HasMany
+    {
+        return $this->hasMany(PedidoBmaPagoArchivo::class, 'pedido_bma_pago_id')->orderBy('orden');
+    }
+
+    /**
+     * Lista visible: filas hijas, o el archivo único legado si todavía no hay hijas.
+     *
+     * @return list<array{id: int|null, url: string|null, nombre_original: string|null, mime_type: string|null, orden: int}>
+     */
+    public function getComprobantesAttribute(): array
+    {
+        if ($this->relationLoaded('archivos') && $this->archivos->isNotEmpty()) {
+            return $this->archivos->map(fn (PedidoBmaPagoArchivo $archivo) => [
+                'id' => $archivo->id,
+                'url' => $archivo->url,
+                'nombre_original' => $archivo->nombre_original,
+                'mime_type' => $archivo->mime_type,
+                'orden' => (int) $archivo->orden,
+            ])->values()->all();
+        }
+
+        if ($this->ruta_archivo) {
+            return [[
+                'id' => null,
+                'url' => $this->url,
+                'nombre_original' => $this->nombre_original,
+                'mime_type' => $this->mime_type,
+                'orden' => 1,
+            ]];
+        }
+
+        return [];
     }
 
     public function urlEvidenciaReporte(): ?string

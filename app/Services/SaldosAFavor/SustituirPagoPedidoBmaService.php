@@ -19,12 +19,13 @@ class SustituirPagoPedidoBmaService
     public function __construct(
         private RegistrarHistorialPedidoService $historial,
         private RegistrarPagoPedidoBmaService $registrarPago,
+        private AdjuntarComprobantesPagoPedidoBma $comprobantes,
     ) {}
 
     public function ejecutar(
         PedidoBmaPago $rechazado,
         array $datos,
-        ?UploadedFile $comprobante,
+        UploadedFile|array|null $comprobante,
         int $usuarioId,
     ): PedidoBmaPago {
         $pedido = $rechazado->pedido;
@@ -70,19 +71,21 @@ class SustituirPagoPedidoBmaService
 
         CoberturaPagoPedidoBmaService::assertBancoPermitido($pedido, $bancoId);
 
+        $archivos = $this->comprobantes->normalizar($comprobante);
         $requiereComprobante = PedidoBmaPago::formaRequiereComprobante($forma);
-        if ($requiereComprobante && (! $comprobante || ! $comprobante->isValid())) {
+        if ($requiereComprobante && $archivos === []) {
             throw new InvalidArgumentException('Debe adjuntar el nuevo comprobante.');
         }
+        if (count($archivos) > PedidoBmaPago::MAX_COMPROBANTES) {
+            throw new InvalidArgumentException(
+                'Puede adjuntar hasta '.PedidoBmaPago::MAX_COMPROBANTES.' comprobantes por exhibición.'
+            );
+        }
 
-        $ruta = null;
+        $rutasNuevas = [];
         try {
-            if ($comprobante && $comprobante->isValid()) {
-                $ruta = $comprobante->store("pedidos_bma/pagos/{$pedido->id}", 'public');
-            }
-
             return DB::transaction(function () use (
-                $rechazado, $pedido, $datos, $comprobante, $usuarioId, $monto, $forma, $bancoId, $ruta
+                $rechazado, $pedido, $datos, $archivos, $usuarioId, $monto, $forma, $bancoId, &$rutasNuevas
             ) {
                 $rechazado = PedidoBmaPago::query()->lockForUpdate()->findOrFail($rechazado->id);
                 if ($rechazado->sustituto()->exists()) {
@@ -104,11 +107,10 @@ class SustituirPagoPedidoBmaService
                     'estado_revision' => PedidoBmaPago::REVISION_PENDIENTE,
                     'activo_para_cobertura' => true,
                     'observaciones' => $datos['observaciones'] ?? null,
-                    'ruta_archivo' => $ruta,
-                    'nombre_original' => $comprobante?->getClientOriginalName(),
-                    'mime_type' => $comprobante && $ruta ? $comprobante->getMimeType() : null,
-                    'tamano_bytes' => $comprobante && $ruta ? $comprobante->getSize() : null,
                 ]);
+
+                $rutasNuevas = $this->comprobantes->guardar($nuevo, $archivos);
+                $nuevo = $nuevo->fresh(['banco', 'archivos', 'reemplaza']);
 
                 $rechazado->update([
                     'activo_para_cobertura' => false,
@@ -127,17 +129,17 @@ class SustituirPagoPedidoBmaService
                         number_format($monto, 2, '.', ',')
                     ),
                     AccionesHistorialPedidoBma::SUSTITUCION_EXHIBICION_PAGO,
-                    $ruta
-                        ? ['ruta' => $ruta, 'nombre' => $comprobante?->getClientOriginalName(), 'reemplaza_pago_id' => $rechazado->id]
+                    $rutasNuevas !== []
+                        ? ['ruta' => $rutasNuevas[0], 'nombre' => $archivos[0]->getClientOriginalName(), 'reemplaza_pago_id' => $rechazado->id]
                         : ['reemplaza_pago_id' => $rechazado->id]
                 );
 
                 $this->registrarPago->reconciliarExcedenteTrasExhibicion($pedido->fresh(), $usuarioId);
 
-                return $nuevo->fresh(['banco', 'reemplaza']);
+                return $nuevo;
             });
         } catch (Throwable $e) {
-            if ($ruta) {
+            foreach ($rutasNuevas as $ruta) {
                 try {
                     Storage::disk('public')->delete($ruta);
                 } catch (Throwable $cleanup) {
