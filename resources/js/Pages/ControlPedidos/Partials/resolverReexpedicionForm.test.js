@@ -2,11 +2,13 @@
  * @vitest-environment node
  */
 import { describe, expect, it } from 'vitest';
+import { calcCostoSeguro } from './pedidosBmaStyles';
 import {
     resolverReexpedicionForm,
     separarCostoEnvioDeReexpedicion,
     costoEnvioParaPersistir,
     costoReexpedicionDeZona,
+    fleteBaseParaSeguro,
 } from './resolverReexpedicionForm';
 
 describe('resolverReexpedicionForm — cargo por zona', () => {
@@ -65,5 +67,19 @@ describe('helpers', () => {
     it('separa / persiste', () => {
         expect(separarCostoEnvioDeReexpedicion(350, 150)).toEqual({ base: 200, reexpedicion: 150 });
         expect(costoEnvioParaPersistir(200, 150)).toBe(350);
+    });
+
+    it('no resta la reexpedición si la guía del formulario ya es el flete base', () => {
+        const guia = 200;
+        const reexpedicion = 150;
+        const mercancia = 1000;
+        const base = fleteBaseParaSeguro(guia, reexpedicion, true);
+        const dobleResta = fleteBaseParaSeguro(guia, reexpedicion, false);
+
+        expect(base).toBe(200);
+        expect(dobleResta).toBe(50);
+        // DHL: (compra + guía) × 2% + $51. Restar $150 otra vez deja el seguro $3 abajo.
+        expect(calcCostoSeguro('DHL', base, mercancia)).toBe(75);
+        expect(calcCostoSeguro('DHL', dobleResta, mercancia)).toBe(72);
     });
 });

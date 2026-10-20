@@ -55,6 +55,19 @@ export function costoEnvioParaPersistir(base, reexpedicion) {
     return Math.round((Number(base || 0) + Number(reexpedicion || 0)) * 100) / 100;
 }
 
+/**
+ * Flete que entra al seguro: total de compra + guía.
+ * Si el formulario ya separó la reexpedición (envioEsBase), costoEnvio es la guía.
+ * Restarla otra vez baja el seguro: en DHL, 2% de $150 = $3.
+ */
+export function fleteBaseParaSeguro(costoEnvio, reexpedicion, envioEsBase) {
+    const envio = Number(costoEnvio || 0);
+    if (!Number.isFinite(envio)) return 0;
+    if (envioEsBase) return Math.max(0, Math.round(envio * 100) / 100);
+    const rex = Math.max(0, Number(reexpedicion || 0));
+    return Math.max(0, Math.round((envio - rex) * 100) / 100);
+}
+
 /** Cargo según zona (Admin → Zonas Pedido → costo_adicional). */
 export function costoReexpedicionDeZona(zonas, zonaId) {
     if (zonaId === '' || zonaId == null) return 0;

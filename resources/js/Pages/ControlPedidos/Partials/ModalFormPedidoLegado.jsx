@@ -67,7 +67,7 @@ import CamposDireccionPedido, {
     camposDesdeDireccion,
     resumirCamposDireccion,
 } from './CamposDireccionPedido';
-import { resolverReexpedicionForm, separarCostoEnvioDeReexpedicion, costoEnvioParaPersistir, costoReexpedicionDeZona } from './resolverReexpedicionForm';
+import { resolverReexpedicionForm, separarCostoEnvioDeReexpedicion, costoEnvioParaPersistir, costoReexpedicionDeZona, fleteBaseParaSeguro } from './resolverReexpedicionForm';
 import {
     EncabezadoPedido,
     SeccionResumenEnvioPedido,
@@ -1654,7 +1654,7 @@ export default function ModalFormPedidoLegado({
 
         const mercanciaLista = data.total_mercancia !== '' && data.total_mercancia != null;
         const envioListo = data.costo_envio !== '' && data.costo_envio != null;
-        // Sin seguro: monto 0. Con seguro: recalcular sobre flete base + mercancía.
+        // Sin seguro: monto 0. Con seguro: (mercancía + guía) según paquetería. La guía ya no incluye reexpedición.
         if (!data.aplica_seguro) {
             if (!seguroOptOutRef.current && mercanciaLista && envioListo) {
                 setData('aplica_seguro', true);
@@ -1672,12 +1672,12 @@ export default function ModalFormPedidoLegado({
             return;
         }
 
-        const envioBase = Math.max(0, Number(data.costo_envio || 0) - Number(costoReexpedicion || 0));
+        const envioBase = fleteBaseParaSeguro(data.costo_envio, costoReexpedicion, envioEsBase);
         const costo = calcCostoSeguro(paq?.nombre, envioBase, data.total_mercancia);
         if (Number(data.costo_seguro || 0) !== Number(costo)) {
             setData('costo_seguro', costo);
         }
-    }, [data.catalogo_paqueteria_id, data.costo_envio, data.total_mercancia, data.cliente_proporciona_guia, data.aplica_seguro, data.costo_seguro, costoReexpedicion, catalogos.paqueterias]);
+    }, [data.catalogo_paqueteria_id, data.costo_envio, data.total_mercancia, data.cliente_proporciona_guia, data.aplica_seguro, data.costo_seguro, costoReexpedicion, envioEsBase, catalogos.paqueterias]);
 
     const marcarGuiaCliente = (checked) => {
         setData('cliente_proporciona_guia', checked);
@@ -4338,7 +4338,7 @@ export default function ModalFormPedidoLegado({
                                                 const paq = (catalogos.paqueterias || []).find(
                                                     (p) => String(p.id) === String(data.catalogo_paqueteria_id)
                                                 );
-                                                const envioBase = Math.max(0, Number(data.costo_envio || 0) - Number(costoReexpedicion || 0));
+                                                const envioBase = fleteBaseParaSeguro(data.costo_envio, costoReexpedicion, envioEsBase);
                                                 setData('costo_seguro', calcCostoSeguro(paq?.nombre, envioBase, data.total_mercancia));
                                             }}
                                         />
