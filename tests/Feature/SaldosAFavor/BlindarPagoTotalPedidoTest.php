@@ -13,6 +13,7 @@ use App\Models\SaldosAFavor\SafMotivo;
 use App\Models\User;
 use App\Services\ControlPedidos\AprobarPedidoBmaService;
 use App\Services\ControlPedidos\ValidarPagoPedidoBmaService;
+use App\Services\SaldosAFavor\CoberturaPagoPedidoBmaService;
 use App\Services\SaldosAFavor\EliminarPagoPedidoBmaService;
 use App\Services\SaldosAFavor\RegistrarPagoPedidoBmaService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -194,5 +195,71 @@ class BlindarPagoTotalPedidoTest extends TestCase
         $this->assertFalse(PedidoBmaPago::formaRequiereComprobante('credito'));
 
         app(RegistrarPagoPedidoBmaService::class)->assertCubiertoParaEnviar($pedido->fresh());
+    }
+
+    public function test_credito_sin_comprobante_permite_validar_el_pago(): void
+    {
+        $pedido = $this->pedidoStub([], CatalogoEstatusPedido::FASE_PENDIENTE_AUXILIAR);
+        $pago = app(RegistrarPagoPedidoBmaService::class)->handle(
+            $pedido,
+            ['monto' => 1000, 'forma_pago' => 'credito'],
+            null,
+            $this->user->id
+        );
+
+        $resumen = app(CoberturaPagoPedidoBmaService::class)->calcular($pedido->fresh());
+        $this->assertNotContains('Cada exhibición de pago debe incluir su comprobante.', $resumen['bloqueos']);
+
+        $res = app(ValidarPagoPedidoBmaService::class)->ejecutar($pedido->fresh(), $this->user->id);
+
+        $this->assertNotNull($res['pedido']->pago_validado_at);
+        $this->assertSame(PedidoBmaPago::REVISION_VERIFICADO, $pago->fresh()->estado_revision);
+    }
+
+    public function test_mixto_solo_bloquea_la_exhibicion_que_exige_comprobante(): void
+    {
+        $mensaje = 'Cada exhibición de pago debe incluir su comprobante.';
+        $cubierto = $this->pedidoStub();
+        PedidoBmaPago::create([
+            'pedido_bma_id' => $cubierto->id,
+            'numero_exhibicion' => 1,
+            'monto' => 400,
+            'forma_pago' => 'credito',
+            'activo_para_cobertura' => true,
+            'capturado_por_id' => $this->user->id,
+        ]);
+        PedidoBmaPago::create([
+            'pedido_bma_id' => $cubierto->id,
+            'numero_exhibicion' => 2,
+            'monto' => 600,
+            'forma_pago' => 'efectivo',
+            'ruta_archivo' => 'pedidos_bma/pagos/efectivo.jpg',
+            'activo_para_cobertura' => true,
+            'capturado_por_id' => $this->user->id,
+        ]);
+
+        $sinBloqueo = app(CoberturaPagoPedidoBmaService::class)->calcular($cubierto->fresh());
+        $this->assertNotContains($mensaje, $sinBloqueo['bloqueos']);
+
+        $incompleto = $this->pedidoStub();
+        PedidoBmaPago::create([
+            'pedido_bma_id' => $incompleto->id,
+            'numero_exhibicion' => 1,
+            'monto' => 400,
+            'forma_pago' => 'credito',
+            'activo_para_cobertura' => true,
+            'capturado_por_id' => $this->user->id,
+        ]);
+        PedidoBmaPago::create([
+            'pedido_bma_id' => $incompleto->id,
+            'numero_exhibicion' => 2,
+            'monto' => 600,
+            'forma_pago' => 'efectivo',
+            'activo_para_cobertura' => true,
+            'capturado_por_id' => $this->user->id,
+        ]);
+
+        $conBloqueo = app(CoberturaPagoPedidoBmaService::class)->calcular($incompleto->fresh());
+        $this->assertContains($mensaje, $conBloqueo['bloqueos']);
     }
 }

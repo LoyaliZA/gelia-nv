@@ -199,7 +199,7 @@ class CoberturaPagoPedidoBmaService
         }
 
         foreach ($pagosActivos as $pago) {
-            if (empty($pago->ruta_archivo)) {
+            if (PedidoBmaPago::formaRequiereComprobante($pago->forma_pago) && empty($pago->ruta_archivo)) {
                 $bloqueos[] = 'Cada exhibición de pago debe incluir su comprobante.';
                 break;
             }
