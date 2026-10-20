@@ -1401,6 +1401,23 @@ export const validarCamposEnvioPedido = (data, {
             }
             if (!omiteCosto && (data.costo_envio === '' || data.costo_envio == null)) {
                 marcar('costo_envio', 'costo de envío');
+            } else if (!omiteCosto && !guiaCliente && tienePesajeRespondido && paqueteria?.categoria === 'comercial' && Number(data.peso_cobrado_guia_kg || 0) > 0) {
+                const cajas = detalleCajas
+                    ? (cajasPesaje || []).filter((c) => c.estado_operativo !== 'retirada')
+                    : [];
+                const costosPorCaja = Object.fromEntries(
+                    (data.cajas_costos || [])
+                        .filter((r) => r?.uuid_operativo)
+                        .map((r) => [r.uuid_operativo, r])
+                );
+                const filas = cajas.map((c) => costosPorCaja[c.uuid_operativo] || c);
+                const desgloseCompleto = cajas.length > 0 && filas.every((row) => row.costo_envio !== '' && row.costo_envio != null);
+                const cobertura = desgloseCompleto
+                    ? filas.reduce((acc, row) => acc + Number(row.costo_envio || 0) + Number(row.costo_adicional || 0), 0)
+                    : Number(data.costo_envio || 0);
+                if (cobertura <= 0) {
+                    marcar('costo_envio', 'costo de envío mayor a cero');
+                }
             }
             if (!omiteCosto && detalleCajas && tienePesajeRespondido) {
                 const costosPorUuid = Object.fromEntries(

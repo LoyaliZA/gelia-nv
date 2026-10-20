@@ -3,14 +3,18 @@
 namespace App\Services\ControlPedidos;
 
 use App\Models\Cliente;
+use App\Models\ControlPedidos\CatalogoPaqueteriaPedido;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Models\ControlPedidos\PedidoBmaDocumento;
 use App\Models\User;
 use App\Services\ControlPedidos\Direcciones\CrearSnapshotDireccionPedido;
 use App\Services\SaldosAFavor\SincronizarAplicacionesPedidoSafService;
+use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
+use App\Support\ControlPedidos\SnapshotHistorialPedidoBma;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use InvalidArgumentException;
 
 class ActualizarPedidoBmaService
 {
@@ -24,6 +28,8 @@ class ActualizarPedidoBmaService
         private AsignarSucursalDestinoPedidoService $asignarDestino,
         private ValidarAlmacenSalidaPedido $validarAlmacenSalida,
         private PersistirIntencionPreparacionPedido $intencionPreparacion,
+        private RegistrarHistorialPedidoService $historial,
+        private NotificarPedidoBmaService $notificar,
     ) {}
 
     public function ejecutar(PedidoBma $pedido, array $datos, int $usuarioId): PedidoBma
@@ -87,6 +93,36 @@ class ActualizarPedidoBmaService
                 unset($attrs['costo_envio'], $attrs['costo_seguro'], $attrs['total_a_cobrar']);
             }
 
+            $costoAntes = $pedido->costo_envio;
+            $motivoAnulacion = null;
+            $reabrePago = false;
+            $motivoReapertura = '';
+            if (! $tieneDesgloseCajas && array_key_exists('costo_envio', $attrs)) {
+                $anula = $this->entradaAnulaCostoEnvio($pedido, $datos, $costoAntes);
+                if ($anula) {
+                    $motivoAnulacion = trim((string) ($datos['motivo_anular_envio'] ?? ''));
+                    $confirmado = filter_var($datos['confirmar_anular_envio'] ?? false, FILTER_VALIDATE_BOOLEAN);
+                    if (! $confirmado || mb_strlen($motivoAnulacion) < 5) {
+                        throw new InvalidArgumentException(
+                            'El costo de envío ya capturado no puede quedar en cero. Confirme la anulación e indique el motivo.'
+                        );
+                    }
+                }
+
+                if ($this->costoDistinto($costoAntes, $attrs['costo_envio']) && $pedido->pago_validado_at) {
+                    $reabrePago = filter_var($datos['reabrir_pago_costos'] ?? false, FILTER_VALIDATE_BOOLEAN);
+                    $motivoReapertura = trim((string) ($datos['motivo_reapertura_pago'] ?? ''));
+                    if ($motivoReapertura === '' && $anula) {
+                        $motivoReapertura = (string) $motivoAnulacion;
+                    }
+                    if (! $reabrePago || mb_strlen($motivoReapertura) < 5) {
+                        throw new \RuntimeException(
+                            'El pago ya está validado. Solicite reapertura autorizada para cambiar costos.'
+                        );
+                    }
+                }
+            }
+
             // La cola de errores se avanza al reenviar (EnviarPedidoBmaService), no al editar.
             $pedido->update(array_merge(
                 $attrs,
@@ -103,6 +139,19 @@ class ActualizarPedidoBmaService
                         ? (int) $datos['sucursal_destino_id']
                         : null;
                     $this->asignarDestino->ejecutar($pedido->fresh(['origen', 'tareaPreparacionVigente.modalidad']), $actor, $dest);
+                }
+            }
+
+            if (! $tieneDesgloseCajas && array_key_exists('costo_envio', $attrs) && $this->costoDistinto($costoAntes, $pedido->costo_envio)) {
+                $this->registrarCambioCostoEncabezado(
+                    $pedido,
+                    $usuarioId,
+                    $costoAntes,
+                    $pedido->costo_envio,
+                    $motivoAnulacion
+                );
+                if ($reabrePago) {
+                    $this->reabrirPagoPorCosto($pedido, $usuarioId, $motivoReapertura);
                 }
             }
 
@@ -268,6 +317,118 @@ class ActualizarPedidoBmaService
         }
 
         return isset($linea['concepto_adicional']) && trim((string) $linea['concepto_adicional']) !== '';
+    }
+
+    /**
+     * Pesaje respondido, paquetería comercial y un costo ya guardado no bajan a cero
+     * si el formulario manda vacío o cero, salvo confirmación explícita.
+     *
+     * @param  array<string, mixed>  $datos
+     */
+    private function entradaAnulaCostoEnvio(PedidoBma $pedido, array $datos, mixed $costoAntes): bool
+    {
+        if (! array_key_exists('costo_envio', $datos)) {
+            return false;
+        }
+        if ((float) ($costoAntes ?? 0) <= 0) {
+            return false;
+        }
+        if (! $this->entradaEsCero($datos['costo_envio'])) {
+            return false;
+        }
+        if (! $pedido->tienePesajeRespondido()) {
+            return false;
+        }
+
+        $guia = array_key_exists('cliente_proporciona_guia', $datos)
+            ? filter_var($datos['cliente_proporciona_guia'], FILTER_VALIDATE_BOOLEAN)
+            : (bool) $pedido->cliente_proporciona_guia;
+        $porCobrar = array_key_exists('envio_por_cobrar', $datos)
+            ? filter_var($datos['envio_por_cobrar'], FILTER_VALIDATE_BOOLEAN)
+            : (bool) $pedido->envio_por_cobrar;
+        if ($guia || $porCobrar) {
+            return false;
+        }
+
+        $paqId = $datos['catalogo_paqueteria_id'] ?? $pedido->catalogo_paqueteria_id;
+        if (! $paqId) {
+            return false;
+        }
+        $paqueteria = CatalogoPaqueteriaPedido::query()->find($paqId);
+
+        return (bool) $paqueteria?->ofreceRastreo();
+    }
+
+    private function entradaEsCero(mixed $valor): bool
+    {
+        if ($valor === null || $valor === '') {
+            return true;
+        }
+
+        return round((float) $valor, 2) <= 0;
+    }
+
+    private function costoDistinto(mixed $antes, mixed $despues): bool
+    {
+        $a = $antes === null || $antes === '' ? null : (int) round(((float) $antes) * 100);
+        $b = $despues === null || $despues === '' ? null : (int) round(((float) $despues) * 100);
+
+        return $a !== $b;
+    }
+
+    private function registrarCambioCostoEncabezado(
+        PedidoBma $pedido,
+        int $usuarioId,
+        mixed $antes,
+        mixed $despues,
+        ?string $motivo,
+    ): void {
+        $comentario = sprintf(
+            'Costo de envío del encabezado: $%s → $%s.',
+            number_format((float) ($antes ?? 0), 2, '.', ','),
+            number_format((float) ($despues ?? 0), 2, '.', ',')
+        );
+        if ($motivo !== null && $motivo !== '') {
+            $comentario .= ' Motivo: '.$motivo;
+        }
+
+        $estatusId = (int) $pedido->catalogo_estatus_pedido_id;
+        $this->historial->ejecutar(
+            $pedido->id,
+            $usuarioId,
+            $estatusId,
+            $estatusId,
+            $comentario,
+            AccionesHistorialPedidoBma::COSTOS_ENVIO,
+            null,
+            SnapshotHistorialPedidoBma::financiero($pedido)
+        );
+    }
+
+    private function reabrirPagoPorCosto(PedidoBma $pedido, int $usuarioId, string $motivo): void
+    {
+        $pedido->update([
+            'pago_validado_at' => null,
+            'pago_validado_por_id' => null,
+        ]);
+        $estatusId = (int) $pedido->catalogo_estatus_pedido_id;
+        $this->historial->ejecutar(
+            $pedido->id,
+            $usuarioId,
+            $estatusId,
+            $estatusId,
+            'Validación de pago anulada por cambio de costos. Motivo: '.$motivo,
+            AccionesHistorialPedidoBma::REAPERTURA_PAGO_COSTOS
+        );
+        $this->notificar->ejecutar(
+            $pedido->fresh(),
+            'pedido_pago_reabierto',
+            'Se modificaron costos de envío. Debe volver a validar el pago.',
+            ['control_pedidos.auditar'],
+            $usuarioId,
+            false,
+            ['url' => '/control-pedidos/auditar?q='.urlencode((string) ($pedido->folio_remision ?: $pedido->folio))]
+        );
     }
 
     private function eliminarDocumentos(PedidoBma $pedido, array $ids): void

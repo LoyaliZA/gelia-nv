@@ -360,6 +360,8 @@ export default function ModalFormPedidoLegado({
     const [pesoVolumetrico, setPesoVolumetrico] = useState(pedido?.peso_volumetrico_kg ?? '');
     const [intentoEnviar, setIntentoEnviar] = useState(false);
     const [avisoForm, setAvisoForm] = useState(null);
+    const [anulacionEnvio, setAnulacionEnvio] = useState(null);
+    const [motivoAnulacionEnvio, setMotivoAnulacionEnvio] = useState('');
     const [avisoPdf, setAvisoPdf] = useState(null);
     const [avisoPesaje, setAvisoPesaje] = useState(null);
     const [pdfDocLocal, setPdfDocLocal] = useState(null);
@@ -382,6 +384,7 @@ export default function ModalFormPedidoLegado({
     const [envioEsBase, setEnvioEsBase] = useState(false);
     const [costoReexpedicion, setCostoReexpedicion] = useState(0);
     const colaCaptura = useRef(new ColaGuardadoPedido());
+    const anulacionEnvioRef = useRef(null);
     const capturaActual = useRef({});
     const baseConfirmada = useRef({ revision_esperada: pedido?.revision_registro ?? 0, base_captura: pedido?.base_captura });
     const claveCreacion = useRef(globalThis.crypto?.randomUUID?.() || `alta-${Date.now()}-${Math.random()}`);
@@ -1350,6 +1353,18 @@ export default function ModalFormPedidoLegado({
         };
     };
 
+    const formularioAnulaEnvio = () => {
+        if (!tienePesajeRespondido || paqueteriaSeleccionada?.categoria !== 'comercial') return false;
+        if (data.cliente_proporciona_guia || data.envio_por_cobrar) return false;
+        if (Number(pedido?.costo_envio || 0) <= 0) return false;
+        const cajasConMonto = detalleCajasUi && (data.cajas_costos || []).some(
+            (row) => row?.costo_envio !== '' && row?.costo_envio != null && Number(row.costo_envio) > 0
+        );
+        if (cajasConMonto) return false;
+        const valor = data.costo_envio;
+        return valor === '' || valor == null || Number(valor) <= 0;
+    };
+
     /** Guarda el borrador en BD (sin archivos) y devuelve su id. */
     const persistirBorradorBd = () => colaCaptura.current.ejecutar(async () => {
         if (capturaActual.current.fp === ultimoFingerprintBd.current && pedidoBdIdRef.current) return pedidoBdIdRef.current;
@@ -1381,6 +1396,9 @@ export default function ModalFormPedidoLegado({
                 payload.costo_envio = envioEsBase
                     ? costoEnvioParaPersistir(data.costo_envio, alcanceReexpedicion === 'pedido' ? costoReexpedicion : 0)
                     : data.costo_envio;
+            }
+            if (formularioAnulaEnvio()) {
+                delete payload.costo_envio;
             }
             payload.pedido_id = pedidoBdIdRef.current || undefined;
             Object.assign(payload, baseConfirmada.current);
@@ -2120,6 +2138,7 @@ export default function ModalFormPedidoLegado({
                 ? `${d.comentarios_drive || ''}\n[Excepción dirección] ${d.motivo_direccion_manual}`.trim()
                 : d.comentarios_drive,
             ...camposPreparacionParaGuardar(estadoPreparacionActual(), intencionConfirmadaRef.current),
+            ...(anulacionEnvioRef.current || {}),
         });
         const safPayload = safAplicacionesParaGuardar(d, safCuenta);
         if (safPayload === undefined) {
@@ -2135,6 +2154,13 @@ export default function ModalFormPedidoLegado({
     const guardar = (enviarPedido = false, { cerrar = true, alTerminar = null } = {}) => {
         if (comandoPendiente.current || manualPendiente.current) return;
         setAvisoForm(null);
+        if (!formularioAnulaEnvio()) {
+            anulacionEnvioRef.current = null;
+        } else if (!anulacionEnvioRef.current) {
+            setMotivoAnulacionEnvio('');
+            setAnulacionEnvio({ enviarPedido, cerrar, alTerminar });
+            return;
+        }
 
         if (enviarPedido) {
             setIntentoEnviar(true);
@@ -2235,6 +2261,8 @@ export default function ModalFormPedidoLegado({
             setPedidoBdId(res.id);
             if (capturaActual.current.data.comprobantes === enviado.comprobantes) { setData('comprobantes', []); setPreviews([]); }
             ultimoFingerprintBd.current = fp;
+            anulacionEnvioRef.current = null;
+            setAnulacionEnvio(null);
             const pendiente = capturaActual.current.fp !== fp;
             setEstadoAuto((s) => ({ ...s, bd: pendiente ? 'Servidor · cambios pendientes' : `Servidor · ${res.folio || res.id}` }));
             if (!cerrar || pendiente) { alTerminar?.(res.id); return; }
@@ -2781,6 +2809,53 @@ export default function ModalFormPedidoLegado({
                 <div className={`gelia-modal-body p-5 md:p-8 ${modoProgresivo ? 'space-y-4' : 'space-y-8'}`} ref={cuerpoFormRef}>
                     <div className={modoProgresivo ? `flex flex-col ${faseUi === FASE_RESPUESTA ? 'lg:flex-row-reverse' : 'lg:flex-row'} gap-6 items-start` : undefined}>
                     <div className={modoProgresivo ? 'lg:w-[70%] w-full min-w-0' : 'contents'}>
+                    {anulacionEnvio && (
+                        <div className="px-3 py-3 rounded-lg border theme-border theme-element space-y-2" role="dialog" aria-label="Anular costo de envío">
+                            <p className="text-xs font-semibold theme-text-main m-0">
+                                El envío guardado es {formatearMoneda(pedido?.costo_envio)}. Dejarlo en cero quita ese cobro. Indique el motivo para confirmarlo.
+                            </p>
+                            <textarea
+                                className={`${THEME_TEXTAREA} w-full py-2`}
+                                value={motivoAnulacionEnvio}
+                                onChange={(e) => setMotivoAnulacionEnvio(e.target.value)}
+                                maxLength={2000}
+                                rows={2}
+                            />
+                            <div className="flex flex-wrap gap-2">
+                                <button
+                                    type="button"
+                                    className={`${BTN_PRIMARY} text-xs min-h-[44px]`}
+                                    onClick={() => {
+                                        const motivo = motivoAnulacionEnvio.trim();
+                                        if (motivo.length < 5) {
+                                            setAvisoForm({ tipo: 'error', mensaje: 'El motivo de anulación debe tener al menos 5 caracteres.' });
+                                            return;
+                                        }
+                                        const pendiente = anulacionEnvio;
+                                        anulacionEnvioRef.current = {
+                                            confirmar_anular_envio: true,
+                                            motivo_anular_envio: motivo,
+                                            ...(pedido?.pago_validado_at ? {
+                                                reabrir_pago_costos: true,
+                                                motivo_reapertura_pago: motivo,
+                                            } : {}),
+                                        };
+                                        setAnulacionEnvio(null);
+                                        guardar(pendiente.enviarPedido, { cerrar: pendiente.cerrar, alTerminar: pendiente.alTerminar });
+                                    }}
+                                >
+                                    Confirmar anulación
+                                </button>
+                                <button
+                                    type="button"
+                                    className={`${BTN_SECONDARY} text-xs min-h-[44px]`}
+                                    onClick={() => setAnulacionEnvio(null)}
+                                >
+                                    Cancelar
+                                </button>
+                            </div>
+                        </div>
+                    )}
                     {avisoForm && (
                         <div
                             role={avisoForm.tipo === 'error' ? 'alert' : 'status'}

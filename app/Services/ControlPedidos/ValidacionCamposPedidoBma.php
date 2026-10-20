@@ -176,8 +176,20 @@ trait ValidacionCamposPedidoBma
                         $faltantes[] = 'domicilio de entrega';
                     }
                 }
+                $pedido->loadMissing('paqueteria');
                 if (! $omiteCosto && $pedido->costo_envio === null) {
                     $faltantes[] = 'costo de envío';
+                } elseif (
+                    ! $omiteCosto
+                    && $tienePesaje
+                    && (float) ($pedido->peso_cobrado_guia_kg ?? 0) > 0
+                    && $pedido->paqueteria?->ofreceRastreo()
+                ) {
+                    $cobertura = (float) app(CalcularTotalesEnvioPedidoService::class)
+                        ->calcular($pedido)['costo_para_cobertura'];
+                    if ($cobertura <= 0) {
+                        $faltantes[] = 'costo de envío mayor a cero';
+                    }
                 }
 
                 if (! $omiteCosto && $tienePesaje) {
