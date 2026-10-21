@@ -2,12 +2,12 @@
 
 namespace App\Services\Productos;
 
+use App\Models\Inventario;
 use App\Models\Producto;
 use App\Models\ProductoAtributoValor;
 use App\Models\ProductoContenido;
 use App\Models\ProductoRelacion;
 use App\Models\ProductoVentaAlmacen;
-use App\Models\Inventario;
 use App\Services\Productos\Extensiones\PerfumeriaExtensionService;
 use Illuminate\Support\Collection;
 
@@ -25,6 +25,22 @@ class ArmarFichaProductoService
      * @return array<string, mixed>
      */
     public function paraProducto(Producto $producto, ?int $almacenContextoId = null, int $stockMax = 5, ?array $almacenIdsPermitidos = null): array
+    {
+        $maestro = $this->datosMaestros($producto);
+        unset($maestro['folio'], $maestro['activo']);
+
+        return array_merge($maestro, [
+            'stock' => $this->mapStock($producto->id, $almacenContextoId, $stockMax, $almacenIdsPermitidos),
+            'ventas' => $this->mapVentas($producto->id, $almacenContextoId, $almacenIdsPermitidos),
+        ]);
+    }
+
+    /**
+     * Datos maestros sin inventario ni ventas.
+     *
+     * @return array<string, mixed>
+     */
+    public function datosMaestros(Producto $producto): array
     {
         $producto->loadMissing([
             'marca:id,nombre',
@@ -47,12 +63,14 @@ class ArmarFichaProductoService
 
         return [
             'id' => $producto->id,
+            'folio' => $producto->folio,
             'sku' => $producto->sku,
             'nombre' => $producto->descripcion,
             'descripcion_corta' => $producto->descripcion_corta,
             'marca' => $producto->marca?->nombre,
             'categoria' => $producto->categoria?->nombre,
             'tipo' => $producto->tipoProducto?->codigo,
+            'activo' => (bool) $producto->activo,
             'atributos' => $this->mapAtributos($producto->atributoValores),
             'extensiones' => $extensiones,
             'relacionados' => $producto->relaciones->map(fn (ProductoRelacion $r) => [
@@ -63,8 +81,6 @@ class ArmarFichaProductoService
                 'activo' => (bool) $r->relacionado?->activo,
             ])->filter(fn ($x) => $x['sku'])->values()->all(),
             'contenido' => $this->mapContenido($producto->contenidos),
-            'stock' => $this->mapStock($producto->id, $almacenContextoId, $stockMax, $almacenIdsPermitidos),
-            'ventas' => $this->mapVentas($producto->id, $almacenContextoId, $almacenIdsPermitidos),
         ];
     }
 

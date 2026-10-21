@@ -241,4 +241,60 @@ describe('buildSidebarNavigation permissions', () => {
         const open = collectOpenGroupIdsForUrl(tree, '/control-pedidos/auditar');
         expect(open.size).toBeGreaterThan(0);
     });
+
+    it('el grupo Almacenes conserva su orden explícito y el resto sigue alfabético', () => {
+        const tree = buildSidebarNavigation({
+            can: canWith([], true),
+            showAdminMenu: true,
+            manualesHubVisible: false,
+            geliaAiVisible: false,
+        });
+        const almacenes = tree.find((n) => n?.id === 'almacenes');
+        expect(almacenes.children.map((n) => n.id)).toEqual([
+            'almacenes_resumen',
+            'almacenes_productos_gi',
+            'almacenes_catalogo',
+            'almacenes_inventarios',
+            'almacenes_costos',
+            'almacenes_importaciones',
+            'almacenes_config_catalogos',
+        ]);
+        expect(almacenes.children.map((n) => n.label)).not.toContain('Cobertura');
+        expect(almacenes.children.find((n) => n.id === 'almacenes_costos')?.label).toBe('Costos y precios');
+        expect(almacenes.children.find((n) => n.id === 'almacenes_productos_gi')?.href()).toBe('/gestion-interna/productos');
+
+        const gestion = tree.find((n) => n?.id === 'gestion_interna');
+        expect(gestion.children.find((n) => n.id === 'gestion_productos')?.href()).toBe('/gestion-interna/productos');
+
+        const sistema = tree.find((n) => n?.id === 'sistema');
+        const labels = sistema.children.map((n) => n.label);
+        const sorted = [...labels].sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base', numeric: true }));
+        expect(labels).toEqual(sorted);
+        expect(labels).not.toEqual(almacenes.children.map((n) => n.label));
+    });
+
+    it('quien solo ve costos no recibe Cobertura ni inventarios en el menú', () => {
+        const tree = buildSidebarNavigation({
+            can: canWith(['almacenes.costos.ver']),
+            showAdminMenu: false,
+            manualesHubVisible: false,
+            geliaAiVisible: false,
+        });
+        const almacenes = tree.find((n) => n?.id === 'almacenes');
+        const ids = almacenes.children.map((n) => n.id);
+        expect(ids).toEqual(['almacenes_resumen', 'almacenes_catalogo', 'almacenes_costos']);
+        expect(almacenes.children.find((n) => n.id === 'almacenes_costos')?.label).toBe('Costos y precios');
+    });
+
+    it('quien solo ve inventario no recibe costos ni el ítem Cobertura', () => {
+        const tree = buildSidebarNavigation({
+            can: canWith(['almacenes.inventarios.ver']),
+            showAdminMenu: false,
+            manualesHubVisible: false,
+            geliaAiVisible: false,
+        });
+        const ids = tree.find((n) => n?.id === 'almacenes').children.map((n) => n.id);
+        expect(ids).toEqual(['almacenes_resumen', 'almacenes_catalogo', 'almacenes_inventarios']);
+        expect(ids).not.toContain('almacenes_cobertura');
+    });
 });

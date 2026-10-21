@@ -1,6 +1,7 @@
 import React from 'react';
-import { Head, router } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
 import AppLayout from '@/Layouts/AppLayout';
+import { puedeVerProductosPorAlmacen } from '@/Components/Almacenes/EnlacesContextoAlmacen';
 import TablaAlmacenes from '@/Pages/Admin/Partials/Catalogos/TablaAlmacenes';
 import { geliaCardClass } from '@/utils/geliaTheme';
 
@@ -53,6 +54,17 @@ export default function Index({
                                 update: 'almacenes.catalogo.update',
                             }}
                             sucursalIdPorDefecto={filtros?.sucursal_id || ''}
+                            accionFila={puedeVerProductosPorAlmacen(auth) ? (item) => (
+                                <Link
+                                    href={route('almacenes.cobertura.index', {
+                                        almacen_id: item.id,
+                                        sucursal_id: item.sucursal_id,
+                                    })}
+                                    className="inline-flex mr-2 px-3 py-2 text-[10px] font-black uppercase theme-element border theme-border rounded-xl"
+                                >
+                                    Productos por almacén
+                                </Link>
+                            ) : null}
                         />
                     </div>
                 )}

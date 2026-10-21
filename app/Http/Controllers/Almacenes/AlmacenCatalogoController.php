@@ -20,12 +20,17 @@ class AlmacenCatalogoController extends Controller
         $user = $request->user();
         $sucursales = $alcance->sucursalesOperables($user);
 
-        $sucursalId = $request->query('sucursal_id');
-        if ($sucursalId !== null && $sucursalId !== '') {
-            $alcance->asegurarSucursalOperable($user, (int) $sucursalId);
-        } else {
-            $sucursalId = $alcance->sucursalActivaId($user);
-        }
+        $sucursalQuery = $request->query('sucursal_id');
+        $almacenQuery = $request->query('almacen_id');
+        $sucursalExplicita = $sucursalQuery !== null && $sucursalQuery !== '';
+        $almacenExplicito = $almacenQuery !== null && $almacenQuery !== '';
+        $alcance->validarContextoConsulta(
+            $user,
+            $sucursalExplicita ? (int) $sucursalQuery : null,
+            $almacenExplicito ? (int) $almacenQuery : null,
+        );
+
+        $sucursalId = $sucursalExplicita ? (int) $sucursalQuery : $alcance->sucursalActivaId($user);
 
         $almacenes = $alcance->almacenesOperables($user, $sucursalId ? (int) $sucursalId : null);
 

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { Boxes, Plus, Edit2, Trash2, Save, Search, Upload } from 'lucide-react';
@@ -6,6 +6,7 @@ import AppLayout from '@/Layouts/AppLayout';
 import GeliaPaginacion from '@/Components/GeliaPaginacion';
 import GeliaLoader from '@/Components/GeliaLoader';
 import EncabezadoOrdenable from '@/Components/Almacenes/EncabezadoOrdenable';
+import EnlacesContextoAlmacen from '@/Components/Almacenes/EnlacesContextoAlmacen';
 import SelectorProducto from '@/Components/Almacenes/SelectorProducto';
 import { geliaCardClass, THEME_BTN_PRIMARY, THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from '@/utils/geliaTheme';
 
@@ -25,7 +26,7 @@ function mostrarCantidad(valor) {
     return texto === '' ? 'Sin dato' : texto;
 }
 
-export default function Index({ auth, inventarios, sucursales, almacenes, filtros }) {
+export default function Index({ auth, inventarios, sucursales, almacenes, filtros, sin_sucursales_operables }) {
     const [modalAbierto, setModalAbierto] = useState(false);
     const [itemActual, setItemActual] = useState(null);
     const [sucursalId, setSucursalId] = useState(filtros?.sucursal_id || '');
@@ -52,16 +53,38 @@ export default function Index({ auth, inventarios, sucursales, almacenes, filtro
         maximo: '',
     });
 
-    const paramsBase = useCallback((extra = {}) => ({
-        sucursal_id: sucursalId,
-        almacen_id: almacenId,
-        q: busqueda,
-        sort: filtros?.sort,
-        dir: filtros?.dir,
-        ...extra,
-    }), [sucursalId, almacenId, busqueda, filtros?.sort, filtros?.dir]);
+    const paramsBase = useCallback((extra = {}) => {
+        const params = {
+            sucursal_id: sucursalId,
+            almacen_id: almacenId,
+            q: busqueda,
+            sort: filtros?.sort,
+            dir: filtros?.dir,
+            ...extra,
+        };
+
+        const texto = (valor, permitidos) => (typeof valor === 'string' && permitidos.includes(valor) ? valor : undefined);
+
+        return {
+            sucursal_id: params.sucursal_id || undefined,
+            almacen_id: params.almacen_id || undefined,
+            q: params.q || undefined,
+            sort: texto(params.sort, ['producto', 'almacen', 'ubicacion', 'existencia', 'apartado', 'disponible', 'transito_oc', 'transito_ot']),
+            dir: texto(params.dir, ['asc', 'desc']),
+            page: params.page,
+        };
+    }, [sucursalId, almacenId, busqueda, filtros?.sort, filtros?.dir]);
+
+    const paramsRef = useRef(paramsBase);
+    paramsRef.current = paramsBase;
+    const busquedaTimer = useRef(null);
+    const cancelarBusquedaPendiente = () => {
+        clearTimeout(busquedaTimer.current);
+        busquedaTimer.current = null;
+    };
 
     const aplicarFiltros = (extra = {}) => {
+        cancelarBusquedaPendiente();
         router.get(route('almacenes.inventarios.index'), paramsBase(extra), { preserveState: true, replace: true });
     };
 
@@ -74,11 +97,13 @@ export default function Index({ auth, inventarios, sucursales, almacenes, filtro
 
     useEffect(() => {
         if (busqueda === (filtros?.q ?? '')) return undefined;
-        const timer = setTimeout(() => {
-            router.get(route('almacenes.inventarios.index'), paramsBase({ q: busqueda, page: 1 }), { preserveState: true, replace: true });
+        const q = busqueda;
+        busquedaTimer.current = setTimeout(() => {
+            busquedaTimer.current = null;
+            router.get(route('almacenes.inventarios.index'), paramsRef.current({ q, page: 1 }), { preserveState: true, replace: true });
         }, 400);
-        return () => clearTimeout(timer);
-    }, [busqueda]);
+        return cancelarBusquedaPendiente;
+    }, [busqueda, filtros?.q]);
 
     const abrirNuevo = () => {
         setItemActual(null);
@@ -129,7 +154,7 @@ export default function Index({ auth, inventarios, sucursales, almacenes, filtro
                             </h1>
                             <p className="text-[11px] font-bold theme-text-muted mt-2 max-w-2xl">
                                 Cantidades de referencia: GELIA-NV no las descuenta automáticamente por venta ni las publica como stock confirmado.
-                                Los costos mostrados aquí son solo referencia del almacén; la gestión detallada está en Costos.
+                                Los costos mostrados aquí son solo referencia del almacén; la gestión detallada está en Costos y precios.
                             </p>
                         </div>
                         <div className="flex gap-2">
@@ -145,12 +170,20 @@ export default function Index({ auth, inventarios, sucursales, almacenes, filtro
                             )}
                         </div>
                     </div>
+                    {sin_sucursales_operables ? (
+                        <div className="text-center">
+                            <p className="text-sm font-bold theme-text-main">Sin sucursales operables asignadas a tu usuario.</p>
+                            <p className="text-[11px] font-bold theme-text-muted mt-2">Solicita acceso a una sucursal para consultar inventarios en este módulo.</p>
+                        </div>
+                    ) : (
+                    <div className="space-y-3">
+                    <EnlacesContextoAlmacen auth={auth} sucursalId={sucursalId} almacenId={almacenId} q={busqueda} actual="inventarios" />
                     <div className="flex flex-wrap gap-2">
-                        <select value={sucursalId} onChange={(e) => { setSucursalId(e.target.value); setAlmacenId(''); }} className="theme-input px-3 py-2 text-[11px] font-bold uppercase">
+                        <select value={sucursalId} onChange={(e) => { const valor = e.target.value; setSucursalId(valor); setAlmacenId(''); aplicarFiltros({ sucursal_id: valor, almacen_id: '', page: 1 }); }} className="theme-input px-3 py-2 text-[11px] font-bold uppercase">
                             <option value="">Todas las sucursales</option>
                             {sucursales.map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
                         </select>
-                        <select value={almacenId} onChange={(e) => setAlmacenId(e.target.value)} className="theme-input px-3 py-2 text-[11px] font-bold uppercase">
+                        <select value={almacenId} onChange={(e) => { const valor = e.target.value; setAlmacenId(valor); aplicarFiltros({ almacen_id: valor, page: 1 }); }} className="theme-input px-3 py-2 text-[11px] font-bold uppercase">
                             <option value="">Todos los almacenes</option>
                             {almacenesFiltrados.map((a) => <option key={a.id} value={a.id}>{a.codigo} - {a.nombre}</option>)}
                         </select>
@@ -160,8 +193,11 @@ export default function Index({ auth, inventarios, sucursales, almacenes, filtro
                         </form>
                         <button onClick={() => aplicarFiltros({ page: 1 })} className="px-4 py-2 text-[10px] font-black uppercase theme-element border theme-border rounded-xl">Filtrar</button>
                     </div>
+                    </div>
+                    )}
                 </header>
 
+                {!sin_sucursales_operables && (
                 <div className={geliaCardClass('overflow-hidden')}>
                     <div className="overflow-x-auto">
                         <table className="w-full text-left min-w-[1100px]">
@@ -213,6 +249,7 @@ export default function Index({ auth, inventarios, sucursales, almacenes, filtro
                     </div>
                     {lista.length > 0 && <GeliaPaginacion paginator={inventarios} onIrAPagina={(p) => aplicarFiltros({ page: p })} embedded />}
                 </div>
+                )}
             </div>
 
             {modalAbierto && createPortal(

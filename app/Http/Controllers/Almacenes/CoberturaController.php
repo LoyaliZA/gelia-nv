@@ -20,13 +20,13 @@ class CoberturaController extends Controller
         $this->autorizar();
         $user = $request->user();
 
-        $almacenId = $request->query('almacen_id');
-        if ($request->query('sucursal_id') && ! $almacenId) {
-            $alcance->asegurarSucursalOperable($user, (int) $request->query('sucursal_id'));
-        }
-        if ($almacenId) {
-            $alcance->asegurarAlmacenOperable($user, (int) $almacenId);
-        }
+        $sucursalId = $request->query('sucursal_id') ?: null;
+        $almacenId = $request->query('almacen_id') ?: null;
+        $alcance->validarContextoConsulta(
+            $user,
+            $sucursalId ? (int) $sucursalId : null,
+            $almacenId ? (int) $almacenId : null,
+        );
         $query = Producto::query()
             ->with(['marca', 'categoria'])
             ->when($request->query('q'), fn ($q, $busqueda) => $q->buscarPorTexto($busqueda))
@@ -58,7 +58,7 @@ class CoberturaController extends Controller
             $inventarios = Inventario::where('almacen_id', $almacenId)->whereIn('producto_id', $ids)->get()->keyBy('producto_id');
         }
 
-        $filas = $productos->getCollection()->map(function (Producto $p) use ($almacenId, $asignaciones, $costos, $inventarios) {
+        $filas = $productos->getCollection()->map(function (Producto $p) use ($asignaciones, $costos, $inventarios) {
             $asig = $asignaciones[$p->id] ?? null;
             $costo = $costos[$p->id] ?? null;
             $inv = $inventarios[$p->id] ?? null;
@@ -75,6 +75,7 @@ class CoberturaController extends Controller
                 'costo' => $costo?->costo,
                 'precio_venta' => $costo?->precio_venta,
                 'existencia' => $inv?->existencia,
+                'tiene_inventario' => $inv !== null,
                 'tiene_cantidad' => $inv !== null && $inv->existencia !== null,
             ];
         });
@@ -86,7 +87,7 @@ class CoberturaController extends Controller
             'filas' => $productos,
             'sucursales' => $sucursales,
             'almacenes' => $alcance->almacenesOperables($user),
-            'filtros' => $request->only(['sucursal_id', 'almacen_id', 'q', 'activo', 'asignacion', 'costo']),
+            'filtros' => (object) $request->only(['sucursal_id', 'almacen_id', 'q', 'activo', 'asignacion', 'costo']),
             'sin_sucursales_operables' => $sucursales->isEmpty(),
         ]);
     }

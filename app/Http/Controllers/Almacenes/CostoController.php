@@ -7,12 +7,12 @@ use App\Http\Requests\Almacenes\StoreCostoRequest;
 use App\Http\Requests\Almacenes\UpdateCostoRequest;
 use App\Models\ProductoCosto;
 use App\Services\Almacenes\AlcanceAlmacenesService;
-use App\Support\Almacenes\OrdenamientoListadoAlmacen;
 use App\Services\Almacenes\GuardarArchivoVistaPreviaImportacionService;
 use App\Services\Almacenes\IniciarImportacionAlmacenService;
 use App\Services\Almacenes\LeerEncabezadosArchivoImportacionService;
 use App\Services\Almacenes\RegistrarAuditoriaAlmacenService;
 use App\Services\Catalogos\PlantillaImportacionCatalogoService;
+use App\Support\Almacenes\OrdenamientoListadoAlmacen;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -36,13 +36,19 @@ class CostoController extends Controller
 
         $alcance->restringirPorAlmacenSucursalOperable($query, $user);
 
-        if ($sucursalId = $request->query('sucursal_id')) {
-            $alcance->asegurarSucursalOperable($user, (int) $sucursalId);
+        $sucursalId = $request->query('sucursal_id') ?: null;
+        $almacenId = $request->query('almacen_id') ?: null;
+        $alcance->validarContextoConsulta(
+            $user,
+            $sucursalId ? (int) $sucursalId : null,
+            $almacenId ? (int) $almacenId : null,
+        );
+
+        if ($sucursalId) {
             $query->whereHas('almacen', fn ($q) => $q->where('sucursal_id', $sucursalId));
         }
 
-        if ($almacenId = $request->query('almacen_id')) {
-            $alcance->asegurarAlmacenOperable($user, (int) $almacenId);
+        if ($almacenId) {
             $query->where('almacen_id', $almacenId);
         }
 
@@ -70,7 +76,7 @@ class CostoController extends Controller
             'costos' => $query->paginate(50)->withQueryString(),
             'sucursales' => $sucursales,
             'almacenes' => $alcance->almacenesOperables($user),
-            'filtros' => $request->only(['sucursal_id', 'almacen_id', 'q', 'sort', 'dir', 'filtro']),
+            'filtros' => (object) $request->only(['sucursal_id', 'almacen_id', 'q', 'sort', 'dir', 'filtro']),
             'sin_sucursales_operables' => $sucursales->isEmpty(),
         ]);
     }

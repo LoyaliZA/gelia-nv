@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -102,6 +103,17 @@ class Producto extends Model
     public function asignacionesAlmacen(): HasMany
     {
         return $this->hasMany(ProductoAlmacen::class);
+    }
+
+    public function imagenes(): HasMany
+    {
+        return $this->hasMany(ProductoImagen::class)->orderBy('posicion');
+    }
+
+    public function imagenPrincipal(): HasOne
+    {
+        return $this->hasOne(ProductoImagen::class, 'producto_id')
+            ->whereNotNull('producto_imagenes.principal_producto_id');
     }
 
     public function getCostoAttribute(): float

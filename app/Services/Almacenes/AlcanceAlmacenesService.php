@@ -125,6 +125,28 @@ final class AlcanceAlmacenesService
     }
 
     /**
+     * Valida ids de una consulta. No escribe sesión ni sustituye un contexto inválido.
+     * No exige que el almacén esté activo: ese criterio sigue solo en almacenesOperables.
+     */
+    public function validarContextoConsulta(User $user, ?int $sucursalId, ?int $almacenId): void
+    {
+        if ($sucursalId !== null) {
+            $this->asegurarSucursalOperable($user, $sucursalId);
+        }
+
+        $almacen = null;
+        if ($almacenId !== null) {
+            $almacen = $this->asegurarAlmacenOperable($user, $almacenId);
+        }
+
+        if ($sucursalId !== null && $almacen instanceof Almacen && (int) $almacen->sucursal_id !== $sucursalId) {
+            throw ValidationException::withMessages([
+                'almacen_id' => 'El almacén no pertenece a la sucursal indicada.',
+            ]);
+        }
+    }
+
+    /**
      * @param  Builder<Almacen>  $query
      * @return Builder<Almacen>
      */

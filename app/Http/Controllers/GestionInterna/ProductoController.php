@@ -5,11 +5,12 @@ namespace App\Http\Controllers\GestionInterna;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\GestionInterna\StoreProductoRequest;
 use App\Http\Requests\GestionInterna\UpdateProductoRequest;
-use App\Models\Atributo;
 use App\Models\Almacen;
+use App\Models\Atributo;
 use App\Models\CanalComercial;
 use App\Models\CatalogoCategoriaProducto;
 use App\Models\CatalogoMarcaProducto;
+use App\Models\CategoriaAtributo;
 use App\Models\FaseOlfativa;
 use App\Models\Inventario;
 use App\Models\NotaOlfativa;
@@ -32,12 +33,10 @@ use App\Support\Almacenes\OrdenamientoListadoAlmacen;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
-use Rap2hpoutre\FastExcel\FastExcel;
 
 class ProductoController extends Controller
 {
@@ -53,10 +52,14 @@ class ProductoController extends Controller
 
     public function index(Request $request): Response
     {
-        $query = Producto::with(['marca', 'categoria', 'tipoProducto']);
+        $query = Producto::with(['marca', 'categoria', 'tipoProducto', 'imagenPrincipal']);
 
         if ($busqueda = $request->query('q')) {
             $query->buscarPorTexto($busqueda);
+        }
+
+        if ($request->boolean('sin_imagen')) {
+            $query->whereDoesntHave('imagenes');
         }
 
         OrdenamientoListadoAlmacen::productos(
@@ -67,13 +70,26 @@ class ProductoController extends Controller
 
         $perfumeriaEnUso = $this->resolverExtensiones->algunaCategoriaUsa('perfumeria');
 
+        $productos = $query->paginate(50)->withQueryString();
+        $productos->getCollection()->transform(function (Producto $producto) {
+            $principal = $producto->imagenPrincipal;
+            $producto->unsetRelation('imagenPrincipal');
+            $producto->setAttribute('miniatura_url', $principal ? route('gestion_interna.productos.imagenes.archivo', [
+                'producto' => $producto->id,
+                'imagen' => $principal->id,
+                'variante' => 'miniatura',
+            ]) : null);
+
+            return $producto;
+        });
+
         return Inertia::render('GestionInterna/Productos/Index', [
-            'productos' => $query->paginate(50)->withQueryString(),
+            'productos' => $productos,
             'marcas' => CatalogoMarcaProducto::where('activo', true)->orderBy('nombre')->get(),
             'categorias' => CatalogoCategoriaProducto::orderBy('nombre')->get(['id', 'nombre', 'parent_id']),
             'tipos' => TipoProducto::where('estado', true)->orderBy('nombre')->get(['id', 'nombre', 'codigo']),
             'atributos' => Atributo::where('estado', true)->with(['opciones' => fn ($q) => $q->where('estado', true)->orderBy('orden')])->orderBy('nombre')->get(),
-            'atributos_por_categoria' => \App\Models\CategoriaAtributo::query()
+            'atributos_por_categoria' => CategoriaAtributo::query()
                 ->orderBy('orden')
                 ->get(['categoria_id', 'atributo_id'])
                 ->groupBy('categoria_id')
@@ -88,7 +104,7 @@ class ProductoController extends Controller
                 ? NotaOlfativa::where('estado', true)->orderBy('nombre')->limit(500)->get(['id', 'nombre', 'slug'])
                 : [],
             'canales' => CanalComercial::where('estado', true)->orderBy('nombre')->get(['id', 'nombre', 'codigo']),
-            'filtros' => $request->only(['q', 'sort', 'dir']),
+            'filtros' => $request->only(['q', 'sort', 'dir', 'sin_imagen']),
         ]);
     }
 

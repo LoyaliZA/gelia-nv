@@ -6,6 +6,8 @@ import AppLayout from '@/Layouts/AppLayout';
 import GeliaPaginacion from '@/Components/GeliaPaginacion';
 import GeliaLoader from '@/Components/GeliaLoader';
 import EncabezadoOrdenable from '@/Components/Almacenes/EncabezadoOrdenable';
+import CargaMultipleImagenes from '@/Components/Productos/CargaMultipleImagenes';
+import { hrefFichaProducto, puedeGestionarImagenes } from '@/utils/fichaProducto';
 import InputConEscanner from '@/Components/Escanner/InputConEscanner';
 import { geliaCardClass, THEME_BTN_PRIMARY, THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from '@/utils/geliaTheme';
 
@@ -25,6 +27,7 @@ export default function Index({ auth, productos, marcas, categorias, tipos = [],
     const puedeGestionar = auth?.user?.permissions?.includes('gestion_interna.productos.gestionar')
         || auth?.user?.permissions?.includes('almacenes.productos.gestionar')
         || auth?.user?.roles?.includes('Super Admin');
+    const puedeImagenes = puedeGestionarImagenes(auth);
 
     const vacioPerfumeria = () => ({ salida: [], corazon: [], fondo: [] });
 
@@ -191,8 +194,9 @@ export default function Index({ auth, productos, marcas, categorias, tipos = [],
         q: busqueda,
         sort: filtros?.sort,
         dir: filtros?.dir,
+        sin_imagen: filtros?.sin_imagen || undefined,
         ...extra,
-    }), [busqueda, filtros?.sort, filtros?.dir]);
+    }), [busqueda, filtros?.sort, filtros?.dir, filtros?.sin_imagen]);
 
     const aplicarFiltros = (extra = {}) => {
         router.get(route('gestion_interna.productos.index'), paramsBase(extra), { preserveState: true, replace: true });
@@ -320,6 +324,9 @@ export default function Index({ auth, productos, marcas, categorias, tipos = [],
                             <input value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="Buscar por nombre o código..." className="theme-input w-full pl-10 py-2 text-[11px] font-bold" />
                         </div>
                         <button type="submit" className={`${THEME_BTN_PRIMARY} theme-btn-primary--compact`}>Buscar</button>
+                        <button type="button" onClick={() => aplicarFiltros({ sin_imagen: filtros?.sin_imagen ? undefined : 1, page: 1 })} className="px-3 py-2 text-[10px] font-black uppercase theme-element border theme-border rounded-xl">
+                            {filtros?.sin_imagen ? 'Ver todos' : 'Sin imagen'}
+                        </button>
                     </form>
                 </header>
 
@@ -328,6 +335,7 @@ export default function Index({ auth, productos, marcas, categorias, tipos = [],
                         <table className="w-full text-left min-w-[900px]">
                             <thead>
                                 <tr className="border-b theme-border text-[10px] font-black uppercase tracking-widest theme-text-muted">
+                                    <th className="px-4 py-4">Imagen</th>
                                     <EncabezadoOrdenable columna="folio" etiqueta="Folio" sortActual={filtros?.sort} dirActual={filtros?.dir} onOrdenar={handleOrdenar} />
                                     <EncabezadoOrdenable columna="producto" etiqueta="SKU / Producto" sortActual={filtros?.sort} dirActual={filtros?.dir} onOrdenar={handleOrdenar} />
                                     <EncabezadoOrdenable columna="marca" etiqueta="Marca" sortActual={filtros?.sort} dirActual={filtros?.dir} onOrdenar={handleOrdenar} />
@@ -339,12 +347,21 @@ export default function Index({ auth, productos, marcas, categorias, tipos = [],
                             </thead>
                             <tbody>
                                 {lista.length === 0 ? (
-                                    <tr><td colSpan={7} className="px-4 py-16 text-center theme-text-muted text-sm font-bold uppercase">Sin productos registrados</td></tr>
+                                    <tr><td colSpan={puedeGestionar ? 8 : 7} className="px-4 py-16 text-center theme-text-muted text-sm font-bold uppercase">Sin productos registrados</td></tr>
                                 ) : lista.map((p) => (
                                     <tr key={p.id} className={`border-b theme-border hover:bg-black/5 dark:hover:bg-white/5 ${!p.activo ? 'opacity-50' : ''}`}>
+                                        <td className="px-4 py-3">
+                                            {p.miniatura_url ? (
+                                                <img src={p.miniatura_url} alt="" className="w-10 h-10 object-cover rounded-lg border theme-border" />
+                                            ) : (
+                                                <span className="text-[10px] font-bold theme-text-muted">Sin imagen</span>
+                                            )}
+                                        </td>
                                         <td className="px-4 py-3 text-[11px] font-bold theme-text-muted">#{p.folio}</td>
                                         <td className="px-4 py-3">
-                                            <span className="font-black text-sm theme-text-main block">{p.descripcion}</span>
+                                            <Link href={hrefFichaProducto(p.id, { desde: 'productos', q: filtros?.q, sort: filtros?.sort, dir: filtros?.dir, page: productos?.current_page, sin_imagen: filtros?.sin_imagen })} className="font-black text-sm theme-text-main block">
+                                                {p.descripcion}
+                                            </Link>
                                             <span className="text-[10px] font-bold theme-text-muted">SKU: {p.sku}</span>
                                         </td>
                                         <td className="px-4 py-3 text-[11px] font-bold theme-text-main">{p.marca?.nombre || '—'}</td>
@@ -366,6 +383,7 @@ export default function Index({ auth, productos, marcas, categorias, tipos = [],
                     </div>
                     {lista.length > 0 && <GeliaPaginacion paginator={productos} onIrAPagina={irAPagina} embedded />}
                 </div>
+                {puedeImagenes && <CargaMultipleImagenes />}
             </div>
 
             {modalAbierto && createPortal(

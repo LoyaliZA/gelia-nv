@@ -3,8 +3,9 @@
 use App\Http\Controllers\Almacenes\AlmacenCatalogoController;
 use App\Http\Controllers\Almacenes\AlmacenesResumenController;
 use App\Http\Controllers\Almacenes\CoberturaController;
-use App\Http\Controllers\Almacenes\EstablecerSucursalActivaAlmacenesController;
 use App\Http\Controllers\Almacenes\CostoController as AlmacenCostoController;
+use App\Http\Controllers\Almacenes\EstablecerSucursalActivaAlmacenesController;
+use App\Http\Controllers\Almacenes\FichaProductoAlmacenController;
 use App\Http\Controllers\Almacenes\ImportacionAlmacenController;
 use App\Http\Controllers\Almacenes\ImportacionLoteController;
 use App\Http\Controllers\Almacenes\InventarioController as AlmacenInventarioController;
@@ -14,6 +15,9 @@ $permisoImportar = 'gestion_interna.productos.gestionar|gestion_interna.producto
 
 Route::prefix('almacenes')->name('almacenes.')->group(function () use ($permisoImportar) {
     Route::permanentRedirect('/productos', '/gestion-interna/productos');
+    Route::get('/productos/{producto}/ficha', [FichaProductoAlmacenController::class, 'show'])
+        ->middleware('role_or_permission:gestion_interna.productos.ver|catalogos.gestionar|almacenes.productos.ver')
+        ->name('productos.ficha');
 
     Route::get('/', [AlmacenesResumenController::class, 'index'])
         ->middleware('role_or_permission:almacenes.inventarios.ver|almacenes.costos.ver|gestion_interna.productos.ver|almacenes.productos.ver|catalogos.gestionar')

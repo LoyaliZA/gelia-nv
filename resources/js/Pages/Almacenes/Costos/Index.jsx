@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { DollarSign, Plus, Edit2, Trash2, Save, Search, UploadCloud } from 'lucide-react';
@@ -6,10 +6,11 @@ import AppLayout from '@/Layouts/AppLayout';
 import GeliaPaginacion from '@/Components/GeliaPaginacion';
 import GeliaLoader from '@/Components/GeliaLoader';
 import EncabezadoOrdenable from '@/Components/Almacenes/EncabezadoOrdenable';
+import EnlacesContextoAlmacen, { puedeVerProductosPorAlmacen } from '@/Components/Almacenes/EnlacesContextoAlmacen';
 import SelectorProducto from '@/Components/Almacenes/SelectorProducto';
 import { geliaCardClass, THEME_BTN_PRIMARY, THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from '@/utils/geliaTheme';
 
-export default function Index({ auth, costos, sucursales, almacenes, filtros }) {
+export default function Index({ auth, costos, sucursales, almacenes, filtros, sin_sucursales_operables }) {
     const [modalAbierto, setModalAbierto] = useState(false);
     const [itemActual, setItemActual] = useState(null);
     const [sucursalId, setSucursalId] = useState(filtros?.sucursal_id || '');
@@ -34,16 +35,40 @@ export default function Index({ auth, costos, sucursales, almacenes, filtros }) 
         precio_venta: '',
     });
 
-    const paramsBase = useCallback((extra = {}) => ({
-        sucursal_id: sucursalId,
-        almacen_id: almacenId,
-        q: busqueda,
-        sort: filtros?.sort,
-        dir: filtros?.dir,
-        ...extra,
-    }), [sucursalId, almacenId, busqueda, filtros?.sort, filtros?.dir]);
+    const paramsBase = useCallback((extra = {}) => {
+        const params = {
+            sucursal_id: sucursalId,
+            almacen_id: almacenId,
+            q: busqueda,
+            sort: filtros?.sort,
+            dir: filtros?.dir,
+            filtro: filtros?.filtro,
+            ...extra,
+        };
+
+        const texto = (valor, permitidos) => (typeof valor === 'string' && permitidos.includes(valor) ? valor : undefined);
+
+        return {
+            sucursal_id: params.sucursal_id || undefined,
+            almacen_id: params.almacen_id || undefined,
+            q: params.q || undefined,
+            sort: texto(params.sort, ['producto', 'almacen', 'costo', 'costo_reposicion', 'precio_venta']),
+            dir: texto(params.dir, ['asc', 'desc']),
+            filtro: texto(params.filtro, ['costo_cero', 'sin_precio']),
+            page: params.page,
+        };
+    }, [sucursalId, almacenId, busqueda, filtros?.sort, filtros?.dir, filtros?.filtro]);
+
+    const paramsRef = useRef(paramsBase);
+    paramsRef.current = paramsBase;
+    const busquedaTimer = useRef(null);
+    const cancelarBusquedaPendiente = () => {
+        clearTimeout(busquedaTimer.current);
+        busquedaTimer.current = null;
+    };
 
     const aplicarFiltros = (extra = {}) => {
+        cancelarBusquedaPendiente();
         router.get(route('almacenes.costos.index'), paramsBase(extra), { preserveState: true, replace: true });
     };
 
@@ -56,11 +81,13 @@ export default function Index({ auth, costos, sucursales, almacenes, filtros }) 
 
     useEffect(() => {
         if (busqueda === (filtros?.q ?? '')) return undefined;
-        const timer = setTimeout(() => {
-            router.get(route('almacenes.costos.index'), paramsBase({ q: busqueda, page: 1 }), { preserveState: true, replace: true });
+        const q = busqueda;
+        busquedaTimer.current = setTimeout(() => {
+            busquedaTimer.current = null;
+            router.get(route('almacenes.costos.index'), paramsRef.current({ q, page: 1 }), { preserveState: true, replace: true });
         }, 400);
-        return () => clearTimeout(timer);
-    }, [busqueda]);
+        return cancelarBusquedaPendiente;
+    }, [busqueda, filtros?.q]);
 
     const abrirNuevo = () => {
         setItemActual(null);
@@ -94,7 +121,7 @@ export default function Index({ auth, costos, sucursales, almacenes, filtros }) 
 
     return (
         <AppLayout auth={auth}>
-            <Head title="Costos" />
+            <Head title="Costos y precios" />
             <GeliaLoader isVisible={processing} message="Guardando costo_" />
 
             <div className="max-w-[1400px] mx-auto p-4 md:p-8 space-y-6">
@@ -103,7 +130,7 @@ export default function Index({ auth, costos, sucursales, almacenes, filtros }) 
                         <div>
                             <h1 className="text-2xl font-black italic uppercase theme-text-main flex items-center gap-3">
                                 <DollarSign className="w-7 h-7" style={{ color: 'var(--color-primario)' }} />
-                                Costos por Almacén
+                                Costos y precios
                             </h1>
                             <p className="text-[11px] font-bold theme-text-muted mt-2 max-w-2xl">
                                 El precio de venta aquí es referencia del almacén; no actualiza automáticamente TiendaNube ni listas comerciales.
@@ -124,12 +151,20 @@ export default function Index({ auth, costos, sucursales, almacenes, filtros }) 
                             </div>
                         )}
                     </div>
+                    {sin_sucursales_operables ? (
+                        <div className="text-center">
+                            <p className="text-sm font-bold theme-text-main">Sin sucursales operables asignadas a tu usuario.</p>
+                            <p className="text-[11px] font-bold theme-text-muted mt-2">Solicita acceso a una sucursal para consultar costos y precios en este módulo.</p>
+                        </div>
+                    ) : (
+                    <div className="space-y-3">
+                    <EnlacesContextoAlmacen auth={auth} sucursalId={sucursalId} almacenId={almacenId} q={busqueda} actual="costos" />
                     <div className="flex flex-wrap gap-2">
-                        <select value={sucursalId} onChange={(e) => { setSucursalId(e.target.value); setAlmacenId(''); }} className="theme-input px-3 py-2 text-[11px] font-bold uppercase">
+                        <select value={sucursalId} onChange={(e) => { const valor = e.target.value; setSucursalId(valor); setAlmacenId(''); aplicarFiltros({ sucursal_id: valor, almacen_id: '', page: 1 }); }} className="theme-input px-3 py-2 text-[11px] font-bold uppercase">
                             <option value="">Todas las sucursales</option>
                             {sucursales.map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
                         </select>
-                        <select value={almacenId} onChange={(e) => setAlmacenId(e.target.value)} className="theme-input px-3 py-2 text-[11px] font-bold uppercase">
+                        <select value={almacenId} onChange={(e) => { const valor = e.target.value; setAlmacenId(valor); aplicarFiltros({ almacen_id: valor, page: 1 }); }} className="theme-input px-3 py-2 text-[11px] font-bold uppercase">
                             <option value="">Todos los almacenes</option>
                             {almacenesFiltrados.map((a) => <option key={a.id} value={a.id}>{a.codigo} - {a.nombre}</option>)}
                         </select>
@@ -139,10 +174,15 @@ export default function Index({ auth, costos, sucursales, almacenes, filtros }) 
                         </form>
                         <button onClick={() => aplicarFiltros({ page: 1 })} className="px-4 py-2 text-[10px] font-black uppercase theme-element border theme-border rounded-xl">Filtrar</button>
                         <button type="button" onClick={() => aplicarFiltros({ filtro: 'costo_cero', page: 1 })} className="px-4 py-2 text-[10px] font-black uppercase theme-element border theme-border rounded-xl">Costo cero</button>
-                        <Link href={route('almacenes.cobertura.index', { costo: 'sin', almacen_id: almacenId || undefined })} className="px-4 py-2 text-[10px] font-black uppercase theme-element border theme-border rounded-xl">Sin costo (cobertura)</Link>
+                        {puedeVerProductosPorAlmacen(auth) && (
+                            <Link href={route('almacenes.cobertura.index', { costo: 'sin', sucursal_id: sucursalId || undefined, almacen_id: almacenId || undefined, q: busqueda || undefined })} className="px-4 py-2 text-[10px] font-black uppercase theme-element border theme-border rounded-xl">Productos sin costo</Link>
+                        )}
                     </div>
+                    </div>
+                    )}
                 </header>
 
+                {!sin_sucursales_operables && (
                 <div className={geliaCardClass('overflow-hidden')}>
                     <div className="overflow-x-auto">
                         <table className="w-full text-left min-w-[800px]">
@@ -191,6 +231,7 @@ export default function Index({ auth, costos, sucursales, almacenes, filtros }) 
                     </div>
                     {lista.length > 0 && <GeliaPaginacion paginator={costos} onIrAPagina={(p) => aplicarFiltros({ page: p })} embedded />}
                 </div>
+                )}
             </div>
 
             {modalAbierto && createPortal(

@@ -2,39 +2,74 @@
 
 namespace App\Providers;
 
+use App\Contracts\Medios\AlmacenObjetosMedio;
+use App\Contracts\PuntoVenta\ConsultaPersonaDisponiblePdv;
+use App\Contracts\PuntoVenta\ResuelveAlcancePdv;
+use App\Contracts\PuntoVenta\ResuelvePlazosCustodiaResguardoPdv;
+use App\Listeners\PreventDestructiveDatabaseCommands;
+use App\Listeners\PuntoVenta\Broadcast\TransmitirCambioPdvRealtimeSubscriber;
+use App\Listeners\PuntoVenta\LiberarTerminalAlertasSucursalAlCerrarSesion;
+use App\Listeners\PuntoVenta\NotificarTurnoPdvSubscriber;
 use App\Models\ApiAplicacion;
-use App\Models\Cliente;
-use App\Models\User;
-use Illuminate\Cache\RateLimiting\Limit;
-use Illuminate\Http\Request;
-use Illuminate\Support\ServiceProvider;
-use Illuminate\Support\Facades\Broadcast;
-use Illuminate\Support\Facades\RateLimiter;
-use Illuminate\Support\Facades\URL;
-use Illuminate\Support\Facades\Gate;
-use Illuminate\Support\Facades\Route;
-use App\Models\SolicitudTag;
-use App\Models\SolicitudFactura;
-use App\Models\SolicitudTraspaso;
-use App\Observers\SolicitudTagObserver;
-// Importaciones requeridas para el módulo de auditoría de catálogos
-use App\Models\CatalogoListaDescuento;
-use App\Models\RhColaborador;
-use App\Models\CatalogoPuesto;
-use App\Models\CatalogoTipoFalta;
 use App\Models\CatalogoBono;
+use App\Models\CatalogoListaDescuento;
+use App\Models\CatalogoPuesto;
 use App\Models\CatalogoReglaIncidencia;
-use App\Models\Producto;
+use App\Models\CatalogoTipoFalta;
+use App\Models\Cliente;
+// Importaciones requeridas para el módulo de auditoría de catálogos
+use App\Models\ConfiguracionSistema;
 use App\Models\Contabilidad\Pedido as ContabilidadPedido;
 use App\Models\ControlPedidos\PedidoBma;
+use App\Models\ControlPedidos\PedidoBmaCaratula;
+use App\Models\ControlPedidos\PedidoBmaCumplimientoFisico;
+use App\Models\ControlPedidos\PedidoBmaTareaDocumento;
 use App\Models\ControlPedidos\PedidoBmaTareaPreparacion;
-use App\Models\RhHorasExtra;
+use App\Models\Inventario;
+use App\Models\Producto;
+use App\Models\ProductoCosto;
+use App\Models\RhColaborador;
 use App\Models\RhDeduccion;
+use App\Models\RhHorasExtra;
 use App\Models\RhPrestamoPagoFijo;
+use App\Models\SolicitudFactura;
+use App\Models\SolicitudTag;
+use App\Models\SolicitudTraspaso;
+use App\Models\User;
 use App\Observers\CatalogoListaDescuentoObserver;
-use App\Listeners\PreventDestructiveDatabaseCommands;
+use App\Observers\ClienteObserver;
+use App\Observers\PedidoBmaTareaPreparacionCaratulaObserver;
+use App\Observers\PreparacionPedidosRealtimeObserver;
+use App\Observers\SolicitudTagObserver;
+use App\Services\Auth\CacheWebAuthnChallengeRepository;
+use App\Services\Demo\AlcanceDemo;
+use App\Services\GeliaAi\Acciones\AccionRegistry;
+use App\Services\GeliaAi\Acciones\GenerarListadoAccion;
+use App\Services\GeliaAi\Acciones\ImportarCostosAccion;
+use App\Services\GeliaAi\Acciones\ImportarInventariosAccion;
+use App\Services\Medios\AlmacenObjetosMedioFake;
+use App\Services\Medios\AlmacenObjetosMedioR2;
+use App\Services\PuntoVenta\AlcancePdv;
+use App\Services\PuntoVenta\Operacion\ConsultaPersonaDisponiblePdvService;
+use App\Services\PuntoVenta\Resguardos\PlazosCustodiaResguardoPdvConfig;
+use App\Support\WebAuthn\PasskeyOrigins;
+use Illuminate\Auth\Events\Logout;
+use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Console\Events\CommandStarting;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Broadcast;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\URL;
+use Illuminate\Support\ServiceProvider;
+use Laragear\WebAuthn\Contracts\WebAuthnChallengeRepository;
+use Spatie\Permission\Models\Permission;
+use Spatie\Permission\PermissionRegistrar;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -43,46 +78,54 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        $this->app->singleton(\App\Services\Demo\AlcanceDemo::class);
+        // El caché de config anterior a esta fase no incluye el archivo nuevo.
+        if ($this->app['config']->get('productos_imagenes') === null) {
+            $this->app['config']->set(
+                'productos_imagenes',
+                require $this->app->configPath('productos_imagenes.php')
+            );
+        }
+
+        $this->app->singleton(AlcanceDemo::class);
 
         $this->app->singleton(
-            \App\Contracts\PuntoVenta\ResuelveAlcancePdv::class,
-            \App\Services\PuntoVenta\AlcancePdv::class
+            ResuelveAlcancePdv::class,
+            AlcancePdv::class
         );
 
         $this->app->singleton(
-            \App\Contracts\PuntoVenta\ResuelvePlazosCustodiaResguardoPdv::class,
-            \App\Services\PuntoVenta\Resguardos\PlazosCustodiaResguardoPdvConfig::class
+            ResuelvePlazosCustodiaResguardoPdv::class,
+            PlazosCustodiaResguardoPdvConfig::class
         );
 
         $this->app->singleton(
-            \App\Contracts\PuntoVenta\ConsultaPersonaDisponiblePdv::class,
-            \App\Services\PuntoVenta\Operacion\ConsultaPersonaDisponiblePdvService::class
+            ConsultaPersonaDisponiblePdv::class,
+            ConsultaPersonaDisponiblePdvService::class
         );
 
         $this->app->singleton(
-            \App\Contracts\Medios\AlmacenObjetosMedio::class,
+            AlmacenObjetosMedio::class,
             function ($app) {
                 $driver = (string) config('medios.driver', 'r2');
                 if ($app->environment('testing') || $driver === 'fake') {
-                    return new \App\Services\Medios\AlmacenObjetosMedioFake;
+                    return new AlmacenObjetosMedioFake;
                 }
 
-                return $app->make(\App\Services\Medios\AlmacenObjetosMedioR2::class);
+                return $app->make(AlmacenObjetosMedioR2::class);
             }
         );
 
-        $this->app->singleton(\App\Services\GeliaAi\Acciones\AccionRegistry::class, function ($app) {
-            return new \App\Services\GeliaAi\Acciones\AccionRegistry([
-                $app->make(\App\Services\GeliaAi\Acciones\ImportarCostosAccion::class),
-                $app->make(\App\Services\GeliaAi\Acciones\ImportarInventariosAccion::class),
-                $app->make(\App\Services\GeliaAi\Acciones\GenerarListadoAccion::class),
+        $this->app->singleton(AccionRegistry::class, function ($app) {
+            return new AccionRegistry([
+                $app->make(ImportarCostosAccion::class),
+                $app->make(ImportarInventariosAccion::class),
+                $app->make(GenerarListadoAccion::class),
             ]);
         });
 
         $this->app->singleton(
-            \Laragear\WebAuthn\Contracts\WebAuthnChallengeRepository::class,
-            \App\Services\Auth\CacheWebAuthnChallengeRepository::class
+            WebAuthnChallengeRepository::class,
+            CacheWebAuthnChallengeRepository::class
         );
     }
 
@@ -93,12 +136,12 @@ class AppServiceProvider extends ServiceProvider
     {
         // Cargar configuraciones del sistema desde la base de datos
         try {
-            if (\Illuminate\Support\Facades\Schema::hasTable('configuraciones_sistema')) {
+            if (Schema::hasTable('configuraciones_sistema')) {
                 // Ensure class is loaded so any lingering old cache can unserialize properly
-                class_exists(\App\Models\ConfiguracionSistema::class);
-                
-                $configuraciones = \Illuminate\Support\Facades\Cache::rememberForever('configuraciones_sistema_globales', function () {
-                    return \App\Models\ConfiguracionSistema::all()->toArray();
+                class_exists(ConfiguracionSistema::class);
+
+                $configuraciones = Cache::rememberForever('configuraciones_sistema_globales', function () {
+                    return ConfiguracionSistema::all()->toArray();
                 });
 
                 foreach ($configuraciones as $configuracion) {
@@ -114,7 +157,9 @@ class AppServiceProvider extends ServiceProvider
                         continue;
                     }
 
-                    if (!$clave) continue;
+                    if (! $clave) {
+                        continue;
+                    }
 
                     // Castear booleanos y limpiar strings
                     if ($tipo === 'boolean') {
@@ -152,10 +197,10 @@ class AppServiceProvider extends ServiceProvider
             }
         } catch (\Throwable $e) {
             // Ignorar errores durante la carga inicial o migraciones si la tabla no existe
-            \Illuminate\Support\Facades\Log::error('AppServiceProvider config load error: ' . $e->getMessage());
+            Log::error('AppServiceProvider config load error: '.$e->getMessage());
         }
 
-        \App\Support\WebAuthn\PasskeyOrigins::apply();
+        PasskeyOrigins::apply();
 
         // 1. Forzar HTTPS cuando la app pública es https (o env production).
         // Evita links de paginación/Inertia en http:// detrás de Cloudflare/proxy → HttpNetworkError.
@@ -176,23 +221,23 @@ class AppServiceProvider extends ServiceProvider
         // Si los IDs de permissions cambian y la caché no se limpia, can() falla para todos menos Super Admin.
         $this->app->booted(function () {
             try {
-                $sample = \Spatie\Permission\Models\Permission::query()
+                $sample = Permission::query()
                     ->orderByDesc('id')
                     ->first(['id', 'name', 'guard_name']);
                 if (! $sample) {
                     return;
                 }
-                $fromCache = \Spatie\Permission\Models\Permission::findByName(
+                $fromCache = Permission::findByName(
                     $sample->name,
                     $sample->guard_name
                 );
                 if ((int) $fromCache->id === (int) $sample->id) {
                     return;
                 }
-                app(\Spatie\Permission\PermissionRegistrar::class)->forgetCachedPermissions();
+                app(PermissionRegistrar::class)->forgetCachedPermissions();
             } catch (\Throwable $e) {
                 try {
-                    app(\Spatie\Permission\PermissionRegistrar::class)->forgetCachedPermissions();
+                    app(PermissionRegistrar::class)->forgetCachedPermissions();
                 } catch (\Throwable) {
                 }
             }
@@ -200,15 +245,15 @@ class AppServiceProvider extends ServiceProvider
 
         // 3. Registro de Observadores
         SolicitudTag::observe(SolicitudTagObserver::class);
-        
+
         // CONEXIÓN DEL NUEVO OBSERVADOR PARA CATÁLOGOS
         CatalogoListaDescuento::observe(CatalogoListaDescuentoObserver::class);
-        Cliente::observe(\App\Observers\ClienteObserver::class);
-        PedidoBmaTareaPreparacion::observe(\App\Observers\PedidoBmaTareaPreparacionCaratulaObserver::class);
-        \App\Models\ControlPedidos\PedidoBma::observe(\App\Observers\PreparacionPedidosRealtimeObserver::class);
-        PedidoBmaTareaPreparacion::observe(\App\Observers\PreparacionPedidosRealtimeObserver::class);
-        \App\Models\ControlPedidos\PedidoBmaCumplimientoFisico::observe(\App\Observers\PreparacionPedidosRealtimeObserver::class);
-        \App\Models\ControlPedidos\PedidoBmaTareaDocumento::observe(\App\Observers\PreparacionPedidosRealtimeObserver::class);
+        Cliente::observe(ClienteObserver::class);
+        PedidoBmaTareaPreparacion::observe(PedidoBmaTareaPreparacionCaratulaObserver::class);
+        PedidoBma::observe(PreparacionPedidosRealtimeObserver::class);
+        PedidoBmaTareaPreparacion::observe(PreparacionPedidosRealtimeObserver::class);
+        PedidoBmaCumplimientoFisico::observe(PreparacionPedidosRealtimeObserver::class);
+        PedidoBmaTareaDocumento::observe(PreparacionPedidosRealtimeObserver::class);
 
         Broadcast::routes([
             'middleware' => ['auth:sanctum'],
@@ -219,11 +264,11 @@ class AppServiceProvider extends ServiceProvider
         // NO usar Event::listen aquí: duplicaba cada push (2x blast).
         Event::listen(CommandStarting::class, PreventDestructiveDatabaseCommands::class);
         Event::listen(
-            \Illuminate\Auth\Events\Logout::class,
-            \App\Listeners\PuntoVenta\LiberarTerminalAlertasSucursalAlCerrarSesion::class,
+            Logout::class,
+            LiberarTerminalAlertasSucursalAlCerrarSesion::class,
         );
-        Event::subscribe(\App\Listeners\PuntoVenta\Broadcast\TransmitirCambioPdvRealtimeSubscriber::class);
-        Event::subscribe(\App\Listeners\PuntoVenta\NotificarTurnoPdvSubscriber::class);
+        Event::subscribe(TransmitirCambioPdvRealtimeSubscriber::class);
+        Event::subscribe(NotificarTurnoPdvSubscriber::class);
 
         Route::bind('factura', fn (string $value) => SolicitudFactura::where('id', $value)->orWhere('folio', $value)->firstOrFail());
         Route::bind('traspaso', fn (string $value) => SolicitudTraspaso::where('id', $value)->orWhere('folio', $value)->firstOrFail());
@@ -237,13 +282,13 @@ class AppServiceProvider extends ServiceProvider
         Route::bind('bono', fn (string $value) => CatalogoBono::findOrFail($value));
         Route::bind('reglaIncidencia', fn (string $value) => CatalogoReglaIncidencia::findOrFail($value));
         Route::bind('producto', fn (string $value) => Producto::findOrFail($value));
-        Route::bind('inventario', fn (string $value) => \App\Models\Inventario::findOrFail($value));
-        Route::bind('costo', fn (string $value) => \App\Models\ProductoCosto::findOrFail($value));
+        Route::bind('inventario', fn (string $value) => Inventario::findOrFail($value));
+        Route::bind('costo', fn (string $value) => ProductoCosto::findOrFail($value));
         Route::bind('pedido', fn (string $value) => ContabilidadPedido::findOrFail($value));
         Route::bind('pedidoBma', fn (string $value) => PedidoBma::findOrFail($value));
         Route::bind('tarea', fn (string $value) => PedidoBmaTareaPreparacion::findOrFail($value));
-        Route::bind('tareaDocumento', fn (string $value) => \App\Models\ControlPedidos\PedidoBmaTareaDocumento::findOrFail($value));
-        Route::bind('caratula', fn (string $value) => \App\Models\ControlPedidos\PedidoBmaCaratula::findOrFail($value));
+        Route::bind('tareaDocumento', fn (string $value) => PedidoBmaTareaDocumento::findOrFail($value));
+        Route::bind('caratula', fn (string $value) => PedidoBmaCaratula::findOrFail($value));
 
         RateLimiter::for('api-externa', function (Request $request) {
             $aplicacion = $request->user();
@@ -252,8 +297,8 @@ class AppServiceProvider extends ServiceProvider
                 : 30;
 
             $key = $aplicacion instanceof ApiAplicacion
-                ? 'api-app:' . $aplicacion->id
-                : 'api-ip:' . $request->ip();
+                ? 'api-app:'.$aplicacion->id
+                : 'api-ip:'.$request->ip();
 
             return Limit::perMinute($limite)->by($key);
         });

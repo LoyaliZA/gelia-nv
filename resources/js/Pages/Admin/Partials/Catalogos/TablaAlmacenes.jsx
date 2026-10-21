@@ -16,6 +16,7 @@ export default function TablaAlmacenes({
     puedeGestionar = true,
     rutas = { store: 'admin.catalogos.almacenes.store', update: 'admin.catalogos.almacenes.update', destroy: 'admin.catalogos.almacenes.destroy' },
     sucursalIdPorDefecto = '',
+    accionFila = null,
 }) {
     const [modalAbierto, setModalAbierto] = useState(false);
     const [modalEliminar, setModalEliminar] = useState(false);
@@ -98,6 +99,7 @@ export default function TablaAlmacenes({
                                 </span>
                             </td>
                             <td className="px-6 py-4 text-right">
+                                {typeof accionFila === 'function' ? accionFila(item) : null}
                                 {puedeGestionar && (
                                     <>
                                         <button type="button" onClick={() => abrirEditar(item)} className="p-2 theme-element border theme-border rounded-xl mr-2"><Edit2 className="w-4 h-4" /></button>
