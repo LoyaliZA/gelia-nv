@@ -39,9 +39,38 @@ class AlmacenArchivoImagenProducto
 
     public function guardarMiniatura(string $claveOriginal, string $rutaLocal): string
     {
-        $clave = dirname($claveOriginal).'/miniatura.webp';
+        // Clave nueva: una escritura fallida no abre ni trunca la miniatura vigente.
+        $clave = dirname($claveOriginal).'/miniatura-'.Str::uuid().'.webp';
 
         return $this->copiar($rutaLocal, $clave);
+    }
+
+    public function existe(string $clave): bool
+    {
+        return $this->claveBajoPrefijo($clave) && Storage::disk($this->disco())->exists($clave);
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function miniaturasJuntoAlOriginal(string $claveOriginal): array
+    {
+        $directorio = dirname($claveOriginal);
+        if (! $this->claveBajoPrefijo($directorio)) {
+            return [];
+        }
+        try {
+            $archivos = Storage::disk($this->disco())->files($directorio);
+        } catch (\Throwable) {
+            return [];
+        }
+
+        return array_values(array_filter(
+            $archivos,
+            fn ($archivo) => is_string($archivo)
+                && $archivo !== $claveOriginal
+                && str_starts_with(basename($archivo), 'miniatura'),
+        ));
     }
 
     public function claveDelProducto(string $clave, int $productoId): bool
@@ -148,7 +177,20 @@ class AlmacenArchivoImagenProducto
             ]);
         }
         try {
-            Storage::disk($this->disco())->writeStream($clave, $stream);
+            try {
+                $escrito = Storage::disk($this->disco())->writeStream($clave, $stream);
+            } catch (\Throwable) {
+                $this->retirarEscrituraIncompleta($clave);
+                throw ValidationException::withMessages([
+                    'archivo' => 'No se pudo guardar el archivo.',
+                ]);
+            }
+            if ($escrito !== true) {
+                $this->retirarEscrituraIncompleta($clave);
+                throw ValidationException::withMessages([
+                    'archivo' => 'No se pudo guardar el archivo.',
+                ]);
+            }
         } finally {
             if (is_resource($stream)) {
                 fclose($stream);
@@ -156,6 +198,24 @@ class AlmacenArchivoImagenProducto
         }
 
         return $clave;
+    }
+
+    private function retirarEscrituraIncompleta(string $clave): void
+    {
+        if (! $this->claveBajoPrefijo($clave) || $this->estaReferenciada($clave)) {
+            return;
+        }
+        try {
+            $disk = Storage::disk($this->disco());
+            if (! $disk->exists($clave)) {
+                return;
+            }
+            if (! $disk->delete($clave)) {
+                $this->registrarLimpieza($clave);
+            }
+        } catch (\Throwable) {
+            $this->registrarLimpieza($clave);
+        }
     }
 
     private function claveBajoPrefijo(string $clave): bool

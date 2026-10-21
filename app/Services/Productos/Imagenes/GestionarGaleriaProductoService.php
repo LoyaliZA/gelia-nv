@@ -45,14 +45,17 @@ class GestionarGaleriaProductoService
         $this->pertenece($producto, $imagen);
         $meta = $this->validador->inspeccionar($archivo->getRealPath());
         $clave = $this->archivos->guardarOriginal($producto->id, $archivo->getRealPath(), $meta['extension']);
-        $anteriores = array_filter([$imagen->clave_original, $imagen->clave_miniatura]);
 
         try {
-            $actualizada = $this->bloquear($producto->id, function () use ($producto, $imagen, $clave, $meta) {
+            [$actualizada, $anteriores] = $this->bloquear($producto->id, function () use ($producto, $imagen, $clave, $meta) {
                 $fila = $this->filaBloqueada($producto->id, $imagen->id);
+                $anteriores = array_values(array_filter([
+                    $fila->clave_original,
+                    $fila->clave_miniatura,
+                ]));
                 $this->aplicarArchivo($fila, $clave, $meta);
 
-                return $fila->fresh() ?? $fila;
+                return [$fila->fresh() ?? $fila, $anteriores];
             });
         } catch (\Throwable $e) {
             $this->descartarClaveNueva($clave);
@@ -134,11 +137,16 @@ class GestionarGaleriaProductoService
     public function desvincular(Producto $producto, ProductoImagen $imagen): void
     {
         $this->pertenece($producto, $imagen);
-        $claves = array_filter([$imagen->clave_original, $imagen->clave_miniatura]);
-        $this->bloquear($producto->id, function () use ($producto, $imagen) {
+        $claves = $this->bloquear($producto->id, function () use ($producto, $imagen) {
             $fila = $this->filaBloqueada($producto->id, $imagen->id);
+            $claves = array_values(array_filter([
+                $fila->clave_original,
+                $fila->clave_miniatura,
+            ]));
             $fila->delete();
             $this->asegurarPrincipal($producto->id);
+
+            return $claves;
         });
         $this->retirarClaves($claves, []);
     }
@@ -146,27 +154,52 @@ class GestionarGaleriaProductoService
     public function reintentarMiniatura(Producto $producto, ProductoImagen $imagen): ProductoImagen
     {
         $this->pertenece($producto, $imagen);
-        $anterior = $imagen->clave_miniatura;
-        try {
-            $clave = $this->miniaturas->generar($imagen->clave_original);
-        } catch (ValidationException) {
-            return $imagen;
-        }
-
-        $actualizada = $this->bloquear($producto->id, function () use ($producto, $imagen, $clave) {
-            $fila = $this->filaBloqueada($producto->id, $imagen->id);
-            $fila->clave_miniatura = $clave;
-            $fila->estado = 'lista';
-            $fila->save();
-
-            return $fila;
+        // Se genera fuera del bloqueo y solo se asocia si el original vigente es el que la produjo.
+        $original = $this->bloquear($producto->id, function () use ($producto, $imagen) {
+            return $this->filaBloqueada($producto->id, $imagen->id)->clave_original;
         });
 
-        if ($anterior && $anterior !== $actualizada->clave_miniatura) {
-            $this->retirarClaves([$anterior], [$actualizada->clave_miniatura]);
+        try {
+            $claveMiniatura = $this->miniaturas->generar($original);
+        } catch (ValidationException) {
+            return $this->filaVigente($producto->id, $imagen->id);
         }
 
-        return $actualizada;
+        try {
+            $resultado = $this->bloquear($producto->id, function () use ($producto, $imagen, $original, $claveMiniatura) {
+                $fila = $this->filaBloqueada($producto->id, $imagen->id);
+                if ($fila->clave_original !== $original || ! $this->archivos->existe($claveMiniatura)) {
+                    return ['fila' => $fila, 'asociada' => false, 'anterior' => null];
+                }
+                $anterior = $fila->clave_miniatura;
+                $fila->clave_miniatura = $claveMiniatura;
+                $fila->estado = 'lista';
+                $fila->save();
+
+                return ['fila' => $fila, 'asociada' => true, 'anterior' => $anterior];
+            });
+        } catch (\Throwable $e) {
+            $this->retirarClaves([$claveMiniatura], []);
+            throw $e;
+        }
+
+        if (! $resultado['asociada']) {
+            $this->retirarClaves(
+                [$claveMiniatura],
+                [$resultado['fila']->clave_original, $resultado['fila']->clave_miniatura],
+            );
+
+            return $resultado['fila'];
+        }
+
+        if (is_string($resultado['anterior']) && $resultado['anterior'] !== $claveMiniatura) {
+            $this->retirarClaves(
+                [$resultado['anterior']],
+                [$resultado['fila']->clave_original, $resultado['fila']->clave_miniatura],
+            );
+        }
+
+        return $resultado['fila'];
     }
 
     /**
@@ -233,7 +266,13 @@ class GestionarGaleriaProductoService
     private function aplicarMiniatura(ProductoImagen $imagen, string $claveOriginal): void
     {
         try {
-            $imagen->clave_miniatura = $this->miniaturas->generar($claveOriginal);
+            $claveMiniatura = $this->miniaturas->generar($claveOriginal);
+            if (! $this->archivos->existe($claveMiniatura)) {
+                throw ValidationException::withMessages([
+                    'miniatura' => 'No se pudo guardar la miniatura.',
+                ]);
+            }
+            $imagen->clave_miniatura = $claveMiniatura;
             $imagen->estado = 'lista';
         } catch (ValidationException) {
             $imagen->clave_miniatura = null;
@@ -332,6 +371,21 @@ class GestionarGaleriaProductoService
 
     private function descartarClaveNueva(string $clave): void
     {
-        $this->retirarClaves([$clave, dirname($clave).'/miniatura.webp'], []);
+        $this->retirarClaves(array_merge([$clave], $this->archivos->miniaturasJuntoAlOriginal($clave)), []);
+    }
+
+    private function filaVigente(int $productoId, int $imagenId): ProductoImagen
+    {
+        $fila = ProductoImagen::query()
+            ->where('producto_id', $productoId)
+            ->whereKey($imagenId)
+            ->first();
+        if (! $fila instanceof ProductoImagen) {
+            throw ValidationException::withMessages([
+                'imagen' => 'La imagen no pertenece a este producto.',
+            ]);
+        }
+
+        return $fila;
     }
 }
