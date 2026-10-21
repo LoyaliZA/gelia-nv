@@ -220,10 +220,10 @@ class EscalonamientoService
         $totalProyectadoBruto = round($montoHistorico + $montoCotizado, 2);
 
         $listaCalificadaBruto = $this->buscarListaCalificadaPorCatalogo($listasValidas, $totalProyectadoBruto);
-        $listaCalificadaEfectiva = $this->resolverListaPorMontoBrutoAcumulado(
-            $totalProyectadoBruto,
-            $listasValidas,
-            $listaActual
+        // El acumulado ya pagado es neto. Solo la cotización nueva lleva el descuento
+        // adicional, así que no se compara contra monto_requerido / (1 − %).
+        $listaCalificadaEfectiva = $listasValidas->first(
+            fn ($l) => $this->calificaPorNetoDeLista($l, $montoHistorico, $montoCotizado, $listaActual)
         );
 
         $listaProvisional = $listaCalificadaBruto;
@@ -302,7 +302,7 @@ class EscalonamientoService
                 'nombre' => $l->nombre,
                 'monto_requerido' => (float) $l->monto_requerido,
                 'umbral_efectivo' => $this->umbralIncremental($l, $listaActual),
-                'cubre' => $totalProyectadoBruto >= $this->umbralIncremental($l, $listaActual),
+                'cubre' => $this->calificaPorNetoDeLista($l, $montoHistorico, $montoCotizado, $listaActual),
             ])
             ->values()
             ->all();
@@ -356,6 +356,23 @@ class EscalonamientoService
             ->filter(fn ($l) => $this->visibleEnSolicitudes($l))
             ->sortByDesc(fn ($l) => (float) $l->monto_requerido)
             ->values();
+    }
+
+    private function calificaPorNetoDeLista(
+        CatalogoListaDescuento $lista,
+        float $montoHistorico,
+        float $montoCotizado,
+        ?CatalogoListaDescuento $listaActual
+    ): bool {
+        $neto = round(
+            $montoHistorico + $this->calcularMontoFinalTentativo(
+                $montoCotizado,
+                $this->porcentajeAplicado($lista, $listaActual)
+            ),
+            2
+        );
+
+        return $neto >= (float) $lista->monto_requerido;
     }
 
     private function visibleEnSolicitudes(CatalogoListaDescuento $lista): bool

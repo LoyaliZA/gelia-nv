@@ -110,7 +110,12 @@ export const evaluarEscalonamiento = (cliente, cotizacion, catalogoListas, lista
         ?? catalogoListas.find(l => l.id == cliente?.lista_actual_id || l.nombre === cliente?.lista_actual)
         ?? null;
     const listaCalificadaBruto = listasValidas.find(l => totalProyectadoBruto >= parseFloat(l.monto_requerido)) || null;
-    const listaCalificadaEfectiva = resolverListaPorMontoBrutoAcumulado(totalProyectadoBruto, listasValidas, listaActual);
+    const calificaPorNetoDeLista = (lista) => {
+        const pct = porcentajeAplicado(lista, listaActual);
+        const neto = Math.round((montoHistorico + calcularMontoFinalTentativo(montoCotizado, pct)) * 100) / 100;
+        return neto >= (parseFloat(lista.monto_requerido) || 0);
+    };
+    const listaCalificadaEfectiva = listasValidas.find(calificaPorNetoDeLista) || null;
     const listaProvisional = listaCalificadaBruto;
     const requisitoListaActual = listaActual ? parseFloat(listaActual.monto_requerido || 0) : 0;
     const esAscenso = listaProvisional
@@ -182,7 +187,7 @@ export const evaluarEscalonamiento = (cliente, cotizacion, catalogoListas, lista
         nombre: l.nombre,
         monto_requerido: parseFloat(l.monto_requerido),
         umbral_efectivo: umbralIncremental(l, listaActual),
-        cubre: totalProyectadoBruto >= umbralIncremental(l, listaActual),
+        cubre: calificaPorNetoDeLista(l),
     }));
 
     return {

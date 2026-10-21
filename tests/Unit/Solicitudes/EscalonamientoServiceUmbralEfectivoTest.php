@@ -208,6 +208,23 @@ class EscalonamientoServiceUmbralEfectivoTest extends TestCase
         $this->assertNotNull($filtradas->firstWhere('nombre', 'MAYOREO ORO'));
     }
 
+    public function test_historico_pagado_4094_cotizacion_1007_50_califica_plata(): void
+    {
+        $bronce = $this->listas->firstWhere('nombre', 'MAYOREO BRONCE');
+        $resultado = $this->svc->evaluar(4094.0, 1007.5, null, $this->listas, 0.01, $bronce);
+
+        $this->assertSame('MAYOREO PLATA', $resultado['lista_anticipada']->nombre);
+        $this->assertSame('MAYOREO PLATA', $resultado['lista_calificada_efectiva']->nombre);
+        $this->assertSame('MAYOREO PLATA', $resultado['lista_calificada_neto']->nombre);
+        $this->assertTrue($resultado['mantiene_lista_anticipada']);
+        $this->assertFalse($resultado['casi_alcanza_siguiente']);
+        $this->assertEquals(5081.35, $resultado['total_proyectado_neto']);
+
+        $plata = collect($resultado['desglose_listas'])->firstWhere('nombre', 'MAYOREO PLATA');
+        $this->assertTrue($plata['cubre']);
+        $this->assertEquals(5103.06, $plata['umbral_efectivo']);
+    }
+
     public function test_evaluar_cotizacion_5204_13_provisional_plata_neto_estable(): void
     {
         $resultado = $this->svc->evaluar(0.0, 5204.13, null, $this->listas, 0.0);
