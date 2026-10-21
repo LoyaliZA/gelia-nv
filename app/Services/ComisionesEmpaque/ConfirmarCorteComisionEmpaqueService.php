@@ -2,10 +2,12 @@
 
 namespace App\Services\ComisionesEmpaque;
 
+use App\Models\ComisionesEmpaque\AreaComisionEmpaque;
 use App\Models\ComisionesEmpaque\AsignacionComisionEmpaque;
 use App\Models\ComisionesEmpaque\AuditoriaComisionEmpaque;
 use App\Models\ComisionesEmpaque\CorteComisionEmpaque;
 use App\Models\ComisionesEmpaque\CorteUnidadComisionEmpaque;
+use App\Models\ComisionesEmpaque\PeriodoComisionEmpaque;
 use App\Models\ComisionesEmpaque\RepartoComisionEmpaque;
 use App\Models\ComisionesEmpaque\TarifaComisionEmpaque;
 use App\Models\ComisionesEmpaque\UnidadComisionEmpaque;
@@ -28,6 +30,14 @@ class ConfirmarCorteComisionEmpaqueService
     {
         $incluidas = $this->unidades($areaId, $desde, $hasta, $incluirTardias);
         $errores = [];
+        $periodos = PeriodoComisionEmpaque::query()->where('area_id', $areaId)
+            ->where('desde', '<=', $hasta)->where('hasta', '>', $desde)->get();
+        $equipoPermanente = RepartoComisionEmpaque::permanente($areaId);
+        foreach ($periodos as $periodo) {
+            if (! $desde->eq($periodo->desde) || ! $hasta->copy()->addMicrosecond()->eq($periodo->hasta) || $incluirTardias) {
+                $errores[] = 'Prepare el corte con las fechas completas de un solo periodo y sin incorporar empaques de periodos anteriores.';
+            }
+        }
         $tramos = [];
         $total = 0;
         $cajas = 0;
@@ -48,12 +58,14 @@ class ConfirmarCorteComisionEmpaqueService
             $esperado = $tarifa ? (int) $unidad->cantidad_comisionable * (int) $tarifa->importe_centavos : null;
             if ($esperado === null || $esperado !== (int) $unidad->importe_centavos) {
                 $errores[] = 'La tarifa vigente ya no coincide con el importe de '.($unidad->folio_pedido ?: $unidad->clave_origen).'. Actualice antes de confirmar.';
+
                 continue;
             }
 
-            $reparto = RepartoComisionEmpaque::vigente($areaId, $unidad->empacado_at);
+            $reparto = $equipoPermanente ?? RepartoComisionEmpaque::vigente($areaId, $unidad->empacado_at);
             if (! $reparto || $reparto->lineas->isEmpty()) {
-                $errores[] = 'No hay reparto vigente el '.$unidad->empacado_at->timezone(config('app.timezone'))->format('Y-m-d H:i').' para '.$unidad->folio_pedido.'.';
+                $errores[] = 'Configure el equipo y reparto del área. No hay reparto para el '.$unidad->empacado_at->timezone(config('app.timezone'))->format('Y-m-d H:i').' para '.$unidad->folio_pedido.'.';
+
                 continue;
             }
             $clave = (string) $reparto->id;
@@ -103,6 +115,7 @@ class ConfirmarCorteComisionEmpaqueService
             'tardias' => $incluirTardias,
             'unidades' => $incluidas->map(fn (UnidadComisionEmpaque $u) => [$u->id, (int) $u->importe_centavos, (int) $u->cantidad_comisionable])->values()->all(),
             'asignaciones' => $asignaciones,
+            'repartos' => collect($tramos)->map(fn ($tramo) => $tramo['lineas'])->all(),
         ];
 
         $exclusiones = UnidadComisionEmpaque::query()
@@ -157,6 +170,7 @@ class ConfirmarCorteComisionEmpaqueService
     public function confirmar(int $areaId, Carbon $desde, Carbon $hasta, bool $incluirTardias, string $hash, User $responsable, ?int $borradorId = null): CorteComisionEmpaque
     {
         return DB::transaction(function () use ($areaId, $desde, $hasta, $incluirTardias, $hash, $responsable, $borradorId) {
+            AreaComisionEmpaque::query()->whereKey($areaId)->lockForUpdate()->firstOrFail();
             $this->assertSinSolape($areaId, $desde, $hasta);
 
             $ids = $this->unidades($areaId, $desde, $hasta, $incluirTardias)->pluck('id')->sort()->values();

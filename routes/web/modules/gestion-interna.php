@@ -42,12 +42,18 @@ Route::prefix('gestion-interna')->name('gestion_interna.')->group(function () {
         Route::get('/', [ComisionesEmpaqueController::class, 'index'])->name('index');
         Route::post('/sincronizar', [ComisionesEmpaqueController::class, 'sincronizar'])->name('sincronizar');
         Route::post('/manual', [ComisionesEmpaqueController::class, 'manual'])->name('manual');
+        Route::post('/carga/revisar', [ComisionesEmpaqueController::class, 'revisarCarga'])->name('carga.revisar');
+        Route::post('/carga', [ComisionesEmpaqueController::class, 'guardarCarga'])->name('carga.store');
         Route::get('/pedido', [ComisionesEmpaqueController::class, 'pedido'])->name('pedido');
         Route::put('/configuracion/alcance', [ComisionesEmpaqueController::class, 'guardarAlcance'])->name('alcance');
+        Route::get('/unidades/{unidad}/pedido', [ComisionesEmpaqueController::class, 'pedidoInformativo'])->name('pedido.informativo');
         Route::post('/unidades/{unidad}/revisar', [ComisionesEmpaqueController::class, 'revisar'])->name('revisar');
         Route::post('/unidades/{unidad}/clasificar', [ComisionesEmpaqueController::class, 'clasificar'])->name('clasificar');
         Route::post('/unidades/{unidad}/decision', [ComisionesEmpaqueController::class, 'decision'])->name('decision');
         Route::post('/unidades/{unidad}/resolver', [ComisionesEmpaqueController::class, 'resolver'])->name('resolver');
+        Route::put('/equipo', [ComisionesEmpaqueController::class, 'guardarEquipo'])->name('equipo');
+        Route::post('/periodos', [ComisionesEmpaqueController::class, 'guardarPeriodo'])->name('periodos.store');
+        Route::put('/periodos/{periodo}', [ComisionesEmpaqueController::class, 'guardarPeriodo'])->name('periodos.update');
         Route::post('/cortes/borrador', [ComisionesEmpaqueController::class, 'borrador'])->name('borrador');
         Route::post('/cortes/confirmar', [ComisionesEmpaqueController::class, 'confirmar'])->name('confirmar');
         Route::post('/cortes/{corte}/descartar', [ComisionesEmpaqueController::class, 'descartar'])->name('descartar');

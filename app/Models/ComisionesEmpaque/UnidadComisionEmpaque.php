@@ -33,6 +33,12 @@ class UnidadComisionEmpaque extends Model
 
     public const POSIBLE_DUPLICADO = 'posible_duplicado';
 
+    public const LIQUIDADA_FUERA = 'liquidada_fuera';
+
+    public const LIQUIDACION_PENDIENTE = 'pendiente';
+
+    public const LIQUIDACION_PAGADO_FUERA = 'pagado_fuera';
+
     public const ETIQUETAS = [
         self::PENDIENTE_REVISION => 'Pendiente de revisión',
         self::RECHAZADA => 'Rechazada',
@@ -46,6 +52,7 @@ class UnidadComisionEmpaque extends Model
         self::REEMPAQUE_REVISION => 'Reempaque por revisar',
         self::SOLAPE_REVISION => 'Posible solape por revisar',
         self::POSIBLE_DUPLICADO => 'Posible duplicado',
+        self::LIQUIDADA_FUERA => 'Pagado fuera',
     ];
 
     public const POR_REVISAR = [
@@ -64,7 +71,7 @@ class UnidadComisionEmpaque extends Model
     protected $fillable = [
         'clave_origen', 'area_id', 'pedido_bma_id', 'procedencia', 'origen_registro', 'origen_tipo', 'origen_id',
         'empacado_at', 'incorporado_at', 'empacador_user_id', 'capturado_por_id', 'empacador_nombre', 'cliente_nombre', 'folio_pedido',
-        'folio_remision', 'logistica', 'cantidad_origen', 'cantidad_comisionable', 'importe_centavos', 'situacion',
+        'folio_remision', 'logistica', 'cantidad_origen', 'cantidad_comisionable', 'importe_centavos', 'situacion', 'liquidacion',
         'revision_estado', 'revision_motivo', 'revision_por_id', 'revision_at', 'corte_id', 'incorporacion_tardia',
         'excepcion_resguardo', 'huella', 'ancla_decision', 'ancla_huella', 'ancla_motivo', 'ancla_por_id', 'ancla_at',
         'clave_idempotencia', 'posible_duplicado', 'duplicados_relacionados', 'duplicados_reconocidos',

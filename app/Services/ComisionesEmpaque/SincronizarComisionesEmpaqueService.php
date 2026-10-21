@@ -323,6 +323,9 @@ class SincronizarComisionesEmpaqueService
             ->exists();
 
         if (! $unidad) {
+            if ($this->gestionar->cubiertaPorConstancia((int) $propuesta['area_id'], $propuesta['folio_remision'] ?? null, $propuesta['empacado_at'])) {
+                return ['nueva' => false, 'actualizada' => false, 'diferencia' => false, 'mensaje' => 'La remisión ya está como constancia pagada fuera.'];
+            }
             $unidad = UnidadComisionEmpaque::query()->create([
                 'clave_origen' => $propuesta['clave_origen'],
                 'area_id' => $propuesta['area_id'],

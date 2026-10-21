@@ -18,7 +18,7 @@ class ConsultarComisionesEmpaqueService
     public function __construct(private AlcanceAreaComisionEmpaque $alcance) {}
 
     /** @return array<string, mixed> */
-    public function resumen(?User $usuario): array
+    public function resumen(?User $usuario, ?Request $request = null): array
     {
         if ($this->alcance->ids($usuario) === []) {
             return [
@@ -33,33 +33,31 @@ class ConsultarComisionesEmpaqueService
 
         $sync = SincronizacionComisionEmpaque::query()->whereIn('estado', ['ok', 'omitida', 'error'])->latest('id')->first();
         $config = ConfiguracionComisionEmpaque::actual();
-        if ($config->fecha_inicio === null || ! $sync || $sync->estado === 'omitida') {
-            return [
-                'listo' => false,
-                'cajas_elegibles' => null,
-                'importe_por_cortar' => null,
-                'importe_confirmado_por_pagar' => null,
-                'por_revisar' => null,
-                'mensaje' => $sync?->mensaje ?: 'Aún no hay una sincronización. Defina la fecha de inicio y pulse Actualizar.',
-            ];
-        }
+        $listo = $config->fecha_inicio !== null && $sync && $sync->estado !== 'omitida';
+        $mensaje = $listo ? null : ($sync?->mensaje ?: 'Aún no hay una sincronización. Defina la fecha de inicio y pulse Actualizar.');
 
-        $base = UnidadComisionEmpaque::query();
-        $this->alcance->aplicar($base, $usuario);
+        $contexto = new Request($request?->only(['area_id', 'desde', 'hasta', 'cliente', 'remision', 'pedido', 'empacador']) ?? []);
+        $base = $this->filtrar($contexto, $usuario);
 
         $elegibles = (clone $base)->where('situacion', UnidadComisionEmpaque::ELEGIBLE)->whereNull('corte_id');
-        $porPagar = AsignacionComisionEmpaque::query()->whereHas('corte', function ($q) use ($usuario) {
+        $porPagar = AsignacionComisionEmpaque::query()->whereHas('corte', function ($q) use ($usuario, $request) {
+            if ($request?->filled('area_id')) {
+                $q->where('area_id', (int) $request->input('area_id'));
+            }
             $q->where('estado', CorteComisionEmpaque::CONFIRMADO);
             $this->alcance->aplicar($q, $usuario);
         })->get()->sum(fn (AsignacionComisionEmpaque $a) => max(0, $a->pendienteCentavos()));
 
         return [
-            'listo' => true,
+            'listo' => (bool) $listo,
+            'total_registros' => (clone $base)->count(),
+            'revisados' => (clone $base)->whereIn('situacion', [UnidadComisionEmpaque::ELEGIBLE, UnidadComisionEmpaque::EN_CORTE, UnidadComisionEmpaque::LIQUIDADA_FUERA])->count(),
             'cajas_elegibles' => (int) $elegibles->sum('cantidad_comisionable'),
             'importe_por_cortar' => DineroComisionEmpaque::texto((int) (clone $elegibles)->sum('importe_centavos')),
+            'importe_constancia' => DineroComisionEmpaque::texto((int) (clone $base)->where('liquidacion', UnidadComisionEmpaque::LIQUIDACION_PAGADO_FUERA)->sum('importe_centavos')),
             'importe_confirmado_por_pagar' => DineroComisionEmpaque::texto((int) $porPagar),
             'por_revisar' => (clone $base)->whereIn('situacion', UnidadComisionEmpaque::POR_REVISAR)->count(),
-            'mensaje' => null,
+            'mensaje' => $mensaje,
         ];
     }
 
@@ -116,6 +114,11 @@ class ConsultarComisionesEmpaqueService
         if ($request->filled('empacador')) {
             $query->where('empacador_nombre', 'like', '%'.$request->input('empacador').'%');
         }
+        if ($request->input('vista') === 'pendientes') {
+            $query->whereIn('situacion', UnidadComisionEmpaque::POR_REVISAR);
+        } elseif ($request->input('vista') === 'revisados') {
+            $query->whereIn('situacion', [UnidadComisionEmpaque::ELEGIBLE, UnidadComisionEmpaque::EN_CORTE, UnidadComisionEmpaque::LIQUIDADA_FUERA]);
+        }
         if ($request->filled('situacion')) {
             $query->where('situacion', $request->input('situacion'));
         }
@@ -153,6 +156,7 @@ class ConsultarComisionesEmpaqueService
             'logistica' => $u->logistica ?: [],
             'importe' => $u->importe_centavos === null ? null : DineroComisionEmpaque::texto((int) $u->importe_centavos),
             'situacion' => $u->situacion,
+            'liquidacion' => $u->liquidacion ?: UnidadComisionEmpaque::LIQUIDACION_PENDIENTE,
             'situacion_etiqueta' => UnidadComisionEmpaque::ETIQUETAS[$u->situacion] ?? $u->situacion,
             'corte' => $u->corte?->folio ?: ($u->corte?->estado === CorteComisionEmpaque::BORRADOR ? 'Borrador' : null),
             'incorporacion_tardia' => $u->incorporacion_tardia,
@@ -189,7 +193,7 @@ class ConsultarComisionesEmpaqueService
         ];
     }
 
-    public function saldos(?User $usuario): array
+    public function saldos(?User $usuario, ?int $areaId = null): array
     {
         $participantes = ParticipanteComisionEmpaque::query()->orderBy('nombre')->get();
         $filas = [];
@@ -197,12 +201,18 @@ class ConsultarComisionesEmpaqueService
             $asignaciones = AsignacionComisionEmpaque::query()
                 ->with(['corte.area', 'ajustes'])
                 ->where('participante_id', $participante->id)
-                ->whereHas('corte', function ($q) use ($usuario) {
+                ->whereHas('corte', function ($q) use ($usuario, $areaId) {
+                    if ($areaId) {
+                        $q->where('area_id', $areaId);
+                    }
                     $q->where('estado', CorteComisionEmpaque::CONFIRMADO);
                     $this->alcance->aplicar($q, $usuario);
                 })
                 ->get();
 
+            if ($areaId && $asignaciones->isEmpty()) {
+                continue;
+            }
             $reconocido = 0;
             $pagado = 0;
             $pendiente = 0;

@@ -22,6 +22,7 @@ class ValorarUnidadComisionEmpaque
         UnidadComisionEmpaque::SOLAPE_REVISION,
         UnidadComisionEmpaque::EN_CORTE,
         UnidadComisionEmpaque::POSIBLE_DUPLICADO,
+        UnidadComisionEmpaque::LIQUIDADA_FUERA,
     ];
 
     /** @param  list<string>  $decisiones */

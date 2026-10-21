@@ -63,6 +63,10 @@ class ConfigurarComisionEmpaqueService
             throw ValidationException::withMessages(['user_id' => 'Vincule una cuenta de usuario. Quien participa debe tener cuenta.']);
         }
 
+        if ($participante && (int) $participante->user_id !== (int) $usuario->id) {
+            throw ValidationException::withMessages(['user_id' => 'La cuenta vinculada se conserva para proteger sus cortes y saldos. Agregue otra persona como un nuevo colaborador.']);
+        }
+
         $duplicado = ParticipanteComisionEmpaque::query()
             ->where('user_id', $usuario->id)
             ->when($participante, fn ($q) => $q->where('id', '!=', $participante->id))
@@ -91,6 +95,27 @@ class ConfigurarComisionEmpaqueService
         AuditoriaComisionEmpaque::anotar($responsable, 'participante', $participante->id, 'crear', null, []);
 
         return $participante;
+    }
+
+    /** @param  list<array{user_id: int, nombre?: string, activo?: bool}>  $filas */
+    public function guardarParticipantes(array $filas, User $responsable): void
+    {
+        DB::transaction(function () use ($filas, $responsable) {
+            foreach ($filas as $indice => $fila) {
+                try {
+                    $this->guardarParticipante([
+                        'user_id' => $fila['user_id'] ?? null,
+                        'nombre' => $fila['nombre'] ?? '',
+                        'activo' => array_key_exists('activo', $fila) ? (bool) $fila['activo'] : true,
+                    ], null, $responsable);
+                } catch (ValidationException $e) {
+                    $mensaje = collect($e->errors())->flatten()->first() ?: 'No se pudo agregar este colaborador.';
+                    throw ValidationException::withMessages([
+                        "colaboradores.$indice.user_id" => $mensaje,
+                    ]);
+                }
+            }
+        });
     }
 
     public function guardarTarifa(int $areaId, string $importe, string $vigenteDesde, User $responsable): TarifaComisionEmpaque
@@ -125,6 +150,18 @@ class ConfigurarComisionEmpaqueService
 
     /** @param  list<array{participante_id: int, porcentaje: string}>  $lineas */
     public function guardarReparto(int $areaId, string $vigenteDesde, array $lineas, User $responsable): RepartoComisionEmpaque
+    {
+        return DB::transaction(function () use ($areaId, $vigenteDesde, $lineas, $responsable) {
+            AreaComisionEmpaque::query()->whereKey($areaId)->lockForUpdate()->firstOrFail();
+            if (RepartoComisionEmpaque::query()->where('area_id', $areaId)->where(fn ($q) => $q->whereNotNull('nombre')->orWhere('permanente', true))->exists()) {
+                throw ValidationException::withMessages(['lineas' => 'Administre el reparto permanente desde Equipo y reparto.']);
+            }
+
+            return $this->guardarRepartoLegado($areaId, $vigenteDesde, $lineas, $responsable);
+        });
+    }
+
+    private function guardarRepartoLegado(int $areaId, string $vigenteDesde, array $lineas, User $responsable): RepartoComisionEmpaque
     {
         if ($lineas === []) {
             throw ValidationException::withMessages(['lineas' => 'Agregue al menos un participante.']);

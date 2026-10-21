@@ -37,6 +37,12 @@ class ExportarComisionesEmpaqueService
                     'Bolsas excluidas' => $fila['bolsas'],
                     'Persona que empacó' => $fila['empacador'],
                     'Paquetería' => $fila['logistica']['paqueteria'] ?? null,
+                    'Logística' => match ($fila['logistica']['logistica'] ?? null) {
+                        'con' => 'Con logística',
+                        'sin' => 'Sin logística',
+                        default => null,
+                    },
+                    'Liquidación' => ($fila['liquidacion'] ?? 'pendiente') === 'pagado_fuera' ? 'Pagado fuera' : 'Pendiente',
                     'Categoría de paquetería' => $fila['logistica']['categoria_paqueteria'] ?? null,
                     'Modalidad de tarifa' => $fila['logistica']['modalidad_tarifa'] ?? null,
                     'Tipo de guía' => $fila['logistica']['tipo_guia'] ?? null,
@@ -67,6 +73,7 @@ class ExportarComisionesEmpaqueService
                         'Cantidad' => $unidad->cantidad_origen,
                         'Provisional' => 'No',
                     ];
+
                     continue;
                 }
                 foreach ($unidad->lineas as $linea) {
@@ -155,9 +162,9 @@ class ExportarComisionesEmpaqueService
         return (new FastExcel(collect($filas)))->download('reparto-'.($corte->folio ?: 'borrador').'.xlsx');
     }
 
-    public function pagos(?User $usuario): StreamedResponse
+    public function pagos(?User $usuario, ?int $areaId = null): StreamedResponse
     {
-        $saldos = $this->consultar->saldos($usuario);
+        $saldos = $this->consultar->saldos($usuario, $areaId);
         $filas = [];
         foreach ($saldos as $saldo) {
             foreach ($saldo['asignaciones'] as $asignacion) {
@@ -174,7 +181,15 @@ class ExportarComisionesEmpaqueService
             }
         }
 
-        $pagos = PagoComisionEmpaque::query()->with('participante')->orderByDesc('id')->get();
+        $alcance = app(AlcanceAreaComisionEmpaque::class);
+        $permitido = function ($q) use ($areaId, $usuario, $alcance) {
+            if ($areaId) {
+                $q->where('area_id', $areaId);
+            }
+            $alcance->aplicar($q, $usuario);
+        };
+        $pagos = PagoComisionEmpaque::query()->with(['participante', 'aplicaciones' => fn ($q) => $q->whereHas('asignacion.corte', $permitido)])
+            ->whereHas('aplicaciones.asignacion.corte', $permitido)->orderByDesc('id')->get();
         foreach ($pagos as $pago) {
             $filas[] = [
                 'Participante' => $pago->participante?->nombre,
@@ -183,7 +198,7 @@ class ExportarComisionesEmpaqueService
                 'Área' => $pago->estado,
                 'Porcentaje' => null,
                 'Reconocido' => null,
-                'Pagado' => DineroComisionEmpaque::texto((int) $pago->importe_centavos),
+                'Pagado' => DineroComisionEmpaque::texto((int) $pago->aplicaciones->sum('importe_centavos')),
                 'Pendiente' => $pago->fecha_pago?->format('Y-m-d'),
                 'Referencia' => $pago->referencia,
                 'Medio' => $pago->medio,

@@ -7,6 +7,7 @@ use App\Models\ComisionesEmpaque\AuditoriaComisionEmpaque;
 use App\Models\ComisionesEmpaque\IncidenciaComisionEmpaque;
 use App\Models\ComisionesEmpaque\UnidadComisionEmpaque;
 use App\Models\ComisionesEmpaque\UnidadLineaComisionEmpaque;
+use App\Models\ControlPedidos\CatalogoPaqueteriaPedido;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Models\User;
 use App\Support\ComisionesEmpaque\FuentesComisionEmpaque;
@@ -198,11 +199,12 @@ class GestionarUnidadComisionEmpaqueService
 
     public function registrarManual(array $datos, User $responsable): UnidadComisionEmpaque
     {
-        $area = AreaComisionEmpaque::query()->where('codigo', 'tienda')->where('activo', true)->first();
-        if (! $area) {
-            throw ValidationException::withMessages(['area_id' => 'El área Tienda no está activa.']);
-        }
+        return $this->registrarFila($datos, $responsable);
+    }
 
+    public function registrarFila(array $datos, User $responsable): UnidadComisionEmpaque
+    {
+        $area = $this->areaDeFila($datos);
         $clave = trim((string) ($datos['clave_idempotencia'] ?? ''));
         if ($clave === '') {
             throw ValidationException::withMessages(['clave_idempotencia' => 'Falta la clave de idempotencia de la captura.']);
@@ -213,6 +215,9 @@ class GestionarUnidadComisionEmpaqueService
             throw ValidationException::withMessages(['cantidad' => 'Indique al menos una caja.']);
         }
 
+        $liquidacion = ($datos['liquidacion'] ?? UnidadComisionEmpaque::LIQUIDACION_PENDIENTE) === UnidadComisionEmpaque::LIQUIDACION_PAGADO_FUERA
+            ? UnidadComisionEmpaque::LIQUIDACION_PAGADO_FUERA
+            : UnidadComisionEmpaque::LIQUIDACION_PENDIENTE;
         $pedidoId = $datos['pedido_bma_id'] ?? null;
         $cliente = trim((string) ($datos['cliente_nombre'] ?? ''));
         $folio = trim((string) ($datos['folio_pedido'] ?? ''));
@@ -226,27 +231,34 @@ class GestionarUnidadComisionEmpaqueService
         } else {
             $pedidoId = null;
         }
+        if ($liquidacion === UnidadComisionEmpaque::LIQUIDACION_PAGADO_FUERA && $remision === '') {
+            throw ValidationException::withMessages(['folio_remision' => 'La constancia pagada fuera necesita folio de remisión.']);
+        }
         $referencia = ($pedidoId || $folio !== '' || $remision !== '')
             ? ($pedidoId ? 'pedido' : 'operativa')
             : 'insuficiente';
-
         $empacado = Carbon::parse($datos['empacado_at']);
-        $huella = hash('sha256', json_encode([
-            'cantidad' => $cantidad,
-            'empacado_at' => (string) $empacado,
-            'pedido' => $pedidoId,
-            'cliente' => $cliente,
-            'folio_pedido' => $folio,
-            'folio_remision' => $remision,
-            'notas' => trim((string) ($datos['notas'] ?? '')),
-            'empacador' => $responsable->id,
-        ]));
+        $nombreEmpacador = trim((string) ($datos['empacador_nombre'] ?? ''));
+        $empacadorUserId = $responsable->id;
+        if ($nombreEmpacador !== '') {
+            $empacadorUserId = ! empty($datos['empacador_user_id']) ? (int) $datos['empacador_user_id'] : null;
+            if ($empacadorUserId && ! User::query()->whereKey($empacadorUserId)->exists()) {
+                $empacadorUserId = null;
+            }
+        } else {
+            $nombreEmpacador = $responsable->name;
+        }
+        $origen = ($datos['origen_registro'] ?? 'manual') === 'carga' ? 'carga' : 'manual';
+        $logistica = $this->logisticaDeclarada($datos, $origen, $referencia);
+        $huella = $this->huellaFila($cantidad, $empacado, $pedidoId, $cliente, $folio, $remision, $datos, $nombreEmpacador, $area->id, $liquidacion, $logistica);
 
         $existente = UnidadComisionEmpaque::query()->where('clave_idempotencia', $clave)->first();
         if ($existente) {
             return $this->mismaCaptura($existente, $huella);
         }
+        $this->afirmarConstanciaLibre($area->id, $remision, $empacado, $liquidacion);
 
+        $pagadoFuera = $liquidacion === UnidadComisionEmpaque::LIQUIDACION_PAGADO_FUERA;
         try {
             $unidad = UnidadComisionEmpaque::query()->create([
                 'clave_origen' => FuentesComisionEmpaque::MANUAL.':'.bin2hex(random_bytes(8)),
@@ -254,26 +266,24 @@ class GestionarUnidadComisionEmpaqueService
                 'area_id' => $area->id,
                 'pedido_bma_id' => $pedidoId,
                 'procedencia' => FuentesComisionEmpaque::MANUAL,
-                'origen_registro' => 'manual',
-                'origen_tipo' => 'manual',
+                'origen_registro' => $origen,
+                'origen_tipo' => $origen,
                 'empacado_at' => $empacado,
                 'incorporado_at' => now(),
-                'empacador_user_id' => $responsable->id,
+                'empacador_user_id' => $empacadorUserId,
                 'capturado_por_id' => $responsable->id,
-                'empacador_nombre' => $responsable->name,
+                'empacador_nombre' => $nombreEmpacador,
                 'cliente_nombre' => $cliente,
                 'folio_pedido' => $folio !== '' ? $folio : null,
                 'folio_remision' => $remision !== '' ? $remision : null,
                 'cantidad_origen' => $cantidad,
-                'situacion' => UnidadComisionEmpaque::PENDIENTE_REVISION,
-                'revision_estado' => 'pendiente',
+                'situacion' => $pagadoFuera ? UnidadComisionEmpaque::LIQUIDADA_FUERA : UnidadComisionEmpaque::PENDIENTE_REVISION,
+                'liquidacion' => $liquidacion,
+                'revision_estado' => $pagadoFuera ? 'no_aplica' : 'pendiente',
                 'huella' => $huella,
                 'diferencia' => $referencia === 'insuficiente' ? $this->textoReferenciaInsuficiente() : null,
                 'notas' => $datos['notas'] ?? null,
-                'logistica' => [
-                    'captura' => 'manual',
-                    'referencia' => $referencia,
-                ],
+                'logistica' => $logistica,
             ]);
         } catch (QueryException $e) {
             $existente = UnidadComisionEmpaque::query()->where('clave_idempotencia', $clave)->first();
@@ -283,13 +293,44 @@ class GestionarUnidadComisionEmpaqueService
             throw $e;
         }
 
-        $this->marcarSiDuplicado($unidad);
+        if ($pagadoFuera) {
+            UnidadLineaComisionEmpaque::query()->create([
+                'unidad_id' => $unidad->id,
+                'catalogo_tipo_caja_id' => null,
+                'cantidad' => $cantidad,
+                'es_bolsa' => false,
+            ]);
+            $this->valorar->aplicar($unidad->fresh('lineas'));
+        } else {
+            $this->marcarSiDuplicado($unidad);
+        }
         AuditoriaComisionEmpaque::anotar($responsable, 'unidad', $unidad->id, 'registro_manual', $datos['notas'] ?? null, [
-            'empacador_user_id' => $responsable->id,
+            'empacador_nombre' => $nombreEmpacador,
             'capturado_por_id' => $responsable->id,
+            'liquidacion' => $liquidacion,
         ]);
 
         return $unidad->fresh();
+    }
+
+    public function claveDeCarga(int $areaId, string $remision, string $dia): string
+    {
+        return 'carga:'.hash('sha256', $areaId.'|'.mb_strtolower(trim($remision)).'|'.$dia);
+    }
+
+    public function cubiertaPorConstancia(int $areaId, ?string $remision, mixed $empacadoAt): bool
+    {
+        $remision = trim((string) $remision);
+        if ($remision === '') {
+            return false;
+        }
+
+        return UnidadComisionEmpaque::query()
+            ->where('area_id', $areaId)
+            ->where('folio_remision', $remision)
+            ->where('liquidacion', UnidadComisionEmpaque::LIQUIDACION_PAGADO_FUERA)
+            ->whereDate('empacado_at', Carbon::parse($empacadoAt)->toDateString())
+            ->exists();
     }
 
     /**
@@ -576,6 +617,88 @@ class GestionarUnidadComisionEmpaqueService
             $unidad->diferencia = 'La cancelación ya tenía una decisión («'.$unidad->ancla_decision.'») sobre otro hecho. Revise el cambio nuevo.';
         }
         $unidad->save();
+    }
+
+    private function areaDeFila(array $datos): AreaComisionEmpaque
+    {
+        if (! empty($datos['area_id'])) {
+            $area = AreaComisionEmpaque::query()->whereKey((int) $datos['area_id'])->where('activo', true)->first();
+        } elseif (! empty($datos['area_codigo'])) {
+            $area = AreaComisionEmpaque::query()->where('codigo', $datos['area_codigo'])->where('activo', true)->first();
+        } else {
+            $area = AreaComisionEmpaque::query()->where('codigo', 'tienda')->where('activo', true)->first();
+        }
+        if (! $area) {
+            throw ValidationException::withMessages(['area_id' => 'El área indicada no está activa.']);
+        }
+
+        return $area;
+    }
+
+    /** @param  array<string, mixed>  $datos
+     * @return array<string, mixed>
+     */
+    private function logisticaDeclarada(array $datos, string $origen, string $referencia): array
+    {
+        $logistica = ['captura' => $origen, 'referencia' => $referencia];
+        $nombre = trim((string) ($datos['paqueteria'] ?? ''));
+        if ($nombre === '') {
+            return $logistica;
+        }
+        $catalogo = CatalogoPaqueteriaPedido::query()
+            ->whereRaw('LOWER(nombre) = ?', [mb_strtolower($nombre)])
+            ->first();
+        $marca = ($datos['logistica'] ?? 'con') === 'sin' ? 'sin' : 'con';
+        $logistica['paqueteria'] = $catalogo?->nombre ?: $nombre;
+        $logistica['paqueteria_id'] = $catalogo?->id;
+        $logistica['logistica'] = $marca;
+        $logistica['sin_logistica'] = $marca === 'sin';
+
+        return $logistica;
+    }
+
+    /** @param  array<string, mixed>  $datos
+     * @param  array<string, mixed>  $logistica
+     */
+    private function huellaFila(int $cantidad, Carbon $empacado, ?int $pedidoId, string $cliente, string $folio, string $remision, array $datos, string $nombreEmpacador, int $areaId, string $liquidacion, array $logistica): string
+    {
+        return hash('sha256', json_encode([
+            'cantidad' => $cantidad,
+            'empacado_at' => (string) $empacado,
+            'pedido' => $pedidoId,
+            'cliente' => $cliente,
+            'folio_pedido' => $folio,
+            'folio_remision' => $remision,
+            'notas' => trim((string) ($datos['notas'] ?? '')),
+            'empacador' => $nombreEmpacador,
+            'area_id' => $areaId,
+            'liquidacion' => $liquidacion,
+            'paqueteria' => $logistica['paqueteria'] ?? '',
+            'logistica' => $logistica['logistica'] ?? '',
+        ]));
+    }
+
+    private function afirmarConstanciaLibre(int $areaId, string $remision, Carbon $empacado, string $liquidacion): void
+    {
+        if ($remision === '') {
+            return;
+        }
+        $hermanas = UnidadComisionEmpaque::query()
+            ->where('area_id', $areaId)
+            ->where('folio_remision', $remision)
+            ->whereDate('empacado_at', $empacado->toDateString())
+            ->where('situacion', '!=', UnidadComisionEmpaque::RECHAZADA)
+            ->get();
+        if ($hermanas->contains(fn (UnidadComisionEmpaque $unidad) => $unidad->liquidacion === UnidadComisionEmpaque::LIQUIDACION_PAGADO_FUERA)) {
+            throw ValidationException::withMessages([
+                'folio_remision' => 'Esa remisión ya está registrada como constancia pagada fuera en la misma área y el mismo día.',
+            ]);
+        }
+        if ($liquidacion === UnidadComisionEmpaque::LIQUIDACION_PAGADO_FUERA && $hermanas->isNotEmpty()) {
+            throw ValidationException::withMessages([
+                'folio_remision' => 'Ya hay un empaque de esta área, remisión y día. No se agrega otra fila pagada fuera.',
+            ]);
+        }
     }
 
     private function pedidoVerificable(?int $pedidoId, string $folio, string $remision): ?PedidoBma

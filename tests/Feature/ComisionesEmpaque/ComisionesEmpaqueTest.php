@@ -9,6 +9,7 @@ use App\Models\ComisionesEmpaque\ConfiguracionComisionEmpaque;
 use App\Models\ComisionesEmpaque\CorteComisionEmpaque;
 use App\Models\ComisionesEmpaque\CorteUnidadComisionEmpaque;
 use App\Models\ComisionesEmpaque\ParticipanteComisionEmpaque;
+use App\Models\ComisionesEmpaque\PeriodoComisionEmpaque;
 use App\Models\ComisionesEmpaque\RepartoComisionEmpaque;
 use App\Models\ComisionesEmpaque\UnidadComisionEmpaque;
 use App\Models\ComisionesEmpaque\UsuarioAreaComisionEmpaque;
@@ -24,16 +25,27 @@ use App\Models\ControlPedidos\PedidoBmaHistorialEstado;
 use App\Models\ControlPedidos\PedidoBmaTareaPreparacion;
 use App\Models\User;
 use App\Services\ComisionesEmpaque\AlcanceAreaComisionEmpaque;
+use App\Services\ComisionesEmpaque\CargarEmpaquesComisionEmpaqueService;
 use App\Services\ComisionesEmpaque\ComprobarFuenteCorteComisionEmpaque;
+use App\Services\ComisionesEmpaque\ConfigurarComisionEmpaqueService;
 use App\Services\ComisionesEmpaque\ConfirmarCorteComisionEmpaqueService;
+use App\Services\ComisionesEmpaque\ConsultarComisionesEmpaqueService;
+use App\Services\ComisionesEmpaque\ExportarComisionesEmpaqueService;
+use App\Services\ComisionesEmpaque\GestionarPeriodoComisionEmpaqueService;
 use App\Services\ComisionesEmpaque\GestionarUnidadComisionEmpaqueService;
+use App\Services\ComisionesEmpaque\GuardarEquipoComisionEmpaqueService;
 use App\Services\ComisionesEmpaque\RegistrarPagoComisionEmpaqueService;
 use App\Services\ComisionesEmpaque\SincronizarComisionesEmpaqueService;
 use App\Support\ComisionesEmpaque\DineroComisionEmpaque;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
+use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
+use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Rap2hpoutre\FastExcel\FastExcel;
 use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
 
@@ -394,7 +406,7 @@ class ComisionesEmpaqueTest extends TestCase
             'notas' => 'Empaque en tienda',
         ], $this->usuario);
 
-        $this->assertSame('tienda', $unidad->area->codigo);
+        $this->assertSame('cedis', $unidad->area->codigo);
         $this->assertSame($this->usuario->id, $unidad->empacador_user_id);
         $this->assertSame($this->usuario->id, $unidad->capturado_por_id);
         $this->assertSame(UnidadComisionEmpaque::PENDIENTE_REVISION, $unidad->situacion);
@@ -402,7 +414,7 @@ class ComisionesEmpaqueTest extends TestCase
         app(GestionarUnidadComisionEmpaqueService::class)->revisarManual($unidad, 'aceptar', 'Corresponde a tienda', $this->usuario);
         $aceptada = $unidad->fresh();
         $this->assertSame(UnidadComisionEmpaque::ELEGIBLE, $aceptada->situacion);
-        $this->assertSame(1200, $aceptada->importe_centavos);
+        $this->assertSame(2000, $aceptada->importe_centavos);
         $this->assertSame('aceptada', $aceptada->revision_estado);
         $this->assertNotNull($aceptada->revision_at);
         $this->assertNotNull($aceptada->incorporado_at);
@@ -500,7 +512,7 @@ class ComisionesEmpaqueTest extends TestCase
         $pedido = $this->pedido(['empacado_at' => '2026-10-06 09:00:00', 'empacado_por_id' => $this->usuario->id]);
         $caja = PedidoBmaCaja::query()->create([
             'pedido_bma_id' => $pedido->id,
-            'uuid_operativo' => (string) \Illuminate\Support\Str::uuid(),
+            'uuid_operativo' => (string) Str::uuid(),
             'catalogo_tipo_caja_id' => DB::table('catalogo_tipos_caja_pedido')->value('id'),
             'cantidad' => 1,
             'orden' => 1,
@@ -744,6 +756,30 @@ class ComisionesEmpaqueTest extends TestCase
         $this->assertSame('REM-9', $manual->folio_remision);
     }
 
+    public function test_la_consulta_del_pedido_informa_las_cajas_sin_montos_de_venta(): void
+    {
+        $this->usuario->givePermissionTo(['gestion_interna.comisiones_empaque.ver', 'gestion_interna.comisiones_empaque.ver_todas']);
+        $pedido = $this->pedido(['folio' => 'PED-INFO', 'folio_remision' => 'REM-INFO', 'numero_cajas' => 2, 'costo_envio' => 500, 'total_mercancia' => 900]);
+        $this->caja($pedido, 2);
+        $unidad = app(GestionarUnidadComisionEmpaqueService::class)->registrarManual([
+            'clave_idempotencia' => 'info-pedido',
+            'empacado_at' => '2026-10-11 15:00:00',
+            'cantidad' => 2,
+            'pedido_bma_id' => $pedido->id,
+        ], $this->usuario);
+
+        $respuesta = $this->actingAs($this->usuario)->getJson(route('gestion_interna.comisiones_empaque.pedido.informativo', $unidad));
+
+        $respuesta->assertOk();
+        $respuesta->assertJsonPath('vinculado', true);
+        $respuesta->assertJsonPath('folio_pedido', 'PED-INFO');
+        $respuesta->assertJsonPath('cajas_declaradas', 2);
+        $respuesta->assertJsonPath('cajas.0.cantidad', 2);
+        $respuesta->assertJsonMissingPath('costo_envio');
+        $respuesta->assertJsonMissingPath('total_mercancia');
+        $this->assertArrayNotHasKey('costo_envio', $respuesta->json('cajas.0'));
+    }
+
     public function test_coincidencia_aparecida_antes_de_aceptar_bloquea_y_el_sincronizado_posterior_no_se_suma(): void
     {
         $gestionar = app(GestionarUnidadComisionEmpaqueService::class);
@@ -882,6 +918,230 @@ class ComisionesEmpaqueTest extends TestCase
         return [$tienda, $participante];
     }
 
+    public function test_equipo_permanente_reparte_fondo_comun_y_conserva_el_corte_al_salir_una_persona(): void
+    {
+        $area = AreaComisionEmpaque::where('codigo', 'cedis')->firstOrFail();
+        $usuarios = collect(range(1, 4))->map(fn ($i) => User::factory()->create(['name' => 'Persona '.$i]));
+        $equipos = app(GuardarEquipoComisionEmpaqueService::class);
+        $equipo1 = $equipos->guardar($area->id, $usuarios->map(fn ($u, $i) => ['user_id' => $u->id, 'porcentaje' => ['50', '30', '10', '10'][$i]])->all(), 'Equipo inicial', $this->usuario);
+        $periodos = app(GestionarPeriodoComisionEmpaqueService::class);
+        $datos = ['nombre' => 'Octubre', 'area_id' => $area->id, 'desde' => '2026-10-01', 'hasta' => '2026-10-15'];
+        $primero = $periodos->guardar($datos, $this->usuario);
+        $datos['hasta'] = '2026-10-13';
+        $datos['motivo'] = 'Salida de la cuarta persona';
+        $periodos->guardar($datos, $this->usuario, $primero);
+        // Todas las cajas las empaca la misma persona: el fondo sigue repartiéndose entre cuatro.
+        foreach ([['2026-10-13 23:59:59', 100], ['2026-10-14 00:00:00', 90]] as [$fecha, $cantidad]) {
+            $pedido = $this->pedido(['empacado_at' => $fecha, 'empacado_por_id' => $usuarios[0]->id]);
+            $this->caja($pedido, $cantidad);
+        }
+        app(SincronizarComisionesEmpaqueService::class)->ejecutar($this->usuario);
+        $corte1 = $this->confirmar($area->id, '2026-10-01', '2026-10-13');
+        $this->assertSame([50000, 30000, 10000, 10000], $corte1->asignaciones->pluck('importe_centavos')->all());
+        $equipo2 = $equipos->guardar($area->id, $usuarios->take(3)->values()->map(fn ($u, $i) => ['user_id' => $u->id, 'porcentaje' => ['60', '30', '10'][$i]])->all(), 'Salida de la cuarta persona', $this->usuario);
+        $segundo = $periodos->guardar(['nombre' => 'Continuación', 'area_id' => $area->id, 'desde' => '2026-10-14', 'hasta' => '2026-10-15'], $this->usuario);
+        $this->assertSame($equipo2->id, RepartoComisionEmpaque::permanente($area->id)->id);
+        $corte2 = $this->confirmar($area->id, '2026-10-14', '2026-10-15');
+        $this->assertSame([54000, 27000, 9000], $corte2->asignaciones->pluck('importe_centavos')->all());
+        $this->assertSame([50000, 30000, 10000, 10000], $corte1->fresh()->asignaciones->pluck('importe_centavos')->all());
+        $this->assertSame(10000, $corte1->fresh()->asignaciones->last()->pendienteCentavos());
+        $this->assertNotSame($equipo1->id, $equipo2->id);
+        $this->assertSame('2026-10-14', $primero->fresh()->hasta->toDateString());
+        $this->assertDatabaseHas('comisiones_empaque_auditorias', ['entidad' => 'equipo', 'entidad_id' => $equipo2->id]);
+        try {
+            $periodos->guardar($datos, $this->usuario, $primero);
+            $this->fail('No se puede modificar un periodo cerrado.');
+        } catch (ValidationException $e) {
+            $this->assertArrayHasKey('periodo', $e->errors());
+        }
+        $this->assertSame($corte2->id, $segundo->corte()->id);
+    }
+
+    public function test_equipo_persiste_entre_periodos_y_el_cambio_invalida_un_calculo_anterior(): void
+    {
+        $area = AreaComisionEmpaque::where('codigo', 'cedis')->firstOrFail();
+        $users = [User::factory()->create(), User::factory()->create()];
+        $service = app(GuardarEquipoComisionEmpaqueService::class);
+        $equipo = $service->guardar($area->id, [['user_id' => $users[0]->id, 'porcentaje' => '70'], ['user_id' => $users[1]->id, 'porcentaje' => '30']], 'Equipo habitual', $this->usuario);
+        $periodos = app(GestionarPeriodoComisionEmpaqueService::class);
+        foreach ([['2026-10-01', '2026-10-13'], ['2026-10-14', '2026-10-15']] as [$desde, $hasta]) {
+            $periodos->guardar(['area_id' => $area->id, 'nombre' => 'Periodo', 'desde' => $desde, 'hasta' => $hasta], $this->usuario);
+        }
+        $this->assertSame($equipo->id, RepartoComisionEmpaque::permanente($area->id)->id);
+        $this->assertSame(1, RepartoComisionEmpaque::where('permanente', true)->count());
+        $pedido = $this->pedido(['empacado_at' => '2026-10-10 10:00:00', 'empacado_por_id' => $users[1]->id]);
+        $this->caja($pedido, 100);
+        app(SincronizarComisionesEmpaqueService::class)->ejecutar($this->usuario);
+        $cortes = app(ConfirmarCorteComisionEmpaqueService::class);
+        $desde = DineroComisionEmpaque::inicioDia('2026-10-01', config('app.timezone'));
+        $hasta = DineroComisionEmpaque::finDia('2026-10-13', config('app.timezone'));
+        $anterior = $cortes->calcular($area->id, $desde, $hasta, false);
+        $service->guardar($area->id, [['user_id' => $users[0]->id, 'porcentaje' => '80'], ['user_id' => $users[1]->id, 'porcentaje' => '20']], 'Ajuste de porcentajes', $this->usuario);
+        $actual = $cortes->calcular($area->id, $desde, $hasta, false);
+        $this->assertNotSame($anterior['hash'], $actual['hash']);
+        $this->expectException(ValidationException::class);
+        $cortes->confirmar($area->id, $desde, $hasta, false, $anterior['hash'], $this->usuario);
+    }
+
+    public function test_periodos_solo_definen_fechas_y_rechazan_solapes_y_cortes_cruzados(): void
+    {
+        $area = AreaComisionEmpaque::where('codigo', 'cedis')->firstOrFail();
+        $service = app(GestionarPeriodoComisionEmpaqueService::class);
+        $datos = ['area_id' => $area->id, 'nombre' => 'Periodo', 'desde' => '2026-10-01', 'hasta' => '2026-10-13'];
+        $service->guardar($datos, $this->usuario);
+        try {
+            $service->guardar(array_replace($datos, ['desde' => '2026-10-13', 'hasta' => '2026-10-15']), $this->usuario);
+            $this->fail('El día 13 ya está incluido.');
+        } catch (ValidationException $e) {
+            $this->assertArrayHasKey('desde', $e->errors());
+        }
+        $service->guardar(array_replace($datos, ['desde' => '2026-10-14', 'hasta' => '2026-10-15']), $this->usuario);
+        $this->assertSame(0, RepartoComisionEmpaque::count());
+        $calculo = app(ConfirmarCorteComisionEmpaqueService::class)->calcular($area->id, DineroComisionEmpaque::inicioDia('2026-10-01', config('app.timezone')), DineroComisionEmpaque::finDia('2026-10-15', config('app.timezone')), false);
+        $this->assertNotEmpty($calculo['errores']);
+    }
+
+    public function test_equipo_valida_100_y_no_repite_usuarios_ni_modifica_otras_areas(): void
+    {
+        $area = AreaComisionEmpaque::where('codigo', 'cedis')->firstOrFail();
+        $tienda = AreaComisionEmpaque::where('codigo', 'tienda')->firstOrFail();
+        $u = User::factory()->create();
+        $service = app(GuardarEquipoComisionEmpaqueService::class);
+        $original = $service->guardar($tienda->id, [['user_id' => $u->id, 'porcentaje' => '100']], 'Equipo tienda', $this->usuario);
+        foreach ([[['user_id' => $u->id, 'porcentaje' => '99']], [['user_id' => $u->id, 'porcentaje' => '50'], ['user_id' => $u->id, 'porcentaje' => '50']]] as $lineas) {
+            try {
+                $service->guardar($area->id, $lineas, 'Prueba incorrecta', $this->usuario);
+                $this->fail('El reparto inválido debe rechazarse.');
+            } catch (ValidationException $e) {
+                $this->assertArrayHasKey('lineas', $e->errors());
+            }
+        }
+        $this->assertNull(RepartoComisionEmpaque::permanente($area->id));
+        $this->assertSame($original->id, RepartoComisionEmpaque::permanente($tienda->id)->id);
+        $this->assertSame(1, ParticipanteComisionEmpaque::count());
+    }
+
+    public function test_pantalla_recibe_equipo_y_tarifas_desde_el_acumulado(): void
+    {
+        $this->usuario->givePermissionTo(['gestion_interna.comisiones_empaque.ver', 'gestion_interna.comisiones_empaque.ver_todas', 'gestion_interna.comisiones_empaque.configurar']);
+        ParticipanteComisionEmpaque::create(['nombre' => 'Equipo visible', 'user_id' => $this->usuario->id, 'activo' => true]);
+        $this->actingAs($this->usuario)->get(route('gestion_interna.comisiones_empaque.index'))
+            ->assertOk()->assertInertia(fn ($page) => $page->component('GestionInterna/ComisionesEmpaque/Index', false)->has('participantes', 1)->where('participantes.0.nombre', 'Equipo visible')->has('tarifas')->has('alcances')->has('periodos')->has('equipo'));
+    }
+
+    public function test_periodos_y_equipo_respetan_area_y_los_porcentajes_no_se_capturan_en_periodos(): void
+    {
+        $this->withoutMiddleware([ValidateCsrfToken::class, PreventRequestForgery::class]);
+        $area = AreaComisionEmpaque::where('codigo', 'cedis')->firstOrFail();
+        $this->usuario->givePermissionTo(['gestion_interna.comisiones_empaque.ver', 'gestion_interna.comisiones_empaque.configurar']);
+        $datos = ['nombre' => 'Periodo', 'area_id' => $area->id, 'desde' => '2026-10-01', 'hasta' => '2026-10-13'];
+        $this->actingAs($this->usuario)->post(route('gestion_interna.comisiones_empaque.periodos.store'), $datos)->assertForbidden();
+        $equipo = ['area_id' => $area->id, 'reparto_id' => 0, 'motivo' => 'Equipo inicial', 'lineas' => [['user_id' => $this->usuario->id, 'porcentaje' => '100']]];
+        $this->put(route('gestion_interna.comisiones_empaque.equipo'), $equipo)->assertForbidden();
+        UsuarioAreaComisionEmpaque::create(['user_id' => $this->usuario->id, 'area_id' => $area->id]);
+        $this->put(route('gestion_interna.comisiones_empaque.equipo'), $equipo)->assertRedirect()->assertSessionHasNoErrors();
+        $this->post(route('gestion_interna.comisiones_empaque.periodos.store'), $datos)->assertRedirect()->assertSessionHasNoErrors();
+        $periodo = PeriodoComisionEmpaque::firstOrFail();
+        $this->put(route('gestion_interna.comisiones_empaque.periodos.update', $periodo->id), array_replace($datos, ['hasta' => '2026-10-12']))->assertSessionHasErrors('motivo');
+        $this->assertSame('2026-10-14', $periodo->fresh()->hasta->toDateString());
+        $this->post(route('gestion_interna.comisiones_empaque.periodos.store'), array_replace($datos, ['desde' => '2026-10-14', 'hasta' => '2026-10-15', 'lineas' => $equipo['lineas']]))->assertSessionHasErrors('lineas');
+    }
+
+    public function test_migracion_separa_periodos_y_conserva_asignaciones_y_equipo_anterior(): void
+    {
+        $area = AreaComisionEmpaque::where('codigo', 'cedis')->firstOrFail();
+        $persona = ParticipanteComisionEmpaque::create(['nombre' => 'Persona histórica', 'user_id' => $this->usuario->id, 'activo' => true]);
+        $legado = $this->reparto($area->id, '2026-10-01 00:00:00', [[$persona->id, '100']]);
+        $legado->update(['nombre' => 'Periodo anterior', 'vigente_hasta' => '2026-10-14 00:00:00']);
+        $pedido = $this->pedido(['empacado_at' => '2026-10-10 10:00:00', 'empacado_por_id' => $this->usuario->id]);
+        $this->caja($pedido, 10);
+        app(SincronizarComisionesEmpaqueService::class)->ejecutar($this->usuario);
+        $corte = $this->confirmar($area->id, '2026-10-01', '2026-10-13');
+        $migracion = require database_path('migrations/2026_10_20_130000_separar_periodos_y_equipo_comisiones_empaque.php');
+        $migracion->down();
+        $migracion->up();
+        $nuevo = PeriodoComisionEmpaque::firstOrFail();
+        $this->assertSame('Periodo anterior', $nuevo->nombre);
+        $this->assertSame($corte->id, $nuevo->corte()->id);
+        $this->assertSame(10000, $corte->fresh()->asignaciones->first()->importe_centavos);
+        $permanente = RepartoComisionEmpaque::permanente($area->id);
+        $this->assertNotSame($legado->id, $permanente->id);
+        $this->assertSame($persona->id, $permanente->lineas->first()->participante_id);
+        $this->assertSame(10000, $permanente->lineas->first()->puntos_base);
+    }
+
+    public function test_reporte_y_resumen_comparten_area_fechas_y_filtros_de_revision(): void
+    {
+        $this->usuario->givePermissionTo('gestion_interna.comisiones_empaque.ver_todas');
+        $area = AreaComisionEmpaque::where('codigo', 'cedis')->firstOrFail();
+        $p1 = $this->pedido(['empacado_at' => '2026-10-13 12:00:00', 'empacado_por_id' => $this->usuario->id]);
+        $p2 = $this->pedido(['empacado_at' => '2026-10-14 12:00:00', 'empacado_por_id' => $this->usuario->id]);
+        $this->caja($p1, 10);
+        $this->caja($p2, 20);
+        app(SincronizarComisionesEmpaqueService::class)->ejecutar($this->usuario);
+        $consultar = app(ConsultarComisionesEmpaqueService::class);
+        $request = new Request(['area_id' => $area->id, 'desde' => '2026-10-13', 'hasta' => '2026-10-13']);
+        $resumen = $consultar->resumen($this->usuario, $request);
+        $this->assertSame(10, $resumen['cajas_elegibles']);
+        $this->assertSame('100.00', $resumen['importe_por_cortar']);
+        $this->assertSame(1, $resumen['total_registros']);
+        $request->merge(['vista' => 'pendientes']);
+        $this->assertSame(0, $consultar->filtrar($request, $this->usuario)->count());
+        $request->merge(['vista' => 'revisados']);
+        $this->assertSame(1, $consultar->filtrar($request, $this->usuario)->count());
+    }
+
+    public function test_equipo_rechaza_un_guardado_sobre_una_version_que_ya_cambio(): void
+    {
+        $area = AreaComisionEmpaque::where('codigo', 'cedis')->firstOrFail();
+        $service = app(GuardarEquipoComisionEmpaqueService::class);
+        $datos = [['user_id' => $this->usuario->id, 'porcentaje' => '100']];
+        $primero = $service->guardar($area->id, $datos, 'Equipo inicial', $this->usuario, 0);
+        try {
+            $service->guardar($area->id, $datos, 'Guardado atrasado', $this->usuario, 0);
+            $this->fail('La versión anterior debe rechazarse.');
+        } catch (ValidationException $e) {
+            $this->assertArrayHasKey('equipo', $e->errors());
+        }
+        $this->assertSame($primero->id, RepartoComisionEmpaque::permanente($area->id)->id);
+    }
+
+    public function test_saldos_y_exportacion_separan_el_pago_de_cedis_del_de_tienda(): void
+    {
+        $this->usuario->givePermissionTo('gestion_interna.comisiones_empaque.ver_todas');
+        $persona = ParticipanteComisionEmpaque::create(['nombre' => 'Persona compartida', 'user_id' => $this->usuario->id, 'activo' => true]);
+        $cedis = AreaComisionEmpaque::where('codigo', 'cedis')->firstOrFail();
+        $tienda = AreaComisionEmpaque::where('codigo', 'tienda')->firstOrFail();
+        $asignaciones = [];
+        foreach ([[$cedis, 1000], [$tienda, 2000]] as [$area, $importe]) {
+            $corte = CorteComisionEmpaque::create(['folio' => 'CE-AREA-'.$area->id, 'area_id' => $area->id, 'estado' => CorteComisionEmpaque::CONFIRMADO, 'limite_desde' => '2026-10-01', 'limite_hasta' => '2026-10-13 23:59:59', 'cajas' => 1, 'total_centavos' => $importe, 'creado_por_id' => $this->usuario->id]);
+            $asignaciones[] = AsignacionComisionEmpaque::create(['corte_id' => $corte->id, 'participante_id' => $persona->id, 'puntos_base' => 10000, 'importe_centavos' => $importe, 'pagado_centavos' => 0]);
+        }
+        app(RegistrarPagoComisionEmpaqueService::class)->pagar($persona->id, '2026-10-20', '30.00', [
+            ['asignacion_id' => $asignaciones[0]->id, 'importe' => '10.00'],
+            ['asignacion_id' => $asignaciones[1]->id, 'importe' => '20.00'],
+        ], 'Pago de ambas áreas', 'transferencia', null, 'pago-areas-1', $this->usuario);
+        $saldos = app(ConsultarComisionesEmpaqueService::class)->saldos($this->usuario, $cedis->id);
+        $this->assertSame('10.00', $saldos[0]['pagado']);
+        $this->assertCount(1, $saldos[0]['asignaciones']);
+        $response = app(ExportarComisionesEmpaqueService::class)->pagos($this->usuario, $cedis->id);
+        ob_start();
+        $response->sendContent();
+        $contenido = ob_get_clean();
+        $temporal = tempnam(sys_get_temp_dir(), 'ce-export-');
+        $archivo = $temporal.'.xlsx';
+        try {
+            file_put_contents($archivo, $contenido);
+            $filas = (new FastExcel)->import($archivo);
+            $this->assertCount(2, $filas);
+            $this->assertSame('10.00', (string) $filas->last()['Pagado']);
+            $this->assertSame('CEDIS', $filas->first()['Área']);
+        } finally {
+            @unlink($archivo);
+            @unlink($temporal);
+        }
+    }
+
     private function confirmar(int $areaId, string $desde, string $hasta): CorteComisionEmpaque
     {
         $servicio = app(ConfirmarCorteComisionEmpaqueService::class);
@@ -895,7 +1155,7 @@ class ComisionesEmpaqueTest extends TestCase
 
     private function reparto(int $areaId, string $desde, array $lineas): RepartoComisionEmpaque
     {
-        return app(\App\Services\ComisionesEmpaque\ConfigurarComisionEmpaqueService::class)->guardarReparto(
+        return app(ConfigurarComisionEmpaqueService::class)->guardarReparto(
             $areaId,
             $desde,
             array_map(fn ($l) => ['participante_id' => $l[0], 'porcentaje' => $l[1]], $lineas),
@@ -908,6 +1168,68 @@ class ComisionesEmpaqueTest extends TestCase
         $asignacion = AsignacionComisionEmpaque::query()->where('corte_id', $corteId)->where('participante_id', $participanteId)->first();
 
         return $asignacion->pendienteCentavos() === 0 ? 'pagado' : 'pendiente';
+    }
+
+    public function test_la_constancia_pagada_fuera_no_entra_al_fondo_ni_se_duplica_al_sincronizar(): void
+    {
+        $this->usuario->givePermissionTo('gestion_interna.comisiones_empaque.ver_todas');
+        $cedis = AreaComisionEmpaque::query()->where('codigo', 'cedis')->first();
+        $constancia = app(GestionarUnidadComisionEmpaqueService::class)->registrarFila([
+            'clave_idempotencia' => 'hist-1',
+            'area_id' => $cedis->id,
+            'empacado_at' => '2026-10-10 12:00:00',
+            'cantidad' => 2,
+            'cliente_nombre' => 'Cliente histórico',
+            'folio_remision' => 'REM-HIST',
+            'paqueteria' => 'Estafeta',
+            'logistica' => 'sin',
+            'empacador_nombre' => 'Lucía',
+            'liquidacion' => 'pagado_fuera',
+            'origen_registro' => 'carga',
+        ], $this->usuario);
+
+        $this->assertSame(UnidadComisionEmpaque::LIQUIDADA_FUERA, $constancia->situacion);
+        $this->assertSame(UnidadComisionEmpaque::LIQUIDACION_PAGADO_FUERA, $constancia->liquidacion);
+        $this->assertSame(2000, $constancia->importe_centavos);
+        $this->assertSame('Lucía', $constancia->empacador_nombre);
+
+        $pedido = $this->pedido([
+            'empacado_at' => '2026-10-10 12:00:00',
+            'empacado_por_id' => $this->usuario->id,
+            'folio_remision' => 'REM-HIST',
+            'numero_cajas' => 2,
+        ]);
+        $this->caja($pedido, 2);
+        app(SincronizarComisionesEmpaqueService::class)->ejecutar($this->usuario);
+
+        $this->assertSame(1, UnidadComisionEmpaque::query()->where('folio_remision', 'REM-HIST')->count());
+        $resumen = app(ConsultarComisionesEmpaqueService::class)->resumen($this->usuario, new Request(['area_id' => $cedis->id]));
+        $this->assertSame('0.00', $resumen['importe_por_cortar']);
+        $this->assertSame('20.00', $resumen['importe_constancia']);
+
+        $carga = app(CargarEmpaquesComisionEmpaqueService::class);
+        $invalida = "fecha,cliente,cajas,remision,paqueteria,logistica,empaco,area,liquidacion\n2026-10-03,Cliente nuevo,1,REM-NUEVA,Estafeta,sin,Lucía,tienda,pendiente\nsin-fecha,Roto,0,,Estafeta,sin,Ana,cedis,pendiente\n";
+        $this->assertNotEmpty($carga->interpretar($invalida, $this->usuario)['errores']);
+        try {
+            $carga->guardar($invalida, $this->usuario);
+            $this->fail('Una fila inválida no debe guardar ninguna.');
+        } catch (ValidationException $e) {
+            $this->assertArrayHasKey('texto', $e->errors());
+        }
+        $this->assertSame(1, UnidadComisionEmpaque::query()->count());
+
+        $valida = "fecha,cliente,cajas,remision,paqueteria,logistica,empaco,area,liquidacion\n2026-10-03,Cliente nuevo,1,REM-NUEVA,Estafeta,sin,Lucía,tienda,pendiente\n2026-10-04,Cliente viejo,2,REM-VIEJA,Estafeta,con,Ana,cedis,pagado fuera\n";
+        $visto = $carga->interpretar($valida, $this->usuario);
+        $this->assertSame([], $visto['errores'], json_encode($visto['errores'], JSON_UNESCAPED_UNICODE));
+        $resultado = $carga->guardar($valida, $this->usuario);
+        $this->assertSame(2, $resultado['nuevas']);
+        $pendiente = UnidadComisionEmpaque::query()->where('folio_remision', 'REM-NUEVA')->first();
+        $this->assertSame(UnidadComisionEmpaque::PENDIENTE_REVISION, $pendiente->situacion);
+        $this->assertNull($pendiente->importe_centavos);
+        $repeticion = $carga->interpretar($valida, $this->usuario);
+        $this->assertSame([], $repeticion['errores'], json_encode($repeticion['errores'], JSON_UNESCAPED_UNICODE));
+        $this->assertSame(['nuevas' => 0, 'repetidas' => 2], $carga->guardar($valida, $this->usuario));
+        $this->assertSame(3, UnidadComisionEmpaque::query()->count());
     }
 
     private function pedido(array $overrides = []): PedidoBma
@@ -930,7 +1252,7 @@ class ComisionesEmpaqueTest extends TestCase
     {
         PedidoBmaCaja::query()->create([
             'pedido_bma_id' => $pedido->id,
-            'uuid_operativo' => (string) \Illuminate\Support\Str::uuid(),
+            'uuid_operativo' => (string) Str::uuid(),
             'catalogo_tipo_caja_id' => DB::table('catalogo_tipos_caja_pedido')->value('id'),
             'cantidad' => $cantidad,
             'orden' => 1,
