@@ -6,8 +6,10 @@ FROM ubuntu:24.04
 LABEL maintainer="Gelia TI"
 
 ARG WWWGROUP=1000
-ARG NODE_VERSION=24
 ARG MYSQL_CLIENT="mysql-client"
+ARG PHP_PACKAGE_VERSION=8.4.27-1+ubuntu24.04.1+deb.sury.org+1
+ARG NODE_VERSION=24.22.1
+ARG COMPOSER_VERSION=2.10.2
 
 WORKDIR /var/www/html
 
@@ -28,52 +30,63 @@ RUN echo "Acquire::http::Pipeline-Depth 0;" > /etc/apt/apt.conf.d/99custom && \
 # ==============================================================================
 # Nota: Se eliminaron xdebug, pcov, swoole y playwright por seguridad en producción.
 # Se reemplazó el servidor integrado por php8.4-fpm.
-RUN apt-get update && apt-get upgrade -y \
+RUN apt-get update \
     && mkdir -p /etc/apt/keyrings \
-    && apt-get install -y gnupg gosu curl ca-certificates zip unzip git sqlite3 libcap2-bin libpng-dev python3 dnsutils librsvg2-bin fswatch ffmpeg nano  \
+    && apt-get install -y gnupg gosu curl ca-certificates zip unzip git sqlite3 libcap2-bin libpng-dev python3 dnsutils librsvg2-bin fswatch ffmpeg nano xz-utils \
     && curl -sS 'https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xb8dc7e53946656efbce4c1dd71daeaab4ad4cab6' | gpg --dearmor | tee /etc/apt/keyrings/ppa_ondrej_php.gpg > /dev/null \
     && echo "deb [signed-by=/etc/apt/keyrings/ppa_ondrej_php.gpg] https://ppa.launchpadcontent.net/ondrej/php/ubuntu noble main" > /etc/apt/sources.list.d/ppa_ondrej_php.list \
     && apt-get update \
-    && apt-get install -y \
+    && apt-get install -y --no-install-recommends \
         libgd3 \
-        php8.4-fpm \
-        php8.4-cli \
-        php8.4-dev \
-        php8.4-pgsql \
-        php8.4-sqlite3 \
-        php8.4-gd \
-        php8.4-curl \
+        php8.4-common=${PHP_PACKAGE_VERSION} \
+        php8.4-opcache=${PHP_PACKAGE_VERSION} \
+        php8.4-fpm=${PHP_PACKAGE_VERSION} \
+        php8.4-cli=${PHP_PACKAGE_VERSION} \
+        php8.4-dev=${PHP_PACKAGE_VERSION} \
+        php8.4-pgsql=${PHP_PACKAGE_VERSION} \
+        php8.4-sqlite3=${PHP_PACKAGE_VERSION} \
+        php8.4-gd=${PHP_PACKAGE_VERSION} \
+        php8.4-curl=${PHP_PACKAGE_VERSION} \
+        php8.4-mysql=${PHP_PACKAGE_VERSION} \
+        php8.4-mbstring=${PHP_PACKAGE_VERSION} \
+        php8.4-xml=${PHP_PACKAGE_VERSION} \
+        php8.4-zip=${PHP_PACKAGE_VERSION} \
+        php8.4-bcmath=${PHP_PACKAGE_VERSION} \
+        php8.4-soap=${PHP_PACKAGE_VERSION} \
+        php8.4-intl=${PHP_PACKAGE_VERSION} \
+        php8.4-readline=${PHP_PACKAGE_VERSION} \
+        php8.4-ldap=${PHP_PACKAGE_VERSION} \
         php8.4-mongodb \
         php8.4-imap \
-        php8.4-mysql \
-        php8.4-mbstring \
-        php8.4-xml \
-        php8.4-zip \
-        php8.4-bcmath \
-        php8.4-soap \
-        php8.4-intl \
-        php8.4-readline \
-        php8.4-ldap \
         php8.4-msgpack \
         php8.4-igbinary \
         php8.4-redis \
         php8.4-memcached \
         php8.4-imagick \
-    && apt-get install -y php-pear zlib1g-dev \
+        php-pear \
+        zlib1g-dev \
     && pecl channel-update pecl.php.net \
-    && pecl install xlswriter \
+    && pecl install xlswriter-3.0.0 \
     && echo "extension=xlswriter.so" > /etc/php/8.4/cli/conf.d/20-xlswriter.ini \
-    && echo "extension=xlswriter.so" > /etc/php/8.4/fpm/conf.d/20-xlswriter.ini
+    && echo "extension=xlswriter.so" > /etc/php/8.4/fpm/conf.d/20-xlswriter.ini \
+    && php -v | grep -q "PHP 8.4.27"
 
 # ==============================================================================
 # 4. Instalación de Composer, Node.js y Clientes de BD
 # ==============================================================================
-RUN curl -sLS https://getcomposer.org/installer | php -- --install-dir=/usr/bin/ --filename=composer \
-    && curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg \
-    && echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_$NODE_VERSION.x nodistro main" > /etc/apt/sources.list.d/nodesource.list \
-    && apt-get update \
-    && apt-get install -y nodejs \
-    && npm install -g npm \
+RUN curl -sLS https://getcomposer.org/installer | php -- --install-dir=/usr/bin/ --filename=composer --version=${COMPOSER_VERSION} \
+    && arch="$(dpkg --print-architecture)" \
+    && case "$arch" in \
+        amd64) node_arch=x64 ;; \
+        arm64) node_arch=arm64 ;; \
+        *) echo "arquitectura no soportada: $arch" >&2; exit 1 ;; \
+    esac \
+    && curl -fsSLO "https://nodejs.org/dist/v${NODE_VERSION}/SHASUMS256.txt" \
+    && curl -fsSLO "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${node_arch}.tar.xz" \
+    && grep " node-v${NODE_VERSION}-linux-${node_arch}.tar.xz$" SHASUMS256.txt | sha256sum -c - \
+    && tar -xJf "node-v${NODE_VERSION}-linux-${node_arch}.tar.xz" -C /usr/local --strip-components=1 \
+    && rm -f SHASUMS256.txt "node-v${NODE_VERSION}-linux-${node_arch}.tar.xz" \
+    && node -v | grep -qx "v${NODE_VERSION}" \
     && apt-get install -y $MYSQL_CLIENT \
     && apt-get -y autoremove \
     && apt-get clean \

@@ -1,11 +1,6 @@
 services:
     laravel.test:
-        build:
-            context: './vendor/laravel/sail/runtimes/8.4'
-            dockerfile: Dockerfile
-            args:
-                WWWGROUP: '${WWWGROUP}'
-        image: 'sail-8.4/app'
+        image: 'gelianv-sail:php-8.4.27-node-24.22.1'
         restart: unless-stopped
         extra_hosts:
             - 'host.docker.internal:host-gateway'
@@ -31,7 +26,7 @@ services:
             - mailpit
             - selenium
     reverb:
-        image: 'sail-8.4/app'
+        image: 'gelianv-sail:php-8.4.27-node-24.22.1'
         restart: unless-stopped
         extra_hosts:
             - 'host.docker.internal:host-gateway'
@@ -49,7 +44,7 @@ services:
             - redis
         command: php artisan reverb:start --host=0.0.0.0 --port=8080
     queue:
-        image: 'sail-8.4/app'
+        image: 'gelianv-sail:php-8.4.27-node-24.22.1'
         restart: unless-stopped
         extra_hosts:
             - 'host.docker.internal:host-gateway'
@@ -65,7 +60,7 @@ services:
             - redis
         command: php artisan queue:work --tries=3 --timeout=630
     scheduler:
-        image: 'sail-8.4/app'
+        image: 'gelianv-sail:php-8.4.27-node-24.22.1'
         restart: unless-stopped
         extra_hosts:
             - 'host.docker.internal:host-gateway'
