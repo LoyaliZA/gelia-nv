@@ -12,6 +12,7 @@ use App\Services\Almacenes\IniciarImportacionAlmacenService;
 use App\Services\Almacenes\LeerEncabezadosArchivoImportacionService;
 use App\Services\Almacenes\RegistrarAuditoriaAlmacenService;
 use App\Services\Catalogos\PlantillaImportacionCatalogoService;
+use App\Support\Almacenes\OperacionesImportacionAlmacen;
 use App\Support\Almacenes\OrdenamientoListadoAlmacen;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -81,6 +82,7 @@ class InventarioController extends Controller
             'almacenes' => $alcance->almacenesOperables($user),
             'filtros' => (object) $request->only(['sucursal_id', 'almacen_id', 'q', 'sort', 'dir']),
             'sin_sucursales_operables' => $sucursales->isEmpty(),
+            'puede_carga_completa' => OperacionesImportacionAlmacen::usuarioPuedeCaso($user, 'completa'),
         ]);
     }
 
@@ -109,8 +111,10 @@ class InventarioController extends Controller
         return back()->with('success', 'Inventario actualizado.');
     }
 
-    public function destroy(Inventario $inventario): RedirectResponse
+    public function destroy(Request $request, Inventario $inventario, AlcanceAlmacenesService $alcance): RedirectResponse
     {
+        $alcance->asegurarAlmacenOperable($request->user(), (int) $inventario->almacen_id);
+
         $id = $inventario->id;
         $inventario->delete();
 

@@ -3,12 +3,15 @@
 namespace Tests\Unit\Services\Almacenes;
 
 use App\Models\Almacen;
+use App\Models\Inventario;
 use App\Models\Producto;
 use App\Models\ProductoAlmacen;
+use App\Models\ProductoCosto;
 use App\Services\Almacenes\ProcesarFilaAsignacionAlmacenImportacionService;
 use App\Services\Almacenes\ProcesarFilaCantidadReferenciaImportacionService;
 use App\Services\Almacenes\ProcesarFilaCostoImportacionService;
 use App\Services\Almacenes\ProcesarFilaImportacionHubService;
+use App\Services\Almacenes\ProcesarFilaProductoImportacionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -98,7 +101,7 @@ class ImportacionPorFolioTest extends TestCase
     public function test_celda_vacia_no_borra_descripcion(): void
     {
         $producto = $this->producto(610020, 'SKU-DESC');
-        $svc = app(\App\Services\Almacenes\ProcesarFilaProductoImportacionService::class);
+        $svc = app(ProcesarFilaProductoImportacionService::class);
 
         $resultado = $svc->ejecutar(
             ['folio' => '610020', 'sku' => '', 'descripcion' => ''],
@@ -108,6 +111,46 @@ class ImportacionPorFolioTest extends TestCase
         $this->assertSame('sin_cambios', $resultado['accion']);
         $this->assertSame('Producto 610020', $producto->fresh()->descripcion);
         $this->assertSame('SKU-DESC', $producto->fresh()->sku);
+    }
+
+    public function test_existencias_solo_actualiza_la_existencia(): void
+    {
+        $almacen = $this->almacen();
+        $producto = $this->producto(610030, 'SKU-EX');
+        $inventario = Inventario::create([
+            'producto_id' => $producto->id,
+            'almacen_id' => $almacen->id,
+            'existencia' => 4,
+            'apartado' => 1,
+            'ubicacion' => 'ANAQUEL',
+        ]);
+        ProductoCosto::create([
+            'producto_id' => $producto->id,
+            'almacen_id' => $almacen->id,
+            'costo' => 8,
+            'precio_venta' => 12,
+        ]);
+
+        $resultado = app(ProcesarFilaCantidadReferenciaImportacionService::class)->ejecutar(
+            ['folio' => '610030', 'existencia' => '9'],
+            ['folio' => 'folio', 'existencia' => 'existencia'],
+            $almacen->id,
+        );
+
+        $this->assertSame('actualizado', $resultado['accion']);
+        $inventario->refresh();
+        $producto->refresh();
+        $this->assertSame('9.000', $inventario->existencia);
+        $this->assertSame('1.000', $inventario->apartado);
+        $this->assertSame('ANAQUEL', $inventario->ubicacion);
+        $this->assertSame('SKU-EX', $producto->sku);
+        $this->assertSame('Producto 610030', $producto->descripcion);
+        $this->assertDatabaseHas('producto_costos', [
+            'producto_id' => $producto->id,
+            'almacen_id' => $almacen->id,
+            'costo' => '8.00',
+            'precio_venta' => '12.00',
+        ]);
     }
 
     private function almacen(): Almacen

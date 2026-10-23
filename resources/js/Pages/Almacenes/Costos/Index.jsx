@@ -18,6 +18,7 @@ export default function Index({ auth, costos, sucursales, almacenes, filtros, si
     const [busqueda, setBusqueda] = useState(filtros?.q || '');
     const lista = costos?.data || [];
     const puedeGestionar = auth?.user?.permissions?.includes('almacenes.costos.gestionar') || auth?.user?.roles?.includes('Super Admin');
+    const puedeBorrar = puedeGestionar || auth?.user?.permissions?.includes('catalogos.gestionar');
     const puedeImportar = auth?.user?.permissions?.includes('almacenes.costos.importar')
         || auth?.user?.permissions?.includes('catalogos.gestionar')
         || auth?.user?.roles?.includes('Super Admin');
@@ -193,16 +194,16 @@ export default function Index({ auth, costos, sucursales, almacenes, filtros, si
                                     <EncabezadoOrdenable columna="costo" etiqueta="Costo" sortActual={filtros?.sort} dirActual={filtros?.dir} onOrdenar={handleOrdenar} alineacion="right" />
                                     <EncabezadoOrdenable columna="costo_reposicion" etiqueta="Costo Reposición" sortActual={filtros?.sort} dirActual={filtros?.dir} onOrdenar={handleOrdenar} alineacion="right" />
                                     <EncabezadoOrdenable columna="precio_venta" etiqueta="Precio Venta" sortActual={filtros?.sort} dirActual={filtros?.dir} onOrdenar={handleOrdenar} alineacion="right" />
-                                    {puedeGestionar && <th className="px-4 py-4 text-right">Acciones</th>}
+                                    {puedeBorrar && <th className="px-4 py-4 text-right">Acciones</th>}
                                 </tr>
                             </thead>
                             <tbody>
                                 {lista.length === 0 ? (
                                     <tr>
-                                        <td colSpan={6} className="px-4 py-16 text-center theme-text-muted text-sm">
+                                        <td colSpan={puedeBorrar ? 6 : 5} className="px-4 py-16 text-center theme-text-muted text-sm">
                                             <p className="font-bold uppercase m-0 mb-2">Sin costos registrados</p>
                                             <p className="text-[11px] m-0 max-w-md mx-auto">
-                                                Costos es independiente de Inventarios. Usa Importar con un archivo de SKU + costo/precio para este almacén (los productos deben existir en el catálogo).
+                                                El archivo identifica el producto por folio, que debe existir. Puede modificar el costo, el costo de reposición y el precio de ese almacén. Conserva la ficha y la existencia. Simular no aplica cambios al catálogo.
                                             </p>
                                         </td>
                                     </tr>
@@ -213,14 +214,16 @@ export default function Index({ auth, costos, sucursales, almacenes, filtros, si
                                             <span className="text-[10px] font-bold theme-text-muted">SKU {c.producto?.sku}</span>
                                         </td>
                                         <td className="px-4 py-3 text-[11px] font-bold uppercase">{c.almacen?.nombre}</td>
-                                        <td className="px-4 py-3 text-right font-bold text-red-500">{fmt(c.costo)}</td>
+                                        <td className="px-4 py-3 text-right font-bold theme-text-peligro">{fmt(c.costo)}</td>
                                         <td className="px-4 py-3 text-right font-bold">{fmt(c.costo_reposicion)}</td>
-                                        <td className="px-4 py-3 text-right font-bold text-emerald-600 dark:text-emerald-400">{fmt(c.precio_venta)}</td>
-                                        {puedeGestionar && (
+                                        <td className="px-4 py-3 text-right font-bold theme-text-exito">{fmt(c.precio_venta)}</td>
+                                        {puedeBorrar && (
                                             <td className="px-4 py-3 text-right">
                                                 <div className="flex justify-end gap-2">
-                                                    <button onClick={() => abrirEditar(c)} className="p-2 theme-element border theme-border rounded-xl"><Edit2 className="w-4 h-4" /></button>
-                                                    <button onClick={() => router.delete(route('almacenes.costos.destroy', c.id))} className="p-2 theme-element border theme-border rounded-xl hover:bg-red-500 hover:text-white"><Trash2 className="w-4 h-4" /></button>
+                                                    {puedeGestionar && (
+                                                        <button type="button" aria-label="Editar costo" onClick={() => abrirEditar(c)} className="p-2 theme-element border theme-border rounded-xl"><Edit2 className="w-4 h-4" /></button>
+                                                    )}
+                                                    <button type="button" aria-label="Eliminar costo" onClick={() => router.delete(route('almacenes.costos.destroy', c.id))} className="p-2 theme-element border theme-border rounded-xl theme-text-peligro"><Trash2 className="w-4 h-4" /></button>
                                                 </div>
                                             </td>
                                         )}

@@ -26,7 +26,7 @@ function mostrarCantidad(valor) {
     return texto === '' ? 'Sin dato' : texto;
 }
 
-export default function Index({ auth, inventarios, sucursales, almacenes, filtros, sin_sucursales_operables }) {
+export default function Index({ auth, inventarios, sucursales, almacenes, filtros, sin_sucursales_operables, puede_carga_completa = false }) {
     const [modalAbierto, setModalAbierto] = useState(false);
     const [itemActual, setItemActual] = useState(null);
     const [sucursalId, setSucursalId] = useState(filtros?.sucursal_id || '');
@@ -34,7 +34,7 @@ export default function Index({ auth, inventarios, sucursales, almacenes, filtro
     const [busqueda, setBusqueda] = useState(filtros?.q || '');
     const lista = inventarios?.data || [];
     const puedeGestionar = auth?.user?.permissions?.includes('almacenes.inventarios.gestionar') || auth?.user?.roles?.includes('Super Admin');
-    const puedeImportar = auth?.user?.permissions?.includes('almacenes.inventarios.importar') || auth?.user?.roles?.includes('Super Admin');
+    const puedeBorrar = puedeGestionar || auth?.user?.permissions?.includes('catalogos.gestionar');
 
     const almacenesFiltrados = useMemo(() => {
         if (!sucursalId) return almacenes;
@@ -155,12 +155,18 @@ export default function Index({ auth, inventarios, sucursales, almacenes, filtro
                             <p className="text-[11px] font-bold theme-text-muted mt-2 max-w-2xl">
                                 Cantidades de referencia: GELIA-NV no las descuenta automáticamente por venta ni las publica como stock confirmado.
                                 Los costos mostrados aquí son solo referencia del almacén; la gestión detallada está en Costos y precios.
+                                La ubicación de esta pantalla es la de inventario y es independiente de la ubicación de asignación.
                             </p>
+                            {puede_carga_completa && (
+                                <p className="text-[11px] font-bold theme-text-muted mt-2 max-w-2xl">
+                                    Carga completa puede incluir ficha, asignación, costos, precios y existencias. Simular no aplica cambios al catálogo.
+                                </p>
+                            )}
                         </div>
                         <div className="flex gap-2">
-                            {puedeImportar && (
+                            {puede_carga_completa && (
                                 <Link href={route('almacenes.importaciones.index', { preset: 'inventario' })} className={`${THEME_BTN_PRIMARY} theme-btn-primary--compact inline-flex items-center gap-2`}>
-                                    <Upload className="w-4 h-4" /> Importar
+                                    <Upload className="w-4 h-4" /> Carga completa
                                 </Link>
                             )}
                             {puedeGestionar && (
@@ -205,7 +211,7 @@ export default function Index({ auth, inventarios, sucursales, almacenes, filtro
                                 <tr className="border-b theme-border text-[10px] font-black uppercase tracking-widest theme-text-muted">
                                     <EncabezadoOrdenable columna="producto" etiqueta="Producto" sortActual={filtros?.sort} dirActual={filtros?.dir} onOrdenar={handleOrdenar} />
                                     <EncabezadoOrdenable columna="almacen" etiqueta="Almacén" sortActual={filtros?.sort} dirActual={filtros?.dir} onOrdenar={handleOrdenar} />
-                                    <EncabezadoOrdenable columna="ubicacion" etiqueta="Ubicación" sortActual={filtros?.sort} dirActual={filtros?.dir} onOrdenar={handleOrdenar} />
+                                    <EncabezadoOrdenable columna="ubicacion" etiqueta="Ubicación de inventario" sortActual={filtros?.sort} dirActual={filtros?.dir} onOrdenar={handleOrdenar} />
                                     <EncabezadoOrdenable columna="existencia" etiqueta="Existencia" sortActual={filtros?.sort} dirActual={filtros?.dir} onOrdenar={handleOrdenar} alineacion="right" />
                                     <EncabezadoOrdenable columna="apartado" etiqueta="Apartado" sortActual={filtros?.sort} dirActual={filtros?.dir} onOrdenar={handleOrdenar} alineacion="right" />
                                     <EncabezadoOrdenable columna="disponible" etiqueta="Disponible" sortActual={filtros?.sort} dirActual={filtros?.dir} onOrdenar={handleOrdenar} alineacion="right" />
@@ -213,12 +219,12 @@ export default function Index({ auth, inventarios, sucursales, almacenes, filtro
                                     <th className="px-4 py-4 text-right text-[10px] font-black uppercase tracking-widest theme-text-muted">P. Venta</th>
                                     <EncabezadoOrdenable columna="transito_oc" etiqueta="Tráns. OC" sortActual={filtros?.sort} dirActual={filtros?.dir} onOrdenar={handleOrdenar} alineacion="right" />
                                     <EncabezadoOrdenable columna="transito_ot" etiqueta="Tráns. OT" sortActual={filtros?.sort} dirActual={filtros?.dir} onOrdenar={handleOrdenar} alineacion="right" />
-                                    {puedeGestionar && <th className="px-4 py-4 text-right">Acciones</th>}
+                                    {puedeBorrar && <th className="px-4 py-4 text-right">Acciones</th>}
                                 </tr>
                             </thead>
                             <tbody>
                                 {lista.length === 0 ? (
-                                    <tr><td colSpan={11} className="px-4 py-16 text-center theme-text-muted text-sm font-bold uppercase">Sin registros de inventario</td></tr>
+                                    <tr><td colSpan={puedeBorrar ? 11 : 10} className="px-4 py-16 text-center theme-text-muted text-sm font-bold uppercase">Sin registros de inventario</td></tr>
                                 ) : lista.map((inv) => (
                                     <tr key={inv.id} className="border-b theme-border hover:bg-black/5 dark:hover:bg-white/5">
                                         <td className="px-4 py-3">
@@ -229,16 +235,18 @@ export default function Index({ auth, inventarios, sucursales, almacenes, filtro
                                         <td className="px-4 py-3 text-[11px] font-bold">{inv.ubicacion || '—'}</td>
                                         <td className="px-4 py-3 text-right font-bold">{mostrarCantidad(inv.existencia)}</td>
                                         <td className="px-4 py-3 text-right font-bold">{mostrarCantidad(inv.apartado)}</td>
-                                        <td className="px-4 py-3 text-right font-bold text-emerald-600 dark:text-emerald-400">{mostrarCantidad(inv.disponible)}</td>
-                                        <td className="px-4 py-3 text-right font-bold text-red-500">{inv.costo_valor != null && inv.costo_valor !== '' ? Number(inv.costo_valor).toFixed(2) : '—'}</td>
-                                        <td className="px-4 py-3 text-right font-bold text-emerald-600 dark:text-emerald-400">{inv.precio_venta_valor != null && inv.precio_venta_valor !== '' ? Number(inv.precio_venta_valor).toFixed(2) : '—'}</td>
+                                        <td className="px-4 py-3 text-right font-bold theme-text-exito">{mostrarCantidad(inv.disponible)}</td>
+                                        <td className="px-4 py-3 text-right font-bold theme-text-peligro">{inv.costo_valor != null && inv.costo_valor !== '' ? Number(inv.costo_valor).toFixed(2) : '—'}</td>
+                                        <td className="px-4 py-3 text-right font-bold theme-text-exito">{inv.precio_venta_valor != null && inv.precio_venta_valor !== '' ? Number(inv.precio_venta_valor).toFixed(2) : '—'}</td>
                                         <td className="px-4 py-3 text-right text-[11px]">{mostrarCantidad(inv.transito_oc)}</td>
                                         <td className="px-4 py-3 text-right text-[11px]">{mostrarCantidad(inv.transito_ot)}</td>
-                                        {puedeGestionar && (
+                                        {puedeBorrar && (
                                             <td className="px-4 py-3 text-right">
                                                 <div className="flex justify-end gap-2">
-                                                    <button onClick={() => abrirEditar(inv)} className="p-2 theme-element border theme-border rounded-xl"><Edit2 className="w-4 h-4" /></button>
-                                                    <button onClick={() => router.delete(route('almacenes.inventarios.destroy', inv.id))} className="p-2 theme-element border theme-border rounded-xl hover:bg-red-500 hover:text-white"><Trash2 className="w-4 h-4" /></button>
+                                                    {puedeGestionar && (
+                                                        <button type="button" aria-label="Editar inventario" onClick={() => abrirEditar(inv)} className="p-2 theme-element border theme-border rounded-xl"><Edit2 className="w-4 h-4" /></button>
+                                                    )}
+                                                    <button type="button" aria-label="Eliminar inventario" onClick={() => router.delete(route('almacenes.inventarios.destroy', inv.id))} className="p-2 theme-element border theme-border rounded-xl theme-text-peligro"><Trash2 className="w-4 h-4" /></button>
                                                 </div>
                                             </td>
                                         )}
@@ -274,8 +282,9 @@ export default function Index({ auth, inventarios, sucursales, almacenes, filtro
                                 </select>
                             </div>
                             <div>
-                                <label className="text-[10px] font-black uppercase theme-text-muted">Ubicación</label>
+                                <label className="text-[10px] font-black uppercase theme-text-muted">Ubicación de inventario</label>
                                 <input value={data.ubicacion} onChange={(e) => setData('ubicacion', e.target.value)} placeholder="A-01-B-03" className="theme-input w-full mt-1 px-4 py-3 text-sm font-bold" />
+                                <p className="text-[11px] font-bold theme-text-muted mt-1">Esta ubicación de inventario no cambia la ubicación de asignación.</p>
                             </div>
                             <div className="grid grid-cols-2 gap-3">
                                 {CAMPOS_CANTIDAD.map((field) => (
@@ -297,7 +306,7 @@ export default function Index({ auth, inventarios, sucursales, almacenes, filtro
                                     </div>
                                 ))}
                             </div>
-                            <div className="p-3 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-sm font-black">
+                            <div className="p-3 rounded-xl theme-element text-sm font-black theme-text-exito">
                                 Disponible: {disponible}
                             </div>
                             <button type="submit" disabled={processing || !data.producto_id} className={`${THEME_BTN_PRIMARY} w-full py-3 flex justify-center gap-2`}>

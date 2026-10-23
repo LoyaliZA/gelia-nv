@@ -2,6 +2,8 @@
 
 namespace App\Support\Almacenes;
 
+use App\Models\User;
+
 final class OperacionesImportacionAlmacen
 {
     public const FICHA_PRODUCTO = 'ficha_producto';
@@ -50,6 +52,37 @@ final class OperacionesImportacionAlmacen
         };
     }
 
+    public static function usuarioPuedeOperacion(User $user, string $operacion): bool
+    {
+        if ($user->can('catalogos.gestionar')) {
+            return true;
+        }
+
+        $permiso = self::permisoParaOperacion($operacion);
+        if ($permiso && $user->can($permiso)) {
+            return true;
+        }
+
+        return $operacion === self::FICHA_PRODUCTO
+            && ($user->can('gestion_interna.productos.gestionar') || $user->can('almacenes.productos.gestionar'));
+    }
+
+    public static function usuarioPuedeCaso(User $user, string $caso): bool
+    {
+        $definicion = self::definicionCasos()[$caso] ?? null;
+        if ($definicion === null) {
+            return false;
+        }
+
+        foreach ($definicion['operaciones'] as $operacion) {
+            if (! self::usuarioPuedeOperacion($user, $operacion)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     public static function etiqueta(string $operacion): string
     {
         return match ($operacion) {
@@ -65,7 +98,7 @@ final class OperacionesImportacionAlmacen
     {
         return match ($operacion) {
             self::FICHA_PRODUCTO => 'Nombre, marca, categoría, código de barras y demás datos del catálogo. No modifica existencias ni costos.',
-            self::ASIGNACION_ALMACEN => 'Relaciona cada SKU con el almacén elegido (ubicación opcional). No modifica existencias ni costos.',
+            self::ASIGNACION_ALMACEN => 'Vincula el folio al almacén elegido y puede guardar la ubicación de asignación. No modifica existencias ni costos.',
             self::COSTOS_PRECIOS => 'Costo, costo de reposición y precio de referencia del almacén. No modifica existencias ni datos del producto.',
             self::CANTIDADES_REFERENCIA => 'Existencias manuales de referencia en el almacén. No activa el producto ni cambia costos por sí sola.',
             default => '',
@@ -106,28 +139,28 @@ final class OperacionesImportacionAlmacen
         return [
             'productos' => [
                 'titulo' => 'Productos',
-                'frase' => 'Crea los folios nuevos y actualiza los que ya existen. Cada fila válida se vincula al almacén elegido. No modifica costos ni existencias.',
+                'frase' => 'El archivo identifica el producto por folio. Puede crear un folio nuevo o actualizar la ficha y la ubicación de asignación en el almacén elegido. Conserva costos, precios y existencias. Una celda vacía no borra el dato guardado.',
                 'columnas' => 'Folio, SKU, descripción, marca, categoría, código de barras, peso, activo y ubicación',
                 'operaciones' => [self::FICHA_PRODUCTO, self::ASIGNACION_ALMACEN],
                 'plantilla' => 'productos',
             ],
             'costos' => [
                 'titulo' => 'Costos y precios',
-                'frase' => 'Solo costo, costo de reposición y precio de referencia de ese almacén. El folio tiene que existir.',
+                'frase' => 'El archivo identifica el producto por folio y el folio tiene que existir. Puede modificar el costo, el costo de reposición y el precio de referencia de ese almacén. Conserva la ficha, la asignación y la existencia.',
                 'columnas' => 'Folio, costo, costo de reposición y precio de referencia',
                 'operaciones' => [self::COSTOS_PRECIOS],
                 'plantilla' => 'costos',
             ],
             'existencias' => [
                 'titulo' => 'Existencias',
-                'frase' => 'Solo la existencia de referencia del almacén elegido. El folio tiene que existir.',
+                'frase' => 'El archivo identifica el producto por folio y el folio tiene que existir. Solo puede modificar la existencia de referencia de ese almacén. Conserva la ficha, la asignación, los costos, los precios y el resto del inventario.',
                 'columnas' => 'Folio y existencia',
                 'operaciones' => [self::CANTIDADES_REFERENCIA],
                 'plantilla' => 'existencias',
             ],
             'completa' => [
                 'titulo' => 'Carga completa',
-                'frase' => 'Ficha, vínculo, costos, precios y existencias en el mismo archivo. Una celda vacía no borra el dato guardado.',
+                'frase' => 'El archivo identifica el producto por folio. Puede incluir ficha, asignación, costos, precios y existencias. Conserva el dato guardado cuando la celda viene vacía.',
                 'columnas' => 'Folio, SKU, descripción, marca, categoría, código de barras, peso, activo, ubicación, existencia, costo, costo de reposición y precio de referencia',
                 'operaciones' => self::todas(),
                 'plantilla' => 'completa',

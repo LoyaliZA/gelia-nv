@@ -168,6 +168,7 @@ export default function Show({ auth, lote, operacionesLabels }) {
                 {step >= 3 && resumen && (
                     <div className={geliaCardClass('p-6 space-y-3')}>
                         <h2 className="text-base font-semibold theme-text-main">Simulación</h2>
+                        <p className="text-sm theme-text-muted">Simular no aplica cambios al catálogo. Los datos del caso solo se escriben al confirmar el paso siguiente.</p>
                         <ResumenSimulacionImportacion resumen={resumen} />
                         {error && <p className="text-sm font-semibold theme-text-peligro" role="alert">{error}</p>}
                         {step === 3 && (

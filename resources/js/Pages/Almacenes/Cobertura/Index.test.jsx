@@ -81,3 +81,52 @@ it('consulta la página siguiente y conserva el contexto de productos por almac�
         page: 2,
     }, { preserveState: true });
 });
+
+it('muestra la ubicación de asignación y oculta Asignar a quien solo consulta', async () => {
+    await act(async () => root.render(
+        <Index
+            auth={{ user: { permissions: ['almacenes.inventarios.ver'], roles: [] } }}
+            filas={{
+                data: [{
+                    id: 7,
+                    descripcion: 'Asignado',
+                    sku: 'SKU-ASIG',
+                    asignado: true,
+                    ubicacion: 'A-1',
+                    costo: null,
+                    tiene_inventario: false,
+                    tiene_cantidad: false,
+                    existencia: null,
+                }],
+                current_page: 1,
+                last_page: 1,
+                total: 1,
+            }}
+            sucursales={[{ id: 1, nombre: 'Principal' }]}
+            almacenes={[{ id: 4, sucursal_id: 1, codigo: 'VTA', nombre: 'Ventas' }]}
+            filtros={{ sucursal_id: 1, almacen_id: 4 }}
+        />,
+    ));
+
+    expect(container.textContent).toContain('Ubicación de asignación A-1');
+    expect(container.textContent).toContain('independiente de la ubicación de inventario');
+    expect(container.textContent).not.toContain('Asignar');
+});
+
+it('muestra Asignar cuando la persona puede gestionar inventarios', async () => {
+    await act(async () => root.render(
+        <Index
+            auth={{ user: { permissions: ['almacenes.inventarios.gestionar'], roles: [] } }}
+            filas={filas}
+            sucursales={[{ id: 1, nombre: 'Principal' }]}
+            almacenes={[{ id: 4, sucursal_id: 1, codigo: 'VTA', nombre: 'Ventas' }]}
+            filtros={{ sucursal_id: 1, almacen_id: 4 }}
+        />,
+    ));
+
+    const casilla = container.querySelector('input[type="checkbox"]');
+    expect(casilla).not.toBeNull();
+    await act(async () => casilla.click());
+
+    expect(container.textContent).toContain('Asignar 1 al almacén');
+});

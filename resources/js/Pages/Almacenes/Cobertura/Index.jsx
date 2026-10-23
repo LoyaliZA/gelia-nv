@@ -20,6 +20,9 @@ export default function Index({ auth, filas, sucursales, almacenes, filtros, sin
     const [seleccion, setSeleccion] = useState([]);
     const lista = filas?.data || [];
     const verFicha = puedeVerFichaProducto(auth);
+    const puedeAsignar = auth?.user?.permissions?.includes('almacenes.inventarios.gestionar')
+        || auth?.user?.permissions?.includes('catalogos.gestionar')
+        || auth?.user?.roles?.includes('Super Admin');
 
     const almacenesFiltrados = useMemo(() => {
         if (!sucursalId) return almacenes;
@@ -118,7 +121,10 @@ export default function Index({ auth, filas, sucursales, almacenes, filtros, sin
                             {!almacenId && (
                                 <p className="text-[11px] font-bold theme-text-muted">Elige un almacén para evaluar asignación, costo y existencia. Sin esa elección, los indicadores no corresponden a un almacén.</p>
                             )}
-                            {almacenId && seleccion.length > 0 && (
+                            {almacenId && (
+                                <p className="text-[11px] font-bold theme-text-muted">La ubicación de asignación que se muestra aquí es independiente de la ubicación de inventario. Esta pantalla no la edita.</p>
+                            )}
+                            {almacenId && puedeAsignar && seleccion.length > 0 && (
                                 <button type="button" onClick={asignarSeleccion} className={`${THEME_BTN_PRIMARY} theme-btn-primary--compact`}>
                                     Asignar {seleccion.length} al almacén
                                 </button>
@@ -164,7 +170,7 @@ export default function Index({ auth, filas, sucursales, almacenes, filtros, sin
                                             )}
                                             <span className="text-[10px] theme-text-muted">SKU {f.sku}</span>
                                         </td>
-                                        <td className="px-4 py-2">{almacenId ? (f.asignado ? `Asignado${f.ubicacion ? ` · ${f.ubicacion}` : ''}` : 'Sin asignar') : '—'}</td>
+                                        <td className="px-4 py-2">{almacenId ? (f.asignado ? `Asignado${f.ubicacion ? ` · Ubicación de asignación ${f.ubicacion}` : ''}` : 'Sin asignar') : '—'}</td>
                                         <td className="px-4 py-2">{almacenId && f.costo != null ? Number(f.costo).toFixed(2) : (almacenId ? 'Sin costo' : '—')}</td>
                                         <td className="px-4 py-2">{almacenId ? textoCantidad(f) : '—'}</td>
                                     </tr>

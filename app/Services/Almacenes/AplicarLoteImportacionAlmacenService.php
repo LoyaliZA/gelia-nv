@@ -89,21 +89,14 @@ class AplicarLoteImportacionAlmacenService
      */
     private function assertPermisosOperaciones(User $user, array $operaciones): void
     {
-        if ($user->can('catalogos.gestionar')) {
-            return;
-        }
-
         foreach ($operaciones as $operacion) {
-            $permiso = OperacionesImportacionAlmacen::permisoParaOperacion($operacion);
-            if ($permiso && ! $user->can($permiso) && ! $user->can('gestion_interna.productos.gestionar') && ! $user->can('almacenes.productos.gestionar')) {
-                if ($operacion === OperacionesImportacionAlmacen::FICHA_PRODUCTO
-                    && ($user->can('gestion_interna.productos.gestionar') || $user->can('almacenes.productos.gestionar'))) {
-                    continue;
-                }
-                throw ValidationException::withMessages([
-                    'operaciones' => "No tienes permiso para aplicar: {$operacion}.",
-                ]);
+            if (OperacionesImportacionAlmacen::usuarioPuedeOperacion($user, $operacion)) {
+                continue;
             }
+
+            throw ValidationException::withMessages([
+                'operaciones' => "No tienes permiso para aplicar: {$operacion}.",
+            ]);
         }
     }
 }

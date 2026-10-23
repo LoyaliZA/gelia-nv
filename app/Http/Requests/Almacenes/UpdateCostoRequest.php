@@ -36,12 +36,29 @@ class UpdateCostoRequest extends FormRequest
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $v): void {
+            if (! $this->user()) {
+                return;
+            }
+
+            $alcance = app(AlcanceAlmacenesService::class);
+            $registro = $this->route('costo');
+            $almacenOriginal = $registro?->almacen_id;
+            if (! $almacenOriginal) {
+                $v->errors()->add('almacen_id', 'No autorizado para operar en el almacén del registro.');
+            } else {
+                try {
+                    $alcance->asegurarAlmacenOperable($this->user(), (int) $almacenOriginal);
+                } catch (\Throwable $e) {
+                    $v->errors()->add('almacen_id', 'No autorizado para operar en el almacén del registro.');
+                }
+            }
+
             $almacenId = $this->input('almacen_id');
-            if (! $almacenId || ! $this->user()) {
+            if (! $almacenId) {
                 return;
             }
             try {
-                app(AlcanceAlmacenesService::class)->asegurarAlmacenOperable($this->user(), (int) $almacenId);
+                $alcance->asegurarAlmacenOperable($this->user(), (int) $almacenId);
             } catch (\Throwable $e) {
                 $v->errors()->add('almacen_id', 'No autorizado para operar en ese almacén.');
             }

@@ -74,7 +74,7 @@ export default function Index({
                 <header className={geliaCardClass('p-6')}>
                     <h1 className="text-2xl font-semibold theme-text-main">Importaciones</h1>
                     <p className="text-sm theme-text-muted mt-2 max-w-2xl">
-                        El folio identifica el producto y no cambia. Si el folio ya existe, la fila lo actualiza. Si viene vacío o nadie lo usa, se registra un producto nuevo. El almacén elegido aplica a todo el archivo.
+                        Cada caso indica qué identificador usa el archivo, qué datos puede modificar y qué datos conserva. Simular no aplica cambios al catálogo. El almacén elegido aplica a todo el archivo.
                     </p>
                 </header>
 

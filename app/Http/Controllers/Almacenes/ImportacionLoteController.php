@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Almacenes;
 
 use App\Http\Controllers\Controller;
 use App\Models\Almacenes\ImportacionAlmacenLog;
+use App\Models\User;
 use App\Services\Almacenes\AlcanceAlmacenesService;
 use App\Services\Almacenes\AplicarLoteImportacionAlmacenService;
 use App\Services\Almacenes\CrearLoteImportacionAlmacenService;
@@ -13,6 +14,7 @@ use App\Support\Almacenes\OperacionesImportacionAlmacen;
 use App\Support\Almacenes\ReglasFichaProductoImportacion;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -221,17 +223,11 @@ class ImportacionLoteController extends Controller
 
     private function puedeOperacion($user, string $operacion): bool
     {
-        if ($user->can('catalogos.gestionar')) {
-            return true;
+        if (! $user instanceof User) {
+            return false;
         }
 
-        $permiso = OperacionesImportacionAlmacen::permisoParaOperacion($operacion);
-        if ($permiso && $user->can($permiso)) {
-            return true;
-        }
-
-        return $operacion === OperacionesImportacionAlmacen::FICHA_PRODUCTO
-            && ($user->can('gestion_interna.productos.gestionar') || $user->can('almacenes.productos.gestionar'));
+        return OperacionesImportacionAlmacen::usuarioPuedeOperacion($user, $operacion);
     }
 
     /**
@@ -253,14 +249,14 @@ class ImportacionLoteController extends Controller
             ReglasFichaProductoImportacion::asegurarColumnasMapeadas($mapping);
         }
         if (in_array(OperacionesImportacionAlmacen::CANTIDADES_REFERENCIA, $operaciones, true) && empty($mapping['existencia'])) {
-            throw \Illuminate\Validation\ValidationException::withMessages([
+            throw ValidationException::withMessages([
                 'mapping' => 'Mapea la columna de existencia.',
             ]);
         }
         if (in_array(OperacionesImportacionAlmacen::COSTOS_PRECIOS, $operaciones, true)) {
             $tieneCosto = ! empty($mapping['costo']) || ! empty($mapping['costo_reposicion']) || ! empty($mapping['precio_venta']);
             if (! $tieneCosto) {
-                throw \Illuminate\Validation\ValidationException::withMessages([
+                throw ValidationException::withMessages([
                     'mapping' => 'Mapea al menos costo, costo de reposición o precio de referencia.',
                 ]);
             }

@@ -107,8 +107,10 @@ class CostoController extends Controller
         return back()->with('success', 'Costo actualizado correctamente.');
     }
 
-    public function destroy(ProductoCosto $costo): RedirectResponse
+    public function destroy(Request $request, ProductoCosto $costo, AlcanceAlmacenesService $alcance): RedirectResponse
     {
+        $alcance->asegurarAlmacenOperable($request->user(), (int) $costo->almacen_id);
+
         $costo->load('producto');
         $referencia = $costo->producto?->sku ?? (string) $costo->producto_id;
         $id = $costo->id;
