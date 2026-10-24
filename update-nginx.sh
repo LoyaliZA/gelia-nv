@@ -44,12 +44,14 @@ docker exec -i "$APP_CONTAINER" php artisan migrate --force
 
 # 6. Reconstruir assets del frontend (Vite)
 echo "Compilando nueva versión del frontend..."
-docker exec -i "$APP_CONTAINER" npm install
-docker exec -i "$APP_CONTAINER" npm run build
+docker exec -i -w /var/www/html "$APP_CONTAINER" npm ci
+docker exec -i -w /var/www/html "$APP_CONTAINER" npm run build
+bash "${SCRIPT_DIR}/scripts/verificar-frontend-publicado.sh"
 
 # 7. Regenerar caché con código ya actualizado
-echo "Regenerando caché de rutas y optimización..."
+echo "Regenerando caché de rutas, eventos y optimización..."
 docker exec -i "$APP_CONTAINER" php artisan route:cache
+docker exec -i "$APP_CONTAINER" php artisan event:cache
 docker exec -i "$APP_CONTAINER" php artisan optimize
 
 # 8. Refrescar procesos en memoria con código nuevo

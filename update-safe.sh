@@ -206,9 +206,9 @@ health_check() {
     health_host="$(health_host_from_app_url)"
     ok "Health check Host: ${health_host}"
 
-    if ! docker exec -i "$WEB_CONTAINER" wget -qSO- --timeout=15 \
+    if ! docker exec -i "$WEB_CONTAINER" wget -q -O /dev/null --timeout=15 \
         --header="Host: ${health_host}" \
-        "http://127.0.0.1/login" 2>&1 | grep -q "200 OK"; then
+        "http://127.0.0.1/login"; then
         fail "Health check falló: Nginx no responde 200 en /login (Host: ${health_host})."
     fi
 
@@ -270,10 +270,11 @@ main() {
     ok "Migraciones aplicadas."
 
     # 7. Frontend
-    log "Compilando assets del frontend (Vite)..."
-    exec_app npm install --no-audit --no-fund
+    log "Compilando assets del frontend (Vite) desde el lockfile..."
+    exec_app npm ci
     exec_app npm run build
-    ok "Frontend compilado."
+    bash "${SCRIPT_DIR}/scripts/verificar-frontend-publicado.sh"
+    ok "Frontend compilado y servido por Nginx."
 
     # 8. Sincronizar entorno Docker ↔ .env (crítico para SESSION_DRIVER, etc.)
     local did_recreate=false
@@ -283,8 +284,9 @@ main() {
     fi
 
     # 9. Regenerar caché con código y entorno ya actualizados
-    log "Regenerando caché de configuración y rutas..."
+    log "Regenerando caché de configuración, eventos y rutas..."
     exec_app php artisan optimize:clear
+    exec_app php artisan event:cache
     exec_app php artisan optimize
     ok "Caché de producción regenerada."
 

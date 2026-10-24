@@ -55,14 +55,16 @@ cerrar_creacion_de_triggers
 
 # 6. Reconstruir assets del frontend (Vite)
 echo "Compilando nueva versión del frontend..."
-docker exec -i gelianv_app npm install
-docker exec -i gelianv_app npm run build
+docker exec -i -w /var/www/html gelianv_app npm ci
+docker exec -i -w /var/www/html gelianv_app npm run build
+bash "${SCRIPT_DIR}/scripts/verificar-frontend-publicado.sh"
 
 # ==============================================================================
 # 7. Regenerar caché con código ya actualizado
 # ==============================================================================
-echo "Regenerando caché de rutas y optimización..."
+echo "Regenerando caché de rutas, eventos y optimización..."
 docker exec -i gelianv_app php artisan route:cache
+docker exec -i gelianv_app php artisan event:cache
 docker exec -i gelianv_app php artisan optimize
 
 # ==============================================================================
