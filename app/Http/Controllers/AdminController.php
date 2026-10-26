@@ -50,6 +50,7 @@ use App\Support\DepartamentoLogoAssets;
 use Illuminate\Support\Facades\Auth; // <-- Importante para el usuario en sesión
 use App\Services\Permisos\AsignarPermisosUsuarioService;
 use App\Services\Permisos\ValidarAsignacionPermisosService;
+use App\Services\Usuarios\AlcanceGestionUsuariosService;
 use Illuminate\Validation\ValidationException;
 
 class AdminController extends Controller
@@ -191,7 +192,11 @@ class AdminController extends Controller
                 ->select('id', 'name', 'apellido_paterno')
                 ->get();
 
-            $roles = Role::with('permissions')->get();
+            $rolesQuery = Role::with('permissions');
+            if (! $user->hasRole('Super Admin')) {
+                $rolesQuery->where('name', '!=', 'Super Admin');
+            }
+            $roles = $rolesQuery->get();
             $rolesConfig = Role::with('permissions')->where('name', '!=', 'Super Admin')->get();
             $todosLosPermisos = Permission::all();
             $catalogoPermisos = $todosLosPermisos;
@@ -234,10 +239,7 @@ class AdminController extends Controller
             'todosLosPermisos' => $todosLosPermisos,
             'catalogoPermisos' => $catalogoPermisos ?? $todosLosPermisos,
             'sexos' => CatalogoSexo::all() ?? [],
-            'sucursales' => Sucursal::query()
-                ->where('activo', true)
-                ->orderBy('nombre')
-                ->get(['id', 'nombre', 'codigo']),
+            'sucursales' => $this->sucursalesVisiblesPara($user, $isGlobalAdmin),
             'esSuperAdmin' => $user->hasRole('Super Admin'),
             'permisosUsuario' => ValidarAsignacionPermisosService::permisosDelUsuario($user),
         ]);
@@ -321,37 +323,12 @@ class AdminController extends Controller
 
     public function storeUsuario(Request $request)
     {
-        $data = $request->validate([
-            'name' => 'required|string|max:255',
-            'apellido_paterno' => 'required|string',
-            'apellido_materno' => 'nullable|string',
-            'username' => 'required|string|unique:users',
-            'email' => 'required|email|unique:users',
-            'password' => 'required|min:8',
-            'telefono' => 'nullable|string',
-            'fecha_nacimiento' => 'nullable|date',
-            'catalogo_sexo_id' => 'nullable|exists:catalogo_sexos,id',
-            'departamentos' => 'nullable|array',
-            'areas' => 'nullable|array',
-            'area_id' => 'nullable|integer|exists:areas,id',
-            'departamento_id' => 'nullable|integer|exists:departamentos,id',
-            'gerentes' => 'nullable|array',
-            'roles_asignados' => 'array',
-            'permisos_individuales' => 'array',
-            'plantilla_origen' => 'nullable|string|max:100',
-            'plantilla_por_permiso' => 'nullable|array',
-            'sucursales' => 'nullable|array',
-            'sucursales.*' => 'integer|exists:sucursales,id',
-            'sucursal_principal_id' => 'nullable|integer|exists:sucursales,id',
-        ]);
-
-        $rolesJerarquicos = collect($data['roles_asignados'] ?? [])
-            ->reject(fn ($r) => str_contains($r, 'Grupo:'))
-            ->values()
-            ->all();
+        $actor = Auth::user();
+        $data = $this->aplicarAlcanceUsuario($actor, null, $this->validarDatosUsuario($request));
+        $rolesJerarquicos = $data['roles_asignados'];
 
         ValidarAsignacionPermisosService::assertPuedeAsignar(
-            Auth::user(),
+            $actor,
             [],
             $data['permisos_individuales'] ?? []
         );
@@ -360,6 +337,7 @@ class AdminController extends Controller
         $departamentoPrincipalId = $this->resolverDepartamentoPrincipal($data);
         [$sucursalIds, $sucursalPrincipalId] = $this->resolverSucursalesUsuario($data);
 
+        DB::transaction(function () use ($actor, $data, $rolesJerarquicos, $areaPrincipalId, $departamentoPrincipalId, $sucursalIds, $sucursalPrincipalId) {
         $usuario = User::create([
             'name' => $data['name'],
             'apellido_paterno' => $data['apellido_paterno'],
@@ -374,9 +352,9 @@ class AdminController extends Controller
             'departamento_id' => $departamentoPrincipalId,
         ]);
 
-        if (isset($data['departamentos'])) $usuario->departamentos()->sync($data['departamentos']);
-        if (isset($data['areas'])) $usuario->areas()->sync($data['areas']);
-        if (isset($data['gerentes'])) $usuario->gerentes()->sync($data['gerentes']);
+        $usuario->departamentos()->sync($data['departamentos']);
+        $usuario->areas()->sync($data['areas']);
+        $usuario->gerentes()->sync($data['gerentes']);
         $usuario->sincronizarSucursalesAsignadas($sucursalIds, $sucursalPrincipalId);
 
         $this->sincronizarAreaRhColaborador($usuario, $areaPrincipalId);
@@ -386,7 +364,7 @@ class AdminController extends Controller
         AsignarPermisosUsuarioService::asignar(
             $usuario,
             $data['permisos_individuales'] ?? [],
-            Auth::user(),
+            $actor,
             $data['plantilla_origen'] ?? null,
             $data['plantilla_por_permiso'] ?? null
         );
@@ -438,6 +416,7 @@ class AdminController extends Controller
             $detallesAuditoria,
             $usuario->id
         );
+        });
 
         return back()->with('success', 'Colaborador registrado exitosamente.');
     }
@@ -445,36 +424,11 @@ class AdminController extends Controller
     public function updateUsuario(Request $request, User $user)
     {
         $asignador = Auth::user();
+        $data = $this->validarDatosUsuario($request, $user);
 
-        $data = $request->validate([
-            'name' => 'required|string',
-            'apellido_paterno' => 'required|string',
-            'apellido_materno' => 'nullable|string',
-            'username' => 'required|string|unique:users,username,' . $user->id,
-            'email' => 'required|email|unique:users,email,' . $user->id,
-            'telefono' => 'nullable|string',
-            'fecha_nacimiento' => 'nullable|date',
-            'catalogo_sexo_id' => 'nullable|exists:catalogo_sexos,id',
-            'departamentos' => 'nullable|array',
-            'areas' => 'nullable|array',
-            'area_id' => 'nullable|integer|exists:areas,id',
-            'departamento_id' => 'nullable|integer|exists:departamentos,id',
-            'gerentes' => 'nullable|array',
-            'roles_asignados' => 'array',
-            'permisos_individuales' => 'array',
-            'plantilla_origen' => 'nullable|string|max:100',
-            'plantilla_por_permiso' => 'nullable|array',
-            'sucursales' => 'nullable|array',
-            'sucursales.*' => 'integer|exists:sucursales,id',
-            'sucursal_principal_id' => 'nullable|integer|exists:sucursales,id',
-        ]);
-
-        $rolesJerarquicos = collect($data['roles_asignados'] ?? [])
-            ->reject(fn ($r) => str_contains($r, 'Grupo:'))
-            ->values()
-            ->all();
-
-        $user->loadMissing(['permissions', 'areas', 'departamentos', 'roles', 'sucursales']);
+        $user->loadMissing(['permissions', 'areas', 'departamentos', 'roles', 'sucursales', 'gerentes']);
+        $data = $this->aplicarAlcanceUsuario($asignador, $user, $data);
+        $rolesJerarquicos = $data['roles_asignados'];
         
         // --- CAPTURA DE ESTADO ANTERIOR PARA AUDITORÍA ---
         $permisosActuales = $user->permissions->pluck('name')->toArray();
@@ -512,6 +466,8 @@ class AdminController extends Controller
         $departamentoPrincipalId = $this->resolverDepartamentoPrincipal($data);
         [$sucursalIds, $sucursalPrincipalId] = $this->resolverSucursalesUsuario($data);
 
+        DB::beginTransaction();
+        try {
         $user->update([
             'name' => $data['name'],
             'apellido_paterno' => $data['apellido_paterno'],
@@ -525,8 +481,11 @@ class AdminController extends Controller
             'departamento_id' => $departamentoPrincipalId,
         ]);
 
-        if ($request->filled('password')) {
-            $user->update(['password' => Hash::make($request->password)]);
+        if (! empty($data['password'])) {
+            $user->update(['password' => Hash::make($data['password'])]);
+            // Sesiones, remember_token y dispositivos solo escriben en esta base.
+            // Si la transacción revierte, la revocación también revierte.
+            app(AlcanceGestionUsuariosService::class)->cerrarAccesosTrasCambioDeContrasena($user);
         }
 
         $user->departamentos()->sync($data['departamentos'] ?? []);
@@ -617,6 +576,11 @@ class AdminController extends Controller
             $detallesAuditoria,
             $user->id
         );
+            DB::commit();
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            throw $e;
+        }
 
         return back()->with('success', 'Perfil actualizado.');
     }
@@ -987,16 +951,10 @@ class AdminController extends Controller
         Gate::authorize('usuarios.archivar');
 
         $request->validate([
-            'motivo' => 'required|string|max:1000'
+            'motivo' => 'required|string|min:3|max:1000',
         ]);
 
-        if ($user->id === Auth::id()) {
-            return back()->withErrors(['error' => 'No puedes archivar tu propia cuenta.']);
-        }
-
-        if ($user->hasRole('Super Admin')) {
-            return back()->withErrors(['error' => 'No se puede archivar a un Super Admin.']);
-        }
+        app(AlcanceGestionUsuariosService::class)->assertPuedeArchivar(Auth::user(), $user);
 
         $timestamp = time();
         $suffix = "_archived_{$timestamp}";
@@ -1041,8 +999,91 @@ class AdminController extends Controller
     {
         Gate::authorize('usuarios.restaurar');
 
+        app(AlcanceGestionUsuariosService::class)->assertPuedeGestionarUsuario(Auth::user(), $user);
+
         $restaurarService->ejecutar($user);
 
         return back()->with('success', 'El colaborador ha sido restaurado exitosamente. Sus credenciales de acceso están activas nuevamente.');
+    }
+
+    private function validarDatosUsuario(Request $request, ?User $user = null): array
+    {
+        if (! $request->filled('password')) {
+            $request->merge(['password' => null]);
+        }
+
+        $ignorarId = $user ? ','.$user->id : '';
+
+        return $request->validate([
+            'name' => 'required|string|max:255',
+            'apellido_paterno' => 'required|string|max:255',
+            'apellido_materno' => 'nullable|string|max:255',
+            'username' => 'required|string|max:255|unique:users,username'.$ignorarId,
+            'email' => 'required|email|max:255|unique:users,email'.$ignorarId,
+            'password' => [$user ? 'nullable' : 'required', 'string', 'min:8'],
+            'telefono' => 'nullable|string|max:255',
+            'fecha_nacimiento' => 'nullable|date',
+            'catalogo_sexo_id' => 'nullable|exists:catalogo_sexos,id',
+            'departamentos' => 'nullable|array',
+            'areas' => 'nullable|array',
+            'area_id' => 'nullable|integer|exists:areas,id',
+            'departamento_id' => 'nullable|integer|exists:departamentos,id',
+            'gerentes' => 'nullable|array',
+            'roles_asignados' => 'array',
+            'permisos_individuales' => 'array',
+            'plantilla_origen' => 'nullable|string|max:100',
+            'plantilla_por_permiso' => 'nullable|array',
+            'sucursales' => 'nullable|array',
+            'sucursales.*' => 'integer|exists:sucursales,id',
+            'sucursal_principal_id' => 'nullable|integer|exists:sucursales,id',
+        ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private function aplicarAlcanceUsuario(User $actor, ?User $objetivo, array $data): array
+    {
+        $alcance = app(AlcanceGestionUsuariosService::class);
+
+        if ($objetivo) {
+            $alcance->assertPuedeGestionarUsuario($actor, $objetivo);
+        }
+
+        $principal = isset($data['sucursal_principal_id']) && $data['sucursal_principal_id'] !== ''
+            ? (int) $data['sucursal_principal_id']
+            : null;
+
+        $data['roles_asignados'] = $alcance->resolverRoles($actor, $objetivo, $data['roles_asignados'] ?? []);
+        $data['departamentos'] = $alcance->resolverDepartamentos($actor, $objetivo, $data['departamentos'] ?? []);
+        $data['areas'] = $alcance->resolverAreas($actor, $objetivo, $data['areas'] ?? []);
+        $data['gerentes'] = $alcance->resolverGerentes($actor, $objetivo, $data['gerentes'] ?? []);
+        [$data['sucursales'], $data['sucursal_principal_id']] = $alcance->prepararSucursales(
+            $actor,
+            $objetivo,
+            $data['sucursales'] ?? [],
+            $principal,
+        );
+
+        return $data;
+    }
+
+    private function sucursalesVisiblesPara(User $user, bool $esAdministracionGlobal)
+    {
+        $sucursales = Sucursal::query()
+            ->where('activo', true)
+            ->orderBy('nombre')
+            ->get(['id', 'nombre', 'codigo']);
+
+        if ($esAdministracionGlobal) {
+            return $sucursales;
+        }
+
+        $permitidas = $user->idsSucursalesOperables()->map(fn ($id) => (int) $id)->all();
+
+        return $sucursales
+            ->filter(fn (Sucursal $sucursal) => in_array((int) $sucursal->id, $permitidas, true))
+            ->values();
     }
 }
