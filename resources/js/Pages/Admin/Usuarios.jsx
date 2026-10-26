@@ -1396,7 +1396,7 @@ export default function Usuarios({
                                         : 'Si cierras ahora, los cambios de esta cuenta se perderán.'}
                                 </p>
                             </div>
-                            <div className="gelia-modal-footer flex flex-wrap justify-end gap-2">
+                            <div className="gelia-modal-footer usuarios-dialogo-acciones">
                                 <button
                                     type="button"
                                     className={THEME_BTN_SECONDARY}

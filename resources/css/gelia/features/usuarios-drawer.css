@@ -489,6 +489,45 @@
     z-index: calc(var(--gelia-z-toast) + 3);
 }
 
+.usuarios-dialogo-acciones {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 1rem 1.5rem calc(1rem + env(safe-area-inset-bottom, 0px));
+}
+
+.usuarios-dialogo-acciones > button {
+    width: 100%;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.65rem 1rem;
+    border-radius: 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 650;
+    letter-spacing: normal;
+    line-height: 1.3;
+    text-transform: none;
+}
+
+.usuarios-dialogo-acciones > .theme-btn-secondary {
+    border: 1px solid var(--theme-border);
+    background: var(--theme-element-bg);
+    color: var(--theme-text-main);
+}
+
+.usuarios-dialogo-acciones > .theme-btn-danger,
+.usuarios-dialogo-acciones > .theme-btn-primary {
+    border: 0;
+    box-shadow: none;
+}
+
+.usuarios-dialogo-acciones > .theme-btn-primary:hover:not(:disabled),
+.usuarios-dialogo-acciones > .theme-btn-danger:hover:not(:disabled) {
+    transform: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
     .usuarios-drawer-pie .animate-spin {
         animation: none;
@@ -801,6 +840,11 @@
     .usuarios-selector-trigger:hover,
     .usuarios-selector-opcion:hover {
         background: color-mix(in srgb, var(--theme-text-main) 6%, var(--theme-surface-solid));
+    }
+
+    .usuarios-dialogo-acciones > .theme-btn-secondary:hover {
+        border-color: color-mix(in srgb, var(--color-primario) 55%, var(--theme-border));
+        background: color-mix(in srgb, var(--color-primario) 8%, var(--theme-element-bg));
     }
 
     .usuarios-selector--identidad .usuarios-selector-trigger:hover {
