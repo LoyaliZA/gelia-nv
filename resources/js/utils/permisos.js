@@ -1657,6 +1657,12 @@ export const SECCIONES_SIDEBAR_PERMISOS = [
         modulos: ['contabilidad', 'facturas', 'cobranza', 'saldos_favor', 'escalonamiento'],
     },
     {
+        id: 'reportes',
+        label: 'Reportes',
+        descripcion: 'Ventas importadas y pagos de pedidos',
+        modulos: ['reportes'],
+    },
+    {
         id: 'herramientas',
         label: 'Herramientas',
         descripcion: 'Listados, funciones operativas y ejercicios',
@@ -1720,6 +1726,7 @@ export const ETIQUETAS_MODULO_UI = {
     escalonamiento: 'Escalonamiento',
     contabilidad: 'Contabilidad',
     facturas: 'Facturas',
+    reportes: 'Reportes',
     traspasos: 'Traspasos',
     cobranza: 'Credibox',
     listados: 'Listados',
@@ -1788,12 +1795,17 @@ export function agruparModulosPorSeccionSidebar(permisosAgrupadosPorModulo) {
         secciones.push({
             id: 'otros',
             label: 'Otros',
-            descripcion: 'Módulos sin sección de menú asociada',
+            descripcion: 'Pendiente de clasificación: no hay una sección del menú que corresponda con certeza',
             modulos,
         });
     }
 
     return secciones;
+}
+
+export function seccionDeModulo(modulo) {
+    const seccion = SECCIONES_SIDEBAR_PERMISOS.find((item) => item.modulos.includes(modulo));
+    return seccion?.id ?? 'otros';
 }
 
 /** Grupo sugerido «Puerta PDV». Visitas programadas se asignan aparte. */
@@ -2088,7 +2100,7 @@ export function calcularDiffPlantilla(activos, plantillaNombre, roles) {
 }
 
 export function resolverOrigenPermiso(meta, isDePlantilla, plantillaNombre, usuarioActualId) {
-    if (!meta || meta?.plantilla_origen === 'sistema:migracion') {
+    if (meta?.plantilla_origen === 'sistema:migracion') {
         return { tipo: 'sistema', tooltip: 'Heredado por actualización del sistema' };
     }
     if (

@@ -6,8 +6,10 @@ use App\Http\Controllers\Controller;
 use App\Models\MobileDevice;
 use App\Models\User;
 use App\Services\Mobile\MobileDeviceRevocationService;
+use App\Services\Usuarios\AlcanceGestionUsuariosService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 
 class MobileDeviceController extends Controller
@@ -19,6 +21,7 @@ class MobileDeviceController extends Controller
     public function index(User $user): JsonResponse
     {
         Gate::authorize('usuarios.gestionar');
+        app(AlcanceGestionUsuariosService::class)->assertPuedeGestionarUsuario(Auth::user(), $user);
 
         $dispositivos = $user->mobileDevices()
             ->orderByDesc('last_seen_at')
@@ -39,6 +42,7 @@ class MobileDeviceController extends Controller
     public function revocar(User $user, MobileDevice $mobileDevice): RedirectResponse
     {
         Gate::authorize('usuarios.gestionar');
+        app(AlcanceGestionUsuariosService::class)->assertPuedeGestionarUsuario(Auth::user(), $user);
         $this->asegurarDispositivoDelUsuario($user, $mobileDevice);
 
         $this->revocacion->revocar($mobileDevice);
@@ -49,6 +53,7 @@ class MobileDeviceController extends Controller
     public function rehabilitar(User $user, MobileDevice $mobileDevice): RedirectResponse
     {
         Gate::authorize('usuarios.gestionar');
+        app(AlcanceGestionUsuariosService::class)->assertPuedeGestionarUsuario(Auth::user(), $user);
         $this->asegurarDispositivoDelUsuario($user, $mobileDevice);
 
         $this->revocacion->rehabilitar($mobileDevice);

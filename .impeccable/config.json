@@ -53,6 +53,15 @@
         "value": "inter",
         "createdAt": "2026-10-19T18:43:10.060Z",
         "reason": "El plan aprobado y resources/css/gelia/tokens.css fijan Inter como --font-principal de GELIA; el prototipo aislado no introduce otra familia."
+      },
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          "docs/visual-refresh/admin-usuarios/index.html"
+        ],
+        "createdAt": "2026-10-24T18:28:52.467Z",
+        "reason": "The prototype picker is copied verbatim from prototype/PICKER.md, whose 4px padding and 0 12px item padding keep the highlight aligned. The finding named no value. Product controls in this file use at least 8px padding."
       }
     ]
   }

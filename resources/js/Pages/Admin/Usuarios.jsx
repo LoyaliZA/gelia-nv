@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Head, useForm, router, usePage } from '@inertiajs/react';
-import { animate } from 'animejs/animation';
 import { createPortal } from 'react-dom';
 import axios from 'axios';
 
@@ -11,13 +10,36 @@ import {
 import AppLayout from '../../Layouts/AppLayout';
 import GeliaPaginacion from '../../Components/GeliaPaginacion';
 import ModalUsuarioForm from './Partials/ModalUsuarioForm';
+import DrawerColaborador from './Partials/DrawerColaborador';
+import ResumenCambiosUsuario from './Partials/ResumenCambiosUsuario';
 import ConfiguracionHerencia from './Partials/ConfiguracionHerencia';
 import {
+    MENSAJE_CIERRE_SUCIO,
+    alternarRelacion,
+    aplicarPlantillaPermisos,
+    datosFormularioDesdeUsuario,
+    compararFormularioUsuario,
+    debeConfirmarCierre,
+    decidirRespuestaGuardado,
+    anchoDrawerColaborador,
+    modoDrawerColaborador,
+    esAdministracionGlobal,
+    formularioVacio,
+    limpiarMapaPlantilla,
+    mensajeErrorHttp,
+    mensajeErrorRed,
+    normalizarErrores,
+    omitirRelacionesFueraDeCatalogo,
+    publicarIncidenciaGuardado,
+    resolverPrincipalFormulario,
+    soltarEnvio,
+    tomarEnvio,
+} from './Partials/formularioUsuario';
+import {
     deduplicarPermisos,
-    permisosDePlantilla,
     permisoProtegidoParaEditor,
 } from '../../utils/permisos';
-import { geliaCardClass, THEME_MODAL_OVERLAY, THEME_MODAL_SHELL, THEME_BTN_PRIMARY } from '../../utils/geliaTheme';
+import { geliaCardClass, THEME_MODAL_OVERLAY, THEME_MODAL_SHELL, THEME_BTN_PRIMARY, THEME_BTN_SECONDARY } from '../../utils/geliaTheme';
 
 function nombreCompleto(usuario) {
     return [(usuario.name || '').trim(), (usuario.apellido_paterno || '').trim(), (usuario.apellido_materno || '').trim()]
@@ -93,15 +115,24 @@ function usuarioEsSuperAdmin(usuario) {
     return (usuario.roles || []).some((rol) => rol.name === 'Super Admin');
 }
 
+function usuarioEsAdministrador(usuario) {
+    return (usuario.roles || []).some((rol) => rol.name === 'Administrador');
+}
+
+const HOVER_PRIMARIO = '[@media(hover:hover)_and_(pointer:fine)]:hover:bg-[var(--color-primario)] [@media(hover:hover)_and_(pointer:fine)]:hover:text-white [@media(hover:hover)_and_(pointer:fine)]:hover:border-[var(--color-primario)]';
+const HOVER_AVISO = '[@media(hover:hover)_and_(pointer:fine)]:hover:bg-[var(--color-aviso)] [@media(hover:hover)_and_(pointer:fine)]:hover:text-white [@media(hover:hover)_and_(pointer:fine)]:hover:border-transparent';
+const HOVER_EXITO = '[@media(hover:hover)_and_(pointer:fine)]:hover:bg-[var(--color-exito)] [@media(hover:hover)_and_(pointer:fine)]:hover:text-white [@media(hover:hover)_and_(pointer:fine)]:hover:border-transparent';
+
 function TarjetaUsuarioMobile({
-    usuario, onEditar, onArchivar, onRestaurar, puedeArchivar, puedeRestaurar, usuarioActualId, esCabezaEquipo = false, vistaArchivados = false,
+    usuario, onEditar, onArchivar, onRestaurar, puedeArchivar, puedeRestaurar, usuarioActualId, esSuperAdmin = false, esCabezaEquipo = false, vistaArchivados = false,
 }) {
     const mostrarArchivar = !vistaArchivados && puedeArchivar
         && usuario.id !== usuarioActualId
-        && !usuarioEsSuperAdmin(usuario);
+        && !usuarioEsSuperAdmin(usuario)
+        && (esSuperAdmin || !usuarioEsAdministrador(usuario));
     const mostrarRestaurar = vistaArchivados && puedeRestaurar;
     return (
-        <article className="fade-in-user theme-surface border theme-border rounded-[1.75rem] p-4 sm:p-5 space-y-3 transition-shadow hover:shadow-md">
+        <article className="theme-surface border theme-border rounded-[1.75rem] p-4 sm:p-5 space-y-3 transition-shadow hover:shadow-md">
             <div className="flex items-start gap-3">
                 <UserAvatar usuario={usuario} />
                 <div className="min-w-0 flex-1 space-y-1.5">
@@ -145,7 +176,7 @@ function TarjetaUsuarioMobile({
             <RolesChips roles={usuario.roles} maxVisible={3} />
 
             {vistaArchivados && usuario.deleted_at && (
-                <p className="text-[10px] font-bold uppercase tracking-widest text-amber-600 dark:text-amber-400">
+                <p className="text-[10px] font-bold uppercase tracking-widest theme-text-aviso">
                     Archivado: {new Date(usuario.deleted_at).toLocaleString('es-MX')}
                 </p>
             )}
@@ -154,10 +185,8 @@ function TarjetaUsuarioMobile({
                 {!vistaArchivados && (
                 <button
                     type="button"
-                    onClick={() => onEditar(usuario)}
-                    className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl theme-element border theme-border theme-text-main text-[10px] font-black uppercase tracking-widest transition-colors hover:text-white"
-                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--color-primario)'; e.currentTarget.style.borderColor = 'var(--color-primario)'; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = ''; e.currentTarget.style.borderColor = ''; }}
+                    onClick={(event) => onEditar(usuario, event)}
+                    className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl theme-element border theme-border theme-text-main text-[10px] font-black uppercase tracking-widest transition-colors ${HOVER_PRIMARIO}`}
                 >
                     <Edit3 className="w-4 h-4 shrink-0" />
                     Editar
@@ -167,7 +196,7 @@ function TarjetaUsuarioMobile({
                     <button
                         type="button"
                         onClick={() => onArchivar(usuario)}
-                        className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl theme-element border theme-border theme-text-muted text-[10px] font-black uppercase tracking-widest transition-colors hover:bg-amber-500 hover:text-white hover:border-transparent"
+                        className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl theme-element border theme-border theme-text-aviso text-[10px] font-black uppercase tracking-widest transition-colors ${HOVER_AVISO}`}
                     >
                         <Archive className="w-4 h-4 shrink-0" />
                         Archivar
@@ -177,7 +206,7 @@ function TarjetaUsuarioMobile({
                     <button
                         type="button"
                         onClick={() => onRestaurar(usuario)}
-                        className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl theme-element border theme-border theme-text-muted text-[10px] font-black uppercase tracking-widest transition-colors hover:bg-teal-500 hover:text-white hover:border-transparent"
+                        className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl theme-element border theme-border theme-text-exito text-[10px] font-black uppercase tracking-widest transition-colors ${HOVER_EXITO}`}
                     >
                         <RotateCcw className="w-4 h-4 shrink-0" />
                         Restaurar
@@ -189,11 +218,12 @@ function TarjetaUsuarioMobile({
 }
 
 function FilaUsuarioDesktop({
-    usuario, onEditar, onArchivar, onRestaurar, puedeArchivar, puedeRestaurar, usuarioActualId, esCabezaEquipo = false, vistaArchivados = false,
+    usuario, onEditar, onArchivar, onRestaurar, puedeArchivar, puedeRestaurar, usuarioActualId, esSuperAdmin = false, esCabezaEquipo = false, vistaArchivados = false,
 }) {
     const mostrarArchivar = !vistaArchivados && puedeArchivar
         && usuario.id !== usuarioActualId
-        && !usuarioEsSuperAdmin(usuario);
+        && !usuarioEsSuperAdmin(usuario)
+        && (esSuperAdmin || !usuarioEsAdministrador(usuario));
     const mostrarRestaurar = vistaArchivados && puedeRestaurar;
     return (
         <tr className="border-b theme-border hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors">
@@ -213,7 +243,7 @@ function FilaUsuarioDesktop({
                             </p>
                         )}
                         {vistaArchivados && usuario.deleted_at && (
-                            <p className="text-[8px] font-black uppercase tracking-widest mt-1 text-amber-600 dark:text-amber-400">
+                            <p className="text-[8px] font-black uppercase tracking-widest mt-1 theme-text-aviso">
                                 Archivado {new Date(usuario.deleted_at).toLocaleDateString('es-MX')}
                             </p>
                         )}
@@ -243,10 +273,8 @@ function FilaUsuarioDesktop({
                     {!vistaArchivados && (
                     <button
                         type="button"
-                        onClick={() => onEditar(usuario)}
-                        className="p-2.5 rounded-xl theme-element border theme-border theme-text-main hover:text-white transition-colors"
-                        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--color-primario)'; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = ''; }}
+                        onClick={(event) => onEditar(usuario, event)}
+                        className={`p-2.5 rounded-xl theme-element border theme-border theme-text-main transition-colors ${HOVER_PRIMARIO}`}
                         aria-label="Editar usuario"
                     >
                         <Edit3 className="w-4 h-4" />
@@ -256,7 +284,7 @@ function FilaUsuarioDesktop({
                         <button
                             type="button"
                             onClick={() => onArchivar(usuario)}
-                            className="p-2.5 rounded-xl theme-element border theme-border theme-text-muted hover:bg-amber-500 hover:text-white hover:border-transparent transition-colors"
+                            className={`p-2.5 rounded-xl theme-element border theme-border theme-text-aviso transition-colors ${HOVER_AVISO}`}
                             aria-label="Archivar usuario"
                         >
                             <Archive className="w-4 h-4" />
@@ -266,7 +294,7 @@ function FilaUsuarioDesktop({
                         <button
                             type="button"
                             onClick={() => onRestaurar(usuario)}
-                            className="p-2.5 rounded-xl theme-element border theme-border theme-text-muted hover:bg-teal-500 hover:text-white hover:border-transparent transition-colors"
+                            className={`p-2.5 rounded-xl theme-element border theme-border theme-text-exito transition-colors ${HOVER_EXITO}`}
                             aria-label="Restaurar usuario"
                         >
                             <RotateCcw className="w-4 h-4" />
@@ -285,24 +313,6 @@ function headersRecargaParcial(version) {
         'X-Inertia-Partial-Component': 'Admin/Usuarios',
         'X-Inertia-Partial-Data': 'usuarios,filtros',
     };
-}
-
-/** Resuelve área/departamento principal para el formulario (datos legacy en prod). */
-function resolverPrincipalFormulario(idsAsignados = [], principalId = null) {
-    const ids = (idsAsignados || [])
-        .map((id) => Number(id))
-        .filter((id) => !Number.isNaN(id));
-    if (ids.length === 0) return '';
-
-    const parsed = principalId !== '' && principalId != null ? Number(principalId) : null;
-    if (parsed != null && ids.includes(parsed)) return String(parsed);
-    if (ids.length >= 1) return String(ids[0]);
-
-    return '';
-}
-
-function resolverAreaPrincipalFormulario(areas = [], areaId = null) {
-    return resolverPrincipalFormulario(areas, areaId);
 }
 
 function paramsListadoUsuarios({ busqueda, gerenteId, estado, page }) {
@@ -348,46 +358,58 @@ export default function Usuarios({
     const [gerenteId, setGerenteId] = useState(gerenteInicial);
     const [estado, setEstado] = useState(estadoInicial);
 
+    const [errorBusqueda, setErrorBusqueda] = useState('');
+    const [cuentaArchivo, setCuentaArchivo] = useState(null);
+    const [motivoArchivo, setMotivoArchivo] = useState('');
+    const [cuentaRestaurar, setCuentaRestaurar] = useState(null);
+    const [errorDialogo, setErrorDialogo] = useState('');
+    const [enviandoDialogo, setEnviandoDialogo] = useState(false);
+
     const puedeArchivar = esSuperAdmin || (auth?.user?.permissions || []).includes('usuarios.archivar');
     const puedeRestaurar = esSuperAdmin || (auth?.user?.permissions || []).includes('usuarios.restaurar');
     const vistaArchivados = estado === 'archivados';
 
     const mensajeErrorRestauracion = (errors) => {
-        const partes = [];
-        if (errors?.email) partes.push(errors.email);
-        if (errors?.username) partes.push(errors.username);
-        if (errors?.usuario) partes.push(errors.usuario);
-        if (errors?.error) partes.push(errors.error);
-        return partes.join('\n') || 'No se pudo restaurar el usuario. Verifica que el correo y el nombre de usuario no estén en uso.';
+        const texto = (valor) => (Array.isArray(valor) ? valor.filter(Boolean).join(' ') : (valor || ''));
+        const partes = [texto(errors?.email), texto(errors?.username), texto(errors?.usuario), texto(errors?.error)].filter(Boolean);
+        return partes.join('\n') || 'No se pudo restaurar la cuenta. Verifica que el correo y el nombre de usuario no estén en uso.';
     };
 
-    const archivarUsuario = (usuario) => {
-        const motivo = window.prompt(
-            `Archivar a ${nombreCompleto(usuario)}.\n\nIngresa el motivo del archivado (obligatorio):`
-        );
-        if (motivo === null) return;
-        if (motivo.trim().length < 3) {
-            alert('El motivo debe tener al menos 3 caracteres.');
+    const abrirArchivo = (usuario) => {
+        setCuentaRestaurar(null);
+        setCuentaArchivo(usuario);
+        setMotivoArchivo('');
+        setErrorDialogo('');
+    };
+
+    const confirmarArchivo = () => {
+        const motivo = motivoArchivo.trim();
+        if (motivo.length < 3) {
+            setErrorDialogo('El motivo debe tener al menos 3 caracteres.');
             return;
         }
-        if (!window.confirm(`¿Confirmas archivar la cuenta de ${nombreCompleto(usuario)}? Se liberarán correo y teléfono para reasignación.`)) {
-            return;
-        }
-        router.delete(route('admin.usuarios.archivar', usuario.id), {
-            data: { motivo: motivo.trim() },
+        setEnviandoDialogo(true);
+        router.delete(route('admin.usuarios.archivar', cuentaArchivo.id), {
+            data: { motivo },
             preserveScroll: true,
+            onSuccess: () => setCuentaArchivo(null),
+            onError: (errores) => {
+                const motivo = Array.isArray(errores?.motivo) ? errores.motivo.join(' ') : errores?.motivo;
+                const general = Array.isArray(errores?.error) ? errores.error.join(' ') : errores?.error;
+                setErrorDialogo(motivo || general || 'No se pudo archivar la cuenta.');
+            },
+            onFinish: () => setEnviandoDialogo(false),
         });
     };
 
-    const restaurarUsuario = (usuario) => {
-        if (!window.confirm(`¿Confirmas restaurar la cuenta de ${nombreCompleto(usuario)}? Se reactivarán sus credenciales de acceso.`)) {
-            return;
-        }
-        router.post(route('admin.usuarios.restaurar', usuario.id), {}, {
+    const confirmarRestauracion = () => {
+        setEnviandoDialogo(true);
+        setErrorDialogo('');
+        router.post(route('admin.usuarios.restaurar', cuentaRestaurar.id), {}, {
             preserveScroll: true,
-            onError: (errors) => {
-                alert(mensajeErrorRestauracion(errors));
-            },
+            onSuccess: () => setCuentaRestaurar(null),
+            onError: (errores) => setErrorDialogo(mensajeErrorRestauracion(errores)),
+            onFinish: () => setEnviandoDialogo(false),
         });
     };
 
@@ -396,41 +418,24 @@ export default function Usuarios({
     const [plantillaSeleccionada, setPlantillaSeleccionada] = useState('');
     const [plantillaPorPermiso, setPlantillaPorPermiso] = useState({});
     const [procedenciaActual, setProcedenciaActual] = useState({});
+    const [incidencia, setIncidencia] = useState(null);
+    const [overlayDatos, setOverlayDatos] = useState(null);
+    const [ControlesDatos, setControlesDatos] = useState(null);
+    const cierreTimer = useRef(null);
+    const envioRef = useRef(false);
+    const edicionRef = useRef(0);
+    const retornoFoco = useRef(null);
+    const paginaRef = useRef(null);
+    const [lineaBase, setLineaBase] = useState(null);
+    const [avisoCambios, setAvisoCambios] = useState(null);
+    const [anchoContenido, setAnchoContenido] = useState(1280);
+    const [entradaConMovimiento, setEntradaConMovimiento] = useState(true);
 
-    // --- FORMULARIO MATRICIAL ---
-    const { data, setData, processing, reset, errors, setError, clearErrors } = useForm({
-        name: '',
-        apellido_paterno: '',
-        apellido_materno: '',
-        username: '',
-        email: '',
-        password: '',
-        telefono: '',
-        fecha_nacimiento: '',
-        catalogo_sexo_id: '',
-        departamentos: [],
-        departamento_id: '',
-        areas: [],
-        area_id: '',
-        gerentes: [],
-        roles_asignados: [],
-        permisos_individuales: [],
-        plantilla_origen: '',
-        plantilla_por_permiso: {},
-        sucursales: [],
-        sucursal_principal_id: '',
-    });
-    
-    // --- ANIMACIONES ---
-    useEffect(() => {
-        animate('.fade-in-user', {
-            opacity: [0, 1],
-            translateY: [10, 0],
-            delay: (el, i) => i * 50,
-            easing: 'easeOutExpo',
-            duration: 600
-        });
-    }, [lista]);
+    const { data, setData, processing, isDirty, setDefaults, errors, setError, clearErrors } = useForm(formularioVacio());
+
+    useEffect(() => () => {
+        if (cierreTimer.current) clearTimeout(cierreTimer.current);
+    }, []);
 
     useEffect(() => {
         setBusqueda(busquedaInicial);
@@ -460,6 +465,7 @@ export default function Usuarios({
             if (abortRef.current !== controller) return;
 
             setUsuariosState(response.data.props.usuarios);
+            setErrorBusqueda('');
 
             if (actualizarUrl) {
                 const url = new URL(window.location.href);
@@ -486,6 +492,7 @@ export default function Usuarios({
             if (axios.isCancel(error) || error.code === 'ERR_CANCELED') return;
 
             console.error('Error al cargar usuarios:', error);
+            setErrorBusqueda('No se pudo actualizar el listado. Intenta de nuevo.');
         } finally {
             if (abortRef.current === controller) {
                 setBuscando(false);
@@ -521,172 +528,126 @@ export default function Usuarios({
         });
     };
 
-    const rolesJerarquia = (roles || []).filter(rol => rol?.name && !rol.name.includes('Grupo:'));
-    const rolesGrupos = (roles || []).filter(rol => rol?.name?.includes('Grupo:'));
+    const departamentosVista = overlayDatos?.departamentos ?? departamentos;
+    const sucursalesVista = overlayDatos?.sucursales ?? sucursales;
+    const rolesVista = overlayDatos?.roles ?? roles;
+    const posiblesGerentesVista = overlayDatos?.posiblesGerentes ?? posiblesGerentes;
+    const sexosVista = overlayDatos?.sexos ?? sexos;
+    const todosLosPermisosVista = overlayDatos?.todosLosPermisos ?? todosLosPermisos;
+    const catalogoPermisosVista = overlayDatos?.catalogoPermisos ?? catalogoPermisos;
+    const listaVisible = overlayDatos ? (overlayDatos.usuarios ?? []) : lista;
+    const rolesJerarquia = (rolesVista || []).filter(rol => rol?.name && !rol.name.includes('Grupo:'));
+    const rolesGrupos = (rolesVista || []).filter(rol => rol?.name?.includes('Grupo:'));
 
     // --- MANEJADORES DE EVENTOS ---
-    const abrirModal = (usuario = null) => {
-        setUsuarioEditando(usuario);
-        if (usuario) {
-            const rolesJerarquicos = (usuario.roles || [])
-                .map(r => r.name)
-                .filter(n => !n.includes('Grupo:'));
-
-            const procMap = {};
-            (usuario.permisos_procedencia || []).forEach((p) => {
-                if (p.permiso) procMap[p.permiso] = p;
-            });
-
-            const plantillaMap = {};
-            Object.entries(procMap).forEach(([permiso, meta]) => {
-                if (meta.plantilla_origen) plantillaMap[permiso] = meta.plantilla_origen;
-            });
-
-            setPlantillaSeleccionada('');
-            setPlantillaPorPermiso(plantillaMap);
-            setProcedenciaActual(procMap);
-
-            const sucursalIds = usuario.sucursales ? usuario.sucursales.map((s) => s.id) : [];
-            const sucursalPrincipalMarcada = (usuario.sucursales || []).find((s) => s.es_principal);
-
-            setData({
-                name: (usuario.name || '').trim(),
-                apellido_paterno: (usuario.apellido_paterno || '').trim(),
-                apellido_materno: (usuario.apellido_materno || '').trim(),
-                username: (usuario.username || '').trim(),
-                email: (usuario.email || '').trim(),
-                password: '',
-                telefono: (usuario.telefono || '').trim(),
-                fecha_nacimiento: usuario.fecha_nacimiento || '',
-                catalogo_sexo_id: usuario.catalogo_sexo_id || '',
-                departamentos: usuario.departamentos ? usuario.departamentos.map(d => d.id) : [],
-                departamento_id: resolverPrincipalFormulario(
-                    usuario.departamentos ? usuario.departamentos.map(d => d.id) : [],
-                    usuario.departamento_id,
-                ),
-                areas: usuario.areas ? usuario.areas.map(a => a.id) : [],
-                area_id: resolverAreaPrincipalFormulario(
-                    usuario.areas ? usuario.areas.map(a => a.id) : [],
-                    usuario.area_id,
-                ),
-                gerentes: usuario.gerentes ? usuario.gerentes.map(g => g.id) : [],
-                roles_asignados: rolesJerarquicos,
-                permisos_individuales: usuario.permissions ? usuario.permissions.map(p => p.name) : [],
-                plantilla_origen: '',
-                plantilla_por_permiso: plantillaMap,
-                sucursales: sucursalIds,
-                sucursal_principal_id: resolverPrincipalFormulario(
-                    sucursalIds,
-                    sucursalPrincipalMarcada?.id ?? '',
-                ),
-            });
+    const abrirModal = (usuario = null, evento = null) => {
+        const origen = evento?.currentTarget || document.activeElement;
+        if (!origen?.closest?.('.usuarios-drawer')) {
+            retornoFoco.current = origen;
+            setEntradaConMovimiento(evento ? evento.detail !== 0 : true);
         } else {
-            setPlantillaSeleccionada('');
-            setPlantillaPorPermiso({});
-            setProcedenciaActual({});
-            reset();
+            setEntradaConMovimiento(false);
         }
+        if (cierreTimer.current) {
+            clearTimeout(cierreTimer.current);
+            cierreTimer.current = null;
+        }
+        edicionRef.current += 1;
+        soltarEnvio(envioRef);
+        setGuardando(false);
+        setIncidencia(null);
+        clearErrors();
+
+        const datos = datosFormularioDesdeUsuario(usuario);
+        const procMap = {};
+        (usuario?.permisos_procedencia || []).forEach((meta) => {
+            if (meta.permiso) procMap[meta.permiso] = meta;
+        });
+
+        setUsuarioEditando(usuario);
+        setPlantillaSeleccionada('');
+        setPlantillaPorPermiso(datos.plantilla_por_permiso);
+        setProcedenciaActual(procMap);
+        setData(datos);
+        setDefaults(datos);
+        setLineaBase({ ...datos, plantilla_origen: datos.plantilla_origen || '' });
         setShowModal(true);
     };
 
-    const cerrarModal = () => {
+    const cerrarModal = ({ forzar = false } = {}) => {
+        if (!forzar && debeConfirmarCierre(isDirty) && !window.confirm(MENSAJE_CIERRE_SUCIO)) {
+            return;
+        }
         setShowModal(false);
-        setTimeout(() => {
-            reset();
+        const destino = retornoFoco.current;
+        requestAnimationFrame(() => destino?.focus?.());
+        const ticketAlCerrar = edicionRef.current;
+        cierreTimer.current = setTimeout(() => {
+            if (edicionRef.current !== ticketAlCerrar) return;
+            const vacio = formularioVacio();
+            setData(vacio);
+            setDefaults(vacio);
             setUsuarioEditando(null);
+            setPlantillaSeleccionada('');
+            setPlantillaPorPermiso({});
+            setProcedenciaActual({});
+            setIncidencia(null);
+            clearErrors();
+            cierreTimer.current = null;
         }, 300);
     };
 
-    const toggleSelection = (campo, idOrName) => {
-        const actuales = data[campo] || [];
-        const nuevos = actuales.includes(idOrName)
-            ? actuales.filter(item => item !== idOrName)
-            : [...actuales, idOrName];
-        setData(campo, nuevos);
-
-        if (campo === 'areas') {
-            setData('area_id', resolverAreaPrincipalFormulario(nuevos, data.area_id));
-        }
-        if (campo === 'departamentos') {
-            setData('departamento_id', resolverPrincipalFormulario(nuevos, data.departamento_id));
-        }
-        if (campo === 'sucursales') {
-            setData('sucursal_principal_id', resolverPrincipalFormulario(nuevos, data.sucursal_principal_id));
-        }
+    const cambiarColaborador = (usuario, evento = null) => {
+        if (!usuario || usuario.id === usuarioEditando?.id) return;
+        if (debeConfirmarCierre(isDirty) && !window.confirm(MENSAJE_CIERRE_SUCIO)) return;
+        abrirModal(usuario, evento);
     };
 
-    const areasSeleccionadas = (departamentos || [])
+    const toggleSelection = (campo, idOrName) => {
+        setData((prev) => alternarRelacion(prev, campo, idOrName));
+    };
+
+    const areasSeleccionadas = (departamentosVista || [])
         .flatMap((depto) => depto.areas || [])
         .filter((area) => (data.areas || []).includes(area.id));
 
-    const departamentosSeleccionados = (departamentos || [])
+    const departamentosSeleccionados = (departamentosVista || [])
         .filter((depto) => (data.departamentos || []).includes(depto.id));
 
-    const sucursalesSeleccionadas = (sucursales || [])
+    const sucursalesSeleccionadas = (sucursalesVista || [])
         .filter((sucursal) => (data.sucursales || []).includes(sucursal.id));
 
     const aplicarPlantilla = (nombreGrupo) => {
-        if (plantillaSeleccionada === nombreGrupo) {
-            const permisosAnteriores = permisosDePlantilla([nombreGrupo], roles);
-            setPermisosIndividualesViaForm((prev) =>
-                prev.filter((p) => {
-                    if (!permisosAnteriores.includes(p)) return true;
-                    return plantillaPorPermiso[p] !== nombreGrupo;
-                })
-            );
-            setPlantillaPorPermiso((prev) => {
-                const next = { ...prev };
-                Object.entries(next).forEach(([permiso, plantilla]) => {
-                    if (plantilla === nombreGrupo) delete next[permiso];
-                });
-                return next;
-            });
-            setPlantillaSeleccionada('');
-            setData('plantilla_origen', '');
-            return;
-        }
-
-        if (plantillaSeleccionada) {
-            const permisosAnteriores = permisosDePlantilla([plantillaSeleccionada], roles);
-            setPermisosIndividualesViaForm((prev) =>
-                prev.filter((p) => {
-                    if (!permisosAnteriores.includes(p)) return true;
-                    return plantillaPorPermiso[p] !== plantillaSeleccionada;
-                })
-            );
-            setPlantillaPorPermiso((prev) => {
-                const next = { ...prev };
-                Object.entries(next).forEach(([permiso, plantilla]) => {
-                    if (plantilla === plantillaSeleccionada) delete next[permiso];
-                });
-                return next;
-            });
-        }
-
-        const nuevosPermisos = permisosDePlantilla([nombreGrupo], roles);
-        setPlantillaSeleccionada(nombreGrupo);
-        setData('plantilla_origen', nombreGrupo);
-        setPermisosIndividualesViaForm((prev) => [...new Set([...prev, ...nuevosPermisos])]);
-        setPlantillaPorPermiso((prev) => {
-            const next = { ...prev };
-            nuevosPermisos.forEach((p) => { next[p] = nombreGrupo; });
-            setData('plantilla_por_permiso', next);
-            return next;
+        const resultado = aplicarPlantillaPermisos({
+            permisos: data.permisos_individuales || [],
+            plantillaActual: plantillaSeleccionada,
+            plantillaNueva: nombreGrupo,
+            mapa: plantillaPorPermiso,
+            roles: rolesVista,
         });
+        setPlantillaSeleccionada(resultado.plantillaSeleccionada);
+        setPlantillaPorPermiso(resultado.mapa);
+        setData((prev) => ({
+            ...prev,
+            permisos_individuales: resultado.permisos,
+            plantilla_origen: resultado.plantilla_origen,
+            plantilla_por_permiso: resultado.mapa,
+        }));
     };
 
-    const setPermisosIndividualesViaForm = (updater) => {
-        const actuales = data.permisos_individuales || [];
-        const nuevos = typeof updater === 'function' ? updater(actuales) : updater;
-        setPlantillaPorPermiso((prevPlantilla) => {
-            const nextPlantilla = { ...prevPlantilla };
-            Object.keys(nextPlantilla).forEach((k) => {
-                if (!nuevos.includes(k)) delete nextPlantilla[k];
-            });
-            setData('plantilla_por_permiso', nextPlantilla);
-            return nextPlantilla;
+    const setPermisosIndividualesViaForm = (valor) => {
+        setData((prev) => {
+            const actuales = prev.permisos_individuales || [];
+            const nuevos = typeof valor === 'function' ? valor(actuales) : valor;
+            return {
+                ...prev,
+                permisos_individuales: nuevos,
+                plantilla_por_permiso: limpiarMapaPlantilla(prev.plantilla_por_permiso, nuevos),
+            };
         });
-        setData('permisos_individuales', nuevos);
+        if (typeof valor !== 'function') {
+            setPlantillaPorPermiso((prev) => limpiarMapaPlantilla(prev, valor));
+        }
     };
 
     const permisosFormData = {
@@ -695,8 +656,35 @@ export default function Usuarios({
         plantilla_por_permiso: plantillaPorPermiso,
     };
 
+    const aplicarDecisionGuardado = (decision, extra = {}) => {
+        if (!decision.aplicar) return decision.detenerInertia ? false : undefined;
+        if (decision.tipo === 'validacion') {
+            setIncidencia({ status: 422, tipo: 'validacion', mensaje: '' });
+            setError(normalizarErrores(extra.errores));
+            return undefined;
+        }
+        if (decision.tipo === 'red' || decision.tipo === 'http') {
+            const mensaje = decision.tipo === 'red'
+                ? mensajeErrorRed()
+                : mensajeErrorHttp(decision.status);
+            setIncidencia({ status: decision.status, tipo: decision.tipo, mensaje });
+            setError('formulario', mensaje);
+            if (decision.publicar) {
+                publicarIncidenciaGuardado({
+                    status: decision.status,
+                    tipo: decision.tipo,
+                    mensaje,
+                });
+            }
+            return decision.detenerInertia ? false : undefined;
+        }
+        return undefined;
+    };
+
     const handleSubmit = (e) => {
         e?.preventDefault?.();
+        if (!tomarEnvio(envioRef)) return;
+
         let permisosLimpios = deduplicarPermisos(data.permisos_individuales);
         if (!esSuperAdmin && usuarioEditando) {
             const usuarioActualId = auth?.user?.id;
@@ -713,23 +701,27 @@ export default function Usuarios({
         }
 
         clearErrors();
-        const areaPrincipalId = resolverAreaPrincipalFormulario(data.areas, data.area_id);
+        setIncidencia(null);
+        const areaPrincipalId = resolverPrincipalFormulario(data.areas, data.area_id);
         const departamentoPrincipalId = resolverPrincipalFormulario(data.departamentos, data.departamento_id);
         const sucursalPrincipalId = resolverPrincipalFormulario(data.sucursales, data.sucursal_principal_id);
         if ((data.areas || []).length > 1 && !areaPrincipalId) {
+            soltarEnvio(envioRef);
             setError('area_id', 'Selecciona el área principal cuando el colaborador tiene varias áreas asignadas.');
             return;
         }
         if ((data.departamentos || []).length > 1 && !departamentoPrincipalId) {
+            soltarEnvio(envioRef);
             setError('departamento_id', 'Selecciona el departamento principal cuando el colaborador tiene varios departamentos asignados.');
             return;
         }
         if ((data.sucursales || []).length > 1 && !sucursalPrincipalId) {
+            soltarEnvio(envioRef);
             setError('sucursal_principal_id', 'Selecciona la sucursal principal cuando el colaborador tiene varias sucursales asignadas.');
             return;
         }
 
-        const payload = {
+        const payload = omitirRelacionesFueraDeCatalogo({
             ...data,
             area_id: areaPrincipalId || null,
             departamento_id: departamentoPrincipalId || null,
@@ -737,13 +729,28 @@ export default function Usuarios({
             permisos_individuales: permisosLimpios,
             plantilla_origen: plantillaSeleccionada || null,
             plantilla_por_permiso: plantillaPorPermiso,
-        };
+        }, {
+            esAdministracionGlobal: esAdministracionGlobal(auth, esSuperAdmin),
+            departamentos: departamentosVista,
+            sucursales: sucursalesVista,
+        });
 
+        const ticket = edicionRef.current;
         setGuardando(true);
         const opciones = {
             preserveScroll: true,
             onSuccess: () => {
-                cerrarModal();
+                const decision = decidirRespuestaGuardado({ ticket, ticketActual: edicionRef.current, status: 200 });
+                if (!decision.cerrar) return;
+                const resumenConfirmado = compararFormularioUsuario(lineaBase, payload, {
+                    departamentos: departamentosVista,
+                    sucursales: sucursalesVista,
+                    gerentes: posiblesGerentesVista,
+                    sexos: sexosVista,
+                    roles: rolesVista,
+                });
+                setAvisoCambios(resumenConfirmado.total > 0 ? resumenConfirmado : null);
+                cerrarModal({ forzar: true });
                 recargarUsuarios(
                     paramsListadoUsuarios({
                         busqueda,
@@ -753,7 +760,29 @@ export default function Usuarios({
                     { actualizarUrl: true },
                 );
             },
-            onFinish: () => setGuardando(false),
+            onError: (errores) => {
+                const decision = decidirRespuestaGuardado({ ticket, ticketActual: edicionRef.current, status: 422 });
+                aplicarDecisionGuardado(decision, { errores });
+            },
+            onHttpException: (response) => {
+                const status = response?.status ?? 0;
+                if (status === 422) {
+                    const decision = decidirRespuestaGuardado({ ticket, ticketActual: edicionRef.current, status: 422 });
+                    if (!decision.aplicar) return false;
+                    return undefined;
+                }
+                const decision = decidirRespuestaGuardado({ ticket, ticketActual: edicionRef.current, status });
+                return aplicarDecisionGuardado(decision);
+            },
+            onNetworkError: () => {
+                const decision = decidirRespuestaGuardado({ ticket, ticketActual: edicionRef.current, red: true });
+                return aplicarDecisionGuardado(decision);
+            },
+            onFinish: () => {
+                if (ticket !== edicionRef.current) return;
+                soltarEnvio(envioRef);
+                setGuardando(false);
+            },
         };
 
         if (usuarioEditando) {
@@ -763,16 +792,76 @@ export default function Usuarios({
         }
     };
 
+    const cambiarModoDatos = async (modo) => {
+        if (!import.meta.env.DEV) return;
+        const url = new URL(window.location.href);
+        if (!modo || modo === 'demo') {
+            url.searchParams.delete('datos');
+            window.history.replaceState({}, '', url.pathname + url.search);
+            setOverlayDatos(null);
+            return;
+        }
+        url.searchParams.set('datos', modo);
+        window.history.replaceState({}, '', url.pathname + url.search);
+        const modulo = await import('./Partials/formularioUsuarioExtremo.jsx');
+        const overlay = { ...modulo.overlayDatos(modo), modo };
+        setOverlayDatos(overlay);
+        if (overlay.usuario) abrirModal(overlay.usuario);
+        else abrirModal(null);
+    };
+
+    useEffect(() => {
+        if (!import.meta.env.DEV) return undefined;
+        let activo = true;
+        import('./Partials/formularioUsuarioExtremo.jsx').then((modulo) => {
+            if (activo) setControlesDatos(() => modulo.ControlesDatosExtremos);
+        });
+        const modo = new URLSearchParams(window.location.search).get('datos');
+        if (modo && modo !== 'demo') {
+            import('./Partials/formularioUsuarioExtremo.jsx').then((modulo) => {
+                if (!activo) return;
+                setOverlayDatos({ ...modulo.overlayDatos(modo), modo });
+            });
+        }
+        return () => {
+            activo = false;
+        };
+    }, []);
+
     const cardHeader = geliaCardClass('p-6 md:p-10 flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-6');
     const cardListado = geliaCardClass('overflow-hidden');
     const procesandoForm = processing || guardando;
     const gerenteFiltroId = gerenteId ? Number(gerenteId) : null;
+    const modoDrawer = modoDrawerColaborador(anchoContenido);
+    const anchoDrawer = anchoDrawerColaborador(anchoContenido);
+
+    useEffect(() => {
+        const main = document.querySelector('.gelia-app-main');
+        if (!main) return undefined;
+        const leer = () => setAnchoContenido(main.clientWidth);
+        leer();
+        const observador = new ResizeObserver(leer);
+        observador.observe(main);
+        return () => observador.disconnect();
+    }, []);
+
+    useEffect(() => {
+        const pagina = paginaRef.current;
+        if (!pagina) return undefined;
+        if (showModal && modoDrawer === 'superpuesto') pagina.setAttribute('inert', '');
+        else pagina.removeAttribute('inert');
+        return () => pagina.removeAttribute('inert');
+    }, [showModal, modoDrawer]);
 
     return (
         <AppLayout auth={auth}>
             <Head title="Directorio de Usuarios" />
 
-            <div className="max-w-[1400px] mx-auto p-4 md:p-8 space-y-6 md:space-y-8">
+            <div
+                ref={paginaRef}
+                className={`max-w-[1400px] mx-auto p-4 md:p-8 space-y-6 md:space-y-8 ${showModal && modoDrawer === 'lateral' ? 'usuarios-pagina--con-drawer' : ''}`}
+                style={showModal && anchoDrawer ? { marginInlineEnd: `${anchoDrawer}px` } : undefined}
+            >
                 <header className={cardHeader}>
                     <div className="min-w-0">
                         <div className="flex items-center gap-3 mb-2">
@@ -818,13 +907,18 @@ export default function Usuarios({
                             </div>
                             <button
                                 type="button"
-                                onClick={() => abrirModal()}
+                                onClick={(event) => abrirModal(null, event)}
                                 className={`${THEME_BTN_PRIMARY} theme-btn-primary--compact shrink-0`}
                                 disabled={vistaArchivados}
                             >
                                 <UserPlus className="w-4 h-4" /> Nuevo ingreso
                             </button>
                         </div>
+                        {errorBusqueda && (
+                            <p role="alert" className="text-xs font-bold theme-text-peligro normal-case tracking-normal">
+                                {errorBusqueda}
+                            </p>
+                        )}
                         <div className="theme-field-with-icon w-full">
                             <UserCog className="theme-field-icon" aria-hidden />
                             <select
@@ -881,7 +975,7 @@ export default function Usuarios({
                                 }}
                                 className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-colors ${
                                     estado === 'archivados'
-                                        ? 'border-amber-500 text-amber-600 dark:text-amber-400 bg-amber-500/10'
+                                        ? 'border-[var(--color-aviso)] text-[var(--color-aviso)] bg-[var(--color-aviso)]/10'
                                         : 'theme-border theme-text-muted'
                                 }`}
                             >
@@ -892,7 +986,7 @@ export default function Usuarios({
                 )}
 
                 <div className={`lg:hidden space-y-3 transition-opacity duration-200 ${buscando ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
-                    {lista.length === 0 ? (
+                    {listaVisible.length === 0 ? (
                         <div className={`${geliaCardClass()} text-center py-14 px-6 border-dashed`}>
                             <Users className="w-12 h-12 theme-text-muted mx-auto mb-4 opacity-50" />
                             <h3 className="text-base font-black italic uppercase theme-text-main">Sin resultados</h3>
@@ -901,22 +995,27 @@ export default function Usuarios({
                             </p>
                         </div>
                     ) : (
-                        lista.map((usuario) => (
+                        listaVisible.map((usuario) => (
                             <TarjetaUsuarioMobile
                                 key={usuario.id}
                                 usuario={usuario}
                                 onEditar={abrirModal}
-                                onArchivar={archivarUsuario}
-                                onRestaurar={restaurarUsuario}
+                                onArchivar={abrirArchivo}
+                                onRestaurar={(usuario) => {
+                                    setCuentaArchivo(null);
+                                    setCuentaRestaurar(usuario);
+                                    setErrorDialogo('');
+                                }}
                                 puedeArchivar={puedeArchivar}
                                 puedeRestaurar={puedeRestaurar}
                                 usuarioActualId={auth?.user?.id}
+                                esSuperAdmin={esSuperAdmin}
                                 esCabezaEquipo={gerenteFiltroId != null && Number(usuario.id) === gerenteFiltroId}
                                 vistaArchivados={vistaArchivados}
                             />
                         ))
                     )}
-                    {lista.length > 0 && (
+                    {listaVisible.length > 0 && !overlayDatos && (
                         <GeliaPaginacion paginator={usuariosState} onIrAPagina={irAPagina} />
                     )}
                 </div>
@@ -935,7 +1034,7 @@ export default function Usuarios({
                                 </tr>
                             </thead>
                             <tbody>
-                                {lista.length === 0 ? (
+                                {listaVisible.length === 0 ? (
                                     <tr>
                                         <td colSpan={6} className="px-4 py-16 text-center">
                                             <Users className="w-10 h-10 theme-text-muted mx-auto mb-3 opacity-50" />
@@ -946,16 +1045,21 @@ export default function Usuarios({
                                         </td>
                                     </tr>
                                 ) : (
-                                    lista.map((usuario) => (
+                                    listaVisible.map((usuario) => (
                                         <FilaUsuarioDesktop
                                             key={usuario.id}
                                             usuario={usuario}
                                             onEditar={abrirModal}
-                                            onArchivar={archivarUsuario}
-                                            onRestaurar={restaurarUsuario}
+                                            onArchivar={abrirArchivo}
+                                            onRestaurar={(usuario) => {
+                                                setCuentaArchivo(null);
+                                                setCuentaRestaurar(usuario);
+                                                setErrorDialogo('');
+                                            }}
                                             puedeArchivar={puedeArchivar}
                                             puedeRestaurar={puedeRestaurar}
                                             usuarioActualId={auth?.user?.id}
+                                            esSuperAdmin={esSuperAdmin}
                                             esCabezaEquipo={gerenteFiltroId != null && Number(usuario.id) === gerenteFiltroId}
                                             vistaArchivados={vistaArchivados}
                                         />
@@ -964,58 +1068,158 @@ export default function Usuarios({
                             </tbody>
                         </table>
                     </div>
-                    {lista.length > 0 && (
+                    {listaVisible.length > 0 && !overlayDatos && (
                         <GeliaPaginacion paginator={usuariosState} onIrAPagina={irAPagina} embedded />
                     )}
                 </div>
 
-                {showModal && createPortal(
+                {(cuentaArchivo || cuentaRestaurar) && createPortal(
                     <div
-                        className={`${THEME_MODAL_OVERLAY} items-start sm:items-center py-4 sm:py-6 overflow-y-auto`}
-                        onClick={cerrarModal}
-                        data-gelia-unsaved-form="1"
+                        className={`${THEME_MODAL_OVERLAY} items-center`}
+                        onClick={() => {
+                            if (enviandoDialogo) return;
+                            setCuentaArchivo(null);
+                            setCuentaRestaurar(null);
+                        }}
                     >
                         <div
-                            className={`${THEME_MODAL_SHELL} max-w-4xl modal-pop text-left`}
-                            onClick={(e) => e.stopPropagation()}
+                            role="dialog"
+                            aria-modal="true"
+                            aria-labelledby="dialogo-cuenta-titulo"
+                            className={`${THEME_MODAL_SHELL} max-w-md w-full min-w-0 text-left`}
+                            onClick={(event) => event.stopPropagation()}
+                            onKeyDown={(event) => {
+                                if (event.key === 'Escape' && !enviandoDialogo) {
+                                    setCuentaArchivo(null);
+                                    setCuentaRestaurar(null);
+                                }
+                            }}
                         >
-                            <ModalUsuarioForm
-                                key={usuarioEditando?.id ?? 'nuevo'}
-                                usuarioEditando={usuarioEditando}
-                                onCerrar={cerrarModal}
-                                onSubmit={handleSubmit}
-                                processing={procesandoForm}
-                                data={data}
-                                setData={setData}
-                                errors={errors}
-                                departamentos={departamentos}
-                                sucursales={sucursales}
-                                posiblesGerentes={posiblesGerentes}
-                                rolesJerarquia={rolesJerarquia}
-                                rolesGrupos={rolesGrupos}
-                                plantillaSeleccionada={plantillaSeleccionada}
-                                aplicarPlantilla={aplicarPlantilla}
-                                permisosFormData={permisosFormData}
-                                setPermisosIndividualesViaForm={setPermisosIndividualesViaForm}
-                                roles={roles}
-                                todosLosPermisos={todosLosPermisos}
-                                catalogoPermisos={catalogoPermisos}
-                                permisosUsuario={permisosUsuario}
-                                esSuperAdmin={esSuperAdmin}
-                                usuarioActualId={auth?.user?.id}
-                                procedenciaActual={procedenciaActual}
-                                setPlantillaPorPermiso={setPlantillaPorPermiso}
-                                sexos={sexos}
-                                toggleSelection={toggleSelection}
-                                areasSeleccionadas={areasSeleccionadas}
-                                departamentosSeleccionados={departamentosSeleccionados}
-                                sucursalesSeleccionadas={sucursalesSeleccionadas}
-                                resolverAreaPrincipalFormulario={resolverAreaPrincipalFormulario}
-                                resolverPrincipalFormulario={resolverPrincipalFormulario}
-                            />
+                            <div className="gelia-modal-body min-w-0 p-6">
+                                <h2 id="dialogo-cuenta-titulo" className="text-lg font-black theme-text-main m-0">
+                                    {cuentaArchivo ? 'Archivar cuenta' : 'Restaurar cuenta'}
+                                </h2>
+                                <p className="theme-text-muted text-sm mt-2 mb-4 min-w-0 [overflow-wrap:anywhere] normal-case tracking-normal">
+                                    {cuentaArchivo
+                                        ? `Se archivará la cuenta de ${nombreCompleto(cuentaArchivo)}. El motivo queda en la auditoría. Correo y teléfono quedan libres para reasignación.`
+                                        : `Se restaurará la cuenta de ${nombreCompleto(cuentaRestaurar)}. Las credenciales de acceso vuelven a estar activas.`}
+                                </p>
+                                {cuentaArchivo && (
+                                    <label className="block space-y-1.5">
+                                        <span className="text-xs font-bold theme-text-muted">Motivo</span>
+                                        <textarea
+                                            autoFocus
+                                            value={motivoArchivo}
+                                            onChange={(event) => setMotivoArchivo(event.target.value)}
+                                            rows={3}
+                                            maxLength={1000}
+                                            className="theme-input w-full text-sm font-medium normal-case tracking-normal"
+                                        />
+                                    </label>
+                                )}
+                                {errorDialogo && (
+                                    <p role="alert" className="text-sm font-bold theme-text-peligro mt-3 min-w-0 whitespace-pre-line [overflow-wrap:anywhere] normal-case tracking-normal">
+                                        {errorDialogo}
+                                    </p>
+                                )}
+                            </div>
+                            <div className="gelia-modal-footer flex flex-wrap justify-end gap-2 p-6">
+                                <button
+                                    type="button"
+                                    className="theme-btn-secondary"
+                                    disabled={enviandoDialogo}
+                                    onClick={() => {
+                                        setCuentaArchivo(null);
+                                        setCuentaRestaurar(null);
+                                    }}
+                                >
+                                    Cancelar
+                                </button>
+                                {cuentaArchivo ? (
+                                    <button
+                                        type="button"
+                                        className="theme-btn-danger"
+                                        disabled={enviandoDialogo}
+                                        onClick={confirmarArchivo}
+                                    >
+                                        Archivar cuenta
+                                    </button>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        className={`${THEME_BTN_PRIMARY} theme-btn-primary--compact`}
+                                        disabled={enviandoDialogo}
+                                        autoFocus
+                                        onClick={confirmarRestauracion}
+                                    >
+                                        Restaurar cuenta
+                                    </button>
+                                )}
+                            </div>
                         </div>
                     </div>,
                     document.body
+                )}
+
+                {avisoCambios && (
+                    <div className="usuarios-aviso-aplicados">
+                        <ResumenCambiosUsuario resumen={avisoCambios} titulo="Cambios aplicados" />
+                        <button type="button" className={`${THEME_BTN_SECONDARY} mt-3`} onClick={() => setAvisoCambios(null)}>
+                            Cerrar aviso
+                        </button>
+                    </div>
+                )}
+                <DrawerColaborador
+                    abierto={showModal}
+                    modo={modoDrawer}
+                    onCerrar={cerrarModal}
+                    movimiento={entradaConMovimiento}
+                    sucio={isDirty}
+                    clave={usuarioEditando?.id ?? 'nuevo'}
+                    ancho={anchoDrawer}
+                >
+                    <ModalUsuarioForm
+                        key={usuarioEditando?.id ?? 'nuevo'}
+                        usuarioEditando={usuarioEditando}
+                        onCerrar={cerrarModal}
+                        onSubmit={handleSubmit}
+                        processing={procesandoForm}
+                        data={data}
+                        setData={setData}
+                        errors={errors}
+                        incidencia={incidencia}
+                        departamentos={departamentosVista}
+                        sucursales={sucursalesVista}
+                        posiblesGerentes={posiblesGerentesVista}
+                        rolesJerarquia={rolesJerarquia}
+                        rolesGrupos={rolesGrupos}
+                        plantillaSeleccionada={plantillaSeleccionada}
+                        aplicarPlantilla={aplicarPlantilla}
+                        permisosFormData={permisosFormData}
+                        setPermisosIndividualesViaForm={setPermisosIndividualesViaForm}
+                        roles={rolesVista}
+                        todosLosPermisos={todosLosPermisosVista}
+                        catalogoPermisos={catalogoPermisosVista}
+                        permisosUsuario={permisosUsuario}
+                        esSuperAdmin={esSuperAdmin}
+                        usuarioActualId={auth?.user?.id}
+                        procedenciaActual={procedenciaActual}
+                        setPlantillaPorPermiso={setPlantillaPorPermiso}
+                        sexos={sexosVista}
+                        toggleSelection={toggleSelection}
+                        areasSeleccionadas={areasSeleccionadas}
+                        departamentosSeleccionados={departamentosSeleccionados}
+                        sucursalesSeleccionadas={sucursalesSeleccionadas}
+                        resolverAreaPrincipalFormulario={resolverPrincipalFormulario}
+                        resolverPrincipalFormulario={resolverPrincipalFormulario}
+                        lineaBase={lineaBase}
+                        companeros={listaVisible}
+                        onCambiarColaborador={cambiarColaborador}
+                        modoDrawer={modoDrawer}
+                    />
+                </DrawerColaborador>
+                {ControlesDatos && (
+                    <ControlesDatos modo={overlayDatos?.modo ?? 'demo'} onCambiar={cambiarModoDatos} />
                 )}
             </div>
         </AppLayout>
