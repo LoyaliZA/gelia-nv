@@ -294,6 +294,91 @@ class AlcanceGestionUsuariosTest extends TestCase
         $this->assertNull(DB::table('sessions')->where('id', 'sesion-prueba')->first());
     }
 
+    public function test_filtros_de_organizacion_acotan_el_listado_autorizado(): void
+    {
+        $aromas = Departamento::create(['nombre' => 'Aromas', 'activo' => true]);
+        $caja = Departamento::create(['nombre' => 'Caja', 'activo' => true]);
+        $mostrador = Area::create(['nombre' => 'Mostrador', 'departamento_id' => $aromas->id]);
+        $centro = Sucursal::factory()->create(['nombre' => 'Centro']);
+        $norte = Sucursal::factory()->create(['nombre' => 'Norte']);
+
+        $enAromas = User::factory()->create([
+            'username' => 'en.aromas',
+            'name' => 'En Aromas',
+            'departamento_id' => $aromas->id,
+            'area_id' => $mostrador->id,
+        ]);
+        $enAromas->concederAccesoSucursal($centro, true);
+
+        $unicaSucursal = User::factory()->create([
+            'username' => 'unica.sucursal',
+            'name' => 'Unica Sucursal',
+            'departamento_id' => $caja->id,
+        ]);
+        $unicaSucursal->concederAccesoSucursal($centro, false);
+
+        $sinPrincipal = User::factory()->create([
+            'username' => 'sin.principal',
+            'name' => 'Sin Principal',
+        ]);
+        $sinPrincipal->concederAccesoSucursal($centro, false);
+        $sinPrincipal->concederAccesoSucursal($norte, false);
+
+        $fuera = User::factory()->create([
+            'username' => 'fuera.filtro',
+            'name' => 'Fuera Filtro',
+            'departamento_id' => $caja->id,
+        ]);
+
+        $sinFiltro = $this->idsDelListado(
+            $this->actingAs($this->administrador)->get(route('admin.usuarios'))
+        );
+        $this->assertContains($enAromas->id, $sinFiltro);
+        $this->assertContains($fuera->id, $sinFiltro);
+        $this->assertContains($sinPrincipal->id, $sinFiltro);
+
+        $porDepartamento = $this->idsDelListado(
+            $this->actingAs($this->administrador)->get(route('admin.usuarios', ['departamento_id' => $aromas->id]))
+        );
+        $this->assertContains($enAromas->id, $porDepartamento);
+        $this->assertNotContains($fuera->id, $porDepartamento);
+
+        $porArea = $this->idsDelListado(
+            $this->actingAs($this->administrador)->get(route('admin.usuarios', ['area_id' => $mostrador->id]))
+        );
+        $this->assertSame([$enAromas->id], $porArea);
+
+        $porSucursal = $this->idsDelListado(
+            $this->actingAs($this->administrador)->get(route('admin.usuarios', ['sucursal_id' => $centro->id]))
+        );
+        $this->assertContains($enAromas->id, $porSucursal);
+        $this->assertContains($unicaSucursal->id, $porSucursal);
+        $this->assertNotContains($sinPrincipal->id, $porSucursal);
+        $this->assertNotContains($fuera->id, $porSucursal);
+
+        $ajeno = User::factory()->create([
+            'username' => 'ajeno.equipo',
+            'name' => 'Ajeno Equipo',
+            'departamento_id' => $aromas->id,
+            'area_id' => $mostrador->id,
+        ]);
+        $equipo = $this->colaboradorDelGerente();
+        $equipo->forceFill([
+            'departamento_id' => $aromas->id,
+            'area_id' => $mostrador->id,
+        ])->save();
+
+        $delGerente = $this->idsDelListado(
+            $this->actingAs($this->gerente)->get(route('admin.usuarios', [
+                'departamento_id' => $aromas->id,
+                'area_id' => $mostrador->id,
+            ]))
+        );
+        $this->assertContains($equipo->id, $delGerente);
+        $this->assertNotContains($ajeno->id, $delGerente);
+        $this->assertNotContains($enAromas->id, $delGerente);
+    }
+
     public function test_area_inexistente_se_rechaza(): void
     {
         $depto = Departamento::create(['nombre' => 'Operacion', 'activo' => true]);
@@ -308,6 +393,20 @@ class AlcanceGestionUsuariosTest extends TestCase
                 'areas' => [$area->id, 999999],
             ]))
             ->assertSessionHasErrors('areas');
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    private function idsDelListado($response): array
+    {
+        $response->assertOk();
+        $pagina = $response->inertiaPage();
+
+        return collect($pagina['props']['usuarios']['data'])
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
     }
 
     private function colaboradorDelGerente(): User

@@ -750,6 +750,8 @@ class AdminController extends Controller
             });
         }
 
+        $this->acotarUsuariosPorOrganizacion($query);
+
         $gerenteId = (int) request('gerente_id', 0);
         if ($gerenteId > 0) {
             $query->where(function ($q) use ($gerenteId) {
@@ -781,6 +783,50 @@ class AdminController extends Controller
             'from' => $paginated->firstItem() ?? 0,
             'to' => $paginated->lastItem() ?? 0,
         ];
+    }
+
+    /**
+     * Filtros opcionales del selector del drawer. Si no vienen, el directorio no cambia.
+     * La sucursal es la principal operable: la marcada, o la única asignación activa.
+     */
+    private function acotarUsuariosPorOrganizacion($query): void
+    {
+        $departamentoId = (int) request('departamento_id', 0);
+        if ($departamentoId > 0) {
+            $query->where(function ($filtro) use ($departamentoId) {
+                $filtro->where('users.departamento_id', $departamentoId)
+                    ->orWhereHas('departamentos', function ($relacion) use ($departamentoId) {
+                        $relacion->where('departamentos.id', $departamentoId);
+                    });
+            });
+        }
+
+        $areaId = (int) request('area_id', 0);
+        if ($areaId > 0) {
+            $query->where('users.area_id', $areaId);
+        }
+
+        $sucursalId = (int) request('sucursal_id', 0);
+        if ($sucursalId > 0) {
+            $query->where(function ($filtro) use ($sucursalId) {
+                $filtro->whereHas('sucursales', function ($relacion) use ($sucursalId) {
+                    $relacion->where('sucursales.id', $sucursalId)
+                        ->where('sucursales.activo', true)
+                        ->where('sucursal_user.activo', true)
+                        ->where('sucursal_user.es_principal', true);
+                })->orWhere(function ($unica) use ($sucursalId) {
+                    $unica->whereHas('sucursales', function ($relacion) use ($sucursalId) {
+                        $relacion->where('sucursales.id', $sucursalId)
+                            ->where('sucursales.activo', true)
+                            ->where('sucursal_user.activo', true);
+                    })->whereRaw('(
+                        select count(*) from sucursal_user su
+                        inner join sucursales s on s.id = su.sucursal_id
+                        where su.user_id = users.id and su.activo = 1 and s.activo = 1
+                    ) = 1');
+                });
+            });
+        }
     }
 
     private function serializarUsuarioConProcedencia(User $usuario): array

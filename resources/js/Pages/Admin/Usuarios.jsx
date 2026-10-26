@@ -11,15 +11,13 @@ import AppLayout from '../../Layouts/AppLayout';
 import GeliaPaginacion from '../../Components/GeliaPaginacion';
 import ModalUsuarioForm from './Partials/ModalUsuarioForm';
 import DrawerColaborador from './Partials/DrawerColaborador';
-import ResumenCambiosUsuario from './Partials/ResumenCambiosUsuario';
 import ConfiguracionHerencia from './Partials/ConfiguracionHerencia';
 import {
-    MENSAJE_CIERRE_SUCIO,
     alternarRelacion,
     aplicarPlantillaPermisos,
     datosFormularioDesdeUsuario,
-    compararFormularioUsuario,
     debeConfirmarCierre,
+    decidirCambioColaborador,
     decidirRespuestaGuardado,
     anchoDrawerColaborador,
     modoDrawerColaborador,
@@ -123,16 +121,37 @@ const HOVER_PRIMARIO = '[@media(hover:hover)_and_(pointer:fine)]:hover:bg-[var(-
 const HOVER_AVISO = '[@media(hover:hover)_and_(pointer:fine)]:hover:bg-[var(--color-aviso)] [@media(hover:hover)_and_(pointer:fine)]:hover:text-white [@media(hover:hover)_and_(pointer:fine)]:hover:border-transparent';
 const HOVER_EXITO = '[@media(hover:hover)_and_(pointer:fine)]:hover:bg-[var(--color-exito)] [@media(hover:hover)_and_(pointer:fine)]:hover:text-white [@media(hover:hover)_and_(pointer:fine)]:hover:border-transparent';
 
+function detenerAccion(event) {
+    event.stopPropagation();
+}
+
 function TarjetaUsuarioMobile({
     usuario, onEditar, onArchivar, onRestaurar, puedeArchivar, puedeRestaurar, usuarioActualId, esSuperAdmin = false, esCabezaEquipo = false, vistaArchivados = false,
+    seleccionable = false, activa = false, onElegir,
 }) {
     const mostrarArchivar = !vistaArchivados && puedeArchivar
         && usuario.id !== usuarioActualId
         && !usuarioEsSuperAdmin(usuario)
         && (esSuperAdmin || !usuarioEsAdministrador(usuario));
     const mostrarRestaurar = vistaArchivados && puedeRestaurar;
+    const elegir = (event) => {
+        if (!seleccionable || event.target.closest('button, a')) return;
+        onElegir?.();
+    };
+    const teclado = (event) => {
+        if (!seleccionable || event.target !== event.currentTarget) return;
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        onElegir?.();
+    };
     return (
-        <article className="theme-surface border theme-border rounded-[1.75rem] p-4 sm:p-5 space-y-3 transition-shadow hover:shadow-md">
+        <article
+            className={`theme-surface border theme-border rounded-[1.75rem] p-4 sm:p-5 space-y-3 transition-shadow hover:shadow-md${seleccionable ? ' usuarios-fila-elegible' : ''}`}
+            aria-selected={seleccionable ? activa : undefined}
+            tabIndex={seleccionable ? 0 : undefined}
+            onClick={elegir}
+            onKeyDown={teclado}
+        >
             <div className="flex items-start gap-3">
                 <UserAvatar usuario={usuario} />
                 <div className="min-w-0 flex-1 space-y-1.5">
@@ -185,7 +204,11 @@ function TarjetaUsuarioMobile({
                 {!vistaArchivados && (
                 <button
                     type="button"
-                    onClick={(event) => onEditar(usuario, event)}
+                    onClick={(event) => {
+                        detenerAccion(event);
+                        onEditar(usuario, event);
+                    }}
+                    onKeyDown={detenerAccion}
                     className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl theme-element border theme-border theme-text-main text-[10px] font-black uppercase tracking-widest transition-colors ${HOVER_PRIMARIO}`}
                 >
                     <Edit3 className="w-4 h-4 shrink-0" />
@@ -195,7 +218,11 @@ function TarjetaUsuarioMobile({
                 {mostrarArchivar && (
                     <button
                         type="button"
-                        onClick={() => onArchivar(usuario)}
+                        onClick={(event) => {
+                            detenerAccion(event);
+                            onArchivar(usuario);
+                        }}
+                        onKeyDown={detenerAccion}
                         className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl theme-element border theme-border theme-text-aviso text-[10px] font-black uppercase tracking-widest transition-colors ${HOVER_AVISO}`}
                     >
                         <Archive className="w-4 h-4 shrink-0" />
@@ -205,7 +232,11 @@ function TarjetaUsuarioMobile({
                 {mostrarRestaurar && (
                     <button
                         type="button"
-                        onClick={() => onRestaurar(usuario)}
+                        onClick={(event) => {
+                            detenerAccion(event);
+                            onRestaurar(usuario);
+                        }}
+                        onKeyDown={detenerAccion}
                         className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl theme-element border theme-border theme-text-exito text-[10px] font-black uppercase tracking-widest transition-colors ${HOVER_EXITO}`}
                     >
                         <RotateCcw className="w-4 h-4 shrink-0" />
@@ -219,6 +250,7 @@ function TarjetaUsuarioMobile({
 
 function FilaUsuarioDesktop({
     usuario, onEditar, onArchivar, onRestaurar, puedeArchivar, puedeRestaurar, usuarioActualId, esSuperAdmin = false, esCabezaEquipo = false, vistaArchivados = false,
+    seleccionable = false, activa = false, onElegir,
 }) {
     const mostrarArchivar = !vistaArchivados && puedeArchivar
         && usuario.id !== usuarioActualId
@@ -226,7 +258,21 @@ function FilaUsuarioDesktop({
         && (esSuperAdmin || !usuarioEsAdministrador(usuario));
     const mostrarRestaurar = vistaArchivados && puedeRestaurar;
     return (
-        <tr className="border-b theme-border hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors">
+        <tr
+            className={`border-b theme-border hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors${seleccionable ? ' usuarios-fila-elegible' : ''}`}
+            aria-selected={seleccionable ? activa : undefined}
+            tabIndex={seleccionable ? 0 : undefined}
+            onClick={(event) => {
+                if (!seleccionable || event.target.closest('button, a')) return;
+                onElegir?.();
+            }}
+            onKeyDown={(event) => {
+                if (!seleccionable || event.target !== event.currentTarget) return;
+                if (event.key !== 'Enter' && event.key !== ' ') return;
+                event.preventDefault();
+                onElegir?.();
+            }}
+        >
             <td className="px-4 py-4">
                 <div className="flex items-center gap-3 min-w-[200px]">
                     <UserAvatar usuario={usuario} />
@@ -273,7 +319,11 @@ function FilaUsuarioDesktop({
                     {!vistaArchivados && (
                     <button
                         type="button"
-                        onClick={(event) => onEditar(usuario, event)}
+                        onClick={(event) => {
+                        detenerAccion(event);
+                        onEditar(usuario, event);
+                    }}
+                    onKeyDown={detenerAccion}
                         className={`p-2.5 rounded-xl theme-element border theme-border theme-text-main transition-colors ${HOVER_PRIMARIO}`}
                         aria-label="Editar usuario"
                     >
@@ -283,7 +333,11 @@ function FilaUsuarioDesktop({
                     {mostrarArchivar && (
                         <button
                             type="button"
-                            onClick={() => onArchivar(usuario)}
+                            onClick={(event) => {
+                            detenerAccion(event);
+                            onArchivar(usuario);
+                        }}
+                        onKeyDown={detenerAccion}
                             className={`p-2.5 rounded-xl theme-element border theme-border theme-text-aviso transition-colors ${HOVER_AVISO}`}
                             aria-label="Archivar usuario"
                         >
@@ -293,7 +347,11 @@ function FilaUsuarioDesktop({
                     {mostrarRestaurar && (
                         <button
                             type="button"
-                            onClick={() => onRestaurar(usuario)}
+                            onClick={(event) => {
+                            detenerAccion(event);
+                            onRestaurar(usuario);
+                        }}
+                        onKeyDown={detenerAccion}
                             className={`p-2.5 rounded-xl theme-element border theme-border theme-text-exito transition-colors ${HOVER_EXITO}`}
                             aria-label="Restaurar usuario"
                         >
@@ -427,9 +485,26 @@ export default function Usuarios({
     const retornoFoco = useRef(null);
     const paginaRef = useRef(null);
     const [lineaBase, setLineaBase] = useState(null);
-    const [avisoCambios, setAvisoCambios] = useState(null);
+    const [confirmacionGuardado, setConfirmacionGuardado] = useState(false);
+    const [dialogoCambio, setDialogoCambio] = useState(null);
+    const [dialogoCierre, setDialogoCierre] = useState(false);
+    const [resultadosBusqueda, setResultadosBusqueda] = useState([]);
+    const [buscandoSelector, setBuscandoSelector] = useState(false);
+    const [hayMasSelector, setHayMasSelector] = useState(false);
+    const [avisoSelector, setAvisoSelector] = useState('');
     const [anchoContenido, setAnchoContenido] = useState(1280);
     const [entradaConMovimiento, setEntradaConMovimiento] = useState(true);
+    const [filtrosCompaneros, setFiltrosCompaneros] = useState({
+        departamento: '',
+        sucursal: '',
+        area: '',
+    });
+    const destinoCambioRef = useRef(null);
+    const confirmacionTimer = useRef(null);
+    const selectorAbortRef = useRef(null);
+    const selectorTimer = useRef(null);
+    const usuarioEditandoRef = useRef(null);
+    usuarioEditandoRef.current = usuarioEditando;
 
     const { data, setData, processing, isDirty, setDefaults, errors, setError, clearErrors } = useForm(formularioVacio());
 
@@ -499,6 +574,53 @@ export default function Usuarios({
             }
         }
     }, [inertiaVersion]);
+
+    const buscarColaboradores = useCallback((texto = '') => {
+        if (selectorTimer.current) clearTimeout(selectorTimer.current);
+        const termino = String(texto ?? '');
+        selectorTimer.current = setTimeout(async () => {
+            if (selectorAbortRef.current) selectorAbortRef.current.abort();
+            const controller = new AbortController();
+            selectorAbortRef.current = controller;
+            setBuscandoSelector(true);
+            const params = { page: 1 };
+            const consulta = termino.trim();
+            if (consulta) params.busqueda = consulta;
+            if (gerenteId) params.gerente_id = Number(gerenteId);
+            if (estado && estado !== 'activos') params.estado = estado;
+            if (filtrosCompaneros.departamento) params.departamento_id = Number(filtrosCompaneros.departamento);
+            if (filtrosCompaneros.area) params.area_id = Number(filtrosCompaneros.area);
+            if (filtrosCompaneros.sucursal) params.sucursal_id = Number(filtrosCompaneros.sucursal);
+
+            try {
+                const response = await axios.get(route('admin.usuarios'), {
+                    params,
+                    headers: headersRecargaParcial(inertiaVersion),
+                    signal: controller.signal,
+                });
+                if (selectorAbortRef.current !== controller) return;
+                const pagina = response.data?.props?.usuarios || {};
+                const datos = pagina.data || [];
+                const actual = usuarioEditandoRef.current;
+                const hayFiltroOrg = Boolean(
+                    filtrosCompaneros.departamento || filtrosCompaneros.area || filtrosCompaneros.sucursal,
+                );
+                const visible = actual && !consulta && !hayFiltroOrg && !datos.some((persona) => String(persona.id) === String(actual.id))
+                    ? [actual, ...datos]
+                    : datos;
+                setResultadosBusqueda(visible);
+                setHayMasSelector((pagina.last_page || 1) > 1);
+                setAvisoSelector('');
+            } catch (error) {
+                if (selectorAbortRef.current !== controller) return;
+                if (axios.isCancel(error) || error.code === 'ERR_CANCELED') return;
+                setAvisoSelector('No se pudo buscar. Intenta de nuevo.');
+                setHayMasSelector(false);
+            } finally {
+                if (selectorAbortRef.current === controller) setBuscandoSelector(false);
+            }
+        }, termino.trim() ? 300 : 0);
+    }, [estado, filtrosCompaneros, gerenteId, inertiaVersion]);
 
     const aplicarFiltros = useCallback((overrides = {}) => {
         if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -575,9 +697,17 @@ export default function Usuarios({
     };
 
     const cerrarModal = ({ forzar = false } = {}) => {
-        if (!forzar && debeConfirmarCierre(isDirty) && !window.confirm(MENSAJE_CIERRE_SUCIO)) {
+        if (envioRef.current) return;
+        if (!forzar && debeConfirmarCierre(isDirty)) {
+            setDialogoCierre(true);
             return;
         }
+        setDialogoCierre(false);
+        setDialogoCambio(null);
+        destinoCambioRef.current = null;
+        setConfirmacionGuardado(false);
+        setFiltrosCompaneros({ departamento: '', sucursal: '', area: '' });
+        setResultadosBusqueda([]);
         setShowModal(false);
         const destino = retornoFoco.current;
         requestAnimationFrame(() => destino?.focus?.());
@@ -598,8 +728,17 @@ export default function Usuarios({
     };
 
     const cambiarColaborador = (usuario, evento = null) => {
-        if (!usuario || usuario.id === usuarioEditando?.id) return;
-        if (debeConfirmarCierre(isDirty) && !window.confirm(MENSAJE_CIERRE_SUCIO)) return;
+        if (!usuario) return;
+        const decision = decidirCambioColaborador({
+            mismo: usuario.id === usuarioEditando?.id,
+            sucio: isDirty,
+            pendiente: envioRef.current,
+        });
+        if (decision.accion === 'bloquear' || decision.accion === 'ignorar') return;
+        if (decision.accion === 'preguntar') {
+            setDialogoCambio(usuario);
+            return;
+        }
         abrirModal(usuario, evento);
     };
 
@@ -702,22 +841,29 @@ export default function Usuarios({
 
         clearErrors();
         setIncidencia(null);
+        setConfirmacionGuardado(false);
+        if (confirmacionTimer.current) {
+            clearTimeout(confirmacionTimer.current);
+            confirmacionTimer.current = null;
+        }
         const areaPrincipalId = resolverPrincipalFormulario(data.areas, data.area_id);
         const departamentoPrincipalId = resolverPrincipalFormulario(data.departamentos, data.departamento_id);
         const sucursalPrincipalId = resolverPrincipalFormulario(data.sucursales, data.sucursal_principal_id);
-        if ((data.areas || []).length > 1 && !areaPrincipalId) {
+        const rechazarLocal = (campo, mensaje) => {
             soltarEnvio(envioRef);
-            setError('area_id', 'Selecciona el área principal cuando el colaborador tiene varias áreas asignadas.');
+            destinoCambioRef.current = null;
+            setError(campo, mensaje);
+        };
+        if ((data.areas || []).length > 1 && !areaPrincipalId) {
+            rechazarLocal('area_id', 'Selecciona el área principal cuando el colaborador tiene varias áreas asignadas.');
             return;
         }
         if ((data.departamentos || []).length > 1 && !departamentoPrincipalId) {
-            soltarEnvio(envioRef);
-            setError('departamento_id', 'Selecciona el departamento principal cuando el colaborador tiene varios departamentos asignados.');
+            rechazarLocal('departamento_id', 'Selecciona el departamento principal cuando el colaborador tiene varios departamentos asignados.');
             return;
         }
         if ((data.sucursales || []).length > 1 && !sucursalPrincipalId) {
-            soltarEnvio(envioRef);
-            setError('sucursal_principal_id', 'Selecciona la sucursal principal cuando el colaborador tiene varias sucursales asignadas.');
+            rechazarLocal('sucursal_principal_id', 'Selecciona la sucursal principal cuando el colaborador tiene varias sucursales asignadas.');
             return;
         }
 
@@ -738,33 +884,51 @@ export default function Usuarios({
         const ticket = edicionRef.current;
         setGuardando(true);
         const opciones = {
+            preserveState: true,
             preserveScroll: true,
-            onSuccess: () => {
+            // El botón del drawer ya informa el envío. AppLayout omite el loader si la visita lo pide.
+            showProgress: false,
+            onSuccess: (page) => {
                 const decision = decidirRespuestaGuardado({ ticket, ticketActual: edicionRef.current, status: 200 });
-                if (!decision.cerrar) return;
-                const resumenConfirmado = compararFormularioUsuario(lineaBase, payload, {
-                    departamentos: departamentosVista,
-                    sucursales: sucursalesVista,
-                    gerentes: posiblesGerentesVista,
-                    sexos: sexosVista,
-                    roles: rolesVista,
-                });
-                setAvisoCambios(resumenConfirmado.total > 0 ? resumenConfirmado : null);
-                cerrarModal({ forzar: true });
-                recargarUsuarios(
-                    paramsListadoUsuarios({
-                        busqueda,
-                        gerenteId,
-                        page: usuariosState.current_page || 1,
-                    }),
-                    { actualizarUrl: true },
-                );
+                if (decision.tipo !== 'ok' || !decision.aplicar) return;
+                const destino = destinoCambioRef.current;
+                destinoCambioRef.current = null;
+                if (destino) {
+                    abrirModal(destino);
+                    return;
+                }
+                if (!usuarioEditando) {
+                    const listaNueva = page?.props?.usuarios?.data || [];
+                    const creado = listaNueva.find((persona) => persona.username === payload.username || persona.email === payload.email);
+                    if (creado) {
+                        abrirModal(creado);
+                        return;
+                    }
+                }
+                const confirmado = {
+                    ...payload,
+                    plantilla_origen: payload.plantilla_origen || '',
+                };
+                setDefaults(confirmado);
+                setLineaBase(confirmado);
+                setUsuarioEditando((actual) => (actual ? {
+                    ...actual,
+                    name: payload.name,
+                    apellido_paterno: payload.apellido_paterno,
+                    apellido_materno: payload.apellido_materno,
+                    username: payload.username,
+                    email: payload.email,
+                } : actual));
+                setConfirmacionGuardado(true);
+                confirmacionTimer.current = setTimeout(() => setConfirmacionGuardado(false), 1600);
             },
             onError: (errores) => {
+                destinoCambioRef.current = null;
                 const decision = decidirRespuestaGuardado({ ticket, ticketActual: edicionRef.current, status: 422 });
                 aplicarDecisionGuardado(decision, { errores });
             },
             onHttpException: (response) => {
+                destinoCambioRef.current = null;
                 const status = response?.status ?? 0;
                 if (status === 422) {
                     const decision = decidirRespuestaGuardado({ ticket, ticketActual: edicionRef.current, status: 422 });
@@ -775,6 +939,7 @@ export default function Usuarios({
                 return aplicarDecisionGuardado(decision);
             },
             onNetworkError: () => {
+                destinoCambioRef.current = null;
                 const decision = decidirRespuestaGuardado({ ticket, ticketActual: edicionRef.current, red: true });
                 return aplicarDecisionGuardado(decision);
             },
@@ -833,6 +998,11 @@ export default function Usuarios({
     const procesandoForm = processing || guardando;
     const gerenteFiltroId = gerenteId ? Number(gerenteId) : null;
     const modoDrawer = modoDrawerColaborador(anchoContenido);
+    const filaSeleccionable = showModal && modoDrawer === 'lateral' && !vistaArchivados;
+    const editarCuenta = (usuario, evento) => {
+        if (filaSeleccionable && usuarioEditando) cambiarColaborador(usuario, evento);
+        else abrirModal(usuario, evento);
+    };
     const anchoDrawer = anchoDrawerColaborador(anchoContenido);
 
     useEffect(() => {
@@ -843,6 +1013,39 @@ export default function Usuarios({
         const observador = new ResizeObserver(leer);
         observador.observe(main);
         return () => observador.disconnect();
+    }, []);
+
+    useEffect(() => {
+        if (!showModal || !usuarioEditando) return undefined;
+        buscarColaboradores('');
+        return () => {
+            if (selectorTimer.current) clearTimeout(selectorTimer.current);
+        };
+    }, [showModal, usuarioEditando?.id, filtrosCompaneros, estado, gerenteId, buscarColaboradores]);
+
+    useEffect(() => {
+        if (!showModal || isDirty || !usuarioEditando) return;
+        const fresco = (usuarios?.data || []).find((persona) => persona.id === usuarioEditando.id);
+        if (!fresco) return;
+        setUsuarioEditando((actual) => (actual && actual.id === fresco.id ? { ...actual, ...fresco } : actual));
+    }, [usuarios, showModal, isDirty, usuarioEditando?.id]);
+
+    useEffect(() => {
+        if (!dialogoCambio && !dialogoCierre) return undefined;
+        const onKey = (event) => {
+            if (event.key !== 'Escape') return;
+            event.preventDefault();
+            event.stopPropagation();
+            setDialogoCambio(null);
+            setDialogoCierre(false);
+        };
+        window.addEventListener('keydown', onKey, true);
+        return () => window.removeEventListener('keydown', onKey, true);
+    }, [dialogoCambio, dialogoCierre]);
+
+    useEffect(() => () => {
+        if (confirmacionTimer.current) clearTimeout(confirmacionTimer.current);
+        if (selectorAbortRef.current) selectorAbortRef.current.abort();
     }, []);
 
     useEffect(() => {
@@ -999,7 +1202,10 @@ export default function Usuarios({
                             <TarjetaUsuarioMobile
                                 key={usuario.id}
                                 usuario={usuario}
-                                onEditar={abrirModal}
+                                onEditar={editarCuenta}
+                                seleccionable={filaSeleccionable}
+                                activa={usuarioEditando?.id === usuario.id}
+                                onElegir={() => cambiarColaborador(usuario)}
                                 onArchivar={abrirArchivo}
                                 onRestaurar={(usuario) => {
                                     setCuentaArchivo(null);
@@ -1049,7 +1255,10 @@ export default function Usuarios({
                                         <FilaUsuarioDesktop
                                             key={usuario.id}
                                             usuario={usuario}
-                                            onEditar={abrirModal}
+                                            onEditar={editarCuenta}
+                                            seleccionable={filaSeleccionable}
+                                            activa={usuarioEditando?.id === usuario.id}
+                                            onElegir={() => cambiarColaborador(usuario)}
                                             onArchivar={abrirArchivo}
                                             onRestaurar={(usuario) => {
                                                 setCuentaArchivo(null);
@@ -1161,13 +1370,83 @@ export default function Usuarios({
                     document.body
                 )}
 
-                {avisoCambios && (
-                    <div className="usuarios-aviso-aplicados">
-                        <ResumenCambiosUsuario resumen={avisoCambios} titulo="Cambios aplicados" />
-                        <button type="button" className={`${THEME_BTN_SECONDARY} mt-3`} onClick={() => setAvisoCambios(null)}>
-                            Cerrar aviso
-                        </button>
-                    </div>
+                {(dialogoCambio || dialogoCierre) && createPortal(
+                    <div
+                        className={`${THEME_MODAL_OVERLAY} items-center usuarios-dialogo-decision`}
+                        onClick={() => {
+                            setDialogoCambio(null);
+                            setDialogoCierre(false);
+                        }}
+                    >
+                        <div
+                            role="alertdialog"
+                            aria-modal="true"
+                            aria-labelledby="dialogo-cambios-titulo"
+                            aria-describedby="dialogo-cambios-texto"
+                            className={`${THEME_MODAL_SHELL} max-w-md w-full min-w-0 text-left`}
+                            onClick={(event) => event.stopPropagation()}
+                        >
+                            <div className="gelia-modal-body min-w-0 p-6">
+                                <h2 id="dialogo-cambios-titulo" className="text-lg font-black theme-text-main m-0">
+                                    {dialogoCambio ? 'Cambiar de colaborador' : 'Cerrar sin guardar'}
+                                </h2>
+                                <p id="dialogo-cambios-texto" className="theme-text-muted text-sm mt-2 mb-0 normal-case tracking-normal">
+                                    {dialogoCambio
+                                        ? 'Hay cambios sin guardar en esta cuenta.'
+                                        : 'Si cierras ahora, los cambios de esta cuenta se perderán.'}
+                                </p>
+                            </div>
+                            <div className="gelia-modal-footer flex flex-wrap justify-end gap-2">
+                                <button
+                                    type="button"
+                                    className={THEME_BTN_SECONDARY}
+                                    autoFocus
+                                    onClick={() => {
+                                        setDialogoCambio(null);
+                                        setDialogoCierre(false);
+                                    }}
+                                >
+                                    Seguir editando
+                                </button>
+                                {dialogoCambio ? (
+                                    <>
+                                        <button
+                                            type="button"
+                                            className={THEME_BTN_SECONDARY}
+                                            onClick={() => {
+                                                const destino = dialogoCambio;
+                                                setDialogoCambio(null);
+                                                abrirModal(destino);
+                                            }}
+                                        >
+                                            Descartar y cambiar
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className={THEME_BTN_PRIMARY}
+                                            onClick={() => {
+                                                if (!dialogoCambio || envioRef.current) return;
+                                                destinoCambioRef.current = dialogoCambio;
+                                                setDialogoCambio(null);
+                                                handleSubmit();
+                                            }}
+                                        >
+                                            Guardar y cambiar
+                                        </button>
+                                    </>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        className="theme-btn-danger"
+                                        onClick={() => cerrarModal({ forzar: true })}
+                                    >
+                                        Descartar cambios
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </div>,
+                    document.body
                 )}
                 <DrawerColaborador
                     abierto={showModal}
@@ -1215,7 +1494,21 @@ export default function Usuarios({
                         lineaBase={lineaBase}
                         companeros={listaVisible}
                         onCambiarColaborador={cambiarColaborador}
-                        modoDrawer={modoDrawer}
+                        filtroDepartamento={filtrosCompaneros.departamento}
+                        filtroSucursal={filtrosCompaneros.sucursal}
+                        filtroArea={filtrosCompaneros.area}
+                        onCambiarFiltro={(campo, valor) => setFiltrosCompaneros((previo) => ({ ...previo, [campo]: valor }))}
+                        onAplicarFiltros={(filtros) => setFiltrosCompaneros({
+                            departamento: filtros?.departamento || '',
+                            sucursal: filtros?.sucursal || '',
+                            area: filtros?.area || '',
+                        })}
+                        resultadosBusqueda={resultadosBusqueda}
+                        buscandoBusqueda={buscandoSelector}
+                        hayMasResultados={hayMasSelector}
+                        avisoBusqueda={avisoSelector}
+                        onBuscarColaboradores={buscarColaboradores}
+                        confirmado={confirmacionGuardado}
                     />
                 </DrawerColaborador>
                 {ControlesDatos && (

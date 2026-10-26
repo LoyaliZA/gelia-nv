@@ -399,6 +399,14 @@ export function debeConfirmarCierre(isDirty) {
     return Boolean(isDirty);
 }
 
+/** Qué hacer al elegir otra cuenta mientras el drawer está abierto. */
+export function decidirCambioColaborador({ mismo = false, sucio = false, pendiente = false } = {}) {
+    if (pendiente) return { accion: 'bloquear' };
+    if (mismo) return { accion: 'ignorar' };
+    if (!sucio) return { accion: 'cambiar' };
+    return { accion: 'preguntar' };
+}
+
 export const MENSAJE_CIERRE_SUCIO = 'Hay cambios sin guardar. Si cierras el formulario, se perderán. ¿Cerrar de todas formas?';
 
 const ANCHO_DIRECTORIO_MIN = 280;
