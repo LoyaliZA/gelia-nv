@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
     Key, ShieldCheck, ChevronRight, Lock, ShieldAlert, Search, Layers, UserPen,
 } from 'lucide-react';
@@ -59,25 +59,20 @@ function MatrizPermisos({
     useEffect(() => {
         if (!usarAcordeonSubmodulo || submodulos.length === 0) return;
         const consulta = busqueda.trim();
+        if (!consulta) return;
         const prefijo = `${moduloRoot}:`;
         setSubmodsExpandidos((prev) => {
-            if (consulta) {
-                let cambio = false;
-                const next = { ...prev };
-                submodulos.forEach((grupo) => {
-                    const clave = `${prefijo}${grupo.id}`;
-                    const coincide = grupo.permisos.some((permiso) => permisoCoincideBusqueda(permiso.name, consulta));
-                    if (coincide && !next[clave]) {
-                        next[clave] = true;
-                        cambio = true;
-                    }
-                });
-                return cambio ? next : prev;
-            }
-            if (Object.keys(prev).some((clave) => clave.startsWith(prefijo))) return prev;
-            const inicial = { ...prev };
-            submodulos.slice(0, 2).forEach((grupo) => { inicial[`${prefijo}${grupo.id}`] = true; });
-            return inicial;
+            let cambio = false;
+            const next = { ...prev };
+            submodulos.forEach((grupo) => {
+                const clave = `${prefijo}${grupo.id}`;
+                const coincide = grupo.permisos.some((permiso) => permisoCoincideBusqueda(permiso.name, consulta));
+                if (coincide && !next[clave]) {
+                    next[clave] = true;
+                    cambio = true;
+                }
+            });
+            return cambio ? next : prev;
         });
     }, [usarAcordeonSubmodulo, submodulos, busqueda]);
 
@@ -264,7 +259,8 @@ function MatrizPermisos({
                         <>
                             {renderEncabezadoSubmodulo(grupo, { compacto: true, omitirAccionMasiva: true })}
                             <ChevronRight
-                                className={`w-4 h-4 theme-text-muted shrink-0 ${abierto ? 'rotate-90' : ''}`}
+                                className="usuarios-permiso-chevron w-4 h-4 theme-text-muted shrink-0"
+                                data-abierto={abierto ? 'true' : 'false'}
                                 aria-hidden
                             />
                         </>
@@ -294,6 +290,41 @@ function MatrizPermisos({
     );
 }
 
+function CuerpoRevelado({ abierto, className = '', children }) {
+    const abiertoRef = useRef(abierto);
+    abiertoRef.current = abierto;
+    const [presente, setPresente] = useState(abierto);
+    const [estado, setEstado] = useState(abierto ? 'abierto' : 'cerrado');
+
+    useEffect(() => {
+        if (abierto) {
+            setPresente(true);
+            const marco = requestAnimationFrame(() => setEstado('abierto'));
+            return () => cancelAnimationFrame(marco);
+        }
+        setEstado('cerrado');
+        const timer = window.setTimeout(() => {
+            if (!abiertoRef.current) setPresente(false);
+        }, 260);
+        return () => window.clearTimeout(timer);
+    }, [abierto]);
+
+    if (!presente) return null;
+
+    return (
+        <div
+            className={`usuarios-permiso-cuerpo ${className}`}
+            data-estado={estado}
+            onTransitionEnd={(event) => {
+                if (event.target !== event.currentTarget || event.propertyName !== 'opacity') return;
+                if (!abiertoRef.current) setPresente(false);
+            }}
+        >
+            {children}
+        </div>
+    );
+}
+
 function AcordeonAnimado({
     abierto,
     onToggle,
@@ -319,11 +350,9 @@ function AcordeonAnimado({
                 </button>
                 {headerActions}
             </div>
-            {abierto && (
-                <div className={`border-t theme-border ${contentClassName}`}>
-                    {children}
-                </div>
-            )}
+            <CuerpoRevelado abierto={abierto} className={`border-t theme-border ${contentClassName}`}>
+                {children}
+            </CuerpoRevelado>
         </div>
     );
 }
@@ -365,7 +394,8 @@ function AcordeonModulo({
                         </span>
                     </div>
                     <ChevronRight
-                        className={`w-4 h-4 theme-text-muted shrink-0 ${expandido ? 'rotate-90' : ''}`}
+                        className="usuarios-permiso-chevron w-4 h-4 theme-text-muted shrink-0"
+                        data-abierto={expandido ? 'true' : 'false'}
                         aria-hidden
                     />
                 </>
@@ -430,7 +460,11 @@ function SeccionesSidebarPermisos({
                         </span>
                         <span className="usuarios-permiso-cuenta">{activosSeccion}/{total}</span>
                         {colapsarSecciones && (
-                            <ChevronRight className={`w-4 h-4 theme-text-muted shrink-0 ${abierta ? 'rotate-90' : ''}`} aria-hidden />
+                            <ChevronRight
+                                className="usuarios-permiso-chevron w-4 h-4 theme-text-muted shrink-0"
+                                data-abierto={abierta ? 'true' : 'false'}
+                                aria-hidden
+                            />
                         )}
                     </>
                 );
@@ -448,16 +482,15 @@ function SeccionesSidebarPermisos({
                     ) : (
                         <header className="usuarios-permiso-seccion">{encabezado}</header>
                     )}
-                    {abierta && !keyPrefix && seccion.id === 'punto_venta' && (
-                        <ResumenCapacidadesPdv
-                            permisos={activos}
-                            sucursalesCatalogo={sucursalesCatalogo}
-                            sucursalIds={sucursalIds}
-                            sucursalPrincipalId={sucursalPrincipalId}
-                        />
-                    )}
-                    {abierta && (
-                    <div className="space-y-2">
+                    <CuerpoRevelado abierto={abierta} className="space-y-2">
+                        {!keyPrefix && seccion.id === 'punto_venta' && (
+                            <ResumenCapacidadesPdv
+                                permisos={activos}
+                                sucursalesCatalogo={sucursalesCatalogo}
+                                sucursalIds={sucursalIds}
+                                sucursalPrincipalId={sucursalPrincipalId}
+                            />
+                        )}
                         {seccion.modulos.map(({ modulo, permisos }) => {
                             const expandKey = `${keyPrefix}${modulo}`;
                             return (
@@ -491,8 +524,7 @@ function SeccionesSidebarPermisos({
                                 </AcordeonModulo>
                             );
                         })}
-                    </div>
-                    )}
+                    </CuerpoRevelado>
                 </section>
                 );
             })}
@@ -779,7 +811,8 @@ export default function PermisosAtomicos({
                                 </span>
                             </div>
                             <ChevronRight
-                                className={`w-4 h-4 theme-text-muted shrink-0 ${plantillaExpandida ? 'rotate-90' : ''}`}
+                                className="usuarios-permiso-chevron w-4 h-4 theme-text-muted shrink-0"
+                                data-abierto={plantillaExpandida ? 'true' : 'false'}
                                 aria-hidden
                             />
                         </>

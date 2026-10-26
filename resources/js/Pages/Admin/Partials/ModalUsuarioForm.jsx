@@ -1,11 +1,12 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
     ShieldCheck, X, Briefcase, Check, Network, User, Lock, Smartphone,
-    Save, Layers, Mail, AtSign, MapPin,
+    Save, Layers, Mail, AtSign, MapPin, SlidersHorizontal, LoaderCircle,
 } from 'lucide-react';
 import PermisosAtomicos from './PermisosAtomicos';
+import SelectorConBusqueda from './SelectorConBusqueda';
+import { catalogoNombrado } from './filtrosCompanerosDrawer';
 import { areasDelCatalogo, compararFormularioUsuario, principalFueraDeCatalogo, resumenErrores, textoError } from './formularioUsuario';
-import { seccionDeModulo } from '../../../utils/permisos';
 import { THEME_BTN_PRIMARY, THEME_BTN_SECONDARY } from '../../../utils/geliaTheme';
 import ResumenCambiosUsuario from './ResumenCambiosUsuario';
 
@@ -57,15 +58,31 @@ export default function ModalUsuarioForm({
     lineaBase = null,
     companeros = [],
     onCambiarColaborador,
-    modoDrawer = 'lateral',
+    filtroDepartamento = '',
+    filtroSucursal = '',
+    filtroArea = '',
+    onCambiarFiltro,
+    onAplicarFiltros,
+    resultadosBusqueda = [],
+    buscandoBusqueda = false,
+    hayMasResultados = false,
+    avisoBusqueda = '',
+    onBuscarColaboradores,
+    confirmado = false,
 }) {
     const [activeTab, setActiveTab] = useState('datos');
+    const raizRef = useRef(null);
+    const [compacto, setCompacto] = useState(false);
     const [expansionPermisos, setExpansionPermisos] = useState(() => ({
         busqueda: '',
-        modulos: { control_pedidos: true },
-        secciones: { [seccionDeModulo('control_pedidos')]: true },
+        modulos: {},
+        secciones: {},
         submodulos: {},
     }));
+    const opcionesSeccion = useMemo(
+        () => TABS.map((tab) => ({ value: tab.id, label: tab.label, icono: tab.icon })),
+        [],
+    );
     const resumen = resumenErrores(errors);
     const avisoIncidencia = incidencia?.mensaje && !resumen.includes(incidencia.mensaje) ? incidencia.mensaje : '';
     const hayAviso = resumen.length > 0 || Boolean(avisoIncidencia) || Boolean(incidencia?.status);
@@ -103,41 +120,202 @@ export default function ModalUsuarioForm({
         .filter(Boolean)
         .join(' ');
 
+    const [panelFiltros, setPanelFiltros] = useState(false);
+    const [borradorFiltros, setBorradorFiltros] = useState({
+        departamento: filtroDepartamento,
+        sucursal: filtroSucursal,
+        area: filtroArea,
+    });
+    const opcionesDepartamento = useMemo(
+        () => catalogoNombrado(departamentos, (depto) => [depto]),
+        [departamentos],
+    );
+    const opcionesSucursal = useMemo(
+        () => catalogoNombrado(sucursales, (sucursal) => [sucursal]),
+        [sucursales],
+    );
+    const opcionesArea = useMemo(
+        () => catalogoNombrado(departamentos, (depto) => depto.areas || []),
+        [departamentos],
+    );
+    useEffect(() => {
+        const nodo = raizRef.current;
+        if (!nodo || typeof ResizeObserver === 'undefined') return undefined;
+        const medir = () => {
+            const limite = 30 * parseFloat(getComputedStyle(document.documentElement).fontSize || '16');
+            const estrecho = nodo.getBoundingClientRect().width <= limite;
+            setCompacto(estrecho);
+            if (!estrecho) setPanelFiltros(false);
+        };
+        medir();
+        const observer = new ResizeObserver(medir);
+        observer.observe(nodo);
+        return () => observer.disconnect();
+    }, []);
+
+    const filtrosEnPantalla = panelFiltros ? borradorFiltros : {
+        departamento: filtroDepartamento,
+        sucursal: filtroSucursal,
+        area: filtroArea,
+    };
+    const filtrosActivos = [filtroDepartamento, filtroSucursal, filtroArea].filter(Boolean).length;
+    const opcionesUsuario = useMemo(
+        () => (resultadosBusqueda || []).map((persona) => ({
+            value: String(persona.id),
+            label: nombreColaborador(persona) || persona.email || 'Colaborador',
+            detalle: [persona.username ? `@${persona.username}` : '', persona.email || ''].filter(Boolean).join(' · '),
+        })),
+        [resultadosBusqueda],
+    );
+    const cambiarFiltroPantalla = (campo, valor) => {
+        if (panelFiltros) {
+            setBorradorFiltros((previo) => ({ ...previo, [campo]: valor }));
+            return;
+        }
+        onCambiarFiltro?.(campo, valor);
+    };
+    const abrirPanelFiltros = () => {
+        setBorradorFiltros({
+            departamento: filtroDepartamento,
+            sucursal: filtroSucursal,
+            area: filtroArea,
+        });
+        setPanelFiltros(true);
+    };
+
     return (
-        <div className="usuarios-drawer-form">
+        <div className="usuarios-drawer-form" ref={raizRef} data-compacto={compacto ? '1' : '0'}>
             <div className="usuarios-drawer-cabecera">
-                <div className="min-w-0">
-                    <h2 id="drawer-colaborador-titulo" className="theme-text-main">
-                        {usuarioEditando ? nombreColaborador(usuarioEditando) || 'Colaborador' : 'Alta de nuevo colaborador'}
-                    </h2>
-                    <p className="text-sm theme-text-muted m-0 mt-1">
-                        {usuarioEditando ? 'Editar colaborador' : 'Datos, acceso y organización'}
-                    </p>
+                <div className="min-w-0 flex-1">
+                    {usuarioEditando ? (
+                        <SelectorConBusqueda
+                            id="drawer-colaborador-titulo"
+                            className="usuarios-selector--identidad"
+                            etiqueta="Colaborador activo"
+                            ocultarEtiqueta
+                            valor={String(usuarioEditando.id)}
+                            textoSeleccionado={nombreColaborador(usuarioEditando) || usuarioEditando.email || 'Colaborador'}
+                            textoSecundario={usuarioEditando.username ? `@${usuarioEditando.username}` : ''}
+                            opciones={opcionesUsuario}
+                            busquedaRemota
+                            cargando={buscandoBusqueda}
+                            hayMas={hayMasResultados}
+                            aviso={avisoBusqueda}
+                            placeholderBusqueda="Nombre, usuario o correo…"
+                            onBuscar={onBuscarColaboradores}
+                            onChange={(id) => {
+                                const persona = (resultadosBusqueda || []).find((item) => String(item.id) === String(id))
+                                    || (companeros || []).find((item) => String(item.id) === String(id));
+                                if (persona) onCambiarColaborador?.(persona);
+                            }}
+                        />
+                    ) : (
+                        <h2 id="drawer-colaborador-titulo" className="theme-text-main">Alta de nuevo colaborador</h2>
+                    )}
                 </div>
                 <button
                     type="button"
                     onClick={onCerrar}
                     className="usuarios-drawer-cerrar"
                     aria-label="Cerrar"
+                    disabled={processing}
                 >
                     <X className="w-5 h-5" />
                 </button>
             </div>
 
-            {modoDrawer === 'superpuesto' && companeros.length > 1 && (
-                <div className="usuarios-drawer-companeros" role="navigation" aria-label="Cambiar de colaborador">
-                    {companeros.map((persona) => (
+            {usuarioEditando && (
+                <>
+                    <div className="usuarios-drawer-filtros-movil">
                         <button
-                            key={persona.id}
                             type="button"
-                            aria-current={usuarioEditando?.id === persona.id ? 'true' : undefined}
-                            onClick={(event) => onCambiarColaborador?.(persona, event)}
+                            className="usuarios-drawer-filtros-boton"
+                            aria-expanded={panelFiltros}
+                            data-activo={filtrosActivos > 0 ? 'true' : 'false'}
+                            onClick={() => (panelFiltros ? setPanelFiltros(false) : abrirPanelFiltros())}
                         >
-                            {nombreColaborador(persona) || persona.email}
+                            <SlidersHorizontal className="w-4 h-4 shrink-0" aria-hidden="true" />
+                            Filtros{filtrosActivos > 0 ? ` (${filtrosActivos})` : ''}
                         </button>
-                    ))}
-                </div>
+                    </div>
+                    <div
+                        className={`usuarios-drawer-filtros${panelFiltros ? ' usuarios-drawer-filtros--abierto' : ''}`}
+                        role="group"
+                        aria-label="Filtros para encontrar un colaborador"
+                    >
+                        <SelectorConBusqueda
+                            id="usuarios-filtro-departamento"
+                            className="usuarios-drawer-filtro--extra"
+                            etiqueta="Departamento"
+                            valor={filtrosEnPantalla.departamento}
+                            opciones={opcionesDepartamento}
+                            permitirVacio
+                            activo={Boolean(filtrosEnPantalla.departamento)}
+                            placeholderBusqueda="Buscar departamento…"
+                            onChange={(valor) => cambiarFiltroPantalla('departamento', valor)}
+                        />
+                        <SelectorConBusqueda
+                            id="usuarios-filtro-sucursal"
+                            className="usuarios-drawer-filtro--extra"
+                            etiqueta="Sucursal principal"
+                            valor={filtrosEnPantalla.sucursal}
+                            opciones={opcionesSucursal}
+                            permitirVacio
+                            activo={Boolean(filtrosEnPantalla.sucursal)}
+                            placeholderBusqueda="Buscar sucursal…"
+                            onChange={(valor) => cambiarFiltroPantalla('sucursal', valor)}
+                        />
+                        <SelectorConBusqueda
+                            id="usuarios-filtro-area"
+                            className="usuarios-drawer-filtro--extra"
+                            etiqueta="Área principal"
+                            valor={filtrosEnPantalla.area}
+                            opciones={opcionesArea}
+                            permitirVacio
+                            activo={Boolean(filtrosEnPantalla.area)}
+                            placeholderBusqueda="Buscar área…"
+                            onChange={(valor) => cambiarFiltroPantalla('area', valor)}
+                        />
+                        <div className="usuarios-drawer-filtros-acciones">
+                            <button
+                                type="button"
+                                className={THEME_BTN_SECONDARY}
+                                onClick={() => {
+                                    const vacio = { departamento: '', sucursal: '', area: '' };
+                                    setBorradorFiltros(vacio);
+                                    onAplicarFiltros?.(vacio);
+                                    setPanelFiltros(false);
+                                }}
+                            >
+                                Limpiar
+                            </button>
+                            <button
+                                type="button"
+                                className={THEME_BTN_PRIMARY}
+                                onClick={() => {
+                                    onAplicarFiltros?.(borradorFiltros);
+                                    setPanelFiltros(false);
+                                }}
+                            >
+                                Aplicar
+                            </button>
+                        </div>
+                    </div>
+                </>
             )}
+
+            <div className="usuarios-drawer-seccion">
+                <SelectorConBusqueda
+                    id="usuarios-drawer-seccion"
+                    className="usuarios-selector--seccion"
+                    etiqueta="Sección"
+                    valor={activeTab}
+                    opciones={opcionesSeccion}
+                    sinBusqueda
+                    animar
+                    onChange={setActiveTab}
+                />
+            </div>
 
             <div className="usuarios-drawer-nav" role="tablist" aria-label="Secciones del colaborador">
                 {TABS.map((tab) => (
@@ -312,7 +490,6 @@ export default function ModalUsuarioForm({
                             colapsarSecciones
                             expansion={expansionPermisos}
                             onExpansion={setExpansionPermisos}
-                            modulosInicialesExpandidos={['control_pedidos']}
                             data={permisosFormData}
                             setData={(campo, valor) => {
                                 if (campo === 'permisos_individuales') {
@@ -596,17 +773,28 @@ export default function ModalUsuarioForm({
                 )}
             </div>
 
-            <div className="gelia-modal-footer usuarios-drawer-pie">
-                <button type="button" onClick={onCerrar} disabled={processing} className={THEME_BTN_SECONDARY}>
-                    Cancelar
-                </button>
-                <button type="button" onClick={onSubmit} disabled={processing} className={THEME_BTN_PRIMARY}>
-                    <Save className="w-5 h-5 shrink-0" />
+            <div className="gelia-modal-footer usuarios-drawer-pie" aria-live="polite">
+                <button
+                    type="button"
+                    onClick={onSubmit}
+                    disabled={processing}
+                    aria-busy={processing ? 'true' : 'false'}
+                    className={THEME_BTN_PRIMARY}
+                >
+                    {processing ? (
+                        <LoaderCircle className="w-5 h-5 shrink-0 animate-spin" aria-hidden="true" />
+                    ) : confirmado ? (
+                        <Check className="w-5 h-5 shrink-0" aria-hidden="true" />
+                    ) : (
+                        <Save className="w-5 h-5 shrink-0" aria-hidden="true" />
+                    )}
                     {processing
-                        ? 'Guardando...'
-                        : usuarioEditando
-                            ? 'Guardar cambios'
-                            : 'Registrar colaborador'}
+                        ? 'Guardando…'
+                        : confirmado
+                            ? 'Guardado'
+                            : usuarioEditando
+                                ? 'Guardar cambios'
+                                : 'Registrar colaborador'}
                 </button>
             </div>
         </div>

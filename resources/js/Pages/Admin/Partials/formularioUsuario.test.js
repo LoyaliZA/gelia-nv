@@ -7,6 +7,7 @@ import {
     anchoDrawerColaborador,
     compararFormularioUsuario,
     datosFormularioDesdeUsuario,
+    decidirCambioColaborador,
     decidirRespuestaGuardado,
     formularioVacio,
     modoDrawerColaborador,
@@ -148,6 +149,18 @@ describe('estado inicial y errores', () => {
         expect(resultado.data.name).toBe('Ana');
         expect(resultado.errors.email).toBe('El correo ya está en uso.');
         expect(resultado.errors.password).toContain('8');
+    });
+});
+
+describe('cambio de colaborador con el drawer abierto', () => {
+    it('cambia directo si el formulario está limpio y no hay un envío en curso', () => {
+        expect(decidirCambioColaborador({ sucio: false, pendiente: false, mismo: false }).accion).toBe('cambiar');
+    });
+
+    it('pregunta si hay cambios, ignora la misma cuenta y bloquea un envío pendiente', () => {
+        expect(decidirCambioColaborador({ sucio: true }).accion).toBe('preguntar');
+        expect(decidirCambioColaborador({ mismo: true, sucio: true }).accion).toBe('ignorar');
+        expect(decidirCambioColaborador({ pendiente: true, sucio: false }).accion).toBe('bloquear');
     });
 });
 
