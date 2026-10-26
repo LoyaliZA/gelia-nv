@@ -208,4 +208,13 @@ describe('agruparModulosPorSeccionSidebar', () => {
         expect(puntoVenta?.modulos.map((m) => m.modulo)).toEqual(['punto_venta', 'pdv']);
         expect(secciones.some((s) => s.id === 'otros')).toBe(false);
     });
+
+    it('coloca reportes en la sección Reportes y deja lo no mapeado como pendiente', () => {
+        const secciones = agruparModulosPorSeccionSidebar({
+            reportes: [{ name: 'reportes.ventas.ver' }],
+            modulo_sin_menu: [{ name: 'modulo_sin_menu.ver' }],
+        });
+        expect(secciones.map((seccion) => seccion.id)).toEqual(['reportes', 'otros']);
+        expect(secciones[1].descripcion).toContain('Pendiente de clasificación');
+    });
 });

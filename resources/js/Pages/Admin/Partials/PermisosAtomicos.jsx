@@ -15,12 +15,13 @@ import {
     gerentePuedeMostrarPermisoInactivo,
     agruparPermisosPorSubmodulo,
     agruparModulosPorSeccionSidebar,
+    seccionDeModulo,
     etiquetaModuloUi,
     filtrarPermisosPorBusqueda,
     calcularDiffPlantilla,
     permisoCoincideBusqueda,
 } from '../../../utils/permisos';
-import PermisoOrigenIndicador, { LeyendaOrigenPermisos } from './PermisoOrigenIndicador';
+import PermisoOrigenIndicador, { IndicadorPermisoProtegido, LeyendaOrigenPermisos } from './PermisoOrigenIndicador';
 import ResumenCapacidadesPdv from './ResumenCapacidadesPdv';
 
 function MatrizPermisos({
@@ -37,6 +38,9 @@ function MatrizPermisos({
     onAsignarLote,
     soloLectura = false,
     removidosSet = null,
+    busqueda = '',
+    submodsControl = null,
+    onSubmodsControl = null,
 }) {
     const moduloRoot = permisosDeModulo?.[0]?.name?.split('.')[0] || '';
     const submodulos = useMemo(
@@ -44,17 +48,38 @@ function MatrizPermisos({
         [moduloRoot, permisosDeModulo],
     );
     const usarAcordeonSubmodulo = submodulos.length > 4;
-    const [submodsExpandidos, setSubmodsExpandidos] = useState({});
+    const [submodsLocales, setSubmodsLocales] = useState({});
+    const submodsExpandidos = submodsControl ?? submodsLocales;
+    const setSubmodsExpandidos = (updater) => {
+        const aplicar = (prev) => (typeof updater === 'function' ? updater(prev) : updater);
+        if (onSubmodsControl) onSubmodsControl(aplicar);
+        else setSubmodsLocales(aplicar);
+    };
 
     useEffect(() => {
         if (!usarAcordeonSubmodulo || submodulos.length === 0) return;
+        const consulta = busqueda.trim();
+        const prefijo = `${moduloRoot}:`;
         setSubmodsExpandidos((prev) => {
-            if (Object.keys(prev).length > 0) return prev;
-            const inicial = {};
-            submodulos.slice(0, 2).forEach((g) => { inicial[g.id] = true; });
+            if (consulta) {
+                let cambio = false;
+                const next = { ...prev };
+                submodulos.forEach((grupo) => {
+                    const clave = `${prefijo}${grupo.id}`;
+                    const coincide = grupo.permisos.some((permiso) => permisoCoincideBusqueda(permiso.name, consulta));
+                    if (coincide && !next[clave]) {
+                        next[clave] = true;
+                        cambio = true;
+                    }
+                });
+                return cambio ? next : prev;
+            }
+            if (Object.keys(prev).some((clave) => clave.startsWith(prefijo))) return prev;
+            const inicial = { ...prev };
+            submodulos.slice(0, 2).forEach((grupo) => { inicial[`${prefijo}${grupo.id}`] = true; });
             return inicial;
         });
-    }, [usarAcordeonSubmodulo, submodulos]);
+    }, [usarAcordeonSubmodulo, submodulos, busqueda]);
 
     if (!permisosDeModulo?.length) return null;
 
@@ -94,45 +119,54 @@ function MatrizPermisos({
         const etiqueta = etiquetaPermisoEnMatriz(permiso.name);
         const esExcepcion = esPermisoExcepcion(permiso.name);
 
+        const motivoBloqueo = protegido
+            ? 'Protegido contra modificaciones'
+            : noDelegable
+                ? 'No se puede delegar este permiso'
+                : '';
+
         return (
             <label
-                className={`flex items-start gap-2 min-h-8 cursor-pointer ${deshabilitado ? 'opacity-50 cursor-not-allowed' : ''}`}
-                title={ayuda || etiqueta || permiso.name}
+                className={`usuarios-permiso-fila ${deshabilitado ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
             >
-                <span className="inline-flex items-center gap-1.5 shrink-0 pt-0.5">
-                    <input
-                        type="checkbox"
-                        checked={isAsignado}
-                        disabled={deshabilitado}
-                        onChange={() => !deshabilitado && onToggle(permiso.name)}
-                        className="w-4 h-4 rounded accent-[var(--color-primario)] cursor-pointer disabled:cursor-not-allowed"
-                        aria-label={`${etiqueta}${ayuda ? `. ${ayuda}` : ''}${isAsignado ? ' activo' : ' inactivo'}`}
-                    />
-                    {isAsignado && (
-                        <PermisoOrigenIndicador
-                            meta={meta}
-                            isDePlantilla={isDePlantilla}
-                            plantillaNombre={plantillaActiva}
-                            usuarioActualId={usuarioActualId}
-                        />
-                    )}
-                </span>
+                <input
+                    type="checkbox"
+                    checked={isAsignado}
+                    disabled={deshabilitado}
+                    onChange={() => !deshabilitado && onToggle(permiso.name)}
+                    className="rounded accent-[var(--color-primario)] cursor-pointer disabled:cursor-not-allowed"
+                    aria-label={`${etiqueta}${ayuda ? `. ${ayuda}` : ''}. ${permiso.name}${isAsignado ? '. Activo' : '. Inactivo'}`}
+                />
                 {conEtiqueta && (
-                    <span className="flex flex-col min-w-0 gap-0.5">
-                        <span
-                            className={`text-xs font-semibold leading-snug ${
-                                isRemovido
-                                    ? 'line-through opacity-60 theme-text-muted'
-                                    : esExcepcion
-                                        ? 'text-amber-600 dark:text-amber-400'
-                                        : 'theme-text-main'
-                            }`}
-                        >
-                            {etiqueta}
+                    <span className="usuarios-permiso-texto">
+                        <span className="flex flex-wrap items-center gap-2">
+                            <span
+                                className={`usuarios-permiso-nombre ${
+                                    isRemovido
+                                        ? 'line-through theme-text-muted'
+                                        : esExcepcion
+                                            ? 'theme-text-aviso'
+                                            : 'theme-text-main'
+                                }`}
+                                title={permiso.name}
+                            >
+                                {etiqueta}
+                            </span>
+                            {motivoBloqueo && <IndicadorPermisoProtegido motivo={motivoBloqueo} />}
                         </span>
-                        {ayuda && (
-                            <span className="text-[11px] theme-text-muted leading-snug font-normal">
-                                {ayuda}
+                        {ayuda ? (
+                            <span className="usuarios-permiso-desc theme-text-muted" title={ayuda}>{ayuda}</span>
+                        ) : (
+                            <span className="usuarios-permiso-desc theme-text-muted">Descripción pendiente de validación</span>
+                        )}
+                        {isAsignado && (
+                            <span className="usuarios-permiso-meta">
+                                <PermisoOrigenIndicador
+                                    meta={meta}
+                                    isDePlantilla={isDePlantilla}
+                                    plantillaNombre={plantillaActiva}
+                                    usuarioActualId={usuarioActualId}
+                                />
                             </span>
                         )}
                     </span>
@@ -148,7 +182,7 @@ function MatrizPermisos({
         return (
             <div className="space-y-2">
                 {normales.length > 0 && (
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-4 gap-y-2">
+                    <div className="grid grid-cols-1 gap-x-4 gap-y-1">
                         {normales.map((p) => (
                             <div key={p.id ?? p.name}>{renderCheckbox(p, { conEtiqueta: true })}</div>
                         ))}
@@ -159,7 +193,7 @@ function MatrizPermisos({
                         <p className="text-[10px] font-black uppercase tracking-widest text-amber-600/90 dark:text-amber-400/90">
                             Excepción · estados avanzados
                         </p>
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-4 gap-y-2">
+                        <div className="grid grid-cols-1 gap-x-4 gap-y-1">
                             {excepciones.map((p) => (
                                 <div key={p.id ?? p.name}>{renderCheckbox(p, { conEtiqueta: true })}</div>
                             ))}
@@ -198,10 +232,10 @@ function MatrizPermisos({
         return (
             <div className={`flex items-start justify-between gap-2 min-w-0 w-full ${compacto ? '' : ''}`}>
                 <div className="min-w-0">
-                    <h4 className="text-[11px] font-black uppercase tracking-widest theme-text-muted">
+                    <h4 className="usuarios-permiso-nombre text-sm font-semibold theme-text-main m-0">
                         {grupo.label}
-                        <span className="ml-1.5 not-italic font-bold opacity-80">
-                            ({activosEnGrupo}/{grupo.permisos.length})
+                        <span className="usuarios-permiso-cuenta ml-2">
+                            {activosEnGrupo}/{grupo.permisos.length}
                         </span>
                     </h4>
                     {grupo.descripcion && (
@@ -217,19 +251,20 @@ function MatrizPermisos({
 
     const renderBloqueSubmodulo = (grupo) => {
         if (usarAcordeonSubmodulo) {
-            const abierto = submodsExpandidos[grupo.id] ?? false;
+            const clave = `${moduloRoot}:${grupo.id}`;
+            const abierto = submodsExpandidos[clave] ?? false;
             return (
                 <AcordeonAnimado
                     key={grupo.id}
                     abierto={abierto}
-                    onToggle={() => setSubmodsExpandidos((prev) => ({ ...prev, [grupo.id]: !abierto }))}
+                    onToggle={() => setSubmodsExpandidos((prev) => ({ ...prev, [clave]: !abierto }))}
                     className="theme-element"
                     contentClassName="p-3 pt-0 space-y-2"
                     summary={(
                         <>
                             {renderEncabezadoSubmodulo(grupo, { compacto: true, omitirAccionMasiva: true })}
                             <ChevronRight
-                                className={`w-4 h-4 theme-text-muted shrink-0 transition-transform duration-300 ease-out ${abierto ? 'rotate-90' : ''}`}
+                                className={`w-4 h-4 theme-text-muted shrink-0 ${abierto ? 'rotate-90' : ''}`}
                                 aria-hidden
                             />
                         </>
@@ -284,16 +319,11 @@ function AcordeonAnimado({
                 </button>
                 {headerActions}
             </div>
-            <div
-                className={`grid transition-[grid-template-rows] duration-300 ease-out ${abierto ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}
-                aria-hidden={!abierto}
-            >
-                <div className="overflow-hidden min-h-0">
-                    <div className={`border-t theme-border ${contentClassName}`}>
-                        {children}
-                    </div>
+            {abierto && (
+                <div className={`border-t theme-border ${contentClassName}`}>
+                    {children}
                 </div>
-            </div>
+            )}
         </div>
     );
 }
@@ -313,8 +343,8 @@ function AcordeonModulo({
 
     const variantClasses = {
         default: 'theme-element',
-        plantilla: 'theme-element border-blue-500/20',
-        soloLectura: 'theme-element border-amber-500/30',
+        plantilla: 'theme-element',
+        soloLectura: 'theme-element',
     };
 
     return (
@@ -327,15 +357,15 @@ function AcordeonModulo({
                 <>
                     <div className="flex items-center gap-2.5 min-w-0">
                         <ShieldCheck className="w-4 h-4 theme-text-muted shrink-0" />
-                        <span className="text-xs font-black uppercase tracking-widest theme-text-main italic truncate">
-                            {titulo}
-                            <span className="ml-2 not-italic font-bold theme-text-muted">
-                                ({activosEnModulo}/{total} activos)
+                        <span className="usuarios-permiso-modulo-texto text-sm font-semibold theme-text-main">
+                            <span className="usuarios-permiso-nombre">{titulo}</span>
+                            <span className="usuarios-permiso-cuenta">
+                                {activosEnModulo}/{total}
                             </span>
                         </span>
                     </div>
                     <ChevronRight
-                        className={`w-4 h-4 theme-text-muted shrink-0 transition-transform duration-300 ease-out ${expandido ? 'rotate-90' : ''}`}
+                        className={`w-4 h-4 theme-text-muted shrink-0 ${expandido ? 'rotate-90' : ''}`}
                         aria-hidden
                     />
                 </>
@@ -367,6 +397,12 @@ function SeccionesSidebarPermisos({
     sucursalesCatalogo = [],
     sucursalIds = [],
     sucursalPrincipalId = null,
+    busqueda = '',
+    colapsarSecciones = false,
+    seccionesExpandidas = {},
+    onToggleSeccion = null,
+    submodsExpandidos = null,
+    onSubmodsExpandidos = null,
 }) {
     const secciones = useMemo(
         () => agruparModulosPorSeccionSidebar(permisosAgrupados),
@@ -377,19 +413,42 @@ function SeccionesSidebarPermisos({
 
     return (
         <div className="space-y-5">
-            {secciones.map((seccion) => (
-                <section key={`${keyPrefix}${seccion.id}`} className="space-y-2">
-                    <header className="px-0.5 border-b theme-border/60 pb-1.5">
-                        <h4 className="text-[11px] font-black uppercase tracking-widest theme-text-muted">
-                            {seccion.label}
-                        </h4>
-                        {seccion.descripcion && (
-                            <p className="text-[11px] theme-text-muted mt-0.5 leading-snug">
-                                {seccion.descripcion}
-                            </p>
+            {secciones.map((seccion) => {
+                const total = seccion.modulos.reduce((suma, item) => suma + item.permisos.length, 0);
+                const activosSeccion = seccion.modulos.reduce(
+                    (suma, item) => suma + item.permisos.filter((permiso) => activos.includes(permiso.name)).length,
+                    0,
+                );
+                const abierta = !colapsarSecciones || Boolean(seccionesExpandidas[`${keyPrefix}${seccion.id}`]);
+                const encabezado = (
+                    <>
+                        <span className="usuarios-permiso-seccion-texto">
+                            <strong className="usuarios-permiso-nombre">{seccion.label}</strong>
+                            {seccion.descripcion && (
+                                <span className="block text-sm theme-text-muted mt-0.5">{seccion.descripcion}</span>
+                            )}
+                        </span>
+                        <span className="usuarios-permiso-cuenta">{activosSeccion}/{total}</span>
+                        {colapsarSecciones && (
+                            <ChevronRight className={`w-4 h-4 theme-text-muted shrink-0 ${abierta ? 'rotate-90' : ''}`} aria-hidden />
                         )}
-                    </header>
-                    {!keyPrefix && seccion.id === 'punto_venta' && (
+                    </>
+                );
+                return (
+                <section key={`${keyPrefix}${seccion.id}`} className="space-y-2">
+                    {colapsarSecciones ? (
+                        <button
+                            type="button"
+                            className="usuarios-permiso-seccion"
+                            aria-expanded={abierta}
+                            onClick={() => onToggleSeccion?.(`${keyPrefix}${seccion.id}`, !abierta)}
+                        >
+                            {encabezado}
+                        </button>
+                    ) : (
+                        <header className="usuarios-permiso-seccion">{encabezado}</header>
+                    )}
+                    {abierta && !keyPrefix && seccion.id === 'punto_venta' && (
                         <ResumenCapacidadesPdv
                             permisos={activos}
                             sucursalesCatalogo={sucursalesCatalogo}
@@ -397,6 +456,7 @@ function SeccionesSidebarPermisos({
                             sucursalPrincipalId={sucursalPrincipalId}
                         />
                     )}
+                    {abierta && (
                     <div className="space-y-2">
                         {seccion.modulos.map(({ modulo, permisos }) => {
                             const expandKey = `${keyPrefix}${modulo}`;
@@ -424,13 +484,18 @@ function SeccionesSidebarPermisos({
                                         onAsignarLote={onAsignarLote}
                                         soloLectura={soloLectura}
                                         removidosSet={removidosSet}
+                                        busqueda={busqueda}
+                                        submodsControl={submodsExpandidos}
+                                        onSubmodsControl={onSubmodsExpandidos}
                                     />
                                 </AcordeonModulo>
                             );
                         })}
                     </div>
+                    )}
                 </section>
-            ))}
+                );
+            })}
         </div>
     );
 }
@@ -451,13 +516,42 @@ export default function PermisosAtomicos({
     sucursalIds = [],
     sucursalPrincipalId = null,
     modulosInicialesExpandidos = [],
+    colapsarSecciones = false,
+    expansion = null,
+    onExpansion = null,
 }) {
-    const [busquedaPermisos, setBusquedaPermisos] = useState('');
-    const [modulosExpandidos, setModulosExpandidos] = useState(() => {
-        const inicial = {};
-        (modulosInicialesExpandidos || []).forEach((modulo) => { inicial[modulo] = true; });
-        return inicial;
+    const controlado = typeof onExpansion === 'function';
+    const [expansionLocal, setExpansionLocal] = useState(() => {
+        const modulos = {};
+        const secciones = {};
+        (modulosInicialesExpandidos || []).forEach((modulo) => {
+            modulos[modulo] = true;
+            secciones[seccionDeModulo(modulo)] = true;
+        });
+        return { busqueda: '', modulos, secciones, submodulos: {} };
     });
+    const estadoExpansion = controlado ? expansion : expansionLocal;
+    const actualizarExpansion = (parcial) => {
+        const aplicar = (prev) => ({ ...prev, ...(typeof parcial === 'function' ? parcial(prev) : parcial) });
+        if (controlado) onExpansion(aplicar);
+        else setExpansionLocal(aplicar);
+    };
+    const busquedaPermisos = estadoExpansion?.busqueda || '';
+    const setBusquedaPermisos = (valor) => actualizarExpansion((prev) => ({
+        busqueda: typeof valor === 'function' ? valor(prev.busqueda) : valor,
+    }));
+    const modulosExpandidos = estadoExpansion?.modulos || {};
+    const setModulosExpandidos = (updater) => actualizarExpansion((prev) => ({
+        modulos: typeof updater === 'function' ? updater(prev.modulos) : updater,
+    }));
+    const seccionesExpandidas = estadoExpansion?.secciones || {};
+    const setSeccionesExpandidas = (updater) => actualizarExpansion((prev) => ({
+        secciones: typeof updater === 'function' ? updater(prev.secciones) : updater,
+    }));
+    const submodsExpandidos = estadoExpansion?.submodulos || {};
+    const setSubmodsExpandidos = (updater) => actualizarExpansion((prev) => ({
+        submodulos: typeof updater === 'function' ? updater(prev.submodulos) : updater,
+    }));
     const [plantillaExpandida, setPlantillaExpandida] = useState(false);
 
     const permisosGestionables = useMemo(
@@ -613,13 +707,24 @@ export default function PermisosAtomicos({
         if (!busquedaPermisos.trim()) return;
 
         const modulosConCoincidencia = {};
+        const seccionesConCoincidencia = {};
         Object.entries(permisosAgrupados).forEach(([modulo, permisos]) => {
-            if (permisos.some((p) => permisoCoincideBusqueda(p.name, busquedaPermisos))) {
+            if (permisos.some((permiso) => permisoCoincideBusqueda(permiso.name, busquedaPermisos))) {
                 modulosConCoincidencia[modulo] = true;
+                seccionesConCoincidencia[seccionDeModulo(modulo)] = true;
             }
         });
-        setModulosExpandidos((prev) => ({ ...prev, ...modulosConCoincidencia }));
-    }, [busquedaPermisos, permisosAgrupados]);
+        setModulosExpandidos((prev) => {
+            const faltan = Object.keys(modulosConCoincidencia).some((clave) => !prev[clave]);
+            return faltan ? { ...prev, ...modulosConCoincidencia } : prev;
+        });
+        if (colapsarSecciones) {
+            setSeccionesExpandidas((prev) => {
+                const faltan = Object.keys(seccionesConCoincidencia).some((clave) => !prev[clave]);
+                return faltan ? { ...prev, ...seccionesConCoincidencia } : prev;
+            });
+        }
+    }, [busquedaPermisos, permisosAgrupados, colapsarSecciones]);
 
     const hayRejilla = Object.keys(permisosAgrupados).length > 0;
     const haySoloLectura = permisosSoloLecturaActivos.length > 0;
@@ -634,15 +739,15 @@ export default function PermisosAtomicos({
     return (
         <div className="space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b theme-border pb-3">
-                <h3 className="text-sm font-black uppercase tracking-widest theme-text-main flex items-center gap-2">
-                    <Key className="w-4 h-4 text-red-500 shrink-0" />
-                    Permisos Atómicos
+                <h3 className="text-sm font-semibold theme-text-main flex items-center gap-2 m-0">
+                    <Key className="w-4 h-4 theme-text-muted shrink-0" />
+                    Permisos
                 </h3>
                 <LeyendaOrigenPermisos />
             </div>
 
             {!esSuperAdmin && (
-                <p className="text-[11px] font-bold theme-text-muted uppercase tracking-widest leading-relaxed">
+                <p className="text-sm theme-text-muted leading-relaxed">
                     Solo puedes modificar permisos que tú asignaste. Los de administración aparecen bloqueados abajo.
                 </p>
             )}
@@ -654,7 +759,7 @@ export default function PermisosAtomicos({
                     value={busquedaPermisos}
                     onChange={(e) => setBusquedaPermisos(e.target.value)}
                     placeholder="Buscar permiso por nombre o descripción..."
-                    className="theme-input w-full pr-4 py-3 text-xs font-bold normal-case tracking-normal placeholder:uppercase placeholder:tracking-wider placeholder:text-[10px]"
+                    className="theme-input w-full pr-4 py-3"
                 />
             </div>
 
@@ -662,19 +767,19 @@ export default function PermisosAtomicos({
                 <AcordeonAnimado
                     abierto={plantillaExpandida}
                     onToggle={() => setPlantillaExpandida((prev) => !prev)}
-                    className="theme-element border-blue-500/30"
-                    summaryClassName="bg-blue-500/5"
-                    contentClassName="p-4 border-blue-500/20 space-y-2"
+                    className="theme-element"
+                    contentClassName="p-4 space-y-2"
                     summary={(
                         <>
                             <div className="flex items-center gap-2.5 min-w-0">
-                                <Layers className="w-4 h-4 text-blue-500 shrink-0" />
-                                <span className="text-xs font-black uppercase tracking-widest text-blue-600 dark:text-blue-400 italic truncate">
-                                    Permisos de la plantilla {plantillaActiva} ({diffPlantilla.heredados.length})
+                                <Layers className="w-4 h-4 theme-text-primario shrink-0" />
+                                <span className="usuarios-permiso-nombre text-sm font-semibold theme-text-main">
+                                    Permisos de la plantilla {plantillaActiva}
+                                    <span className="usuarios-permiso-cuenta ml-2">{diffPlantilla.heredados.length}</span>
                                 </span>
                             </div>
                             <ChevronRight
-                                className={`w-4 h-4 text-blue-500 shrink-0 transition-transform duration-300 ease-out ${plantillaExpandida ? 'rotate-90' : ''}`}
+                                className={`w-4 h-4 theme-text-muted shrink-0 ${plantillaExpandida ? 'rotate-90' : ''}`}
                                 aria-hidden
                             />
                         </>
@@ -695,14 +800,20 @@ export default function PermisosAtomicos({
                             soloLectura
                             modulosExpandidos={modulosExpandidos}
                             onToggleModulo={toggleModulo}
+                            busqueda={busquedaPermisos}
+                            colapsarSecciones={colapsarSecciones}
+                            seccionesExpandidas={seccionesExpandidas}
+                            onToggleSeccion={(id, abierto) => setSeccionesExpandidas((prev) => ({ ...prev, [id]: abierto }))}
+                            submodsExpandidos={submodsExpandidos}
+                            onSubmodsExpandidos={setSubmodsExpandidos}
                             variant="plantilla"
                         />
                 </AcordeonAnimado>
             )}
 
             {diffPlantilla.tienePlantilla && (
-                <div className="flex items-center gap-2 text-xs font-black uppercase tracking-widest theme-text-muted">
-                    <UserPen className="w-4 h-4 text-orange-500 shrink-0" />
+                <div className="flex items-center gap-2 text-sm theme-text-muted">
+                    <UserPen className="w-4 h-4 shrink-0" />
                     Permisos personalizados ({diffPlantilla.personalizados.length})
                 </div>
             )}
@@ -723,6 +834,12 @@ export default function PermisosAtomicos({
                     removidosSet={removidosSet}
                     modulosExpandidos={modulosExpandidos}
                     onToggleModulo={toggleModulo}
+                    busqueda={busquedaPermisos}
+                    colapsarSecciones={colapsarSecciones}
+                    seccionesExpandidas={seccionesExpandidas}
+                    onToggleSeccion={(id, abierto) => setSeccionesExpandidas((prev) => ({ ...prev, [id]: abierto }))}
+                    submodsExpandidos={submodsExpandidos}
+                    onSubmodsExpandidos={setSubmodsExpandidos}
                     sucursalesCatalogo={sucursalesCatalogo}
                     sucursalIds={sucursalIds}
                     sucursalPrincipalId={sucursalPrincipalId}
@@ -743,9 +860,9 @@ export default function PermisosAtomicos({
 
             {haySoloLectura && (
                 <div className={`space-y-2 ${hayRejilla || hayPlantilla ? 'mt-4 pt-4 border-t theme-border' : ''}`}>
-                    <h4 className="text-xs font-black uppercase tracking-widest theme-text-muted flex items-center gap-2">
-                        <ShieldAlert className="w-4 h-4 text-amber-500 shrink-0" />
-                        Permisos asignados por administración (solo lectura)
+                    <h4 className="text-sm font-semibold theme-text-main flex items-center gap-2">
+                        <ShieldAlert className="w-4 h-4 theme-text-aviso shrink-0" />
+                        Permisos asignados por administración
                     </h4>
                     <SeccionesSidebarPermisos
                         permisosAgrupados={soloLecturaAgrupados}
@@ -762,6 +879,12 @@ export default function PermisosAtomicos({
                         soloLectura
                         modulosExpandidos={modulosExpandidos}
                         onToggleModulo={toggleModulo}
+                        busqueda={busquedaPermisos}
+                        colapsarSecciones={colapsarSecciones}
+                        seccionesExpandidas={seccionesExpandidas}
+                        onToggleSeccion={(id, abierto) => setSeccionesExpandidas((prev) => ({ ...prev, [id]: abierto }))}
+                        submodsExpandidos={submodsExpandidos}
+                        onSubmodsExpandidos={setSubmodsExpandidos}
                         variant="soloLectura"
                     />
                 </div>

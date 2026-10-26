@@ -1,19 +1,19 @@
 import React from 'react';
-import { Building2, UserPen, Lock, UserCheck } from 'lucide-react';
+import { Lock } from 'lucide-react';
 import { resolverOrigenPermiso } from '../../../utils/permisos';
 
-const ICONOS = {
-    plantilla: Building2,
-    custom: UserPen,
-    sistema: Lock,
-    otro: UserCheck,
+const ETIQUETAS = {
+    plantilla: 'Plantilla',
+    custom: 'Directo',
+    sistema: 'Sistema',
+    otro: 'Otra persona',
 };
 
 const CLASES = {
-    plantilla: 'text-blue-500',
-    custom: 'text-orange-500',
-    sistema: 'text-teal-500',
-    otro: 'text-violet-500',
+    plantilla: 'theme-text-primario',
+    custom: 'theme-text-main',
+    sistema: 'theme-text-muted',
+    otro: 'theme-text-aviso',
 };
 
 export default function PermisoOrigenIndicador({
@@ -29,35 +29,45 @@ export default function PermisoOrigenIndicador({
         plantillaNombre,
         usuarioActualId,
     );
-    const Icon = ICONOS[tipo] || UserPen;
+    const etiqueta = ETIQUETAS[tipo] || ETIQUETAS.custom;
 
     return (
         <span
-            className={`inline-flex shrink-0 ${className}`}
+            className={`usuarios-permiso-badge ${CLASES[tipo] || CLASES.custom} ${className}`}
             title={tooltip}
             aria-label={tooltip}
         >
-            <Icon className={`w-3.5 h-3.5 ${CLASES[tipo] || CLASES.custom}`} aria-hidden />
+            {etiqueta}
+        </span>
+    );
+}
+
+export function IndicadorPermisoProtegido({ motivo = 'Protegido contra modificaciones' }) {
+    return (
+        <span className="usuarios-permiso-bloqueo" title={motivo}>
+            <Lock className="w-3.5 h-3.5" aria-hidden />
+            <span className="sr-only">{motivo}</span>
         </span>
     );
 }
 
 export function LeyendaOrigenPermisos() {
     const items = [
-        { Icon: Building2, label: 'Plantilla', clase: CLASES.plantilla },
-        { Icon: UserPen, label: 'Manual', clase: CLASES.custom },
-        { Icon: UserCheck, label: 'Otro asignador', clase: CLASES.otro },
-        { Icon: Lock, label: 'Sistema', clase: CLASES.sistema },
+        { tipo: 'plantilla', label: 'Plantilla' },
+        { tipo: 'custom', label: 'Directo' },
+        { tipo: 'otro', label: 'Otra persona' },
+        { tipo: 'sistema', label: 'Sistema' },
     ];
 
     return (
-        <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-[10px] font-bold uppercase tracking-widest theme-text-muted">
-            {items.map(({ Icon, label, clase }) => (
-                <span key={label} className="inline-flex items-center gap-1.5" title={label}>
-                    <Icon className={`w-3.5 h-3.5 ${clase}`} aria-hidden />
-                    {label}
-                </span>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm theme-text-muted">
+            {items.map(({ tipo, label }) => (
+                <span key={tipo} className={`usuarios-permiso-badge ${CLASES[tipo]}`}>{label}</span>
             ))}
+            <span className="inline-flex items-center gap-1">
+                <Lock className="w-3.5 h-3.5 theme-text-aviso" aria-hidden />
+                Protegido
+            </span>
         </div>
     );
 }
