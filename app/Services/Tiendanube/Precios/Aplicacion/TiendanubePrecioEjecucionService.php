@@ -134,6 +134,15 @@ class TiendanubePrecioEjecucionService
                 'error_mensaje' => 'Pendiente detenido. Las confirmadas permanecen aplicadas.',
             ]);
 
+        if (config('tiendanube.gobernador_activo', false)) {
+            $gobernador = app(\App\Services\Tiendanube\Gobernador\TiendanubeGobernador::class);
+            foreach ($ejecucion->items()->pluck('id') as $itemId) {
+                $gobernador->retirarDemanda($storeId, 'publicacion', 'precio:'.$itemId);
+                $gobernador->retirarDemanda($storeId, 'recuperacion', 'precio:'.$itemId.':verificar');
+                $gobernador->retirarDemanda($storeId, 'recuperacion', 'precio:'.$itemId.':reconciliar');
+            }
+        }
+
         $ejecucion->eventos()->create([
             'tipo' => TiendanubePrecioEjecucionEvento::TIPO_CANCELADA,
             'actor_id' => $userId,
@@ -177,7 +186,8 @@ class TiendanubePrecioEjecucionService
             $item->refresh();
             $this->refrescarContadores($ejecucion->fresh());
             if ($item->estado === TiendanubePrecioEjecucionItem::ESTADO_REINTENTO_PENDIENTE && $item->siguiente_intento_at) {
-                ProcesarPrecioEjecucionJob::dispatch($ejecucion->id)->delay($item->siguiente_intento_at);
+                app(\App\Services\Tiendanube\Gobernador\TiendanubeEnrutadorColas::class)
+                    ->despacharPrecio($ejecucion->id, $item->siguiente_intento_at);
             }
 
             return $this->payload($ejecucion->fresh());
@@ -202,7 +212,7 @@ class TiendanubePrecioEjecucionService
         }
 
         $this->refrescarContadores($ejecucion);
-        ProcesarPrecioEjecucionJob::dispatch($ejecucion->id);
+        app(\App\Services\Tiendanube\Gobernador\TiendanubeEnrutadorColas::class)->despacharPrecio($ejecucion->id);
 
         return $this->payload($ejecucion);
     }
@@ -272,7 +282,7 @@ class TiendanubePrecioEjecucionService
             ->exists();
 
         if ($quedan && $ejecucion->estado === TiendanubePrecioEjecucion::ESTADO_PROCESANDO) {
-            ProcesarPrecioEjecucionJob::dispatch($ejecucion->id);
+            app(\App\Services\Tiendanube\Gobernador\TiendanubeEnrutadorColas::class)->despacharPrecio($ejecucion->id);
         }
     }
 
@@ -305,7 +315,7 @@ class TiendanubePrecioEjecucionService
                 ])
                 ->exists();
             if ($pendientes) {
-                ProcesarPrecioEjecucionJob::dispatch($ejecucion->id);
+                app(\App\Services\Tiendanube\Gobernador\TiendanubeEnrutadorColas::class)->despacharPrecio($ejecucion->id);
                 $recuperadas++;
             } else {
                 $this->refrescarContadores($ejecucion);

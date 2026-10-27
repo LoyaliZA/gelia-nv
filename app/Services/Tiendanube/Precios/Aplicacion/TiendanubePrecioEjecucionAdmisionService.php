@@ -149,7 +149,7 @@ class TiendanubePrecioEjecucionAdmisionService
             );
         }
 
-        ProcesarPrecioEjecucionJob::dispatch($ejecucion->id);
+        app(\App\Services\Tiendanube\Gobernador\TiendanubeEnrutadorColas::class)->despacharPrecio($ejecucion->id);
 
         return app(TiendanubePrecioEjecucionService::class)->payload($ejecucion->fresh());
     }

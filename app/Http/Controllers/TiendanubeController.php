@@ -344,7 +344,12 @@ class TiendanubeController extends Controller
         Gate::authorize('tiendanube.configurar');
 
         try {
-            $probe = $api->probeReadOnly();
+            $probe = app(\App\Services\Tiendanube\Gobernador\TiendanubeEmisorHttp::class)->bajo(
+                \App\Support\Tiendanube\TiendanubeClaseTurno::Interactivo,
+                'conexion:'.(int) (TiendanubeConfiguracion::obtener()->store_id ?? 0),
+                'sin_escritura',
+                fn () => $api->probeReadOnly(),
+            );
             $store = $probe['store'];
             $config = TiendanubeConfiguracion::obtener();
             $config->fill([

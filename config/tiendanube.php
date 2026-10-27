@@ -46,6 +46,13 @@ return [
      * ya resuelto: cambiar este default no apaga un entorno cacheado en verdadero.
      */
     'precios_aplicacion_habilitada' => filter_var(env('TIENDANUBE_PRECIOS_APLICACION_HABILITADA', false), FILTER_VALIDATE_BOOLEAN),
+    /*
+     * Ambos falsos hasta integrar el reprogramador de E2b y comprobar consumidores.
+     * Un config:cache previo no incluye estas claves: la ausencia se lee como falso.
+     */
+    'gobernador_activo' => filter_var(env('TIENDANUBE_GOBERNADOR_ACTIVO', false), FILTER_VALIDATE_BOOLEAN),
+    'colas_dedicadas' => filter_var(env('TIENDANUBE_COLAS_DEDICADAS', false), FILTER_VALIDATE_BOOLEAN),
+    'gobernador_intervalo_ms' => (int) env('TIENDANUBE_GOBERNADOR_INTERVALO_MS', 1000),
     'precios_restauracion_habilitada' => filter_var(env('TIENDANUBE_PRECIOS_RESTAURACION_HABILITADA', true), FILTER_VALIDATE_BOOLEAN),
     'precio_ejecucion_lease_seconds' => (int) env('TIENDANUBE_PRECIO_EJECUCION_LEASE_SECONDS', 90),
     'precio_ejecucion_item_max_intentos' => (int) env('TIENDANUBE_PRECIO_EJECUCION_ITEM_MAX_INTENTOS', 5),

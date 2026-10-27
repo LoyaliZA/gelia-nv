@@ -7,6 +7,8 @@ use App\Exceptions\Tiendanube\TiendanubeApiException;
 use App\Exceptions\Tiendanube\TiendanubeApiNotFoundException;
 use App\Exceptions\Tiendanube\TiendanubeStockEscrituraBloqueadaException;
 use App\Models\Tiendanube\TiendanubeConfiguracion;
+use App\Services\Tiendanube\Gobernador\TiendanubeEmisorHttp;
+use App\Support\Tiendanube\TiendanubeClaseTurno;
 use App\Models\Tiendanube\TiendanubeProducto;
 use App\Models\Tiendanube\TiendanubeProductoImagen;
 use App\Models\Tiendanube\TiendanubeProductoVariante;
@@ -21,7 +23,8 @@ class TiendanubeProductoWriteService
         private TiendanubeApiClient $api,
         private TiendanubeCatalogoSyncService $sync,
         private TiendanubeProductoImagenOperacionService $imagenOperaciones,
-        private TiendanubeOperacionTiendaService $operaciones
+        private TiendanubeOperacionTiendaService $operaciones,
+        private TiendanubeEmisorHttp $emisor,
     ) {}
 
     /**
@@ -29,6 +32,10 @@ class TiendanubeProductoWriteService
      */
     public function crear(array $datos): TiendanubeProducto
     {
+        if ($this->emisor->pendiente(TiendanubeClaseTurno::Interactivo)) {
+            return $this->emisor->bajo(TiendanubeClaseTurno::Interactivo, 'producto:crear', 'sin_escritura', fn () => $this->crear($datos));
+        }
+
         $this->assertEscrituraAdmisible();
         $this->rechazarStockPlanoSiBloqueado($datos);
         $payload = $this->buildProductPayload($datos, forCreate: true);
@@ -98,6 +105,10 @@ class TiendanubeProductoWriteService
      */
     public function actualizar(int $tnProductId, array $datos): TiendanubeProducto
     {
+        if ($this->emisor->pendiente(TiendanubeClaseTurno::Interactivo)) {
+            return $this->emisor->bajo(TiendanubeClaseTurno::Interactivo, 'producto:'.$tnProductId, 'sin_escritura', fn () => $this->actualizar($tnProductId, $datos));
+        }
+
         $this->assertEscrituraAdmisible();
         $this->rechazarStockPlanoSiBloqueado($datos);
         $productoPayload = $this->buildProductPayload($datos, forCreate: false);
@@ -157,6 +168,15 @@ class TiendanubeProductoWriteService
         ?string $solicitudClave = null,
         ?int $userId = null,
     ): TiendanubeProductoImagenCarga {
+        if ($this->emisor->pendiente(TiendanubeClaseTurno::Interactivo)) {
+            return $this->emisor->bajo(
+                TiendanubeClaseTurno::Interactivo,
+                'producto:'.$tnProductId.':imagen',
+                'sin_escritura',
+                fn () => $this->agregarImagen($tnProductId, $srcUrl, $file, $position, $reemplazar, $optImagen, $solicitudClave, $userId),
+            );
+        }
+
         $this->assertEscrituraAdmisible();
 
         return $this->imagenOperaciones->ejecutar(
@@ -228,6 +248,10 @@ class TiendanubeProductoWriteService
      */
     public function refrescarSrcsTemporalesDeProductos(array $productoIds): int
     {
+        if ($this->emisor->pendiente(TiendanubeClaseTurno::Interactivo)) {
+            return $this->emisor->bajo(TiendanubeClaseTurno::Interactivo, 'producto:srcs', 'sin_escritura', fn () => $this->refrescarSrcsTemporalesDeProductos($productoIds));
+        }
+
         $ids = array_values(array_unique(array_filter(array_map('intval', $productoIds))));
         $updated = 0;
 
@@ -541,6 +565,12 @@ class TiendanubeProductoWriteService
 
     public function aplicarStock(TiendanubeStockPayload $payload): void
     {
+        if ($this->emisor->pendiente(TiendanubeClaseTurno::Interactivo)) {
+            $this->emisor->bajo(TiendanubeClaseTurno::Interactivo, 'producto:'.$payload->productId.':stock', 'sin_escritura', fn () => $this->aplicarStock($payload));
+
+            return;
+        }
+
         $payload->validate();
         $this->api->updateVariant($payload->productId, $payload->variantId, $payload->toVariantApiPayload());
     }

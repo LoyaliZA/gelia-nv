@@ -3,6 +3,12 @@
 namespace App\Providers;
 
 use App\Contracts\Medios\AlmacenObjetosMedio;
+use App\Services\Tiendanube\Gobernador\TiendanubeContextoHttpActual;
+use App\Services\Tiendanube\Gobernador\TiendanubeEmisorHttp;
+use App\Services\Tiendanube\Gobernador\TiendanubeEnrutadorColas;
+use App\Services\Tiendanube\Gobernador\TiendanubeGobernador;
+use App\Services\Tiendanube\Gobernador\TiendanubeReprogramador;
+use App\Services\Tiendanube\Gobernador\TiendanubeReprogramadorInactivo;
 use App\Contracts\PuntoVenta\ConsultaPersonaDisponiblePdv;
 use App\Contracts\PuntoVenta\ResuelveAlcancePdv;
 use App\Contracts\PuntoVenta\ResuelvePlazosCustodiaResguardoPdv;
@@ -87,6 +93,11 @@ class AppServiceProvider extends ServiceProvider
         }
 
         $this->app->singleton(AlcanceDemo::class);
+        $this->app->singleton(TiendanubeGobernador::class);
+        $this->app->singleton(TiendanubeContextoHttpActual::class);
+        $this->app->singleton(TiendanubeEmisorHttp::class);
+        $this->app->singleton(TiendanubeEnrutadorColas::class);
+        $this->app->singleton(TiendanubeReprogramador::class, TiendanubeReprogramadorInactivo::class);
 
         $this->app->singleton(
             ResuelveAlcancePdv::class,
