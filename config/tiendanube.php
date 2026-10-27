@@ -53,6 +53,14 @@ return [
     'gobernador_activo' => filter_var(env('TIENDANUBE_GOBERNADOR_ACTIVO', false), FILTER_VALIDATE_BOOLEAN),
     'colas_dedicadas' => filter_var(env('TIENDANUBE_COLAS_DEDICADAS', false), FILTER_VALIDATE_BOOLEAN),
     'gobernador_intervalo_ms' => (int) env('TIENDANUBE_GOBERNADOR_INTERVALO_MS', 1000),
+    /*
+     * Ausentes en un config:cache anterior. El código usa estos mismos respaldos
+     * si la clave no está cargada. No regenerar el cache para incorporarlas.
+     */
+    'gobernador_lectura_max_ms' => (int) env('TIENDANUBE_GOBERNADOR_LECTURA_MAX_MS', 30_000),
+    'gobernador_reset_respaldo_ms' => (int) env('TIENDANUBE_GOBERNADOR_RESET_RESPALDO_MS', 2_000),
+    'gobernador_demanda_margen_ms' => (int) env('TIENDANUBE_GOBERNADOR_DEMANDA_MARGEN_MS', 30_000),
+    'gobernador_demanda_ttl_ms' => (int) env('TIENDANUBE_GOBERNADOR_DEMANDA_TTL_MS', 120_000),
     'precios_restauracion_habilitada' => filter_var(env('TIENDANUBE_PRECIOS_RESTAURACION_HABILITADA', true), FILTER_VALIDATE_BOOLEAN),
     'precio_ejecucion_lease_seconds' => (int) env('TIENDANUBE_PRECIO_EJECUCION_LEASE_SECONDS', 90),
     'precio_ejecucion_item_max_intentos' => (int) env('TIENDANUBE_PRECIO_EJECUCION_ITEM_MAX_INTENTOS', 5),

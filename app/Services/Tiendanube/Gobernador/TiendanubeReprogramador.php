@@ -11,4 +11,6 @@ namespace App\Services\Tiendanube\Gobernador;
 interface TiendanubeReprogramador
 {
     public function reprogramar(TiendanubeTurnoResultado $turno): void;
+
+    public function programarEjecucion(string $ejecucionId, \DateTimeInterface $cuando): void;
 }

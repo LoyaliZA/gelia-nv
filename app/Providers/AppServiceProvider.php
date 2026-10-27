@@ -8,7 +8,7 @@ use App\Services\Tiendanube\Gobernador\TiendanubeEmisorHttp;
 use App\Services\Tiendanube\Gobernador\TiendanubeEnrutadorColas;
 use App\Services\Tiendanube\Gobernador\TiendanubeGobernador;
 use App\Services\Tiendanube\Gobernador\TiendanubeReprogramador;
-use App\Services\Tiendanube\Gobernador\TiendanubeReprogramadorInactivo;
+use App\Services\Tiendanube\Gobernador\TiendanubeReprogramadorDurable;
 use App\Contracts\PuntoVenta\ConsultaPersonaDisponiblePdv;
 use App\Contracts\PuntoVenta\ResuelveAlcancePdv;
 use App\Contracts\PuntoVenta\ResuelvePlazosCustodiaResguardoPdv;
@@ -97,7 +97,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(TiendanubeContextoHttpActual::class);
         $this->app->singleton(TiendanubeEmisorHttp::class);
         $this->app->singleton(TiendanubeEnrutadorColas::class);
-        $this->app->singleton(TiendanubeReprogramador::class, TiendanubeReprogramadorInactivo::class);
+        $this->app->singleton(TiendanubeReprogramador::class, TiendanubeReprogramadorDurable::class);
 
         $this->app->singleton(
             ResuelveAlcancePdv::class,

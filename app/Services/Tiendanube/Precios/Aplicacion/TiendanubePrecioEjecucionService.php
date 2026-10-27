@@ -274,15 +274,37 @@ class TiendanubePrecioEjecucionService
         $this->refrescarContadores($ejecucion);
         $ejecucion->refresh();
 
-        $quedan = $ejecucion->items()
+        if ($ejecucion->estado !== TiendanubePrecioEjecucion::ESTADO_PROCESANDO) {
+            return;
+        }
+
+        $hayDebido = $ejecucion->items()
             ->whereIn('estado', [
                 TiendanubePrecioEjecucionItem::ESTADO_PENDIENTE,
                 TiendanubePrecioEjecucionItem::ESTADO_REINTENTO_PENDIENTE,
             ])
+            ->where(function ($q) {
+                $q->whereNull('siguiente_intento_at')->orWhere('siguiente_intento_at', '<=', now());
+            })
             ->exists();
-
-        if ($quedan && $ejecucion->estado === TiendanubePrecioEjecucion::ESTADO_PROCESANDO) {
+        if ($hayDebido) {
             app(\App\Services\Tiendanube\Gobernador\TiendanubeEnrutadorColas::class)->despacharPrecio($ejecucion->id);
+
+            return;
+        }
+
+        $proxima = $ejecucion->items()
+            ->whereIn('estado', [
+                TiendanubePrecioEjecucionItem::ESTADO_PENDIENTE,
+                TiendanubePrecioEjecucionItem::ESTADO_REINTENTO_PENDIENTE,
+            ])
+            ->where('siguiente_intento_at', '>', now())
+            ->orderBy('siguiente_intento_at')
+            ->value('siguiente_intento_at');
+        if ($proxima) {
+            $cuando = $proxima instanceof \DateTimeInterface ? $proxima : \Illuminate\Support\Carbon::parse($proxima);
+            app(\App\Services\Tiendanube\Gobernador\TiendanubeReprogramador::class)
+                ->programarEjecucion($ejecucion->id, $cuando);
         }
     }
 

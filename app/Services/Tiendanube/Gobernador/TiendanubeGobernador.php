@@ -166,6 +166,76 @@ class TiendanubeGobernador
         );
     }
 
+    public function renovarVigencia(int $storeId, string $operacionId, string $fase, ?int $ahoraMs = null): TiendanubeTurnoResultado
+    {
+        $fila = $this->almacen()->evaluar(
+            $this->clave($storeId),
+            'renovar',
+            $this->ahora($ahoraMs),
+            $this->intervalo(null),
+            '',
+            'comprobacion_vigencia',
+            $operacionId,
+            $fase,
+        );
+
+        return $this->interpretar($fila, $operacionId, '');
+    }
+
+    public function guardarContinuacion(int $storeId, string $operacionId, string $marca): bool
+    {
+        $fila = $this->almacen()->evaluar(
+            $this->clave($storeId),
+            'continuar',
+            $this->ahora(null),
+            0,
+            '',
+            '',
+            $operacionId,
+            '',
+            $marca,
+        );
+
+        return (int) ($fila[0] ?? 0) === 1;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function continuacion(int $storeId, string $operacionId): array
+    {
+        $fila = $this->almacen()->evaluar(
+            $this->clave($storeId),
+            'leer',
+            $this->ahora(null),
+            0,
+            '',
+            '',
+            $operacionId,
+            '',
+        );
+        $decodificada = json_decode((string) ($fila[0] ?? ''), true);
+
+        return is_array($decodificada) ? $decodificada : [];
+    }
+
+    public function reservarPrograma(int $storeId, string $ejecucionId, string $marca): bool
+    {
+        $fila = $this->almacen()->evaluar(
+            $this->clave($storeId),
+            'programar',
+            $this->ahora(null),
+            0,
+            '',
+            '',
+            $ejecucionId,
+            '',
+            $marca,
+        );
+
+        return (int) ($fila[0] ?? 0) === 1;
+    }
+
     public function liberarReserva(int $storeId, string $operacionId): void
     {
         $this->almacen()->evaluar($this->clave($storeId), 'liberar', $this->ahora(null), 0, '', '', $operacionId, '');

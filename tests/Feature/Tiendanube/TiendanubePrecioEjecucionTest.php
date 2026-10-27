@@ -9,6 +9,8 @@ use App\Services\Tiendanube\Gobernador\TiendanubeContextoHttpActual;
 use App\Services\Tiendanube\Gobernador\TiendanubeEmisorHttp;
 use App\Services\Tiendanube\Gobernador\TiendanubeEnrutadorColas;
 use App\Services\Tiendanube\Gobernador\TiendanubeGobernador;
+use App\Services\Tiendanube\Gobernador\TiendanubeReprogramadorDurable;
+use App\Services\Tiendanube\Gobernador\TiendanubeTurnoResultado;
 use App\Services\Tiendanube\Precios\Aplicacion\TiendanubePrecioEjecucionItemProcessor;
 use App\Services\Tiendanube\TiendanubeApiClient;
 use App\Services\Tiendanube\TiendanubeProductoWriteService;
@@ -767,6 +769,412 @@ class TiendanubePrecioEjecucionTest extends TestCase
         $this->assertSame(TiendanubePrecioEjecucionItem::ESTADO_REINTENTO_PENDIENTE, $item->estado);
         $this->assertFalse((bool) ($item->evidencia['escritura'] ?? true));
         $this->assertSame('sin_escritura', $item->evidencia['fase'] ?? null);
+    }
+
+    public function test_espera_prolongada_persiste_la_continuacion_sin_trabajo_inmediato(): void
+    {
+        Queue::fake();
+        config([
+            'tiendanube.gobernador_activo' => true,
+            'tiendanube.colas_dedicadas' => false,
+            'tiendanube.gobernador_intervalo_ms' => 60_000,
+            'tiendanube.gobernador_demanda_margen_ms' => 30_000,
+        ]);
+        $prefijo = 'tn-gov-test-'.bin2hex(random_bytes(4));
+        $gobernador = TiendanubeGobernador::conectarPrueba($prefijo);
+        $inicio = 1_700_000_000_000;
+        $gobernador->fijarAhora($inicio);
+        $this->app->instance(TiendanubeGobernador::class, $gobernador);
+
+        try {
+            $this->crearVariante(1000, 100, '100.00');
+            $lote = $this->aprobarLote([1000]);
+            $puts = 0;
+            Http::fake(function (Request $request) use (&$puts) {
+                if ($request->method() === 'PUT') {
+                    $puts++;
+                }
+
+                return Http::response($this->productoRemoto(100, 1000, '100.00'), 200);
+            });
+            $ejecucionId = $this->actingAs($this->user)
+                ->postJson(route('tiendanube.precios.lotes.aplicar', $lote['lote_id']), [
+                    'checksum' => $lote['revision']['checksum'],
+                ])
+                ->assertCreated()
+                ->json('id');
+            $inmediatosAlAplicar = $this->contarTrabajosPrecio(false);
+
+            app(TiendanubePrecioEjecucionService::class)->procesarLote($ejecucionId);
+
+            $this->assertSame(0, $puts);
+            $item = TiendanubePrecioEjecucionItem::query()->where('ejecucion_id', $ejecucionId)->firstOrFail();
+            $this->assertSame(TiendanubePrecioEjecucionItem::ESTADO_REINTENTO_PENDIENTE, $item->estado);
+            $this->assertSame(0, (int) $item->intentos);
+            $this->assertSame('sin_presupuesto_local', $item->evidencia['categoria'] ?? null);
+            $this->assertGreaterThan($inicio + 30_000, (int) ($item->evidencia['continuacion']['reanudar_despues_at'] ?? 0));
+            $this->assertSame($inmediatosAlAplicar, $this->contarTrabajosPrecio(false));
+            $this->assertSame(1, $this->contarTrabajosPrecio(true));
+            $demorado = Queue::pushed(ProcesarPrecioEjecucionJob::class)->first(fn (ProcesarPrecioEjecucionJob $job) => $job->delay !== null);
+            $this->assertNotNull($demorado);
+            $this->assertTrue($demorado->delay->greaterThan(now()->addSeconds(50)));
+            $this->assertNotSame('tiendanube_publicacion', $demorado->queue);
+            $this->assertContains('publicacion', $gobernador->clasesConDemanda(8004291, $inicio));
+            $this->assertSame([], $gobernador->clasesConDemanda(8004291, $inicio + 90_001));
+
+            $gobernador->anunciarDemanda(8004291, 'publicacion', 'precio:'.$item->id, $inicio + 120_000);
+            app(TiendanubePrecioEjecucionService::class)->cancelar($ejecucionId, 8004291, $this->user->id);
+            $this->assertNotContains('publicacion', $gobernador->clasesConDemanda(8004291, $inicio));
+        } finally {
+            $gobernador->olvidar();
+        }
+    }
+
+    public function test_lectura_caducada_o_de_otra_configuracion_se_renueva_sin_otro_turno_de_clase(): void
+    {
+        Queue::fake();
+        config([
+            'tiendanube.gobernador_activo' => true,
+            'tiendanube.gobernador_intervalo_ms' => 1000,
+            'tiendanube.gobernador_lectura_max_ms' => 1_500,
+        ]);
+        $gobernador = TiendanubeGobernador::conectarPrueba('tn-gov-test-'.bin2hex(random_bytes(4)));
+        $inicio = 1_700_000_000_000;
+        $gobernador->fijarAhora($inicio);
+        $this->app->instance(TiendanubeGobernador::class, $gobernador);
+        $gets = 0;
+        $puts = 0;
+
+        try {
+            $this->crearVariante(1000, 100, '100.00');
+            $lote = $this->aprobarLote([1000]);
+            Http::fake(function (Request $request) use (&$gets, &$puts) {
+                if ($request->method() === 'PUT') {
+                    $puts++;
+
+                    return Http::response($this->productoRemoto(100, 1000, '110.00'), 200);
+                }
+                $gets++;
+
+                return Http::response($this->productoRemoto(100, 1000, '100.00'), 200);
+            });
+            $ejecucionId = $this->solicitarAplicacion($lote);
+            $processor = app(TiendanubePrecioEjecucionItemProcessor::class);
+            $this->reanudarItem($processor, $ejecucionId);
+
+            $gobernador->fijarAhora($inicio + 1000);
+            $this->reanudarItem($processor, $ejecucionId);
+            $this->assertSame(1, $gets);
+            $this->assertSame(0, $puts);
+
+            $gobernador->fijarAhora($inicio + 2501);
+            $this->reanudarItem($processor, $ejecucionId);
+            $this->assertSame(2, $gets);
+            $this->assertSame(0, $puts);
+            $this->assertCount(1, $gobernador->ventana(8004291));
+
+            $gobernador->fijarAhora($inicio + 3501);
+            $this->reanudarItem($processor, $ejecucionId);
+            $this->assertSame(2, $gets);
+            $this->assertSame(1, $puts);
+            $this->assertCount(1, $gobernador->ventana(8004291));
+            app(TiendanubePrecioEjecucionService::class)->refrescarContadores(
+                TiendanubePrecioEjecucion::query()->findOrFail($ejecucionId)
+            );
+
+            $gobernador->olvidar();
+            $gets = 0;
+            $puts = 0;
+            $gobernador->fijarAhora($inicio);
+            TiendanubeProductoVariante::query()->whereKey(1000)->update(['price' => '100.00']);
+            $loteConfiguracion = $this->aprobarLote([1000]);
+            $ejecucionId = $this->solicitarAplicacion($loteConfiguracion);
+            $this->reanudarItem($processor, $ejecucionId);
+            $gobernador->fijarAhora($inicio + 1000);
+            $this->reanudarItem($processor, $ejecucionId);
+            $this->assertSame(1, $gets);
+            TiendanubePrecioEjecucion::query()->whereKey($ejecucionId)->update(['config_generation' => 2]);
+            TiendanubeConfiguracion::obtener()->update(['config_generation' => 2]);
+            config(['tiendanube.gobernador_lectura_max_ms' => 30_000]);
+
+            $gobernador->fijarAhora($inicio + 2000);
+            $this->reanudarItem($processor, $ejecucionId);
+            $this->assertSame(2, $gets);
+            $this->assertSame(0, $puts);
+            $this->assertCount(1, $gobernador->ventana(8004291));
+
+            $gobernador->fijarAhora($inicio + 3000);
+            $this->reanudarItem($processor, $ejecucionId);
+            $this->assertSame(1, $puts);
+            $this->assertCount(1, $gobernador->ventana(8004291));
+        } finally {
+            $gobernador->olvidar();
+        }
+    }
+
+    public function test_denegaciones_locales_no_agotan_los_intentos_de_envio(): void
+    {
+        Queue::fake();
+        config([
+            'tiendanube.gobernador_activo' => true,
+            'tiendanube.gobernador_intervalo_ms' => 1000,
+            'tiendanube.precio_ejecucion_item_max_intentos' => 3,
+        ]);
+        $gobernador = TiendanubeGobernador::conectarPrueba('tn-gov-test-'.bin2hex(random_bytes(4)));
+        $inicio = 1_700_000_000_000;
+        $gobernador->fijarAhora($inicio);
+        $this->app->instance(TiendanubeGobernador::class, $gobernador);
+        $puts = 0;
+
+        try {
+            $this->crearVariante(1000, 100, '100.00');
+            $lote = $this->aprobarLote([1000]);
+            Http::fake(function (Request $request) use (&$puts) {
+                if ($request->method() === 'PUT') {
+                    $puts++;
+
+                    return Http::response($this->productoRemoto(100, 1000, '110.00'), 200);
+                }
+
+                return Http::response($this->productoRemoto(100, 1000, '100.00'), 200);
+            });
+            $ejecucionId = $this->solicitarAplicacion($lote);
+            $processor = app(TiendanubePrecioEjecucionItemProcessor::class);
+
+            for ($vez = 0; $vez < 6; $vez++) {
+                $this->reanudarItem($processor, $ejecucionId);
+            }
+
+            $item = TiendanubePrecioEjecucionItem::query()->where('ejecucion_id', $ejecucionId)->firstOrFail();
+            $this->assertSame(TiendanubePrecioEjecucionItem::ESTADO_REINTENTO_PENDIENTE, $item->estado);
+            $this->assertSame(0, (int) $item->intentos);
+            $this->assertSame(0, (int) ($item->evidencia['contadores']['envios'] ?? 0));
+            $this->assertSame(6, (int) ($item->evidencia['contadores']['esperas'] ?? 0));
+            $this->assertSame(0, $puts);
+            $this->assertSame(1, $this->contarTrabajosPrecio(true));
+
+            $gobernador->fijarAhora($inicio + 1000);
+            $this->reanudarItem($processor, $ejecucionId);
+            $gobernador->fijarAhora($inicio + 2000);
+            $this->reanudarItem($processor, $ejecucionId);
+            $item->refresh();
+            $this->assertSame(1, $puts);
+            $this->assertSame(1, (int) $item->intentos);
+            $this->assertSame(TiendanubePrecioEjecucionItem::ESTADO_CONFIRMADO, $item->estado);
+        } finally {
+            $gobernador->olvidar();
+        }
+    }
+
+    public function test_la_continuacion_persistida_se_lee_tras_reiniciar_y_no_se_duplica(): void
+    {
+        Queue::fake();
+        config([
+            'tiendanube.gobernador_activo' => true,
+            'tiendanube.gobernador_intervalo_ms' => 60_000,
+            'tiendanube.colas_dedicadas' => false,
+        ]);
+        $prefijo = 'tn-gov-test-'.bin2hex(random_bytes(4));
+        $gobernador = TiendanubeGobernador::conectarPrueba($prefijo);
+        $inicio = 1_700_000_000_000;
+        $gobernador->fijarAhora($inicio);
+        $this->app->instance(TiendanubeGobernador::class, $gobernador);
+
+        try {
+            $this->crearVariante(1000, 100, '100.00');
+            $lote = $this->aprobarLote([1000]);
+            Http::fake(fn () => Http::response($this->productoRemoto(100, 1000, '100.00'), 200));
+            $ejecucionId = $this->solicitarAplicacion($lote);
+            $processor = app(TiendanubePrecioEjecucionItemProcessor::class);
+            $this->reanudarItem($processor, $ejecucionId);
+            $this->reanudarItem($processor, $ejecucionId);
+
+            $item = TiendanubePrecioEjecucionItem::query()->where('ejecucion_id', $ejecucionId)->firstOrFail();
+            $this->assertSame(1, $this->contarTrabajosPrecio(true));
+            $otro = TiendanubeGobernador::conectarPrueba($prefijo);
+            $continuacion = $otro->continuacion(8004291, 'precio:'.$item->id);
+            $this->assertSame('sin_presupuesto_local', $continuacion['motivo'] ?? null);
+            $this->assertSame('procesar', $continuacion['como'] ?? null);
+            $this->assertSame('publicacion', $continuacion['clase'] ?? null);
+            $this->assertGreaterThan($inicio, (int) ($continuacion['reanudar_despues_at'] ?? 0));
+
+            $reprogramador = new TiendanubeReprogramadorDurable($otro, app(TiendanubeEnrutadorColas::class));
+            $reprogramador->reprogramar(new TiendanubeTurnoResultado(
+                false,
+                (string) $continuacion['motivo'],
+                (int) $continuacion['reanudar_despues_at'],
+                (string) $continuacion['fase'],
+                'precio:'.$item->id,
+                (string) $continuacion['clase'],
+            ));
+            $this->assertSame(1, $this->contarTrabajosPrecio(true));
+        } finally {
+            $gobernador->olvidar();
+            $otro = null;
+        }
+    }
+
+    public function test_resultado_incierto_se_verifica_antes_de_otra_escritura(): void
+    {
+        Queue::fake();
+        config([
+            'tiendanube.gobernador_activo' => true,
+            'tiendanube.gobernador_intervalo_ms' => 1000,
+        ]);
+        $gobernador = TiendanubeGobernador::conectarPrueba('tn-gov-test-'.bin2hex(random_bytes(4)));
+        $inicio = 1_700_000_000_000;
+        $gobernador->fijarAhora($inicio);
+        $this->app->instance(TiendanubeGobernador::class, $gobernador);
+        $gets = 0;
+        $puts = 0;
+
+        try {
+            $this->crearVariante(1000, 100, '100.00');
+            $lote = $this->aprobarLote([1000]);
+            Http::fake(function (Request $request) use (&$gets, &$puts) {
+                if ($request->method() === 'PUT') {
+                    $puts++;
+
+                    return Http::response(['error' => 'gateway'], 504);
+                }
+                $gets++;
+
+                return Http::response($this->productoRemoto(100, 1000, '100.00'), 200);
+            });
+            $ejecucionId = $this->solicitarAplicacion($lote);
+            $processor = app(TiendanubePrecioEjecucionItemProcessor::class);
+            $this->reanudarItem($processor, $ejecucionId);
+            $gobernador->fijarAhora($inicio + 1000);
+            $this->reanudarItem($processor, $ejecucionId);
+            $gobernador->fijarAhora($inicio + 2000);
+            $this->reanudarItem($processor, $ejecucionId);
+
+            $item = TiendanubePrecioEjecucionItem::query()->where('ejecucion_id', $ejecucionId)->firstOrFail();
+            $this->assertSame(1, $puts);
+            $this->assertTrue((bool) ($item->evidencia['verificacion_pendiente'] ?? false));
+            $this->assertArrayHasKey('payload', $item->evidencia);
+            $this->assertNotSame(TiendanubePrecioEjecucionItem::ESTADO_FALLIDO, $item->estado);
+
+            $getsAlEnviar = $gets;
+            $gobernador->fijarAhora($inicio + 3000);
+            $this->reanudarItem($processor, $ejecucionId);
+            $item->refresh();
+            $this->assertSame(1, $puts);
+            $this->assertGreaterThan($getsAlEnviar, $gets);
+            $this->assertArrayHasKey('payload', $item->evidencia);
+            $this->assertNotSame(TiendanubePrecioEjecucionItem::ESTADO_CONFIRMADO, $item->estado);
+        } finally {
+            $gobernador->olvidar();
+        }
+    }
+
+    public function test_cada_categoria_de_espera_conserva_su_evidencia(): void
+    {
+        Queue::fake();
+        config([
+            'tiendanube.gobernador_activo' => true,
+            'tiendanube.gobernador_intervalo_ms' => 0,
+            'tiendanube.gobernador_reset_respaldo_ms' => 4_000,
+        ]);
+        $gobernador = TiendanubeGobernador::conectarPrueba('tn-gov-test-'.bin2hex(random_bytes(4)));
+        $this->app->instance(TiendanubeGobernador::class, $gobernador);
+        $cliente = app(TiendanubeApiClient::class);
+
+        try {
+            $antes = (int) floor(microtime(true) * 1000);
+            $respuesta = Http::response(['error' => 'rate'], 429);
+            Http::fake(function () use (&$respuesta) {
+                return $respuesta;
+            });
+            try {
+                app(TiendanubeContextoHttpActual::class)->usar(
+                    'op-sin-reset',
+                    'catalogo',
+                    'intento',
+                    'sin_escritura',
+                    fn () => $cliente->getProduct(1),
+                );
+                $this->fail('El 429 sin reset debía reprogramarse.');
+            } catch (TiendanubeApiRateLimitException) {
+                $espera = $gobernador->espera(8004291, 'op-sin-reset');
+                $this->assertSame('rate_limit', $espera['motivo']);
+                $this->assertGreaterThanOrEqual(4_000, $espera['reanudar_despues_at'] - $antes);
+                $this->assertLessThan(10_000, $espera['reanudar_despues_at'] - $antes);
+            }
+
+            $gobernador->olvidar();
+            $this->crearVariante(1000, 100, '100.00');
+            $lote = $this->aprobarLote([1000]);
+            $processor = app(TiendanubePrecioEjecucionItemProcessor::class);
+
+            $respuesta = Http::response(['error' => 'payment'], 402);
+            $ejecucionCuenta = $this->solicitarAplicacion($lote);
+            $itemCuenta = TiendanubePrecioEjecucionItem::query()->where('ejecucion_id', $ejecucionCuenta)->firstOrFail();
+            $processor->procesar($itemCuenta);
+            $itemCuenta->refresh();
+            $ejecucion = TiendanubePrecioEjecucion::query()->findOrFail($ejecucionCuenta);
+            $this->assertSame(TiendanubePrecioEjecucion::ESTADO_SUSPENDIDA, $ejecucion->estado);
+            $this->assertSame('cuenta', $ejecucion->error_codigo);
+            $this->assertNotSame('credenciales', $ejecucion->error_codigo);
+            Http::assertNotSent(fn (Request $request) => $request->method() === 'PUT');
+            app(TiendanubeOperacionTiendaService::class)->liberar((int) $ejecucion->store_id, (string) $ejecucion->lease_token);
+
+            $gobernador->olvidar();
+            $gobernador->fijarAhora((int) floor(microtime(true) * 1000));
+            $respuesta = Http::response(['error' => 'unauthorized'], 401);
+            $loteCredenciales = $this->aprobarLote([1000]);
+            $ejecucionCredenciales = $this->solicitarAplicacion($loteCredenciales);
+            $processor->procesar(TiendanubePrecioEjecucionItem::query()->where('ejecucion_id', $ejecucionCredenciales)->firstOrFail());
+            $ejecucionCredencialesModelo = TiendanubePrecioEjecucion::query()->findOrFail($ejecucionCredenciales);
+            $this->assertSame('credenciales', $ejecucionCredencialesModelo->error_codigo);
+            app(TiendanubeOperacionTiendaService::class)->liberar((int) $ejecucionCredencialesModelo->store_id, (string) $ejecucionCredencialesModelo->lease_token);
+
+            $gobernador->olvidar();
+            $respuesta = Http::response(['error' => 'invalid'], 422);
+            $loteFuncional = $this->aprobarLote([1000]);
+            $ejecucionFuncional = $this->solicitarAplicacion($loteFuncional);
+            $processor->procesar(TiendanubePrecioEjecucionItem::query()->where('ejecucion_id', $ejecucionFuncional)->firstOrFail());
+            $itemFuncional = TiendanubePrecioEjecucionItem::query()->where('ejecucion_id', $ejecucionFuncional)->firstOrFail();
+            $this->assertSame(TiendanubePrecioEjecucionItem::ESTADO_FALLIDO, $itemFuncional->estado);
+            $this->assertSame('validacion_remota', $itemFuncional->error_codigo);
+            $ejecucionFuncionalModelo = TiendanubePrecioEjecucion::query()->findOrFail($ejecucionFuncional);
+            $this->assertNotSame(TiendanubePrecioEjecucion::ESTADO_SUSPENDIDA, $ejecucionFuncionalModelo->estado);
+            app(TiendanubeOperacionTiendaService::class)->liberar((int) $ejecucionFuncionalModelo->store_id, (string) $ejecucionFuncionalModelo->lease_token);
+
+            $gobernador->olvidar();
+            $respuesta = Http::response(['error' => 'gateway'], 503);
+            $loteTransitorio = $this->aprobarLote([1000]);
+            $ejecucionTransitoria = $this->solicitarAplicacion($loteTransitorio);
+            $processor->procesar(TiendanubePrecioEjecucionItem::query()->where('ejecucion_id', $ejecucionTransitoria)->firstOrFail());
+            $itemTransitorio = TiendanubePrecioEjecucionItem::query()->where('ejecucion_id', $ejecucionTransitoria)->firstOrFail();
+            $this->assertSame(TiendanubePrecioEjecucionItem::ESTADO_REINTENTO_PENDIENTE, $itemTransitorio->estado);
+            $this->assertSame('error_transitorio', $itemTransitorio->evidencia['categoria'] ?? null);
+            $this->assertFalse((bool) ($itemTransitorio->evidencia['escritura'] ?? true));
+            $this->assertSame('sin_escritura', $itemTransitorio->evidencia['fase'] ?? null);
+            $this->assertSame(0, (int) $itemTransitorio->intentos);
+        } finally {
+            $gobernador->olvidar();
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $lote
+     */
+    private function solicitarAplicacion(array $lote): string
+    {
+        return $this->actingAs($this->user)
+            ->postJson(route('tiendanube.precios.lotes.aplicar', $lote['lote_id']), [
+                'checksum' => $lote['revision']['checksum'],
+            ])
+            ->assertCreated()
+            ->json('id');
+    }
+
+    private function contarTrabajosPrecio(bool $demorados): int
+    {
+        return Queue::pushed(ProcesarPrecioEjecucionJob::class)
+            ->filter(fn (ProcesarPrecioEjecucionJob $job) => $demorados ? $job->delay !== null : $job->delay === null)
+            ->count();
     }
 
     /**

@@ -662,9 +662,13 @@ class TiendanubeApiClient
 
             if ($response->status() === 429) {
                 $reset = $response->header('x-rate-limit-reset');
+                $resetMs = is_numeric($reset) ? (int) $reset : 0;
+                if ($resetMs <= 0) {
+                    $resetMs = max(1, (int) config('tiendanube.gobernador_reset_respaldo_ms', 2_000));
+                }
                 $turnoLimite = $gobernador->registrarLimiteRemoto(
                     $storeId,
-                    is_numeric($reset) ? (int) $reset : 0,
+                    $resetMs,
                     $operacion,
                     $fase,
                 );

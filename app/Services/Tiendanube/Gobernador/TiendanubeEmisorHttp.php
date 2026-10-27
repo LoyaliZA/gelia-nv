@@ -2,6 +2,8 @@
 
 namespace App\Services\Tiendanube\Gobernador;
 
+use App\Exceptions\Tiendanube\TiendanubeApiRateLimitException;
+use App\Exceptions\Tiendanube\TiendanubePresupuestoLocalException;
 use App\Models\Tiendanube\TiendanubeConfiguracion;
 use App\Support\Tiendanube\TiendanubeClaseTurno;
 use App\Support\Tiendanube\TiendanubePropositoHttp;
@@ -40,6 +42,7 @@ class TiendanubeEmisorHttp
             $this->gobernador->anunciarDemanda($storeId, $clase->value, $operacionId);
         }
 
+        $mantenerDemanda = false;
         try {
             return $this->contexto->usar(
                 $operacionId,
@@ -48,10 +51,32 @@ class TiendanubeEmisorHttp
                 $fase,
                 $callback,
             );
+        } catch (TiendanubePresupuestoLocalException $e) {
+            $mantenerDemanda = true;
+            $this->renovarDemanda($storeId, $clase, $operacionId, $e->turno->reanudarDespuesAt);
+            throw $e;
+        } catch (TiendanubeApiRateLimitException $e) {
+            $mantenerDemanda = true;
+            $reanudar = $storeId > 0
+                ? (int) $this->gobernador->espera($storeId, $operacionId)['reanudar_despues_at']
+                : 0;
+            $this->renovarDemanda($storeId, $clase, $operacionId, $reanudar);
+            throw $e;
         } finally {
-            if ($storeId > 0) {
+            if (! $mantenerDemanda && $storeId > 0) {
                 $this->gobernador->retirarDemanda($storeId, $clase->value, $operacionId);
             }
         }
+    }
+
+    private function renovarDemanda(int $storeId, TiendanubeClaseTurno $clase, string $operacionId, int $reanudar): void
+    {
+        if ($storeId <= 0) {
+            return;
+        }
+
+        $margen = max(1000, (int) config('tiendanube.gobernador_demanda_margen_ms', 30_000));
+        $ahora = $this->gobernador->marcaTemporal();
+        $this->gobernador->anunciarDemanda($storeId, $clase->value, $operacionId, max($ahora, $reanudar) + $margen);
     }
 }

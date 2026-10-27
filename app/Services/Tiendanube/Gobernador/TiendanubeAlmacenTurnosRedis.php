@@ -282,6 +282,49 @@ if accion == 'evidencia' then
   return responder(1, '', fase)
 end
 
+if accion == 'renovar' then
+  if operacion == '' then
+    return denegar('sin_presupuesto_local')
+  end
+  local rk = p .. ':reserva:' .. operacion
+  if redis.call('HGET', rk, 'pendiente') ~= '1' then
+    return denegar('sin_presupuesto_local')
+  end
+  if tonumber(redis.call('HGET', rk, 'vigencias') or '0') < 1 then
+    return denegar('sin_presupuesto_local')
+  end
+  if now < tonumber(redis.call('GET', p .. ':siguiente') or '0') then
+    return denegar(motivoTiempo())
+  end
+  redis.call('HSET', rk, 'vigencias', '0')
+  anotarFase()
+  return responder(1, '', fase)
+end
+
+if accion == 'continuar' then
+  local key = p .. ':continuacion:' .. operacion
+  local previa = redis.call('GET', key)
+  if previa == extra then
+    return {0, 'duplicada', extra, fase}
+  end
+  redis.call('SET', key, extra)
+  return {1, 'programada', extra, fase}
+end
+
+if accion == 'leer' then
+  return { redis.call('GET', p .. ':continuacion:' .. operacion) or '' }
+end
+
+if accion == 'programar' then
+  local key = p .. ':prog:' .. operacion
+  local previa = redis.call('GET', key)
+  if previa == extra then
+    return {0, 'duplicada', extra, ''}
+  end
+  redis.call('SET', key, extra)
+  return {1, 'programada', extra, ''}
+end
+
 if accion == 'liberar' then
   if operacion ~= '' then
     redis.call('HSET', p .. ':reserva:' .. operacion, 'pendiente', '0')
@@ -333,15 +376,19 @@ LUA;
 
     public function olvidar(): void
     {
-        $cursor = null;
         do {
-            $claves = $this->redis->scan($cursor, $this->prefijo.':*', 100);
-            if ($claves === false) {
-                break;
-            }
-            if (is_array($claves) && $claves !== []) {
-                $this->redis->del($claves);
-            }
-        } while ((int) $cursor !== 0);
+            $cursor = null;
+            $borro = false;
+            do {
+                $claves = $this->redis->scan($cursor, $this->prefijo.':*', 100);
+                if ($claves === false) {
+                    break;
+                }
+                if (is_array($claves) && $claves !== []) {
+                    $this->redis->del($claves);
+                    $borro = true;
+                }
+            } while ((int) $cursor !== 0);
+        } while ($borro);
     }
 }
