@@ -8,11 +8,11 @@ namespace App\Services\Tiendanube\Gobernador;
  */
 class TiendanubeReprogramadorInactivo implements TiendanubeReprogramador
 {
-    public function reprogramar(TiendanubeTurnoResultado $turno): void
+    public function reprogramar(TiendanubeTurnoResultado $turno, ?string $leaseToken = null): void
     {
     }
 
-    public function programarEjecucion(string $ejecucionId, \DateTimeInterface $cuando): void
+    public function programarEjecucion(string $ejecucionId, \DateTimeInterface $cuando, ?string $leaseToken = null): void
     {
     }
 }

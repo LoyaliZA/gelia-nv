@@ -58,11 +58,24 @@ return [
      * si la clave no está cargada. No regenerar el cache para incorporarlas.
      */
     'gobernador_lectura_max_ms' => (int) env('TIENDANUBE_GOBERNADOR_LECTURA_MAX_MS', 30_000),
+    /*
+     * Si un 429 no trae x-rate-limit-reset, la espera usa este respaldo.
+     * No es una espera fija de cinco segundos: el default es 2000 ms.
+     */
     'gobernador_reset_respaldo_ms' => (int) env('TIENDANUBE_GOBERNADOR_RESET_RESPALDO_MS', 2_000),
     'gobernador_demanda_margen_ms' => (int) env('TIENDANUBE_GOBERNADOR_DEMANDA_MARGEN_MS', 30_000),
     'gobernador_demanda_ttl_ms' => (int) env('TIENDANUBE_GOBERNADOR_DEMANDA_TTL_MS', 120_000),
     'precios_restauracion_habilitada' => filter_var(env('TIENDANUBE_PRECIOS_RESTAURACION_HABILITADA', true), FILTER_VALIDATE_BOOLEAN),
+    /*
+     * Un envío de precio cabe en el trabajo; el trabajo cabe en el lease del ítem.
+     * El lease cabe en el lock del producto y en la exclusividad de tienda.
+     * Una espera durable suelta lock, reserva y lease del ítem. No renueva un token vencido.
+     * El timeout del job de publicación es precio_trabajo_max_seconds, no el del worker default.
+     */
+    'precio_http_timeout_seconds' => (int) env('TIENDANUBE_PRECIO_HTTP_TIMEOUT_SECONDS', 30),
+    'precio_trabajo_max_seconds' => (int) env('TIENDANUBE_PRECIO_TRABAJO_MAX_SECONDS', 80),
     'precio_ejecucion_lease_seconds' => (int) env('TIENDANUBE_PRECIO_EJECUCION_LEASE_SECONDS', 90),
+    'precio_recurso_lock_seconds' => (int) env('TIENDANUBE_PRECIO_RECURSO_LOCK_SECONDS', 90),
     'precio_ejecucion_item_max_intentos' => (int) env('TIENDANUBE_PRECIO_EJECUCION_ITEM_MAX_INTENTOS', 5),
     'precio_ejecucion_batch' => (int) env('TIENDANUBE_PRECIO_EJECUCION_BATCH', 15),
     'api_version_precios' => '2025-03',

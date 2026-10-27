@@ -1157,6 +1157,345 @@ class TiendanubePrecioEjecucionTest extends TestCase
         }
     }
 
+    public function test_renovar_no_revive_un_lease_de_tienda_vencido(): void
+    {
+        $ops = app(TiendanubeOperacionTiendaService::class);
+        $token = $ops->adquirirExclusiva(8004291, TiendanubeOperacionTiendaService::TIPO_PRECIO_APLICACION, (int) $this->user->id, 1);
+        \App\Models\Tiendanube\TiendanubeOperacionTienda::query()->where('store_id', 8004291)->update([
+            'lease_expires_at' => now()->subMinute(),
+        ]);
+
+        $this->assertFalse($ops->renovar(8004291, $token));
+        $vence = \App\Models\Tiendanube\TiendanubeOperacionTienda::query()->where('store_id', 8004291)->value('lease_expires_at');
+        $this->assertTrue(\Illuminate\Support\Carbon::parse($vence)->lt(now()));
+        \App\Models\Tiendanube\TiendanubeOperacionTienda::query()->where('store_id', 8004291)->update([
+            'lease_token' => (string) \Illuminate\Support\Str::uuid(),
+            'lease_expires_at' => now()->addMinute(),
+            'estado' => \App\Models\Tiendanube\TiendanubeOperacionTienda::ESTADO_ACTIVA,
+        ]);
+        $this->assertNull($ops->recuperarPropiedad(8004291, $token, TiendanubeOperacionTiendaService::TIPO_PRECIO_APLICACION, (int) $this->user->id, 1));
+        \App\Models\Tiendanube\TiendanubeOperacionTienda::query()->where('store_id', 8004291)->update([
+            'lease_expires_at' => now()->subMinute(),
+        ]);
+        $recuperado = $ops->recuperarPropiedad(8004291, $token, TiendanubeOperacionTiendaService::TIPO_PRECIO_APLICACION, (int) $this->user->id, 1);
+        $this->assertNotNull($recuperado);
+        $this->assertNotSame($token, $recuperado);
+    }
+
+    public function test_renovacion_falsa_antes_del_put_detiene_el_envio(): void
+    {
+        Queue::fake();
+        $this->crearVariante(1000, 100, '100.00');
+        $lote = $this->aprobarLote([1000]);
+        $puts = 0;
+        $token = null;
+        Http::fake(function (Request $request) use (&$puts, &$token) {
+            if ($token === null) {
+                $token = \App\Models\Tiendanube\TiendanubeOperacionTienda::query()->where('store_id', 8004291)->value('lease_token');
+            }
+            if ($request->method() === 'GET') {
+                \App\Models\Tiendanube\TiendanubeOperacionTienda::query()->where('store_id', 8004291)->update([
+                    'lease_expires_at' => now()->subMinute(),
+                ]);
+
+                return Http::response($this->productoRemoto(100, 1000, '100.00'), 200);
+            }
+            $puts++;
+
+            return Http::response($this->productoRemoto(100, 1000, '110.00'), 200);
+        });
+
+        $this->aplicarYProcesar($lote);
+        $this->assertSame(0, $puts);
+        $fila = \App\Models\Tiendanube\TiendanubeOperacionTienda::query()->where('store_id', 8004291)->first();
+        $this->assertSame($token, $fila->lease_token);
+        $this->assertTrue($fila->lease_expires_at->lt(now()));
+        $this->assertNotSame(
+            TiendanubePrecioEjecucionItem::ESTADO_CONFIRMADO,
+            TiendanubePrecioEjecucionItem::query()->value('estado')
+        );
+    }
+
+    public function test_el_lease_vence_durante_la_llamada_y_exige_conciliacion(): void
+    {
+        Queue::fake();
+        $this->crearVariante(1000, 100, '100.00');
+        $lote = $this->aprobarLote([1000]);
+        $puts = 0;
+        Http::fake(function (Request $request) use (&$puts) {
+            if ($request->method() === 'PUT') {
+                $puts++;
+                TiendanubePrecioEjecucionItem::query()->update([
+                    'lease_expires_at' => now()->subMinute(),
+                ]);
+
+                return Http::response($this->productoRemoto(100, 1000, '110.00'), 200);
+            }
+
+            return Http::response($this->productoRemoto(100, 1000, '100.00'), 200);
+        });
+
+        $this->aplicarYProcesar($lote);
+        $item = TiendanubePrecioEjecucionItem::query()->firstOrFail();
+        $this->assertSame(1, $puts);
+        $this->assertSame(TiendanubePrecioEjecucionItem::ESTADO_RESULTADO_INCIERTO, $item->estado);
+        $this->assertTrue((bool) ($item->evidencia['verificacion_pendiente'] ?? false));
+        $this->assertStringContainsString(
+            'no cancela una solicitud que Tiendanube ya pudo recibir',
+            (string) $item->error_mensaje
+        );
+        $this->assertSame(
+            1,
+            \App\Models\Tiendanube\TiendanubePrecioEjecucionEvento::query()
+                ->where('tipo', \App\Models\Tiendanube\TiendanubePrecioEjecucionEvento::TIPO_CONCILIACION_EXIGIDA)
+                ->count()
+        );
+    }
+
+    public function test_cancelar_durante_el_put_no_deja_que_el_worker_confirme(): void
+    {
+        Queue::fake();
+        $this->crearVariante(1000, 100, '100.00');
+        $lote = $this->aprobarLote([1000]);
+        $ejecucionId = null;
+        Http::fake(function (Request $request) use (&$ejecucionId) {
+            if ($request->method() === 'PUT') {
+                app(TiendanubePrecioEjecucionService::class)->detenerItemsEnCurso((string) $ejecucionId);
+
+                return Http::response($this->productoRemoto(100, 1000, '110.00'), 200);
+            }
+
+            return Http::response($this->productoRemoto(100, 1000, '100.00'), 200);
+        });
+        $ejecucionId = $this->solicitarAplicacion($lote);
+        (new ProcesarPrecioEjecucionJob($ejecucionId))->handle(app(TiendanubePrecioEjecucionService::class));
+        $item = TiendanubePrecioEjecucionItem::query()->where('ejecucion_id', $ejecucionId)->firstOrFail();
+        $this->assertSame(TiendanubePrecioEjecucionItem::ESTADO_CANCELADO, $item->estado);
+        $this->assertSame(
+            1,
+            \App\Models\Tiendanube\TiendanubePrecioEjecucionEvento::query()
+                ->where('tipo', \App\Models\Tiendanube\TiendanubePrecioEjecucionEvento::TIPO_CONCILIACION_EXIGIDA)
+                ->count()
+        );
+    }
+
+    public function test_la_espera_prolongada_recupera_la_propiedad_con_un_token_nuevo(): void
+    {
+        Queue::fake();
+        $this->crearVariante(1000, 100, '100.00');
+        $lote = $this->aprobarLote([1000]);
+        $ejecucionId = $this->solicitarAplicacion($lote);
+        $anterior = (string) TiendanubePrecioEjecucion::query()->findOrFail($ejecucionId)->lease_token;
+        \App\Models\Tiendanube\TiendanubeOperacionTienda::query()->where('store_id', 8004291)->update([
+            'lease_expires_at' => now()->subMinute(),
+        ]);
+        TiendanubePrecioEjecucion::query()->where('id', $ejecucionId)->update([
+            'lease_expires_at' => now()->subMinute(),
+        ]);
+        TiendanubePrecioEjecucionItem::query()->where('ejecucion_id', $ejecucionId)->update([
+            'estado' => TiendanubePrecioEjecucionItem::ESTADO_REINTENTO_PENDIENTE,
+            'lease_token' => null,
+            'lease_expires_at' => null,
+            'siguiente_intento_at' => now()->subSecond(),
+        ]);
+        Http::fake(function (Request $request) {
+            if ($request->method() === 'PUT') {
+                return Http::response($this->productoRemoto(100, 1000, '110.00'), 200);
+            }
+
+            return Http::response($this->productoRemoto(100, 1000, '100.00'), 200);
+        });
+
+        (new ProcesarPrecioEjecucionJob($ejecucionId))->handle(app(TiendanubePrecioEjecucionService::class));
+        $ejecucion = TiendanubePrecioEjecucion::query()->findOrFail($ejecucionId);
+        $item = TiendanubePrecioEjecucionItem::query()->where('ejecucion_id', $ejecucionId)->firstOrFail();
+        $this->assertSame(TiendanubePrecioEjecucionItem::ESTADO_CONFIRMADO, $item->estado);
+        $tienda = \App\Models\Tiendanube\TiendanubeOperacionTienda::query()->where('store_id', 8004291)->first();
+        $this->assertNotSame($anterior, $tienda->lease_token);
+        $this->assertNotNull($ejecucion->lease_token);
+        $this->assertNotSame($anterior, $ejecucion->lease_token);
+    }
+
+    public function test_una_exclusiva_ajena_impide_recuperar_la_propiedad_y_el_put(): void
+    {
+        Queue::fake();
+        $this->crearVariante(1000, 100, '100.00');
+        $lote = $this->aprobarLote([1000]);
+        $ejecucionId = $this->solicitarAplicacion($lote);
+        $ajeno = (string) \Illuminate\Support\Str::uuid();
+        \App\Models\Tiendanube\TiendanubeOperacionTienda::query()->where('store_id', 8004291)->update([
+            'lease_token' => $ajeno,
+            'lease_expires_at' => now()->addMinute(),
+            'estado' => \App\Models\Tiendanube\TiendanubeOperacionTienda::ESTADO_ACTIVA,
+            'tipo' => TiendanubeOperacionTiendaService::TIPO_CATALOGO_SYNC,
+        ]);
+        TiendanubePrecioEjecucionItem::query()->where('ejecucion_id', $ejecucionId)->update([
+            'estado' => TiendanubePrecioEjecucionItem::ESTADO_REINTENTO_PENDIENTE,
+            'lease_token' => null,
+            'lease_expires_at' => null,
+            'siguiente_intento_at' => now()->subSecond(),
+        ]);
+        $puts = 0;
+        Http::fake(function (Request $request) use (&$puts) {
+            if ($request->method() === 'PUT') {
+                $puts++;
+            }
+
+            return Http::response($this->productoRemoto(100, 1000, '100.00'), 200);
+        });
+
+        (new ProcesarPrecioEjecucionJob($ejecucionId))->handle(app(TiendanubePrecioEjecucionService::class));
+
+        $this->assertSame(0, $puts);
+        $this->assertSame(
+            $ajeno,
+            \App\Models\Tiendanube\TiendanubeOperacionTienda::query()->where('store_id', 8004291)->value('lease_token')
+        );
+        $this->assertNotSame(
+            TiendanubePrecioEjecucionItem::ESTADO_CONFIRMADO,
+            TiendanubePrecioEjecucionItem::query()->where('ejecucion_id', $ejecucionId)->value('estado')
+        );
+    }
+
+    public function test_un_worker_sin_token_no_finaliza_ni_reprograma(): void
+    {
+        Queue::fake();
+        $this->crearVariante(1000, 100, '100.00');
+        $lote = $this->aprobarLote([1000]);
+        $worker = null;
+        $sucesor = (string) \Illuminate\Support\Str::uuid();
+        Http::fake(function (Request $request) use (&$worker, $sucesor) {
+            if ($request->method() !== 'PUT') {
+                return Http::response($this->productoRemoto(100, 1000, '100.00'), 200);
+            }
+            $item = TiendanubePrecioEjecucionItem::query()->firstOrFail();
+            $worker = (string) $item->lease_token;
+            $item->update([
+                'lease_token' => $sucesor,
+                'estado' => TiendanubePrecioEjecucionItem::ESTADO_CONFIRMADO,
+                'lease_expires_at' => now()->addHour(),
+                'error_codigo' => null,
+            ]);
+
+            return Http::response($this->productoRemoto(100, 1000, '110.00'), 200);
+        });
+        $ejecucionId = $this->solicitarAplicacion($lote);
+        (new ProcesarPrecioEjecucionJob($ejecucionId))->handle(app(TiendanubePrecioEjecucionService::class));
+        $this->assertNotNull($worker);
+        $item = TiendanubePrecioEjecucionItem::query()->firstOrFail();
+        app(\App\Services\Tiendanube\Gobernador\TiendanubeReprogramadorDurable::class)->reprogramar(new TiendanubeTurnoResultado(
+            false,
+            'sin_presupuesto_local',
+            $this->app->make(\App\Services\Tiendanube\Gobernador\TiendanubeGobernador::class)->marcaTemporal() + 5_000,
+            'sin_escritura',
+            'precio:'.$item->id,
+            'publicacion',
+        ), $worker);
+        $item->refresh();
+        $this->assertSame(TiendanubePrecioEjecucionItem::ESTADO_CONFIRMADO, $item->estado);
+        $this->assertSame($sucesor, $item->lease_token);
+    }
+
+    public function test_la_publicacion_bloquea_edicion_e_imagenes_y_el_espejo_remoto_sigue(): void
+    {
+        $this->user->givePermissionTo(
+            Permission::findOrCreate('tiendanube.productos.editar', 'web')
+        );
+        $this->crearVariante(1000, 100, '100.00');
+        app(TiendanubeOperacionTiendaService::class)->adquirirExclusiva(
+            8004291,
+            TiendanubeOperacionTiendaService::TIPO_PRECIO_APLICACION,
+            (int) $this->user->id,
+            1
+        );
+
+        $this->actingAs($this->user)
+            ->putJson(route('tiendanube.productos.update', 100), ['name' => 'Editado en Gelia'])
+            ->assertStatus(409);
+
+        $zip = tempnam(sys_get_temp_dir(), 'tnzip');
+        $archivo = new \ZipArchive();
+        $archivo->open($zip, \ZipArchive::OVERWRITE);
+        $archivo->addFromString('SKU-1000.jpg', 'img');
+        $archivo->close();
+        $this->actingAs($this->user)
+            ->post(route('tiendanube.imagenes.importar'), [
+                'zip' => new \Illuminate\Http\UploadedFile($zip, 'lote.zip', 'application/zip', null, true),
+            ])
+            ->assertStatus(409);
+
+        app(\App\Services\Tiendanube\TiendanubeCatalogoSyncService::class)->upsertProducto([
+            'id' => 100,
+            'name' => ['es' => 'Cambiado en Tiendanube'],
+            'published' => true,
+        ]);
+        $producto = TiendanubeProducto::query()->findOrFail(100);
+        $nombre = is_array($producto->name) ? ($producto->name['es'] ?? '') : (string) $producto->name;
+        $this->assertSame('Cambiado en Tiendanube', $nombre);
+    }
+
+    public function test_una_edicion_en_curso_impide_el_put_de_publicacion(): void
+    {
+        Queue::fake();
+        $this->crearVariante(1000, 100, '100.00');
+        $lote = $this->aprobarLote([1000]);
+        $lock = app(\App\Services\Tiendanube\TiendanubeProductoRecursoLockService::class)
+            ->intentarProducto(8004291, 100, 90);
+        $this->assertNotNull($lock);
+        $puts = 0;
+        Http::fake(function (Request $request) use (&$puts) {
+            if ($request->method() === 'PUT') {
+                $puts++;
+            }
+
+            return Http::response($this->productoRemoto(100, 1000, '100.00'), 200);
+        });
+
+        try {
+            $this->aplicarYProcesar($lote);
+        } finally {
+            $lock->release();
+        }
+
+        $this->assertSame(0, $puts);
+        $this->assertSame(
+            TiendanubePrecioEjecucionItem::ESTADO_REINTENTO_PENDIENTE,
+            TiendanubePrecioEjecucionItem::query()->value('estado')
+        );
+    }
+
+    public function test_las_duraciones_dejan_el_http_dentro_del_lease_y_el_respaldo_es_2000(): void
+    {
+        $src = (string) file_get_contents(config_path('tiendanube.php'));
+        $defecto = static function (string $clave) use ($src): int {
+            $encontrado = preg_match("/'".$clave."' => \(int\) env\('[^']+', (\d+(?:_\d+)?)\)/", $src, $coincidencia);
+
+            return $encontrado === 1 ? (int) str_replace('_', '', $coincidencia[1]) : -1;
+        };
+        $http = $defecto('precio_http_timeout_seconds');
+        $trabajo = $defecto('precio_trabajo_max_seconds');
+        $lease = $defecto('precio_ejecucion_lease_seconds');
+        $lock = $defecto('precio_recurso_lock_seconds');
+        $tienda = $defecto('sync_lease_seconds');
+        $respaldo = $defecto('gobernador_reset_respaldo_ms');
+        $this->assertSame(30, $http);
+        $this->assertSame(80, $trabajo);
+        $this->assertSame(90, $lease);
+        $this->assertSame(90, $lock);
+        $this->assertSame(120, $tienda);
+        $this->assertSame(2_000, $respaldo);
+        $this->assertSame($trabajo, (new ProcesarPrecioEjecucionJob('x'))->timeout);
+        $this->assertLessThan($trabajo, $http);
+        $this->assertLessThan($lease, $trabajo);
+        $this->assertLessThanOrEqual($lock, $lease);
+        $this->assertLessThanOrEqual($tienda, $lock);
+        $this->assertStringContainsString('No es una espera fija de cinco segundos', $src);
+        $procesador = (string) file_get_contents(app_path('Services/Tiendanube/Precios/Aplicacion/TiendanubePrecioEjecucionItemProcessor.php'));
+        $this->assertStringContainsString("config('tiendanube.precio_http_timeout_seconds', 30)", $procesador);
+        $this->assertStringContainsString("config('tiendanube.precio_recurso_lock_seconds', 90)", $procesador);
+        $this->assertStringContainsString("config('tiendanube.gobernador_reset_respaldo_ms', 2_000)", $procesador);
+    }
+
     /**
      * @param  array<string, mixed>  $lote
      */

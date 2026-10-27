@@ -25,6 +25,7 @@ class TiendanubeProductoWriteService
         private TiendanubeProductoImagenOperacionService $imagenOperaciones,
         private TiendanubeOperacionTiendaService $operaciones,
         private TiendanubeEmisorHttp $emisor,
+        private TiendanubeProductoRecursoLockService $recursoLocks,
     ) {}
 
     /**
@@ -110,6 +111,11 @@ class TiendanubeProductoWriteService
         }
 
         $this->assertEscrituraAdmisible();
+        $storeId = (int) (TiendanubeConfiguracion::obtener()->store_id ?? 0);
+        $lock = $storeId > 0
+            ? $this->recursoLocks->exigirProductoLibre($storeId, $tnProductId, max(1, (int) config('tiendanube.precio_recurso_lock_seconds', 90)))
+            : null;
+        try {
         $this->rechazarStockPlanoSiBloqueado($datos);
         $productoPayload = $this->buildProductPayload($datos, forCreate: false);
         $variantPayload = $this->buildVariantPayload($datos);
@@ -153,6 +159,9 @@ class TiendanubeProductoWriteService
         $remote = $this->api->getProduct($tnProductId);
 
         return $this->sync->upsertProducto($remote);
+        } finally {
+            $lock?->release();
+        }
     }
 
     /**
@@ -178,7 +187,11 @@ class TiendanubeProductoWriteService
         }
 
         $this->assertEscrituraAdmisible();
-
+        $storeId = (int) (TiendanubeConfiguracion::obtener()->store_id ?? 0);
+        $lock = $storeId > 0
+            ? $this->recursoLocks->exigirProductoLibre($storeId, $tnProductId, max(1, (int) config('tiendanube.precio_recurso_lock_seconds', 90)))
+            : null;
+        try {
         return $this->imagenOperaciones->ejecutar(
             $tnProductId,
             $srcUrl,
@@ -189,6 +202,9 @@ class TiendanubeProductoWriteService
             $solicitudClave,
             $userId
         );
+        } finally {
+            $lock?->release();
+        }
     }
 
     /**

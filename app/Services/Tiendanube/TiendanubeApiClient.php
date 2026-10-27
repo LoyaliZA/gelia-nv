@@ -32,6 +32,8 @@ class TiendanubeApiClient
 
     private bool $reintentarEscrituraAmbigua = true;
 
+    private ?int $timeoutSegundos = null;
+
     public function __construct(
         private ?TiendanubeConfiguracion $config = null
     ) {}
@@ -43,6 +45,14 @@ class TiendanubeApiClient
     {
         $copia = clone $this;
         $copia->reintentarEscrituraAmbigua = false;
+
+        return $copia;
+    }
+
+    public function conTimeout(int $segundos): self
+    {
+        $copia = clone $this;
+        $copia->timeoutSegundos = max(1, $segundos);
 
         return $copia;
     }
@@ -94,7 +104,7 @@ class TiendanubeApiClient
                 'Content-Type' => 'application/json; charset=utf-8',
                 'Accept' => 'application/json',
             ])
-            ->timeout(60);
+            ->timeout($this->timeoutSegundos ?? 60);
     }
 
     public function resolveBaseUrl(): string
@@ -664,6 +674,7 @@ class TiendanubeApiClient
                 $reset = $response->header('x-rate-limit-reset');
                 $resetMs = is_numeric($reset) ? (int) $reset : 0;
                 if ($resetMs <= 0) {
+                    // Respaldo configurable. No es una espera fija de cinco segundos: el default es 2000 ms.
                     $resetMs = max(1, (int) config('tiendanube.gobernador_reset_respaldo_ms', 2_000));
                 }
                 $turnoLimite = $gobernador->registrarLimiteRemoto(

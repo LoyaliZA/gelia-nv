@@ -173,12 +173,32 @@ if accion == 'estado' then
   return { redis.call('HGET', rk, 'pendiente') or '0', redis.call('HGET', rk, 'vigencias') or '0' }
 end
 
+local function duenoDe(extra)
+  if extra == nil or extra == '' or extra == '{}' then
+    return '', 0
+  end
+  local barra = string.find(extra, '|', 1, true)
+  if not barra then
+    return extra, 0
+  end
+  return string.sub(extra, 1, barra - 1), tonumber(string.sub(extra, barra + 1)) or 0
+end
+
 if accion == 'reservar' then
   if operacion == '' then
     return denegar('sin_presupuesto_local')
   end
+  local dueno, duracion = duenoDe(extra)
   local rk = p .. ':reserva:' .. operacion
   if redis.call('HGET', rk, 'pendiente') == '1' then
+    local actual = redis.call('HGET', rk, 'dueno') or ''
+    local vence = tonumber(redis.call('HGET', rk, 'vence') or '0')
+    if actual ~= '' and dueno ~= '' and actual ~= dueno and now < vence then
+      return denegar('sin_presupuesto_local')
+    end
+    if dueno ~= '' and (actual == '' or actual == dueno or now >= vence) then
+      redis.call('HSET', rk, 'dueno', dueno, 'vence', tostring(now + duracion))
+    end
     if now < tonumber(redis.call('GET', p .. ':siguiente') or '0') then
       return denegar(motivoTiempo())
     end
@@ -192,6 +212,9 @@ if accion == 'reservar' then
   end
   cobrar()
   redis.call('HSET', rk, 'pendiente', '1', 'vigencias', '0', 'clase', clase)
+  if dueno ~= '' then
+    redis.call('HSET', rk, 'dueno', dueno, 'vence', tostring(now + duracion))
+  end
   anotarFase()
   return responder(1, '', fase)
 end
@@ -325,9 +348,32 @@ if accion == 'programar' then
   return {1, 'programada', extra, ''}
 end
 
+if accion == 'ceder_dueno' then
+  if operacion ~= '' then
+    local rk = p .. ':reserva:' .. operacion
+    local dueno = duenoDe(extra)
+    local actual = redis.call('HGET', rk, 'dueno') or ''
+    if actual ~= '' and dueno ~= actual then
+      return responder(0, 'ajeno', fase)
+    end
+    redis.call('HDEL', rk, 'dueno', 'vence')
+  end
+  return responder(1, '', fase)
+end
+
 if accion == 'liberar' then
   if operacion ~= '' then
-    redis.call('HSET', p .. ':reserva:' .. operacion, 'pendiente', '0')
+    local rk = p .. ':reserva:' .. operacion
+    local dueno = duenoDe(extra)
+    local actual = redis.call('HGET', rk, 'dueno') or ''
+    if actual ~= '' and dueno ~= actual then
+      return responder(0, 'ajeno', fase)
+    end
+    if actual == '' and dueno ~= '' then
+      return responder(0, 'ajeno', fase)
+    end
+    redis.call('HSET', rk, 'pendiente', '0')
+    redis.call('HDEL', rk, 'dueno', 'vence')
   end
   return responder(1, '', fase)
 end

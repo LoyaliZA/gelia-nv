@@ -24,7 +24,6 @@ use App\Services\Tiendanube\TiendanubeOperacionTiendaService;
 use App\Services\Tiendanube\TiendanubeProductoRecursoLockService;
 use App\Support\Tiendanube\TiendanubeClaseTurno;
 use App\Support\Tiendanube\TiendanubePropositoHttp;
-use Illuminate\Support\Str;
 use Throwable;
 
 class TiendanubePrecioEjecucionItemProcessor
@@ -40,11 +39,16 @@ class TiendanubePrecioEjecucionItemProcessor
         private readonly TiendanubeReprogramador $reprogramador,
         private readonly TiendanubeContextoHttpActual $contextoHttp,
         private readonly TiendanubeEmisorHttp $emisor,
+        private readonly TiendanubePrecioLeaseGuard $leases,
     ) {}
 
     private ?int $reservaStoreId = null;
 
     private ?string $reservaOperacionId = null;
+
+    private ?string $leaseToken = null;
+
+    private bool $envioIniciado = false;
 
     public function procesar(TiendanubePrecioEjecucionItem $item): void
     {
@@ -65,6 +69,8 @@ class TiendanubePrecioEjecucionItemProcessor
             return;
         }
 
+        $this->leaseToken = null;
+        $this->envioIniciado = false;
         $ejecucion = $item->ejecucion;
         $ejecucion->refresh();
 
@@ -75,7 +81,8 @@ class TiendanubePrecioEjecucionItemProcessor
             return;
         }
 
-        if (! $this->reclamar($item)) {
+        $this->leaseToken = $this->reclamar($item);
+        if ($this->leaseToken === null) {
             return;
         }
 
@@ -91,9 +98,17 @@ class TiendanubePrecioEjecucionItemProcessor
                 return;
             }
 
-            $this->operaciones->renovar((int) $ejecucion->store_id, (string) $ejecucion->lease_token);
+            if (! $this->prepararExclusividad($ejecucion)) {
+                $this->parkearSinEnvio($item, 'exclusividad_perdida', 'La exclusividad de la tienda no está vigente. No hay envíos nuevos.');
 
-            $lock = $this->recursoLocks->intentarProducto((int) $ejecucion->store_id, (int) $item->producto_id, 90);
+                return;
+            }
+
+            $lock = $this->recursoLocks->intentarProducto(
+                (int) $ejecucion->store_id,
+                (int) $item->producto_id,
+                max(1, (int) config('tiendanube.precio_recurso_lock_seconds', 90)),
+            );
             if ($lock === null) {
                 $this->liberarAReintento($item, 'recurso_ocupado', 'El producto está ocupado por otra operación.');
 
@@ -116,6 +131,9 @@ class TiendanubePrecioEjecucionItemProcessor
             }
             $this->registrarEsperaRemota($item, $e);
         } catch (TiendanubePrecioEjecucionException $e) {
+            if ($e->codigo === 'sin_propiedad') {
+                return;
+            }
             $this->finalizar($item, TiendanubePrecioEjecucionItem::ESTADO_FALLIDO, $e->codigo, $e->getMessage());
         } catch (Throwable $e) {
             $this->mapearFallo($item, $e);
@@ -132,6 +150,9 @@ class TiendanubePrecioEjecucionItemProcessor
 
         try {
             $producto = $this->leerProducto($item, $ejecucion);
+            if ($producto === null) {
+                return;
+            }
         } catch (TiendanubeApiNotFoundException $e) {
             $this->finalizar(
                 $item,
@@ -166,7 +187,11 @@ class TiendanubePrecioEjecucionItemProcessor
         }
 
         $remoto = $this->control->preciosDeVariante($variante);
-        $item->update(['valor_remoto_previo' => $remoto]);
+        if (! $this->propio($item, ['valor_remoto_previo' => $remoto])) {
+            $this->exigirConciliacionSiHizoFalta($item, 'Se perdió la propiedad antes de escribir.');
+
+            return;
+        }
         $comparacion = $this->control->comparar(
             $item->campos_objetivo ?? [],
             $remoto,
@@ -200,6 +225,9 @@ class TiendanubePrecioEjecucionItemProcessor
 
         $payload = $this->escritor->construirPayload($item->campos_objetivo ?? []);
         $resultado = $this->escribirConTurno($item, $ejecucion, $payload);
+        if ($resultado === null) {
+            return;
+        }
 
         if ($resultado->escrituraIncierta) {
             $this->marcarEfectoPosible($item, $payload);
@@ -255,9 +283,18 @@ class TiendanubePrecioEjecucionItemProcessor
             return;
         }
 
+        $this->leaseToken = $this->leases->reclamarParaVerificar($item);
+        if ($this->leaseToken === null) {
+            return;
+        }
+        $this->envioIniciado = false;
+
         $ejecucion = $item->ejecucion;
+        if (! $this->puedeEnviar($item, $ejecucion)) {
+            return;
+        }
         try {
-            $producto = $this->api->getProduct((int) $item->producto_id);
+            $producto = $this->apiPrecio()->getProduct((int) $item->producto_id);
         } catch (TiendanubePresupuestoLocalException $e) {
             if ($this->contextoHttp->clase === TiendanubeClaseTurno::Recuperacion->value) {
                 throw $e;
@@ -305,12 +342,16 @@ class TiendanubePrecioEjecucionItemProcessor
 
     private function reconciliarIncierta(TiendanubePrecioEjecucionItem $item, ?string $detalle): void
     {
+        $ejecucion = $item->ejecucion;
+        if ($ejecucion === null || ! $this->puedeEnviar($item, $ejecucion)) {
+            return;
+        }
         try {
             $producto = $this->emisor->bajo(
                 TiendanubeClaseTurno::Recuperacion,
                 'precio:'.$item->id.':reconciliar',
                 'efecto_remoto_posible',
-                fn () => $this->api->getProduct((int) $item->producto_id),
+                fn () => $this->apiPrecio()->getProduct((int) $item->producto_id),
             );
         } catch (TiendanubePresupuestoLocalException $e) {
             $this->registrarEsperaLocal($item, $e);
@@ -346,39 +387,26 @@ class TiendanubePrecioEjecucionItemProcessor
         $this->finalizar($item, TiendanubePrecioEjecucionItem::ESTADO_CONFLICTO, 'conflicto_remoto', $comparacion['explicacion'], $remoto);
     }
 
-    private function reclamar(TiendanubePrecioEjecucionItem $item): bool
+    private function reclamar(TiendanubePrecioEjecucionItem $item): ?string
     {
-        $token = (string) Str::uuid();
-        $now = now();
-        $lease = $now->copy()->addSeconds(max(30, (int) config('tiendanube.precio_ejecucion_lease_seconds', 90)));
-
-        $affected = TiendanubePrecioEjecucionItem::query()
-            ->where('id', $item->id)
-            ->whereIn('estado', [
-                TiendanubePrecioEjecucionItem::ESTADO_PENDIENTE,
-                TiendanubePrecioEjecucionItem::ESTADO_REINTENTO_PENDIENTE,
-            ])
-            ->where(function ($q) use ($now) {
-                $q->whereNull('siguiente_intento_at')->orWhere('siguiente_intento_at', '<=', $now);
-            })
-            ->update([
-                'estado' => TiendanubePrecioEjecucionItem::ESTADO_PROCESANDO,
-                'lease_token' => $token,
-                'lease_expires_at' => $lease,
-                'updated_at' => $now,
-            ]);
-
-        return $affected === 1;
+        return $this->leases->reclamar($item);
     }
 
     /**
      * @param  array<string, mixed>|null  $confirmado
      * @param  array<string, mixed>  $evidencia
      */
-    private function leerProducto(TiendanubePrecioEjecucionItem $item, TiendanubePrecioEjecucion $ejecucion): array
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function leerProducto(TiendanubePrecioEjecucionItem $item, TiendanubePrecioEjecucion $ejecucion): ?array
     {
+        if (! $this->puedeEnviar($item, $ejecucion)) {
+            return null;
+        }
+
         if (! config('tiendanube.gobernador_activo', false)) {
-            return $this->api->getProduct((int) $item->producto_id);
+            return $this->apiPrecio()->getProduct((int) $item->producto_id);
         }
 
         $operacion = 'precio:'.$item->id;
@@ -405,6 +433,10 @@ class TiendanubePrecioEjecucionItemProcessor
             TiendanubeClaseTurno::Publicacion->value,
             $operacion,
             'sin_escritura',
+            null,
+            null,
+            $this->leaseToken,
+            $this->leases->segundos() * 1000,
         );
         if (! $turno->concedido) {
             $this->reprogramador->reprogramar($turno);
@@ -417,20 +449,23 @@ class TiendanubePrecioEjecucionItemProcessor
             TiendanubeClaseTurno::Publicacion->value,
             TiendanubePropositoHttp::ComprobacionVigencia->value,
             'lectura_hecha',
-            fn () => $this->api->getProduct((int) $item->producto_id),
+            fn () => $this->apiPrecio()->getProduct((int) $item->producto_id),
         );
-        $this->guardarLecturaVigente($item, $storeId, $operacion, $producto);
+        if (! $this->guardarLecturaVigente($item, $storeId, $operacion, $producto)) {
+            return null;
+        }
 
         return $producto;
     }
 
     private function debeReconciliarSinPut(TiendanubePrecioEjecucionItem $item, TiendanubePrecioEjecucion $ejecucion): bool
     {
-        if (! config('tiendanube.gobernador_activo', false)) {
-            return false;
-        }
         $evidencia = is_array($item->evidencia) ? $item->evidencia : [];
-        return (bool) ($evidencia['verificacion_pendiente'] ?? false);
+        if ((bool) ($evidencia['verificacion_pendiente'] ?? false)) {
+            return true;
+        }
+
+        return $this->leases->hayConciliacionAbierta($item);
     }
 
     /**
@@ -472,14 +507,14 @@ class TiendanubePrecioEjecucionItemProcessor
     /**
      * @param  array<string, mixed>  $producto
      */
-    private function guardarLecturaVigente(TiendanubePrecioEjecucionItem $item, int $storeId, string $operacion, array $producto): void
+    private function guardarLecturaVigente(TiendanubePrecioEjecucionItem $item, int $storeId, string $operacion, array $producto): bool
     {
         $previa = is_array($item->evidencia) ? $item->evidencia : [];
         $tomadaEn = $this->gobernador->marcaTemporal();
         $ejecucion = $item->ejecucion;
         $contadores = $this->contadores($previa);
         $contadores['lecturas']++;
-        $item->update([
+        if (! $this->propio($item, [
             'evidencia' => array_merge($previa, [
                 'contadores' => $contadores,
                 'lectura_vigente' => [
@@ -491,24 +526,34 @@ class TiendanubePrecioEjecucionItemProcessor
                     'checksum_revision' => (string) ($ejecucion->checksum_revision ?? ''),
                 ],
             ]),
-        ]);
-        $item->refresh();
+        ])) {
+            return false;
+        }
         $this->gobernador->guardarEvidencia($storeId, $operacion, 'lectura_hecha', [
             'proposito' => TiendanubePropositoHttp::ComprobacionVigencia->value,
             'tomada_en' => $tomadaEn,
         ]);
+
+        return true;
     }
 
     /**
      * @param  array<string, mixed>  $payload
      */
-    private function escribirConTurno(TiendanubePrecioEjecucionItem $item, TiendanubePrecioEjecucion $ejecucion, array $payload): TiendanubePrecioVarianteWriteResult
+    private function escribirConTurno(TiendanubePrecioEjecucionItem $item, TiendanubePrecioEjecucion $ejecucion, array $payload): ?TiendanubePrecioVarianteWriteResult
     {
+        if (! $this->puedeEnviar($item, $ejecucion)) {
+            return null;
+        }
+
         $escribir = fn () => $this->escritor->escribir(
             (int) $ejecucion->store_id,
             (int) $item->producto_id,
             (int) $item->variante_id,
             $payload,
+            function () {
+                $this->envioIniciado = true;
+            },
         );
 
         if (! config('tiendanube.gobernador_activo', false) || $this->reservaOperacionId === null) {
@@ -540,14 +585,15 @@ class TiendanubePrecioEjecucionItemProcessor
 
     private function registrarEsperaLocal(TiendanubePrecioEjecucionItem $item, TiendanubePresupuestoLocalException $e): void
     {
+        $this->cederDuenoReserva();
         $this->reservaStoreId = null;
         $this->reservaOperacionId = null;
         $this->anotarEspera($item, $e->turno, 'sin_presupuesto_local');
-        $this->reprogramador->reprogramar($e->turno);
     }
 
     private function registrarEsperaRemota(TiendanubePrecioEjecucionItem $item, TiendanubeApiRateLimitException $e): void
     {
+        $this->cederDuenoReserva();
         $this->reservaStoreId = null;
         $this->reservaOperacionId = null;
         $item->refresh();
@@ -567,19 +613,11 @@ class TiendanubePrecioEjecucionItemProcessor
             TiendanubeClaseTurno::Publicacion->value,
         );
         $this->anotarEspera($item, $turno, 'rate_limit');
-        $this->reprogramador->reprogramar($turno);
     }
 
     private function anotarEspera(TiendanubePrecioEjecucionItem $item, TiendanubeTurnoResultado $turno, string $categoria): void
     {
-        $this->liberarAReintento($item, $categoria, 'Sin presupuesto local para la fase '.$turno->fase.'.', false);
         $item->refresh();
-        if (! in_array($item->estado, [
-            TiendanubePrecioEjecucionItem::ESTADO_REINTENTO_PENDIENTE,
-            TiendanubePrecioEjecucionItem::ESTADO_RESULTADO_INCIERTO,
-        ], true)) {
-            return;
-        }
         $previa = is_array($item->evidencia) ? $item->evidencia : [];
         $contadores = $this->contadores($previa);
         $contadores['esperas']++;
@@ -588,8 +626,9 @@ class TiendanubePrecioEjecucionItemProcessor
         if (! $pendiente && in_array($fase, ['escritura_enviada', 'efecto_remoto_posible'], true)) {
             $fase = isset($previa['lectura_vigente']) ? 'lectura_hecha' : 'sin_escritura';
         }
-        $item->update([
+        if (! $this->propio($item, [
             'error_codigo' => $categoria,
+            'error_mensaje' => 'Sin presupuesto local para la fase '.$turno->fase.'.',
             'evidencia' => array_merge($previa, [
                 'contadores' => $contadores,
                 'canal' => $categoria === 'rate_limit' ? 'api' : 'gobernador',
@@ -598,7 +637,13 @@ class TiendanubePrecioEjecucionItemProcessor
                 'motivo' => $categoria,
                 'categoria' => $categoria,
             ]),
-        ]);
+        ])) {
+            $this->exigirConciliacionSiHizoFalta($item, 'La espera no pudo guardarse con el lease vigente.');
+
+            return;
+        }
+        $this->reprogramador->reprogramar($turno, $this->leaseToken);
+        $this->leaseToken = null;
     }
 
     private function soltarReserva(): void
@@ -607,10 +652,23 @@ class TiendanubePrecioEjecucionItemProcessor
             return;
         }
         if (config('tiendanube.gobernador_activo', false)) {
-            $this->gobernador->liberarReserva($this->reservaStoreId, $this->reservaOperacionId);
+            $this->gobernador->liberarReserva($this->reservaStoreId, $this->reservaOperacionId, $this->leaseToken);
         }
         $this->reservaStoreId = null;
         $this->reservaOperacionId = null;
+    }
+
+    private function cederDuenoReserva(): void
+    {
+        if (! config('tiendanube.gobernador_activo', false)
+            || $this->reservaStoreId === null
+            || $this->reservaOperacionId === null
+            || $this->leaseToken === null
+            || $this->leaseToken === '') {
+            return;
+        }
+
+        $this->gobernador->cederDuenoReserva($this->reservaStoreId, $this->reservaOperacionId, $this->leaseToken);
     }
 
     private function finalizar(
@@ -633,7 +691,8 @@ class TiendanubePrecioEjecucionItemProcessor
 
         $previa = is_array($item->evidencia) ? $item->evidencia : [];
         $base = $estado === TiendanubePrecioEjecucionItem::ESTADO_RESULTADO_INCIERTO ? $previa : [];
-        $item->update([
+        $token = (string) $this->leaseToken;
+        $ok = $this->propio($item, [
             'estado' => $estado,
             'error_codigo' => $codigo,
             'error_mensaje' => $mensaje,
@@ -642,6 +701,19 @@ class TiendanubePrecioEjecucionItemProcessor
             'lease_token' => null,
             'lease_expires_at' => null,
         ]);
+        if (! $ok) {
+            if ($this->envioIniciado) {
+                $this->leases->registrarEfectoTrasPerderVigencia(
+                    $item,
+                    $token,
+                    $evidencia,
+                    'La vigencia se perdió después del envío. Eso no cancela una solicitud que Tiendanube ya pudo recibir. Hace falta conciliación.',
+                );
+            }
+
+            return;
+        }
+        $this->leaseToken = null;
 
         $item->ejecucion?->eventos()->create([
             'item_id' => $item->id,
@@ -676,21 +748,10 @@ class TiendanubePrecioEjecucionItemProcessor
 
             return;
         }
-        $this->liberarAReintento($item, $codigo, $mensaje, false);
-        $item->refresh();
-        if ($item->estado !== TiendanubePrecioEjecucionItem::ESTADO_REINTENTO_PENDIENTE) {
-            return;
-        }
         $espera = max(1, (int) config('tiendanube.gobernador_reset_respaldo_ms', 2_000));
-        $turno = new TiendanubeTurnoResultado(
-            false,
-            'error_transitorio',
-            $this->gobernador->marcaTemporal() + $espera,
-            'sin_escritura',
-            'precio:'.$item->id,
-            TiendanubeClaseTurno::Publicacion->value,
-        );
-        $item->update([
+        if (! $this->propio($item, [
+            'error_codigo' => $codigo,
+            'error_mensaje' => $mensaje,
             'evidencia' => array_merge($previa, [
                 'contadores' => $contadores,
                 'canal' => 'api',
@@ -699,8 +760,19 @@ class TiendanubePrecioEjecucionItemProcessor
                 'categoria' => 'error_transitorio',
                 'mensaje' => $mensaje,
             ]),
-        ]);
-        $this->reprogramador->reprogramar($turno);
+        ])) {
+            return;
+        }
+        $turno = new TiendanubeTurnoResultado(
+            false,
+            'error_transitorio',
+            $this->gobernador->marcaTemporal() + $espera,
+            'sin_escritura',
+            'precio:'.$item->id,
+            TiendanubeClaseTurno::Publicacion->value,
+        );
+        $this->reprogramador->reprogramar($turno, $this->leaseToken);
+        $this->leaseToken = null;
     }
 
     private function liberarAReintento(TiendanubePrecioEjecucionItem $item, string $codigo, string $mensaje, bool $agotaEnvios = true): void
@@ -714,14 +786,16 @@ class TiendanubePrecioEjecucionItemProcessor
         }
 
         $espera = max(1, (int) config('tiendanube.gobernador_reset_respaldo_ms', 2_000));
-        $item->update([
+        if ($this->propio($item, [
             'estado' => TiendanubePrecioEjecucionItem::ESTADO_REINTENTO_PENDIENTE,
             'error_codigo' => $codigo,
             'error_mensaje' => $mensaje,
             'siguiente_intento_at' => now()->addMilliseconds($espera),
             'lease_token' => null,
             'lease_expires_at' => null,
-        ]);
+        ])) {
+            $this->leaseToken = null;
+        }
     }
 
     private function mapearFallo(TiendanubePrecioEjecucionItem $item, Throwable $e): void
@@ -770,14 +844,18 @@ class TiendanubePrecioEjecucionItemProcessor
             return;
         }
 
-        $this->liberarAReintento($item, 'error_transitorio', $e->getMessage());
         $item->refresh();
-        if ($item->estado !== TiendanubePrecioEjecucionItem::ESTADO_REINTENTO_PENDIENTE) {
-            return;
-        }
         $espera = max(1, (int) config('tiendanube.gobernador_reset_respaldo_ms', 2_000));
         $previa = is_array($item->evidencia) ? $item->evidencia : [];
-        $item->update([
+        $max = max(1, (int) config('tiendanube.precio_ejecucion_item_max_intentos', 5));
+        if ($item->intentos >= $max) {
+            $this->finalizar($item, TiendanubePrecioEjecucionItem::ESTADO_FALLIDO, 'max_intentos', $e->getMessage());
+
+            return;
+        }
+        if (! $this->propio($item, [
+            'error_codigo' => 'error_transitorio',
+            'error_mensaje' => $e->getMessage(),
             'evidencia' => array_merge($previa, [
                 'canal' => 'api',
                 'escritura' => (bool) ($previa['verificacion_pendiente'] ?? false),
@@ -785,7 +863,11 @@ class TiendanubePrecioEjecucionItemProcessor
                 'categoria' => 'error_transitorio',
                 'mensaje' => $e->getMessage(),
             ]),
-        ]);
+        ])) {
+            $this->exigirConciliacionSiHizoFalta($item, $e->getMessage());
+
+            return;
+        }
         $this->reprogramador->reprogramar(new TiendanubeTurnoResultado(
             false,
             'error_transitorio',
@@ -793,7 +875,8 @@ class TiendanubePrecioEjecucionItemProcessor
             'sin_escritura',
             'precio:'.$item->id,
             TiendanubeClaseTurno::Publicacion->value,
-        ));
+        ), $this->leaseToken);
+        $this->leaseToken = null;
     }
 
     /**
@@ -817,10 +900,12 @@ class TiendanubePrecioEjecucionItemProcessor
         $previa = is_array($item->evidencia) ? $item->evidencia : [];
         $contadores = $this->contadores($previa);
         $contadores['envios']++;
-        $item->update([
+        if (! $this->propio($item, [
             'intentos' => $item->intentos + 1,
             'evidencia' => array_merge($previa, ['contadores' => $contadores]),
-        ]);
+        ])) {
+            $this->exigirConciliacionSiHizoFalta($item, 'El envío quedó sin poder anotarse en el ítem.');
+        }
     }
 
     /**
@@ -830,7 +915,7 @@ class TiendanubePrecioEjecucionItemProcessor
     {
         $item->refresh();
         $previa = is_array($item->evidencia) ? $item->evidencia : [];
-        $item->update([
+        if (! $this->propio($item, [
             'evidencia' => array_merge($previa, [
                 'verificacion_pendiente' => true,
                 'payload' => $payload,
@@ -838,15 +923,16 @@ class TiendanubePrecioEjecucionItemProcessor
                 'fase' => 'escritura_enviada',
                 'efecto' => 'posible',
             ]),
-        ]);
-        $item->refresh();
+        ])) {
+            $this->exigirConciliacionSiHizoFalta($item, 'El envío pudo salir y la evidencia no quedó en el ítem.');
+        }
     }
 
     private function cerrarVerificacion(TiendanubePrecioEjecucionItem $item, string $resultado): void
     {
         $item->refresh();
         $previa = is_array($item->evidencia) ? $item->evidencia : [];
-        $item->update([
+        $this->propio($item, [
             'evidencia' => array_merge($previa, [
                 'verificacion_pendiente' => false,
                 'verificacion' => $resultado,
@@ -858,7 +944,7 @@ class TiendanubePrecioEjecucionItemProcessor
     {
         $this->soltarReserva();
         $previa = is_array($item->evidencia) ? $item->evidencia : [];
-        $item->update([
+        if (! $this->propio($item, [
             'estado' => TiendanubePrecioEjecucionItem::ESTADO_PENDIENTE,
             'error_codigo' => $codigo,
             'error_mensaje' => $mensaje,
@@ -866,10 +952,21 @@ class TiendanubePrecioEjecucionItemProcessor
             'lease_expires_at' => null,
             'evidencia' => array_merge($previa, [
                 'categoria' => $codigo,
-                'escritura' => false,
-                'fase' => 'sin_escritura',
+                'escritura' => $this->envioIniciado,
+                'verificacion_pendiente' => $this->envioIniciado,
+                'fase' => $this->envioIniciado ? 'efecto_remoto_posible' : 'sin_escritura',
+                'conciliacion' => $this->envioIniciado ? 'exigida' : null,
             ]),
-        ]);
+        ])) {
+            $this->exigirConciliacionSiHizoFalta($item, $mensaje);
+
+            return;
+        }
+        $tokenSuspendido = (string) $this->leaseToken;
+        $this->leaseToken = null;
+        if ($this->envioIniciado) {
+            $this->leases->anotarConciliacion($item, $tokenSuspendido, $mensaje);
+        }
         $item->ejecucion?->update([
             'estado' => TiendanubePrecioEjecucion::ESTADO_SUSPENDIDA,
             'error_codigo' => $codigo,
@@ -881,5 +978,123 @@ class TiendanubePrecioEjecucionItemProcessor
             'payload' => ['canal' => 'api', 'codigo' => $codigo],
             'created_at' => now(),
         ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $cambios
+     */
+    private function propio(TiendanubePrecioEjecucionItem $item, array $cambios): bool
+    {
+        if ($this->leaseToken === null || $this->leaseToken === '') {
+            return false;
+        }
+
+        return $this->leases->actualizarVigente($item, $this->leaseToken, $cambios, [
+            TiendanubePrecioEjecucionItem::ESTADO_PROCESANDO,
+        ]);
+    }
+
+    private function puedeEnviar(TiendanubePrecioEjecucionItem $item, TiendanubePrecioEjecucion $ejecucion): bool
+    {
+        if ($this->leaseToken === null || ! $this->leases->renovar($item, $this->leaseToken)) {
+            $this->parkearSinEnvio($item, 'lease_item', 'El lease del ítem no sigue vigente. No hay envío nuevo.');
+
+            return false;
+        }
+        $ejecucion->refresh();
+        $tokenTienda = (string) $ejecucion->lease_token;
+        if (! $this->operaciones->renovar((int) $ejecucion->store_id, $tokenTienda)) {
+            $this->parkearSinEnvio($item, 'exclusividad_no_renovada', 'La exclusividad de la tienda no se renovó. Se detienen los envíos nuevos.');
+
+            return false;
+        }
+
+        return true;
+    }
+
+    private function prepararExclusividad(TiendanubePrecioEjecucion $ejecucion): bool
+    {
+        $storeId = (int) $ejecucion->store_id;
+        $token = (string) $ejecucion->lease_token;
+        if ($this->operaciones->sigueVigente($storeId, $token)) {
+            return $this->operaciones->renovar($storeId, $token);
+        }
+
+        $nuevo = $this->operaciones->recuperarPropiedad(
+            $storeId,
+            $token,
+            TiendanubeOperacionTiendaService::TIPO_PRECIO_APLICACION,
+            (int) $ejecucion->user_id,
+            (int) $ejecucion->config_generation,
+        );
+        if ($nuevo === null) {
+            return false;
+        }
+
+        $ahora = now();
+        $segundos = max(30, (int) config('tiendanube.sync_lease_seconds', 120));
+        $asignado = TiendanubePrecioEjecucion::query()
+            ->where('id', $ejecucion->id)
+            ->where(function ($q) use ($token) {
+                if ($token === '') {
+                    $q->whereNull('lease_token');
+                } else {
+                    $q->where('lease_token', $token);
+                }
+            })
+            ->where(function ($q) use ($ahora) {
+                $q->whereNull('lease_expires_at')->orWhere('lease_expires_at', '<', $ahora);
+            })
+            ->update([
+                'lease_token' => $nuevo,
+                'lease_expires_at' => $ahora->copy()->addSeconds($segundos),
+                'updated_at' => $ahora,
+            ]);
+        if ($asignado !== 1) {
+            $this->operaciones->liberar($storeId, $nuevo);
+
+            return false;
+        }
+        $ejecucion->refresh();
+
+        return true;
+    }
+
+    private function parkearSinEnvio(TiendanubePrecioEjecucionItem $item, string $codigo, string $mensaje): void
+    {
+        $this->soltarReserva();
+        if ($this->envioIniciado) {
+            $this->exigirConciliacionSiHizoFalta($item, $mensaje);
+
+            return;
+        }
+        $this->propio($item, [
+            'estado' => TiendanubePrecioEjecucionItem::ESTADO_REINTENTO_PENDIENTE,
+            'error_codigo' => $codigo,
+            'error_mensaje' => $mensaje,
+            'siguiente_intento_at' => now()->addMilliseconds(max(1, (int) config('tiendanube.gobernador_reset_respaldo_ms', 2_000))),
+            'lease_token' => null,
+            'lease_expires_at' => null,
+        ]);
+        $this->leaseToken = null;
+    }
+
+    private function exigirConciliacionSiHizoFalta(TiendanubePrecioEjecucionItem $item, string $mensaje): void
+    {
+        if (! $this->envioIniciado || $this->leaseToken === null) {
+            return;
+        }
+        $this->leases->registrarEfectoTrasPerderVigencia(
+            $item,
+            $this->leaseToken,
+            [],
+            'La vigencia se perdió después del envío. Eso no cancela una solicitud que Tiendanube ya pudo recibir. '.$mensaje,
+        );
+        $this->leaseToken = null;
+    }
+
+    private function apiPrecio(): TiendanubeApiClient
+    {
+        return $this->api->conTimeout(max(1, (int) config('tiendanube.precio_http_timeout_seconds', 30)));
     }
 }

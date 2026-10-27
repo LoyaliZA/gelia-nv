@@ -306,6 +306,10 @@ class TiendanubeCatalogoSyncService
     /**
      * @param  array<string, mixed>  $producto
      */
+    /**
+     * Registra un payload que ya vino de Tiendanube. El lock local de Gelia no
+     * impide ni deshace un cambio hecho directamente en la tienda.
+     */
     public function upsertProducto(array $producto): TiendanubeProducto
     {
         return DB::transaction(function () use ($producto) {

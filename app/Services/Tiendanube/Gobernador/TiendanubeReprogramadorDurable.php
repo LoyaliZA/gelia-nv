@@ -4,6 +4,7 @@ namespace App\Services\Tiendanube\Gobernador;
 
 use App\Models\Tiendanube\TiendanubeConfiguracion;
 use App\Models\Tiendanube\TiendanubePrecioEjecucionItem;
+use App\Services\Tiendanube\Precios\Aplicacion\TiendanubePrecioLeaseGuard;
 use DateTimeInterface;
 
 /**
@@ -15,15 +16,20 @@ class TiendanubeReprogramadorDurable implements TiendanubeReprogramador
     public function __construct(
         private readonly TiendanubeGobernador $gobernador,
         private readonly TiendanubeEnrutadorColas $enrutador,
+        private readonly ?TiendanubePrecioLeaseGuard $leases = null,
     ) {}
 
-    public function reprogramar(TiendanubeTurnoResultado $turno): void
+    public function reprogramar(TiendanubeTurnoResultado $turno, ?string $leaseToken = null): void
     {
         if ($turno->operacionId === '') {
             return;
         }
 
         $como = $this->como($turno);
+        $propio = $this->reflejarEnItem($turno, $como, $leaseToken);
+        if ($leaseToken !== null && $leaseToken !== '' && ! $propio) {
+            return;
+        }
         $nueva = true;
         if (config('tiendanube.gobernador_activo', false)) {
             $storeId = $this->storeId();
@@ -32,8 +38,7 @@ class TiendanubeReprogramadorDurable implements TiendanubeReprogramador
             }
         }
 
-        $this->reflejarEnItem($turno, $como);
-        if (! $nueva) {
+        if (! $nueva && ! $propio) {
             return;
         }
 
@@ -47,10 +52,10 @@ class TiendanubeReprogramadorDurable implements TiendanubeReprogramador
             return;
         }
 
-        $this->programarEjecucion($ejecucionId, now()->addMilliseconds($esperaMs));
+        $this->programarEjecucion($ejecucionId, now()->addMilliseconds($esperaMs), $leaseToken);
     }
 
-    public function programarEjecucion(string $ejecucionId, DateTimeInterface $cuando): void
+    public function programarEjecucion(string $ejecucionId, DateTimeInterface $cuando, ?string $leaseToken = null): void
     {
         if ($cuando <= now()) {
             return;
@@ -62,7 +67,7 @@ class TiendanubeReprogramadorDurable implements TiendanubeReprogramador
             if ($storeId > 0 && ! $this->gobernador->reservarPrograma($storeId, $ejecucionId, $marca)) {
                 return;
             }
-        } elseif (! $this->marcarProgramacionLocal($ejecucionId, $marca)) {
+        } elseif (! $this->marcarProgramacionLocal($ejecucionId, $marca, $leaseToken)) {
             return;
         }
 
@@ -92,21 +97,18 @@ class TiendanubeReprogramadorDurable implements TiendanubeReprogramador
         ], JSON_THROW_ON_ERROR);
     }
 
-    private function reflejarEnItem(TiendanubeTurnoResultado $turno, string $como): void
+    private function reflejarEnItem(TiendanubeTurnoResultado $turno, string $como, ?string $leaseToken): bool
     {
-        $item = $this->itemDe($turno->operacionId);
-        if ($item === null) {
-            return;
-        }
-        if (! in_array($item->estado, [
-            TiendanubePrecioEjecucionItem::ESTADO_PENDIENTE,
-            TiendanubePrecioEjecucionItem::ESTADO_PROCESANDO,
-            TiendanubePrecioEjecucionItem::ESTADO_REINTENTO_PENDIENTE,
-            TiendanubePrecioEjecucionItem::ESTADO_RESULTADO_INCIERTO,
-        ], true)) {
-            return;
+        if ($leaseToken === null || $leaseToken === '') {
+            return false;
         }
 
+        $item = $this->itemDe($turno->operacionId);
+        if ($item === null) {
+            return false;
+        }
+
+        $guard = $this->leases ?? new TiendanubePrecioLeaseGuard();
         $previa = is_array($item->evidencia) ? $item->evidencia : [];
         $esperaMs = $turno->reanudarDespuesAt - $this->gobernador->marcaTemporal();
         $cambios = [
@@ -127,15 +129,18 @@ class TiendanubeReprogramadorDurable implements TiendanubeReprogramador
         if ($esperaMs > 0) {
             $cambios['siguiente_intento_at'] = now()->addMilliseconds($esperaMs);
         }
-        $item->update($cambios);
+        return $guard->actualizarVigente($item, $leaseToken, $cambios, [
+            TiendanubePrecioEjecucionItem::ESTADO_PROCESANDO,
+        ]);
     }
 
-    private function marcarProgramacionLocal(string $ejecucionId, string $marca): bool
+    private function marcarProgramacionLocal(string $ejecucionId, string $marca, ?string $leaseToken): bool
     {
         $item = TiendanubePrecioEjecucionItem::query()
             ->where('ejecucion_id', $ejecucionId)
             ->whereIn('estado', [
                 TiendanubePrecioEjecucionItem::ESTADO_PENDIENTE,
+                TiendanubePrecioEjecucionItem::ESTADO_PROCESANDO,
                 TiendanubePrecioEjecucionItem::ESTADO_REINTENTO_PENDIENTE,
                 TiendanubePrecioEjecucionItem::ESTADO_RESULTADO_INCIERTO,
             ])
@@ -151,8 +156,21 @@ class TiendanubeReprogramadorDurable implements TiendanubeReprogramador
         }
         $continuacion = is_array($previa['continuacion'] ?? null) ? $previa['continuacion'] : [];
         $continuacion['programada_en'] = $marca;
+        $evidencia = array_merge($previa, ['continuacion' => $continuacion]);
+        if ($item->estado === TiendanubePrecioEjecucionItem::ESTADO_PROCESANDO
+            && is_string($item->lease_token)
+            && $item->lease_token !== '') {
+            if ($leaseToken !== $item->lease_token) {
+                return false;
+            }
+            $guard = $this->leases ?? new TiendanubePrecioLeaseGuard();
+
+            return $guard->actualizarVigente($item, (string) $leaseToken, [
+                'evidencia' => $evidencia,
+            ], [TiendanubePrecioEjecucionItem::ESTADO_PROCESANDO]);
+        }
         $item->update([
-            'evidencia' => array_merge($previa, ['continuacion' => $continuacion]),
+            'evidencia' => $evidencia,
         ]);
 
         return true;

@@ -8,9 +8,9 @@ use Redis;
  * Presupuesto compartido por tienda. gobernador_activo queda en falso: este servicio
  * no enruta colas. La demora durable pertenece a TiendanubeReprogramador (E2b).
  *
- * ponytail: una reserva pendiente sobrevive si el proceso muere entre reservar y
- * finalizar. E2c puede vencerla con el lease; mientras tanto el reintento reutiliza
- * esa reserva y no cobra un segundo turno de clase.
+ * ponytail: la reserva guarda el token del ítem y su vencimiento. liberar solo
+ * la suelta si ese token coincide. Una reserva vencida puede tomarla el worker
+ * siguiente. El reintento de la misma reserva no cobra otro turno de clase.
  */
 class TiendanubeGobernador
 {
@@ -120,9 +120,13 @@ class TiendanubeGobernador
         ];
     }
 
-    public function reservarEscritura(int $storeId, string $clase, string $operacionId, string $fase, ?int $intervaloMs = null, ?int $ahoraMs = null): TiendanubeTurnoResultado
+    public function reservarEscritura(int $storeId, string $clase, string $operacionId, string $fase, ?int $intervaloMs = null, ?int $ahoraMs = null, ?string $dueno = null, ?int $vigenciaMs = null): TiendanubeTurnoResultado
     {
-        return $this->resultado('reservar', $storeId, $clase, 'intento', $operacionId, $fase, $intervaloMs, $ahoraMs);
+        $extra = ($dueno !== null && $dueno !== '')
+            ? $dueno.'|'.max(1, (int) ($vigenciaMs ?? 0))
+            : '{}';
+
+        return $this->resultado('reservar', $storeId, $clase, 'intento', $operacionId, $fase, $intervaloMs, $ahoraMs, $extra);
     }
 
     public function adquirir(int $storeId, string $clase, string $proposito, string $operacionId, string $fase, ?int $intervaloMs = null, ?int $ahoraMs = null): TiendanubeTurnoResultado
@@ -236,9 +240,23 @@ class TiendanubeGobernador
         return (int) ($fila[0] ?? 0) === 1;
     }
 
-    public function liberarReserva(int $storeId, string $operacionId): void
+    public function liberarReserva(int $storeId, string $operacionId, ?string $dueno = null): void
     {
-        $this->almacen()->evaluar($this->clave($storeId), 'liberar', $this->ahora(null), 0, '', '', $operacionId, '');
+        $extra = ($dueno !== null && $dueno !== '') ? $dueno.'|0' : '{}';
+        $this->almacen()->evaluar($this->clave($storeId), 'liberar', $this->ahora(null), 0, '', '', $operacionId, '', $extra);
+    }
+
+    /**
+     * La espera durable suelta el dueño y conserva la reserva pendiente.
+     * El siguiente intento, con un token nuevo, puede adoptarla. Un token viejo no la borra.
+     */
+    public function cederDuenoReserva(int $storeId, string $operacionId, string $dueno): void
+    {
+        if ($dueno === '') {
+            return;
+        }
+
+        $this->almacen()->evaluar($this->clave($storeId), 'ceder_dueno', $this->ahora(null), 0, '', '', $operacionId, '', $dueno.'|0');
     }
 
     /**
@@ -298,7 +316,7 @@ class TiendanubeGobernador
         return $this->almacen;
     }
 
-    private function resultado(string $accion, int $storeId, string $clase, string $proposito, string $operacionId, string $fase, ?int $intervaloMs, ?int $ahoraMs): TiendanubeTurnoResultado
+    private function resultado(string $accion, int $storeId, string $clase, string $proposito, string $operacionId, string $fase, ?int $intervaloMs, ?int $ahoraMs, string $extra = '{}'): TiendanubeTurnoResultado
     {
         $fila = $this->almacen()->evaluar(
             $this->clave($storeId),
@@ -309,6 +327,7 @@ class TiendanubeGobernador
             $proposito,
             $operacionId,
             $fase,
+            $extra,
         );
 
         return $this->interpretar($fila, $operacionId, $clase);

@@ -123,16 +123,7 @@ class TiendanubePrecioEjecucionService
     public function cancelar(string $ejecucionId, int $storeId, int $userId): array
     {
         $ejecucion = $this->obtenerAutorizada($ejecucionId, $storeId, $userId);
-        $ejecucion->items()
-            ->whereIn('estado', [
-                TiendanubePrecioEjecucionItem::ESTADO_PENDIENTE,
-                TiendanubePrecioEjecucionItem::ESTADO_REINTENTO_PENDIENTE,
-            ])
-            ->update([
-                'estado' => TiendanubePrecioEjecucionItem::ESTADO_CANCELADO,
-                'error_codigo' => 'detenido',
-                'error_mensaje' => 'Pendiente detenido. Las confirmadas permanecen aplicadas.',
-            ]);
+        $this->detenerItemsEnCurso($ejecucion->id);
 
         if (config('tiendanube.gobernador_activo', false)) {
             $gobernador = app(\App\Services\Tiendanube\Gobernador\TiendanubeGobernador::class);
@@ -193,12 +184,29 @@ class TiendanubePrecioEjecucionService
             return $this->payload($ejecucion->fresh());
         }
 
-        $item->update([
-            'estado' => TiendanubePrecioEjecucionItem::ESTADO_REINTENTO_PENDIENTE,
-            'siguiente_intento_at' => now(),
-            'lease_token' => null,
-            'lease_expires_at' => null,
-        ]);
+        $ahora = now();
+        $affected = TiendanubePrecioEjecucionItem::query()
+            ->where('id', $item->id)
+            ->whereIn('estado', [
+                TiendanubePrecioEjecucionItem::ESTADO_REINTENTO_PENDIENTE,
+                TiendanubePrecioEjecucionItem::ESTADO_RESULTADO_INCIERTO,
+                TiendanubePrecioEjecucionItem::ESTADO_FALLIDO,
+            ])
+            ->where(function ($q) use ($ahora) {
+                $q->whereNull('lease_token')
+                    ->orWhereNull('lease_expires_at')
+                    ->orWhere('lease_expires_at', '<', $ahora);
+            })
+            ->update([
+                'estado' => TiendanubePrecioEjecucionItem::ESTADO_REINTENTO_PENDIENTE,
+                'siguiente_intento_at' => $ahora,
+                'lease_token' => null,
+                'lease_expires_at' => null,
+                'updated_at' => $ahora,
+            ]);
+        if ($affected !== 1) {
+            throw new TiendanubePrecioEjecucionException('El ítem cambió de dueño. No se reprogramó.', 'lease_ajeno', 409);
+        }
         $ejecucion->eventos()->create([
             'tipo' => TiendanubePrecioEjecucionEvento::TIPO_REINTENTO,
             'item_id' => $item->id,
@@ -308,18 +316,53 @@ class TiendanubePrecioEjecucionService
         }
     }
 
+    public function detenerItemsEnCurso(string $ejecucionId): int
+    {
+        return TiendanubePrecioEjecucionItem::query()
+            ->where('ejecucion_id', $ejecucionId)
+            ->whereIn('estado', [
+                TiendanubePrecioEjecucionItem::ESTADO_PENDIENTE,
+                TiendanubePrecioEjecucionItem::ESTADO_REINTENTO_PENDIENTE,
+                TiendanubePrecioEjecucionItem::ESTADO_PROCESANDO,
+            ])
+            ->update([
+                'estado' => TiendanubePrecioEjecucionItem::ESTADO_CANCELADO,
+                'error_codigo' => 'detenido',
+                'error_mensaje' => 'Pendiente detenido. Las confirmadas permanecen aplicadas.',
+                'lease_token' => null,
+                'lease_expires_at' => null,
+                'updated_at' => now(),
+            ]);
+    }
+
     public function recuperar(): int
     {
         $ahora = now();
-        TiendanubePrecioEjecucionItem::query()
+        $vencidos = TiendanubePrecioEjecucionItem::query()
             ->where('estado', TiendanubePrecioEjecucionItem::ESTADO_PROCESANDO)
             ->whereNotNull('lease_expires_at')
             ->where('lease_expires_at', '<', $ahora)
-            ->update([
-                'estado' => TiendanubePrecioEjecucionItem::ESTADO_REINTENTO_PENDIENTE,
-                'lease_token' => null,
-                'siguiente_intento_at' => $ahora,
-            ]);
+            ->get();
+        foreach ($vencidos as $item) {
+            $previa = is_array($item->evidencia) ? $item->evidencia : [];
+            $efecto = (bool) ($previa['verificacion_pendiente'] ?? false)
+                || ($previa['efecto'] ?? '') === 'posible'
+                || ($previa['conciliacion'] ?? '') === 'exigida';
+            TiendanubePrecioEjecucionItem::query()
+                ->where('id', $item->id)
+                ->where('lease_token', $item->lease_token)
+                ->where('estado', TiendanubePrecioEjecucionItem::ESTADO_PROCESANDO)
+                ->where('lease_expires_at', '<', $ahora)
+                ->update([
+                    'estado' => $efecto
+                        ? TiendanubePrecioEjecucionItem::ESTADO_RESULTADO_INCIERTO
+                        : TiendanubePrecioEjecucionItem::ESTADO_REINTENTO_PENDIENTE,
+                    'lease_token' => null,
+                    'lease_expires_at' => null,
+                    'siguiente_intento_at' => $efecto ? null : $ahora,
+                    'updated_at' => $ahora,
+                ]);
+        }
 
         $recuperadas = 0;
         $abiertas = TiendanubePrecioEjecucion::query()
@@ -404,9 +447,19 @@ class TiendanubePrecioEjecucionService
             'completed_at' => $cerrada ? ($ejecucion->completed_at ?? now()) : null,
         ]);
 
-        if ($cerrada && $ejecucion->lease_token) {
-            $this->operaciones->liberar((int) $ejecucion->store_id, (string) $ejecucion->lease_token);
-            $ejecucion->update(['lease_token' => null, 'lease_expires_at' => null]);
+        $tokenCierre = (string) $ejecucion->lease_token;
+        if ($cerrada && $tokenCierre !== '') {
+            $liberado = TiendanubePrecioEjecucion::query()
+                ->where('id', $ejecucion->id)
+                ->where('lease_token', $tokenCierre)
+                ->update([
+                    'lease_token' => null,
+                    'lease_expires_at' => null,
+                    'updated_at' => now(),
+                ]);
+            if ($liberado === 1) {
+                $this->operaciones->liberar((int) $ejecucion->store_id, $tokenCierre);
+            }
         }
 
         if ($cerrada && $ejecucion->eventos()->where('tipo', TiendanubePrecioEjecucionEvento::TIPO_COMPLETADA)->doesntExist()) {
