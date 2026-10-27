@@ -1,0 +1,66 @@
+# Preparación de consumidores de producción. No está incluido en docker-compose.prod.yaml.
+# No arrancar este archivo. Un cambio aquí no demuestra que el proceso exista.
+# El worker default no se modifica en docker-compose.prod.yaml.
+# Uso futuro, no ejecutado:
+#   docker compose -f docker-compose.prod.yaml -f docker-compose.tiendanube-queues.prod.yaml --profile tiendanube-colas up
+services:
+  tiendanube-interactiva:
+    image: gelianv-prod:latest
+    profiles: ['tiendanube-colas']
+    restart: unless-stopped
+    working_dir: /var/www/html
+    env_file: .env
+    volumes:
+      - .:/var/www/html
+      - storage_data:/var/www/html/storage
+    depends_on:
+      - app
+      - redis
+    networks:
+      - gelianv_net
+    command: php artisan queue:work tiendanube --queue=tiendanube_interactiva --tries=1 --timeout=120
+  tiendanube-recuperacion:
+    image: gelianv-prod:latest
+    profiles: ['tiendanube-colas']
+    restart: unless-stopped
+    working_dir: /var/www/html
+    env_file: .env
+    volumes:
+      - .:/var/www/html
+      - storage_data:/var/www/html/storage
+    depends_on:
+      - app
+      - redis
+    networks:
+      - gelianv_net
+    command: php artisan queue:work tiendanube --queue=tiendanube_recuperacion --tries=1 --timeout=180
+  tiendanube-publicacion:
+    image: gelianv-prod:latest
+    profiles: ['tiendanube-colas']
+    restart: unless-stopped
+    working_dir: /var/www/html
+    env_file: .env
+    volumes:
+      - .:/var/www/html
+      - storage_data:/var/www/html/storage
+    depends_on:
+      - app
+      - redis
+    networks:
+      - gelianv_net
+    command: php artisan queue:work tiendanube --queue=tiendanube_publicacion --tries=1 --timeout=180
+  tiendanube-catalogo:
+    image: gelianv-prod:latest
+    profiles: ['tiendanube-colas']
+    restart: unless-stopped
+    working_dir: /var/www/html
+    env_file: .env
+    volumes:
+      - .:/var/www/html
+      - storage_data:/var/www/html/storage
+    depends_on:
+      - app
+      - redis
+    networks:
+      - gelianv_net
+    command: php artisan queue:work tiendanube --queue=tiendanube_catalogo --tries=1 --timeout=300

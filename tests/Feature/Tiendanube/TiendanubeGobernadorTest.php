@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Tiendanube;
 
+use App\Jobs\Tiendanube\Precios\ProcesarPrecioEjecucionJob;
 use App\Services\Tiendanube\Gobernador\TiendanubeEnrutadorColas;
 use App\Services\Tiendanube\Gobernador\TiendanubeGobernador;
 use App\Support\Tiendanube\TiendanubeClaseTurno;
@@ -258,6 +259,45 @@ class TiendanubeGobernadorTest extends TestCase
             $this->assertSame(1, $concedidos, $detalle);
         } finally {
             $gobernador->olvidar();
+        }
+    }
+
+    public function test_los_consumidores_quedan_preparados_y_los_trabajos_siguen_en_default(): void
+    {
+        $this->assertFalse((bool) config('tiendanube.gobernador_activo', false));
+        $this->assertFalse((bool) config('tiendanube.colas_dedicadas', false));
+        $config = (string) file_get_contents(base_path('config/tiendanube.php'));
+        $this->assertStringContainsString("env('TIENDANUBE_GOBERNADOR_ACTIVO', false)", $config);
+        $this->assertStringContainsString("env('TIENDANUBE_COLAS_DEDICADAS', false)", $config);
+
+        $trabajo = (string) file_get_contents(app_path('Jobs/Tiendanube/Precios/ProcesarPrecioEjecucionJob.php'));
+        $this->assertStringNotContainsString('onQueue', $trabajo);
+        $this->assertStringNotContainsString('tiendanube_', $trabajo);
+        $this->assertNull((new ProcesarPrecioEjecucionJob('x'))->queue);
+
+        $desarrollo = (string) file_get_contents(base_path('compose.yaml'));
+        $produccion = (string) file_get_contents(base_path('docker-compose.prod.yaml'));
+        $this->assertStringContainsString('command: php artisan queue:work --tries=3 --timeout=630', $desarrollo);
+        $this->assertStringContainsString('command: php artisan queue:work --tries=3 --timeout=630', $produccion);
+
+        $colas = (string) file_get_contents(config_path('queue.php'));
+        $this->assertStringContainsString("'retry_after' => (int) env('DB_QUEUE_RETRY_AFTER', 90)", $colas);
+        $this->assertStringContainsString("'retry_after' => 360", $colas);
+        $this->assertMatchesRegularExpression("/'tiendanube' => \\[.*?'retry_after' => 360,/s", $colas);
+
+        foreach ([
+            'compose.tiendanube-queues.yaml' => 'sail',
+            'docker-compose.tiendanube-queues.prod.yaml' => 'gelianv_net',
+        ] as $archivo => $red) {
+            $contenido = (string) file_get_contents(base_path($archivo));
+            $this->assertStringContainsString('profiles:', $contenido);
+            $this->assertStringContainsString('tiendanube-colas', $contenido);
+            $this->assertStringContainsString($red, $contenido);
+            $this->assertStringContainsString('queue:work tiendanube --queue=', $contenido);
+            foreach (['tiendanube_interactiva', 'tiendanube_recuperacion', 'tiendanube_publicacion', 'tiendanube_catalogo'] as $cola) {
+                $this->assertStringContainsString('--queue='.$cola, $contenido);
+            }
+            $this->assertStringNotContainsString('--tries=3 --timeout=630', $contenido);
         }
     }
 

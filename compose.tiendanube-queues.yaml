@@ -1,0 +1,75 @@
+# Preparación de consumidores. Este archivo no está incluido en compose.yaml.
+# `docker compose up` del proyecto no arranca estos procesos.
+# Ni este archivo ni un cambio de comando acreditan que un proceso esté en ejecución.
+# No usar hasta la activación controlada, después de E2b y de comprobar cada consumidor.
+# Uso futuro, no ejecutado:
+#   docker compose -f compose.yaml -f compose.tiendanube-queues.yaml --profile tiendanube-colas up
+services:
+  tiendanube-interactiva:
+    image: 'gelianv-sail:php-8.4.27-node-24.22.1'
+    profiles: ['tiendanube-colas']
+    restart: unless-stopped
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    environment:
+      WWWUSER: '${WWWUSER}'
+      LARAVEL_SAIL: 1
+    volumes:
+      - '.:/var/www/html'
+    networks:
+      - sail
+    depends_on:
+      - laravel.test
+      - redis
+    command: php artisan queue:work tiendanube --queue=tiendanube_interactiva --tries=1 --timeout=120
+  tiendanube-recuperacion:
+    image: 'gelianv-sail:php-8.4.27-node-24.22.1'
+    profiles: ['tiendanube-colas']
+    restart: unless-stopped
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    environment:
+      WWWUSER: '${WWWUSER}'
+      LARAVEL_SAIL: 1
+    volumes:
+      - '.:/var/www/html'
+    networks:
+      - sail
+    depends_on:
+      - laravel.test
+      - redis
+    command: php artisan queue:work tiendanube --queue=tiendanube_recuperacion --tries=1 --timeout=180
+  tiendanube-publicacion:
+    image: 'gelianv-sail:php-8.4.27-node-24.22.1'
+    profiles: ['tiendanube-colas']
+    restart: unless-stopped
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    environment:
+      WWWUSER: '${WWWUSER}'
+      LARAVEL_SAIL: 1
+    volumes:
+      - '.:/var/www/html'
+    networks:
+      - sail
+    depends_on:
+      - laravel.test
+      - redis
+    command: php artisan queue:work tiendanube --queue=tiendanube_publicacion --tries=1 --timeout=180
+  tiendanube-catalogo:
+    image: 'gelianv-sail:php-8.4.27-node-24.22.1'
+    profiles: ['tiendanube-colas']
+    restart: unless-stopped
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    environment:
+      WWWUSER: '${WWWUSER}'
+      LARAVEL_SAIL: 1
+    volumes:
+      - '.:/var/www/html'
+    networks:
+      - sail
+    depends_on:
+      - laravel.test
+      - redis
+    command: php artisan queue:work tiendanube --queue=tiendanube_catalogo --tries=1 --timeout=300
