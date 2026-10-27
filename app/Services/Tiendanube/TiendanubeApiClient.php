@@ -24,9 +24,22 @@ class TiendanubeApiClient
 {
     public const ALLOWED_VERSIONS = ['v1', '2025-03'];
 
+    private bool $reintentarEscrituraAmbigua = true;
+
     public function __construct(
         private ?TiendanubeConfiguracion $config = null
     ) {}
+
+    /**
+     * PUT de variante sin reintentar 502/503/504: el resultado puede haber quedado aplicado.
+     */
+    public function sinReintentoEscrituraAmbigua(): self
+    {
+        $copia = clone $this;
+        $copia->reintentarEscrituraAmbigua = false;
+
+        return $copia;
+    }
 
     public function config(): TiendanubeConfiguracion
     {
@@ -580,6 +593,9 @@ class TiendanubeApiClient
 
         if (in_array($status, [502, 503, 504], true)) {
             if ($uncertainPost) {
+                return false;
+            }
+            if (! $this->reintentarEscrituraAmbigua && $method === 'PUT') {
                 return false;
             }
 

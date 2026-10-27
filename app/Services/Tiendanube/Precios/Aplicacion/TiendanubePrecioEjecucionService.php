@@ -165,6 +165,24 @@ class TiendanubePrecioEjecucionService
             throw new TiendanubePrecioEjecucionException('El ítem no admite reintento.', 'no_recuperable');
         }
 
+        if ($item->estado === TiendanubePrecioEjecucionItem::ESTADO_RESULTADO_INCIERTO) {
+            $ejecucion->eventos()->create([
+                'tipo' => TiendanubePrecioEjecucionEvento::TIPO_REINTENTO,
+                'item_id' => $item->id,
+                'actor_id' => $userId,
+                'payload' => ['canal' => 'api', 'variante_id' => $item->variante_id, 'fase' => 'reconciliar'],
+                'created_at' => now(),
+            ]);
+            $this->processor->verificar($item);
+            $item->refresh();
+            $this->refrescarContadores($ejecucion->fresh());
+            if ($item->estado === TiendanubePrecioEjecucionItem::ESTADO_REINTENTO_PENDIENTE && $item->siguiente_intento_at) {
+                ProcesarPrecioEjecucionJob::dispatch($ejecucion->id)->delay($item->siguiente_intento_at);
+            }
+
+            return $this->payload($ejecucion->fresh());
+        }
+
         $item->update([
             'estado' => TiendanubePrecioEjecucionItem::ESTADO_REINTENTO_PENDIENTE,
             'siguiente_intento_at' => now(),

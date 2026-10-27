@@ -18,9 +18,11 @@ class TiendanubeOperacionTiendaService
 
     public const TIPO_CAMBIO_TIENDA = 'cambio_tienda';
 
+    public const TIPO_PRECIO_APLICACION = 'precio_aplicacion';
+
     /**
-     * Jerarquía: catalogo_sync y catalogo_wipe son exclusivos por tienda.
-     * Escrituras, importaciones y cambio de tienda se rechazan mientras hay sync/wipe activo.
+     * Jerarquía: catalogo_sync, catalogo_wipe y precio_aplicacion ocupan la exclusividad de la tienda.
+     * Escrituras, importaciones y cambio de tienda se rechazan mientras esa exclusividad está activa.
      */
     public function asegurarFila(int $storeId): TiendanubeOperacionTienda
     {
@@ -126,7 +128,7 @@ class TiendanubeOperacionTiendaService
 
         $query = TiendanubeOperacionTienda::query()
             ->where('estado', TiendanubeOperacionTienda::ESTADO_ACTIVA)
-            ->whereIn('tipo', [self::TIPO_CATALOGO_SYNC, self::TIPO_CATALOGO_WIPE])
+            ->whereIn('tipo', [self::TIPO_CATALOGO_SYNC, self::TIPO_CATALOGO_WIPE, self::TIPO_PRECIO_APLICACION])
             ->where('lease_expires_at', '>=', now());
 
         if ($storeId) {

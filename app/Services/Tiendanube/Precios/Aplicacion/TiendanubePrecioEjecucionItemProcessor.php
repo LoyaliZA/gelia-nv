@@ -82,7 +82,25 @@ class TiendanubePrecioEjecucionItemProcessor
         try {
             $producto = $this->api->getProduct((int) $item->producto_id);
         } catch (TiendanubeApiNotFoundException $e) {
-            $this->finalizar($item, TiendanubePrecioEjecucionItem::ESTADO_FALLIDO, 'variante_inexistente', 'El producto ya no existe en TiendaNube. El espejo local no se borró.');
+            $this->finalizar(
+                $item,
+                TiendanubePrecioEjecucionItem::ESTADO_FALLIDO,
+                'variante_inexistente',
+                'El producto ya no existe en TiendaNube. El espejo local no se borró.',
+                null,
+                ['canal' => 'api', 'escritura' => false, 'fase' => 'sin_escritura']
+            );
+
+            return;
+        } catch (TiendanubeApiException $e) {
+            if (in_array($e->statusCode, [401, 402, 403, 422, 429], true)) {
+                throw $e;
+            }
+            $this->registrarLecturaSinEscritura($item, 'lectura_previa', $e->getMessage());
+
+            return;
+        } catch (Throwable $e) {
+            $this->registrarLecturaSinEscritura($item, 'lectura_previa', $e->getMessage());
 
             return;
         }
@@ -305,6 +323,23 @@ class TiendanubePrecioEjecucionItemProcessor
                 'codigo' => $codigo,
             ],
             'created_at' => now(),
+        ]);
+    }
+
+    private function registrarLecturaSinEscritura(TiendanubePrecioEjecucionItem $item, string $codigo, string $mensaje): void
+    {
+        $this->liberarAReintento($item, $codigo, $mensaje);
+        $item->refresh();
+        if ($item->estado !== TiendanubePrecioEjecucionItem::ESTADO_REINTENTO_PENDIENTE) {
+            return;
+        }
+        $item->update([
+            'evidencia' => [
+                'canal' => 'api',
+                'escritura' => false,
+                'fase' => 'sin_escritura',
+                'mensaje' => $mensaje,
+            ],
         ]);
     }
 

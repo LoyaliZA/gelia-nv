@@ -9,7 +9,9 @@ use App\Models\Tiendanube\TiendanubePrecioEjecucionItem;
 use App\Models\Tiendanube\TiendanubeProducto;
 use App\Models\Tiendanube\TiendanubeProductoVariante;
 use App\Models\User;
+use App\Exceptions\Tiendanube\TiendanubeOperacionConflictException;
 use App\Services\Tiendanube\Precios\Aplicacion\TiendanubePrecioEjecucionService;
+use App\Services\Tiendanube\TiendanubeOperacionTiendaService;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Crypt;
@@ -263,6 +265,160 @@ class TiendanubePrecioEjecucionTest extends TestCase
         $this->assertSame('110.00', $item->valor_confirmado['normal']);
         $this->assertEquals(110.0, (float) TiendanubeProductoVariante::find(1000)?->getRawOriginal('price'));
         $this->assertEquals(5, (int) TiendanubeProductoVariante::find(1000)?->stock);
+    }
+
+    public function test_sync_activo_rechaza_la_aplicacion(): void
+    {
+        Queue::fake();
+        Http::fake();
+        $this->crearVariante(1000, 100, '100.00');
+        $lote = $this->aprobarLote([1000]);
+        app(TiendanubeOperacionTiendaService::class)->adquirirExclusiva(
+            8004291,
+            TiendanubeOperacionTiendaService::TIPO_CATALOGO_SYNC,
+            (int) $this->user->id,
+            1
+        );
+
+        $this->actingAs($this->user)
+            ->postJson(route('tiendanube.precios.lotes.aplicar', $lote['lote_id']), [
+                'checksum' => $lote['revision']['checksum'],
+            ])
+            ->assertStatus(409)
+            ->assertJsonPath('codigo', 'operacion_tienda');
+
+        Http::assertNothingSent();
+        $this->assertSame(0, TiendanubePrecioEjecucion::query()->count());
+    }
+
+    public function test_aplicacion_de_precios_bloquea_escritura_manual_e_imagenes(): void
+    {
+        $ops = app(TiendanubeOperacionTiendaService::class);
+        $ops->adquirirExclusiva(8004291, TiendanubeOperacionTiendaService::TIPO_PRECIO_APLICACION, (int) $this->user->id, 1);
+
+        foreach ([
+            TiendanubeOperacionTiendaService::TIPO_PRODUCTO_WRITE,
+            TiendanubeOperacionTiendaService::TIPO_IMAGE_IMPORT,
+            TiendanubeOperacionTiendaService::TIPO_CATALOGO_WIPE,
+        ] as $tipo) {
+            try {
+                $ops->assertAdmisible($tipo, 8004291);
+                $this->fail('Debió rechazar '.$tipo);
+            } catch (TiendanubeOperacionConflictException) {
+                $this->assertTrue(true);
+            }
+        }
+    }
+
+    public function test_default_deshabilitado_no_admite_y_el_valor_explicito_si(): void
+    {
+        Queue::fake();
+        Http::fake();
+        $this->crearVariante(1000, 100, '100.00');
+        $lote = $this->aprobarLote([1000]);
+
+        config(['tiendanube.precios_aplicacion_habilitada' => false]);
+        $this->actingAs($this->user)
+            ->postJson(route('tiendanube.precios.lotes.aplicar', $lote['lote_id']), [
+                'checksum' => $lote['revision']['checksum'],
+            ])
+            ->assertStatus(403)
+            ->assertJsonPath('codigo', 'deshabilitado');
+
+        config(['tiendanube.precios_aplicacion_habilitada' => true]);
+        $this->actingAs($this->user)
+            ->postJson(route('tiendanube.precios.lotes.aplicar', $lote['lote_id']), [
+                'checksum' => $lote['revision']['checksum'],
+            ])
+            ->assertCreated();
+        Http::assertNothingSent();
+    }
+
+    public function test_archivo_de_configuracion_declara_default_falso(): void
+    {
+        $src = (string) file_get_contents(config_path('tiendanube.php'));
+        $this->assertStringContainsString("env('TIENDANUBE_PRECIOS_APLICACION_HABILITADA', false)", $src);
+    }
+
+    public function test_timeout_con_origen_no_repite_el_put_en_el_mismo_turno(): void
+    {
+        Queue::fake();
+        $this->crearVariante(1000, 100, '100.00');
+        $lote = $this->aprobarLote([1000]);
+        $puts = 0;
+        Http::fake(function (Request $request) use (&$puts) {
+            if ($request->method() === 'PUT') {
+                $puts++;
+
+                return Http::response(['error' => 'gateway'], 504);
+            }
+
+            return Http::response($this->productoRemoto(100, 1000, '100.00'), 200);
+        });
+
+        $this->aplicarYProcesar($lote);
+        $item = TiendanubePrecioEjecucionItem::query()->first();
+        $this->assertSame(1, $puts);
+        $this->assertSame(TiendanubePrecioEjecucionItem::ESTADO_REINTENTO_PENDIENTE, $item->estado);
+        $this->assertNotNull($item->siguiente_intento_at);
+    }
+
+    public function test_reintentar_incierto_reconcilia_sin_otro_put(): void
+    {
+        Queue::fake();
+        $this->crearVariante(1000, 100, '100.00');
+        $lote = $this->aprobarLote([1000]);
+        $res = $this->actingAs($this->user)
+            ->postJson(route('tiendanube.precios.lotes.aplicar', $lote['lote_id']), [
+                'checksum' => $lote['revision']['checksum'],
+            ])
+            ->assertCreated();
+        $item = TiendanubePrecioEjecucionItem::query()->first();
+        $item->update([
+            'estado' => TiendanubePrecioEjecucionItem::ESTADO_RESULTADO_INCIERTO,
+        ]);
+
+        $puts = 0;
+        Http::fake(function (Request $request) use (&$puts) {
+            if ($request->method() === 'PUT') {
+                $puts++;
+            }
+
+            return Http::response($this->productoRemoto(100, 1000, '100.00'), 200);
+        });
+
+        $this->actingAs($this->user)
+            ->postJson(route('tiendanube.precios.ejecuciones.items.reintentar', [$res->json('id'), $item->id]))
+            ->assertOk();
+
+        $this->assertSame(0, $puts);
+        $item->refresh();
+        $this->assertSame(TiendanubePrecioEjecucionItem::ESTADO_REINTENTO_PENDIENTE, $item->estado);
+        Queue::assertPushed(ProcesarPrecioEjecucionJob::class);
+    }
+
+    public function test_lectura_previa_fallida_no_escribe(): void
+    {
+        Queue::fake();
+        $this->crearVariante(1000, 100, '100.00');
+        $lote = $this->aprobarLote([1000]);
+        $puts = 0;
+        Http::fake(function (Request $request) use (&$puts) {
+            if ($request->method() === 'PUT') {
+                $puts++;
+
+                return Http::response(['ok' => true], 200);
+            }
+
+            return Http::response(['error' => 'gateway'], 503);
+        });
+
+        $this->aplicarYProcesar($lote);
+        $item = TiendanubePrecioEjecucionItem::query()->first();
+        $this->assertSame(0, $puts);
+        $this->assertSame(TiendanubePrecioEjecucionItem::ESTADO_REINTENTO_PENDIENTE, $item->estado);
+        $this->assertFalse((bool) ($item->evidencia['escritura'] ?? true));
+        $this->assertSame('sin_escritura', $item->evidencia['fase'] ?? null);
     }
 
     /**

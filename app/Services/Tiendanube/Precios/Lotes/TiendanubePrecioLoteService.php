@@ -772,7 +772,7 @@ class TiendanubePrecioLoteService
             [
                 'id' => 'api',
                 'nombre' => 'Publicar por API',
-                'disponible' => (bool) config('tiendanube.precios_aplicacion_habilitada', true),
+                'disponible' => (bool) config('tiendanube.precios_aplicacion_habilitada', false),
                 'nota' => 'Aplica en TiendaNube los importes aprobados de esta revisión',
             ],
         ];

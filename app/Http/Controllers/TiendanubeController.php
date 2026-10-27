@@ -479,6 +479,9 @@ class TiendanubeController extends Controller
             'imagenes' => $producto->imagenes,
             'variantes' => $producto->variantes->map(function (TiendanubeProductoVariante $v) {
                 $row = $v->toArray();
+                if (! Gate::allows('tiendanube.precios.ver')) {
+                    unset($row['cost']);
+                }
                 $row['stock_resumen'] = $v->stockResumen();
 
                 return $row;

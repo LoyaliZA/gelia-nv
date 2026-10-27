@@ -41,7 +41,11 @@ return [
     'precio_lote_sync_max' => (int) env('TIENDANUBE_PRECIO_LOTE_SYNC_MAX', 200),
     'precio_lote_resolver_per_page' => (int) env('TIENDANUBE_PRECIO_LOTE_RESOLVER_PER_PAGE', 500),
     'precios_aprobacion_habilitada' => filter_var(env('TIENDANUBE_PRECIOS_APROBACION_HABILITADA', true), FILTER_VALIDATE_BOOLEAN),
-    'precios_aplicacion_habilitada' => filter_var(env('TIENDANUBE_PRECIOS_APLICACION_HABILITADA', true), FILTER_VALIDATE_BOOLEAN),
+    /*
+     * Falso si la variable no existe. Un config:cache previo conserva el booleano
+     * ya resuelto: cambiar este default no apaga un entorno cacheado en verdadero.
+     */
+    'precios_aplicacion_habilitada' => filter_var(env('TIENDANUBE_PRECIOS_APLICACION_HABILITADA', false), FILTER_VALIDATE_BOOLEAN),
     'precios_restauracion_habilitada' => filter_var(env('TIENDANUBE_PRECIOS_RESTAURACION_HABILITADA', true), FILTER_VALIDATE_BOOLEAN),
     'precio_ejecucion_lease_seconds' => (int) env('TIENDANUBE_PRECIO_EJECUCION_LEASE_SECONDS', 90),
     'precio_ejecucion_item_max_intentos' => (int) env('TIENDANUBE_PRECIO_EJECUCION_ITEM_MAX_INTENTOS', 5),
