@@ -13,4 +13,10 @@ interface TiendanubeReprogramador
     public function reprogramar(TiendanubeTurnoResultado $turno, ?string $leaseToken = null): void;
 
     public function programarEjecucion(string $ejecucionId, \DateTimeInterface $cuando, ?string $leaseToken = null): void;
+
+    /**
+     * Encola un solo trabajo para esa marca. Una marca futura no sale de inmediato.
+     * Si la continuación ya estaba persistida y el despacho no ocurrió, lo repara.
+     */
+    public function despacharUnaVez(string $ejecucionId, ?\DateTimeInterface $cuando = null, ?string $leaseToken = null): bool;
 }

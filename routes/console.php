@@ -1,5 +1,6 @@
 <?php
 
+use App\Jobs\Tiendanube\Precios\RecuperarPrecioEjecucionesJob;
 use App\Services\ControlPedidos\PreparacionTiendaConfig;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -59,6 +60,9 @@ Schedule::command('pdv:evaluar-cierre-horario-operacion')->everyFiveMinutes();
 Schedule::command('pdv:evaluar-apertura-horario-operacion')->everyFiveMinutes();
 Schedule::command('medios:limpiar-cargas')->hourly();
 Schedule::command('tiendanube:recuperar-webhooks')->everyMinute();
+Schedule::job(new RecuperarPrecioEjecucionesJob)
+    ->everyMinute()
+    ->when(fn () => (bool) config('tiendanube.recuperacion_scheduler_activo', false));
 Schedule::command('tiendanube:limpiar-imports-imagenes')->dailyAt('04:00');
 
 // Hora de recordatorio desde config (si difiere de 11:00).

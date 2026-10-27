@@ -15,4 +15,9 @@ class TiendanubeReprogramadorInactivo implements TiendanubeReprogramador
     public function programarEjecucion(string $ejecucionId, \DateTimeInterface $cuando, ?string $leaseToken = null): void
     {
     }
+
+    public function despacharUnaVez(string $ejecucionId, ?\DateTimeInterface $cuando = null, ?string $leaseToken = null): bool
+    {
+        return false;
+    }
 }

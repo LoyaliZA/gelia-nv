@@ -177,8 +177,8 @@ class TiendanubePrecioEjecucionService
             $item->refresh();
             $this->refrescarContadores($ejecucion->fresh());
             if ($item->estado === TiendanubePrecioEjecucionItem::ESTADO_REINTENTO_PENDIENTE && $item->siguiente_intento_at) {
-                app(\App\Services\Tiendanube\Gobernador\TiendanubeEnrutadorColas::class)
-                    ->despacharPrecio($ejecucion->id, $item->siguiente_intento_at);
+                app(\App\Services\Tiendanube\Gobernador\TiendanubeReprogramador::class)
+                    ->despacharUnaVez($ejecucion->id, $item->siguiente_intento_at);
             }
 
             return $this->payload($ejecucion->fresh());
@@ -220,7 +220,8 @@ class TiendanubePrecioEjecucionService
         }
 
         $this->refrescarContadores($ejecucion);
-        app(\App\Services\Tiendanube\Gobernador\TiendanubeEnrutadorColas::class)->despacharPrecio($ejecucion->id);
+        app(\App\Services\Tiendanube\Gobernador\TiendanubeReprogramador::class)
+            ->despacharUnaVez($ejecucion->id, now());
 
         return $this->payload($ejecucion);
     }
@@ -259,6 +260,11 @@ class TiendanubePrecioEjecucionService
 
         $ejecucion->update(['estado' => TiendanubePrecioEjecucion::ESTADO_PROCESANDO]);
         $limite = max(1, (int) config('tiendanube.precio_ejecucion_batch', 15));
+        $inciertosPrevios = $ejecucion->items()
+            ->where('estado', TiendanubePrecioEjecucionItem::ESTADO_RESULTADO_INCIERTO)
+            ->orderBy('id')
+            ->limit($limite)
+            ->pluck('id');
         $items = $ejecucion->items()
             ->whereIn('estado', [
                 TiendanubePrecioEjecucionItem::ESTADO_PENDIENTE,
@@ -286,6 +292,12 @@ class TiendanubePrecioEjecucionService
             return;
         }
 
+        $this->reconciliarInciertos($ejecucion, $inciertosPrevios);
+        $ejecucion->refresh();
+        if ($ejecucion->estado !== TiendanubePrecioEjecucion::ESTADO_PROCESANDO) {
+            return;
+        }
+
         $hayDebido = $ejecucion->items()
             ->whereIn('estado', [
                 TiendanubePrecioEjecucionItem::ESTADO_PENDIENTE,
@@ -296,7 +308,8 @@ class TiendanubePrecioEjecucionService
             })
             ->exists();
         if ($hayDebido) {
-            app(\App\Services\Tiendanube\Gobernador\TiendanubeEnrutadorColas::class)->despacharPrecio($ejecucion->id);
+            app(\App\Services\Tiendanube\Gobernador\TiendanubeReprogramador::class)
+                ->despacharUnaVez($ejecucion->id, null);
 
             return;
         }
@@ -313,6 +326,32 @@ class TiendanubePrecioEjecucionService
             $cuando = $proxima instanceof \DateTimeInterface ? $proxima : \Illuminate\Support\Carbon::parse($proxima);
             app(\App\Services\Tiendanube\Gobernador\TiendanubeReprogramador::class)
                 ->programarEjecucion($ejecucion->id, $cuando);
+        }
+    }
+
+    /**
+     * @param  \Illuminate\Support\Collection<int, int>|list<int>  $ids
+     */
+    private function reconciliarInciertos(TiendanubePrecioEjecucion $ejecucion, $ids): void
+    {
+        if ($ids === [] || (is_object($ids) && $ids->isEmpty())) {
+            return;
+        }
+
+        $inciertos = $ejecucion->items()
+            ->whereIn('id', $ids)
+            ->where('estado', TiendanubePrecioEjecucionItem::ESTADO_RESULTADO_INCIERTO)
+            ->orderBy('id')
+            ->get();
+        foreach ($inciertos as $item) {
+            $ejecucion->refresh();
+            if (in_array($ejecucion->estado, [
+                TiendanubePrecioEjecucion::ESTADO_CANCELADA,
+                TiendanubePrecioEjecucion::ESTADO_SUSPENDIDA,
+            ], true)) {
+                return;
+            }
+            $this->processor->verificar($item);
         }
     }
 
@@ -337,17 +376,47 @@ class TiendanubePrecioEjecucionService
 
     public function recuperar(): int
     {
+        $this->reclamarAbandonados();
+
+        $recuperadas = 0;
+        $abiertas = TiendanubePrecioEjecucion::query()
+            ->whereIn('estado', [
+                TiendanubePrecioEjecucion::ESTADO_PENDIENTE,
+                TiendanubePrecioEjecucion::ESTADO_PROCESANDO,
+            ])
+            ->get();
+
+        foreach ($abiertas as $ejecucion) {
+            if ($this->asegurarContinuacion($ejecucion)) {
+                $recuperadas++;
+            }
+        }
+
+        return $recuperadas;
+    }
+
+    private function reclamarAbandonados(): void
+    {
         $ahora = now();
         $vencidos = TiendanubePrecioEjecucionItem::query()
             ->where('estado', TiendanubePrecioEjecucionItem::ESTADO_PROCESANDO)
             ->whereNotNull('lease_expires_at')
             ->where('lease_expires_at', '<', $ahora)
+            ->whereHas('ejecucion', function ($q) {
+                $q->whereIn('estado', [
+                    TiendanubePrecioEjecucion::ESTADO_PENDIENTE,
+                    TiendanubePrecioEjecucion::ESTADO_PROCESANDO,
+                ]);
+            })
             ->get();
         foreach ($vencidos as $item) {
             $previa = is_array($item->evidencia) ? $item->evidencia : [];
+            $fase = (string) ($previa['fase'] ?? '');
             $efecto = (bool) ($previa['verificacion_pendiente'] ?? false)
                 || ($previa['efecto'] ?? '') === 'posible'
-                || ($previa['conciliacion'] ?? '') === 'exigida';
+                || ($previa['conciliacion'] ?? '') === 'exigida'
+                || in_array($fase, ['escritura_enviada', 'efecto_remoto_posible'], true);
+            $momento = $this->continuacionFutura($item, $ahora);
             TiendanubePrecioEjecucionItem::query()
                 ->where('id', $item->id)
                 ->where('lease_token', $item->lease_token)
@@ -359,35 +428,74 @@ class TiendanubePrecioEjecucionService
                         : TiendanubePrecioEjecucionItem::ESTADO_REINTENTO_PENDIENTE,
                     'lease_token' => null,
                     'lease_expires_at' => null,
-                    'siguiente_intento_at' => $efecto ? null : $ahora,
+                    'siguiente_intento_at' => $efecto ? null : ($momento ?? $ahora),
                     'updated_at' => $ahora,
                 ]);
         }
+    }
 
-        $recuperadas = 0;
-        $abiertas = TiendanubePrecioEjecucion::query()
-            ->whereIn('estado', [
-                TiendanubePrecioEjecucion::ESTADO_PENDIENTE,
-                TiendanubePrecioEjecucion::ESTADO_PROCESANDO,
-            ])
-            ->get();
-
-        foreach ($abiertas as $ejecucion) {
-            $pendientes = $ejecucion->items()
-                ->whereIn('estado', [
-                    TiendanubePrecioEjecucionItem::ESTADO_PENDIENTE,
-                    TiendanubePrecioEjecucionItem::ESTADO_REINTENTO_PENDIENTE,
-                ])
-                ->exists();
-            if ($pendientes) {
-                app(\App\Services\Tiendanube\Gobernador\TiendanubeEnrutadorColas::class)->despacharPrecio($ejecucion->id);
-                $recuperadas++;
-            } else {
-                $this->refrescarContadores($ejecucion);
-            }
+    private function continuacionFutura(TiendanubePrecioEjecucionItem $item, \Illuminate\Support\Carbon $ahora): ?\Illuminate\Support\Carbon
+    {
+        if ($item->siguiente_intento_at && $item->siguiente_intento_at->greaterThan($ahora)) {
+            return $item->siguiente_intento_at;
         }
 
-        return $recuperadas;
+        $evidencia = is_array($item->evidencia) ? $item->evidencia : [];
+        $marca = (int) ($evidencia['continuacion']['reanudar_despues_at'] ?? 0);
+        if ($marca <= 0) {
+            return null;
+        }
+
+        $momento = $marca > 10_000_000_000
+            ? \Illuminate\Support\Carbon::createFromTimestampMs($marca)
+            : \Illuminate\Support\Carbon::createFromTimestamp($marca);
+
+        return $momento->greaterThan($ahora) ? $momento : null;
+    }
+
+    private function asegurarContinuacion(TiendanubePrecioEjecucion $ejecucion): bool
+    {
+        $reprogramador = app(\App\Services\Tiendanube\Gobernador\TiendanubeReprogramador::class);
+        $hayIncierta = $ejecucion->items()
+            ->where('estado', TiendanubePrecioEjecucionItem::ESTADO_RESULTADO_INCIERTO)
+            ->exists();
+        $hayDebido = $ejecucion->items()
+            ->whereIn('estado', [
+                TiendanubePrecioEjecucionItem::ESTADO_PENDIENTE,
+                TiendanubePrecioEjecucionItem::ESTADO_REINTENTO_PENDIENTE,
+            ])
+            ->where(function ($q) {
+                $q->whereNull('siguiente_intento_at')->orWhere('siguiente_intento_at', '<=', now());
+            })
+            ->exists();
+
+        if ($hayIncierta || $hayDebido) {
+            $marca = (string) $ejecucion->continuacion_despachada_en;
+            $programada = (string) $ejecucion->continuacion_programada_en;
+            if (! $hayIncierta && $marca !== '' && $marca !== 'debido' && $marca === $programada && (int) $marca <= now()->getTimestamp()) {
+                return false;
+            }
+
+            return $reprogramador->despacharUnaVez($ejecucion->id, null);
+        }
+
+        $proxima = $ejecucion->items()
+            ->whereIn('estado', [
+                TiendanubePrecioEjecucionItem::ESTADO_PENDIENTE,
+                TiendanubePrecioEjecucionItem::ESTADO_REINTENTO_PENDIENTE,
+            ])
+            ->where('siguiente_intento_at', '>', now())
+            ->orderBy('siguiente_intento_at')
+            ->value('siguiente_intento_at');
+        if (! $proxima) {
+            $this->refrescarContadores($ejecucion);
+
+            return false;
+        }
+
+        $cuando = $proxima instanceof \DateTimeInterface ? $proxima : \Illuminate\Support\Carbon::parse($proxima);
+
+        return $reprogramador->despacharUnaVez($ejecucion->id, $cuando);
     }
 
     public function refrescarContadores(TiendanubePrecioEjecucion $ejecucion): void

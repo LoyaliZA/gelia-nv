@@ -52,6 +52,12 @@ return [
      */
     'gobernador_activo' => filter_var(env('TIENDANUBE_GOBERNADOR_ACTIVO', false), FILTER_VALIDATE_BOOLEAN),
     'colas_dedicadas' => filter_var(env('TIENDANUBE_COLAS_DEDICADAS', false), FILTER_VALIDATE_BOOLEAN),
+    /*
+     * El scheduler de recuperación queda registrado y apagado.
+     * Un config:cache anterior no tiene la clave: la ausencia se lee como falso
+     * y no encola RecuperarPrecioEjecucionesJob. No regenerar el cache para crearla.
+     */
+    'recuperacion_scheduler_activo' => filter_var(env('TIENDANUBE_RECUPERACION_SCHEDULER_ACTIVO', false), FILTER_VALIDATE_BOOLEAN),
     'gobernador_intervalo_ms' => (int) env('TIENDANUBE_GOBERNADOR_INTERVALO_MS', 1000),
     /*
      * Ausentes en un config:cache anterior. El código usa estos mismos respaldos
