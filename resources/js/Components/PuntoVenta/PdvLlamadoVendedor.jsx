@@ -8,6 +8,7 @@ import ModalLlamadoTurnoPdv from '@/Components/PuntoVenta/ModalLlamadoTurnoPdv';
 import { mensajeTtsPersonalPdv, PDV_TTS_ESTADO } from '@/utils/pdvSpeechUtils';
 import { debeReproducirSonidoPersonalPdv } from '@/utils/pdvAlertasAudiencia';
 import {
+    convieneReclamarAudioPersonalPdv,
     debeReproducirTonoEventoPdv,
     mensajeFallbackWebPushPdv,
     PDV_PUSH_ESTADO,
@@ -68,15 +69,17 @@ export default function PdvLlamadoVendedor({ userId }) {
     const onEvent = useCallback((envelope) => {
         if (envelope?.audiencia !== 'usuario') return;
 
-        const tomaAudio = reclamarAudioEventoPdv(envelope?.event_id, 'usuario');
-        if (tomaAudio) {
-            if (
-                debeReproducirSonidoPersonalPdv(envelope, prefs.prefsUsuario, prefs.silencioTerminal, userId)
-                && debeReproducirTonoEventoPdv(envelope, 'personal')
-            ) {
-                reproducirTonoPdv(prefs.prefsUsuario.tono_id, tonosAlertas);
+        if (convieneReclamarAudioPersonalPdv(envelope, prefs.prefsUsuario, prefs.silencioTerminal, userId)) {
+            const tomaAudio = reclamarAudioEventoPdv(envelope?.event_id, 'usuario');
+            if (tomaAudio) {
+                if (
+                    debeReproducirSonidoPersonalPdv(envelope, prefs.prefsUsuario, prefs.silencioTerminal, userId)
+                    && debeReproducirTonoEventoPdv(envelope, 'personal')
+                ) {
+                    reproducirTonoPdv(prefs.prefsUsuario.tono_id, tonosAlertas);
+                }
+                encolar(envelope);
             }
-            encolar(envelope);
         }
 
         if (!avisoPushRef.current && prefs.estadoPush === PDV_PUSH_ESTADO.pendiente) {

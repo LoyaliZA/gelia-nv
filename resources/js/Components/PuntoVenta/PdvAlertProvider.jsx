@@ -22,11 +22,14 @@ import {
     debeAnunciarVozPdv,
     debeReproducirSonidoPdv,
     debeReproducirTonoEventoPdv,
-    reclamarAudioEventoPdv,
     reproducirTonoPdv,
 } from '@/utils/pdvAlertasPrefs';
 import { mensajeTtsTerminalPdv } from '@/utils/pdvAlertasCatalog';
-import { PDV_AUDIENCIA_CANAL, resolverModoAudioPdv } from '@/utils/pdvAlertasAudiencia';
+import {
+    PDV_AUDIENCIA_CANAL,
+    anuncioTerminalEnNavegadorPdv,
+    terminalSucursalPuedeAnunciar,
+} from '@/utils/pdvAlertasAudiencia';
 
 const PdvAlertContext = createContext(null);
 
@@ -135,7 +138,6 @@ export default function PdvAlertProvider({
         storageKey: 'pdv_terminal_general_id',
         prefijoRuta: 'punto_venta.terminal_general',
         rutasFallback: RUTAS_TERMINAL_GENERAL,
-        coordinarAudio: false,
     });
     const [activandoPush, setActivandoPush] = useState(false);
 
@@ -144,22 +146,10 @@ export default function PdvAlertProvider({
     const audioAnunciadosRef = useRef(new Set());
 
     const resolverTextoTts = useCallback((envelope) => {
-        const modo = resolverModoAudioPdv(envelope, {
-            userId,
-            terminalActiva: terminal.terminalActiva && terminal.esLiderAudio(),
-            prefsUsuario: prefs.prefsUsuario,
-            silencioTerminal: prefs.silencioTerminal,
-            audioYaAnunciado: audioAnunciadosRef.current.has(envelope?.event_id),
-        });
-
-        if (modo === 'terminal') {
-            return mensajeTtsTerminalPdv(envelope);
-        }
-        if (modo === 'personal') {
-            return null;
-        }
-        return null;
-    }, [userId, terminal, prefs.prefsUsuario, prefs.silencioTerminal]);
+        if (envelope?.audiencia === PDV_AUDIENCIA_CANAL.usuario) return null;
+        if (envelope?.audiencia === PDV_AUDIENCIA_CANAL.publico) return null;
+        return mensajeTtsTerminalPdv(envelope);
+    }, []);
 
     const {
         encolar: encolarTts,
@@ -237,44 +227,15 @@ export default function PdvAlertProvider({
         });
     }, [marcarActualizacionConfirmada]);
 
-    const manejarEvento = useCallback((envelope) => {
+    const contextoAudioTerminal = useCallback(() => ({
+        alertasLocalLider: terminal.terminalActiva && terminal.esLiderAudio(),
+        generalLocalLider: terminalGeneral.terminalActiva && terminalGeneral.esLiderAudio(),
+        estadoAlertas: terminal.estado,
+        designacionAlertasVigente: terminal.designacion?.vigente === true,
+    }), [terminal, terminalGeneral]);
+
+    const manejarEvento = useCallback(async (envelope) => {
         const encolado = encolar(envelope);
-
-        const modoAudio = resolverModoAudioPdv(envelope, {
-            userId,
-            terminalActiva: terminal.terminalActiva && terminal.esLiderAudio(),
-            prefsUsuario: prefs.prefsUsuario,
-            silencioTerminal: prefs.silencioTerminal,
-            audioYaAnunciado: audioAnunciadosRef.current.has(envelope?.event_id),
-        });
-
-        const audioPersonalYaTomado = modoAudio === 'personal'
-            && !reclamarAudioEventoPdv(envelope?.event_id, 'usuario');
-
-        if (modoAudio && !audioPersonalYaTomado && !audioAnunciadosRef.current.has(envelope.event_id)) {
-            audioAnunciadosRef.current.add(envelope.event_id);
-
-            if (
-                debeReproducirSonidoPdv(envelope, prefs.prefsUsuario, prefs.silencioTerminal, {
-                    userId,
-                    terminalActiva: terminal.terminalActiva,
-                    modo: modoAudio,
-                })
-                && debeReproducirTonoEventoPdv(envelope, modoAudio)
-            ) {
-                reproducirTonoPdv(prefs.prefsUsuario.tono_id, tonosAlertas);
-            }
-
-            if (
-                debeAnunciarVozPdv(envelope, prefs.prefsUsuario, prefs.silencioTerminal, {
-                    userId,
-                    terminalActiva: terminal.terminalActiva,
-                    modo: modoAudio,
-                })
-            ) {
-                encolarTts(envelope);
-            }
-        }
 
         if (encolado) {
             const ahora = Date.now();
@@ -293,6 +254,71 @@ export default function PdvAlertProvider({
         }
 
         programarRecargasPorEvento(envelope);
+
+        const eventId = envelope?.event_id;
+        if (!eventId || audioAnunciadosRef.current.has(eventId)) return;
+
+        let contexto = contextoAudioTerminal();
+        const generalPuedeConfirmar = !contexto.alertasLocalLider
+            && contexto.generalLocalLider
+            && envelope?.audiencia === PDV_AUDIENCIA_CANAL.sucursal;
+        const puedeInicial = terminalSucursalPuedeAnunciar(contexto);
+
+        if (!puedeInicial && !generalPuedeConfirmar) return;
+
+        const candidato = anuncioTerminalEnNavegadorPdv(envelope, {
+            userId,
+            terminalActiva: true,
+            prefsUsuario: prefs.prefsUsuario,
+            silencioTerminal: prefs.silencioTerminal,
+            audioYaAnunciado: false,
+        });
+        if (candidato !== 'terminal') return;
+
+        audioAnunciadosRef.current.add(eventId);
+
+        if (generalPuedeConfirmar) {
+            const fresco = await terminal.refrescar();
+            if (fresco?.estado) {
+                contexto = {
+                    ...contexto,
+                    estadoAlertas: fresco.estado,
+                    designacionAlertasVigente: fresco.designacion?.vigente === true,
+                };
+            }
+        }
+
+        const puedeAnunciar = terminalSucursalPuedeAnunciar(contexto);
+        const decision = anuncioTerminalEnNavegadorPdv(envelope, {
+            userId,
+            terminalActiva: puedeAnunciar,
+            prefsUsuario: prefs.prefsUsuario,
+            silencioTerminal: prefs.silencioTerminal,
+            audioYaAnunciado: false,
+        });
+
+        if (decision !== 'terminal') return;
+
+        const texto = mensajeTtsTerminalPdv(envelope);
+        const suena = debeReproducirSonidoPdv(envelope, prefs.prefsUsuario, prefs.silencioTerminal, {
+            userId,
+            terminalActiva: puedeAnunciar,
+            modo: 'terminal',
+        }) && debeReproducirTonoEventoPdv(envelope, 'terminal');
+        const habla = Boolean(texto) && debeAnunciarVozPdv(envelope, prefs.prefsUsuario, prefs.silencioTerminal, {
+            userId,
+            terminalActiva: puedeAnunciar,
+            modo: 'terminal',
+        });
+
+        if (!suena && !habla) return;
+
+        if (suena) {
+            reproducirTonoPdv(prefs.prefsUsuario.tono_id, tonosAlertas);
+        }
+        if (habla) {
+            encolarTts(envelope);
+        }
     }, [
         encolar,
         encolarTts,
@@ -302,6 +328,7 @@ export default function PdvAlertProvider({
         programarRecargasPorEvento,
         userId,
         terminal,
+        contextoAudioTerminal,
     ]);
 
     const { estadoConexion } = usePdvRealtime({

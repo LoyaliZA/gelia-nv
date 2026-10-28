@@ -216,6 +216,17 @@ export default function usePdvTerminalAlertas({
         return () => window.clearInterval(intervalo);
     }, [habilitado, terminalActiva, config?.latido_segundos, enviarLatido]);
 
+    useEffect(() => {
+        if (!habilitado || !sucursalId || terminalActiva) return undefined;
+
+        const segundos = config?.latido_segundos ?? 30;
+        const intervalo = window.setInterval(() => {
+            refrescar();
+        }, segundos * 1000);
+
+        return () => window.clearInterval(intervalo);
+    }, [habilitado, sucursalId, terminalActiva, config?.latido_segundos, refrescar]);
+
     const terminalActivaRef = useRef(terminalActiva);
     terminalActivaRef.current = terminalActiva;
 

@@ -51,6 +51,14 @@ class CatalogoAlertasTurnosPdvTest extends TestCase
             CatalogoAlertasTurnosPdv::guionTerminal('pausa.iniciada', ['primer_nombre' => 'Ana']),
         );
         $this->assertSame(
+            'Pausa finalizada. Ana.',
+            CatalogoAlertasTurnosPdv::guionTerminal('pausa.finalizada', ['primer_nombre' => 'Ana']),
+        );
+        $this->assertSame(
+            'Pausa finalizada.',
+            CatalogoAlertasTurnosPdv::guionTerminal('pausa.finalizada', []),
+        );
+        $this->assertSame(
             'Nuevo resguardo pendiente de aprobación. R-10.',
             CatalogoAlertasTurnosPdv::guionTerminal('resguardo.registro_manual_creado', [
                 'folio' => 'R-10',
