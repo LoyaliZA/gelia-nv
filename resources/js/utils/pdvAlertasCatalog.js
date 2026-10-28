@@ -54,6 +54,11 @@ export const PDV_ALERTAS_CATALOGO_TURNOS = {
         tonoConfigurable: false,
         guion: 'Pausa activa. {vendedor}.',
     },
+    'pausa.finalizada': {
+        prioridad: 'alta',
+        tonoConfigurable: false,
+        guion: 'Pausa finalizada. {vendedor}.',
+    },
     'resguardo.recepcion_esperada_creada': {
         prioridad: 'alta',
         tonoConfigurable: false,
@@ -121,9 +126,10 @@ export function mensajeTtsTerminalPdv(envelope) {
         return mensajeTtsProrrogaPdv(datos);
     }
 
-    if (tipo === 'pausa.iniciada') {
+    if (tipo === 'pausa.iniciada' || tipo === 'pausa.finalizada') {
         const vendedor = primerNombreDesdeDatosPdv(datos);
-        return vendedor ? `Pausa activa. ${vendedor}.` : 'Pausa activa.';
+        const frase = tipo === 'pausa.finalizada' ? 'Pausa finalizada' : 'Pausa activa';
+        return vendedor ? `${frase}. ${vendedor}.` : `${frase}.`;
     }
 
     if (PDV_TIPOS_RESGUARDO_NUEVO.has(tipo)) {

@@ -2,8 +2,10 @@ import { resolveTonoPath } from './alertasPrefs';
 import { PDV_TTS_TIPOS, mensajeTtsPersonalPdv } from './pdvSpeechUtils';
 import { mensajeTtsTerminalPdv, definicionAlertaPdv } from './pdvAlertasCatalog';
 import {
+    debeAnunciarVozPersonalPdv,
     debeReproducirSonidoPersonalPdv,
     debeReproducirSonidoTerminalPdv,
+    esEventoPersonalPdv,
 } from './pdvAlertasAudiencia';
 
 export const PDV_ALERTAS_PREFS_EVENT = 'pdv-alertas-prefs-changed';
@@ -165,6 +167,17 @@ export function debeReproducirTonoEventoPdv(envelope, modo = 'personal') {
         return PDV_SONIDO_TIPOS.has(String(envelope?.tipo || ''));
     }
     return definicionAlertaPdv(envelope?.tipo) !== null;
+}
+
+/** Reclama el evento personal solo si este componente va a reproducir tono o voz. */
+export function convieneReclamarAudioPersonalPdv(envelope, prefsUsuario, silencioTerminal, userId) {
+    if (!esEventoPersonalPdv(envelope, userId)) return false;
+
+    const habla = debeAnunciarVozPersonalPdv(envelope, prefsUsuario, silencioTerminal, userId);
+    const suena = debeReproducirSonidoPersonalPdv(envelope, prefsUsuario, silencioTerminal, userId)
+        && debeReproducirTonoEventoPdv(envelope, 'personal');
+
+    return habla || suena;
 }
 
 export function estadoWebPushPdv(prefsUsuario, webpush = {}) {

@@ -62,6 +62,11 @@ final class CatalogoAlertasTurnosPdv
                 'tono_configurable' => false,
                 'guion' => 'Pausa activa. {vendedor}.',
             ],
+            'pausa.finalizada' => [
+                'prioridad' => self::PRIORIDAD_ALTA,
+                'tono_configurable' => false,
+                'guion' => 'Pausa finalizada. {vendedor}.',
+            ],
             'resguardo.recepcion_esperada_creada' => [
                 'prioridad' => self::PRIORIDAD_ALTA,
                 'tono_configurable' => false,
@@ -98,10 +103,11 @@ final class CatalogoAlertasTurnosPdv
             return null;
         }
 
-        if ($tipo === 'pausa.iniciada') {
+        if ($tipo === 'pausa.iniciada' || $tipo === 'pausa.finalizada') {
             $vendedor = self::primerNombre($datos);
+            $frase = $tipo === 'pausa.finalizada' ? 'Pausa finalizada' : 'Pausa activa';
 
-            return $vendedor !== '' ? "Pausa activa. {$vendedor}." : 'Pausa activa.';
+            return $vendedor !== '' ? "{$frase}. {$vendedor}." : "{$frase}.";
         }
 
         if (in_array($tipo, ['resguardo.recepcion_esperada_creada', 'resguardo.registro_manual_creado'], true)) {

@@ -63,6 +63,16 @@ describe('pdvAlertasCatalog', () => {
         })).toBe('Pausa activa. Ana.');
 
         expect(mensajeTtsTerminalPdv({
+            tipo: 'pausa.finalizada',
+            datos: { primer_nombre: 'Ana' },
+        })).toBe('Pausa finalizada. Ana.');
+
+        expect(mensajeTtsTerminalPdv({
+            tipo: 'pausa.finalizada',
+            datos: {},
+        })).toBe('Pausa finalizada.');
+
+        expect(mensajeTtsTerminalPdv({
             tipo: 'resguardo.recepcion_esperada_creada',
             datos: { folio: 'R-10', snapshot_cliente_nombre: 'Cliente Uno' },
         })).toBe('Nuevo resguardo pendiente de aprobación. R-10.');
