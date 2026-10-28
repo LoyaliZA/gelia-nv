@@ -25,9 +25,12 @@ import {
     reproducirTonoPdv,
 } from '@/utils/pdvAlertasPrefs';
 import { mensajeTtsTerminalPdv } from '@/utils/pdvAlertasCatalog';
+import { mensajeTtsGerenciaPdv } from '@/utils/pdvSpeechUtils';
+import { crearCoordinadorAudioTerminalPdv } from '@/utils/pdvTerminalAudioLeader';
 import {
     PDV_AUDIENCIA_CANAL,
     anuncioTerminalEnNavegadorPdv,
+    fijarVozGerenciaPdv,
     terminalSucursalPuedeAnunciar,
 } from '@/utils/pdvAlertasAudiencia';
 
@@ -120,6 +123,7 @@ export default function PdvAlertProvider({
     userId = null,
     habilitado = true,
     mostrarPreferencias = true,
+    anunciarComoGerencia = false,
 }) {
     const { auth, tonos_alertas: tonosAlertas = [], capacidades = {} } = usePage().props;
     const prefs = usePdvAlertasPrefs({
@@ -144,8 +148,13 @@ export default function PdvAlertProvider({
     const { encolar, reiniciar } = usePdvAlertQueue();
     const vozHabilitada = prefs.canalesEfectivos.voz;
     const audioAnunciadosRef = useRef(new Set());
+    const textoForzadoRef = useRef(null);
+    const liderGerenciaRef = useRef(null);
+    const nombreGerente = String(auth?.user?.name || '').trim();
+    const vozGerencia = Boolean(anunciarComoGerencia) && !terminalGeneral.terminalActiva;
 
     const resolverTextoTts = useCallback((envelope) => {
+        if (textoForzadoRef.current) return textoForzadoRef.current;
         if (envelope?.audiencia === PDV_AUDIENCIA_CANAL.usuario) return null;
         if (envelope?.audiencia === PDV_AUDIENCIA_CANAL.publico) return null;
         return mensajeTtsTerminalPdv(envelope);
@@ -227,6 +236,30 @@ export default function PdvAlertProvider({
         });
     }, [marcarActualizacionConfirmada]);
 
+    useEffect(() => {
+        fijarVozGerenciaPdv(vozGerencia);
+        return () => fijarVozGerenciaPdv(false);
+    }, [vozGerencia]);
+
+    useEffect(() => {
+        if (!vozGerencia || !sucursalId) {
+            liderGerenciaRef.current?.destruir();
+            liderGerenciaRef.current = null;
+            return undefined;
+        }
+
+        const coordinador = crearCoordinadorAudioTerminalPdv({
+            terminalId: `gerencia-${sucursalId}`,
+        });
+        liderGerenciaRef.current = coordinador;
+        return () => {
+            coordinador.destruir();
+            if (liderGerenciaRef.current === coordinador) {
+                liderGerenciaRef.current = null;
+            }
+        };
+    }, [vozGerencia, sucursalId]);
+
     const contextoAudioTerminal = useCallback(() => ({
         alertasLocalLider: terminal.terminalActiva && terminal.esLiderAudio(),
         generalLocalLider: terminalGeneral.terminalActiva && terminalGeneral.esLiderAudio(),
@@ -257,6 +290,26 @@ export default function PdvAlertProvider({
 
         const eventId = envelope?.event_id;
         if (!eventId || audioAnunciadosRef.current.has(eventId)) return;
+
+        const textoGerencia = vozGerencia
+            ? mensajeTtsGerenciaPdv(envelope, { nombreGerente, userId })
+            : null;
+        if (textoGerencia) {
+            if (liderGerenciaRef.current?.esLider?.() !== false) {
+                audioAnunciadosRef.current.add(eventId);
+                const puedeSonar = prefs.prefsUsuario?.canales?.sonido === true && !prefs.silencioTerminal;
+                const puedeHablar = prefs.prefsUsuario?.canales?.voz === true && !prefs.silencioTerminal;
+                if (puedeSonar && debeReproducirTonoEventoPdv(envelope, 'terminal')) {
+                    reproducirTonoPdv(prefs.prefsUsuario.tono_id, tonosAlertas);
+                }
+                if (puedeHablar) {
+                    textoForzadoRef.current = textoGerencia;
+                    encolarTts(envelope);
+                    textoForzadoRef.current = null;
+                }
+            }
+            return;
+        }
 
         let contexto = contextoAudioTerminal();
         const generalPuedeConfirmar = !contexto.alertasLocalLider
@@ -329,6 +382,8 @@ export default function PdvAlertProvider({
         userId,
         terminal,
         contextoAudioTerminal,
+        vozGerencia,
+        nombreGerente,
     ]);
 
     const { estadoConexion } = usePdvRealtime({

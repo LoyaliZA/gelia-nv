@@ -123,6 +123,17 @@ export function terminalSucursalPuedeAnunciar({
     return Boolean(generalLocalLider);
 }
 
+let vozGerenciaLocal = false;
+
+/** La vista de gerencia está anunciando; el llamado del puesto no duplica ese audio. */
+export function fijarVozGerenciaPdv(activa) {
+    vozGerenciaLocal = Boolean(activa);
+}
+
+export function vozGerenciaActivaPdv() {
+    return vozGerenciaLocal;
+}
+
 /** El llamado del puesto anuncia este sobre. El provider no lo reclama. */
 export function audioPersonalDelegadoPdv(envelope, userId = null) {
     return esEventoPersonalPdv(envelope, userId);

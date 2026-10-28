@@ -83,6 +83,7 @@ export default function OperacionGeneral({
                 sucursalId={sucursalActiva?.id}
                 userId={auth?.user?.id}
                 habilitado={Boolean(sucursalActiva?.id)}
+                anunciarComoGerencia={esGerenciaEquipo}
             >
                 <OperacionRealtimeSync refrescar={manejarActualizado} />
                 <GeliaPageShell className="space-y-5" data-operacion-root>

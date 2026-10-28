@@ -153,6 +153,61 @@ export function mensajeTtsProrrogaPdv(datos) {
     return `Prórroga iniciada. Turno ${folio}.`;
 }
 
+const TIPOS_AVISO_GERENCIA = new Set([
+    'turno.asignado',
+    'turno.reatencion',
+    'turno.transferido',
+    'atencion.prorroga',
+]);
+
+export function cubreAvisoGerenciaPdv(envelope) {
+    return TIPOS_AVISO_GERENCIA.has(String(envelope?.tipo || ''));
+}
+
+/**
+ * Operación General, quien gestiona el equipo.
+ * Propio: «Isaac, tienes un nuevo cliente asignado.»
+ * De otra persona: «Isaac, el vendedor Diego tiene un nuevo cliente asignado.»
+ * La terminal general no usa este guion.
+ */
+export function mensajeTtsGerenciaPdv(envelope, { nombreGerente = '', userId = null } = {}) {
+    if (envelope?.audiencia !== 'sucursal') return null;
+    if (!cubreAvisoGerenciaPdv(envelope)) return null;
+
+    const datos = envelope?.datos;
+    if (!datos || typeof datos !== 'object') return null;
+
+    const gerente = String(nombreGerente || '').trim();
+    const vendedor = primerNombreAtencionPdv(datos);
+    const asignado = datos?.atencion?.user_id;
+    const esPropio = userId != null
+        && asignado != null
+        && Number(asignado) === Number(userId);
+    const tipo = String(envelope?.tipo || '');
+
+    if (tipo === 'atencion.prorroga') {
+        if (esPropio) {
+            return gerente
+                ? `${gerente}, se ha iniciado el tiempo de prórroga.`
+                : 'Se ha iniciado el tiempo de prórroga.';
+        }
+        if (!vendedor) return null;
+        return gerente
+            ? `${gerente}, se ha iniciado el tiempo de prórroga del vendedor ${vendedor}.`
+            : `Se ha iniciado el tiempo de prórroga del vendedor ${vendedor}.`;
+    }
+
+    if (esPropio) {
+        return gerente
+            ? `${gerente}, tienes un nuevo cliente asignado.`
+            : 'Tienes un nuevo cliente asignado.';
+    }
+    if (!vendedor) return null;
+    return gerente
+        ? `${gerente}, el vendedor ${vendedor} tiene un nuevo cliente asignado.`
+        : `El vendedor ${vendedor} tiene un nuevo cliente asignado.`;
+}
+
 export function mensajeTtsPersonalPdv(envelope) {
     const datos = envelope?.datos;
     if (!datos || typeof datos !== 'object') return null;
