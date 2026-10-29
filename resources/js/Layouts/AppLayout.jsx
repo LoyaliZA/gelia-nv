@@ -12,6 +12,7 @@ import { isProfessionalSidebarLayout, DEFAULT_SIDEBAR_LAYOUT, DEFAULT_SIDEBAR_MO
 
 import NotificationService from '../Services/NotificationBrowserService';
 import GeliaLoader from '../Components/GeliaLoader';
+import AvisoVersionNueva from '../Components/AvisoVersionNueva';
 import WooSyncFloatingTracker from '../Components/WooSyncFloatingTracker';
 import ImportacionAlmacenFloatingTracker from '../Components/Almacenes/ImportacionAlmacenFloatingTracker';
 import CobranzaReporteFloatingTracker from '../Components/CobranzaReporteFloatingTracker';
@@ -677,6 +678,7 @@ export default function AppLayout({ children, fullScreen = false }) {
                     progress={globalProgress}
                     message="Procesando_"
                 />
+                <AvisoVersionNueva />
 
                 {useMobileTopBar && (
                     <header className="gelia-mobile-topbar md:hidden" role="banner">
