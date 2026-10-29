@@ -83,3 +83,83 @@ export function resolverModoAudioPdv(envelope, {
 
     return null;
 }
+
+const ESTADOS_ALERTAS_VIGENTES = new Set([
+    'terminal_activa',
+    'otra_terminal_activa',
+    'conexion_perdida',
+]);
+
+/**
+ * La designación de alertas sigue vigente aunque este navegador no sea quien la opera.
+ * `designacionVigente` cubre a quien consulta el estado sin permiso de alertas:
+ * la API deja la designación y el estado de UI en no autorizada.
+ */
+export function alertasDesignacionVigentePdv({
+    estado = null,
+    designacionVigente = false,
+} = {}) {
+    if (designacionVigente === true) return true;
+    return ESTADOS_ALERTAS_VIGENTES.has(String(estado || ''));
+}
+
+/**
+ * Alertas vigente: solo la pestaña líder de esa terminal.
+ * Sin designación de alertas: la pestaña líder de la terminal general.
+ */
+export function terminalSucursalPuedeAnunciar({
+    alertasLocalLider = false,
+    generalLocalLider = false,
+    estadoAlertas = null,
+    designacionAlertasVigente = false,
+} = {}) {
+    if (alertasDesignacionVigentePdv({
+        estado: estadoAlertas,
+        designacionVigente: designacionAlertasVigente,
+    })) {
+        return Boolean(alertasLocalLider);
+    }
+
+    return Boolean(generalLocalLider);
+}
+
+let vozGerenciaLocal = false;
+
+/** La vista de gerencia está anunciando; el llamado del puesto no duplica ese audio. */
+export function fijarVozGerenciaPdv(activa) {
+    vozGerenciaLocal = Boolean(activa);
+}
+
+export function vozGerenciaActivaPdv() {
+    return vozGerenciaLocal;
+}
+
+/** El llamado del puesto anuncia este sobre. El provider no lo reclama. */
+export function audioPersonalDelegadoPdv(envelope, userId = null) {
+    return esEventoPersonalPdv(envelope, userId);
+}
+
+/**
+ * Mismo llamado, canal de sucursal, en el navegador de quien atiende.
+ * No se repite aquí; otra terminal de sucursal sí lo anuncia.
+ */
+export function esLlamadoPropioEnSucursalPdv(envelope, userId = null) {
+    if (envelope?.audiencia !== PDV_AUDIENCIA_CANAL.sucursal) return false;
+    if (!PDV_TIPOS_AUDIO_PERSONAL.has(String(envelope?.tipo || ''))) return false;
+    if (userId == null) return false;
+    const asignado = envelope?.datos?.atencion?.user_id;
+    return Number(asignado) === Number(userId);
+}
+
+/**
+ * Decisión del provider. No depende del orden entre canal usuario y sucursal.
+ * `terminal` solo si este navegador debe anunciar sucursal y el texto o el tono aplican.
+ */
+export function anuncioTerminalEnNavegadorPdv(envelope, opciones = {}) {
+    const userId = opciones.userId ?? null;
+    if (opciones.audioYaAnunciado) return null;
+    if (audioPersonalDelegadoPdv(envelope, userId)) return null;
+    if (esLlamadoPropioEnSucursalPdv(envelope, userId)) return null;
+
+    return resolverModoAudioPdv(envelope, opciones) === 'terminal' ? 'terminal' : null;
+}

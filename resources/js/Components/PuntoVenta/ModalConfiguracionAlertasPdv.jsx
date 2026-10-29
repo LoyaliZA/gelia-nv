@@ -139,11 +139,11 @@ export default function ModalConfiguracionAlertasPdv({
                                 },
                                 disponible: {
                                     titulo: 'Disponible para activar',
-                                    detalle: 'Este equipo muestra a todo el equipo de ventas, con las opciones de quien tiene la sesión.',
+                                    detalle: 'Este equipo muestra a todo el equipo de ventas, con las opciones de quien tiene la sesión. Anuncia las novedades de la sucursal cuando no hay una terminal de alertas activa.',
                                 },
                                 terminal_activa: {
                                     titulo: 'Terminal general',
-                                    detalle: 'Quien inicie sesión aquí gestiona su turno. No aparecen acciones de gerencia.',
+                                    detalle: 'Quien inicie sesión aquí gestiona su turno. No aparecen acciones de gerencia. Anuncia las novedades de la sucursal cuando no hay una terminal de alertas activa.',
                                 },
                                 otra_terminal_activa: {
                                     titulo: 'Otra terminal general',

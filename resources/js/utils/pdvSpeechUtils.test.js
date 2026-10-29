@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
     debeAnunciarTtsPdv,
     etiquetaAudioIndicadorPdv,
+    mensajeTtsGerenciaPdv,
     mensajeTtsPdv,
     PDV_TTS_ESTADO,
     PDV_TTS_TIPOS,
@@ -99,6 +100,56 @@ describe('pdvSpeechUtils', () => {
             tipo: 'atencion.prorroga',
             datos: { folio: 'V-0401' },
         })).toBe('Prórroga iniciada. Turno V-0401.');
+    });
+
+    it('en gerencia distingue el turno propio del de otra persona', () => {
+        const propio = {
+            tipo: 'turno.asignado',
+            audiencia: 'sucursal',
+            datos: {
+                snapshot_nombre_llamado: 'María López',
+                atencion: { user_id: 7, primer_nombre: 'Isaac' },
+            },
+        };
+        const ajeno = {
+            tipo: 'turno.transferido',
+            audiencia: 'sucursal',
+            datos: {
+                snapshot_nombre_llamado: 'María López',
+                atencion: { user_id: 4, primer_nombre: 'Diego' },
+            },
+        };
+
+        expect(mensajeTtsGerenciaPdv(propio, { nombreGerente: 'Isaac', userId: 7 }))
+            .toBe('Isaac, tienes un nuevo cliente asignado.');
+        expect(mensajeTtsGerenciaPdv(ajeno, { nombreGerente: 'Isaac', userId: 7 }))
+            .toBe('Isaac, el vendedor Diego tiene un nuevo cliente asignado.');
+        expect(mensajeTtsPdv(ajeno)).toBe('Diego, tienes un nuevo cliente: María López.');
+    });
+
+    it('en gerencia anuncia la prórroga de otra persona y la propia', () => {
+        const ajena = {
+            tipo: 'atencion.prorroga',
+            audiencia: 'sucursal',
+            datos: {
+                folio: 'V-9',
+                atencion: { user_id: 4, primer_nombre: 'Diego' },
+            },
+        };
+        const propia = {
+            ...ajena,
+            datos: {
+                folio: 'V-9',
+                atencion: { user_id: 7, primer_nombre: 'Isaac' },
+            },
+        };
+
+        expect(mensajeTtsGerenciaPdv(ajena, { nombreGerente: 'Isaac', userId: 7 }))
+            .toBe('Isaac, se ha iniciado el tiempo de prórroga del vendedor Diego.');
+        expect(mensajeTtsGerenciaPdv(propia, { nombreGerente: 'Isaac', userId: 7 }))
+            .toBe('Isaac, se ha iniciado el tiempo de prórroga.');
+        expect(mensajeTtsGerenciaPdv({ ...ajena, audiencia: 'usuario' }, { nombreGerente: 'Isaac', userId: 7 }))
+            .toBeNull();
     });
 
     it('resuelve estado TTS inicial como bloqueado sin gesto previo', () => {
