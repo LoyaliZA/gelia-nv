@@ -103,4 +103,30 @@ describe('gestión de atención desde Operación General', () => {
         });
         expect(onActualizado).toHaveBeenCalledOnce();
     });
+
+    it('habilita reatención en espera si la persona es candidata', async () => {
+        montar({
+            persona: { ...persona, estado_vendedor: 'en_espera', recibe_turnos: false, atencion_actual: null },
+            puedeAsignarReatencion: true,
+            reatenciones: [{ id: 12, version: 8, folio: 'V-12', cliente_nombre: 'Cliente', candidatos: [{ id: 4 }] }],
+        });
+
+        const boton = [...document.querySelectorAll('button')]
+            .find((elemento) => elemento.textContent.trim() === 'Reatención');
+        expect(boton.disabled).toBe(false);
+        expect(boton.title).toBe('Asignar un cliente en re-atención');
+    });
+
+    it('mantiene reatención bloqueada en espera si la persona no es candidata', () => {
+        montar({
+            persona: { ...persona, estado_vendedor: 'en_espera', recibe_turnos: false, atencion_actual: null },
+            puedeAsignarReatencion: true,
+            reatenciones: [{ id: 12, version: 8, folio: 'V-12', cliente_nombre: 'Cliente', candidatos: [{ id: 9 }] }],
+        });
+
+        const boton = [...document.querySelectorAll('button')]
+            .find((elemento) => elemento.textContent.trim() === 'Reatención');
+        expect(boton.disabled).toBe(true);
+        expect(boton.title).toBe('No hay clientes en ventana de re-atención');
+    });
 });

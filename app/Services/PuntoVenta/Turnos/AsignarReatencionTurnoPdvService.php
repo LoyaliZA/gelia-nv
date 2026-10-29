@@ -143,7 +143,7 @@ class AsignarReatencionTurnoPdvService
                 ]);
             }
 
-            if (! $this->consultaDisponible->esDisponible($destino, $sucursalId)) {
+            if (! $this->aceptaDestinoReatencion($destino, $sucursalId)) {
                 throw ValidationException::withMessages([
                     'destino_user_id' => 'La persona destino no está disponible.',
                 ]);
@@ -248,12 +248,18 @@ class AsignarReatencionTurnoPdvService
         return $this->vendedoresElegibles
             ->query($sucursalId)
             ->get()
-            ->filter(fn (User $user): bool => $this->consultaDisponible->esDisponible(
-                $user,
-                $sucursalId,
-            ))
+            ->filter(fn (User $user): bool => $this->aceptaDestinoReatencion($user, $sucursalId))
             ->map(static fn (User $user): array => SerializadorBandejaReatencionPdv::candidato($user))
             ->values()
             ->all();
+    }
+
+    private function aceptaDestinoReatencion(User $user, int $sucursalId): bool
+    {
+        if ($this->consultaDisponible instanceof ConsultaPersonaDisponiblePdvService) {
+            return $this->consultaDisponible->esDestinoReatencionManual($user, $sucursalId);
+        }
+
+        return $this->consultaDisponible->esDisponible($user, $sucursalId);
     }
 }
