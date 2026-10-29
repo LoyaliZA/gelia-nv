@@ -157,12 +157,13 @@ return Application::configure(basePath: dirname(__DIR__))
                 ? $e->getStatusCode()
                 : 500;
 
-            if (! in_array($status, [403, 404, 500, 503], true)) {
+            if (! in_array($status, [403, 404, 422, 500, 503], true)) {
                 return null;
             }
 
             return Inertia::render('Error', [
                 'status' => $status,
+                'message' => $status === 422 ? $e->getMessage() : null,
                 'returnUrl' => $request->headers->get('referer'),
             ])
                 ->toResponse($request)

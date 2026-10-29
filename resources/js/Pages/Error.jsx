@@ -3,7 +3,7 @@ import { Head, Link, router } from '@inertiajs/react';
 import GeliaLogo from '@/Components/GeliaLogo';
 import { Home, RefreshCcw } from 'lucide-react'; // Iconos para los botones
 
-export default function Error({ status, returnUrl = null }) {
+export default function Error({ status, message = null, returnUrl = null }) {
     const reintentar = () => {
         const destino = returnUrl || (typeof document !== 'undefined' ? document.referrer : '') || '/dashboard';
         if (destino && destino !== window.location.href) {
@@ -22,6 +22,7 @@ export default function Error({ status, returnUrl = null }) {
         500: '500: Error Interno del Servidor',
         404: '404: Página No Encontrada',
         403: '403: Acceso Prohibido',
+        422: '422: No se pudo completar la acción',
     };
 
     const descriptionMap = {
@@ -30,11 +31,12 @@ export default function Error({ status, returnUrl = null }) {
         // Mensaje solicitado por el usuario
         404: 'Lo siento, la página que buscas no existe o está en otro sitio.', 
         // Mensaje solicitado por el usuario
-        403: 'Lo siento, no tienes acceso a esa función.', 
+        403: 'Lo siento, no tienes acceso a esa función.',
+        422: 'No se pudo completar la acción.',
     };
 
     const title = titleMap[status] || `Error ${status}`;
-    const description = descriptionMap[status] || 'Lo siento, ha ocurrido un error inesperado.';
+    const description = (status === 422 && message) ? message : (descriptionMap[status] || 'Lo siento, ha ocurrido un error inesperado.');
 
     return (
         <>

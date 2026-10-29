@@ -14,6 +14,11 @@ class ValidarListaInferiorService
         return str_contains($nombre, 'LISTA');
     }
 
+    public function exigeListaRebaja(SolicitudTag $solicitud): bool
+    {
+        return $this->esProcesoCambioLista($solicitud) && (bool) $solicitud->catalogo_lista_descuento_id;
+    }
+
     public function obtenerListaReferencia(SolicitudTag $solicitud): ?CatalogoListaDescuento
     {
         $solicitud->loadMissing(['cliente.listaDescuento', 'listaDescuento']);
