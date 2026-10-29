@@ -26,6 +26,11 @@ export default defineConfig(({ mode }) => {
                 '@': path.resolve(__dirname, 'resources/js'),
             },
         },
+        build: {
+            outDir: process.env.VITE_OUT_DIR || 'public/build',
+            emptyOutDir: true,
+            manifest: 'manifest.json',
+        },
         test: {
             environment: 'node',
             include: ['resources/js/**/*.test.{js,jsx}'],
