@@ -1,11 +1,12 @@
 import React from 'react';
 import { Link } from '@inertiajs/react';
-import { BarChart3, Layers, Shield, Users } from 'lucide-react';
+import { BarChart3, History, Layers, Shield, Users } from 'lucide-react';
 import { geliaCardClass, GELIA_SEGMENT_TABS_SCROLL, GELIA_SEGMENT_TABS_TRACK } from '../../../../utils/geliaTheme';
 import {
     ETIQUETAS_TIPO_REPORTE,
     puedeVerTipoReporte,
     RUTAS_REPORTE_PDV,
+    TIPO_REPORTE_AUDITORIA_OPERACION,
     TIPO_REPORTE_CONJUNTO,
     TIPO_REPORTE_RESGUARDOS,
     TIPO_REPORTE_TURNOS_OPERACION,
@@ -15,6 +16,7 @@ const TABS = [
     { id: TIPO_REPORTE_RESGUARDOS, icon: Shield, label: ETIQUETAS_TIPO_REPORTE[TIPO_REPORTE_RESGUARDOS] },
     { id: TIPO_REPORTE_TURNOS_OPERACION, icon: Users, label: ETIQUETAS_TIPO_REPORTE[TIPO_REPORTE_TURNOS_OPERACION] },
     { id: TIPO_REPORTE_CONJUNTO, icon: Layers, label: ETIQUETAS_TIPO_REPORTE[TIPO_REPORTE_CONJUNTO] },
+    { id: TIPO_REPORTE_AUDITORIA_OPERACION, icon: History, label: ETIQUETAS_TIPO_REPORTE[TIPO_REPORTE_AUDITORIA_OPERACION] },
 ];
 
 export default function NavegacionReportesPdv({ tipoActivo, vistasDisponibles = {} }) {

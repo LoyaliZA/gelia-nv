@@ -7,6 +7,8 @@ use App\Events\PuntoVenta\TurnoAsignado;
 use App\Events\PuntoVenta\TurnoReatencion;
 use App\Jobs\PuntoVenta\Turnos\EjecutarMatchmakerTurnosPdvJob;
 use App\Models\ConfiguracionSistema;
+use App\Models\PuntoVenta\EsperaDisponibilidadPdv;
+use App\Models\PuntoVenta\JornadaPdv;
 use App\Models\PuntoVenta\SucursalDiaOperacionPdv;
 use App\Models\PuntoVenta\TurnoPdv;
 use App\Models\PuntoVenta\TurnoPdvAtencion;
@@ -58,6 +60,11 @@ class MatchmakerTurnosPdvTest extends TestCase
         }
 
         $this->sucursal = Sucursal::factory()->create(['nombre' => 'Sucursal Matchmaker']);
+
+        // ponytail: el cache de configuración apunta a database y el candado unique del matchmaker sobrevive entre tests con el mismo id de sucursal.
+        config(['cache.default' => 'array']);
+        Cache::purge('database');
+        Cache::purge('array');
     }
 
     public function test_inicio_atencion_automatico_al_asignar(): void
@@ -278,9 +285,11 @@ class MatchmakerTurnosPdvTest extends TestCase
         Event::assertDispatched(TurnoAsignado::class, 1);
     }
 
-    public function test_finalizar_pausa_asigna_turno_en_cola_con_disponibilidad_real(): void
+    public function test_finalizar_pausa_no_asigna_hasta_vencer_la_espera(): void
     {
         Event::fake([TurnoAsignado::class]);
+        $plazos = app(PlazosTurnosPdvConfig::class);
+        $plazos->persistir(array_merge($plazos->configuracionInicialAprobada(), ['cooldown_segundos' => 20]));
 
         $this->abrirSucursal();
         $ventas = $this->crearVendedorOperacion('Vendedor Pausa');
@@ -292,8 +301,35 @@ class MatchmakerTurnosPdvTest extends TestCase
         app(FinalizarPausaPdvService::class)->ejecutar($ventas, now());
 
         $turno->refresh();
+        $this->assertSame(TurnoPdv::ESTADO_EN_COLA, $turno->estado);
+        Event::assertNotDispatched(TurnoAsignado::class);
+        $this->assertSame(1, EsperaDisponibilidadPdv::query()->count());
+
+        $this->travel(20)->seconds();
+        app(MatchmakerTurnosPdvService::class)->ejecutar($this->sucursal->id, 'cooldown');
+
+        $turno->refresh();
         $this->assertSame(TurnoPdv::ESTADO_ASIGNADO, $turno->estado);
-        Event::assertDispatched(TurnoAsignado::class, 1);
+        $this->assertSame($ventas->id, $turno->atencionActual->user_id);
+    }
+
+    public function test_finalizar_pausa_sin_cooldown_asigna_turno_en_cola(): void
+    {
+        Event::fake([TurnoAsignado::class]);
+        $plazos = app(PlazosTurnosPdvConfig::class);
+        $plazos->persistir(array_merge($plazos->configuracionInicialAprobada(), ['cooldown_segundos' => 0]));
+
+        $this->abrirSucursal();
+        $ventas = $this->crearVendedorOperacion('Vendedor Pausa Cero');
+        app(AbrirJornadaPdvService::class)->ejecutar($ventas, now());
+        app(IniciarPausaPdvService::class)->ejecutar($ventas, now());
+        $turno = $this->crearTurnoEnCola('Sin espera');
+
+        app(FinalizarPausaPdvService::class)->ejecutar($ventas, now());
+
+        $turno->refresh();
+        $this->assertSame(TurnoPdv::ESTADO_ASIGNADO, $turno->estado);
+        $this->assertNull(JornadaPdv::query()->where('user_id', $ventas->id)->value('disponible_desde'));
     }
 
     public function test_abrir_jornada_dispara_job_matchmaker(): void
