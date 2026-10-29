@@ -184,7 +184,6 @@ export default function TarjetaVendedorGerencia({
     const enPausa = persona.estado_vendedor === 'en_retencion';
     const ocupado = persona.estado_vendedor === 'atendiendo';
     const reatencionHabilitada = puedeAsignarReatencion
-        && Boolean(persona.recibe_turnos)
         && !ocupado
         && clientesReatencion.length > 0;
 
@@ -303,7 +302,7 @@ export default function TarjetaVendedorGerencia({
                                 type="button"
                                 className={`${THEME_BTN_PRIMARY} ${CLASE_BTN_TARJETA}`}
                                 disabled={!reatencionHabilitada || cargando}
-                                title={tituloReatencion(ocupado, persona.recibe_turnos, clientesReatencion.length)}
+                                title={tituloReatencion(reatencionHabilitada, ocupado, clientesReatencion.length)}
                                 onClick={() => setModalReatencionAbierto(true)}
                             >
                                 <RotateCcw className="w-4 h-4 shrink-0" aria-hidden />
@@ -380,17 +379,17 @@ export default function TarjetaVendedorGerencia({
     );
 }
 
-function tituloReatencion(ocupado, recibeTurnos, cantidadClientes) {
+function tituloReatencion(habilitada, ocupado, cantidadClientes) {
+    if (habilitada) {
+        return 'Asignar un cliente en re-atención';
+    }
     if (ocupado) {
         return 'No disponible: hay una atención en curso';
-    }
-    if (!recibeTurnos) {
-        return 'Solo se puede reatender con personal disponible';
     }
     if (cantidadClientes === 0) {
         return 'No hay clientes en ventana de re-atención';
     }
-    return 'Asignar un cliente en re-atención';
+    return 'Solo se puede reatender con personal disponible';
 }
 
 function mensajeConfirmacion(persona, accion) {
