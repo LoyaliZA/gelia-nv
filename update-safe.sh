@@ -32,7 +32,7 @@ WEB_CONTAINER="${DOCKER_WEB_CONTAINER:-gelianv_web}"
 DB_CONTAINER="${DOCKER_DB_CONTAINER:-gelianv_db}"
 QUEUE_CONTAINER="${DOCKER_QUEUE_CONTAINER:-gelianv_queue}"
 REVERB_CONTAINER="${DOCKER_REVERB_CONTAINER:-gelianv_reverb}"
-GIT_BRANCH="${GIT_BRANCH:-main}"
+# Vacío: se usa la rama del checkout. GIT_BRANCH solo si coincide con esa rama.
 
 SKIP_GIT=false
 REBUILD_IMAGE=false
@@ -378,9 +378,27 @@ main() {
     PREV_SHA="$(git rev-parse HEAD)"
 
     if ! $SKIP_GIT; then
-        log "Descargando cambios desde origin/${GIT_BRANCH}..."
-        GIT_EDITOR=true git pull --no-edit origin "$GIT_BRANCH"
-        ok "Repositorio actualizado."
+        local rama pendiente
+        rama="$(git rev-parse --abbrev-ref HEAD)"
+        if [ "$rama" = "HEAD" ]; then
+            fail "El checkout no tiene rama. No se descarga una actualización en detached HEAD."
+        fi
+        if [ -z "${GIT_BRANCH:-}" ]; then
+            GIT_BRANCH="$rama"
+        elif [ "$GIT_BRANCH" != "$rama" ]; then
+            fail "El checkout está en ${rama} y GIT_BRANCH=${GIT_BRANCH}. El despliegue no mezcla otra rama."
+        fi
+
+        log "Descargando origin/${GIT_BRANCH}..."
+        git fetch origin "$GIT_BRANCH"
+        pendiente="$(git rev-list --count "HEAD..origin/${GIT_BRANCH}")"
+        if [ "$pendiente" -eq 0 ]; then
+            warn "origin/${GIT_BRANCH} no tiene commits nuevos. No se descargó código."
+        else
+            log "Se aplican ${pendiente} commits de origin/${GIT_BRANCH}."
+            GIT_EDITOR=true git merge --no-edit "origin/${GIT_BRANCH}"
+        fi
+        ok "Repositorio en $(git rev-parse --short HEAD) (${GIT_BRANCH})."
     else
         warn "Omitiendo git pull (--skip-git)."
     fi
