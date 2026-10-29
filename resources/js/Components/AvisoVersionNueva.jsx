@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import GeliaLoader from '@/Components/GeliaLoader';
+import { Download } from 'lucide-react';
+import PantallaActualizacionGelia from '@/Components/PantallaActualizacionGelia';
 import useAvisoVersionNueva from '@/hooks/useAvisoVersionNueva';
 import {
     ESPERA_ACTUALIZACION_MS,
@@ -26,8 +27,11 @@ export default function AvisoVersionNueva() {
             antesDeRecargar();
             window.location.reload();
         }, ESPERA_ACTUALIZACION_MS);
+        const shell = document.querySelector('.gelia-app-shell');
+        shell?.setAttribute('inert', '');
 
         return () => {
+            shell?.removeAttribute('inert');
             if (rotacion) {
                 window.clearInterval(rotacion);
             }
@@ -42,19 +46,30 @@ export default function AvisoVersionNueva() {
     return (
         <>
             {visible && !actualizando ? (
-                <div className="pointer-events-none fixed inset-x-0 z-[10000] flex justify-center px-4 top-[calc(var(--gelia-mobile-topbar-height)+0.75rem)] md:top-3">
+                <div role="status" aria-live="polite">
                     <button
                         type="button"
-                        className="pointer-events-auto min-h-11 max-w-full rounded-full border theme-border theme-surface theme-text-main px-4 py-2 text-sm font-semibold shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primario)]"
+                        className="gelia-aviso-version pointer-events-auto flex w-full min-h-11 items-start gap-4 rounded-2xl border theme-surface theme-no-blur p-4 text-left shadow-2xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primario)]"
                         onClick={() => setActualizando(true)}
                     >
-                        Hay una nueva actualización de GELIA
+                        <span
+                            className="shrink-0 rounded-xl p-2"
+                            style={{ backgroundColor: 'color-mix(in srgb, var(--color-primario) 15%, transparent)' }}
+                            aria-hidden="true"
+                        >
+                            <Download className="size-5" style={{ color: 'var(--color-primario)' }} />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                            <span className="block text-sm font-semibold theme-text-primario">Nueva versión</span>
+                            <span className="mt-0.5 block text-xs font-bold leading-snug theme-text-main">
+                                Hay una nueva actualización de <span translate="no">GELIA</span> lista para instalar.
+                            </span>
+                        </span>
                     </button>
                 </div>
             ) : null}
-            <GeliaLoader
+            <PantallaActualizacionGelia
                 isVisible={actualizando}
-                message="Actualizando tu GELIA"
                 nota={fraseActualizacion(indice)}
             />
         </>

@@ -1,12 +1,12 @@
 export const FRASES_ACTUALIZACION = [
-    'Tu captura sigue en esta pantalla hasta que confirmes.',
     'En un momento GELIA queda al día.',
-    'Gracias por esperar este instante.',
-    'La operación sigue al terminar.',
+    'Gracias por este instante. Ya casi está.',
+    'Esta vista vuelve en cuanto termine.',
+    'Lo que estabas haciendo sigue aquí.',
 ];
 
-export const ESPERA_ACTUALIZACION_MS = 2400;
-export const ROTACION_ACTUALIZACION_MS = 1200;
+export const ESPERA_ACTUALIZACION_MS = 4800;
+export const ROTACION_ACTUALIZACION_MS = 1600;
 
 export function decidirAvisoVersion({ versionCargada, versionRemota }) {
     if (!versionCargada || !versionRemota || versionCargada === versionRemota) {
