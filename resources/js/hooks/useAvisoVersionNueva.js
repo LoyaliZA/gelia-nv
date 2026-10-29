@@ -18,7 +18,7 @@ export default function useAvisoVersionNueva() {
             return undefined;
         }
 
-        const cargada = versionSuperficieCargada('shell');
+        const cargada = versionSuperficieCargada('compilacion');
         if (!cargada) {
             setVisible(false);
             return undefined;
@@ -49,7 +49,7 @@ export default function useAvisoVersionNueva() {
                 }
                 setVisible(decidirAvisoVersion({
                     versionCargada: cargada,
-                    versionRemota: data?.shell || '',
+                    versionRemota: data?.compilacion || '',
                 }) === 'avisar');
             } catch {
                 // La alerta no bloquea el trabajo si la consulta falla.

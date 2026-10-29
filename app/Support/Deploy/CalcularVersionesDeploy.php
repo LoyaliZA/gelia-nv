@@ -16,7 +16,7 @@ final class CalcularVersionesDeploy
     ];
 
     /**
-     * @return array{shell: string, surfaces: array{sala: string, turnos: string}}
+     * @return array{shell: string, compilacion: string, surfaces: array{sala: string, turnos: string}}
      */
     public static function actual(?string $rutaManifiesto = null): array
     {
@@ -32,7 +32,7 @@ final class CalcularVersionesDeploy
 
     /**
      * @param  array<string, mixed>  $manifiesto
-     * @return array{shell: string, surfaces: array{sala: string, turnos: string}}
+     * @return array{shell: string, compilacion: string, surfaces: array{sala: string, turnos: string}}
      */
     public static function desdeManifiesto(array $manifiesto): array
     {
@@ -46,6 +46,7 @@ final class CalcularVersionesDeploy
                 [$entrada],
                 false,
             )),
+            'compilacion' => self::hashArchivos(self::archivosPublicados($manifiesto)),
             'surfaces' => [
                 'sala' => self::hashArchivos(self::cierre($manifiesto, $paginasSala, true)),
                 'turnos' => self::hashArchivos(self::cierre($manifiesto, $paginasTurnos, true)),
@@ -90,11 +91,36 @@ final class CalcularVersionesDeploy
 
         return [
             'shell' => $version,
+            'compilacion' => $version,
             'surfaces' => [
                 'sala' => $version,
                 'turnos' => $version,
             ],
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $manifiesto
+     * @return list<string>
+     */
+    private static function archivosPublicados(array $manifiesto): array
+    {
+        $archivos = [];
+
+        foreach ($manifiesto as $entrada) {
+            if (! is_array($entrada)) {
+                continue;
+            }
+            $archivo = $entrada['file'] ?? null;
+            if (! is_string($archivo) || $archivo === '') {
+                continue;
+            }
+            $archivos[] = $archivo;
+        }
+
+        sort($archivos);
+
+        return $archivos;
     }
 
     /**
