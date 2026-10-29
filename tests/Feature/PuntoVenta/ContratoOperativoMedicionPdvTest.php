@@ -10,6 +10,7 @@ use App\Events\PuntoVenta\PausaIniciada;
 use App\Events\PuntoVenta\TurnoAsignado;
 use App\Jobs\PuntoVenta\Turnos\EjecutarMatchmakerTurnosPdvJob;
 use App\Models\ConfiguracionSistema;
+use App\Models\PuntoVenta\EsperaDisponibilidadPdv;
 use App\Models\PuntoVenta\JornadaPdv;
 use App\Models\PuntoVenta\SucursalDiaOperacionPdv;
 use App\Models\PuntoVenta\TurnoPdv;
@@ -94,14 +95,24 @@ class ContratoOperativoMedicionPdvTest extends TestCase
         if ($segundos > 0) {
             $this->assertNotNull($jornadaEmpleado->disponible_desde);
             $this->assertTrue($jornadaEmpleado->disponible_desde->equalTo(now()->addSeconds($segundos)));
-            Queue::assertPushed(EjecutarMatchmakerTurnosPdvJob::class, fn ($job) =>
-                $job->origenDisparador === 'cooldown'
+            Queue::assertPushed(EjecutarMatchmakerTurnosPdvJob::class, fn ($job) => $job->origenDisparador === 'cooldown'
                 && $job->uniqueSuffix === 'cooldown:'.$this->empleado->id.':'.now()->addSeconds($segundos)->getTimestamp());
         } else {
             $this->assertNull($jornadaEmpleado->disponible_desde);
             Queue::assertNotPushed(EjecutarMatchmakerTurnosPdvJob::class);
         }
         $this->assertNull($this->jornada($this->gerente)->disponible_desde);
+        $espera = EsperaDisponibilidadPdv::query()->sole();
+        $this->assertSame(EsperaDisponibilidadPdv::ORIGEN_ATENCION_CERRADA, $espera->origen);
+        $this->assertSame($segundos, $espera->cooldown_segundos);
+        $this->assertSame($this->gerente->id, $espera->actor_id);
+        $this->assertSame($this->empleado->id, $espera->user_id);
+        $this->assertNull($espera->disponible_desde_anterior);
+        if ($segundos > 0) {
+            $this->assertTrue($espera->disponible_desde_nuevo->equalTo($jornadaEmpleado->disponible_desde));
+        } else {
+            $this->assertNull($espera->disponible_desde_nuevo);
+        }
         $evento = TurnoPdvEvento::query()->where('tipo_evento', TurnoPdvEvento::TIPO_ATENCION_CERRADA)->sole();
         $this->assertSame($this->gerente->id, $evento->actor_id);
         $this->assertSame($this->empleado->id, $turno->atenciones()->sole()->user_id);
@@ -134,12 +145,48 @@ class ContratoOperativoMedicionPdvTest extends TestCase
         $this->assertTrue(app(ConsultaPersonaDisponiblePdvService::class)->esDisponible($this->gerente, $this->sucursal->id));
     }
 
-    public function test_pausa_real_bloquea_y_su_final_restablece_disponibilidad_permitida(): void
+    public function test_pausa_real_bloquea_y_su_final_aplica_la_espera_configurada(): void
     {
         app(IniciarPausaPdvService::class)->ejecutar($this->empleado, now());
-        $this->assertFalse(app(ConsultaPersonaDisponiblePdvService::class)->esDisponible($this->empleado, $this->sucursal->id));
-        app(FinalizarPausaPdvService::class)->ejecutar($this->empleado, now()->addMinute());
+        $consulta = app(ConsultaPersonaDisponiblePdvService::class);
+        $this->assertFalse($consulta->esDisponible($this->empleado, $this->sucursal->id));
+
+        $fin = now()->copy()->addMinute();
+        app(FinalizarPausaPdvService::class)->ejecutar($this->empleado, $fin);
+
+        $this->assertFalse($consulta->esDisponible($this->empleado, $this->sucursal->id));
+        $marca = $fin->copy()->addSeconds(10);
+        $this->assertTrue($this->jornada($this->empleado)->disponible_desde->equalTo($marca));
+
+        $espera = EsperaDisponibilidadPdv::query()->sole();
+        $this->assertSame(EsperaDisponibilidadPdv::ORIGEN_PAUSA_FINALIZADA, $espera->origen);
+        $this->assertSame(10, $espera->cooldown_segundos);
+        $this->assertSame($this->empleado->id, $espera->actor_id);
+        $this->assertSame($this->empleado->id, $espera->user_id);
+        $this->assertNull($espera->disponible_desde_anterior);
+        $this->assertTrue($espera->disponible_desde_nuevo->equalTo($marca));
+        Queue::assertPushed(EjecutarMatchmakerTurnosPdvJob::class, fn ($job) => $job->origenDisparador === 'cooldown'
+            && $job->uniqueSuffix === 'cooldown:'.$this->empleado->id.':'.$marca->getTimestamp());
+
+        $this->travelTo($marca);
+        $this->assertTrue($consulta->esDisponible($this->empleado, $this->sucursal->id));
+    }
+
+    public function test_fin_de_pausa_sin_cooldown_queda_elegible_y_registra_cero_segundos(): void
+    {
+        $plazos = app(PlazosTurnosPdvConfig::class);
+        $plazos->persistir(array_merge($plazos->configuracionInicialAprobada(), ['cooldown_segundos' => 0]));
+
+        app(IniciarPausaPdvService::class)->ejecutar($this->empleado, now());
+        app(FinalizarPausaPdvService::class)->ejecutar($this->empleado, now());
+
+        $this->assertNull($this->jornada($this->empleado)->disponible_desde);
         $this->assertTrue(app(ConsultaPersonaDisponiblePdvService::class)->esDisponible($this->empleado, $this->sucursal->id));
+        $espera = EsperaDisponibilidadPdv::query()->sole();
+        $this->assertSame(0, $espera->cooldown_segundos);
+        $this->assertNull($espera->disponible_desde_nuevo);
+        $this->assertSame(EsperaDisponibilidadPdv::ORIGEN_PAUSA_FINALIZADA, $espera->origen);
+        Queue::assertNotPushed(EjecutarMatchmakerTurnosPdvJob::class, fn ($job) => $job->origenDisparador === 'cooldown');
     }
 
     public function test_pausa_con_reserva_abierta_se_rechaza(): void
@@ -167,6 +214,7 @@ class ContratoOperativoMedicionPdvTest extends TestCase
         $segundo = $this->cerrarComoGerente($turno);
         $this->assertSame($primero['evento']->id, $segundo['evento']->id);
         $this->assertSame(1, TurnoPdvEvento::query()->where('tipo_evento', TurnoPdvEvento::TIPO_ATENCION_CERRADA)->count());
+        $this->assertSame(1, EsperaDisponibilidadPdv::query()->count());
         $this->assertNotNull($limite);
         $this->assertTrue($limite->equalTo($this->jornada($this->empleado)->disponible_desde));
     }

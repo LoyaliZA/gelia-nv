@@ -4,6 +4,7 @@ namespace App\Services\PuntoVenta\Operacion;
 
 use App\Contracts\PuntoVenta\ResuelveAlcancePdv;
 use App\Events\PuntoVenta\PausaFinalizada;
+use App\Models\PuntoVenta\EsperaDisponibilidadPdv;
 use App\Models\PuntoVenta\IntervaloOperativoPdv;
 use App\Models\PuntoVenta\JornadaPdv;
 use App\Models\User;
@@ -20,6 +21,7 @@ class FinalizarPausaPdvService
 
     public function __construct(
         private readonly ResuelveAlcancePdv $alcance,
+        private readonly AplicarEsperaDisponibilidadPdvService $espera,
     ) {}
 
     /**
@@ -84,6 +86,16 @@ class FinalizarPausaPdvService
                     'inicio_at' => $ahora,
                     'version' => 1,
                 ]);
+
+                $this->espera->ejecutar(
+                    $userId,
+                    $sucursalId,
+                    $ahora,
+                    EsperaDisponibilidadPdv::ORIGEN_PAUSA_FINALIZADA,
+                    $actorId,
+                    null,
+                    (int) $intervaloAbierto->id,
+                );
 
                 PausaFinalizada::dispatch(
                     $jornada->fresh(),

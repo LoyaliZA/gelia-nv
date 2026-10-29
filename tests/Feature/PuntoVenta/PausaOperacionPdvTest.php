@@ -5,6 +5,7 @@ namespace Tests\Feature\PuntoVenta;
 use App\Events\PuntoVenta\PausaFinalizada;
 use App\Events\PuntoVenta\PausaIniciada;
 use App\Models\ConfiguracionSistema;
+use App\Models\PuntoVenta\EsperaDisponibilidadPdv;
 use App\Models\PuntoVenta\IntervaloOperativoPdv;
 use App\Models\PuntoVenta\JornadaPdv;
 use App\Models\PuntoVenta\SucursalDiaOperacionPdv;
@@ -17,6 +18,7 @@ use App\Services\PuntoVenta\Operacion\ConsultaPersonaDisponiblePdvService;
 use App\Services\PuntoVenta\Operacion\FinalizarPausaPdvService;
 use App\Services\PuntoVenta\Operacion\IniciarPausaPdvService;
 use App\Services\PuntoVenta\PuntoVentaModulo;
+use App\Services\PuntoVenta\Turnos\PlazosTurnosPdvConfig;
 use App\Support\PuntoVenta\Operacion\EstadoJornadaPdv;
 use App\Support\PuntoVenta\Operacion\TipoIntervaloOperativoPdv;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
@@ -159,6 +161,7 @@ class PausaOperacionPdvTest extends TestCase
 
         $segunda->assertOk()->assertJsonPath('reintento', true);
         Event::assertDispatched(PausaFinalizada::class, 1);
+        $this->assertSame(1, EsperaDisponibilidadPdv::query()->count());
     }
 
     public function test_rechaza_finalizar_pausa_sin_pausa_activa(): void
@@ -186,6 +189,8 @@ class PausaOperacionPdvTest extends TestCase
 
     public function test_tras_finalizar_pausa_persona_vuelve_a_estar_disponible(): void
     {
+        $plazos = app(PlazosTurnosPdvConfig::class);
+        $plazos->persistir(array_merge($plazos->configuracionInicialAprobada(), ['cooldown_segundos' => 10]));
         $servicio = app(ConsultaPersonaDisponiblePdvService::class);
         $this->darPermisosAtencion($this->ventas);
         $this->abrirJornada();
@@ -196,6 +201,8 @@ class PausaOperacionPdvTest extends TestCase
         $this->assertFalse($servicio->esDisponible($this->ventas, $this->sucursal->id));
 
         $this->actingAs($this->ventas)->postJson(route('punto_venta.operacion.pausa.finalizar'))->assertOk();
+        $this->assertFalse($servicio->esDisponible($this->ventas, $this->sucursal->id));
+        $this->travel(10)->seconds();
         $this->assertTrue($servicio->esDisponible($this->ventas, $this->sucursal->id));
     }
 

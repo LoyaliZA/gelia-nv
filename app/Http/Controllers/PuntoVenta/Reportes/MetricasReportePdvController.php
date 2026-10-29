@@ -268,7 +268,7 @@ class MetricasReportePdvController extends Controller
     }
 
     /**
-     * @return array{resguardos: bool, turnos_operacion: bool, conjunto: bool}
+     * @return array{resguardos: bool, turnos_operacion: bool, conjunto: bool, auditoria_operacion: bool}
      */
     private function vistasDisponibles(User $user, ResuelveAlcancePdv $alcance): array
     {
@@ -279,6 +279,7 @@ class MetricasReportePdvController extends Controller
             'resguardos' => $resguardos,
             'turnos_operacion' => $turnos,
             'conjunto' => $resguardos && $turnos,
+            'auditoria_operacion' => $user->hasRole('Super Admin'),
         ];
     }
 

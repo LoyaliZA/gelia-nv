@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\PuntoVenta\Reportes\AuditoriaOperacionPdvController;
 use App\Http\Controllers\PuntoVenta\Reportes\ExportacionReportePdvController;
 use App\Http\Controllers\PuntoVenta\Reportes\MetricasReportePdvController;
 use App\Services\PuntoVenta\PuntoVentaModulo;
@@ -29,4 +30,8 @@ Route::middleware(['pdv.permiso:'.PuntoVentaModulo::PERMISO_ACCEDER])
             ->name('turnos_operacion');
 
         Route::get('/conjunto', [MetricasReportePdvController::class, 'conjunto'])->name('conjunto');
+
+        Route::middleware(['role:Super Admin'])
+            ->get('/auditoria-operacion', AuditoriaOperacionPdvController::class)
+            ->name('auditoria_operacion');
     });
