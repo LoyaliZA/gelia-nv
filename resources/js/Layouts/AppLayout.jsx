@@ -12,6 +12,7 @@ import { isProfessionalSidebarLayout, DEFAULT_SIDEBAR_LAYOUT, DEFAULT_SIDEBAR_MO
 
 import NotificationService from '../Services/NotificationBrowserService';
 import GeliaLoader from '../Components/GeliaLoader';
+import AvisoVersionNueva from '../Components/AvisoVersionNueva';
 import WooSyncFloatingTracker from '../Components/WooSyncFloatingTracker';
 import ImportacionAlmacenFloatingTracker from '../Components/Almacenes/ImportacionAlmacenFloatingTracker';
 import CobranzaReporteFloatingTracker from '../Components/CobranzaReporteFloatingTracker';
@@ -806,7 +807,8 @@ export default function AppLayout({ children, fullScreen = false }) {
                     )}
 
                     {/* TOASTS FLOTANTES */}
-                    <div className="fixed top-6 right-6 z-[10000] flex flex-col gap-3 w-full max-w-sm pointer-events-none">
+                    <div className="pointer-events-none fixed top-6 right-6 z-[10000] flex w-[min(24rem,calc(100vw-3rem))] flex-col gap-3">
+                    <AvisoVersionNueva />
                     {toasts.map((toast) => {
                         const esClickeable = !!(toast.conversacionId || toast.notification);
 

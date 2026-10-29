@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Head, useForm, router, usePage } from '@inertiajs/react';
-import { LayoutDashboard, Settings2, X, Check, Layers, RotateCcw, Sparkles, Clock, Activity } from 'lucide-react';
+import { LayoutDashboard, Settings2, X, Check, Layers, RotateCcw, Sparkles } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
 import GeliaPageShell from '../../Components/GeliaPageShell';
 import DashboardLayoutGrid from '../../Components/Dashboard/DashboardLayoutGrid';
@@ -26,7 +26,7 @@ import {
     THEME_MODAL_OVERLAY,
     THEME_MODAL_SHELL,
 } from '../../utils/geliaTheme';
-import DashboardWidgetStatus from '../../Components/Dashboard/DashboardWidgetStatus';
+import RelojConexion from '../../Components/Dashboard/RelojConexion';
 import { formatoMoneda } from '../../utils/formatoMoneda';
 
 import WidgetSolicitudes from './Widgets/WidgetSolicitudes';
@@ -183,35 +183,6 @@ export default function AdminDashboard({
         () => KPI_STRIP_CONFIG.filter((item) => Object.prototype.hasOwnProperty.call(estadisticas, item.key)),
         [estadisticas]
     );
-
-    const pendientesAtencion = useMemo(() => {
-        let total = 0;
-        if (mostrarWidgetSolicitudes) total += metricas_solicitudes.pendientes ?? 0;
-        if (mostrarWidgetCancelaciones) total += metricas_operativas.pendientes ?? 0;
-        if (mostrarWidgetActivos) {
-            total += (alertas_activos_resumen.vencidos || 0)
-                + (alertas_activos_resumen.proximos_7 || 0)
-                + (alertas_activos_resumen.mantenimiento || 0);
-        }
-        if (mostrarWidgetRh) {
-            total += (rh_widget.pendientes_he ?? rh_widget.pendientes ?? 0)
-                + (rh_widget.pendientes_incidencias ?? 0);
-        }
-        if (mostrarWidgetCredibox) total += metricas_credibox.alertas_pendientes ?? 0;
-        if (mostrarWidgetPedidos) {
-            total += (metricas_pedidos.pendiente_auxiliar ?? 0) + (metricas_pedidos.en_cedis ?? 0);
-        }
-        if (mostrarWidgetFacturas) total += metricas_facturas.pendientes ?? 0;
-        return total;
-    }, [
-        mostrarWidgetSolicitudes, metricas_solicitudes,
-        mostrarWidgetCancelaciones, metricas_operativas,
-        mostrarWidgetActivos, alertas_activos_resumen,
-        mostrarWidgetRh, rh_widget,
-        mostrarWidgetCredibox, metricas_credibox,
-        mostrarWidgetPedidos, metricas_pedidos,
-        mostrarWidgetFacturas, metricas_facturas,
-    ]);
 
     const layoutFlags = useMemo(
         () => ({
@@ -407,8 +378,6 @@ export default function AdminDashboard({
     };
 
     const hayPaneles = activeLayout.length > 0;
-    const hayColasVisibles = mostrarWidgetSolicitudes || mostrarWidgetCancelaciones || mostrarWidgetActivos
-        || mostrarWidgetRh || mostrarWidgetCredibox || mostrarWidgetPedidos || mostrarWidgetFacturas;
 
     const primerNombre = auth?.user?.name ? auth.user.name.trim().split(' ')[0] : 'Usuario';
 
@@ -437,19 +406,7 @@ export default function AdminDashboard({
                         </p>
                     </div>
 
-                    {hayColasVisibles && (
-                        <div className="shrink-0">
-                            {pendientesAtencion > 0 ? (
-                                <DashboardWidgetStatus tono="aviso" icon={Clock}>
-                                    {pendientesAtencion} pendientes de atención
-                                </DashboardWidgetStatus>
-                            ) : (
-                                <DashboardWidgetStatus tono="exito" icon={Activity}>
-                                    Operación al día
-                                </DashboardWidgetStatus>
-                            )}
-                        </div>
-                    )}
+                    <RelojConexion />
                 </header>
 
                 {kpiItems.length > 0 && (

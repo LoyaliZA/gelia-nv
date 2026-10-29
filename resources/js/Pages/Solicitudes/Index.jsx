@@ -24,7 +24,7 @@ import ModalRespuestaConsulta from './Partials/ModalRespuestaConsulta';
 import ModalEjercicioEscalonamiento from './Partials/ModalEjercicioEscalonamiento';
 import FiltrosSolicitudes from '@/Components/Filtros/FiltrosSolicitudes';
 import useFiltrosSolicitudesPage from '@/hooks/useFiltrosSolicitudesPage';
-import { GELIA_ESTADO_VIVO_TONO, THEME_BTN_PRIMARY } from '../../utils/geliaTheme';
+import { geliaCardClass, GELIA_ESTADO_VIVO_TONO, THEME_BTN_PRIMARY } from '../../utils/geliaTheme';
 import { badgeClaseEstadoSolicitud, CHIP_NEUTRO, claseEtiquetaLista, claseEtiquetaTipoCliente, esListaDiamante, iconoTipoCliente, PANEL_AVISO, PANEL_ERROR, PANEL_EXITO, PANEL_NOTA } from './Partials/solicitudesStyles';
 import { puedeEmitirConsultaSolicitud, puedeResponderConsultaSolicitud } from '../../utils/permisos';
 import { idEstadoPorNombre } from '../Facturas/Partials/facturasFiltros';
@@ -927,12 +927,12 @@ export default function Index({
             {detalleId !== null && solicitudesFiltradas.find(s => s.id === detalleId) && <ModalDetalleSolicitud solicitud={solicitudesFiltradas.find(s => s.id === detalleId)} auth={auth} onClose={() => setDetalleId(null)} onMarcarLeido={marcarConsultaLeida} procesando={procesandoAccion} onBitacora={can('configuracion.ver_auditoria') ? () => { setModalBitacora({ abierto: true, solicitud: solicitudesFiltradas.find(s => s.id === detalleId) }); setDetalleId(null); } : null} />}
             <GeliaPageShell className="gelia-solicitudes-workspace gelia-tag-lista space-y-5">
                 <p className="sr-only" aria-live="polite">{copiadoId ? 'Número de cliente copiado' : ''}</p>
-                <header className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-                    <div className="min-w-0">
+                <header className={geliaCardClass('gelia-solicitudes-header')}>
+                    <div className="gelia-solicitudes-header-copy">
                         <h1 className="m-0 text-2xl font-semibold theme-text-main text-balance">Solicitudes</h1>
                         <p className="m-0 mt-1 text-sm theme-text-muted">Gestiona solicitudes de TAG y cambios de lista</p>
                     </div>
-                    <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center md:w-auto">
+                    <div className="gelia-solicitudes-header-actions">
                         {puedeExportar && (
                             <div className="relative" ref={exportarRef}>
                                 <button

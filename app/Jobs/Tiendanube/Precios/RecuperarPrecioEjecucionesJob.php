@@ -17,6 +17,10 @@ class RecuperarPrecioEjecucionesJob implements ShouldQueue
 
     public function handle(TiendanubePrecioEjecucionService $ejecuciones): void
     {
+        if (! config('tiendanube.recuperacion_scheduler_activo', false)) {
+            return;
+        }
+
         $ejecuciones->recuperar();
     }
 }

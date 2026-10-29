@@ -78,7 +78,7 @@ final class TiendanubePrecioReglaPreviewService
         $fuentesIndex = collect($fuentesResueltas)->keyBy('variante_id');
 
         $variantes = TiendanubeProductoVariante::query()
-            ->with('producto:id,nombre')
+            ->with('producto:id,name')
             ->whereIn('id', $varianteIds)
             ->get()
             ->keyBy('id');
@@ -182,7 +182,7 @@ final class TiendanubePrecioReglaPreviewService
         $fila = [
             'variante_id' => (int) $variante->id,
             'producto_id' => (int) $variante->producto_id,
-            'nombre' => $variante->producto instanceof TiendanubeProducto ? $variante->producto->nombre : null,
+            'nombre' => $variante->producto instanceof TiendanubeProducto ? $variante->producto->nombreVisible() : null,
             'sku' => $variante->sku,
             'base' => $definicion['base'] ?? null,
             'base_lista_id' => $baseListaId,

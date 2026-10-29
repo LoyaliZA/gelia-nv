@@ -17,7 +17,6 @@ use App\Models\SaldosAFavor\SafCredito;
 use App\Models\SaldosAFavor\SafIncidencia;
 use App\Services\Manuales\ResolverManualesVisiblesService;
 use App\Services\GeliaAi\ResolverAccesoGeliaAi;
-use App\Support\Deploy\CalcularVersionesDeploy;
 
 class HandleInertiaRequests extends Middleware
 {
@@ -41,11 +40,9 @@ class HandleInertiaRequests extends Middleware
             return null;
         }
 
-        if (! is_file(public_path('build/manifest.json'))) {
-            return null;
-        }
+        $version = config('gelia.version_compatibilidad');
 
-        return CalcularVersionesDeploy::actual()['shell'];
+        return is_string($version) && $version !== '' ? $version : '1';
     }
 
     /**

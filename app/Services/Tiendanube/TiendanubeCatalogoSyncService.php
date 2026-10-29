@@ -3,6 +3,9 @@
 namespace App\Services\Tiendanube;
 
 use App\Exceptions\Tiendanube\TiendanubeApiException;
+use App\Services\Tiendanube\Gobernador\TiendanubeEmisorHttp;
+use App\Services\Tiendanube\Gobernador\TiendanubeGobernador;
+use App\Support\Tiendanube\TiendanubeClaseTurno;
 use App\Models\Tiendanube\TiendanubeCategoria;
 use App\Models\Tiendanube\TiendanubeConfiguracion;
 use App\Models\Tiendanube\TiendanubeProducto;
@@ -22,11 +25,23 @@ class TiendanubeCatalogoSyncService
         private TiendanubeApiClient $api,
         private TiendanubeSyncRecursoVistoService $vistos,
         private TiendanubeCatalogoPruneService $prune,
-        private TiendanubeOperacionTiendaService $operaciones
+        private TiendanubeOperacionTiendaService $operaciones,
+        private TiendanubeEmisorHttp $emisor,
     ) {}
 
     public function sincronizar(TiendanubeSyncLog $log): void
     {
+        if ($this->emisor->pendiente(TiendanubeClaseTurno::Catalogo)) {
+            $this->emisor->bajo(
+                TiendanubeClaseTurno::Catalogo,
+                'sync:'.$log->id,
+                'sin_escritura',
+                fn () => $this->sincronizar($log),
+            );
+
+            return;
+        }
+
         $log->update(['estado' => 'en_proceso', 'fase' => 'descargando_categorias', 'mensaje_error' => null]);
 
         try {
@@ -225,12 +240,27 @@ class TiendanubeCatalogoSyncService
                     }
                 }
                 $this->vistos->registrarPagina($log, $tipo, array_values(array_filter($chunk, 'is_array')));
+                $this->persistirPaginaSiGobernador($log, $paginas);
             }
 
             return ['completa' => true, 'paginas' => $paginas, 'error' => null];
         } catch (Throwable $e) {
             return ['completa' => false, 'paginas' => $paginas, 'error' => $e];
         }
+    }
+
+    private function persistirPaginaSiGobernador(TiendanubeSyncLog $log, int $paginas): void
+    {
+        if (! config('tiendanube.gobernador_activo', false) || ! $log->store_id) {
+            return;
+        }
+
+        app(TiendanubeGobernador::class)->guardarEvidencia(
+            (int) $log->store_id,
+            'sync:'.$log->id,
+            'sin_escritura',
+            ['pagina_completada' => $paginas],
+        );
     }
 
     private function renovarLease(TiendanubeSyncLog $log): void
@@ -275,6 +305,10 @@ class TiendanubeCatalogoSyncService
 
     /**
      * @param  array<string, mixed>  $producto
+     */
+    /**
+     * Registra un payload que ya vino de Tiendanube. El lock local de Gelia no
+     * impide ni deshace un cambio hecho directamente en la tienda.
      */
     public function upsertProducto(array $producto): TiendanubeProducto
     {

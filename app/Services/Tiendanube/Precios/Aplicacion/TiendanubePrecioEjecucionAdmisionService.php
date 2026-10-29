@@ -37,7 +37,7 @@ class TiendanubePrecioEjecucionAdmisionService
         bool $puedeAplicar,
         string $checksum,
     ): array {
-        if (! config('tiendanube.precios_aplicacion_habilitada', true)) {
+        if (! config('tiendanube.precios_aplicacion_habilitada', false)) {
             throw new TiendanubePrecioEjecucionException('La aplicación por API no está habilitada.', 'deshabilitado', 403);
         }
         if (! $puedeAplicar) {
@@ -149,7 +149,7 @@ class TiendanubePrecioEjecucionAdmisionService
             );
         }
 
-        ProcesarPrecioEjecucionJob::dispatch($ejecucion->id);
+        app(\App\Services\Tiendanube\Gobernador\TiendanubeEnrutadorColas::class)->despacharPrecio($ejecucion->id);
 
         return app(TiendanubePrecioEjecucionService::class)->payload($ejecucion->fresh());
     }

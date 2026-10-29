@@ -10,6 +10,7 @@ use App\Models\Tiendanube\TiendanubeProductoVariante;
 use App\Models\Tiendanube\TiendanubeSyncLog;
 use App\Models\Tiendanube\TiendanubeUbicacion;
 use App\Models\Tiendanube\TiendanubeVarianteNivel;
+use App\Services\Tiendanube\Gobernador\TiendanubeGobernador;
 use App\Services\Tiendanube\TiendanubeCatalogoSyncService;
 use Illuminate\Support\Facades\Http;
 use Tests\Support\FakesTiendanubeApi;
@@ -30,6 +31,31 @@ class TiendanubeCatalogoSyncTest extends TestCase
             'tiendanube.sync_prune_enabled' => false,
         ]);
         $this->seedTiendanubeCredentials();
+    }
+
+    public function test_sync_clasifica_catalogo_y_retira_la_demanda(): void
+    {
+        config([
+            'tiendanube.gobernador_activo' => true,
+            'tiendanube.gobernador_intervalo_ms' => 0,
+        ]);
+        $gobernador = TiendanubeGobernador::conectarPrueba('tn-gov-test-'.bin2hex(random_bytes(4)));
+        $this->app->instance(TiendanubeGobernador::class, $gobernador);
+
+        try {
+            $cats = TiendanubeCatalogoFixtures::get('cat-arbol');
+            $prod = TiendanubeCatalogoFixtures::get('prod-simple');
+            $this->fakeCatalogo([$cats[0]], [$prod]);
+            $log = $this->runSync();
+
+            $this->assertSame('completado', $log->estado);
+            $ventana = $gobernador->ventana($this->tiendanubeStoreId);
+            $this->assertNotEmpty($ventana);
+            $this->assertSame(['catalogo'], array_values(array_unique($ventana)));
+            $this->assertSame([], $gobernador->clasesConDemanda($this->tiendanubeStoreId));
+        } finally {
+            $gobernador->olvidar();
+        }
     }
 
     public function test_upsert_categoria_producto_imagen_desde_payload_api(): void

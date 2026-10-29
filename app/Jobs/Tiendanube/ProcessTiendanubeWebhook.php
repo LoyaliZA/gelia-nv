@@ -108,7 +108,12 @@ class ProcessTiendanubeWebhook implements ShouldQueue
             return;
         }
 
-        $producto = $api->getProduct($id);
+        $producto = app(\App\Services\Tiendanube\Gobernador\TiendanubeEmisorHttp::class)->bajo(
+            \App\Support\Tiendanube\TiendanubeClaseTurno::Catalogo,
+            'webhook:producto:'.$id,
+            'sin_escritura',
+            fn () => $api->getProduct($id),
+        );
         $sync->upsertProducto($producto);
         $inbox->markProcessed($delivery, $token);
     }
@@ -143,7 +148,12 @@ class ProcessTiendanubeWebhook implements ShouldQueue
             return;
         }
 
-        $categoria = $api->getCategory($id);
+        $categoria = app(\App\Services\Tiendanube\Gobernador\TiendanubeEmisorHttp::class)->bajo(
+            \App\Support\Tiendanube\TiendanubeClaseTurno::Catalogo,
+            'webhook:categoria:'.$id,
+            'sin_escritura',
+            fn () => $api->getCategory($id),
+        );
         $sync->upsertCategoria($categoria);
         $inbox->markProcessed($delivery, $token);
     }

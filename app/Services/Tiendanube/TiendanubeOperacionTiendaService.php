@@ -18,9 +18,11 @@ class TiendanubeOperacionTiendaService
 
     public const TIPO_CAMBIO_TIENDA = 'cambio_tienda';
 
+    public const TIPO_PRECIO_APLICACION = 'precio_aplicacion';
+
     /**
-     * Jerarquía: catalogo_sync y catalogo_wipe son exclusivos por tienda.
-     * Escrituras, importaciones y cambio de tienda se rechazan mientras hay sync/wipe activo.
+     * Jerarquía: catalogo_sync, catalogo_wipe y precio_aplicacion ocupan la exclusividad de la tienda.
+     * Escrituras, importaciones y cambio de tienda se rechazan mientras esa exclusividad está activa.
      */
     public function asegurarFila(int $storeId): TiendanubeOperacionTienda
     {
@@ -74,12 +76,54 @@ class TiendanubeOperacionTiendaService
             ->where('store_id', $storeId)
             ->where('lease_token', $token)
             ->where('estado', TiendanubeOperacionTienda::ESTADO_ACTIVA)
+            ->where('lease_expires_at', '>=', $now)
             ->update([
                 'lease_expires_at' => $now->copy()->addSeconds($leaseSeconds),
                 'updated_at' => $now,
             ]);
 
         return $affected === 1;
+    }
+
+    public function sigueVigente(int $storeId, string $token): bool
+    {
+        if ($token === '') {
+            return false;
+        }
+
+        return TiendanubeOperacionTienda::query()
+            ->where('store_id', $storeId)
+            ->where('lease_token', $token)
+            ->where('estado', TiendanubeOperacionTienda::ESTADO_ACTIVA)
+            ->where('lease_expires_at', '>=', now())
+            ->exists();
+    }
+
+    /**
+     * Token nuevo solo si el anterior ya no está vigente y la tienda está libre.
+     * No alarga el lease vencido: quien llama a renovar() y recibe falso debe detenerse.
+     */
+    public function recuperarPropiedad(int $storeId, string $tokenPrevio, string $tipo, int $ownerId, int $generation): ?string
+    {
+        if ($this->sigueVigente($storeId, $tokenPrevio)) {
+            return null;
+        }
+
+        $ajena = TiendanubeOperacionTienda::query()
+            ->where('store_id', $storeId)
+            ->where('estado', TiendanubeOperacionTienda::ESTADO_ACTIVA)
+            ->where('lease_expires_at', '>=', now())
+            ->where('lease_token', '!=', $tokenPrevio)
+            ->exists();
+        if ($ajena) {
+            return null;
+        }
+
+        try {
+            return $this->adquirirExclusiva($storeId, $tipo, $ownerId, $generation);
+        } catch (TiendanubeOperacionConflictException) {
+            return null;
+        }
     }
 
     public function liberar(int $storeId, ?string $token = null, ?int $ownerId = null): void
@@ -126,7 +170,7 @@ class TiendanubeOperacionTiendaService
 
         $query = TiendanubeOperacionTienda::query()
             ->where('estado', TiendanubeOperacionTienda::ESTADO_ACTIVA)
-            ->whereIn('tipo', [self::TIPO_CATALOGO_SYNC, self::TIPO_CATALOGO_WIPE])
+            ->whereIn('tipo', [self::TIPO_CATALOGO_SYNC, self::TIPO_CATALOGO_WIPE, self::TIPO_PRECIO_APLICACION])
             ->where('lease_expires_at', '>=', now());
 
         if ($storeId) {
