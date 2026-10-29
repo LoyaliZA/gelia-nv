@@ -3,17 +3,15 @@
 namespace App\Services\PuntoVenta\Turnos;
 
 use App\Contracts\PuntoVenta\ResuelveAlcancePdv;
-use Illuminate\Support\Facades\Bus;
 use App\Events\PuntoVenta\AtencionCerrada;
-use App\Jobs\PuntoVenta\Turnos\EjecutarMatchmakerTurnosPdvJob;
 use App\Jobs\PuntoVenta\Turnos\VencerVentanaReatencionTurnoPdvJob;
-use App\Models\PuntoVenta\JornadaPdv;
+use App\Models\PuntoVenta\EsperaDisponibilidadPdv;
 use App\Models\PuntoVenta\TurnoPdv;
 use App\Models\PuntoVenta\TurnoPdvAtencion;
 use App\Models\PuntoVenta\TurnoPdvEvento;
 use App\Models\User;
+use App\Services\PuntoVenta\Operacion\AplicarEsperaDisponibilidadPdvService;
 use App\Services\PuntoVenta\PuntoVentaModulo;
-use App\Support\PuntoVenta\Operacion\EstadoJornadaPdv;
 use App\Support\PuntoVenta\Turnos\MotivosCierreAtencionTurnoPdv;
 use Carbon\CarbonInterface;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -27,6 +25,7 @@ class CerrarAtencionTurnoPdvService
     public function __construct(
         private readonly ResuelveAlcancePdv $alcance,
         private readonly PlazosTurnosPdvConfig $plazos,
+        private readonly AplicarEsperaDisponibilidadPdvService $espera,
     ) {}
 
     /**
@@ -195,7 +194,14 @@ class CerrarAtencionTurnoPdvService
             VencerVentanaReatencionTurnoPdvJob::dispatch($turnoBloqueado->id)
                 ->delay($reatencionExpira);
 
-            $this->aplicarCooldown((int) $atencion->user_id, (int) $turnoBloqueado->sucursal_id, $ahora, $plazos);
+            $this->espera->ejecutar(
+                (int) $atencion->user_id,
+                (int) $turnoBloqueado->sucursal_id,
+                $ahora,
+                EsperaDisponibilidadPdv::ORIGEN_ATENCION_CERRADA,
+                (int) $actor->id,
+                (int) $atencion->id,
+            );
 
             $turnoActualizado = $turnoBloqueado->fresh(['cliente', 'sucursal', 'atencionActual']);
             $atencionActualizada = $atencion->fresh();
@@ -213,32 +219,5 @@ class CerrarAtencionTurnoPdvService
                 'evento' => $evento,
             ];
         });
-    }
-
-    /**
-     * @param  array{cooldown_segundos?: int}  $plazos
-     */
-    private function aplicarCooldown(int $userId, int $sucursalId, CarbonInterface $ahora, array $plazos): void
-    {
-        $segundos = max(0, (int) ($plazos['cooldown_segundos'] ?? 10));
-        $disponibleDesde = $segundos > 0 ? $ahora->copy()->addSeconds($segundos) : null;
-
-        JornadaPdv::query()
-            ->where('user_id', $userId)
-            ->where('sucursal_id', $sucursalId)
-            ->where('estado', EstadoJornadaPdv::Abierta)
-            ->update(['disponible_desde' => $disponibleDesde]);
-
-        if ($disponibleDesde === null) {
-            return;
-        }
-
-        $job = new EjecutarMatchmakerTurnosPdvJob(
-            $sucursalId,
-            'cooldown',
-            'cooldown:'.$userId.':'.$disponibleDesde->getTimestamp(),
-        );
-        $job->delay($disponibleDesde);
-        Bus::dispatch($job);
     }
 }

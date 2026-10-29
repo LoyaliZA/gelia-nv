@@ -156,6 +156,9 @@ class ReatencionGerencialPdvTest extends TestCase
 
     public function test_vendedor_anterior_pausado_inactivo_u_ocupado_queda_excluido(): void
     {
+        $plazos = app(PlazosTurnosPdvConfig::class);
+        $plazos->persistir(array_merge($plazos->configuracionInicialAprobada(), ['cooldown_segundos' => 0]));
+
         $this->activarVendedor($this->vendedorAnterior);
         $this->activarVendedor($this->vendedorDestino);
 

@@ -4,7 +4,6 @@ namespace Tests\Feature\PuntoVenta;
 
 use App\Models\ConfiguracionSistema;
 use App\Models\PuntoVenta\IntervaloOperativoPdv;
-use App\Models\PuntoVenta\JornadaPdv;
 use App\Models\PuntoVenta\MotivoPausaPdv;
 use App\Models\PuntoVenta\OperacionGestionAuditoriaPdv;
 use App\Models\PuntoVenta\SucursalDiaOperacionPdv;
@@ -16,7 +15,7 @@ use App\Services\PuntoVenta\Operacion\AbrirJornadaPdvService;
 use App\Services\PuntoVenta\Operacion\ConsultaPersonaDisponiblePdvService;
 use App\Services\PuntoVenta\Operacion\GestionarEquipoOperativoPdvService;
 use App\Services\PuntoVenta\PuntoVentaModulo;
-use App\Support\PuntoVenta\Operacion\EstadoJornadaPdv;
+use App\Services\PuntoVenta\Turnos\PlazosTurnosPdvConfig;
 use App\Support\PuntoVenta\Operacion\TipoIntervaloOperativoPdv;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
@@ -180,6 +179,8 @@ class PausaGerencialMotivosPdvTest extends TestCase
 
     public function test_finalizacion_registra_actor_y_vuelve_a_disponible(): void
     {
+        $plazos = app(PlazosTurnosPdvConfig::class);
+        $plazos->persistir(array_merge($plazos->configuracionInicialAprobada(), ['cooldown_segundos' => 10]));
         $this->activarVendedor();
         $servicioDisponible = app(ConsultaPersonaDisponiblePdvService::class);
 
@@ -206,7 +207,9 @@ class PausaGerencialMotivosPdvTest extends TestCase
         $this->assertSame(TipoIntervaloOperativoPdv::Disponible, $intervaloAbierto->tipo);
 
         $miembro = collect($response->json('equipo'))->firstWhere('id', $this->vendedor->id);
-        $this->assertSame('disponible', $miembro['estado_vendedor']);
+        $this->assertSame('en_espera', $miembro['estado_vendedor']);
+        $this->assertFalse($servicioDisponible->esDisponible($this->vendedor, $this->sucursal->id));
+        $this->travel(10)->seconds();
         $this->assertTrue($servicioDisponible->esDisponible($this->vendedor, $this->sucursal->id));
     }
 

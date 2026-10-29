@@ -1,17 +1,20 @@
 export const TIPO_REPORTE_RESGUARDOS = 'resguardos';
 export const TIPO_REPORTE_TURNOS_OPERACION = 'turnos_operacion';
 export const TIPO_REPORTE_CONJUNTO = 'conjunto';
+export const TIPO_REPORTE_AUDITORIA_OPERACION = 'auditoria_operacion';
 
 export const RUTAS_REPORTE_PDV = {
     [TIPO_REPORTE_RESGUARDOS]: 'punto_venta.reportes.resguardos',
     [TIPO_REPORTE_TURNOS_OPERACION]: 'punto_venta.reportes.turnos_operacion',
     [TIPO_REPORTE_CONJUNTO]: 'punto_venta.reportes.conjunto',
+    [TIPO_REPORTE_AUDITORIA_OPERACION]: 'punto_venta.reportes.auditoria_operacion',
 };
 
 export const ETIQUETAS_TIPO_REPORTE = {
     [TIPO_REPORTE_RESGUARDOS]: 'Resguardos',
     [TIPO_REPORTE_TURNOS_OPERACION]: 'Turnos y operación',
     [TIPO_REPORTE_CONJUNTO]: 'Conjunto',
+    [TIPO_REPORTE_AUDITORIA_OPERACION]: 'Auditoría de operación',
 };
 
 /** Omite valores vacíos para query string de Inertia. */
@@ -228,6 +231,7 @@ export function puedeVerTipoReporte(vistasDisponibles, tipo) {
     if (tipo === TIPO_REPORTE_CONJUNTO) return Boolean(vistasDisponibles.conjunto);
     if (tipo === TIPO_REPORTE_RESGUARDOS) return Boolean(vistasDisponibles.resguardos);
     if (tipo === TIPO_REPORTE_TURNOS_OPERACION) return Boolean(vistasDisponibles.turnos_operacion);
+    if (tipo === TIPO_REPORTE_AUDITORIA_OPERACION) return Boolean(vistasDisponibles.auditoria_operacion);
     return false;
 }
 

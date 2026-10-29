@@ -144,7 +144,7 @@ class GestionEquipoOperativoPdvTest extends TestCase
         $miembroDisponible = collect(
             $this->actingAs($this->gerente)->getJson(route('punto_venta.operacion.datos'))->json('equipo')
         )->firstWhere('id', $this->vendedor->id);
-        $this->assertSame('disponible', $miembroDisponible['estado_vendedor']);
+        $this->assertSame('en_espera', $miembroDisponible['estado_vendedor']);
     }
 
     public function test_gerente_cierra_jornada_vendedor(): void
