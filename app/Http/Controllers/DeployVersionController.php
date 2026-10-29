@@ -24,6 +24,7 @@ class DeployVersionController extends Controller
             ->json([
                 'version' => $versiones['shell'],
                 'shell' => $versiones['shell'],
+                'compilacion' => $versiones['compilacion'],
                 'surfaces' => $versiones['surfaces'],
             ])
             ->header('Cache-Control', 'no-store');

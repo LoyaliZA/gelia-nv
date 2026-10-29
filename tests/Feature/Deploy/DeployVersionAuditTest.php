@@ -28,7 +28,7 @@ class DeployVersionAuditTest extends TestCase
     {
         $this->getJson('/api/deploy-version')
             ->assertOk()
-            ->assertJsonStructure(['version', 'shell', 'surfaces' => ['sala', 'turnos']]);
+            ->assertJsonStructure(['version', 'shell', 'compilacion', 'surfaces' => ['sala', 'turnos']]);
 
         $this->assertSame(1, AuditoriaDespliegue::query()->where('accion', 'consulta_ok')->count());
         $this->assertSame(0, AuditoriaDespliegue::query()->where('accion', 'publicacion_detectada')->count());
