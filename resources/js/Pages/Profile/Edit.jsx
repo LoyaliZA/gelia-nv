@@ -94,7 +94,7 @@ function readStoredTheme(temaVisual = {}) {
             color: temaVisual?.color_nombre?.toLowerCase() || 'rosa',
             dark: temaVisual?.modo === 'dark',
             bg: normalizeFondoBase(temaVisual?.fondo_base) || FONDO_SISTEMA,
-            font: temaVisual?.fuente_principal || 'inter',
+            font: temaVisual?.fuente_principal || 'mono',
             scale: clampFontScale(temaVisual?.escala_fuente ?? FONT_SCALE_DEFAULT),
             glass: temaVisual?.efecto_cristal !== false,
             layout: resolveSidebarLayout(null, temaVisual?.layout_sidebar),
@@ -114,7 +114,7 @@ function readStoredTheme(temaVisual = {}) {
             ? localStorage.getItem('theme') === 'dark'
             : temaVisual?.modo === 'dark',
         bg: normalizeFondoBase(localStorage.getItem('bg_base') || temaVisual?.fondo_base) || FONDO_SISTEMA,
-        font: localStorage.getItem('theme_font') || temaVisual?.fuente_principal || 'inter',
+        font: localStorage.getItem('theme_font') || temaVisual?.fuente_principal || 'mono',
         scale: clampFontScale(
             localStorage.getItem(FONT_SCALE_STORAGE_KEY) ?? temaVisual?.escala_fuente ?? FONT_SCALE_DEFAULT
         ),

@@ -25,12 +25,62 @@ import ModalEjercicioEscalonamiento from './Partials/ModalEjercicioEscalonamient
 import FiltrosSolicitudes from '@/Components/Filtros/FiltrosSolicitudes';
 import useFiltrosSolicitudesPage from '@/hooks/useFiltrosSolicitudesPage';
 import { geliaCardClass, GELIA_ESTADO_VIVO_TONO, THEME_BTN_PRIMARY } from '../../utils/geliaTheme';
+import useIconoHover from '@/hooks/useIconoHover';
+import EtiquetaConIcono from '@/Components/EtiquetaConIcono';
 import { badgeClaseEstadoSolicitud, CHIP_NEUTRO, claseEtiquetaLista, claseEtiquetaTipoCliente, esListaDiamante, iconoTipoCliente, PANEL_AVISO, PANEL_ERROR, PANEL_EXITO, PANEL_NOTA } from './Partials/solicitudesStyles';
 import { puedeEmitirConsultaSolicitud, puedeResponderConsultaSolicitud } from '../../utils/permisos';
 import { idEstadoPorNombre } from '../Facturas/Partials/facturasFiltros';
 
 const BTN_SECUNDARIO = 'inline-flex items-center justify-center gap-2 rounded-xl border theme-border theme-element px-3 py-2 text-sm font-medium theme-text-main transition-colors duration-200 hover:border-[var(--color-primario)] hover:text-[var(--color-primario)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primario)]';
 const ITEM_EXPORTAR = 'flex items-center gap-2 rounded-lg px-3 py-2 text-sm theme-text-main hover:bg-black/5 focus-visible:outline focus-visible:outline-2 dark:hover:bg-white/5';
+function BotonCabecera({ iconos, className, children, ...props }) {
+    const principal = useIconoHover(iconos[0], { size: 16, className: 'h-4 w-4 shrink-0' });
+    const extra = useIconoHover(iconos[1], { size: 16, className: 'h-4 w-4 shrink-0' });
+    const disparar = (event, nombre) => {
+        principal.triggerProps[nombre]?.(event);
+        extra.triggerProps[nombre]?.(event);
+    };
+
+    return (
+        <button
+            type="button"
+            className={className}
+            {...props}
+            onMouseEnter={(event) => {
+                disparar(event, 'onMouseEnter');
+                props.onMouseEnter?.(event);
+            }}
+            onMouseLeave={(event) => {
+                disparar(event, 'onMouseLeave');
+                props.onMouseLeave?.(event);
+            }}
+            onFocus={(event) => {
+                disparar(event, 'onFocus');
+                props.onFocus?.(event);
+            }}
+            onBlur={(event) => {
+                disparar(event, 'onBlur');
+                props.onBlur?.(event);
+            }}
+        >
+            {principal.nodo}
+            {children}
+            {iconos[1] ? extra.nodo : null}
+        </button>
+    );
+}
+
+function OpcionExportar({ as: Tag = 'a', icon, children, ...props }) {
+    const icono = useIconoHover(icon, { size: 16, className: 'h-4 w-4' });
+
+    return (
+        <Tag {...icono.triggerProps} {...props}>
+            {icono.nodo}
+            {children}
+        </Tag>
+    );
+}
+
 const CHIP_AVISO = `gelia-estado-vivo gelia-estado-vivo--compacto gap-1 text-xs font-semibold ${GELIA_ESTADO_VIVO_TONO.aviso}`;
 const CHIP_ERROR = `gelia-estado-vivo gelia-estado-vivo--compacto gap-1 text-xs font-semibold ${GELIA_ESTADO_VIVO_TONO.error}`;
 const CHIP_INFO = `gelia-estado-vivo gelia-estado-vivo--compacto gap-1 text-xs font-semibold ${GELIA_ESTADO_VIVO_TONO.info}`;
@@ -80,10 +130,14 @@ const EtiquetasOperacion = ({ solicitud, children }) => {
 
     const etiquetaLista = (nombre) => (
         esListaDiamante(nombre) ? (
-            <span className={claseEtiquetaLista(nombre)}>
-                <Sparkles className="h-3 w-3 text-cyan-600 dark:text-cyan-300" aria-hidden="true" />
+            <EtiquetaConIcono
+                icon={Sparkles}
+                className={claseEtiquetaLista(nombre)}
+                iconClassName="h-3 w-3 text-cyan-600 dark:text-cyan-300"
+                size={12}
+            >
                 <span className="text-cyan-700 drop-shadow-sm dark:text-cyan-300">{nombre}</span>
-            </span>
+            </EtiquetaConIcono>
         ) : (
             <span className={claseEtiquetaLista(nombre)}>{nombre}</span>
         )
@@ -106,32 +160,34 @@ const EtiquetasOperacion = ({ solicitud, children }) => {
             </div>
             <div className="flex flex-wrap items-center gap-2 empty:hidden">
                 {esTag && (
-                    <span className={CHIP_NEUTRO}>
-                        <Tag className="h-3 w-3" aria-hidden="true" /> TAG: {responsableTag}
-                    </span>
+                    <EtiquetaConIcono icon={Tag} className={CHIP_NEUTRO} iconClassName="h-3 w-3" size={12}>
+                        TAG: {responsableTag}
+                    </EtiquetaConIcono>
                 )}
-                {objTipo && (() => {
-                    const IconoTipo = iconoTipoCliente(objTipo.nombre);
-                    return (
-                        <span className={claseEtiquetaTipoCliente(objTipo.nombre)}>
-                            <IconoTipo className="h-3 w-3" aria-hidden="true" /> {objTipo.nombre}
-                        </span>
-                    );
-                })()}
+                {objTipo && (
+                    <EtiquetaConIcono
+                        icon={iconoTipoCliente(objTipo.nombre)}
+                        className={claseEtiquetaTipoCliente(objTipo.nombre)}
+                        iconClassName="h-3 w-3"
+                        size={12}
+                    >
+                        {objTipo.nombre}
+                    </EtiquetaConIcono>
+                )}
                 {solicitud.compra_en_tienda && (
-                    <span className={CHIP_NEUTRO}>
-                        <Store className="h-3 w-3" aria-hidden="true" /> Compra en tienda
-                    </span>
+                    <EtiquetaConIcono icon={Store} className={CHIP_NEUTRO} iconClassName="h-3 w-3" size={12}>
+                        Compra en tienda
+                    </EtiquetaConIcono>
                 )}
                 {solicitud.compra_en_tienda_solo_tag && (
-                    <span className={`${CHIP_INFO} normal-case tracking-normal`}>
-                        <Tag className="h-3 w-3" aria-hidden="true" /> Compra realizada: solicitar tag
-                    </span>
+                    <EtiquetaConIcono icon={Tag} className={`${CHIP_INFO} normal-case tracking-normal`} iconClassName="h-3 w-3" size={12}>
+                        Compra realizada: solicitar tag
+                    </EtiquetaConIcono>
                 )}
                 {solicitud.cancelacion_solicitada_at && solicitud.estado?.nombre !== 'Cancelada' && (
-                    <span className={CHIP_ERROR}>
-                        <Ban className="h-3 w-3" aria-hidden="true" /> Cancelación solicitada
-                    </span>
+                    <EtiquetaConIcono icon={Ban} className={CHIP_ERROR} iconClassName="h-3 w-3" size={12}>
+                        Cancelación solicitada
+                    </EtiquetaConIcono>
                 )}
                 {children}
             </div>
@@ -287,10 +343,9 @@ const CotizacionSolicitud = ({ solicitud, alinearDerecha = false }) => {
 };
 
 const MotivoIncidencia = ({ motivo }) => (
-    <span className={CHIP_ERROR}>
-        <AlertOctagon className="h-3 w-3" aria-hidden="true" />
+    <EtiquetaConIcono icon={AlertOctagon} className={CHIP_ERROR} iconClassName="h-3 w-3" size={12}>
         {motivo === 'vencimiento_pago' ? 'Pago vencido' : motivo === 'error_reportado' ? 'Error reportado' : motivo === 'pago_insuficiente' ? 'Pago insuficiente' : motivo}
-    </span>
+    </EtiquetaConIcono>
 );
 
 const OperacionSolicitud = ({ solicitud, listas }) => (
@@ -312,9 +367,9 @@ const EstadoVacioLista = ({ hayFiltros, puedeCrear, onLimpiar, onCrear }) => (
             {hayFiltros ? (
                 <button type="button" onClick={onLimpiar} className={BTN_SECUNDARIO}>Limpiar filtros</button>
             ) : puedeCrear ? (
-                <button type="button" onClick={onCrear} className={`${THEME_BTN_PRIMARY} theme-btn-primary--compact`}>
-                    <Plus className="h-4 w-4" aria-hidden="true" /> Nueva solicitud
-                </button>
+                <BotonCabecera iconos={[Plus]} onClick={onCrear} className={`${THEME_BTN_PRIMARY} theme-btn-primary--compact`}>
+                    Nueva solicitud
+                </BotonCabecera>
             ) : null}
         </div>
     </div>
@@ -935,28 +990,26 @@ export default function Index({
                     <div className="gelia-solicitudes-header-actions">
                         {puedeExportar && (
                             <div className="relative" ref={exportarRef}>
-                                <button
-                                    type="button"
+                                <BotonCabecera
+                                    iconos={[Download, ChevronDown]}
                                     className={BTN_SECUNDARIO}
                                     aria-expanded={menuExportar}
                                     aria-haspopup="menu"
                                     onClick={() => setMenuExportar((abierto) => !abierto)}
                                 >
-                                    <Download className="h-4 w-4 shrink-0" aria-hidden="true" />
                                     Exportar
-                                    <ChevronDown className="h-4 w-4 shrink-0" aria-hidden="true" />
-                                </button>
+                                </BotonCabecera>
                                 {menuExportar && (
                                     <div className="absolute right-0 z-20 mt-2 w-48 rounded-xl border theme-border theme-surface p-1 shadow-lg" role="menu">
-                                        <a href={route('reportes.solicitudes.exportar', { ...exportParams, format: 'pdf' })} className={ITEM_EXPORTAR} role="menuitem">
-                                            <FileText className="h-4 w-4" aria-hidden="true" /> PDF
-                                        </a>
-                                        <a href={route('reportes.solicitudes.exportar', { ...exportParams, format: 'xlsx' })} className={ITEM_EXPORTAR} role="menuitem">
-                                            <FileSpreadsheet className="h-4 w-4" aria-hidden="true" /> Excel
-                                        </a>
-                                        <a href={route('reportes.solicitudes.exportar', { ...exportParams, format: 'csv' })} className={ITEM_EXPORTAR} role="menuitem">
-                                            <Download className="h-4 w-4" aria-hidden="true" /> CSV
-                                        </a>
+                                        <OpcionExportar href={route('reportes.solicitudes.exportar', { ...exportParams, format: 'pdf' })} className={ITEM_EXPORTAR} role="menuitem" icon={FileText}>
+                                            PDF
+                                        </OpcionExportar>
+                                        <OpcionExportar href={route('reportes.solicitudes.exportar', { ...exportParams, format: 'xlsx' })} className={ITEM_EXPORTAR} role="menuitem" icon={FileSpreadsheet}>
+                                            Excel
+                                        </OpcionExportar>
+                                        <OpcionExportar href={route('reportes.solicitudes.exportar', { ...exportParams, format: 'csv' })} className={ITEM_EXPORTAR} role="menuitem" icon={Download}>
+                                            CSV
+                                        </OpcionExportar>
                                         <Link href={route('reportes.solicitudes.index', exportParams)} className={ITEM_EXPORTAR} role="menuitem">
                                             Reportes
                                         </Link>
@@ -965,14 +1018,22 @@ export default function Index({
                             </div>
                         )}
                         {puedeVerEscalonamiento && (
-                            <button type="button" onClick={() => setModalEscalonamiento(true)} className={BTN_SECUNDARIO}>
-                                <Calculator className="h-4 w-4 shrink-0" aria-hidden="true" /> Escalonamiento
-                            </button>
+                            <BotonCabecera
+                                iconos={[Calculator]}
+                                onClick={() => setModalEscalonamiento(true)}
+                                className={BTN_SECUNDARIO}
+                            >
+                                Escalonamiento
+                            </BotonCabecera>
                         )}
                         {can('solicitudes.crear') && (
-                            <button type="button" onClick={() => setModalForm({ abierto: true, modoEdicion: false, solicitud: null })} className={`${THEME_BTN_PRIMARY} theme-btn-primary--compact w-full sm:w-auto`}>
-                                <Plus className="h-4 w-4" aria-hidden="true" /> Nueva solicitud
-                            </button>
+                            <BotonCabecera
+                                iconos={[Plus]}
+                                onClick={() => setModalForm({ abierto: true, modoEdicion: false, solicitud: null })}
+                                className={`${THEME_BTN_PRIMARY} theme-btn-primary--compact w-full sm:w-auto`}
+                            >
+                                Nueva solicitud
+                            </BotonCabecera>
                         )}
                     </div>
                 </header>
@@ -1047,10 +1108,9 @@ export default function Index({
                                         </div>
                                         <div className="gelia-tag-card-rail">
                                             <div className="gelia-tag-card-estado">
-                                                <div className={`${estatus.clase} whitespace-nowrap`}>
-                                                    <StatusIcon className="h-3.5 w-3.5" aria-hidden="true" />
+                                                <EtiquetaConIcono icon={StatusIcon} className={`${estatus.clase} whitespace-nowrap`}>
                                                     <span>{estatus.label}</span>
-                                                </div>
+                                                </EtiquetaConIcono>
                                             </div>
                                             <div className="gelia-tag-card-pago">
                                                 <CotizacionSolicitud solicitud={solicitud} />
@@ -1118,7 +1178,9 @@ export default function Index({
                                                 <CotizacionSolicitud solicitud={solicitud} alinearDerecha />
                                             </td>
                                             <td className="px-4 py-3 align-top">
-                                                <div className={`${estatus.clase} whitespace-nowrap`}><StatusIcon className="h-3.5 w-3.5" aria-hidden="true" /><span>{estatus.label}</span></div>
+                                                <EtiquetaConIcono icon={StatusIcon} className={`${estatus.clase} whitespace-nowrap`}>
+                                                    <span>{estatus.label}</span>
+                                                </EtiquetaConIcono>
                                             </td>
                                             <td className="px-4 py-3 text-right align-top">
                                                 {accionesSolicitud(solicitud)}

@@ -1,6 +1,20 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Clock } from 'lucide-react';
-import { formatearCronometro } from '../../Turnos/Partials/tableroVentasUtils';
+import { ClockIcon } from '@animateicons/react/lucide/clock-icon';
+
+function formatearCronometroHms(milisegundos) {
+    if (milisegundos === null || milisegundos === undefined) return '—';
+    const totalSegundos = Math.max(0, Math.floor(milisegundos / 1000));
+    const horas = Math.floor(totalSegundos / 3600);
+    const minutos = Math.floor((totalSegundos % 3600) / 60);
+    const segundos = totalSegundos % 60;
+    const reloj = `${String(minutos).padStart(2, '0')}:${String(segundos).padStart(2, '0')}`;
+
+    if (horas < 1) {
+        return reloj;
+    }
+
+    return `${String(horas).padStart(2, '0')}:${reloj}`;
+}
 
 function calcularDisplay(modo, referenciaAt, servidorAt) {
     if (!referenciaAt || !servidorAt) return null;
@@ -22,6 +36,10 @@ export default function CronometroVisualOperacion({
     modo = 'transcurrido',
     compacto = false,
     alerta = false,
+    superficieAlerta = null,
+    variante = 'bloque',
+    prominente = false,
+    integrado = false,
 }) {
     const [, setTick] = useState(0);
     const reloj = useMemo(() => ({
@@ -45,16 +63,39 @@ export default function CronometroVisualOperacion({
 
     if (!referenciaAt) return null;
 
+    const valor = formatearCronometroHms(display);
+
+    if (variante === 'valor') {
+        return <span className="tabular-nums">{valor}</span>;
+    }
+
+    const superficie = superficieAlerta === 'prorroga'
+        ? 'gelia-estado-equipo--prorroga'
+        : superficieAlerta === 'pausa'
+            ? 'gelia-estado-equipo--pausa'
+            : null;
+    const heredaTono = Boolean(superficie);
+    const caja = integrado
+        ? 'flex items-center gap-2.5'
+        : `flex items-center gap-2 rounded-xl border theme-border ${compacto ? 'px-2 py-1.5' : 'px-3 py-2'} ${prominente ? 'h-14' : ''} ${superficie || (alerta ? 'gelia-estado-vivo--aviso' : 'theme-element')}`;
+    const icono = prominente ? 16 : (compacto ? 14 : 16);
+    const valorClase = prominente
+        ? 'text-xl font-bold leading-none'
+        : `${compacto ? 'text-sm' : 'text-lg'} font-semibold`;
+    const colorIcono = heredaTono ? '' : (alerta ? 'theme-text-aviso' : 'theme-text-muted');
+    const colorEtiqueta = heredaTono || alerta ? '' : 'theme-text-muted';
+    const colorValor = heredaTono ? '' : (alerta ? 'theme-text-aviso' : 'theme-text-main');
+
     return (
-        <div className={`flex items-center gap-2 rounded-xl ${compacto ? 'px-2 py-1.5' : 'px-3 py-2'} ${alerta ? 'bg-amber-500/15' : 'bg-black/5 dark:bg-white/5'}`}>
-            <Clock className={`${compacto ? 'w-3.5 h-3.5' : 'w-4 h-4'} shrink-0 ${alerta ? 'text-amber-600 dark:text-amber-400' : 'theme-text-muted'}`} aria-hidden />
-            <div className="min-w-0">
-                <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0">{etiqueta}</p>
+        <div className={caja}>
+            <ClockIcon size={icono} className={`shrink-0 ${colorIcono}`} />
+            <div className={`min-w-0 ${prominente ? 'flex flex-col gap-0.5' : ''}`}>
+                <p className={`${prominente ? 'text-[11px] font-bold uppercase tracking-wide leading-none' : 'text-xs font-medium'} ${colorEtiqueta} m-0`}>{etiqueta}</p>
                 <p
-                    className={`${compacto ? 'text-sm' : 'text-lg'} font-black tabular-nums m-0 ${alerta ? 'text-amber-700 dark:text-amber-300' : 'theme-text-main'}`}
+                    className={`${valorClase} tabular-nums m-0 ${colorValor}`}
                     aria-live="off"
                 >
-                    {formatearCronometro(display)}
+                    {valor}
                 </p>
             </div>
         </div>

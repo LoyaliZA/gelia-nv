@@ -291,7 +291,7 @@ class PersonalizacionCatalogoService
             'colorNombre'=> $config['color_nombre'] ?? 'rosa',
             'colorHex'   => $config['color_hex'] ?? '#ec4899',
             'bg'         => $config['fondo_base'] ?? 'none',
-            'font'       => $config['fuente_principal'] ?? 'inter',
+            'font'       => $config['fuente_principal'] ?? 'mono',
             'escala'     => $config['escala_fuente'] ?? 1,
             'glass'      => (bool) ($config['efecto_cristal'] ?? true),
             'layout'     => $config['layout_sidebar'] ?? 'professional_left',

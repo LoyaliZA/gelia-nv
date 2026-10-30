@@ -1,5 +1,8 @@
 import React from 'react';
-import { CheckCircle2, Download, FileSpreadsheet, FileText, RefreshCw } from 'lucide-react';
+import { DownloadIcon } from '@animateicons/react/lucide/download-icon';
+import { FileSpreadsheet, FileText, RefreshCw } from 'lucide-react';
+import IconoConfirmacionAnimado from '@/Components/IconoConfirmacionAnimado';
+import useIconoEnControl from '@/hooks/useIconoEnControl';
 
 function IconoFormato({ formato }) {
     if (formato?.startsWith('csv')) return <FileSpreadsheet className="w-5 h-5" style={{ color: 'var(--color-primario)' }} />;
@@ -7,14 +10,15 @@ function IconoFormato({ formato }) {
 }
 
 export default function VistaCompletadoPagosPedidos({ resultado, onDescargar, onGenerarOtro, onCerrar }) {
+    const descarga = useIconoEnControl();
     const registrosLabel = resultado?.num_paginas
         ? `${resultado.num_paginas} páginas · ${(resultado.num_registros ?? 0).toLocaleString('es-MX')} pedidos`
         : `${(resultado?.num_registros ?? 0).toLocaleString('es-MX')} registros`;
 
     return (
         <div className="p-8 md:p-10 flex flex-col items-center gap-6 flex-1 justify-center min-h-[22rem]">
-            <div className="w-16 h-16 rounded-full flex items-center justify-center bg-green-500/10">
-                <CheckCircle2 className="w-9 h-9 text-green-600" />
+            <div className="w-16 h-16 rounded-full flex items-center justify-center bg-[color-mix(in_srgb,var(--color-exito)_10%,transparent)]">
+                <IconoConfirmacionAnimado size={36} className="theme-text-exito" />
             </div>
 
             <div className="text-center space-y-1">
@@ -50,11 +54,18 @@ export default function VistaCompletadoPagosPedidos({ resultado, onDescargar, on
             <div className="flex flex-wrap gap-3 justify-center w-full max-w-md">
                 <button
                     type="button"
+                    {...descarga.triggerProps}
                     onClick={onDescargar}
                     className="px-6 py-2.5 rounded-xl text-sm font-bold text-white flex items-center gap-2"
                     style={{ backgroundColor: 'var(--color-primario)' }}
                 >
-                    <Download className="w-4 h-4" />
+                    <DownloadIcon
+                        ref={descarga.ref}
+                        size={16}
+                        duration={1}
+                        isAnimated={false}
+                        color="currentColor"
+                    />
                     Descargar
                 </button>
                 <button

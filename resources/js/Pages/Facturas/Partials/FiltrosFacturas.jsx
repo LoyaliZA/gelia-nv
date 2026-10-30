@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Search, X } from 'lucide-react';
+import CampoBusqueda from '@/Components/CampoBusqueda';
 import { FACTURAS_TABS } from './facturasFiltros';
 import { BTN_PRIMARY, BTN_SECONDARY } from './facturasStyles';
 
@@ -26,7 +27,7 @@ export default function FiltrosFacturas({ filtros = {}, vendedores = [], departa
         <section className="theme-card theme-surface border theme-border p-4 md:p-5 space-y-4" aria-label="Filtros de facturas" aria-busy={listaCargando}>
             <div className="gelia-filtros-scroll"><div className="gelia-segment p-1" role="group" aria-label="Estado de solicitudes">{FACTURAS_TABS.map((tab) => <button key={tab.id} type="button" aria-pressed={tabActiva === tab.id} className="gelia-segment-btn whitespace-nowrap" data-active={tabActiva === tab.id} onClick={() => onTabChange(tab.id)}>{tab.label}</button>)}</div></div>
             <form onSubmit={aplicar} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
-                <div className="sm:col-span-2"><label htmlFor="facturas-q" className="theme-label block mb-1.5">Buscar facturas</label><div className="theme-field-with-icon"><Search className="theme-field-icon" aria-hidden="true" /><input id="facturas-q" name="q" type="search" value={local.q} onChange={(event) => cambiar('q', event.target.value)} placeholder="Folio, razón social o RFC…" autoComplete="off" enterKeyHint="search" className="theme-input w-full" /></div></div>
+                <div className="sm:col-span-2"><label htmlFor="facturas-q" className="theme-label block mb-1.5">Buscar facturas</label><CampoBusqueda id="facturas-q" name="q" type="search" value={local.q} onChange={(event) => cambiar('q', event.target.value)} placeholder="Folio, razón social o RFC…" autoComplete="off" enterKeyHint="search" className="theme-input w-full" /></div>
                 {[{ key: 'departamento_id', label: 'Departamento', opciones: departamentos }, { key: 'area_id', label: 'Área principal', opciones: areas }, { key: 'vendedor_id', label: 'Vendedor', opciones: vendedores }].map(({ key, label, opciones }) => (
                     <div key={key}><label htmlFor={`facturas-${key}`} className="theme-label block mb-1.5">{label}</label><select id={`facturas-${key}`} name={key} value={local[key]} className="theme-select w-full" onChange={(event) => cambiar(key, event.target.value)}><option value="">Todos</option>{opciones.map((op) => <option key={op.id} value={String(op.id)}>{op.nombre || op.name}</option>)}</select></div>
                 ))}

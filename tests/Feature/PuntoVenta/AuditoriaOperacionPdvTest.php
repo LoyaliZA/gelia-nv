@@ -15,7 +15,8 @@ use App\Services\PuntoVenta\PuntoVentaModulo;
 use App\Services\PuntoVenta\Turnos\MatchmakerTurnosPdvService;
 use App\Services\PuntoVenta\Turnos\PlazosTurnosPdvConfig;
 use Carbon\Carbon;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use App\Services\PuntoVenta\Turnos\TransferirTurnoPdvService;
+use Tests\Support\RefreshDatabaseSafe;
 use Inertia\Testing\AssertableInertia as Assert;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
@@ -23,7 +24,7 @@ use Tests\TestCase;
 
 class AuditoriaOperacionPdvTest extends TestCase
 {
-    use RefreshDatabase;
+    use RefreshDatabaseSafe;
 
     private Sucursal $sucursal;
 
@@ -110,6 +111,60 @@ class AuditoriaOperacionPdvTest extends TestCase
                         && str_contains((string) ($espera['detalle'] ?? ''), '20 segundos')
                         && str_contains((string) ($asignacion['detalle'] ?? ''), 'espera entre turnos')
                         && str_contains((string) ($asignacion['titulo'] ?? ''), 'V-0071');
+                }));
+    }
+
+    public function test_linea_reciente_oculta_asignacion_ajena_y_muestra_la_transferencia(): void
+    {
+        $diego = $this->persona('Diego Pausa');
+        $eduardo = $this->persona('Eduardo Fila');
+        app(AlcancePdv::class)->establecerSucursalActiva($this->superAdmin, $this->sucursal->id);
+
+        app(AbrirJornadaPdvService::class)->ejecutar($diego, now()->subHour());
+        app(AbrirJornadaPdvService::class)->ejecutar($eduardo, now()->subHour());
+        app(IniciarPausaPdvService::class)->ejecutar($diego, now()->subMinutes(20));
+
+        $turno = TurnoPdv::factory()->create([
+            'sucursal_id' => $this->sucursal->id,
+            'estado' => TurnoPdv::ESTADO_EN_COLA,
+            'alta_at' => now()->subMinutes(5),
+            'folio' => 'V-0025',
+        ]);
+        $this->assertSame(1, app(MatchmakerTurnosPdvService::class)->ejecutar($this->sucursal->id, 'jornada.abierta'));
+
+        $turno = $turno->fresh();
+        app(TransferirTurnoPdvService::class)->ejecutar(
+            $turno,
+            $this->superAdmin,
+            (int) $turno->version,
+            'pdv:auditoria:transferencia-durante-pausa',
+            $diego->id,
+            now(),
+        );
+
+        $this->actingAs($this->superAdmin)
+            ->get(route('punto_venta.reportes.auditoria_operacion', [
+                'sucursal_id' => $this->sucursal->id,
+                'user_id' => $diego->id,
+                'desde' => '2026-10-29',
+                'hasta' => '2026-10-29',
+            ]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('linea', function ($linea): bool {
+                    $filas = collect($linea);
+                    $transferencia = $filas->firstWhere('tipo', 'turno.transferido');
+                    $horas = $filas->pluck('ocurrido_at')->all();
+                    $descendente = $horas;
+                    rsort($descendente);
+
+                    return $filas->isNotEmpty()
+                        && $horas === $descendente
+                        && $filas->first()['tipo'] === 'turno.transferido'
+                        && ! $filas->contains(fn ($fila) => $fila['tipo'] === 'turno.asignado')
+                        && str_contains((string) ($transferencia['detalle'] ?? ''), 'Entrega: Eduardo Fila')
+                        && str_contains((string) ($transferencia['detalle'] ?? ''), 'Recibe: Diego Pausa')
+                        && str_contains((string) ($transferencia['titulo'] ?? ''), 'V-0025');
                 }));
     }
 

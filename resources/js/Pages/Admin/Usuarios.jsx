@@ -4,9 +4,10 @@ import { createPortal } from 'react-dom';
 import axios from 'axios';
 
 import {
-    Users, UserPlus, Search, Edit3, Archive, RotateCcw,
+    Users, UserPlus, Edit3, Archive, RotateCcw,
     MapPin, Mail, AtSign, UserCog,
 } from 'lucide-react';
+import CampoBusqueda from '@/Components/CampoBusqueda';
 import AppLayout from '../../Layouts/AppLayout';
 import GeliaPaginacion from '../../Components/GeliaPaginacion';
 import ModalUsuarioForm from './Partials/ModalUsuarioForm';
@@ -1089,25 +1090,22 @@ export default function Usuarios({
 
                     <div className="flex flex-col gap-3 w-full lg:w-auto lg:max-w-2xl shrink-0">
                         <div className="flex flex-col sm:flex-row gap-3">
-                            <div className="theme-field-with-icon flex-1 min-w-0">
-                                {buscando ? (
-                                    <div className="theme-field-icon flex items-center justify-center">
+                            <CampoBusqueda
+                                wrapperClassName="flex-1 min-w-0"
+                                type="search"
+                                placeholder="Buscar por nombre, correo o usuario..."
+                                className="theme-input w-full pr-4 py-3 text-[11px] font-bold normal-case tracking-normal placeholder:uppercase placeholder:tracking-wider placeholder:text-[10px]"
+                                value={busqueda}
+                                onChange={(e) => {
+                                    setBusqueda(e.target.value);
+                                    aplicarFiltros({ busqueda: e.target.value });
+                                }}
+                                icono={buscando ? (
+                                    <div className="theme-field-icon flex items-center justify-center" aria-hidden="true">
                                         <div className="w-3.5 h-3.5 rounded-full border-2 border-[var(--color-primario)] border-t-transparent animate-spin" />
                                     </div>
-                                ) : (
-                                    <Search className="theme-field-icon" aria-hidden />
-                                )}
-                                <input
-                                    type="search"
-                                    placeholder="Buscar por nombre, correo o usuario..."
-                                    className="theme-input w-full pr-4 py-3 text-[11px] font-bold normal-case tracking-normal placeholder:uppercase placeholder:tracking-wider placeholder:text-[10px]"
-                                    value={busqueda}
-                                    onChange={(e) => {
-                                        setBusqueda(e.target.value);
-                                        aplicarFiltros({ busqueda: e.target.value });
-                                    }}
-                                />
-                            </div>
+                                ) : null}
+                            />
                             <button
                                 type="button"
                                 onClick={(event) => abrirModal(null, event)}

@@ -1,13 +1,25 @@
 import React, { useMemo } from 'react';
-import { UserCheck } from 'lucide-react';
+import { User, UserCheck } from 'lucide-react';
 import { geliaCardClass } from '../../../../utils/geliaTheme';
 import TarjetaVendedorGerencia from './TarjetaVendedorGerencia';
 import { particionarEquipoGerencia } from './operacionUtils';
+
+function destinosTransferencia(equipo, personaId) {
+    return equipo
+        .filter((miembro) => Number(miembro.id) !== Number(personaId) && !miembro.atencion_actual)
+        .map((miembro) => ({
+            id: miembro.id,
+            nombre: miembro.nombre,
+            estado_vendedor: miembro.estado_vendedor,
+            cronometro: miembro.cronometro ?? null,
+        }));
+}
 
 export default function ListaEquipoGerencia({
     equipo = [],
     servidorAt,
     puedeGestionar = false,
+    puedeTransferirTurno = false,
     puedeAsignarReatencion = false,
     reatenciones = [],
     motivosPausa = [],
@@ -20,7 +32,6 @@ export default function ListaEquipoGerencia({
         () => particionarEquipoGerencia(equipo),
         [equipo],
     );
-    const mostrarDivision = activos.length > 0 && inactivos.length > 0;
 
     const renderTarjeta = (persona) => (
         <li key={persona.id} className="min-w-0">
@@ -28,6 +39,8 @@ export default function ListaEquipoGerencia({
                 persona={persona}
                 servidorAt={servidorAt}
                 puedeGestionar={puedeGestionar}
+                puedeTransferirTurno={puedeTransferirTurno}
+                destinosTransferencia={destinosTransferencia(equipo, persona.id)}
                 puedeAsignarReatencion={puedeAsignarReatencion}
                 reatenciones={reatenciones}
                 catalogos={catalogos}
@@ -51,24 +64,48 @@ export default function ListaEquipoGerencia({
     }
 
     return (
-        <ul
-            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 m-0 p-0 list-none"
-            aria-label="Equipo en sucursal"
-        >
-            {activos.map(renderTarjeta)}
-            {mostrarDivision ? (
-                <li
-                    className="col-span-full flex items-center gap-3 py-1 list-none"
-                    aria-hidden
+        <div className="space-y-5">
+            {activos.length > 0 && (
+                <SeccionEquipo
+                    id="equipo-activos-hoy"
+                    titulo="Activos hoy"
+                    marca={(
+                        <span
+                            className="h-2.5 w-2.5 rounded-full shrink-0"
+                            style={{ backgroundColor: 'var(--color-exito)' }}
+                            aria-hidden
+                        />
+                    )}
                 >
-                    <span className="h-px flex-1 bg-black/10 dark:bg-white/10" />
-                    <span className="text-[11px] font-semibold uppercase tracking-wide theme-text-muted shrink-0">
-                        Inactivos hoy
-                    </span>
-                    <span className="h-px flex-1 bg-black/10 dark:bg-white/10" />
-                </li>
-            ) : null}
-            {inactivos.map(renderTarjeta)}
-        </ul>
+                    {activos.map(renderTarjeta)}
+                </SeccionEquipo>
+            )}
+            {inactivos.length > 0 && (
+                <SeccionEquipo
+                    id="equipo-inactivos-hoy"
+                    titulo="Inactivos hoy"
+                    marca={<User className="w-5 h-5 theme-text-muted shrink-0" aria-hidden />}
+                >
+                    {inactivos.map(renderTarjeta)}
+                </SeccionEquipo>
+            )}
+        </div>
+    );
+}
+
+function SeccionEquipo({ id, titulo, marca, children }) {
+    return (
+        <section className="space-y-3" aria-labelledby={id}>
+            <div className="flex items-center gap-3">
+                {marca}
+                <h2 id={id} className="text-sm font-black uppercase tracking-wide theme-text-main m-0 shrink-0">
+                    {titulo}
+                </h2>
+                <span className="h-px flex-1" style={{ backgroundColor: 'var(--theme-border)' }} aria-hidden />
+            </div>
+            <ul className="m-0 grid list-none grid-cols-1 justify-start gap-4 p-0 sm:grid-cols-[repeat(auto-fill,minmax(18rem,22rem))]">
+                {children}
+            </ul>
+        </section>
     );
 }

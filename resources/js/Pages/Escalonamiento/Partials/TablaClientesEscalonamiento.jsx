@@ -1,5 +1,6 @@
 import { router } from '@inertiajs/react';
 import { ArrowDown, ArrowUp, ArrowUpDown, Download, Eye, History, Minus, Search } from 'lucide-react';
+import CampoBusqueda from '@/Components/CampoBusqueda';
 import BadgeListaDescuento from '../../../Components/BadgeListaDescuento';
 import GeliaPaginacion from '../../../Components/GeliaPaginacion';
 import {
@@ -110,15 +111,12 @@ export default function TablaClientesEscalonamiento({
                     <form onSubmit={enviarBusqueda} className="flex-1 flex flex-col sm:flex-row gap-4 sm:items-end">
                         <label className="flex-1 space-y-1.5">
                             <span className={THEME_LABEL}>Buscar cliente</span>
-                            <div className="theme-field-with-icon">
-                                <Search className="theme-field-icon" aria-hidden />
-                                <input
-                                    name="q"
-                                    className={`${THEME_INPUT} w-full`}
-                                    placeholder="Número o nombre"
-                                    defaultValue={filtros.q || ''}
-                                />
-                            </div>
+                            <CampoBusqueda
+                                name="q"
+                                className={`${THEME_INPUT} w-full`}
+                                placeholder="Número o nombre"
+                                defaultValue={filtros.q || ''}
+                            />
                         </label>
                         <button type="submit" className={`${THEME_BTN_PRIMARY} shrink-0`}>
                             <Search className="w-4 h-4" aria-hidden />

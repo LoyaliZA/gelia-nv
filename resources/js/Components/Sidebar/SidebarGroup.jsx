@@ -1,5 +1,6 @@
 import React from 'react';
 import { ChevronRight } from 'lucide-react';
+import useIconoHover from '@/hooks/useIconoHover';
 
 export default function SidebarGroup({
     id,
@@ -23,6 +24,7 @@ export default function SidebarGroup({
 }) {
     const isRoot = depth === 0;
     const isExpanded = inFlyout ? open : (open && !collapsed);
+    const icono = useIconoHover(Icon, { size: 18, className: 'gelia-pro-sidebar__row-icon' });
 
     const handleClick = (event) => {
         if (collapsed && !inFlyout) {
@@ -33,6 +35,7 @@ export default function SidebarGroup({
     };
 
     const handleMouseEnter = (event) => {
+        icono.triggerProps.onMouseEnter?.(event);
         if (collapsed && !inFlyout) {
             onCollapsedHoverEnter?.(id, event);
             return;
@@ -42,7 +45,8 @@ export default function SidebarGroup({
         }
     };
 
-    const handleMouseLeave = () => {
+    const handleMouseLeave = (event) => {
+        icono.triggerProps.onMouseLeave?.(event);
         if (collapsed && !inFlyout) {
             onCollapsedHoverLeave?.();
             return;
@@ -74,9 +78,11 @@ export default function SidebarGroup({
                 onClick={handleClick}
                 onMouseEnter={handleMouseEnter}
                 onMouseLeave={handleMouseLeave}
+                onFocus={icono.triggerProps.onFocus}
+                onBlur={icono.triggerProps.onBlur}
                 data-tip={collapsed && !inFlyout ? label : ''}
             >
-                {Icon ? <Icon className="gelia-pro-sidebar__row-icon" aria-hidden /> : null}
+                {icono.nodo}
                 <span className="gelia-pro-sidebar__row-label">{label}</span>
                 <ChevronRight
                     className={`gelia-pro-sidebar__row-chevron ${isExpanded ? 'gelia-pro-sidebar__row-chevron--open' : ''}`}

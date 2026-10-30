@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
-import { Loader2, Search, User, X } from 'lucide-react';
+import { Loader2, User, X } from 'lucide-react';
+import CampoBusqueda from '@/Components/CampoBusqueda';
 import { THEME_BTN_SECONDARY, THEME_INPUT, THEME_LABEL } from '../../../../utils/geliaTheme';
 
 export default function BusquedaClienteResguardo({
@@ -110,30 +111,28 @@ export default function BusquedaClienteResguardo({
             <label className={THEME_LABEL} htmlFor="busqueda-cliente-resguardo">
                 Buscar cliente
             </label>
-            <div className="theme-field-with-icon relative">
-                <Search className="theme-field-icon w-4 h-4" aria-hidden />
-                <input
-                    id="busqueda-cliente-resguardo"
-                    type="search"
-                    inputMode="search"
-                    autoComplete="off"
-                    value={consulta}
-                    onChange={onCambioConsulta}
-                    disabled={deshabilitado}
-                    placeholder="Número o nombre (mín. 2 caracteres)"
-                    className={`${THEME_INPUT} min-h-[44px]`}
-                    aria-autocomplete="list"
-                    aria-expanded={mostrarLista}
-                    aria-controls="resultados-cliente-resguardo"
-                />
-                {buscando && (
+            <CampoBusqueda
+                wrapperClassName="relative"
+                id="busqueda-cliente-resguardo"
+                type="search"
+                inputMode="search"
+                autoComplete="off"
+                value={consulta}
+                onChange={onCambioConsulta}
+                disabled={deshabilitado}
+                placeholder="Número o nombre (mín. 2 caracteres)"
+                className={`${THEME_INPUT} min-h-[44px]`}
+                aria-autocomplete="list"
+                aria-expanded={mostrarLista}
+                aria-controls="resultados-cliente-resguardo"
+                suffix={buscando ? (
                     <Loader2
                         className="w-4 h-4 animate-spin absolute right-4 top-1/2 -translate-y-1/2"
                         style={{ color: 'var(--color-primario)' }}
                         aria-hidden
                     />
-                )}
-            </div>
+                ) : null}
+            />
 
             {mostrarLista && (
                 <ul

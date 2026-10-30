@@ -295,6 +295,7 @@ export default function TarjetaTurnoVentas({
             <ModalTransferirTurno
                 abierto={modalTransferir}
                 personas={personasTransferencia}
+                servidorAt={servidorAt}
                 procesando={procesando}
                 onClose={() => setModalTransferir(false)}
                 onConfirmar={transferir}

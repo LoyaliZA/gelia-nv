@@ -2,6 +2,7 @@ import React from 'react';
 import { ChevronDown, X } from 'lucide-react';
 import { geliaCardClass } from '@/utils/geliaTheme';
 import { claseEtiquetaTipoCliente, iconoTipoCliente } from './solicitudesStyles';
+import EtiquetaConIcono from '@/Components/EtiquetaConIcono';
 
 const METRICAS_TOTALES = [
     ['clientes', 'Clientes únicos'],
@@ -33,12 +34,15 @@ function CeldaKpi({ etiqueta, valor, numero }) {
 }
 
 function EtiquetaTipo({ nombre }) {
-    const Icono = iconoTipoCliente(nombre);
     return (
-        <span className={claseEtiquetaTipoCliente(nombre)}>
-            <Icono className="h-3 w-3 shrink-0" aria-hidden="true" />
+        <EtiquetaConIcono
+            icon={iconoTipoCliente(nombre)}
+            className={claseEtiquetaTipoCliente(nombre)}
+            iconClassName="h-3 w-3 shrink-0"
+            size={12}
+        >
             <span className="truncate">{nombre}</span>
-        </span>
+        </EtiquetaConIcono>
     );
 }
 

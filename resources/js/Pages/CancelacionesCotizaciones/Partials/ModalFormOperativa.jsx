@@ -2,7 +2,8 @@ import SolicitudDialog from '@/Components/Solicitudes/SolicitudDialog';
 import React, { useEffect, useId, useRef, useState } from 'react';
 import { useForm } from '@inertiajs/react';
 import axios from 'axios';
-import { X, Search, MessageSquare, Send, Hash, Calendar, FileText, Landmark, ChevronDown } from 'lucide-react';
+import { X, MessageSquare, Send, Hash, Calendar, FileText, Landmark, ChevronDown } from 'lucide-react';
+import CampoBusqueda from '@/Components/CampoBusqueda';
 import { tipoOperativoDeProceso } from './operativasStyles';
 import {
     THEME_MODAL_OVERLAY,
@@ -212,18 +213,17 @@ export default function ModalFormOperativa({ onClose, onExito, procesos = [], ba
 
                         <div className="space-y-1.5 relative">
                             <label htmlFor="operativa-cliente" className={THEME_LABEL}>Cliente</label>
-                            <div className="theme-field-with-icon relative">
-                                <Search className="theme-field-icon" aria-hidden />
-                                <input id="operativa-cliente" name="numero_cliente" autoComplete="off"
-                                    type="text"
-                                    required
-                                    value={data.numero_cliente}
-                                    onChange={(e) => manejarBusquedaCliente(e.target.value)}
-                                    onFocus={() => { if (data.numero_cliente) setMostrarDropdown(true); }}
-                                    placeholder="Nombre o número de cliente…"
-                                    className={`${THEME_INPUT} w-full pr-4`}
-                                />
-                            </div>
+                            <CampoBusqueda
+                                wrapperClassName="relative"
+                                id="operativa-cliente" name="numero_cliente" autoComplete="off"
+                                type="text"
+                                required
+                                value={data.numero_cliente}
+                                onChange={(e) => manejarBusquedaCliente(e.target.value)}
+                                onFocus={() => { if (data.numero_cliente) setMostrarDropdown(true); }}
+                                placeholder="Nombre o número de cliente…"
+                                className={`${THEME_INPUT} w-full pr-4`}
+                            />
                             {infoCliente && (
                                 <p className="text-xs font-bold theme-text-main mt-2 m-0">{infoCliente.nombre}</p>
                             )}

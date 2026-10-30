@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
+import useIconoHover from '@/hooks/useIconoHover';
 import { buildSidebarNavigation, collectOpenGroupIdsForUrl } from '../config/sidebarNavigation';
 import SidebarNavLeafLink from './SidebarNavLeafLink';
 import { trackExpandScroll } from './Sidebar/sidebarAccordionScroll';
@@ -8,6 +9,23 @@ import { trackExpandScroll } from './Sidebar/sidebarAccordionScroll';
 const PADDING_LINK = { 1: 'pl-10', 2: 'pl-14', 3: 'pl-16' };
 const PADDING_SUBGROUP = { 1: 'pl-10', 2: 'pl-14' };
 const LEGACY_SCROLL_SELECTOR = '.gelia-sidebar-access-scroll';
+
+function BotonNav({ icon, iconClassName, size, className, onClick, expanded, children }) {
+    const icono = useIconoHover(icon, { size, className: iconClassName });
+
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            aria-expanded={expanded}
+            className={className}
+            {...icono.triggerProps}
+        >
+            {icono.nodo}
+            {children}
+        </button>
+    );
+}
 
 function resolveHref(item) {
     if (typeof item?.href === 'function') return item.href();
@@ -87,10 +105,12 @@ export default function SidebarNavMenu({ url, can, showAdminMenu, manualesHubVis
                 ref={setGroupRef(group.id)}
                 className="gelia-sidebar-nav-root-block flex flex-col gap-0.5 min-w-0"
             >
-                <button
-                    type="button"
+                <BotonNav
+                    icon={Icon}
+                    size={16}
+                    iconClassName="w-4 h-4 shrink-0 gelia-sidebar-nav-root-icon"
+                    expanded={isOpen}
                     onClick={() => toggleGroup(group.id)}
-                    aria-expanded={isOpen}
                     className={`gelia-sidebar-nav-root-btn flex items-center w-full gap-2.5 transition-all outline-none border ${
                         isOpen ? 'gelia-sidebar-nav-root-btn--open' : ''
                     } ${
@@ -99,12 +119,11 @@ export default function SidebarNavMenu({ url, can, showAdminMenu, manualesHubVis
                             : 'gelia-sidebar-nav-root-btn--idle'
                     }`}
                 >
-                    <Icon className="w-4 h-4 shrink-0 gelia-sidebar-nav-root-icon" aria-hidden />
                     <span className="gelia-sidebar-nav-root-label flex-1 text-left">
                         {group.label}
                     </span>
                     <ChevronRight className={`w-4 h-4 shrink-0 gelia-sidebar-nav-chevron transition-transform duration-300 ${isOpen ? 'rotate-90' : ''}`} aria-hidden />
-                </button>
+                </BotonNav>
                 <div className={`sidebar-collapsible-wrapper ${isOpen ? 'sidebar-collapsible-wrapper--open' : ''}`}>
                     <div className="sidebar-collapsible-inner">
                         {group.children?.length > 0 && (
@@ -135,18 +154,19 @@ export default function SidebarNavMenu({ url, can, showAdminMenu, manualesHubVis
                 ref={setGroupRef(group.id)}
                 className="flex flex-col gap-0.5 min-w-0"
             >
-                <button
-                    type="button"
+                <BotonNav
+                    icon={Icon}
+                    size={14}
+                    iconClassName="w-3.5 h-3.5 mr-2.5 shrink-0 gelia-sidebar-nav-child-icon"
+                    expanded={isOpen}
                     onClick={() => toggleGroup(group.id)}
-                    aria-expanded={isOpen}
                     className={`gelia-sidebar-nav-subgroup-btn flex items-center w-full py-2 pr-3 ${pad} rounded-lg transition-colors outline-none border-0 bg-transparent`}
                 >
-                    <Icon className="w-3.5 h-3.5 mr-2.5 shrink-0 gelia-sidebar-nav-child-icon" aria-hidden />
                     <span className="gelia-sidebar-nav-subgroup-label truncate text-left flex-1">
                         {group.label}
                     </span>
                     <ChevronRight className={`w-3.5 h-3.5 ml-auto shrink-0 gelia-sidebar-nav-chevron transition-transform duration-300 opacity-60 ${isOpen ? 'rotate-90' : ''}`} aria-hidden />
-                </button>
+                </BotonNav>
                 <div className={`sidebar-collapsible-wrapper ${isOpen ? 'sidebar-collapsible-wrapper--open' : ''}`}>
                     <div className="sidebar-collapsible-inner">
                         {group.children?.length > 0 && (

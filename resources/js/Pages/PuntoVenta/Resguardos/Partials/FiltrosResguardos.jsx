@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { Search, Filter, X, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
+import { Filter, X, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
+import CampoBusqueda from '@/Components/CampoBusqueda';
 import { geliaCardClass, GELIA_CHIP } from '../../../../utils/geliaTheme';
 import { BTN_SECONDARY, RESGUARDOS_FILTRO_LABEL, THEME_INPUT, THEME_SELECT } from './resguardosStyles';
 import { antiguedadesVisiblesPorBandeja } from './resguardosUtils';
@@ -183,20 +184,18 @@ export default function FiltrosResguardos({
                 </div>
             ) : (
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                    <div className="relative flex-1 min-w-0">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 theme-text-muted pointer-events-none" aria-hidden />
-                        <input
-                            type="search"
-                            name="q_resguardos"
-                            autoComplete="off"
-                            spellCheck={false}
-                            value={busqueda}
-                            onChange={(e) => onBusqueda(e.target.value)}
-                            placeholder="Folio, remisión o cliente…"
-                            className={`${THEME_INPUT} pl-10 min-h-[48px] text-base sm:text-sm`}
-                            aria-label="Buscar resguardos"
-                        />
-                    </div>
+                    <CampoBusqueda
+                        wrapperClassName="flex-1 min-w-0"
+                        type="search"
+                        name="q_resguardos"
+                        autoComplete="off"
+                        spellCheck={false}
+                        value={busqueda}
+                        onChange={(e) => onBusqueda(e.target.value)}
+                        placeholder="Folio, remisión o cliente…"
+                        className={`${THEME_INPUT} min-h-[48px] text-base sm:text-sm`}
+                        aria-label="Buscar resguardos"
+                    />
                     {cargando && (
                         <div
                             className="flex items-center justify-center gap-2 text-xs font-semibold theme-text-muted shrink-0 min-h-[44px]"

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
-import { Database, ArrowLeft, Search, Edit2, UploadCloud, Plus, Users } from 'lucide-react';
+import { Database, ArrowLeft, Edit2, UploadCloud, Plus, Users } from 'lucide-react';
+import CampoBusqueda from '@/Components/CampoBusqueda';
 import AppLayout from '../../../Layouts/AppLayout';
 import GeliaPaginacion from '../../../Components/GeliaPaginacion';
 import ModalEditarDatosFiscales from '../Partials/ModalEditarDatosFiscales';
@@ -150,19 +151,17 @@ export default function DatosFiscalesIndex({
                         <label htmlFor="df-busqueda" className="theme-label ml-1">
                             {tab === 'clientes' ? 'Buscar cliente' : 'Buscar receptor'}
                         </label>
-                        <div className="theme-field-with-icon mt-1.5 max-w-xl">
-                            <Search className="theme-field-icon" aria-hidden />
-                            <input
-                                id="df-busqueda"
-                                type="search"
-                                value={busqueda}
-                                onChange={(e) => setBusqueda(e.target.value)}
-                                placeholder={tab === 'clientes'
-                                    ? 'Número, nombre, RFC o razón social…'
-                                    : 'Código interno, RFC o razón social…'}
-                                className="theme-input w-full pr-4 py-3 normal-case tracking-normal font-bold text-sm"
-                            />
-                        </div>
+                        <CampoBusqueda
+                            wrapperClassName="mt-1.5 max-w-xl"
+                            id="df-busqueda"
+                            type="search"
+                            value={busqueda}
+                            onChange={(e) => setBusqueda(e.target.value)}
+                            placeholder={tab === 'clientes'
+                                ? 'Número, nombre, RFC o razón social…'
+                                : 'Código interno, RFC o razón social…'}
+                            className="theme-input w-full pr-4 py-3 normal-case tracking-normal font-bold text-sm"
+                        />
                     </div>
 
                     {tab === 'clientes' ? (

@@ -1,3 +1,19 @@
+/* El clip animado vive en un div; el svg hereda el cuadrado del control. */
+.gelia-icono-animado {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    line-height: 0;
+}
+
+.gelia-icono-animado svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    max-width: none;
+}
+
 /* --- Superficies y texto --- */
 .theme-surface {
     background-color: var(--theme-surface-bg);
@@ -87,6 +103,24 @@
     color: var(--color-primario);
 }
 
+.gelia-estado-equipo--atendiendo {
+    border-color: color-mix(in srgb, var(--color-equipo-atendiendo) 40%, transparent);
+    background-color: color-mix(in srgb, var(--color-equipo-atendiendo) 12%, transparent);
+    color: var(--color-equipo-atendiendo);
+}
+
+.gelia-estado-equipo--prorroga {
+    border-color: color-mix(in srgb, var(--color-equipo-prorroga) 45%, transparent);
+    background-color: color-mix(in srgb, var(--color-equipo-prorroga) 14%, transparent);
+    color: var(--color-equipo-prorroga);
+}
+
+.gelia-estado-equipo--pausa {
+    border-color: color-mix(in srgb, var(--color-equipo-pausa) 45%, transparent);
+    background-color: color-mix(in srgb, var(--color-equipo-pausa) 14%, transparent);
+    color: var(--color-equipo-pausa);
+}
+
 .gelia-estado-vivo--compacto {
     min-height: auto;
     min-width: auto;
@@ -104,6 +138,48 @@
     border-color: inherit;
     opacity: 0.3;
     animation: ping 1s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+/* Tarjeta de equipo: el borde y un lavado corto siguen el tono del badge. */
+.theme-card.gelia-tarjeta-tono {
+    --gelia-tarjeta-tono: var(--theme-text-muted);
+    border-color: color-mix(in srgb, var(--gelia-tarjeta-tono) 78%, transparent);
+    box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--gelia-tarjeta-tono) 42%, transparent),
+        0 8px 20px -8px color-mix(in srgb, var(--gelia-tarjeta-tono) 55%, transparent),
+        var(--theme-shadow-card);
+    background-image: linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--gelia-tarjeta-tono) 18%, transparent) 0%,
+        transparent 34%
+    );
+}
+
+.theme-card.gelia-tarjeta-tono--exito { --gelia-tarjeta-tono: var(--color-exito); }
+.theme-card.gelia-tarjeta-tono--aviso { --gelia-tarjeta-tono: var(--color-aviso); }
+.theme-card.gelia-tarjeta-tono--error { --gelia-tarjeta-tono: var(--color-peligro); }
+.theme-card.gelia-tarjeta-tono--atendiendo { --gelia-tarjeta-tono: var(--color-equipo-atendiendo); }
+.theme-card.gelia-tarjeta-tono--prorroga { --gelia-tarjeta-tono: var(--color-equipo-prorroga); }
+.theme-card.gelia-tarjeta-tono--pausa { --gelia-tarjeta-tono: var(--color-equipo-pausa); }
+
+.theme-card.gelia-tarjeta-tono--neutro {
+    border-color: color-mix(in srgb, var(--gelia-tarjeta-tono) 28%, transparent);
+    box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--gelia-tarjeta-tono) 14%, transparent),
+        var(--theme-shadow-card);
+    background-image: linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--gelia-tarjeta-tono) 6%, transparent) 0%,
+        transparent 22%
+    );
+}
+
+html.glass-active .theme-surface.theme-card.gelia-tarjeta-tono {
+    border-color: color-mix(in srgb, var(--gelia-tarjeta-tono) 78%, transparent);
+}
+
+html.glass-active .theme-surface.theme-card.gelia-tarjeta-tono--neutro {
+    border-color: color-mix(in srgb, var(--gelia-tarjeta-tono) 28%, transparent);
 }
 
 .gelia-icon-box {

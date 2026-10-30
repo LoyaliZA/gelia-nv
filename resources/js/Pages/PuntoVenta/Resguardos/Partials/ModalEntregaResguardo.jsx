@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { router } from '@inertiajs/react';
-import { AlertTriangle, CheckCircle2, Loader2, Truck, X } from 'lucide-react';
+import { AlertTriangle, Loader2, Truck, X } from 'lucide-react';
+import IconoConfirmacionAnimado from '@/Components/IconoConfirmacionAnimado';
 import { geliaCardClass, THEME_BTN_PRIMARY, THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from '../../../../utils/geliaTheme';
 import FormularioEntregaResguardo from './FormularioEntregaResguardo';
 import useEntregaResguardo from './useEntregaResguardo';
@@ -171,7 +172,7 @@ export default function ModalEntregaResguardo({
 function ResultadoExito({ onDetalle, onBandeja, parcial = false }) {
     return (
         <div className={`${geliaCardClass()} p-8 text-center space-y-4`}>
-            <CheckCircle2 className="w-12 h-12 mx-auto text-[var(--color-exito)]" />
+            <IconoConfirmacionAnimado size={48} className="mx-auto theme-text-exito" />
             <div className="space-y-2">
                 <h3 className="text-lg font-black uppercase theme-text-main m-0">
                     {parcial ? 'Entrega parcial registrada' : 'Entrega registrada'}

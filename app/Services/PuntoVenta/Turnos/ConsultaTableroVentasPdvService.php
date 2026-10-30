@@ -9,6 +9,7 @@ use App\Models\PuntoVenta\JornadaPdv;
 use App\Models\PuntoVenta\TurnoPdv;
 use App\Models\PuntoVenta\TurnoPdvAtencion;
 use App\Models\User;
+use App\Services\PuntoVenta\Operacion\ConsultaEquipoOperativoPdvService;
 use App\Services\PuntoVenta\Operacion\OperacionPdvConfig;
 use App\Services\PuntoVenta\Operacion\ResolverEstadoVendedorOperacionPdvService;
 use App\Services\PuntoVenta\PuntoVentaModulo;
@@ -25,6 +26,7 @@ class ConsultaTableroVentasPdvService
         private readonly PlazosTurnosPdvConfig $plazos,
         private readonly OperacionPdvConfig $operacionConfig,
         private readonly ResolverEstadoVendedorOperacionPdvService $resolverEstadoVendedor,
+        private readonly ConsultaEquipoOperativoPdvService $equipo,
     ) {}
 
     /**
@@ -60,7 +62,7 @@ class ConsultaTableroVentasPdvService
         ];
 
         if ($this->alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_TURNOS_TRANSFERIR)) {
-            $payload['personas_transferencia'] = $this->consultarPersonasTransferencia($sucursalId, $user);
+            $payload['personas_transferencia'] = $this->consultarPersonasTransferencia($sucursalId, $user, $ahora);
         }
 
         return $payload;
@@ -154,10 +156,18 @@ class ConsultaTableroVentasPdvService
     }
 
     /**
-     * @return list<array{id: int, primer_nombre: string}>
+     * @return list<array{
+     *   id: int,
+     *   primer_nombre: string,
+     *   nombre: string,
+     *   estado_vendedor: string|null,
+     *   cronometro: array<string, mixed>|null
+     * }>
      */
-    private function consultarPersonasTransferencia(int $sucursalId, User $actor): array
+    private function consultarPersonasTransferencia(int $sucursalId, User $actor, CarbonInterface $ahora): array
     {
+        $equipo = collect($this->equipo->listar($sucursalId, $ahora))->keyBy('id');
+
         return User::query()
             ->whereHas('sucursales', static function ($query) use ($sucursalId): void {
                 $query->where('sucursales.id', $sucursalId)
@@ -171,10 +181,17 @@ class ConsultaTableroVentasPdvService
                 $persona,
                 PuntoVentaModulo::PERMISO_TURNOS_ATENDER,
             ))
-            ->map(static fn (User $persona): array => [
-                'id' => $persona->id,
-                'primer_nombre' => self::primerNombre($persona->name),
-            ])
+            ->map(function (User $persona) use ($equipo): array {
+                $miembro = $equipo->get($persona->id);
+
+                return [
+                    'id' => $persona->id,
+                    'primer_nombre' => self::primerNombre($persona->name),
+                    'nombre' => (string) $persona->name,
+                    'estado_vendedor' => is_array($miembro) ? ($miembro['estado_vendedor'] ?? null) : null,
+                    'cronometro' => is_array($miembro) ? ($miembro['cronometro'] ?? null) : null,
+                ];
+            })
             ->values()
             ->all();
     }
