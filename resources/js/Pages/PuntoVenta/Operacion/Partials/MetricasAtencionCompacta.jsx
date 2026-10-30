@@ -1,9 +1,11 @@
 import React from 'react';
+import { FileTextIcon } from '@animateicons/react/lucide/file-text-icon';
 import CronometroVisualOperacion from './CronometroVisualOperacion';
 
 export default function MetricasAtencionCompacta({
     atencion,
     servidorAt,
+    prominente = false,
 }) {
     if (!atencion) {
         return null;
@@ -13,60 +15,74 @@ export default function MetricasAtencionCompacta({
     const esperaVencida = Boolean(atencion.espera_inicial_vencida);
     const prorrogaActiva = Boolean(atencion.prorroga_activa);
 
-    return (
-        <div className="rounded-xl px-3 py-2 bg-black/5 dark:bg-white/5 space-y-1.5">
-            <div className="flex items-center justify-between gap-2 min-w-0">
+    const ficha = (
+        <div className={`flex items-center justify-between gap-2 min-w-0 ${prominente ? 'h-14 rounded-xl px-3 py-2 theme-element border theme-border' : ''}`}>
+            <div className="flex min-w-0 items-center gap-2">
+                {prominente && <FileTextIcon size={16} className="shrink-0 theme-text-muted" />}
                 <div className="min-w-0">
-                    <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0 truncate">
+                    <p className={`${prominente ? 'text-sm font-bold' : 'text-sm font-semibold'} theme-text-main m-0 truncate`}>
                         {atencion.folio}
                     </p>
                     {atencion.cliente && (
-                        <p className="text-xs font-semibold theme-text-main m-0 truncate">
+                        <p className={`m-0 truncate ${prominente ? 'text-xs font-semibold theme-text-muted' : 'text-sm theme-text-muted'}`}>
                             {atencion.cliente}
                         </p>
                     )}
                 </div>
-                {enCurso ? (
-                    prorrogaActiva ? (
-                        <span className="shrink-0 inline-flex px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-amber-500/15 text-amber-800 dark:text-amber-200">
-                            Prórroga
-                        </span>
-                    ) : (
-                        <span className="shrink-0 inline-flex px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-emerald-500/15 text-emerald-800 dark:text-emerald-200">
-                            En curso
-                        </span>
-                    )
-                ) : (
-                    <span className={`shrink-0 inline-flex px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${
-                        esperaVencida
-                            ? 'bg-amber-500/15 text-amber-800 dark:text-amber-200'
-                            : 'bg-sky-500/15 text-sky-800 dark:text-sky-200'
-                    }`}
-                    >
-                        Espera
-                    </span>
-                )}
             </div>
-
             {enCurso ? (
-                <CronometroVisualOperacion
-                    etiqueta="Atención"
-                    referenciaAt={atencion.atencion_inicio_at}
-                    servidorAt={servidorAt}
-                    modo="transcurrido"
-                    compacto
-                    alerta={prorrogaActiva}
-                />
+                <span className="shrink-0 gelia-estado-vivo gelia-estado-vivo--exito gelia-estado-vivo--compacto text-xs font-semibold">
+                    En curso
+                </span>
             ) : (
-                <CronometroVisualOperacion
-                    etiqueta="Inicio"
-                    referenciaAt={atencion.espera_inicial_expira_at}
-                    servidorAt={servidorAt}
-                    modo="restante"
-                    compacto
-                    alerta={esperaVencida}
-                />
+                <span className={`shrink-0 gelia-estado-vivo gelia-estado-vivo--compacto text-xs font-semibold ${
+                    esperaVencida
+                        ? 'gelia-estado-vivo--aviso'
+                        : 'gelia-estado-vivo--info'
+                }`}
+                >
+                    Espera
+                </span>
             )}
+        </div>
+    );
+
+    const reloj = enCurso ? (
+        <CronometroVisualOperacion
+            etiqueta="Atención"
+            referenciaAt={atencion.atencion_inicio_at}
+            servidorAt={servidorAt}
+            modo="transcurrido"
+            compacto={!prominente}
+            prominente={prominente}
+            alerta={prorrogaActiva}
+            superficieAlerta={prorrogaActiva ? 'prorroga' : null}
+        />
+    ) : (
+        <CronometroVisualOperacion
+            etiqueta="Inicio"
+            referenciaAt={atencion.espera_inicial_expira_at}
+            servidorAt={servidorAt}
+            modo="restante"
+            compacto={!prominente}
+            prominente={prominente}
+            alerta={esperaVencida}
+        />
+    );
+
+    if (prominente) {
+        return (
+            <div className="flex flex-col gap-2">
+                {ficha}
+                {reloj}
+            </div>
+        );
+    }
+
+    return (
+        <div className="rounded-xl px-3 py-2 theme-element border theme-border space-y-2">
+            {ficha}
+            {reloj}
         </div>
     );
 }

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Head } from '@inertiajs/react';
-import { AlertTriangle, CheckCircle2, ShieldOff, Ticket } from 'lucide-react';
+import { AlertTriangle, ShieldOff, Ticket } from 'lucide-react';
+import IconoConfirmacionAnimado from '@/Components/IconoConfirmacionAnimado';
 import AppLayout from '../../../Layouts/AppLayout';
 import GeliaPageShell from '../../../Components/GeliaPageShell';
 import GeliaTituloCard from '../../../Components/GeliaTituloCard';
@@ -211,7 +212,7 @@ function ConfirmacionFolio({ turno, catalogos, onNuevo }) {
     return (
         <div className={`${geliaCardClass()} p-6 space-y-5`}>
             <div className="text-center space-y-2">
-                <CheckCircle2 className="w-12 h-12 mx-auto text-emerald-500" aria-hidden />
+                <IconoConfirmacionAnimado size={48} className="mx-auto theme-text-exito" />
                 <h2 className="text-lg font-black uppercase theme-text-main m-0">Turno registrado</h2>
                 <p className="text-4xl font-black tracking-wider theme-text-main m-0" aria-live="polite">
                     {turno?.folio}

@@ -1,3 +1,5 @@
+import { GELIA_ESTADO_VIVO_TONO } from '../../../../utils/geliaTheme';
+
 export const REFRESCO_OPERACION_MS = 30000;
 
 const ETIQUETAS_JORNADA = {
@@ -16,23 +18,35 @@ const ETIQUETAS_ESTADO_VENDEDOR = {
     no_activado: 'No activado',
     no_llego: 'No llegó',
     disponible: 'Disponible',
-    en_espera: 'En espera',
+    en_espera: 'Pre-disponible',
     atendiendo: 'Atendiendo',
     en_retencion: 'En pausa',
     cierre_pendiente: 'Cierre pendiente',
     jornada_cerrada: 'Jornada finalizada',
 };
 
-const CLASES_ESTADO_VENDEDOR = {
-    no_activado: 'bg-slate-500/15 theme-text-muted',
-    no_llego: 'bg-red-500/15 text-red-700 dark:text-red-300',
-    disponible: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
-    en_espera: 'bg-amber-500/15 text-amber-700 dark:text-amber-300',
-    atendiendo: 'bg-sky-500/15 text-sky-700 dark:text-sky-300',
-    en_retencion: 'bg-amber-500/15 text-amber-700 dark:text-amber-300',
-    cierre_pendiente: 'bg-amber-500/15 text-amber-700 dark:text-amber-300',
-    jornada_cerrada: 'bg-slate-500/15 theme-text-muted',
+const TONO_ESTADO_VENDEDOR = {
+    no_activado: 'neutro',
+    no_llego: 'error',
+    disponible: 'exito',
+    en_espera: 'aviso',
+    atendiendo: 'atendiendo',
+    en_retencion: 'pausa',
+    cierre_pendiente: 'aviso',
+    jornada_cerrada: 'neutro',
 };
+
+const CLASE_TONO_EQUIPO = {
+    atendiendo: 'gelia-estado-equipo--atendiendo',
+    prorroga: 'gelia-estado-equipo--prorroga',
+    pausa: 'gelia-estado-equipo--pausa',
+};
+
+function claseEstadoVivo(tono) {
+    const clase = CLASE_TONO_EQUIPO[tono] || GELIA_ESTADO_VIVO_TONO[tono] || GELIA_ESTADO_VIVO_TONO.neutro;
+
+    return `${clase} gelia-estado-vivo gelia-estado-vivo--compacto`;
+}
 
 export function etiquetaEstadoVendedor(estado) {
     if (!estado) return '—';
@@ -47,8 +61,38 @@ export function inicialesNombre(nombre) {
     return `${partes[0][0]}${partes[partes.length - 1][0]}`.toUpperCase();
 }
 
-export function claseBadgeEstadoVendedor(estado) {
-    return CLASES_ESTADO_VENDEDOR[estado] || 'bg-slate-500/15 theme-text-muted';
+export function tonoEstadoVendedor(estado, prorrogaActiva = false) {
+    if (estado === 'atendiendo' && prorrogaActiva) return 'prorroga';
+
+    return TONO_ESTADO_VENDEDOR[estado] || 'neutro';
+}
+
+export function claseBadgeEstadoVendedor(estado, prorrogaActiva = false) {
+    return claseEstadoVivo(tonoEstadoVendedor(estado, prorrogaActiva));
+}
+
+export function esAvisoDisponibilidad(estado) {
+    return estado === 'en_retencion' || estado === 'en_espera';
+}
+
+export function mensajeAvisoDisponibilidad(estado, accion) {
+    if (estado === 'en_retencion') {
+        const cierre = accion === 'reatencion'
+            ? 'La reatención manual sí se puede confirmar.'
+            : 'La transferencia sí se puede confirmar.';
+
+        return `Está en pausa. La fila automática no asigna clientes hasta que termine. ${cierre}`;
+    }
+
+    if (estado === 'en_espera') {
+        const cierre = accion === 'reatencion'
+            ? 'La reatención manual sí se puede confirmar.'
+            : 'La transferencia sí se puede confirmar.';
+
+        return `Pre-disponible. Volverá a la cola al terminar la cuenta. ${cierre}`;
+    }
+
+    return '';
 }
 
 export function mensajeMiAtencion(estadoVendedor) {
@@ -60,7 +104,7 @@ export function mensajeMiAtencion(estadoVendedor) {
         case 'disponible':
             return 'Estás disponible. Recibirás una alerta cuando se te asigne un cliente.';
         case 'en_espera':
-            return 'Terminaste un turno. Espera unos segundos antes de recibir el siguiente.';
+            return 'Estás pre-disponible. Volverás a la cola al terminar la cuenta regresiva.';
         case 'atendiendo':
             return null;
         case 'en_retencion':
@@ -180,16 +224,16 @@ export function etiquetaActividad(actividad) {
 }
 
 export function claseBadgeJornada(estado) {
-    if (estado === 'ABIERTA') return 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300';
-    if (estado === 'CERRADA_CON_ATENCION') return 'bg-amber-500/15 text-amber-700 dark:text-amber-300';
-    return 'bg-slate-500/15 theme-text-muted';
+    if (estado === 'ABIERTA') return claseEstadoVivo('exito');
+    if (estado === 'CERRADA_CON_ATENCION') return claseEstadoVivo('aviso');
+    return claseEstadoVivo('neutro');
 }
 
 export function claseBadgeActividad(actividad) {
-    if (actividad === 'disponible') return 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300';
-    if (actividad === 'en_pausa') return 'bg-amber-500/15 text-amber-700 dark:text-amber-300';
-    if (actividad === 'en_atencion') return 'bg-sky-500/15 text-sky-700 dark:text-sky-300';
-    return 'bg-slate-500/15 theme-text-muted';
+    if (actividad === 'disponible') return claseEstadoVivo('exito');
+    if (actividad === 'en_pausa') return claseEstadoVivo('aviso');
+    if (actividad === 'en_atencion') return claseEstadoVivo('info');
+    return claseEstadoVivo('neutro');
 }
 
 export function referenciaCronometro(estado) {

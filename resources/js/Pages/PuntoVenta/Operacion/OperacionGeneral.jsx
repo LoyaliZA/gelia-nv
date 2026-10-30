@@ -69,7 +69,7 @@ export default function OperacionGeneral({
         return (
             <AppLayout auth={auth}>
                 <Head title="Operación General | Punto de venta" />
-                <GeliaPageShell className="max-w-[720px]">
+                <GeliaPageShell className="max-w-[720px]" style={{ '--font-principal': "'JetBrains Mono', monospace" }}>
                     <EstadoSinPermiso />
                 </GeliaPageShell>
             </AppLayout>
@@ -86,7 +86,7 @@ export default function OperacionGeneral({
                 anunciarComoGerencia={esGerenciaEquipo}
             >
                 <OperacionRealtimeSync refrescar={manejarActualizado} />
-                <GeliaPageShell className="space-y-5" data-operacion-root>
+                <GeliaPageShell className="space-y-5" data-operacion-root style={{ '--font-principal': "'JetBrains Mono', monospace" }}>
                     <GeliaTituloCard
                         title="Operación General"
                         description="Jornada de sucursal, equipo y acciones gerenciales en un solo lugar"
@@ -153,6 +153,7 @@ export default function OperacionGeneral({
                                         equipo={estado.equipo ?? []}
                                         servidorAt={servidorAt}
                                         puedeGestionar={modo.esGerenciaEquipo}
+                                        puedeTransferirTurno={modo.esGerenciaEquipo && Boolean(permisos.transferir)}
                                         puedeAsignarReatencion={modo.puedeAsignarReatencion}
                                         reatenciones={reatencion}
                                         motivosPausa={motivosPausa}

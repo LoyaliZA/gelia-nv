@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { router } from '@inertiajs/react';
 import { Filter, Search } from 'lucide-react';
+import CampoBusqueda from '@/Components/CampoBusqueda';
 import GeliaPaginacion from '../../../Components/GeliaPaginacion';
 import { GELIA_BTN_OUTLINE, GELIA_ESTADO_VIVO_TONO, THEME_BTN_PRIMARY, THEME_INPUT, THEME_LABEL, geliaCardClass } from '../../../utils/geliaTheme';
 import FiltroClienteEscalonamiento from './FiltroClienteEscalonamiento';
@@ -69,15 +70,12 @@ export default function TablaDocumentosEscalonamiento({
                 <form onSubmit={enviarBusqueda} className="flex flex-col sm:flex-row gap-4 sm:items-end border-t theme-border pt-5">
                     <label className="flex-1 space-y-1.5">
                         <span className={THEME_LABEL}>Buscar documento</span>
-                        <div className="theme-field-with-icon">
-                            <Search className="theme-field-icon" aria-hidden />
-                            <input
-                                name="q_doc"
-                                className={`${THEME_INPUT} w-full`}
-                                placeholder="Folio, número o nombre"
-                                defaultValue={busqueda}
-                            />
-                        </div>
+                        <CampoBusqueda
+                            name="q_doc"
+                            className={`${THEME_INPUT} w-full`}
+                            placeholder="Folio, número o nombre"
+                            defaultValue={busqueda}
+                        />
                     </label>
                     <button type="submit" className={`${THEME_BTN_PRIMARY} shrink-0`}>
                         <Search className="w-4 h-4" aria-hidden />

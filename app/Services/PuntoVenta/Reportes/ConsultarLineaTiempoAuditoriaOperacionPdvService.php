@@ -43,12 +43,12 @@ class ConsultarLineaTiempoAuditoriaOperacionPdvService
         );
 
         usort($filas, function (array $a, array $b): int {
-            $tiempo = strcmp($a['ocurrido_at'], $b['ocurrido_at']);
+            $tiempo = strcmp($b['ocurrido_at'], $a['ocurrido_at']);
             if ($tiempo !== 0) {
                 return $tiempo;
             }
 
-            return $a['orden'] <=> $b['orden'];
+            return $b['orden'] <=> $a['orden'];
         });
 
         return $filas;
@@ -180,15 +180,30 @@ class ConsultarLineaTiempoAuditoriaOperacionPdvService
                 TurnoPdvEvento::TIPO_ASIGNADO,
                 TurnoPdvEvento::TIPO_REATENCION,
                 TurnoPdvEvento::TIPO_ATENCION_CERRADA,
+                TurnoPdvEvento::TIPO_TRANSFERIDO,
             ])
             ->orderBy('ocurrido_at')
             ->get();
 
+        $ids = [];
+        foreach ($eventos as $evento) {
+            $snapshot = is_array($evento->snapshot_json) ? $evento->snapshot_json : [];
+            foreach (['user_id', 'origen_user_id', 'destino_user_id'] as $clave) {
+                if (! empty($snapshot[$clave])) {
+                    $ids[] = $snapshot[$clave];
+                }
+            }
+        }
+        $nombres = $this->nombres($ids);
+
         $filas = [];
         foreach ($eventos as $evento) {
             $folio = $evento->turno?->folio ?: ('#'.$evento->turno_id);
-            $filas[] = match ($evento->tipo_evento) {
-                TurnoPdvEvento::TIPO_ALTA => $this->fila(
+            $snapshot = is_array($evento->snapshot_json) ? $evento->snapshot_json : [];
+            $tipo = (string) $evento->tipo_evento;
+
+            if ($tipo === TurnoPdvEvento::TIPO_ALTA) {
+                $filas[] = $this->fila(
                     'turno-'.$evento->id,
                     $evento->ocurrido_at,
                     'turno.alta',
@@ -196,8 +211,13 @@ class ConsultarLineaTiempoAuditoriaOperacionPdvService
                     'El turno queda en espera de asignación.',
                     $evento->actor?->name,
                     20,
-                ),
-                TurnoPdvEvento::TIPO_ATENCION_CERRADA => $this->fila(
+                );
+
+                continue;
+            }
+
+            if ($tipo === TurnoPdvEvento::TIPO_ATENCION_CERRADA) {
+                $filas[] = $this->fila(
                     'turno-'.$evento->id,
                     $evento->ocurrido_at,
                     'atencion.cerrada',
@@ -205,17 +225,52 @@ class ConsultarLineaTiempoAuditoriaOperacionPdvService
                     'Motivo: '.$this->motivoCierre($evento).'.',
                     $evento->actor?->name,
                     70,
-                ),
-                default => $this->fila(
+                );
+
+                continue;
+            }
+
+            if ($tipo === TurnoPdvEvento::TIPO_ASIGNADO || $tipo === TurnoPdvEvento::TIPO_REATENCION) {
+                $recibeId = (int) ($snapshot['user_id'] ?? 0);
+                if ($recibeId !== $userId) {
+                    continue;
+                }
+
+                $recibe = $nombres[$recibeId] ?? 'la persona consultada';
+                $filas[] = $this->fila(
                     'turno-'.$evento->id,
                     $evento->ocurrido_at,
-                    (string) $evento->tipo_evento,
-                    'Turno '.$folio.' asignado',
-                    'Origen: '.$this->etiquetaOrigen((string) ($evento->snapshot_json['origen'] ?? '')).'.',
+                    $tipo,
+                    $tipo === TurnoPdvEvento::TIPO_REATENCION
+                        ? 'Turno '.$folio.' en reatención'
+                        : 'Turno '.$folio.' asignado',
+                    'Recibe: '.$recibe.'. Origen: '.$this->etiquetaOrigen((string) ($snapshot['origen'] ?? '')).'.',
                     $evento->actor?->name ?? 'Sistema',
                     60,
-                ),
-            };
+                );
+
+                continue;
+            }
+
+            if ($tipo !== TurnoPdvEvento::TIPO_TRANSFERIDO) {
+                continue;
+            }
+
+            $origenId = (int) ($snapshot['origen_user_id'] ?? 0);
+            $destinoId = (int) ($snapshot['destino_user_id'] ?? 0);
+            if ($origenId !== $userId && $destinoId !== $userId) {
+                continue;
+            }
+
+            $filas[] = $this->fila(
+                'turno-'.$evento->id,
+                $evento->ocurrido_at,
+                'turno.transferido',
+                'Turno '.$folio.' transferido',
+                'Entrega: '.($nombres[$origenId] ?? 'sin registro').'. Recibe: '.($nombres[$destinoId] ?? 'sin registro').'.',
+                $evento->actor?->name,
+                65,
+            );
         }
 
         return $filas;
@@ -294,6 +349,7 @@ class ConsultarLineaTiempoAuditoriaOperacionPdvService
             EsperaDisponibilidadPdv::ORIGEN_PAUSA_FINALIZADA => 'fin de pausa',
             'cooldown' => 'espera entre turnos',
             'jornada.abierta' => 'apertura de jornada',
+            'gerencia.reatencion' => 'reatención manual',
             '' => 'no registrado',
             default => $origen,
         };

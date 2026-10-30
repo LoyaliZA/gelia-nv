@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Download } from 'lucide-react';
+import { DownloadIcon } from '@animateicons/react/lucide/download-icon';
+import useIconoEnControl from '@/hooks/useIconoEnControl';
 import PantallaActualizacionGelia from '@/Components/PantallaActualizacionGelia';
 import useAvisoVersionNueva from '@/hooks/useAvisoVersionNueva';
 import {
@@ -11,6 +12,7 @@ import {
 
 export default function AvisoVersionNueva() {
     const visible = useAvisoVersionNueva();
+    const descarga = useIconoEnControl();
     const [actualizando, setActualizando] = useState(false);
     const [indice, setIndice] = useState(0);
 
@@ -50,14 +52,21 @@ export default function AvisoVersionNueva() {
                     <button
                         type="button"
                         className="gelia-aviso-version pointer-events-auto flex w-full min-h-11 items-start gap-4 rounded-2xl border theme-surface theme-no-blur p-4 text-left shadow-2xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primario)]"
+                        {...descarga.triggerProps}
                         onClick={() => setActualizando(true)}
                     >
                         <span
-                            className="shrink-0 rounded-xl p-2"
+                            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
                             style={{ backgroundColor: 'color-mix(in srgb, var(--color-primario) 15%, transparent)' }}
                             aria-hidden="true"
                         >
-                            <Download className="size-5" style={{ color: 'var(--color-primario)' }} />
+                            <DownloadIcon
+                                ref={descarga.ref}
+                                size={20}
+                                duration={1}
+                                isAnimated={false}
+                                color="var(--color-primario)"
+                            />
                         </span>
                         <span className="min-w-0 flex-1">
                             <span className="block text-sm font-semibold theme-text-primario">Nueva versión</span>

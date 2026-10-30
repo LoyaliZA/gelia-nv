@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Head, router, usePage } from '@inertiajs/react';
-import { MapPin, Search, ClipboardList, ClipboardCheck, Loader2, Upload } from 'lucide-react';
+import { MapPin, ClipboardList, ClipboardCheck, Loader2, Upload } from 'lucide-react';
+import CampoBusqueda from '@/Components/CampoBusqueda';
 import AppLayout from '../../../Layouts/AppLayout';
 import GeliaPageShell from '../../../Components/GeliaPageShell';
 import GeliaPaginacion from '../../../Components/GeliaPaginacion';
@@ -142,21 +143,19 @@ export default function Index({ clientes = { data: [] }, filtros = {} }) {
                 <div className={`${geliaCardClass()} p-5 md:p-6 space-y-4`}>
                     <label className="block">
                         <span className="text-[9px] font-black uppercase tracking-widest theme-text-muted">Buscar cliente</span>
-                        <div className="theme-field-with-icon relative mt-2">
-                            <Search className="theme-field-icon w-4 h-4" />
-                            <input
-                                type="text"
-                                value={q}
-                                onChange={(e) => setQ(e.target.value)}
-                                placeholder="Número o nombre…"
-                                className={`${THEME_INPUT} w-full py-3.5 pr-10`}
-                                autoComplete="off"
-                                aria-busy={cargando}
-                            />
-                            {cargando && (
+                        <CampoBusqueda
+                            wrapperClassName="relative mt-2"
+                            type="text"
+                            value={q}
+                            onChange={(e) => setQ(e.target.value)}
+                            placeholder="Número o nombre…"
+                            className={`${THEME_INPUT} w-full py-3.5 pr-10`}
+                            autoComplete="off"
+                            aria-busy={cargando}
+                            suffix={cargando ? (
                                 <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin theme-text-muted" aria-label="Buscando" />
-                            )}
-                        </div>
+                            ) : null}
+                        />
                     </label>
                     <div className="pt-1 border-t theme-border">
                         <GeliaPaginacion

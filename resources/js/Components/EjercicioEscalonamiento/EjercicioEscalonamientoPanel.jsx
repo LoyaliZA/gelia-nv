@@ -2,7 +2,6 @@ import React, { useState, useRef } from 'react';
 import axios from 'axios';
 import {
     Calculator,
-    Search,
     TrendingUp,
     AlertTriangle,
     CheckCircle2,
@@ -10,6 +9,7 @@ import {
     Users,
     Eraser,
 } from 'lucide-react';
+import CampoBusqueda from '@/Components/CampoBusqueda';
 import GeliaTituloCard from '@/Components/GeliaTituloCard';
 import { THEME_INPUT, geliaCardClass } from '@/utils/geliaTheme';
 import {
@@ -193,17 +193,15 @@ export default function EjercicioEscalonamientoPanel({ listas, variant = 'page' 
 
     const buscadorAside = (
         <div className={`${isModal ? 'w-full' : 'w-full md:w-80'} relative`}>
-            <div className="theme-field-with-icon relative">
-                <Search className="theme-field-icon w-5 h-5" aria-hidden />
-                <input
-                    type="text"
-                    value={terminoBusqueda}
-                    onChange={e => manejarBusqueda(e.target.value)}
-                    onFocus={() => { if (terminoBusqueda) setMostrarDropdown(true); }}
-                    placeholder="Buscar cliente..."
-                    className={`${THEME_INPUT} w-full py-3.5 text-sm`}
-                />
-            </div>
+            <CampoBusqueda
+                wrapperClassName="relative"
+                type="text"
+                value={terminoBusqueda}
+                onChange={e => manejarBusqueda(e.target.value)}
+                onFocus={() => { if (terminoBusqueda) setMostrarDropdown(true); }}
+                placeholder="Buscar cliente..."
+                className={`${THEME_INPUT} w-full py-3.5 text-sm`}
+            />
             {mostrarDropdown && (
                 <div className="absolute top-[100%] mt-2 left-0 right-0 theme-surface border theme-border rounded-2xl shadow-2xl z-50 max-h-60 overflow-y-auto custom-scrollbar p-2">
                     {buscando ? (

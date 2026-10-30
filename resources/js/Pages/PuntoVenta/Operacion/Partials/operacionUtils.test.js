@@ -3,6 +3,9 @@ import {
     esConflictoVersion,
     etiquetaActividad,
     etiquetaEstadoVendedor,
+    tonoEstadoVendedor,
+    claseBadgeEstadoVendedor,
+    mensajeAvisoDisponibilidad,
     etiquetaJornada,
     formatearUltimaActualizacion,
     avisoSucursalOperacion,
@@ -39,7 +42,17 @@ describe('operacionUtils', () => {
         expect(etiquetaJornada('ABIERTA')).toBe('Abierta');
         expect(etiquetaActividad('en_pausa')).toBe('En pausa');
         expect(etiquetaEstadoVendedor('en_retencion')).toBe('En pausa');
-        expect(etiquetaEstadoVendedor('en_espera')).toBe('En espera');
+        expect(tonoEstadoVendedor('disponible')).toBe('exito');
+        expect(tonoEstadoVendedor('atendiendo')).toBe('atendiendo');
+        expect(tonoEstadoVendedor('atendiendo', true)).toBe('prorroga');
+        expect(tonoEstadoVendedor('en_retencion')).toBe('pausa');
+        expect(claseBadgeEstadoVendedor('atendiendo')).toContain('gelia-estado-equipo--atendiendo');
+        expect(claseBadgeEstadoVendedor('atendiendo', true)).toContain('gelia-estado-equipo--prorroga');
+        expect(claseBadgeEstadoVendedor('en_retencion')).toContain('gelia-estado-equipo--pausa');
+        expect(etiquetaEstadoVendedor('en_espera')).toBe('Pre-disponible');
+        expect(mensajeAvisoDisponibilidad('en_retencion', 'transferencia')).toContain('transferencia sí se puede confirmar');
+        expect(mensajeAvisoDisponibilidad('en_espera', 'reatencion')).toContain('Pre-disponible');
+        expect(mensajeAvisoDisponibilidad('disponible', 'transferencia')).toBe('');
     });
 
     it('mensajes de mi atención por estado', () => {

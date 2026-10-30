@@ -13,8 +13,9 @@ import { createPortal } from 'react-dom';
 import { useForm, usePage, router } from '@inertiajs/react';
 import axios from 'axios';
 import {
-    X, Search, Save, Send, RotateCcw, ImagePlus, Trash2, AlertTriangle, PenLine, Link2, Cloud, HardDrive, Scale, FileText, ArrowRight, CheckCircle2,
+    X, Save, Send, RotateCcw, ImagePlus, Trash2, AlertTriangle, PenLine, Link2, Cloud, HardDrive, Scale, FileText, ArrowRight, CheckCircle2,
 } from 'lucide-react';
+import CampoBusqueda from '@/Components/CampoBusqueda';
 import GeliaLoader from '../../../Components/GeliaLoader';
 import { THEME_INPUT, THEME_SELECT, THEME_TEXTAREA } from '../../../utils/geliaTheme';
 import InputMoneda from './InputMoneda';
@@ -2936,10 +2937,7 @@ export default function ModalFormPedidoLegado({
                             <div className="relative" data-campo="cliente">
                                 <div className={wrapCampo('cliente')}>
                                 <label className={SECCION}>Número de cliente *</label>
-                                <div className="theme-field-with-icon">
-                                    <Search className="theme-field-icon w-4 h-4" />
-                                    <input type="text" value={data.numero_cliente} disabled={logisticaBloqueada} onChange={(e) => manejarBusquedaCliente(e.target.value)} placeholder="Buscar cliente..." className={`${THEME_INPUT} w-full py-3 ${logisticaBloqueada ? 'opacity-50' : ''}`} />
-                                </div>
+                                <CampoBusqueda type="text" value={data.numero_cliente} disabled={logisticaBloqueada} onChange={(e) => manejarBusquedaCliente(e.target.value)} placeholder="Buscar cliente..." className={`${THEME_INPUT} w-full py-3 ${logisticaBloqueada ? 'opacity-50' : ''}`} />
                                 {infoCliente && <p className="text-xs font-bold mt-2 theme-text-main">{infoCliente.nombre}</p>}
                                 {mostrarDropdown && (
                                     <div className="absolute z-50 mt-1 w-full theme-surface border theme-border rounded-xl shadow-xl max-h-48 overflow-y-auto p-2">
@@ -3471,22 +3469,19 @@ export default function ModalFormPedidoLegado({
                                                             title="Fecha hasta"
                                                         />
                                                     </div>
-                                                    <div className="theme-field-with-icon">
-                                                        <Search className="theme-field-icon w-4 h-4" />
-                                                        <input
-                                                            type="text"
-                                                            value={qPrincipal}
-                                                            onChange={(e) => {
-                                                                const v = e.target.value;
-                                                                setQPrincipal(v);
-                                                                if (temporizadorPrincipal.current) clearTimeout(temporizadorPrincipal.current);
-                                                                temporizadorPrincipal.current = setTimeout(() => buscarPrincipales(v), 350);
-                                                            }}
-                                                            onFocus={() => buscarPrincipales(qPrincipal)}
-                                                            placeholder="Buscar folio interno o folio de pedido..."
-                                                            className={`${THEME_INPUT} w-full py-3`}
-                                                        />
-                                                    </div>
+                                                    <CampoBusqueda
+                                                        type="text"
+                                                        value={qPrincipal}
+                                                        onChange={(e) => {
+                                                            const v = e.target.value;
+                                                            setQPrincipal(v);
+                                                            if (temporizadorPrincipal.current) clearTimeout(temporizadorPrincipal.current);
+                                                            temporizadorPrincipal.current = setTimeout(() => buscarPrincipales(v), 350);
+                                                        }}
+                                                        onFocus={() => buscarPrincipales(qPrincipal)}
+                                                        placeholder="Buscar folio interno o folio de pedido..."
+                                                        className={`${THEME_INPUT} w-full py-3`}
+                                                    />
                                                     {principalSeleccionado && (
                                                         <p className="text-xs font-bold theme-text-main mt-1 m-0">
                                                             Principal: {etiquetaCandidatoPrincipal(principalSeleccionado)}

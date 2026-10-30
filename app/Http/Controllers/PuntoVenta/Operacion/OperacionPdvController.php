@@ -75,6 +75,7 @@ class OperacionPdvController extends Controller
             'equipo_ver' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_OPERACION_EQUIPO_VER),
             'equipo_gestionar' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_OPERACION_EQUIPO_GESTIONAR),
             'reatencion_asignar' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_TURNOS_REATENCION_ASIGNAR),
+            'transferir' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_TURNOS_TRANSFERIR),
             'pantalla_sala_abrir' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_PANTALLA_SALA_ABRIR),
         ];
     }

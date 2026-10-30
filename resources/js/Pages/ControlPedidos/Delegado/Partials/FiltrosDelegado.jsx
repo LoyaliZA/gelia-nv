@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Search, RefreshCw, ChevronDown, Loader2, X, SlidersHorizontal } from 'lucide-react';
+import { RefreshCw, ChevronDown, Loader2, X, SlidersHorizontal } from 'lucide-react';
+import CampoBusqueda from '@/Components/CampoBusqueda';
 import { THEME_INPUT, THEME_LABEL, THEME_SELECT } from '../../../../utils/geliaTheme';
 import {
     BTN_SECONDARY,
@@ -121,25 +122,23 @@ export default function FiltrosDelegado({
                             <label htmlFor="delegado-busqueda" className={`${THEME_LABEL} ml-1`}>
                                 Buscar
                             </label>
-                            <div className="theme-field-with-icon relative mt-1.5">
-                                <Search className="theme-field-icon w-4 h-4" aria-hidden />
-                                <input
-                                    id="delegado-busqueda"
-                                    type="search"
-                                    value={busqueda}
-                                    onChange={(e) => onBuscar?.(e.target.value)}
-                                    placeholder={placeholderBusquedaDelegado(busquedaCampo)}
-                                    className={`${THEME_INPUT} w-full py-3 text-sm font-bold pr-10 theme-text-main placeholder:theme-text-muted min-h-[44px]`}
-                                    aria-busy={buscando}
-                                    autoComplete="off"
-                                />
-                                {buscando && (
+                            <CampoBusqueda
+                                wrapperClassName="relative mt-1.5"
+                                id="delegado-busqueda"
+                                type="search"
+                                value={busqueda}
+                                onChange={(e) => onBuscar?.(e.target.value)}
+                                placeholder={placeholderBusquedaDelegado(busquedaCampo)}
+                                className={`${THEME_INPUT} w-full py-3 text-sm font-bold pr-10 theme-text-main placeholder:theme-text-muted min-h-[44px]`}
+                                aria-busy={buscando}
+                                autoComplete="off"
+                                suffix={buscando ? (
                                     <Loader2
                                         className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin theme-text-muted"
                                         aria-label="Buscando"
                                     />
-                                )}
-                            </div>
+                                ) : null}
+                            />
                         </div>
                     </div>
                     <button

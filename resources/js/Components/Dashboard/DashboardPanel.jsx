@@ -1,5 +1,6 @@
 import React from 'react';
 import { GELIA_ICON_BOX } from '../../utils/geliaTheme';
+import useIconoEnControl from '../../hooks/useIconoEnControl';
 
 /**
  * Contenedor de panel del dashboard.
@@ -16,18 +17,27 @@ export default function DashboardPanel({
     panelClassName = '',
     children,
 }) {
+    const { ref, triggerProps } = useIconoEnControl();
     const iconColorStyle = iconStyle || (iconClassName ? undefined : { color: 'var(--color-primario)' });
 
     const iconNode = Icon ? (
         <span className={`${GELIA_ICON_BOX} !p-2 shrink-0`} aria-hidden>
-            <Icon className={`w-4 h-4 ${iconClassName}`} style={iconColorStyle} />
+            <Icon
+                ref={ref}
+                size={16}
+                duration={1}
+                isAnimated={false}
+                color="currentColor"
+                className={`w-4 h-4 ${iconClassName}`}
+                style={iconColorStyle}
+            />
         </span>
     ) : null;
 
     if (variant === 'mobile') {
         return (
             <div className={`dashboard-panel-mobile theme-surface theme-border shadow-sm ${panelClassName}`.trim()}>
-                <div className="dashboard-panel-mobile__header theme-border">
+                <div className="dashboard-panel-mobile__header theme-border" {...triggerProps}>
                     <div className="flex items-center gap-2 min-w-0 flex-1">
                         {iconNode}
                         <h2 className="dashboard-panel-mobile__title theme-text-main truncate min-w-0">{title}</h2>
@@ -51,7 +61,7 @@ export default function DashboardPanel({
 
     return (
         <div className={shellClass}>
-            <div className="dashboard-panel-shell__header flex items-center justify-between border-b theme-border shrink-0 gap-3 min-w-0">
+            <div className="dashboard-panel-shell__header flex items-center justify-between border-b theme-border shrink-0 gap-3 min-w-0" {...triggerProps}>
                 <div className="flex items-center gap-2 min-w-0 flex-1">
                     {iconNode}
                     <h2 className="dashboard-panel-shell__title theme-text-main min-w-0">{title}</h2>

@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Head, useForm, router, usePage } from '@inertiajs/react';
-import { LayoutDashboard, Settings2, X, Check, Layers, RotateCcw, Sparkles } from 'lucide-react';
+import { Settings2, X, Check, RotateCcw, Sparkles } from 'lucide-react';
+import { Layers, LayoutDashboard } from '../../Components/Dashboard/dashboardIconosAnimados';
 import AppLayout from '../../Layouts/AppLayout';
 import GeliaPageShell from '../../Components/GeliaPageShell';
 import DashboardLayoutGrid from '../../Components/Dashboard/DashboardLayoutGrid';

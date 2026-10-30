@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from '@inertiajs/react';
+import useIconoHover from '@/hooks/useIconoHover';
 
 export default function SidebarLink({
     href,
@@ -11,6 +12,7 @@ export default function SidebarLink({
     collapsed = false,
     depth = 1,
 }) {
+    const icono = useIconoHover(Icon, { size: 18, className: 'gelia-pro-sidebar__row-icon' });
     const depthClass = depth <= 1
         ? 'gelia-pro-sidebar__link--l1'
         : depth === 2
@@ -20,6 +22,7 @@ export default function SidebarLink({
     return (
         <Link
             href={href}
+            {...icono.triggerProps}
             onClick={onClick}
             aria-current={active ? 'page' : undefined}
             className={[
@@ -32,7 +35,7 @@ export default function SidebarLink({
             data-tip={collapsed ? label : ''}
             data-depth={depth}
         >
-            {Icon ? <Icon className="gelia-pro-sidebar__row-icon" aria-hidden /> : null}
+            {icono.nodo}
             <span className="gelia-pro-sidebar__row-label">{label}</span>
             {badge ? <span className="gelia-pro-sidebar__badge">{badge}</span> : null}
         </Link>
