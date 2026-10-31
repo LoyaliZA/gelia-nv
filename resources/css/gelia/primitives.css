@@ -862,3 +862,93 @@ body > .gelia-modal-overlay {
         border-radius: var(--theme-radius-card);
     }
 }
+
+.gelia-titulo-card--compact {
+    border-width: 1px;
+    box-shadow: none;
+    border-radius: 0.75rem;
+}
+
+.gelia-titulo-card--compact .gelia-estado-vivo {
+    min-height: 2rem;
+    min-width: 2rem;
+    padding: 0.375rem;
+    border-radius: 0.75rem;
+}
+
+.gelia-titulo-card--compact .gelia-estado-vivo svg {
+    width: 0.875rem;
+    height: 0.875rem;
+}
+
+.gelia-titulo-card--compact [data-pdv-config-alertas-trigger] {
+    min-height: 2rem;
+    min-width: 2rem;
+    padding: 0.375rem;
+    border-radius: 0.75rem;
+}
+
+/* Operación General: un solo radio en tarjetas, botones, campos y badges. */
+[data-operacion-root] :is(
+    .theme-card,
+    .gelia-titulo-card,
+    .gelia-estado-vivo,
+    .gelia-estado-vivo--compacto,
+    .gelia-panel-suave,
+    .gelia-callout-aviso,
+    .theme-btn-primary,
+    .theme-btn-secondary,
+    .theme-btn-danger,
+    .theme-btn-icon,
+    .theme-input,
+    .theme-select,
+    .theme-textarea,
+    .rounded,
+    .rounded-md,
+    .rounded-lg,
+    .rounded-xl,
+    .rounded-2xl,
+    .rounded-3xl,
+    .rounded-full,
+    button,
+    input,
+    select,
+    textarea
+) {
+    border-radius: 0.75rem;
+}
+
+[data-operacion-root] .gelia-estado-vivo__pulso {
+    border-radius: inherit;
+}
+
+[data-operacion-root] button:not(:disabled) {
+    cursor: pointer;
+}
+
+[data-operacion-root] button:not(.theme-btn-primary):not(.theme-btn-danger):not(.gelia-estado-vivo):hover:not(:disabled) {
+    background-color: color-mix(in srgb, var(--theme-text-main) 12%, var(--theme-element-bg)) !important;
+}
+
+[data-operacion-root] button.gelia-estado-vivo:hover:not(:disabled) {
+    filter: brightness(1.2);
+}
+
+.gelia-titulo-card--compact .gelia-estado-vivo.gelia-estado-vivo--etiqueta {
+    min-height: auto;
+    min-width: 0;
+    width: 100%;
+    justify-content: flex-start;
+    gap: 0.375rem;
+    padding: 0.25rem 0.5rem;
+}
+
+[data-pdv-selector-sucursal-compacto] select {
+    text-align: center;
+    text-align-last: center;
+}
+
+.gelia-titulo-card--compact [data-pdv-config-alertas-trigger] svg {
+    width: 0.875rem;
+    height: 0.875rem;
+}

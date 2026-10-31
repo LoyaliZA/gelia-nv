@@ -107,6 +107,7 @@ export default function Entregados({
             <Head title="Historial de entregas | Resguardos PDV" />
             <GeliaPageShell className="space-y-3 md:space-y-4">
                 <GeliaTituloCard
+                    compact
                     eyebrow="Punto de Venta"
                     title="Historial de entregas"
                     titleHighlight="solo consulta"
@@ -126,7 +127,6 @@ export default function Entregados({
                             </div>
                         </div>
                     )}
-                    className="!p-4 md:!p-5 lg:!p-6 !gap-3 md:!gap-4 [&_h1]:!text-2xl sm:[&_h1]:!text-3xl md:[&_h1]:!text-3xl"
                 >
                     <p className="text-sm theme-text-muted m-0 max-w-2xl">
                         Resguardos con entrega total registrada en la sucursal activa. Abre el detalle para revisar bultos, evidencias y auditoría.
