@@ -1,6 +1,6 @@
 import React from 'react';
 import { Head } from '@inertiajs/react';
-import { AlertTriangle, ShieldOff, Ticket } from 'lucide-react';
+import { AlertTriangle, ShieldOff } from 'lucide-react';
 import IconoConfirmacionAnimado from '@/Components/IconoConfirmacionAnimado';
 import AppLayout from '../../../Layouts/AppLayout';
 import GeliaPageShell from '../../../Components/GeliaPageShell';
@@ -114,10 +114,10 @@ function RecepcionContenido({
     return (
         <GeliaPageShell className="max-w-7xl space-y-4" data-recepcion-turno-root>
             <GeliaTituloCard
+                compact
                 title="Recepción de turnos"
                 description="Registro y supervisión de fila en mostrador"
                 aside={<PdvEncabezadoAlertasPdv />}
-                icon={Ticket}
             >
                 <SelectorSucursalActivaPdv
                     sucursalActiva={sucursalActiva}

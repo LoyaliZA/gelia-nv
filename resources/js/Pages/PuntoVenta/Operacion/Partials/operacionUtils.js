@@ -177,6 +177,59 @@ export function particionarEquipoGerencia(equipo = []) {
     return { activos, inactivos };
 }
 
+/** Lapso sin activar ni usar la sección antes de contraerla, si ya hay gente activa. */
+export const INACTIVIDAD_SECCION_INACTIVOS_MS = 60_000;
+
+/**
+ * Sección de inactivos: abierta si nadie está activo; si ya hay activos, se contrae
+ * tras un minuto sin activar o usar el apartado.
+ *
+ * @returns {{ abierta: boolean, reiniciarTemporizador: boolean, cancelarTemporizador: boolean }}
+ */
+export function resolverSeccionInactivos({
+    abierta,
+    activosAntes,
+    activosAhora,
+    evento,
+}) {
+    if (evento === 'vencio') {
+        if (activosAhora === 0) {
+            return { abierta: true, reiniciarTemporizador: false, cancelarTemporizador: true };
+        }
+
+        return { abierta: false, reiniciarTemporizador: false, cancelarTemporizador: true };
+    }
+
+    if (evento === 'alternar') {
+        const siguiente = !abierta;
+        const corre = siguiente && activosAhora > 0;
+
+        return {
+            abierta: siguiente,
+            reiniciarTemporizador: corre,
+            cancelarTemporizador: !corre,
+        };
+    }
+
+    if (evento === 'actividad') {
+        if (!abierta || activosAhora === 0) {
+            return { abierta, reiniciarTemporizador: false, cancelarTemporizador: false };
+        }
+
+        return { abierta: true, reiniciarTemporizador: true, cancelarTemporizador: false };
+    }
+
+    if (activosAhora === 0) {
+        return { abierta: true, reiniciarTemporizador: false, cancelarTemporizador: true };
+    }
+
+    if (activosAntes === 0 || activosAhora > activosAntes) {
+        return { abierta: true, reiniciarTemporizador: true, cancelarTemporizador: false };
+    }
+
+    return { abierta, reiniciarTemporizador: false, cancelarTemporizador: false };
+}
+
 export function mostrarBandejaSinTurno(estadoVendedor) {
     return estadoVendedor === 'disponible';
 }

@@ -1,6 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import { Head } from '@inertiajs/react';
-import { Clock, Loader2, RefreshCw, ShieldOff } from 'lucide-react';
+import { Loader2, RefreshCw, ShieldOff } from 'lucide-react';
 import AppLayout from '../../../Layouts/AppLayout';
 import GeliaPageShell from '../../../Components/GeliaPageShell';
 import GeliaTituloCard from '../../../Components/GeliaTituloCard';
@@ -88,10 +88,10 @@ export default function OperacionGeneral({
                 <OperacionRealtimeSync refrescar={manejarActualizado} />
                 <GeliaPageShell className="space-y-5" data-operacion-root style={{ '--font-principal': "'JetBrains Mono', monospace" }}>
                     <GeliaTituloCard
+                        compact
                         title="Operación General"
                         description="Jornada de sucursal, equipo y acciones gerenciales en un solo lugar"
-                        aside={<PdvEncabezadoAlertasPdv />}
-                        icon={Clock}
+                        aside={<PdvEncabezadoAlertasPdv disposicion="columna" />}
                     >
                         <SelectorSucursalActivaPdv
                             sucursalActiva={sucursalActiva}

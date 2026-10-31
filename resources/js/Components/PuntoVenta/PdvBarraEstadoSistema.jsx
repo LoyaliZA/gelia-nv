@@ -1,5 +1,13 @@
 import React, { useCallback, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { BellRingIcon } from '@animateicons/react/lucide/bell-ring-icon';
+import { BellOffIcon } from '@animateicons/react/lucide/bell-off-icon';
+import { RadioIcon as RadioAnimadoIcon } from '@animateicons/react/lucide/radio-icon';
+import { RadioOffIcon } from '@animateicons/react/lucide/radio-off-icon';
+import { Volume2Icon } from '@animateicons/react/lucide/volume-2-icon';
+import { VolumeOffIcon } from '@animateicons/react/lucide/volume-off-icon';
+import { WifiIcon } from '@animateicons/react/lucide/wifi-icon';
+import { WifiOffIcon } from '@animateicons/react/lucide/wifi-off-icon';
 import {
     Bell,
     BellOff,
@@ -263,9 +271,44 @@ function resolverIndicadorTerminal(terminal) {
     };
 }
 
+function textoConexion(estadoConexion) {
+    if (estadoConexion === PDV_ESTADO_CONEXION.conectado) return 'En línea';
+    if (estadoConexion === PDV_ESTADO_CONEXION.conectando) return 'Reconectando';
+    return 'Sin conexión';
+}
+
+function textoAudio(audio) {
+    if (audio.deshabilitado) return 'Audio desactivado';
+    if (audio.accion === 'silenciado') return 'Audio silenciado';
+    if (audio.accion === 'desbloquear') return 'Audio bloqueado';
+    if (audio.accion === 'no_soportado') return 'Audio no disponible';
+    if (audio.tono === 'exito') return 'Audio activo';
+    return 'Audio';
+}
+
+function textoPush(estadoPush) {
+    if (estadoPush === PDV_PUSH_ESTADO.activo) return 'Notificaciones activas';
+    if (estadoPush === PDV_PUSH_ESTADO.denegado) return 'Notificaciones bloqueadas';
+    if (estadoPush === PDV_PUSH_ESTADO.pendiente) return 'Notificaciones pendientes';
+    return 'Notificaciones inactivas';
+}
+
+function textoTerminal(estado) {
+    const textos = {
+        no_autorizada: 'Terminal no autorizada',
+        disponible: 'Terminal disponible',
+        terminal_activa: 'Terminal activa',
+        otra_terminal_activa: 'Otra terminal activa',
+        conexion_perdida: 'Terminal sin conexión',
+    };
+
+    return textos[estado] || 'Terminal';
+}
+
 export default function PdvBarraEstadoSistema({
     onAbrirConfiguracion = null,
     seccionInicialModal = null,
+    disposicion = 'fila',
     className = '',
 }) {
     const ctx = usePdvAlertContext();
@@ -374,16 +417,25 @@ export default function PdvBarraEstadoSistema({
         }
     }, [onAbrirConfiguracion, seccionInicialModal]);
 
+    const enColumna = disposicion === 'columna';
+    const audioActivo = audio.tono === 'exito' && !audio.deshabilitado && audio.accion !== 'silenciado';
+    const pushActivo = estadoPush === PDV_PUSH_ESTADO.activo;
+    const terminalActiva = Boolean(terminalInfo?.terminalActiva);
+
     return (
         <>
             <div
-                className={`inline-flex items-center gap-1.5 ${className}`}
+                className={enColumna
+                    ? `flex w-max flex-col items-stretch gap-1 ${className}`
+                    : `inline-flex items-center gap-1.5 ${className}`}
                 role="group"
                 aria-label="Estado del sistema de alertas"
                 data-pdv-barra-estado
             >
                 <PdvIndicadorEstadoVivo
-                    icono={conexion.icono}
+                    icono={enColumna ? (estadoConexion === PDV_ESTADO_CONEXION.conectado ? WifiIcon : WifiOffIcon) : conexion.icono}
+                    animado={enColumna}
+                    texto={enColumna ? textoConexion(estadoConexion) : null}
                     etiqueta={conexion.etiqueta}
                     titulo={conexion.titulo}
                     tono={conexion.tono}
@@ -393,7 +445,9 @@ export default function PdvBarraEstadoSistema({
                     dataAtributo={`conexion-${estadoConexion}`}
                 />
                 <PdvIndicadorEstadoVivo
-                    icono={audio.icono}
+                    icono={enColumna ? (audioActivo ? Volume2Icon : VolumeOffIcon) : audio.icono}
+                    animado={enColumna}
+                    texto={enColumna ? textoAudio(audio) : null}
                     etiqueta={audio.etiqueta}
                     titulo={audio.titulo}
                     tono={audio.tono}
@@ -405,7 +459,9 @@ export default function PdvBarraEstadoSistema({
                 />
                 {(vozHabilitada || sonidoHabilitado || prefs?.prefsUsuario?.canales?.web_push) && (
                     <PdvIndicadorEstadoVivo
-                        icono={push.icono}
+                        icono={enColumna ? (pushActivo ? BellRingIcon : BellOffIcon) : push.icono}
+                        animado={enColumna}
+                        texto={enColumna ? textoPush(estadoPush) : null}
                         etiqueta={push.etiqueta}
                         titulo={push.titulo}
                         tono={push.tono}
@@ -420,7 +476,9 @@ export default function PdvBarraEstadoSistema({
                 )}
                 {terminalInfo && (
                     <PdvIndicadorEstadoVivo
-                        icono={terminalInfo.icono}
+                        icono={enColumna ? (terminalActiva ? RadioAnimadoIcon : RadioOffIcon) : terminalInfo.icono}
+                        animado={enColumna}
+                        texto={enColumna ? textoTerminal(terminal?.estado) : null}
                         etiqueta={terminalInfo.etiqueta}
                         titulo={terminalInfo.titulo}
                         tono={terminalInfo.tono}

@@ -63,12 +63,12 @@ export default function VisitasProgramadasPdvIndex({
             <Head title="Visitas del día | Punto de venta" />
             <GeliaPageShell className="max-w-[960px] mx-auto w-full space-y-5" data-recepcion-movil-root>
                 <GeliaTituloCard
+                    compact
                     eyebrow="Punto de Venta"
                     title="Visitas del"
                     titleHighlight="día"
                     description="Clientes con asistencia programada para hoy en esta sucursal."
                     icon={CalendarClock}
-                    className="!p-4 md:!p-5 lg:!p-6 !gap-3 md:!gap-4 [&_h1]:!text-2xl sm:[&_h1]:!text-3xl md:[&_h1]:!text-3xl"
                 >
                     <SelectorSucursalActivaPdv
                         sucursalActiva={sucursalActiva}

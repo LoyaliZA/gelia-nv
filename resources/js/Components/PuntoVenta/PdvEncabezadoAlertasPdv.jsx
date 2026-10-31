@@ -5,7 +5,7 @@ import { usePdvAlertContext } from '@/Components/PuntoVenta/PdvAlertProvider';
 import PdvBarraEstadoSistema from '@/Components/PuntoVenta/PdvBarraEstadoSistema';
 import ModalConfiguracionAlertasPdv from '@/Components/PuntoVenta/ModalConfiguracionAlertasPdv';
 
-export default function PdvEncabezadoAlertasPdv({ className = '' }) {
+export default function PdvEncabezadoAlertasPdv({ disposicion = 'fila', className = '' }) {
     const ctx = usePdvAlertContext();
     const [modalAbierto, setModalAbierto] = useState(false);
     const [seccionInicial, setSeccionInicial] = useState(null);
@@ -41,10 +41,10 @@ export default function PdvEncabezadoAlertasPdv({ className = '' }) {
     return (
         <>
             <div
-                className={`flex items-center gap-2 ${className}`}
+                className={`flex gap-2 ${disposicion === 'columna' ? 'items-start' : 'items-center'} ${className}`}
                 data-pdv-encabezado-alertas
             >
-                <PdvBarraEstadoSistema onAbrirConfiguracion={abrirConfiguracion} />
+                <PdvBarraEstadoSistema disposicion={disposicion} onAbrirConfiguracion={abrirConfiguracion} />
                 <button
                     type="button"
                     className={`${THEME_BTN_ICON} gelia-estado-vivo gelia-estado-vivo--neutro theme-element border theme-border`}

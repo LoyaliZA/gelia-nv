@@ -16,6 +16,7 @@ import {
     mensajeMiAtencion,
     esVendedorEquipoInactivoGerencia,
     particionarEquipoGerencia,
+    resolverSeccionInactivos,
     mostrarBandejaSinTurno,
     puedeAbrirJornada,
     puedeAbrirSucursalManualmente,
@@ -78,6 +79,50 @@ describe('operacionUtils', () => {
         const { activos, inactivos } = particionarEquipoGerencia(equipo);
         expect(activos.map((p) => p.id)).toEqual([3, 2]);
         expect(inactivos.map((p) => p.id)).toEqual([1, 4]);
+    });
+
+    it('contrae inactivos cuando ya hay activos y los mantiene abiertos si nadie está activo', () => {
+        expect(resolverSeccionInactivos({
+            abierta: true,
+            activosAntes: 0,
+            activosAhora: 0,
+            evento: 'equipo',
+        })).toEqual({ abierta: true, reiniciarTemporizador: false, cancelarTemporizador: true });
+
+        expect(resolverSeccionInactivos({
+            abierta: true,
+            activosAntes: 0,
+            activosAhora: 1,
+            evento: 'equipo',
+        })).toEqual({ abierta: true, reiniciarTemporizador: true, cancelarTemporizador: false });
+
+        expect(resolverSeccionInactivos({
+            abierta: true,
+            activosAntes: 1,
+            activosAhora: 2,
+            evento: 'equipo',
+        })).toEqual({ abierta: true, reiniciarTemporizador: true, cancelarTemporizador: false });
+
+        expect(resolverSeccionInactivos({
+            abierta: true,
+            activosAntes: 2,
+            activosAhora: 2,
+            evento: 'actividad',
+        })).toEqual({ abierta: true, reiniciarTemporizador: true, cancelarTemporizador: false });
+
+        expect(resolverSeccionInactivos({
+            abierta: true,
+            activosAntes: 2,
+            activosAhora: 2,
+            evento: 'vencio',
+        })).toEqual({ abierta: false, reiniciarTemporizador: false, cancelarTemporizador: true });
+
+        expect(resolverSeccionInactivos({
+            abierta: false,
+            activosAntes: 2,
+            activosAhora: 0,
+            evento: 'vencio',
+        })).toEqual({ abierta: true, reiniciarTemporizador: false, cancelarTemporizador: true });
     });
 
     it('solo disponible muestra bandeja sin turno', () => {
