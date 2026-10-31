@@ -27,14 +27,15 @@ final class SerializadorBandejaReatencionPdv
         $restanteSegundos = $expiraAt !== null
             ? max(0, (int) $ahora->diffInSeconds($expiraAt, false))
             : 0;
+        $nombreVisible = IdentidadVisibleTurnoPdv::nombreVisible($turno);
 
         return [
             'id' => $turno->id,
             'folio' => $turno->folio,
             'version' => $turno->version,
-            'cliente_nombre' => $turno->snapshot_nombre_llamado
-                ?? $turno->snapshot_cliente_nombre
-                ?? '—',
+            'cliente_nombre' => $nombreVisible !== '' ? $nombreVisible : '—',
+            'es_tercero' => IdentidadVisibleTurnoPdv::esTercero($turno),
+            'cliente_titular' => IdentidadVisibleTurnoPdv::nombreTitular($turno),
             'atencion_previa' => $atencionPrevia instanceof TurnoPdvAtencion ? [
                 'id' => $atencionPrevia->id,
                 'numero_secuencia' => $atencionPrevia->numero_secuencia,
