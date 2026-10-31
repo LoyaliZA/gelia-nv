@@ -159,6 +159,8 @@ class GestionVendedoresPdvTest extends TestCase
 
         $this->assertSame('atendiendo', $miembro['estado_vendedor']);
         $this->assertSame('Cliente Compacto', $miembro['atencion_actual']['cliente']);
+        $this->assertFalse($miembro['atencion_actual']['es_tercero']);
+        $this->assertNull($miembro['atencion_actual']['cliente_titular']);
         $this->assertSame($turno->folio, $miembro['atencion_actual']['folio']);
         $this->assertSame($turno->id, $miembro['atencion_actual']['turno_id']);
         $this->assertSame(7, $miembro['atencion_actual']['turno_version']);
@@ -166,6 +168,39 @@ class GestionVendedoresPdvTest extends TestCase
         $this->assertNotEmpty($miembro['atencion_actual']['espera_inicial_expira_at']);
         $this->assertArrayHasKey('plazos_turnos', $response->json());
         $this->assertSame(5, $response->json('plazos_turnos.espera_inicial_minutos'));
+    }
+
+    public function test_atencion_de_tercero_muestra_quien_entra_y_la_cuenta_titular(): void
+    {
+        app(GestionarEquipoOperativoPdvService::class)->activar($this->gerente, $this->vendedor, now());
+
+        $turno = TurnoPdv::factory()->create([
+            'sucursal_id' => $this->sucursal->id,
+            'estado' => TurnoPdv::ESTADO_ASIGNADO,
+            'snapshot_cliente_nombre' => 'Cliente Titular',
+            'snapshot_nombre_llamado' => 'Persona que entra',
+            'snapshot_json' => [
+                'tipo_persona' => 'representante',
+                'nombre_presente' => 'Persona que entra',
+            ],
+        ]);
+
+        $atencion = TurnoPdvAtencion::factory()->create([
+            'turno_id' => $turno->id,
+            'user_id' => $this->vendedor->id,
+            'inicio_at' => now()->subMinutes(2),
+            'atencion_inicio_at' => null,
+            'fin_at' => null,
+        ]);
+        $turno->update(['atencion_actual_id' => $atencion->id]);
+
+        $response = $this->actingAs($this->gerente)->getJson(route('punto_venta.operacion.datos'));
+        $miembro = collect($response->json('equipo'))->firstWhere('id', $this->vendedor->id);
+
+        $this->assertSame('Persona que entra', $miembro['atencion_actual']['cliente']);
+        $this->assertTrue($miembro['atencion_actual']['es_tercero']);
+        $this->assertSame('Cliente Titular', $miembro['atencion_actual']['cliente_titular']);
+        $this->assertNotSame('Cliente Titular', $miembro['atencion_actual']['cliente']);
     }
 
     public function test_cierre_desde_operacion_respeta_espera_configurada_y_expone_cuenta_regresiva(): void
