@@ -25,6 +25,7 @@ const ChatPanel = forwardRef(function ChatPanel({
     onCargarMas,
     onVolver,
     mostrarVolver = false,
+    volverBreakpoint = 'sm',
     onIrAMensaje,
 }, ref) {
     const { auth } = usePage().props;
@@ -138,7 +139,7 @@ const ChatPanel = forwardRef(function ChatPanel({
                 <div className="flex items-center gap-3 px-4 py-3 sm:px-5">
                 <MensajeriaNavMenuButton className="!p-1.5" />
                 {mostrarVolver && (
-                    <button type="button" onClick={onVolver} className="p-1.5 rounded-full theme-element theme-text-main sm:hidden">
+                    <button type="button" onClick={onVolver} className={`p-1.5 rounded-full theme-element theme-text-main ${volverBreakpoint === 'md' ? 'md:hidden' : 'sm:hidden'}`}>
                         <ArrowLeft className="w-5 h-5" />
                     </button>
                 )}
@@ -151,7 +152,7 @@ const ChatPanel = forwardRef(function ChatPanel({
                     iconClassName="w-5 h-5"
                 />
 
-                <div className="min-w-0 flex-1 sm:max-w-[10rem] lg:max-w-[14rem]">
+                <div className="min-w-0 flex-1 sm:max-w-[16rem] lg:max-w-xs">
                     <p className="text-sm font-black truncate theme-text-main m-0">{conversacion.nombre}</p>
                     {!esGrupo && conversacion.presencia_otro && (
                         <EstadoPresenciaTexto presencia={conversacion.presencia_otro} compact className="mt-0.5" />

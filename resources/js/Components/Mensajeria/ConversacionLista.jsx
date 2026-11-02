@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from '@inertiajs/react';
-import { MessageSquarePlus, Users, ArrowLeft } from 'lucide-react';
+import { MessageSquarePlus, Users, ArrowLeft, X, ExternalLink } from 'lucide-react';
 import BuscadorInteligente from './BuscadorInteligente';
 import AvatarUsuario from './AvatarUsuario';
 import SelectorEstadoPresencia from './SelectorEstadoPresencia';
@@ -30,20 +30,38 @@ export default function ConversacionLista({
     onSeleccionarConversacion,
     onIrAMensaje,
     compact = false,
+    compacta = false,
+    onCerrar,
 }) {
 
+    const ancho = compact || compacta
+        ? 'w-full md:w-72 lg:w-80 shrink-0'
+        : 'w-full sm:w-80 lg:w-96 shrink-0';
+
     return (
-        <div className={`gelia-mensajeria-list-pane flex flex-col h-full theme-text-main border-r theme-border ${compact ? 'w-full' : 'w-full sm:w-80 lg:w-96 shrink-0'}`}>
+        <div className={`gelia-mensajeria-list-pane flex flex-col h-full theme-text-main border-r theme-border ${ancho}`}>
             <div className="gelia-mensajeria-list-header p-3 sm:p-4 border-b theme-border shrink-0">
                 <div className="flex items-center gap-2 mb-3 min-w-0">
                     <MensajeriaNavMenuButton />
-                    <Link
-                        href={route('dashboard')}
-                        className="hidden md:flex p-2 rounded-full theme-element theme-text-main hover:border-[var(--color-primario)] border theme-border transition-colors shrink-0"
-                        title="Volver al dashboard"
-                    >
-                        <ArrowLeft className="w-4 h-4" />
-                    </Link>
+                    {onCerrar ? (
+                        <button
+                            type="button"
+                            onClick={onCerrar}
+                            className="flex p-2 rounded-full theme-element theme-text-main hover:border-[var(--color-primario)] border theme-border transition-colors shrink-0"
+                            title="Cerrar mensajería"
+                            aria-label="Cerrar mensajería"
+                        >
+                            <X className="w-4 h-4" />
+                        </button>
+                    ) : (
+                        <Link
+                            href={route('dashboard')}
+                            className="hidden md:flex p-2 rounded-full theme-element theme-text-main hover:border-[var(--color-primario)] border theme-border transition-colors shrink-0"
+                            title="Volver al dashboard"
+                        >
+                            <ArrowLeft className="w-4 h-4" />
+                        </Link>
+                    )}
                     <h2 className="text-sm font-black uppercase italic tracking-tighter theme-text-main flex-1 truncate">Chats_</h2>
                     <div className="flex gap-1 shrink-0">
                         <button
@@ -62,6 +80,16 @@ export default function ConversacionLista({
                         >
                             <Users className="w-4 h-4" />
                         </button>
+                        {onCerrar && (
+                            <Link
+                                href={route('mensajeria.index')}
+                                className="p-2 rounded-full theme-element hover:border-[var(--color-primario)] border theme-border transition-colors"
+                                title="Abrir mensajería"
+                                aria-label="Abrir mensajería en página"
+                            >
+                                <ExternalLink className="w-4 h-4" />
+                            </Link>
+                        )}
                     </div>
                 </div>
 
@@ -109,7 +137,7 @@ export default function ConversacionLista({
                                 </div>
                                 <div className="flex items-center justify-between gap-2">
                                     <div className="min-w-0 flex-1">
-                                        {c.tipo !== 'grupo' && c.presencia_otro && c.presencia_otro.estado !== 'disponible' && (
+                                        {c.tipo !== 'grupo' && c.presencia_otro && (
                                             <EstadoPresenciaTexto presencia={c.presencia_otro} compact className="mb-0.5" />
                                         )}
                                         <p className="text-xs theme-text-muted truncate m-0">{c.ultimo_mensaje_preview || 'Sin mensajes'}</p>

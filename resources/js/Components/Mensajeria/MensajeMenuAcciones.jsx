@@ -1,8 +1,8 @@
 import React, { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { CornerDownRight } from 'lucide-react';
+import { Copy, CornerDownRight } from 'lucide-react';
 
-export default function MensajeMenuAcciones({ anchor, onCerrar, onResponder }) {
+export default function MensajeMenuAcciones({ anchor, onCerrar, onResponder, onCopiarImagen }) {
     const ref = useRef(null);
 
     useEffect(() => {
@@ -23,9 +23,10 @@ export default function MensajeMenuAcciones({ anchor, onCerrar, onResponder }) {
 
     if (!anchor) return null;
 
-    const ancho = 168;
+    const ancho = onCopiarImagen ? 188 : 168;
     const left = Math.min(anchor.x, window.innerWidth - ancho - 8);
-    const top = Math.min(anchor.y, window.innerHeight - 56);
+    const altoMenu = onCopiarImagen ? 96 : 56;
+    const top = Math.min(anchor.y, window.innerHeight - altoMenu);
 
     return createPortal(
         <div
@@ -46,6 +47,20 @@ export default function MensajeMenuAcciones({ anchor, onCerrar, onResponder }) {
                 <CornerDownRight className="w-4 h-4" />
                 Responder
             </button>
+            {onCopiarImagen && (
+                <button
+                    type="button"
+                    role="menuitem"
+                    className="gelia-mensaje-menu__item w-full flex items-center gap-2 px-3 py-2 text-xs font-bold theme-text-main"
+                    onClick={() => {
+                        onCopiarImagen();
+                        onCerrar?.();
+                    }}
+                >
+                    <Copy className="w-4 h-4" />
+                    Copiar imagen
+                </button>
+            )}
         </div>,
         document.body
     );

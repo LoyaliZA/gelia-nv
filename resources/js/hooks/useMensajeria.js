@@ -3,6 +3,9 @@ import MensajeriaService from '@/Services/MensajeriaService';
 import {
     normalizarMensajeParaViewer,
     aplicarActualizacionLectura,
+    aplicarCursorLectura,
+    conversacionConMensajeNuevo,
+    fusionarMensajesHilo,
     esMismoUsuario,
 } from '@/utils/mensajeriaMensaje';
 
@@ -15,10 +18,30 @@ export default function useMensajeria(conversacionesIniciales = [], viewerUserId
     const [cursor, setCursor] = useState(null);
     const [hasMore, setHasMore] = useState(false);
     const mensajesRef = useRef([]);
+    const conversacionesRef = useRef(conversacionesIniciales);
+    const conversacionActivaRef = useRef(null);
+    const procesadosRef = useRef(new Set());
 
     useEffect(() => {
         mensajesRef.current = mensajes;
     }, [mensajes]);
+
+    useEffect(() => {
+        conversacionesRef.current = conversaciones;
+    }, [conversaciones]);
+
+    useEffect(() => {
+        conversacionActivaRef.current = conversacionActiva;
+    }, [conversacionActiva]);
+
+    const recordarMensaje = useCallback((mensajeId) => {
+        if (!mensajeId) return;
+        procesadosRef.current.add(mensajeId);
+        if (procesadosRef.current.size > 400) {
+            const primero = procesadosRef.current.values().next().value;
+            procesadosRef.current.delete(primero);
+        }
+    }, []);
 
     const actualizarConversacionEnLista = useCallback((conversacionId, cambios) => {
         setConversaciones((prev) => {
@@ -32,8 +55,16 @@ export default function useMensajeria(conversacionesIniciales = [], viewerUserId
         });
     }, []);
 
+    const fijarConversacionActiva = useCallback((valor) => {
+        setConversacionActiva((prev) => {
+            const siguiente = typeof valor === 'function' ? valor(prev) : valor;
+            conversacionActivaRef.current = siguiente;
+            return siguiente;
+        });
+    }, []);
+
     const seleccionarConversacion = useCallback(async (conversacion) => {
-        setConversacionActiva(conversacion);
+        fijarConversacionActiva(conversacion);
         setMensajes([]);
         setCursor(null);
         setHasMore(false);
@@ -44,12 +75,13 @@ export default function useMensajeria(conversacionesIniciales = [], viewerUserId
             setMensajes(data.mensajes);
             setCursor(data.next_cursor);
             setHasMore(data.has_more);
+            (data.mensajes || []).forEach((m) => recordarMensaje(m.id));
             await MensajeriaService.marcarLeida(conversacion.id);
             actualizarConversacionEnLista(conversacion.id, { unread_count: 0 });
         } finally {
             setCargandoMensajes(false);
         }
-    }, [actualizarConversacionEnLista]);
+    }, [actualizarConversacionEnLista, fijarConversacionActiva, recordarMensaje]);
 
     const cargarMasMensajes = useCallback(async () => {
         if (!conversacionActiva || !hasMore || !cursor || cargandoMensajes) return;
@@ -75,6 +107,7 @@ export default function useMensajeria(conversacionesIniciales = [], viewerUserId
                 contenido.trim(),
                 replyToId
             );
+            recordarMensaje(mensaje?.id);
             setMensajes((prev) => [...prev, mensaje]);
             actualizarConversacionEnLista(conversacionActiva.id, {
                 ultimo_mensaje_preview: contenido.trim().slice(0, 200),
@@ -84,7 +117,7 @@ export default function useMensajeria(conversacionesIniciales = [], viewerUserId
         } finally {
             setEnviando(false);
         }
-    }, [conversacionActiva, actualizarConversacionEnLista]);
+    }, [conversacionActiva, actualizarConversacionEnLista, recordarMensaje]);
 
     const enviarAdjunto = useCallback(async (file, tipo, contenido = null, replyToId = null) => {
         if (!conversacionActiva) return null;
@@ -98,6 +131,7 @@ export default function useMensajeria(conversacionesIniciales = [], viewerUserId
                 contenido,
                 replyToId
             );
+            recordarMensaje(mensaje?.id);
             setMensajes((prev) => [...prev, mensaje]);
             actualizarConversacionEnLista(conversacionActiva.id, {
                 ultimo_mensaje_preview: mensaje.contenido || `[${tipo}]`,
@@ -107,30 +141,43 @@ export default function useMensajeria(conversacionesIniciales = [], viewerUserId
         } finally {
             setEnviando(false);
         }
-    }, [conversacionActiva, actualizarConversacionEnLista]);
+    }, [conversacionActiva, actualizarConversacionEnLista, recordarMensaje]);
 
     const recibirMensaje = useCallback((mensaje) => {
-        if (!mensaje) return;
+        if (!mensaje?.id || procesadosRef.current.has(mensaje.id)) return;
+        recordarMensaje(mensaje.id);
 
         const normalizado = normalizarMensajeParaViewer(mensaje, viewerUserId);
-        const activaId = conversacionActiva?.id;
+        const activaId = conversacionActivaRef.current?.id;
+        const id = normalizado.conversacion_id;
+        const chatAbierto = activaId === id;
 
-        if (activaId === normalizado.conversacion_id) {
+        if (chatAbierto) {
             setMensajes((prev) => {
                 if (prev.some((m) => m.id === normalizado.id)) return prev;
                 return [...prev, normalizado];
             });
-            MensajeriaService.marcarLeida(mensaje.conversacion_id);
+            MensajeriaService.marcarLeida(id);
         }
 
-        actualizarConversacionEnLista(normalizado.conversacion_id, {
-            ultimo_mensaje_preview: normalizado.contenido || `[${normalizado.tipo}]`,
-            ultimo_mensaje_at: normalizado.created_at,
-            unread_count: activaId === normalizado.conversacion_id
-                ? 0
-                : (conversaciones.find((c) => c.id === normalizado.conversacion_id)?.unread_count || 0) + 1,
+        const existe = conversacionesRef.current.some((c) => c.id === id);
+        if (!existe) {
+            MensajeriaService.listarConversaciones()
+                .then((lista) => setConversaciones(lista))
+                .catch(() => {});
+            return;
+        }
+
+        setConversaciones((prev) => {
+            const idx = prev.findIndex((c) => c.id === id);
+            if (idx === -1) return prev;
+            const actualizada = conversacionConMensajeNuevo(prev[idx], normalizado, chatAbierto);
+            const resto = prev.filter((c) => c.id !== id);
+            return [actualizada, ...resto].sort(
+                (a, b) => new Date(b.ultimo_mensaje_at || 0) - new Date(a.ultimo_mensaje_at || 0)
+            );
         });
-    }, [conversacionActiva, conversaciones, actualizarConversacionEnLista, viewerUserId]);
+    }, [recordarMensaje, viewerUserId]);
 
     useEffect(() => {
         const handler = (event) => {
@@ -163,6 +210,36 @@ export default function useMensajeria(conversacionesIniciales = [], viewerUserId
         window.addEventListener('mensajeria-mensaje-leido', handler);
         return () => window.removeEventListener('mensajeria-mensaje-leido', handler);
     }, [actualizarMensaje]);
+
+    const aplicarCursor = useCallback((detalle) => {
+        const resultado = aplicarCursorLectura({
+            conversaciones: conversacionesRef.current,
+            mensajes: mensajesRef.current,
+            conversacionActivaId: conversacionActivaRef.current?.id,
+            detalle,
+        });
+        setConversaciones(resultado.conversaciones);
+        setMensajes(resultado.mensajes);
+    }, []);
+
+    useEffect(() => {
+        const handler = (event) => aplicarCursor(event.detail);
+        window.addEventListener('mensajeria-conversacion-leida', handler);
+        return () => window.removeEventListener('mensajeria-conversacion-leida', handler);
+    }, [aplicarCursor]);
+
+    const sincronizarHiloAbierto = useCallback(async () => {
+        const id = conversacionActivaRef.current?.id;
+        if (!id) return;
+
+        try {
+            const data = await MensajeriaService.listarMensajes(id);
+            setMensajes((prev) => fusionarMensajesHilo(prev, data.mensajes));
+            (data.mensajes || []).forEach((m) => recordarMensaje(m.id));
+        } catch {
+            // La red de seguridad no debe interrumpir el chat abierto.
+        }
+    }, [recordarMensaje]);
 
     const marcarConversacionVisibleLeida = useCallback(async () => {
         if (!conversacionActiva) return;
@@ -210,8 +287,12 @@ export default function useMensajeria(conversacionesIniciales = [], viewerUserId
     const refrescarConversaciones = useCallback(async () => {
         const lista = await MensajeriaService.listarConversaciones();
         setConversaciones(lista);
+        fijarConversacionActiva((prev) => {
+            if (!prev) return prev;
+            return lista.find((c) => c.id === prev.id) || prev;
+        });
         return lista;
-    }, []);
+    }, [fijarConversacionActiva]);
 
     const irAMensaje = useCallback(async (conversacionId, mensajeId) => {
         let conversacion = conversaciones.find((c) => c.id === conversacionId);
@@ -226,7 +307,7 @@ export default function useMensajeria(conversacionesIniciales = [], viewerUserId
         const cambioConversacion = conversacionActiva?.id !== conversacionId;
 
         if (cambioConversacion) {
-            setConversacionActiva(conversacion);
+            fijarConversacionActiva(conversacion);
             setMensajes([]);
             setCursor(null);
             setHasMore(false);
@@ -251,7 +332,7 @@ export default function useMensajeria(conversacionesIniciales = [], viewerUserId
         }
 
         return { conversacion, mensajeId };
-    }, [conversaciones, conversacionActiva?.id, refrescarConversaciones, actualizarConversacionEnLista]);
+    }, [conversaciones, conversacionActiva?.id, refrescarConversaciones, actualizarConversacionEnLista, fijarConversacionActiva]);
 
     const totalUnread = conversaciones.reduce((sum, c) => sum + (c.unread_count || 0), 0);
 
@@ -272,8 +353,9 @@ export default function useMensajeria(conversacionesIniciales = [], viewerUserId
         actualizarAdjunto,
         crearConversacion,
         refrescarConversaciones,
+        sincronizarHiloAbierto,
         irAMensaje,
-        setConversacionActiva,
+        setConversacionActiva: fijarConversacionActiva,
         setConversaciones,
     };
 }

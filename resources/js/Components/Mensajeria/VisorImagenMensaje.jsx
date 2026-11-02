@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Download } from 'lucide-react';
+import { X, Download, Copy } from 'lucide-react';
+import { copiarImagenMensaje } from '@/utils/mensajeriaPortapapeles';
 
 export default function VisorImagenMensaje({ adjunto, onCerrar }) {
     const src = adjunto.url || adjunto.thumbnail_url;
@@ -37,6 +38,15 @@ export default function VisorImagenMensaje({ adjunto, onCerrar }) {
                 className="absolute top-4 right-4 flex items-center gap-2 z-10"
                 onClick={(e) => e.stopPropagation()}
             >
+                <button
+                    type="button"
+                    onClick={() => copiarImagenMensaje(adjunto)}
+                    className="flex items-center gap-2 px-3 py-2 rounded-full bg-black/50 text-white text-xs font-bold uppercase tracking-wider hover:bg-black/70 transition-colors"
+                    title="Copiar imagen"
+                >
+                    <Copy className="w-4 h-4" />
+                    Copiar
+                </button>
                 <a
                     href={downloadUrl}
                     download={nombre}

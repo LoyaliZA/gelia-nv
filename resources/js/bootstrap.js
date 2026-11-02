@@ -28,4 +28,17 @@ if (!isPublicForm && !window.Echo) {
         enabledTransports: useTls ? ['ws', 'wss'] : ['ws'],
         authEndpoint: '/broadcasting/auth',
     });
+
+    window.axios.interceptors.request.use((config) => {
+        try {
+            const socketId = window.Echo?.socketId?.();
+            if (socketId) {
+                config.headers = config.headers || {};
+                config.headers['X-Socket-Id'] = socketId;
+            }
+        } catch {
+            // Sin conexión realtime el POST sigue por HTTP.
+        }
+        return config;
+    });
 }
