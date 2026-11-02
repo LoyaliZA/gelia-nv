@@ -55,8 +55,28 @@ export default {
         return data.presencia;
     },
 
-    async heartbeat() {
-        const { data } = await axios.post(urlHeartbeat());
+    async heartbeat(extra = {}) {
+        const { data } = await axios.post(urlHeartbeat(), extra);
         return data.presencia;
+    },
+
+    senalAlCerrar(tabId) {
+        if (typeof fetch === 'undefined' || !tabId) return;
+
+        const par = document.cookie.split('; ').find((fila) => fila.startsWith('XSRF-TOKEN='));
+        const token = par ? decodeURIComponent(par.split('=').slice(1).join('=')) : '';
+
+        fetch(urlHeartbeat(), {
+            method: 'POST',
+            credentials: 'same-origin',
+            keepalive: true,
+            headers: {
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                ...(token ? { 'X-XSRF-TOKEN': token } : {}),
+            },
+            body: JSON.stringify({ tab_id: tabId, visible: false }),
+        }).catch(() => {});
     },
 };

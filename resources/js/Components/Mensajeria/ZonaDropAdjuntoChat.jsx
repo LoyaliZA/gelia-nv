@@ -2,6 +2,7 @@ import React from 'react';
 import { Upload } from 'lucide-react';
 import usePrepararAdjuntoDrop from '@/hooks/usePrepararAdjuntoDrop';
 import ModalPrepararAdjunto from './ModalPrepararAdjunto';
+import { archivosImagenDesdePortapapeles } from '@/utils/mensajeriaPortapapeles';
 
 export default function ZonaDropAdjuntoChat({
     children,
@@ -23,6 +24,12 @@ export default function ZonaDropAdjuntoChat({
         <div
             className={`gelia-drop-adjunto-zona relative flex flex-col min-h-0 min-w-0 ${className}`}
             {...zoneProps}
+            onPaste={(event) => {
+                const archivos = archivosImagenDesdePortapapeles(event.clipboardData);
+                if (!archivos.length) return;
+                event.preventDefault();
+                prepararAdjunto(archivos[0]);
+            }}
         >
             {dragActivo && (
                 <div className="gelia-drop-adjunto-overlay" aria-hidden>

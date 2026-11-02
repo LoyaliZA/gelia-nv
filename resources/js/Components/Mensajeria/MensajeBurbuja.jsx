@@ -13,6 +13,7 @@ import {
     nombreRemitenteGrupo,
     subtituloRemitenteGrupo,
 } from '@/utils/mensajeriaGrupo';
+import { copiarImagenMensaje } from '@/utils/mensajeriaPortapapeles';
 
 const SWIPE_UMBRAL = 56;
 
@@ -192,6 +193,9 @@ export default function MensajeBurbuja({
                 anchor={menuAnchor}
                 onCerrar={() => setMenuAnchor(null)}
                 onResponder={() => onResponder?.(mensaje)}
+                onCopiarImagen={mensaje.tipo === 'imagen' && adjunto
+                    ? () => copiarImagenMensaje(adjunto)
+                    : null}
             />
         </div>
     );
