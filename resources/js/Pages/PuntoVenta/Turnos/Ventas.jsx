@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
 import { Head } from '@inertiajs/react';
-import { Loader2, RefreshCw, ShieldOff } from 'lucide-react';
+import { Headphones, Loader2, RefreshCw, ShieldOff } from 'lucide-react';
 import AppLayout from '../../../Layouts/AppLayout';
 import GeliaPageShell from '../../../Components/GeliaPageShell';
 import GeliaTituloCard from '../../../Components/GeliaTituloCard';
