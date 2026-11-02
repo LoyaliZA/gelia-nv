@@ -46,6 +46,10 @@ class CalcularProgresoPedidoBmaService
 
         $pedido->loadMissing(['origen', 'estatus', 'documentos', 'paqueteria', 'zona', 'tipoGuia']);
 
+        if (\App\Support\ControlPedidos\RegistrarPedidos\ProgresoCapturaTienda::aplica($pedido->solicitud_preparacion_json)) {
+            return \App\Support\ControlPedidos\RegistrarPedidos\ProgresoCapturaTienda::respuesta();
+        }
+
         $solicitudOk = $this->solicitudCompleta($pedido);
         $requiereLogistica = (bool) ($pedido->origen?->requiere_logistica ?? false) && ! $pedido->esTrasladoInternoAPdv();
         $pendientePesaje = $pedido->estatus_envio === PedidoBma::ESTATUS_ENVIO_PENDIENTE_PESAJE

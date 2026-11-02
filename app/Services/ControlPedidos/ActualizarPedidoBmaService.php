@@ -10,10 +10,12 @@ use App\Models\User;
 use App\Services\ControlPedidos\Direcciones\CrearSnapshotDireccionPedido;
 use App\Services\SaldosAFavor\SincronizarAplicacionesPedidoSafService;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
+use App\Support\ControlPedidos\ContextoDepartamentoPedido;
 use App\Support\ControlPedidos\InstruccionEntrega;
 use App\Support\ControlPedidos\SnapshotHistorialPedidoBma;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
 
@@ -80,6 +82,17 @@ class ActualizarPedidoBmaService
             $eraRechazado = $pedido->estatus?->fase_ciclo === 'RECHAZADO_VENDEDORA';
 
             $attrs = $this->atributosActualizacionParcial($pedido, $datos);
+            if (array_key_exists('departamento_operacion_id', $datos)
+                && Schema::hasColumn('pedidos_bma', 'departamento_operacion_id')) {
+                $departamento = $datos['departamento_operacion_id'];
+                $tieneValor = $departamento !== null && $departamento !== '';
+                if ($tieneValor || $pedido->departamento_operacion_id === null) {
+                    $attrs['departamento_operacion_id'] = ContextoDepartamentoPedido::validar(
+                        User::findOrFail($usuarioId),
+                        $tieneValor ? (int) $departamento : null
+                    );
+                }
+            }
 
             // No borrar captura temprana si el form/autoguard manda vacío (sync CEDIS / reload).
             if (empty($attrs['origen_id']) && $pedido->origen_id) {
@@ -197,6 +210,7 @@ class ActualizarPedidoBmaService
             }
 
             $this->intencionPreparacion->ejecutar($pedido, $datos);
+            $pedido = app(AplicarCapturaTiendaPedido::class)->ejecutar($pedido->fresh(), $datos, User::findOrFail($usuarioId));
             app(ResguardosEnvioPedido::class)->aplicar($pedido->fresh(), $datos, $usuarioId);
 
             if (array_key_exists('saf_aplicaciones', $datos)) {

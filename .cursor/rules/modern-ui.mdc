@@ -1,0 +1,12 @@
+---
+description: Dirección visual GELIA y uso de skills dentro del lenguaje del producto
+alwaysApply: true
+---
+
+Antes de analizar o modificar una interfaz, leer `AGENTS.md` y `GUIA_DISENO_GELIA.md` en la raíz. La guía es la fuente común para dirección visual, referencias, selección de skills y comprobaciones. Esta regla es un punto de entrada; no mantener aquí otra versión de la guía.
+
+Partir de los patrones existentes de GELIA. Inspeccionar una referencia relevante antes de elegir una skill. Las skills son apoyo para necesidades concretas: Impeccable es opcional y no se activa una cadena de diseño o movimiento por defecto.
+
+Evaluar la composición completa y su personalidad, además de corregir defectos. El uso de tokens o una verificación técnica por sí solos no acreditan coherencia visual. Respetar `.cursor/rules/estilos-gelia.mdc` y reutilizar antes de extender o crear.
+
+Seguir las decisiones y autorizaciones vigentes del usuario. Un cambio de backend no inicia trabajo visual. Al cerrar, distinguir lo leído, lo ejecutado, lo revisado visualmente y lo pendiente.

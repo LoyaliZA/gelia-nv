@@ -47,7 +47,7 @@ class ConfirmarApartadoRecogeHoyService
         }
 
         return DB::transaction(function () use ($tarea, $usuario, $versionEsperada, $productos) {
-            $tarea = PedidoBmaTareaPreparacion::query()->lockForUpdate()->findOrFail($tarea->id);
+            $tarea = InstruccionEntrega::bloquearParaEjecutar($tarea);
             app(\App\Services\Traspasos\AbastecerPreparacionService::class)->asegurarSatisfecho($tarea);
             $tarea->load(['modalidad', 'pedido.estatus']);
             if ((int) $tarea->asignada_a_id !== (int) $usuario->id) {

@@ -892,7 +892,8 @@
 
 /* Q8.1: densidad local del registro y la revisión, sin cambiar otros modales. */
 .gelia-pedidos-captura-cabecera {
-    display: flex;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
     align-items: flex-start;
     justify-content: space-between;
     gap: 0.75rem;
@@ -993,13 +994,24 @@
     outline-offset: 3px;
 }
 
-@media (width >= 1024px) {
-    .gelia-pedidos-captura-cabecera > div {
-        display: grid;
-        grid-template-columns: auto minmax(0, 1fr);
-        align-items: baseline;
-        gap: 0.25rem 1.25rem;
-        width: 100%;
+.gelia-pedidos-captura-identidad {
+    min-width: 0;
+    overflow-wrap: break-word;
+}
+
+.gelia-pedidos-captura-controles {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+@media (width <= 479px) {
+    .gelia-pedidos-captura-cabecera {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .gelia-pedidos-captura-controles {
+        justify-content: flex-end;
     }
 }
 
@@ -1031,5 +1043,422 @@
 
     .gelia-pedidos-auditoria-acciones {
         justify-content: flex-start;
+    }
+}
+
+.gelia-captura-inicial :is(.theme-input, .theme-select, input[type='radio']) {
+    font-size: 1rem;
+}
+
+.gelia-captura-inicial :is(button, input, select, textarea):focus-visible {
+    outline: 2px solid var(--color-primario);
+    outline-offset: 2px;
+}
+
+.registrar-tienda-icono-borde,
+.registrar-tienda-borrador {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    box-sizing: border-box;
+    width: 2.75rem;
+    height: 2.75rem;
+    padding: 0;
+    border: 1px solid var(--theme-border, var(--color-borde));
+    border-radius: 0.75rem;
+    background: var(--theme-surface-solid, transparent);
+    color: var(--theme-text-main);
+}
+
+.registrar-tienda-borrador {
+    width: auto;
+    min-width: 2.75rem;
+    padding-inline: 0.75rem;
+    gap: 0.5rem;
+}
+
+.registrar-tienda-borrador-leyenda {
+    white-space: nowrap;
+}
+
+.registrar-tienda-borrador[data-estado='guardado'] {
+    border-color: var(--color-exito);
+    color: var(--color-exito);
+    background: color-mix(in srgb, var(--color-exito) 16%, transparent);
+}
+
+.registrar-tienda-borrador:disabled {
+    opacity: 0.7;
+}
+
+.registrar-tienda-archivo-acciones {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.registrar-tienda-archivo-acciones > button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .registrar-tienda-archivo-listo {
+        animation: registrar-tienda-revelar 160ms ease-out;
+    }
+}
+
+@keyframes registrar-tienda-revelar {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+/* Registrar pedidos: composición basada en los formularios operativos de GELIA. */
+.registrar-tienda-modal {
+    max-width: 58rem;
+    container: registrar-tienda / inline-size;
+}
+
+.registrar-tienda-cabecera {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 1rem;
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid var(--theme-border);
+}
+
+.registrar-tienda-emblema {
+    width: 3rem;
+    height: 3rem;
+    flex: 0 0 auto;
+    color: var(--color-primario);
+}
+
+.registrar-tienda-antetitulo {
+    margin: 0 0 0.375rem;
+    color: var(--theme-text-muted);
+    font-size: 0.625rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.registrar-tienda-descripcion {
+    margin: 0.5rem 0 0;
+    color: var(--theme-text-muted);
+    font-size: 0.8125rem;
+    line-height: 1.5;
+}
+
+.registrar-tienda-modal .registrar-tienda-cabecera h2 {
+    font-weight: 900;
+    font-style: italic;
+    text-transform: uppercase;
+    letter-spacing: -0.025em;
+}
+
+.registrar-tienda-modal .theme-label {
+    font-size: 0.625rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.registrar-tienda-cerrar {
+    align-self: start;
+    width: 2.75rem;
+    height: 2.75rem;
+    padding: 0;
+}
+
+.registrar-tienda-cuerpo {
+    display: grid;
+    align-content: start;
+    gap: 1rem;
+    padding: 1.25rem 1.5rem;
+}
+
+.registrar-tienda-panel {
+    min-width: 0;
+    padding: 1.125rem;
+    border: 1px solid var(--theme-border);
+    border-radius: var(--pedidos-surface-radius);
+    background: var(--theme-surface-solid);
+}
+
+.registrar-tienda-seccion-titulo {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    color: var(--color-primario);
+    margin-bottom: 1rem;
+}
+
+.registrar-tienda-seccion-titulo h3 {
+    margin: 0;
+    color: var(--theme-text-main);
+    font-size: 0.875rem;
+    font-weight: 700;
+}
+
+.registrar-tienda-datos,
+.registrar-tienda-atencion {
+    display: grid;
+    gap: 1rem;
+    min-width: 0;
+    align-items: start;
+}
+
+.registrar-tienda-departamento {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    min-height: 44px;
+    margin: 0;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--theme-border);
+    border-radius: var(--theme-radius-input);
+    background: var(--theme-element-bg);
+    color: var(--theme-text-main);
+    font-size: 0.875rem;
+}
+
+.registrar-tienda-departamento svg {
+    flex-shrink: 0;
+    color: var(--theme-text-muted);
+}
+
+.registrar-tienda-cliente {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.875rem;
+    border: 1px solid var(--theme-border);
+    border-inline-start: 3px solid var(--color-primario);
+    border-radius: var(--theme-radius-input);
+    background: var(--theme-element-bg);
+}
+
+.registrar-tienda-cliente-identidad {
+    flex: 1 1 12rem;
+}
+
+.registrar-tienda-cliente-icono {
+    width: 2.5rem;
+    height: 2.5rem;
+    flex: 0 0 auto;
+    color: var(--color-primario);
+}
+
+.registrar-tienda-cliente-nombre {
+    margin: 0;
+    color: var(--theme-text-main);
+    font-size: 0.875rem;
+    font-weight: 700;
+    overflow-wrap: anywhere;
+}
+
+.registrar-tienda-ayuda {
+    margin: -0.5rem 0 1rem;
+    color: var(--theme-text-muted);
+    font-size: 0.75rem;
+    line-height: 1.5;
+}
+
+.registrar-tienda-casos {
+    display: grid;
+    gap: 0.625rem;
+}
+
+.gelia-captura-inicial .registrar-tienda-destino {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    width: 100%;
+    padding: 0.875rem;
+    border: 1px solid var(--theme-border);
+    border-radius: var(--theme-radius-input);
+    background: var(--theme-element-bg);
+    color: var(--theme-text-main);
+    text-align: left;
+    cursor: pointer;
+}
+
+.gelia-captura-inicial .registrar-tienda-destino[aria-pressed='true'] {
+    border-color: var(--color-primario);
+    box-shadow: inset 0 0 0 1px var(--color-primario);
+    background: color-mix(in srgb, var(--color-primario) 9%, var(--theme-surface-solid));
+}
+
+.registrar-tienda-destino:disabled {
+    cursor: default;
+}
+
+.registrar-tienda-destino:hover:not(:disabled) {
+    border-color: var(--color-primario);
+}
+
+.registrar-tienda-caso-icono {
+    display: inline-flex;
+    flex-shrink: 0;
+    color: var(--theme-text-muted);
+    margin-top: 0.125rem;
+}
+
+.registrar-tienda-destino[aria-pressed='true'] .registrar-tienda-caso-icono {
+    color: var(--color-primario);
+}
+
+.registrar-tienda-caso-texto {
+    display: grid;
+    gap: 0.375rem;
+    flex: 1;
+    min-width: 0;
+}
+
+.registrar-tienda-caso-titulo {
+    font-size: 0.8125rem;
+    font-weight: 700;
+    line-height: 1.4;
+}
+
+.registrar-tienda-caso-detalle {
+    color: var(--theme-text-muted);
+    font-size: 0.75rem;
+    line-height: 1.5;
+}
+
+.registrar-tienda-caso-marca {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 1rem;
+    height: 1rem;
+    margin-top: 0.125rem;
+    border: 1px solid var(--theme-text-muted);
+    border-radius: 50%;
+}
+
+.registrar-tienda-destino[aria-pressed='true'] .registrar-tienda-caso-marca {
+    border-color: var(--color-primario);
+    color: var(--theme-text-main);
+}
+
+.registrar-tienda-archivo {
+    padding: 1rem;
+    border: 1px dashed var(--theme-border);
+    border-radius: var(--theme-radius-input);
+    background: var(--theme-element-bg);
+}
+
+.registrar-tienda-archivo-adjunto {
+    border-style: solid;
+}
+
+.registrar-tienda-archivo-vacio {
+    display: grid;
+    justify-items: center;
+    gap: 0.75rem;
+    padding-block: 1.5rem;
+    text-align: center;
+}
+
+.registrar-tienda-vista-previa {
+    width: 100%;
+    max-height: 14rem;
+    object-fit: contain;
+    border-radius: 0.5rem;
+}
+
+.registrar-tienda-pie {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem 1rem;
+    padding: 1rem 1.5rem max(1rem, env(safe-area-inset-bottom, 0px));
+}
+
+.registrar-tienda-pie-estado {
+    flex: 1 1 10rem;
+    min-width: 0;
+}
+
+.registrar-tienda-guardado {
+    display: block;
+    color: var(--theme-text-main);
+    font-size: 0.75rem;
+    margin-bottom: 0.25rem;
+}
+
+.registrar-tienda-pie-acciones {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-left: auto;
+}
+
+.registrar-tienda-pie .registrar-tienda-borrador {
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.registrar-tienda-pie .theme-btn-primary {
+    gap: 0.625rem;
+    white-space: normal;
+}
+
+@container registrar-tienda (min-width: 32rem) {
+    .registrar-tienda-datos {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .registrar-tienda-cliente {
+        grid-column: 1 / -1;
+    }
+}
+
+@container registrar-tienda (min-width: 48rem) {
+    .registrar-tienda-atencion {
+        grid-template-columns: 1.15fr 1fr;
+    }
+
+    .registrar-tienda-atencion > :only-child {
+        grid-column: 1 / -1;
+    }
+}
+
+@container registrar-tienda (max-width: 31.99rem) {
+    .registrar-tienda-cabecera {
+        grid-template-columns: minmax(0, 1fr) auto;
+        padding: 1rem;
+        gap: 0.75rem;
+    }
+
+    .registrar-tienda-cabecera > .registrar-tienda-emblema {
+        display: none;
+    }
+
+    .registrar-tienda-cuerpo,
+    .registrar-tienda-pie {
+        padding: 1rem;
+    }
+
+    .registrar-tienda-modal .gelia-modal-footer > .registrar-tienda-pie-acciones {
+        display: grid;
+        width: 100%;
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .registrar-tienda-pie .registrar-tienda-borrador {
+        width: 100%;
     }
 }

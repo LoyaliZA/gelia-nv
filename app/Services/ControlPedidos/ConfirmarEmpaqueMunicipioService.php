@@ -44,6 +44,7 @@ class ConfirmarEmpaqueMunicipioService
         }
 
         return DB::transaction(function () use ($tarea, $usuario, $bultos, $versionEsperada) {
+            $tarea = InstruccionEntrega::bloquearParaEjecutar($tarea);
             $tarea->loadMissing(['documentos', 'productos', 'paqueteria', 'modalidad']);
             $cumplimiento = PedidoBmaCumplimientoFisico::query()
                 ->where('pedido_bma_tarea_preparacion_id', $tarea->id)

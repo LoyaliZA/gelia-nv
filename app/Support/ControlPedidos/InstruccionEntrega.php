@@ -8,6 +8,7 @@ use App\Models\ControlPedidos\PedidoBmaCumplimientoFisico;
 use App\Models\ControlPedidos\PedidoBmaTareaPreparacion;
 use App\Models\User;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -40,6 +41,35 @@ final class InstruccionEntrega
             ])
             ->orderByDesc('id')
             ->get();
+    }
+
+    /**
+     * Misma coordinación que la sustitución: pedido, luego la instrucción, dentro de la transacción.
+     * Una acción que llegó con la instrucción anterior no continúa sobre la nueva.
+     */
+    public static function bloquearParaEjecutar(PedidoBmaTareaPreparacion $tarea): PedidoBmaTareaPreparacion
+    {
+        if (DB::transactionLevel() < 1) {
+            throw new \RuntimeException('La instrucción vigente se comprueba dentro de la transacción.');
+        }
+
+        $pedido = PedidoBma::query()->whereKey((int) $tarea->pedido_bma_id)->lockForUpdate()->first();
+        if ($pedido === null) {
+            throw ValidationException::withMessages([
+                'instruccion' => self::MENSAJE_OBSOLETA,
+            ]);
+        }
+
+        $vigente = PedidoBmaTareaPreparacion::query()->whereKey($tarea->id)->lockForUpdate()->first();
+        if ($vigente === null) {
+            throw ValidationException::withMessages([
+                'instruccion' => self::MENSAJE_OBSOLETA,
+            ]);
+        }
+
+        self::assertEjecutable($vigente);
+
+        return $vigente;
     }
 
     public static function assertEjecutable(PedidoBmaTareaPreparacion $tarea): void

@@ -1,0 +1,41 @@
+---
+
+description: Component reuse and abstraction decisions when creating, modifying, or refactoring UI components and reusable interface elements.
+alwaysApply: false
+------------------
+
+# Component Reuse
+
+Before creating a new UI component:
+
+1. Check whether an existing component already satisfies the requirement fully or partially.
+2. Prefer, in order:
+   **Reuse → Extend → Create**
+3. Extend an existing component through props, variants, composition, or configuration when the change fits its existing responsibility.
+4. Do not create duplicate components for minor differences such as text, icons, colors, sizes, states, or visual variants.
+
+## Creating New Components
+
+Create a new component when:
+
+* no existing component reasonably fits the responsibility;
+* reuse would force an existing component beyond its intended purpose; or
+* the UI represents a distinct reusable pattern.
+
+Follow the project's existing component structure and conventions.
+
+## Avoid Over-Abstraction
+
+Do not create abstractions only for hypothetical future reuse.
+
+Avoid:
+
+* unnecessary wrapper components;
+* components that only rename another component;
+* duplicate components with minor differences;
+* generic abstractions without a current reusable pattern;
+* additional files when a small, clear modification is sufficient.
+
+Prefer the smallest clear and maintainable solution.
+
+Do not sacrifice clarity or correctness merely to reduce code.

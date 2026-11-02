@@ -24,8 +24,7 @@ class TransicionEstadoTareaPreparacionService
         bool $omitirPermiso = false,
     ): PedidoBmaTareaPreparacion {
         return DB::transaction(function () use ($tarea, $estadoNuevo, $usuarioId, $accion, $comentario, $meta, $versionEsperada, $actor, $omitirPermiso) {
-            $tarea = PedidoBmaTareaPreparacion::query()->lockForUpdate()->findOrFail($tarea->id);
-            InstruccionEntrega::assertEjecutable($tarea);
+            $tarea = InstruccionEntrega::bloquearParaEjecutar($tarea);
             $actor ??= User::find($usuarioId);
 
             if ($versionEsperada !== null && (int) $tarea->version !== $versionEsperada) {

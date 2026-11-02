@@ -541,7 +541,9 @@ export default function ModalFormPedidoLegado({
     ) || (pedido?.origen && String(pedido.origen.id) === String(data.origen_id || pedido?.origen_id || pedido?.origen?.id || '')
         ? pedido.origen
         : null);
-    const origenRequiereLogistica = origenSeleccionado?.requiere_logistica ?? false;
+    const codigoEntregaIndicado = String(codigoModalidadPreparacion || pedido?.solicitud_preparacion?.codigo_modalidad || '');
+    const envioYaIndicado = codigoEntregaIndicado === 'ENVIO_MUNICIPIO' || codigoEntregaIndicado.startsWith('ENVIO_BODEGA');
+    const origenRequiereLogistica = origenSeleccionado ? Boolean(origenSeleccionado.requiere_logistica) : envioYaIndicado;
     const preparacionConfig = catalogos?.preparacion_config || {};
     const modalidadesPreparacion = (preparacionConfig.modalidades_catalogo || [])
         .filter((m) => (preparacionConfig.modalidades_habilitadas || []).includes(m.codigo))
@@ -769,7 +771,7 @@ export default function ModalFormPedidoLegado({
     capturaManualRef.current = Boolean(mostrarExcepcion || data.direccion_manual_excepcion);
 
     // Sin tipo: cliente + tipo. Resto del form solo tras cerrar consulta (foco en pesaje/evidencias).
-    const tieneTipo = Boolean(data.origen_id || pedido?.origen_id || pedido?.origen?.id);
+    const tieneTipo = Boolean(data.origen_id || pedido?.origen_id || pedido?.origen?.id) || envioYaIndicado;
     const enfocadoEnPesaje = fasePedido === 'PESAJE_PENDIENTE' && !tienePesajeRespondido;
     const mostrarPesaje = tieneTipo || tienePesajeRespondido || pendientePesaje;
     const mostrarPdfPedido = mostrarPesaje || (tieneTipo && !requiereLogistica);
@@ -2962,7 +2964,7 @@ export default function ModalFormPedidoLegado({
                         <p className={SECCION}>{nSec.tipo}. Tipo de entrega</p>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className={wrapCampo('origen')} data-campo="origen">
-                                <label className={SECCION}>Tipo de pedido *</label>
+                                <label className={SECCION}>{envioYaIndicado ? 'Canal de la venta' : 'Tipo de pedido *'}</label>
                                 <select
                                     value={data.origen_id}
                                     disabled={logisticaBloqueada}
@@ -2970,11 +2972,20 @@ export default function ModalFormPedidoLegado({
                                     className={`${THEME_SELECT} w-full py-3 ${logisticaBloqueada ? 'opacity-50' : ''}`}
                                 >
                                     <option value="">Seleccionar...</option>
-                                    {(catalogos.origenes || []).map((o) => (
+                                    {(envioYaIndicado
+                                        ? (catalogos.origenes || []).filter((o) => o.requiere_logistica || String(o.id) === String(data.origen_id))
+                                        : (catalogos.origenes || [])
+                                    ).map((o) => (
                                         <option key={o.id} value={o.id}>{o.nombre}</option>
                                     ))}
                                 </select>
-                                {origenSeleccionado ? (
+                                {envioYaIndicado ? (
+                                    <p className="text-[10px] font-bold theme-text-muted mt-1.5 m-0">
+                                        {origenSeleccionado
+                                            ? 'La modalidad de entrega ya quedó indicada. Este canal solo registra dónde se tomó la venta.'
+                                            : 'La modalidad de entrega ya quedó indicada. El canal registra dónde se tomó la venta: foráneo, comercio electrónico o mayoristas. No sustituye a Municipal ni a Nacional.'}
+                                    </p>
+                                ) : origenSeleccionado ? (
                                     <p className="text-[10px] font-bold theme-text-muted mt-1.5 m-0">
                                         {origenRequiereLogistica
                                             ? (trasladoInterno

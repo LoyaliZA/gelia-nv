@@ -8,11 +8,12 @@ use App\Models\ControlPedidos\PedidoBmaRevisionProducto;
 use App\Models\ControlPedidos\PedidoBmaTareaDocumento;
 use App\Models\ControlPedidos\PedidoBmaTareaPreparacion;
 use App\Models\User;
+use App\Support\ControlPedidos\InstruccionEntrega;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
-use App\Support\ControlPedidos\InstruccionEntrega;
 
 class GenerarCaratulaRecogeHoyService
 {
@@ -69,17 +70,35 @@ class GenerarCaratulaRecogeHoyService
         $ruta = "pedidos_bma/caratulas_recoge/{$tarea->id}/{$nombre}";
         Storage::disk('local')->put($ruta, $contenido);
 
-        return PedidoBmaTareaDocumento::query()->create([
-            'pedido_bma_tarea_preparacion_id' => $tarea->id,
-            'tipo_evidencia' => PedidoBmaTareaDocumento::TIPO_CARATULA_RECOGE,
-            'ruta_interna' => $ruta,
-            'nombre_original' => 'Carátula recoge en tienda.pdf',
-            'mime_type' => 'application/pdf',
-            'tamano_bytes' => strlen($contenido),
-            'hash_sha256' => hash('sha256', $contenido),
-            'subido_por_id' => $usuario->id,
-            'subido_at' => now(),
-            'inmutable' => true,
-        ]);
+        try {
+            return DB::transaction(function () use ($tarea, $usuario, $ruta, $contenido, $regenerar) {
+                $tarea = InstruccionEntrega::bloquearParaEjecutar($tarea);
+                $existente = $tarea->documentos()
+                    ->where('tipo_evidencia', PedidoBmaTareaDocumento::TIPO_CARATULA_RECOGE)
+                    ->latest('id')
+                    ->first();
+                if ($existente && ! $regenerar) {
+                    Storage::disk('local')->delete($ruta);
+
+                    return $existente;
+                }
+
+                return PedidoBmaTareaDocumento::query()->create([
+                    'pedido_bma_tarea_preparacion_id' => $tarea->id,
+                    'tipo_evidencia' => PedidoBmaTareaDocumento::TIPO_CARATULA_RECOGE,
+                    'ruta_interna' => $ruta,
+                    'nombre_original' => 'Carátula recoge en tienda.pdf',
+                    'mime_type' => 'application/pdf',
+                    'tamano_bytes' => strlen($contenido),
+                    'hash_sha256' => hash('sha256', $contenido),
+                    'subido_por_id' => $usuario->id,
+                    'subido_at' => now(),
+                    'inmutable' => true,
+                ]);
+            });
+        } catch (\Throwable $e) {
+            Storage::disk('local')->delete($ruta);
+            throw $e;
+        }
     }
 }

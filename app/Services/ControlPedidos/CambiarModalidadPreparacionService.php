@@ -189,7 +189,8 @@ class CambiarModalidadPreparacionService
             ]);
 
             if ($fisico) {
-                $fisico->update([
+                $fisico = PedidoBmaCumplimientoFisico::query()->whereKey($fisico->id)->lockForUpdate()->first();
+                $fisico?->update([
                     'pedido_bma_tarea_preparacion_id' => $nueva->id,
                 ]);
             } else {

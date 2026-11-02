@@ -32,6 +32,7 @@ Route::prefix('control-pedidos')->name('control_pedidos.')->group(function () {
     Route::middleware(['can:control_pedidos.crear'])->group(function () {
         Route::post('/', [PedidoBmaController::class, 'store'])->name('store');
         Route::post('/autoguardar', [PedidoBmaController::class, 'autoguardar'])->name('autoguardar');
+        Route::post('/{pedidoBma}/solicitud-tienda', [PedidoBmaController::class, 'solicitarTienda'])->name('solicitud_tienda');
         Route::get('/candidatos-principal', [PedidoBmaController::class, 'candidatosPrincipal'])->name('candidatos_principal');
         Route::get('/candidatos-resguardo-envio', [PedidoBmaController::class, 'candidatosResguardoEnvio'])->name('candidatos_resguardo_envio');
         Route::post('/{pedidoBma}/completar-envio-resguardo', [PedidoBmaController::class, 'completarEnvioResguardo'])->name('completar_envio_resguardo');
