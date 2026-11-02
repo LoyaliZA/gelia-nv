@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Mensajeria;
 
 use App\Http\Controllers\Controller;
 use App\Services\Presencia\PresenciaUsuarioService;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -33,7 +34,7 @@ class PresenciaController extends Controller
     {
         try {
             return $this->ejecutarActualizacion($request, $service);
-        } catch (\Illuminate\Database\QueryException $e) {
+        } catch (QueryException $e) {
             if (str_contains($e->getMessage(), 'presencia')) {
                 return response()->json([
                     'message' => 'Falta la migración de presencia. Ejecuta: php artisan migrate',
@@ -66,9 +67,17 @@ class PresenciaController extends Controller
         return response()->json(['presencia' => $presencia]);
     }
 
-    public function heartbeat(PresenciaUsuarioService $service): JsonResponse
+    public function heartbeat(Request $request, PresenciaUsuarioService $service): JsonResponse
     {
-        $presencia = $service->registrarActividad(Auth::user());
+        $tabId = substr(preg_replace('/[^a-zA-Z0-9_-]/', '', (string) $request->input('tab_id', '')) ?? '', 0, 64);
+        $user = Auth::user();
+
+        if ($tabId !== '') {
+            $visible = ! $request->exists('visible') || $request->boolean('visible');
+            $presencia = $service->registrarSenal($user, $tabId, $visible);
+        } else {
+            $presencia = $service->registrarActividad($user);
+        }
 
         return response()->json(['presencia' => $presencia]);
     }

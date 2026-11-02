@@ -11,6 +11,8 @@ class MarcarConversacionLeidaService
 {
     public function __construct(
         private RegistrarLecturaMensajeService $registrarLectura,
+        private FormatearMensajeService $formatearMensaje,
+        private NotificarCursorLecturaService $notificarCursor,
     ) {}
 
     public function ejecutar(Conversacion $conversacion, User $user): void
@@ -29,7 +31,39 @@ class MarcarConversacionLeidaService
             ->pluck('id');
 
         foreach ($mensajeIds as $mensajeId) {
-            $this->registrarLectura->ejecutar($mensajeId, $user, emitirBroadcast: true);
+            $this->registrarLectura->ejecutar((int) $mensajeId, $user, emitirBroadcast: false);
         }
+
+        $porAutor = [];
+        if ($mensajeIds->isNotEmpty()) {
+            $mensajes = Mensaje::query()
+                ->with(['user', 'lecturas', 'conversacion.participantes'])
+                ->whereIn('id', $mensajeIds)
+                ->get();
+
+            foreach ($mensajes as $mensaje) {
+                $autor = $mensaje->user;
+                if (! $autor) {
+                    continue;
+                }
+
+                $formateado = $this->formatearMensaje->ejecutar(
+                    $mensaje,
+                    $autor,
+                    $mensaje->conversacion ?? $conversacion
+                );
+                $porAutor[$autor->id][] = [
+                    'id' => $mensaje->id,
+                    'estado_lectura' => $formateado['estado_lectura'],
+                ];
+            }
+        }
+
+        $this->notificarCursor->ejecutar(
+            $conversacion->id,
+            $user->id,
+            $ahora->toIso8601String(),
+            $porAutor
+        );
     }
 }

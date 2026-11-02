@@ -2,8 +2,50 @@
 
 namespace App\Support;
 
+use Carbon\Carbon;
+
 final class PresenciaCatalogo
 {
+    public const EN_LINEA_SEGUNDOS = 90;
+
+    /**
+     * En línea si hay una pestaña vigente. Si el arreglo de pestañas existe y está
+     * vacío, la última sesión avisó que se ocultó. Sin esa clave se usa la actividad.
+     */
+    public static function enLinea(array $prefs, ?Carbon $ahora = null): bool
+    {
+        $ahora = $ahora ?? now();
+        $pestanas = $prefs['pestanas'] ?? null;
+
+        if (is_array($pestanas)) {
+            foreach ($pestanas as $expira) {
+                if (! is_string($expira) || $expira === '') {
+                    continue;
+                }
+                try {
+                    if (Carbon::parse($expira)->greaterThan($ahora)) {
+                        return true;
+                    }
+                } catch (\Throwable) {
+                    continue;
+                }
+            }
+
+            return false;
+        }
+
+        $ultima = $prefs['ultima_actividad_at'] ?? null;
+        if (! is_string($ultima) || $ultima === '') {
+            return false;
+        }
+
+        try {
+            return Carbon::parse($ultima)->greaterThan($ahora->copy()->subSeconds(self::EN_LINEA_SEGUNDOS));
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
     public static function estados(): array
     {
         $config = config('presencia.estados', []);
