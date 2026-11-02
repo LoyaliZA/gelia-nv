@@ -45,7 +45,7 @@ class SolicitarCancelacionSolicitudService
             }
 
             $listaRebaja = null;
-            $esCambioLista = $this->validarListaInferior->esProcesoCambioLista($solicitud);
+            $esCambioLista = $this->validarListaInferior->exigeListaRebaja($solicitud);
 
             if ($esCambioLista) {
                 if (!$listaRebajaId) {

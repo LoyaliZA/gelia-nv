@@ -21,7 +21,7 @@ use App\Services\PuntoVenta\Turnos\PlazosTurnosPdvConfig;
 use App\Support\PuntoVenta\Turnos\MotivosCierreAtencionTurnoPdv;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Support\RefreshDatabaseSafe;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Spatie\Permission\Models\Permission;
@@ -30,7 +30,7 @@ use Tests\TestCase;
 
 class ReatencionGerencialPdvTest extends TestCase
 {
-    use RefreshDatabase;
+    use RefreshDatabaseSafe;
 
     private Sucursal $sucursal;
 
@@ -206,8 +206,23 @@ class ReatencionGerencialPdvTest extends TestCase
                 ->json('reatencion.0.candidatos')
         )->pluck('id');
 
-        $this->assertTrue($candidatosConDestinoPausado->contains($this->vendedorAnterior->id));
-        $this->assertFalse($candidatosConDestinoPausado->contains($this->vendedorDestino->id));
+        $this->assertFalse($candidatosConDestinoPausado->contains($this->vendedorAnterior->id));
+        $this->assertTrue($candidatosConDestinoPausado->contains($this->vendedorDestino->id));
+
+        $disponibilidad = app(ConsultaPersonaDisponiblePdvService::class);
+        $this->assertFalse($disponibilidad->esDisponible($this->vendedorDestino, $this->sucursal->id));
+
+        $turnoFila = TurnoPdv::factory()->create([
+            'sucursal_id' => $this->sucursal->id,
+            'estado' => TurnoPdv::ESTADO_EN_COLA,
+            'servicio' => TurnoPdv::SERVICIO_VENTAS,
+            'atencion_actual_id' => null,
+        ]);
+        app(MatchmakerTurnosPdvService::class)->ejecutar($this->sucursal->id, 'cooldown');
+        $this->assertNotSame(
+            $this->vendedorDestino->id,
+            $turnoFila->fresh()->atencionActual?->user_id,
+        );
 
         $this->actingAs($this->gerente)->postJson(
             route('punto_venta.turnos.asignar_reatencion', $turno),
@@ -216,8 +231,8 @@ class ReatencionGerencialPdvTest extends TestCase
                 'destino_user_id' => $this->vendedorDestino->id,
                 'idempotency_key' => 'pdv:reatencion:pausado',
             ],
-        )->assertUnprocessable()
-            ->assertJsonValidationErrors(['destino_user_id']);
+        )->assertOk()
+            ->assertJsonPath('atencion.user_id', $this->vendedorDestino->id);
     }
 
     public function test_reasigna_durante_espera_de_fin_de_pausa_sin_adelantar_la_fila(): void
@@ -265,8 +280,9 @@ class ReatencionGerencialPdvTest extends TestCase
         $this->assertFalse($disponibilidad->esDisponible($this->vendedorDestino, $this->sucursal->id));
     }
 
-    public function test_espera_por_cierre_de_atencion_sigue_excluyendo_de_reatencion(): void
+    public function test_reasigna_durante_predisponible_tras_cerrar_atencion_sin_adelantar_la_fila(): void
     {
+        Event::fake([TurnoReatencion::class, TurnoAsignado::class]);
         $this->fijarCooldown(15);
         $this->activarVendedor($this->vendedorDestino);
         $contexto = $this->crearTurnoAsignado($this->vendedorDestino);
@@ -275,15 +291,20 @@ class ReatencionGerencialPdvTest extends TestCase
             route('punto_venta.turnos.cerrar_atencion', $contexto['turno']),
             [
                 'version' => $contexto['turno']->version,
-                'idempotency_key' => 'pdv:cerrar:espera-sigue-bloqueando',
+                'idempotency_key' => 'pdv:cerrar:espera-permite-reatencion',
                 'motivo' => MotivosCierreAtencionTurnoPdv::VENTA,
             ],
         )->assertOk();
 
         $turno = $this->crearTurnoEnReatencion($this->vendedorAnterior);
-        $this->assertFalse(
-            app(ConsultaPersonaDisponiblePdvService::class)->esDisponible($this->vendedorDestino, $this->sucursal->id),
-        );
+        $turnoFila = TurnoPdv::factory()->create([
+            'sucursal_id' => $this->sucursal->id,
+            'estado' => TurnoPdv::ESTADO_EN_COLA,
+            'servicio' => TurnoPdv::SERVICIO_VENTAS,
+            'atencion_actual_id' => null,
+        ]);
+        $disponibilidad = app(ConsultaPersonaDisponiblePdvService::class);
+        $this->assertFalse($disponibilidad->esDisponible($this->vendedorDestino, $this->sucursal->id));
 
         $candidatos = collect(
             $this->actingAs($this->gerente)
@@ -291,7 +312,10 @@ class ReatencionGerencialPdvTest extends TestCase
                 ->json('reatencion')
         )->firstWhere('id', $turno->id)['candidatos'] ?? [];
 
-        $this->assertFalse(collect($candidatos)->pluck('id')->contains($this->vendedorDestino->id));
+        $this->assertTrue(collect($candidatos)->pluck('id')->contains($this->vendedorDestino->id));
+
+        $this->assertSame(0, app(MatchmakerTurnosPdvService::class)->ejecutar($this->sucursal->id, 'cooldown'));
+        $this->assertSame(TurnoPdv::ESTADO_EN_COLA, $turnoFila->fresh()->estado);
 
         $this->actingAs($this->gerente)->postJson(
             route('punto_venta.turnos.asignar_reatencion', $turno),
@@ -300,8 +324,9 @@ class ReatencionGerencialPdvTest extends TestCase
                 'destino_user_id' => $this->vendedorDestino->id,
                 'idempotency_key' => 'pdv:reatencion:espera-cierre',
             ],
-        )->assertUnprocessable()
-            ->assertJsonValidationErrors(['destino_user_id']);
+        )->assertOk()
+            ->assertJsonPath('turno.estado', TurnoPdv::ESTADO_ASIGNADO)
+            ->assertJsonPath('atencion.user_id', $this->vendedorDestino->id);
     }
 
     public function test_vencida_no_se_puede_asignar(): void

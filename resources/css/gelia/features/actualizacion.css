@@ -1,0 +1,73 @@
+/* Aviso de versión y capa de actualización.
+   El pulso ilumina el borde; el texto no pierde opacidad. */
+
+@keyframes gelia-aviso-version-pulso {
+    0%, 100% {
+        box-shadow:
+            0 0 0 1px color-mix(in srgb, var(--color-primario) 55%, transparent),
+            0 0 12px 0 color-mix(in srgb, var(--color-primario) 35%, transparent);
+    }
+    50% {
+        box-shadow:
+            0 0 0 1px var(--color-primario),
+            0 0 28px 4px color-mix(in srgb, var(--color-primario) 75%, transparent);
+    }
+}
+
+.gelia-aviso-version {
+    border-color: var(--color-primario);
+    animation: gelia-aviso-version-pulso 1.6s cubic-bezier(0.77, 0, 0.175, 1) infinite;
+}
+
+.gelia-actualizacion-halo {
+    position: absolute;
+    top: 42%;
+    left: 50%;
+    width: 18rem;
+    height: 18rem;
+    transform: translate(-50%, -50%);
+    border-radius: 9999px;
+    background: radial-gradient(
+        circle,
+        color-mix(in srgb, var(--color-primario) 32%, transparent) 0%,
+        transparent 70%
+    );
+    pointer-events: none;
+}
+
+@keyframes gelia-engranaje-giro {
+    to { transform: rotate(360deg); }
+}
+
+.gelia-engranaje {
+    display: inline-flex;
+    color: var(--theme-text-main);
+    transform-origin: center;
+    transform-box: fill-box;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .gelia-aviso-version:hover {
+        background-color: color-mix(in srgb, var(--color-primario) 10%, var(--theme-surface-bg));
+    }
+}
+
+.gelia-engranaje--horario {
+    animation: gelia-engranaje-giro 2.4s linear infinite;
+}
+
+.gelia-engranaje--antihorario {
+    animation: gelia-engranaje-giro 3.6s linear infinite reverse;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .gelia-aviso-version,
+    .gelia-engranaje--horario,
+    .gelia-engranaje--antihorario {
+        animation: none;
+    }
+
+    .gelia-aviso-version {
+        box-shadow: 0 0 16px 2px color-mix(in srgb, var(--color-primario) 65%, transparent);
+    }
+}

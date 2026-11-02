@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-    Key, ShieldCheck, ChevronRight, Lock, ShieldAlert, Search, Layers, UserPen,
+    Key, ShieldCheck, ChevronRight, Lock, ShieldAlert, Layers, UserPen,
 } from 'lucide-react';
+import CampoBusqueda from '@/Components/CampoBusqueda';
 import {
     permisoDePlantilla,
     plantillasDePermiso,
@@ -784,16 +785,13 @@ export default function PermisosAtomicos({
                 </p>
             )}
 
-            <div className="theme-field-with-icon">
-                <Search className="theme-field-icon" aria-hidden />
-                <input
-                    type="search"
-                    value={busquedaPermisos}
-                    onChange={(e) => setBusquedaPermisos(e.target.value)}
-                    placeholder="Buscar permiso por nombre o descripción..."
-                    className="theme-input w-full pr-4 py-3"
-                />
-            </div>
+            <CampoBusqueda
+                type="search"
+                value={busquedaPermisos}
+                onChange={(e) => setBusquedaPermisos(e.target.value)}
+                placeholder="Buscar permiso por nombre o descripción..."
+                className="theme-input w-full pr-4 py-3"
+            />
 
             {hayPlantilla && (
                 <AcordeonAnimado

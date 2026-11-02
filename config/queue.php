@@ -44,6 +44,21 @@ return [
             'after_commit' => false,
         ],
 
+        /*
+         * Conexión aparte para los consumidores preparados de Tiendanube.
+         * retry_after queda por encima del timeout más largo de esos workers (300s).
+         * No cambia el retry_after de la conexión database, que siguen usando los demás módulos.
+         * Los workers no están arrancados: esta entrada no activa colas.
+         */
+        'tiendanube' => [
+            'driver' => 'database',
+            'connection' => env('DB_QUEUE_CONNECTION'),
+            'table' => env('DB_QUEUE_TABLE', 'jobs'),
+            'queue' => 'default',
+            'retry_after' => 360,
+            'after_commit' => false,
+        ],
+
         'beanstalkd' => [
             'driver' => 'beanstalkd',
             'host' => env('BEANSTALKD_QUEUE_HOST', 'localhost'),

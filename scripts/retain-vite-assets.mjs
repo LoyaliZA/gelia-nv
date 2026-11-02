@@ -39,6 +39,11 @@ try {
         const pending = path.join(buildDir, 'manifest.next.json');
         fs.writeFileSync(pending, JSON.stringify(manifest, null, 2));
         fs.renameSync(pending, manifestPath);
+        const manifestsDir = path.join(buildDir, 'manifests');
+        fs.mkdirSync(manifestsDir, { recursive: true });
+        const sha7 = (process.env.DEPLOY_SHA || 'local00').replace(/[^A-Za-z0-9]/g, '').slice(0, 7) || 'local00';
+        const sello = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+        fs.copyFileSync(manifestPath, path.join(manifestsDir, `${sello}-${sha7}.json`));
         // Switch from the development server only after the build is complete and verified.
         const hotFile = path.join(root, 'public/hot');
         if (fs.existsSync(hotFile)) fs.renameSync(hotFile, path.join(deployDir, 'hot.previous'));

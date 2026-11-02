@@ -3,6 +3,8 @@
 namespace App\Services\Tiendanube;
 
 use App\Exceptions\Tiendanube\TiendanubeApiException;
+use App\Services\Tiendanube\Gobernador\TiendanubeEmisorHttp;
+use App\Support\Tiendanube\TiendanubeClaseTurno;
 use App\Models\Tiendanube\TiendanubeProducto;
 use App\Models\Tiendanube\TiendanubeProductoImagen;
 use App\Models\Tiendanube\TiendanubeProductoImagenOperacion;
@@ -26,7 +28,8 @@ class TiendanubeProductoImagenOperacionService
     public function __construct(
         private TiendanubeApiClient $api,
         private TiendanubeCatalogoSyncService $sync,
-        private OptimizarImagenTiendanubeService $optimizarImagen
+        private OptimizarImagenTiendanubeService $optimizarImagen,
+        private TiendanubeEmisorHttp $emisor,
     ) {}
 
     /**
@@ -42,6 +45,15 @@ class TiendanubeProductoImagenOperacionService
         ?string $solicitudClave = null,
         ?int $userId = null,
     ): TiendanubeProductoImagenCarga {
+        if ($this->emisor->pendiente(TiendanubeClaseTurno::Interactivo)) {
+            return $this->emisor->bajo(
+                TiendanubeClaseTurno::Interactivo,
+                'imagen:'.$tnProductId,
+                'sin_escritura',
+                fn () => $this->ejecutar($tnProductId, $srcUrl, $file, $position, $reemplazar, $optImagen, $solicitudClave, $userId),
+            );
+        }
+
         $this->validarEntrada($tnProductId, $srcUrl, $file);
 
         $tiendaId = $this->tiendaId();
@@ -77,6 +89,15 @@ class TiendanubeProductoImagenOperacionService
 
     public function reconciliar(TiendanubeProductoImagenOperacion $op): TiendanubeProductoImagenCarga
     {
+        if ($this->emisor->pendiente(TiendanubeClaseTurno::Recuperacion)) {
+            return $this->emisor->bajo(
+                TiendanubeClaseTurno::Recuperacion,
+                'imagen:'.$op->producto_id.':reconciliar',
+                'efecto_remoto_posible',
+                fn () => $this->reconciliar($op),
+            );
+        }
+
         return $this->conLock((string) $op->tienda_id, (int) $op->producto_id, function () use ($op) {
             $op->refresh();
             $op->increment('intentos');

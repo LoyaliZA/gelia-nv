@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { Search, RefreshCw, SlidersHorizontal, Loader2 } from 'lucide-react';
+import { RefreshCw, SlidersHorizontal, Loader2 } from 'lucide-react';
+import CampoBusqueda from '@/Components/CampoBusqueda';
 import { THEME_INPUT, THEME_LABEL, THEME_SELECT } from '../../../utils/geliaTheme';
 import {
     BTN_SECONDARY,
@@ -160,26 +161,24 @@ export default function FiltrosPedidos({
             <div className="hidden md:flex flex-wrap items-end gap-2 lg:gap-3">
                 <div className="flex-1 min-w-[14rem]">
                     <label htmlFor="pedidos-busqueda" className={`${THEME_LABEL} ml-0.5`}>Buscar</label>
-                    <div className="theme-field-with-icon relative mt-1">
-                        <Search className="theme-field-icon w-4 h-4" aria-hidden />
-                        <input
-                            id="pedidos-busqueda"
-                            name="q" enterKeyHint="search"
-                            type="search"
-                            value={busqueda ?? filtros.q ?? ''}
-                            onChange={(e) => onBuscar(e.target.value)}
-                            placeholder="Folio, cliente o número…"
-                            className={`${THEME_INPUT} w-full py-2.5 text-sm font-semibold pr-10`}
-                            aria-busy={buscando}
-                            autoComplete="off"
-                        />
-                        {buscando && (
+                    <CampoBusqueda
+                        wrapperClassName="relative mt-1"
+                        id="pedidos-busqueda"
+                        name="q" enterKeyHint="search"
+                        type="search"
+                        value={busqueda ?? filtros.q ?? ''}
+                        onChange={(e) => onBuscar(e.target.value)}
+                        placeholder="Folio, cliente o número…"
+                        className={`${THEME_INPUT} w-full py-2.5 text-sm font-semibold pr-10`}
+                        aria-busy={buscando}
+                        autoComplete="off"
+                        suffix={buscando ? (
                             <Loader2
                                 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin theme-text-muted"
                                 aria-label="Buscando"
                             />
-                        )}
-                    </div>
+                        ) : null}
+                    />
                 </div>
 
                 <div className="w-full sm:w-auto min-w-[12rem] sm:max-w-[16rem] flex-1 sm:flex-none">
@@ -235,27 +234,25 @@ export default function FiltrosPedidos({
             {/* Móvil */}
             <div className="md:hidden space-y-2 min-w-0">
                 <div className="flex items-center gap-1.5 min-w-0">
-                    <div className="theme-field-with-icon relative flex-1 min-w-0">
-                        <Search className="theme-field-icon w-4 h-4" aria-hidden />
-                        <input
-                            id="pedidos-busqueda-movil"
-                            name="q" enterKeyHint="search"
-                            type="search"
-                            value={busqueda ?? filtros.q ?? ''}
-                            onChange={(e) => onBuscar(e.target.value)}
-                            placeholder="Folio o cliente…"
-                            aria-label="Buscar folio, cliente o número"
-                            className={`${THEME_INPUT} w-full min-w-0 py-2.5 text-sm font-semibold pl-9 pr-9`}
-                            aria-busy={buscando}
-                            autoComplete="off"
-                        />
-                        {buscando && (
+                    <CampoBusqueda
+                        wrapperClassName="relative flex-1 min-w-0"
+                        id="pedidos-busqueda-movil"
+                        name="q" enterKeyHint="search"
+                        type="search"
+                        value={busqueda ?? filtros.q ?? ''}
+                        onChange={(e) => onBuscar(e.target.value)}
+                        placeholder="Folio o cliente…"
+                        aria-label="Buscar folio, cliente o número"
+                        className={`${THEME_INPUT} w-full min-w-0 py-2.5 text-sm font-semibold pl-9 pr-9`}
+                        aria-busy={buscando}
+                        autoComplete="off"
+                        suffix={buscando ? (
                             <Loader2
                                 className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin theme-text-muted"
                                 aria-label="Buscando"
                             />
-                        )}
-                    </div>
+                        ) : null}
+                    />
                     <button
                         type="button"
                         onClick={() => setFiltrosAbiertos((v) => !v)}

@@ -13,7 +13,9 @@ use App\Services\Tiendanube\Precios\Lotes\TiendanubePrecioLoteService;
 use App\Services\Tiendanube\Precios\Lotes\TiendanubePrecioLoteSimulacionService;
 use App\Services\Tiendanube\Precios\TiendanubePrecioDecimal;
 use App\Services\Tiendanube\Precios\TiendanubePrecioSeleccionService;
+use App\Services\Tiendanube\Gobernador\TiendanubeEmisorHttp;
 use App\Services\Tiendanube\TiendanubeApiClient;
+use App\Support\Tiendanube\TiendanubeClaseTurno;
 use App\Support\Tiendanube\Precios\TiendanubePrecioDestino;
 use App\Support\Tiendanube\Precios\TiendanubePrecioIntencion;
 use Illuminate\Support\Facades\DB;
@@ -27,6 +29,7 @@ class TiendanubePrecioRestauracionService
         private readonly TiendanubePrecioSeleccionService $selecciones,
         private readonly TiendanubeApiClient $api,
         private readonly TiendanubePrecioEjecucionControlRemotoService $control,
+        private readonly TiendanubeEmisorHttp $emisor,
     ) {}
 
     /**
@@ -35,6 +38,10 @@ class TiendanubePrecioRestauracionService
      */
     public function preparar(string $loteId, int $storeId, int $userId, array $datos, bool $puedeVerCosto): array
     {
+        if ($this->emisor->pendiente(TiendanubeClaseTurno::Recuperacion)) {
+            return $this->emisor->bajo(TiendanubeClaseTurno::Recuperacion, 'restauracion:'.$loteId, 'lectura_hecha', fn () => $this->preparar($loteId, $storeId, $userId, $datos, $puedeVerCosto));
+        }
+
         $this->asegurarHabilitada();
         $lote = $this->historial->obtenerDeTienda($loteId, $storeId);
         $this->asegurarRestaurable($lote);
@@ -48,6 +55,10 @@ class TiendanubePrecioRestauracionService
      */
     public function confirmar(string $loteId, int $storeId, int $userId, array $datos, bool $puedeVerCosto): array
     {
+        if ($this->emisor->pendiente(TiendanubeClaseTurno::Recuperacion)) {
+            return $this->emisor->bajo(TiendanubeClaseTurno::Recuperacion, 'restauracion:'.$loteId.':confirmar', 'lectura_hecha', fn () => $this->confirmar($loteId, $storeId, $userId, $datos, $puedeVerCosto));
+        }
+
         $this->asegurarHabilitada();
         $lote = $this->historial->obtenerDeTienda($loteId, $storeId);
         $this->asegurarRestaurable($lote);

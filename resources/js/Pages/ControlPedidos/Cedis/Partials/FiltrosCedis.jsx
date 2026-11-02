@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Search, RefreshCw, ChevronDown, Loader2 } from 'lucide-react';
+import { RefreshCw, ChevronDown, Loader2 } from 'lucide-react';
+import CampoBusqueda from '@/Components/CampoBusqueda';
 import { THEME_INPUT, THEME_LABEL } from '../../../../utils/geliaTheme';
 import {
     BTN_SECONDARY,
@@ -50,25 +51,23 @@ export default function FiltrosCedis({
             <div className="flex flex-row gap-2 items-end">
                 <div className="flex-1 min-w-0">
                     <label htmlFor="cedis-busqueda" className={`${THEME_LABEL} ml-1`}>Buscar</label>
-                    <div className="theme-field-with-icon relative mt-1.5">
-                        <Search className="theme-field-icon w-4 h-4" aria-hidden />
-                        <input
-                            id="cedis-busqueda"
-                            type="search" name="q" enterKeyHint="search"
-                            value={busqueda ?? filtros.q ?? ''}
-                            onChange={(e) => onBuscar(e.target.value)}
-                            placeholder="Folio, cliente o número…"
-                            className={`${THEME_INPUT} w-full py-3 text-sm font-bold pr-10`}
-                            aria-busy={buscando}
-                            autoComplete="off"
-                        />
-                        {buscando && (
+                    <CampoBusqueda
+                        wrapperClassName="relative mt-1.5"
+                        id="cedis-busqueda"
+                        type="search" name="q" enterKeyHint="search"
+                        value={busqueda ?? filtros.q ?? ''}
+                        onChange={(e) => onBuscar(e.target.value)}
+                        placeholder="Folio, cliente o número…"
+                        className={`${THEME_INPUT} w-full py-3 text-sm font-bold pr-10`}
+                        aria-busy={buscando}
+                        autoComplete="off"
+                        suffix={buscando ? (
                             <Loader2
                                 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin theme-text-muted"
                                 aria-label="Buscando"
                             />
-                        )}
-                    </div>
+                        ) : null}
+                    />
                 </div>
                 <button
                     type="button"

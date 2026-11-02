@@ -26,6 +26,67 @@
     box-shadow: none;
 }
 
+/* El título de la bandeja recupera la tarjeta: título, descripción y acciones en un solo bloque. */
+.gelia-solicitudes-workspace > header.gelia-solicitudes-header {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: clamp(1rem, 2vw, 1.5rem);
+    border: 1px solid var(--theme-border);
+    background-color: var(--theme-surface-solid);
+}
+
+.gelia-solicitudes-header-copy {
+    min-width: 0;
+}
+
+.gelia-solicitudes-header-copy p {
+    max-width: 70ch;
+    overflow-wrap: anywhere;
+}
+
+.gelia-solicitudes-header-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+    width: 100%;
+}
+
+.gelia-solicitudes-header-actions > :is(a, button, .relative) {
+    min-width: 0;
+}
+
+.gelia-solicitudes-header-actions > .relative > button {
+    width: 100%;
+}
+
+@media (width >= 40rem) {
+    .gelia-solicitudes-header-actions {
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+
+    .gelia-solicitudes-header-actions > .relative > button {
+        width: auto;
+    }
+}
+
+@media (width >= 64rem) {
+    .gelia-solicitudes-workspace > header.gelia-solicitudes-header {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .gelia-solicitudes-header-actions {
+        width: auto;
+        flex-shrink: 0;
+    }
+}
+
 .gelia-solicitudes-workspace :is(h1, h2, h3),
 .gelia-workflow-overlay :is(h2, h3) {
     font-style: normal;

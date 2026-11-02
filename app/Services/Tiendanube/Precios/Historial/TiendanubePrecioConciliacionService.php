@@ -11,7 +11,9 @@ use App\Models\Tiendanube\TiendanubePrecioLoteItem;
 use App\Models\Tiendanube\TiendanubeProductoVariante;
 use App\Services\Tiendanube\Precios\Aplicacion\TiendanubePrecioEjecucionControlRemotoService;
 use App\Services\Tiendanube\Precios\Lotes\TiendanubePrecioLoteService;
+use App\Services\Tiendanube\Gobernador\TiendanubeEmisorHttp;
 use App\Services\Tiendanube\TiendanubeApiClient;
+use App\Support\Tiendanube\TiendanubeClaseTurno;
 use App\Support\Tiendanube\Precios\TiendanubePrecioDestino;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -23,6 +25,7 @@ class TiendanubePrecioConciliacionService
         private readonly TiendanubePrecioLoteService $lotes,
         private readonly TiendanubeApiClient $api,
         private readonly TiendanubePrecioEjecucionControlRemotoService $control,
+        private readonly TiendanubeEmisorHttp $emisor,
     ) {}
 
     /**
@@ -31,6 +34,10 @@ class TiendanubePrecioConciliacionService
      */
     public function conciliar(string $loteId, int $storeId, int $userId, array $datos, bool $puedeVerCosto): array
     {
+        if ($this->emisor->pendiente(TiendanubeClaseTurno::Recuperacion)) {
+            return $this->emisor->bajo(TiendanubeClaseTurno::Recuperacion, 'conciliacion:'.$loteId, 'lectura_hecha', fn () => $this->conciliar($loteId, $storeId, $userId, $datos, $puedeVerCosto));
+        }
+
         $lote = $this->historial->obtenerDeTienda($loteId, $storeId);
         $revision = $lote->revisionActual();
         if (! $revision) {

@@ -61,6 +61,34 @@ describe('gestión de atención desde Operación General', () => {
         vi.unstubAllGlobals();
     });
 
+    it('no ofrece transferir sin el permiso de gerencia', () => {
+        montar();
+        const boton = [...document.querySelectorAll('button')]
+            .find((elemento) => elemento.textContent.includes('Transferir'));
+        expect(boton).toBeUndefined();
+    });
+
+    it('transfiere la atención en curso a otra persona del equipo', async () => {
+        montar({
+            puedeTransferirTurno: true,
+            destinosTransferencia: [{ id: 9, nombre: 'Diana Paola', estado_vendedor: 'disponible' }],
+        });
+        await pulsar('Transferir');
+        const destino = document.querySelector('input[name="destino-transferencia"]');
+        expect(destino).not.toBeNull();
+        await act(async () => {
+            destino.click();
+        });
+        await pulsar('Confirmar transferencia');
+
+        expect(axios.post).toHaveBeenCalledWith('punto_venta.turnos.transferir/12', {
+            version: 7,
+            idempotency_key: expect.any(String),
+            destino_user_id: 9,
+        });
+        expect(onActualizado).toHaveBeenCalledOnce();
+    });
+
     it('confirmar cierre envía la versión del turno y actualiza la operación', async () => {
         montar();
         await pulsar('Terminar atención');

@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import {
-    Search, RefreshCw, ChevronDown, Loader2, X, SlidersHorizontal,
+    RefreshCw, ChevronDown, Loader2, X, SlidersHorizontal,
 } from 'lucide-react';
+import CampoBusqueda from '@/Components/CampoBusqueda';
 import { THEME_INPUT, THEME_LABEL, THEME_SELECT } from '../../../../utils/geliaTheme';
 import {
     BTN_SECONDARY,
@@ -102,26 +103,24 @@ export default function FiltrosTienda({
             <div className="flex flex-col lg:flex-row gap-3 lg:items-end">
                 <div className="flex-1 min-w-0">
                     <label htmlFor="tienda-busqueda" className={`${THEME_LABEL}`}>Buscar pedido</label>
-                    <div className="theme-field-with-icon relative mt-1.5">
-                        <Search className="theme-field-icon w-4 h-4" aria-hidden />
-                        <input
-                            id="tienda-busqueda"
-                            type="search"
-                            value={busqueda ?? ''}
-                            onChange={(e) => onBuscar(e.target.value)}
-                            name="q"
-                            placeholder="Folio, cliente o número…"
-                            className={`${THEME_INPUT} w-full py-3 text-sm font-semibold pr-10`}
-                            aria-busy={buscando}
-                            autoComplete="off"
-                        />
-                        {buscando && (
+                    <CampoBusqueda
+                        wrapperClassName="relative mt-1.5"
+                        id="tienda-busqueda"
+                        type="search"
+                        value={busqueda ?? ''}
+                        onChange={(e) => onBuscar(e.target.value)}
+                        name="q"
+                        placeholder="Folio, cliente o número…"
+                        className={`${THEME_INPUT} w-full py-3 text-sm font-semibold pr-10`}
+                        aria-busy={buscando}
+                        autoComplete="off"
+                        suffix={buscando ? (
                             <Loader2
                                 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin theme-text-muted"
                                 aria-label="Buscando"
                             />
-                        )}
-                    </div>
+                        ) : null}
+                    />
                 </div>
                 <div className="flex flex-wrap gap-2 shrink-0">
                     <button

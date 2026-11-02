@@ -89,7 +89,7 @@ class TiendanubePrecioVarianteWriteService
     /**
      * @param  array<string, mixed>  $payload
      */
-    public function escribir(int $storeId, int $productoId, int $varianteId, array $payload): TiendanubePrecioVarianteWriteResult
+    public function escribir(int $storeId, int $productoId, int $varianteId, array $payload, ?callable $alEnviar = null): TiendanubePrecioVarianteWriteResult
     {
         $this->assertAllowlist($payload);
         $this->assertPertenencia($storeId, $productoId, $varianteId);
@@ -97,7 +97,11 @@ class TiendanubePrecioVarianteWriteService
         $put = null;
         $putHecho = false;
         try {
-            $put = $this->api->sinReintentoEscrituraAmbigua()->updateVariant($productoId, $varianteId, $payload);
+            if ($alEnviar !== null) {
+                $alEnviar();
+            }
+            $timeout = max(1, (int) config('tiendanube.precio_http_timeout_seconds', 30));
+            $put = $this->api->sinReintentoEscrituraAmbigua()->conTimeout($timeout)->updateVariant($productoId, $varianteId, $payload);
             $putHecho = true;
         } catch (Throwable $e) {
             if ($this->esEscrituraAmbigua($e)) {

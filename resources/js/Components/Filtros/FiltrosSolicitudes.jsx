@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Search, Filter, AlertOctagon, SlidersHorizontal, X, Calendar } from 'lucide-react';
+import CampoBusqueda from '@/Components/CampoBusqueda';
+import useIconoHover from '@/hooks/useIconoHover';
 import { normalizarFechaAlConfirmar } from '@/utils/fechaFiltro';
 import RangoFechasPersonalizado from '@/Components/Filtros/RangoFechasPersonalizado';
 import { geliaCardClass, GELIA_CHIP, GELIA_SEGMENT_TABS_SCROLL, GELIA_SEGMENT_TABS_TRACK_COMPACT, THEME_INPUT, THEME_LABEL, THEME_SELECT } from '@/utils/geliaTheme';
@@ -73,6 +75,9 @@ export default function FiltrosSolicitudes({
     const [tipoClienteLocal, setTipoClienteLocal] = useState(filtroTipoCliente);
     const [tagLocal, setTagLocal] = useState(filtroTag);
     const [errorFechas, setErrorFechas] = useState('');
+    const iconoBuscar = useIconoHover(Search, { size: 16, className: 'h-4 w-4 shrink-0' });
+    const iconoFiltros = useIconoHover(SlidersHorizontal, { size: 16, className: 'h-4 w-4 shrink-0' });
+    const iconoPanelFiltros = useIconoHover(Filter, { size: 14, className: 'h-3.5 w-3.5' });
     useEffect(() => { setListaLocal(filtroLista); setTipoClienteLocal(filtroTipoCliente); setTagLocal(filtroTag); }, [filtroLista, filtroTipoCliente, filtroTag]);
 
     useEffect(() => {
@@ -192,44 +197,44 @@ export default function FiltrosSolicitudes({
 
                 <div className="flex w-full flex-col gap-2 sm:flex-row lg:max-w-xl lg:flex-1">
                     <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row">
-                        <div className="theme-field-with-icon relative min-w-0 flex-1">
-                            <Search className="theme-field-icon" aria-hidden="true" />
-                            <input
-                                type="search"
-                                placeholder="Buscar folio o cliente…"
-                                value={busquedaLocal}
-                                onChange={(e) => setBusquedaLocal(e.target.value)}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                        e.preventDefault();
-                                        aplicarConsulta();
-                                    }
-                                }}
-                                enterKeyHint="search"
-                                autoComplete="off"
-                                aria-label="Buscar folio o cliente"
-                                className={`${THEME_INPUT} w-full`}
-                            />
-                        </div>
+                        <CampoBusqueda
+                            wrapperClassName="relative min-w-0 flex-1"
+                            type="search"
+                            placeholder="Buscar folio o cliente…"
+                            value={busquedaLocal}
+                            onChange={(e) => setBusquedaLocal(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    aplicarConsulta();
+                                }
+                            }}
+                            enterKeyHint="search"
+                            autoComplete="off"
+                            aria-label="Buscar folio o cliente"
+                            className={`${THEME_INPUT} w-full`}
+                        />
                         <button
                             type="button"
+                            {...iconoBuscar.triggerProps}
                             onClick={aplicarConsulta}
                             className={`${variante === 'tag-lista' ? 'theme-btn-primary' : 'text-white'} inline-flex w-full shrink-0 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold sm:w-auto ${FOCUS}`}
                             style={variante === 'tag-lista' ? undefined : { backgroundColor: 'var(--color-primario)' }}
                             aria-label={etiquetaBuscar}
                         >
-                            <Search className="h-4 w-4 shrink-0" aria-hidden="true" />
+                            {iconoBuscar.nodo}
                             Buscar
                         </button>
                     </div>
                     <button
                         type="button"
+                        {...iconoFiltros.triggerProps}
                         onClick={() => setMostrarAdicionales((v) => !v)}
                         aria-expanded={mostrarAdicionales}
                         aria-controls={`${idPrefixFechas}-adicionales`}
                         className={`inline-flex w-full shrink-0 items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-medium transition-colors sm:w-auto ${FOCUS} ${mostrarAdicionales || filtrosActivos > 0 || tipoFecha !== 'TODAS' ? 'border-[var(--color-primario)] text-[var(--color-primario)] bg-[color-mix(in_srgb,var(--color-primario)_10%,transparent)]' : 'theme-border theme-element theme-text-muted hover:border-[var(--color-primario)]'}`}
                     >
-                        <SlidersHorizontal className="h-4 w-4 shrink-0" aria-hidden="true" />
+                        {iconoFiltros.nodo}
                         <span>Filtros</span>
                         {filtrosActivos > 0 && (
                             <span className="flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px] font-semibold text-white tabular-nums" style={{ backgroundColor: 'var(--color-primario)' }}>
@@ -261,8 +266,8 @@ export default function FiltrosSolicitudes({
             {mostrarAdicionales && (
                 <div id={`${idPrefixFechas}-adicionales`} className="gelia-tag-filtros-panel theme-surface space-y-4 rounded-xl border theme-border p-4">
                     <div className="flex items-center justify-between gap-3">
-                        <p className="m-0 flex items-center gap-2 text-sm font-medium theme-text-main">
-                            <Filter className="h-3.5 w-3.5" aria-hidden="true" /> Filtros
+                        <p className="m-0 flex items-center gap-2 text-sm font-medium theme-text-main" {...iconoPanelFiltros.triggerProps}>
+                            {iconoPanelFiltros.nodo} Filtros
                         </p>
                         <p className="m-0 hidden text-xs theme-text-muted sm:block">
                             Los cambios se aplican al pulsar {variante === 'tag-lista' ? 'Aplicar filtros' : 'Buscar'}

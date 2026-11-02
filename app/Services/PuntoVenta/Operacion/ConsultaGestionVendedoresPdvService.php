@@ -71,6 +71,7 @@ class ConsultaGestionVendedoresPdvService
             'activos_hoy' => 0,
             'disponibles' => 0,
             'atendiendo' => 0,
+            'pre_disponibles' => 0,
             'en_pausa' => 0,
         ];
 
@@ -90,6 +91,7 @@ class ConsultaGestionVendedoresPdvService
             match ($estado) {
                 EstadoVendedorOperacionPdv::Disponible => $resumen['disponibles']++,
                 EstadoVendedorOperacionPdv::Atendiendo => $resumen['atendiendo']++,
+                EstadoVendedorOperacionPdv::EnEspera => $resumen['pre_disponibles']++,
                 EstadoVendedorOperacionPdv::EnRetencion => $resumen['en_pausa']++,
                 default => null,
             };
@@ -108,6 +110,7 @@ class ConsultaGestionVendedoresPdvService
             'activos_hoy' => 0,
             'disponibles' => 0,
             'atendiendo' => 0,
+            'pre_disponibles' => 0,
             'en_pausa' => 0,
         ];
     }

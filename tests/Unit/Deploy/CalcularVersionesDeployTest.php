@@ -19,6 +19,7 @@ class CalcularVersionesDeployTest extends TestCase
         $this->assertSame($antes['surfaces']['sala'], $despues['surfaces']['sala']);
         $this->assertSame($antes['surfaces']['turnos'], $despues['surfaces']['turnos']);
         $this->assertSame($antes['shell'], $despues['shell']);
+        $this->assertNotSame($antes['compilacion'], $despues['compilacion']);
     }
 
     public function test_un_chunk_de_sala_solo_cambia_esa_superficie(): void
@@ -46,7 +47,13 @@ class CalcularVersionesDeployTest extends TestCase
         $antes = CalcularVersionesDeploy::desdeManifiesto($base);
 
         $this->assertSame($antes['shell'], CalcularVersionesDeploy::desdeManifiesto($pagina)['shell']);
+        $this->assertNotSame($antes['compilacion'], CalcularVersionesDeploy::desdeManifiesto($pagina)['compilacion']);
         $this->assertNotSame($antes['shell'], CalcularVersionesDeploy::desdeManifiesto($arranque)['shell']);
+
+        $estilos = $this->manifiesto();
+        $estilos['resources/css/app.css']['file'] = 'assets/app-OTRO.css';
+        $this->assertSame($antes['shell'], CalcularVersionesDeploy::desdeManifiesto($estilos)['shell']);
+        $this->assertNotSame($antes['compilacion'], CalcularVersionesDeploy::desdeManifiesto($estilos)['compilacion']);
     }
 
     /**

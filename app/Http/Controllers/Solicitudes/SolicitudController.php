@@ -14,6 +14,7 @@ use App\Services\Solicitudes\SolicitarCancelacionSolicitudService;
 use App\Services\Solicitudes\ExportarReporteSolicitudesService;
 use App\Services\Solicitudes\AjustarMontoPorSolicitudService;
 use App\Services\Solicitudes\TipoClienteSolicitudResolver;
+use App\Services\Solicitudes\ValidarListaInferiorService;
 use App\Services\Solicitudes\EscalonamientoService;
 use App\Services\Escalonamiento\ProyeccionClienteEscalonamiento;
 use Illuminate\Http\RedirectResponse;
@@ -860,11 +861,11 @@ class SolicitudController extends Controller
             abort(403, 'Las solicitudes operativas se cancelan desde el módulo Cancelaciones y Cotizaciones.');
         }
 
-        $esCambioLista = str_contains(strtoupper($solicitud->proceso?->nombre ?? ''), 'LISTA');
+        $exigeRebaja = app(ValidarListaInferiorService::class)->exigeListaRebaja($solicitud);
 
         $request->validate([
             'motivo_cancelacion' => 'required|string|min:10|max:1000',
-            'catalogo_lista_rebaja_id' => ($esCambioLista ? 'required' : 'nullable') . '|integer|exists:catalogo_listas_descuento,id',
+            'catalogo_lista_rebaja_id' => ($exigeRebaja ? 'required' : 'nullable') . '|integer|exists:catalogo_listas_descuento,id',
         ]);
 
         $service->ejecutar(

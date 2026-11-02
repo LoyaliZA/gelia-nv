@@ -1,6 +1,7 @@
 import React from 'react';
 import { Head, Link } from '@inertiajs/react';
-import { ArrowLeft, PackageCheck } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
+import IconoConfirmacionAnimado from '@/Components/IconoConfirmacionAnimado';
 import AppLayout from '../../../Layouts/AppLayout';
 import GeliaPageShell from '../../../Components/GeliaPageShell';
 import { geliaCardClass, THEME_BTN_PRIMARY } from '../../../utils/geliaTheme';
@@ -42,7 +43,7 @@ export default function Custodia({
 
                 {exito ? (
                     <div className={`${geliaCardClass()} p-6 text-center space-y-3`}>
-                        <PackageCheck className="w-10 h-10 mx-auto text-[var(--color-exito)]" />
+                        <IconoConfirmacionAnimado variante="paquete" size={40} className="mx-auto theme-text-exito" />
                         <p className="font-black m-0">Custodia registrada correctamente.</p>
                         <Link href={route('punto_venta.resguardos.show', resguardo.id)} className={THEME_BTN_PRIMARY}>Ver detalle</Link>
                     </div>

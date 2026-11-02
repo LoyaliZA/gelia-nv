@@ -8,7 +8,7 @@ import FiltrosSolicitudes from '@/Components/Filtros/FiltrosSolicitudes';
 import { eventosHistorial, leerSnapshotSeguro } from '@/Pages/Solicitudes/Partials/solicitudHistorial';
 
 let root, container;
-const solicitud = { id: 42, monto_cotizado: 3500, proceso: { nombre: 'TAG y cambio de lista' }, cliente: { nombre: 'Cliente', lista_descuento: { monto_requerido: 3000 } }, lista_descuento: { monto_requerido: 5000 } };
+const solicitud = { id: 42, monto_cotizado: 3500, catalogo_lista_descuento_id: 9, proceso: { nombre: 'TAG y cambio de lista' }, cliente: { nombre: 'Cliente', lista_descuento: { monto_requerido: 3000 } }, lista_descuento: { monto_requerido: 5000 } };
 const input = async (selector, value) => act(() => {
     const field = document.querySelector(selector);
     const prototype = field.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
@@ -58,6 +58,16 @@ describe('Tag and Lista action forms', () => {
         await input('#accion-motivo', 'El cliente pospuso su compra.');
         await submit();
         expect(post).toHaveBeenCalledWith('/solicitudes.solicitar_cancelacion/42', { motivo_cancelacion: 'El cliente pospuso su compra.', catalogo_lista_rebaja_id: '2' }, expect.any(Object));
+    });
+
+    it('does not ask for a lower list when the request did not change the client list', async () => {
+        const post = vi.spyOn(router, 'post').mockImplementation(() => {});
+        const sinLista = { ...solicitud, catalogo_lista_descuento_id: null };
+        await act(() => root.render(React.createElement(ModalAccionSolicitud, { accion: 'solicitar', solicitud: sinLista, listas: [{ id: 1, nombre: 'Público', monto_requerido: 0 }], onClose: vi.fn() })));
+        expect(document.querySelector('#accion-lista')).toBeNull();
+        await input('#accion-motivo', 'El pedido cambió de piezas.');
+        await submit();
+        expect(post).toHaveBeenCalledWith('/solicitudes.solicitar_cancelacion/42', { motivo_cancelacion: 'El pedido cambió de piezas.' }, expect.any(Object));
     });
 
     it('retains a visible confirmation and the audit reason when deleting a request', async () => {

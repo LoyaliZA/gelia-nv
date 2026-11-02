@@ -3,7 +3,8 @@ import SolicitudDialog from '@/Components/Solicitudes/SolicitudDialog';
 import React, { useEffect, useState, useRef } from 'react';
 import { useForm } from '@inertiajs/react';
 import axios from 'axios';
-import { X, Sparkles, Search, CreditCard, FileSignature, TrendingUp, Send, AlertTriangle, Users, MessageSquare, CheckCircle2, Circle, FileText, Calendar, Landmark, Hash, Store, Tag, FileSpreadsheet, Upload, Trash2, Download, ChevronDown } from 'lucide-react';
+import { X, Sparkles, CreditCard, FileSignature, TrendingUp, Send, AlertTriangle, Users, MessageSquare, CheckCircle2, Circle, FileText, Calendar, Landmark, Hash, Store, Tag, FileSpreadsheet, Upload, Trash2, Download, ChevronDown } from 'lucide-react';
+import CampoBusqueda from '@/Components/CampoBusqueda';
 import { THEME_INPUT, THEME_SELECT, THEME_TEXTAREA, THEME_BTN_PRIMARY } from '../../../utils/geliaTheme';
 import {
     evaluarEscalonamiento,
@@ -315,20 +316,19 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
 
                         <div className="space-y-2 relative">
                             <label htmlFor="solicitud-cliente" className="text-[10px] font-medium  theme-text-muted  ml-1">Cliente</label>
-                            <div className="theme-field-with-icon relative">
-                                <Search className="theme-field-icon w-5 h-5" aria-hidden />
-                                <input id="solicitud-cliente" name="numero_cliente" autoComplete="off"
-                                    type="text"
-                                    value={data.numero_cliente}
-                                    required
-                                    onChange={e => manejarBusquedaCliente(e.target.value)}
-                                    onFocus={() => { if (data.numero_cliente) setMostrarDropdown(true); }}
-                                    onKeyDown={event => { if (event.key === 'Escape') setMostrarDropdown(false); if (event.key === 'ArrowDown') { event.preventDefault(); event.currentTarget.closest('.relative')?.parentElement.querySelector('button')?.focus(); } }}
-                                    placeholder="Ingresa nombre o folio…"
-                                    className={`${THEME_INPUT} w-full py-4 text-sm`}
-                                    disabled={modoEdicion}
-                                />
-                            </div>
+                            <CampoBusqueda
+                                wrapperClassName="relative"
+                                id="solicitud-cliente" name="numero_cliente" autoComplete="off"
+                                type="text"
+                                value={data.numero_cliente}
+                                required
+                                onChange={e => manejarBusquedaCliente(e.target.value)}
+                                onFocus={() => { if (data.numero_cliente) setMostrarDropdown(true); }}
+                                onKeyDown={event => { if (event.key === 'Escape') setMostrarDropdown(false); if (event.key === 'ArrowDown') { event.preventDefault(); event.currentTarget.closest('.relative')?.parentElement.querySelector('button')?.focus(); } }}
+                                placeholder="Ingresa nombre o folio…"
+                                className={`${THEME_INPUT} w-full py-4 text-sm`}
+                                disabled={modoEdicion}
+                            />
                             {errors.numero_cliente && <p className="text-xs text-red-500">{errors.numero_cliente}</p>}
                             {!modoEdicion && data.numero_cliente && !infoCliente && (
                                 <p className="text-xs text-amber-600 dark:text-amber-400 font-bold">

@@ -144,7 +144,7 @@ export default function SelectorSucursalActivaPdv({
                             value={selectValue}
                             onChange={onSelectChange}
                             disabled={selectDisabled}
-                            className={`${THEME_SELECT} !py-1 !px-2 text-[10px] font-bold min-h-[32px] max-w-[10rem] w-full sm:w-auto`}
+                            className={`${THEME_SELECT} !py-1 !px-2 text-center text-[10px] font-bold min-h-[32px] max-w-[10rem] w-full sm:w-auto`}
                             aria-label="Seleccionar sucursal activa"
                         >
                             {sucursalesAsignadas.map(({ id, nombre }) => (

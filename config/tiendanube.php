@@ -41,9 +41,47 @@ return [
     'precio_lote_sync_max' => (int) env('TIENDANUBE_PRECIO_LOTE_SYNC_MAX', 200),
     'precio_lote_resolver_per_page' => (int) env('TIENDANUBE_PRECIO_LOTE_RESOLVER_PER_PAGE', 500),
     'precios_aprobacion_habilitada' => filter_var(env('TIENDANUBE_PRECIOS_APROBACION_HABILITADA', true), FILTER_VALIDATE_BOOLEAN),
-    'precios_aplicacion_habilitada' => filter_var(env('TIENDANUBE_PRECIOS_APLICACION_HABILITADA', true), FILTER_VALIDATE_BOOLEAN),
+    /*
+     * Falso si la variable no existe. Un config:cache previo conserva el booleano
+     * ya resuelto: cambiar este default no apaga un entorno cacheado en verdadero.
+     */
+    'precios_aplicacion_habilitada' => filter_var(env('TIENDANUBE_PRECIOS_APLICACION_HABILITADA', false), FILTER_VALIDATE_BOOLEAN),
+    /*
+     * Ambos falsos hasta integrar el reprogramador de E2b y comprobar consumidores.
+     * Un config:cache previo no incluye estas claves: la ausencia se lee como falso.
+     */
+    'gobernador_activo' => filter_var(env('TIENDANUBE_GOBERNADOR_ACTIVO', false), FILTER_VALIDATE_BOOLEAN),
+    'colas_dedicadas' => filter_var(env('TIENDANUBE_COLAS_DEDICADAS', false), FILTER_VALIDATE_BOOLEAN),
+    /*
+     * El scheduler de recuperación queda registrado y apagado.
+     * Un config:cache anterior no tiene la clave: la ausencia se lee como falso
+     * y no encola RecuperarPrecioEjecucionesJob. No regenerar el cache para crearla.
+     */
+    'recuperacion_scheduler_activo' => filter_var(env('TIENDANUBE_RECUPERACION_SCHEDULER_ACTIVO', false), FILTER_VALIDATE_BOOLEAN),
+    'gobernador_intervalo_ms' => (int) env('TIENDANUBE_GOBERNADOR_INTERVALO_MS', 1000),
+    /*
+     * Ausentes en un config:cache anterior. El código usa estos mismos respaldos
+     * si la clave no está cargada. No regenerar el cache para incorporarlas.
+     */
+    'gobernador_lectura_max_ms' => (int) env('TIENDANUBE_GOBERNADOR_LECTURA_MAX_MS', 30_000),
+    /*
+     * Si un 429 no trae x-rate-limit-reset, la espera usa este respaldo.
+     * No es una espera fija de cinco segundos: el default es 2000 ms.
+     */
+    'gobernador_reset_respaldo_ms' => (int) env('TIENDANUBE_GOBERNADOR_RESET_RESPALDO_MS', 2_000),
+    'gobernador_demanda_margen_ms' => (int) env('TIENDANUBE_GOBERNADOR_DEMANDA_MARGEN_MS', 30_000),
+    'gobernador_demanda_ttl_ms' => (int) env('TIENDANUBE_GOBERNADOR_DEMANDA_TTL_MS', 120_000),
     'precios_restauracion_habilitada' => filter_var(env('TIENDANUBE_PRECIOS_RESTAURACION_HABILITADA', true), FILTER_VALIDATE_BOOLEAN),
+    /*
+     * Un envío de precio cabe en el trabajo; el trabajo cabe en el lease del ítem.
+     * El lease cabe en el lock del producto y en la exclusividad de tienda.
+     * Una espera durable suelta lock, reserva y lease del ítem. No renueva un token vencido.
+     * El timeout del job de publicación es precio_trabajo_max_seconds, no el del worker default.
+     */
+    'precio_http_timeout_seconds' => (int) env('TIENDANUBE_PRECIO_HTTP_TIMEOUT_SECONDS', 30),
+    'precio_trabajo_max_seconds' => (int) env('TIENDANUBE_PRECIO_TRABAJO_MAX_SECONDS', 80),
     'precio_ejecucion_lease_seconds' => (int) env('TIENDANUBE_PRECIO_EJECUCION_LEASE_SECONDS', 90),
+    'precio_recurso_lock_seconds' => (int) env('TIENDANUBE_PRECIO_RECURSO_LOCK_SECONDS', 90),
     'precio_ejecucion_item_max_intentos' => (int) env('TIENDANUBE_PRECIO_EJECUCION_ITEM_MAX_INTENTOS', 5),
     'precio_ejecucion_batch' => (int) env('TIENDANUBE_PRECIO_EJECUCION_BATCH', 15),
     'api_version_precios' => '2025-03',

@@ -30,6 +30,8 @@ class TiendanubePrecioEjecucionEvento extends Model
 
     public const TIPO_REINTENTO = 'reintento';
 
+    public const TIPO_CONCILIACION_EXIGIDA = 'conciliacion_exigida';
+
     protected $table = 'tiendanube_precio_ejecucion_eventos';
 
     protected $fillable = [

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from '@inertiajs/react';
+import useIconoHover from '@/hooks/useIconoHover';
 
 /**
  * Enlace hoja del sidebar (accesos y perfil) — estados activos idénticos.
@@ -18,13 +19,14 @@ export default function SidebarNavLeafLink({
     disabled = false,
     badge,
 }) {
+    const icono = useIconoHover(Icon, {
+        size: 14,
+        className: `w-3.5 h-3.5 mr-2.5 ${active ? 'gelia-sidebar-nav-child-icon--active' : 'gelia-sidebar-nav-child-icon'}`,
+    });
     const content = (
         <>
             <div className="flex items-center shrink-0 mt-0.5">
-                <Icon
-                    className={`w-3.5 h-3.5 mr-2.5 ${active ? 'gelia-sidebar-nav-child-icon--active' : 'gelia-sidebar-nav-child-icon'}`}
-                    aria-hidden
-                />
+                {icono.nodo}
             </div>
             <div className="flex flex-col min-w-0 flex-1">
                 <span className="flex items-center gap-2 min-w-0">
@@ -54,6 +56,7 @@ export default function SidebarNavLeafLink({
         return (
             <span
                 role="presentation"
+                {...icono.triggerProps}
                 className={`gelia-sidebar-nav-child-link group flex items-center w-full py-1.5 pr-3 opacity-50 cursor-not-allowed ${paddingClass} ${extraClassName}`.trim()}
             >
                 {content}
@@ -64,6 +67,7 @@ export default function SidebarNavLeafLink({
     return (
         <Link
             href={href}
+            {...icono.triggerProps}
             onClick={onClick}
             role={role}
             aria-current={active ? 'page' : undefined}

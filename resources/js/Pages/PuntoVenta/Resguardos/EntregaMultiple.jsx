@@ -1,6 +1,7 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { Head, Link } from '@inertiajs/react';
-import { ArrowLeft, ArrowRight, CheckCircle2, AlertTriangle, Truck } from 'lucide-react';
+import { ArrowLeft, ArrowRight, AlertTriangle, Truck } from 'lucide-react';
+import IconoConfirmacionAnimado from '@/Components/IconoConfirmacionAnimado';
 import AppLayout from '../../../Layouts/AppLayout';
 import GeliaPageShell from '../../../Components/GeliaPageShell';
 import { geliaCardClass, THEME_BTN_PRIMARY } from '../../../utils/geliaTheme';
@@ -156,7 +157,7 @@ export default function EntregaMultiple({
 
                 {exito ? (
                     <div className={`${geliaCardClass()} p-8 text-center space-y-4`}>
-                        <CheckCircle2 className="w-12 h-12 mx-auto text-[var(--color-exito)]" />
+                        <IconoConfirmacionAnimado size={48} className="mx-auto theme-text-exito" />
                         <h2 className="text-lg font-black uppercase theme-text-main m-0">Operación registrada</h2>
                         <p className="text-sm theme-text-muted m-0">
                             Se registró la entrega de {resultados.length || resguardos.length} pedido(s). Cada pedido conserva su propia firma.

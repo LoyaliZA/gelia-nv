@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
-import { Search, X } from 'lucide-react';
+import { X } from 'lucide-react';
+import CampoBusqueda from '@/Components/CampoBusqueda';
 import { THEME_INPUT, THEME_LABEL } from '../../../utils/geliaTheme';
 
 /**
@@ -75,17 +76,14 @@ export default function FiltroClienteEscalonamiento({
                 </div>
             ) : (
                 <>
-                    <div className="theme-field-with-icon">
-                        <Search className="theme-field-icon" aria-hidden />
-                        <input
-                            type="search"
-                            className={`${THEME_INPUT} w-full`}
-                            placeholder="Número o nombre (mín. 2 caracteres)"
-                            value={busqueda}
-                            onChange={(e) => setBusqueda(e.target.value)}
-                            autoComplete="off"
-                        />
-                    </div>
+                    <CampoBusqueda
+                        type="search"
+                        className={`${THEME_INPUT} w-full`}
+                        placeholder="Número o nombre (mín. 2 caracteres)"
+                        value={busqueda}
+                        onChange={(e) => setBusqueda(e.target.value)}
+                        autoComplete="off"
+                    />
                     {cargando && <p className="text-xs theme-text-muted m-0">Buscando…</p>}
                     {sugerencias.length > 0 && (
                         <ul className="absolute z-20 left-0 right-0 mt-2 theme-surface border theme-border rounded-xl shadow-lg max-h-64 overflow-y-auto m-0 p-1.5 list-none">

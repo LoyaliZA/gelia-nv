@@ -2,6 +2,7 @@
 @import './gelia/tokens.css';
 @import './gelia/primitives.css';
 @import './gelia/animations.css';
+@import './gelia/features/actualizacion.css';
 @import './gelia/utilities.css';
 @import './gelia/layout/app-shell.css';
 @import './gelia/features/sidebar.css';

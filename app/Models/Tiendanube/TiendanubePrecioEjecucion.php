@@ -55,6 +55,10 @@ class TiendanubePrecioEjecucion extends Model
         'resumen_campos',
         'lease_token',
         'lease_expires_at',
+        'continuacion_programada_en',
+        'continuacion_despachada_en',
+        'continuacion_despacho_token',
+        'continuacion_despacho_expira_at',
         'error_codigo',
         'error_mensaje',
         'started_at',
@@ -78,6 +82,7 @@ class TiendanubePrecioEjecucion extends Model
             'canceladas' => 'integer',
             'resumen_campos' => 'array',
             'lease_expires_at' => 'datetime',
+            'continuacion_despacho_expira_at' => 'datetime',
             'started_at' => 'datetime',
             'completed_at' => 'datetime',
         ];

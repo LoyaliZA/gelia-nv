@@ -33,7 +33,7 @@ class ConsultaPersonaDisponiblePdvService implements ConsultaPersonaDisponiblePd
 
     /**
      * Destino de reatención manual. La fila automática sigue usando esDisponible.
-     * Durante la espera de fin de pausa la persona aún puede recibir esa reasignación.
+     * Durante la pausa abierta y la espera (fin de pausa o cierre de atención) la persona aún puede recibir esa reasignación.
      */
     public function esDestinoReatencionManual(User $user, int $sucursalId): bool
     {
@@ -41,11 +41,19 @@ class ConsultaPersonaDisponiblePdvService implements ConsultaPersonaDisponiblePd
             return true;
         }
 
-        if (! $this->consultaBase($sucursalId, exigirCooldownVencido: false)->whereKey($user->id)->exists()) {
-            return false;
+        if ($this->consultaBase($sucursalId, exigirCooldownVencido: false)->whereKey($user->id)->exists()
+            && $this->esperaVigentePermiteReatencionManual($user, $sucursalId)) {
+            return true;
         }
 
-        return $this->esperaVigenteEsFinDePausa($user, $sucursalId);
+        return $this->consultaBase($sucursalId, exigirCooldownVencido: false, excluirPausaAbierta: false)
+            ->whereKey($user->id)
+            ->whereHas('intervalosOperativosPdv', function (Builder $query) use ($sucursalId): void {
+                $query->where('sucursal_id', $sucursalId)
+                    ->whereNull('fin_at')
+                    ->where('tipo', TipoIntervaloOperativoPdv::EnPausa);
+            })
+            ->exists();
     }
 
     public function contarDisponibles(int $sucursalId, string $servicio): int
@@ -56,7 +64,7 @@ class ConsultaPersonaDisponiblePdvService implements ConsultaPersonaDisponiblePd
     /**
      * @return Builder<User>
      */
-    private function consultaBase(int $sucursalId, bool $exigirCooldownVencido = true): Builder
+    private function consultaBase(int $sucursalId, bool $exigirCooldownVencido = true, bool $excluirPausaAbierta = true): Builder
     {
         if (! $this->sucursalAceptaAltas($sucursalId)) {
             return User::query()->whereRaw('1 = 0');
@@ -66,7 +74,7 @@ class ConsultaPersonaDisponiblePdvService implements ConsultaPersonaDisponiblePd
         $finDia = $inicioDia->copy()->endOfDay();
         $ahora = now();
 
-        return $this->vendedoresElegibles->query($sucursalId)
+        $consulta = $this->vendedoresElegibles->query($sucursalId)
             ->whereHas('jornadasPdv', function (Builder $query) use ($sucursalId, $inicioDia, $finDia, $ahora, $exigirCooldownVencido): void {
                 $query->where('sucursal_id', $sucursalId)
                     ->where('estado', EstadoJornadaPdv::Abierta)
@@ -79,12 +87,17 @@ class ConsultaPersonaDisponiblePdvService implements ConsultaPersonaDisponiblePd
                             ->orWhere('disponible_desde', '<=', $ahora);
                     });
                 }
-            })
-            ->whereDoesntHave('intervalosOperativosPdv', function (Builder $query) use ($sucursalId): void {
+            });
+
+        if ($excluirPausaAbierta) {
+            $consulta->whereDoesntHave('intervalosOperativosPdv', function (Builder $query) use ($sucursalId): void {
                 $query->where('sucursal_id', $sucursalId)
                     ->whereNull('fin_at')
                     ->where('tipo', TipoIntervaloOperativoPdv::EnPausa);
-            })
+            });
+        }
+
+        return $consulta
             ->whereDoesntHave('atencionesTurnoPdv', function (Builder $query): void {
                 $query->whereNull('fin_at');
             })
@@ -102,7 +115,7 @@ class ConsultaPersonaDisponiblePdvService implements ConsultaPersonaDisponiblePd
         return $dia instanceof SucursalDiaOperacionPdv && $dia->acepta_altas;
     }
 
-    private function esperaVigenteEsFinDePausa(User $user, int $sucursalId): bool
+    private function esperaVigentePermiteReatencionManual(User $user, int $sucursalId): bool
     {
         $jornada = JornadaPdv::query()
             ->where('user_id', $user->id)
@@ -120,7 +133,10 @@ class ConsultaPersonaDisponiblePdvService implements ConsultaPersonaDisponiblePd
             ->first();
 
         return $espera instanceof EsperaDisponibilidadPdv
-            && $espera->origen === EsperaDisponibilidadPdv::ORIGEN_PAUSA_FINALIZADA
+            && in_array($espera->origen, [
+                EsperaDisponibilidadPdv::ORIGEN_PAUSA_FINALIZADA,
+                EsperaDisponibilidadPdv::ORIGEN_ATENCION_CERRADA,
+            ], true)
             && $espera->disponible_desde_nuevo !== null
             && $jornada->disponible_desde->equalTo($espera->disponible_desde_nuevo);
     }

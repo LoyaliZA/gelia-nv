@@ -3,6 +3,9 @@ import {
     esConflictoVersion,
     etiquetaActividad,
     etiquetaEstadoVendedor,
+    tonoEstadoVendedor,
+    claseBadgeEstadoVendedor,
+    mensajeAvisoDisponibilidad,
     etiquetaJornada,
     formatearUltimaActualizacion,
     avisoSucursalOperacion,
@@ -13,6 +16,7 @@ import {
     mensajeMiAtencion,
     esVendedorEquipoInactivoGerencia,
     particionarEquipoGerencia,
+    resolverSeccionInactivos,
     mostrarBandejaSinTurno,
     puedeAbrirJornada,
     puedeAbrirSucursalManualmente,
@@ -39,7 +43,17 @@ describe('operacionUtils', () => {
         expect(etiquetaJornada('ABIERTA')).toBe('Abierta');
         expect(etiquetaActividad('en_pausa')).toBe('En pausa');
         expect(etiquetaEstadoVendedor('en_retencion')).toBe('En pausa');
-        expect(etiquetaEstadoVendedor('en_espera')).toBe('En espera');
+        expect(tonoEstadoVendedor('disponible')).toBe('exito');
+        expect(tonoEstadoVendedor('atendiendo')).toBe('atendiendo');
+        expect(tonoEstadoVendedor('atendiendo', true)).toBe('prorroga');
+        expect(tonoEstadoVendedor('en_retencion')).toBe('pausa');
+        expect(claseBadgeEstadoVendedor('atendiendo')).toContain('gelia-estado-equipo--atendiendo');
+        expect(claseBadgeEstadoVendedor('atendiendo', true)).toContain('gelia-estado-equipo--prorroga');
+        expect(claseBadgeEstadoVendedor('en_retencion')).toContain('gelia-estado-equipo--pausa');
+        expect(etiquetaEstadoVendedor('en_espera')).toBe('Pre-disponible');
+        expect(mensajeAvisoDisponibilidad('en_retencion', 'transferencia')).toContain('transferencia sí se puede confirmar');
+        expect(mensajeAvisoDisponibilidad('en_espera', 'reatencion')).toContain('Pre-disponible');
+        expect(mensajeAvisoDisponibilidad('disponible', 'transferencia')).toBe('');
     });
 
     it('mensajes de mi atención por estado', () => {
@@ -65,6 +79,50 @@ describe('operacionUtils', () => {
         const { activos, inactivos } = particionarEquipoGerencia(equipo);
         expect(activos.map((p) => p.id)).toEqual([3, 2]);
         expect(inactivos.map((p) => p.id)).toEqual([1, 4]);
+    });
+
+    it('contrae inactivos cuando ya hay activos y los mantiene abiertos si nadie está activo', () => {
+        expect(resolverSeccionInactivos({
+            abierta: true,
+            activosAntes: 0,
+            activosAhora: 0,
+            evento: 'equipo',
+        })).toEqual({ abierta: true, reiniciarTemporizador: false, cancelarTemporizador: true });
+
+        expect(resolverSeccionInactivos({
+            abierta: true,
+            activosAntes: 0,
+            activosAhora: 1,
+            evento: 'equipo',
+        })).toEqual({ abierta: true, reiniciarTemporizador: true, cancelarTemporizador: false });
+
+        expect(resolverSeccionInactivos({
+            abierta: true,
+            activosAntes: 1,
+            activosAhora: 2,
+            evento: 'equipo',
+        })).toEqual({ abierta: true, reiniciarTemporizador: true, cancelarTemporizador: false });
+
+        expect(resolverSeccionInactivos({
+            abierta: true,
+            activosAntes: 2,
+            activosAhora: 2,
+            evento: 'actividad',
+        })).toEqual({ abierta: true, reiniciarTemporizador: true, cancelarTemporizador: false });
+
+        expect(resolverSeccionInactivos({
+            abierta: true,
+            activosAntes: 2,
+            activosAhora: 2,
+            evento: 'vencio',
+        })).toEqual({ abierta: false, reiniciarTemporizador: false, cancelarTemporizador: true });
+
+        expect(resolverSeccionInactivos({
+            abierta: false,
+            activosAntes: 2,
+            activosAhora: 0,
+            evento: 'vencio',
+        })).toEqual({ abierta: true, reiniciarTemporizador: false, cancelarTemporizador: true });
     });
 
     it('solo disponible muestra bandeja sin turno', () => {

@@ -1,8 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { TvIcon } from '@animateicons/react/lucide/tv-icon';
 import { Copy, ExternalLink, Loader2, Monitor, Power, PowerOff } from 'lucide-react';
 import ModalConfirmarAccion from '@/Pages/ControlPedidos/Partials/ModalConfirmarAccion';
 import { geliaCardClass, THEME_BTN_PRIMARY, THEME_BTN_SECONDARY } from '@/utils/geliaTheme';
 import useEnlacePantallaSalaPdv from '@/hooks/useEnlacePantallaSalaPdv';
+import useIconoEnControl from '@/hooks/useIconoEnControl';
 
 export default function AbrirPantallaSalaPdv({
     sucursalActiva = null,
@@ -28,6 +30,7 @@ export default function AbrirPantallaSalaPdv({
     const [modalDesactivar, setModalDesactivar] = useState(false);
     const [mensaje, setMensaje] = useState(null);
     const [copiado, setCopiado] = useState(false);
+    const { ref: iconoTvRef, triggerProps: iconoTvHover } = useIconoEnControl();
 
     useEffect(() => {
         if (!sucursalId) return;
@@ -188,12 +191,21 @@ export default function AbrirPantallaSalaPdv({
             <>
                 <button
                     type="button"
-                    className={`${THEME_BTN_SECONDARY} inline-flex items-center gap-2`}
+                    className="inline-flex items-center gap-2 min-h-[44px] px-4 py-2.5 rounded-xl border text-[10px] font-black uppercase tracking-widest theme-text-main disabled:opacity-60 disabled:cursor-not-allowed"
+                    style={{
+                        backgroundColor: 'var(--theme-element-bg)',
+                        borderColor: 'var(--theme-element-border)',
+                    }}
+                    {...iconoTvHover}
                     onClick={() => setModalConfirmar(true)}
                     disabled={cargando}
                     data-pdv-pantalla-sala-abrir-compact
                 >
-                    <Monitor className="w-4 h-4" aria-hidden />
+                    {cargando ? (
+                        <Loader2 className="w-4 h-4 animate-spin" aria-hidden />
+                    ) : (
+                        <TvIcon ref={iconoTvRef} size={16} duration={1.5} aria-hidden />
+                    )}
                     Pantalla de sala
                 </button>
                 <ModalConfirmarAccion

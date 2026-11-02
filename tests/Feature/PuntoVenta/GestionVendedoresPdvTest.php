@@ -14,7 +14,7 @@ use App\Services\PuntoVenta\PuntoVentaModulo;
 use App\Services\PuntoVenta\Turnos\PlazosTurnosPdvConfig;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Support\RefreshDatabaseSafe;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Queue;
@@ -25,7 +25,7 @@ use Tests\TestCase;
 
 class GestionVendedoresPdvTest extends TestCase
 {
-    use RefreshDatabase;
+    use RefreshDatabaseSafe;
 
     private Sucursal $sucursal;
 
@@ -126,6 +126,7 @@ class GestionVendedoresPdvTest extends TestCase
             ->assertJsonPath('resumen.configurados', 1)
             ->assertJsonPath('resumen.activos_hoy', 1)
             ->assertJsonPath('resumen.disponibles', 1)
+            ->assertJsonPath('resumen.pre_disponibles', 0)
             ->assertJsonPath('clientes_en_fila', 1);
 
         $miembro = collect($response->json('equipo'))->firstWhere('id', $this->vendedor->id);
