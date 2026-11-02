@@ -848,6 +848,22 @@ class PedidoBma extends Model
             ->latest('id');
     }
 
+    /**
+     * Instrucción de entrega que todavía se puede ejecutar.
+     * En registros existentes es la tarea abierta más reciente.
+     * Sustituida, cancelada o liberada no cuenta.
+     */
+    public function instruccionEntregaVigente(): HasOne
+    {
+        return $this->hasOne(PedidoBmaTareaPreparacion::class, 'pedido_bma_id')
+            ->whereNotIn('estado', [
+                PedidoBmaTareaPreparacion::ESTADO_CANCELADA,
+                PedidoBmaTareaPreparacion::ESTADO_SUSTITUIDA,
+                PedidoBmaTareaPreparacion::ESTADO_LIBERADA,
+            ])
+            ->latest('id');
+    }
+
     public function tareaPreparacionRespondida(): HasOne
     {
         return $this->hasOne(PedidoBmaTareaPreparacion::class, 'pedido_bma_id')
@@ -866,6 +882,7 @@ class PedidoBma extends Model
             ->whereNotIn('estado', [
                 PedidoBmaTareaPreparacion::ESTADO_RECIBIDA_CEDIS,
                 PedidoBmaTareaPreparacion::ESTADO_CANCELADA,
+                PedidoBmaTareaPreparacion::ESTADO_SUSTITUIDA,
                 PedidoBmaTareaPreparacion::ESTADO_LIBERADA,
             ])
             ->exists();
@@ -879,6 +896,7 @@ class PedidoBma extends Model
             ->whereNotIn('estado', [
                 PedidoBmaTareaPreparacion::ESTADO_RESPONDIDA,
                 PedidoBmaTareaPreparacion::ESTADO_CANCELADA,
+                PedidoBmaTareaPreparacion::ESTADO_SUSTITUIDA,
                 PedidoBmaTareaPreparacion::ESTADO_LIBERADA,
             ])
             ->exists();
@@ -888,7 +906,10 @@ class PedidoBma extends Model
     {
         $obligatorias = $this->tareasPreparacion()
             ->where('requiere_traslado_cedis', true)
-            ->whereNotIn('estado', [PedidoBmaTareaPreparacion::ESTADO_CANCELADA])
+            ->whereNotIn('estado', [
+                PedidoBmaTareaPreparacion::ESTADO_CANCELADA,
+                PedidoBmaTareaPreparacion::ESTADO_SUSTITUIDA,
+            ])
             ->get();
 
         if ($obligatorias->isEmpty()) {

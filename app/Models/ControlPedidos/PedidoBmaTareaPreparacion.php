@@ -38,6 +38,9 @@ class PedidoBmaTareaPreparacion extends Model
 
     public const ESTADO_CANCELADA = 'CANCELADA';
 
+    /** La instrucción fue reemplazada. Conserva historial y no admite acciones nuevas. */
+    public const ESTADO_SUSTITUIDA = 'SUSTITUIDA';
+
     public const ESTADOS = [
         self::ESTADO_PENDIENTE,
         self::ESTADO_EN_ATENCION,
@@ -51,6 +54,7 @@ class PedidoBmaTareaPreparacion extends Model
         self::ESTADO_LIBERACION_SOLICITADA,
         self::ESTADO_LIBERADA,
         self::ESTADO_CANCELADA,
+        self::ESTADO_SUSTITUIDA,
     ];
 
     public const LABELS = [
@@ -66,6 +70,7 @@ class PedidoBmaTareaPreparacion extends Model
         self::ESTADO_LIBERACION_SOLICITADA => 'Liberación solicitada',
         self::ESTADO_LIBERADA => 'Liberada',
         self::ESTADO_CANCELADA => 'Cancelada',
+        self::ESTADO_SUSTITUIDA => 'Sustituida',
     ];
 
     protected $table = 'pedido_bma_tareas_preparacion';

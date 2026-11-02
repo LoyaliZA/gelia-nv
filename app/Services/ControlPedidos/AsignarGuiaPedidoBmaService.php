@@ -6,6 +6,7 @@ use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\PedidoBma;
 use Illuminate\Support\Facades\DB;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
+use App\Support\ControlPedidos\InstruccionEntrega;
 use App\Support\ControlPedidos\MaquinaEstadosPedidoBma;
 
 class AsignarGuiaPedidoBmaService
@@ -25,6 +26,7 @@ class AsignarGuiaPedidoBmaService
         }
 
         $pedido->loadMissing(['estatus', 'paqueteria', 'origen']);
+        InstruccionEntrega::assertGuiaNoPosterior($pedido);
 
         if ($pedido->es_resguardo) {
             throw new \RuntimeException('Un pedido en resguardo no puede recibir guía. Libere el resguardo primero.');

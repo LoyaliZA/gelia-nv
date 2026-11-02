@@ -6,6 +6,7 @@ use App\Models\ControlPedidos\PedidoBmaCumplimientoEvento;
 use App\Models\ControlPedidos\PedidoBmaCumplimientoFisico;
 use App\Models\ControlPedidos\PedidoBmaTareaPreparacion;
 use App\Models\User;
+use App\Support\ControlPedidos\InstruccionEntrega;
 use App\Support\ControlPedidos\MaquinaEstadosCumplimientoFisico;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -22,6 +23,7 @@ class ConfirmarDespachoMunicipioService
         string $receptorTransportista,
         ?int $versionEsperada = null,
     ): PedidoBmaCumplimientoFisico {
+        InstruccionEntrega::assertEjecutable($tarea);
         if (! $usuario->can('control_pedidos.tienda.despachar_municipio')) {
             throw ValidationException::withMessages([
                 'permiso' => 'No tiene permiso para registrar el despacho municipal.',

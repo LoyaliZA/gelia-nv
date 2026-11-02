@@ -8,6 +8,7 @@ use App\Models\ControlPedidos\PedidoBmaTareaDocumento;
 use App\Models\ControlPedidos\PedidoBmaTareaPreparacion;
 use App\Models\User;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
+use App\Support\ControlPedidos\InstruccionEntrega;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -27,6 +28,7 @@ class GenerarCaratulaPedidoService
         ?int $versionEsperada = null,
         ?string $motivoRegeneracion = null,
     ): PedidoBmaCaratula {
+        InstruccionEntrega::assertEjecutable($tarea);
         if (! $usuario->can('control_pedidos.tienda.generar_caratula')
             && ! ($motivoRegeneracion && $usuario->can('control_pedidos.tienda.regenerar_caratula'))) {
             throw new \RuntimeException('No tiene permiso para generar carátula.');

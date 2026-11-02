@@ -8,6 +8,7 @@ use App\Models\ControlPedidos\PedidoBmaCumplimientoEvento;
 use App\Models\ControlPedidos\PedidoBmaTareaPreparacion;
 use App\Models\User;
 use App\Support\ControlPedidos\MaquinaEstadosCumplimientoFisico;
+use App\Support\ControlPedidos\InstruccionEntrega;
 use App\Support\ControlPedidos\PlazosApartadoFisico;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -27,6 +28,7 @@ class SepararCumplimientoFisicoService
         ?string $ubicacion = null,
         ?int $versionEsperada = null,
     ): PedidoBmaCumplimientoFisico {
+        InstruccionEntrega::assertEjecutable($tarea);
         if (! $usuario->can('control_pedidos.tienda.apartado.separar')) {
             throw ValidationException::withMessages([
                 'permiso' => 'No tiene permiso para separar mercancía.',

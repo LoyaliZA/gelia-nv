@@ -105,14 +105,22 @@ class EnviarPedidoBmaService
                 ? $this->colaErroresService->attrsColaVacia()
                 : $this->colaErroresService->attrsColaPendiente($restantes);
 
-            $pedido->update(array_merge([
+            $conservarRemision = $pedido->tieneRemision();
+            $conservarPago = $pedido->tienePagoValidado();
+            $attrsEnvio = [
                 'catalogo_estatus_pedido_id' => $estatusNuevo->id,
                 'estatus_envio' => $this->resolverEstatusEnvioAlEnviar($pedido),
-                'pago_validado_at' => null,
-                'pago_validado_por_id' => null,
-            ], $attrsError));
+            ];
+            if (! $conservarPago) {
+                $attrsEnvio['pago_validado_at'] = null;
+                $attrsEnvio['pago_validado_por_id'] = null;
+            }
 
-            $this->eliminarRemisiones($pedido);
+            $pedido->update(array_merge($attrsEnvio, $attrsError));
+
+            if (! $conservarRemision) {
+                $this->eliminarRemisiones($pedido);
+            }
 
             $comentario = $restantes === []
                 ? 'Pedido enviado a revisión del auxiliar.'
@@ -137,7 +145,7 @@ class EnviarPedidoBmaService
 
             $q = urlencode((string) ($pedido->folio_remision ?: $pedido->folio ?: $pedido->id));
 
-            // Enviar siempre reinicia remisión/pago: el auxiliar es el siguiente paso operativo.
+            // Una remisión reconocida y un pago comprobado se conservan si la compra no cambió.
             // La cola de guías se notifica al aprobar, no aquí.
             $mensaje = $restantes === []
                 ? 'Nuevo pedido pendiente de auditoría'

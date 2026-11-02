@@ -5,6 +5,7 @@ namespace App\Services\ControlPedidos;
 use App\Models\ControlPedidos\PedidoBmaTareaHistorial;
 use App\Models\ControlPedidos\PedidoBmaTareaPreparacion;
 use App\Models\User;
+use App\Support\ControlPedidos\InstruccionEntrega;
 use App\Support\ControlPedidos\MaquinaEstadosTareaPreparacion;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -24,6 +25,7 @@ class TransicionEstadoTareaPreparacionService
     ): PedidoBmaTareaPreparacion {
         return DB::transaction(function () use ($tarea, $estadoNuevo, $usuarioId, $accion, $comentario, $meta, $versionEsperada, $actor, $omitirPermiso) {
             $tarea = PedidoBmaTareaPreparacion::query()->lockForUpdate()->findOrFail($tarea->id);
+            InstruccionEntrega::assertEjecutable($tarea);
             $actor ??= User::find($usuarioId);
 
             if ($versionEsperada !== null && (int) $tarea->version !== $versionEsperada) {
