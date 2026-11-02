@@ -7,6 +7,7 @@ use App\Models\ControlPedidos\PedidoBmaCumplimientoFisico;
 use App\Models\ControlPedidos\PedidoBmaTareaPreparacion;
 use App\Models\User;
 use App\Support\ControlPedidos\MaquinaEstadosCumplimientoFisico;
+use App\Support\ControlPedidos\InstruccionEntrega;
 use App\Support\ControlPedidos\PoliticaSalidaPreparacion;
 use App\Support\ControlPedidos\SalidaMunicipalPreparacion;
 use Illuminate\Support\Facades\DB;
@@ -27,6 +28,7 @@ class AutorizarSalidaPreparacionService
         User $usuario,
         ?int $versionEsperada = null,
     ): PedidoBmaCumplimientoFisico {
+        InstruccionEntrega::assertEjecutable($tarea);
         if (! $usuario->can('control_pedidos.salida.autorizar')) {
             throw ValidationException::withMessages([
                 'permiso' => 'No tiene permiso para autorizar la salida.',

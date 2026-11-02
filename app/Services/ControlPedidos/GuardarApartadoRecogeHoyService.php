@@ -10,6 +10,7 @@ use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
+use App\Support\ControlPedidos\InstruccionEntrega;
 
 class GuardarApartadoRecogeHoyService
 {
@@ -23,6 +24,7 @@ class GuardarApartadoRecogeHoyService
 
     public function ejecutar(PedidoBmaTareaPreparacion $tarea, User $usuario, array $datos, bool $confirmar = false): PedidoBmaCumplimientoFisico
     {
+        InstruccionEntrega::assertEjecutable($tarea);
         abort_unless($usuario->can('control_pedidos.tienda.apartado.separar') || $usuario->can('control_pedidos.tienda.responder'), 403);
 
         $rutas = [];

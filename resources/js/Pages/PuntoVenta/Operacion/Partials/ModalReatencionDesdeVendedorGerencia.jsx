@@ -9,8 +9,9 @@ import {
     THEME_MODAL_SHELL,
     deferModalAction,
 } from '../../../ControlPedidos/Partials/pedidosBmaStyles';
+import AvisoDisponibilidadPersona from './AvisoDisponibilidadPersona';
 import CronometroVisualOperacion from './CronometroVisualOperacion';
-import { esConflictoVersion, mensajeErrorOperacion } from './operacionUtils';
+import { esAvisoDisponibilidad, esConflictoVersion, mensajeAvisoDisponibilidad, mensajeErrorOperacion } from './operacionUtils';
 
 export default function ModalReatencionDesdeVendedorGerencia({
     abierto = false,
@@ -109,8 +110,22 @@ export default function ModalReatencionDesdeVendedorGerencia({
                             Reatención
                         </h3>
                         <p className="text-sm theme-text-muted mt-2 m-0 leading-relaxed">
-                            Asignar a {persona.nombre} un cliente que aún puede reatenderse.
+                            Asignar a{' '}
+                            <span className="inline-flex flex-wrap items-center gap-2 align-middle">
+                                <span className="font-semibold theme-text-main">{persona.nombre}</span>
+                                <AvisoDisponibilidadPersona
+                                    estado={persona.estado_vendedor}
+                                    cronometro={persona.cronometro}
+                                    servidorAt={servidorAt}
+                                />
+                            </span>
+                            {' '}un cliente que aún puede reatenderse.
                         </p>
+                        {esAvisoDisponibilidad(persona.estado_vendedor) && turnos.length > 0 ? (
+                            <p className="text-sm theme-text-main mt-2 m-0" aria-live="polite">
+                                {mensajeAvisoDisponibilidad(persona.estado_vendedor, 'reatencion')}
+                            </p>
+                        ) : null}
                     </div>
                 </div>
 
@@ -125,7 +140,7 @@ export default function ModalReatencionDesdeVendedorGerencia({
                         </label>
                         <select
                             id="cliente-reatencion"
-                            className="w-full min-h-[44px] rounded-xl border border-black/10 dark:border-white/10 px-3 py-2.5 text-sm font-semibold theme-text-main bg-transparent"
+                            className="w-full min-h-[44px] rounded-xl border theme-border theme-element px-3 py-2.5 text-sm font-semibold theme-text-main"
                             value={turnoId}
                             onChange={(event) => setTurnoId(event.target.value)}
                             disabled={cargando}

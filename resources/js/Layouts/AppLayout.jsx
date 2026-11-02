@@ -7,11 +7,13 @@ import GeliaLogo from '../Components/GeliaLogo';
 import NotificationBell from '../Components/NotificationBell';
 import PdvLlamadoVendedor from '../Components/PuntoVenta/PdvLlamadoVendedor';
 import MensajeriaWidget from '../Components/Mensajeria/MensajeriaWidget';
-import { Bell, X, Menu } from 'lucide-react';
+import { X, Menu } from 'lucide-react';
+import { BellRingIcon } from '@animateicons/react/lucide/bell-ring-icon';
 import { isProfessionalSidebarLayout, DEFAULT_SIDEBAR_LAYOUT, DEFAULT_SIDEBAR_MOBILE_LAYOUT, ensureProfessionalSidebarDefaultOnce, resolveSidebarLayout } from '../config/sidebarLayouts';
 
 import NotificationService from '../Services/NotificationBrowserService';
 import GeliaLoader from '../Components/GeliaLoader';
+import AvisoVersionNueva from '../Components/AvisoVersionNueva';
 import WooSyncFloatingTracker from '../Components/WooSyncFloatingTracker';
 import ImportacionAlmacenFloatingTracker from '../Components/Almacenes/ImportacionAlmacenFloatingTracker';
 import CobranzaReporteFloatingTracker from '../Components/CobranzaReporteFloatingTracker';
@@ -62,6 +64,25 @@ const accentColors = {
 
 const MOBILE_SIDEBAR_LAYOUT_BOTTOM = 'mobile_bottom';
 const MOBILE_SIDEBAR_LAYOUT_TOPBAR = 'mobile_topbar';
+
+function IconoCampanaToast() {
+    const ref = useRef(null);
+
+    useEffect(() => {
+        ref.current?.startAnimation();
+    }, []);
+
+    return (
+        <BellRingIcon
+            ref={ref}
+            size={20}
+            duration={0.5}
+            isAnimated={false}
+            color="var(--color-primario)"
+            aria-hidden="true"
+        />
+    );
+}
 
 export default function AppLayout({ children, fullScreen = false }) {
     const { props: { auth, tonos_alertas = [], flash, webauthnEnabled }, url } = usePage();
@@ -597,7 +618,7 @@ export default function AppLayout({ children, fullScreen = false }) {
         applyFondoPantalla(root, normalizeFondoBase(nombreFondoRaw));
 
         const savedFont = typeof window !== 'undefined' ? localStorage.getItem('theme_font') : null;
-        const activeFont = savedFont || tema.fuente_principal || 'inter';
+        const activeFont = savedFont || tema.fuente_principal || 'mono';
         const fontMap = {
             inter: "'Inter', sans-serif",
             montserrat: "'Montserrat', sans-serif",
@@ -606,7 +627,7 @@ export default function AppLayout({ children, fullScreen = false }) {
             roboto: "'Roboto', sans-serif",
             mono: "'JetBrains Mono', monospace"
         };
-        root.style.setProperty('--font-principal', fontMap[activeFont] || fontMap.inter);
+        root.style.setProperty('--font-principal', fontMap[activeFont] || fontMap.mono);
 
         const savedScale = typeof window !== 'undefined' ? localStorage.getItem(FONT_SCALE_STORAGE_KEY) : null;
         const activeScale = clampFontScale(
@@ -806,7 +827,8 @@ export default function AppLayout({ children, fullScreen = false }) {
                     )}
 
                     {/* TOASTS FLOTANTES */}
-                    <div className="fixed top-6 right-6 z-[10000] flex flex-col gap-3 w-full max-w-sm pointer-events-none">
+                    <div className="pointer-events-none fixed top-6 right-6 z-[10000] flex w-[min(24rem,calc(100vw-3rem))] flex-col gap-3">
+                    <AvisoVersionNueva />
                     {toasts.map((toast) => {
                         const esClickeable = !!(toast.conversacionId || toast.notification);
 
@@ -818,8 +840,8 @@ export default function AppLayout({ children, fullScreen = false }) {
                             role={esClickeable ? 'button' : undefined}
                         >
                             <div className="absolute bottom-0 left-0 h-1 bg-[var(--color-primario)] animate-progress-shrink" />
-                            <div className="p-2 rounded-xl" style={{ backgroundColor: 'color-mix(in srgb, var(--color-primario) 15%, transparent)' }}>
-                                <Bell className="w-5 h-5" style={{ color: 'var(--color-primario)' }} />
+                            <div className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ backgroundColor: 'color-mix(in srgb, var(--color-primario) 15%, transparent)' }}>
+                                <IconoCampanaToast />
                             </div>
                             <div className="flex-1">
                                 <p className="text-[10px] font-black uppercase tracking-widest text-[var(--color-primario)] mb-0.5">Nueva Alerta_</p>

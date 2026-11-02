@@ -1,5 +1,6 @@
 import React from 'react';
-import { Search, ChevronDown } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
+import CampoBusqueda from '@/Components/CampoBusqueda';
 import { THEME_INPUT, THEME_SELECT } from '../../../utils/geliaTheme';
 
 export { default as RhSectionLabel } from './RhSectionLabel';
@@ -34,20 +35,18 @@ export function RhSearchField({
     };
 
     return (
-        <div className={`theme-field-with-icon min-w-0 flex-1 ${className}`.trim()}>
-            <Search className="theme-field-icon" aria-hidden />
-            <input
-                id={id}
-                type="text"
-                value={value}
-                onChange={onChange}
-                onKeyDown={handleKeyDown}
-                placeholder={placeholder}
-                autoComplete="off"
-                enterKeyHint="search"
-                className={INPUT_CLASS}
-            />
-        </div>
+        <CampoBusqueda
+            wrapperClassName={`min-w-0 flex-1 ${className}`.trim()}
+            id={id}
+            type="text"
+            value={value}
+            onChange={onChange}
+            onKeyDown={handleKeyDown}
+            placeholder={placeholder}
+            autoComplete="off"
+            enterKeyHint="search"
+            className={INPUT_CLASS}
+        />
     );
 }
 

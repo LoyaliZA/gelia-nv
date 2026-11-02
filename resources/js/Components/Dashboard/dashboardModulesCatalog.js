@@ -1,6 +1,6 @@
 import {
     Users, UserPlus, FolderTree, Database, FileSignature, Package, Map, List, Ban, Briefcase, CreditCard, FileSpreadsheet, Receipt, ShoppingBag, Store, Calculator, Boxes, DollarSign, ArrowLeftRight, Bot
-} from 'lucide-react';
+} from './dashboardIconosAnimados';
 import { contabilidadRoutes } from '../../Pages/Contabilidad/contabilidadRoutes';
 
 export const DASHBOARD_MODULE_CARDS = [

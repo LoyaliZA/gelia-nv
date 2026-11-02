@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Calendar, Filter, Search, SlidersHorizontal, X } from 'lucide-react';
+import CampoBusqueda from '@/Components/CampoBusqueda';
 import RangoFechasPersonalizado from '@/Components/Filtros/RangoFechasPersonalizado';
 
 const PRESETS = [
@@ -212,24 +213,23 @@ export default function BarraConsultaPagosPedidos({ filtros, formasPago, onAplic
 
             <div className="flex flex-col sm:flex-row gap-3">
                 <div className="flex flex-col sm:flex-row gap-2 flex-1 min-w-0">
-                    <div className="relative flex-1 min-w-0">
-                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 theme-text-muted pointer-events-none" />
-                        <input
-                            type="text"
-                            placeholder="Buscar folio, remisión, cliente, quien atendió, referencia…"
-                            value={busquedaLocal}
-                            onChange={(e) => setBusquedaLocal(e.target.value)}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                    e.preventDefault();
-                                    aplicarBusqueda();
-                                }
-                            }}
-                            enterKeyHint="search"
-                            autoComplete="off"
-                            className="w-full pl-12 pr-4 py-4 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none focus:ring-2 transition-all shadow-sm"
-                        />
-                    </div>
+                    <CampoBusqueda
+                        wrapperClassName="flex-1 min-w-0"
+                        iconClassName="theme-field-icon theme-text-muted"
+                        type="text"
+                        placeholder="Buscar folio, remisión, cliente, quien atendió, referencia…"
+                        value={busquedaLocal}
+                        onChange={(e) => setBusquedaLocal(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                                e.preventDefault();
+                                aplicarBusqueda();
+                            }
+                        }}
+                        enterKeyHint="search"
+                        autoComplete="off"
+                        className="w-full pl-12 pr-4 py-4 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none focus:ring-2 transition-all shadow-sm"
+                    />
                     <button
                         type="button"
                         onClick={aplicarBusqueda}

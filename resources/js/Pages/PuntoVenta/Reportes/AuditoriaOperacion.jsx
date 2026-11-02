@@ -1,6 +1,19 @@
 import React, { useEffect, useState } from 'react';
 import { Head, router, usePage } from '@inertiajs/react';
-import { History, Loader2 } from 'lucide-react';
+import {
+    ArrowRightLeft,
+    Check,
+    DoorClosed,
+    DoorOpen,
+    History,
+    Loader2,
+    Pause,
+    Play,
+    RotateCcw,
+    Timer,
+    UserCheck,
+    UserPlus,
+} from 'lucide-react';
 import AppLayout from '../../../Layouts/AppLayout';
 import GeliaPageShell from '../../../Components/GeliaPageShell';
 import GeliaTituloCard from '../../../Components/GeliaTituloCard';
@@ -19,6 +32,38 @@ function Campo({ label, children, error }) {
 }
 
 const inputClass = 'w-full rounded-lg border theme-border theme-element px-3 py-2 text-sm theme-text-main';
+
+const ICONO_TIPO = {
+    'jornada.abierta': DoorOpen,
+    'jornada.cerrada': DoorClosed,
+    'pausa.iniciada': Pause,
+    'pausa.finalizada': Play,
+    'turno.alta': UserPlus,
+    'turno.asignado': UserCheck,
+    'turno.reatencion': RotateCcw,
+    'turno.transferido': ArrowRightLeft,
+    'atencion.cerrada': Check,
+    'espera.aplicada': Timer,
+};
+
+function agruparLineaPorDia(linea) {
+    const grupos = [];
+    linea.forEach((fila) => {
+        const dia = String(fila.hora || '').slice(0, 10) || 'Sin fecha';
+        const ultimo = grupos[grupos.length - 1];
+        if (!ultimo || ultimo.dia !== dia) {
+            grupos.push({ dia, filas: [fila] });
+            return;
+        }
+        ultimo.filas.push(fila);
+    });
+    return grupos;
+}
+
+function horaCorta(hora) {
+    const partes = String(hora || '').split(' ');
+    return partes[1] || hora;
+}
 
 export default function AuditoriaOperacion({
     filtros = {},
@@ -190,23 +235,37 @@ export default function AuditoriaOperacion({
 
                     {!cargando && linea.length > 0 && (
                         <div className={geliaCardClass('p-4 md:p-5')}>
-                            <h2 className="text-sm font-semibold theme-text-main m-0 mb-3">Línea de tiempo</h2>
-                            <ol className="m-0 p-0 list-none divide-y theme-border">
-                                {linea.map((fila) => (
-                                    <li key={fila.id} className="grid grid-cols-1 sm:grid-cols-[9.5rem_minmax(0,1fr)] gap-1 sm:gap-4 py-3 min-w-0">
-                                        <time className="text-sm tabular-nums theme-text-muted" dateTime={fila.ocurrido_at}>
-                                            {fila.hora}
-                                        </time>
-                                        <div className="min-w-0">
-                                            <p className="text-sm font-semibold theme-text-main m-0 break-words">{fila.titulo}</p>
-                                            <p className="text-sm theme-text-muted m-0 mt-1 break-words">{fila.detalle}</p>
-                                            {fila.actor ? (
-                                                <p className="text-sm theme-text-main m-0 mt-1 break-words">Registrado por {fila.actor}</p>
-                                            ) : null}
-                                        </div>
-                                    </li>
-                                ))}
-                            </ol>
+                            <h2 className="text-sm font-semibold theme-text-main m-0">Línea de tiempo</h2>
+                            <p className="text-sm theme-text-muted m-0 mt-1 mb-4">Lo más reciente aparece primero.</p>
+                            {agruparLineaPorDia(linea).map((grupo) => (
+                                <section key={grupo.dia} className="mt-4 first:mt-0" aria-labelledby={`auditoria-dia-${grupo.dia.replace(/\//g, '-')}`}>
+                                    <h3 id={`auditoria-dia-${grupo.dia.replace(/\//g, '-')}`} className="text-sm font-semibold theme-text-main m-0">
+                                        {grupo.dia}
+                                    </h3>
+                                    <ol className="m-0 mt-2 p-0 list-none divide-y theme-border">
+                                        {grupo.filas.map((fila) => {
+                                            const Icono = ICONO_TIPO[fila.tipo] || History;
+                                            return (
+                                                <li key={fila.id} className="grid grid-cols-[1.5rem_minmax(0,1fr)] gap-3 py-3 min-w-0">
+                                                    <Icono className="w-4 h-4 mt-0.5 theme-text-muted" aria-hidden />
+                                                    <div className="min-w-0">
+                                                        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                                                            <p className="text-sm font-semibold theme-text-main m-0 break-words">{fila.titulo}</p>
+                                                            <time className="text-sm tabular-nums theme-text-muted" dateTime={fila.ocurrido_at}>
+                                                                {horaCorta(fila.hora)}
+                                                            </time>
+                                                        </div>
+                                                        <p className="text-sm theme-text-muted m-0 mt-1 break-words">{fila.detalle}</p>
+                                                        {fila.actor ? (
+                                                            <p className="text-sm theme-text-main m-0 mt-1 break-words">Registrado por {fila.actor}</p>
+                                                        ) : null}
+                                                    </div>
+                                                </li>
+                                            );
+                                        })}
+                                    </ol>
+                                </section>
+                            ))}
                         </div>
                     )}
                     </div>

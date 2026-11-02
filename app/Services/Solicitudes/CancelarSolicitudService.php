@@ -5,6 +5,7 @@ namespace App\Services\Solicitudes;
 use App\Models\SolicitudTag;
 use App\Models\Cliente;
 use App\Models\CatalogoEstadoSolicitud;
+use App\Models\CatalogoProceso;
 use App\Models\AuditoriaSolicitud;
 use App\Notifications\AlertaSolicitud;
 use Illuminate\Support\Facades\Auth;
@@ -40,10 +41,17 @@ class CancelarSolicitudService
                 CatalogoEstadoSolicitud::idDe('Verificada'),
             ];
 
-            if (in_array($estadoAnteriorId, $estadosConBeneficios) && $solicitud->proceso?->esFinanciero()) {
-                $snapshotDiff = $this->ajustarMonto->revertirBeneficios($solicitud, Auth::id());
-
-                if ($solicitud->catalogo_lista_rebaja_id && $solicitud->cliente_id) {
+            if (
+                in_array($estadoAnteriorId, $estadosConBeneficios)
+                && $solicitud->proceso?->esFinanciero()
+                && ! $this->solicitudPosteriorSostieneBeneficio($solicitud)
+            ) {
+                $listaRebaja = null;
+                if (
+                    $solicitud->catalogo_lista_rebaja_id
+                    && $solicitud->cliente_id
+                    && $this->validarListaInferior->exigeListaRebaja($solicitud)
+                ) {
                     $cliente = Cliente::with(['listaDescuento', 'vendedor', 'tipo'])->find($solicitud->cliente_id);
                     if (
                         $cliente
@@ -52,13 +60,25 @@ class CancelarSolicitudService
                     ) {
                         $listaRebaja = $this->validarListaInferior->validarListaInferior(
                             $solicitud,
-                            $solicitud->catalogo_lista_rebaja_id
+                            (int) $solicitud->catalogo_lista_rebaja_id
                         );
-                        $cliente->lista_actual_id = $listaRebaja->id;
-                        $cliente->save();
-                        $cliente->refresh()->load(['listaDescuento', 'vendedor', 'tipo']);
-                        $snapshotDiff['despues'] = $this->ajustarMonto->capturarSnapshotCliente($cliente);
                     }
+                }
+
+                $snapshotDiff = $this->ajustarMonto->revertirBeneficios($solicitud, Auth::id());
+
+                if ($listaRebaja && $solicitud->cliente_id) {
+                    $cliente = Cliente::with(['listaDescuento', 'vendedor', 'tipo'])->find($solicitud->cliente_id);
+                    if (! $cliente) {
+                        $listaRebaja = null;
+                    }
+                }
+
+                if ($listaRebaja && $cliente) {
+                    $cliente->lista_actual_id = $listaRebaja->id;
+                    $cliente->save();
+                    $cliente->refresh()->load(['listaDescuento', 'vendedor', 'tipo']);
+                    $snapshotDiff['despues'] = $this->ajustarMonto->capturarSnapshotCliente($cliente);
                 }
             }
 
@@ -91,5 +111,33 @@ class CancelarSolicitudService
                 );
             }
         });
+    }
+
+    private function solicitudPosteriorSostieneBeneficio(SolicitudTag $solicitud): bool
+    {
+        if (! $solicitud->cliente_id) {
+            return false;
+        }
+
+        $estados = array_values(array_filter([
+            CatalogoEstadoSolicitud::idDe('Respondida'),
+            CatalogoEstadoSolicitud::idDe('Verificada'),
+        ]));
+
+        if ($estados === []) {
+            return false;
+        }
+
+        return SolicitudTag::query()
+            ->where('cliente_id', $solicitud->cliente_id)
+            ->where('id', '>', $solicitud->id)
+            ->whereIn('catalogo_estado_solicitud_id', $estados)
+            ->whereHas('proceso', function ($q) {
+                $q->where(function ($q) {
+                    $q->where('categoria_flujo', '!=', CatalogoProceso::CATEGORIA_OPERATIVO)
+                        ->orWhereNull('categoria_flujo');
+                });
+            })
+            ->exists();
     }
 }

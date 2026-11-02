@@ -289,6 +289,7 @@ export default function Index({
                 <ResguardosRealtimeSync refrescar={recargarSilencioso} />
                 <GeliaPageShell className={`space-y-3 md:space-y-4 pb-[max(5.5rem,env(safe-area-inset-bottom))] md:pb-6 ${GELIA_PREVENT_OVERFLOW_X}`}>
                 <GeliaTituloCard
+                    compact
                     eyebrow="Punto de Venta"
                     title="Resguardos"
                     titleHighlight="en sucursal"
@@ -321,7 +322,6 @@ export default function Index({
                             </div>
                         </div>
                     )}
-                    className="!p-4 md:!p-5 lg:!p-6 !gap-3 md:!gap-4 [&_h1]:!text-2xl sm:[&_h1]:!text-3xl md:[&_h1]:!text-3xl"
                 >
                     <SelectorSucursalActivaPdv
                         sucursalActiva={sucursalActiva}

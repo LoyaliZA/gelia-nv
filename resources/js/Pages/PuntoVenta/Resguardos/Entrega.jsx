@@ -1,6 +1,7 @@
 import React from 'react';
 import { Head, Link, router } from '@inertiajs/react';
-import { ArrowLeft, CheckCircle2, AlertTriangle, Package, Truck } from 'lucide-react';
+import { ArrowLeft, AlertTriangle, Package, Truck } from 'lucide-react';
+import IconoConfirmacionAnimado from '@/Components/IconoConfirmacionAnimado';
 import AppLayout from '../../../Layouts/AppLayout';
 import GeliaPageShell from '../../../Components/GeliaPageShell';
 import { geliaCardClass } from '../../../utils/geliaTheme';
@@ -107,7 +108,7 @@ export default function Entrega({
 function ResultadoExito({ onDetalle, onBandeja, parcial = false }) {
     return (
         <div className={`${geliaCardClass()} p-8 text-center space-y-4`}>
-            <CheckCircle2 className="w-12 h-12 mx-auto text-[var(--color-exito)]" />
+            <IconoConfirmacionAnimado size={48} className="mx-auto theme-text-exito" />
             <div className="space-y-2">
                 <h2 className="text-lg font-black uppercase theme-text-main m-0">
                     {parcial ? 'Entrega parcial registrada' : 'Entrega registrada'}

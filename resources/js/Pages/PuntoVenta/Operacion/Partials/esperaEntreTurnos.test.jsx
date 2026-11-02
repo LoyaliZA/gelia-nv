@@ -69,8 +69,17 @@ describe('cuenta regresiva entre turnos', () => {
         montar(<CronometroVisualOperacion etiqueta="Disponible" servidorAt={servidorAt} referenciaAt="2026-10-16T15:59:00Z" />);
         act(() => vi.advanceTimersByTime(2000));
         expect(contenedor.textContent).toContain('01:02');
+        expect(contenedor.textContent).not.toContain('00:01:02');
         montar(<CronometroVisualOperacion etiqueta="Espera" modo="restante" servidorAt="2026-10-16T16:00:05Z" referenciaAt={referenciaAt} />);
         expect(contenedor.textContent).toContain('00:05');
+    });
+
+    it('muestra horas solo cuando el tiempo llega a una hora', () => {
+        montar(<CronometroVisualOperacion etiqueta="Atención" servidorAt={servidorAt} referenciaAt="2026-10-16T14:55:47Z" />);
+        expect(contenedor.textContent).toContain('01:04:13');
+        montar(<CronometroVisualOperacion etiqueta="Atención" servidorAt={servidorAt} referenciaAt="2026-10-16T15:00:01Z" />);
+        expect(contenedor.textContent).toContain('59:59');
+        expect(contenedor.textContent).not.toContain('00:59:59');
     });
 
     it('muestra la espera y consulta al vencer para reflejar disponibilidad sin esperar los 30 segundos', async () => {
@@ -82,13 +91,14 @@ describe('cuenta regresiva entre turnos', () => {
         expect(contenedor.textContent).toContain('00:10');
         expect(contenedor.textContent).toContain('Volverá a la cola');
         expect(contenedor.textContent).not.toContain('Recibe turnos');
+        expect(contenedor.textContent).not.toContain('Actividad:');
         await act(async () => vi.advanceTimersByTime(9000));
         expect(contenedor.textContent).toContain('00:01');
         expect(axios.get).not.toHaveBeenCalled();
         await act(async () => vi.advanceTimersByTime(1000));
         expect(axios.get).toHaveBeenCalledTimes(1);
         expect(contenedor.textContent).toContain('Disponible');
-        expect(contenedor.textContent).toContain('Recibe turnos');
+        expect(contenedor.textContent).not.toContain('Recibe turnos');
         expect(contenedor.textContent).not.toContain('Volverá a la cola');
     });
 

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from '@inertiajs/react';
+import useIconoEnControl from '../../hooks/useIconoEnControl';
 
 export default function DashboardModuleCard({
     href,
@@ -14,7 +15,21 @@ export default function DashboardModuleCard({
     borderStyle,
     variant = 'desktop',
 }) {
-    if (variant === 'mobile') {
+    const { ref, triggerProps } = useIconoEnControl();
+    const enMovil = variant === 'mobile';
+    const icono = (
+        <Icon
+            ref={ref}
+            size={enMovil ? 18 : 20}
+            duration={1}
+            isAnimated={false}
+            color="currentColor"
+            className={`${enMovil ? 'dashboard-module-card-mobile__icon' : 'dashboard-module-card__icon'} ${iconClass}`}
+            style={iconStyle}
+        />
+    );
+
+    if (enMovil) {
         const ariaLabel = subtitle ? `${title}. ${subtitle}` : title;
 
         return (
@@ -29,7 +44,7 @@ export default function DashboardModuleCard({
                     className={`dashboard-module-card-mobile__icon-wrap ${iconWrapClass}`}
                     style={iconWrapStyle}
                 >
-                    <Icon className={`dashboard-module-card-mobile__icon ${iconClass}`} style={iconStyle} />
+                    {icono}
                 </div>
                 <span className="dashboard-module-card-mobile__label theme-text-main">{title}</span>
             </Link>
@@ -43,6 +58,7 @@ export default function DashboardModuleCard({
             aria-label={subtitle ? `${title}. ${subtitle}` : title}
             className={`dashboard-module-card theme-element shadow-sm outline-none group ${borderClass}`}
             style={borderStyle}
+            {...triggerProps}
         >
             <span className="dashboard-module-card__tooltip" role="tooltip">
                 {subtitle ? `${title} — ${subtitle}` : title}
@@ -51,7 +67,7 @@ export default function DashboardModuleCard({
                 className={`dashboard-module-card__icon-wrap ${iconWrapClass}`}
                 style={iconWrapStyle}
             >
-                <Icon className={`dashboard-module-card__icon ${iconClass}`} style={iconStyle} />
+                    {icono}
             </div>
             <h3 className="dashboard-module-card__title theme-text-main">{title}</h3>
             {subtitle && <p className="dashboard-module-card__subtitle theme-text-muted">{subtitle}</p>}

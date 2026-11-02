@@ -6,6 +6,7 @@ use App\Models\ControlPedidos\PedidoBma;
 use App\Models\Sucursal;
 use App\Models\User;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
+use App\Support\ControlPedidos\InstruccionEntrega;
 use Illuminate\Support\Facades\DB;
 
 class AsignarSucursalDestinoPedidoService
@@ -37,6 +38,7 @@ class AsignarSucursalDestinoPedidoService
         return DB::transaction(function () use ($pedido, $usuario, $viejo, $nuevo) {
             $pedido = PedidoBma::query()->lockForUpdate()->findOrFail($pedido->id);
             $pedido->loadMissing(['estatus', 'sucursalDestino']);
+            InstruccionEntrega::assertSegundoTraslado($usuario, $pedido);
 
             $etiquetaAnterior = $this->etiquetaSucursal($viejo, $pedido->sucursalDestino);
             $pedido->update(['sucursal_destino_id' => $nuevo]);

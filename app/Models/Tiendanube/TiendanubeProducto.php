@@ -72,12 +72,26 @@ class TiendanubeProducto extends Model
 
     public function nombreVisible(): string
     {
-        $name = $this->name;
-        if (! is_array($name)) {
-            return (string) ($name ?? '');
+        return $this->textoLocalizado($this->name);
+    }
+
+    public function handleVisible(): string
+    {
+        return $this->textoLocalizado($this->handle);
+    }
+
+    public function descripcionVisible(): string
+    {
+        return $this->textoLocalizado($this->description);
+    }
+
+    private function textoLocalizado(mixed $valor): string
+    {
+        if (! is_array($valor)) {
+            return (string) ($valor ?? '');
         }
 
-        return (string) ($name['es'] ?? $name['es_MX'] ?? reset($name) ?: '');
+        return (string) ($valor['es'] ?? $valor['es_MX'] ?? reset($valor) ?: '');
     }
 
     /**

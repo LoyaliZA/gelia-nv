@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { router } from '@inertiajs/react';
-import { Filter, Search, User, UserX, Wrench, RotateCcw, ChevronDown, ChevronUp, ScanLine, PenTool } from 'lucide-react';
+import { Filter, User, UserX, Wrench, RotateCcw, ChevronDown, ChevronUp, ScanLine, PenTool } from 'lucide-react';
+import CampoBusqueda from '@/Components/CampoBusqueda';
 import { INPUT_CLASS, SELECT_CLASS, LABEL_CLASS, getActivosCardClass } from './activosFormStyles';
 import ModalEscanearCodigo from '@/Components/Escanner/ModalEscanearCodigo';
 import { resolverCodigoEscaneado } from './resolverCodigoEscaneado';
@@ -249,17 +250,15 @@ export default function FiltrosActivos({ filtros = {}, tipos = [], categorias = 
                 <div className="theme-form-zone p-5 md:p-8 space-y-6 md:space-y-8">
                     <CampoFiltro label="Buscar" htmlFor="activos-filtro-busqueda" className="w-full">
                         <div className="flex gap-2 items-stretch">
-                            <div className="theme-field-with-icon flex-1 min-w-0">
-                                <Search className="theme-field-icon" aria-hidden />
-                                <input
-                                    id="activos-filtro-busqueda"
-                                    type="search"
-                                    placeholder="Folio, nombre, serie, MAC..."
-                                    defaultValue={filtros.busqueda || ''}
-                                    onKeyDown={(e) => e.key === 'Enter' && aplicar({ busqueda: e.target.value })}
-                                    className={`${INPUT_CLASS} w-full pr-4`}
-                                />
-                            </div>
+                            <CampoBusqueda
+                                wrapperClassName="flex-1 min-w-0"
+                                id="activos-filtro-busqueda"
+                                type="search"
+                                placeholder="Folio, nombre, serie, MAC..."
+                                defaultValue={filtros.busqueda || ''}
+                                onKeyDown={(e) => e.key === 'Enter' && aplicar({ busqueda: e.target.value })}
+                                className={`${INPUT_CLASS} w-full pr-4`}
+                            />
                             <button
                                 type="button"
                                 onClick={() => setModalEscaner(true)}

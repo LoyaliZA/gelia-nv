@@ -7,6 +7,7 @@ use App\Contracts\PuntoVenta\ResuelveAlcancePdv;
 use App\Models\PuntoVenta\TurnoPdv;
 use App\Models\PuntoVenta\TurnoPdvAtencion;
 use App\Models\User;
+use App\Services\PuntoVenta\Operacion\ConsultaPersonaDisponiblePdvService;
 use App\Services\PuntoVenta\Operacion\ConsultaVendedoresElegiblesPdvService;
 use App\Services\PuntoVenta\PuntoVentaModulo;
 use App\Support\PuntoVenta\Turnos\ResolverCandidatosReatencionTurnoPdv;
@@ -91,12 +92,18 @@ class ConsultaBandejaReatencionPdvService
         return $this->vendedoresElegibles
             ->query($sucursalId)
             ->get()
-            ->filter(fn (User $user): bool => $this->consultaDisponible->esDisponible(
-                $user,
-                $sucursalId,
-            ))
+            ->filter(fn (User $user): bool => $this->aceptaDestinoReatencion($user, $sucursalId))
             ->map(static fn (User $user): array => SerializadorBandejaReatencionPdv::candidato($user))
             ->values()
             ->all();
+    }
+
+    private function aceptaDestinoReatencion(User $user, int $sucursalId): bool
+    {
+        if ($this->consultaDisponible instanceof ConsultaPersonaDisponiblePdvService) {
+            return $this->consultaDisponible->esDestinoReatencionManual($user, $sucursalId);
+        }
+
+        return $this->consultaDisponible->esDisponible($user, $sucursalId);
     }
 }

@@ -9,7 +9,13 @@ use App\Exceptions\Tiendanube\TiendanubeApiPaymentRequiredException;
 use App\Exceptions\Tiendanube\TiendanubeApiRateLimitException;
 use App\Exceptions\Tiendanube\TiendanubeApiRouteException;
 use App\Exceptions\Tiendanube\TiendanubeApiValidationException;
+use App\Exceptions\Tiendanube\TiendanubeClaseNoDeclaradaException;
+use App\Exceptions\Tiendanube\TiendanubePresupuestoLocalException;
 use App\Models\Tiendanube\TiendanubeConfiguracion;
+use App\Services\Tiendanube\Gobernador\TiendanubeContextoHttpActual;
+use App\Services\Tiendanube\Gobernador\TiendanubeGobernador;
+use App\Services\Tiendanube\Gobernador\TiendanubeReprogramador;
+use App\Support\Tiendanube\TiendanubePropositoHttp;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\RequestException;
@@ -24,9 +30,32 @@ class TiendanubeApiClient
 {
     public const ALLOWED_VERSIONS = ['v1', '2025-03'];
 
+    private bool $reintentarEscrituraAmbigua = true;
+
+    private ?int $timeoutSegundos = null;
+
     public function __construct(
         private ?TiendanubeConfiguracion $config = null
     ) {}
+
+    /**
+     * PUT de variante sin reintentar 502/503/504: el resultado puede haber quedado aplicado.
+     */
+    public function sinReintentoEscrituraAmbigua(): self
+    {
+        $copia = clone $this;
+        $copia->reintentarEscrituraAmbigua = false;
+
+        return $copia;
+    }
+
+    public function conTimeout(int $segundos): self
+    {
+        $copia = clone $this;
+        $copia->timeoutSegundos = max(1, $segundos);
+
+        return $copia;
+    }
 
     public function config(): TiendanubeConfiguracion
     {
@@ -35,25 +64,10 @@ class TiendanubeApiClient
 
     public function client(?string $method = 'GET', string $path = '/'): PendingRequest
     {
-        $config = $this->config();
-        $token = $config->accessTokenDecrypted();
-        $storeId = $config->store_id;
-
-        if (! $token || ! $storeId) {
-            throw new RuntimeException('Credenciales de Tiendanube no configuradas.');
-        }
-
-        $method = strtoupper($method);
+        $method = strtoupper((string) $method);
         $sleepMs = max(0, (int) config('tiendanube.retry_sleep_ms', 1500));
 
-        return Http::baseUrl($this->resolveBaseUrl())
-            ->withToken($token)
-            ->withHeaders([
-                'User-Agent' => $this->userAgent(),
-                'Content-Type' => 'application/json; charset=utf-8',
-                'Accept' => 'application/json',
-            ])
-            ->timeout(60)
+        return $this->pedidoBase()
             ->retry(
                 3,
                 function (int $attempt, mixed $exception) use ($sleepMs): int {
@@ -71,6 +85,26 @@ class TiendanubeApiClient
                 },
                 throw: false,
             );
+    }
+
+    private function pedidoBase(): PendingRequest
+    {
+        $config = $this->config();
+        $token = $config->accessTokenDecrypted();
+        $storeId = $config->store_id;
+
+        if (! $token || ! $storeId) {
+            throw new RuntimeException('Credenciales de Tiendanube no configuradas.');
+        }
+
+        return Http::baseUrl($this->resolveBaseUrl())
+            ->withToken($token)
+            ->withHeaders([
+                'User-Agent' => $this->userAgent(),
+                'Content-Type' => 'application/json; charset=utf-8',
+                'Accept' => 'application/json',
+            ])
+            ->timeout($this->timeoutSegundos ?? 60);
     }
 
     public function resolveBaseUrl(): string
@@ -535,6 +569,18 @@ class TiendanubeApiClient
     {
         $method = strtoupper($method);
 
+        if (config('tiendanube.gobernador_activo', false)) {
+            return $this->enviarGobernado($method, $url, $data);
+        }
+
+        return $this->enviarDirecto($method, $url, $data);
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function enviarDirecto(string $method, string $url, array $data): Response
+    {
         try {
             $pending = $this->client($method, $url);
             $response = match ($method) {
@@ -561,6 +607,114 @@ class TiendanubeApiClient
         return $response;
     }
 
+    /**
+     * Cada intento, incluido un reintento interno, toma un turno antes de salir.
+     * Sin turno no hay espera bloqueante: se registra la fase y se devuelve el control.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function enviarGobernado(string $method, string $url, array $data): Response
+    {
+        $contexto = app(TiendanubeContextoHttpActual::class);
+        if ($contexto->clase === null || $contexto->clase === '') {
+            throw new TiendanubeClaseNoDeclaradaException('El emisor no declaró la clase de turno.');
+        }
+        $clase = $contexto->clase;
+        $proposito = $contexto->proposito ?? TiendanubePropositoHttp::Intento->value;
+        $fase = $contexto->fase ?? 'sin_escritura';
+        $operacion = $contexto->operacionId ?? '';
+        $storeId = (int) $this->config()->store_id;
+        $gobernador = app(TiendanubeGobernador::class);
+        $reprogramador = app(TiendanubeReprogramador::class);
+        $max = $proposito === TiendanubePropositoHttp::ComprobacionVigencia->value ? 1 : 3;
+
+        for ($intento = 1; $intento <= $max; $intento++) {
+            $turno = $gobernador->adquirir($storeId, $clase, $proposito, $operacion, $fase);
+            if (! $turno->concedido) {
+                $reprogramador->reprogramar($turno);
+                if ($turno->motivo === 'rate_limit') {
+                    throw new TiendanubeApiRateLimitException(
+                        'Tiendanube API HTTP 429: límite remoto vigente.',
+                        429,
+                        $this->resourceFromUrl($url),
+                        $method,
+                        'rate_limit',
+                    );
+                }
+
+                throw new TiendanubePresupuestoLocalException($turno);
+            }
+
+            try {
+                $pending = $this->pedidoBase();
+                $response = match ($method) {
+                    'GET' => $pending->get($url, $data),
+                    'POST' => $pending->post($url, $data),
+                    'PUT' => $pending->put($url, $data),
+                    'DELETE' => $pending->delete($url, $data),
+                    default => throw new InvalidArgumentException("Método HTTP no soportado: {$method}"),
+                };
+            } catch (ConnectionException $e) {
+                if ($intento < $max && $this->shouldRetry($e, $method, $url)) {
+                    continue;
+                }
+
+                throw new TiendanubeApiException(
+                    'Tiendanube API conexión fallida (timeout o red).',
+                    0,
+                    $this->resourceFromUrl($url),
+                    $method,
+                    'connection_failed',
+                    null,
+                    $e,
+                );
+            }
+
+            if ($response->status() === 429) {
+                $reset = $response->header('x-rate-limit-reset');
+                $resetMs = is_numeric($reset) ? (int) $reset : 0;
+                if ($resetMs <= 0) {
+                    // Respaldo configurable. No es una espera fija de cinco segundos: el default es 2000 ms.
+                    $resetMs = max(1, (int) config('tiendanube.gobernador_reset_respaldo_ms', 2_000));
+                }
+                $turnoLimite = $gobernador->registrarLimiteRemoto(
+                    $storeId,
+                    $resetMs,
+                    $operacion,
+                    $fase,
+                );
+                $reprogramador->reprogramar($turnoLimite);
+                $this->assertOk($response, $method, $url);
+            }
+
+            if (! $response->successful() && $intento < $max && $this->respuestaReintentable($response, $method, $url)) {
+                continue;
+            }
+
+            $this->assertOk($response, $method, $url);
+
+            return $response;
+        }
+
+        throw new RuntimeException('El envío gobernado no produjo respuesta.');
+    }
+
+    private function respuestaReintentable(Response $response, string $method, string $path): bool
+    {
+        $status = $response->status();
+        if (! in_array($status, [502, 503, 504], true)) {
+            return false;
+        }
+        if ($method === 'POST' && $this->isUncertainPostPath($path)) {
+            return false;
+        }
+        if (! $this->reintentarEscrituraAmbigua && $method === 'PUT') {
+            return false;
+        }
+
+        return in_array($method, ['GET', 'HEAD', 'PUT', 'DELETE'], true);
+    }
+
     private function shouldRetry(Throwable $exception, string $method, string $path): bool
     {
         $status = null;
@@ -580,6 +734,9 @@ class TiendanubeApiClient
 
         if (in_array($status, [502, 503, 504], true)) {
             if ($uncertainPost) {
+                return false;
+            }
+            if (! $this->reintentarEscrituraAmbigua && $method === 'PUT') {
                 return false;
             }
 

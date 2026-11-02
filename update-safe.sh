@@ -1,18 +1,18 @@
 #!/bin/bash
 # ==============================================================================
-# Actualización segura de GeliaNV — minimiza caídas y errores 502
+# Actualización de GeliaNV sin borrar el build ni la caché de rutas.
 #
 # Uso:
-#   ./update-safe.sh              # Actualización estándar (git pull + deploy)
-#   ./update-safe.sh --skip-git   # Sin git pull (solo aplicar cambios locales)
-#   ./update-safe.sh --rebuild    # Recompila imagen Docker y recrea contenedores
-#   ./update-safe.sh --recreate-env  # Fuerza recarga de variables .env en contenedores
+#   ./update-safe.sh                 # Actualización estándar
+#   ./update-safe.sh --skip-git      # Sin git pull
+#   ./update-safe.sh --yes           # No pregunta si hay que recrear contenedores
+#   ./update-safe.sh --purge-assets  # Borra chunks viejos (si no, solo simula)
+#   ./update-safe.sh --dry-run       # La purga solo informa, aunque vaya --purge-assets
+#   ./update-safe.sh --quick         # Mismo camino. No omite respaldo ni verificación
+#   ./update-safe.sh --rebuild       # Recompila la imagen. Corta el servicio
+#   ./update-safe.sh --recreate-env  # Fuerza recrear app, queue y scheduler
 #
-# Qué hace diferente a update.sh:
-#   - Detecta cambios en .env y recrea contenedores (evita SESSION_DRIVER desincronizado)
-#   - Reinicia Nginx (web) tras recrear app/reverb (evita 502 por IP en caché)
-#   - Regenera caché de Laravel DESPUÉS de sincronizar el entorno
-#   - Verificación de salud al finalizar
+# La copia anterior de este script está en update-safe.legacy.sh y no se invoca.
 # ==============================================================================
 
 set -euo pipefail
@@ -23,18 +23,24 @@ cd "$SCRIPT_DIR"
 # shellcheck source=scripts/backup-db.sh
 source "${SCRIPT_DIR}/scripts/backup-db.sh"
 
-COMPOSE_FILE="docker-compose.prod.yaml"
+COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yaml}"
 COMPOSE=()
 COMPOSE_BIN_DISPLAY=""
 
 APP_CONTAINER="${DOCKER_APP_CONTAINER:-gelianv_app}"
 WEB_CONTAINER="${DOCKER_WEB_CONTAINER:-gelianv_web}"
-QUEUE_WAIT_SECONDS="${QUEUE_WAIT_SECONDS:-8}"
-GIT_BRANCH="${GIT_BRANCH:-main}"
+DB_CONTAINER="${DOCKER_DB_CONTAINER:-gelianv_db}"
+QUEUE_CONTAINER="${DOCKER_QUEUE_CONTAINER:-gelianv_queue}"
+REVERB_CONTAINER="${DOCKER_REVERB_CONTAINER:-gelianv_reverb}"
+# Vacío: se usa la rama del checkout. GIT_BRANCH solo si coincide con esa rama.
 
 SKIP_GIT=false
 REBUILD_IMAGE=false
 FORCE_RECREATE_ENV=false
+ASSUME_YES=false
+PURGE_APPLY=false
+DRY_RUN_FLAG=false
+PREV_SHA=""
 
 # ------------------------------------------------------------------------------
 # Utilidades
@@ -52,7 +58,7 @@ on_error() {
 trap on_error ERR
 
 usage() {
-    sed -n '4,10p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '4,16p' "$0" | sed 's/^# \{0,1\}//'
     exit 0
 }
 
@@ -62,12 +68,19 @@ parse_args() {
             --skip-git)       SKIP_GIT=true ;;
             --rebuild)        REBUILD_IMAGE=true ;;
             --recreate-env)   FORCE_RECREATE_ENV=true ;;
+            --yes)            ASSUME_YES=true ;;
+            --purge-assets)   PURGE_APPLY=true ;;
+            --dry-run)        DRY_RUN_FLAG=true ;;
+            --quick)          ;;
             -h|--help)        usage ;;
             *)
                 fail "Opción desconocida: ${arg}. Use --help."
                 ;;
         esac
     done
+    if $DRY_RUN_FLAG; then
+        PURGE_APPLY=false
+    fi
 }
 
 require_command() {
@@ -85,9 +98,7 @@ detect_docker_compose() {
         fail "No se encontró Docker Compose. Requiere 'docker compose' (plugin v2) o 'docker-compose'."
     fi
 
-
-
-    ok "Docker Compose detectado: ${COMPOSE_BIN_DISPLAY}"
+    ok "Docker Compose detectado: ${COMPOSE_BIN_DISPLAY} (${COMPOSE_FILE})"
 }
 
 container_running() {
@@ -95,7 +106,7 @@ container_running() {
 }
 
 exec_app() {
-    docker exec -i "$APP_CONTAINER" "$@"
+    docker exec -i -w /var/www/html "$APP_CONTAINER" "$@"
 }
 
 env_file_value() {
@@ -104,8 +115,24 @@ env_file_value() {
 }
 
 container_env_value() {
-    local key="$1"
-    docker exec -i "$APP_CONTAINER" printenv "$key" 2>/dev/null || true
+    local container="$1"
+    local key="$2"
+    docker exec -i "$container" printenv "$key" 2>/dev/null || true
+}
+
+claves_distintas() {
+    local container="$1"
+    shift
+    local key file_val container_val
+    for key in "$@"; do
+        file_val="$(env_file_value "$key")"
+        container_val="$(container_env_value "$container" "$key")"
+        if [ -n "$file_val" ] && [ "$file_val" != "$container_val" ]; then
+            warn "Desincronización detectada: ${key} (.env=${file_val}, contenedor=${container_val:-<vacío>})"
+            return 0
+        fi
+    done
+    return 1
 }
 
 env_needs_recreate() {
@@ -117,41 +144,44 @@ env_needs_recreate() {
         return 1
     fi
 
-    # Si .env es más reciente que el arranque del contenedor, probablemente cambió
-    local env_mtime container_start_epoch
-    env_mtime="$(stat -c %Y .env 2>/dev/null || echo 0)"
-    container_start_epoch="$(docker inspect -f '{{.State.StartedAt}}' "$APP_CONTAINER" 2>/dev/null | xargs -I{} date -d "{}" +%s 2>/dev/null || echo 0)"
-    if [ "$env_mtime" -gt "$container_start_epoch" ]; then
-        warn ".env modificado después del último arranque de ${APP_CONTAINER}."
-        return 0
+    claves_distintas "$APP_CONTAINER" SESSION_DRIVER APP_ENV APP_URL CACHE_STORE QUEUE_CONNECTION
+}
+
+reverb_needs_recreate() {
+    if [ ! -f .env ]; then
+        return 1
     fi
 
-    # Comparar variables críticas entre archivo y proceso del contenedor
-    local keys=(SESSION_DRIVER APP_ENV APP_URL CACHE_STORE QUEUE_CONNECTION)
-    for key in "${keys[@]}"; do
-        local file_val container_val
-        file_val="$(env_file_value "$key")"
-        container_val="$(container_env_value "$key")"
-        if [ -n "$file_val" ] && [ "$file_val" != "$container_val" ]; then
-            warn "Desincronización detectada: ${key} (.env=${file_val}, contenedor=${container_val:-<vacío>})"
+    local key
+    while IFS= read -r key; do
+        [ -n "$key" ] || continue
+        if claves_distintas "$REVERB_CONTAINER" "$key"; then
             return 0
         fi
-    done
+    done < <(grep -E '^REVERB_[A-Za-z0-9_]+=' .env 2>/dev/null | cut -d= -f1 || true)
 
     return 1
 }
 
-recreate_runtime_containers() {
-    log "Recreando contenedores para sincronizar variables de entorno..."
-    "${COMPOSE[@]}" up -d --force-recreate --no-deps app queue scheduler reverb
-    ok "Contenedores app/queue/scheduler/reverb recreados."
+confirmar_recreacion() {
+    if $ASSUME_YES; then
+        return 0
+    fi
+    if [ ! -r /dev/tty ]; then
+        fail "Hay que recrear contenedores y no hay terminal. Repite el comando con --yes."
+    fi
+    local respuesta
+    read -r -p "Este despliegue recreará contenedores (corte breve). ¿Continuar? (s/n) " respuesta </dev/tty
+    case "$respuesta" in
+        s|S) return 0 ;;
+        *) fail "Recreación cancelada." ;;
+    esac
 }
 
-restart_web_proxy() {
-    log "Reiniciando Nginx (${WEB_CONTAINER}) para refrescar upstreams..."
-    "${COMPOSE[@]}" restart web
-    sleep 2
-    ok "Nginx reiniciado."
+recargar_nginx() {
+    log "Recargando Nginx sin cortar conexiones..."
+    docker exec -i "$WEB_CONTAINER" nginx -s reload
+    ok "Nginx recargado."
 }
 
 graceful_php_fpm_reload() {
@@ -160,11 +190,22 @@ graceful_php_fpm_reload() {
     ok "Señal USR2 enviada a PHP-FPM."
 }
 
-restart_queue_worker() {
+esperar_cola() {
     log "Señalizando queue worker para reinicio limpio..."
+    local antes ahora intento
+    antes="$(docker inspect -f '{{.State.StartedAt}}' "$QUEUE_CONTAINER" 2>/dev/null || true)"
     exec_app php artisan queue:restart || true
-    sleep "$QUEUE_WAIT_SECONDS"
-    ok "Queue worker reiniciado (espera ${QUEUE_WAIT_SECONDS}s)."
+    intento=0
+    while [ "$intento" -lt 60 ]; do
+        sleep 1
+        ahora="$(docker inspect -f '{{.State.StartedAt}}' "$QUEUE_CONTAINER" 2>/dev/null || true)"
+        if [ -n "$ahora" ] && [ "$ahora" != "$antes" ]; then
+            ok "Queue worker reiniciado."
+            return 0
+        fi
+        intento=$((intento + 1))
+    done
+    warn "La cola no mostró un reinicio en 60 s. Se continúa."
 }
 
 refresh_permissions() {
@@ -174,7 +215,99 @@ refresh_permissions() {
     ok "Permisos actualizados."
 }
 
-# Host HTTP para Nginx virtual hosts (APP_URL). Evita el default_server 404.
+preflight_espacio() {
+    local disponible necesario
+    disponible="$(df -Pk . | awk 'NR==2 {print $4}')"
+    if [ -d public/build ]; then
+        necesario="$(du -sk public/build | awk '{print $1}')"
+    else
+        necesario=512000
+    fi
+    if [ "${disponible:-0}" -lt $((necesario + 204800)) ]; then
+        fail "No hay espacio para compilar otro frontend junto a public/build."
+    fi
+    ok "Espacio en disco suficiente para el build."
+}
+
+mysql_root() {
+    docker exec "$DB_CONTAINER" sh -c 'export MYSQL_PWD="$MYSQL_ROOT_PASSWORD"; mysql --user=root --batch --skip-column-names -e "$1"; unset MYSQL_PWD' sh "$1"
+}
+
+cerrar_creacion_de_triggers() {
+    mysql_root "SET GLOBAL log_bin_trust_function_creators = 0" || true
+    local valor
+    valor="$(mysql_root "SELECT @@GLOBAL.log_bin_trust_function_creators" || true)"
+    if [ "$valor" != "0" ]; then
+        echo "ERROR: log_bin_trust_function_creators quedó en '${valor}'." >&2
+        exit 1
+    fi
+}
+
+migrate_con_triggers() {
+    if ! container_running "$DB_CONTAINER"; then
+        fail "El contenedor ${DB_CONTAINER} no está corriendo. No se migra."
+    fi
+
+    log "Respaldando base de datos y ejecutando migraciones..."
+    backup_db_antes_de_migrar
+
+    # MySQL 8 con binlog rechaza CREATE TRIGGER si el usuario no tiene SUPER
+    # ni SET_USER_ID (error 1419). No se concede ninguno de esos privilegios:
+    # permiten fijar DEFINER ajeno. La opción se abre solo mientras corre migrate
+    # y se cierra aunque la migración falle.
+    # ponytail: ventana global durante migrate; para quitarla, migrar con un
+    # usuario que ya tenga SET_USER_ID y borrar este bloque.
+    echo "Abriendo creación de triggers solo para esta migración..."
+    mysql_root "SET GLOBAL log_bin_trust_function_creators = 1"
+    set +e
+    exec_app php artisan migrate --force
+    local status=$?
+    set -e
+    cerrar_creacion_de_triggers
+    if [ "$status" -ne 0 ]; then
+        fail "La migración falló (${status}). La ventana de triggers ya se cerró."
+    fi
+    ok "Migraciones aplicadas."
+}
+
+compilar_frontend() {
+    local cabeza necesita_ci sha
+    cabeza="$(git rev-parse HEAD)"
+    necesita_ci=false
+    if [ "$PREV_SHA" != "$cabeza" ] && ! git diff --quiet "$PREV_SHA" "$cabeza" -- package-lock.json; then
+        necesita_ci=true
+    fi
+    if ! exec_app test -d node_modules; then
+        necesita_ci=true
+    fi
+
+    if $necesita_ci; then
+        log "Instalando dependencias de Node desde el lockfile..."
+        exec_app npm ci
+    else
+        log "package-lock.json sin cambios. Se omite npm ci."
+    fi
+
+    log "Compilando assets sin vaciar public/build..."
+    sha="$(git rev-parse --short=7 HEAD)"
+    exec_app env "DEPLOY_SHA=${sha}" npm run build
+    bash "${SCRIPT_DIR}/scripts/verificar-frontend-publicado.sh"
+    ok "Frontend compilado y servido por Nginx."
+}
+
+purgar_assets() {
+    local sha modo
+    sha="$(git rev-parse --short=7 HEAD)"
+    if $PURGE_APPLY; then
+        modo="--apply"
+        log "Purgando assets que ya no están en las compilaciones retenidas..."
+    else
+        modo="--dry-run"
+        log "Purga de assets en simulación. Use --purge-assets para borrar."
+    fi
+    exec_app env "DEPLOY_SHA=${sha}" node scripts/purgar-assets.mjs "$modo"
+}
+
 health_host_from_app_url() {
     local url host
     url="$(env_file_value APP_URL)"
@@ -201,7 +334,6 @@ health_check() {
     driver="$(exec_app php artisan tinker --execute="echo config('session.driver');" 2>/dev/null | tail -1)"
     ok "SESSION driver activo: ${driver:-desconocido}"
 
-    # Nginx enruta por server_name; sin Host correcto cae en default_server → 404.
     local health_host
     health_host="$(health_host_from_app_url)"
     ok "Health check Host: ${health_host}"
@@ -228,88 +360,112 @@ main() {
 
     log "=== Actualización segura GeliaNV ==="
 
-    # 0. Pre-flight
     if ! container_running "$APP_CONTAINER"; then
         fail "El contenedor ${APP_CONTAINER} no está corriendo. Ejecute primero: ${COMPOSE_BIN_DISPLAY} -f ${COMPOSE_FILE} up -d"
     fi
+    if ! container_running "$WEB_CONTAINER"; then
+        fail "El contenedor ${WEB_CONTAINER} no está corriendo."
+    fi
 
-    # 1. Código fuente (sin abrir editor de merge commit)
     if ! $SKIP_GIT; then
-        log "Descargando cambios desde origin/${GIT_BRANCH}..."
-        GIT_EDITOR=true git pull --no-edit origin "$GIT_BRANCH"
-        ok "Repositorio actualizado."
+        if [ -n "$(git status --porcelain)" ]; then
+            fail "El checkout tiene cambios locales. No se despliega encima de un árbol sucio."
+        fi
+    fi
+
+    preflight_espacio
+
+    PREV_SHA="$(git rev-parse HEAD)"
+
+    if ! $SKIP_GIT; then
+        local rama pendiente
+        rama="$(git rev-parse --abbrev-ref HEAD)"
+        if [ "$rama" = "HEAD" ]; then
+            fail "El checkout no tiene rama. No se descarga una actualización en detached HEAD."
+        fi
+        if [ -z "${GIT_BRANCH:-}" ]; then
+            GIT_BRANCH="$rama"
+        elif [ "$GIT_BRANCH" != "$rama" ]; then
+            fail "El checkout está en ${rama} y GIT_BRANCH=${GIT_BRANCH}. El despliegue no mezcla otra rama."
+        fi
+
+        log "Descargando origin/${GIT_BRANCH}..."
+        git fetch origin "$GIT_BRANCH"
+        pendiente="$(git rev-list --count "HEAD..origin/${GIT_BRANCH}")"
+        if [ "$pendiente" -eq 0 ]; then
+            warn "origin/${GIT_BRANCH} no tiene commits nuevos. No se descargó código."
+        else
+            log "Se aplican ${pendiente} commits de origin/${GIT_BRANCH}."
+            GIT_EDITOR=true git merge --no-edit "origin/${GIT_BRANCH}"
+        fi
+        ok "Repositorio en $(git rev-parse --short HEAD) (${GIT_BRANCH})."
     else
         warn "Omitiendo git pull (--skip-git)."
     fi
 
-    # 2. Rebuild de imagen (opcional)
     if $REBUILD_IMAGE; then
-        log "Compilando imagen Docker (puede tardar varios minutos)..."
+        log "Compilando imagen Docker. Este paso recrea contenedores y corta el servicio..."
         "${COMPOSE[@]}" build app
         "${COMPOSE[@]}" up -d --force-recreate app queue scheduler reverb web
         ok "Imagen reconstruida y contenedores recreados."
     fi
 
-    # 3. Git safe directory (preventivo)
     exec_app git config --global --add safe.directory /var/www/html || true
 
-    # 4. Limpiar caché ANTES de actualizar (evita servir config/rutas viejas)
-    log "Limpiando caché anterior..."
-    exec_app php artisan optimize:clear
-    ok "Caché limpiada."
-
-    # 5. Dependencias PHP
     log "Actualizando dependencias de Composer..."
     exec_app composer install --no-dev --optimize-autoloader --no-interaction
     ok "Composer actualizado."
 
-    # 6. Migraciones con respaldo
-    log "Respaldando base de datos y ejecutando migraciones..."
-    backup_db_antes_de_migrar
-    exec_app php artisan migrate --force
-    ok "Migraciones aplicadas."
+    migrate_con_triggers
+    compilar_frontend
 
-    # 7. Frontend
-    log "Compilando assets del frontend (Vite) desde el lockfile..."
-    exec_app npm ci
-    exec_app npm run build
-    bash "${SCRIPT_DIR}/scripts/verificar-frontend-publicado.sh"
-    ok "Frontend compilado y servido por Nginx."
-
-    # 8. Sincronizar entorno Docker ↔ .env (crítico para SESSION_DRIVER, etc.)
-    local did_recreate=false
-    if env_needs_recreate; then
-        recreate_runtime_containers
-        did_recreate=true
-    fi
-
-    # 9. Regenerar caché con código y entorno ya actualizados
-    log "Regenerando caché de configuración, eventos y rutas..."
-    exec_app php artisan optimize:clear
-    exec_app php artisan event:cache
+    log "Regenerando caché sin vaciar la anterior..."
     exec_app php artisan optimize
     ok "Caché de producción regenerada."
 
-    # 10. Reiniciar proxy si hubo recreación (evita 502 por IP obsoleta en Nginx)
-    if $did_recreate || $REBUILD_IMAGE; then
-        restart_web_proxy
+    local recrear_app=false
+    local recrear_reverb=false
+    if env_needs_recreate; then
+        recrear_app=true
+    fi
+    if reverb_needs_recreate; then
+        recrear_reverb=true
+    fi
+
+    if $recrear_app || $recrear_reverb; then
+        confirmar_recreacion
+    fi
+
+    if $recrear_app; then
+        local servicio
+        for servicio in queue scheduler app; do
+            log "Recreando ${servicio}..."
+            "${COMPOSE[@]}" up -d --force-recreate --no-deps "$servicio"
+        done
+        ok "Contenedores de aplicación recreados."
     else
         graceful_php_fpm_reload
     fi
 
-    # 11. Queue worker
-    restart_queue_worker
+    if $recrear_reverb; then
+        log "Recreando reverb..."
+        "${COMPOSE[@]}" up -d --force-recreate --no-deps reverb
+        ok "Reverb recreado."
+    fi
 
-    # 12. Permisos
+    if $recrear_app || $recrear_reverb || $REBUILD_IMAGE; then
+        recargar_nginx
+    fi
+
+    esperar_cola
     refresh_permissions
-
-    # 13. Verificación final
     health_check
+    purgar_assets
 
-    log "=== Actualización completada sin interrupciones críticas ==="
+    log "=== Actualización completada sin vaciar el build ni las rutas ==="
     echo ""
-    echo "  Si cambió .env: los contenedores ya están sincronizados."
-    echo "  Si algo falla: use ./rollback.sh para revertir el código."
+    echo "  Los chunks anteriores siguen en public/build/assets."
+    echo "  La purga real se pide con --purge-assets."
     echo ""
 }
 

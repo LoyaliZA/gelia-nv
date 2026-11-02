@@ -2,7 +2,7 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 import GeliaLogo from './GeliaLogo'; // <-- Importamos nuestro Smart Component
 
-export default function GeliaLoader({ isVisible, message = "Sincronizando datos_", progress = null, onClose = null, buttonText = "Aceptar y Continuar" }) {
+export default function GeliaLoader({ isVisible, message = "Sincronizando datos_", progress = null, onClose = null, buttonText = "Aceptar y Continuar", nota = null }) {
     if (!isVisible) return null;
 
     // Lógica dinámica: Si recibimos un número de progreso, usamos el relleno fluido. 
@@ -39,11 +39,14 @@ export default function GeliaLoader({ isVisible, message = "Sincronizando datos_
                         </p>
                     )}
 
-                    {!onClose ? (
+                    {nota ? (
+                        <p className="text-sm theme-text-muted mt-2 m-0">{nota}</p>
+                    ) : !onClose ? (
                         <p className="text-[10px] font-bold theme-text-muted tracking-widest uppercase mt-2">
                             Por favor, no cierres esta ventana
                         </p>
-                    ) : (
+                    ) : null}
+                    {onClose ? (
                         <button 
                             onClick={onClose}
                             className="w-full mt-6 px-8 py-4 text-white rounded-2xl font-black uppercase tracking-widest text-[11px] shadow-lg transition-all hover:scale-105 outline-none relative overflow-hidden group"
@@ -52,7 +55,7 @@ export default function GeliaLoader({ isVisible, message = "Sincronizando datos_
                             <span className="relative z-10">{buttonText}</span>
                             <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out" />
                         </button>
-                    )}
+                    ) : null}
                 </div>
 
             </div>

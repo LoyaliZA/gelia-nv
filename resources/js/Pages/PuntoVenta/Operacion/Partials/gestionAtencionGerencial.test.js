@@ -61,6 +61,34 @@ describe('gestión de atención desde Operación General', () => {
         vi.unstubAllGlobals();
     });
 
+    it('no ofrece transferir sin el permiso de gerencia', () => {
+        montar();
+        const boton = [...document.querySelectorAll('button')]
+            .find((elemento) => elemento.textContent.includes('Transferir'));
+        expect(boton).toBeUndefined();
+    });
+
+    it('transfiere la atención en curso a otra persona del equipo', async () => {
+        montar({
+            puedeTransferirTurno: true,
+            destinosTransferencia: [{ id: 9, nombre: 'Diana Paola', estado_vendedor: 'disponible' }],
+        });
+        await pulsar('Transferir');
+        const destino = document.querySelector('input[name="destino-transferencia"]');
+        expect(destino).not.toBeNull();
+        await act(async () => {
+            destino.click();
+        });
+        await pulsar('Confirmar transferencia');
+
+        expect(axios.post).toHaveBeenCalledWith('punto_venta.turnos.transferir/12', {
+            version: 7,
+            idempotency_key: expect.any(String),
+            destino_user_id: 9,
+        });
+        expect(onActualizado).toHaveBeenCalledOnce();
+    });
+
     it('confirmar cierre envía la versión del turno y actualiza la operación', async () => {
         montar();
         await pulsar('Terminar atención');
@@ -102,5 +130,31 @@ describe('gestión de atención desde Operación General', () => {
             idempotency_key: 'pdv:reatencion:12:4',
         });
         expect(onActualizado).toHaveBeenCalledOnce();
+    });
+
+    it('habilita reatención en espera si la persona es candidata', async () => {
+        montar({
+            persona: { ...persona, estado_vendedor: 'en_espera', recibe_turnos: false, atencion_actual: null },
+            puedeAsignarReatencion: true,
+            reatenciones: [{ id: 12, version: 8, folio: 'V-12', cliente_nombre: 'Cliente', candidatos: [{ id: 4 }] }],
+        });
+
+        const boton = [...document.querySelectorAll('button')]
+            .find((elemento) => elemento.textContent.trim() === 'Reatención');
+        expect(boton.disabled).toBe(false);
+        expect(boton.title).toBe('Asignar un cliente en re-atención');
+    });
+
+    it('mantiene reatención bloqueada en espera si la persona no es candidata', () => {
+        montar({
+            persona: { ...persona, estado_vendedor: 'en_espera', recibe_turnos: false, atencion_actual: null },
+            puedeAsignarReatencion: true,
+            reatenciones: [{ id: 12, version: 8, folio: 'V-12', cliente_nombre: 'Cliente', candidatos: [{ id: 9 }] }],
+        });
+
+        const boton = [...document.querySelectorAll('button')]
+            .find((elemento) => elemento.textContent.trim() === 'Reatención');
+        expect(boton.disabled).toBe(true);
+        expect(boton.title).toBe('No hay clientes en ventana de re-atención');
     });
 });

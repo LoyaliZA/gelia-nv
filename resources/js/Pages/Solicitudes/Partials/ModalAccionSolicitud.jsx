@@ -16,7 +16,8 @@ const ACCIONES = {
 
 export default function ModalAccionSolicitud({ accion, solicitud, listas = [], onClose, onProcesando }) {
     const config = ACCIONES[accion];
-    const cambioLista = (solicitud.proceso?.nombre || '').toUpperCase().includes('LISTA');
+    const cambioLista = (solicitud.proceso?.nombre || '').toUpperCase().includes('LISTA')
+        && solicitud.catalogo_lista_descuento_id;
     const referencia = Math.max(Number((solicitud.cliente?.lista_descuento || solicitud.cliente?.listaDescuento)?.monto_requerido || 0), Number((solicitud.lista_descuento || solicitud.listaDescuento)?.monto_requerido || 0));
     const inferiores = listas.filter(l => l.activo !== false && listaVisibleEnSolicitudes(l) && Number(l.monto_requerido) < referencia).sort((a, b) => Number(b.monto_requerido) - Number(a.monto_requerido));
     const requiereLista = accion === 'solicitar' && cambioLista;

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Search, SlidersHorizontal, X } from 'lucide-react';
+import CampoBusqueda from '@/Components/CampoBusqueda';
 import { TIPOS_OPERATIVO, BTN_PRIMARY, BTN_SECONDARY } from './operativasStyles';
 
 const TABS = [
@@ -17,7 +18,7 @@ export default function FiltrosOperativas({ tabActiva, busqueda = '', tipoOperat
             <form onSubmit={(event) => { event.preventDefault(); onAplicarFiltros({ q: busquedaLocal.trim() || undefined, page: 1 }); }} className="flex flex-wrap items-end gap-2">
                 <div className="flex-1 min-w-[min(100%,15rem)]">
                     <label htmlFor="operativas-busqueda" className="theme-label block mb-1.5">Buscar solicitudes</label>
-                    <div className="theme-field-with-icon"><Search className="theme-field-icon" aria-hidden="true" /><input id="operativas-busqueda" name="q" type="search" value={busquedaLocal} onChange={(event) => setBusquedaLocal(event.target.value)} placeholder="Folio, remisión, pedido o cliente…" autoComplete="off" enterKeyHint="search" className="theme-input w-full" /></div>
+                    <CampoBusqueda id="operativas-busqueda" name="q" type="search" value={busquedaLocal} onChange={(event) => setBusquedaLocal(event.target.value)} placeholder="Folio, remisión, pedido o cliente…" autoComplete="off" enterKeyHint="search" className="theme-input w-full" />
                 </div>
                 <button type="submit" disabled={listaCargando} className={BTN_PRIMARY}><Search className="w-4 h-4" aria-hidden="true" /> Buscar</button>
                 <button type="button" className={BTN_SECONDARY} aria-expanded={mostrarAdicionales} aria-controls="operativas-filtros-extra" onClick={() => setMostrarAdicionales((valor) => !valor)}><SlidersHorizontal className="w-4 h-4" aria-hidden="true" />{mostrarAdicionales ? 'Ocultar filtros' : 'Más filtros'}{filtrosActivos > 0 ? ` (${filtrosActivos})` : ''}</button>

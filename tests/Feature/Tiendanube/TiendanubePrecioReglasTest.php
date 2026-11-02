@@ -228,6 +228,7 @@ class TiendanubePrecioReglasTest extends TestCase
         $preview->assertJsonPath('mensaje', 'Muestra; aún no revisada para aplicar');
         $this->assertGreaterThanOrEqual(1, count($preview->json('filas')));
         $this->assertSame(1000, $preview->json('filas.0.variante_id'));
+        $this->assertSame('Producto', $preview->json('filas.0.nombre'));
     }
 
     public function test_sin_permiso_costo_no_revela_valores_en_preview(): void

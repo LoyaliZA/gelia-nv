@@ -35,6 +35,19 @@ export default function useGeliaDeployWatch({
     politica = 'en_reposo',
     habilitado = true,
 } = {}) {
+    if (typeof document !== 'undefined' && habilitado && superficie) {
+        document.documentElement.setAttribute('data-gelia-deploy-watch', superficie);
+    }
+
+    useEffect(() => {
+        if (!habilitado || !superficie || typeof document === 'undefined') return undefined;
+
+        document.documentElement.setAttribute('data-gelia-deploy-watch', superficie);
+        return () => {
+            document.documentElement.removeAttribute('data-gelia-deploy-watch');
+        };
+    }, [habilitado, superficie]);
+
     useEffect(() => {
         if (!habilitado || !superficie || typeof window === 'undefined') return undefined;
 

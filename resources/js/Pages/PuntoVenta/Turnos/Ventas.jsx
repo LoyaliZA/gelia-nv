@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
 import { Head } from '@inertiajs/react';
-import { Loader2, Headphones, RefreshCw, ShieldOff } from 'lucide-react';
+import { Loader2, RefreshCw, ShieldOff } from 'lucide-react';
 import AppLayout from '../../../Layouts/AppLayout';
 import GeliaPageShell from '../../../Components/GeliaPageShell';
 import GeliaTituloCard from '../../../Components/GeliaTituloCard';
@@ -118,10 +118,10 @@ function VentasContenido({
     return (
                 <GeliaPageShell className="max-w-[720px] space-y-5" data-ventas-tablero-root>
                 <GeliaTituloCard
+                    compact
                     title="Mi atención"
                     description="Turno asignado y atención en curso"
                     aside={<PdvEncabezadoAlertasPdv />}
-                    icon={Headphones}
                 >
                     <SelectorSucursalActivaPdv
                         sucursalActiva={sucursalActiva}
