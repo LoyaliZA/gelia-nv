@@ -12,11 +12,13 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use App\Support\ControlPedidos\InstruccionEntrega;
 
 class GenerarCaratulaRecogeHoyService
 {
     public function ejecutar(PedidoBmaTareaPreparacion $tarea, User $usuario, bool $regenerar = false): PedidoBmaTareaDocumento
     {
+        InstruccionEntrega::assertEjecutable($tarea);
         $tarea->loadMissing(['modalidad', 'productos', 'pedido.cliente', 'pedido.estatus']);
         if ($tarea->modalidad?->codigo !== CatalogoModalidadPreparacionPedido::CODIGO_RECOGE_TIENDA) {
             throw ValidationException::withMessages([

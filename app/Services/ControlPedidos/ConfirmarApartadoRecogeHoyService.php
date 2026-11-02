@@ -10,6 +10,7 @@ use App\Models\ControlPedidos\PedidoBmaRevisionProducto;
 use App\Models\ControlPedidos\PedidoBmaTareaPreparacion;
 use App\Models\User;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
+use App\Support\ControlPedidos\InstruccionEntrega;
 use App\Support\ControlPedidos\MaquinaEstadosCumplimientoFisico;
 use App\Support\ControlPedidos\PlazosApartadoFisico;
 use Illuminate\Support\Collection;
@@ -37,6 +38,7 @@ class ConfirmarApartadoRecogeHoyService
         ?int $versionEsperada = null,
         array $productos = [],
     ): PedidoBmaCumplimientoFisico {
+        InstruccionEntrega::assertEjecutable($tarea);
         if (! $usuario->can('control_pedidos.tienda.apartado.separar')
             && ! $usuario->can('control_pedidos.tienda.responder')) {
             throw ValidationException::withMessages([

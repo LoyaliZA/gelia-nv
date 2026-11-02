@@ -7,6 +7,7 @@ use App\Models\ControlPedidos\PedidoBmaCumplimientoFisico;
 use App\Models\ControlPedidos\PedidoBmaTareaPreparacion;
 use App\Models\User;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
+use App\Support\ControlPedidos\InstruccionEntrega;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
@@ -27,6 +28,7 @@ class ConfirmarCaratulaColocadaService
         ?int $versionEsperada = null,
         ?int $caratulaId = null,
     ): PedidoBmaTareaPreparacion {
+        InstruccionEntrega::assertEjecutable($tarea);
         if (! $usuario->can('control_pedidos.tienda.confirmar_caratula')) {
             throw new \RuntimeException('No tiene permiso para confirmar colocación de carátula.');
         }

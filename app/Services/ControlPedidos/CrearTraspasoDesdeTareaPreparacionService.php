@@ -11,6 +11,7 @@ use App\Models\SolicitudTraspaso;
 use App\Models\SolicitudTraspasoProducto;
 use App\Models\User;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
+use App\Support\ControlPedidos\InstruccionEntrega;
 use App\Support\ControlPedidos\DesgloseSkuPreparacion;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -36,6 +37,8 @@ class CrearTraspasoDesdeTareaPreparacionService
                 return $existente->load(['productos', 'estado', 'almacenOrigen', 'cliente']);
             }
         }
+
+        InstruccionEntrega::assertEjecutable($tarea);
 
         $porTarea = SolicitudTraspaso::query()
             ->where('tarea_preparacion_id', $tarea->id)

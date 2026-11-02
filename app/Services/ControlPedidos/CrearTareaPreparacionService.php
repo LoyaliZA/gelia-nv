@@ -13,6 +13,7 @@ use App\Models\ControlPedidos\PedidoBmaTareaProducto;
 use App\Models\User;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
 use App\Support\ControlPedidos\AlmacenPdv;
+use App\Support\ControlPedidos\InstruccionEntrega;
 use App\Support\ControlPedidos\MaquinaEstadosPedidoBma;
 use App\Support\ControlPedidos\VisibilidadPedidoBma;
 use Illuminate\Support\Facades\DB;
@@ -163,14 +164,27 @@ class CrearTareaPreparacionService
             throw ValidationException::withMessages(['folio_remision' => 'Capture el folio del pedido antes de solicitar preparación.']);
         }
 
-        $activa = $pedido->tareaPreparacionVigente()->first();
-        if ($activa) {
+        if (InstruccionEntrega::abiertas((int) $pedido->id)->isNotEmpty()) {
             throw ValidationException::withMessages([
-                'tarea' => 'Ya existe una solicitud de preparación activa para este pedido.',
+                'tarea' => 'Ya existe una instrucción de entrega vigente para este pedido.',
             ]);
         }
 
         return DB::transaction(function () use ($pedido, $usuario, $modalidad, $almacenId, $observaciones, $idempotenciaClave, $datosMunicipio, $meta) {
+            $pedido = PedidoBma::query()->lockForUpdate()->findOrFail($pedido->id);
+            if ($idempotenciaClave) {
+                $repetida = PedidoBmaTareaPreparacion::query()
+                    ->where('idempotencia_clave', $idempotenciaClave)
+                    ->first();
+                if ($repetida) {
+                    return $repetida->load(['modalidad', 'almacen', 'productos', 'pedido.cliente', 'paqueteria']);
+                }
+            }
+            if (InstruccionEntrega::abiertas((int) $pedido->id)->isNotEmpty()) {
+                throw ValidationException::withMessages([
+                    'tarea' => 'Ya existe una instrucción de entrega vigente para este pedido.',
+                ]);
+            }
             $pedido->loadMissing('estatus');
             $fechaLimite = $this->requisitosService->calcularFechaLimite($modalidad);
             $prioridadMd = (bool) ($meta['prioridad_md'] ?? false);

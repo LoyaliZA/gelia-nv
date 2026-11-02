@@ -7,6 +7,7 @@ use App\Models\ControlPedidos\PedidoBmaTareaPreparacion;
 use App\Models\SolicitudTraspaso;
 use App\Models\User;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
+use App\Support\ControlPedidos\InstruccionEntrega;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -24,6 +25,7 @@ class ConfirmarSalidaTrasladoTiendaService
         User $usuario,
         ?int $versionEsperada = null,
     ): PedidoBmaTareaPreparacion {
+        InstruccionEntrega::assertEjecutable($tarea);
         if (! $usuario->can('control_pedidos.tienda.trasladar')) {
             throw new \RuntimeException('No tiene permiso para confirmar salida a CEDIS.');
         }

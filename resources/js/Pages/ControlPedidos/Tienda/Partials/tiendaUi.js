@@ -31,6 +31,7 @@ export const TONO_ESTADO_TIENDA = {
     LIBERACION_SOLICITADA: 'aviso',
     LIBERADA: 'neutro',
     CANCELADA: 'neutro',
+    SUSTITUIDA: 'neutro',
 };
 
 export function accionPrincipalTienda(tarea, puedeTomar = false) {
@@ -41,7 +42,7 @@ export function accionPrincipalTienda(tarea, puedeTomar = false) {
         const puedeResponder = esRecoge ? tarea.puede_preparar : tarea.puede_responder;
         return { label: puedeResponder === false ? 'Ver preparación' : 'Continuar preparación', atender: false };
     }
-    const etiquetas = { LISTA_PARA_TRASLADO: 'Confirmar salida', LISTA_PARA_CARATULA: 'Revisar carátula', RESPONDIDA: 'Ver respuesta', CON_INCIDENCIA: 'Revisar problema', RECHAZADA_CEDIS: 'Revisar rechazo' };
+    const etiquetas = { LISTA_PARA_TRASLADO: 'Confirmar salida', LISTA_PARA_CARATULA: 'Revisar carátula', RESPONDIDA: 'Ver respuesta', CON_INCIDENCIA: 'Revisar problema', RECHAZADA_CEDIS: 'Revisar rechazo', SUSTITUIDA: 'Ver historial', CANCELADA: 'Ver historial' };
     return { label: etiquetas[tarea.estado] || 'Ver preparación', atender: false };
 }
 
@@ -58,6 +59,7 @@ export const ETIQUETA_ESTADO_TIENDA = {
     LIBERACION_SOLICITADA: 'Liberación',
     LIBERADA: 'Liberada',
     CANCELADA: 'Cancelada',
+    SUSTITUIDA: 'Sustituida',
 };
 
 export function claseBadgeEstadoTienda(estado, estadoLabel) {

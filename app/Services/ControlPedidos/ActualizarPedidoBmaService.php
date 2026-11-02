@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Services\ControlPedidos\Direcciones\CrearSnapshotDireccionPedido;
 use App\Services\SaldosAFavor\SincronizarAplicacionesPedidoSafService;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
+use App\Support\ControlPedidos\InstruccionEntrega;
 use App\Support\ControlPedidos\SnapshotHistorialPedidoBma;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -36,6 +37,12 @@ class ActualizarPedidoBmaService
     {
         $datos['revision_esperada'] ??= (int) $pedido->revision_registro;
         $datos['base_captura'] ??= \App\Support\ControlPedidos\RevisionCapturaPedido::base($pedido);
+        InstruccionEntrega::assertCambioPaqueteria(
+            $pedido,
+            array_key_exists('catalogo_paqueteria_id', $datos) && $datos['catalogo_paqueteria_id'] !== null && $datos['catalogo_paqueteria_id'] !== ''
+                ? (int) $datos['catalogo_paqueteria_id']
+                : null
+        );
         if (!$pedido->esEditablePorVendedora()) {
             throw new \RuntimeException('Este pedido no puede editarse en su estado actual.');
         }
@@ -53,6 +60,20 @@ class ActualizarPedidoBmaService
                 $cliente = Cliente::where('numero_cliente', $datos['numero_cliente'])->first();
                 if ($cliente) {
                     $clienteId = $cliente->id;
+                }
+            }
+
+            if ($pedido->tieneRemision() || $pedido->tienePagoValidado()) {
+                if ((int) $clienteId !== (int) $pedido->cliente_id) {
+                    throw new \RuntimeException('La compra ya tiene pago comprobado o remisión. No se cambia el cliente ni la mercancía.');
+                }
+                foreach (['total_mercancia', 'cantidad_piezas'] as $campo) {
+                    if (! array_key_exists($campo, $datos) || $datos[$campo] === null || $datos[$campo] === '') {
+                        continue;
+                    }
+                    if (abs((float) $datos[$campo] - (float) $pedido->{$campo}) > 0.009) {
+                        throw new \RuntimeException('La compra ya tiene pago comprobado o remisión. No se modifican mercancía ni importes.');
+                    }
                 }
             }
 
