@@ -12,6 +12,24 @@ final class SerializadorBandejaRecepcionTurnoPdv
     /**
      * @return array<string, mixed>
      */
+    public static function turnoEnReatencion(TurnoPdv $turno, CarbonInterface $ahora): array
+    {
+        $expiraAt = $turno->reatencion_expira_at;
+
+        return array_merge(
+            self::resumenTurno($turno, $ahora),
+            [
+                'puede_baja_cola' => false,
+                'restante_segundos' => $expiraAt !== null
+                    ? max(0, (int) $ahora->diffInSeconds($expiraAt, false))
+                    : 0,
+            ],
+        );
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
     public static function turnoEnCola(TurnoPdv $turno, CarbonInterface $ahora): array
     {
         return array_merge(

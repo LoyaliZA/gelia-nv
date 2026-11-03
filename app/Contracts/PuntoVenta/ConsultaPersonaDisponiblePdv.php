@@ -13,8 +13,9 @@ use App\Models\User;
 interface ConsultaPersonaDisponiblePdv
 {
     /**
-     * Primera persona disponible en la sucursal para el servicio indicado.
-     * El desempate debe ser determinista (contrato Turnos §7).
+     * Siguiente persona de la fila automática.
+     * La primera ronda del día, entre quienes aún no cierran una atención, es aleatoria.
+     * Después, gana quien lleva más tiempo libre desde su último cierre.
      */
     public function primeraDisponible(int $sucursalId, string $servicio): ?User;
 

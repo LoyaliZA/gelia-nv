@@ -41,7 +41,8 @@ export default function BandejaColaRecepcionTurno({
 
     const enCola = bandeja?.en_cola ?? [];
     const asignados = bandeja?.asignados ?? [];
-    const vacia = enCola.length === 0 && asignados.length === 0;
+    const enReatencion = bandeja?.en_reatencion ?? [];
+    const vacia = enCola.length === 0 && asignados.length === 0 && enReatencion.length === 0;
     const { enEspera, asignados: totalAsignados } = resumenBandejaRecepcion(bandeja);
 
     const manejarConflicto = useCallback(async () => {
@@ -143,6 +144,16 @@ export default function BandejaColaRecepcionTurno({
                     permisos={permisos}
                     servicio={catalogos.servicio}
                     mostrarAtencion
+                />
+            )}
+
+            {enReatencion.length > 0 && (
+                <ListaTurnos
+                    titulo={`En reatención (${enReatencion.length})`}
+                    turnos={enReatencion}
+                    catalogos={catalogos}
+                    permisos={permisos}
+                    servicio={catalogos.servicio}
                 />
             )}
 
