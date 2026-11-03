@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Services\PuntoVenta\Turnos\PlazosTurnosPdvConfig;
 use App\Support\PuntoVenta\Operacion\EstadoJornadaPdv;
 use App\Support\PuntoVenta\Operacion\EstadoVendedorOperacionPdv;
+use App\Support\PuntoVenta\Turnos\IdentidadVisibleTurnoPdv;
 use App\Support\PuntoVenta\Turnos\SerializadorTableroVentasPdv;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
@@ -75,7 +76,7 @@ class ConsultaEquipoOperativoPdvService
 
         $atencionesAbiertas = TurnoPdvAtencion::query()
             ->with([
-                'turno:id,folio,snapshot_nombre_llamado,snapshot_cliente_nombre,servicio,version',
+                'turno:id,folio,snapshot_nombre_llamado,snapshot_cliente_nombre,snapshot_json,servicio,version',
                 'prorroga',
             ])
             ->whereIn('user_id', $userIds)
@@ -156,7 +157,7 @@ class ConsultaEquipoOperativoPdvService
             return null;
         }
 
-        $cliente = $turno->snapshot_cliente_nombre ?: $turno->snapshot_nombre_llamado;
+        $nombreVisible = IdentidadVisibleTurnoPdv::nombreVisible($turno);
 
         return array_merge(
             SerializadorTableroVentasPdv::atencion($atencion, $plazos, $ahora),
@@ -164,7 +165,9 @@ class ConsultaEquipoOperativoPdvService
                 'folio' => (string) $turno->folio,
                 'turno_id' => (int) $turno->id,
                 'turno_version' => (int) $turno->version,
-                'cliente' => $cliente !== null && $cliente !== '' ? (string) $cliente : null,
+                'cliente' => $nombreVisible !== '' ? $nombreVisible : null,
+                'es_tercero' => IdentidadVisibleTurnoPdv::esTercero($turno),
+                'cliente_titular' => IdentidadVisibleTurnoPdv::nombreTitular($turno),
                 'servicio' => $turno->servicio !== null ? (string) $turno->servicio : null,
             ],
         );

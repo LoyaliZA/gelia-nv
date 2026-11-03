@@ -148,7 +148,7 @@ export default function ModalReatencionDesdeVendedorGerencia({
                             <option value="">Seleccionar…</option>
                             {turnos.map((turno) => (
                                 <option key={turno.id} value={turno.id}>
-                                    Folio {turno.folio} · {turno.cliente_nombre}
+                                    Folio {turno.folio} · {turno.cliente_nombre}{turno.es_tercero ? ' · Tercero' : ''}
                                 </option>
                             ))}
                         </select>
