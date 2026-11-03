@@ -16,7 +16,9 @@ final class DestinoRevisionRegistrarPedidos
 
     public const CONTROL_PEDIDOS = 'control_pedidos';
 
-    public const MENSAJE_AREA = 'Elige quién revisará y separará la mercancía.';
+    public const MENSAJE_AREA = 'Elige el destino de la revisión.';
+
+    public const MENSAJE_MISMO_DIA = 'Mismo día (T-02.1) no se envía como apartado ni como consulta desde esta captura.';
 
     public const MENSAJE_ALMACEN = 'Elige la sucursal o el almacén de tienda.';
 
@@ -103,8 +105,8 @@ final class DestinoRevisionRegistrarPedidos
     public static function etiqueta(string $area): string
     {
         return match ($area) {
-            self::PREPARACION_TIENDA => 'Solicitar apartado en tienda',
-            self::CONTROL_PEDIDOS => 'Solicitar separación a CEDIS',
+            self::PREPARACION_TIENDA => 'Revisar y apartar en tienda',
+            self::CONTROL_PEDIDOS => 'Consultar disponibilidad en CEDIS',
             default => 'Solicitar en tienda',
         };
     }
@@ -117,7 +119,7 @@ final class DestinoRevisionRegistrarPedidos
             return 'Enviado a Preparación Tienda'.$lugar.'. Se espera la revisión del archivo. Aún no hay apartado ni disponibilidad confirmada.';
         }
 
-        return 'Enviado a Control Pedidos. Se espera la separación en CEDIS. Aún no hay disponibilidad confirmada, pago ni entrega.';
+        return 'Enviado a Control Pedidos. Se espera la consulta de disponibilidad. Aún no hay disponibilidad confirmada, traslado, pago ni entrega.';
     }
 
     public static function yaEnviada(PedidoBma $pedido): bool

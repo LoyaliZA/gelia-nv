@@ -135,6 +135,11 @@ class SolicitarRevisionRegistrarPedidosService
         if (! $pedido->tieneSoporteSolicitud()) {
             throw ValidationException::withMessages(['pdf' => 'Adjunta el PDF o la imagen del pedido.']);
         }
+        if (($json['caso_tienda'] ?? '') === 'mismo_dia_pdv') {
+            throw ValidationException::withMessages([
+                'caso_tienda' => DestinoRevisionRegistrarPedidos::MENSAJE_MISMO_DIA,
+            ]);
+        }
         if ($pedido->estatus?->fase_ciclo !== CatalogoEstatusPedido::FASE_BORRADOR) {
             throw ValidationException::withMessages(['estado' => 'Este pedido ya no está en captura.']);
         }
@@ -258,13 +263,13 @@ class SolicitarRevisionRegistrarPedidosService
             $usuario->id,
             $estatusAnterior->id,
             $estatusNuevo->id,
-            'Solicitud de separación enviada a Control Pedidos. Pendiente de revisión.',
+            'Consulta de disponibilidad enviada a Control Pedidos. Pendiente de revisión. No hay traslado.',
             AccionesHistorialPedidoBma::SOLICITUD_PESAJE
         );
         $this->notificar->ejecutar(
             $pedido->fresh(['cliente', 'vendedor']),
             'pedido_consulta_pesaje',
-            'Nueva solicitud de separación en CEDIS, pendiente de revisión.',
+            'Nueva consulta de disponibilidad en CEDIS, pendiente de revisión.',
             ['control_pedidos.cedis'],
             $usuario->id,
             false,

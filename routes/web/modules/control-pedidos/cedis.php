@@ -17,6 +17,7 @@ Route::middleware(['can:control_pedidos.cedis'])
         Route::post('/{pedidoBma}/reportar-error-datos', [PedidoBmaCedisController::class, 'reportarErrorDatos'])->name('reportar_error_datos');
         Route::post('/{pedidoBma}/marcar-resguardo-apartado', [PedidoBmaCedisController::class, 'marcarResguardoApartado'])->name('marcar_resguardo_apartado');
         Route::post('/{pedidoBma}/responder-pesaje', [PedidoBmaCedisController::class, 'responderPesaje'])->name('responder_pesaje');
+        Route::post('/{pedidoBma}/disponibilidad', [PedidoBmaCedisController::class, 'responderDisponibilidad'])->name('disponibilidad');
         Route::post('/{pedidoBma}/reportar-sin-existencia', [PedidoBmaCedisController::class, 'reportarSinExistencia'])->name('reportar_sin_existencia');
         Route::post('/{pedidoBma}/confirmar-stock-sin-existencia', [PedidoBmaCedisController::class, 'confirmarStockSinExistencia'])->name('confirmar_stock_sin_existencia');
         Route::post('/{pedidoBma}/sesion-evidencia', [PedidoBmaCedisController::class, 'crearSesionEvidencia'])->name('sesion_evidencia.store');

@@ -136,6 +136,7 @@ class PedidoBmaTiendaController extends Controller
             'historial.usuario',
             'pedido.cliente',
             'pedido.referencias',
+            'pedido.revisionesProducto',
             'asignadaA',
             'solicitudTraspaso.estado',
             'enviadaCedisPor',
@@ -701,6 +702,23 @@ class PedidoBmaTiendaController extends Controller
         $mensaje = 'Apartado confirmado. Ventas recibió el aviso y la carátula está lista.';
 
         return $request->wantsJson() ? response()->json(['message' => $mensaje]) : redirect()->back()->with('success', $mensaje);
+    }
+
+    public function responderDisponibilidad(
+        PedidoBmaTareaPreparacion $tarea,
+        \App\Http\Requests\ControlPedidos\ResponderDisponibilidadInicialRequest $request,
+        \App\Services\ControlPedidos\ResponderDisponibilidadInicialService $service,
+    ): JsonResponse {
+        $tarea->loadMissing('pedido');
+        $resultado = $service->ejecutar(
+            $tarea->pedido,
+            Auth::user(),
+            $request->validated(),
+            $request->file('evidencias', []) ?: [],
+            $tarea
+        );
+
+        return response()->json($resultado);
     }
 
     public function guardarApartado(

@@ -221,6 +221,22 @@ class PedidoBmaCedisController extends Controller
         return redirect()->back()->with('success', 'Resguardo marcado como apartado. Se notificó a quien realizó el pedido.');
     }
 
+    public function responderDisponibilidad(
+        \App\Http\Requests\ControlPedidos\ResponderDisponibilidadInicialRequest $request,
+        PedidoBma $pedidoBma,
+        \App\Services\ControlPedidos\ResponderDisponibilidadInicialService $service,
+    ): JsonResponse {
+        Gate::authorize('control_pedidos.cedis');
+        VisibilidadPedidoBma::assertPuedeConsultar(Auth::user(), $pedidoBma);
+
+        return response()->json($service->ejecutar(
+            $pedidoBma,
+            Auth::user(),
+            $request->validated(),
+            $request->file('evidencias', []) ?: []
+        ));
+    }
+
     public function responderPesaje(
         ResponderPesajePedidoBmaRequest $request,
         PedidoBma $pedidoBma,

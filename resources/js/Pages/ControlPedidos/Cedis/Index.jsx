@@ -1,5 +1,6 @@
 import useActualizacionesPedidos from '../Partials/useActualizacionesPedidos';
 import React, { useEffect, useRef, useState } from 'react';
+import axios from 'axios';
 import { Head, router, usePage } from '@inertiajs/react';
 import { Warehouse, Clock, CheckCircle2, Package, Scale, Loader2, PackageOpen, AlertTriangle } from 'lucide-react';
 import AppLayout from '../../../Layouts/AppLayout';
@@ -15,6 +16,7 @@ import ModalMarcarApartadoResguardo from './Partials/ModalMarcarApartadoResguard
 import ModalAlertaPedido from '../Partials/ModalAlertaPedido';
 import ModalBitacoraPedido from '../Partials/ModalBitacoraPedido';
 import ModalLiberarMercancia from '../Partials/ModalLiberarMercancia';
+import PanelRespuestaDisponibilidad from '../Partials/PanelRespuestaDisponibilidad';
 import useListadoDiscreto from '../Partials/useListadoDiscreto';
 
 const KPI_CONFIG = [
@@ -59,6 +61,7 @@ export default function Index({
     const [modalBitacora, setModalBitacora] = useState({ abierto: false, pedido: null });
     const [alerta, setAlerta] = useState({ abierto: false, tipo: 'success', titulo: '', mensaje: '' });
     const [modalLiberar, setModalLiberar] = useState({ abierto: false, tarea: null });
+    const [disponibilidad, setDisponibilidad] = useState({ abierto: false, pedido: null });
     const debounceBusqueda = useRef(null);
     const modalAbiertoRef = useRef(false);
 
@@ -83,8 +86,8 @@ export default function Index({
     }, [flash?.success, flash?.error]);
 
     useEffect(() => {
-        modalAbiertoRef.current = modalDetalle.abierto || modalPesaje.abierto || modalErrorDatos.abierto || modalApartado.abierto || modalBitacora.abierto || modalLiberar.abierto;
-    }, [modalDetalle.abierto, modalPesaje.abierto, modalErrorDatos.abierto, modalApartado.abierto, modalBitacora.abierto, modalLiberar.abierto]);
+        modalAbiertoRef.current = modalDetalle.abierto || modalPesaje.abierto || modalErrorDatos.abierto || modalApartado.abierto || modalBitacora.abierto || modalLiberar.abierto || disponibilidad.abierto;
+    }, [modalDetalle.abierto, modalPesaje.abierto, modalErrorDatos.abierto, modalApartado.abierto, modalBitacora.abierto, modalLiberar.abierto, disponibilidad.abierto]);
 
     useActualizacionesPedidos({ onActualizar: () => tabActiva === 'LIBERACIONES' ? router.reload({ only: ['liberaciones', 'metricas'] }) : cargar({ tab: tabActiva, q: busqueda || undefined, page: pedidosVista?.current_page || 1 }, { silencioso: true }), pausado: () => modalAbiertoRef.current || cargando });
 
@@ -118,7 +121,13 @@ export default function Index({
     };
 
     const abrirDetalle = (pedido) => setModalDetalle({ abierto: true, pedido });
-    const abrirPesaje = (pedido) => setModalPesaje({ abierto: true, pedido });
+    const abrirPesaje = (pedido) => {
+        if (pedido?.solicitud_preparacion?.area_revision === 'control_pedidos') {
+            setDisponibilidad({ abierto: true, pedido });
+            return;
+        }
+        setModalPesaje({ abierto: true, pedido });
+    };
     const abrirErrorDatos = (pedido) => setModalErrorDatos({ abierto: true, pedido });
     const abrirApartado = (pedido) => setModalApartado({ abierto: true, pedido });
     const abrirBitacora = (pedido) => setModalBitacora({ abierto: true, pedido });
@@ -243,6 +252,30 @@ export default function Index({
                 abierto={modalBitacora.abierto}
                 pedido={modalBitacora.pedido}
                 onClose={() => setModalBitacora({ abierto: false, pedido: null })}
+            />
+            <PanelRespuestaDisponibilidad
+                modo="dialogo"
+                abierto={disponibilidad.abierto}
+                onClose={() => setDisponibilidad({ abierto: false, pedido: null })}
+                documentos={(disponibilidad.pedido?.documentos || []).filter((documento) => ['pdf_pedido', 'cotizacion', 'anexo'].includes(documento.tipo))}
+                revision={disponibilidad.pedido?.solicitud_preparacion?.revision_disponibilidad}
+                piezas={(disponibilidad.pedido?.revisiones_producto || []).filter((pieza) => !pieza.resolucion && ['regular', 'malo', 'danado', 'sin_existencia'].includes(pieza.estado_fisico)).map((pieza) => ({ id: pieza.id, descripcion: pieza.descripcion_producto, cantidad: pieza.cantidad_solicitada, detalle: pieza.comentario }))}
+                puedeResponder
+                tomada
+                onEnviar={async (form) => {
+                    const respuesta = await axios.post(route('control_pedidos.cedis.disponibilidad', disponibilidad.pedido.id), form, { headers: { Accept: 'application/json' } });
+                    setDisponibilidad((previo) => ({
+                        ...previo,
+                        pedido: {
+                            ...previo.pedido,
+                            solicitud_preparacion: {
+                                ...(previo.pedido?.solicitud_preparacion || {}),
+                                revision_disponibilidad: { estado: respuesta.data.estado },
+                            },
+                        },
+                    }));
+                    onActualizar();
+                }}
             />
             <ModalResponderPesaje
                 abierto={modalPesaje.abierto}

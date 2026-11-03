@@ -101,6 +101,23 @@ final class VisibilidadTareaPreparacion
                 'vendedora_nombre' => $pedido->vendedor?->name,
                 'cliente_nombre' => $pedido->cliente?->nombre_comercial ?: $pedido->cliente?->nombre ?: $pedido->contacto_nombre_snapshot,
                 'cantidad_piezas' => $pedido->cantidad_piezas,
+                'area_revision' => ($pedido->solicitud_preparacion ?? [])['area_revision'] ?? null,
+                'revision_disponibilidad' => ($pedido->solicitud_preparacion ?? [])['revision_disponibilidad'] ?? null,
+                'excepciones' => $pedido->relationLoaded('revisionesProducto')
+                    ? $pedido->revisionesProducto
+                        ->filter(fn ($revision) => $revision->resolucion === null
+                            && in_array($revision->estado_fisico, ['regular', 'malo', 'danado', 'sin_existencia'], true))
+                        ->sortBy('orden')
+                        ->map(fn ($revision) => [
+                            'id' => $revision->id,
+                            'descripcion' => $revision->descripcion_producto,
+                            'sku' => $revision->sku,
+                            'cantidad' => $revision->cantidad_solicitada,
+                            'estado_fisico' => $revision->estado_fisico,
+                            'detalle' => $revision->comentario,
+                            'resolucion' => $revision->resolucion,
+                        ])->values()->all()
+                    : [],
             ] : null,
             'responsable' => $tarea->asignadaA ? [
                 'id' => $tarea->asignadaA->id,

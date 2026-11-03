@@ -36,7 +36,7 @@ class RegistrarPedidosTiendaTest extends TestCase
             'receptor_definido' => true,
         ]);
         $this->assertTrue($cedis['principal']['habilitada']);
-        $this->assertSame('Solicitar separación a CEDIS', $cedis['principal']['etiqueta']);
+        $this->assertSame('Consultar disponibilidad en CEDIS', $cedis['principal']['etiqueta']);
 
         $tienda = (new PoliticaAccionesRegistrarPedidos)->evaluar([
             'modalidad' => 'tienda',
@@ -50,7 +50,7 @@ class RegistrarPedidosTiendaTest extends TestCase
         ]);
         $this->assertFalse($tienda['principal']['habilitada']);
         $this->assertSame(DestinoRevisionRegistrarPedidos::MENSAJE_ALMACEN, $tienda['principal']['motivo']);
-        $this->assertSame('Solicitar apartado en tienda', $tienda['principal']['etiqueta']);
+        $this->assertSame('Revisar y apartar en tienda', $tienda['principal']['etiqueta']);
     }
 
     public function test_el_almacen_de_tienda_solo_se_precarga_si_es_unico(): void
@@ -216,5 +216,28 @@ class RegistrarPedidosTiendaTest extends TestCase
             ['id' => 3, 'requiere_logistica' => false],
             ['id' => 8, 'requiere_logistica' => false],
         ]));
+    }
+
+    public function test_la_revision_guardada_no_se_reescribe_ni_se_falsifica(): void
+    {
+        $fusion = new FusionarSolicitudPreparacionPedido;
+        $base = [
+            'version' => 1,
+            'area_revision' => 'preparacion_tienda',
+            'caso_tienda' => 'revisar_apartar',
+            'revision_disponibilidad' => ['estado' => 'excepciones_pendientes', 'confirmada' => false],
+        ];
+
+        $conservada = $fusion->ejecutar($base, [
+            'modalidad_entrega' => 'tienda',
+            'revision_disponibilidad' => ['estado' => 'sin_excepciones', 'confirmada' => true],
+        ]);
+        $this->assertSame('excepciones_pendientes', $conservada['revision_disponibilidad']['estado']);
+        $this->assertFalse($conservada['revision_disponibilidad']['confirmada']);
+
+        $leida = $fusion->ejecutar(null, $base);
+        $this->assertSame('excepciones_pendientes', $leida['revision_disponibilidad']['estado']);
+        $this->assertSame('revisar_apartar', $fusion->ejecutar(null, ['caso_tienda' => 'revisar_apartar'])['caso_tienda']);
+        $this->assertSame('consultar_cedis', $fusion->ejecutar(null, ['caso_tienda' => 'consultar_cedis'])['caso_tienda']);
     }
 }

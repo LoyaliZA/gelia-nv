@@ -17,7 +17,6 @@ import {
     Package,
     Search,
     Store,
-    Timer,
     Truck,
     UserRound,
     X,
@@ -44,52 +43,43 @@ import { claseEtiquetaLista } from '../../Solicitudes/Partials/solicitudesStyles
 import { GELIA_ESTADO_VIVO_TONO } from '../../../utils/geliaTheme';
 
 const MENSAJE_ARCHIVO = 'Adjunta el PDF o la imagen del pedido.';
-const MENSAJE_AREA = 'Elige quién revisará y separará la mercancía.';
+const MENSAJE_AREA = 'Elige el destino de la revisión.';
 const MENSAJE_ALMACEN = 'Elige la sucursal o el almacén de tienda.';
 const MENSAJE_SIN_ALMACEN = 'No hay un almacén de tienda para recibir el apartado.';
 const MENSAJE_MODALIDAD = 'Este pedido ya tiene una instrucción, un pago o una remisión. La modalidad se conserva.';
+const NOTA_TIENDA_MD =
+    'Mismo día (T-02.1) es transferencia, con facultad por departamento o usuario, de lunes a viernes. El servidor acepta el reporte de pago hasta las 13:00. Elegirlo no confirma cobertura, preparación ni entrega. Las piezas ya disponibles en punto de venta y la continuación después del corte no tienen una regla automática.';
 const ETIQUETA_AREA = {
-    preparacion_tienda: 'Solicitar apartado en tienda',
-    control_pedidos: 'Solicitar separación a CEDIS',
+    preparacion_tienda: 'Revisar y apartar en tienda',
+    control_pedidos: 'Consultar disponibilidad en CEDIS',
 };
 
-const CASOS_TIENDA = [
+const DESTINOS_TIENDA = [
     {
-        id: 'apartado_pdv',
+        id: 'revisar_apartar',
         icono: Store,
         area: 'preparacion_tienda',
-        titulo: 'Apartado en punto de venta',
-        detalle: 'La mercancía se revisa y aparta en la sucursal. El pago queda pendiente.',
+        titulo: 'Revisar y apartar en tienda',
+        detalle: 'La sucursal revisa el archivo y aparta lo aceptado. No confirma pago ni entrega.',
     },
     {
-        id: 'mismo_dia_pdv',
-        icono: Timer,
-        area: 'preparacion_tienda',
-        titulo: 'Mismo día en punto de venta',
-        detalle: 'La revisión ocurre en la sucursal. Elegir este caso no confirma Mismo día ni la cobertura.',
-    },
-    {
-        id: 'traspaso_cedis',
-        icono: Truck,
-        area: 'control_pedidos',
-        titulo: 'Traspaso desde CEDIS',
-        detalle: 'La mercancía se separa en el almacén y la solicitud llega a Control Pedidos.',
-    },
-    {
-        id: 'consulta_cedis',
+        id: 'consultar_cedis',
         icono: Search,
         area: 'control_pedidos',
-        titulo: 'Consulta de disponibilidad',
-        detalle: 'Transferencia o crédito se revisan en Control Pedidos. No asigna cobertura ni crédito.',
+        titulo: 'Consultar disponibilidad en CEDIS',
+        detalle: 'Control Pedidos responde la disponibilidad. Enviar la consulta no registra un traslado.',
     },
 ];
 
-function casoDe(solicitud) {
-    const guardado = CASOS_TIENDA.find((caso) => caso.id === solicitud?.caso_tienda);
-    if (guardado) return guardado.id;
+function casoDe(solicitud, conservar = false) {
+    const id = solicitud?.caso_tienda || '';
+    if (id === 'mismo_dia_pdv') return id;
+    if (conservar && id) return id;
+    if (id === 'revisar_apartar' || id === 'apartado_pdv') return 'revisar_apartar';
+    if (id === 'consultar_cedis' || id === 'consulta_cedis' || id === 'traspaso_cedis') return 'consultar_cedis';
     const area = areaDe(solicitud);
-    if (area === 'preparacion_tienda') return 'apartado_pdv';
-    if (area === 'control_pedidos') return 'traspaso_cedis';
+    if (area === 'preparacion_tienda') return 'revisar_apartar';
+    if (area === 'control_pedidos') return 'consultar_cedis';
     return '';
 }
 
@@ -153,6 +143,7 @@ function esImagen(documento) {
 }
 
 function areaDe(solicitud) {
+    if (solicitud?.caso_tienda === 'mismo_dia_pdv') return '';
     return ['preparacion_tienda', 'control_pedidos'].includes(solicitud?.area_revision) ? solicitud.area_revision : '';
 }
 
@@ -181,9 +172,56 @@ function esperaDe(area, nombre) {
         return `Enviado a Preparación Tienda${lugar}. Se espera la revisión del archivo. Aún no hay apartado ni disponibilidad confirmada.`;
     }
     if (area === 'control_pedidos') {
-        return 'Enviado a Control Pedidos. Se espera la separación en CEDIS. Aún no hay disponibilidad confirmada, pago ni entrega.';
+        return 'Enviado a Control Pedidos. Se espera la consulta de disponibilidad. Aún no hay disponibilidad confirmada, traslado, pago ni entrega.';
     }
     return '';
+}
+
+function piezasPendientes(revisiones) {
+    return (revisiones || []).filter(
+        (pieza) =>
+            !pieza?.resolucion &&
+            ['regular', 'malo', 'danado', 'sin_existencia'].includes(pieza?.estado_fisico),
+    );
+}
+
+function ResultadoRevisionTienda({ area, nombreAlmacen, solicitud, revisiones }) {
+    const revision = solicitud?.revision_disponibilidad;
+    const piezas = piezasPendientes(revisiones);
+    const titulo =
+        area === 'preparacion_tienda'
+            ? `Enviado a Preparación Tienda${nombreAlmacen ? ` · ${nombreAlmacen}` : ''}`
+            : 'Enviado a Control Pedidos';
+    let detalle = esperaDe(area, nombreAlmacen);
+    if (revision?.estado === 'excepciones_pendientes') {
+        detalle =
+            'Falta la decisión del cliente sobre las piezas con excepción. Esas piezas no continúan como aceptadas.';
+    } else if (revision?.estado === 'sin_excepciones' && area === 'preparacion_tienda') {
+        detalle = 'Revisión sin excepciones. Falta el apartado físico de lo aceptado. No hay pago ni entrega.';
+    } else if (revision?.estado === 'sin_excepciones') {
+        detalle = 'Consulta de disponibilidad sin excepciones. No hay traslado, pago ni entrega.';
+    }
+
+    return (
+        <div className="mt-4 rounded-xl border theme-border theme-element p-4 grid gap-2" role="status">
+            <p className="text-xs font-bold theme-text-muted m-0">
+                {revision?.estado === 'excepciones_pendientes' ? 'Decisión pendiente' : 'Siguiente paso'}
+            </p>
+            <p className="text-sm font-semibold theme-text-main m-0">{titulo}</p>
+            <p className="text-sm theme-text-muted m-0 break-words">{detalle}</p>
+            {piezas.length > 0 && (
+                <ul className="m-0 pl-4 grid gap-1">
+                    {piezas.map((pieza) => (
+                        <li key={pieza.id || `${pieza.descripcion_producto}-${pieza.sku}`} className="text-sm theme-text-main">
+                            {pieza.descripcion_producto || pieza.descripcion}
+                            {pieza.cantidad_solicitada ? ` · ${pieza.cantidad_solicitada}` : ''}
+                            {pieza.comentario || pieza.detalle ? ` · ${pieza.comentario || pieza.detalle}` : ''}
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </div>
+    );
 }
 
 function motivoSolicitud({ modalidad, tieneCliente, tieneDepartamento, tieneFolio, tieneArchivo, receptor, enviada }) {
@@ -223,17 +261,17 @@ export default function FormularioRegistrarTienda({
         guardadoId || principalId || (departamentosUsuario.length === 1 ? departamentosUsuario[0] : '');
     const soporteInicial = soporteDe(pedido);
     const almacenes = registrarTienda.almacenes_tienda || [];
-    const casoInicial = casoDe(solicitud);
-    const casoMetaInicial = CASOS_TIENDA.find((caso) => caso.id === casoInicial);
-    const areaInicial = areaDe(solicitud) || casoMetaInicial?.area || '';
+    const enviadaInicial = enviadaDe(pedido, solicitud);
+    const casoInicial = casoDe(solicitud, enviadaInicial || capturaAvanzada(pedido));
+    const casoMetaInicial = DESTINOS_TIENDA.find((caso) => caso.id === casoInicial);
+    const areaInicial =
+        casoInicial === 'mismo_dia_pdv' ? '' : areaDe(solicitud) || casoMetaInicial?.area || '';
     const almacenInicial =
         areaInicial === 'preparacion_tienda' && !solicitud.almacen_revision_id && almacenes.length === 1
             ? String(almacenes[0].id)
             : solicitud.almacen_revision_id
               ? String(solicitud.almacen_revision_id)
               : '';
-    const enviadaInicial = enviadaDe(pedido, solicitud);
-
     const [clienteId, setClienteId] = useState(pedido?.cliente_id || '');
     const [numeroCliente, setNumeroCliente] = useState(pedido?.cliente?.numero_cliente || pedido?.numero_cliente || '');
     const [nombreCliente, setNombreCliente] = useState(pedido?.cliente?.nombre || '');
@@ -685,7 +723,7 @@ export default function FormularioRegistrarTienda({
                             Registrar pedido
                         </h2>
                         <p className="registrar-tienda-descripcion">
-                            Captura el pedido y elige quién revisará la mercancía.
+                            Captura el pedido y elige el destino de la revisión.
                         </p>
                     </div>
                     <button
@@ -858,15 +896,20 @@ export default function FormularioRegistrarTienda({
                                     <Package size={18} aria-hidden="true" />
                                     <h3 id="registrar-tienda-atencion-titulo">Atención en tienda</h3>
                                 </div>
-                                <p className="registrar-tienda-ayuda">Elige el caso de trabajo para esta solicitud.</p>
+                                <p className="registrar-tienda-ayuda">Elige el destino de esta solicitud.</p>
+                                {caso === 'mismo_dia_pdv' && (
+                                    <p className="text-sm theme-text-main m-0 mb-3" role="status">
+                                        {NOTA_TIENDA_MD} Esta captura conserva esa intención y no la convierte en apartado ni en consulta.
+                                    </p>
+                                )}
                                 <div className="registrar-tienda-casos">
-                                    {CASOS_TIENDA.map((opcion) => (
+                                    {DESTINOS_TIENDA.map((opcion) => (
                                         <button
                                             key={opcion.id}
                                             type="button"
                                             className="registrar-tienda-destino"
                                             aria-pressed={caso === opcion.id}
-                                            disabled={enviada || enviando || guardando}
+                                            disabled={enviada || avanzado || enviando || guardando}
                                             onClick={() => {
                                                 setCaso(opcion.id);
                                                 setArea(opcion.area);
@@ -1026,19 +1069,12 @@ export default function FormularioRegistrarTienda({
                         </section>
                     </div>
                     {enviada && (
-                        <div className="mt-4 rounded-xl border theme-border theme-element p-4 grid gap-1" role="status">
-                            <p className="text-xs font-bold theme-text-muted m-0">Siguiente paso</p>
-                            <p className="text-sm font-semibold theme-text-main m-0">
-                                {area === 'preparacion_tienda'
-                                    ? `Enviado a Preparación Tienda${nombreAlmacenVisible ? ` · ${nombreAlmacenVisible}` : ''}`
-                                    : 'Enviado a Control Pedidos'}
-                            </p>
-                            <p className="text-sm theme-text-muted m-0 break-words">
-                                {area === 'preparacion_tienda'
-                                    ? 'Se espera la revisión del archivo. Aún no hay apartado ni disponibilidad confirmada.'
-                                    : 'Se espera la separación en CEDIS. Aún no hay disponibilidad confirmada, pago ni entrega.'}
-                            </p>
-                        </div>
+                        <ResultadoRevisionTienda
+                            area={area}
+                            nombreAlmacen={nombreAlmacenVisible}
+                            solicitud={pedido?.solicitud_preparacion}
+                            revisiones={pedido?.revisiones_producto || pedido?.revisionesProducto || []}
+                        />
                     )}
                     {borradorConfirmado && !enviada && (
                         <p className="text-sm theme-text-muted mt-4 mb-0" role="status">
@@ -1084,7 +1120,7 @@ export default function FormularioRegistrarTienda({
                                 type="button"
                                 className={THEME_BTN_PRIMARY}
                                 aria-describedby={motivo ? 'registrar-tienda-motivo' : undefined}
-                                disabled={guardando || enviando || estadoArchivo === 'cargando' || Boolean(motivo)}
+                                disabled={avanzado || guardando || enviando || estadoArchivo === 'cargando' || Boolean(motivo)}
                                 onClick={solicitar}
                             >
                                 {enviando ? 'Enviando…' : ETIQUETA_AREA[area] || 'Solicitar en tienda'}

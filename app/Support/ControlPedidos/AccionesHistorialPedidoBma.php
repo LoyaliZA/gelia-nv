@@ -11,6 +11,8 @@ final class AccionesHistorialPedidoBma
     public const COMPLEMENTO = 'complemento';
     public const SOLICITUD_PESAJE = 'solicitud_pesaje';
     public const RESPUESTA_PESAJE = 'respuesta_pesaje';
+
+    public const RESPUESTA_DISPONIBILIDAD = 'respuesta_disponibilidad';
     public const SOLICITUD_REPESAJE = 'solicitud_repesaje';
     public const ENVIO_AUXILIAR = 'envio_auxiliar';
     public const VOLVER_BORRADOR = 'volver_borrador';
@@ -101,6 +103,7 @@ final class AccionesHistorialPedidoBma
         self::COMPLEMENTO => 'Complemento de pedido',
         self::SOLICITUD_PESAJE => 'Solicitud de pesaje',
         self::RESPUESTA_PESAJE => 'Respuesta de CEDIS (pesaje)',
+        self::RESPUESTA_DISPONIBILIDAD => 'Respuesta de disponibilidad',
         self::SOLICITUD_REPESAJE => 'Solicitud de re-pesaje',
         self::CIERRE_CONSULTA => 'Cierre de consulta CEDIS',
         self::REABRIR_CONSULTA => 'Reapertura de consulta CEDIS',

@@ -4,6 +4,7 @@ namespace App\Support\ControlPedidos\RegistrarPedidos;
 
 use App\Models\Almacen;
 use App\Models\ControlPedidos\PedidoBma;
+use App\Services\ControlPedidos\ResponderDisponibilidadInicialService;
 
 /** Lectura del pedido para Registrar pedidos. No crea filas ni confirma Mismo día. */
 final class ExpedienteRegistrarPedidos
@@ -53,10 +54,60 @@ final class ExpedienteRegistrarPedidos
             'almacen_revision' => $almacenRevision ?: null,
             'enviada' => $enviada,
             'espera' => $enviada ? DestinoRevisionRegistrarPedidos::espera($area, $almacenRevision ?: null) : null,
+            'revision_disponibilidad' => is_array($json['revision_disponibilidad'] ?? null) ? $json['revision_disponibilidad'] : null,
+            'decision_pendiente' => $this->decisionPendiente($json, $area),
+            'excepciones' => $this->excepcionesPendientes($pedido, $json),
+            'tienda_md' => ($json['caso_tienda'] ?? null) === 'mismo_dia_pdv' ? [
+                'ficha' => 'T-02.1',
+                'cobertura' => 'transferencia',
+                'confirmada' => false,
+            ] : null,
             'respuesta' => $instruccion ? [
                 'estado' => $instruccion->estado,
                 'vigente' => true,
             ] : null,
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $json
+     */
+    private function decisionPendiente(array $json, string $area): ?string
+    {
+        $estado = $json['revision_disponibilidad']['estado'] ?? null;
+        if ($estado === 'excepciones_pendientes') {
+            return ResponderDisponibilidadInicialService::DECISION_EXCEPCIONES;
+        }
+        if ($estado === 'sin_excepciones') {
+            return $area === DestinoRevisionRegistrarPedidos::PREPARACION_TIENDA
+                ? ResponderDisponibilidadInicialService::DECISION_TIENDA
+                : ResponderDisponibilidadInicialService::DECISION_CEDIS;
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $json
+     * @return list<array{descripcion: string, cantidad: ?int, detalle: ?string, estado_fisico: string}>
+     */
+    private function excepcionesPendientes(PedidoBma $pedido, array $json): array
+    {
+        if (($json['revision_disponibilidad']['estado'] ?? null) !== 'excepciones_pendientes') {
+            return [];
+        }
+
+        return $pedido->revisionesProducto()
+            ->whereNull('resolucion')
+            ->whereIn('estado_fisico', ['regular', 'malo', 'danado', 'sin_existencia'])
+            ->orderBy('orden')
+            ->get(['descripcion_producto', 'cantidad_solicitada', 'estado_fisico', 'comentario'])
+            ->map(fn ($revision) => [
+                'descripcion' => (string) $revision->descripcion_producto,
+                'cantidad' => $revision->cantidad_solicitada,
+                'detalle' => $revision->comentario,
+                'estado_fisico' => (string) $revision->estado_fisico,
+            ])
+            ->all();
     }
 }

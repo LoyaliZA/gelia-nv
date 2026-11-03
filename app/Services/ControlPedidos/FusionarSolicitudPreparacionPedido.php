@@ -9,6 +9,15 @@ namespace App\Services\ControlPedidos;
  */
 class FusionarSolicitudPreparacionPedido
 {
+    /** @var list<string> */
+    private const CASOS = [
+        'revisar_apartar',
+        'consultar_cedis',
+        'apartado_pdv',
+        'mismo_dia_pdv',
+        'traspaso_cedis',
+        'consulta_cedis',
+    ];
     /**
      * @param  array<string, mixed>|null  $actual
      * @param  array<string, mixed>|null  $entrada
@@ -71,6 +80,16 @@ class FusionarSolicitudPreparacionPedido
             $salida['almacen_revision_id'] = $this->identificador($entrada['almacen_revision_id']);
         } elseif (array_key_exists('almacen_revision_id', $base)) {
             $salida['almacen_revision_id'] = $this->identificador($base['almacen_revision_id']);
+        }
+
+        $revision = null;
+        if (is_array($base['revision_disponibilidad'] ?? null)) {
+            $revision = $this->revisionDisponibilidad($base['revision_disponibilidad']);
+        } elseif ($actual === null && is_array($entrada['revision_disponibilidad'] ?? null)) {
+            $revision = $this->revisionDisponibilidad($entrada['revision_disponibilidad']);
+        }
+        if ($revision !== null) {
+            $salida['revision_disponibilidad'] = $revision;
         }
 
         if (array_key_exists('entrega_municipal', $entrada)) {
@@ -163,7 +182,10 @@ class FusionarSolicitudPreparacionPedido
         if (in_array($salida['area_revision'] ?? null, ['preparacion_tienda', 'control_pedidos'], true)) {
             return false;
         }
-        if (in_array($salida['caso_tienda'] ?? null, ['apartado_pdv', 'mismo_dia_pdv', 'traspaso_cedis', 'consulta_cedis'], true)) {
+        if (in_array($salida['caso_tienda'] ?? null, self::CASOS, true)) {
+            return false;
+        }
+        if (is_array($salida['revision_disponibilidad'] ?? null)) {
             return false;
         }
 
@@ -222,7 +244,28 @@ class FusionarSolicitudPreparacionPedido
 
     private function casoTienda(mixed $valor): ?string
     {
-        return in_array($valor, ['apartado_pdv', 'mismo_dia_pdv', 'traspaso_cedis', 'consulta_cedis'], true) ? $valor : null;
+        return in_array($valor, self::CASOS, true) ? $valor : null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $valor
+     * @return array{estado: string, confirmada: bool, respondida_at: ?string, respondida_por_id: ?int}|null
+     */
+    private function revisionDisponibilidad(array $valor): ?array
+    {
+        $estado = $valor['estado'] ?? null;
+        if (! in_array($estado, ['sin_excepciones', 'excepciones_pendientes'], true)) {
+            return null;
+        }
+
+        $respondida = $valor['respondida_at'] ?? null;
+
+        return [
+            'estado' => $estado,
+            'confirmada' => (bool) ($valor['confirmada'] ?? false),
+            'respondida_at' => is_string($respondida) ? $respondida : null,
+            'respondida_por_id' => $this->identificador($valor['respondida_por_id'] ?? null),
+        ];
     }
 
     private function identificador(mixed $valor): ?int

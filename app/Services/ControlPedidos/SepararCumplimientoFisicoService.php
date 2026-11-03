@@ -9,7 +9,7 @@ use App\Models\ControlPedidos\PedidoBmaTareaPreparacion;
 use App\Models\User;
 use App\Support\ControlPedidos\MaquinaEstadosCumplimientoFisico;
 use App\Support\ControlPedidos\InstruccionEntrega;
-use App\Support\ControlPedidos\PlazosApartadoFisico;
+use App\Support\ControlPedidos\PlazoApartadoTienda;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -83,11 +83,14 @@ class SepararCumplimientoFisicoService
             $venceAt = null;
             $esRecogeHoy = $tarea->modalidad?->codigo === CatalogoModalidadPreparacionPedido::CODIGO_RECOGE_TIENDA;
             if ($esRecogeHoy) {
-                $venceAt = PlazosApartadoFisico::cierreOperativo(
-                    now(),
-                    $this->config->zonaHoraria(),
-                    $this->config->cierreOperativoHora()
-                );
+                $evaluacion = (new PlazoApartadoTienda($this->config))->evaluarConfirmacion(now(), $tarea->fecha_limite);
+                if (! $evaluacion['permite']) {
+                    throw ValidationException::withMessages(['estado' => $evaluacion['mensaje']]);
+                }
+                $venceAt = $evaluacion['vence_at'];
+                if ($tarea->fecha_limite === null) {
+                    $tarea->update(['fecha_limite' => $venceAt]);
+                }
             } elseif ($tarea->fecha_limite) {
                 $venceAt = $tarea->fecha_limite;
             }

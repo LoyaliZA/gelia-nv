@@ -3,6 +3,7 @@
 namespace App\Services\ControlPedidos;
 
 use App\Models\ControlPedidos\CatalogoModalidadPreparacionPedido;
+use App\Models\ControlPedidos\PedidoBma;
 use App\Models\ControlPedidos\PedidoBmaCumplimientoFisico;
 use App\Models\ControlPedidos\PedidoBmaTareaPreparacion;
 
@@ -17,7 +18,7 @@ class EvaluarVencimientoApartadoFisicoService
     public function ejecutar(): int
     {
         $filas = PedidoBmaCumplimientoFisico::query()
-            ->with('tarea.modalidad')
+            ->with(['tarea.modalidad', 'tarea.pedido'])
             ->whereIn('estado', [
                 PedidoBmaCumplimientoFisico::ESTADO_POR_SEPARAR,
                 PedidoBmaCumplimientoFisico::ESTADO_APARTADO_CONFIRMADO,
@@ -34,6 +35,9 @@ class EvaluarVencimientoApartadoFisicoService
         foreach ($filas as $cumplimiento) {
             $tarea = $cumplimiento->tarea;
             if (! $tarea || $tarea->estado === PedidoBmaTareaPreparacion::ESTADO_CANCELADA) {
+                continue;
+            }
+            if ($this->mercanciaPagada($tarea->pedido)) {
                 continue;
             }
             if ($tarea->modalidad?->codigo === CatalogoModalidadPreparacionPedido::CODIGO_RECOGE_TIENDA) {
@@ -62,5 +66,18 @@ class EvaluarVencimientoApartadoFisicoService
         }
 
         return $movidas;
+    }
+
+    /**
+     * La caducidad de un apartado impago no libera mercancía ya pagada o remisionada.
+     * ponytail: no define duración VIP ni una consecuencia a los 20 días.
+     */
+    private function mercanciaPagada(?PedidoBma $pedido): bool
+    {
+        if ($pedido === null) {
+            return false;
+        }
+
+        return $pedido->pago_validado_at !== null || filled($pedido->numero_remision);
     }
 }

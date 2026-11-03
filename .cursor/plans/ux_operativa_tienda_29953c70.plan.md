@@ -1,22 +1,52 @@
 ---
 name: UX operativa Tienda
-overview: La captura inicial de 2.1.1 está implementada en la aplicación y pendiente de revisión. Contiene cliente, departamento, folio, modalidad y archivo. No clasifica T-01. La solicitud sigue deshabilitada y el recorrido operativo no está cerrado. 2.1.2 a 2.1.5 y la fase 1 conservan su alcance.
+overview: La conexión inicial de Registrar pedidos con Preparación Tienda o Control Pedidos está implementada y probada. No es la validación integral de Tienda. T-04, T-05, T-06 y las reglas financieras nuevas siguen fuera.
 todos:
   - id: esperar-revision
-    content: La captura 2.1.1 está en la aplicación y espera la revisión de quien usa el sistema. La solicitud sigue deshabilitada.
-    status: pending
+    content: Conexión inicial probada. La validación integral de Tienda sigue pendiente.
+    status: completed
   - id: prototipo-registrar
     content: Prototipo aislado anterior en docs/visual-refresh/registrar-pedidos-tienda. Deja de ser autoridad para la captura inicial.
     status: completed
   - id: ejecutar-2-1-1
-    content: Captura inicial implementada y comprobada en borradores de prueba. Pendiente de revisión. La solicitud sigue sin habilitarse y el recorrido operativo no está cerrado.
-    status: pending
+    content: Captura con dos destinos, plazo T-01 y respuesta inicial de disponibilidad. No cierra 2.1.5.
+    status: completed
 isProject: false
 ---
 
 # Fase 2.1 — UX operativa de Tienda
 
-Replanteo de la subfase 2.1.1, 2 de noviembre de 2026. Este texto es la única versión vigente de la captura inicial. Está implementada en la aplicación y pendiente de revisión. La solicitud sigue deshabilitada y el recorrido operativo no está cerrado. No avanza a 2.1.2.
+## Estado vigente — 2 de noviembre de 2026
+
+La conexión inicial está hecha y probada. La validación integral de Tienda no. Un botón o un servicio no cierra la ficha.
+
+La captura pide solo dos destinos: «Revisar y apartar en tienda» y «Consultar disponibilidad en CEDIS». Transferencia, crédito y Mismo día (T-02.1) no se eligen aquí. Una intención ya guardada de Mismo día no se convierte en apartado ni en consulta. Enviar la consulta no registra un traslado.
+
+La revisión pendiente sin `fecha_limite` no es un apartado vencido. Al confirmar el apartado, T-01 persiste el corte del día: 17:00 de lunes a viernes y 13:00 el sábado, en la zona de preparación. El valor predeterminado `cierre_operativo_hora` de 20:00 no alarga ese plazo. Falta de zona, apartado vencido y cierre operativo son tres rechazos distintos. No se renueva un apartado antiguo. La mercancía pagada o remisionada no se libera por esa caducidad. No hay duración VIP ni consecuencia automática a los 20 días.
+
+Preparación Tienda y Control Pedidos pueden consultar el archivo, tomar la revisión y responder sin excepciones o con las piezas afectadas. La ausencia de marcas no concluye la revisión. Las excepciones quedan sin resolución y Registrar pedidos muestra la decisión que falta. Esas piezas no siguen como aceptadas.
+
+Queda fuera de esta conexión: cruces T-04, T-05 y T-06, reglas financieras nuevas, decisión posterior del cliente, apartado físico de lo aceptado, custodia, entrega, segundo traslado y dos procesos simultáneos. Los mecanismos ya existentes se conservan.
+
+### Matriz
+
+| Ficha | Estado | Bloqueo concreto |
+| --- | --- | --- |
+| T-01 | Parcial | Vigencia del apartado y respuesta inicial probadas. Falta apartar físicamente lo aceptado, custodiar y entregar después del pago. |
+| T-02 | Pendiente | La captura no inicia la transferencia «Recoger después». Faltan cobertura, remisión y la regla de los 20 días, que no se inventó. |
+| T-02.1 | Parcial | Queda identificado y no se envía como apartado ni como consulta. Elegirlo no confirma cobertura ni entrega. Faltan las piezas ya disponibles en PDV y la continuación después de las 13:00. |
+| T-03 | Pendiente | El cambio de sucursal y el segundo traslado no se implementaron. La facultad de gerencia sigue sin resolverse. |
+| T-04 | Pendiente | Cruce no implementado en esta intervención. |
+| T-05 | Pendiente | Cruce no implementado en esta intervención. |
+| T-06 | Pendiente | Cruce no implementado en esta intervención. |
+| T-07 | Pendiente | El ajuste de piezas antes del pago y la remisión no está en esta conexión. |
+| T-08 | Parcial | La excepción llega con pieza, cantidad, detalle o faltante y evidencia. Falta la acción con la que el cliente resuelve esas piezas. |
+| T-09 | Pendiente | La consulta de crédito, el resultado de Wizerp y la cancelación por plazo no se abrieron. |
+| R-01 | Pendiente | La custodia y la entrega cuando el cliente acude no forman parte de esta conexión. El día 20 no libera. |
+
+Las secciones siguientes conservan el diseño de la captura. Donde dicen que «Solicitar en tienda» sigue deshabilitada, ese corte quedó superado por esta conexión. No superan la matriz.
+
+Replanteo de la subfase 2.1.1, 2 de noviembre de 2026. La captura inicial sigue siendo la composición vigente. La conexión inicial no avanza a la validación integral ni a 2.1.5.
 
 La captura anterior y el prototipo de [docs/visual-refresh/registrar-pedidos-tienda/](docs/visual-refresh/registrar-pedidos-tienda/) pedían cobertura, sucursal o piezas en el alta. Dejan de ser autoridad para este paso. El análisis V02.1 no se reescribió. [PRODUCT.md](PRODUCT.md) todavía dice que el archivo de T-01 no está confirmado; no se edita aquí. Para 2.1.1 prevalece este plan.
 
@@ -277,11 +307,12 @@ Fuera de este corte: Control Pedidos, Auditar pedidos, Preparación Tienda, resg
 
 ## Pendientes
 
-La captura 2.1.1 está en la aplicación y pendiente de revisión. Estos puntos siguen sin resolverse y mantienen «Solicitar en tienda» deshabilitada. El recorrido operativo no está cerrado.
+La conexión inicial ya no deja la solicitud deshabilitada. La validación integral sigue abierta.
 
-- Destino. No hay regla actual que separe Preparación Tienda de Control Pedidos sin cobertura. Antes de habilitar «Solicitar en tienda» hay que decidir si los casos de CEDIS se inician solo en una etapa posterior, sin reescribir una tarea ya creada, o si existe otra correspondencia unívoca. Hasta entonces no se crea tarea ni se usa `RECOGE_TIENDA` como sustituto.
-- Almacén. La tarea vigente exige `almacen_id`. El departamento no lo determina. `User::sucursalPrincipal` solo serviría si esa sucursal tuviera exactamente un PDV activo y habilitado; el código reconoce varios PDV. No se muestra sucursal ni almacén. Sin correspondencia única, la solicitud sigue incompleta.
-- Concurrencia de la fase 1. Sigue sin comprobarse. `solicitarTienda` responde 422. Este cambio de diseño no retira ese bloqueo.
-- Responsable del segundo traslado: la bandeja de la facultad de gerencia, no una persona fija. Sigue siendo trabajo de 2.1.5.
-- Piezas ya en PDV para Mismo día (Tienda MD) y la continuación cuando el reporte del pago queda fuera del corte.
-- Reloj del crédito, VIP, día 20, sobrante menor a $10, desborde asegurado y absorción interna.
+- Concurrencia de la fase 1. Sigue sin dos procesos simultáneos. Una instrucción sustituida no se ejecuta; eso sí quedó probado en la respuesta de disponibilidad.
+- Segundo traslado. Usa `control_pedidos.salida.autorizar` y además rechaza a quien registró la venta. Esa prohibición no está aprobada. Sigue en 2.1.5.
+- Decisión del cliente sobre las excepciones. Registrar pedidos ya muestra las piezas pendientes. No hay todavía una acción que las retire, sustituya o acepte.
+- Apartado físico, recepción, custodia y entrega. La confirmación del apartado conserva el plazo T-01. El recorrido completo no está cerrado.
+- Piezas ya en PDV para Mismo día (T-02.1) y la continuación cuando el reporte del pago queda fuera de las 13:00.
+- Reloj del crédito, VIP, día 20, sobrante menor a $10, desborde asegurado y absorción interna. No se agregaron reglas.
+- `RecogeTiendaFlujoTest::test_rechaza_productos_de_otro_almacen_sin_alterar_el_apartado` ya fallaba en el código confirmado: el registro de piezas no limita el catálogo al almacén de la tarea. No se corrigió en esta conexión.
