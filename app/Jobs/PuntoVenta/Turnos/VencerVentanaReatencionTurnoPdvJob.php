@@ -14,15 +14,22 @@ class VencerVentanaReatencionTurnoPdvJob implements ShouldBeUnique, ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public int $uniqueFor = 7200;
+    /**
+     * La ventana máxima es 1440 minutos. El candado debe sobrevivir a ese retraso.
+     */
+    public int $uniqueFor = 90000;
 
     public function __construct(
         public int $turnoId,
+        public ?int $expiraAtTimestamp = null,
     ) {}
 
     public function uniqueId(): string
     {
-        return 'pdv-ventana-reatencion:'.$this->turnoId;
+        // isset cubre jobs ya encolados antes de existir expiraAtTimestamp.
+        $marca = isset($this->expiraAtTimestamp) ? (int) $this->expiraAtTimestamp : 0;
+
+        return 'pdv-ventana-reatencion:'.$this->turnoId.':'.$marca;
     }
 
     public function handle(VencerVentanaReatencionTurnoPdvService $servicio): void

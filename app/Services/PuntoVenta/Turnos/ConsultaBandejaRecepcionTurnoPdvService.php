@@ -51,6 +51,10 @@ class ConsultaBandejaRecepcionTurnoPdvService
                 ->map(fn (TurnoPdv $turno) => SerializadorBandejaRecepcionTurnoPdv::turnoAsignado($turno, $ahora, $plazos))
                 ->values()
                 ->all(),
+            'en_reatencion' => $this->consultarEnReatencion($sucursalId, $ahora)
+                ->map(fn (TurnoPdv $turno) => SerializadorBandejaRecepcionTurnoPdv::turnoEnReatencion($turno, $ahora))
+                ->values()
+                ->all(),
         ];
     }
 
@@ -118,6 +122,23 @@ class ConsultaBandejaRecepcionTurnoPdvService
             ->where('estado', TurnoPdv::ESTADO_ASIGNADO)
             ->with(['atencionActual.user:id,name'])
             ->orderBy('alta_at')
+            ->orderBy('id')
+            ->limit(100)
+            ->get();
+    }
+
+    /**
+     * @return Collection<int, TurnoPdv>
+     */
+    private function consultarEnReatencion(int $sucursalId, CarbonInterface $ahora): Collection
+    {
+        return TurnoPdv::query()
+            ->where('sucursal_id', $sucursalId)
+            ->where('servicio', TurnoPdv::SERVICIO_VENTAS)
+            ->where('estado', TurnoPdv::ESTADO_EN_REATENCION)
+            ->whereNull('atencion_actual_id')
+            ->where('reatencion_expira_at', '>', $ahora)
+            ->orderBy('reatencion_expira_at')
             ->orderBy('id')
             ->limit(100)
             ->get();
