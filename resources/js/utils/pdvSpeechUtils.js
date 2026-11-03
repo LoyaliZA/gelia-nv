@@ -120,6 +120,21 @@ export function frasesPrioridadTtsPdv(datos, { publico = false } = {}) {
  * Vendedor: {vendedor}, tienes un nuevo cliente: {cliente}.
  * No dice reatención ni la palabra lista.
  */
+export function mensajeAsignacionEspecialPdv(tipo, datos) {
+    const vendedor = primerNombreAtencionPdv(datos);
+    if (!vendedor) return null;
+
+    if (tipo === 'turno.reatencion') {
+        return `${vendedor}, tienes una nueva reatención.`;
+    }
+
+    if (tipo === 'turno.transferido') {
+        return `${vendedor}, se te ha transferido un cliente para atención.`;
+    }
+
+    return null;
+}
+
 export function mensajeTtsLlamadoPdv(datos, { publico = false } = {}) {
     if (!datos || typeof datos !== 'object') return null;
 
@@ -185,6 +200,10 @@ export function mensajeTtsGerenciaPdv(envelope, { nombreGerente = '', userId = n
         && Number(asignado) === Number(userId);
     const tipo = String(envelope?.tipo || '');
 
+    if (tipo === 'turno.reatencion' || tipo === 'turno.transferido') {
+        return mensajeAsignacionEspecialPdv(tipo, datos);
+    }
+
     if (tipo === 'atencion.prorroga') {
         if (esPropio) {
             return gerente
@@ -215,6 +234,10 @@ export function mensajeTtsPersonalPdv(envelope) {
     const tipo = String(envelope?.tipo || '');
     if (tipo === 'atencion.prorroga') {
         return mensajeTtsProrrogaPdv(datos);
+    }
+
+    if (tipo === 'turno.reatencion' || tipo === 'turno.transferido') {
+        return null;
     }
 
     if (tipo && !PDV_TTS_TIPOS.has(tipo)) return null;

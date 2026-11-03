@@ -11,6 +11,7 @@ use App\Services\PuntoVenta\Turnos\PlazosTurnosPdvConfig;
 use App\Support\PuntoVenta\Operacion\EstadoJornadaPdv;
 use App\Support\PuntoVenta\Operacion\EstadoVendedorOperacionPdv;
 use App\Support\PuntoVenta\Turnos\IdentidadVisibleTurnoPdv;
+use App\Support\PuntoVenta\Turnos\MarcaAtencionTurnoPdv;
 use App\Support\PuntoVenta\Turnos\SerializadorTableroVentasPdv;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
@@ -84,12 +85,15 @@ class ConsultaEquipoOperativoPdvService
             ->get()
             ->keyBy('user_id');
 
+        $marcas = MarcaAtencionTurnoPdv::paraAtenciones($atencionesAbiertas);
+
         return $personas->map(function (User $persona) use (
             $sucursalId,
             $jornadas,
             $intervalos,
             $asistencias,
             $atencionesAbiertas,
+            $marcas,
             $ahora,
             $plazos,
         ): array {
@@ -118,7 +122,15 @@ class ConsultaEquipoOperativoPdvService
                 'pausa_motivo' => $estado === EstadoVendedorOperacionPdv::EnRetencion
                     ? $intervalo?->textoMotivoPausaCompleto()
                     : null,
-                'atencion_actual' => $this->serializarAtencionActual($atencionAbierta, $plazos, $ahora),
+                'atencion_actual' => $this->serializarAtencionActual(
+                    $atencionAbierta,
+                    $plazos,
+                    $ahora,
+                    $jornada instanceof JornadaPdv ? $jornada->disponible_desde : null,
+                    $atencionAbierta instanceof TurnoPdvAtencion
+                        ? ($marcas[(int) $atencionAbierta->id] ?? null)
+                        : null,
+                ),
                 'jornada' => $jornada instanceof JornadaPdv ? [
                     'estado' => $jornada->estado->value,
                     'version' => $jornada->version,
@@ -144,10 +156,16 @@ class ConsultaEquipoOperativoPdvService
      *   aviso_tolerancia_espera_minutos?: int,
      *   aviso_tolerancia_prorroga_minutos?: int
      * }  $plazos
+     * @param  array{marca_atencion?: string, folio_visible?: string, numero_reatencion?: int|null}|null  $marca
      * @return array<string, mixed>|null
      */
-    private function serializarAtencionActual(?TurnoPdvAtencion $atencion, array $plazos, CarbonInterface $ahora): ?array
-    {
+    private function serializarAtencionActual(
+        ?TurnoPdvAtencion $atencion,
+        array $plazos,
+        CarbonInterface $ahora,
+        ?CarbonInterface $habilitarDesde = null,
+        ?array $marca = null,
+    ): ?array {
         if ($atencion === null) {
             return null;
         }
@@ -160,9 +178,12 @@ class ConsultaEquipoOperativoPdvService
         $nombreVisible = IdentidadVisibleTurnoPdv::nombreVisible($turno);
 
         return array_merge(
-            SerializadorTableroVentasPdv::atencion($atencion, $plazos, $ahora),
+            SerializadorTableroVentasPdv::atencion($atencion, $plazos, $ahora, $habilitarDesde, $marca),
             [
                 'folio' => (string) $turno->folio,
+                'folio_visible' => $marca['folio_visible'] ?? (string) $turno->folio,
+                'marca_atencion' => $marca['marca_atencion'] ?? MarcaAtencionTurnoPdv::NORMAL,
+                'numero_reatencion' => $marca['numero_reatencion'] ?? null,
                 'turno_id' => (int) $turno->id,
                 'turno_version' => (int) $turno->version,
                 'cliente' => $nombreVisible !== '' ? $nombreVisible : null,

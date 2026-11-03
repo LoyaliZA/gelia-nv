@@ -50,9 +50,14 @@ class FinalizarPausaPdvService
     /**
      * @return array{jornada: JornadaPdv, intervalo: IntervaloOperativoPdv, reintento: bool}
      */
-    public function finalizarParaUsuario(int $userId, int $sucursalId, CarbonInterface $ahora, int $actorId): array
-    {
-        return DB::transaction(function () use ($userId, $sucursalId, $ahora, $actorId): array {
+    public function finalizarParaUsuario(
+        int $userId,
+        int $sucursalId,
+        CarbonInterface $ahora,
+        int $actorId,
+        bool $anunciar = true,
+    ): array {
+        return DB::transaction(function () use ($userId, $sucursalId, $ahora, $actorId, $anunciar): array {
             $jornada = JornadaPdv::query()
                 ->where('user_id', $userId)
                 ->where('sucursal_id', $sucursalId)
@@ -102,6 +107,7 @@ class FinalizarPausaPdvService
                     $intervaloDisponible,
                     $sucursalId,
                     $actorId,
+                    $anunciar,
                 );
 
                 return [

@@ -87,8 +87,6 @@ describe('pdvAlertasAudiencia', () => {
 
     it.each([
         'turno.asignado',
-        'turno.reatencion',
-        'turno.transferido',
         'atencion.prorroga',
     ])('delega %s al puesto y no lo anuncia como terminal', (tipo) => {
         const personal = {

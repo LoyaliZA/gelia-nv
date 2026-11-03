@@ -126,19 +126,19 @@ class ConstruirPayloadDesdeNotificacionService
         }
 
         if (! empty($data['conversacion_id'])) {
-            return 'mensaje-conv-' . $data['conversacion_id'];
+            return 'mensaje-conv-'.$data['conversacion_id'];
         }
 
-        if (!empty($data['solicitud_id'])) {
-            return 'solicitud-' . $data['solicitud_id'];
+        if (! empty($data['solicitud_id'])) {
+            return 'solicitud-'.$data['solicitud_id'];
         }
 
-        if (!empty($data['activo_id'])) {
-            return 'activo-' . $data['activo_id'];
+        if (! empty($data['activo_id'])) {
+            return 'activo-'.$data['activo_id'];
         }
 
-        if (!empty($data['ticket_id'])) {
-            return 'soporte-ticket-' . $data['ticket_id'];
+        if (! empty($data['ticket_id'])) {
+            return 'soporte-ticket-'.$data['ticket_id'];
         }
 
         return 'gelia-'.($data['tipo'] ?? 'general').'-'.now()->format('Ymd');
@@ -151,8 +151,8 @@ class ConstruirPayloadDesdeNotificacionService
 
         if ($folio !== '' && str_starts_with($tipo, 'pdv.turno.')) {
             return match ($tipo) {
-                'pdv.turno.reatencion' => "Turno {$folio} listo para reatención.",
-                'pdv.turno.transferido' => "Turno {$folio} transferido a este puesto.",
+                'pdv.turno.reatencion' => 'Tienes una nueva reatención.',
+                'pdv.turno.transferido' => 'Se te ha transferido un cliente para atención.',
                 default => "Turno {$folio} asignado para atención.",
             };
         }

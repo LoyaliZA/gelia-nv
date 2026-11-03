@@ -8,9 +8,24 @@ use PHPUnit\Framework\TestCase;
 
 class CatalogoAlertasTurnosPdvTest extends TestCase
 {
+    public function test_guion_de_reatencion_y_transferencia_nombra_a_quien_recibe(): void
+    {
+        $reatencion = CatalogoAlertasTurnosPdv::guionTerminal(TurnoPdvEvento::TIPO_REATENCION, [
+            'folio' => 'V-300',
+            'snapshot_nombre_llamado' => 'María López',
+            'atencion' => ['primer_nombre' => 'Ana'],
+        ]);
+        $transferencia = CatalogoAlertasTurnosPdv::guionTerminal(TurnoPdvEvento::TIPO_TRANSFERIDO, [
+            'atencion' => ['primer_nombre' => 'Ana'],
+        ]);
+
+        $this->assertSame('Ana, tienes una nueva reatención.', $reatencion);
+        $this->assertSame('Ana, se te ha transferido un cliente para atención.', $transferencia);
+    }
+
     public function test_guion_de_llamado_es_breve_y_no_dice_reatencion_ni_lista(): void
     {
-        $mensaje = CatalogoAlertasTurnosPdv::guionTerminal(TurnoPdvEvento::TIPO_REATENCION, [
+        $mensaje = CatalogoAlertasTurnosPdv::guionTerminal(TurnoPdvEvento::TIPO_ASIGNADO, [
             'folio' => 'V-300',
             'snapshot_nombre_llamado' => 'María López',
             'prioridad_diamante' => true,

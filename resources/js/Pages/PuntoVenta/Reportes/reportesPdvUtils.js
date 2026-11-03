@@ -223,6 +223,7 @@ export function metricaTieneDetalle(metrica) {
         || metrica.en_curso
         || metrica.conteo != null
         || metrica.numerador != null
+        || metrica.clases
     );
 }
 

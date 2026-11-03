@@ -11,8 +11,6 @@ use App\Models\User;
 use App\Services\PuntoVenta\Operacion\ConsultaPersonaDisponiblePdvService;
 use App\Services\PuntoVenta\Operacion\ConsultaVendedoresElegiblesPdvService;
 use App\Services\PuntoVenta\PuntoVentaModulo;
-use App\Support\PuntoVenta\Turnos\ResolverCandidatosReatencionTurnoPdv;
-use App\Support\PuntoVenta\Turnos\SerializadorBandejaReatencionPdv;
 use Carbon\CarbonInterface;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
@@ -28,6 +26,7 @@ class AsignarReatencionTurnoPdvService
         private readonly ConsultaPersonaDisponiblePdv $consultaDisponible,
         private readonly AsignarTurnoPdvService $asignarTurno,
         private readonly AplicarPlazosAtencionNuevaTurnoPdvService $aplicarPlazos,
+        private readonly PrepararDestinoAsignacionManualPdvService $prepararDestino,
     ) {}
 
     /**
@@ -118,18 +117,6 @@ class AsignarReatencionTurnoPdvService
 
             $sucursalId = (int) $turnoBloqueado->sucursal_id;
 
-            if ($vendedorAnteriorId !== null && (int) $destino->id === $vendedorAnteriorId) {
-                $candidatosDisponibles = $this->listarCandidatosDisponibles($sucursalId);
-                if (ResolverCandidatosReatencionTurnoPdv::hayOtroDisponibleDistinto(
-                    $vendedorAnteriorId,
-                    $candidatosDisponibles,
-                )) {
-                    throw ValidationException::withMessages([
-                        'destino_user_id' => 'Debe asignar la re-atención a un vendedor distinto al anterior.',
-                    ]);
-                }
-            }
-
             if (! $this->vendedoresElegibles->esElegible($destino, $sucursalId)) {
                 throw ValidationException::withMessages([
                     'destino_user_id' => 'La persona destino no es elegible en esta sucursal.',
@@ -148,6 +135,13 @@ class AsignarReatencionTurnoPdvService
                     'destino_user_id' => 'La persona destino no está disponible.',
                 ]);
             }
+
+            $habilitarDesde = $this->prepararDestino->ejecutar(
+                (int) $destino->id,
+                $sucursalId,
+                $ahora,
+                (int) $actor->id,
+            );
 
             $numeroSecuencia = (int) TurnoPdvAtencion::query()
                 ->where('turno_id', $turnoBloqueado->id)
@@ -217,7 +211,7 @@ class AsignarReatencionTurnoPdvService
                 throw $exception;
             }
 
-            $atencion = $this->aplicarPlazos->ejecutar($atencion, $ahora);
+            $atencion = $this->aplicarPlazos->ejecutar($atencion, $ahora, $habilitarDesde);
 
             $turnoActualizado = $turnoBloqueado->fresh(['cliente', 'sucursal', 'atencionActual']);
 
@@ -238,20 +232,6 @@ class AsignarReatencionTurnoPdvService
                 'evento' => $evento,
             ];
         });
-    }
-
-    /**
-     * @return list<array{id: int, nombre: string}>
-     */
-    private function listarCandidatosDisponibles(int $sucursalId): array
-    {
-        return $this->vendedoresElegibles
-            ->query($sucursalId)
-            ->get()
-            ->filter(fn (User $user): bool => $this->aceptaDestinoReatencion($user, $sucursalId))
-            ->map(static fn (User $user): array => SerializadorBandejaReatencionPdv::candidato($user))
-            ->values()
-            ->all();
     }
 
     private function aceptaDestinoReatencion(User $user, int $sucursalId): bool

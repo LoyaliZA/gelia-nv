@@ -163,6 +163,7 @@ export function debeAnunciarVozPdv(envelope, prefsUsuario, silencioTerminal = fa
 }
 
 export function debeReproducirTonoEventoPdv(envelope, modo = 'personal') {
+    if (envelope?.datos?.anunciar === false) return false;
     if (modo === 'personal') {
         return PDV_SONIDO_TIPOS.has(String(envelope?.tipo || ''));
     }

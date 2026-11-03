@@ -23,8 +23,21 @@ export default function MetricasAtencionCompacta({
                 {prominente && <FileTextIcon size={16} className="shrink-0 theme-text-muted" />}
                 <div className="min-w-0">
                     <p className={`${prominente ? 'text-sm font-bold' : 'text-sm font-semibold'} theme-text-main m-0 truncate`}>
-                        {atencion.folio}
+                        {atencion.folio_visible || atencion.folio}
                     </p>
+                    {atencion.marca_atencion === 'reatencion' && (
+                        <p className="m-0 text-[11px] font-semibold theme-text-muted">
+                            Reatención {atencion.numero_reatencion || ''}
+                        </p>
+                    )}
+                    {atencion.marca_atencion === 'transferencia' && (
+                        <p className="m-0 text-[11px] font-semibold theme-text-muted">Transferido</p>
+                    )}
+                    {atencion.atencion_habilitada_desde && (
+                        <p className="m-0 text-[11px] font-semibold theme-text-muted">
+                            La atención inicia al terminar la cuenta.
+                        </p>
+                    )}
                     {atencion.cliente && (
                         <div className="flex items-center gap-1.5 min-w-0">
                             <p className={`m-0 truncate ${prominente ? 'text-xs font-semibold theme-text-main' : 'text-sm theme-text-main'}`}>
@@ -75,7 +88,7 @@ export default function MetricasAtencionCompacta({
     ) : (
         <CronometroVisualOperacion
             etiqueta="Inicio"
-            referenciaAt={atencion.espera_inicial_expira_at}
+            referenciaAt={atencion.atencion_habilitada_desde || atencion.espera_inicial_expira_at}
             servidorAt={servidorAt}
             modo="restante"
             compacto={!prominente}
