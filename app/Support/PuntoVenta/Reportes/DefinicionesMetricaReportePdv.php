@@ -46,7 +46,11 @@ final class DefinicionesMetricaReportePdv
             ],
             MetricaTurnoOperacionPdvIds::T_11_TASA_REATENCION => [
                 'definicion' => 'Reatenciones válidas / atenciones cerradas con venta o sin venta.',
-                'alcance' => 'Solo cuenta reatenciones dentro de la ventana configurada.',
+                'alcance' => 'Solo cuenta el evento de reatención dentro de la ventana. Una transferencia no cuenta como reatención.',
+            ],
+            MetricaTurnoOperacionPdvIds::T_17_CLASIFICACION_ATENCION => [
+                'definicion' => 'Separa atenciones normales, reatendidas y transferidas, y las ventas de cada tipo.',
+                'alcance' => 'La atención se clasifica por su inicio en el rango. La venta se clasifica por el cierre con motivo venta.',
             ],
             MetricaTurnoOperacionPdvIds::T_15_PERCENTILES_ESPERA_COLA => [
                 'definicion' => 'Percentiles P50, P90 y P95 de la espera en cola.',

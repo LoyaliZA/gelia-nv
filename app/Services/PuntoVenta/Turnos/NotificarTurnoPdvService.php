@@ -91,12 +91,12 @@ class NotificarTurnoPdvService
     {
         return match ($tipoEvento) {
             TurnoPdvEvento::TIPO_REATENCION => [
-                'Reatención de turno',
-                "Turno {$folio} listo para reatención.",
+                'Nueva reatención',
+                'Tienes una nueva reatención.',
             ],
             TurnoPdvEvento::TIPO_TRANSFERIDO => [
                 'Turno transferido',
-                "Turno {$folio} transferido a este puesto.",
+                'Se te ha transferido un cliente para atención.',
             ],
             default => [
                 'Turno asignado',

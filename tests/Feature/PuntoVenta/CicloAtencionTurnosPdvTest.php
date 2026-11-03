@@ -13,6 +13,7 @@ use App\Jobs\PuntoVenta\Turnos\VencerVentanaReatencionTurnoPdvJob;
 use App\Models\ConfiguracionSistema;
 use App\Models\PuntoVenta\IntervaloOperativoPdv;
 use App\Models\PuntoVenta\JornadaPdv;
+use App\Models\PuntoVenta\SucursalDiaOperacionPdv;
 use App\Models\PuntoVenta\TurnoPdv;
 use App\Models\PuntoVenta\TurnoPdvAtencion;
 use App\Models\PuntoVenta\TurnoPdvEvento;
@@ -280,8 +281,22 @@ class CicloAtencionTurnosPdvTest extends TestCase
 
         $contexto = $this->crearTurnoAsignado();
         $destino = User::factory()->create();
-        $destino->givePermissionTo(PuntoVentaModulo::PERMISO_TURNOS_ATENDER);
+        $destino->givePermissionTo([
+            PuntoVentaModulo::PERMISO_ACCEDER,
+            PuntoVentaModulo::PERMISO_TURNOS_ATENDER,
+        ]);
         $destino->concederAccesoSucursal($this->sucursal, esPrincipal: true);
+        SucursalDiaOperacionPdv::factory()->create([
+            'sucursal_id' => $this->sucursal->id,
+            'fecha_operativa' => now()->toDateString(),
+            'acepta_altas' => true,
+        ]);
+        app(AbrirJornadaPdvService::class)->abrirParaUsuario(
+            (int) $destino->id,
+            (int) $this->sucursal->id,
+            now(),
+            (int) $this->gerencia->id,
+        );
 
         $this->actingAs($this->gerencia)->postJson(
             route('punto_venta.turnos.transferir', $contexto['turno']),

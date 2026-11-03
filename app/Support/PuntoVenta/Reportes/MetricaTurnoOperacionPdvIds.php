@@ -36,6 +36,8 @@ final class MetricaTurnoOperacionPdvIds
 
     public const T_16_PERCENTILES_DURACION_ATENCION = 'T-16';
 
+    public const T_17_CLASIFICACION_ATENCION = 'T-17';
+
     public const O_01_JORNADAS_ABIERTAS = 'O-01';
 
     public const O_02_DURACION_JORNADA = 'O-02';
@@ -88,6 +90,7 @@ final class MetricaTurnoOperacionPdvIds
             self::T_14_DISTRIBUCION_PRIORIDAD,
             self::T_15_PERCENTILES_ESPERA_COLA,
             self::T_16_PERCENTILES_DURACION_ATENCION,
+            self::T_17_CLASIFICACION_ATENCION,
         ];
     }
 

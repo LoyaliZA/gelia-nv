@@ -105,9 +105,13 @@ export default function TarjetaMiAtencion({
                 <div className="flex items-start gap-3 rounded-xl px-3 py-2 bg-black/5 dark:bg-white/5">
                     <Headphones className="w-4 h-4 shrink-0 theme-text-muted mt-0.5" aria-hidden />
                     <div className="min-w-0">
-                        <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0">Turno asignado</p>
+                        <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0">
+                            {turnoAsignado.marca_atencion === 'reatencion'
+                                ? `Reatención ${turnoAsignado.numero_reatencion || ''}`.trim()
+                                : (turnoAsignado.marca_atencion === 'transferencia' ? 'Transferido' : 'Turno asignado')}
+                        </p>
                         <p className="text-sm font-black theme-text-main m-0 mt-1">
-                            {turnoAsignado.folio || turnoAsignado.codigo || `#${turnoAsignado.id}`}
+                            {turnoAsignado.folio_visible || turnoAsignado.folio || turnoAsignado.codigo || `#${turnoAsignado.id}`}
                         </p>
                         {turnoAsignado.servicio && (
                             <p className="text-xs font-semibold theme-text-muted m-0 mt-1">{turnoAsignado.servicio}</p>

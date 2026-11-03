@@ -35,12 +35,12 @@ final class CatalogoAlertasTurnosPdv
             TurnoPdvEvento::TIPO_REATENCION => [
                 'prioridad' => self::PRIORIDAD_ALTA,
                 'tono_configurable' => false,
-                'guion' => '{vendedor}, tienes un nuevo cliente: {cliente}.',
+                'guion' => '{vendedor}, tienes una nueva reatención.',
             ],
             TurnoPdvEvento::TIPO_TRANSFERIDO => [
                 'prioridad' => self::PRIORIDAD_ALTA,
                 'tono_configurable' => false,
-                'guion' => '{vendedor}, tienes un nuevo cliente: {cliente}.',
+                'guion' => '{vendedor}, se te ha transferido un cliente para atención.',
             ],
             TurnoPdvEvento::TIPO_ESPERA_PROXIMO_VENCER => [
                 'prioridad' => self::PRIORIDAD_CRITICA,
@@ -104,10 +104,18 @@ final class CatalogoAlertasTurnosPdv
         }
 
         if ($tipo === 'pausa.iniciada' || $tipo === 'pausa.finalizada') {
+            if ($tipo === 'pausa.finalizada' && ($datos['anunciar'] ?? true) === false) {
+                return null;
+            }
+
             $vendedor = self::primerNombre($datos);
             $frase = $tipo === 'pausa.finalizada' ? 'Pausa finalizada' : 'Pausa activa';
 
             return $vendedor !== '' ? "{$frase}. {$vendedor}." : "{$frase}.";
+        }
+
+        if ($tipo === TurnoPdvEvento::TIPO_REATENCION || $tipo === TurnoPdvEvento::TIPO_TRANSFERIDO) {
+            return self::guionAsignacionEspecial($tipo, $datos);
         }
 
         if (in_array($tipo, ['resguardo.recepcion_esperada_creada', 'resguardo.registro_manual_creado'], true)) {
@@ -119,11 +127,7 @@ final class CatalogoAlertasTurnosPdv
             return "Nuevo resguardo pendiente de aprobación. {$referencia}.";
         }
 
-        if (in_array($tipo, [
-            TurnoPdvEvento::TIPO_ASIGNADO,
-            TurnoPdvEvento::TIPO_REATENCION,
-            TurnoPdvEvento::TIPO_TRANSFERIDO,
-        ], true)) {
+        if ($tipo === TurnoPdvEvento::TIPO_ASIGNADO) {
             return self::guionLlamado($datos, false);
         }
 
@@ -192,6 +196,27 @@ final class CatalogoAlertasTurnosPdv
         $partes[] = 'Pase con '.($vendedor !== '' ? $vendedor : 'el vendedor asignado').'.';
 
         return implode(' ', $partes);
+    }
+
+    /**
+     * @param  array<string, mixed>  $datos
+     */
+    public static function guionAsignacionEspecial(string $tipo, array $datos): ?string
+    {
+        $vendedor = self::primerNombre($datos);
+        if ($vendedor === '') {
+            return null;
+        }
+
+        if ($tipo === TurnoPdvEvento::TIPO_REATENCION) {
+            return "{$vendedor}, tienes una nueva reatención.";
+        }
+
+        if ($tipo === TurnoPdvEvento::TIPO_TRANSFERIDO) {
+            return "{$vendedor}, se te ha transferido un cliente para atención.";
+        }
+
+        return null;
     }
 
     /**

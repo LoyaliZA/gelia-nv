@@ -54,7 +54,13 @@ class ConsultaTableroVentasPdvService
             'servidor_at' => $ahora->toIso8601String(),
             'plazos' => $plazos,
             'turno_asignado' => $turnoAsignado instanceof TurnoPdv
-                ? SerializadorTableroVentasPdv::turno($turnoAsignado, $plazos, $ahora, $atencionPrevia)
+                ? SerializadorTableroVentasPdv::turno(
+                    $turnoAsignado,
+                    $plazos,
+                    $ahora,
+                    $atencionPrevia,
+                    $estadoPropio['disponible_desde'] ?? null,
+                )
                 : null,
             'estado_vendedor' => $estadoPropio['estado_vendedor'],
             'cronometro' => $estadoPropio['cronometro'],
@@ -98,7 +104,7 @@ class ConsultaTableroVentasPdvService
     }
 
     /**
-     * @return array{estado_vendedor: string|null, cronometro: array<string, mixed>|null, pausa_motivo: string|null}
+     * @return array{estado_vendedor: string|null, cronometro: array<string, mixed>|null, pausa_motivo: string|null, disponible_desde: CarbonInterface|null}
      */
     private function resolverEstadoPropio(User $user, int $sucursalId, CarbonInterface $ahora): array
     {
@@ -152,6 +158,7 @@ class ConsultaTableroVentasPdvService
             'pausa_motivo' => $estadoVendedor === EstadoVendedorOperacionPdv::EnRetencion
                 ? $intervalo?->textoMotivoPausaCompleto()
                 : null,
+            'disponible_desde' => $jornada?->disponible_desde,
         ];
     }
 
@@ -183,15 +190,21 @@ class ConsultaTableroVentasPdvService
             ))
             ->map(function (User $persona) use ($equipo): array {
                 $miembro = $equipo->get($persona->id);
+                $estado = is_array($miembro) ? ($miembro['estado_vendedor'] ?? null) : null;
 
                 return [
                     'id' => $persona->id,
                     'primer_nombre' => self::primerNombre($persona->name),
                     'nombre' => (string) $persona->name,
-                    'estado_vendedor' => is_array($miembro) ? ($miembro['estado_vendedor'] ?? null) : null,
+                    'estado_vendedor' => $estado,
                     'cronometro' => is_array($miembro) ? ($miembro['cronometro'] ?? null) : null,
                 ];
             })
+            ->filter(static fn (array $persona): bool => in_array($persona['estado_vendedor'], [
+                EstadoVendedorOperacionPdv::Disponible->value,
+                EstadoVendedorOperacionPdv::EnEspera->value,
+                EstadoVendedorOperacionPdv::EnRetencion->value,
+            ], true))
             ->values()
             ->all();
     }

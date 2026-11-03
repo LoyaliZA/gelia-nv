@@ -38,7 +38,7 @@ describe('pdvSpeechUtils', () => {
 
     it('forma el guion breve con prioridad y sin decir reatención ni lista', () => {
         const mensaje = mensajeTtsPdv(envelopeLlamado({
-            tipo: 'turno.reatencion',
+            tipo: 'turno.asignado',
             datos: {
                 folio: 'V-0200',
                 snapshot_nombre_llamado: 'Rosa Hernández',
@@ -52,6 +52,26 @@ describe('pdvSpeechUtils', () => {
 
         expect(mensaje).toBe('Luis, tienes un nuevo cliente: Rosa Hernández.');
         expect(mensaje).not.toMatch(/reatenci[oó]n|lista/i);
+    });
+
+    it('reatención y transferencia se anuncian en gerencia y no en el puesto', () => {
+        const reatencion = {
+            tipo: 'turno.reatencion',
+            audiencia: 'sucursal',
+            datos: { atencion: { primer_nombre: 'Diego', user_id: 4 } },
+        };
+        const transferencia = {
+            tipo: 'turno.transferido',
+            audiencia: 'sucursal',
+            datos: { atencion: { primer_nombre: 'Juan', user_id: 5 } },
+        };
+
+        expect(mensajeTtsGerenciaPdv(reatencion, { nombreGerente: 'Isaac', userId: 7 }))
+            .toBe('Diego, tienes una nueva reatención.');
+        expect(mensajeTtsGerenciaPdv(transferencia, { nombreGerente: 'Isaac', userId: 7 }))
+            .toBe('Juan, se te ha transferido un cliente para atención.');
+        expect(mensajeTtsPdv({ ...reatencion, audiencia: 'usuario' })).toBeNull();
+        expect(mensajeTtsPdv({ ...transferencia, audiencia: 'usuario' })).toBeNull();
     });
 
     it('en sala pública no menciona discapacidad, tercera edad ni VIP', () => {
@@ -88,7 +108,7 @@ describe('pdvSpeechUtils', () => {
 
     it('anuncia prórroga una vez y usa fallback sin primer nombre', () => {
         const sinAtencion = mensajeTtsPdv({
-            tipo: 'turno.reatencion',
+            tipo: 'turno.asignado',
             datos: {
                 folio: 'V-0400',
                 snapshot_nombre_llamado: 'Pedro Ruiz',
@@ -112,7 +132,7 @@ describe('pdvSpeechUtils', () => {
             },
         };
         const ajeno = {
-            tipo: 'turno.transferido',
+            tipo: 'turno.asignado',
             audiencia: 'sucursal',
             datos: {
                 snapshot_nombre_llamado: 'María López',

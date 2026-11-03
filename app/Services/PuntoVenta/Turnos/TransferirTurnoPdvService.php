@@ -8,6 +8,7 @@ use App\Models\PuntoVenta\TurnoPdv;
 use App\Models\PuntoVenta\TurnoPdvAtencion;
 use App\Models\PuntoVenta\TurnoPdvEvento;
 use App\Models\User;
+use App\Services\PuntoVenta\Operacion\ConsultaPersonaDisponiblePdvService;
 use App\Services\PuntoVenta\PuntoVentaModulo;
 use App\Support\PuntoVenta\Turnos\MotivosCierreAtencionTurnoPdv;
 use Carbon\CarbonInterface;
@@ -22,6 +23,8 @@ class TransferirTurnoPdvService
     public function __construct(
         private readonly ResuelveAlcancePdv $alcance,
         private readonly AplicarPlazosAtencionNuevaTurnoPdvService $aplicarPlazos,
+        private readonly ConsultaPersonaDisponiblePdvService $disponibilidad,
+        private readonly PrepararDestinoAsignacionManualPdvService $prepararDestino,
     ) {}
 
     /**
@@ -125,11 +128,18 @@ class TransferirTurnoPdvService
                 ]);
             }
 
-            if ($this->personaTieneAtencionAbierta($destino->id)) {
+            if (! $this->disponibilidad->esDestinoReatencionManual($destino, $sucursalId)) {
                 throw ValidationException::withMessages([
                     'destino_user_id' => 'La persona destino no está disponible.',
                 ]);
             }
+
+            $habilitarDesde = $this->prepararDestino->ejecutar(
+                (int) $destino->id,
+                $sucursalId,
+                $ahora,
+                (int) $actor->id,
+            );
 
             $atencionAnterior->update([
                 'fin_at' => $ahora,
@@ -215,7 +225,7 @@ class TransferirTurnoPdvService
                 (int) $turnoBloqueado->sucursal_id,
             );
 
-            $atencionNueva = $this->aplicarPlazos->ejecutar($atencionNueva, $ahora);
+            $atencionNueva = $this->aplicarPlazos->ejecutar($atencionNueva, $ahora, $habilitarDesde);
 
             return [
                 'turno' => $turnoActualizado,
@@ -224,13 +234,5 @@ class TransferirTurnoPdvService
                 'evento' => $evento,
             ];
         });
-    }
-
-    private function personaTieneAtencionAbierta(int $userId): bool
-    {
-        return TurnoPdvAtencion::query()
-            ->where('user_id', $userId)
-            ->whereNull('fin_at')
-            ->exists();
     }
 }

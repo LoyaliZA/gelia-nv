@@ -61,6 +61,16 @@ function FilaDetalle({ metricaId, etiqueta, metrica, definicion }) {
                             ))}
                         </ul>
                     )}
+                    {metrica?.clases && (
+                        <ul className="m-0 pl-4">
+                            <li>Atenciones normales: {metrica.clases.atenciones_normales}</li>
+                            <li>Atenciones reatendidas: {metrica.clases.atenciones_reatendidas}</li>
+                            <li>Atenciones transferidas: {metrica.clases.atenciones_transferidas}</li>
+                            <li>Ventas normales: {metrica.clases.ventas_normales}</li>
+                            <li>Ventas en reatención: {metrica.clases.ventas_reatendidas}</li>
+                            <li>Ventas en transferencia: {metrica.clases.ventas_transferidas}</li>
+                        </ul>
+                    )}
                     {metrica?.en_curso && <p className="m-0 text-amber-500">Hay registros en curso al corte del reporte.</p>}
                 </div>
             )}

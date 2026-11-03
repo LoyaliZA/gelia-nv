@@ -17,8 +17,8 @@ export const PDV_ESTADO_CONEXION = {
 const ETIQUETAS_EVENTO = {
     'turno.alta': 'Nuevo turno en cola',
     'turno.asignado': 'Turno asignado',
-    'turno.reatencion': 'Reatención de turno',
-    'turno.transferido': 'Turno transferido',
+    'turno.reatencion': 'Nueva reatención',
+    'turno.transferido': 'Cliente transferido para atención',
     'atencion.cerrada': 'Atención cerrada',
     'atencion.prorroga': 'Prórroga de atención',
     'atencion.espera_proximo_vencer': 'Turno próximo a vencer',

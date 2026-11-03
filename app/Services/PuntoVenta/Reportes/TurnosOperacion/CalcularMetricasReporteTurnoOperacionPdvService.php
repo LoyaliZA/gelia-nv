@@ -17,6 +17,7 @@ use App\Support\PuntoVenta\Reportes\PercentilesPdv;
 use App\Support\PuntoVenta\Turnos\MotivosCierreAtencionTurnoPdv;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 
 class CalcularMetricasReporteTurnoOperacionPdvService
 {
@@ -120,6 +121,7 @@ class CalcularMetricasReporteTurnoOperacionPdvService
                 MetricaTurnoOperacionPdvIds::T_16_PERCENTILES_DURACION_ATENCION,
                 $duracionAtencion
             ),
+            MetricaTurnoOperacionPdvIds::T_17_CLASIFICACION_ATENCION => $this->metricaClasificacionAtencion($user, $filtros),
         ], $operacion);
     }
 
@@ -569,7 +571,7 @@ class CalcularMetricasReporteTurnoOperacionPdvService
             ->whereNotNull('fin_at')
             ->whereIn('motivo_cierre', [MotivosCierreAtencionTurnoPdv::VENTA, MotivosCierreAtencionTurnoPdv::SIN_VENTA])
             ->with(['turno:id,sucursal_id,reatencion_expira_at'])
-            ->select(['id', 'turno_id', 'numero_secuencia', 'inicio_at', 'fin_at', 'motivo_cierre'])
+            ->select(['id', 'turno_id', 'numero_secuencia', 'inicio_at', 'fin_at', 'motivo_cierre', 'es_transferencia'])
             ->orderBy('turno_id')
             ->orderBy('numero_secuencia')
             ->chunk(200, function ($atenciones) use (&$cerradas, &$reatenciones, &$tiemposHastaReatencion, $user, $filtros, $desde, $hasta) {
@@ -629,15 +631,15 @@ class CalcularMetricasReporteTurnoOperacionPdvService
         Carbon $desde,
         Carbon $hasta,
     ): bool {
+        if ($atencion->es_transferencia || $atencion->inicio_at === null) {
+            return false;
+        }
+
         $turno = $atencion->turno;
         $expira = $turno->reatencion_expira_at;
 
         if ($expira !== null && $atencion->inicio_at->gt($expira)) {
             return false;
-        }
-
-        if ($atencion->numero_secuencia > 1) {
-            return true;
         }
 
         return TurnoPdvEvento::query()
@@ -647,6 +649,80 @@ class CalcularMetricasReporteTurnoOperacionPdvService
             ->where('ocurrido_at', '>=', $desde)
             ->where('ocurrido_at', '<', $hasta)
             ->exists();
+    }
+
+    /**
+     * @param  array<string, mixed>  $filtros
+     * @return array<string, mixed>
+     */
+    private function metricaClasificacionAtencion(User $user, array $filtros): array
+    {
+        $desde = $filtros['desde'];
+        $hasta = $filtros['hasta'];
+        $clases = [
+            'atenciones_normales' => 0,
+            'atenciones_reatendidas' => 0,
+            'atenciones_transferidas' => 0,
+            'ventas_normales' => 0,
+            'ventas_reatendidas' => 0,
+            'ventas_transferidas' => 0,
+        ];
+
+        $this->filtrosQuery->queryAtenciones($user, $filtros)
+            ->with(['turno:id,sucursal_id'])
+            ->select(['id', 'turno_id', 'numero_secuencia', 'inicio_at', 'fin_at', 'motivo_cierre', 'es_transferencia'])
+            ->orderBy('id')
+            ->chunk(200, function ($atenciones) use (&$clases, $filtros, $desde, $hasta): void {
+                $turnoIds = $atenciones->pluck('turno_id')->unique()->all();
+                $reatenciones = TurnoPdvEvento::query()
+                    ->whereIn('turno_id', $turnoIds)
+                    ->where('tipo_evento', TurnoPdvEvento::TIPO_REATENCION)
+                    ->pluck('atencion_id')
+                    ->flip();
+
+                foreach ($atenciones as $atencion) {
+                    $sucursalId = (int) $atencion->turno?->sucursal_id;
+                    if ($sucursalId === 0) {
+                        continue;
+                    }
+
+                    $clase = $this->claseAtencion($atencion, $reatenciones);
+
+                    if ($atencion->inicio_at !== null
+                        && $this->filtrosQuery->cumpleAtribucion($atencion->inicio_at, $sucursalId, $filtros, $desde, $hasta)) {
+                        $clases['atenciones_'.$clase]++;
+                    }
+
+                    if ($atencion->fin_at !== null
+                        && $atencion->motivo_cierre === MotivosCierreAtencionTurnoPdv::VENTA
+                        && $this->filtrosQuery->cumpleAtribucion($atencion->fin_at, $sucursalId, $filtros, $desde, $hasta)) {
+                        $clases['ventas_'.$clase]++;
+                    }
+                }
+            });
+
+        return [
+            'id' => MetricaTurnoOperacionPdvIds::T_17_CLASIFICACION_ATENCION,
+            'unidad' => 'conteo',
+            'valor' => $clases['atenciones_normales'] + $clases['atenciones_reatendidas'] + $clases['atenciones_transferidas'],
+            'clases' => $clases,
+        ];
+    }
+
+    /**
+     * @param  Collection<int, int>|array<int, mixed>  $reatenciones
+     */
+    private function claseAtencion(TurnoPdvAtencion $atencion, $reatenciones): string
+    {
+        if ($atencion->es_transferencia) {
+            return 'transferidas';
+        }
+
+        if (isset($reatenciones[$atencion->id]) || ((int) $atencion->numero_secuencia > 1 && ! $atencion->es_transferencia)) {
+            return 'reatendidas';
+        }
+
+        return 'normales';
     }
 
     /**

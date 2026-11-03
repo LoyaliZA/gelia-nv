@@ -17,5 +17,6 @@ class PausaFinalizada implements ShouldDispatchAfterCommit
         public IntervaloOperativoPdv $intervalo,
         public int $sucursalId,
         public int $actorId,
+        public bool $anunciar = true,
     ) {}
 }
