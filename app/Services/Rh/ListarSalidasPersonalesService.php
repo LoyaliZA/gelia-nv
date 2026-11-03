@@ -7,7 +7,7 @@ use Illuminate\Pagination\LengthAwarePaginator;
 
 class ListarSalidasPersonalesService
 {
-    public function ejecutar(array $filtros): LengthAwarePaginator
+    public function ejecutar(array $filtros, int $porPagina = 15): LengthAwarePaginator
     {
         $query = RhSalidaPersonal::query()
             ->with(['colaborador.departamento', 'colaborador.area', 'registradoPor'])
@@ -61,7 +61,7 @@ class ListarSalidasPersonalesService
             }
         }
 
-        return $query->paginate(15)->withQueryString();
+        return $query->paginate(max(1, $porPagina))->withQueryString();
     }
 
     public function metricas(array $filtros): array

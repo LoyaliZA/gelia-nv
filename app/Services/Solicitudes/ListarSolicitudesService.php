@@ -37,7 +37,20 @@ class ListarSolicitudesService
         return array_merge($normalizar($totales), ['tipos' => $tipos]);
     }
 
-    public function ejecutar(?User $usuario, array $filtros = [], bool $paginar = true)
+    public function visiblePara(User $usuario, SolicitudTag $solicitud): bool
+    {
+        $solicitud->loadMissing('proceso');
+        if ($solicitud->proceso === null || $solicitud->proceso->categoria_flujo === CatalogoProceso::CATEGORIA_OPERATIVO) {
+            return false;
+        }
+
+        $query = SolicitudTag::query()->whereKey($solicitud->id);
+        $this->aplicarAislamientoDeDatos($query, $usuario);
+
+        return $query->exists();
+    }
+
+    public function ejecutar(?User $usuario, array $filtros = [], bool $paginar = true, int $porPagina = 15)
     {
         $query = SolicitudTag::with([
             'cliente.listaDescuento',
@@ -64,7 +77,7 @@ class ListarSolicitudesService
 
         $this->aplicarFiltros($query, $filtros, $usuario);
 
-        return $paginar ? $query->paginate(15)->withQueryString() : $query->get();
+        return $paginar ? $query->paginate(max(1, $porPagina))->withQueryString() : $query->get();
     }
 
     public function metricas(?User $usuario): array

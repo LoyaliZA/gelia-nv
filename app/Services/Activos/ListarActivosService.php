@@ -8,7 +8,16 @@ use Illuminate\Database\Eloquent\Builder;
 
 class ListarActivosService
 {
-    public function ejecutar(?User $usuario, array $filtros = [], bool $paginar = true)
+    public function puedeVer(User $usuario, Activo $activo): bool
+    {
+        if ($usuario->hasRole(['Super Admin', 'Administrador']) || $usuario->can('activos.ver_todos')) {
+            return true;
+        }
+
+        return in_array((int) $activo->departamento_id, $usuario->departamentos->pluck('id')->map(fn ($id) => (int) $id)->all(), true);
+    }
+
+    public function ejecutar(?User $usuario, array $filtros = [], bool $paginar = true, int $porPagina = 15)
     {
         $query = Activo::with([
             'tipo',
@@ -27,7 +36,7 @@ class ListarActivosService
 
         $this->aplicarFiltros($query, $filtros, $usuario);
 
-        return $paginar ? $query->paginate(15)->withQueryString() : $query->get();
+        return $paginar ? $query->paginate(max(1, $porPagina))->withQueryString() : $query->get();
     }
 
     private function aplicarAislamientoDeDatos(Builder $query, User $usuario): void

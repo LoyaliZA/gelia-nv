@@ -213,6 +213,7 @@ Con Sail, ejecutar los comandos de PHP y npm dentro de los contenedores correspo
 ## Documentación
 
 - [Notificaciones Push Web](docs/PUSH_NOTIFICATIONS.md).
+- [Ampliación del API externa para la app móvil](docs/api-externa/ampliacion.md).
 - [Documentación de control de pedidos](docs/control-pedidos/).
 - [Checklist de interfaz y direcciones de envío](docs/control-pedidos/pase-ui-checklist.md).
 - [Documentación de operaciones](docs/operaciones/).
