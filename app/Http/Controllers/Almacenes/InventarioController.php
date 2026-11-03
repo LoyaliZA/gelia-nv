@@ -7,13 +7,13 @@ use App\Http\Requests\Almacenes\StoreInventarioRequest;
 use App\Http\Requests\Almacenes\UpdateInventarioRequest;
 use App\Models\Inventario;
 use App\Services\Almacenes\AlcanceAlmacenesService;
+use App\Services\Almacenes\ListarInventariosService;
 use App\Services\Almacenes\GuardarArchivoVistaPreviaImportacionService;
 use App\Services\Almacenes\IniciarImportacionAlmacenService;
 use App\Services\Almacenes\LeerEncabezadosArchivoImportacionService;
 use App\Services\Almacenes\RegistrarAuditoriaAlmacenService;
 use App\Services\Catalogos\PlantillaImportacionCatalogoService;
 use App\Support\Almacenes\OperacionesImportacionAlmacen;
-use App\Support\Almacenes\OrdenamientoListadoAlmacen;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -26,58 +26,13 @@ class InventarioController extends Controller
         private readonly RegistrarAuditoriaAlmacenService $auditoria,
     ) {}
 
-    public function index(Request $request, AlcanceAlmacenesService $alcance): Response
+    public function index(Request $request, AlcanceAlmacenesService $alcance, ListarInventariosService $listar): Response
     {
         $user = $request->user();
-        $query = Inventario::query()
-            ->select('inventarios.*')
-            ->leftJoin('producto_costos', function ($join) {
-                $join->on('producto_costos.producto_id', '=', 'inventarios.producto_id')
-                    ->on('producto_costos.almacen_id', '=', 'inventarios.almacen_id');
-            })
-            ->addSelect([
-                'producto_costos.costo as costo_valor',
-                'producto_costos.precio_venta as precio_venta_valor',
-            ])
-            ->with([
-                'producto.marca',
-                'producto.categoria',
-                'almacen.sucursal',
-                'almacen.tipoAlmacen',
-            ]);
-
-        $alcance->restringirPorAlmacenSucursalOperable($query, $user);
-
-        $sucursalId = $request->query('sucursal_id') ?: null;
-        $almacenId = $request->query('almacen_id') ?: null;
-        $alcance->validarContextoConsulta(
-            $user,
-            $sucursalId ? (int) $sucursalId : null,
-            $almacenId ? (int) $almacenId : null,
-        );
-
-        if ($sucursalId) {
-            $query->whereHas('almacen', fn ($q) => $q->where('sucursal_id', $sucursalId));
-        }
-
-        if ($almacenId) {
-            $query->where('almacen_id', $almacenId);
-        }
-
-        if ($busqueda = $request->query('q')) {
-            $query->whereHas('producto', fn ($q) => $q->buscarPorTexto($busqueda));
-        }
-
-        OrdenamientoListadoAlmacen::inventarios(
-            $query,
-            $request->query('sort'),
-            $request->query('dir'),
-        );
-
         $sucursales = $alcance->sucursalesOperables($user);
 
         return Inertia::render('Almacenes/Inventarios/Index', [
-            'inventarios' => $query->paginate(50)->withQueryString(),
+            'inventarios' => $listar->ejecutar($user, $request->query(), 50),
             'sucursales' => $sucursales,
             'almacenes' => $alcance->almacenesOperables($user),
             'filtros' => (object) $request->only(['sucursal_id', 'almacen_id', 'q', 'sort', 'dir']),

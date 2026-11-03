@@ -17,9 +17,38 @@ class ListarPedidosBmaService
         private CalcularProgresoPedidoBmaService $progreso,
     ) {}
 
-    public function ejecutar(?User $usuario, array $filtros = [], bool $paginar = true)
+    public function ejecutar(?User $usuario, array $filtros = [], bool $paginar = true, int $porPagina = 15)
     {
-        $query = PedidoBma::with([
+        $query = PedidoBma::with($this->relacionesConsulta())->orderByDesc('created_at');
+
+        if ($usuario) {
+            VisibilidadPedidoBma::aplicarAlcanceListadoBma($query, $usuario);
+        }
+
+        $this->aplicarFiltros($query, $filtros, $usuario);
+
+        if (! $paginar) {
+            return $query->get()->each(fn (PedidoBma $p) => $this->anexarFlagsVista($p, $usuario));
+        }
+
+        return $query->paginate(max(1, $porPagina))->withQueryString()->through(
+            fn (PedidoBma $p) => $this->anexarFlagsVista($p, $usuario)
+        );
+    }
+
+    public function presentar(PedidoBma $pedido, User $usuario): PedidoBma
+    {
+        $pedido->load($this->relacionesConsulta());
+
+        return $this->anexarFlagsVista($pedido, $usuario);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function relacionesConsulta(): array
+    {
+        return [
             'cliente',
             'vendedor',
             'estatus',
@@ -67,21 +96,7 @@ class ListarPedidosBmaService
             'tareaPreparacionRespondida.paqueteria',
             'tareaPreparacionRespondida.caratulas',
             'referencias',
-        ])->orderByDesc('created_at');
-
-        if ($usuario) {
-            VisibilidadPedidoBma::aplicarAlcanceListadoBma($query, $usuario);
-        }
-
-        $this->aplicarFiltros($query, $filtros, $usuario);
-
-        if (! $paginar) {
-            return $query->get()->each(fn (PedidoBma $p) => $this->anexarFlagsVista($p, $usuario));
-        }
-
-        return $query->paginate(15)->withQueryString()->through(
-            fn (PedidoBma $p) => $this->anexarFlagsVista($p, $usuario)
-        );
+        ];
     }
 
     public function metricas(?User $usuario): array

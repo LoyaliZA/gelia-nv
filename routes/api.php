@@ -10,8 +10,15 @@ use App\Http\Controllers\Api\V1\Mobile\MobileSyncController;
 use App\Http\Controllers\Api\V1\Mobile\PuntoVenta\ArchivoResguardoPdvMobileController;
 use App\Http\Controllers\Api\V1\Mobile\PuntoVenta\ContextoPuntoVentaMobileController;
 use App\Http\Controllers\Api\V1\Mobile\PuntoVenta\ResguardoPdvMobileController;
+use App\Http\Controllers\Api\V1\Mobile\Activos\ActivoMobileController;
+use App\Http\Controllers\Api\V1\Mobile\Almacenes\AlmacenMobileController;
 use App\Http\Controllers\Api\V1\Mobile\Comercial\VisitaProgramadaMobileController;
+use App\Http\Controllers\Api\V1\Mobile\Mensajeria\MensajeriaMobileController;
+use App\Http\Controllers\Api\V1\Mobile\Pedidos\PedidoMobileController;
 use App\Http\Controllers\Api\V1\Mobile\PuntoVenta\TurnoPdvMobileController;
+use App\Http\Controllers\Api\V1\Mobile\Rh\RhMobileController;
+use App\Http\Controllers\Api\V1\Mobile\Solicitudes\SolicitudMobileController;
+use App\Http\Controllers\Api\V1\Mobile\Traspasos\TraspasoMobileController;
 use App\Http\Controllers\Api\V1\Mobile\PuntoVenta\VisitaProgramadaPdvMobileController;
 use App\Http\Controllers\Api\V1\PasskeyController;
 use App\Services\PuntoVenta\PuntoVentaModulo;
@@ -70,6 +77,45 @@ Route::prefix('v1')->group(function () {
             Route::get('/visitas-programadas/historial', [VisitaProgramadaMobileController::class, 'historial']);
             Route::post('/visitas-programadas', [VisitaProgramadaMobileController::class, 'store']);
             Route::get('/visitas-programadas/catalogos', [VisitaProgramadaMobileController::class, 'catalogos']);
+        });
+
+        Route::get('/pedidos', [PedidoMobileController::class, 'index']);
+        Route::get('/pedidos/{pedidoBma}', [PedidoMobileController::class, 'show']);
+
+        Route::prefix('rh')->group(function () {
+            Route::get('/colaboradores', [RhMobileController::class, 'colaboradores']);
+            Route::get('/colaboradores/{colaborador}', [RhMobileController::class, 'colaborador']);
+            Route::get('/horas-extra', [RhMobileController::class, 'horasExtra']);
+            Route::get('/salidas-personales', [RhMobileController::class, 'salidas']);
+            Route::get('/incidencias', [RhMobileController::class, 'incidencias']);
+            Route::get('/prestamos', [RhMobileController::class, 'prestamos']);
+            Route::get('/banco-tiempo', [RhMobileController::class, 'bancoTiempo']);
+        });
+
+        Route::get('/almacenes', [AlmacenMobileController::class, 'index']);
+        Route::get('/almacenes/{almacen}', [AlmacenMobileController::class, 'show']);
+        Route::get('/inventarios', [AlmacenMobileController::class, 'inventarios']);
+        Route::get('/inventarios/{inventario}', [AlmacenMobileController::class, 'inventario'])->whereNumber('inventario');
+
+        Route::get('/activos/resolver-codigo', [ActivoMobileController::class, 'resolverCodigo']);
+        Route::get('/activos/asignaciones/pendientes-firma', [ActivoMobileController::class, 'pendientesFirma']);
+        Route::post('/activos/asignaciones/{asignacion}/firmar', [ActivoMobileController::class, 'firmar']);
+        Route::get('/activos', [ActivoMobileController::class, 'index']);
+        Route::get('/activos/{activo}', [ActivoMobileController::class, 'show']);
+
+        Route::get('/solicitudes', [SolicitudMobileController::class, 'index']);
+        Route::get('/solicitudes/{solicitud}', [SolicitudMobileController::class, 'show']);
+
+        Route::get('/traspasos', [TraspasoMobileController::class, 'index']);
+        Route::get('/traspasos/{traspaso}', [TraspasoMobileController::class, 'show']);
+
+        Route::prefix('mensajeria')->group(function () {
+            Route::get('/conversaciones', [MensajeriaMobileController::class, 'conversaciones']);
+            Route::post('/conversaciones', [MensajeriaMobileController::class, 'storeConversacion']);
+            Route::get('/usuarios', [MensajeriaMobileController::class, 'usuarios']);
+            Route::get('/conversaciones/{conversacion}/mensajes', [MensajeriaMobileController::class, 'mensajes']);
+            Route::post('/conversaciones/{conversacion}/mensajes', [MensajeriaMobileController::class, 'enviar']);
+            Route::put('/conversaciones/{conversacion}/leer', [MensajeriaMobileController::class, 'leer']);
         });
 
         Route::middleware('mobile.sync')->group(function () {

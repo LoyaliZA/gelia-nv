@@ -94,7 +94,7 @@ class ApiDocumentacionService
         $permisosCampos = config('mobile.permisos_campos', []);
 
         return [
-            'introduccion' => 'API para apps móviles nativas. Autenticación por usuario del sistema (no por aplicación externa). Incluye sincronización incremental de clientes y la operación de piso de resguardos y turnos sobre la sucursal principal del usuario o la sucursal activa guardada en el dispositivo.',
+            'introduccion' => 'API para apps móviles nativas. Autenticación por usuario del sistema (no por aplicación externa). Incluye sincronización incremental de clientes, la operación de piso de resguardos y turnos, y la consulta operativa de pedidos, RH, inventarios, almacenes, activos, solicitudes, traspasos y mensajería. Cada ruta usa el mismo permiso y el mismo alcance que el escritorio.',
             'requisitos_acceso' => [
                 'El usuario debe tener el permiso clientes.ver (alcance completo) o mis_clientes.gestionar (solo clientes asignados como vendedor).',
                 'Cada dispositivo se identifica con device_uuid (UUID v4). Un login nuevo en el mismo dispositivo revoca el token anterior.',
@@ -333,6 +333,7 @@ class ApiDocumentacionService
                     'descripcion' => 'Sucursales activas e intenciones para el alta. Permiso visitas_programadas.gestionar.',
                     'curl' => "curl -s \"{$baseUrl}/mobile/comercial/visitas-programadas/catalogos\" {$authHeaders}",
                 ],
+                ...$this->endpointsOperacionAmpliada($baseUrl, $authHeaders),
             ],
             'respuesta_login' => [
                 'access_token' => 'Token Bearer (ability mobile)',
@@ -378,6 +379,56 @@ class ApiDocumentacionService
             ],
             'guias_cliente_http' => $this->guiasClienteHttpMobile($baseUrl),
         ];
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function endpointsOperacionAmpliada(string $baseUrl, string $authHeaders): array
+    {
+        $rutas = [
+            ['GET', '/mobile/pedidos', 'Listado de pedidos BMA visibles para quien consulta. Permiso control_pedidos.ver_listado. Query: q, tab (TODAS, BORRADORES, PESAJE_PENDIENTE, PESAJE_RESPONDIDO, PENDIENTE_AUXILIAR, EN_CEDIS, PENDIENTE_GUIA_CLIENTE, ENVIADOS, RECHAZADAS, OBS_CEDIS, SIN_EXISTENCIA, ELIMINADAS), page, per_page (máx. 50). Incluye metricas del alcance. ELIMINADAS exige control_pedidos.eliminados.'],
+            ['GET', '/mobile/pedidos/{id}', 'Detalle del pedido si VisibilidadPedidoBma permite consultarlo. Mismo permiso de listado. No incluye archivos de pago ni rutas de documentos.'],
+            ['GET', '/mobile/rh/colaboradores', 'Personal con permiso rh.ver. Query: q o busqueda, departamento_id, area_id, catalogo_puesto_id, activo, vinculo (con_cuenta|sin_cuenta), page, per_page. Incluye compensación porque el escritorio la muestra con el mismo permiso.'],
+            ['GET', '/mobile/rh/colaboradores/{id}', 'Ficha del colaborador. Incidencias recientes si rh.incidencias.ver o rh.deducciones.ver. Préstamos activos si rh.prestamos.ver.'],
+            ['GET', '/mobile/rh/horas-extra', 'Horas extra. Permisos rh.ver y rh.horas_extra.ver. Query: q, rh_colaborador_id, departamento_id, area_id, fecha_inicio, fecha_fin, estado_pago.'],
+            ['GET', '/mobile/rh/salidas-personales', 'Salidas personales. Permisos rh.ver y rh.salidas_personales.ver. No entrega las fotos de evidencia.'],
+            ['GET', '/mobile/rh/incidencias', 'Deducciones e incidencias. Permisos rh.ver y rh.incidencias.ver. Query: q, rh_colaborador_id, departamento_id, estado_deduccion, catalogo_regla_incidencia_id.'],
+            ['GET', '/mobile/rh/prestamos', 'Préstamos de pago fijo. Permisos rh.ver y rh.prestamos.ver. Query: q, rh_colaborador_id, departamento_id, estado.'],
+            ['GET', '/mobile/rh/banco-tiempo', 'Banco de tiempo. Permisos rh.ver y rh.banco_tiempo.ver. Query: q, rh_colaborador_id, departamento_id, estado.'],
+            ['GET', '/mobile/almacenes', 'Almacenes de las sucursales operables. Permiso de consulta del módulo de almacenes. Query: q, sucursal_id, activo, page, per_page. Incluye sucursales operables.'],
+            ['GET', '/mobile/almacenes/{id}', 'Detalle de un almacén operable. Fuera de alcance responde 404.'],
+            ['GET', '/mobile/inventarios', 'Existencias por producto y almacén, con el alcance de sucursal del escritorio. Permiso almacenes.inventarios.ver o catalogos.gestionar. Query: q, sucursal_id, almacen_id, sort, dir, page, per_page. costo y precio_venta viajan igual que en el listado web.'],
+            ['GET', '/mobile/inventarios/{id}', 'Detalle de una fila de inventario dentro del alcance.'],
+            ['GET', '/mobile/activos', 'Activos del departamento de quien consulta, o todos si tiene activos.ver_todos. Permiso activos.ver. Query: q, estado, mis_activos, sin_asignar, en_mantenimiento, pendientes_firma, departamento_id.'],
+            ['GET', '/mobile/activos/{id}', 'Detalle del activo, asignación activa y consulta_token. Fuera del departamento responde 404.'],
+            ['GET', '/mobile/activos/resolver-codigo', 'Resuelve folio, serie o token de QR. Query codigo. Permiso activos.ver. Misma búsqueda que el escritorio.'],
+            ['GET', '/mobile/activos/asignaciones/pendientes-firma', 'Asignaciones activas sin firma de la persona autenticada.'],
+            ['POST', '/mobile/activos/asignaciones/{id}/firmar', 'Registra la firma de recibido. Permiso activos.ver. Body JSON: firma (data URL png/jpg/jpeg). Puede firmar la persona asignada, o quien tenga activos.asignar y acceso al departamento. No devuelve la ruta del archivo.'],
+            ['GET', '/mobile/solicitudes', 'Solicitudes de tag visibles según aislamiento de vendedor, gerencia o administración. Permiso solicitudes.ver_listado. Query: q, tab, estado_id, proceso_id, fecha_inicio, fecha_fin. No incluye datos fiscales ni rutas de evidencia.'],
+            ['GET', '/mobile/solicitudes/{id}', 'Detalle de una solicitud visible. Fuera de alcance responde 404.'],
+            ['GET', '/mobile/traspasos', 'Traspasos visibles para quien consulta. Permiso traspasos.ver_listado. Query: q, tab (PENDIENTES, RESPONDIDAS, VERIFICADAS, INCORRECTAS, ENTREGA_MANANA), almacen_origen_id, fecha_inicio, fecha_fin, fecha_entrega. Excluye abastecimiento de preparación.'],
+            ['GET', '/mobile/traspasos/{id}', 'Detalle con productos. No entrega el archivo de evidencia.'],
+            ['GET', '/mobile/mensajeria/conversaciones', 'Conversaciones donde participa la persona autenticada. Misma forma que el listado web.'],
+            ['POST', '/mobile/mensajeria/conversaciones', 'Crea conversación directa o de grupo. Body: tipo (directo|grupo), participante_ids[], nombre opcional.'],
+            ['GET', '/mobile/mensajeria/usuarios', 'Busca cuentas para iniciar conversación. Query: q, limit.'],
+            ['GET', '/mobile/mensajeria/conversaciones/{id}/mensajes', 'Mensajes de una conversación propia. Query cursor. Respuesta: mensajes, next_cursor, has_more.'],
+            ['POST', '/mobile/mensajeria/conversaciones/{id}/mensajes', 'Envía un mensaje de texto. Body: contenido, reply_to_id opcional. Solo participantes.'],
+            ['PUT', '/mobile/mensajeria/conversaciones/{id}/leer', 'Marca la conversación como leída.'],
+        ];
+
+        return array_map(function (array $ruta) use ($baseUrl, $authHeaders) {
+            [$metodo, $path, $descripcion] = $ruta;
+            $curlMetodo = $metodo === 'GET' ? '' : '-X '.$metodo.' ';
+
+            return [
+                'metodo' => $metodo,
+                'ruta' => $path,
+                'auth' => true,
+                'descripcion' => $descripcion,
+                'curl' => 'curl -s '.$curlMetodo.'"'.$baseUrl.$path.'" '.$authHeaders,
+            ];
+        }, $rutas);
     }
 
     private function endpointsParaRecurso(ApiRecurso $recurso, string $baseUrl): array

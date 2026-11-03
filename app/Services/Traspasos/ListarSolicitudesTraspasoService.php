@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Builder;
 
 class ListarSolicitudesTraspasoService
 {
-    public function ejecutar(?User $usuario, array $filtros = [], bool $paginar = true)
+    public function ejecutar(?User $usuario, array $filtros = [], bool $paginar = true, int $porPagina = 15)
     {
         $query = SolicitudTraspaso::with([
             'vendedor:id,name',
@@ -37,7 +37,7 @@ class ListarSolicitudesTraspasoService
 
         $this->aplicarFiltros($query, $filtros);
 
-        return $paginar ? $query->paginate(15)->withQueryString() : $query->get();
+        return $paginar ? $query->paginate(max(1, $porPagina))->withQueryString() : $query->get();
     }
 
     public function metricas(?User $usuario): array
