@@ -36,6 +36,7 @@ final class EtiquetasMetricaReportePdv
         MetricaTurnoOperacionPdvIds::T_14_DISTRIBUCION_PRIORIDAD => 'Distribución por prioridad',
         MetricaTurnoOperacionPdvIds::T_15_PERCENTILES_ESPERA_COLA => 'Percentiles espera en cola',
         MetricaTurnoOperacionPdvIds::T_16_PERCENTILES_DURACION_ATENCION => 'Percentiles duración atención',
+        MetricaTurnoOperacionPdvIds::T_17_CLASIFICACION_ATENCION => 'Atenciones y ventas por tipo',
         MetricaTurnoOperacionPdvIds::O_01_JORNADAS_ABIERTAS => 'Jornadas abiertas',
         MetricaTurnoOperacionPdvIds::O_02_DURACION_JORNADA => 'Duración de jornada',
         MetricaTurnoOperacionPdvIds::O_03_TIEMPO_PAUSA => 'Tiempo en pausa',

@@ -150,9 +150,11 @@ export default function TarjetaTurnoVentas({
             <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                     <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0">
-                        {esReatencion ? 'Re-atención' : 'Turno asignado'}
+                        {esReatencion ? 'Reatención' : (atencion?.es_transferencia ? 'Transferido' : 'Turno asignado')}
                     </p>
-                    <p className="text-3xl font-black tracking-wider theme-text-main m-0 mt-1">{turno?.folio}</p>
+                    <p className="text-3xl font-black tracking-wider theme-text-main m-0 mt-1">
+                        {turno?.folio_visible || turno?.folio}
+                    </p>
                     <p className="text-sm font-bold theme-text-main m-0 mt-2">{turno?.snapshot_nombre_llamado || '—'}</p>
                     {turno?.es_tercero && turno?.cliente_titular && (
                         <p className="text-xs font-semibold theme-text-muted m-0 mt-1">
@@ -167,8 +169,13 @@ export default function TarjetaTurnoVentas({
                 </div>
                 <div className="flex flex-col items-end gap-2">
                     {esReatencion && (
-                        <span className="inline-flex px-3 py-1.5 rounded-xl text-[10px] font-black uppercase bg-violet-500/15 text-violet-700 dark:text-violet-300">
-                            Re-atención
+                        <span className="inline-flex gelia-estado-vivo gelia-estado-vivo--info gelia-estado-vivo--compacto px-3 py-1.5 text-[10px] font-black uppercase">
+                            Reatención {turno?.numero_reatencion || ''}
+                        </span>
+                    )}
+                    {atencion?.es_transferencia && (
+                        <span className="inline-flex gelia-estado-vivo gelia-estado-vivo--aviso gelia-estado-vivo--compacto px-3 py-1.5 text-[10px] font-black uppercase">
+                            Transferido
                         </span>
                     )}
                     <EstadoUiBadge estadoUi={estadoUi} />
@@ -212,7 +219,15 @@ export default function TarjetaTurnoVentas({
             )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {!atencion?.atencion_en_curso && atencion?.espera_inicial_expira_at && (
+                {!atencion?.atencion_en_curso && atencion?.atencion_habilitada_desde && (
+                    <CronometroVisualTurno
+                        etiqueta="Inicio de atención"
+                        referenciaAt={atencion.atencion_habilitada_desde}
+                        servidorAt={servidorAt}
+                        modo="restante"
+                    />
+                )}
+                {!atencion?.atencion_en_curso && !atencion?.atencion_habilitada_desde && atencion?.espera_inicial_expira_at && (
                     <CronometroVisualTurno
                         etiqueta="Espera inicial"
                         referenciaAt={atencion.espera_inicial_expira_at}
@@ -230,6 +245,11 @@ export default function TarjetaTurnoVentas({
                         alerta={atencion.prorroga_activa}
                     />
                 )}
+                {atencion?.atencion_habilitada_desde && (
+                    <p className="text-xs font-semibold theme-text-muted m-0 sm:col-span-2">
+                        La atención inicia al terminar la cuenta.
+                    </p>
+                )}
                 {atencion?.prorroga_activa && (
                     <div className="flex items-center gap-2 rounded-xl px-3 py-2 bg-amber-500/15 sm:col-span-2">
                         <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" aria-hidden />
@@ -246,7 +266,7 @@ export default function TarjetaTurnoVentas({
                         <button
                             type="button"
                             className={`${THEME_BTN_PRIMARY} ${BTN_ACCION} flex-1`}
-                            disabled={procesando}
+                            disabled={procesando || Boolean(atencion?.atencion_habilitada_desde)}
                             onClick={iniciarAtencion}
                         >
                             <Play className="w-4 h-4" aria-hidden />

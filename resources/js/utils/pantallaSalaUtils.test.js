@@ -54,8 +54,7 @@ describe('pantallaSalaUtils', () => {
     it('deduplica actualizaciones del mismo turno', () => {
         const primero = aplicarEventoSala([], envelopeAsignado());
         const segundo = aplicarEventoSala(primero, envelopeAsignado({
-            event_id: 'turnos:turno.transferido:3',
-            tipo: 'turno.transferido',
+            event_id: 'turnos:turno.asignado:3',
             datos: {
                 ...envelopeAsignado().datos,
                 atencion_primer_nombre: 'Luis',
@@ -64,6 +63,23 @@ describe('pantallaSalaUtils', () => {
 
         expect(segundo).toHaveLength(1);
         expect(segundo[0].atencion_primer_nombre).toBe('Luis');
+    });
+
+    it('quita el llamado de sala cuando el turno se transfiere o se reatiende', () => {
+        const llamado = aplicarEventoSala([], envelopeAsignado());
+        const transferido = aplicarEventoSala(llamado, {
+            event_id: 'turnos:turno.transferido:3',
+            tipo: 'turno.transferido',
+            datos: { turno_id: 10 },
+        });
+        const reatendido = aplicarEventoSala(llamado, {
+            event_id: 'turnos:turno.reatencion:4',
+            tipo: 'turno.reatencion',
+            datos: { turno_id: 10 },
+        });
+
+        expect(transferido).toHaveLength(0);
+        expect(reatendido).toHaveLength(0);
     });
 
     it('elige el llamado más reciente como actual', () => {

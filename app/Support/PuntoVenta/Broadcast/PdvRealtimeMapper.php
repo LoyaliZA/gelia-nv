@@ -11,9 +11,9 @@ use App\Events\PuntoVenta\EquipoAsistenciaActualizada;
 use App\Events\PuntoVenta\IncidenciaResguardoPdvRegistrada;
 use App\Events\PuntoVenta\JornadaAbierta;
 use App\Events\PuntoVenta\JornadaAmpliada;
-use App\Events\PuntoVenta\JornadaCerrada;
 use App\Events\PuntoVenta\JornadaAperturaHorario;
 use App\Events\PuntoVenta\JornadaAperturaManual;
+use App\Events\PuntoVenta\JornadaCerrada;
 use App\Events\PuntoVenta\JornadaCierreHorario;
 use App\Events\PuntoVenta\JornadaCierreManual;
 use App\Events\PuntoVenta\JornadaReaperturaManual;
@@ -21,14 +21,16 @@ use App\Events\PuntoVenta\PausaFinalizada;
 use App\Events\PuntoVenta\PausaIniciada;
 use App\Events\PuntoVenta\PublicidadPdvActualizada;
 use App\Events\PuntoVenta\RecepcionEsperadaPdvCreada;
-use App\Events\PuntoVenta\RegistroManualResguardoPdvCreado;
 use App\Events\PuntoVenta\RecepcionFisicaPdvCompletada;
+use App\Events\PuntoVenta\RegistroManualResguardoPdvCreado;
 use App\Events\PuntoVenta\TurnoAsignado;
 use App\Events\PuntoVenta\TurnoCreado;
 use App\Events\PuntoVenta\TurnoReatencion;
 use App\Events\PuntoVenta\TurnoTransferido;
 use App\Events\PuntoVenta\TurnoVentanaReatencionVencida;
+use App\Models\PuntoVenta\JornadaPdv;
 use App\Models\PuntoVenta\PdvPantallaSalaToken;
+use App\Models\PuntoVenta\TurnoPdvAtencion;
 use App\Models\PuntoVenta\TurnoPdvEvento;
 use App\Support\PuntoVenta\Broadcast\Payloads\PayloadOperacionPdvBroadcast;
 use App\Support\PuntoVenta\Broadcast\Payloads\PayloadResguardoPdvBroadcast;
@@ -430,7 +432,7 @@ final class PdvRealtimeMapper
     private function turnoAlertaSucursal(
         AtencionEsperaProximoVencer|AtencionProrrogaProximoVencer $event,
         string $tipo,
-        \App\Models\PuntoVenta\TurnoPdvAtencion $atencion,
+        TurnoPdvAtencion $atencion,
     ): array {
         return [[
             'channels' => [CanalesPdv::sucursal($event->sucursalId)],
@@ -661,6 +663,7 @@ final class PdvRealtimeMapper
                     'jornada' => PayloadOperacionPdvBroadcast::jornada($event->jornada),
                     'intervalo' => PayloadOperacionPdvBroadcast::intervalo($event->intervalo),
                     'primer_nombre' => $this->primerNombreJornada($event->jornada),
+                    'anunciar' => ! $event instanceof PausaFinalizada || $event->anunciar,
                 ],
             ),
         ]];
@@ -726,7 +729,7 @@ final class PdvRealtimeMapper
         return $transmisiones;
     }
 
-    private function atencionConPersona(\App\Models\PuntoVenta\TurnoPdvAtencion $atencion): \App\Models\PuntoVenta\TurnoPdvAtencion
+    private function atencionConPersona(TurnoPdvAtencion $atencion): TurnoPdvAtencion
     {
         if (! $atencion->relationLoaded('user')) {
             $atencion->load('user');
@@ -735,7 +738,7 @@ final class PdvRealtimeMapper
         return $atencion;
     }
 
-    private function primerNombreJornada(\App\Models\PuntoVenta\JornadaPdv $jornada): ?string
+    private function primerNombreJornada(JornadaPdv $jornada): ?string
     {
         if (! $jornada->relationLoaded('user')) {
             $jornada->load('user');

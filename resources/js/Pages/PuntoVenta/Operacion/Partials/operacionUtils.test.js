@@ -51,7 +51,7 @@ describe('operacionUtils', () => {
         expect(claseBadgeEstadoVendedor('atendiendo', true)).toContain('gelia-estado-equipo--prorroga');
         expect(claseBadgeEstadoVendedor('en_retencion')).toContain('gelia-estado-equipo--pausa');
         expect(etiquetaEstadoVendedor('en_espera')).toBe('Pre-disponible');
-        expect(mensajeAvisoDisponibilidad('en_retencion', 'transferencia')).toContain('transferencia sí se puede confirmar');
+        expect(mensajeAvisoDisponibilidad('en_retencion', 'transferencia')).toContain('termina la pausa');
         expect(mensajeAvisoDisponibilidad('en_espera', 'reatencion')).toContain('Pre-disponible');
         expect(mensajeAvisoDisponibilidad('disponible', 'transferencia')).toBe('');
     });
