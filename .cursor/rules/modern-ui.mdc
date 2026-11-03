@@ -1,12 +1,10 @@
 ---
-description: Dirección visual GELIA y uso de skills dentro del lenguaje del producto
 alwaysApply: true
 ---
+# Entrada única de diseño GELIA
 
-Antes de analizar o modificar una interfaz, leer `AGENTS.md` y `GUIA_DISENO_GELIA.md` en la raíz. La guía es la fuente común para dirección visual, referencias, selección de skills y comprobaciones. Esta regla es un punto de entrada; no mantener aquí otra versión de la guía.
+Para analizar o modificar interfaz, seguir `AGENTS.md` y `GUIA_DISENO_GELIA.md`; inspeccionar la referencia existente pertinente y sus estilos efectivos. Reutilizar controles y capacidades antes de añadir otra superficie. Conservar la personalización de tema, fuente y acento.
 
-Partir de los patrones existentes de GELIA. Inspeccionar una referencia relevante antes de elegir una skill. Las skills son apoyo para necesidades concretas: Impeccable es opcional y no se activa una cadena de diseño o movimiento por defecto.
+Las skills apoyan una necesidad concreta; no activarlas en cadena ni iniciar exploración, prototipo o renovación por una corrección local. La regla `visual-refresh-router` es manual y solo se usa si el usuario la menciona o pide expresamente ese flujo de renovación.
 
-Evaluar la composición completa y su personalidad, además de corregir defectos. El uso de tokens o una verificación técnica por sí solos no acreditan coherencia visual. Respetar `.cursor/rules/estilos-gelia.mdc` y reutilizar antes de extender o crear.
-
-Seguir las decisiones y autorizaciones vigentes del usuario. Un cambio de backend no inicia trabajo visual. Al cerrar, distinguir lo leído, lo ejecutado, lo revisado visualmente y lo pendiente.
+Las decisiones actuales del usuario y el flujo operativo gobiernan la implementación. Un cambio de backend no inicia un rediseño. Verificar la composición y el comportamiento afectados en la aplicación; usar tokens no demuestra por sí solo integración o coherencia visual.

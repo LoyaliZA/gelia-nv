@@ -81,8 +81,10 @@ class PedidoBmaController extends Controller
             'catalogos' => fn () => $catalogosService->ejecutar(),
             'direcciones_normalizadas' => (bool) config('control_pedidos.direcciones_normalizadas'),
             'registrar_tienda' => [
-                'facultad_md' => Auth::user()->can(\App\Support\ControlPedidos\RegistrarPedidos\PoliticaAccionesRegistrarPedidos::PERMISO_MD)
-                    || Auth::user()->hasRole('Super Admin'),
+                'facultad_md' => app(\App\Services\ControlPedidos\PreparacionTiendaConfig::class)->facultadMismoDia(
+                    Auth::user(),
+                    Auth::user()->departamento_id
+                ),
                 'es_sabado' => now()->isSaturday(),
                 'almacenes_tienda' => app(\App\Support\ControlPedidos\RegistrarPedidos\DestinoRevisionRegistrarPedidos::class)->catalogoTienda(),
             ],
@@ -218,6 +220,247 @@ class PedidoBmaController extends Controller
             'base_captura' => $resultado['pedido']->base_captura,
             'solicitud_preparacion' => $resultado['pedido']->solicitud_preparacion,
         ]));
+    }
+
+    public function decidirTienda(
+        Request $request,
+        PedidoBma $pedidoBma,
+        ListarPedidosBmaService $listarService,
+        \App\Services\ControlPedidos\RegistrarDecisionClienteTiendaService $servicio,
+    ): JsonResponse {
+        Gate::authorize('control_pedidos.crear');
+        $listarService->asegurarAcceso($pedidoBma, Auth::user());
+        $datos = $request->validate([
+            'revision_id' => ['required', 'integer'],
+            'accion' => ['required', 'string', 'max:40'],
+            'nota' => ['nullable', 'string', 'max:500'],
+            'sku_sustituto' => ['nullable', 'string', 'max:80'],
+        ]);
+
+        $pedido = $servicio->ejecutar(
+            $pedidoBma,
+            Auth::user(),
+            (int) $datos['revision_id'],
+            $datos['accion'],
+            (string) ($datos['nota'] ?? ''),
+            (string) ($datos['sku_sustituto'] ?? '')
+        );
+
+        return response()->json(array_merge(['ok' => true], $this->contextoRegistrarTienda($pedido), [
+            'solicitud_preparacion' => $pedido->solicitud_preparacion,
+            'revisiones_producto' => $pedido->revisionesProducto,
+        ]));
+    }
+
+    public function coberturaTienda(
+        Request $request,
+        PedidoBma $pedidoBma,
+        ListarPedidosBmaService $listarService,
+        \App\Services\ControlPedidos\RegistrarCoberturaTiendaService $servicio,
+    ): JsonResponse {
+        Gate::authorize('control_pedidos.crear');
+        $listarService->asegurarAcceso($pedidoBma, Auth::user());
+        $datos = $request->validate([
+            'cobertura' => ['required', 'in:apartado,transferencia,credito'],
+            'mismo_dia' => ['nullable', 'boolean'],
+        ]);
+        $pedido = $servicio->ejecutar(
+            $pedidoBma,
+            Auth::user(),
+            $datos['cobertura'],
+            (bool) ($datos['mismo_dia'] ?? false)
+        );
+
+        return response()->json(array_merge(['ok' => true], $this->contextoRegistrarTienda($pedido), [
+            'solicitud_preparacion' => $pedido->solicitud_preparacion,
+        ]));
+    }
+
+    public function anexoTienda(
+        Request $request,
+        PedidoBma $pedidoBma,
+        ListarPedidosBmaService $listarService,
+        \App\Services\ControlPedidos\RegistrarAnexoTiendaService $servicio,
+    ): JsonResponse {
+        Gate::authorize('control_pedidos.crear');
+        $listarService->asegurarAcceso($pedidoBma, Auth::user());
+        $datos = $request->validate([
+            'entrada' => ['nullable', 'in:documento,catalogo'],
+            'sku' => ['required_without:entrada', 'nullable', 'string', 'max:80'],
+            'descripcion' => ['required_with:sku', 'nullable', 'string', 'max:180'],
+            'cantidad' => ['required_with:sku', 'nullable', 'integer', 'min:1'],
+            'condicion' => ['nullable', 'string', 'max:500'],
+            'piezas' => ['required_if:entrada,catalogo', 'nullable', 'array', 'min:1', 'max:20'],
+            'piezas.*.sku' => ['required', 'string', 'max:80'],
+            'piezas.*.descripcion' => ['required', 'string', 'max:180'],
+            'piezas.*.cantidad' => ['required', 'integer', 'min:1'],
+            'piezas.*.producto_id' => ['nullable', 'integer'],
+            'evidencia' => ['required', 'file', 'max:10240', 'mimes:pdf,jpg,jpeg,png,webp'],
+        ]);
+        $entrada = $datos['entrada'] ?? 'catalogo';
+        $piezas = $datos['piezas'] ?? [];
+        if ($entrada === 'catalogo' && $piezas === [] && filled($datos['sku'] ?? null)) {
+            $piezas = [[
+                'sku' => $datos['sku'],
+                'descripcion' => $datos['descripcion'] ?? '',
+                'cantidad' => (int) ($datos['cantidad'] ?? 0),
+                'condicion' => $datos['condicion'] ?? '',
+            ]];
+        }
+        $resultado = $servicio->ejecutar(
+            $pedidoBma,
+            Auth::user(),
+            $datos['sku'] ?? null,
+            $datos['descripcion'] ?? null,
+            isset($datos['cantidad']) ? (int) $datos['cantidad'] : null,
+            $datos['condicion'] ?? null,
+            $request->file('evidencia'),
+            $piezas,
+            $entrada
+        );
+
+        return response()->json([
+            'ok' => true,
+            'pedido_id' => $resultado->id,
+            'folio' => $resultado->folio,
+            'principal_id' => $resultado->pedido_principal_id ?: $pedidoBma->id,
+            'expediente' => app(\App\Support\ControlPedidos\RegistrarPedidos\ExpedienteRegistrarPedidos::class)->desdePedido(
+                $resultado->pedido_principal_id ? $pedidoBma->fresh() : $resultado
+            ),
+        ]);
+    }
+
+    public function retiroPiezasTienda(
+        Request $request,
+        PedidoBma $pedidoBma,
+        ListarPedidosBmaService $listarService,
+        \App\Services\ControlPedidos\RegistrarRetiroPiezasTiendaService $servicio,
+    ): JsonResponse {
+        Gate::authorize('control_pedidos.crear');
+        $listarService->asegurarAcceso($pedidoBma, Auth::user());
+        $datos = $request->validate([
+            'entrada' => ['nullable', 'in:documento,catalogo'],
+            'motivo' => ['required', 'string', 'max:500'],
+            'motivo_opcion' => ['nullable', 'string', 'max:120'],
+            'piezas' => ['required_if:entrada,catalogo', 'nullable', 'array', 'min:1'],
+            'piezas.*.sku' => ['required', 'string', 'max:80'],
+            'piezas.*.descripcion' => ['required', 'string', 'max:180'],
+            'piezas.*.cantidad' => ['required', 'integer', 'min:1'],
+            'documentos' => ['required_if:entrada,documento', 'nullable', 'array', 'min:1'],
+            'documentos.*' => ['file', 'max:10240', 'mimes:pdf,jpg,jpeg,png,webp'],
+            'evidencias' => ['nullable', 'array'],
+            'evidencias.*' => ['file', 'max:10240', 'mimes:pdf,jpg,jpeg,png,webp'],
+        ]);
+        $entrada = $datos['entrada'] ?? 'catalogo';
+        $pedido = $servicio->ejecutar(
+            $pedidoBma,
+            Auth::user(),
+            $datos['piezas'] ?? [],
+            $datos['motivo'],
+            array_values($request->file('evidencias') ?? []),
+            $entrada,
+            array_values($request->file('documentos') ?? []),
+            $datos['motivo_opcion'] ?? null,
+        );
+
+        return response()->json([
+            'ok' => true,
+            'message' => 'Retiro solicitado. El auxiliar identifica y retira; todavía no se libera el stock ni hay pago o entrega.',
+            'solicitud_preparacion' => $pedido->solicitud_preparacion,
+        ]);
+    }
+
+    public function retirarCustodiaEnvio(
+        Request $request,
+        PedidoBma $pedidoBma,
+        ListarPedidosBmaService $listarService,
+        \App\Services\ControlPedidos\RetirarCustodiaParaEnvioService $servicio,
+    ): JsonResponse {
+        Gate::authorize('control_pedidos.crear');
+        $listarService->asegurarAcceso($pedidoBma, Auth::user());
+        $datos = $request->validate(['pedido_principal_id' => ['required', 'integer']]);
+        $principal = PedidoBma::query()->findOrFail($datos['pedido_principal_id']);
+        $pedido = $servicio->ejecutar($pedidoBma, $principal, Auth::user());
+
+        return response()->json(array_merge(['ok' => true], $this->contextoRegistrarTienda($pedido)));
+    }
+
+    public function cambiarSucursalTienda(
+        Request $request,
+        PedidoBma $pedidoBma,
+        ListarPedidosBmaService $listarService,
+        \App\Services\ControlPedidos\AsignarSucursalDestinoPedidoService $servicio,
+    ): JsonResponse {
+        Gate::authorize('control_pedidos.crear');
+        $listarService->asegurarAcceso($pedidoBma, Auth::user());
+        $datos = $request->validate(['sucursal_destino_id' => ['required', 'integer']]);
+        try {
+            $pedido = $servicio->ejecutar($pedidoBma, Auth::user(), (int) $datos['sucursal_destino_id']);
+        } catch (\RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return response()->json(array_merge(['ok' => true], $this->contextoRegistrarTienda($pedido)));
+    }
+
+    public function resolverSegundoTraslado(
+        Request $request,
+        PedidoBma $pedidoBma,
+        \App\Services\ControlPedidos\ResolverSegundoTrasladoTiendaService $servicio,
+    ): JsonResponse {
+        Gate::authorize(\App\Services\ControlPedidos\SolicitarSegundoTrasladoTiendaService::PERMISO);
+        $datos = $request->validate([
+            'decision' => ['required', 'in:autorizar,rechazar'],
+            'recorrido' => ['nullable', 'string', 'max:500'],
+        ]);
+        $pedido = $servicio->ejecutar($pedidoBma, Auth::user(), $datos['decision'], (string) ($datos['recorrido'] ?? ''));
+
+        return response()->json(array_merge(['ok' => true], $this->contextoRegistrarTienda($pedido)));
+    }
+
+    public function salirSegundoTraslado(
+        PedidoBma $pedidoBma,
+        \App\Services\ControlPedidos\EjecutarSegundoTrasladoTiendaService $servicio,
+    ): JsonResponse {
+        $pedido = $servicio->salir($pedidoBma, Auth::user());
+
+        return response()->json(array_merge(['ok' => true], $this->contextoRegistrarTienda($pedido)));
+    }
+
+    public function recibirSegundoTraslado(
+        PedidoBma $pedidoBma,
+        \App\Services\ControlPedidos\EjecutarSegundoTrasladoTiendaService $servicio,
+    ): JsonResponse {
+        $pedido = $servicio->recibir($pedidoBma, Auth::user());
+
+        return response()->json(array_merge(['ok' => true], $this->contextoRegistrarTienda($pedido)));
+    }
+
+    public function trasladarCustodiaCedis(
+        PedidoBma $pedidoBma,
+        \App\Services\ControlPedidos\TrasladarCustodiaHaciaCedisService $servicio,
+    ): JsonResponse {
+        $pedido = $servicio->enviar($pedidoBma, Auth::user());
+
+        return response()->json(array_merge(['ok' => true, 'folio' => $pedido->folio], $this->contextoRegistrarTienda($pedido)));
+    }
+
+    public function recibirCustodiaCedis(
+        PedidoBma $pedidoBma,
+        \App\Services\ControlPedidos\TrasladarCustodiaHaciaCedisService $servicio,
+    ): JsonResponse {
+        $pedido = $servicio->recibir($pedidoBma, Auth::user());
+
+        return response()->json(array_merge(['ok' => true], $this->contextoRegistrarTienda($pedido)));
+    }
+
+    public function integrarAnexoTienda(
+        PedidoBma $pedidoBma,
+        \App\Services\ControlPedidos\IntegrarAnexoFisicoTiendaService $servicio,
+    ): JsonResponse {
+        $pedido = $servicio->ejecutar($pedidoBma, Auth::user());
+
+        return response()->json(array_merge(['ok' => true, 'folio' => $pedido->folio], $this->contextoRegistrarTienda($pedido)));
     }
 
     /**
@@ -772,16 +1015,29 @@ class PedidoBmaController extends Controller
     }
 
     public function cerrarConsulta(
+        Request $request,
         PedidoBma $pedidoBma,
         ListarPedidosBmaService $listarService,
         CerrarConsultaPedidoBmaService $service
-    ): RedirectResponse {
+    ): RedirectResponse|JsonResponse {
         Gate::authorize('control_pedidos.crear');
         $listarService->asegurarAcceso($pedidoBma, Auth::user());
 
         try {
-            $service->ejecutar($pedidoBma->load(['estatus', 'origen', 'vendedor']), Auth::id());
+            $pedido = $service->ejecutar($pedidoBma->load(['estatus', 'origen', 'vendedor']), Auth::id());
         } catch (Throwable $e) {
+            if ($request->expectsJson()) {
+                $esNegocio = $e instanceof \InvalidArgumentException
+                    || $e instanceof \Illuminate\Validation\ValidationException
+                    || ($e instanceof \RuntimeException && ! $e instanceof \Illuminate\Database\QueryException);
+
+                return response()->json([
+                    'message' => $esNegocio
+                        ? $e->getMessage()
+                        : 'No se pudo cerrar la consulta. Intente de nuevo o contacte a soporte.',
+                ], 422);
+            }
+
             return $this->responderErrorOperacionPedido(
                 $e,
                 $pedidoBma,
@@ -790,7 +1046,15 @@ class PedidoBmaController extends Controller
             );
         }
 
-        return redirect()->back()->with('success', 'Consulta CEDIS cerrada. Ya puede capturar el monto y el pago.');
+        if ($request->expectsJson()) {
+            return response()->json([
+                'ok' => true,
+                'consulta_cerrada' => $pedido->consultaCerrada(),
+                'message' => 'Consulta cerrada. La mercancía quedó confirmada con el cliente.',
+            ]);
+        }
+
+        return redirect()->back()->with('success', 'Consulta cerrada. Ya puede capturar el monto y el pago.');
     }
 
     public function reabrirConsulta(

@@ -6,6 +6,7 @@ use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Models\ControlPedidos\PedidoBmaDocumento;
 use App\Models\ControlPedidos\PedidoBmaRevisionProducto;
+use App\Models\ControlPedidos\PedidoBmaTareaDocumento;
 use App\Models\ControlPedidos\PedidoBmaTareaPreparacion;
 use App\Models\User;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
@@ -27,9 +28,12 @@ class ResponderDisponibilidadInicialService
 
     public const MENSAJE_INCOMPLETA = 'La revisión no está concluida. Confirme el pedido completo con evidencia o indique las piezas con excepción.';
 
+    public const MENSAJE_FOTO = 'Adjunte una foto del conjunto físico. El PDF o la captura del pedido no la sustituyen.';
+
     public function __construct(
         private RegistrarHistorialPedidoService $historial,
         private NotificarPedidoBmaService $notificar,
+        private RegistrarProductosPreparacionService $productos,
     ) {}
 
     /**
@@ -70,6 +74,13 @@ class ResponderDisponibilidadInicialService
             $excepciones = $this->excepciones($datos['excepciones'] ?? []);
             $confirmada = (bool) ($datos['confirmacion_explicita'] ?? false);
             $archivos = array_values(array_filter($evidencias, fn ($archivo) => $archivo instanceof UploadedFile));
+            $imagenesNuevas = array_values(array_filter(
+                $archivos,
+                fn (UploadedFile $archivo) => $this->esImagen($archivo->getMimeType(), $archivo->getClientOriginalName())
+            ));
+            $guardadas = $tarea !== null
+                ? $this->fotosGuardadas($tarea, $datos['evidencias_guardadas'] ?? [])
+                : [];
             if ($excepciones !== [] && $confirmada) {
                 throw ValidationException::withMessages([
                     'confirmacion_explicita' => 'La confirmación sin excepciones no admite piezas afectadas.',
@@ -78,11 +89,15 @@ class ResponderDisponibilidadInicialService
             if ($excepciones === [] && ! $confirmada) {
                 throw ValidationException::withMessages(['confirmacion_explicita' => self::MENSAJE_INCOMPLETA]);
             }
-            if ($archivos === []) {
+            if ($tarea !== null && $imagenesNuevas === [] && $guardadas === []) {
+                throw ValidationException::withMessages(['evidencias' => self::MENSAJE_FOTO]);
+            }
+            if ($tarea === null && $archivos === []) {
                 throw ValidationException::withMessages(['evidencias' => 'Adjunte la evidencia de la revisión.']);
             }
 
             $estado = $excepciones === [] ? 'sin_excepciones' : 'excepciones_pendientes';
+            $comentario = $estado === 'sin_excepciones' ? 'Evidencia del pedido completo' : 'Evidencia de la excepción';
             foreach ($archivos as $orden => $archivo) {
                 $ruta = $archivo->store('pedidos_bma/'.$pedido->id.'/disponibilidad', 'public');
                 $pedido->documentos()->create([
@@ -92,8 +107,34 @@ class ResponderDisponibilidadInicialService
                     'mime_type' => $archivo->getMimeType(),
                     'tamano_bytes' => $archivo->getSize(),
                     'orden' => $orden + 1,
-                    'comentario' => $estado === 'sin_excepciones' ? 'Evidencia del pedido completo' : 'Evidencia de la excepción',
+                    'comentario' => $comentario,
                     'relacion_tipo' => PedidoBmaDocumento::RELACION_REVISION_GENERAL,
+                    'relacion_id' => $tarea?->id,
+                    'activo' => true,
+                ]);
+            }
+            if ($tarea !== null && $imagenesNuevas !== []) {
+                $this->productos->guardarGenerales($tarea, $usuario, $imagenesNuevas);
+            }
+            foreach ($guardadas as $orden => $documento) {
+                $yaExiste = $pedido->documentos()
+                    ->where('ruta_archivo', $documento->ruta_interna)
+                    ->where('relacion_id', $tarea->id)
+                    ->where('activo', true)
+                    ->exists();
+                if ($yaExiste) {
+                    continue;
+                }
+                $pedido->documentos()->create([
+                    'tipo' => PedidoBmaDocumento::TIPO_EVIDENCIA_CONDICION,
+                    'ruta_archivo' => $documento->ruta_interna,
+                    'nombre_original' => $documento->nombre_original,
+                    'mime_type' => $documento->mime_type,
+                    'tamano_bytes' => $documento->tamano_bytes,
+                    'orden' => count($archivos) + $orden + 1,
+                    'comentario' => $comentario,
+                    'relacion_tipo' => PedidoBmaDocumento::RELACION_REVISION_GENERAL,
+                    'relacion_id' => $tarea->id,
                     'activo' => true,
                 ]);
             }
@@ -169,6 +210,41 @@ class ResponderDisponibilidadInicialService
 
             return $this->resultado($estado, $area, false);
         });
+    }
+
+    /**
+     * @param  list<int|string>  $ids
+     * @return list<PedidoBmaTareaDocumento>
+     */
+    private function fotosGuardadas(PedidoBmaTareaPreparacion $tarea, array $ids): array
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $ids))));
+        $consulta = $tarea->documentos()
+            ->where('tipo_evidencia', PedidoBmaTareaDocumento::TIPO_EVIDENCIA_GENERAL)
+            ->where('mime_type', 'like', 'image/%');
+        if ($ids !== []) {
+            $encontradas = $consulta->whereIn('id', $ids)->get();
+            if ($encontradas->count() !== count($ids)) {
+                throw ValidationException::withMessages([
+                    'evidencias_guardadas' => 'La evidencia guardada no es una foto del conjunto de esta revisión.',
+                ]);
+            }
+
+            return $encontradas->all();
+        }
+
+        return $consulta->get()->all();
+    }
+
+    private function esImagen(?string $mime, ?string $nombre): bool
+    {
+        $mime = strtolower((string) $mime);
+        $nombre = strtolower((string) $nombre);
+        if (str_contains($mime, 'pdf') || str_ends_with($nombre, '.pdf')) {
+            return false;
+        }
+
+        return str_starts_with($mime, 'image/') || preg_match('/\.(jpe?g|png|webp)$/', $nombre) === 1;
     }
 
     /**

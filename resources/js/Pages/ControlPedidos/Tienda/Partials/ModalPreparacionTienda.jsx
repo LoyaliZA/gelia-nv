@@ -6,7 +6,6 @@ import { Loader2, X } from 'lucide-react';
 import usePedidoDialog from '../../Partials/usePedidoDialog';
 import { BTN_PRIMARY, BTN_SECONDARY, THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from '../../Partials/pedidosBmaStyles';
 import PrepararApartadoRecoge from './PrepararApartadoRecoge';
-import PanelRespuestaDisponibilidad from '../../Partials/PanelRespuestaDisponibilidad';
 import ShowTienda from '../Show';
 import ModalConfirmarAccion from '../../Partials/ModalConfirmarAccion';
 import AvisoResultadoTienda from './AvisoResultadoTienda';
@@ -89,20 +88,10 @@ export default function ModalPreparacionTienda({ tareaId, atender = false, auth,
                 <button type="button" className={`${BTN_SECONDARY} min-h-[44px] shrink-0`} onClick={pedirCerrar} disabled={procesando} aria-label="Cerrar preparación"><X className="w-5 h-5" /></button>
             </header>
             <div className="gelia-modal-body flex flex-col">
-                <AvisoResultadoTienda flash={{ error, success: mensaje }} />
+                {(error || mensaje) && <div className="gelia-preparacion-aviso-cambio"><AvisoResultadoTienda flash={{ error, success: mensaje }} /></div>}
                 {cargando ? <div role="status" className="flex items-center gap-2 py-8 px-4 theme-text-muted"><Loader2 className="w-5 h-5 animate-spin" /> Abriendo pedido…</div> : tarea && <>
                     {tarea.estado === 'PENDIENTE' && tarea.puede_tomar && <button type="button" className={BTN_PRIMARY} disabled={ocupado}
                         onClick={() => enviar(route('control_pedidos.tienda.tomar', tarea.id), { version: tarea.version })}>Atender pedido</button>}
-                    {tarea.pedido?.area_revision === 'preparacion_tienda' && (
-                        <PanelRespuestaDisponibilidad
-                            documentos={datos.documentos_solicitud || []}
-                            revision={tarea.pedido.revision_disponibilidad}
-                            piezas={tarea.pedido.excepciones || []}
-                            puedeResponder={Boolean(tarea.puede_preparar || tarea.puede_responder)}
-                            tomada={tarea.estado === 'EN_ATENCION'}
-                            onEnviar={(form) => enviar(route('control_pedidos.tienda.disponibilidad', tarea.id), form)}
-                        />
-                    )}
                     {['PENDIENTE', 'EN_ATENCION'].includes(tarea.estado) ? <PrepararApartadoRecoge key={`${tarea.id}-${capturaVersion}`} tarea={tarea} auth={auth}
                         documentos={datos.documentos_solicitud} documentosTarea={datos.documentos} requisitos={datos.requisitos} tiposCaja={datos.tipos_caja} onEnviar={enviar} bloqueado={ocupado} onDirtyChange={setDirty} onRefrescarDocumentos={() => cargar(undefined, true).catch(() => setError('No se pudieron actualizar las fotos.'))} />
                         : <ShowTienda {...datos} auth={auth} embedded onEnviar={enviar} />}

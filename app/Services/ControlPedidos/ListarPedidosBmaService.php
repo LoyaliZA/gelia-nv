@@ -143,6 +143,7 @@ class ListarPedidosBmaService
         $pedido->setAttribute('tiene_sin_existencia_abierta', $pedido->tieneSinExistenciaAbierta());
         $pedido->setAttribute('consulta_cerrada', $pedido->consultaCerrada());
         $pedido->setAttribute('puede_cerrar_consulta', $puedeEditar && $pedido->puedeCerrarConsulta());
+        $pedido->setAttribute('motivo_bloqueo_cierre', $pedido->esConsultaDisponibilidadTienda() ? $pedido->motivoBloqueoCierreConsultaTienda() : null);
         $pedido->setAttribute('es_consulta_mercancia', $pedido->esConsultaMercancia());
         $pedido->setAttribute('consulta_cedis_modo_revision_mercancia', $pedido->consultaCedisModoRevisionMercancia());
         $pedido->setAttribute('fuentes_pago', $pedido->fuentesPagoResumen());

@@ -13,7 +13,7 @@ Identificar usuario final, tarea, dispositivos y restricciones por evidencia. Cl
 
 ## Descubrir y usar skills
 
-Buscar nombres y descripciones en catálogo, directorios de proyecto/usuario y plugins expuestos. Comparar `name` del frontmatter, no solo carpetas. Leer instrucciones reales antes de usar:
+Primero identificar qué ayuda falta para la tarea, siguiendo GUIA_DISENO_GELIA.md. Buscar y leer únicamente el recurso elegido; no recorrer todas las instalaciones ni cargar una suite por defecto. Comparar `name` del frontmatter, no solo carpetas. Las siguientes son opciones, no lecturas obligatorias:
 - `frontend-design`: composición, dirección estética y soluciones visuales distintivas.
 - `ui-ux-pro-max`: investigación de patrones; ejecutar búsquedas/scripts según su documentación real.
 - Impeccable: localizar las skills/comandos que exponga para crítica, auditoría, normalización o refinamiento. No asumir una skill única ni sintaxis universal.

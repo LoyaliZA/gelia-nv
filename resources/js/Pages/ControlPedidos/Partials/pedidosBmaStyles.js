@@ -591,7 +591,25 @@ export const MODALIDADES_TIENDA_FILTRO = [
     { id: 'RECOGE_TIENDA', label: 'Recoge en tienda' },
     { id: 'RECOGE_TIENDA_TRANSFERENCIA', label: 'Transferencia' },
     { id: 'RECOGE_TIENDA_CREDITO', label: 'Crédito' },
+    { id: 'ENVIO_MUNICIPIO', label: 'Envío municipal' },
 ];
+
+export const contextoRecoleccionTienda = (pedido) => {
+    const solicitud = pedido?.solicitud_preparacion || {};
+    const recoleccion = solicitud.modalidad_entrega === 'tienda'
+        || ['preparacion_tienda', 'control_pedidos'].includes(solicitud.area_revision);
+    if (!recoleccion) return null;
+    const cobertura = solicitud.cobertura_tienda?.tipo;
+    const coberturaTexto = {
+        apartado: 'Pago al recoger',
+        transferencia: 'Transferencia',
+        credito: 'Crédito',
+    }[cobertura] || 'Cobertura pendiente';
+    const md = solicitud.atencion_tienda === 'prevista' ? ' Intención de Mismo día, sin confirmar.' : '';
+    const sucursal = pedido.sucursal_destino?.nombre || pedido.sucursalDestino?.nombre || 'sucursal por definir';
+
+    return `Recolección en tienda. Destino: ${sucursal}. ${coberturaTexto}.${md} No pide peso ni guía.`;
+};
 
 export const badgeResguardoSemantico = () => ({
     label: 'Resguardo',

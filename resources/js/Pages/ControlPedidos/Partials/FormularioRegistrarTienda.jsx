@@ -41,6 +41,8 @@ import { BotonBorrador } from './FormularioProgresivo/EncabezadoPedido';
 import { archivosImagenDesdeClipboard } from './archivosDesdeClipboard';
 import { claseEtiquetaLista } from '../../Solicitudes/Partials/solicitudesStyles';
 import { GELIA_ESTADO_VIVO_TONO } from '../../../utils/geliaTheme';
+import ContinuidadTienda from './ContinuidadTienda';
+import SeguimientoSolicitudTienda, { respuestaDeTiendaEmitida } from './SeguimientoSolicitudTienda';
 
 const MENSAJE_ARCHIVO = 'Adjunta el PDF o la imagen del pedido.';
 const MENSAJE_AREA = 'Elige el destino de la revisión.';
@@ -177,53 +179,6 @@ function esperaDe(area, nombre) {
     return '';
 }
 
-function piezasPendientes(revisiones) {
-    return (revisiones || []).filter(
-        (pieza) =>
-            !pieza?.resolucion &&
-            ['regular', 'malo', 'danado', 'sin_existencia'].includes(pieza?.estado_fisico),
-    );
-}
-
-function ResultadoRevisionTienda({ area, nombreAlmacen, solicitud, revisiones }) {
-    const revision = solicitud?.revision_disponibilidad;
-    const piezas = piezasPendientes(revisiones);
-    const titulo =
-        area === 'preparacion_tienda'
-            ? `Enviado a Preparación Tienda${nombreAlmacen ? ` · ${nombreAlmacen}` : ''}`
-            : 'Enviado a Control Pedidos';
-    let detalle = esperaDe(area, nombreAlmacen);
-    if (revision?.estado === 'excepciones_pendientes') {
-        detalle =
-            'Falta la decisión del cliente sobre las piezas con excepción. Esas piezas no continúan como aceptadas.';
-    } else if (revision?.estado === 'sin_excepciones' && area === 'preparacion_tienda') {
-        detalle = 'Revisión sin excepciones. Falta el apartado físico de lo aceptado. No hay pago ni entrega.';
-    } else if (revision?.estado === 'sin_excepciones') {
-        detalle = 'Consulta de disponibilidad sin excepciones. No hay traslado, pago ni entrega.';
-    }
-
-    return (
-        <div className="mt-4 rounded-xl border theme-border theme-element p-4 grid gap-2" role="status">
-            <p className="text-xs font-bold theme-text-muted m-0">
-                {revision?.estado === 'excepciones_pendientes' ? 'Decisión pendiente' : 'Siguiente paso'}
-            </p>
-            <p className="text-sm font-semibold theme-text-main m-0">{titulo}</p>
-            <p className="text-sm theme-text-muted m-0 break-words">{detalle}</p>
-            {piezas.length > 0 && (
-                <ul className="m-0 pl-4 grid gap-1">
-                    {piezas.map((pieza) => (
-                        <li key={pieza.id || `${pieza.descripcion_producto}-${pieza.sku}`} className="text-sm theme-text-main">
-                            {pieza.descripcion_producto || pieza.descripcion}
-                            {pieza.cantidad_solicitada ? ` · ${pieza.cantidad_solicitada}` : ''}
-                            {pieza.comentario || pieza.detalle ? ` · ${pieza.comentario || pieza.detalle}` : ''}
-                        </li>
-                    ))}
-                </ul>
-            )}
-        </div>
-    );
-}
-
 function motivoSolicitud({ modalidad, tieneCliente, tieneDepartamento, tieneFolio, tieneArchivo, receptor, enviada }) {
     if (modalidad !== 'tienda' || enviada) return '';
     if (!tieneCliente) return 'Indica el número de cliente.';
@@ -302,6 +257,7 @@ export default function FormularioRegistrarTienda({
     const [errorArchivo, setErrorArchivo] = useState('');
     const [ampliado, setAmpliado] = useState(false);
     const [pedidoId, setPedidoId] = useState(pedido?.id || null);
+    const [consultaCerrada, setConsultaCerrada] = useState(Boolean(pedido?.consulta_cerrada || pedido?.consulta_cerrada_at));
     const [base, setBase] = useState({
         revision_esperada: pedido?.revision_registro ?? 0,
         base_captura: pedido?.base_captura || null,
@@ -659,6 +615,10 @@ export default function FormularioRegistrarTienda({
         setModalidad(valor);
         if (valor !== 'tienda') setArea('');
     };
+
+    useEffect(() => {
+        setConsultaCerrada(Boolean(pedido?.consulta_cerrada || pedido?.consulta_cerrada_at));
+    }, [pedido?.id, pedido?.consulta_cerrada, pedido?.consulta_cerrada_at]);
 
     useEffect(() => {
         if (!abierto) return undefined;
@@ -1068,13 +1028,30 @@ export default function FormularioRegistrarTienda({
                             </div>
                         </section>
                     </div>
-                    {enviada && (
-                        <ResultadoRevisionTienda
-                            area={area}
-                            nombreAlmacen={nombreAlmacenVisible}
-                            solicitud={pedido?.solicitud_preparacion}
-                            revisiones={pedido?.revisiones_producto || pedido?.revisionesProducto || []}
-                        />
+                    {(enviada || respuestaDeTiendaEmitida(pedido)) && (
+                        <>
+                            <SeguimientoSolicitudTienda
+                                pedidoId={pedidoId}
+                                pedido={pedido}
+                                area={area}
+                                nombreAlmacen={nombreAlmacenVisible}
+                                revisiones={pedido?.revisiones_producto || pedido?.revisionesProducto || []}
+                                consultaCerrada={consultaCerrada}
+                                onConsultaCerrada={() => setConsultaCerrada(true)}
+                            />
+                            <ContinuidadTienda
+                                pedidoId={pedidoId}
+                                solicitud={pedido?.solicitud_preparacion || {}}
+                                revisiones={pedido?.revisiones_producto || pedido?.revisionesProducto || []}
+                                sucursales={catalogos.sucursales || []}
+                                facultadMd={Boolean(registrarTienda.facultad_md)}
+                                puedeResolverTraslado={superAdmin || (auth?.user?.permissions || []).includes('control_pedidos.tienda.autorizar_segundo_traslado')}
+                                puedeOperarTienda={superAdmin || (auth?.user?.permissions || []).includes('control_pedidos.tienda.responder') || (auth?.user?.permissions || []).includes('control_pedidos.tienda.trasladar')}
+                                puedeCedis={superAdmin || (auth?.user?.permissions || []).includes('control_pedidos.cedis')}
+                                mostrarCustodia={false}
+                                consultaCerrada={consultaCerrada}
+                            />
+                        </>
                     )}
                     {borradorConfirmado && !enviada && (
                         <p className="text-sm theme-text-muted mt-4 mb-0" role="status">

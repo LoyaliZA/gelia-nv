@@ -16,6 +16,7 @@ class ConfirmarEntregaRecogeHoyRequest extends FormRequest
         return [
             'receptor' => ['required', 'string', 'max:160'],
             'version' => ['nullable', 'integer', 'min:1'],
+            'foto' => ['required', 'file', 'max:10240', 'mimes:jpg,jpeg,png,webp'],
         ];
     }
 }

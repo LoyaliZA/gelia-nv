@@ -21,6 +21,7 @@ import {
     BTN_PRIMARY,
     tieneGuiaPdfDisponible,
     cedisConsultaEsRevisionMercancia,
+    contextoRecoleccionTienda,
     terminologiaEmpaqueConsultaCedis,
     pedidoRequiereLogistica,
     etiquetaOrigenGuia,
@@ -102,6 +103,9 @@ function TarjetaPedido({
                         {formatearFechaNegocio(pedido.fecha)}
                     </p>
                     <BloqueVendedorPedido pedido={pedido} variante="nombre" />
+                    {contextoRecoleccionTienda(pedido) && (
+                        <p className="text-xs theme-text-main mt-2 m-0 break-words">{contextoRecoleccionTienda(pedido)}</p>
+                    )}
                     {nombresDepartamentosVendedor(pedido.vendedor).length > 0 && (
                         <div className="gelia-pedidos-departamento flex flex-wrap items-center gap-2 mt-3">
                             <span className="text-xs theme-text-muted">Departamento</span>

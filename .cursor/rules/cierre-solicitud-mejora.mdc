@@ -1,8 +1,10 @@
 ---
-description: Al cerrar una corrección o implementación, documentar en docs y registrar el commit de la solicitud
-alwaysApply: true
+alwaysApply: false
 ---
+# Cierre documentado — uso explícito
 
-Cuando termine una resolución de errores o una implementación, leer y seguir `.cursor/skills/cierre-solicitud-mejora/SKILL.md` antes de dar la tarea por terminada.
-No aplicar este cierre a preguntas, exploraciones o revisiones que no cambian el sistema.
-Esta regla solo indica leer esa skill. No implica que el reporte o el commit ya se hayan hecho.
+Aplicar únicamente cuando el usuario mencione esta regla o solicite un cierre documentado especial. Esta regla es autónoma; no requiere una skill externa.
+
+Registrar en la documentación existente de la tarea: problema, solución, comprobaciones ejecutadas y pendientes reales. Actualizar el plan o análisis cuando corresponda al encargo; no crear documentos adicionales por defecto ni afirmar validación del usuario.
+
+No hacer commit, push ni despliegue como parte automática del cierre. Solo realizarlos si el usuario los autoriza expresamente. Una respuesta normal de cierre sigue siendo suficiente cuando no se solicita este procedimiento.

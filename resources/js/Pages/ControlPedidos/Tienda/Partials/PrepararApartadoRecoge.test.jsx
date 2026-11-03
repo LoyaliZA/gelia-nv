@@ -177,6 +177,34 @@ it('confirma el apartado sin capturar anaquel ni ubicación', async () => {
     expect(post.mock.calls[0][1].ubicacion).toBeUndefined();
 });
 
+it('en la consulta de tienda responde disponibilidad y separa solo la selección aceptada', async () => {
+    const consulta = { ...tarea, modalidad: { codigo: 'RECOGE_TIENDA' }, pedido: { area_revision: 'preparacion_tienda', cliente_nombre: 'Cliente ficticio' } };
+    await mount({ tarea: consulta });
+    expect(button('Confirmar apartado')).toBeUndefined();
+    expect(button('Enviar respuesta')).toBeDefined();
+    expect(button('1 Productos')).toBeUndefined();
+    expect(container.querySelector('#tienda-productos')).toBeNull();
+    expect(container.querySelector('#tienda-evidencias')).toBeNull();
+    await click('Enviar respuesta');
+    expect(post).not.toHaveBeenCalled();
+    expect(container.textContent).toContain('Indique el estado del pedido');
+    const elegir = (texto) => act(() => [...container.querySelectorAll('label')].find((el) => el.textContent.includes(texto)).querySelector('input').click());
+    await elegir('Todas las piezas en buen estado');
+    expect(container.textContent).toContain('Todas las piezas correctas');
+    expect(container.textContent).toContain('Foto del conjunto físico');
+    expect(container.querySelector('#tienda-productos')).toBeNull();
+    await elegir('Piezas con detalles');
+    expect(container.textContent).toContain('Buscar o escanear');
+    expect(button('Agregar pieza')).toBeUndefined();
+    expect(container.querySelector('#tienda-productos')).not.toBeNull();
+    expect(container.querySelector('#tienda-evidencias')).toBeNull();
+    await mount({ tarea: { ...consulta, pedido: { ...consulta.pedido, revision_disponibilidad: { estado: 'excepciones_pendientes' }, excepciones: [{ id: 1, descripcion: 'Crema agotada' }] } } });
+    expect(button('Confirmar separación')).toBeUndefined();
+    expect(button('Enviar respuesta de disponibilidad')).toBeUndefined();
+    expect(container.textContent).toContain('todavía no está aceptado');
+    await mount({ tarea: { ...consulta, pedido: { ...consulta.pedido, revision_disponibilidad: { estado: 'sin_excepciones', aceptacion_vigente: true } } } });
+    expect(button('Confirmar separación')).toBeDefined();
+});
 it('en móvil abre el pedido de referencia y vuelve a productos sin perder las cantidades', async () => {
     const media = window.matchMedia;
     window.matchMedia = vi.fn(() => ({ matches: true }));

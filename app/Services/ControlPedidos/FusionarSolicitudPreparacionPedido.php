@@ -92,6 +92,8 @@ class FusionarSolicitudPreparacionPedido
             $salida['revision_disponibilidad'] = $revision;
         }
 
+        $this->conservarOperacionTienda($salida, $actual === null ? $entrada : $base);
+
         if (array_key_exists('entrega_municipal', $entrada)) {
             if ($entrada['entrega_municipal'] === null) {
                 $salida['entrega_municipal'] = null;
@@ -188,6 +190,15 @@ class FusionarSolicitudPreparacionPedido
         if (is_array($salida['revision_disponibilidad'] ?? null)) {
             return false;
         }
+        foreach ([
+            'cobertura_tienda', 'segundo_traslado', 'credito_wizerp', 'tienda_md_reporte',
+            'retiro_recoleccion', 'liberacion_fisica_20', 'cambio_modalidad',
+            'continuacion_ejecutor', 'entrega_custodia', 'compromisos_inventario', 'complemento_pdv', 'anexo_integracion',
+        ] as $clave) {
+            if (is_array($salida[$clave] ?? null) && $salida[$clave] !== []) {
+                return false;
+            }
+        }
 
         foreach (['codigo_modalidad', 'tipo_referencia', 'folio_referencia'] as $clave) {
             if (($salida[$clave] ?? null) !== null) {
@@ -254,18 +265,69 @@ class FusionarSolicitudPreparacionPedido
     private function revisionDisponibilidad(array $valor): ?array
     {
         $estado = $valor['estado'] ?? null;
-        if (! in_array($estado, ['sin_excepciones', 'excepciones_pendientes'], true)) {
+        if (! in_array($estado, ['sin_excepciones', 'excepciones_pendientes', 'decision_registrada'], true)) {
             return null;
         }
 
         $respondida = $valor['respondida_at'] ?? null;
+        $decision = $valor['decision_at'] ?? null;
 
-        return [
+        $salida = [
             'estado' => $estado,
             'confirmada' => (bool) ($valor['confirmada'] ?? false),
             'respondida_at' => is_string($respondida) ? $respondida : null,
             'respondida_por_id' => $this->identificador($valor['respondida_por_id'] ?? null),
+            'decision_at' => is_string($decision) ? $decision : null,
+            'decision_por_id' => $this->identificador($valor['decision_por_id'] ?? null),
         ];
+        if (array_key_exists('aceptacion_vigente', $valor)) {
+            $salida['aceptacion_vigente'] = (bool) $valor['aceptacion_vigente'];
+        }
+        if (array_key_exists('vigente', $valor)) {
+            $salida['vigente'] = (bool) $valor['vigente'];
+        }
+        if (is_string($valor['sustituida_at'] ?? null) && $valor['sustituida_at'] !== '') {
+            $salida['sustituida_at'] = $valor['sustituida_at'];
+        }
+
+        return $salida;
+    }
+
+    /**
+     * La captura no reescribe cobertura, traslado, crédito ni corte. La lectura sí los muestra.
+     *
+     * @param  array<string, mixed>  $salida
+     * @param  array<string, mixed>  $origen
+     */
+    private function conservarOperacionTienda(array &$salida, array $origen): void
+    {
+        foreach ([
+            'cobertura_tienda',
+            'segundo_traslado',
+            'credito_wizerp',
+            'tienda_md_reporte',
+            'tienda_md',
+            'retiro_recoleccion',
+            'anexo_sin_remision',
+            'anexos_relacionados',
+            'retiro_piezas',
+            'liberacion_fisica_20',
+            'cambio_modalidad',
+            'continuacion_ejecutor',
+            'entrega_custodia',
+            'compromisos_inventario',
+            'complemento_pdv',
+            'anexo_integracion',
+        ] as $clave) {
+            if (array_key_exists($clave, $origen)) {
+                $salida[$clave] = $origen[$clave];
+            }
+        }
+        foreach (['anexo_integrado', 'origen_apartado'] as $clave) {
+            if (array_key_exists($clave, $origen)) {
+                $salida[$clave] = $origen[$clave];
+            }
+        }
     }
 
     private function identificador(mixed $valor): ?int

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { router } from '@inertiajs/react';
 import axios from 'axios';
-import { AlertTriangle, CheckCircle2, FileText, ScanLine, Smartphone, Trash2 } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ClipboardCheck, FileText, ImagePlus, PackageMinus, ScanLine, Smartphone, Trash2 } from 'lucide-react';
 import useEscaneoPreparacion from './useEscaneoPreparacion';
 import { faltantesRespuesta } from './requisitosRespuesta';
 import ModalConfirmarAccion from '../../Partials/ModalConfirmarAccion';
@@ -13,6 +13,19 @@ import ModalVistaPreviaDocumento from '../../Partials/ModalVistaPreviaDocumento'
 import ModalSesionEvidenciaTienda from './ModalSesionEvidenciaTienda';
 import { THEME_INPUT, THEME_LABEL, THEME_SELECT, THEME_TEXTAREA } from '../../../../utils/geliaTheme';
 import { BTN_PRIMARY, BTN_SECONDARY, formatearFechaNegocio } from '../../Partials/pedidosBmaStyles';
+
+const ESTADOS_EXCEPCION = ['regular', 'malo', 'danado', 'sin_existencia'];
+
+function esExcepcionFisica(linea) {
+    return ESTADOS_EXCEPCION.includes(linea?.estado_fisico);
+}
+
+function esImagenGuardada(documento) {
+    const mime = String(documento?.mime_type || '');
+    const nombre = String(documento?.nombre_original || '');
+    if (mime.includes('pdf') || /\.pdf$/i.test(nombre)) return false;
+    return mime.startsWith('image/') || /\.(jpe?g|png|webp)$/i.test(nombre);
+}
 
 function formData(datos) {
     const form = new FormData();
@@ -28,6 +41,54 @@ function formData(datos) {
     return form;
 }
 
+function AtencionRetiro({ tarea, ocupado, onEnviar }) {
+    const pendientes = (tarea.pedido?.retiros || []).filter((retiro) => (retiro.estado || 'pendiente') === 'pendiente');
+    const [producto, setProducto] = useState(null);
+    const [cantidad, setCantidad] = useState('1');
+    const [piezas, setPiezas] = useState([]);
+    const [nota, setNota] = useState('');
+    const [version, setVersion] = useState(pendientes[0]?.version || 0);
+    if (!pendientes.length) return null;
+    const actual = pendientes.find((retiro) => Number(retiro.version) === Number(version)) || pendientes[0];
+    const documental = actual.entrada === 'documento';
+    const agregarPieza = () => {
+        if (!producto?.sku || !producto?.descripcion || Number(cantidad) < 1) return;
+        setPiezas((lista) => {
+            const indice = lista.findIndex((pieza) => String(pieza.sku) === String(producto.sku));
+            const pieza = { sku: producto.sku, descripcion: producto.descripcion, cantidad: Number(cantidad) };
+            if (indice < 0) return [...lista, pieza];
+            return lista.map((fila, i) => (i === indice ? { ...fila, cantidad: fila.cantidad + pieza.cantidad } : fila));
+        });
+        setProducto(null);
+        setCantidad('1');
+    };
+    const enviar = (decision) => {
+        const datos = { version: actual.version, decision, nota, piezas: documental ? piezas : [] };
+        const opciones = { preserveScroll: true };
+        if (onEnviar) onEnviar(route('control_pedidos.tienda.retiro.atender', tarea.id), datos, opciones);
+        else router.post(route('control_pedidos.tienda.retiro.atender', tarea.id), datos, opciones);
+    };
+    return <section className="registrar-tienda-panel mx-4 mb-4" aria-label="Retiro por atender">
+        <div className="registrar-tienda-seccion-titulo"><PackageMinus size={18} aria-hidden="true" /><h3>Retiro por atender</h3></div>
+        {pendientes.length > 1 && <label className={THEME_LABEL}>Solicitud<select className={`${THEME_SELECT} w-full mt-1`} value={actual.version} onChange={(evento) => setVersion(Number(evento.target.value))}>{pendientes.map((retiro) => <option key={retiro.version} value={retiro.version}>Versión {retiro.version} · {retiro.motivo}</option>)}</select></label>}
+        <p className="text-sm theme-text-main m-0">{actual.motivo}{actual.solicitado_por ? ` · Solicitó ${actual.solicitado_por}` : ''} · {actual.estado || 'pendiente'}</p>
+        {documental ? <p className="text-sm theme-text-muted m-0">Llegaron {actual.documentos_piezas?.length || 0} archivo(s) de las piezas a retirar. Identifique productos y cantidades comprometidas. No use un SKU inventado.</p> : <ul className="m-0 pl-4">{(actual.piezas || []).map((pieza) => <li key={pieza.sku} className="text-sm theme-text-main">{pieza.descripcion} · {pieza.sku} · {pieza.cantidad}</li>)}</ul>}
+        {(actual.documentos_piezas || []).length > 0 && <ul className="m-0 pl-4">{actual.documentos_piezas.map((documento) => <li key={documento.id} className="text-sm"><a className="underline" href={documento.url}>{documento.nombre || 'Captura'}</a></li>)}</ul>}
+        {documental && <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_6rem_auto] sm:items-end">
+            <div className="min-w-0"><label className={THEME_LABEL} htmlFor="retiro-atender-producto">Producto comprometido</label><SelectorProducto inputId="retiro-atender-producto" almacenId={tarea.almacen?.id} incluirSinInventario value={producto?.id || ''} onChange={(_, elegido) => setProducto(elegido)} disabled={ocupado} /></div>
+            <div><label className={THEME_LABEL} htmlFor="retiro-atender-cantidad">Cantidad</label><input id="retiro-atender-cantidad" className={`${THEME_INPUT} w-full min-h-[44px]`} inputMode="numeric" min="1" value={cantidad} onChange={(evento) => setCantidad(evento.target.value)} /></div>
+            <button type="button" className={BTN_SECONDARY} disabled={ocupado || !producto} onClick={agregarPieza}>Agregar</button>
+        </div>}
+        {piezas.length > 0 && <ul className="m-0 pl-4">{piezas.map((pieza) => <li key={pieza.sku} className="text-sm theme-text-main">{pieza.descripcion} · {pieza.cantidad} <button type="button" className="underline" onClick={() => setPiezas((lista) => lista.filter((fila) => fila.sku !== pieza.sku))}>Quitar</button></li>)}</ul>}
+        <label className={THEME_LABEL} htmlFor="retiro-atender-nota">Nota si rechaza</label>
+        <textarea id="retiro-atender-nota" className={`${THEME_TEXTAREA} w-full`} rows={2} value={nota} onChange={(evento) => setNota(evento.target.value)} />
+        <div className="flex flex-wrap gap-2">
+            <button type="button" className={BTN_PRIMARY} disabled={ocupado} onClick={() => enviar('aplicar')}>Aplicar retiro</button>
+            <button type="button" className={BTN_SECONDARY} disabled={ocupado} onClick={() => enviar('rechazar')}>Rechazar</button>
+        </div>
+    </section>;
+}
+
 export default function PrepararApartadoRecoge({ tarea, auth, documentos = [], documentosTarea = [], requisitos = {}, tiposCaja = [], onEnviar = null, bloqueado = false, onDirtyChange = null, onRefrescarDocumentos = null }) {
     const esRecoge = tarea.modalidad?.codigo === 'RECOGE_TIENDA' || !tarea.modalidad;
     const capturaEstadoPieza = esRecoge || tarea.modalidad?.codigo === 'RECOGE_TIENDA_TRANSFERENCIA';
@@ -36,7 +97,7 @@ export default function PrepararApartadoRecoge({ tarea, auth, documentos = [], d
     const autorizado = (esRecoge ? tarea.puede_preparar : tarea.puede_responder) ?? ((esAdmin || permisos.includes('control_pedidos.tienda.responder') || (esRecoge && permisos.includes('control_pedidos.tienda.apartado.separar'))) && Number(tarea.responsable?.id) === Number(auth?.user?.id));
     const editable = tarea.estado === 'EN_ATENCION' && autorizado;
     const puedeIncidencia = tarea.puede_reportar_incidencia ?? (esAdmin || permisos.includes('control_pedidos.tienda.reportar_error'));
-    const [lineas, setLineas] = useState(() => (tarea.productos || []).filter((p) => p.sku).map((p) => ({ id: p.id, producto_id: p.producto_id, sku: p.sku, descripcion: p.descripcion_snapshot, cantidad: p.cantidad_encontrada ?? '', estado_fisico: p.estado_fisico || 'bueno', observacion: p.observacion || '', unica_pieza: Boolean(p.unica_pieza), mejor_ejemplar: Boolean(p.mejor_ejemplar), evidencias: [], previews: [], detalle: p.estado_fisico && p.estado_fisico !== 'bueno' })));
+    const [lineas, setLineas] = useState(() => (tarea.productos || []).filter((p) => p.sku).map((p) => ({ id: p.id, producto_id: p.producto_id, sku: p.sku, descripcion: p.descripcion_snapshot, cantidad: p.cantidad_encontrada ?? '', estado_fisico: p.estado_fisico || 'bueno', observacion: p.observacion || '', unica_pieza: Boolean(p.unica_pieza), mejor_ejemplar: Boolean(p.mejor_ejemplar), evidencias: [], previews: [], detalle: false })));
     const [seleccion, setSeleccion] = useState(null);
     const [codigo, setCodigo] = useState('');
     const [motivo, setMotivo] = useState('');
@@ -51,6 +112,10 @@ export default function PrepararApartadoRecoge({ tarea, auth, documentos = [], d
     const [validando, setValidando] = useState(false);
     const [quitarLinea, setQuitarLinea] = useState(null);
     const [modalQr, setModalQr] = useState(false);
+    const [confirmacionConjunto, setConfirmacionConjunto] = useState(false);
+    const [estadoPedido, setEstadoPedido] = useState(null);
+    const [sugerencias, setSugerencias] = useState([]);
+    const buscarSugerenciasRef = useRef(null);
     const ocupado = procesando || bloqueado;
     const vence = tarea.fecha_limite || tarea.apartado?.vence_at;
     const vencida = esRecoge && Boolean(vence && new Date(vence).getTime() <= Date.now());
@@ -65,41 +130,95 @@ export default function PrepararApartadoRecoge({ tarea, auth, documentos = [], d
         setDirty(true);
         setLineas((prev) => prev.map((l, j) => {
             if (j !== i) return l;
-            if (clave === 'unica_pieza') return { ...l, unica_pieza: !l.unica_pieza, detalle: true };
-            if (clave === 'mejor_ejemplar') return { ...l, mejor_ejemplar: !l.mejor_ejemplar, detalle: true };
+            if (clave === 'unica_pieza') return { ...l, unica_pieza: !l.unica_pieza };
+            if (clave === 'mejor_ejemplar') return { ...l, mejor_ejemplar: !l.mejor_ejemplar };
             if (clave !== 'sin_existencia') return l;
             if (l.estado_fisico === 'sin_existencia') {
                 return {
                     ...l,
-                    estado_fisico: 'bueno',
-                    cantidad: Number(l.cantidad) === 0 ? 1 : l.cantidad,
+                    estado_fisico: momentoRevision ? 'regular' : 'bueno',
+                    cantidad: Number(l.cantidad_consulta) > 0 ? l.cantidad_consulta : (Number(l.cantidad) === 0 ? 1 : l.cantidad),
                     observacion: l.observacion === MOTIVO_SIN_EXISTENCIA ? '' : l.observacion,
-                    detalle: l.unica_pieza || l.mejor_ejemplar,
+                    detalle: false,
                 };
             }
             return {
                 ...l,
                 estado_fisico: 'sin_existencia',
+                cantidad_consulta: Number(l.cantidad) > 0 ? Number(l.cantidad) : (l.cantidad_consulta || 1),
                 cantidad: 0,
                 observacion: String(l.observacion || '').trim() || MOTIVO_SIN_EXISTENCIA,
-                detalle: true,
+                detalle: false,
             };
         }));
     };
     const agregar = (producto = seleccion) => {
         if (!producto || ocupado) return;
+        const excepcion = momentoRevision && estadoPedido === 'detalle';
         setDirty(true);
         setLineas((prev) => {
             const i = prev.findIndex((l) => (l.producto_id && Number(l.producto_id) === Number(producto.id)) || String(l.sku).toLowerCase() === String(producto.sku).toLowerCase());
             return i >= 0 ? prev.map((l, j) => j === i ? { ...l, cantidad: (Number(l.cantidad) || 0) + 1 } : l)
-                : [...prev, { producto_id: producto.id, sku: producto.sku, descripcion: producto.descripcion, cantidad: 1, estado_fisico: 'bueno', observacion: '', unica_pieza: false, mejor_ejemplar: false, evidencias: [], previews: [], detalle: false }];
+                : [...prev, { producto_id: producto.id, sku: producto.sku, descripcion: producto.descripcion, cantidad: 1, estado_fisico: excepcion ? 'regular' : 'bueno', observacion: '', unica_pieza: false, mejor_ejemplar: false, evidencias: [], previews: [], detalle: false }];
         });
         setSeleccion(null);
+        setCodigo('');
+        setSugerencias([]);
+    };
+    const elegirEstadoPedido = (valor) => {
+        setEstadoPedido(valor);
+        setDirty(true);
+        setError('');
+        if (valor === 'correcto') {
+            setConfirmacionConjunto(true);
+            setLineas((prev) => {
+                prev.forEach((linea) => linea.previews?.forEach((p) => { if (p.url?.startsWith('blob:')) URL.revokeObjectURL(p.url); }));
+                return [];
+            });
+            setSeleccion(null);
+            setCodigo('');
+            setSugerencias([]);
+            return;
+        }
+        setConfirmacionConjunto(false);
+        setLineas((prev) => prev.map((linea) => ({
+            ...linea,
+            detalle: false,
+            estado_fisico: linea.estado_fisico === 'bueno' ? 'regular' : linea.estado_fisico,
+        })));
+    };
+    const programarSugerencias = (termino) => {
+        clearTimeout(buscarSugerenciasRef.current);
+        const texto = String(termino || '').trim();
+        if (texto.length < 2 || !tarea.almacen?.id) {
+            setSugerencias([]);
+            return;
+        }
+        buscarSugerenciasRef.current = setTimeout(async () => {
+            try {
+                const { data } = await axios.get(route('gestion_interna.productos.buscar'), {
+                    params: { q: texto, almacen_id: tarea.almacen.id, per_page: 8, incluir_sin_inventario: 1 },
+                });
+                setSugerencias(data.data || []);
+            } catch {
+                setSugerencias([]);
+            }
+        }, 250);
     };
     const escaneo = useEscaneoPreparacion({ almacenId: tarea.almacen?.id, onProducto: agregar });
     useEffect(() => { onDirtyChange?.(dirty || escaneo.pendientes > 0); }, [dirty, escaneo.pendientes, onDirtyChange]);
     const guardando = ocupado || escaneo.pendientes > 0;
-    const faltantes = faltantesRespuesta({ lineas, esRecoge, extra, requisitos, documentos: documentosTarea, evidencias: evidencias.archivos });
+    const revision = tarea.pedido?.revision_disponibilidad || null;
+    const estadoRevision = revision?.estado || '';
+    const consultaTienda = esRecoge && tarea.pedido?.area_revision === 'preparacion_tienda';
+    const aceptacionVigente = revision?.aceptacion_vigente !== false && revision?.vigente !== false && !revision?.sustituida_at;
+    const apartadoConfirmado = tarea.apartado?.estado === 'APARTADO_CONFIRMADO';
+    const excepcionesPendientes = estadoRevision === 'excepciones_pendientes' || (Array.isArray(tarea.pedido?.excepciones) && tarea.pedido.excepciones.length > 0);
+    const seleccionAceptada = aceptacionVigente && !excepcionesPendientes && (estadoRevision === 'sin_excepciones' || estadoRevision === 'decision_registrada');
+    const momentoRevision = consultaTienda && editable && !estadoRevision;
+    const momentoSeparacion = consultaTienda && editable && seleccionAceptada && !apartadoConfirmado;
+    const momentoEspera = consultaTienda && editable && !momentoRevision && !momentoSeparacion && !apartadoConfirmado;
+    const faltantes = (momentoRevision || momentoEspera) ? [] : faltantesRespuesta({ lineas, esRecoge, extra, requisitos, documentos: documentosTarea, evidencias: evidencias.archivos });
     const irACampo = (id) => {
         const campo = formRef.current?.querySelector(`[id="${id}"]`);
         campo?.scrollIntoView?.({ block: 'nearest', behavior: 'auto' });
@@ -120,7 +239,16 @@ export default function PrepararApartadoRecoge({ tarea, auth, documentos = [], d
             if (vencida) { setError('La solicitud venció. Reporte el problema a Ventas para renovarla.'); return; }
             if (faltantes.length) { setError('Complete los campos señalados antes de enviar la respuesta.'); irACampo(faltantes[0].campo); return; }
         }
-        if (!lineas.length && !incidencia) { setError('Agregue los productos preparados o reporte el problema.'); return; }
+        if (!lineas.length && !incidencia) {
+            if (confirmar) {
+                setError('Identifique los productos y cantidades físicos antes de confirmar la separación.');
+                return;
+            }
+            if (!evidencias.archivos.length) {
+                setError('Agregue los productos preparados, una foto del conjunto o reporte el problema.');
+                return;
+            }
+        }
         if (incidencia && !motivo.trim()) { setError('Describa qué necesita resolver Ventas.'); irACampo('tienda-motivo'); return; }
         setProcesando(true);
         const datos = { version: esRecoge ? tarea.apartado?.version : tarea.version,
@@ -133,6 +261,58 @@ export default function PrepararApartadoRecoge({ tarea, auth, documentos = [], d
         const opciones = { preserveScroll: true, onFinish: () => setProcesando(false), onSuccess: () => { setDirty(false); setValidando(false); onDirtyChange?.(false); }, onError: (errores) => setError(Object.values(errores).flat().join(' ')) };
         if (onEnviar) onEnviar(route(nombreRuta, tarea.id), payload, opciones);
         else router.post(route(nombreRuta, tarea.id), payload, opciones);
+    };
+    const revisionRegistrada = Boolean(tarea.pedido?.revision_disponibilidad?.estado);
+    const puedeRegistrarRevision = editable && esRecoge && tarea.pedido?.area_revision === 'preparacion_tienda' && !revisionRegistrada;
+    const registrarRevision = () => {
+        if (guardando || !puedeRegistrarRevision) return;
+        setError('');
+        if (estadoPedido !== 'correcto' && estadoPedido !== 'detalle') {
+            setError('Indique el estado del pedido.');
+            irACampo('tienda-estado-pedido');
+            return;
+        }
+        const afectadas = estadoPedido === 'detalle' ? lineas.filter(esExcepcionFisica) : [];
+        if (estadoPedido === 'detalle' && afectadas.length === 0) {
+            setError('Registre las piezas con detalles.');
+            irACampo('tienda-productos');
+            return;
+        }
+        const sinDetalle = afectadas.find((linea) => linea.estado_fisico !== 'sin_existencia' && !String(linea.observacion || '').trim());
+        if (sinDetalle) {
+            setError('Describa el detalle de la pieza afectada. Única pieza y Mejor ejemplar no son una incidencia.');
+            return;
+        }
+        const imagenesNuevas = evidencias.archivos.filter((archivo) => String(archivo.type || '').startsWith('image/'));
+        const guardadas = fotosGenerales.filter(esImagenGuardada);
+        if (imagenesNuevas.length === 0 && guardadas.length === 0) {
+            setError('Adjunte una foto del conjunto físico. El PDF del pedido no la sustituye.');
+            irACampo('tienda-evidencia-general');
+            return;
+        }
+        setProcesando(true);
+        const datos = {
+            confirmacion_explicita: afectadas.length === 0,
+            version: tarea.apartado?.version,
+            excepciones: afectadas.map((linea) => ({
+                descripcion: linea.descripcion,
+                sku: linea.sku || '',
+                cantidad: Math.max(1, Number(linea.cantidad_consulta || linea.cantidad) || 1),
+                condicion: linea.estado_fisico === 'sin_existencia' ? 'faltante' : 'detalle',
+                detalle: String(linea.observacion || '').trim() || 'Sin existencias',
+            })),
+            evidencias: imagenesNuevas,
+            evidencias_guardadas: guardadas.map((documento) => documento.id),
+            ...(estadoPedido === 'detalle' && lineas.length ? { lineas: lineas.map(({ previews, detalle, cantidad_consulta, ...linea }) => linea) } : {}),
+        };
+        const opciones = {
+            onFinish: () => setProcesando(false),
+            onSuccess: () => { setDirty(false); onDirtyChange?.(false); },
+            onError: (errores) => setError(Object.values(errores).flat().join(' ')),
+        };
+        const payload = formData(datos);
+        if (onEnviar) onEnviar(route('control_pedidos.tienda.disponibilidad', tarea.id), payload, opciones);
+        else router.post(route('control_pedidos.tienda.disponibilidad', tarea.id), payload, opciones);
     };
     const total = lineas.reduce((sum, l) => sum + (Number(l.cantidad) || 0), 0);
     const verDocs = (docs, indice = 0) => setGaleria({ abierto: true, documentos: docs, indice });
@@ -153,6 +333,10 @@ export default function PrepararApartadoRecoge({ tarea, auth, documentos = [], d
     const actualizarExtra = (campo, valor) => { setDirty(true); setExtra((prev) => ({ ...prev, [campo]: valor })); };
     const tituloCierre = esRecoge ? 'Confirmación' : conPesaje ? 'Pesaje y respuesta' : 'Revisar y responder';
     const evidenciaGeneralObligatoria = !esRecoge && requisitos.evidencia_general_obligatoria;
+    const fotoRevisionObligatoria = momentoRevision || puedeRegistrarRevision;
+    const capturaExcepcion = momentoRevision && estadoPedido === 'detalle';
+    const mostrarProductos = !momentoRevision || capturaExcepcion;
+    const mostrarEvidencias = !momentoRevision || estadoPedido === 'correcto' || (capturaExcepcion && lineas.length > 0);
     const fotosProducto = (l, i) => <GaleriaEvidencias id={`tienda-fotos-${i}`} label="Evidencia del producto" obligatorio={!esRecoge && requisitos.evidencia_por_producto}
         maxArchivos={10} archivos={l.evidencias} previews={l.previews} error={validando ? faltantes.find((f) => f.campo === `tienda-fotos-${i}`)?.texto : undefined}
         onChange={(files, previews) => { cambiar(i, 'evidencias', files); cambiar(i, 'previews', previews); }} onVer={verDocs} disabled={ocupado} />;
@@ -196,15 +380,31 @@ export default function PrepararApartadoRecoge({ tarea, auth, documentos = [], d
                 {tarea.abastecimiento_aviso && <p role="status" className="theme-text-aviso">{tarea.abastecimiento_aviso}</p>}
                 {tarea.abastecimiento_pendiente && <p role="status" className="theme-text-aviso">Hay abastecimiento pendiente de salida, llegada o resolución de incidencias. Confirme las llegadas antes de cerrar la preparación.</p>}
                 {tarea.observaciones_solicitud && <aside className="gelia-preparacion-instrucciones"><h4>Indicaciones de Ventas</h4><p>{tarea.observaciones_solicitud}</p></aside>}
-                {editable && <nav className="gelia-preparacion-guia" aria-label="Pasos para responder">
-                    {[['tienda-productos', 'Productos'], ['tienda-evidencias', 'Evidencias'], ['tienda-cierre', 'Cierre']].map(([id, label], i) => <button key={id} type="button" onClick={() => irACampo(id)}><span>{i + 1}</span>{label}</button>)}
-                </nav>}
+                {Array.isArray(tarea.pedido?.anexos_pendientes) && tarea.pedido.anexos_pendientes.length > 0 && <aside className="gelia-preparacion-instrucciones"><h4>Anexo pendiente de identificar</h4><p>Llegó un PDF o captura de anexo. Identifique las piezas con el escáner o el buscador. El archivo no confirma disponibilidad ni apartado.</p></aside>}
                 {tarea.estado === 'EN_ATENCION' && !autorizado && <p role="status" className="text-sm theme-text-muted">Esta tarea está asignada a {tarea.responsable?.name || 'otro auxiliar'}. Solo su responsable puede responder.</p>}
                 {tarea.estado === 'PENDIENTE' && <p className="text-sm theme-text-muted">Seleccione «Atender pedido» para comenzar la captura.</p>}
-                <section id="tienda-productos" tabIndex={-1} className="gelia-preparacion-seccion">
-                    <div className="gelia-preparacion-seccion-titulo"><h4>1. Registrar productos</h4><span>{lineas.length} productos</span></div>
+                {momentoRevision && <section id="tienda-estado-pedido" tabIndex={-1} className="gelia-preparacion-seccion registrar-tienda-panel">
+                    <div className="registrar-tienda-seccion-titulo"><ClipboardCheck size={18} aria-hidden="true" /><h3>Indique el estado del pedido</h3></div>
+                    <p className="gelia-preparacion-ayuda">Elija una opción. Las piezas con detalles se registran después. Si todo está correcto, no se guardan productos.</p>
+                    <fieldset className="grid gap-2 m-0 border-0 p-0">
+                        <label className="gelia-pedidos-atributo gelia-pedidos-atributo-control"><input type="radio" name="estado-pedido" checked={estadoPedido === 'correcto'} disabled={ocupado} onChange={() => elegirEstadoPedido('correcto')} />Todas las piezas en buen estado</label>
+                        <label className="gelia-pedidos-atributo gelia-pedidos-atributo-control"><input type="radio" name="estado-pedido" checked={estadoPedido === 'detalle'} disabled={ocupado} onChange={() => elegirEstadoPedido('detalle')} />Piezas con detalles</label>
+                    </fieldset>
+                </section>}
+                {mostrarProductos && <section id="tienda-productos" tabIndex={-1} className="gelia-preparacion-seccion registrar-tienda-panel">
+                    <div className="registrar-tienda-seccion-titulo"><ScanLine size={18} aria-hidden="true" /><h3>Registrar productos</h3><span className="text-xs theme-text-muted">{lineas.length} productos</span></div>
                     <p className="gelia-preparacion-ayuda">Revise el pedido de referencia. Cada lectura agrega una pieza; si repite el código, aumenta su cantidad.</p>
-                    {editable && <>
+                    {editable && (capturaExcepcion ? <div className="gelia-preparacion-escaner">
+                        <label htmlFor="tienda-escanear" className={THEME_LABEL}><ScanLine className="w-4 h-4" aria-hidden="true" />Buscar o escanear</label>
+                        <InputConEscanner label="producto" value={codigo} mostrarBotonCamara alEscanear={(leido) => { setSugerencias([]); capturarCodigo(leido); }}
+                            onChange={(e) => { setCodigo(e.target.value); programarSugerencias(e.target.value); }}
+                            inputProps={{ ...atributosCampo('tienda-escanear'), name: 'codigo_producto', autoComplete: 'off', spellCheck: false, placeholder: 'Nombre, SKU o código…', className: `${THEME_INPUT} w-full`, disabled: ocupado || !tarea.almacen?.id,
+                                onKeyDown: (e) => { if (e.key === 'Enter') { e.preventDefault(); setSugerencias([]); capturarCodigo(e.currentTarget.value); } } }} />
+                        {sugerencias.length > 0 && <ul className="gelia-preparacion-sugerencias m-0 p-0 list-none">{sugerencias.map((producto) => <li key={producto.id}><button type="button" className={`${BTN_SECONDARY} w-full justify-start`} onClick={() => agregar(producto)}>{producto.descripcion}<span className="theme-text-muted">SKU: {producto.sku}</span></button></li>)}</ul>}
+                        {errorCampo('tienda-escanear')}
+                        <p className="gelia-preparacion-ayuda" role="status">{!tarea.almacen?.id ? 'La solicitud necesita un almacén asignado para consultar productos.' : escaneo.pendientes ? `Consultando ${escaneo.pendientes} lectura(s)…` : escaneo.ultimo || 'Escriba para buscar, escanee con la pistola o use la cámara. La pieza se agrega al elegirla.'}</p>
+                        {escaneo.fallos.map((f, i) => <div key={`${f.codigo}-${i}`} className="gelia-preparacion-error-escaneo" role="alert"><span><strong>{f.codigo}</strong>: {f.mensaje}</span><button type="button" className={BTN_SECONDARY} disabled={ocupado} onClick={() => { escaneo.quitarFallo(i); escaneo.encolar(f.codigo); }}>Reintentar</button><button type="button" className={BTN_SECONDARY} onClick={() => escaneo.quitarFallo(i)} aria-label={`Descartar aviso de ${f.codigo}`}>Descartar aviso</button></div>)}
+                    </div> : <>
                         <div className="gelia-preparacion-escaner">
                             <label htmlFor="tienda-escanear" className={THEME_LABEL}><ScanLine className="w-4 h-4" aria-hidden="true" />Escaneo continuo</label>
                             <div className="gelia-preparacion-escaner-fila">
@@ -221,11 +421,50 @@ export default function PrepararApartadoRecoge({ tarea, auth, documentos = [], d
                             <div className="min-w-0 gelia-preparacion-selector"><label htmlFor="tienda-buscar-producto" className={THEME_LABEL}>O buscar por nombre o código</label><SelectorProducto inputId="tienda-buscar-producto" almacenId={tarea.almacen?.id} incluirSinInventario value={seleccion?.id || ''} onChange={(_, p) => setSeleccion(p)} disabled={ocupado || !tarea.almacen?.id} /></div>
                             <button type="button" className={BTN_SECONDARY} onClick={() => agregar()} disabled={!seleccion || ocupado}>Agregar pieza</button>
                         </div>
-                    </>}
-                    {!lineas.length && <div className="gelia-preparacion-vacio"><ScanLine className="w-6 h-6" aria-hidden="true" /><strong>Aún no hay productos registrados</strong><p>Escanee un código o busque un producto y seleccione «Agregar pieza». Si no hay disponibilidad, reporte el problema a Ventas.</p></div>}
+                    </>)}
+                    {!lineas.length && <div className="gelia-preparacion-vacio"><ScanLine className="w-6 h-6" aria-hidden="true" /><strong>Aún no hay productos registrados</strong><p>{capturaExcepcion ? 'Busque o escanee la pieza con detalle.' : 'Escanee un código o busque un producto y seleccione «Agregar pieza». Si no hay disponibilidad, reporte el problema a Ventas.'}</p></div>}
                     <div className="gelia-preparacion-productos">{lineas.map((l, i) => {
                         const registrados = documentosTarea.filter((d) => l.id && Number(d.pedido_bma_tarea_producto_id) === Number(l.id));
                         const estados = { bueno: 'Buen estado', regular: 'Con detalle', malo: 'Malo', danado: 'Dañado', sin_existencia: 'Sin existencias' };
+                        if (capturaExcepcion) {
+                            const sinExistencia = l.estado_fisico === 'sin_existencia';
+                            const marcarSinExistencia = () => {
+                                setDirty(true);
+                                setLineas((prev) => prev.map((fila, j) => j !== i ? fila : {
+                                    ...fila,
+                                    estado_fisico: 'sin_existencia',
+                                    cantidad_consulta: Number(fila.cantidad) > 0 ? Number(fila.cantidad) : (fila.cantidad_consulta || 1),
+                                    cantidad: 0,
+                                    observacion: String(fila.observacion || '').trim() || MOTIVO_SIN_EXISTENCIA,
+                                    detalle: false,
+                                }));
+                            };
+                            return <article key={l.id || `nueva-${i}`} className="gelia-preparacion-producto">
+                                <div className="gelia-preparacion-producto-fila">
+                                    <button type="button" className="min-w-0 text-left" aria-expanded={!sinExistencia && Boolean(l.detalle)} aria-controls={`tienda-detalle-${i}`} disabled={ocupado || sinExistencia} onClick={() => cambiar(i, 'detalle', !l.detalle)}>
+                                        <h5 className="text-sm font-semibold m-0 break-words">{l.descripcion}</h5>
+                                        <span className="text-xs theme-text-muted">SKU: {l.sku}</span>
+                                        <p className="gelia-preparacion-condicion m-0">{estados[l.estado_fisico] || 'Con detalle'}{l.observacion ? ` · ${l.observacion}` : ''}</p>
+                                    </button>
+                                    <button type="button" className={BTN_SECONDARY} aria-label="Quitar pieza" disabled={guardando} onClick={() => setQuitarLinea(i)}><Trash2 className="w-4 h-4" aria-hidden="true" /></button>
+                                </div>
+                                {sinExistencia && <label className="gelia-pedidos-atributo gelia-pedidos-atributo-control"><input type="checkbox" checked onChange={() => alternarEtiqueta(i, 'sin_existencia')} disabled={ocupado} />Sin existencias</label>}
+                                {!sinExistencia && l.detalle && <div id={`tienda-detalle-${i}`} className="gelia-preparacion-detalle">
+                                    <label className={THEME_LABEL} htmlFor={`tienda-cantidad-${i}`}>Preparadas<input {...atributosCampo(`tienda-cantidad-${i}`)} aria-label={`Cantidad de ${l.descripcion}`} name={`cantidad-${i}`} type="number" inputMode="numeric" min="0" step="1" disabled={ocupado} className={`${THEME_INPUT} w-full mt-1`} value={l.cantidad} onChange={(e) => cambiar(i, 'cantidad', e.target.value)} /></label>
+                                    <div className="gelia-pedidos-atributos" aria-label="Marcas rápidas de la pieza">
+                                        <label className="gelia-pedidos-atributo gelia-pedidos-atributo-control"><input type="checkbox" checked={l.unica_pieza} onChange={() => alternarEtiqueta(i, 'unica_pieza')} disabled={ocupado} />Única pieza</label>
+                                        <label className="gelia-pedidos-atributo gelia-pedidos-atributo-control"><input type="checkbox" checked={l.mejor_ejemplar} onChange={() => alternarEtiqueta(i, 'mejor_ejemplar')} disabled={ocupado} />Mejor ejemplar</label>
+                                        {permitirSinExistencia && <label className="gelia-pedidos-atributo gelia-pedidos-atributo-control"><input type="checkbox" checked={false} onChange={marcarSinExistencia} disabled={ocupado} />Sin existencias</label>}
+                                    </div>
+                                    <label className={THEME_LABEL}>Estado de la pieza<select name={`estado-${i}`} className={`${THEME_SELECT} w-full mt-1`} value={l.estado_fisico === 'bueno' ? 'regular' : l.estado_fisico} onChange={(e) => { if (e.target.value === 'sin_existencia') marcarSinExistencia(); else cambiar(i, 'estado_fisico', e.target.value); }} disabled={ocupado}>
+                                        {Object.entries(estados).filter(([estado]) => estado !== 'bueno' && (!requisitos.estados_fisicos_permitidos || requisitos.estados_fisicos_permitidos.includes(estado))).map(([estado, texto]) => <option key={estado} value={estado}>{texto}</option>)}
+                                    </select></label>
+                                    <label className={THEME_LABEL}>Detalle o motivo<textarea name={`observacion-${i}`} rows={2} maxLength={2000} className={`${THEME_TEXTAREA} w-full mt-1`} value={l.observacion} onChange={(e) => cambiar(i, 'observacion', e.target.value)} disabled={ocupado} placeholder="Describa el daño, faltante o detalle…" /></label>
+                                    {fotosProducto(l, i)}
+                                </div>}
+                                {registrados.length > 0 && <button type="button" className={`${BTN_SECONDARY} mt-2`} onClick={() => verDocs(registrados)}>Ver evidencia registrada ({registrados.length})</button>}
+                            </article>;
+                        }
                         return <article key={l.id || `nueva-${i}`} className="gelia-preparacion-producto">
                             <div className="gelia-preparacion-producto-fila">
                                 <div className="min-w-0"><h5 className="text-sm font-semibold m-0 break-words">{l.descripcion}</h5><span className="text-xs theme-text-muted">SKU: {l.sku}</span><p className="gelia-preparacion-condicion">{estados[l.estado_fisico] || 'Pendiente'}{l.observacion ? ` · ${l.observacion}` : ''}</p></div>
@@ -248,6 +487,7 @@ export default function PrepararApartadoRecoge({ tarea, auth, documentos = [], d
                                     setLineas((prev) => prev.map((fila, j) => j !== i ? fila : {
                                         ...fila,
                                         estado_fisico: 'sin_existencia',
+                                        cantidad_consulta: Number(fila.cantidad) > 0 ? Number(fila.cantidad) : (fila.cantidad_consulta || 1),
                                         cantidad: 0,
                                         observacion: String(fila.observacion || '').trim() || MOTIVO_SIN_EXISTENCIA,
                                         detalle: true,
@@ -263,19 +503,19 @@ export default function PrepararApartadoRecoge({ tarea, auth, documentos = [], d
                             {registrados.length > 0 && <button type="button" className={`${BTN_SECONDARY} mt-2`} onClick={() => verDocs(registrados)}>Ver evidencia registrada ({registrados.length})</button>}
                         </article>;
                     })}</div>
-                </section>
-                {editable && <>
-                    <section id="tienda-evidencias" tabIndex={-1} className="gelia-preparacion-seccion">
-                        <div className="gelia-preparacion-seccion-titulo"><h4>2. Evidencias finales</h4><span>{evidenciaGeneralObligatoria ? 'Obligatorias' : 'Opcionales'}</span></div>
-                        <p className="gelia-preparacion-ayuda">Fotografíe el conjunto de productos que está preparando. Revise las imágenes antes de enviar.</p>
+                </section>}
+                {editable && mostrarEvidencias && <section id="tienda-evidencias" tabIndex={-1} className="gelia-preparacion-seccion registrar-tienda-panel">
+                        <div className="registrar-tienda-seccion-titulo"><ImagePlus size={18} aria-hidden="true" /><h3>Evidencias</h3><span className="text-xs theme-text-muted">{fotoRevisionObligatoria || evidenciaGeneralObligatoria ? 'Obligatorias' : 'Opcionales'}</span></div>
+                        <p className="gelia-preparacion-ayuda">{fotoRevisionObligatoria ? 'La foto del conjunto físico es obligatoria. El PDF del pedido no la sustituye.' : 'Fotografíe el conjunto de productos que está preparando. Revise las imágenes antes de enviar.'}</p>
                         {puedeFotosCelular && <button type="button" className={`${BTN_SECONDARY} gelia-preparacion-celular`} disabled={ocupado} onClick={() => setModalQr(true)}><Smartphone className="w-4 h-4" aria-hidden="true" />Fotos con celular</button>}
-                        <GaleriaEvidencias id="tienda-evidencia-general" maxArchivos={10} label={esRecoge ? 'Fotos del apartado (opcional)' : 'Evidencia del conjunto preparado'} obligatorio={evidenciaGeneralObligatoria} archivos={evidencias.archivos} previews={evidencias.previews}
+                        <GaleriaEvidencias id="tienda-evidencia-general" maxArchivos={10} label={fotoRevisionObligatoria ? 'Foto del conjunto físico' : (esRecoge ? 'Fotos del apartado (opcional)' : 'Evidencia del conjunto preparado')} obligatorio={fotoRevisionObligatoria || evidenciaGeneralObligatoria} archivos={evidencias.archivos} previews={evidencias.previews}
                             error={validando ? faltantes.find((f) => f.campo === 'tienda-evidencia-general')?.texto : undefined} onChange={(files, previews) => { setDirty(true); setEvidencias({ archivos: files, previews }); }} onVer={verDocs} disabled={ocupado} />
                         {fotosGenerales.length > 0 && <div className="gelia-preparacion-registradas"><CheckCircle2 className="w-4 h-4" aria-hidden="true" /><span>{fotosGenerales.length} evidencias ya guardadas</span><button type="button" className={BTN_SECONDARY} onClick={() => verDocs(fotosGenerales)}>Revisar evidencias</button></div>}
-                    </section>
-                    <section id="tienda-cierre" tabIndex={-1} className="gelia-preparacion-seccion">
-                        <div className="gelia-preparacion-seccion-titulo"><h4>3. {tituloCierre}</h4></div>
-                        {esRecoge ? <p className="gelia-preparacion-ayuda">Confirme las piezas separadas para avisar a Ventas.</p>
+                        {momentoRevision && <div className="gelia-preparacion-resumen" aria-label="Revisión de la respuesta">{estadoPedido === 'correcto' ? <strong className="gelia-preparacion-correctas">Todas las piezas correctas</strong> : <strong>{`${lineas.filter(esExcepcionFisica).length} piezas afectadas`}</strong>}<p>Al enviar, Ventas recibe la respuesta de disponibilidad. Todavía no hay apartado.</p></div>}
+                    </section>}
+                    {editable && !momentoRevision && <section id="tienda-cierre" tabIndex={-1} className="gelia-preparacion-seccion registrar-tienda-panel">
+                        <div className="registrar-tienda-seccion-titulo"><ClipboardCheck size={18} aria-hidden="true" /><h3>{tituloCierre}</h3></div>
+                        {esRecoge ? <p className="gelia-preparacion-ayuda">{momentoRevision ? 'Confirme el conjunto o marque solo las piezas afectadas. La foto física es obligatoria y el PDF del pedido no la sustituye.' : momentoSeparacion ? 'Identifique los productos físicos de la selección aceptada y confirme la separación.' : 'Confirme las piezas separadas para avisar a Ventas.'}</p>
                             : <div className="gelia-preparacion-pesaje">
                                 {['peso_real_kg', 'peso_volumetrico_kg'].filter((campo) => requisitos[campo === 'peso_real_kg' ? 'peso_real_obligatorio' : 'peso_volumetrico_obligatorio']).map((campo) => <div key={campo}><label htmlFor={`tienda-${campo}`} className={THEME_LABEL}>{campo === 'peso_real_kg' ? 'Peso real (kg)' : 'Peso volumétrico (kg)'} *<input {...atributosCampo(`tienda-${campo}`)} aria-required="true" name={campo} type="number" inputMode="decimal" step="0.001" min="0.001" disabled={ocupado} className={`${THEME_INPUT} w-full mt-1`} value={extra[campo]} onChange={(e) => actualizarExtra(campo, e.target.value)} placeholder="Ej. 1.250" /></label>{errorCampo(`tienda-${campo}`)}</div>)}
                                 {requisitos.caja_obligatoria && <div><label htmlFor="tienda-catalogo_tipo_caja_id" className={THEME_LABEL}>Tipo de caja *<select {...atributosCampo('tienda-catalogo_tipo_caja_id')} aria-required="true" name="catalogo_tipo_caja_id" disabled={ocupado} className={`${THEME_SELECT} w-full mt-1`} value={extra.catalogo_tipo_caja_id} onChange={(e) => actualizarExtra('catalogo_tipo_caja_id', e.target.value)}><option value="">Seleccione una caja…</option>{tiposCaja.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}</select></label>{errorCampo('tienda-catalogo_tipo_caja_id')}</div>}
@@ -286,23 +526,32 @@ export default function PrepararApartadoRecoge({ tarea, auth, documentos = [], d
                             {(esAdmin || permisos.includes('control_pedidos.tienda.cargar_identificacion')) && ['identificacion', 'remision'].map((tipo) => <div key={tipo}><label htmlFor={`tienda-${tipo}`} className={THEME_LABEL}>{tipo === 'identificacion' ? 'Identificación' : 'Remisión'}{tipo === 'identificacion' && requisitos.requiere_identificacion ? ' *' : ''}<input {...atributosCampo(`tienda-${tipo}`)} name={tipo} type="file" accept="image/jpeg,image/png,image/webp,application/pdf" disabled={ocupado} onChange={(e) => { subirDocumentoMunicipal(tipo, e.target.files?.[0]); e.target.value = ''; }} /></label>{errorCampo(`tienda-${tipo}`)}</div>)}
                             {documentosTarea.filter((d) => ['identificacion', 'remision'].includes(d.tipo_evidencia)).map((d) => <button key={d.id} type="button" className={BTN_SECONDARY} onClick={() => verDocs([d])}>{d.nombre_original}</button>)}
                         </div>}
-                        <div className="gelia-preparacion-resumen" aria-label="Revisión de la respuesta"><strong>{total} piezas · {lineas.length} productos</strong><p>{esRecoge ? 'Al confirmar, Ventas recibirá las piezas y su estado.' : 'Al responder, Ventas recibirá las cantidades, el estado de la mercancía y las evidencias registradas.'}</p>
+                        {puedeRegistrarRevision && <div className="grid gap-3 mb-3">
+                            <p className="gelia-preparacion-ayuda m-0">La revisión usa las piezas y la foto ya capturadas. No hace falta transcribir las piezas correctas. Única pieza y Mejor ejemplar no son faltante ni daño. El apartado físico se confirma aparte.</p>
+                            {lineas.some(esExcepcionFisica) ? <ul className="m-0 pl-4 grid gap-1">{lineas.filter(esExcepcionFisica).map((linea) => <li key={linea.id || linea.sku} className="text-sm theme-text-main">{linea.descripcion} · {Math.max(1, Number(linea.cantidad_consulta || linea.cantidad) || 1)}</li>)}</ul>
+                                : <label className="flex items-start gap-2 text-sm theme-text-main"><input type="checkbox" className="mt-1" checked={confirmacionConjunto} disabled={ocupado} onChange={(evento) => setConfirmacionConjunto(evento.target.checked)} />Confirmo el conjunto sin incidencias.</label>}
+                        </div>}
+                        {revisionRegistrada && esRecoge && <p className="gelia-preparacion-ayuda" role="status">La revisión ya quedó registrada. Confirmar el apartado es un paso distinto y no repite la captura.</p>}
+                        <div className="gelia-preparacion-resumen" aria-label="Revisión de la respuesta"><strong>{momentoRevision && lineas.some(esExcepcionFisica) ? `${lineas.filter(esExcepcionFisica).length} piezas afectadas` : `${total} piezas · ${lineas.length} productos`}</strong><p>{momentoRevision ? 'Al enviar, Ventas recibe la respuesta de disponibilidad. Todavía no hay apartado.' : esRecoge ? 'Al confirmar la separación, Ventas recibe el apartado físico.' : 'Al responder, Ventas recibirá las cantidades, el estado de la mercancía y las evidencias registradas.'}</p>
                             {faltantes.length > 0 && <div className="gelia-preparacion-pendientes"><span>Por completar antes de enviar:</span><ul>{faltantes.map((f) => <li key={f.campo}><button type="button" onClick={() => { setValidando(true); irACampo(f.campo); }}>{f.texto}</button></li>)}</ul></div>}
                         </div>
-                    </section>
-                    {modoIncidencia && <section className="gelia-preparacion-seccion gelia-preparacion-incidencia"><h4>Reportar problema a Ventas</h4><p className="gelia-preparacion-ayuda">Describa qué impide continuar. Puede reportarlo aunque no haya encontrado piezas.</p><label htmlFor="tienda-motivo" className={THEME_LABEL}>Qué necesita resolver Ventas *<textarea id="tienda-motivo" name="motivo_incidencia" maxLength={2000} className={`${THEME_TEXTAREA} w-full mt-1`} rows={3} value={motivo} disabled={ocupado} onChange={(e) => { setDirty(true); setMotivo(e.target.value); }} /></label><div className="flex flex-wrap gap-2 mt-3"><button type="button" className={BTN_PRIMARY} disabled={guardando} onClick={() => guardar(false, true)}>Enviar problema a Ventas</button><button type="button" className={BTN_SECONDARY} disabled={ocupado} onClick={() => setModoIncidencia(false)}>Cancelar reporte</button></div></section>}
-                </>}
+                    </section>}
+                    {editable && modoIncidencia && <section className="gelia-preparacion-seccion gelia-preparacion-incidencia"><h4>Reportar problema a Ventas</h4><p className="gelia-preparacion-ayuda">Describa qué impide continuar. Puede reportarlo aunque no haya encontrado piezas.</p><label htmlFor="tienda-motivo" className={THEME_LABEL}>Qué necesita resolver Ventas *<textarea id="tienda-motivo" name="motivo_incidencia" maxLength={2000} className={`${THEME_TEXTAREA} w-full mt-1`} rows={3} value={motivo} disabled={ocupado} onChange={(e) => { setDirty(true); setMotivo(e.target.value); }} /></label><div className="flex flex-wrap gap-2 mt-3"><button type="button" className={BTN_PRIMARY} disabled={guardando} onClick={() => guardar(false, true)}>Enviar problema a Ventas</button><button type="button" className={BTN_SECONDARY} disabled={ocupado} onClick={() => setModoIncidencia(false)}>Cancelar reporte</button></div></section>}
             </div>
             {mostrarPedido && <aside id="tienda-pedido-referencia" tabIndex={-1} className="gelia-preparacion-documento" aria-label="Pedido de referencia"><button type="button" className={`${BTN_SECONDARY} mb-3 min-h-[44px]`} onClick={() => { setMostrarPedido(false); irACampo('tienda-productos'); }}>Volver a productos</button><DocumentoSolicitudTienda tareaId={tarea.id} documentos={documentos} /></aside>}
         </div>
+        {editable && <AtencionRetiro tarea={tarea} ocupado={ocupado} onEnviar={onEnviar} />}
         <footer className="gelia-preparacion-footer">
             {editable ? <>
-                <div className="gelia-preparacion-estado-guardado" role="status"><strong>{guardando ? escaneo.pendientes ? 'Procesando lecturas…' : 'Guardando…' : dirty ? 'Cambios sin guardar' : 'Sin cambios pendientes'}</strong><span>{vencida ? 'Solicitud vencida. Guarde su avance o reporte a Ventas.' : faltantes.length ? `${faltantes.length} pendiente(s) para enviar. Puede guardar su avance.` : 'Respuesta completa. Revise y confirme para avisar a Ventas.'}</span></div>
+                <div className="gelia-preparacion-estado-guardado" role="status"><strong>{guardando ? escaneo.pendientes ? 'Procesando lecturas…' : 'Guardando…' : dirty ? 'Cambios sin guardar' : 'Sin cambios pendientes'}</strong><span>{vencida ? 'Solicitud vencida. Guarde su avance o reporte a Ventas.' : momentoRevision ? 'Envíe la respuesta de disponibilidad. La separación se confirma cuando la selección esté aceptada.' : momentoEspera ? 'Hay una decisión o un ajuste pendiente. No confirme la separación.' : momentoSeparacion ? 'La selección está aceptada. Identifique lo físico y confirme la separación.' : faltantes.length ? `${faltantes.length} pendiente(s) para enviar. Puede guardar su avance.` : 'Respuesta completa. Revise y confirme para avisar a Ventas.'}</span></div>
                 <div className="gelia-preparacion-footer-acciones">
-                    <button type="button" className={BTN_SECONDARY} disabled={guardando} onClick={() => guardar()}>Guardar y continuar después</button>
-                    <button type="button" className={BTN_PRIMARY} disabled={guardando || vencida} onClick={() => guardar(true)}><CheckCircle2 className="w-4 h-4" aria-hidden="true" />{procesando ? 'Guardando…' : esRecoge ? 'Confirmar apartado' : 'Responder preparación'}</button>
+                    {!momentoEspera && <button type="button" className={BTN_SECONDARY} disabled={guardando} onClick={() => guardar()}>Guardar y continuar después</button>}
+                    {momentoRevision && <button type="button" className={BTN_PRIMARY} disabled={guardando || vencida} onClick={registrarRevision}><CheckCircle2 className="w-4 h-4" aria-hidden="true" />{procesando ? 'Guardando…' : 'Enviar respuesta'}</button>}
+                    {momentoSeparacion && <button type="button" className={BTN_PRIMARY} disabled={guardando || vencida} onClick={() => guardar(true)}><CheckCircle2 className="w-4 h-4" aria-hidden="true" />{procesando ? 'Guardando…' : 'Confirmar separación'}</button>}
+                    {momentoEspera && <p className="text-sm theme-text-main m-0">Hay cambios pendientes de decisión. No se confirma la separación de un conjunto que todavía no está aceptado.</p>}
+                    {!consultaTienda && <button type="button" className={BTN_PRIMARY} disabled={guardando || vencida} onClick={() => guardar(true)}><CheckCircle2 className="w-4 h-4" aria-hidden="true" />{procesando ? 'Guardando…' : esRecoge ? 'Confirmar apartado' : 'Responder preparación'}</button>}
                 </div>
-            </> : <p className="text-sm theme-text-main m-0">Total preparado: {total} piezas{tarea.apartado?.ubicacion ? ` · Ubicación: ${tarea.apartado.ubicacion}` : ''}{tarea.apartado?.estado === 'APARTADO_CONFIRMADO' ? ' · Apartado confirmado. Ventas recibió el aviso.' : ''}</p>}
+            </> : <p className="text-sm theme-text-main m-0">Total preparado: {total} piezas{tarea.apartado?.ubicacion ? ` · Ubicación: ${tarea.apartado.ubicacion}` : ''}{apartadoConfirmado ? ` · Apartado confirmado. ${tarea.apartado?.pago_confirmado_at ? 'Pago presencial confirmado.' : 'Pago presencial pendiente.'} ${tarea.apartado?.entregada_at ? 'Entrega registrada.' : 'Entrega pendiente.'}` : ''}</p>}
         </footer>
         <ModalConfirmarAccion abierto={quitarLinea !== null} titulo="Quitar producto de la preparación" mensaje="Se quitarán su cantidad y las evidencias pendientes de guardar." etiquetaConfirmar="Quitar producto" variante="danger" onClose={() => setQuitarLinea(null)} onConfirm={() => {
             const linea = lineas[quitarLinea];

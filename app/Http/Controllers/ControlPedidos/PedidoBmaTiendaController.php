@@ -433,6 +433,7 @@ class PedidoBmaTiendaController extends Controller
 
         return response()->json([
             'url' => $payload['url'],
+            'codigo' => $payload['token'],
             'qr_data_uri' => $payload['qr_data_uri'],
             'expira_en' => $payload['expira_en'],
         ]);
@@ -441,15 +442,9 @@ class PedidoBmaTiendaController extends Controller
     public function mostrarSesionEvidencia(PedidoBmaTareaPreparacion $tarea, SesionEvidenciaTareaPreparacionService $service): JsonResponse
     {
         Gate::authorize('control_pedidos.tienda.evidencias');
-        $sesion = $service->vigente($tarea);
 
         return response()->json([
-            'sesion' => $sesion ? [
-                'estado' => $sesion->estado,
-                'expira_en' => $sesion->expira_en?->toIso8601String(),
-                'url' => $sesion->urlPublica(),
-                'fotos_count' => $sesion->fotos()->count(),
-            ] : null,
+            'sesion' => $service->estadoParaEquipo($tarea),
         ]);
     }
 
@@ -459,6 +454,16 @@ class PedidoBmaTiendaController extends Controller
         $service->cancelar($tarea);
 
         return response()->json(['ok' => true]);
+    }
+
+    public function reflejarSesionEvidencia(PedidoBmaTareaPreparacion $tarea, SesionEvidenciaTareaPreparacionService $service): JsonResponse
+    {
+        Gate::authorize('control_pedidos.tienda.evidencias');
+
+        return response()->json([
+            'ok' => true,
+            'nuevas' => $service->reflejarEnTarea($tarea, Auth::id()),
+        ]);
     }
 
     public function promoverSesionEvidencia(PedidoBmaTareaPreparacion $tarea, SesionEvidenciaTareaPreparacionService $service): JsonResponse
@@ -704,12 +709,52 @@ class PedidoBmaTiendaController extends Controller
         return $request->wantsJson() ? response()->json(['message' => $mensaje]) : redirect()->back()->with('success', $mensaje);
     }
 
+    public function atenderRetiro(
+        PedidoBmaTareaPreparacion $tarea,
+        Request $request,
+        \App\Services\ControlPedidos\AtenderRetiroPiezasTiendaService $servicio,
+    ): JsonResponse {
+        $datos = $request->validate([
+            'version' => ['required', 'integer', 'min:1'],
+            'decision' => ['required', 'in:aplicar,rechazar'],
+            'nota' => ['nullable', 'string', 'max:500'],
+            'piezas' => ['nullable', 'array'],
+            'piezas.*.sku' => ['required', 'string', 'max:80'],
+            'piezas.*.descripcion' => ['required', 'string', 'max:180'],
+            'piezas.*.cantidad' => ['required', 'integer', 'min:1'],
+        ]);
+        $servicio->ejecutar(
+            $tarea,
+            Auth::user(),
+            (int) $datos['version'],
+            $datos['decision'],
+            $datos['piezas'] ?? [],
+            (string) ($datos['nota'] ?? '')
+        );
+
+        return response()->json([
+            'ok' => true,
+            'message' => $datos['decision'] === 'aplicar'
+                ? 'Retiro aplicado. Ventas recibió el resultado. No hay pago ni entrega.'
+                : 'Retiro rechazado. Ventas recibió el resultado.',
+        ]);
+    }
+
     public function responderDisponibilidad(
         PedidoBmaTareaPreparacion $tarea,
         \App\Http\Requests\ControlPedidos\ResponderDisponibilidadInicialRequest $request,
         \App\Services\ControlPedidos\ResponderDisponibilidadInicialService $service,
     ): JsonResponse {
-        $tarea->loadMissing('pedido');
+        $tarea->loadMissing(['pedido', 'modalidad', 'cumplimientoFisico']);
+        $lineas = $request->all()['lineas'] ?? null;
+        if (is_array($lineas) && $lineas !== []
+            && $tarea->modalidad?->codigo === \App\Models\ControlPedidos\CatalogoModalidadPreparacionPedido::CODIGO_RECOGE_TIENDA) {
+            app(\App\Services\ControlPedidos\GuardarApartadoRecogeHoyService::class)->ejecutar($tarea, Auth::user(), [
+                'version' => $request->input('version', $tarea->cumplimientoFisico?->version),
+                'lineas' => $lineas,
+            ], false);
+            $tarea->refresh();
+        }
         $resultado = $service->ejecutar(
             $tarea->pedido,
             Auth::user(),
@@ -864,12 +909,45 @@ class PedidoBmaTiendaController extends Controller
     ): RedirectResponse {
         $datos = $request->validated();
         try {
-            $service->ejecutar($tarea, Auth::user(), $datos['receptor'], $datos['version'] ?? null);
+            $service->ejecutar($tarea, Auth::user(), $datos['receptor'], $datos['version'] ?? null, $request->file('foto'));
         } catch (ValidationException $e) {
             return redirect()->back()->with('error', collect($e->errors())->flatten()->first() ?: $e->getMessage());
         }
 
-        return redirect()->route('control_pedidos.tienda.show', $tarea)->with('success', 'Entrega registrada con receptor, hora y persona que entregó.');
+        return redirect()->route('control_pedidos.tienda.show', $tarea)->with('success', 'Entrega registrada con fotografía, receptor y responsable.');
+    }
+
+    public function recibirCustodia(
+        PedidoBmaTareaPreparacion $tarea,
+        \App\Services\ControlPedidos\RegistrarRecepcionCustodiaTiendaService $service,
+    ): RedirectResponse {
+        abort_unless(VisibilidadTareaPreparacion::puedeVer(Auth::user(), $tarea), 403);
+        try {
+            $service->ejecutar($tarea, Auth::user());
+        } catch (ValidationException $e) {
+            return redirect()->back()->with('error', collect($e->errors())->flatten()->first() ?: $e->getMessage());
+        }
+
+        return redirect()->route('control_pedidos.tienda.show', $tarea)->with('success', 'Recepción confirmada. La mercancía quedó en custodia.');
+    }
+
+    public function entregarCustodia(
+        PedidoBmaTareaPreparacion $tarea,
+        Request $request,
+        \App\Services\ControlPedidos\ConfirmarEntregaCustodiaTiendaService $service,
+    ): RedirectResponse {
+        abort_unless(VisibilidadTareaPreparacion::puedeVer(Auth::user(), $tarea), 403);
+        $datos = $request->validate([
+            'receptor' => ['required', 'string', 'max:160'],
+            'foto' => ['required', 'file', 'max:10240', 'mimes:jpg,jpeg,png,webp'],
+        ]);
+        try {
+            $service->ejecutar($tarea, Auth::user(), $datos['receptor'], $request->file('foto'));
+        } catch (ValidationException $e) {
+            return redirect()->back()->with('error', collect($e->errors())->flatten()->first() ?: $e->getMessage());
+        }
+
+        return redirect()->route('control_pedidos.tienda.show', $tarea)->with('success', 'Entrega de custodia registrada.');
     }
 
     public function subirEvidenciaEmpaqueMunicipal(PedidoBmaTareaPreparacion $tarea, Request $request): RedirectResponse
@@ -948,7 +1026,14 @@ class PedidoBmaTiendaController extends Controller
     ): RedirectResponse {
         $datos = $request->validated();
         try {
-            $nueva = $service->ejecutar($tarea, Auth::user(), $datos['codigo_modalidad'], $datos['motivo'], $datos['version'] ?? null);
+            $nueva = $service->ejecutar(
+                $tarea,
+                Auth::user(),
+                $datos['codigo_modalidad'],
+                $datos['motivo'],
+                $datos['version'] ?? null,
+                $request->file('evidencia')
+            );
         } catch (ValidationException $e) {
             return redirect()->back()->with('error', collect($e->errors())->flatten()->first() ?: $e->getMessage());
         }

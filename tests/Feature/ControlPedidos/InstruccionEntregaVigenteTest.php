@@ -20,6 +20,8 @@ use App\Models\User;
 use App\Services\ControlPedidos\ActualizarPedidoBmaService;
 use App\Services\ControlPedidos\AsignarGuiaPedidoBmaService;
 use App\Services\ControlPedidos\AsignarSucursalDestinoPedidoService;
+use App\Services\ControlPedidos\ResolverSegundoTrasladoTiendaService;
+use App\Services\ControlPedidos\SolicitarSegundoTrasladoTiendaService;
 use App\Services\ControlPedidos\AsegurarCumplimientoFisicoService;
 use App\Services\ControlPedidos\CambiarModalidadPreparacionService;
 use App\Services\ControlPedidos\ConfirmarDespachoMunicipioService;
@@ -391,24 +393,33 @@ class InstruccionEntregaVigenteTest extends TestCase
         $destino = Sucursal::factory()->create(['activo' => true]);
         $servicio = app(AsignarSucursalDestinoPedidoService::class);
 
+        $solicitado = $servicio->ejecutar($pedido, $this->usuario, $destino->id);
+
+        $this->assertSame(EstatusSucursalPedidoBma::EN_TRANSITO, $solicitado->estatus_sucursal);
+        $this->assertNotSame($destino->id, $solicitado->sucursal_destino_id);
+        $this->assertSame('pendiente', $solicitado->solicitud_preparacion_json['segundo_traslado']['estado']);
+
+        $salida = User::factory()->create();
+        $salida->givePermissionTo(Permission::findOrCreate('control_pedidos.salida.autorizar', 'web'));
         try {
-            $servicio->ejecutar($pedido, $this->usuario, $destino->id);
-            $this->fail('Quien vendió no autoriza el segundo traslado.');
-        } catch (\RuntimeException $e) {
-            $this->assertSame(InstruccionEntrega::MENSAJE_SEGUNDO_TRASLADO, $e->getMessage());
+            app(ResolverSegundoTrasladoTiendaService::class)->ejecutar($solicitado, $salida, 'autorizar', 'Recorrido de prueba');
+            $this->fail('El permiso de salida no autoriza el segundo traslado.');
+        } catch (ValidationException $e) {
+            $this->assertArrayHasKey('permiso', $e->errors());
         }
 
-        $this->assertSame(EstatusSucursalPedidoBma::EN_TRANSITO, $pedido->fresh()->estatus_sucursal);
-        $this->assertNotSame($destino->id, $pedido->fresh()->sucursal_destino_id);
-
         $gerencia = User::factory()->create();
-        $gerencia->givePermissionTo(Permission::findOrCreate('control_pedidos.crear', 'web'));
-        $gerencia->givePermissionTo(Permission::findOrCreate('control_pedidos.salida.autorizar', 'web'));
-
-        $actualizado = $servicio->ejecutar($pedido->fresh(), $gerencia, $destino->id);
+        $gerencia->givePermissionTo(Permission::findOrCreate(SolicitarSegundoTrasladoTiendaService::PERMISO, 'web'));
+        $actualizado = app(ResolverSegundoTrasladoTiendaService::class)->ejecutar(
+            $solicitado->fresh(),
+            $gerencia,
+            'autorizar',
+            'De la sucursal actual a la nueva, sin paso inventado por CEDIS.'
+        );
 
         $this->assertSame($destino->id, $actualizado->sucursal_destino_id);
         $this->assertSame(EstatusSucursalPedidoBma::EN_TRANSITO, $actualizado->estatus_sucursal);
+        $this->assertFalse($actualizado->solicitud_preparacion_json['segundo_traslado']['recepcion_confirmada']);
     }
 
     public function test_sin_permiso_no_sustituye_la_instruccion(): void

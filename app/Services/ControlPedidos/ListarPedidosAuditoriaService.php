@@ -79,6 +79,7 @@ class ListarPedidosAuditoriaService
             app(CalcularTotalesEnvioPedidoService::class)->calcular($pedido)
         );
         $pedido->setAttribute('es_recoge_tienda_apartado', $pedido->esRecogeTiendaApartado());
+        $pedido->setAttribute('es_recoleccion_tienda', $pedido->esRecoleccionTienda());
 
         return $pedido;
     }

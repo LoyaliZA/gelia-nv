@@ -103,6 +103,11 @@ final class VisibilidadTareaPreparacion
                 'cantidad_piezas' => $pedido->cantidad_piezas,
                 'area_revision' => ($pedido->solicitud_preparacion ?? [])['area_revision'] ?? null,
                 'revision_disponibilidad' => ($pedido->solicitud_preparacion ?? [])['revision_disponibilidad'] ?? null,
+                'retiros' => self::retirosVisibles($pedido),
+                'anexos_pendientes' => collect(($pedido->solicitud_preparacion ?? [])['anexo_sin_remision'] ?? [])
+                    ->filter(fn ($linea) => is_array($linea) && (($linea['entrada'] ?? '') === 'documento' || ($linea['pendiente_identificacion'] ?? false) === true))
+                    ->values()
+                    ->all(),
                 'excepciones' => $pedido->relationLoaded('revisionesProducto')
                     ? $pedido->revisionesProducto
                         ->filter(fn ($revision) => $revision->resolucion === null
@@ -180,6 +185,45 @@ final class VisibilidadTareaPreparacion
             'progreso_caratula' => self::progresoCaratula($tarea),
             'apartado' => self::payloadApartado($tarea),
         ];
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private static function retirosVisibles(?PedidoBma $pedido): array
+    {
+        if (! $pedido) {
+            return [];
+        }
+        $retiros = is_array($pedido->solicitud_preparacion_json) ? ($pedido->solicitud_preparacion_json['retiro_piezas'] ?? []) : [];
+
+        return collect($retiros)->filter(fn ($retiro) => is_array($retiro))->map(function (array $retiro) use ($pedido) {
+            $retiro['documentos_piezas'] = self::documentosConUrl($pedido, $retiro['documentos_piezas'] ?? []);
+            $retiro['documentos_peticion'] = self::documentosConUrl($pedido, $retiro['documentos_peticion'] ?? []);
+
+            return $retiro;
+        })->values()->all();
+    }
+
+    /**
+     * @param  list<mixed>  $documentos
+     * @return list<array<string, mixed>>
+     */
+    private static function documentosConUrl(PedidoBma $pedido, array $documentos): array
+    {
+        $salida = [];
+        foreach ($documentos as $documento) {
+            if (! is_array($documento) || empty($documento['id'])) {
+                continue;
+            }
+            $documento['url'] = route('control_pedidos.documentos.show', [
+                'pedidoBma' => $pedido->id,
+                'documento' => $documento['id'],
+            ]);
+            $salida[] = $documento;
+        }
+
+        return $salida;
     }
 
     /**

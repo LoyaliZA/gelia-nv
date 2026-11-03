@@ -686,7 +686,7 @@ export default function Show({
                 </div>
             </GeliaPageShell>
 
-            <ModalSesionEvidenciaTienda abierto={modalQr} onCerrar={() => setModalQr(false)} tareaId={tarea.id} />
+            <ModalSesionEvidenciaTienda abierto={modalQr} onCerrar={() => setModalQr(false)} tareaId={tarea.id} onImportado={() => router.reload({ only: ['documentos'], preserveScroll: true })} />
             <ModalLiberarMercancia
                 abierto={modalLiberar}
                 onClose={() => setModalLiberar(false)}

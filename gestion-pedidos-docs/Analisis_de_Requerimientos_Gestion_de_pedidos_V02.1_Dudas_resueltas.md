@@ -2291,3 +2291,50 @@ Tienda: 10 fichas, incluido el subproceso de mismo día. Municipal: 12. Nacional
 **Pie de página:** `V02  ·  Página {PAGE}`
 
 El campo `{PAGE}` representa el número automático de página de Word. El archivo original no almacena un número fijo para ese campo; Markdown no tiene paginación fija.
+
+## Trazabilidad de implementación — 3 de noviembre de 2026
+
+Esta sección no cambia las fichas ni las reglas de negocio. Registra el estado de la entrega de Tienda 2.1.1 a 2.1.5. La aceptación de quien opera sigue pendiente en todos los casos.
+
+| Caso | Implementación | Prueba | Aceptación | Observación |
+| --- | --- | --- | --- | --- |
+| T-01 | Parcial | `RecorridoTiendaIntegralTest::test_el_apartado_se_cobra_y_entrega_con_fotografia` | Pendiente | Pago presencial y fotografía después del apartado. Sin recorrido de pantalla. |
+| T-02 | Parcial | Cobertura en `test_la_cobertura_de_mismo_dia_exige_facultad_y_dia_habil_sin_confirmarla` | Pendiente | Traslado, recepción, custodia y entrega no se recorrieron de punta a punta. |
+| T-02.1 | Parcial | `CorteMismoDiaTiendaTest` | Pendiente | El corte no confirma la modalidad. Duración VIP y piezas ya en PDV después de las 13:00 siguen sin regla nueva. |
+| T-03 | Parcial | `InstruccionEntregaVigenteTest::test_segundo_traslado_exige_autorizacion_y_no_simula_recepcion` | Pendiente | Autorizar cambia el destino y no confirma la recepción. |
+| T-04 | Parcial | Servicio existente de cambio de modalidad; sin prueba HTTP nueva del archivo | Pendiente | La petición exige evidencia. |
+| T-05 | Parcial | `test_el_anexo_no_edita_la_remision_y_el_retiro_no_confirma_cedis` | Pendiente | El retiro no crea el traslado ni la recepción en CEDIS. |
+| T-06 | Parcial | Misma prueba de anexo | Pendiente | Con remisión abre pedido relacionado. Falta cobertura e integración. |
+| T-07 | Parcial | Decisión de retiro en `test_una_pieza_inexistente_no_se_acepta_y_la_misma_decision_no_se_duplica` | Pendiente | Sustituir exige archivo previo. La reserva posterior no se probó. |
+| T-08 | Parcial | Misma prueba de decisión | Pendiente | Carrera MySQL `decidir` preparada, no ejecutada. |
+| T-09 | Parcial | `test_el_credito_aprobado_no_pide_transferencia_y_el_bloqueado_sigue_bloqueado` | Pendiente | AC-03: la hora de corte sigue inactiva. |
+| R-01 | Parcial | `test_los_veinte_dias_reintegran_fisicamente_sin_crear_saldo` | Pendiente | AC-01: se solicita el reintegro físico y no se decide el dinero ni se mueve el inventario. |
+| S-01/S-07 | Parcial | `test_la_misma_referencia_no_crea_un_segundo_ingreso` | Pendiente | AC-02 y AC-13 no se reimplementaron. El duplicado de referencia sí se bloquea. |
+
+## Trazabilidad de implementación — continuación del 3 de noviembre de 2026
+
+Esta continuación no reescribe las fichas. Sustituye, para el estado de la entrega, la lectura de la tabla anterior. La aceptación de quien opera sigue pendiente.
+
+Recorrido reproducible en sqlite de prueba, sin datos reales. Los folios de pedido son ficticios (`INT-…`). Las remisiones citadas identifican cada caso.
+
+| Caso | Implementación | Prueba | Aceptación | Paso que sigue abierto |
+| --- | --- | --- | --- | --- |
+| T-01 | Disponibilidad, retiro documental y cierre de consulta implementados. El pago presencial y la fotografía hasta ENTREGADA siguen cubiertos por la prueba integral | `SolicitudRegistrarTiendaTest`, `test_la_cobertura_de_mismo_dia_exige_facultad_y_dia_habil_sin_confirmarla` y `test_el_apartado_se_cobra_y_entrega_con_fotografia` | Pendiente | Aceptación operativa. El folio real 45265236 se abrió en bandeja y en registro; no se envió la respuesta ni se confirmó la separación. |
+| T-02 | Completa: remisión REM-T02, recepción, custodia, apartado y entrega | `test_la_transferencia_se_recibe_en_custodia_y_se_entrega` | Pendiente | Ninguno de ese recorrido. |
+| T-02.1 | El corte no confirma la modalidad. La continuación física es la de T-02 | `CorteMismoDiaTiendaTest` y la prueba de T-02 | Pendiente | Duración VIP. Alternativa si la pieza ya está en PDV o el reporte llega después de las 13:00. |
+| T-03 | Completa: autorizar no traslada; la salida y la recepción quedan registradas | `test_el_segundo_traslado_se_mueve_despues_de_autorizarlo` | Pendiente | Ninguno del movimiento. El recorrido lo escribe gerencia al autorizar; no se asume un paso por CEDIS. |
+| T-04 | Completa: HTTP 422 sin archivo; con archivo conserva pago y remisión REM-MOD y avisa al circuito receptor | `test_cambiar_modalidad_exige_archivo_y_conserva_pago_y_remision` | Pendiente | Ninguno de la sustitución documentada. |
+| T-05 | Completa: retiro, traspaso PDV → CEDIS y recepción. Remisión REM-PDV. El principal espera hasta la recepción | `test_el_retiro_de_pdv_se_traslada_y_cedis_lo_integra` | Pendiente | Ninguno de ese recorrido. |
+| T-06 | Completa con remisión propia REM-ANX, cobertura, preparación e integración. El principal conserva REM-PRI | `test_el_anexo_se_cubre_se_remisiona_y_se_integra` | Pendiente | Anexo del día siguiente sin remisión: no hay regla para aceptarlo o rechazarlo. |
+| T-07 | Completa: la sustituta sin disponible no se registra; la disponible se aparta y la anterior se libera | `test_retirar_libera_el_compromiso_y_la_sustituta_exige_disponibilidad` | Pendiente | Ninguno de retirar/sustituir. |
+| T-08 | La tarea vigente recibe la continuación y una pieza inexistente no se acepta | `test_una_pieza_inexistente_no_se_acepta_y_la_misma_decision_no_se_duplica` y la prueba de T-07 | Pendiente | Carrera concurrente no ejecutada. Falta que `sail` pueda crear la base aislada `gelia_solicitud_211_test` sin ampliar permisos de la base de trabajo. |
+| T-09 | Completa remisión REM-CRED, custodia y entrega. La cancelación ocurre al empezar el día posterior al de tolerancia | `test_el_credito_se_remisiona_entrega_y_se_cancela_al_terminar_el_dia_siguiente` | Pendiente | La hora exacta dentro del día siguiente. No se inventó. |
+| R-01 | Completa el reintegro: apartado a 0, existencia sin cambio, devolución pendiente, sin saldo. Remisión REM-20 | `test_los_veinte_dias_reintegran_fisicamente_sin_crear_saldo` | Pendiente | Destino del dinero pagado. |
+| S-01/S-07 | $9.99 no genera saldo; $10 sí cumple el mínimo. La misma referencia no duplica el ingreso. El saldo no se aplica al pedido que lo originó | `ReglasSaldosAFavorTest` y `test_el_excedente_menor_a_diez_no_genera_saldo_y_no_se_aplica_al_mismo_pedido` | Pendiente | Ninguno de esas dos reglas. |
+
+Preguntas que siguen siendo de negocio y no bloquean los recorridos ya descritos:
+
+- ¿Cuánto dura el apartado VIP?
+- ¿Qué ocurre con el dinero cuando la mercancía pagada vuelve a estar disponible a los 20 días?
+- ¿A qué hora del día siguiente se cancela el crédito si no hubo remisión? La entrega cancela al iniciar el día posterior, sin elegir una hora intermedia.
+- Si Mismo día se reporta después de las 13:00, o la pieza ya está en PDV, ¿cuál es la alternativa operativa?

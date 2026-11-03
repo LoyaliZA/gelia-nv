@@ -17,7 +17,7 @@ Si no hay contrato previo, construir mapa breve de tokens efectivos y comportami
 
 ## Usar recursos con evidencia
 
-Descubrir y leer skills por catálogo/frontmatter: `frontend-design`, `ui-ux-pro-max`, capacidades pertinentes de Impeccable y `web-design-guidelines`. Aplicar pasos relevantes al diseño elegido, sin volver a explorar estilos incompatibles.
+Identificar una necesidad concreta antes de elegir una skill. `frontend-design`, `ui-ux-pro-max`, Impeccable y `web-design-guidelines` son opciones; no descubrirlas ni leerlas todas por defecto. Usar solo los recursos necesarios para el diseño autorizado, siguiendo GUIA_DISENO_GELIA.md y sin volver a explorar estilos incompatibles.
 
 Seguir documentación real para scripts/comandos; no inventar sintaxis. Distinguir lectura de ejecución y revisión propia de auditoría formal. Si falta recurso, continuar y registrar límite. No activar hooks ni instalar paquetes por defecto. Evitar recursión si un recurso remite a esta suite.
 

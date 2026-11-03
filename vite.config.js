@@ -2,6 +2,7 @@ import { defineConfig, loadEnv } from 'vite';
 import laravel from 'laravel-vite-plugin';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
+import os from 'node:os';
 import path from 'path';
 
 export default defineConfig(({ mode }) => {
@@ -17,6 +18,9 @@ export default defineConfig(({ mode }) => {
                     'resources/js/app.jsx',
                 ],
                 refresh: true,
+                // Vitest arranca otro Vite con este mismo archivo. El plugin borra hotFile al salir;
+                // si apunta a public/hot, apaga la recarga en vivo del servidor de desarrollo.
+                ...(process.env.VITEST ? { hotFile: path.join(os.tmpdir(), 'gelianv-vitest.hot') } : {}),
             }),
             react(),
             tailwindcss(),

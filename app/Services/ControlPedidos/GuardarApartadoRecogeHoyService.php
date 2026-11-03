@@ -47,13 +47,21 @@ class GuardarApartadoRecogeHoyService
                 if (! in_array($apartado->estado, [PedidoBmaCumplimientoFisico::ESTADO_POR_SEPARAR, PedidoBmaCumplimientoFisico::ESTADO_SEPARADA], true)) {
                     throw ValidationException::withMessages(['estado' => 'Este apartado ya no admite cambios.']);
                 }
-                $lineas = $datos['lineas'] ?? [];
+                $lineas = array_values(array_filter($datos['lineas'] ?? [], 'is_array'));
                 $motivo = trim((string) ($datos['motivo_incidencia'] ?? ''));
-                if ($lineas === [] && $motivo === '') {
-                    throw ValidationException::withMessages(['lineas' => 'Registre piezas o describa el problema de la solicitud.']);
+                $evidencias = array_values(array_filter(
+                    $datos['evidencias'] ?? [],
+                    fn ($archivo) => $archivo instanceof \Illuminate\Http\UploadedFile
+                ));
+                if ($lineas === [] && $motivo === '' && $evidencias === []) {
+                    throw ValidationException::withMessages(['lineas' => 'Registre piezas, adjunte la foto del conjunto o describa el problema de la solicitud.']);
+                }
+                if ($confirmar && $lineas === []) {
+                    throw ValidationException::withMessages(['lineas' => 'Identifique los productos y cantidades físicos antes de confirmar la separación.']);
                 }
                 $antes = $tarea->productos()->get()->toArray();
                 if ($lineas !== []) {
+                    $this->assertCatalogoDelAlmacen($tarea, $lineas);
                     $rutas = $this->registrar->ejecutar($tarea, $usuario, $lineas);
                 }
                 $rutas = array_merge($rutas, $this->registrar->guardarGenerales($tarea, $usuario, $datos['evidencias'] ?? []));
@@ -78,6 +86,32 @@ class GuardarApartadoRecogeHoyService
         } catch (\Throwable $e) {
             Storage::disk('public')->delete($rutas);
             throw $e;
+        }
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $lineas
+     */
+    private function assertCatalogoDelAlmacen(PedidoBmaTareaPreparacion $tarea, array $lineas): void
+    {
+        if (! $tarea->almacen_id) {
+            return;
+        }
+
+        foreach ($lineas as $linea) {
+            $productoId = (int) ($linea['producto_id'] ?? 0);
+            if ($productoId < 1) {
+                continue;
+            }
+            $enAlmacen = DB::table('inventarios')
+                ->where('producto_id', $productoId)
+                ->where('almacen_id', $tarea->almacen_id)
+                ->exists();
+            if (! $enAlmacen) {
+                throw ValidationException::withMessages([
+                    'lineas' => 'Seleccione un producto del almacén de esta tarea.',
+                ]);
+            }
         }
     }
 }

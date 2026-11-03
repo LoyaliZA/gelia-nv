@@ -27,7 +27,7 @@ Leer [workflow.md](references/workflow.md) para entregables y continuidad.
 
 ## Coordinar recursos
 
-Hacer que la etapa activa descubra y lea `frontend-design`, `ui-ux-pro-max`, capacidades pertinentes de Impeccable y `web-design-guidelines` cuando estén disponibles. Un plugin puede exponer varias skills y comandos sin una skill llamada `impeccable`.
+Elegir recursos solo para una necesidad identificada que los patrones existentes no resuelvan. `frontend-design`, `ui-ux-pro-max`, Impeccable y `web-design-guidelines` son opciones, no una lista de lectura obligatoria. No buscar ni leer todos por estar disponibles; seguir primero GUIA_DISENO_GELIA.md. Un plugin puede exponer varias skills sin una skill llamada `impeccable`.
 
 En una renovación, leer del conjunto de movimiento solo las skills del caso: `emil-design-eng` para decidir si animar, `find-animation-opportunities` para buscar huecos, `animate` para implementar en web (`animate-expo` solo en React Native o Expo), `review-animations` si ya hay movimiento, `animation-performance` si se traba, `apple-design` en gestos o profundidad, `mobile-native` en viewport chico y `break-ui` si hay datos variables. No cargar el paquete entero en una corrección pequeña. Esa corrección sigue la regla de UX del proyecto y no reinicia este flujo ni `improve-animations` de todo el repositorio.
 

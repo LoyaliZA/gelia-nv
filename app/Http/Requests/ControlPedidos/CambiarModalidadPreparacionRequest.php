@@ -18,6 +18,7 @@ class CambiarModalidadPreparacionRequest extends FormRequest
             'codigo_modalidad' => ['required', 'string', 'max:64'],
             'motivo' => ['required', 'string', 'min:5', 'max:500'],
             'version' => ['nullable', 'integer', 'min:1'],
+            'evidencia' => ['required', 'file', 'max:10240', 'mimes:pdf,jpg,jpeg,png,webp'],
         ];
     }
 }

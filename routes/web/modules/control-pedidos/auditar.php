@@ -20,6 +20,8 @@ Route::middleware(['can:control_pedidos.auditar'])
         Route::get('/listado', [PedidoBmaAuditoriaController::class, 'listado'])->name('listado');
         Route::get('/{pedidoBma}/detalle', [PedidoBmaAuditoriaController::class, 'detalle'])->name('detalle');
         Route::post('/{pedidoBma}/validar-pago', [PedidoBmaAuditoriaController::class, 'validarPago'])->name('validar_pago');
+        Route::post('/{pedidoBma}/credito-tienda', [PedidoBmaAuditoriaController::class, 'registrarCreditoTienda'])->name('credito_tienda');
+        Route::post('/{pedidoBma}/remision-credito', [PedidoBmaAuditoriaController::class, 'remisionCreditoTienda'])->name('remision_credito');
         Route::post('/{pedidoBma}/remision', [PedidoBmaAuditoriaController::class, 'subirRemision'])->name('remision.store');
         Route::put('/{pedidoBma}/numero-remision', [PedidoBmaAuditoriaController::class, 'actualizarNumeroRemision'])->name('numero_remision.update');
         // La URL anterior exige el nuevo campo; nunca escribe el número de pedido.

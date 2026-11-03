@@ -1,5 +1,5 @@
 ---
-description: En JSX Inertia/React usar solo el sistema global de estilos GELIA (tokens, primitivas, geliaTheme, componentes Gelia*). Normalizar legado al tocar archivos.
+description: En JSX Inertia/React usar solo el sistema global de estilos GELIA (tokens, primitivas, geliaTheme, componentes Gelia*). Corregir legado solo dentro del alcance autorizado.
 globs: resources/js/**/*.jsx
 alwaysApply: false
 ---
@@ -16,7 +16,7 @@ Contrato: `docs/style-system/contrato-diseno-fase-2.md`. Migración por lotes: `
 2. **Primitivas** — `resources/css/gelia/primitives.css` — clases `theme-*`, `gelia-*`, `gelia-estado-vivo--*`.
 3. **Tailwind semántico** — `resources/css/app.css` (`@theme`: `text-muted`, `bg-surface`, `text-primario`, …).
 4. **JSX** — `resources/js/utils/geliaTheme.js` (constantes y helpers; ampliar aquí si un patrón se repite 3+).
-5. **Componentes** — `resources/js/Components/Gelia*.jsx` y UI compartida existente antes de crear otra (`component-reuse.mdc`).
+5. **Componentes** — `resources/js/Components/Gelia*.jsx` y UI compartida existente antes de crear otra. La revisión extensa de `component-reuse.mdc` es manual.
 
 No añadir paletas paralelas en el módulo (hex, `zinc`/`gray`/`slate`/`green`/`amber` para tema o estado). Reemplazos: `docs/style-system/equivalence-matrix.md`.
 
@@ -27,7 +27,7 @@ No añadir paletas paralelas en el módulo (hex, `zinc`/`gray`/`slate`/`green`/`
 - Estados: `GELIA_ESTADO_VIVO_TONO` + `gelia-estado-vivo--*` o `theme-text-exito` / `peligro` / `aviso` / `info`.
 - Formularios, botones, modales, grids: exports de `geliaTheme.js` (`THEME_INPUT`, `THEME_BTN_PRIMARY`, `THEME_MODAL_*`, `geliaCardClass`, …).
 - Encabezados de página: preferir `GeliaTituloCard` + `GeliaPageShell` cuando encaje con el módulo.
-- Si el archivo tiene legado en el alcance del cambio, **normalizarlo en el mismo diff** (no dejar zinc/hex/inline color nuevos ni intactos en bloques que ya estás tocando).
+- Corregir estilos de legado únicamente en el bloque afectado cuando sea necesario para el cambio. No normalizar el archivo completo ni ampliar la tarea por encontrar estilos antiguos. No introducir colores fijos nuevos.
 
 ## Verificación
 

@@ -1,66 +1,12 @@
 ---
 alwaysApply: false
 ---
-# Development Server and Build Rules
+# Comprobación de assets — uso explícito
 
-This project uses the Vite development server for local testing.
+Aplicar cuando el usuario mencione esta regla o pida revisar cómo validar/compilar el frontend. Complementa `comando-entorno-desarrollo.mdc`; no impone una prohibición absoluta de build.
 
-The standard development command is:
+Comprobar el modo real de assets de la aplicación. Con Vite activo y accesible, reutilizarlo para ajustes y revisión visual. No levantar otro servidor ni reiniciar el existente sin motivo.
 
-`./vendor/bin/sail npm run dev`
+Con assets compilados, ejecutar un build al terminar el lote si hace falta servir los cambios. También procede por solicitud del usuario, preparación de despliegue o diagnóstico/verificación del bundle. Confirmar que la página utiliza los assets previstos. No ejecutar build tras cada edición ni confundir compilación correcta con validación funcional.
 
-## Development Workflow
-
-During normal development, use the existing Vite development server to validate changes.
-
-Do not run a production build after every code modification.
-
-Vite already provides hot module replacement and immediate feedback during development, so running `npm run build` repeatedly is unnecessary and wastes time.
-
-## Build Restrictions
-
-Do NOT run:
-
-`./vendor/bin/sail npm run build`
-
-after routine changes such as:
-
-- UI adjustments
-- component changes
-- styling changes
-- text changes
-- small logic changes
-- refactors
-- bug fixes
-- form changes
-- layout changes
-
-Assume the project is being tested through the active Vite development server unless explicitly stated otherwise.
-
-## When a Build Is Allowed
-
-Only run a production build when:
-
-- the user explicitly asks for it;
-- a production deployment is being prepared;
-- a build-specific error needs to be diagnosed;
-- the change directly affects the build configuration;
-- compatibility with the production bundle must be verified.
-
-Do not use a production build as the default method to validate every change.
-
-## Validation During Development
-
-For normal changes, prefer:
-
-1. Reviewing the modified code.
-2. Checking for syntax or type errors.
-3. Using the existing Vite development server.
-4. Running targeted linting or tests when relevant.
-5. Verifying the affected functionality directly.
-
-Do not restart the Vite server unnecessarily if it is already running.
-
-## Required Principle
-
-**Development validation should use `npm run dev`. Production builds should only be executed when they are actually necessary or explicitly requested.**
+Usar Sail y pruebas dirigidas al comportamiento modificado.

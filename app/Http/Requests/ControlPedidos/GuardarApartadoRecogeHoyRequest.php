@@ -13,7 +13,7 @@ class GuardarApartadoRecogeHoyRequest extends FormRequest
 
     public function rules(): array
     {
-        return array_merge(ReglasLineasPreparacion::reglas(! $this->filled('motivo_incidencia')), [
+        return array_merge(ReglasLineasPreparacion::reglas(false), [
             'version' => ['required', 'integer', 'min:1'],
             'ubicacion' => ['nullable', 'string', 'max:255'],
             'evidencias' => ['nullable', 'array', 'max:10'],

@@ -3,6 +3,7 @@
 namespace App\Services\SaldosAFavor;
 
 use App\Models\ControlPedidos\PedidoBma;
+use App\Services\ControlPedidos\AplicarCorteMismoDiaTienda;
 use App\Models\SaldosAFavor\PedidoBmaPago;
 use App\Models\SaldosAFavor\SafCredito;
 use App\Models\SaldosAFavor\SafMotivo;
@@ -117,6 +118,20 @@ class RegistrarPagoPedidoBmaService
                 }
             }
 
+            $referencia = trim((string) ($datos['referencia'] ?? ''));
+            if ($referencia !== '') {
+                $repetido = PedidoBmaPago::query()
+                    ->where('pedido_bma_id', $pedido->id)
+                    ->where('referencia', $referencia)
+                    ->where('activo_para_cobertura', true)
+                    ->exists();
+                if ($repetido) {
+                    throw new InvalidArgumentException(
+                        'Este comprobante ya está aplicado. Un segundo ingreso necesita otra referencia.'
+                    );
+                }
+            }
+
             $siguiente = ((int) PedidoBmaPago::where('pedido_bma_id', $pedido->id)->max('numero_exhibicion')) + 1;
 
             $attrs = [
@@ -161,6 +176,7 @@ class RegistrarPagoPedidoBmaService
             }
 
             $this->reconciliarExcedenteTrasExhibicion($pedido->fresh(), $usuarioId);
+            app(AplicarCorteMismoDiaTienda::class)->aplicar($pedido->fresh(), $pago);
 
             return $pago;
         });

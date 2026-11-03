@@ -69,6 +69,10 @@ class ConfirmarApartadoRecogeHoyService
             if ($tarea->estado !== PedidoBmaTareaPreparacion::ESTADO_EN_ATENCION) {
                 throw ValidationException::withMessages(['estado' => 'Tome la tarea antes de confirmar el apartado.']);
             }
+            $bloqueo = $tarea->pedido?->motivoBloqueoSeparacion();
+            if ($bloqueo !== null) {
+                throw ValidationException::withMessages(['estado' => $bloqueo]);
+            }
             $this->aplicarRevision($tarea, $productos);
             app(\App\Services\Traspasos\AbastecerPreparacionService::class)->asegurarSatisfecho($tarea);
             $tarea->load('productos');

@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { archivosDeManifiesto } from '../resources/js/utils/retainViteAssets.js';
+import { servidorHotActivo } from './servidor-hot.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const buildDir = path.join(root, 'public/build');
@@ -18,8 +19,7 @@ const validate = (directory, manifest) => {
         if (!target.startsWith(path.resolve(directory) + path.sep) || !fs.existsSync(target)) throw new Error(`Falta el archivo compilado: ${relative}`);
     }
 };
-
-try {
+await (async () => { try {
     const previous = readJson(manifestPath);
     const result = spawnSync(process.execPath, [path.join(root, 'node_modules/vite/bin/vite.js'), 'build', '--outDir', stageDir, '--emptyOutDir'], { cwd: root, stdio: 'inherit' });
     if (result.status !== 0) process.exitCode = result.status || 1;
@@ -44,9 +44,12 @@ try {
         const sha7 = (process.env.DEPLOY_SHA || 'local00').replace(/[^A-Za-z0-9]/g, '').slice(0, 7) || 'local00';
         const sello = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
         fs.copyFileSync(manifestPath, path.join(manifestsDir, `${sello}-${sha7}.json`));
-        // Switch from the development server only after the build is complete and verified.
+        // Solo desconectar Vite si ya no acepta conexiones. Si sigue en marcha, public/hot
+        // mantiene la recarga en vivo; quitarlo obliga a Laravel a usar el manifiesto.
         const hotFile = path.join(root, 'public/hot');
-        if (fs.existsSync(hotFile)) fs.renameSync(hotFile, path.join(deployDir, 'hot.previous'));
+        if (fs.existsSync(hotFile) && !await servidorHotActivo(fs.readFileSync(hotFile, 'utf8'))) {
+            fs.renameSync(hotFile, path.join(deployDir, 'hot.previous'));
+        }
         process.stdout.write('Compilación publicada: manifiesto completo y archivos verificados.\n');
     }
 } catch (error) {
@@ -54,4 +57,4 @@ try {
     process.exitCode = 1;
 } finally {
     fs.rmSync(stageDir, { recursive: true, force: true });
-}
+} })();

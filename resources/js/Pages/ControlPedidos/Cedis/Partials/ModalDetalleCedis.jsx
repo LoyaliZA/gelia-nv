@@ -11,6 +11,7 @@ import {
 import {
     badgeEmpaqueSemantico,
     cedisConsultaEsRevisionMercancia,
+    contextoRecoleccionTienda,
     terminologiaEmpaqueConsultaCedis,
     badgeRetrasoGuia,
     badgesRetrasoSla,
@@ -729,6 +730,9 @@ export default function ModalDetalleCedis({
                         <section id="cedis-pedido" tabIndex={-1} className={`${SECCION_WRAP} gelia-pedidos-seccion`}>
                             <h3 className="gelia-pedidos-seccion-titulo mb-3">Datos operativos</h3>
                             <div className="grid grid-cols-2 gap-4">
+                                {contextoRecoleccionTienda(pedido) && (
+                                    <p className="text-sm theme-text-main col-span-2 m-0 break-words">{contextoRecoleccionTienda(pedido)}</p>
+                                )}
                                 <Campo label="Cliente" value={pedido.cliente?.nombre} />
                                 <Campo label="N° Cliente" value={pedido.cliente?.numero_cliente} />
                                 <Campo label="Tipo de pedido" value={pedido.origen?.nombre} />

@@ -38,7 +38,13 @@ class AsignarSucursalDestinoPedidoService
         return DB::transaction(function () use ($pedido, $usuario, $viejo, $nuevo) {
             $pedido = PedidoBma::query()->lockForUpdate()->findOrFail($pedido->id);
             $pedido->loadMissing(['estatus', 'sucursalDestino']);
-            InstruccionEntrega::assertSegundoTraslado($usuario, $pedido);
+            if (InstruccionEntrega::mercanciaYaSalio($pedido)) {
+                if ($nuevo === null) {
+                    throw new \RuntimeException(InstruccionEntrega::MENSAJE_SEGUNDO_TRASLADO);
+                }
+
+                return app(SolicitarSegundoTrasladoTiendaService::class)->ejecutar($pedido, $usuario, $nuevo);
+            }
 
             $etiquetaAnterior = $this->etiquetaSucursal($viejo, $pedido->sucursalDestino);
             $pedido->update(['sucursal_destino_id' => $nuevo]);

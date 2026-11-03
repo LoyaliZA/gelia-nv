@@ -799,6 +799,19 @@ class PedidoBma extends Model
         );
     }
 
+    public function esRecoleccionTienda(): bool
+    {
+        $codigo = $this->codigoModalidadPreparacionVigente();
+        if (in_array($codigo, CatalogoModalidadPreparacionPedido::CODIGOS_FASE4, true)) {
+            return true;
+        }
+
+        $json = is_array($this->solicitud_preparacion_json) ? $this->solicitud_preparacion_json : [];
+
+        return ($json['modalidad_entrega'] ?? null) === 'tienda'
+            && in_array($json['area_revision'] ?? null, ['preparacion_tienda', 'control_pedidos'], true);
+    }
+
     public function cancelacionesOperativas(): HasMany
     {
         return $this->hasMany(PedidoBmaCancelacionOperativa::class, 'pedido_bma_id')->latest('id');
@@ -1071,7 +1084,7 @@ class PedidoBma extends Model
         if (! $this->esEditablePorVendedora()) {
             return false;
         }
-        if ($this->estatus_envio === self::ESTATUS_ENVIO_PENDIENTE_PESAJE) {
+        if ($this->estatus_envio === self::ESTATUS_ENVIO_PENDIENTE_PESAJE && ! $this->listaParaCerrarConsultaTienda()) {
             return false;
         }
         if ($this->consulta_actualizacion_pendiente) {
@@ -1079,6 +1092,9 @@ class PedidoBma extends Model
         }
 
         if ($this->enRutaPreparacionTienda()) {
+            if ($this->esConsultaDisponibilidadTienda()) {
+                return $this->listaParaCerrarConsultaTienda();
+            }
             if ($this->tareasPreparacion()->where('requiere_traslado_cedis', true)->exists()) {
                 return $this->todasTareasTrasladoRecibidas();
             }
@@ -1090,6 +1106,90 @@ class PedidoBma extends Model
         }
 
         return $this->tienePesajeRespondido();
+    }
+
+    public function esConsultaDisponibilidadTienda(): bool
+    {
+        $json = is_array($this->solicitud_preparacion_json) ? $this->solicitud_preparacion_json : [];
+
+        return ($json['area_revision'] ?? null) === 'preparacion_tienda';
+    }
+
+    public function listaParaCerrarConsultaTienda(): bool
+    {
+        return $this->esConsultaDisponibilidadTienda() && $this->motivoBloqueoCierreConsultaTienda() === null;
+    }
+
+    public function motivoBloqueoCierreConsultaTienda(): ?string
+    {
+        if (! $this->esConsultaDisponibilidadTienda()) {
+            return null;
+        }
+        $json = is_array($this->solicitud_preparacion_json) ? $this->solicitud_preparacion_json : [];
+        $revision = is_array($json['revision_disponibilidad'] ?? null) ? $json['revision_disponibilidad'] : [];
+        $estado = $revision['estado'] ?? null;
+        if (($revision['vigente'] ?? true) === false || filled($revision['sustituida_at'] ?? null)) {
+            return 'La respuesta vigente fue sustituida. No se cierra ni se cubre con la versión anterior.';
+        }
+        if (! in_array($estado, ['sin_excepciones', 'decision_registrada'], true)) {
+            return $estado === 'excepciones_pendientes'
+                ? 'Falta la decisión del cliente sobre las piezas con excepción.'
+                : 'La consulta sigue abierta: falta la respuesta de disponibilidad.';
+        }
+        if (($revision['aceptacion_vigente'] ?? true) === false || $this->tieneAjusteTiendaPendiente()) {
+            return 'Hay un ajuste pendiente. La aceptación de esta versión no sigue vigente.';
+        }
+
+        return null;
+    }
+
+    public function motivoBloqueoSeparacion(): ?string
+    {
+        if (! $this->esConsultaDisponibilidadTienda()) {
+            return null;
+        }
+        $json = is_array($this->solicitud_preparacion_json) ? $this->solicitud_preparacion_json : [];
+        $revision = is_array($json['revision_disponibilidad'] ?? null) ? $json['revision_disponibilidad'] : [];
+        $estado = $revision['estado'] ?? null;
+        if (! in_array($estado, ['sin_excepciones', 'decision_registrada'], true)) {
+            return 'No se confirma la separación: la selección todavía no está aceptada.';
+        }
+        if (($revision['aceptacion_vigente'] ?? true) === false || $this->tieneAjusteTiendaPendiente()) {
+            return 'No se confirma la separación: hay un ajuste pendiente o la aceptación de esta versión no sigue vigente.';
+        }
+
+        return null;
+    }
+
+    public function tieneAjusteTiendaPendiente(): bool
+    {
+        $json = is_array($this->solicitud_preparacion_json) ? $this->solicitud_preparacion_json : [];
+        foreach ((array) ($json['retiro_piezas'] ?? []) as $retiro) {
+            if (is_array($retiro) && ($retiro['estado'] ?? 'pendiente') === 'pendiente') {
+                return true;
+            }
+        }
+        foreach ((array) ($json['anexo_sin_remision'] ?? []) as $anexo) {
+            if (is_array($anexo) && ($anexo['pendiente_identificacion'] ?? false) === true) {
+                return true;
+            }
+        }
+
+        return $this->revisionesProducto()
+            ->whereNull('resolucion')
+            ->whereIn('estado_fisico', ['regular', 'malo', 'danado', 'sin_existencia'])
+            ->exists();
+    }
+
+    public function pedidoPagadoORemisionado(): bool
+    {
+        if (filled($this->numero_remision) || $this->tienePagoValidado() || $this->tieneRemision()) {
+            return true;
+        }
+
+        return $this->tareasPreparacion()
+            ->whereHas('cumplimientoFisico', fn ($q) => $q->whereNotNull('pago_confirmado_at'))
+            ->exists();
     }
 
     /** Tras Fase 2: Envío y Tienda exigen cierre (salvo complemento de resguardo). */

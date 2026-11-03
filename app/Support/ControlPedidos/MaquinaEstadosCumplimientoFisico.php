@@ -41,7 +41,10 @@ final class MaquinaEstadosCumplimientoFisico
         PedidoBmaCumplimientoFisico::ESTADO_ENTREGADA => [],
         PedidoBmaCumplimientoFisico::ESTADO_DESPACHADA => [],
         PedidoBmaCumplimientoFisico::ESTADO_DEVUELTA_ANAQUEL => [],
-        PedidoBmaCumplimientoFisico::ESTADO_APARTADO_CONFIRMADO => [],
+        PedidoBmaCumplimientoFisico::ESTADO_APARTADO_CONFIRMADO => [
+            PedidoBmaCumplimientoFisico::ESTADO_ENTREGADA,
+            PedidoBmaCumplimientoFisico::ESTADO_DEVOLUCION_PENDIENTE,
+        ],
     ];
 
     public static function puedeTransicionar(string $origen, string $destino): bool

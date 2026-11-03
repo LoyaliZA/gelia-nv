@@ -33,6 +33,12 @@ Route::prefix('control-pedidos')->name('control_pedidos.')->group(function () {
         Route::post('/', [PedidoBmaController::class, 'store'])->name('store');
         Route::post('/autoguardar', [PedidoBmaController::class, 'autoguardar'])->name('autoguardar');
         Route::post('/{pedidoBma}/solicitud-tienda', [PedidoBmaController::class, 'solicitarTienda'])->name('solicitud_tienda');
+        Route::post('/{pedidoBma}/decision-tienda', [PedidoBmaController::class, 'decidirTienda'])->name('decision_tienda');
+        Route::post('/{pedidoBma}/cobertura-tienda', [PedidoBmaController::class, 'coberturaTienda'])->name('cobertura_tienda');
+        Route::post('/{pedidoBma}/anexo-tienda', [PedidoBmaController::class, 'anexoTienda'])->name('anexo_tienda');
+        Route::post('/{pedidoBma}/retiro-piezas-tienda', [PedidoBmaController::class, 'retiroPiezasTienda'])->name('retiro_piezas_tienda');
+        Route::post('/{pedidoBma}/retiro-custodia-envio', [PedidoBmaController::class, 'retirarCustodiaEnvio'])->name('retiro_custodia_envio');
+        Route::post('/{pedidoBma}/sucursal-destino', [PedidoBmaController::class, 'cambiarSucursalTienda'])->name('sucursal_destino');
         Route::get('/candidatos-principal', [PedidoBmaController::class, 'candidatosPrincipal'])->name('candidatos_principal');
         Route::get('/candidatos-resguardo-envio', [PedidoBmaController::class, 'candidatosResguardoEnvio'])->name('candidatos_resguardo_envio');
         Route::post('/{pedidoBma}/completar-envio-resguardo', [PedidoBmaController::class, 'completarEnvioResguardo'])->name('completar_envio_resguardo');
@@ -67,6 +73,25 @@ Route::prefix('control-pedidos')->name('control_pedidos.')->group(function () {
         Route::post('/{pedidoBma}/generar-saldo-excedente', [PedidoBmaSaldosPagosController::class, 'generarSaldoExcedente'])
             ->name('generar_saldo_excedente');
     });
+
+    Route::post('/{pedidoBma}/segundo-traslado', [PedidoBmaController::class, 'resolverSegundoTraslado'])
+        ->middleware('can:control_pedidos.tienda.autorizar_segundo_traslado')
+        ->name('segundo_traslado');
+    Route::post('/{pedidoBma}/segundo-traslado/salida', [PedidoBmaController::class, 'salirSegundoTraslado'])
+        ->middleware('role_or_permission:control_pedidos.tienda.trasladar|control_pedidos.tienda.responder')
+        ->name('segundo_traslado.salida');
+    Route::post('/{pedidoBma}/segundo-traslado/recepcion', [PedidoBmaController::class, 'recibirSegundoTraslado'])
+        ->middleware('role_or_permission:control_pedidos.tienda.trasladar|control_pedidos.tienda.responder')
+        ->name('segundo_traslado.recepcion');
+    Route::post('/{pedidoBma}/retiro-custodia-envio/trasladar', [PedidoBmaController::class, 'trasladarCustodiaCedis'])
+        ->middleware('can:control_pedidos.tienda.trasladar')
+        ->name('retiro_custodia_envio.trasladar');
+    Route::post('/{pedidoBma}/retiro-custodia-envio/recibir-cedis', [PedidoBmaController::class, 'recibirCustodiaCedis'])
+        ->middleware('can:control_pedidos.cedis')
+        ->name('retiro_custodia_envio.recibir_cedis');
+    Route::post('/{pedidoBma}/anexo-tienda/integrar', [PedidoBmaController::class, 'integrarAnexoTienda'])
+        ->middleware('can:control_pedidos.tienda.responder')
+        ->name('anexo_tienda.integrar');
 
     // crear | editar se valida en UpdatePedidoBmaRequest (borradores autoguardados)
     Route::put('/{pedidoBma}', [PedidoBmaController::class, 'update'])->name('update');

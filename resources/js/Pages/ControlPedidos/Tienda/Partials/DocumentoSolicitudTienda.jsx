@@ -18,7 +18,7 @@ export default function DocumentoSolicitudTienda({ tareaId, documentos = [] }) {
         <p className="text-xs theme-text-muted">Compare los productos y cantidades con el documento de Ventas.</p>
         {documentos.length > 1 ? <label className={`block ${THEME_LABEL}`}>Documento
             <select className={`${THEME_SELECT} w-full`} value={documento.id} onChange={(e) => setDocumentoId(Number(e.target.value))}>
-                {documentos.map((d) => <option key={d.id} value={d.id}>{d.nombre_original || 'Documento del pedido'}</option>)}
+                {documentos.map((d) => <option key={d.id} value={d.id}>{d.tipo === 'anexo_piezas' ? `Anexo · ${d.nombre_original || 'documento'}` : (d.nombre_original || 'Documento del pedido')}</option>)}
             </select>
         </label> : <p className="text-xs theme-text-muted m-0">{documento.nombre_original}</p>}
         <div className="gelia-preparacion-documento-acciones"><button type="button" className={BTN_SECONDARY} onClick={() => setAmpliado(true)}><Expand className="w-4 h-4" aria-hidden="true" />Ampliar pedido</button></div>

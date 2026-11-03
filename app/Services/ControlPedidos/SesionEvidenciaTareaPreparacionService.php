@@ -46,6 +46,25 @@ class SesionEvidenciaTareaPreparacionService
         ];
     }
 
+    public function estadoParaEquipo(PedidoBmaTareaPreparacion $tarea): ?array
+    {
+        $sesion = $this->vigente($tarea);
+        if (! $sesion) {
+            return null;
+        }
+
+        $sesion->load('fotos');
+
+        return [
+            'estado' => $sesion->estado,
+            'expira_en' => $sesion->expira_en?->toIso8601String(),
+            'url' => $sesion->urlPublica(),
+            'codigo' => $sesion->codigo_publico,
+            'fotos_count' => $sesion->fotos->count(),
+            'fotos' => $sesion->fotos->map(fn (PedidoBmaTareaSesionEvidenciaFoto $foto) => $this->fotoPublica($sesion, $foto))->values()->all(),
+        ];
+    }
+
     public function vigente(PedidoBmaTareaPreparacion $tarea): ?PedidoBmaTareaSesionEvidencia
     {
         $sesion = PedidoBmaTareaSesionEvidencia::query()
@@ -136,6 +155,16 @@ class SesionEvidenciaTareaPreparacionService
         ]);
     }
 
+    public function reflejarEnTarea(PedidoBmaTareaPreparacion $tarea, int $usuarioId): int
+    {
+        $sesion = $this->vigente($tarea);
+        if (! $sesion) {
+            return 0;
+        }
+
+        return DB::transaction(fn () => $this->copiarFotosATarea($sesion, $tarea, $usuarioId));
+    }
+
     public function promoverATarea(PedidoBmaTareaPreparacion $tarea, int $usuarioId): void
     {
         $sesion = $this->vigente($tarea);
@@ -144,17 +173,7 @@ class SesionEvidenciaTareaPreparacionService
         }
 
         DB::transaction(function () use ($sesion, $tarea, $usuarioId) {
-            foreach ($sesion->fotos as $foto) {
-                $tarea->documentos()->create([
-                    'tipo_evidencia' => PedidoBmaTareaDocumento::TIPO_EVIDENCIA_GENERAL,
-                    'ruta_interna' => $foto->ruta,
-                    'nombre_original' => $foto->nombre_original ?: 'evidencia_movil.jpg',
-                    'mime_type' => $foto->mime_type,
-                    'tamano_bytes' => $foto->tamano_bytes,
-                    'subido_por_id' => $usuarioId,
-                    'subido_at' => now(),
-                ]);
-            }
+            $this->copiarFotosATarea($sesion, $tarea, $usuarioId);
             $sesion->update(['estado' => PedidoBmaTareaSesionEvidencia::ESTADO_COMPLETADA]);
         });
     }
@@ -169,6 +188,38 @@ class SesionEvidenciaTareaPreparacionService
             'expira_en' => $sesion->expira_en?->toIso8601String(),
             'productos' => $sesion->snapshot_json['productos'] ?? [],
             'fotos_count' => $sesion->fotos->count(),
+            'fotos' => $sesion->fotos->map(fn (PedidoBmaTareaSesionEvidenciaFoto $foto) => $this->fotoPublica($sesion, $foto))->values()->all(),
+        ];
+    }
+
+    private function copiarFotosATarea(PedidoBmaTareaSesionEvidencia $sesion, PedidoBmaTareaPreparacion $tarea, int $usuarioId): int
+    {
+        $nuevas = 0;
+        foreach ($sesion->fotos as $foto) {
+            if ($tarea->documentos()->where('ruta_interna', $foto->ruta)->exists()) {
+                continue;
+            }
+            $tarea->documentos()->create([
+                'tipo_evidencia' => PedidoBmaTareaDocumento::TIPO_EVIDENCIA_GENERAL,
+                'ruta_interna' => $foto->ruta,
+                'nombre_original' => $foto->nombre_original ?: 'evidencia_movil.jpg',
+                'mime_type' => $foto->mime_type,
+                'tamano_bytes' => $foto->tamano_bytes,
+                'subido_por_id' => $usuarioId,
+                'subido_at' => now(),
+            ]);
+            $nuevas++;
+        }
+
+        return $nuevas;
+    }
+
+    private function fotoPublica(PedidoBmaTareaSesionEvidencia $sesion, PedidoBmaTareaSesionEvidenciaFoto $foto): array
+    {
+        return [
+            'id' => $foto->id,
+            'nombre' => $foto->nombre_original,
+            'url' => '/tienda-evidencia/'.$sesion->codigo_publico.'/fotos/'.$foto->id,
         ];
     }
 
@@ -209,11 +260,12 @@ class SesionEvidenciaTareaPreparacionService
 
     private function qrDataUri(string $url): string
     {
-        $qr = new QrCode($url);
-        $qr->setErrorCorrectionLevel(ErrorCorrectionLevel::Medium);
-        $qr->setSize(280);
-        $writer = new PngWriter();
-
-        return $writer->write($qr)->getDataUri();
+        $qr = new QrCode(
+            data: $url,
+            errorCorrectionLevel: ErrorCorrectionLevel::Medium,
+            size: 280,
+            margin: 8,
+        );
+        return (new PngWriter())->write($qr)->getDataUri();
     }
 }

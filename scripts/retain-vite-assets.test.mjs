@@ -1,13 +1,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import http from 'node:http';
+import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 function proyecto() {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gelianv-build-test-'));
-    for (const file of ['scripts/retain-vite-assets.mjs', 'resources/js/utils/retainViteAssets.js']) {
+    for (const file of ['scripts/retain-vite-assets.mjs', 'scripts/servidor-hot.mjs', 'resources/js/utils/retainViteAssets.js']) {
         fs.mkdirSync(path.dirname(path.join(dir, file)), { recursive: true });
         fs.copyFileSync(file, path.join(dir, file));
     }
@@ -16,7 +18,7 @@ function proyecto() {
     fs.writeFileSync(path.join(dir, 'package.json'), '{"type":"module"}');
     fs.writeFileSync(path.join(dir, 'public/build/manifest.json'), '{"publicado":"anterior"}');
     fs.writeFileSync(path.join(dir, 'public/build/assets/anterior.js'), 'anterior');
-    fs.writeFileSync(path.join(dir, 'public/hot'), 'http://localhost:5179');
+    fs.writeFileSync(path.join(dir, 'public/hot'), 'http://127.0.0.1:9');
     return dir;
 }
 function ejecutar(dir, compilador) {
@@ -48,4 +50,19 @@ test('publica entradas, dependencias y recursos completos conservando archivos a
         assert.ok(fs.existsSync(path.join(dir, 'storage/framework/deploy/hot.previous')));
         assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dir, 'storage/framework/deploy/manifest.previous.json'))), { publicado: 'anterior' });
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+test('una respuesta HTTP conserva el criterio de servidor activo y un TCP vacío no', async () => {
+    const { servidorHotActivo } = await import('./servidor-hot.mjs');
+    const httpServer = http.createServer((req, res) => { res.writeHead(200); res.end('ok'); });
+    const tcpServer = net.createServer((socket) => socket.destroy());
+    await new Promise((resolve) => httpServer.listen(0, '127.0.0.1', resolve));
+    await new Promise((resolve) => tcpServer.listen(0, '127.0.0.1', resolve));
+    try {
+        assert.equal(await servidorHotActivo(`http://127.0.0.1:${httpServer.address().port}`), true);
+        assert.equal(await servidorHotActivo(`http://127.0.0.1:${tcpServer.address().port}`), false);
+        assert.equal(await servidorHotActivo('no-es-url'), false);
+    } finally {
+        httpServer.close();
+        tcpServer.close();
+    }
 });

@@ -46,8 +46,7 @@ class PedidoBmaEvidenciaTiendaPublicaController extends Controller
             'foto' => ['required', 'file', 'max:10240', 'mimes:jpg,jpeg,png,webp'],
         ]);
 
-        $sesion = $service->porCodigo($codigo);
-        $service->reclamar($codigo, $request->ip() ?? '', (string) $request->userAgent());
+        $sesion = $service->reclamar($codigo, $request->ip() ?? '', (string) $request->userAgent());
         $foto = $service->subirFoto($sesion, $request->file('foto'));
 
         return response()->json(['foto_id' => $foto->id]);

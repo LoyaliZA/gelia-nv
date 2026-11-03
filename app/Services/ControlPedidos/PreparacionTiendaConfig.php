@@ -21,6 +21,8 @@ class PreparacionTiendaConfig
 
     public const CLAVE_DIAS_PRORROGA_VIP = 'control_pedidos.preparacion.dias_prorroga_vip';
 
+    public const CLAVE_MD_DEPARTAMENTOS = 'control_pedidos.tienda.md_departamentos';
+
     public const CACHE_KEY = 'control_pedidos.preparacion_tienda.config';
 
     /**
@@ -109,6 +111,33 @@ class PreparacionTiendaConfig
         $n = (int) $this->valorEscalar(self::CLAVE_DIAS_PRORROGA_VIP, '1');
 
         return max(1, min(5, $n));
+    }
+
+    /**
+     * Facultad de Tienda MD por departamento. Vacío no autoriza a nadie por sí solo.
+     *
+     * @return list<int>
+     */
+    public function departamentosMismoDia(): array
+    {
+        $raw = trim((string) $this->valorEscalar(self::CLAVE_MD_DEPARTAMENTOS, ''));
+        if ($raw === '') {
+            return [];
+        }
+
+        return array_values(array_unique(array_filter(array_map(
+            'intval',
+            preg_split('/\s*,\s*/', $raw) ?: []
+        ))));
+    }
+
+    public function facultadMismoDia(User $usuario, ?int $departamentoId): bool
+    {
+        if ($usuario->hasRole('Super Admin') || $usuario->can(\App\Support\ControlPedidos\RegistrarPedidos\PoliticaAccionesRegistrarPedidos::PERMISO_MD)) {
+            return true;
+        }
+
+        return $departamentoId !== null && in_array((int) $departamentoId, $this->departamentosMismoDia(), true);
     }
 
     public function modalidadPermitida(string $codigo): bool

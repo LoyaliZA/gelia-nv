@@ -37,7 +37,7 @@ class CumplimientoFisicoApartadoTest extends TestCase
         $this->assertSame('2026-10-05 20:00:00', $nuevo->format('Y-m-d H:i:s'));
     }
 
-    public function test_recoge_hoy_solo_confirma_apartado_sin_pago_ni_entrega(): void
+    public function test_recoge_hoy_aparta_cobra_y_entrega_sin_auditoria_central(): void
     {
         $politica = new PoliticaSalidaPreparacion(CatalogoModalidadPreparacionPedido::CODIGO_RECOGE_TIENDA);
 
@@ -49,6 +49,10 @@ class CumplimientoFisicoApartadoTest extends TestCase
         $this->assertTrue(MaquinaEstadosCumplimientoFisico::puedeTransicionar(
             PedidoBmaCumplimientoFisico::ESTADO_SEPARADA,
             PedidoBmaCumplimientoFisico::ESTADO_APARTADO_CONFIRMADO
+        ));
+        $this->assertTrue(MaquinaEstadosCumplimientoFisico::puedeTransicionar(
+            PedidoBmaCumplimientoFisico::ESTADO_APARTADO_CONFIRMADO,
+            PedidoBmaCumplimientoFisico::ESTADO_ENTREGADA
         ));
         $this->assertFalse(MaquinaEstadosCumplimientoFisico::puedeTransicionar(
             PedidoBmaCumplimientoFisico::ESTADO_APARTADO_CONFIRMADO,

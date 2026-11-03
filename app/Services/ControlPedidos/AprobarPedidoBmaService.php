@@ -37,8 +37,10 @@ class AprobarPedidoBmaService
             throw new \RuntimeException('Solo se pueden aprobar pedidos pendientes de revisión.');
         }
 
-        if (in_array($pedido->codigoModalidadPreparacionVigente(), CatalogoModalidadPreparacionPedido::CODIGOS_FASE4, true)) {
-            throw new \RuntimeException('La recogida en tienda se cierra en PDV, sin aprobación de CEDIS y sin PDF de remisión.');
+        $codigoCobertura = $pedido->codigoModalidadPreparacionVigente()
+            ?: (is_array($pedido->solicitud_preparacion_json) ? ($pedido->solicitud_preparacion_json['codigo_modalidad'] ?? null) : null);
+        if ($codigoCobertura === CatalogoModalidadPreparacionPedido::CODIGO_RECOGE_TIENDA) {
+            throw new \RuntimeException('El apartado para pagar en tienda se cobra y se entrega en la sucursal. No pasa por esta aprobación.');
         }
 
         if ($pedido->esEnvioSoloResguardos()) {

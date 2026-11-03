@@ -48,7 +48,19 @@ class ConfirmarPagoSalidaPreparacionService
         }
 
         $politica = PoliticaSalidaPreparacion::desdeTarea($tarea);
-        if ($politica->soloApartado()) {
+        if ($politica->esRecogeHoy()) {
+            $tarea->loadMissing('cumplimientoFisico');
+            if ($tarea->cumplimientoFisico?->estado !== PedidoBmaCumplimientoFisico::ESTADO_APARTADO_CONFIRMADO) {
+                throw ValidationException::withMessages([
+                    'estado' => 'El pago presencial se confirma después del apartado físico.',
+                ]);
+            }
+            if ($condicion !== PoliticaSalidaPreparacion::COBRO_PAGADO) {
+                throw ValidationException::withMessages([
+                    'condicion_cobro' => 'El apartado se cobra al recoger. No admite quedar por cobrar.',
+                ]);
+            }
+        } elseif ($politica->soloApartado()) {
             throw ValidationException::withMessages([
                 'modalidad' => 'Recoge en tienda solo confirma el apartado. No hay pago ni transferencia.',
             ]);

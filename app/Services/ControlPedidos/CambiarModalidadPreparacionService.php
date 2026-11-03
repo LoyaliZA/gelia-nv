@@ -7,8 +7,10 @@ use App\Models\ControlPedidos\PedidoBma;
 use App\Models\ControlPedidos\PedidoBmaCumplimientoFisico;
 use App\Models\ControlPedidos\PedidoBmaTareaHistorial;
 use App\Models\ControlPedidos\PedidoBmaTareaPreparacion;
+use App\Models\ControlPedidos\PedidoBmaDocumento;
 use App\Models\User;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
+use Illuminate\Http\UploadedFile;
 use App\Support\ControlPedidos\InstruccionEntrega;
 use App\Support\ControlPedidos\VisibilidadPedidoBma;
 use Illuminate\Support\Facades\DB;
@@ -38,6 +40,7 @@ class CambiarModalidadPreparacionService
         string $codigoModalidad,
         string $motivo,
         ?int $versionEsperada = null,
+        ?UploadedFile $evidencia = null,
     ): PedidoBmaTareaPreparacion {
         if (! $usuario->can('control_pedidos.preparacion.solicitar')
             && ! $usuario->can('control_pedidos.preparacion.corregir')) {
@@ -84,7 +87,7 @@ class CambiarModalidadPreparacionService
             ->where('activo', true)
             ->firstOrFail();
 
-        return DB::transaction(function () use ($tarea, $usuario, $modalidad, $motivo, $versionEsperada) {
+        return DB::transaction(function () use ($tarea, $usuario, $modalidad, $motivo, $versionEsperada, $evidencia) {
             $pedido = PedidoBma::query()->lockForUpdate()->findOrFail($tarea->pedido_bma_id);
             $pedido->loadMissing('estatus');
             $tarea = PedidoBmaTareaPreparacion::query()->lockForUpdate()->findOrFail($tarea->id);
@@ -207,9 +210,34 @@ class CambiarModalidadPreparacionService
                 ]);
             }
 
+            $evidenciaRuta = null;
+            if ($evidencia) {
+                $evidenciaRuta = $evidencia->store('pedidos_bma/'.$pedido->id.'/cambio-modalidad', 'public');
+                $pedido->documentos()->create([
+                    'tipo' => PedidoBmaDocumento::TIPO_EVIDENCIA_CONDICION,
+                    'ruta_archivo' => $evidenciaRuta,
+                    'nombre_original' => $evidencia->getClientOriginalName(),
+                    'mime_type' => $evidencia->getMimeType(),
+                    'tamano_bytes' => $evidencia->getSize(),
+                    'orden' => ((int) $pedido->documentos()->max('orden')) + 1,
+                    'comentario' => $motivo,
+                    'activo' => true,
+                ]);
+            }
+
             $json = is_array($pedido->solicitud_preparacion_json) ? $pedido->solicitud_preparacion_json : [];
             $json['version'] = 1;
             $json['codigo_modalidad'] = $modalidad->codigo;
+            $json['cambio_modalidad'] = [
+                'tarea_anterior_id' => $tarea->id,
+                'tarea_nueva_id' => $nueva->id,
+                'causa' => $motivo,
+                'evidencia' => $evidenciaRuta,
+                'pagos_conservados' => true,
+                'remision_conservada' => true,
+                'circuito_receptor' => $modalidad->esDestinoSucursal() ? 'tienda' : 'envio',
+                'recepcion_confirmada' => false,
+            ];
             $pedido->update(['solicitud_preparacion_json' => $json]);
 
             if ($pedido->estatus) {
@@ -223,14 +251,17 @@ class CambiarModalidadPreparacionService
                 );
             }
 
+            $circuito = $json['cambio_modalidad']['circuito_receptor'] ?? 'tienda';
             $this->notificarService->ejecutar(
                 $pedido->fresh(['cliente', 'vendedor']),
                 'pedido_preparacion_cambio_modalidad',
-                "La instrucción de entrega cambió a {$modalidad->nombre}. La mercancía apartada permanece en su ubicación.",
-                ['control_pedidos.tienda.ver'],
+                "La instrucción vigente es {$modalidad->nombre}. La anterior queda en historial. Pagos y remisión se conservan.",
+                [$circuito === 'envio' ? 'control_pedidos.cedis' : 'control_pedidos.tienda.ver'],
                 $usuario->id,
                 true,
-                ['url' => '/control-pedidos/tienda?tarea='.$nueva->id]
+                ['url' => $circuito === 'envio'
+                    ? '/control-pedidos?tarea='.$nueva->id
+                    : '/control-pedidos/tienda?tarea='.$nueva->id]
             );
 
             return $nueva->fresh(['modalidad', 'almacen', 'productos', 'pedido.cliente', 'cumplimientoFisico']);

@@ -47,6 +47,14 @@ class PedidoBmaRevisionProducto extends Model
 
     public const RESOLUCION_STOCK_OK = 'stock_ok';
 
+    public const RESOLUCION_ACEPTAR_DISPONIBLE = 'aceptar_disponible';
+
+    public const RESOLUCION_ACEPTAR_CONDICION = 'aceptar_condicion';
+
+    public const RESOLUCION_ALTERNATIVA = 'solicitar_alternativa';
+
+    public const RESOLUCION_DESISTIR = 'desistir';
+
     public const RESOLUCIONES = [
         self::RESOLUCION_CONTACTAR,
         self::RESOLUCION_ESPERAR,
@@ -55,10 +63,23 @@ class PedidoBmaRevisionProducto extends Model
         self::RESOLUCION_STOCK_OK,
     ];
 
+    /** Decisiones de Tienda. No pasan por el circuito viejo de sin existencias. */
+    public const RESOLUCIONES_DECISION_TIENDA = [
+        self::RESOLUCION_ACEPTAR_DISPONIBLE,
+        self::RESOLUCION_ACEPTAR_CONDICION,
+        self::RESOLUCION_RETIRAR,
+        self::RESOLUCION_SUSTITUIR,
+        self::RESOLUCION_ALTERNATIVA,
+        self::RESOLUCION_DESISTIR,
+    ];
+
     public const RESOLUCIONES_CIERRAN = [
         self::RESOLUCION_RETIRAR,
         self::RESOLUCION_SUSTITUIR,
         self::RESOLUCION_STOCK_OK,
+        self::RESOLUCION_ACEPTAR_DISPONIBLE,
+        self::RESOLUCION_ACEPTAR_CONDICION,
+        self::RESOLUCION_DESISTIR,
     ];
 
     public const LABELS_RESOLUCION = [
@@ -67,6 +88,10 @@ class PedidoBmaRevisionProducto extends Model
         self::RESOLUCION_RETIRAR => 'Retirar producto',
         self::RESOLUCION_SUSTITUIR => 'Sustituir producto',
         self::RESOLUCION_STOCK_OK => 'Ya hay existencias',
+        self::RESOLUCION_ACEPTAR_DISPONIBLE => 'Aceptar lo disponible',
+        self::RESOLUCION_ACEPTAR_CONDICION => 'Aceptar la condición',
+        self::RESOLUCION_ALTERNATIVA => 'Solicitar alternativa',
+        self::RESOLUCION_DESISTIR => 'Desistir',
     ];
 
     protected $table = 'pedido_bma_revisiones_producto';

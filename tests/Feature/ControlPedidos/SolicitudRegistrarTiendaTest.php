@@ -12,12 +12,14 @@ use App\Models\ControlPedidos\PedidoBma;
 use App\Models\ControlPedidos\PedidoBmaCumplimientoFisico;
 use App\Models\ControlPedidos\PedidoBmaDocumento;
 use App\Models\ControlPedidos\PedidoBmaRevisionProducto;
+use App\Models\ControlPedidos\PedidoBmaTareaDocumento;
 use App\Models\ControlPedidos\PedidoBmaTareaPreparacion;
 use App\Models\Departamento;
 use App\Models\Sucursal;
 use App\Models\User;
 use App\Services\ControlPedidos\ResponderDisponibilidadInicialService;
 use App\Support\ControlPedidos\RegistrarPedidos\ExpedienteRegistrarPedidos;
+use App\Support\ControlPedidos\RespuestaPreparacionTienda;
 use App\Support\ControlPedidos\RevisionCapturaPedido;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
@@ -227,7 +229,7 @@ class SolicitudRegistrarTiendaTest extends TestCase
             '/control-pedidos/tienda/tareas/'.$tarea->id.'/disponibilidad',
             [
                 'confirmacion_explicita' => 1,
-                'evidencias' => [UploadedFile::fake()->create('pedido-completo.pdf', 20, 'application/pdf')],
+                'evidencias' => [UploadedFile::fake()->image('conjunto.jpg', 40, 40)],
             ],
             ['Accept' => 'application/json']
         )->assertOk();
@@ -247,6 +249,9 @@ class SolicitudRegistrarTiendaTest extends TestCase
             $tarea->cumplimientoFisico->estado
         );
         $this->assertSame(1, $pedido->documentos()->where('tipo', PedidoBmaDocumento::TIPO_EVIDENCIA_CONDICION)->count());
+        $this->assertSame(1, $tarea->documentos()->where('tipo_evidencia', PedidoBmaTareaDocumento::TIPO_EVIDENCIA_GENERAL)->count());
+        $visible = RespuestaPreparacionTienda::datos($tarea->fresh(['documentos', 'productos', 'atendidaPor', 'cumplimientoFisico']));
+        $this->assertSame('image/jpeg', $visible['documentos'][0]['mime_type']);
         $this->assertSame(0, $pedido->revisionesProducto()->count());
 
         $this->actingAs($this->usuario)->post(
@@ -374,6 +379,463 @@ class SolicitudRegistrarTiendaTest extends TestCase
         $this->assertSame(ResponderDisponibilidadInicialService::DECISION_EXCEPCIONES, $expediente['decision_pendiente']);
         $this->assertSame('Crema corporal', $expediente['excepciones'][0]['descripcion']);
         $this->assertNull($pieza->fresh()->resolucion);
+    }
+
+    public function test_el_retiro_de_piezas_queda_documentado_despues_de_la_respuesta(): void
+    {
+        $pedido = $this->pedido([
+            'solicitud_preparacion_json' => [
+                'version' => 1,
+                'modalidad_entrega' => 'tienda',
+                'area_revision' => 'preparacion_tienda',
+                'revision_disponibilidad' => [
+                    'estado' => 'sin_excepciones',
+                    'confirmada' => true,
+                ],
+            ],
+        ]);
+
+        $this->actingAs($this->usuario)->postJson("/control-pedidos/{$pedido->id}/retiro-piezas-tienda", [
+            'motivo' => 'El cliente ya no quiere la pieza de regalo',
+            'piezas' => [[
+                'sku' => 'SKU-1',
+                'descripcion' => 'Crema corporal',
+                'cantidad' => 1,
+            ]],
+        ])->assertOk()->assertJsonPath('ok', true);
+
+        $leida = $pedido->fresh()->solicitud_preparacion;
+        $this->assertSame('El cliente ya no quiere la pieza de regalo', $leida['retiro_piezas'][0]['motivo']);
+        $this->assertSame('Crema corporal', $leida['retiro_piezas'][0]['piezas'][0]['descripcion']);
+        $this->assertNull($pedido->fresh()->pesaje_respondido_at);
+    }
+
+    public function test_el_retiro_conserva_varias_evidencias_de_la_peticion(): void
+    {
+        Storage::fake('public');
+        $pedido = $this->pedido([
+            'solicitud_preparacion_json' => [
+                'version' => 1,
+                'modalidad_entrega' => 'tienda',
+                'area_revision' => 'preparacion_tienda',
+                'revision_disponibilidad' => [
+                    'estado' => 'sin_excepciones',
+                    'confirmada' => true,
+                ],
+            ],
+        ]);
+
+        $this->actingAs($this->usuario)->post(
+            "/control-pedidos/{$pedido->id}/retiro-piezas-tienda",
+            [
+                'motivo' => 'El cliente ya no lo quiere',
+                'piezas' => [[
+                    'sku' => 'SKU-1',
+                    'descripcion' => 'Crema corporal',
+                    'cantidad' => 1,
+                ]],
+                'evidencias' => [
+                    UploadedFile::fake()->image('captura-1.jpg'),
+                    UploadedFile::fake()->image('captura-2.jpg'),
+                    UploadedFile::fake()->image('captura-3.jpg'),
+                ],
+            ],
+            ['Accept' => 'application/json']
+        )->assertOk();
+
+        $documentos = $pedido->fresh()->documentos()->orderBy('orden')->get();
+        $this->assertCount(3, $documentos);
+        $this->assertSame(
+            ['captura-1.jpg', 'captura-2.jpg', 'captura-3.jpg'],
+            $documentos->pluck('nombre_original')->all()
+        );
+    }
+
+    public function test_el_retiro_no_procede_sin_respuesta(): void
+    {
+        $pedido = $this->pedido();
+
+        $this->actingAs($this->usuario)->postJson("/control-pedidos/{$pedido->id}/retiro-piezas-tienda", [
+            'motivo' => 'Retiro anticipado',
+            'piezas' => [[
+                'sku' => 'SKU-1',
+                'descripcion' => 'Crema corporal',
+                'cantidad' => 1,
+            ]],
+        ])->assertStatus(422);
+    }
+
+    public function test_el_pdf_del_pedido_no_sustituye_la_foto_del_conjunto(): void
+    {
+        Storage::fake('public');
+        $this->permitirRevision();
+        $tarea = $this->solicitarTienda();
+        $this->actingAs($this->usuario)->postJson(
+            '/control-pedidos/tienda/tareas/'.$tarea->id.'/tomar',
+            ['version' => $tarea->version]
+        )->assertOk();
+
+        $this->actingAs($this->usuario)->post(
+            '/control-pedidos/tienda/tareas/'.$tarea->id.'/disponibilidad',
+            [
+                'confirmacion_explicita' => 1,
+                'evidencias' => [UploadedFile::fake()->create('pedido-completo.pdf', 20, 'application/pdf')],
+            ],
+            ['Accept' => 'application/json']
+        )->assertStatus(422)->assertJsonValidationErrors('evidencias');
+
+        $this->assertNull($tarea->pedido->fresh()->solicitud_preparacion_json['revision_disponibilidad'] ?? null);
+    }
+
+    public function test_una_foto_ya_guardada_se_reconoce_sin_volver_a_cargarla(): void
+    {
+        Storage::fake('public');
+        $this->permitirRevision();
+        $tarea = $this->solicitarTienda();
+        $this->actingAs($this->usuario)->postJson(
+            '/control-pedidos/tienda/tareas/'.$tarea->id.'/tomar',
+            ['version' => $tarea->version]
+        )->assertOk();
+        $foto = $tarea->documentos()->create([
+            'tipo_evidencia' => PedidoBmaTareaDocumento::TIPO_EVIDENCIA_GENERAL,
+            'ruta_interna' => 'pedidos_bma/tareas_preparacion/'.$tarea->id.'/conjunto.jpg',
+            'nombre_original' => 'conjunto.jpg',
+            'mime_type' => 'image/jpeg',
+            'tamano_bytes' => 1200,
+            'subido_por_id' => $this->usuario->id,
+            'subido_at' => now(),
+        ]);
+
+        $this->actingAs($this->usuario)->post(
+            '/control-pedidos/tienda/tareas/'.$tarea->id.'/disponibilidad',
+            [
+                'confirmacion_explicita' => 1,
+                'evidencias_guardadas' => [$foto->id],
+            ],
+            ['Accept' => 'application/json']
+        )->assertOk()->assertJsonPath('estado', 'sin_excepciones');
+
+        $pedido = $tarea->pedido->fresh();
+        $this->assertSame(1, $pedido->documentos()->where('tipo', PedidoBmaDocumento::TIPO_EVIDENCIA_CONDICION)->count());
+        $this->assertSame(0, $pedido->revisionesProducto()->count());
+        $visible = RespuestaPreparacionTienda::datos($tarea->fresh(['documentos', 'productos', 'atendidaPor', 'cumplimientoFisico']));
+        $this->assertSame($foto->id, $visible['documentos'][0]['id']);
+    }
+
+    public function test_la_revision_conserva_atributos_y_solo_registra_la_pieza_afectada(): void
+    {
+        Storage::fake('public');
+        $this->permitirRevision();
+        $tarea = $this->solicitarTienda();
+        $this->actingAs($this->usuario)->postJson(
+            '/control-pedidos/tienda/tareas/'.$tarea->id.'/tomar',
+            ['version' => $tarea->version]
+        )->assertOk();
+
+        $this->actingAs($this->usuario)->post(
+            '/control-pedidos/tienda/tareas/'.$tarea->id.'/disponibilidad',
+            [
+                'confirmacion_explicita' => 0,
+                'version' => 1,
+                'lineas' => [
+                    [
+                        'sku' => 'SKU-UNICA',
+                        'descripcion' => 'Frasco único',
+                        'cantidad' => 1,
+                        'estado_fisico' => 'bueno',
+                        'observacion' => '',
+                        'unica_pieza' => 1,
+                        'mejor_ejemplar' => 1,
+                    ],
+                    [
+                        'sku' => 'SKU-FALTA',
+                        'descripcion' => 'Crema agotada',
+                        'cantidad' => 0,
+                        'estado_fisico' => 'sin_existencia',
+                        'observacion' => 'Sin existencias',
+                    ],
+                ],
+                'excepciones' => [[
+                    'descripcion' => 'Crema agotada',
+                    'sku' => 'SKU-FALTA',
+                    'cantidad' => 1,
+                    'condicion' => 'faltante',
+                    'detalle' => 'Sin existencias',
+                ]],
+                'evidencias' => [UploadedFile::fake()->image('conjunto.jpg', 40, 40)],
+            ],
+            ['Accept' => 'application/json']
+        )->assertOk()->assertJsonPath('estado', 'excepciones_pendientes');
+
+        $tarea = $tarea->fresh(['productos', 'documentos', 'atendidaPor', 'cumplimientoFisico']);
+        $unica = $tarea->productos->firstWhere('sku', 'SKU-UNICA');
+        $this->assertTrue((bool) $unica->unica_pieza);
+        $this->assertTrue((bool) $unica->mejor_ejemplar);
+        $this->assertSame('bueno', $unica->estado_fisico);
+        $this->assertSame(1, $tarea->pedido->revisionesProducto()->count());
+        $this->assertSame('Crema agotada', $tarea->pedido->revisionesProducto()->value('descripcion_producto'));
+        $visible = RespuestaPreparacionTienda::datos($tarea);
+        $this->assertTrue($visible['productos'][0]['unica_pieza'] || $visible['productos'][1]['unica_pieza']);
+        $this->assertSame('image/jpeg', $visible['documentos'][0]['mime_type']);
+    }
+
+    public function test_el_anexo_documental_no_exige_sku_y_queda_pendiente_de_identificar(): void
+    {
+        Storage::fake('public');
+        $this->permitirRevision();
+        $tarea = $this->solicitarTienda();
+        $pedido = $tarea->pedido;
+
+        $this->actingAs($this->usuario)->post(
+            "/control-pedidos/{$pedido->id}/anexo-tienda",
+            [
+                'entrada' => 'documento',
+                'evidencia' => UploadedFile::fake()->create('anexo.pdf', 20, 'application/pdf'),
+            ],
+            ['Accept' => 'application/json']
+        )->assertOk();
+
+        $fresco = $pedido->fresh();
+        $linea = $fresco->solicitud_preparacion_json['anexo_sin_remision'][0];
+        $this->assertSame('documento', $linea['entrada']);
+        $this->assertTrue($linea['pendiente_identificacion']);
+        $this->assertArrayNotHasKey('sku', $linea);
+        $this->assertSame(1, $fresco->documentos()->where('tipo', PedidoBmaDocumento::TIPO_ANEXO_PIEZAS)->count());
+
+        $this->actingAs($this->usuario)->postJson(
+            '/control-pedidos/tienda/tareas/'.$tarea->id.'/tomar',
+            ['version' => $tarea->version]
+        )->assertOk();
+        $this->actingAs($this->usuario)->getJson('/control-pedidos/tienda/tareas/'.$tarea->id)
+            ->assertOk()
+            ->assertJsonPath('tarea.pedido.anexos_pendientes.0.entrada', 'documento');
+    }
+
+    public function test_el_anexo_por_catalogo_conserva_las_cantidades(): void
+    {
+        Storage::fake('public');
+        $pedido = $this->pedido();
+        $this->documento($pedido);
+
+        $this->actingAs($this->usuario)->post(
+            "/control-pedidos/{$pedido->id}/anexo-tienda",
+            [
+                'entrada' => 'catalogo',
+                'piezas' => [
+                    ['sku' => 'SKU-A', 'descripcion' => 'Crema', 'cantidad' => 2],
+                    ['sku' => 'SKU-B', 'descripcion' => 'Loción', 'cantidad' => 1],
+                ],
+                'evidencia' => UploadedFile::fake()->create('anexo.pdf', 20, 'application/pdf'),
+            ],
+            ['Accept' => 'application/json']
+        )->assertOk();
+
+        $lineas = $pedido->fresh()->solicitud_preparacion_json['anexo_sin_remision'];
+        $this->assertSame(2, $lineas[0]['cantidad']);
+        $this->assertSame('SKU-A', $lineas[0]['sku']);
+        $this->assertSame(1, $lineas[1]['cantidad']);
+        $this->assertSame('catalogo', $lineas[1]['entrada']);
+    }
+
+    public function test_cerrar_consulta_sin_respuesta_responde_json(): void
+    {
+        $pedido = $this->pedido();
+
+        $this->actingAs($this->usuario)
+            ->postJson("/control-pedidos/{$pedido->id}/cerrar-consulta")
+            ->assertStatus(422)
+            ->assertJsonStructure(['message']);
+    }
+
+    public function test_el_retiro_documental_conserva_todas_las_capturas_sin_sku(): void
+    {
+        Storage::fake('public');
+        $pedido = $this->pedido([
+            'solicitud_preparacion_json' => [
+                'version' => 1,
+                'modalidad_entrega' => 'tienda',
+                'area_revision' => 'preparacion_tienda',
+                'revision_disponibilidad' => [
+                    'estado' => 'sin_excepciones',
+                    'confirmada' => true,
+                ],
+            ],
+        ]);
+        $archivos = [];
+        for ($i = 1; $i <= 21; $i++) {
+            $archivos[] = UploadedFile::fake()->image("pieza-{$i}.jpg");
+        }
+
+        $this->actingAs($this->usuario)->post(
+            "/control-pedidos/{$pedido->id}/retiro-piezas-tienda",
+            [
+                'entrada' => 'documento',
+                'motivo_opcion' => 'El cliente ya no lo quiere',
+                'motivo' => 'El cliente ya no lo quiere',
+                'documentos' => $archivos,
+            ],
+            ['Accept' => 'application/json']
+        )->assertOk();
+
+        $retiro = $pedido->fresh()->solicitud_preparacion_json['retiro_piezas'][0];
+        $this->assertSame('pendiente', $retiro['estado']);
+        $this->assertSame('documento', $retiro['entrada']);
+        $this->assertSame([], $retiro['piezas']);
+        $this->assertCount(21, $retiro['documentos_piezas']);
+        $this->assertSame(21, $pedido->fresh()->documentos()->where('relacion_tipo', PedidoBmaDocumento::RELACION_RETIRO_PIEZAS)->count());
+        $this->assertFalse($pedido->fresh()->solicitud_preparacion_json['revision_disponibilidad']['aceptacion_vigente']);
+    }
+
+    public function test_el_auxiliar_aplica_una_vez_el_retiro_de_catalogo_y_rechaza_lo_ajeno(): void
+    {
+        $this->permitirRevision();
+        $tarea = $this->solicitarTienda();
+        $this->actingAs($this->usuario)->postJson(
+            '/control-pedidos/tienda/tareas/'.$tarea->id.'/tomar',
+            ['version' => $tarea->version]
+        )->assertOk();
+        $tarea->productos()->create([
+            'sku' => 'SKU-REAL',
+            'descripcion_snapshot' => 'Crema comprometida',
+            'cantidad_solicitada' => 4,
+            'cantidad_encontrada' => 4,
+            'estado_fisico' => 'bueno',
+            'orden' => 1,
+        ]);
+        $pedido = $tarea->pedido->fresh();
+        $json = $pedido->solicitud_preparacion_json;
+        $json['revision_disponibilidad'] = ['estado' => 'sin_excepciones', 'confirmada' => true];
+        $pedido->update(['solicitud_preparacion_json' => $json]);
+
+        $this->actingAs($this->usuario)->postJson("/control-pedidos/{$pedido->id}/retiro-piezas-tienda", [
+            'entrada' => 'catalogo',
+            'motivo_opcion' => 'Otro',
+            'motivo' => 'El cliente pidió la mitad',
+            'piezas' => [[
+                'sku' => 'SKU-AJENA',
+                'descripcion' => 'Pieza que no está',
+                'cantidad' => 1,
+            ]],
+        ])->assertOk();
+
+        $this->actingAs($this->usuario)->postJson(
+            '/control-pedidos/tienda/tareas/'.$tarea->id.'/retiro-piezas/atender',
+            ['version' => 1, 'decision' => 'aplicar']
+        )->assertStatus(422);
+
+        $pedido->refresh();
+        $json = $pedido->solicitud_preparacion_json;
+        $json['retiro_piezas'][0]['piezas'] = [[
+            'sku' => 'SKU-REAL',
+            'descripcion' => 'Crema comprometida',
+            'cantidad' => 2,
+        ]];
+        $pedido->update(['solicitud_preparacion_json' => $json]);
+
+        $this->actingAs($this->usuario)->postJson(
+            '/control-pedidos/tienda/tareas/'.$tarea->id.'/retiro-piezas/atender',
+            ['version' => 1, 'decision' => 'aplicar']
+        )->assertOk();
+        $this->actingAs($this->usuario)->postJson(
+            '/control-pedidos/tienda/tareas/'.$tarea->id.'/retiro-piezas/atender',
+            ['version' => 1, 'decision' => 'aplicar']
+        )->assertStatus(422);
+
+        $this->assertSame(2, (int) $tarea->productos()->where('sku', 'SKU-REAL')->value('cantidad_encontrada'));
+        $this->assertSame('aplicada', $pedido->fresh()->solicitud_preparacion_json['retiro_piezas'][0]['estado']);
+        $this->assertTrue($pedido->fresh()->solicitud_preparacion_json['revision_disponibilidad']['aceptacion_vigente']);
+    }
+
+    public function test_el_motivo_otro_exige_texto_y_la_peticion_puede_ir_sin_evidencia(): void
+    {
+        $pedido = $this->pedido([
+            'solicitud_preparacion_json' => [
+                'version' => 1,
+                'modalidad_entrega' => 'tienda',
+                'area_revision' => 'preparacion_tienda',
+                'revision_disponibilidad' => ['estado' => 'sin_excepciones', 'confirmada' => true],
+            ],
+        ]);
+
+        $this->actingAs($this->usuario)->postJson("/control-pedidos/{$pedido->id}/retiro-piezas-tienda", [
+            'entrada' => 'catalogo',
+            'motivo_opcion' => 'Pieza duplicada',
+            'motivo' => 'Pieza duplicada',
+            'piezas' => [[
+                'sku' => 'SKU-1',
+                'descripcion' => 'Crema corporal',
+                'cantidad' => 1,
+            ]],
+        ])->assertOk();
+        $this->assertSame(0, $pedido->fresh()->documentos()->count());
+
+        $this->actingAs($this->usuario)->postJson("/control-pedidos/{$pedido->id}/retiro-piezas-tienda", [
+            'entrada' => 'catalogo',
+            'motivo' => '',
+            'piezas' => [[
+                'sku' => 'SKU-2',
+                'descripcion' => 'Loción',
+                'cantidad' => 1,
+            ]],
+        ])->assertStatus(422);
+    }
+
+    public function test_la_cobertura_y_el_cierre_esperan_una_consulta_vigente(): void
+    {
+        Storage::fake('public');
+        $this->permitirRevision();
+        $tarea = $this->solicitarTienda();
+        $pedido = $tarea->pedido;
+        $this->actingAs($this->usuario)->postJson(
+            '/control-pedidos/tienda/tareas/'.$tarea->id.'/tomar',
+            ['version' => $tarea->version]
+        )->assertOk();
+
+        $this->actingAs($this->usuario)->postJson("/control-pedidos/{$pedido->id}/cobertura-tienda", [
+            'cobertura' => 'apartado',
+        ])->assertStatus(422);
+
+        $this->actingAs($this->usuario)->post(
+            '/control-pedidos/tienda/tareas/'.$tarea->id.'/apartado/confirmar',
+            [
+                'version' => 1,
+                'lineas' => [[
+                    'sku' => 'SKU-1',
+                    'descripcion' => 'Crema',
+                    'cantidad' => 1,
+                    'estado_fisico' => 'bueno',
+                ]],
+            ],
+            ['Accept' => 'application/json']
+        )->assertStatus(422);
+
+        $this->actingAs($this->usuario)->post(
+            '/control-pedidos/tienda/tareas/'.$tarea->id.'/disponibilidad',
+            [
+                'confirmacion_explicita' => 1,
+                'evidencias' => [UploadedFile::fake()->image('conjunto.jpg')],
+            ],
+            ['Accept' => 'application/json']
+        )->assertOk();
+
+        $this->actingAs($this->usuario)->postJson("/control-pedidos/{$pedido->id}/cerrar-consulta")
+            ->assertOk();
+        $this->assertNotNull($pedido->fresh()->consulta_cerrada_at);
+        $this->assertNull($pedido->fresh()->pago_validado_at);
+
+        $this->actingAs($this->usuario)->post(
+            '/control-pedidos/tienda/tareas/'.$tarea->id.'/apartado/guardar',
+            [
+                'version' => $tarea->fresh()->cumplimientoFisico->version,
+                'evidencias' => [UploadedFile::fake()->image('avance.jpg')],
+            ],
+            ['Accept' => 'application/json']
+        )->assertOk();
+        $this->assertSame(0, $tarea->productos()->count());
+        $this->assertNotSame(
+            PedidoBmaCumplimientoFisico::ESTADO_APARTADO_CONFIRMADO,
+            $tarea->fresh()->cumplimientoFisico->estado
+        );
     }
 
     private function permitirRevision(): void

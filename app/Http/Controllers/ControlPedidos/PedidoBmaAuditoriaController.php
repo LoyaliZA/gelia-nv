@@ -94,6 +94,44 @@ class PedidoBmaAuditoriaController extends Controller
         ]);
     }
 
+    public function registrarCreditoTienda(
+        Request $request,
+        PedidoBma $pedidoBma,
+        \App\Services\ControlPedidos\RegistrarResultadoCreditoTiendaService $servicio,
+    ): RedirectResponse {
+        VisibilidadPedidoBma::assertPuedeConsultar(Auth::user(), $pedidoBma);
+        $datos = $request->validate([
+            'resultado' => ['required', 'in:aprobado,bloqueado'],
+            'causa' => ['nullable', 'string', 'max:500'],
+        ]);
+        try {
+            $servicio->ejecutar($pedidoBma, Auth::user(), $datos['resultado'], (string) ($datos['causa'] ?? ''));
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return back()->with('error', collect($e->errors())->flatten()->first() ?: $e->getMessage());
+        }
+
+        return back()->with('success', 'Resultado de crédito registrado. No confirma la entrega.');
+    }
+
+    public function remisionCreditoTienda(
+        Request $request,
+        PedidoBma $pedidoBma,
+        \App\Services\ControlPedidos\RegistrarRemisionCreditoTiendaService $servicio,
+    ): RedirectResponse {
+        VisibilidadPedidoBma::assertPuedeConsultar(Auth::user(), $pedidoBma);
+        $datos = $request->validate([
+            'numero' => ['required', 'string', 'max:80'],
+            'archivo' => ['required', 'file', 'max:10240', 'mimes:pdf'],
+        ]);
+        try {
+            $servicio->ejecutar($pedidoBma, Auth::user(), $datos['numero'], $request->file('archivo'));
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return back()->with('error', collect($e->errors())->flatten()->first() ?: $e->getMessage());
+        }
+
+        return back()->with('success', 'Remisión registrada. Falta preparar y entregar.');
+    }
+
     public function validarPago(PedidoBma $pedidoBma, ValidarPagoPedidoBmaService $service): RedirectResponse
     {
         Gate::authorize('control_pedidos.auditar');

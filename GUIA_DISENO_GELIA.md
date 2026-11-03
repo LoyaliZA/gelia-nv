@@ -124,6 +124,10 @@ Si el usuario aprueba una nueva dirección o corrige una anterior, actualizar es
 
 ## Señales de que se perdió el rumbo
 
+Decisión del usuario del 3 de noviembre de 2026, acotada a Preparación Tienda y ajustes de piezas: conservar el espacio operativo con documento, escáner/buscador, atributos y galería al integrar revisión por excepciones. No superponer un formulario genérico que los oculte ni dar por conservada una evidencia solo porque existe un selector de archivos. Para anexos, priorizar PDF/captura y ofrecer selección por SKU/nombre como alternativa. La selección de piezas para retiro se conserva y se pule. El detalle funcional vigente está en la aclaración de la sección 5 de `.cursor/plans/ux_operativa_tienda_29953c70.plan.md`.
+
+Seguimiento en Registrar pedidos, misma fecha: Resultado del apartado y Ajuste de piezas usan el panel de Datos del pedido, con superficie sólida e icono junto al título. El retiro admite varias capturas de la petición del cliente, sin tope de archivos en la aplicación, con el rótulo «Evidencia petición cliente»; no es obligatoria. El motivo sale de un catálogo y solo «Otro» abre texto. Si la respuesta solo trae piezas con detalle, la pieza a retirar se busca por nombre o SKU. Cobertura y las secciones siguientes aparecen después de cerrar la consulta.
+
 - El resultado respeta tokens, pero parece pertenecer a otra aplicación.
 - Se eliminó la identidad del encabezado o se uniformaron todos los elementos por aplicar una recomendación genérica.
 - Se corrigió un defecto de distribución y se dio por resuelta una crítica a la composición completa.

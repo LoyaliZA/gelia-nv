@@ -23,6 +23,10 @@ class PedidoBmaDocumento extends Model
     public const TIPO_EVIDENCIA_TICKET_BULTO_EMPAQUE = 'evidencia_ticket_bulto_empaque';
 
     public const RELACION_REVISION_GENERAL = 'revision_general';
+
+    public const RELACION_RETIRO_PIEZAS = 'retiro_piezas';
+
+    public const RELACION_RETIRO_PETICION = 'retiro_peticion_cliente';
     public const RELACION_BULTO_EMPAQUE = 'bulto_empaque';
 
     public const RELACION_REVISION_PRODUCTO = 'revision_producto';

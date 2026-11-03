@@ -14,7 +14,7 @@ export default function ResultadoPreparacionTienda({ tarea, documentos = [], tip
         <div className="flex flex-wrap justify-between items-start gap-3">
             <div><h3 className="text-base font-semibold m-0 inline-flex items-center gap-2"><CheckCircle2 className="w-5 h-5 theme-text-exito" aria-hidden="true" />Respuesta registrada</h3>
                 <p className="text-sm theme-text-muted m-0 mt-1">{tarea.responsable?.name ? `Responsable: ${tarea.responsable.name}` : ''}{tarea.atendida_at ? ` · ${formatearFechaNegocio(tarea.atendida_at)}` : ''}</p></div>
-            <strong className="text-sm tabular-nums">{total} piezas preparadas</strong>
+            <strong className="text-sm tabular-nums">{tarea.apartado?.estado === 'APARTADO_CONFIRMADO' ? `${total} piezas apartadas` : `${total} piezas preparadas`}</strong>
         </div>
         <dl className="gelia-preparacion-meta">
             {tarea.apartado?.ubicacion && <div><dt>Ubicación del apartado</dt><dd>{tarea.apartado.ubicacion}</dd></div>}
@@ -22,6 +22,7 @@ export default function ResultadoPreparacionTienda({ tarea, documentos = [], tip
             {tarea.peso_volumetrico_kg && <div><dt>Peso volumétrico</dt><dd>{tarea.peso_volumetrico_kg} kg</dd></div>}
             {tarea.catalogo_tipo_caja_id && <div><dt>Caja</dt><dd>{tiposCaja.find((c) => Number(c.id) === Number(tarea.catalogo_tipo_caja_id))?.nombre || 'Registrada'}</dd></div>}
         </dl>
+        {tarea.apartado?.estado === 'APARTADO_CONFIRMADO' && <p className="text-sm theme-text-main m-0">Apartado confirmado. {tarea.apartado.pago_confirmado_at ? 'Pago presencial confirmado.' : 'Pago presencial pendiente.'} {tarea.apartado.entregada_at ? 'Entrega registrada.' : 'Entrega pendiente.'}</p>}
         {tarea.observaciones_respuesta && <p className="text-sm whitespace-pre-wrap break-words">{tarea.observaciones_respuesta}</p>}
         {tarea.observaciones_fisicas && <p className="text-sm whitespace-pre-wrap break-words"><strong>Estado físico general: </strong>{tarea.observaciones_fisicas}</p>}
         <div className="gelia-tienda-op-table-wrap mt-4"><table className="gelia-tienda-op-table"><caption className="sr-only">Productos y cantidades registrados en la respuesta</caption><thead><tr><th scope="col">Producto</th><th scope="col">Preparadas</th><th scope="col">Estado y detalle</th><th scope="col">Evidencias</th></tr></thead>

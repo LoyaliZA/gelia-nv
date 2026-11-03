@@ -28,7 +28,10 @@ final class AplicarCapturaTiendaPedido
             $atencion = $this->politica->evaluarAtencion([
                 'cobertura' => PoliticaAccionesRegistrarPedidos::coberturaDeCodigo($solicitud['codigo_modalidad'] ?? null),
                 'atencion' => 'prevista',
-                'facultad' => $usuario->can(PoliticaAccionesRegistrarPedidos::PERMISO_MD) || $usuario->hasRole('Super Admin'),
+                'facultad' => app(PreparacionTiendaConfig::class)->facultadMismoDia(
+                    $usuario,
+                    $pedido->departamento_operacion_id
+                ),
                 'sabado' => now()->isSaturday(),
             ]);
             if ($atencion['motivo']) {

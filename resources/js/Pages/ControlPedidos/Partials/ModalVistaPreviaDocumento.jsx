@@ -10,7 +10,7 @@ import {
 } from './pedidosBmaStyles';
 import VisorPdfPaginas from './VisorPdfPaginas';
 
-const esPdf = (doc) => {
+export function esPdf(doc) {
     const nombre = String(doc?.nombre_original || doc?.url || '').toLowerCase();
     const mime = String(doc?.mime_type || doc?.mime || '').toLowerCase();
     if (nombre.endsWith('.pdf') || mime.includes('pdf')) return true;

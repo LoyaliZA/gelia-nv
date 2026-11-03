@@ -21,6 +21,8 @@ export default function ApartadoFisicoTienda({ onEnviar = null,  tarea, auth, co
     const [motivoProrroga, setMotivoProrroga] = useState('');
     const [codigoModalidad, setCodigoModalidad] = useState('');
     const [motivoModalidad, setMotivoModalidad] = useState('');
+    const [receptorEntrega, setReceptorEntrega] = useState('');
+    const [fotoEntrega, setFotoEntrega] = useState(null);
     const [condicionCobro, setCondicionCobro] = useState('PAGADO');
     const [folioOperacion, setFolioOperacion] = useState('');
     const [skuAnexo, setSkuAnexo] = useState('');
@@ -29,6 +31,7 @@ export default function ApartadoFisicoTienda({ onEnviar = null,  tarea, auth, co
     const [productoDetalleId, setProductoDetalleId] = useState('');
     const [estadoDetalle, setEstadoDetalle] = useState('regular');
     const [observacionDetalle, setObservacionDetalle] = useState('');
+    const [evidenciaModalidad, setEvidenciaModalidad] = useState(null);
 
     if (!apartado) return null;
 
@@ -58,6 +61,25 @@ export default function ApartadoFisicoTienda({ onEnviar = null,  tarea, auth, co
             motivo: motivoProrroga,
             version: apartado.version,
         });
+    };
+
+    const recibirCustodia = () => {
+        postOperacion(route('control_pedidos.tienda.custodia.recibir', tarea.id), {});
+    };
+
+    const entregarCustodia = () => {
+        const form = new FormData();
+        form.append('receptor', receptorEntrega);
+        if (fotoEntrega) form.append('foto', fotoEntrega);
+        postOperacion(route('control_pedidos.tienda.custodia.entregar', tarea.id), form, { forceFormData: true });
+    };
+
+    const entregarApartado = () => {
+        const form = new FormData();
+        form.append('receptor', receptorEntrega);
+        form.append('version', apartado.version);
+        if (fotoEntrega) form.append('foto', fotoEntrega);
+        postOperacion(route('control_pedidos.tienda.salida.entrega', tarea.id), form, { forceFormData: true });
     };
 
     const confirmarPago = () => {
@@ -101,15 +123,17 @@ export default function ApartadoFisicoTienda({ onEnviar = null,  tarea, auth, co
     };
 
     const cambiarModalidad = () => {
-        postOperacion(route('control_pedidos.preparacion.cambiar_modalidad', tarea.id), {
-            codigo_modalidad: codigoModalidad,
-            motivo: motivoModalidad,
-            version: tarea.version,
-        });
+        const form = new FormData();
+        form.append('codigo_modalidad', codigoModalidad);
+        form.append('motivo', motivoModalidad);
+        form.append('version', tarea.version);
+        if (evidenciaModalidad) form.append('evidencia', evidenciaModalidad);
+        postOperacion(route('control_pedidos.preparacion.cambiar_modalidad', tarea.id), form, { forceFormData: true });
     };
 
     const modalidades = (config.modalidades_catalogo || []).filter((m) => m.codigo !== tarea.modalidad?.codigo);
     const esRecogeHoy = tarea.modalidad?.codigo === 'RECOGE_TIENDA';
+    const esCustodiaDiferida = ['RECOGE_TIENDA_TRANSFERENCIA', 'RECOGE_TIENDA_CREDITO'].includes(tarea.modalidad?.codigo);
     const esTransferencia = tarea.modalidad?.codigo === 'RECOGE_TIENDA_TRANSFERENCIA';
     const esCredito = tarea.modalidad?.codigo === 'RECOGE_TIENDA_CREDITO';
     const esResguardoPago = esTransferencia || esCredito;
@@ -169,12 +193,40 @@ export default function ApartadoFisicoTienda({ onEnviar = null,  tarea, auth, co
                 <button type="button" className={BTN_PRIMARY} onClick={autorizarSalida}>Autorizar salida</button>
             )}
 
-            {esRecogeHoy && (
-                <p className="text-xs font-bold m-0">Recogida el mismo día en PDV. Solo apartado y confirmación, sin pago ni transferencia.</p>
+            {esRecogeHoy && !apartadoConfirmado && (
+                <p className="text-xs font-bold m-0">Apartado para pagar y recoger en la sucursal. No es Mismo día ni confirma el cobro.</p>
             )}
 
-            {esRecogeHoy && apartadoConfirmado && (
-                <p className="text-xs font-bold m-0">Apartado confirmado. Este pedido no continúa a cobro ni a auditoría.</p>
+            {esRecogeHoy && apartadoConfirmado && !apartado.pago_confirmado_at && puedeValidarPago && (
+                <div className="grid sm:grid-cols-2 gap-3 items-end">
+                    <div>
+                        <label className={THEME_LABEL}>Folio del cobro presencial</label>
+                        <input className={`${THEME_INPUT} w-full mt-1`} value={folioOperacion} onChange={(e) => setFolioOperacion(e.target.value)} />
+                    </div>
+                    <button type="button" className={BTN_PRIMARY} onClick={confirmarPago}>Confirmar pago presencial</button>
+                </div>
+            )}
+
+            {esCustodiaDiferida && apartado.estado !== 'ENTREGADA' && (permisos.includes('control_pedidos.tienda.responder') || permisos.includes('control_pedidos.tienda.trasladar')) && (
+                <button type="button" className={BTN_PRIMARY} onClick={recibirCustodia}>Confirmar recepción y custodia</button>
+            )}
+
+            {esCustodiaDiferida && apartado.estado === 'LISTA_PARA_SALIDA' && permisos.includes('pdv.resguardos.entregar') && (
+                <div className="grid gap-3">
+                    <p className="text-xs font-bold m-0">La mercancía está en custodia. Falta la entrega con fotografía.</p>
+                    <input className={`${THEME_INPUT} w-full`} placeholder="Quién recibe" value={receptorEntrega} onChange={(e) => setReceptorEntrega(e.target.value)} />
+                    <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => setFotoEntrega(e.target.files?.[0] || null)} />
+                    <button type="button" className={BTN_PRIMARY} onClick={entregarCustodia}>Confirmar entrega de custodia</button>
+                </div>
+            )}
+
+            {esRecogeHoy && apartadoConfirmado && apartado.pago_confirmado_at && apartado.estado !== 'ENTREGADA' && permisos.includes('control_pedidos.salida.confirmar_entrega') && (
+                <div className="grid gap-3">
+                    <p className="text-xs font-bold m-0">Pago presencial registrado. Falta la fotografía de entrega.</p>
+                    <input className={`${THEME_INPUT} w-full`} placeholder="Quién recibe" value={receptorEntrega} onChange={(e) => setReceptorEntrega(e.target.value)} />
+                    <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => setFotoEntrega(e.target.files?.[0] || null)} />
+                    <button type="button" className={BTN_PRIMARY} onClick={entregarApartado}>Confirmar entrega</button>
+                </div>
             )}
 
             {puedeEditarRecoge && (
@@ -261,14 +313,16 @@ export default function ApartadoFisicoTienda({ onEnviar = null,  tarea, auth, co
                 </div>
             )}
 
-            {puedeModalidad && tareaAbierta && modalidades.length > 0 && !esRecogeHoy && (
+            {puedeModalidad && tareaAbierta && modalidades.length > 0 && (
                 <div className="space-y-2 border-t theme-border pt-3">
                     <label className={THEME_LABEL}>Cambiar modalidad</label>
+                    <p className="text-xs theme-text-muted m-0">La venta y los pagos reconocidos se conservan. Adjunte la evidencia del cambio.</p>
                     <select className={`${THEME_SELECT} w-full mt-1`} value={codigoModalidad} onChange={(e) => setCodigoModalidad(e.target.value)}>
                         <option value="">Seleccione</option>
                         {modalidades.map((m) => <option key={m.codigo} value={m.codigo}>{m.nombre}</option>)}
                     </select>
                     <textarea className={`${THEME_TEXTAREA} w-full`} value={motivoModalidad} onChange={(e) => setMotivoModalidad(e.target.value)} placeholder="Motivo del cambio" />
+                    <input type="file" accept="application/pdf,image/jpeg,image/png,image/webp" onChange={(e) => setEvidenciaModalidad(e.target.files?.[0] || null)} />
                     <button type="button" className={BTN_SECONDARY} onClick={cambiarModalidad}>Registrar cambio</button>
                 </div>
             )}

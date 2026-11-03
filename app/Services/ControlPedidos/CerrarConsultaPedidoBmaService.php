@@ -26,7 +26,7 @@ class CerrarConsultaPedidoBmaService
     {
         $pedido->loadMissing(['estatus', 'origen', 'vendedor']);
 
-        if ($pedido->esRecogeTiendaApartado()) {
+        if ($pedido->esRecogeTiendaApartado() && ! $pedido->listaParaCerrarConsultaTienda()) {
             throw new \RuntimeException('Recoge en tienda no cierra consulta ni abre monto o pago.');
         }
 
@@ -37,7 +37,8 @@ class CerrarConsultaPedidoBmaService
 
         if (! $pedido->puedeCerrarConsulta()) {
             throw new \RuntimeException(
-                'No se puede cerrar la consulta: se requiere respuesta vigente de CEDIS y que no haya actualización pendiente.'
+                $pedido->motivoBloqueoCierreConsultaTienda()
+                    ?: 'No se puede cerrar la consulta: se requiere respuesta vigente y que no haya ajustes pendientes.'
             );
         }
 

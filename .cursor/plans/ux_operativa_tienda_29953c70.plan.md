@@ -4,24 +4,27 @@ overview: Completar conjuntamente 2.1.1 a 2.1.5 para recorrer Tienda de registro
 todos:
   - id: contrato-compartido
     content: Unificar expediente, instrucción vigente, decisiones, cobertura y acciones entre todas las vistas; resolver las dependencias compartidas necesarias.
-    status: pending
+    status: completed
   - id: ejecutar-2-1-1
     content: Completar Registrar pedidos con continuidad por secciones, decisiones del cliente, cobertura, seguimiento y solicitudes de cambio o complemento.
-    status: pending
+    status: completed
   - id: ejecutar-2-1-2
     content: Completar Control Pedidos con revisión por excepciones, preparación, traslado, cambios y recepción de complementos.
-    status: pending
+    status: completed
   - id: ejecutar-2-1-3
     content: Completar Auditar pedidos con transferencia, crédito, remisión, diferencias y reglas de Tienda MD.
-    status: pending
+    status: completed
   - id: ejecutar-2-1-4
     content: Completar Preparación Tienda y su integración PDV para apartado, recepción, custodia, entrega y liberación física documentada.
-    status: pending
+    status: completed
   - id: ejecutar-2-1-5
     content: Integrar autorizaciones y cruces T-04/T-05/T-06; verificar recorridos, concurrencia y regresiones relevantes en una pasada conjunta.
-    status: pending
+    status: completed
+  - id: corregir-t01-y-ajustes
+    content: Resolver las incidencias de preparación, respuesta, retiro documental y cierre según correccion_t01_preparacion_respuesta_y_ajustes.plan.md; comprobar cambios presentes antes de reimplementarlos.
+    status: completed
   - id: repaso-usuario
-    content: Entregar matriz de casos reproducibles y registrar las validaciones del usuario sin confundir implementación con aceptación operativa.
+    content: Matriz actualizada el 3 nov 2026 con la continuación física. La validación del usuario sigue pendiente; no marcarla como aprobada.
     status: pending
 isProject: false
 ---
@@ -29,6 +32,8 @@ isProject: false
 # Fase 2.1 — Recorrido integral de Tienda
 
 ## 1. Decisión vigente — 3 de noviembre de 2026
+
+**Corrección ejecutada el 3 de noviembre de 2026:** [Preparación T-01, respuesta y ajustes](correccion_t01_preparacion_respuesta_y_ajustes.plan.md). Precisa el flujo y los adjuntos de retiros; sus criterios prevalecen en ese alcance. Los estados completed registran la entrega y las pruebas, no la aceptación operativa. T-01 sigue pendiente de esa aceptación.
 
 El usuario autoriza trabajar **todas las subfases 2.1.1 a 2.1.5 como una sola entrega integrada**. Las subfases organizan responsabilidades; no son puertas que requieran aprobación entre vistas. Completar primero el camino de Tienda y después entregar los casos para el repaso del usuario. Corregir las incidencias encontradas por recorrido, sin volver a planificar cada pantalla.
 
@@ -75,6 +80,23 @@ Cada pedido conserva un expediente compartido: cliente y número, departamento, 
 - Mostrar la siguiente acción y el motivo de un bloqueo en lenguaje operativo. Evitar códigos internos, explicaciones técnicas y promesas de entrega sin confirmar.
 
 ## 5. Trabajo por subfase, dentro de la misma entrega
+
+### Aclaración vigente del usuario — primera corrección de separación y anexos, 3 de noviembre de 2026
+
+Esta aclaración precisa la implementación de las subfases siguientes y prevalece sobre interpretaciones que sustituyan controles operativos existentes por formularios simplificados.
+
+- **Una sola superficie de preparación.** Integrar la respuesta de disponibilidad en el espacio existente de `PrepararApartadoRecoge`, con documento de referencia, escáner/buscador, estado físico, cantidades, atributos Única pieza/Mejor ejemplar/Sin existencias y evidencias. No apilar encima un segundo formulario que tape o desplace esos controles. Disponibilidad y apartado son eventos distintos, pero no requieren dos capturas incompatibles.
+- **Revisión por excepciones.** Permitir confirmar explícitamente el conjunto sin incidencias y detallar únicamente lo afectado. Conservar la captura mediante escáner/buscador cuando el auxiliar la necesita y los datos físicos existentes, sin exigir que la vendedora transcriba todo el documento ni que el auxiliar duplique la captura. Los atributos Única pieza y Mejor ejemplar se conservan como datos independientes; no son por sí mismos daño o faltante ni impiden declarar un conjunto sin excepciones.
+- **Evidencia integrada.** Conservar galería, vista previa, carga/pegado y captura desde celular ya disponibles. Diferenciar documento solicitado, evidencia general de mercancía y evidencia por pieza. Una evidencia válida persistida debe verse en preparación y en la respuesta de la vendedora sin volver a subirla para la misma revisión. Una captura/PDF del pedido no sustituye una foto obligatoria del conjunto físico. No mostrar PDF como miniatura de foto ni asociar evidencia de otra instrucción o versión.
+- **Anexos: dos entradas.** La principal es adjuntar el PDF o captura del pedido de anexo sin SKU, descripción por producto ni cantidad transcrita obligatorios. La alternativa es seleccionar productos del catálogo mediante SKU o nombre y sus cantidades, reutilizando el buscador existente. Ambas crean una solicitud de anexo pendiente de revisión del ejecutor; la vendedora no certifica su disponibilidad ni integración. El contrato HTTP y los servicios deben admitir la entrada documental sin SKU ficticio; el ejecutor resuelve los productos físicos necesarios antes de reservar, preparar o integrar. No implementar extracción automática ni anticipar imágenes de catálogo aún no disponibles.
+- **Retiro.** Conservar la selección de piezas y cantidades que el usuario consideró adecuada; pulir su presentación sin sustituir ese recorrido. Mantener sus restricciones según pago/remisión y su comunicación al ejecutor.
+- **Comprobación de esta corrección.** Recorrer T-01 hasta separación y comprobar que las evidencias y atributos llegan a Registrar pedidos; anexo documental sin SKU y anexo por catálogo; retiro parcial. Revisar el modal real, incluido móvil, y la respuesta receptora. No declarar T-01 validado ni reabrir la implementación completa de 2.1 por este ajuste.
+
+#### Corrección aplicada — 3 de noviembre de 2026
+
+La revisión de disponibilidad quedó dentro de `PrepararApartadoRecoge`. Ya no se apila `PanelRespuestaDisponibilidad` encima de la preparación. El apartado físico sigue siendo la acción «Confirmar apartado». Única pieza y Mejor ejemplar no se tratan como incidencia. La foto del conjunto es obligatoria; el PDF del pedido no la sustituye. Una foto ya guardada en la tarea se reconoce sin volver a cargarla y aparece en la respuesta de Registrar pedidos. El anexo documental no exige SKU; el de catálogo usa el buscador y conserva cantidades. El retiro de piezas conserva su recorrido.
+
+Comprobado en automático: `SolicitudRegistrarTiendaTest` (17 pruebas) y los dos recorridos de anexo ya existentes; Vitest del modal y de la preparación (18 pruebas); build del entorno. En pantalla: preparación del pedido 5645 en escritorio y a 390 px, con escáner, buscador, foto, documento ampliable y la confirmación del conjunto; en Registrar pedidos, PBMA-2026-00082 muestra la respuesta, el anexo documental, el buscador de productos y el retiro. No se envió revisión, anexo ni retiro sobre pedidos reales. La validación del usuario sigue pendiente.
 
 ### 2.1.1 — Registrar pedidos y seguimiento de la vendedora
 
@@ -185,18 +207,18 @@ Estado inicial al ampliar el alcance. «Pendiente» significa pendiente de compl
 
 | Caso | Recorrido que debe poder probarse | Entrega integral | Validación del usuario |
 | --- | --- | --- | --- |
-| T-01 | Consulta PDV → aceptación → apartado → pago presencial → foto/entrega; variante vencida | Pendiente | Pendiente |
-| T-02 | Consulta → transferencia/remisión → preparación → traslado/recepción → custodia → entrega | Pendiente | Pendiente |
-| T-02.1 | Intención MD → facultad/corte → cobertura/remisión → preparación/traslado → entrega o pendiente con causa | Pendiente | Pendiente |
-| T-03 | Destino/cambio previo → solicitud de segundo traslado → resolución → movimiento/recepción | Pendiente | Pendiente |
-| T-04 | Cambio autorizado → solicitud sustituta → pagos/remisión reconocidos → continuidad receptora | Pendiente | Pendiente |
-| T-05 | Remisiones custodiadas → retiro → traslado → recepción/integración CEDIS → continuidad de envío | Pendiente | Pendiente |
-| T-06 | Anexo consultado → ajuste permitido o nuevo pedido → cobertura → integración/entrega | Pendiente | Pendiente |
-| T-07 | Retirar/sustituir antes del pago → archivo/instrucción vigentes → reserva coherente | Pendiente | Pendiente |
-| T-08 | Excepción → decisión del cliente → respuesta al ejecutor → continuidad sin aceptación implícita | Pendiente | Pendiente |
-| T-09 | Crédito Wizerp aprobado/bloqueado → remisión o regularización/cancelación → preparación/entrega | Pendiente | Pendiente |
-| R-01 | Recepción → ubicación → custodia → entrega o movimiento autorizado/vencimiento trazable | Pendiente | Pendiente |
-| S-01/S-07 | Excedente/segundo ingreso → verificación → aplicación correcta y saldo separado sin duplicidad | Pendiente | Pendiente |
+| T-01 | Consulta PDV → aceptación → apartado → pago presencial → foto/entrega; variante vencida | Corrección de disponibilidad, retiro y cierre probada el 3 nov 2026: 23 pruebas PHP y 19 de interfaz en verde. El pago presencial hasta ENTREGADA sigue en `test_el_apartado_se_cobra_y_entrega_con_fotografia`. La bandeja mostró la respuesta pendiente del folio 45265236 sin enviarla. | Pendiente |
+| T-02 | Consulta → transferencia/remisión → preparación → traslado/recepción → custodia → entrega | Completa. `test_la_transferencia_se_recibe_en_custodia_y_se_entrega`: remisión REM-T02, recepción en custodia, apartado de inventario y entrega con fotografía. La entrega baja existencia y libera el apartado. | Pendiente |
+| T-02.1 | Intención MD → facultad/corte → cobertura/remisión → preparación/traslado → entrega o pendiente con causa | El corte sigue en `CorteMismoDiaTiendaTest` y no confirma la modalidad. La preparación, el traslado y la entrega posteriores usan el mismo recorrido de T-02. Siguen abiertas la duración VIP y la alternativa cuando la pieza ya está en PDV o el reporte llega después de las 13:00. | Pendiente |
+| T-03 | Destino/cambio previo → solicitud de segundo traslado → resolución → movimiento/recepción | Completa la autorización y el movimiento. `InstruccionEntregaVigenteTest` impide simular la recepción al autorizar. `test_el_segundo_traslado_se_mueve_despues_de_autorizarlo` exige la salida y después confirma la recepción en destino. | Pendiente |
+| T-04 | Cambio autorizado → solicitud sustituta → pagos/remisión reconocidos → continuidad receptora | Completa. `test_cambiar_modalidad_exige_archivo_y_conserva_pago_y_remision`: sin archivo la petición responde 422; con archivo la instrucción anterior queda sustituida, la nueva queda pendiente, se conservan pago y remisión REM-MOD y el circuito receptor es envío. | Pendiente |
+| T-05 | Remisiones custodiadas → retiro → traslado → recepción/integración CEDIS → continuidad de envío | Completa. `test_el_retiro_de_pdv_se_traslada_y_cedis_lo_integra`: remisión REM-PDV, salida PDV → CEDIS con el traspaso existente y recepción que marca `integrado_cedis` en el envío principal. Antes de la recepción el principal espera. | Pendiente |
+| T-06 | Anexo consultado → ajuste permitido o nuevo pedido → cobertura → integración/entrega | Completa cuando hay remisión. `test_el_anexo_se_cubre_se_remisiona_y_se_integra`: principal REM-PRI, anexo REM-ANX, cobertura y pago propios, preparación respondida e integración física. El anexo del día siguiente sin remisión sigue sin regla. | Pendiente |
+| T-07 | Retirar/sustituir antes del pago → archivo/instrucción vigentes → reserva coherente | Completa. `test_retirar_libera_el_compromiso_y_la_sustituta_exige_disponibilidad`: sin disponible no hay sustitución; con disponible se compromete la sustituta y la pieza anterior deja de estar apartada. | Pendiente |
+| T-08 | Excepción → decisión del cliente → respuesta al ejecutor → continuidad sin aceptación implícita | La decisión escribe `continuacion_ejecutor` en la tarea vigente y no vuelve disponible una pieza inexistente. La misma decisión no se duplica. La carrera MySQL `decidir` sigue sin ejecutarse: el usuario `sail` no puede crear `gelia_solicitud_211_test`. | Pendiente |
+| T-09 | Crédito Wizerp aprobado/bloqueado → remisión o regularización/cancelación → preparación/entrega | Completa la remisión, la custodia y la entrega: remisión REM-CRED. La cancelación AC-03 corre al iniciar el día posterior al de tolerancia y no cancela un crédito del día anterior. La hora dentro del día siguiente no está definida y no se inventó. | Pendiente |
+| R-01 | Recepción → ubicación → custodia → entrega o movimiento autorizado/vencimiento trazable | Completa el reintegro físico. A los 20 días, remisión REM-20, el apartado vuelve a 0, la existencia no se inventa, el cumplimiento queda en devolución pendiente y no se crea saldo. El destino del dinero sigue sin definir. | Pendiente |
+| S-01/S-07 | Excedente/segundo ingreso → verificación → aplicación correcta y saldo separado sin duplicidad | Completa la comprobación. `ReglasSaldosAFavorTest` pasa con mínimo de $10. `test_el_excedente_menor_a_diez_no_genera_saldo_y_no_se_aplica_al_mismo_pedido` rechaza $9.99 y excluye el mismo pedido. La referencia repetida no crea otro ingreso. | Pendiente |
 
 Por caso anotar al entregar: estado (implementado y probado / parcial / bloqueado), folio ficticio o prueba reproducible, resultado esperado/obtenido y pendiente concreto. El estado de aceptación del usuario permanece separado, con fecha y observación cuando lo revise.
 

@@ -1,12 +1,12 @@
 ---
-description: Coordinar renovaciones visuales con las skills del proyecto
-alwaysApply: true
+alwaysApply: false
 ---
+# Renovación visual — uso explícito
 
-Antes de elegir skills o un flujo de renovación, leer `AGENTS.md` y `GUIA_DISENO_GELIA.md` en la raíz. Elegir una referencia del producto y una necesidad concreta. La dirección de GELIA y las decisiones vigentes del usuario encuadran las recomendaciones de las skills.
+Aplicar únicamente si el usuario menciona esta regla o solicita expresamente exploración, prototipo o una renovación visual coordinada. No activar por una corrección de estilos, formulario o flujo.
 
-Cuando una exploración o renovación amplia requiera coordinación entre etapas, leer `.cursor/skills/visual-refresh/SKILL.md` y los recursos pertinentes. Interpretar su selección de herramientas según la guía común: no cargar automáticamente todas las skills enumeradas ni convertir «SaaS/ERP» en una estética ajena al producto.
-Detectar el perfil SaaS/ERP o ecommerce por la tarea del usuario final, y leer los estilos globales efectivos antes de proponer cambios.
-Para exploración, entregar propuesta visual aislada antes de editar vistas activas. Para implementar, reutilizar la elección y autorización existentes sin confirmaciones repetidas.
-Para correcciones pequeñas o trabajo sin objetivo visual, no iniciar este proceso ni cargar todas las skills de renovación. La regla de UX sigue aplicando solo en la superficie tocada. El conjunto de movimiento (`emil-design-eng`, `animate`, `find-animation-opportunities`, `review-animations` y afines) se lee si el cambio incluye movimiento, no en cada corrección, y no dispara `improve-animations` de todo el repositorio.
-Esta regla dirige la lectura del proceso; no implica que skills, hooks o auditorías se hayan ejecutado.
+Seguir `AGENTS.md` y `GUIA_DISENO_GELIA.md`. Usar `.cursor/skills/visual-refresh/SKILL.md` solo para el proceso solicitado, leyendo la etapa y los recursos necesarios; no cargar una suite completa ni delegar por defecto.
+
+Conservar identidad GELIA, referencias reales y autorizaciones vigentes. Si el usuario pide alternativas, presentar una propuesta revisable. Si ya autorizó implementar una dirección, continuar sin otra aprobación intermedia. Clasificar por la tarea de la persona, sin imponer una estética SaaS/ERP o ecommerce como sustituto de la identidad del producto.
+
+Distinguir recursos leídos, herramientas ejecutadas, revisión visual y validación funcional. No instalar skills, plugins, hooks o dependencias por efecto secundario.

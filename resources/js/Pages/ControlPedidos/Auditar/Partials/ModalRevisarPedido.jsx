@@ -59,6 +59,32 @@ const Campo = ({ label, value }) => (
     </div>
 );
 
+function CreditoTienda({ pedidoId, resultado }) {
+    const [causa, setCausa] = useState(resultado?.causa || '');
+    const [aviso, setAviso] = useState(resultado?.pendiente || '');
+    const enviar = (valor) => {
+        router.post(route('control_pedidos.auditar.credito_tienda', pedidoId), {
+            resultado: valor,
+            causa,
+        }, { preserveScroll: true, onError: (errores) => setAviso(Object.values(errores)[0] || 'No se registró el crédito.') });
+    };
+
+    return (
+        <div className="mt-4 grid gap-2">
+            <p className="text-sm theme-text-main m-0">
+                Crédito en Wizerp: {resultado?.resultado || 'sin resultado'}. No se pide comprobante de transferencia.
+            </p>
+            {aviso && <p className="text-sm theme-text-muted m-0">{aviso}</p>}
+            <label className={THEME_LABEL} htmlFor="credito-causa">Causa si está bloqueado</label>
+            <textarea id="credito-causa" className="w-full min-h-16 rounded-lg border theme-border theme-element px-3 py-2 text-sm theme-text-main" value={causa} onChange={(evento) => setCausa(evento.target.value)} />
+            <div className="flex flex-wrap gap-2">
+                <button type="button" className={BTN_PRIMARY} onClick={() => enviar('aprobado')}>Crédito aprobado</button>
+                <button type="button" className={BTN_SECONDARY} onClick={() => enviar('bloqueado')}>Crédito bloqueado</button>
+            </div>
+        </div>
+    );
+}
+
 export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoInicial, bancos = [], catalogos = {} }) {
     const { auth } = usePage().props;
     const permisos = auth?.user?.permissions || [];
@@ -464,7 +490,12 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                         <Campo label="Reexpedición" value={pedido.zona?.nombre} />
                                         <Campo label={pedido.usa_preparacion_tienda ? 'Respuesta de Tienda' : 'Pesaje CEDIS'} value={pedido.pesaje_respondido_at ? 'Respondido' : (pedido.estatus_envio === 'pendiente_pesaje' ? 'Pendiente' : '—')} />
                                     </div>
-                                    {tienePesajeRespondido && (
+                                    {pedido.es_recoleccion_tienda && (
+                                        <p className="text-sm theme-text-main m-0 mt-3">
+                                            Recolección en tienda. No se exigen pesos, guías ni cargos de transporte.
+                                        </p>
+                                    )}
+                                    {tienePesajeRespondido && !pedido.es_recoleccion_tienda && (
                                         <div className="mt-4 space-y-3">
                                             <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0">
                                                 Respuesta de cajas y pesos
@@ -751,8 +782,11 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                     />
                                     {recogeTienda && (
                                         <p className="text-sm font-bold theme-text-main m-0 mt-3">
-                                            Recoge en tienda: apartado confirmado en PDV. Sin validación de pago ni remisión.
+                                            El pago presencial y la entrega con fotografía se confirman en la sucursal. Esta bandeja no pide transferencia ni remisión para el apartado.
                                         </p>
+                                    )}
+                                    {pedido.solicitud_preparacion?.codigo_modalidad === 'RECOGE_TIENDA_CREDITO' && (
+                                        <CreditoTienda pedidoId={pedido.id} resultado={pedido.solicitud_preparacion?.credito_wizerp} />
                                     )}
                                     {esPendiente && !recogeTienda && (
                                         <div className="mt-4 flex flex-wrap gap-2">

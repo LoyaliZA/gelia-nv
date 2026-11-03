@@ -2,6 +2,7 @@
 
 namespace App\Services\ControlPedidos;
 
+use App\Models\ControlPedidos\CatalogoModalidadPreparacionPedido;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Models\SaldosAFavor\PedidoBmaPago;
 use App\Services\Reportes\PagosPedidos\RegistrarCierrePagoPedidoService;
@@ -49,6 +50,17 @@ class ValidarPagoPedidoBmaService
                     'resumen' => $resumen,
                     'incidencia_id' => null,
                 ];
+            }
+
+            $codigoCobertura = $pedido->codigoModalidadPreparacionVigente()
+                ?: (is_array($pedido->solicitud_preparacion_json) ? ($pedido->solicitud_preparacion_json['codigo_modalidad'] ?? null) : null);
+            if ($codigoCobertura === CatalogoModalidadPreparacionPedido::CODIGO_RECOGE_TIENDA_CREDITO) {
+                $credito = is_array($pedido->solicitud_preparacion_json)
+                    ? ($pedido->solicitud_preparacion_json['credito_wizerp']['resultado'] ?? null)
+                    : null;
+                if ($credito !== 'aprobado') {
+                    throw new RuntimeException('Registre el resultado de Wizerp. Un crédito bloqueado o sin resultado no se valida por el paso del tiempo ni con una transferencia.');
+                }
             }
 
             $this->pagos->assertPagoListoParaAvanzar($pedido, RegistrarPagoPedidoBmaService::FASE_VALIDAR);
