@@ -1,318 +1,211 @@
 ---
-name: UX operativa Tienda
-overview: La conexión inicial de Registrar pedidos con Preparación Tienda o Control Pedidos está implementada y probada. No es la validación integral de Tienda. T-04, T-05, T-06 y las reglas financieras nuevas siguen fuera.
+name: UX operativa Tienda — fase 2.1 integral
+overview: Completar conjuntamente 2.1.1 a 2.1.5 para recorrer Tienda de registro a entrega, incluidos cambios y complementos documentados. Reutilizar los avances; validar después por casos con el usuario y actualizar la trazabilidad del análisis V02.1.
 todos:
-  - id: esperar-revision
-    content: Conexión inicial probada. La validación integral de Tienda sigue pendiente.
-    status: completed
-  - id: prototipo-registrar
-    content: Prototipo aislado anterior en docs/visual-refresh/registrar-pedidos-tienda. Deja de ser autoridad para la captura inicial.
-    status: completed
+  - id: contrato-compartido
+    content: Unificar expediente, instrucción vigente, decisiones, cobertura y acciones entre todas las vistas; resolver las dependencias compartidas necesarias.
+    status: pending
   - id: ejecutar-2-1-1
-    content: Captura con dos destinos, plazo T-01 y respuesta inicial de disponibilidad. No cierra 2.1.5.
-    status: completed
+    content: Completar Registrar pedidos con continuidad por secciones, decisiones del cliente, cobertura, seguimiento y solicitudes de cambio o complemento.
+    status: pending
+  - id: ejecutar-2-1-2
+    content: Completar Control Pedidos con revisión por excepciones, preparación, traslado, cambios y recepción de complementos.
+    status: pending
+  - id: ejecutar-2-1-3
+    content: Completar Auditar pedidos con transferencia, crédito, remisión, diferencias y reglas de Tienda MD.
+    status: pending
+  - id: ejecutar-2-1-4
+    content: Completar Preparación Tienda y su integración PDV para apartado, recepción, custodia, entrega y liberación física documentada.
+    status: pending
+  - id: ejecutar-2-1-5
+    content: Integrar autorizaciones y cruces T-04/T-05/T-06; verificar recorridos, concurrencia y regresiones relevantes en una pasada conjunta.
+    status: pending
+  - id: repaso-usuario
+    content: Entregar matriz de casos reproducibles y registrar las validaciones del usuario sin confundir implementación con aceptación operativa.
+    status: pending
 isProject: false
 ---
 
-# Fase 2.1 — UX operativa de Tienda
+# Fase 2.1 — Recorrido integral de Tienda
 
-## Estado vigente — 2 de noviembre de 2026
+## 1. Decisión vigente — 3 de noviembre de 2026
 
-La conexión inicial está hecha y probada. La validación integral de Tienda no. Un botón o un servicio no cierra la ficha.
+El usuario autoriza trabajar **todas las subfases 2.1.1 a 2.1.5 como una sola entrega integrada**. Las subfases organizan responsabilidades; no son puertas que requieran aprobación entre vistas. Completar primero el camino de Tienda y después entregar los casos para el repaso del usuario. Corregir las incidencias encontradas por recorrido, sin volver a planificar cada pantalla.
 
-La captura pide solo dos destinos: «Revisar y apartar en tienda» y «Consultar disponibilidad en CEDIS». Transferencia, crédito y Mismo día (T-02.1) no se eligen aquí. Una intención ya guardada de Mismo día no se convierte en apartado ni en consulta. Enviar la consulta no registra un traslado.
+Este documento sustituye los cortes anteriores de este mismo plan: ya no se limita el trabajo a la captura inicial, no se pide detenerse antes de 2.1.2 y T-04/T-05/T-06 dejan de estar excluidos. No restaurar el bloqueo provisional de «Solicitar todavía no está disponible». La ampliación incluye los servicios, permisos, tareas y conexiones indispensables para que las acciones funcionen.
 
-La revisión pendiente sin `fecha_limite` no es un apartado vencido. Al confirmar el apartado, T-01 persiste el corte del día: 17:00 de lunes a viernes y 13:00 el sábado, en la zona de preparación. El valor predeterminado `cierre_operativo_hora` de 20:00 no alarga ese plazo. Falta de zona, apartado vencido y cierre operativo son tres rechazos distintos. No se renueva un apartado antiguo. La mercancía pagada o remisionada no se libera por esa caducidad. No hay duración VIP ni consecuencia automática a los 20 días.
+El encargo actual es actualizar el plan. Su ejecución en Cursor debe realizarse en modo Agent, siguiendo el alcance completo y actualizando avances sin solicitar otra aprobación por cada subfase. No confundir este plan actualizado con una ejecución ya realizada.
 
-Preparación Tienda y Control Pedidos pueden consultar el archivo, tomar la revisión y responder sin excepciones o con las piezas afectadas. La ausencia de marcas no concluye la revisión. Las excepciones quedan sin resolución y Registrar pedidos muestra la decisión que falta. Esas piezas no siguen como aceptadas.
+## 2. Fuentes y precedencia
 
-Queda fuera de esta conexión: cruces T-04, T-05 y T-06, reglas financieras nuevas, decisión posterior del cliente, apartado físico de lo aceptado, custodia, entrega, segundo traslado y dos procesos simultáneos. Los mecanismos ya existentes se conservan.
+- Instrucciones y observaciones más recientes del usuario en esta sesión: una entrega integral, agilidad y validación posterior por casos.
+- `AGENTS.md` y `GUIA_DISENO_GELIA.md`: dirección visual y trabajo con el repositorio.
+- `gestion-pedidos-docs/Analisis_de_Requerimientos_Gestion_de_pedidos_V02.1_Dudas_resueltas.md`: fichas, respuestas de aclaración AC y escenarios CV. Leer las respuestas `R:`: varias corrigen límites que el cuerpo de las fichas aún presenta como abiertos.
+- Decisiones vigentes del chat «Definir flujos operativos del sistema»: captura compacta, continuidad por secciones, documento como referencia, revisión por excepciones y conexión real con Tienda o CEDIS.
+- Código y mecanismos actuales: punto de partida para reutilizar, no evidencia suficiente de cumplimiento.
 
-### Matriz
+Cuando una respuesta AC resuelva un punto, no copiar como regla vigente el párrafo anterior que lo declaraba abierto. Cuando falte una definición real, aislar ese caso con causa y resolución pendiente; continuar con los demás. Un conflicto con una decisión humana posterior debe quedar identificado y consultarse puntualmente, sin suspender la entrega entera.
 
-| Ficha | Estado | Bloqueo concreto |
+### Avances que se conservan
+
+El plan anterior reportó conexión inicial a dos destinos, plazo T-01 y revisión por excepciones. La lectura del 3 de noviembre confirma en código los dos destinos y `PlazoApartadoTienda`; no se reejecutaron aquí las pruebas ni se verificó el recorrido renderizado.
+
+Conservar y completar ese trabajo. Los estados pendientes de arriba corresponden a la ampliación integral, no significan rehacer lo existente. No declarar aprobadas por el usuario las pruebas reportadas por una implementación anterior.
+
+## 3. Alcance y límites
+
+Incluye T-01, T-02, T-02.1, T-03, T-04, T-05, T-06, T-07, T-08, T-09 y R-01. Incluye los controles financieros y logísticos que esas fichas necesitan: pagos y remisiones reconocidos, saldos aplicables, autorización, traslado, custodia y evidencia de entrega.
+
+Los cruces con Municipal y Nacional deben funcionar hasta su incorporación y continuación real en el circuito existente, conservando referencias, pagos, ubicación e instrucción. Corregir las dependencias necesarias de esos circuitos para ejecutar el cruce; no rediseñar íntegramente ambas modalidades en esta fase. Si una dependencia impide continuarlo, el caso queda parcial con bloqueo concreto, nunca completo por mostrar un enlace.
+
+No hay extracción automática del documento ni nueva integración con Wizerp. La auxiliar registra en GELIA el resultado y la remisión que obtuvo en Wizerp. No crear otro sistema de inventario, pagos, saldos o resguardos en paralelo.
+
+No usar `migrate fresh`, `ALLOW_DESTRUCTIVE_DB`, reinicialización de datos ni cambios masivos sobre pedidos reales para las pruebas. No hacer commit, push ni despliegue remoto sin instrucción expresa. Los ajustes de esquema indispensables deben ser incrementales y conservar datos.
+
+## 4. Contrato común para todas las vistas
+
+Cada pedido conserva un expediente compartido: cliente y número, departamento, folio de pedido, remisión o remisiones, modalidad, destino, ubicación física real, instrucción vigente, revisión, decisiones, cobertura, pendientes y documentos. Cada rol ve lo necesario para actuar y quién debe continuar.
+
+- Distinguir modalidad Tienda, área que revisa, forma de cobertura y condición Mismo día. Una selección no acredita disponibilidad, pago, remisión, traslado ni entrega.
+- Mantener una instrucción ejecutable vigente. Una sustituida permanece en historial y no puede ejecutarse. El cambio de instrucción no devuelve físicamente mercancía al anaquel.
+- Proteger las mutaciones en servidor, dentro de transacciones y con coordinación consistente de bloqueos. Doble clic y reintento no duplican tareas, pagos, saldos, traslados ni entregas.
+- Una decisión del cliente conserva causa, piezas/cantidades afectadas, evidencia, responsable y resultado. Resolver una excepción no exige repetir la revisión de piezas no afectadas.
+- Una salida no es una recepción; una recepción no es una entrega al cliente. Registrar cada evento por su responsable y ubicación.
+- Reutilizar documentos y datos entre vistas. No pedir otra vez cliente, archivo, remisión o evidencia que ya está disponible y sigue vigente.
+- Mostrar la siguiente acción y el motivo de un bloqueo en lenguaje operativo. Evitar códigos internos, explicaciones técnicas y promesas de entrega sin confirmar.
+
+## 5. Trabajo por subfase, dentro de la misma entrega
+
+### 2.1.1 — Registrar pedidos y seguimiento de la vendedora
+
+Conservar la captura actual: cliente, departamento principal precargado, folio, modalidad sin selección automática y archivo. Corregir el departamento solo cuando exista necesidad y facultad. Guardar borrador permite datos incompletos y no crea tarea; solicitar exige cliente, departamento, folio, archivo listo y receptor definido. Conservar formatos PDF/JPG/JPEG/PNG/WEBP y máximo de 10 MB.
+
+Para Tienda mantener los dos destinos actuales: «Revisar y apartar en tienda» y «Consultar disponibilidad en CEDIS». Pedir sucursal/almacén únicamente cuando haga falta dirigir el trabajo, y distinguir el almacén que revisa de la sucursal final de recolección. No derivar cobertura ni MD de esos destinos. T-01 no solicita surtido a CEDIS; T-02/T-02.1/T-09 prefieren CEDIS y admiten el origen PDV documentado cuando corresponda. No convertir intenciones antiguas de MD silenciosamente en apartado impago.
+
+Completar las secciones posteriores del mismo expediente:
+
+1. Resultado de disponibilidad con evidencia y pendientes.
+2. Decisión expresa del cliente ante faltantes o detalles: aceptar lo disponible, aceptar una condición, retirar, sustituir, solicitar alternativa o desistir según el caso. Una pieza inexistente no se vuelve disponible por aceptarla.
+3. Pedido definitivo y archivo actualizado para T-07; conservar versiones y reservas coherentes, sin edición directa informal de una remisión.
+4. Cobertura: pago al recoger, transferencia o crédito. Mostrar Mismo día cuando se necesita solicitar esa condición, antes del compromiso logístico; no obligar a esperar a que haya pago para expresar la intención MD.
+5. Reporte de comprobantes, envío a auditoría y resultado con causa cuando se devuelve.
+6. Seguimiento de preparación, traslado, recepción, custodia y entrega; acciones de cambio de sucursal, modalidad o complemento cuando correspondan.
+
+La inspección se responde en la vista ejecutora. Registrar pedidos recibe el resultado y obtiene la decisión del cliente; no duplica la inspección. Municipal y Nacional conservan su alta existente y los datos ya capturados.
+
+### 2.1.2 — Control Pedidos / CEDIS
+
+Mostrar claramente que el pedido es para recoger en Tienda, la sucursal destino, origen real, revisión pendiente, cobertura y condición MD cuando aplique. Eliminar dependencias de pesaje/cotización de envío que no correspondan a Tienda; conservar el funcionamiento que otras modalidades sí necesitan.
+
+Tomar revisión, consultar el archivo y responder por excepciones. Sin excepciones exige confirmación explícita y evidencia del pedido completo. Con excepciones, identificar pieza/cantidad/condición y esperar resolución del cliente. Ni un autoguardado ni la ausencia de marcas cierran la revisión.
+
+Preparar lo aceptado y documentado según la ficha; no confundir la consulta previa al pago con autorización de despacho. Coordinar bolsas, evidencias, salida a sucursal y recepción separada. Respetar cobertura y remisión antes de los pasos que las requieren.
+
+Permitir ajuste antes del traslado, aplicar la instrucción vigente y procesar el segundo traslado solo después de resolución de gerencia. Recibir físicamente complementos desde PDV, relacionarlos con principal y remisiones y dejar espera explícita mientras no lleguen. La salida del origen no confirma integración en CEDIS.
+
+### 2.1.3 — Auditar pedidos / auxiliar de ventas
+
+Adaptar bandeja y revisión al caso Tienda. Presentar documento definitivo, importe, cobertura, comprobantes, diferencias, remisión y decisiones pendientes. No exigir pesos, guías o cargos de transporte a una recolección que no los requiere.
+
+- Transferencia: comprobar ingreso, correspondencia e importe; admitir varias transferencias del mismo método con aplicación trazable, sin contar dos veces un comprobante ni un ingreso.
+- Crédito: registrar resultado de Wizerp, aprobado o bloqueado con causa. No pedir comprobante de transferencia. No aprobar por el mero paso del tiempo ni cambiar automáticamente el método.
+- Pago presencial T-01: usar la confirmación del cobro existente por el personal autorizado; no forzar una transferencia ni un paso por auditoría central que la ficha no exige.
+- Registrar la remisión pertinente y devolver correcciones a la vendedora con causa. La revisión posterior de Administración no introduce otra espera previa a preparación.
+- Aplicar excedentes desde $10 conforme a AC-02. El saldo nuevo nace al registrar y verificar el pago y se dispone para el siguiente pedido, no para cubrir el mismo que lo originó (AC-13). Distinguir saldo de productos y de envío y reutilizar autorización/movimientos existentes.
+- Distinguir comprobante repetido de segundo ingreso real; aplicar S-07 sin duplicar venta ni entrega. No inventar pérdida contable de diferencias menores a $10.
+
+**Tienda MD:** transferencia y facultad configurable por departamento o usuario; lunes a viernes, sin sábado. La intención puede estar prevista antes del pago. El corte de las 13:00 usa el primer reporte de pago aceptado por el servidor (`pedido_bma_pagos.created_at` en el mecanismo actual), no fecha declarada, apertura de pantalla, revisión ni emisión de remisión. Conservar el instante original y su trazabilidad al sustituir soporte. Verificar después de las 13:00 no invalida un reporte oportuno. Reporte oportuno no equivale por sí solo a cobertura verificada ni garantiza entrega: además requiere disponibilidad, documentación, preparación y traslado. Reporte tardío queda pendiente de acuerdo, sin reprogramación ni cambio automático de modalidad.
+
+### 2.1.4 — Preparación Tienda e integración con PDV
+
+Separar recolección Tienda de las tareas municipales que comparten vista. Usar la misma revisión por excepciones que CEDIS, sin volver a capturar todas las piezas correctas. Mantener los datos físicos necesarios para reserva, traslado y entrega mediante los mecanismos existentes.
+
+T-01: revisión, decisión sobre detalles, apartado físico de lo aceptado, vigencia, pago confirmado y entrega con fotografía. Conservar 17:00 de lunes a viernes y 13:00 el sábado en la zona configurada. Una revisión sin `fecha_limite` no es un apartado vencido; asignar/persistir el plazo cuando corresponda sin renovar reservas antiguas. Diferenciar vencimiento, falta de configuración y cierre operativo. No confundir T-01 con Tienda MD.
+
+T-02/T-02.1/T-09: verificar procedencia, remisión y cobertura correspondiente; recibir y cotejar bolsas/evidencias, ubicar en custodia y entregar al acudir el cliente con fotografía y responsable. La remisión a crédito aprobada es cobertura válida sin transferencia.
+
+Integrar las evidencias existentes de CEDIS/auxiliar con resguardos PDV conforme a AC-10. No hacer que PDV registre manualmente de nuevo un resguardo que el pedido ya puede generar. Sincronizar estados de pedido y custodia en ambos sentidos y evitar doble entrega.
+
+El apartado impago y la mercancía pagada tienen reglas distintas de vencimiento. Para pagados implementar el seguimiento de 20 días naturales desde la remisión y el proceso físico previsto por AC-01, con trazabilidad y sin borrar la obligación o inventar el destino del dinero. La liberación de custodia por entrega, complemento, cambio de destino o vencimiento conserva causas diferentes.
+
+### 2.1.5 — Autorizaciones, cambios, complementos e integración
+
+- **T-03:** cambio de sucursal antes del traslado actualiza la instrucción de quienes preparan. Si ya se trasladó, crear solicitud pendiente y resolución real de gerencia. Usar facultad de gerencia existente o un permiso específico integrado al esquema actual; el permiso genérico de salida no equivale por sí solo a gerencia. No rechazar solo por ser quien vendió. Autorizar no mueve mercancía ni confirma recepción; registrar origen/destino y recorrido confirmado, sin inventar ruta directa o vía CEDIS. El cliente no recoge en CEDIS.
+- **T-04:** sustituir la solicitud de modalidad con causa, evidencia y referencias mutuas. Conservar pedido, remisión y pagos reconocidos; no cancelar automáticamente la venta ni cobrar otra vez mercancía. Comprobar ubicación y límites de salida; conectar el circuito receptor y los cargos/saldos aplicables.
+- **T-05:** identificar remisiones pagadas en custodia, retirar de espera de recolección, trasladar PDV→CEDIS, confirmar recepción e integración con el principal. Evitar doble entrega y doble cobro. Continuar en envío existente con referencias completas; cobrar solo mercancía nueva o cargos pendientes.
+- **T-06:** consultar disponibilidad del anexo. Sin remisión, ajustar el pedido solo en la condición documentada; con remisión, nuevo pedido relacionado y su cobertura/remisión. No enviar complementos impagos ni asumir integración por añadir una línea. Reconocer recepción e integración física antes de entregar el conjunto.
+- **T-07/T-08:** las decisiones de la vendedora deben modificar la instrucción/reserva correcta y regresar a quien ejecuta; no dejar una lista de excepciones sin acción para resolverla.
+
+Resolver en esta entrega las dependencias de concurrencia de la fase 1 para las acciones implementadas. Verificar dos operaciones realmente simultáneas en un entorno aislado que soporte los bloqueos utilizados: doble solicitud y sustitución frente a ejecución. Un reintento secuencial no acredita esa prueba. Conservar la protección al incorporar cambios y complementos.
+
+## 6. Aclaraciones resueltas y límites reales
+
+El plan anterior mantenía algunas reglas resueltas como si siguieran abiertas. Aplicar esta distinción:
+
+| Tema | Regla de referencia para implementar | Lo que no debe inventarse |
 | --- | --- | --- |
-| T-01 | Parcial | Vigencia del apartado y respuesta inicial probadas. Falta apartar físicamente lo aceptado, custodiar y entregar después del pago. |
-| T-02 | Pendiente | La captura no inicia la transferencia «Recoger después». Faltan cobertura, remisión y la regla de los 20 días, que no se inventó. |
-| T-02.1 | Parcial | Queda identificado y no se envía como apartado ni como consulta. Elegirlo no confirma cobertura ni entrega. Faltan las piezas ya disponibles en PDV y la continuación después de las 13:00. |
-| T-03 | Pendiente | El cambio de sucursal y el segundo traslado no se implementaron. La facultad de gerencia sigue sin resolverse. |
-| T-04 | Pendiente | Cruce no implementado en esta intervención. |
-| T-05 | Pendiente | Cruce no implementado en esta intervención. |
-| T-06 | Pendiente | Cruce no implementado en esta intervención. |
-| T-07 | Pendiente | El ajuste de piezas antes del pago y la remisión no está en esta conexión. |
-| T-08 | Parcial | La excepción llega con pieza, cantidad, detalle o faltante y evidencia. Falta la acción con la que el cliente resuelve esas piezas. |
-| T-09 | Pendiente | La consulta de crédito, el resultado de Wizerp y la cancelación por plazo no se abrieron. |
-| R-01 | Pendiente | La custodia y la entrega cuando el cliente acude no forman parte de esta conexión. El día 20 no libera. |
-
-Las secciones siguientes conservan el diseño de la captura. Donde dicen que «Solicitar en tienda» sigue deshabilitada, ese corte quedó superado por esta conexión. No superan la matriz.
-
-Replanteo de la subfase 2.1.1, 2 de noviembre de 2026. La captura inicial sigue siendo la composición vigente. La conexión inicial no avanza a la validación integral ni a 2.1.5.
-
-La captura anterior y el prototipo de [docs/visual-refresh/registrar-pedidos-tienda/](docs/visual-refresh/registrar-pedidos-tienda/) pedían cobertura, sucursal o piezas en el alta. Dejan de ser autoridad para este paso. El análisis V02.1 no se reescribió. [PRODUCT.md](PRODUCT.md) todavía dice que el archivo de T-01 no está confirmado; no se edita aquí. Para 2.1.1 prevalece este plan.
-
-Numeración UX, distinta de la fase operativa 2 del plan de rediseño:
-
-- 2.1.1 Registrar pedidos — captura inicial.
-- 2.1.2 Control Pedidos.
-- 2.1.3 Auditar pedidos.
-- 2.1.4 Preparación Tienda.
-- 2.1.5 Validación integral y autorizaciones.
-
-## Correspondencia de vistas
-
-Un nombre personal es referencia de rol. No entra como condición de código.
-
-- Vendedora: Registrar pedidos.
-- Auxiliar de ventas: Auditar pedidos.
-- Auxiliar de tienda: Preparación Tienda.
-- CEDIS y empacadores: Control Pedidos.
-- Encargado de guías: Entregar guías.
-
-Tienda como modalidad y Preparación Tienda como vista siguen siendo conceptos distintos. Las tareas municipales de esa vista permanecen en su segmento.
-
-## Decisiones que siguen vigentes
-
-- La captura inicial identifica el pedido y puede adjuntar el archivo. No clasifica T-01, no pide cobertura y no transcribe piezas. Para el caso descrito, «Solicitar en tienda» dirige la revisión de disponibilidad y la separación a Preparación Tienda. Esa acción no declara forma de pago y permanece deshabilitada.
-- Guardar borrador no exige pago ni archivo y no crea tarea. Solicitar es una acción distinta y exige el archivo. Transferencia, crédito y pago al recoger se distinguen en una sección posterior. La ausencia de cobertura en esta captura no elige una forma de pago.
-- La revisión de disponibilidad registra solo excepciones. Sin excepciones, «todo OK» exige confirmación explícita y evidencia del pedido completo. Un borrador, un autoguardado o la falta de marcas por pieza no cierran la revisión. No se inventan inspecciones de lo no capturado. Control Pedidos y Preparación Tienda comparten esa capacidad. No forma parte de la captura inicial y no se implementa ahora.
-- El PDF o la imagen identifica las piezas y cantidades. Es obligatorio para solicitar y no lo es para el borrador. Formatos y límite ya existentes: PDF, JPG, JPEG, PNG o WEBP, hasta 10 MB. No hay extracción automática ni integración con Wizerp.
-- Mismo día (Tienda MD) queda fuera de esta captura. Sigue siendo una condición de atención, no una cobertura. T-02.1 es modalidad Tienda, cobertura por transferencia y esa condición. No se combina con crédito ni con pago al recoger. La facultad es configurable por departamento o usuario, opera de lunes a viernes y no el sábado. La solicitud sin pago reportado queda prevista, no confirmada. El corte de las 13:00 compara la hora en que el servidor acepta el reporte del pago. Verificar el ingreso o registrar la remisión después de las 13:00 no rechaza un reporte que entró al corte. La entrega el mismo día además exige disponibilidad, documentación, preparación y traslado. Un reporte fuera del corte no cambia la modalidad ni reprograma. Esas reglas aplican cuando una etapa posterior pida la condición.
-- La concurrencia de la fase 1 puede comprobarse en paralelo con este diseño y debe quedar resuelta antes de habilitar acciones nuevas que dependan de ella. Un cambio visual no retira ese bloqueo. Quien registra no ve el detalle técnico: el aviso visible es «Solicitar en tienda todavía no está disponible.»
+| 20 días, AC-01 | La respuesta autoriza reintegrar físicamente la mercancía para venta tras 20 días naturales desde remisión. Corregir la contradicción con el cuerpo antiguo de T-02/R-01. Registrar movimiento físico y mantener trazabilidad. | Destino del dinero pagado, devolución o creación automática de saldo. Reutilizar inventario existente; no marcar disponible solo por cambiar una etiqueta. |
+| Crédito, AC-03 | Si sigue bloqueado o sin regularizar al vencer la tolerancia hasta el día siguiente, procede cancelación y gestión física correspondiente, sin aprobación ficticia. | Hora/zona exacta del vencimiento si no existe definición vigente. Dejar el corte parametrizado/inactivo hasta resolver ese dato, con pendiente visible; no congelar el flujo aprobado de crédito. |
+| Saldo, AC-02/AC-13 | Desde $10; pago verificado; siguiente pedido; productos y envío con usos separados. | Pérdida de diferencias menores o uso del saldo nuevo en el mismo pedido. |
+| Facultad MD, AC-04 | Configuración por departamento o usuario, no nombre de persona/departamento fijo en código. | Recolección directa PDV como TIENDA MD o alternativa automática tras el corte. |
+| Modificación documentada, AC-05 | Adjuntar evidencia; complemento relacionado cuando corresponda. | Edición informal de remisión emitida o cancelación contable automática. |
+| Custodia, AC-10 | Reutilizar e integrar evidencias PDV existentes desde CEDIS/auxiliar. | Nuevo circuito manual duplicado. |
 
-Siguen abiertas, sin valor inventado y fuera de esta captura: reloj del crédito, duración VIP, dinero de la mercancía pagada a los 20 días, sobrante menor a $10, desborde asegurado, absorción interna, piezas ya en PDV para Mismo día (Tienda MD) y la continuación exacta después de su corte.
+Siguen necesitando definición puntual: duración VIP y su autorización cuando no haya regla vigente; tratamiento del dinero tras liberación de pagados; corte exacto del crédito; continuación tras las 13:00 y piezas ya en PDV para MD; condición no cerrada del anexo al día siguiente e integración excepcional. Resolver lo documentado y mostrar el pendiente del caso afectado, sin darlo por completado ni impedir operar los casos ordinarios.
 
-## Fase 1, todavía sin cerrar
+No reinterpretar todos los puntos AC como pendientes ni resolverlos mediante valores arbitrarios. Si código o documentos revelan una decisión humana posterior distinta, registrar la discrepancia concreta para validarla con el usuario.
 
-Lectura de código del 2 de noviembre de 2026. No se reejecutaron pruebas.
+## 7. Lineamientos comunes de interfaz
 
-- La instrucción vigente está en código. Una sustituida no se ejecuta y la mercancía no vuelve al anaquel por el solo cambio.
-- La concurrencia solo tiene un segundo llamado secuencial con la tarea ya sustituida. Dos procesos simultáneos no están evidenciados. Solicitar apartado o confirmación crea trabajo ejecutable: no se habilita hasta cerrar esta comprobación. 2.1.5 repite el recorrido, y no es la primera vez que se exige.
-- El segundo traslado usa `control_pedidos.salida.autorizar` y además rechaza a quien registró la venta. Esa prohibición no está aprobada. El permiso no es la facultad de gerencia. El pendiente con resolución sigue siendo trabajo de 2.1.5.
-- Los tres fallos del 31 de octubre siguen atribuidos a `ControlPedidosErroresPorDuenoTest` (consulta no cerrada) y `RecogeTiendaFlujoTest` (producto de otro almacén). No se volvieron a correr.
-
-## 1. Mapa
-
-```mermaid
-flowchart TD
-  registrar[RegistrarPedidos]
-  legado[FormularioEnvioExistente]
-  control[ControlPedidos]
-  auditar[AuditarPedidos]
-  prep[PreparacionTienda]
-  gerencia[Gerencia]
-  registrar -->|"borrador sin tarea"| registrar
-  registrar -->|"Solicitar en tienda, aun no habilitada"| prep
-  registrar -->|"municipal o nacional"| legado
-  prep -->|"respuesta por excepciones, etapa posterior"| registrar
-  registrar -->|"decision del cliente, etapa posterior"| prep
-  registrar -->|"cobertura y pago, etapa posterior"| auditar
-  auditar -->|"resultado y remision"| registrar
-  control -->|"revision por excepciones, etapa posterior"| registrar
-  control -->|"aviso de salida, no recepcion"| prep
-  prep -->|"entrega despues del pago confirmado"| registrar
-  registrar -->|"segundo traslado, mas adelante"| gerencia
-  gerencia -->|"resolucion sin mover"| prep
-```
+Aplicar `GUIA_DISENO_GELIA.md` a las cinco subfases. Referencias: Registrar pedido actual para captura/seguimiento y resguardos PDV para recepción/custodia. Inspeccionar sus estilos efectivos antes de recomponer cada tipo de superficie.
 
-La arista hacia Preparación Tienda describe el destinatario del caso pedido para «Solicitar en tienda». No clasifica el pedido como T-01 y no está habilitada. La consulta que las fichas T-02, T-02.1, T-03 y T-09 envían a Control Pedidos no sale de esta captura: falta una distinción unívoca y no se inventa aquí.
+- Mantener identidad GELIA de cabeceras, iconos, jerarquía, densidad y botones reconocibles con hover/foco/carga. Respetar tema, fuente y acento configurables; no imponer la apariencia de una captura ni una fuente fija nueva.
+- Identificar cliente, número, folios, modalidad y sucursal sin repetir la ficha completa por todas partes. Explicar qué atender, qué falta y quién continúa.
+- Bandejas y filtros deben distinguir pendientes reales por rol: revisión, decisión del cliente, cobertura, preparación, traslado, recepción, custodia y entrega. Reutilizar estados reales antes de añadir nuevos.
+- Mostrar acciones por etapa y permiso; un botón deshabilitado explica la causa. Una acción disponible debe persistir y reflejar su resultado en las vistas relacionadas.
+- Documentos legibles, ampliación, sustitución permitida y autoguardado con estados reales. Un guardado tardío no sobrescribe decisiones recientes.
+- Escritorio y móvil, claro/oscuro, foco visible y acciones accesibles con desplazamiento. Conservar lo que ya funciona de Registrar pedidos; no iniciar otra exploración estética ni instalar dependencias por defecto.
 
-Entregas de la captura inicial:
+## 8. Ejecución y comprobación conjunta
 
-- Cliente, departamento, folio del pedido, modalidad y, cuando se solicita, el archivo. El folio interno nace al guardar. La remisión no se captura aquí.
-- No entrega sucursal, canal, piezas transcritas, cobertura ni condición de atención.
+1. Revisar estado local y reutilizar avances. Identificar las dependencias concretas y fijar el contrato común sin abrir otra ronda de planificación.
+2. Implementar servicios y continuidad entre las cinco vistas. Se puede trabajar en un orden técnico por dependencias; no detenerse al terminar una pantalla para solicitar autorización de la siguiente.
+3. Integrar cambios/complementos, permisos, tareas programadas pertinentes y sincronización con resguardos.
+4. Ejecutar una pasada funcional conjunta con pedidos ficticios y las pruebas pertinentes. Corregir los fallos que cortan el recorrido antes de entregar. No repetir suites ya satisfactorias sin nuevos cambios o una razón concreta.
+5. Comprobar el resultado renderizado de las superficies modificadas en escritorio/móvil y claro/oscuro. Ejecutar el build del entorno y comprobar que la aplicación sirve los assets vigentes.
+6. Entregar instrucciones breves para que el usuario recorra los casos; actualizar plan y trazabilidad. Los defectos menores de presentación van a pendientes; los de cobertura, datos, permisos, ubicación, entrega o continuidad impiden marcar el caso completo.
 
-Entregas de etapas posteriores, fuera de este corte:
+Pruebas críticas: T-01 con pago/entrega y vencimiento; T-02 con recepción/custodia; MD oportuno verificado después del corte, tardío y sin facultad; crédito aprobado/bloqueado; faltantes aceptados/retirados/sustituidos; cambio de sucursal antes/después del traslado con autorización/rechazo; cambio de modalidad; complemento desde custodia; anexo con/sin remisión; 20 días con la consecuencia física diferenciada de la financiera; duplicados y concurrencia. Probar crédito con/sin remisión al momento de cancelar y recepción/entrega reintentadas. Conservar controles de productos de otro almacén y corregir ese fallo conocido si afecta al recorrido.
 
-- Control Pedidos y Preparación Tienda entregan el estado de revisión, la evidencia del pedido completo y, si existen, las excepciones con pieza y cantidad. No entregan una marca de «correcta» por cada pieza omitida.
-- Registrar pedidos, ante excepciones, entrega la decisión del cliente. Mientras falta, el apartado o la preparación no siguen con esas piezas.
-- Auditar pedidos entrega correspondencia de ingreso, resultado de crédito y número de remisión. No interviene para guardar ni para consultar disponibilidad. Administración revisa después y no bloquea.
-- Preparación Tienda entrega apartado de lo aceptado, recepción, ubicación de custodia y entrega con foto. La entrega que corresponda a un apartado impago espera la confirmación del pago.
-- Gerencia, en 2.1.5, entrega la resolución del segundo traslado sin mover la mercancía.
+No hace falta crear un pedido por cada variante si pueden comprobarse con datos de prueba y pruebas de servicio. La evidencia de código, prueba automática y recorrido por interfaz se informa por separado.
 
-La franja de cada vista dice qué se atiende, qué hacer ahora y qué sigue. La captura inicial no muestra esa franja de etapas posteriores.
+## 9. Matriz para el repaso del usuario
 
-## 2. Matriz
+Estado inicial al ampliar el alcance. «Pendiente» significa pendiente de completar/acreditar en esta entrega; no elimina avances anteriores. Cursor sustituirá la columna de entrega por evidencia real y el usuario validará después la operación.
 
-- **T-01.** La captura 2.1.1 no clasifica el pedido como T-01. El archivo identifica las piezas; quien registra no las transcribe. 2.1.4 responde por excepciones, aparta lo aceptado, libera impago al corte y entrega tras confirmar el pago. 2.1.5 recorre el circuito. En la ficha, CEDIS no participa. VIP no se activa. Aceptación de esta captura: el borrador no crea tarea; la solicitud no pide pago ni transcribe piezas y permanece deshabilitada. Aceptación posterior: sin revisión concluida no hay apartado; la entrega sin pago confirmado permanece bloqueada.
-- **T-02.** Transferencia con atención «Recoger después». La consulta no se inicia en la captura inicial, porque esa pantalla no pide cobertura ni envía el pedido a Control Pedidos. La respuesta sigue prevista en 2.1.2. Cobertura y remisión en 2.1.3, antes de tratar la compra como cubierta. Recepción, custodia y entrega en 2.1.4. La liberación a los 20 días no se ejecuta. Aceptación: guardar borrador no exige pago; el pago verificado cubre ese pedido; el saldo desde $10 no vuelve al mismo pedido.
-- **T-02.1 Mismo día (Tienda MD).** Modalidad Tienda, cobertura transferencia y condición de atención Mismo día (Tienda MD). La captura inicial no pide ni muestra esa condición. Cuando una etapa posterior la pida, el servidor verifica la facultad por departamento o usuario y la exclusión del sábado, y muestra la solicitud como prevista mientras el pago no esté reportado. No confirma la condición ni usa las 13:00 como hora de la solicitud. El corte compara `pedido_bma_pagos.created_at` del primer reporte aceptado, asignado por el servidor en `RegistrarPagoPedidoBmaService`. No usa `fecha_pago`, la hora de apertura de la pantalla, `revisado_at` ni la hora de la remisión. Conservar esa hora al sustituir el comprobante es trabajo de servidor posterior. 2.1.2 prepara la instrucción solo si sigue vigente y la condición está confirmada. 2.1.3 verifica el ingreso y registra la remisión sin tomar su propia hora como corte. 2.1.4 lo recibe como mismo día pagado, no como apartado impago, solo con la condición confirmada. 2.1.5 recorre pago sin reportar, reporte dentro del corte, verificación después de las 13:00, reporte fuera del corte, sábado y falta de facultad. Mostrar esos escenarios no ejecuta las reglas. Piezas ya en PDV y la continuación cuando el reporte queda fuera del corte siguen abiertas: no se reprograma ni se cambia de modalidad, y no se inventa un tercer camino.
-- **T-03.** El cambio de sucursal no está en la captura inicial. Sigue previsto en 2.1.2, antes del traslado. Segundo traslado, con pendiente real y resolución, en 2.1.5. El cliente no recoge en CEDIS.
-- **T-04, T-05 y T-06.** Cruces. En 2.1 se muestran bloqueados cuando la persona podría buscarlos. El ajuste del mismo pedido antes de pago y remisión es T-07.
-- **T-07.** El ajuste de piezas antes de pago y remisión no está en la captura inicial. Sigue previsto en 2.1.2.
-- **T-08.** La excepción es el pendiente: causa, pieza, cantidad, responsable de la revisión y decisión que Registrar pedidos debe obtener. No obliga a revisar de nuevo el pedido completo. Esa decisión aparece en una sección posterior, no en la captura inicial.
-- **T-09.** La consulta no se inicia en esta captura. Auditar pedidos registra el resultado de Wizerp. La cancelación por plazo sigue apagada. La cobertura de crédito se exige para remisión y entrega, no para la consulta.
-- **R-01.** Custodia y entrega cuando el cliente acude. El día 20 no libera.
-- **S-01 y S-07.** 2.1.3, antes de dar por cubierta una transferencia. El menor a $10 no se automatiza.
-- **Revisión por excepciones en otras modalidades.** Municipal y nacional hoy pueden pedir respuesta por línea o pesaje. Al rediseñarlas se reutiliza esta capacidad para la disponibilidad. El pesaje nacional y la carátula municipal siguen siendo otros eventos. Esta entrega no los implementa.
-- **Altas de envío existentes.** Municipal y Nacional conservan su formulario actual. Elegirlos continúa hacia ese formulario con cliente, departamento, folio y archivo ya guardados, sin duplicar la captura. Un cambio de modalidad sobre un pedido ya iniciado respeta los límites físicos, documentales y financieros. Conservar el alta existente no autoriza los cruces T-04, T-05 y T-06.
+| Caso | Recorrido que debe poder probarse | Entrega integral | Validación del usuario |
+| --- | --- | --- | --- |
+| T-01 | Consulta PDV → aceptación → apartado → pago presencial → foto/entrega; variante vencida | Pendiente | Pendiente |
+| T-02 | Consulta → transferencia/remisión → preparación → traslado/recepción → custodia → entrega | Pendiente | Pendiente |
+| T-02.1 | Intención MD → facultad/corte → cobertura/remisión → preparación/traslado → entrega o pendiente con causa | Pendiente | Pendiente |
+| T-03 | Destino/cambio previo → solicitud de segundo traslado → resolución → movimiento/recepción | Pendiente | Pendiente |
+| T-04 | Cambio autorizado → solicitud sustituta → pagos/remisión reconocidos → continuidad receptora | Pendiente | Pendiente |
+| T-05 | Remisiones custodiadas → retiro → traslado → recepción/integración CEDIS → continuidad de envío | Pendiente | Pendiente |
+| T-06 | Anexo consultado → ajuste permitido o nuevo pedido → cobertura → integración/entrega | Pendiente | Pendiente |
+| T-07 | Retirar/sustituir antes del pago → archivo/instrucción vigentes → reserva coherente | Pendiente | Pendiente |
+| T-08 | Excepción → decisión del cliente → respuesta al ejecutor → continuidad sin aceptación implícita | Pendiente | Pendiente |
+| T-09 | Crédito Wizerp aprobado/bloqueado → remisión o regularización/cancelación → preparación/entrega | Pendiente | Pendiente |
+| R-01 | Recepción → ubicación → custodia → entrega o movimiento autorizado/vencimiento trazable | Pendiente | Pendiente |
+| S-01/S-07 | Excedente/segundo ingreso → verificación → aplicación correcta y saldo separado sin duplicidad | Pendiente | Pendiente |
 
-2.1 no queda como Tienda completa.
+Por caso anotar al entregar: estado (implementado y probado / parcial / bloqueado), folio ficticio o prueba reproducible, resultado esperado/obtenido y pendiente concreto. El estado de aceptación del usuario permanece separado, con fecha y observación cuando lo revise.
 
-## 3. Arquitectura
+## 10. Documentación y cierre
 
-- **Expediente compartido.** Un lector, sin tabla nueva, con cliente, folios, modalidad, instrucción vigente, ubicación real, cobertura, pendientes, evidencia y excepciones. Cada vista muestra lo que le sirve para actuar y consulta la evidencia ya adjunta. La captura inicial solo usa cliente, departamento, folio, modalidad y archivo. Backend futuro: el presentador. No se implementa ahora.
-- **Acciones y motivos.** Una política por vista, llamada también por el servicio que muta. Registrar pedidos deja de heredar el progreso de pesaje, cotización y pago. El servidor sigue siendo la autorización. Backend futuro en cada subfase.
-- **Captura inicial.** Número de cliente, departamento precargado, folio del pedido, modalidad y archivo. No se abre una sección de cobertura, sucursal, canal, piezas ni Mismo día. Municipal y nacional continúan en el formulario actual.
-- **Revisión por excepciones.** Una capacidad para Control Pedidos y Preparación Tienda: pedido de referencia, buscador y escáner, alta breve de excepción (pieza y cantidad afectada, daño o falta), evidencia del pedido completo y confirmación explícita. Tres estados: no realizada o en curso; concluida sin excepciones; concluida con excepciones pendientes de decisión. Backend futuro, compartido, en 2.1.2 y 2.1.4. La captura inicial no muestra ese resultado.
-- **Pendientes.** Causa, solicitante, responsable, evidencia, estado y decisión requerida. La excepción de mercancía usa ese contrato. El segundo traslado también, y se construye junto con su resolución en 2.1.5. Antes no se muestra la etiqueta de gerencia.
+Actualizar este plan al terminar la implementación y después de cada repaso de casos con el usuario. No declarar «Tienda completa» mientras existan recorridos documentados sin cierre o dependencias que impidan continuarlos.
 
-## 4. Captura inicial de Registrar pedidos
+En el análisis V02.1 conservar las fichas y los requisitos de negocio. Añadir trazabilidad de implementación/validación junto a cada ficha o en una sección final enlazada, sin reescribir una regla para que coincida con un defecto. Registrar caso, estado de implementación, prueba, aceptación del usuario, fecha y observaciones. La aprobación del usuario no se presume por una prueba automática.
 
-### Alcance
+Al reconciliar aclaraciones del propio documento, hacer explícita la respuesta AC aplicada y conservar la referencia; no borrar el antecedente ni presentar un pendiente financiero como prohibición de una operación física ya definida. Las decisiones nuevas del usuario se incorporan con fecha y casos afectados.
 
-La primera sección contiene únicamente:
-
-- Número de cliente.
-- Departamento precargado del principal de quien registra (`users.departamento_id`, vía `ContextoDepartamentoPedido`).
-- Folio del pedido.
-- Modalidad, sin elección automática: Tienda, Envío municipal, Envío nacional. Son tres opciones separadas. Municipal y Nacional no se agrupan.
-- PDF o imagen del pedido, con previsualización.
-- Guardar borrador y, si la modalidad es Tienda, la acción «Solicitar en tienda».
-
-Quedan fuera de esta sección: cobertura, forma de pago, comprobantes, importes, saldos, captura de piezas, Mismo día (Tienda MD), sucursal, canal y cualquier campo de una etapa posterior.
-
-El departamento se muestra como dato ya resuelto. Un control de corrección aparece solo si hay facultad (`ContextoDepartamentoPedido::validar`: Super Admin o un departamento autorizado) y una necesidad real: falta el principal, o el borrador guardado trae otro departamento autorizado. Pertenecer a varios departamentos no obliga a elegir. Si el principal falta y hay más de un departamento autorizado, no se inventa uno: la solicitud sigue incompleta hasta que alguien con facultad lo corrija. El borrador puede guardarse sin ese dato, como ya permite el servicio.
-
-### Esquema
-
-Escritorio, dentro del modal. La captura usa una medida compacta de unos 48rem, alineada al inicio; no estira cada campo al ancho de `max-w-6xl`. Radios y campos salen de `geliaTheme` y de [resources/css/gelia/tokens.css](resources/css/gelia/tokens.css). El área del archivo centra su contenido y abarca el ancho de las dos columnas. La modalidad es un grupo de tres radios, ninguno marcado.
-
-```
-Registrar pedidos                                      Cerrar
-Número de cliente              Departamento
-[ 24018                    ]   Aromas Carmen
-
-Folio del pedido               Modalidad
-[ PED-1044                 ]   ( ) Tienda
-                               ( ) Envío municipal
-                               ( ) Envío nacional
-
-        ┌──────────────────────────────────┐
-        │     Adjuntar PDF o imagen        │
-        │     previsualización visible     │
-        │     Ampliar · Reemplazar · Retirar│
-        └──────────────────────────────────┘
-
-Guardar borrador                 Solicitar en tienda
-```
-
-En pantallas pequeñas los campos se apilan en este orden: cliente, departamento, folio, modalidad, archivo y acciones. No hay desplazamiento horizontal. El pie va en el flujo del diálogo, a 44px de alto, con `scroll-padding` igual a su altura y margen de `safe-area`, para que el foco no quede tapado. Los campos usan al menos 16px. El diálogo limita la altura con `100dvh`.
-
-La previsualización aparece con opacidad de 160ms y ease-out. Guardar, teclado, error y el cambio de modalidad no se animan. Con `prefers-reduced-motion`, la previsualización aparece de inmediato. No se agregan Anime.js ni Motion.
-
-### Componentes
-
-Se conservan y se usan en esta responsabilidad:
-
-- `MiniaturaDocumento` y `ModalVistaPreviaDocumento`, en [resources/js/Pages/ControlPedidos/Partials/ModalVistaPreviaDocumento.jsx](resources/js/Pages/ControlPedidos/Partials/ModalVistaPreviaDocumento.jsx), para previsualizar y ampliar.
-- `VisorPdfPaginas` cuando el archivo es PDF.
-- [GestionarPdfPedidoBmaService](app/Services/ControlPedidos/GestionarPdfPedidoBmaService.php) y `POST control-pedidos/{pedido}/pdf-pedido` para cargar y sustituir. La sustitución ya retira el soporte anterior.
-- `documentos_eliminar` de [UpdatePedidoBmaRequest](app/Http/Requests/ControlPedidos/UpdatePedidoBmaRequest.php) para retirar antes de solicitar. El autoguardado descarta esa clave; el retiro usa la actualización existente, solo el soporte de este borrador y solo mientras siga editable y sin tarea.
-- [ModalFormPedido](resources/js/Pages/ControlPedidos/Partials/ModalFormPedido.jsx) como puerta y [ModalFormPedidoLegado](resources/js/Pages/ControlPedidos/Partials/ModalFormPedidoLegado.jsx) para Municipal, Nacional y pedidos ya avanzados.
-- Autoguardado, `revision_registro` / `base_captura`, `ContextoDepartamentoPedido` y el bloqueo `CONCURRENCIA_COMPROBADA = false`.
-- [DocumentoSolicitudTienda](resources/js/Pages/ControlPedidos/Tienda/Partials/DocumentoSolicitudTienda.jsx) permanece en Preparación Tienda. No es el control de alta.
-
-Se adapta [FormularioRegistrarTienda](resources/js/Pages/ControlPedidos/Partials/FormularioRegistrarTienda.jsx) para esta composición. También [PoliticaAccionesRegistrarPedidos](app/Support/ControlPedidos/RegistrarPedidos/PoliticaAccionesRegistrarPedidos.php), [ExpedienteRegistrarPedidos](app/Support/ControlPedidos/RegistrarPedidos/ExpedienteRegistrarPedidos.php) y [ProgresoCapturaTienda](app/Support/ControlPedidos/RegistrarPedidos/ProgresoCapturaTienda.php), que hoy dependen de cobertura, piezas o Mismo día.
-
-Se retiran de esta sección: cobertura, sucursal, canal, atención, Mismo día y el alta de piezas. No se crea un adjuntador nuevo.
-
-### Contrato de guardado, archivo y solicitud
-
-Guardar borrador no crea tarea. Puede persistir con datos incompletos y sin archivo. Guarda cliente, departamento resuelto, folio y `solicitud_preparacion.modalidad_entrega` (`tienda`, `municipal` o `nacional`). No escribe código de cobertura, `atencion_tienda`, `piezas_tienda`, `prioridad_md`, sucursal ni canal.
-
-El archivo se sube cuando el borrador ya tiene id. Estados visibles: vacío, Cargando, Listo y error con el mensaje existente. Reemplazar y retirar quedan disponibles antes de solicitar. Al reabrir un borrador del servidor, `pedido.documentos` (`pdf_pedido` o `cotizacion`, ya cargado por `ListarPedidosBmaService`) vuelve a mostrarse. Un borrador solo del navegador no contiene el archivo y no debe simularlo.
-
-«Solicitar en tienda» es otra acción. Para el caso descrito, Preparación Tienda debe recibir la solicitud, revisar disponibilidad y separar. No declara forma de pago ni clasifica el pedido como T-01. Exige cliente resuelto, departamento resuelto, folio, modalidad Tienda y archivo listo. Aun así permanece deshabilitada: faltan el destino unívoco y la comprobación de concurrencia. El texto visible es «Solicitar en tienda todavía no está disponible.» No menciona concurrencia, instrucción vigente, códigos ni almacén. Si falta el archivo, el aviso propio es «Adjunta el PDF o la imagen del pedido.»
-
-Municipal y Nacional continúan al formulario existente con cliente, departamento, folio y archivo ya guardados. No se vuelven a capturar. No se crea tarea ni un cruce nuevo si el pedido ya tiene instrucción, pago o remisión: siguen los límites físicos, documentales y financieros actuales.
-
-### Destino y fichas
-
-Confirmado para esta acción: la vista destinataria es Preparación Tienda y el trabajo es revisar disponibilidad y separar. Quien registra no transcribe piezas. La revisión posterior sigue siendo por excepciones.
-
-No está confirmado: forma de pago, T-01, Mismo día, ni que CEDIS quede fuera de todo pedido de Tienda.
-
-Las fichas separan otros recorridos. T-01 es el único en el que CEDIS no participa. T-02, T-02.1 y T-09 consultan primero a CEDIS; T-03 también, o a PDV si la disponibilidad lo indica. Esta captura no tiene un dato que distinga esos recorridos. [CrearTareaPreparacionService](app/Services/ControlPedidos/CrearTareaPreparacionService.php) no sirve tal cual: exige `codigo_modalidad` y `almacen_id`, y `RECOGE_TIENDA` además impone almacén PDV, `prioridad_md` y sucursal destino. Usarlo convertiría la solicitud en T-01.
-
-### Continuidad por secciones
-
-Se conserva la idea de secciones del formulario anterior. Esta subfase solo muestra la primera. Cada momento posterior muestra solo lo suyo y no se implementa ahora:
-
-- Respuesta de disponibilidad y evidencia: sección siguiente, alimentada por Preparación Tienda. Registrar pedidos no contiene el formulario de inspección.
-- Excepciones y decisión del cliente: la sección de confirmación, solo si hay excepciones. No se registra cada pieza correcta. Mientras falta la decisión, esas piezas no siguen.
-- Cobertura y reporte de pago: sección de pago. Ahí se distinguen transferencia, crédito y Mismo día, cuando esa etapa exista.
-- Seguimiento de preparación y entrega: lectura posterior del estado de la instrucción. Entregar guías sigue siendo otra vista.
-
-## 5. Vistas
-
-Registrar pedidos, en 2.1.1, muestra solo la captura inicial. No contiene el formulario de inspección, la cobertura, las piezas ni la decisión del cliente. Guardar borrador sigue disponible y no crea tarea. «Solicitar en tienda» es la acción distinta de la modalidad Tienda y permanece deshabilitada. Envío municipal o nacional continúa en el formulario existente con los datos ya capturados.
-
-Control Pedidos confirma por excepciones y después registra la salida a sucursal. El aviso de salida no es recepción. Esa vista no recibe una tarea desde esta captura.
-
-Auditar pedidos compara importe y comprobantes cuando el caso ya llegó a cobertura. Registra la remisión o el resultado de crédito. Devolver a Registrar pedidos lleva causa.
-
-Preparación Tienda separa recolección y envío municipal. Responde por excepciones, aparta, recibe, custodia y entrega. La entrega de un apartado impago permanece bloqueada hasta confirmar el pago. Esta captura no marca el pedido como ese apartado.
-
-Gerencia resuelve el segundo traslado en el mismo expediente, sin mover la mercancía. La facultad será un permiso propio. El rechazo actual por ser quien vendió no se copia al diseño.
-
-## 6. Prototipo anterior
-
-El HTML de [docs/visual-refresh/registrar-pedidos-tienda/](docs/visual-refresh/registrar-pedidos-tienda/) queda como antecedente. Mostraba cobertura y captura de piezas, así que no define esta captura. No se produce otro prototipo en este replanteo. La distribución vigente es el esquema de la sección 4.
-
-La dirección visual que sí se conserva: tokens de [resources/css/gelia/tokens.css](resources/css/gelia/tokens.css), radio de trabajo de 1 rem, radio de tarjeta de página de 2.5 rem sin usarlo para inflar el formulario, fuente de producto JetBrains Mono y sin paleta nueva.
-
-## 7. Cortes futuros
-
-Ninguno usa `migrate fresh` ni `ALLOW_DESTRUCTIVE_DB`.
-
-- **2.1.1.** Captura inicial descrita en la sección 4, sin sustituir el formulario de Municipal ni Nacional. Borrador sin tarea. Solicitar exige el archivo y permanece deshabilitada hasta resolver el destino y la concurrencia de la fase 1. No clasifica T-01, no escribe `RECOGE_TIENDA` ni `prioridad_md`, y no llama a `CrearTareaPreparacionService` con ese código. No implementa la respuesta, las excepciones, la decisión del cliente, la cobertura, el pago, Mismo día, el corte de las 13:00, el pendiente de gerencia ni los cruces. La captura está implementada y pendiente de revisión. La solicitud sigue deshabilitada y el recorrido operativo no está cerrado.
-- **2.1.2.** Revisión por excepciones en Control Pedidos y salida a sucursal distinta de la recepción. Misma regla que usará Preparación Tienda. Prepara Mismo día (Tienda MD) solo si la condición sigue confirmada.
-- **2.1.3.** Cobertura, remisión, saldo desde $10, transferencias del mismo método y crédito sin comprobante. Para Mismo día (Tienda MD), la verificación y la remisión no rechazan un reporte cuyo primer `pedido_bma_pagos.created_at` aceptado está dentro del corte de las 13:00. Un reporte fuera del corte no confirma la condición y no cambia la modalidad.
-- **2.1.4.** La misma revisión en Preparación Tienda, apartado, corte del impago, pago antes de entregar, recepción y custodia. Segmento municipal separado.
-- **2.1.5.** Recorrido ordinario, segundo traslado con resolución, permiso de gerencia y retiro del rechazo por ser quien vendió. Repite la concurrencia si el entorno puede cruzar dos solicitudes. No se llama Tienda completa.
-
-## 8. Alcance de 2.1.1
-
-Este replanteo sustituye el alcance anterior de la captura. La aplicación ya usa esta captura y queda pendiente de revisión. La solicitud sigue deshabilitada. La captura previa ya no es el diseño vigente.
-
-Cuando se autorice la implementación, el trabajo se limita a la primera sección de Registrar pedidos:
-
-- Adaptar `FormularioRegistrarTienda` a la composición de la sección 4.
-- Adaptar la política, el expediente y el progreso para que dejen de depender de cobertura, piezas y Mismo día en esta sección.
-- Reutilizar el adjunto y la previsualización existentes. No crear otro componente de archivo.
-- Conservar Municipal y Nacional en `ModalFormPedidoLegado`, con los datos ya capturados y sin cruces nuevos.
-- Mantener `PoliticaAccionesRegistrarPedidos::CONCURRENCIA_COMPROBADA = false`. `solicitarTienda` sigue sin crear tarea.
-
-Fuera de este corte: Control Pedidos, Auditar pedidos, Preparación Tienda, resguardos, permiso de gerencia, tabla de pendientes, saldos, registro del pago, corte de las 13:00, rediseño del formulario de Municipal y Nacional, y `AsignarSucursalDestinoPedidoService`.
-
-### Criterios de aceptación
-
-- El alta no muestra cobertura, pago, piezas, Mismo día, sucursal, canal ni campos posteriores, y no preselecciona modalidad.
-- El archivo se selecciona, previsualiza, amplía y distingue carga, listo y error; se puede sustituir o retirar antes de solicitar, con los formatos y el límite actuales.
-- Solicitar exige el archivo. Guardar borrador no lo exige y no crea tarea.
-- Reabrir el borrador del servidor recupera cliente, departamento, folio, modalidad y archivo guardado.
-- No existe transcripción de productos.
-- «Solicitar en tienda» permanece deshabilitada, distinta de guardar, y no llama a la preparación con `RECOGE_TIENDA`.
-- Municipal y Nacional continúan al formulario existente sin duplicar lo ya capturado ni abrir un cruce nuevo.
-- En escritorio los campos van en dos columnas compactas; en pantalla pequeña se apilan, sin scroll horizontal y sin tapar el foco.
-
-## 9. Skills de este replanteo
-
-- visual-refresh y visual-discovery: revisión del flujo real, sin prototipo nuevo y sin editar vistas.
-- frontend-design: la jerarquía es el archivo y la solicitud, dentro de los tokens GELIA.
-- emil-design-eng: sin movimiento en una captura frecuente, salvo la opacidad breve de la previsualización.
-- ui-ux-pro-max: foco visible, pie que no lo tape, etiquetas y respuesta de carga.
-- mobile-native: campos de 16px, `100dvh`, área segura y acciones fuera del contenido. Se comprobó el apilado en un viewport de 390 px.
-- impeccable, modo Operate: leída para densidad y jerarquía. No se ejecutó el lanzador ni se renovó la identidad.
-
-## Pendientes
-
-La conexión inicial ya no deja la solicitud deshabilitada. La validación integral sigue abierta.
-
-- Concurrencia de la fase 1. Sigue sin dos procesos simultáneos. Una instrucción sustituida no se ejecuta; eso sí quedó probado en la respuesta de disponibilidad.
-- Segundo traslado. Usa `control_pedidos.salida.autorizar` y además rechaza a quien registró la venta. Esa prohibición no está aprobada. Sigue en 2.1.5.
-- Decisión del cliente sobre las excepciones. Registrar pedidos ya muestra las piezas pendientes. No hay todavía una acción que las retire, sustituya o acepte.
-- Apartado físico, recepción, custodia y entrega. La confirmación del apartado conserva el plazo T-01. El recorrido completo no está cerrado.
-- Piezas ya en PDV para Mismo día (T-02.1) y la continuación cuando el reporte del pago queda fuera de las 13:00.
-- Reloj del crédito, VIP, día 20, sobrante menor a $10, desborde asegurado y absorción interna. No se agregaron reglas.
-- `RecogeTiendaFlujoTest::test_rechaza_productos_de_otro_almacen_sin_alterar_el_apartado` ya fallaba en el código confirmado: el registro de piezas no limita el catálogo al almacén de la tarea. No se corrigió en esta conexión.
+La entrega de Cursor debe indicar: recorridos listos y cómo probarlos; archivos y cambios relevantes; pruebas/concurrencia/build y revisión visual; pendientes concretos con rol y causa. El siguiente paso del usuario será su repaso operativo de Tienda, no otra aprobación para iniciar la siguiente vista de 2.1.
