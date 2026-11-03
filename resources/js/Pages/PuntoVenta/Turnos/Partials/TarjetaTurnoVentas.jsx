@@ -154,6 +154,11 @@ export default function TarjetaTurnoVentas({
                     </p>
                     <p className="text-3xl font-black tracking-wider theme-text-main m-0 mt-1">{turno?.folio}</p>
                     <p className="text-sm font-bold theme-text-main m-0 mt-2">{turno?.snapshot_nombre_llamado || '—'}</p>
+                    {turno?.es_tercero && turno?.cliente_titular && (
+                        <p className="text-xs font-semibold theme-text-muted m-0 mt-1">
+                            Cuenta: {turno.cliente_titular}
+                        </p>
+                    )}
                     {turno?.servicio && (
                         <p className="text-xs font-semibold theme-text-muted m-0 mt-1">
                             Servicio: <span className="theme-text-main">{turno.servicio}</span>
@@ -188,8 +193,13 @@ export default function TarjetaTurnoVentas({
                 </div>
             )}
 
-            {etiquetas.length > 0 && (
+            {(etiquetas.length > 0 || turno?.es_tercero) && (
                 <div className="flex flex-wrap gap-2">
+                    {turno?.es_tercero && (
+                        <span className="inline-flex px-2.5 py-1 rounded-lg text-[10px] font-black uppercase bg-sky-500/15 text-sky-800 dark:text-sky-200">
+                            Tercero
+                        </span>
+                    )}
                     {etiquetas.map((etiqueta) => (
                         <span
                             key={etiqueta}

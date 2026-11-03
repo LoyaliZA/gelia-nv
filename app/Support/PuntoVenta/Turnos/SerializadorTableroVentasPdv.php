@@ -111,13 +111,19 @@ final class SerializadorTableroVentasPdv
      */
     private static function resumenTurno(TurnoPdv $turno, CarbonInterface $ahora): array
     {
+        $nombreVisible = IdentidadVisibleTurnoPdv::nombreVisible($turno);
+
         return [
             'id' => $turno->id,
             'folio' => $turno->folio,
             'estado' => $turno->estado,
             'servicio' => $turno->servicio,
             'sucursal_id' => $turno->sucursal_id,
-            'snapshot_nombre_llamado' => $turno->snapshot_nombre_llamado,
+            'snapshot_nombre_llamado' => $nombreVisible !== ''
+                ? $nombreVisible
+                : $turno->snapshot_nombre_llamado,
+            'es_tercero' => IdentidadVisibleTurnoPdv::esTercero($turno),
+            'cliente_titular' => IdentidadVisibleTurnoPdv::nombreTitular($turno),
             'prioridad_diamante' => (bool) $turno->prioridad_diamante,
             'prioridad_vip' => (bool) $turno->prioridad_vip,
             'prioridad_adulto_mayor' => (bool) $turno->prioridad_adulto_mayor,
