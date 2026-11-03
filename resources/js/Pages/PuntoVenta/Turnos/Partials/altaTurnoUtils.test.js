@@ -119,6 +119,19 @@ describe('altaTurnoUtils', () => {
 
         expect(mensajeClienteYaEnCola(bandeja.asignados[0])).toContain('asignado');
         expect(mensajeClienteYaEnCola(bandeja.en_cola[0])).toContain('en cola');
+
+        const enReatencion = {
+            id: 12,
+            cliente_id: 15,
+            folio: 'V-0003',
+            estado: 'EN_REATENCION',
+            reatencion_vigente: true,
+        };
+        expect(buscarTurnoActivoClienteEnBandeja({
+            ...bandeja,
+            en_reatencion: [enReatencion],
+        }, 15)).toMatchObject({ folio: 'V-0003' });
+        expect(mensajeClienteYaEnCola(enReatencion)).toContain('ventana de reatención');
     });
 
     it('oculta mensajes SQL crudos del servidor', () => {

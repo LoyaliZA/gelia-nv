@@ -342,7 +342,7 @@ class JornadaDisponibilidadOperacionPdvTest extends TestCase
         $this->assertFalse($servicio->esDisponible($this->ventas, $this->sucursal->id, true));
     }
 
-    public function test_primera_disponible_desempata_por_user_id_asc(): void
+    public function test_primera_ronda_reparte_al_azar_entre_quienes_no_han_atendido(): void
     {
         $this->abrirSucursal();
         $primero = $this->crearVendedor('Primero');
@@ -353,10 +353,55 @@ class JornadaDisponibilidadOperacionPdvTest extends TestCase
         }
 
         $servicio = app(ConsultaPersonaDisponiblePdv::class);
-        $elegido = $servicio->primeraDisponible($this->sucursal->id, TurnoPdv::SERVICIO_VENTAS);
+        $elegidos = [];
+        for ($i = 0; $i < 40; $i++) {
+            $elegido = $servicio->primeraDisponible($this->sucursal->id, TurnoPdv::SERVICIO_VENTAS);
+            $this->assertInstanceOf(User::class, $elegido);
+            $elegidos[$elegido->id] = true;
+        }
 
-        $this->assertInstanceOf(User::class, $elegido);
-        $this->assertSame(min($primero->id, $segundo->id), $elegido->id);
+        $this->assertArrayHasKey($primero->id, $elegidos);
+        $this->assertArrayHasKey($segundo->id, $elegidos);
+    }
+
+    public function test_quien_no_ha_atendido_tiene_prioridad_sobre_quien_ya_cerro(): void
+    {
+        $this->abrirSucursal();
+        $sinTurno = $this->crearVendedor('Sin turno');
+        $yaAtendio = $this->crearVendedor('Ya atendió');
+
+        foreach ([$sinTurno, $yaAtendio] as $vendedor) {
+            app(AbrirJornadaPdvService::class)->ejecutar($vendedor, now());
+        }
+
+        $this->registrarCierre($yaAtendio, now()->subMinutes(30));
+
+        $elegido = app(ConsultaPersonaDisponiblePdv::class)
+            ->primeraDisponible($this->sucursal->id, TurnoPdv::SERVICIO_VENTAS);
+
+        $this->assertSame($sinTurno->id, $elegido?->id);
+    }
+
+    public function test_cola_entrega_al_que_quedo_libre_antes_aunque_tenga_id_mayor(): void
+    {
+        $this->abrirSucursal();
+        $this->seedPlazos(0);
+        $temprano = $this->crearVendedor('Cerró antes');
+        $tarde = $this->crearVendedor('Cerró después');
+        $menor = $temprano->id < $tarde->id ? $temprano : $tarde;
+        $mayor = $temprano->id < $tarde->id ? $tarde : $temprano;
+
+        foreach ([$menor, $mayor] as $vendedor) {
+            app(AbrirJornadaPdvService::class)->ejecutar($vendedor, now());
+        }
+
+        $this->registrarCierre($mayor, now()->subMinutes(20));
+        $this->registrarCierre($menor, now()->subMinutes(5));
+
+        $elegido = app(ConsultaPersonaDisponiblePdv::class)
+            ->primeraDisponible($this->sucursal->id, TurnoPdv::SERVICIO_VENTAS);
+
+        $this->assertSame($mayor->id, $elegido?->id);
     }
 
     public function test_dos_aperturas_concurrentes_no_duplican_jornada_activa(): void
@@ -407,9 +452,6 @@ class JornadaDisponibilidadOperacionPdvTest extends TestCase
         app(AbrirJornadaPdvService::class)->ejecutar($primero, now());
         app(AbrirJornadaPdvService::class)->ejecutar($segundo, now());
 
-        $menor = $primero->id < $segundo->id ? $primero : $segundo;
-        $mayor = $primero->id < $segundo->id ? $segundo : $primero;
-
         $turnoUno = TurnoPdv::factory()->create([
             'sucursal_id' => $this->sucursal->id,
             'estado' => TurnoPdv::ESTADO_EN_COLA,
@@ -424,12 +466,13 @@ class JornadaDisponibilidadOperacionPdvTest extends TestCase
         app(MatchmakerTurnosPdvService::class)->ejecutar($this->sucursal->id, 'test.cooldown');
 
         $turnoUno->refresh();
+        $primeroAsignado = User::query()->findOrFail($turnoUno->atencionActual->user_id);
+        $segundoAsignado = $primeroAsignado->id === $primero->id ? $segundo : $primero;
         $this->assertSame(TurnoPdv::ESTADO_ASIGNADO, $turnoUno->estado);
-        $this->assertSame($menor->id, $turnoUno->atencionActual->user_id);
 
         app(CerrarAtencionTurnoPdvService::class)->ejecutar(
             $turnoUno->fresh(),
-            $menor,
+            $primeroAsignado,
             (int) $turnoUno->fresh()->version,
             'pdv:cerrar:cooldown',
             MotivosCierreAtencionTurnoPdv::VENTA,
@@ -441,8 +484,8 @@ class JornadaDisponibilidadOperacionPdvTest extends TestCase
 
         $turnoDos->refresh();
         $this->assertSame(TurnoPdv::ESTADO_ASIGNADO, $turnoDos->estado);
-        $this->assertSame($mayor->id, $turnoDos->atencionActual->user_id);
-        $this->assertFalse(app(ConsultaPersonaDisponiblePdvService::class)->esDisponible($menor, $this->sucursal->id));
+        $this->assertSame($segundoAsignado->id, $turnoDos->atencionActual->user_id);
+        $this->assertFalse(app(ConsultaPersonaDisponiblePdvService::class)->esDisponible($primeroAsignado, $this->sucursal->id));
 
         $this->seedPlazos(0);
         $turnoTres = TurnoPdv::factory()->create([
@@ -453,7 +496,7 @@ class JornadaDisponibilidadOperacionPdvTest extends TestCase
 
         app(CerrarAtencionTurnoPdvService::class)->ejecutar(
             $turnoDos->fresh(),
-            $mayor,
+            $segundoAsignado,
             (int) $turnoDos->fresh()->version,
             'pdv:cerrar:cooldown-cero',
             MotivosCierreAtencionTurnoPdv::VENTA,
@@ -465,10 +508,26 @@ class JornadaDisponibilidadOperacionPdvTest extends TestCase
 
         $turnoTres->refresh();
         $this->assertSame(TurnoPdv::ESTADO_ASIGNADO, $turnoTres->estado);
-        $this->assertSame($mayor->id, $turnoTres->atencionActual->user_id);
+        $this->assertSame($segundoAsignado->id, $turnoTres->atencionActual->user_id);
 
         $this->travel(11)->seconds();
-        $this->assertTrue(app(ConsultaPersonaDisponiblePdvService::class)->esDisponible($menor, $this->sucursal->id));
+        $this->assertTrue(app(ConsultaPersonaDisponiblePdvService::class)->esDisponible($primeroAsignado, $this->sucursal->id));
+    }
+
+    private function registrarCierre(User $vendedor, \Carbon\CarbonInterface $finAt): void
+    {
+        $turno = TurnoPdv::factory()->create([
+            'sucursal_id' => $this->sucursal->id,
+            'estado' => TurnoPdv::ESTADO_EN_REATENCION,
+            'alta_at' => $finAt->copy()->subMinutes(10),
+        ]);
+
+        TurnoPdvAtencion::factory()->create([
+            'turno_id' => $turno->id,
+            'user_id' => $vendedor->id,
+            'inicio_at' => $finAt->copy()->subMinutes(10),
+            'fin_at' => $finAt,
+        ]);
     }
 
     private function seedPlazos(int $cooldownSegundos): void

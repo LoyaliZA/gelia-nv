@@ -49,6 +49,7 @@ export function turnosVisiblesBandeja(bandeja) {
     return [
         ...(bandeja.en_cola ?? []),
         ...(bandeja.asignados ?? []),
+        ...(bandeja.en_reatencion ?? []),
     ];
 }
 
@@ -64,6 +65,10 @@ export function buscarTurnoActivoClienteEnBandeja(bandeja, clienteId) {
 
 export function mensajeClienteYaEnCola(turno) {
     const folio = turno?.folio ? ` (${turno.folio})` : '';
+    if (turno?.estado === 'EN_REATENCION' || turno?.reatencion_vigente) {
+        return `Esta persona sigue en ventana de reatención${folio}. Reasígnala desde operación; no hace falta un turno nuevo.`;
+    }
+
     const estado = turno?.estado === 'ASIGNADO' ? 'asignado' : 'en cola';
 
     return `Esta persona ya tiene un turno ${estado}${folio}. No es necesario registrarlo de nuevo.`;

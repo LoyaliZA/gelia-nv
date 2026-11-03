@@ -93,6 +93,7 @@ class FormularioRecepcionTurnoPdvController extends Controller
                 ],
                 'en_cola' => [],
                 'asignados' => [],
+                'en_reatencion' => [],
             ];
         }
 
@@ -127,6 +128,7 @@ class FormularioRecepcionTurnoPdvController extends Controller
             'estados' => [
                 TurnoPdv::ESTADO_EN_COLA => 'En cola',
                 TurnoPdv::ESTADO_ASIGNADO => 'Asignado',
+                TurnoPdv::ESTADO_EN_REATENCION => 'En reatención',
             ],
             'motivos_baja' => [
                 ['valor' => MotivosBajaColaTurnoPdv::SE_FUE, 'etiqueta' => 'Se fue'],

@@ -132,12 +132,7 @@ export default function TarjetaVendedorGerencia({
         [motivosPausa, motivoPausaId],
     );
 
-    const clientesReatencion = useMemo(
-        () => (reatenciones ?? []).filter((turno) => (
-            (turno.candidatos ?? []).some((candidato) => Number(candidato.id) === Number(persona.id))
-        )),
-        [reatenciones, persona.id],
-    );
+    const clientesReatencion = reatenciones ?? [];
 
     const ejecutarAccion = async (accion, payloadExtra = {}) => {
         const ruta = RUTAS_ACCION[accion];

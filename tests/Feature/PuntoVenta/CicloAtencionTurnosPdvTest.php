@@ -349,6 +349,17 @@ class CicloAtencionTurnosPdvTest extends TestCase
         Event::assertDispatched(TurnoVentanaReatencionVencida::class, 1);
     }
 
+    public function test_cada_ventana_de_reatencion_programa_su_propio_vencimiento(): void
+    {
+        Queue::fake();
+
+        VencerVentanaReatencionTurnoPdvJob::dispatch(15, 1_700_000_000);
+        VencerVentanaReatencionTurnoPdvJob::dispatch(15, 1_700_003_600);
+        VencerVentanaReatencionTurnoPdvJob::dispatch(15, 1_700_003_600);
+
+        Queue::assertPushed(VencerVentanaReatencionTurnoPdvJob::class, 2);
+    }
+
     public function test_job_prorroga_registra_evento_tras_iniciar_atencion(): void
     {
         Event::fake([AtencionProrroga::class]);

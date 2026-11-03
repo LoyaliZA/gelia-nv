@@ -93,7 +93,33 @@ class UiBandejaColaRecepcionTurnoPdvTest extends TestCase
             ->assertJsonPath('en_cola.0.puede_baja_cola', true)
             ->assertJsonPath('asignados.0.id', $asignado->id)
             ->assertJsonPath('asignados.0.puede_baja_cola', false)
-            ->assertJsonPath('asignados.0.atencion.primer_nombre', 'Vendedor');
+            ->assertJsonPath('asignados.0.atencion.primer_nombre', 'Vendedor')
+            ->assertJsonCount(0, 'en_reatencion');
+    }
+
+    public function test_datos_lista_clientes_con_ventana_de_reatencion_vigente(): void
+    {
+        $vigente = TurnoPdv::factory()->create([
+            'sucursal_id' => $this->sucursal->id,
+            'estado' => TurnoPdv::ESTADO_EN_REATENCION,
+            'reatencion_expira_at' => now()->addMinutes(40),
+            'snapshot_nombre_llamado' => 'Cliente Reciente',
+            'atencion_actual_id' => null,
+        ]);
+        TurnoPdv::factory()->create([
+            'sucursal_id' => $this->sucursal->id,
+            'estado' => TurnoPdv::ESTADO_EN_REATENCION,
+            'reatencion_expira_at' => now()->subMinute(),
+            'atencion_actual_id' => null,
+        ]);
+
+        $this->actingAs($this->recepcion)
+            ->getJson(route('punto_venta.turnos.recepcion.datos'))
+            ->assertOk()
+            ->assertJsonCount(1, 'en_reatencion')
+            ->assertJsonPath('en_reatencion.0.id', $vigente->id)
+            ->assertJsonPath('en_reatencion.0.reatencion_vigente', true)
+            ->assertJsonPath('en_reatencion.0.puede_baja_cola', false);
     }
 
     public function test_baja_exitosa_y_rechazo_si_ya_asignado(): void

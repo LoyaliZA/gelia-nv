@@ -191,8 +191,10 @@ class CerrarAtencionTurnoPdvService
                 throw $exception;
             }
 
-            VencerVentanaReatencionTurnoPdvJob::dispatch($turnoBloqueado->id)
-                ->delay($reatencionExpira);
+            VencerVentanaReatencionTurnoPdvJob::dispatch(
+                $turnoBloqueado->id,
+                $reatencionExpira->getTimestamp(),
+            )->delay($reatencionExpira);
 
             $this->espera->ejecutar(
                 (int) $atencion->user_id,
