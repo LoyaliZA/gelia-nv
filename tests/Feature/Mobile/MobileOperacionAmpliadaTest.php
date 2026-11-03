@@ -20,6 +20,8 @@ use App\Models\Inventario;
 use App\Models\Producto;
 use App\Models\ProductoCosto;
 use App\Models\RhColaborador;
+use App\Models\SolicitudFactura;
+use App\Models\SolicitudFacturaRemision;
 use App\Models\SolicitudTag;
 use App\Models\SolicitudTraspaso;
 use App\Models\Sucursal;
@@ -29,6 +31,7 @@ use Tests\Support\RefreshDatabaseSafe;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class MobileOperacionAmpliadaTest extends TestCase
@@ -39,6 +42,8 @@ class MobileOperacionAmpliadaTest extends TestCase
     {
         parent::setUp();
         $this->withoutMiddleware([ThrottleRequests::class]);
+        Role::findOrCreate('Super Admin', 'web');
+        Role::findOrCreate('Administrador', 'web');
     }
 
     public function test_pedidos_respeta_el_alcance_de_la_persona_vendedora(): void
@@ -265,6 +270,161 @@ class MobileOperacionAmpliadaTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_facturas_muestran_el_identificador_fiscal_sin_correo_ni_archivos(): void
+    {
+        CatalogoEstadoSolicitud::reiniciarCache();
+        $propia = $this->usuario(['facturas.ver_listado']);
+        $ajena = User::factory()->create();
+        $estado = CatalogoEstadoSolicitud::query()->firstOrCreate(
+            ['nombre' => 'Pendiente'],
+            ['activo' => true],
+        );
+        $factura = SolicitudFactura::query()->create([
+            'folio' => 'FAC-TEST-0001',
+            'vendedor_id' => $propia->id,
+            'catalogo_estado_solicitud_id' => $estado->id,
+            'razon_social' => 'Aromas del Norte',
+            'destinatario_tipo' => SolicitudFactura::DESTINATARIO_CLIENTE,
+            'datos_fiscales' => [
+                'rfc' => 'XAXX010101000',
+                'correo_electronico' => 'secreto@example.com',
+                'uso_factura' => 'G03',
+                'nombre_razon_social' => 'Aromas del Norte SA',
+            ],
+            'factura_xml_path' => 'facturas/secretos/uno.xml',
+            'archivo_fiscal_path' => 'facturas/secretos/constancia.xlsx',
+        ]);
+        $oculta = SolicitudFactura::query()->create([
+            'folio' => 'FAC-TEST-0002',
+            'vendedor_id' => $ajena->id,
+            'catalogo_estado_solicitud_id' => $estado->id,
+            'razon_social' => 'Cuenta ajena',
+            'destinatario_tipo' => SolicitudFactura::DESTINATARIO_CLIENTE,
+        ]);
+
+        $this->con($propia)
+            ->getJson('/api/v1/mobile/facturas?q=Aromas&tab=PENDIENTES')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('data.0.folio', 'FAC-TEST-0001')
+            ->assertJsonPath('data.0.razon_social', 'Aromas del Norte')
+            ->assertJsonPath('data.0.estado.nombre', 'Pendiente')
+            ->assertJsonPath('data.0.identificador_fiscal.rfc', 'XAXX010101000')
+            ->assertJsonPath('data.0.identificador_fiscal.uso_factura', 'G03')
+            ->assertJsonPath('data.0.tiene_xml', true)
+            ->assertJsonPath('data.0.tiene_archivo_fiscal', true)
+            ->assertJsonPath('metricas.pendientes', 1)
+            ->assertJsonMissingPath('data.0.datos_fiscales')
+            ->assertJsonMissingPath('data.0.factura_xml_path')
+            ->assertJsonMissing(['correo_electronico' => 'secreto@example.com']);
+
+        $this->con($propia)
+            ->getJson('/api/v1/mobile/facturas/'.$factura->id)
+            ->assertOk()
+            ->assertJsonPath('data.folio', 'FAC-TEST-0001');
+
+        $this->con($propia)
+            ->getJson('/api/v1/mobile/facturas/'.$oculta->id)
+            ->assertNotFound();
+
+        $this->con($this->usuario([]))
+            ->getJson('/api/v1/mobile/facturas')
+            ->assertForbidden();
+    }
+
+    public function test_solicitud_expone_la_cotizacion_persistida_y_registra_la_cancelacion(): void
+    {
+        $propia = $this->usuario(['solicitudes.ver_listado', 'solicitudes.solicitar_cancelacion']);
+        $estado = CatalogoEstadoSolicitud::query()->firstOrCreate(
+            ['nombre' => 'Pendiente'],
+            ['activo' => true],
+        );
+        $solicitud = $this->solicitud($propia);
+        $solicitud->update([
+            'catalogo_estado_solicitud_id' => $estado->id,
+            'solicitar_cotizacion' => true,
+            'total_proyectado_neto' => 180,
+            'numero_pedido' => 'PED-COT-1',
+            'factura_razon_social' => 'Casa Fiscal',
+            'factura_datos_fiscales' => [
+                'rfc' => 'CACX7605101P8',
+                'correo_electronico' => 'no-enviar@example.com',
+            ],
+            'archivo_facturas_path' => 'facturas/oculto.pdf',
+        ]);
+        SolicitudFacturaRemision::query()->create([
+            'solicitud_id' => $solicitud->id,
+            'path' => 'facturas/remisiones/oculto.pdf',
+            'nombre_original' => 'remision-10.pdf',
+            'orden' => 1,
+        ]);
+
+        $this->con($propia)
+            ->getJson('/api/v1/mobile/solicitudes/'.$solicitud->id)
+            ->assertOk()
+            ->assertJsonPath('data.cotizacion.solicitar_cotizacion', true)
+            ->assertJsonPath('data.cotizacion.monto_cotizado', '250.00')
+            ->assertJsonPath('data.cotizacion.total_proyectado_neto', '180.00')
+            ->assertJsonPath('data.numero_pedido', 'PED-COT-1')
+            ->assertJsonPath('data.factura.razon_social', 'Casa Fiscal')
+            ->assertJsonPath('data.factura.tiene_archivo', true)
+            ->assertJsonPath('data.factura.identificador_fiscal.rfc', 'CACX7605101P8')
+            ->assertJsonPath('data.factura.remisiones.0.nombre_original', 'remision-10.pdf')
+            ->assertJsonMissingPath('data.factura.remisiones.0.path')
+            ->assertJsonMissingPath('data.factura_datos_fiscales')
+            ->assertJsonMissing(['correo_electronico' => 'no-enviar@example.com']);
+
+        $this->con($propia)
+            ->postJson('/api/v1/mobile/solicitudes/'.$solicitud->id.'/solicitar-cancelacion', [
+                'motivo_cancelacion' => 'El cliente ya no requiere el folio.',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.motivo_cancelacion', 'El cliente ya no requiere el folio.');
+
+        $this->assertNotNull($solicitud->fresh()->cancelacion_solicitada_at);
+
+        $this->con($this->usuario(['solicitudes.ver_listado']))
+            ->postJson('/api/v1/mobile/solicitudes/'.$solicitud->id.'/solicitar-cancelacion', [
+                'motivo_cancelacion' => 'No tiene permiso para pedirla.',
+            ])
+            ->assertForbidden();
+    }
+
+    public function test_operativas_filtran_cotizacion_y_ocultan_lo_ajeno(): void
+    {
+        $propia = $this->usuario(['cancelaciones_cotizaciones.ver_listado', 'cancelaciones_cotizaciones.solicitar_cancelacion']);
+        $ajena = User::factory()->create();
+        $cotizacion = $this->operativa($propia, 'COTIZACION DE MOSTRADOR', 'Pendiente');
+        $this->operativa($propia, 'REMISION DE PISO', 'Pendiente');
+        $ajenaOperativa = $this->operativa($ajena, 'COTIZACION AJENA', 'Pendiente');
+
+        $this->con($propia)
+            ->getJson('/api/v1/mobile/cancelaciones-cotizaciones?tipo_operativo=COTIZACION')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('data.0.id', $cotizacion->id)
+            ->assertJsonPath('data.0.numero_pedido', 'PED-90')
+            ->assertJsonPath('data.0.cotizacion.monto_cotizado', '90.00')
+            ->assertJsonPath('data.0.cotizacion.solicitar_cotizacion', true);
+
+        $this->con($propia)
+            ->getJson('/api/v1/mobile/cancelaciones-cotizaciones/'.$ajenaOperativa->id)
+            ->assertNotFound();
+
+        $this->con($propia)
+            ->getJson('/api/v1/mobile/cancelaciones-cotizaciones/'.$this->solicitud($propia)->id)
+            ->assertNotFound();
+
+        $this->con($propia)
+            ->postJson('/api/v1/mobile/cancelaciones-cotizaciones/'.$cotizacion->id.'/solicitar-cancelacion', [
+                'motivo_cancelacion' => 'La cotización ya no procede.',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.motivo_cancelacion', 'La cotización ya no procede.');
+
+        $this->assertNotNull($cotizacion->fresh()->cancelacion_solicitada_at);
+    }
+
     /**
      * @param  list<string>  $permisos
      */
@@ -439,4 +599,37 @@ class MobileOperacionAmpliadaTest extends TestCase
         ]);
     }
 
+    private function operativa(User $vendedor, string $procesoNombre, string $estadoNombre): SolicitudTag
+    {
+        $listaId = DB::table('catalogo_listas_descuento')->insertGetId([
+            'nombre' => 'Lista '.Str::random(4),
+            'activo' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $cliente = Cliente::query()->create([
+            'numero_cliente' => (string) random_int(100000, 999999),
+            'nombre' => 'Cliente '.$procesoNombre,
+            'lista_actual_id' => $listaId,
+        ]);
+        $proceso = CatalogoProceso::query()->create([
+            'nombre' => $procesoNombre.' '.Str::random(3),
+            'categoria_flujo' => CatalogoProceso::CATEGORIA_OPERATIVO,
+            'activo' => true,
+        ]);
+        $estado = CatalogoEstadoSolicitud::query()->firstOrCreate(
+            ['nombre' => $estadoNombre],
+            ['activo' => true],
+        );
+
+        return SolicitudTag::query()->create([
+            'cliente_id' => $cliente->id,
+            'vendedor_id' => $vendedor->id,
+            'catalogo_proceso_id' => $proceso->id,
+            'catalogo_estado_solicitud_id' => $estado->id,
+            'monto_cotizado' => 90,
+            'numero_pedido' => 'PED-90',
+            'solicitar_cotizacion' => true,
+        ]);
+    }
 }

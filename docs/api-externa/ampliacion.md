@@ -56,7 +56,9 @@ Las rutas web viven en `routes/web/modules`. El permiso de la primera columna es
 | Traspasos | `traspasos.ver_listado` | `SolicitudTraspaso` | `ListarSolicitudesTraspasoService::usuarioPuedeVer`. El abastecimiento de preparación no entra al listado. |
 | Mensajería | sesión autenticada | `Conversacion`, `Mensaje` | `ConversacionPolicy`: solo participantes. |
 | Punto de venta | permisos `pdv.*` | resguardos, turnos, visitas | Ya estaba en el API móvil. |
-| Facturas, contabilidad, cobranza, saldos, comisiones | permisos de cada módulo | dinero, CFDI, cortes | No se expusieron. |
+| Facturas | `facturas.ver_listado` | `SolicitudFactura` | Propias; gerencia o quien verifica o responde, por departamento; borradores ajenos ocultos. |
+| Cancelaciones y cotizaciones | `cancelaciones_cotizaciones.ver_listado` | `SolicitudTag` con proceso operativo | El mismo aislamiento del módulo web. |
+| Contabilidad, cobranza automática, saldos, comisiones | permisos de cada módulo | cortes, importaciones, crédito | No se expusieron. Ver brechas. |
 | Integraciones, medios, reportes exportables, Gelia AI | permisos de cada módulo | credenciales, archivos, agregados | No se expusieron. |
 
 ## Rutas implementadas
@@ -144,7 +146,42 @@ Errores de firma: 422 si el formato no es válido; 403 si no hay autorización.
 | GET | `/mobile/traspasos` | `traspasos.ver_listado` |
 | GET | `/mobile/traspasos/{id}` | el mismo, vía `usuarioPuedeVer` |
 
-Solicitud: montos, `pago_confirmado`, remisión, pedido, fecha de operación, observaciones, cancelación, cliente, vendedor, proceso, estado y departamento. Query `q`, `tab`, `estado_id`, `proceso_id`, `fecha_inicio`, `fecha_fin`. No se envían `factura_datos_fiscales` ni rutas de evidencia.
+Solicitud de tag: montos, `pago_confirmado`, remisión, pedido, fecha de operación, observaciones, cancelación, cliente, vendedor, proceso, estado y departamento. También `cotizacion` (bandera `solicitar_cotizacion` y los montos que ya persiste `solicitudes_tags`: cotizado, aplicado, tentativo y `total_proyectado_neto`), tipo de cliente, lista de descuento, lista de rebaja y el nombre del banco de catálogo. Query `q`, `tab`, `estado_id`, `proceso_id`, `vendedor_id`, `lista_id`, `tipo_cliente_id`, `fecha_inicio`, `fecha_fin`, `motivo_incorrecta`. La lista añade `metricas` y `resumen` que ya calcula `ListarSolicitudesService`.
+
+El bloque `factura` de la solicitud trae razón social, si hay datos fiscales, si hay archivo, y un identificador con `rfc`, `uso_factura` y `nombre_razon_social`. El detalle agrega remisiones por `id`, `nombre_original` y `orden`. No se envía el JSON `factura_datos_fiscales`, ni correo, teléfono, código postal, régimen, ni la ruta `archivo_facturas_path` o `evidencia_path`.
+
+| Método | Ruta | Permiso | Efecto |
+| --- | --- | --- | --- |
+| POST | `/mobile/solicitudes/{id}/solicitar-cancelacion` | `solicitudes.solicitar_cancelacion` | Pide cancelar el folio. No lo cancela. |
+
+Body: `motivo_cancelacion` (mínimo 10 caracteres) y `catalogo_lista_rebaja_id` cuando el proceso es de cambio de lista. Solo la persona dueña del folio, igual que `SolicitarCancelacionSolicitudService`. Un folio operativo responde 403: se cancela en el módulo de abajo.
+
+### Solicitudes de facturación
+
+| Método | Ruta | Permiso |
+| --- | --- | --- |
+| GET | `/mobile/facturas` | `facturas.ver_listado` |
+| GET | `/mobile/facturas/{id}` | el mismo, vía `usuarioPuedeVer` |
+
+Campos útiles para métricas: `folio`, `legacy_solicitud_id`, `destinatario_tipo`, `razon_social`, `estado`, `motivo_respuesta`, `motivo_incorrecta`, `campos_incorrectos`, fechas (`created_at`, `respondida_at`, formulario enviado y respondido), cliente (`numero_cliente`, `nombre`), departamento, cuenta que registró la solicitud, quien respondió, banco de catálogo (`id`, `nombre`) y receptor (`id`, `codigo_interno`). Indicadores de documento: `tiene_voucher`, `tiene_pdf_emitido`, `tiene_xml`, `tiene_archivo_fiscal`. Identificador fiscal reducido: `rfc`, `uso_factura`, `nombre_razon_social`.
+
+Query `q`, `tab` (`BORRADORES`, `PENDIENTES`, `RESPONDIDAS`, `VERIFICADAS`, `INCORRECTAS`, `CANCELADAS`), `departamento_id`, `area_id`, `vendedor_id`, `fecha_inicio`, `fecha_fin`. `metricas`: `borradores`, `pendientes`, `respondidas_hoy`, `incorrectas`, las que ya cuenta `ListarSolicitudesFacturaService`.
+
+`solicitudes_facturas` no tiene columnas de importe, impuesto, moneda ni sucursal. La unidad de organización es el departamento. No se publica el alta: `StoreSolicitudFacturaRequest` exige comprobantes de pago en modo pendiente, acepta `archivo_fiscal` y puede generar un enlace público de datos fiscales.
+
+### Cancelaciones y cotizaciones
+
+| Método | Ruta | Permiso |
+| --- | --- | --- |
+| GET | `/mobile/cancelaciones-cotizaciones` | `cancelaciones_cotizaciones.ver_listado` |
+| GET | `/mobile/cancelaciones-cotizaciones/{id}` | el mismo, y `usuarioPuedeVer` |
+| POST | `/mobile/cancelaciones-cotizaciones/{id}/solicitar-cancelacion` | `cancelaciones_cotizaciones.solicitar_cancelacion` |
+
+Son filas de `solicitudes_tags` cuyo proceso tiene `categoria_flujo = operativo`. El escritorio las separa en cotización, remisión y cancelación de pedido con el filtro `tipo_operativo` (`COTIZACION`, `REMISION`, `PEDIDO`). La misma forma de solicitud incluye montos, `numero_pedido`, `numero_remision`, `fecha_operacion`, `motivo_operacion`, `solicitar_cotizacion` y estado. Query adicional: `tab`, `proceso_id`, `departamento_id`, `area_id`, `vendedor_id`, fechas y `q`. `metricas`: `pendientes`, `respondidas_hoy`, `incorrectas`.
+
+La cancelación de una factura no es otro modelo: en facturación el tab `CANCELADAS` filtra el estado `Cancelada` de `SolicitudFactura`. La cancelación del folio de tag o del folio operativo es `cancelacion_solicitada_at` más `motivo_cancelacion`. El POST solo registra esa solicitud. Quien confirma usa `solicitudes.cancelar` o `cancelaciones_cotizaciones.cancelar` en el escritorio; esa confirmación no se expuso.
+
+No hay tabla de partidas ni de vigencia de cotización. Se buscó `solicitud_cotizacion`, `cotizaciones_solicitud`, `SolicitudCotizacion`, `partida_cotizacion`, `lineas_cotizacion` y `detalle_cotizacion`. `SnapshotCotizacionSolicitudService` arma un arreglo en memoria y no lo persiste. Tampoco hay columnas de impuesto o moneda en `solicitudes_tags` ni en `solicitudes_facturas`.
 
 Traspaso: folio, piezas, fecha estimada, estados físicos, motivo, cliente, vendedor, departamento, sucursal, almacén origen y estado. El detalle incluye productos (`sku`, `descripcion`, `piezas`). Query `q`, `tab` (`PENDIENTES`, `RESPONDIDAS`, `VERIFICADAS`, `INCORRECTAS`, `ENTREGA_MANANA`), `almacen_origen_id`, fechas. No se envía el archivo de evidencia. Se indica `tiene_evidencia_respuesta`.
 
@@ -171,7 +208,12 @@ Estas operaciones existen en el escritorio y no se publicaron. El motivo es de n
 | Crear o modificar existencias, importar inventarios o costos | Escritura masiva o de stock. | No exponer importaciones. Un ajuste unitario futuro debe usar los form requests de almacén y `almacenes.inventarios.gestionar`, limitado a un almacén operable. |
 | Asignar, transferir, dar de baja o mantener un activo | Cambia custodia. La firma de recibido sí quedó, porque ya era una acción de la persona asignada. | Reutilizar `AsignarActivoService`, `TransferirActivoService` y `CambiarEstadoActivoService` con sus permisos. |
 | Fotos, responsivas PDF y evidencias de resguardo de pedido, salida de RH o traspaso | Hace falta una descarga autenticada. Publicar la ruta de almacenamiento no sustituye ese control. | `GET` autenticado que resuelva el archivo con el mismo alcance de la ficha, sin URL permanente. |
-| Facturas, contabilidad, cobranza automática, saldos a favor, comisiones y reportes | Datos fiscales, bancarios y de corte. | Lectura futura solo con el permiso web del módulo y sin exportar archivos masivos. |
+| Alta de solicitud de facturación | `StoreSolicitudFacturaRequest` y `CrearSolicitudFacturaService` exigen comprobantes y pueden importar un archivo fiscal o abrir un enlace público. | No publicar `archivo_fiscal`, `vouchers` ni `enlace_url`. |
+| Confirmar cancelación de un folio, responder o verificar una factura | Cambia estado, pago o documento emitido. La solicitud de cancelación sí quedó. | Seguir en el escritorio con `solicitudes.cancelar`, `cancelaciones_cotizaciones.cancelar` y `facturas.verificar`. |
+| Contabilidad | Se buscó `App\Models\Contabilidad\ContabilidadConfiguracion` y `ContabilidadController`. Es configuración y corte, no una bandeja de documentos. | No exponer. |
+| Cobranza automática | Existe `CobranzaFactura` (`folio`, `monto`, fechas, `pagada`) y `AutoCobranzaController`, `ImportarReporteCobranzaService`, `ConfirmarPagoCobranzaService`. No hay un listado con el aislamiento por persona que usan facturas o solicitudes. | No inventar ese aislamiento. |
+| Saldos a favor y comisiones | `SaldosAFavorController` y los permisos de comisiones. Mueven crédito o cálculo de pago. | No exponer. |
+| CFDI, XML, PDF, constancia y datos bancarios de una cuenta | Rutas de archivo y secretos. El catálogo `catalogo_bancos` solo tiene nombre, no cuenta. | Los indicadores `tiene_xml` y `tiene_pdf_emitido` bastan. La descarga sigue en `ArchivoFacturaController` del escritorio. |
 | Confirmar, cancelar o verificar solicitudes y traspasos | Mueven mercancía o confirman pago. | `PUT` que delegue en el controlador web ya existente, con `traspasos.cedis` o `solicitudes.confirmar_pago`. |
 | Adjuntos de mensajería | El alta de archivos tiene otro request y almacenamiento. El texto sí quedó. | `POST /mobile/mensajeria/conversaciones/{id}/adjuntos` reutilizando `AdjuntoMensajeController`. |
 | Token de aplicación para estos dominios | Mezclaría el alcance de una integración con el de una persona. | No agregar recursos `api_recursos` hasta definir un subconjunto de campos no sensibles y un permiso de aplicación distinto del permiso humano. |
@@ -183,6 +225,6 @@ Estas operaciones existen en el escritorio y no se publicaron. El motivo es de n
 | --- | --- |
 | 401 | Token ausente, token de aplicación usado en `/mobile`, o dispositivo revocado. |
 | 403 | Falta el permiso, o la consulta del pedido no está autorizada. |
-| 404 | El registro no existe o está fuera del alcance (almacén, inventario, activo, solicitud, traspaso). |
+| 404 | El registro no existe o está fuera del alcance (almacén, inventario, activo, solicitud, factura, cancelación operativa, traspaso). |
 | 422 | Query de inventario incoherente con la sucursal, o firma con formato inválido. |
 | 429 | Límite `api-mobile`. |

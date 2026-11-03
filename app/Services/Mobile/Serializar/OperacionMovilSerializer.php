@@ -6,6 +6,7 @@ use App\Models\Activo;
 use App\Models\ActivoAsignacion;
 use App\Models\Almacen;
 use App\Models\Inventario;
+use App\Models\SolicitudFactura;
 use App\Models\SolicitudTag;
 use App\Models\SolicitudTraspaso;
 
@@ -196,7 +197,137 @@ class OperacionMovilSerializer
                 'id' => $solicitud->departamento->id,
                 'nombre' => $solicitud->departamento->nombre,
             ] : null,
+            'motivo_operacion' => $solicitud->motivo_operacion,
+            'tipo_cliente' => $solicitud->relationLoaded('tipoCliente') && $solicitud->tipoCliente ? [
+                'id' => $solicitud->tipoCliente->id,
+                'nombre' => $solicitud->tipoCliente->nombre,
+            ] : null,
+            'lista_descuento' => $solicitud->relationLoaded('listaDescuento') && $solicitud->listaDescuento ? [
+                'id' => $solicitud->listaDescuento->id,
+                'nombre' => $solicitud->listaDescuento->nombre,
+            ] : null,
+            'lista_rebaja' => $solicitud->relationLoaded('listaRebaja') && $solicitud->listaRebaja ? [
+                'id' => $solicitud->listaRebaja->id,
+                'nombre' => $solicitud->listaRebaja->nombre,
+            ] : null,
+            'banco' => $solicitud->relationLoaded('banco') && $solicitud->banco ? [
+                'id' => $solicitud->banco->id,
+                'nombre' => $solicitud->banco->nombre,
+            ] : null,
+            'cotizacion' => [
+                'solicitar_cotizacion' => (bool) $solicitud->solicitar_cotizacion,
+                'monto_cotizado' => $solicitud->monto_cotizado,
+                'monto_aplicado_al_cliente' => $solicitud->monto_aplicado_al_cliente,
+                'monto_final_tentativo' => $solicitud->monto_final_tentativo,
+                'total_proyectado_neto' => $solicitud->total_proyectado_neto,
+            ],
+            'factura' => $this->facturaEnSolicitud($solicitud),
         ];
+    }
+
+    /**
+     * Solicitud de facturación. Sin XML, PDF, comprobantes, enlaces ni el paquete fiscal completo.
+     *
+     * @return array<string, mixed>
+     */
+    public function solicitudFactura(SolicitudFactura $factura): array
+    {
+        return [
+            'id' => $factura->id,
+            'folio' => $factura->folio,
+            'legacy_solicitud_id' => $factura->legacy_solicitud_id,
+            'destinatario_tipo' => $factura->destinatario_tipo,
+            'razon_social' => $factura->razon_social,
+            'observaciones_vendedor' => $factura->observaciones_vendedor,
+            'motivo_respuesta' => $factura->motivo_respuesta,
+            'motivo_incorrecta' => $factura->motivo_incorrecta,
+            'campos_incorrectos' => $factura->campos_incorrectos ?? [],
+            'created_at' => $factura->created_at?->toIso8601String(),
+            'respondida_at' => $factura->respondida_at?->toIso8601String(),
+            'formulario_enviado_at' => $factura->formulario_enviado_at?->toIso8601String(),
+            'formulario_respondido_at' => $factura->formulario_respondido_at?->toIso8601String(),
+            'tiene_voucher' => (bool) $factura->tiene_voucher,
+            'tiene_pdf_emitido' => (bool) $factura->tiene_pdf_emitido,
+            'tiene_xml' => (bool) $factura->tiene_xml,
+            'tiene_archivo_fiscal' => (bool) $factura->tiene_archivo_fiscal,
+            'identificador_fiscal' => $this->identificadorFiscal($factura->datos_fiscales),
+            'cliente' => $factura->cliente ? [
+                'id' => $factura->cliente->id,
+                'numero_cliente' => $factura->cliente->numero_cliente,
+                'nombre' => $factura->cliente->nombre,
+            ] : null,
+            'vendedor' => $factura->vendedor ? [
+                'id' => $factura->vendedor->id,
+                'name' => $factura->vendedor->name,
+            ] : null,
+            'respondida_por' => $factura->relationLoaded('respondidaPor') && $factura->respondidaPor ? [
+                'id' => $factura->respondidaPor->id,
+                'name' => $factura->respondidaPor->name,
+            ] : null,
+            'departamento' => $factura->departamento ? [
+                'id' => $factura->departamento->id,
+                'nombre' => $factura->departamento->nombre,
+            ] : null,
+            'estado' => $factura->estado ? [
+                'id' => $factura->estado->id,
+                'nombre' => $factura->estado->nombre,
+            ] : null,
+            'banco' => $factura->relationLoaded('banco') && $factura->banco ? [
+                'id' => $factura->banco->id,
+                'nombre' => $factura->banco->nombre,
+            ] : null,
+            'receptor' => $factura->relationLoaded('receptorFiscal') && $factura->receptorFiscal ? [
+                'id' => $factura->receptorFiscal->id,
+                'codigo_interno' => $factura->receptorFiscal->codigo_interno,
+            ] : null,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function facturaEnSolicitud(SolicitudTag $solicitud): array
+    {
+        $datos = [
+            'razon_social' => $solicitud->factura_razon_social,
+            'tiene_datos_fiscales' => is_array($solicitud->factura_datos_fiscales) && $solicitud->factura_datos_fiscales !== [],
+            'tiene_archivo' => filled($solicitud->archivo_facturas_path),
+            'identificador_fiscal' => $this->identificadorFiscal($solicitud->factura_datos_fiscales),
+        ];
+
+        if ($solicitud->relationLoaded('remisionesFactura')) {
+            $datos['remisiones'] = $solicitud->remisionesFactura->map(fn ($remision) => [
+                'id' => $remision->id,
+                'nombre_original' => $remision->nombre_original,
+                'orden' => $remision->orden,
+            ])->values()->all();
+        }
+
+        return $datos;
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $datos
+     * @return array{rfc: ?string, uso_factura: ?string, nombre_razon_social: ?string}
+     */
+    private function identificadorFiscal(?array $datos): array
+    {
+        return [
+            'rfc' => $this->texto($datos['rfc'] ?? null),
+            'uso_factura' => $this->texto($datos['uso_factura'] ?? null),
+            'nombre_razon_social' => $this->texto($datos['nombre_razon_social'] ?? null),
+        ];
+    }
+
+    private function texto(mixed $valor): ?string
+    {
+        if (! is_scalar($valor)) {
+            return null;
+        }
+
+        $texto = trim((string) $valor);
+
+        return $texto === '' ? null : $texto;
     }
 
     /**

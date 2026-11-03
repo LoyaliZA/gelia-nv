@@ -17,6 +17,8 @@ use App\Http\Controllers\Api\V1\Mobile\Mensajeria\MensajeriaMobileController;
 use App\Http\Controllers\Api\V1\Mobile\Pedidos\PedidoMobileController;
 use App\Http\Controllers\Api\V1\Mobile\PuntoVenta\TurnoPdvMobileController;
 use App\Http\Controllers\Api\V1\Mobile\Rh\RhMobileController;
+use App\Http\Controllers\Api\V1\Mobile\Cancelaciones\CancelacionCotizacionMobileController;
+use App\Http\Controllers\Api\V1\Mobile\Facturas\FacturaMobileController;
 use App\Http\Controllers\Api\V1\Mobile\Solicitudes\SolicitudMobileController;
 use App\Http\Controllers\Api\V1\Mobile\Traspasos\TraspasoMobileController;
 use App\Http\Controllers\Api\V1\Mobile\PuntoVenta\VisitaProgramadaPdvMobileController;
@@ -104,7 +106,15 @@ Route::prefix('v1')->group(function () {
         Route::get('/activos/{activo}', [ActivoMobileController::class, 'show']);
 
         Route::get('/solicitudes', [SolicitudMobileController::class, 'index']);
+        Route::post('/solicitudes/{solicitud}/solicitar-cancelacion', [SolicitudMobileController::class, 'solicitarCancelacion']);
         Route::get('/solicitudes/{solicitud}', [SolicitudMobileController::class, 'show']);
+
+        Route::get('/facturas', [FacturaMobileController::class, 'index']);
+        Route::get('/facturas/{solicitudFactura}', [FacturaMobileController::class, 'show']);
+
+        Route::get('/cancelaciones-cotizaciones', [CancelacionCotizacionMobileController::class, 'index']);
+        Route::post('/cancelaciones-cotizaciones/{solicitud}/solicitar-cancelacion', [CancelacionCotizacionMobileController::class, 'solicitarCancelacion']);
+        Route::get('/cancelaciones-cotizaciones/{solicitud}', [CancelacionCotizacionMobileController::class, 'show']);
 
         Route::get('/traspasos', [TraspasoMobileController::class, 'index']);
         Route::get('/traspasos/{traspaso}', [TraspasoMobileController::class, 'show']);
