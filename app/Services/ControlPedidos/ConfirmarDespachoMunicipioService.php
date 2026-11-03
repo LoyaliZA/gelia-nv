@@ -38,6 +38,7 @@ class ConfirmarDespachoMunicipioService
         }
 
         return DB::transaction(function () use ($tarea, $usuario, $receptorTransportista, $versionEsperada) {
+            $tarea = InstruccionEntrega::bloquearParaEjecutar($tarea);
             $cumplimiento = PedidoBmaCumplimientoFisico::query()
                 ->where('pedido_bma_tarea_preparacion_id', $tarea->id)
                 ->lockForUpdate()

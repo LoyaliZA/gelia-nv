@@ -44,3 +44,68 @@ export function aplicarActualizacionLectura(mensajeLocal, mensajeActualizado, vi
         lecturas_count: normalizado.lecturas_count ?? mensajeLocal.lecturas_count,
     };
 }
+
+export function conversacionConMensajeNuevo(conversacion, mensaje, chatAbierto) {
+    const previo = conversacion.ultimo_mensaje_at
+        ? new Date(conversacion.ultimo_mensaje_at).getTime()
+        : 0;
+    const llegada = mensaje?.created_at ? new Date(mensaje.created_at).getTime() : 0;
+    const yaEstaba = previo > 0 && llegada > 0 && previo >= llegada;
+
+    return {
+        ...conversacion,
+        ultimo_mensaje_preview: mensaje.contenido || `[${mensaje.tipo}]`,
+        ultimo_mensaje_at: mensaje.created_at || conversacion.ultimo_mensaje_at,
+        unread_count: chatAbierto
+            ? 0
+            : (yaEstaba ? (conversacion.unread_count || 0) : (conversacion.unread_count || 0) + 1),
+    };
+}
+
+export function aplicarCursorLectura({ conversaciones, mensajes, conversacionActivaId, detalle }) {
+    if (!detalle?.conversacion_id) {
+        return { conversaciones, mensajes };
+    }
+
+    const id = Number(detalle.conversacion_id);
+
+    if (detalle.alcance === 'lector') {
+        return {
+            conversaciones: conversaciones.map((c) => (
+                Number(c.id) === id ? { ...c, unread_count: 0 } : c
+            )),
+            mensajes,
+        };
+    }
+
+    if (detalle.alcance !== 'autor' || Number(conversacionActivaId) !== id) {
+        return { conversaciones, mensajes };
+    }
+
+    const mapa = new Map((detalle.mensajes || []).map((m) => [Number(m.id), m.estado_lectura]));
+
+    return {
+        conversaciones,
+        mensajes: mensajes.map((m) => (
+            mapa.has(Number(m.id))
+                ? { ...m, estado_lectura: fusionarEstadoLectura(m.estado_lectura, mapa.get(Number(m.id))) }
+                : m
+        )),
+    };
+}
+
+export function fusionarMensajesHilo(previos, frescos) {
+    const porId = new Map((frescos || []).map((m) => [m.id, m]));
+    const vistos = new Set();
+    const mezcla = (previos || []).map((m) => {
+        vistos.add(m.id);
+        if (!porId.has(m.id)) return m;
+        return { ...m, ...porId.get(m.id) };
+    });
+
+    (frescos || []).forEach((m) => {
+        if (!vistos.has(m.id)) mezcla.push(m);
+    });
+
+    return mezcla.sort((a, b) => Number(a.id) - Number(b.id));
+}

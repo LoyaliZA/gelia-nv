@@ -58,7 +58,10 @@ class SolicitarPesajePedidoBmaService
         }
 
         $pedido->loadMissing(['paqueteria', 'almacen.tipoAlmacen']);
-        if (($pedido->origen?->requiere_logistica ?? true)
+        $revisionCedis = is_array($pedido->solicitud_preparacion_json)
+            && ($pedido->solicitud_preparacion_json['area_revision'] ?? null) === 'control_pedidos';
+        if (! $revisionCedis
+            && ($pedido->origen?->requiere_logistica ?? true)
             && ! $pedido->catalogo_paqueteria_id
             && ! $pedido->esTrasladoInternoAPdv()
             && ! $pedido->esResguardoAbierto()) {

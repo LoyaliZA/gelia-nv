@@ -3,6 +3,7 @@ import { Send, Paperclip, Image, Film, FileUp } from 'lucide-react';
 import GrabadorAudio from './GrabadorAudio';
 import BarraRespuestaMensaje from './BarraRespuestaMensaje';
 import { detectarTipoArchivo } from '@/utils/mensajeriaArchivoLocal';
+import { archivosImagenDesdePortapapeles } from '@/utils/mensajeriaPortapapeles';
 
 export default function MensajeInput({
     onEnviarTexto,
@@ -57,6 +58,14 @@ export default function MensajeInput({
         } finally {
             restaurarFocoInput();
         }
+    };
+
+    const handlePaste = (event) => {
+        const archivos = archivosImagenDesdePortapapeles(event.clipboardData);
+        if (!archivos.length) return;
+        event.preventDefault();
+        event.stopPropagation();
+        preparar(archivos[0]);
     };
 
     const handleKeyDown = (e) => {
@@ -134,6 +143,7 @@ export default function MensajeInput({
                     value={texto}
                     onChange={(e) => setTexto(e.target.value)}
                     onKeyDown={handleKeyDown}
+                    onPaste={handlePaste}
                     placeholder={respondiendoA ? 'Escribe tu respuesta…' : 'Escribe un mensaje…'}
                     rows={1}
                     aria-busy={enviando}

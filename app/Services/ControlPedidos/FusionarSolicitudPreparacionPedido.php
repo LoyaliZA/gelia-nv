@@ -9,6 +9,15 @@ namespace App\Services\ControlPedidos;
  */
 class FusionarSolicitudPreparacionPedido
 {
+    /** @var list<string> */
+    private const CASOS = [
+        'revisar_apartar',
+        'consultar_cedis',
+        'apartado_pdv',
+        'mismo_dia_pdv',
+        'traspaso_cedis',
+        'consulta_cedis',
+    ];
     /**
      * @param  array<string, mixed>|null  $actual
      * @param  array<string, mixed>|null  $entrada
@@ -35,6 +44,52 @@ class FusionarSolicitudPreparacionPedido
             $salida['traslado_interno_pdv'] = filter_var($entrada['traslado_interno_pdv'], FILTER_VALIDATE_BOOLEAN);
         } elseif (array_key_exists('traslado_interno_pdv', $base)) {
             $salida['traslado_interno_pdv'] = filter_var($base['traslado_interno_pdv'], FILTER_VALIDATE_BOOLEAN);
+        }
+
+        if (array_key_exists('atencion_tienda', $entrada)) {
+            $salida['atencion_tienda'] = $this->atencion($entrada['atencion_tienda']);
+        } elseif (array_key_exists('atencion_tienda', $base)) {
+            $salida['atencion_tienda'] = $this->atencion($base['atencion_tienda']);
+        }
+
+        if (array_key_exists('piezas_tienda', $entrada)) {
+            $salida['piezas_tienda'] = $this->piezas($entrada['piezas_tienda']);
+        } elseif (array_key_exists('piezas_tienda', $base)) {
+            $salida['piezas_tienda'] = $this->piezas($base['piezas_tienda']);
+        }
+
+        if (array_key_exists('modalidad_entrega', $entrada)) {
+            $salida['modalidad_entrega'] = $this->modalidadEntrega($entrada['modalidad_entrega']);
+        } elseif (array_key_exists('modalidad_entrega', $base)) {
+            $salida['modalidad_entrega'] = $this->modalidadEntrega($base['modalidad_entrega']);
+        }
+
+        if (array_key_exists('area_revision', $entrada)) {
+            $salida['area_revision'] = $this->areaRevision($entrada['area_revision']);
+        } elseif (array_key_exists('area_revision', $base)) {
+            $salida['area_revision'] = $this->areaRevision($base['area_revision']);
+        }
+
+        if (array_key_exists('caso_tienda', $entrada)) {
+            $salida['caso_tienda'] = $this->casoTienda($entrada['caso_tienda']);
+        } elseif (array_key_exists('caso_tienda', $base)) {
+            $salida['caso_tienda'] = $this->casoTienda($base['caso_tienda']);
+        }
+
+        if (array_key_exists('almacen_revision_id', $entrada)) {
+            $salida['almacen_revision_id'] = $this->identificador($entrada['almacen_revision_id']);
+        } elseif (array_key_exists('almacen_revision_id', $base)) {
+            $salida['almacen_revision_id'] = $this->identificador($base['almacen_revision_id']);
+        }
+
+        $revision = null;
+        if (is_array($base['revision_disponibilidad'] ?? null)) {
+            $revision = $this->revisionDisponibilidad($base['revision_disponibilidad']);
+        } elseif ($actual === null && is_array($entrada['revision_disponibilidad'] ?? null)) {
+            $revision = $this->revisionDisponibilidad($entrada['revision_disponibilidad']);
+        }
+        if ($revision !== null) {
+            $salida['revision_disponibilidad'] = $revision;
         }
 
         if (array_key_exists('entrega_municipal', $entrada)) {
@@ -121,12 +176,31 @@ class FusionarSolicitudPreparacionPedido
      */
     private function vacia(array $salida): bool
     {
+        if (array_key_exists('modalidad_entrega', $salida)) {
+            return false;
+        }
+        if (in_array($salida['area_revision'] ?? null, ['preparacion_tienda', 'control_pedidos'], true)) {
+            return false;
+        }
+        if (in_array($salida['caso_tienda'] ?? null, self::CASOS, true)) {
+            return false;
+        }
+        if (is_array($salida['revision_disponibilidad'] ?? null)) {
+            return false;
+        }
+
         foreach (['codigo_modalidad', 'tipo_referencia', 'folio_referencia'] as $clave) {
             if (($salida[$clave] ?? null) !== null) {
                 return false;
             }
         }
         if (array_key_exists('traslado_interno_pdv', $salida)) {
+            return false;
+        }
+        if (in_array($salida['atencion_tienda'] ?? null, ['despues', 'prevista'], true)) {
+            return false;
+        }
+        if (is_array($salida['piezas_tienda'] ?? null) && $salida['piezas_tienda'] !== []) {
             return false;
         }
 
@@ -151,6 +225,89 @@ class FusionarSolicitudPreparacionPedido
         }
 
         return true;
+    }
+
+    private function atencion(mixed $valor): ?string
+    {
+        return in_array($valor, ['despues', 'prevista'], true) ? $valor : null;
+    }
+
+    private function modalidadEntrega(mixed $valor): ?string
+    {
+        return in_array($valor, ['tienda', 'municipal', 'nacional'], true) ? $valor : null;
+    }
+
+    private function areaRevision(mixed $valor): ?string
+    {
+        return in_array($valor, ['preparacion_tienda', 'control_pedidos'], true) ? $valor : null;
+    }
+
+    private function casoTienda(mixed $valor): ?string
+    {
+        return in_array($valor, self::CASOS, true) ? $valor : null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $valor
+     * @return array{estado: string, confirmada: bool, respondida_at: ?string, respondida_por_id: ?int}|null
+     */
+    private function revisionDisponibilidad(array $valor): ?array
+    {
+        $estado = $valor['estado'] ?? null;
+        if (! in_array($estado, ['sin_excepciones', 'excepciones_pendientes'], true)) {
+            return null;
+        }
+
+        $respondida = $valor['respondida_at'] ?? null;
+
+        return [
+            'estado' => $estado,
+            'confirmada' => (bool) ($valor['confirmada'] ?? false),
+            'respondida_at' => is_string($respondida) ? $respondida : null,
+            'respondida_por_id' => $this->identificador($valor['respondida_por_id'] ?? null),
+        ];
+    }
+
+    private function identificador(mixed $valor): ?int
+    {
+        if ($valor === null || $valor === '') {
+            return null;
+        }
+        $id = (int) $valor;
+
+        return $id > 0 ? $id : null;
+    }
+
+    /**
+     * @return list<array{sku: string, nombre: ?string, cantidad: int}>|null
+     */
+    private function piezas(mixed $entrada): ?array
+    {
+        if (! is_array($entrada)) {
+            return null;
+        }
+
+        $salida = [];
+        foreach ($entrada as $fila) {
+            if (! is_array($fila)) {
+                continue;
+            }
+            $sku = $this->texto($fila['sku'] ?? null);
+            $cantidad = (int) ($fila['cantidad'] ?? 0);
+            if ($sku === null || $cantidad < 1) {
+                continue;
+            }
+            $salida[] = [
+                'sku' => $sku,
+                'nombre' => $this->texto($fila['nombre'] ?? null),
+                'cantidad' => $cantidad,
+            ];
+            if (count($salida) >= 40) {
+                break;
+            }
+        }
+
+        return $salida === [] ? null : $salida;
     }
 
     private function texto(mixed $valor): ?string

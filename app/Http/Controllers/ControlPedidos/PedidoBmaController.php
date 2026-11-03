@@ -44,6 +44,7 @@ use App\Services\ControlPedidos\RestaurarRegistroPedidoBmaService;
 use App\Services\ControlPedidos\ObtenerCatalogosPedidoBmaService;
 use App\Services\ControlPedidos\SolicitarPesajePedidoBmaService;
 use App\Services\ControlPedidos\CrearTareaPreparacionService;
+use App\Services\ControlPedidos\SolicitarRevisionRegistrarPedidosService;
 use App\Services\ControlPedidos\SolicitarRepesajePedidoBmaService;
 use App\Services\ControlPedidos\CerrarConsultaPedidoBmaService;
 use App\Services\ControlPedidos\ReabrirConsultaPedidoBmaService;
@@ -79,6 +80,12 @@ class PedidoBmaController extends Controller
             'filtros' => $request->only(['tab', 'q', 'page']),
             'catalogos' => fn () => $catalogosService->ejecutar(),
             'direcciones_normalizadas' => (bool) config('control_pedidos.direcciones_normalizadas'),
+            'registrar_tienda' => [
+                'facultad_md' => Auth::user()->can(\App\Support\ControlPedidos\RegistrarPedidos\PoliticaAccionesRegistrarPedidos::PERMISO_MD)
+                    || Auth::user()->hasRole('Super Admin'),
+                'es_sabado' => now()->isSaturday(),
+                'almacenes_tienda' => app(\App\Support\ControlPedidos\RegistrarPedidos\DestinoRevisionRegistrarPedidos::class)->catalogoTienda(),
+            ],
         ]);
     }
 
@@ -156,7 +163,7 @@ class PedidoBmaController extends Controller
 
         $pedido->load(['origen', 'estatus', 'documentos', 'paqueteria', 'zona', 'tipoGuia']);
 
-        return response()->json([
+        return response()->json(array_merge([
             'id' => $pedido->id,
             'folio' => $pedido->folio,
             'revision_registro' => (int) $pedido->revision_registro,
@@ -165,8 +172,75 @@ class PedidoBmaController extends Controller
             'updated_at' => optional($pedido->updated_at)?->toIso8601String(),
             'progreso' => $progresoService->calcular($pedido),
             'prioridad_md' => (bool) $pedido->prioridad_md,
+            'origen_id' => $pedido->origen_id,
             'solicitud_preparacion' => $pedido->solicitud_preparacion,
+        ], $this->contextoRegistrarTienda($pedido)));
+    }
+
+    public function solicitarTienda(
+        Request $request,
+        PedidoBma $pedidoBma,
+        ListarPedidosBmaService $listarService,
+        SolicitarRevisionRegistrarPedidosService $servicio
+    ): JsonResponse {
+        Gate::authorize('control_pedidos.crear');
+        $listarService->asegurarAcceso($pedidoBma, Auth::user());
+
+        $data = $request->validate([
+            'area_revision' => ['required', 'string', 'in:preparacion_tienda,control_pedidos'],
+            'almacen_id' => ['nullable', 'integer'],
+            'revision_esperada' => ['required', 'integer', 'min:0'],
+            'base_captura' => ['required', 'string'],
         ]);
+
+        $resultado = $servicio->ejecutar(
+            $pedidoBma,
+            Auth::user(),
+            $data['area_revision'],
+            isset($data['almacen_id']) ? (int) $data['almacen_id'] : null,
+            [
+                'revision_esperada' => (int) $data['revision_esperada'],
+                'base_captura' => $data['base_captura'],
+            ]
+        );
+
+        return response()->json(array_merge([
+            'ok' => true,
+            'idempotente' => $resultado['idempotente'],
+            'area_revision' => $resultado['area'],
+            'etiqueta' => $resultado['etiqueta'],
+            'espera' => $resultado['espera'],
+            'almacen_revision' => $resultado['almacen'],
+        ], $this->contextoRegistrarTienda($resultado['pedido']), [
+            'id' => $resultado['pedido']->id,
+            'folio' => $resultado['pedido']->folio,
+            'revision_registro' => (int) $resultado['pedido']->revision_registro,
+            'base_captura' => $resultado['pedido']->base_captura,
+            'solicitud_preparacion' => $resultado['pedido']->solicitud_preparacion,
+        ]));
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function contextoRegistrarTienda(PedidoBma $pedido): array
+    {
+        if (! \App\Support\ControlPedidos\RegistrarPedidos\ProgresoCapturaTienda::aplica($pedido->solicitud_preparacion_json)) {
+            return [];
+        }
+
+        $pedido->loadMissing('documentos');
+        $soporte = $pedido->documentos->first(fn ($documento) => in_array($documento->tipo, [
+            \App\Models\ControlPedidos\PedidoBmaDocumento::TIPO_PDF_PEDIDO,
+            \App\Models\ControlPedidos\PedidoBmaDocumento::TIPO_COTIZACION,
+        ], true));
+
+        return [
+            'expediente' => app(\App\Support\ControlPedidos\RegistrarPedidos\ExpedienteRegistrarPedidos::class)->desdePedido($pedido),
+            'acciones_tienda' => app(\App\Support\ControlPedidos\RegistrarPedidos\PoliticaAccionesRegistrarPedidos::class)
+                ->desdePedido($pedido, Auth::user()),
+            'soporte_pedido' => $soporte,
+        ];
     }
 
     private function capturaConfirmada(PedidoBma $pedido)
@@ -516,6 +590,9 @@ class PedidoBmaController extends Controller
                 'ok' => true,
                 'mensaje' => 'PDF o foto del pedido adjuntado.',
                 'documento' => $documento,
+                'id' => $pedido->id,
+                'revision_registro' => (int) $pedido->revision_registro,
+                'base_captura' => $pedido->base_captura,
             ]);
         }
 

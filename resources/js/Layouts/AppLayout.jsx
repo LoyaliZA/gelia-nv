@@ -7,6 +7,7 @@ import GeliaLogo from '../Components/GeliaLogo';
 import NotificationBell from '../Components/NotificationBell';
 import PdvLlamadoVendedor from '../Components/PuntoVenta/PdvLlamadoVendedor';
 import MensajeriaWidget from '../Components/Mensajeria/MensajeriaWidget';
+import MensajeriaProvider from '../Components/Mensajeria/MensajeriaProvider';
 import { X, Menu } from 'lucide-react';
 import { BellRingIcon } from '@animateicons/react/lucide/bell-ring-icon';
 import { isProfessionalSidebarLayout, DEFAULT_SIDEBAR_LAYOUT, DEFAULT_SIDEBAR_MOBILE_LAYOUT, ensureProfessionalSidebarDefaultOnce, resolveSidebarLayout } from '../config/sidebarLayouts';
@@ -382,6 +383,10 @@ export default function AppLayout({ children, fullScreen = false }) {
                     if (!mensaje) return;
                     notificarMensajeLeido(mensaje, auth);
                 })
+                .listen('.conversacion.leida', (event) => {
+                    if (!event?.conversacion_id) return;
+                    window.dispatchEvent(new CustomEvent('mensajeria-conversacion-leida', { detail: event }));
+                })
                 .listen('.presencia.contacto', (event) => {
                     const presencia = event?.presencia;
                     if (!presencia) return;
@@ -407,8 +412,6 @@ export default function AppLayout({ children, fullScreen = false }) {
                     }
 
                     notificarMensajeNuevo(mensaje, auth);
-
-                    reloadAuthSilencioso();
                 });
         }
 
@@ -675,6 +678,7 @@ export default function AppLayout({ children, fullScreen = false }) {
     ].filter(Boolean).join(' ');
 
     return (
+        <MensajeriaProvider>
         <ModalContext.Provider value={{ openModal, closeModal }}>
             <div
                 className="gelia-app-shell min-h-dvh text-gray-950 dark:text-gray-100 transition-colors duration-500"
@@ -883,5 +887,6 @@ export default function AppLayout({ children, fullScreen = false }) {
 
             </div>
         </ModalContext.Provider>
+        </MensajeriaProvider>
     );
 }

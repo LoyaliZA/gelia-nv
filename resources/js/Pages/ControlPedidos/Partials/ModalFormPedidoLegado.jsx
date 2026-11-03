@@ -541,7 +541,9 @@ export default function ModalFormPedidoLegado({
     ) || (pedido?.origen && String(pedido.origen.id) === String(data.origen_id || pedido?.origen_id || pedido?.origen?.id || '')
         ? pedido.origen
         : null);
-    const origenRequiereLogistica = origenSeleccionado?.requiere_logistica ?? false;
+    const codigoEntregaIndicado = String(codigoModalidadPreparacion || pedido?.solicitud_preparacion?.codigo_modalidad || '');
+    const envioYaIndicado = codigoEntregaIndicado === 'ENVIO_MUNICIPIO' || codigoEntregaIndicado.startsWith('ENVIO_BODEGA');
+    const origenRequiereLogistica = origenSeleccionado ? Boolean(origenSeleccionado.requiere_logistica) : envioYaIndicado;
     const preparacionConfig = catalogos?.preparacion_config || {};
     const modalidadesPreparacion = (preparacionConfig.modalidades_catalogo || [])
         .filter((m) => (preparacionConfig.modalidades_habilitadas || []).includes(m.codigo))
@@ -769,7 +771,7 @@ export default function ModalFormPedidoLegado({
     capturaManualRef.current = Boolean(mostrarExcepcion || data.direccion_manual_excepcion);
 
     // Sin tipo: cliente + tipo. Resto del form solo tras cerrar consulta (foco en pesaje/evidencias).
-    const tieneTipo = Boolean(data.origen_id || pedido?.origen_id || pedido?.origen?.id);
+    const tieneTipo = Boolean(data.origen_id || pedido?.origen_id || pedido?.origen?.id) || envioYaIndicado;
     const enfocadoEnPesaje = fasePedido === 'PESAJE_PENDIENTE' && !tienePesajeRespondido;
     const mostrarPesaje = tieneTipo || tienePesajeRespondido || pendientePesaje;
     const mostrarPdfPedido = mostrarPesaje || (tieneTipo && !requiereLogistica);
@@ -2962,7 +2964,7 @@ export default function ModalFormPedidoLegado({
                         <p className={SECCION}>{nSec.tipo}. Tipo de entrega</p>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className={wrapCampo('origen')} data-campo="origen">
-                                <label className={SECCION}>Tipo de pedido *</label>
+                                <label className={SECCION}>{envioYaIndicado ? 'Canal de la venta' : 'Tipo de pedido *'}</label>
                                 <select
                                     value={data.origen_id}
                                     disabled={logisticaBloqueada}
@@ -2970,11 +2972,20 @@ export default function ModalFormPedidoLegado({
                                     className={`${THEME_SELECT} w-full py-3 ${logisticaBloqueada ? 'opacity-50' : ''}`}
                                 >
                                     <option value="">Seleccionar...</option>
-                                    {(catalogos.origenes || []).map((o) => (
+                                    {(envioYaIndicado
+                                        ? (catalogos.origenes || []).filter((o) => o.requiere_logistica || String(o.id) === String(data.origen_id))
+                                        : (catalogos.origenes || [])
+                                    ).map((o) => (
                                         <option key={o.id} value={o.id}>{o.nombre}</option>
                                     ))}
                                 </select>
-                                {origenSeleccionado ? (
+                                {envioYaIndicado ? (
+                                    <p className="text-[10px] font-bold theme-text-muted mt-1.5 m-0">
+                                        {origenSeleccionado
+                                            ? 'La modalidad de entrega ya quedó indicada. Este canal solo registra dónde se tomó la venta.'
+                                            : 'La modalidad de entrega ya quedó indicada. El canal registra dónde se tomó la venta: foráneo, comercio electrónico o mayoristas. No sustituye a Municipal ni a Nacional.'}
+                                    </p>
+                                ) : origenSeleccionado ? (
                                     <p className="text-[10px] font-bold theme-text-muted mt-1.5 m-0">
                                         {origenRequiereLogistica
                                             ? (trasladoInterno
@@ -2983,7 +2994,7 @@ export default function ModalFormPedidoLegado({
                                                     ? 'Envío preparado en Tienda: complete el transporte y la preparación elegida. La salida y la recepción se confirman en sus etapas.'
                                                     : 'Envío: elija el almacén de salida. La paquetería aparece enseguida para envíos al cliente, también en resguardo. La sucursal destino es opcional y solo aplica si la mercancía se custodia o se traslada a una sucursal. Si el recorrido es interno, active Traslado interno a PDV.')
                                             : (esRecogeTienda
-                                                ? 'Recoge en tienda: mismo día en el almacén PDV. Personal de preparación revisa las piezas, confirma el apartado y genera la carátula. Sin pago ni transferencia.'
+                                                ? 'Recoge en tienda: apartado en el almacén PDV. No es Mismo día (T-02.1). Personal de preparación revisa las piezas y confirma el apartado. Sin pago ni transferencia.'
                                                 : (esModalidadCredito
                                                     ? 'Resguardo con crédito: el pago se registra con el crédito autorizado. La mercancía queda en tienda hasta que la persona recoja.'
                                                     : (esModalidadTransferencia
@@ -3019,7 +3030,7 @@ export default function ModalFormPedidoLegado({
                                     >
                                         <span className="block text-sm font-bold theme-text-main">Recoge hoy</span>
                                         <span className="block text-[11px] font-bold theme-text-muted mt-1">
-                                            Mismo día en un almacén tipo PDV. Se aparta la mercancía y se genera la carátula. Sin pago ni transferencia.
+                                            Apartado para pagar y recoger en la sucursal. No es Mismo día (T-02.1) ni confirma cobertura.
                                         </span>
                                     </button>
                                     )}
@@ -3075,6 +3086,9 @@ export default function ModalFormPedidoLegado({
                                     </button>
                                     )}
                                 </div>
+                                <p className="text-xs theme-text-muted m-0">
+                                    Mismo día (T-02.1) es transferencia, con facultad por departamento o usuario, de lunes a viernes. El servidor acepta el reporte de pago hasta las 13:00. Elegirlo no confirma cobertura, preparación ni entrega. Las piezas ya disponibles en punto de venta y la continuación después del corte no tienen una regla automática.
+                                </p>
                             </div>
                             )}
                             <div className={wrapCampo('almacen')} data-campo="almacen">
@@ -3221,7 +3235,7 @@ export default function ModalFormPedidoLegado({
                                 </select>
                                 {esRecogeTienda && (
                                     <p className="text-[10px] font-black uppercase tracking-widest theme-text-aviso m-0 mt-2">
-                                        Mismo día en PDV. Solo apartado y confirmación. Sin pago ni transferencia.
+                                        Apartado en PDV. No es Mismo día (T-02.1). Solo apartado y confirmación, sin pago ni transferencia.
                                     </p>
                                 )}
                                 {esModalidadTransferencia && (

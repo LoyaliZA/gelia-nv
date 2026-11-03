@@ -1,0 +1,99 @@
+---
+alwaysApply: true
+---
+# Laravel Sail Command Execution
+
+This project runs inside Laravel Sail.
+
+All application-related commands must be executed through:
+
+`./vendor/bin/sail`
+
+Do not execute PHP, Artisan, Composer, or other project runtime commands directly on the host environment unless explicitly requested.
+
+## PHP Version
+
+The project uses:
+
+`PHP 8.2`
+
+All generated code, dependencies, syntax, and implementation decisions must remain compatible with PHP 8.2.
+
+Do not use features that require PHP 8.3 or newer.
+
+## Required Command Usage
+
+Use Sail for project commands.
+
+Examples:
+
+Instead of:
+
+`php artisan migrate`
+
+Use:
+
+`./vendor/bin/sail artisan migrate`
+
+Instead of:
+
+`php artisan test`
+
+Use:
+
+`./vendor/bin/sail artisan test`
+
+Instead of:
+
+`composer install`
+
+Use:
+
+`./vendor/bin/sail composer install`
+
+Instead of:
+
+`composer require vendor/package`
+
+Use:
+
+`./vendor/bin/sail composer require vendor/package`
+
+Instead of:
+
+`php -v`
+
+Use:
+
+`./vendor/bin/sail php -v`
+
+## Runtime Assumption
+
+Assume that:
+
+- Laravel runs inside Sail containers.
+- The host machine PHP version may be different or unavailable.
+- The host environment must not be treated as the authoritative application runtime.
+- Commands must execute inside the Sail environment to ensure dependency and PHP version consistency.
+
+## Before Running Commands
+
+Before executing a project command:
+
+1. Determine whether it belongs to the Laravel/PHP application environment.
+2. If it does, run it through `./vendor/bin/sail`.
+3. Do not fall back to host-level PHP or Composer simply because a command fails.
+4. If Sail is unavailable or the containers are not running, report the issue instead of silently using the host environment.
+
+## PHP 8.2 Compatibility
+
+When writing PHP code:
+
+- target PHP 8.2;
+- verify that used syntax is supported by PHP 8.2;
+- avoid PHP 8.3+ APIs and language features;
+- consider the project's installed Laravel and package versions before introducing new functionality.
+
+## Required Principle
+
+**The Sail container is the source of truth for the PHP application environment. Always use `./vendor/bin/sail` for project runtime commands and maintain PHP 8.2 compatibility.**

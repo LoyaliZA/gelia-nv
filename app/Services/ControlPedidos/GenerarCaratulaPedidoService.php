@@ -35,7 +35,7 @@ class GenerarCaratulaPedidoService
         }
 
         return DB::transaction(function () use ($tarea, $usuario, $versionEsperada, $motivoRegeneracion) {
-            $tarea = PedidoBmaTareaPreparacion::query()->lockForUpdate()->findOrFail($tarea->id);
+            $tarea = InstruccionEntrega::bloquearParaEjecutar($tarea);
             $tarea->loadMissing(['modalidad', 'paqueteria', 'pedido.estatus', 'documentos', 'pedido.cliente']);
 
             if ($versionEsperada !== null && (int) $tarea->version !== $versionEsperada) {

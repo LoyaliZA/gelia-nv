@@ -72,6 +72,7 @@ class CrearTraspasoDesdeTareaPreparacionService
         }
 
         return DB::transaction(function () use ($tarea, $usuario, $pedido, $almacen, $conPiezas) {
+            $tarea = InstruccionEntrega::bloquearParaEjecutar($tarea);
             $pedido->loadMissing(['vendedor.departamentos', 'vendedor.area.departamento', 'estatus', 'cliente']);
 
             $estadoPendiente = CatalogoEstadoSolicitud::where('nombre', 'Pendiente')->firstOrFail();

@@ -1,0 +1,17 @@
+---
+description: Apply when creating, refactoring, reorganizing, or extracting application code where module boundaries or separation of responsibilities need to be evaluated.
+alwaysApply: false
+---
+# Modularization by Responsibility
+
+Modularize code by functional responsibility, not by file length.
+
+When creating or refactoring code:
+
+* Extract code only when it represents a distinct responsibility, reusable behavior, business logic, or architectural boundary.
+* Do not split a file solely because it is large.
+* Avoid unnecessary layers, wrappers, services, helpers, or files.
+* Prefer extending an existing appropriate module before creating a new one.
+* Keep related logic together when separation would make the code harder to understand or navigate.
+
+Prefer the simplest structure that keeps responsibilities clear.

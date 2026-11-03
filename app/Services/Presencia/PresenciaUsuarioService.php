@@ -2,13 +2,15 @@
 
 namespace App\Services\Presencia;
 
-use App\Support\PresenciaCatalogo;
 use App\Events\PresenciaActualizadaUsuario;
 use App\Events\PresenciaContactoActualizada;
 use App\Models\ConfiguracionUsuario;
 use App\Models\ConversacionParticipante;
 use App\Models\User;
+use App\Support\PresenciaCatalogo;
+use Carbon\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class PresenciaUsuarioService
 {
@@ -35,7 +37,7 @@ class PresenciaUsuarioService
         $config = ConfiguracionUsuario::where('user_id', $user->id)->first();
         $guardado = $config?->presencia;
 
-        if (!is_array($guardado)) {
+        if (! is_array($guardado)) {
             return $this->prefsPorDefecto();
         }
 
@@ -49,7 +51,7 @@ class PresenciaUsuarioService
 
     public function formatearPorUserId(?int $userId): ?array
     {
-        if (!$userId) {
+        if (! $userId) {
             return null;
         }
 
@@ -86,14 +88,85 @@ class PresenciaUsuarioService
     public function registrarActividad(User $user): array
     {
         $prefs = $this->obtenerPrefs($user);
+        $notificada = (bool) ($prefs['en_linea_notificada'] ?? false);
         $estadoAntes = $this->resolver->estadoEfectivo($prefs);
 
         $prefs['ultima_actividad_at'] = now()->toIso8601String();
 
         $estadoDespues = $this->resolver->estadoEfectivo($prefs);
-        $formateado = $this->persistir($user, $prefs, $estadoAntes !== $estadoDespues);
+        $enLinea = PresenciaCatalogo::enLinea($prefs);
+        $prefs['en_linea_notificada'] = $enLinea;
 
-        return $formateado;
+        return $this->persistir(
+            $user,
+            $prefs,
+            $estadoAntes !== $estadoDespues || $notificada !== $enLinea
+        );
+    }
+
+    public function registrarSenal(User $user, string $tabId, bool $visible): array
+    {
+        $tabId = substr(preg_replace('/[^a-zA-Z0-9_-]/', '', $tabId) ?? '', 0, 64);
+        if ($tabId === '') {
+            return $this->registrarActividad($user);
+        }
+
+        return DB::transaction(function () use ($user, $tabId, $visible) {
+            $config = ConfiguracionUsuario::where('user_id', $user->id)->lockForUpdate()->first();
+            $prefs = $this->mezclarPrefs(is_array($config?->presencia) ? $config->presencia : []);
+            $notificada = (bool) ($prefs['en_linea_notificada'] ?? false);
+            $estadoAntes = $this->resolver->estadoEfectivo($prefs);
+
+            $pestanas = $this->pestanasVivas(is_array($prefs['pestanas'] ?? null) ? $prefs['pestanas'] : []);
+            if ($visible) {
+                $pestanas[$tabId] = now()->addSeconds(PresenciaCatalogo::EN_LINEA_SEGUNDOS)->toIso8601String();
+                $prefs['ultima_actividad_at'] = now()->toIso8601String();
+            } else {
+                unset($pestanas[$tabId]);
+                if ($pestanas === []) {
+                    $prefs['ultima_actividad_at'] = now()->toIso8601String();
+                }
+            }
+            $prefs['pestanas'] = $pestanas;
+
+            $estadoDespues = $this->resolver->estadoEfectivo($prefs);
+            $enLinea = PresenciaCatalogo::enLinea($prefs);
+            $prefs['en_linea_notificada'] = $enLinea;
+
+            return $this->persistir(
+                $user,
+                $prefs,
+                $estadoAntes !== $estadoDespues || $notificada !== $enLinea
+            );
+        });
+    }
+
+    public function debeMarcarFueraDeLinea(array $prefs): bool
+    {
+        return (bool) ($prefs['en_linea_notificada'] ?? false)
+            && ! PresenciaCatalogo::enLinea($prefs);
+    }
+
+    public function marcarFueraDeLineaSiAplica(User $user): bool
+    {
+        return DB::transaction(function () use ($user) {
+            $config = ConfiguracionUsuario::where('user_id', $user->id)->lockForUpdate()->first();
+            if (! $config || ! is_array($config->presencia)) {
+                return false;
+            }
+
+            $prefs = $this->mezclarPrefs($config->presencia);
+            $prefs['pestanas'] = $this->pestanasVivas(is_array($prefs['pestanas'] ?? null) ? $prefs['pestanas'] : []);
+
+            if (! $this->debeMarcarFueraDeLinea($prefs)) {
+                return false;
+            }
+
+            $prefs['en_linea_notificada'] = false;
+            $this->persistir($user, $prefs, true);
+
+            return true;
+        });
     }
 
     public function actualizar(User $user, array $datos): array
@@ -147,7 +220,7 @@ class PresenciaUsuarioService
     public function sincronizarAutomatico(User $user): array
     {
         $prefs = $this->obtenerPrefs($user);
-        if (($prefs['modo'] ?? 'automatico') === 'manual' && !empty($prefs['expira_at'])) {
+        if (($prefs['modo'] ?? 'automatico') === 'manual' && ! empty($prefs['expira_at'])) {
             if (now()->lt($prefs['expira_at'])) {
                 return $this->formatear->ejecutar($prefs);
             }
@@ -163,6 +236,35 @@ class PresenciaUsuarioService
         }
 
         return $this->persistir($user, $prefs, true);
+    }
+
+    private function mezclarPrefs(array $guardado): array
+    {
+        return array_replace_recursive($this->prefsPorDefecto(), $guardado);
+    }
+
+    private function pestanasVivas(array $pestanas): array
+    {
+        $vivas = [];
+
+        foreach ($pestanas as $id => $expira) {
+            if (! is_string($id) || ! is_string($expira)) {
+                continue;
+            }
+            try {
+                if (Carbon::parse($expira)->isFuture()) {
+                    $vivas[$id] = $expira;
+                }
+            } catch (\Throwable) {
+                continue;
+            }
+        }
+
+        if (count($vivas) > 8) {
+            $vivas = array_slice($vivas, -8, null, true);
+        }
+
+        return $vivas;
     }
 
     private function persistir(User $user, array $prefs, bool $emitirBroadcast): array
@@ -206,18 +308,18 @@ class PresenciaUsuarioService
         $validos = [];
 
         foreach ($horarios as $regla) {
-            if (!is_array($regla)) {
+            if (! is_array($regla)) {
                 continue;
             }
             $estado = $regla['estado'] ?? null;
-            if (!$estado || !PresenciaCatalogo::esSlugValido($estado)) {
+            if (! $estado || ! PresenciaCatalogo::esSlugValido($estado)) {
                 continue;
             }
             $dias = array_values(array_unique(array_map('intval', $regla['dias'] ?? [])));
             $dias = array_filter($dias, fn ($d) => $d >= 1 && $d <= 7);
             $inicio = $this->normalizarHora($regla['inicio'] ?? '');
             $fin = $this->normalizarHora($regla['fin'] ?? '');
-            if (!$inicio || !$fin) {
+            if (! $inicio || ! $fin) {
                 continue;
             }
             $validos[] = [
@@ -233,7 +335,7 @@ class PresenciaUsuarioService
 
     private function normalizarHora(string $hora): ?string
     {
-        if (!preg_match('/^(\d{1,2}):(\d{2})$/', trim($hora), $m)) {
+        if (! preg_match('/^(\d{1,2}):(\d{2})$/', trim($hora), $m)) {
             return null;
         }
         $h = (int) $m[1];

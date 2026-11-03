@@ -34,7 +34,7 @@ class ConfirmarCaratulaColocadaService
         }
 
         return DB::transaction(function () use ($tarea, $usuario, $versionEsperada, $caratulaId) {
-            $tarea = PedidoBmaTareaPreparacion::query()->lockForUpdate()->findOrFail($tarea->id);
+            $tarea = InstruccionEntrega::bloquearParaEjecutar($tarea);
 
             if ($tarea->estado !== PedidoBmaTareaPreparacion::ESTADO_LISTA_PARA_CARATULA) {
                 throw ValidationException::withMessages([

@@ -254,7 +254,7 @@ function TarjetaPedido({
             <div className="gelia-pedidos-tarjeta-acciones pt-2">
                 {pendientePesaje && (
                     <button type="button" onClick={() => onResponderPesaje?.(pedido)} className={`${BTN_PRIMARY} w-full flex items-center justify-center gap-2 text-xs outline-none py-3 min-h-[44px]`}>
-                        <Scale className="w-4 h-4" aria-hidden="true" /> {soloMercancia ? 'Responder consulta' : 'Responder pesaje'}
+                        <Scale className="w-4 h-4" aria-hidden="true" /> {pedido.solicitud_preparacion?.area_revision === 'control_pedidos' ? (pedido.solicitud_preparacion?.revision_disponibilidad?.estado ? 'Ver disponibilidad' : 'Consultar disponibilidad') : (soloMercancia ? 'Responder consulta' : 'Responder pesaje')}
                     </button>
                 )}
                 {puedeMarcarEnviado && (

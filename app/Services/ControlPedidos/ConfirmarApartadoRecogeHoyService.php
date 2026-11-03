@@ -12,7 +12,7 @@ use App\Models\User;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
 use App\Support\ControlPedidos\InstruccionEntrega;
 use App\Support\ControlPedidos\MaquinaEstadosCumplimientoFisico;
-use App\Support\ControlPedidos\PlazosApartadoFisico;
+use App\Support\ControlPedidos\PlazoApartadoTienda;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -47,7 +47,7 @@ class ConfirmarApartadoRecogeHoyService
         }
 
         return DB::transaction(function () use ($tarea, $usuario, $versionEsperada, $productos) {
-            $tarea = PedidoBmaTareaPreparacion::query()->lockForUpdate()->findOrFail($tarea->id);
+            $tarea = InstruccionEntrega::bloquearParaEjecutar($tarea);
             app(\App\Services\Traspasos\AbastecerPreparacionService::class)->asegurarSatisfecho($tarea);
             $tarea->load(['modalidad', 'pedido.estatus']);
             if ((int) $tarea->asignada_a_id !== (int) $usuario->id) {
@@ -73,11 +73,13 @@ class ConfirmarApartadoRecogeHoyService
             app(\App\Services\Traspasos\AbastecerPreparacionService::class)->asegurarSatisfecho($tarea);
             $tarea->load('productos');
             $cantidad = $this->cantidadConfirmable($tarea->productos);
-            $venceAt = PlazosApartadoFisico::cierreOperativo(
-                now(), $this->config->zonaHoraria(), $this->config->cierreOperativoHora()
-            );
-            if (now()->greaterThanOrEqualTo($venceAt) || ! $tarea->fecha_limite || now()->greaterThanOrEqualTo($tarea->fecha_limite)) {
-                throw ValidationException::withMessages(['estado' => 'El cierre de tienda ya pasó. Registre una nueva solicitud el próximo día.']);
+            $evaluacion = (new PlazoApartadoTienda($this->config))->evaluarConfirmacion(now(), $tarea->fecha_limite);
+            if (! $evaluacion['permite']) {
+                throw ValidationException::withMessages(['estado' => $evaluacion['mensaje']]);
+            }
+            $venceAt = $evaluacion['vence_at'];
+            if ($tarea->fecha_limite === null) {
+                $tarea->update(['fecha_limite' => $venceAt]);
             }
 
             if ($versionEsperada !== null && (int) $cumplimiento->version !== $versionEsperada) {

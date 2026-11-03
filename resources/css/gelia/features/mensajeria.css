@@ -558,6 +558,34 @@ html.glass-active .gelia-buscador-mensajeria-panel.theme-no-blur {
     z-index: 1;
 }
 
+.gelia-mensajeria-drawer-panel {
+    width: 100%;
+    max-width: 100%;
+}
+
+@media (min-width: 768px) {
+    .gelia-mensajeria-drawer-panel {
+        width: min(960px, 100vw);
+        max-width: min(960px, 100vw);
+    }
+}
+
+.gelia-mensajeria-drawer-panel .gelia-mensajeria-module {
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    background-color: var(--theme-surface-bg);
+}
+
+.gelia-mensajeria-drawer-panel .gelia-mensajeria-drive-panel {
+    position: absolute !important;
+    inset: 0;
+    z-index: 25;
+    width: 100% !important;
+    max-width: none !important;
+    box-shadow: var(--theme-shadow-card);
+}
+
 /* Mensajería: portales y módulo heredan tokens de tema */
 .gelia-mensajeria-portal,
 .gelia-mensajeria-module {

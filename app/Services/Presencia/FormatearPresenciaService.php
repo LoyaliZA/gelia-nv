@@ -24,6 +24,8 @@ class FormatearPresenciaService
             'modo' => $prefs['modo'] ?? 'automatico',
             'automatizar' => (bool) ($prefs['automatizar'] ?? true),
             'expira_at' => $prefs['expira_at'] ?? null,
+            'en_linea' => PresenciaCatalogo::enLinea($prefs),
+            'ultima_actividad_at' => $prefs['ultima_actividad_at'] ?? null,
         ];
     }
 }

@@ -24,7 +24,7 @@ import useListadoDiscreto from './Partials/useListadoDiscreto';
 
 const REFRESCO_LISTADO_MS = 15000;
 
-export default function Index({ auth, pedidos, metricas = {}, filtros = {}, catalogos = {}, direcciones_normalizadas = false }) {
+export default function Index({ auth, pedidos, metricas = {}, filtros = {}, catalogos = {}, direcciones_normalizadas = false, registrar_tienda = {} }) {
     const { flash } = usePage().props;
     const permisos = auth?.user?.permissions || [];
     const can = (permiso) => permisos.includes(permiso) || auth?.user?.roles?.includes('Super Admin');
@@ -303,6 +303,7 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
                         });
                     }}
                     catalogos={catalogos}
+                    registrarTienda={registrar_tienda}
                     direccionesNormalizadas={direcciones_normalizadas}
                     onClose={() => {
                         setModalForm({ abierto: false, pedido: null, recuperarBorrador: false, instancia: 'new-clean', pedidoIdVivo: null });

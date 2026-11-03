@@ -30,7 +30,7 @@ class GuardarApartadoRecogeHoyService
         $rutas = [];
         try {
             return DB::transaction(function () use ($tarea, $usuario, $datos, $confirmar, &$rutas) {
-                $tarea = PedidoBmaTareaPreparacion::query()->lockForUpdate()->findOrFail($tarea->id);
+                $tarea = InstruccionEntrega::bloquearParaEjecutar($tarea);
                 $tarea->load('modalidad');
                 if ((int) $tarea->asignada_a_id !== (int) $usuario->id) {
                     throw ValidationException::withMessages(['tarea' => 'Solo el auxiliar que tomó la tarea puede registrar y confirmar las piezas.']);

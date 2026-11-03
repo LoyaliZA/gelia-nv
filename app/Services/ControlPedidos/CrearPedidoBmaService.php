@@ -111,6 +111,7 @@ class CrearPedidoBmaService
             $this->historialService->registrarCreacion($pedido->id, $vendedorId, $estatusBorrador->id);
             app(ResguardosEnvioPedido::class)->aplicar($pedido, $datos, $vendedorId);
             $this->intencionPreparacion->ejecutar($pedido, $datos);
+            $pedido = app(AplicarCapturaTiendaPedido::class)->ejecutar($pedido->fresh(), $datos, User::findOrFail($vendedorId));
 
             $destExplicito = array_key_exists('sucursal_destino_id', $datos);
             $dest = $destExplicito

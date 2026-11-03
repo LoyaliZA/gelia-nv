@@ -63,6 +63,7 @@ class AutorizarSalidaPreparacionService
         }
 
         return DB::transaction(function () use ($tarea, $usuario, $versionEsperada, $politica, $caratulaMunicipal) {
+            $tarea = InstruccionEntrega::bloquearParaEjecutar($tarea);
             $this->asegurar->ejecutar($tarea);
             $cumplimiento = PedidoBmaCumplimientoFisico::query()
                 ->where('pedido_bma_tarea_preparacion_id', $tarea->id)

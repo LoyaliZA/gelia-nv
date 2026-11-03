@@ -31,7 +31,7 @@ class ConfirmarSalidaTrasladoTiendaService
         }
 
         return DB::transaction(function () use ($tarea, $usuario, $versionEsperada) {
-            $tarea = PedidoBmaTareaPreparacion::query()->lockForUpdate()->findOrFail($tarea->id);
+            $tarea = InstruccionEntrega::bloquearParaEjecutar($tarea);
 
             if ($tarea->estado !== PedidoBmaTareaPreparacion::ESTADO_LISTA_PARA_TRASLADO) {
                 throw ValidationException::withMessages([

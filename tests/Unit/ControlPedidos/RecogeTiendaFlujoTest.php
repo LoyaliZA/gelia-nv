@@ -18,7 +18,9 @@ use App\Services\ControlPedidos\NotificarPedidoBmaService;
 use App\Services\ControlPedidos\PreparacionTiendaConfig;
 use App\Services\ControlPedidos\ReabrirApartadoRecogeHoyService;
 use App\Services\ControlPedidos\ReportarIncidenciaPreparacionService;
+use App\Support\ControlPedidos\PlazoApartadoTienda;
 use App\Support\ControlPedidos\RespuestaPreparacionTienda;
+use Carbon\Carbon;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -283,6 +285,114 @@ class RecogeTiendaFlujoTest extends TestCase
         $this->travelTo(now()->addDay());
         $this->expectException(ValidationException::class);
         app(GuardarApartadoRecogeHoyService::class)->ejecutar($this->tarea, $this->auxiliar, $this->datos(), true);
+    }
+
+    public function test_un_apartado_sin_plazo_se_confirma_el_lunes_y_persiste_las_17(): void
+    {
+        $this->travelTo(Carbon::parse('2026-11-02 16:00:00', 'America/Mexico_City'));
+        $this->tarea->update(['fecha_limite' => null]);
+
+        $apartado = app(GuardarApartadoRecogeHoyService::class)->ejecutar($this->tarea, $this->auxiliar, $this->datos(), true);
+
+        $this->assertSame('APARTADO_CONFIRMADO', $apartado->estado);
+        $this->assertSame(
+            '2026-11-02 17:00:00',
+            $this->tarea->fresh()->fecha_limite->timezone('America/Mexico_City')->format('Y-m-d H:i:s')
+        );
+    }
+
+    public function test_el_sabado_antes_de_las_13_persiste_ese_corte(): void
+    {
+        $this->travelTo(Carbon::parse('2026-11-07 12:30:00', 'America/Mexico_City'));
+        $this->tarea->update(['fecha_limite' => null]);
+
+        app(GuardarApartadoRecogeHoyService::class)->ejecutar($this->tarea, $this->auxiliar, $this->datos(), true);
+
+        $this->assertSame(
+            '2026-11-07 13:00:00',
+            $this->tarea->fresh()->fecha_limite->timezone('America/Mexico_City')->format('Y-m-d H:i:s')
+        );
+    }
+
+    public function test_el_cierre_de_las_17_no_usa_la_configuracion_de_las_20(): void
+    {
+        $this->travelTo(Carbon::parse('2026-11-02 18:00:00', 'America/Mexico_City'));
+        $this->tarea->update(['fecha_limite' => null]);
+
+        try {
+            app(GuardarApartadoRecogeHoyService::class)->ejecutar($this->tarea, $this->auxiliar, $this->datos(), true);
+            $this->fail('El apartado no debió confirmarse después del corte.');
+        } catch (ValidationException $e) {
+            $this->assertSame(PlazoApartadoTienda::MENSAJE_CIERRE, $e->errors()['estado'][0]);
+        }
+
+        $this->assertNull($this->tarea->fresh()->fecha_limite);
+    }
+
+    public function test_el_sabado_a_las_13_es_cierre_operativo(): void
+    {
+        $this->travelTo(Carbon::parse('2026-11-07 13:00:00', 'America/Mexico_City'));
+        $this->tarea->update(['fecha_limite' => null]);
+
+        try {
+            app(GuardarApartadoRecogeHoyService::class)->ejecutar($this->tarea, $this->auxiliar, $this->datos(), true);
+            $this->fail('El apartado no debió confirmarse en el corte del sábado.');
+        } catch (ValidationException $e) {
+            $this->assertSame(PlazoApartadoTienda::MENSAJE_CIERRE, $e->errors()['estado'][0]);
+        }
+
+        $this->assertNull($this->tarea->fresh()->fecha_limite);
+    }
+
+    public function test_un_apartado_vencido_no_se_renueva(): void
+    {
+        $limite = Carbon::parse('2026-11-01 17:00:00', 'America/Mexico_City');
+        $this->tarea->update(['fecha_limite' => $limite]);
+        $this->travelTo(Carbon::parse('2026-11-02 16:00:00', 'America/Mexico_City'));
+
+        try {
+            app(GuardarApartadoRecogeHoyService::class)->ejecutar($this->tarea, $this->auxiliar, $this->datos(), true);
+            $this->fail('Un apartado vencido no debió renovarse.');
+        } catch (ValidationException $e) {
+            $this->assertSame(PlazoApartadoTienda::MENSAJE_VENCIDO, $e->errors()['estado'][0]);
+        }
+
+        $this->assertTrue($this->tarea->fresh()->fecha_limite->equalTo($limite));
+    }
+
+    public function test_sin_zona_horaria_no_calcula_vigencia(): void
+    {
+        $config = Mockery::mock(PreparacionTiendaConfig::class)->makePartial();
+        $config->shouldReceive('zonaHoraria')->andReturn('No/Existe');
+        $config->shouldReceive('cierreOperativoHora')->andReturn('20:00');
+        $this->app->instance(PreparacionTiendaConfig::class, $config);
+        $this->travelTo(Carbon::parse('2026-11-02 16:00:00', 'America/Mexico_City'));
+        $this->tarea->update(['fecha_limite' => null]);
+
+        try {
+            app(GuardarApartadoRecogeHoyService::class)->ejecutar($this->tarea, $this->auxiliar, $this->datos(), true);
+            $this->fail('Sin zona horaria no debió confirmarse el apartado.');
+        } catch (ValidationException $e) {
+            $this->assertSame(PlazoApartadoTienda::MENSAJE_CONFIGURACION, $e->errors()['estado'][0]);
+        }
+
+        $this->assertNull($this->tarea->fresh()->fecha_limite);
+    }
+
+    public function test_la_mercancia_pagada_no_se_libera_al_vencer_el_apartado(): void
+    {
+        Schema::table('pedidos_bma', function (Blueprint $tabla) {
+            $tabla->text('pago_validado_at')->nullable();
+            $tabla->text('numero_remision')->nullable();
+        });
+        $apartado = app(GuardarApartadoRecogeHoyService::class)->ejecutar($this->tarea, $this->auxiliar, $this->datos(), true);
+        $this->tarea->pedido->update(['pago_validado_at' => now()]);
+        $this->travelTo(now()->addDay());
+
+        $this->assertSame(0, app(EvaluarVencimientoApartadoFisicoService::class)->ejecutar());
+        $this->assertSame('APARTADO_CONFIRMADO', $apartado->fresh()->estado);
+        $this->assertSame(3, $apartado->fresh()->cantidad);
+        $this->assertSame(0, PedidoBmaCumplimientoEvento::query()->where('tipo', 'VENCIMIENTO_AVISADO')->count());
     }
 
     public function test_usa_catalogo_del_almacen_y_permite_preparar_con_existencia_cero(): void

@@ -1018,6 +1018,13 @@ class PedidoBma extends Model
 
     public function esConsultaMercancia(): bool
     {
+        $area = is_array($this->solicitud_preparacion_json)
+            ? ($this->solicitud_preparacion_json['area_revision'] ?? null)
+            : null;
+        if ($area === 'control_pedidos') {
+            return true;
+        }
+
         $this->loadMissing('origen');
 
         return ! (bool) ($this->origen?->requiere_logistica ?? true);
