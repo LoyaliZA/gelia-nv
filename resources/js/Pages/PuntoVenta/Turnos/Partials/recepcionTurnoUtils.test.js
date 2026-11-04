@@ -44,6 +44,11 @@ describe('recepcionTurnoUtils', () => {
 
     it('formatea espera y prioridad de turno', () => {
         expect(formatearEsperaTurno({ espera_segundos: 125 })).toBe('2m 5s');
+        expect(formatearEsperaTurno({
+            reatencion_vigente: true,
+            restante_segundos: 90,
+            espera_segundos: 10,
+        })).toBe('Reatención 1m 30s');
         expect(resumenPrioridadTurno({ prioridad_vip: true })).toBe('VIP');
         expect(resumenPrioridadTurno({})).toBe('Normal');
     });

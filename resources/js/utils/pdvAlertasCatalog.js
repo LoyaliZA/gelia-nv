@@ -1,4 +1,9 @@
-import { mensajeTtsLlamadoPdv, mensajeTtsProrrogaPdv, primerNombreAtencionPdv } from './pdvSpeechUtils';
+import {
+    mensajeAsignacionEspecialPdv,
+    mensajeTtsLlamadoPdv,
+    mensajeTtsProrrogaPdv,
+    primerNombreAtencionPdv,
+} from './pdvSpeechUtils';
 
 /** Prioridades de alertas audibles (alineado con CatalogoAlertasTurnosPdv). */
 export const PDV_ALERTA_PRIORIDAD = {
@@ -27,12 +32,12 @@ export const PDV_ALERTAS_CATALOGO_TURNOS = {
     'turno.reatencion': {
         prioridad: 'alta',
         tonoConfigurable: false,
-        guion: '{vendedor}, tienes un nuevo cliente: {cliente}.',
+        guion: '{vendedor}, tienes una nueva reatención.',
     },
     'turno.transferido': {
         prioridad: 'alta',
         tonoConfigurable: false,
-        guion: '{vendedor}, tienes un nuevo cliente: {cliente}.',
+        guion: '{vendedor}, se te ha transferido un cliente para atención.',
     },
     'atencion.espera_proximo_vencer': {
         prioridad: 'critica',
@@ -73,8 +78,6 @@ export const PDV_ALERTAS_CATALOGO_TURNOS = {
 
 export const PDV_TIPOS_AUDIO_PERSONAL = new Set([
     'turno.asignado',
-    'turno.reatencion',
-    'turno.transferido',
     'atencion.prorroga',
 ]);
 
@@ -117,6 +120,14 @@ export function mensajeTtsTerminalPdv(envelope) {
     const definicion = definicionAlertaPdv(tipo);
     const datos = envelope?.datos;
     if (!definicion || !datos || typeof datos !== 'object') return null;
+
+    if ((tipo === 'turno.reatencion' || tipo === 'turno.transferido')) {
+        return mensajeAsignacionEspecialPdv(tipo, datos);
+    }
+
+    if (tipo === 'pausa.finalizada' && datos.anunciar === false) {
+        return null;
+    }
 
     if (PDV_TIPOS_LLAMADO.has(tipo)) {
         return mensajeTtsLlamadoPdv(datos, { publico: false });

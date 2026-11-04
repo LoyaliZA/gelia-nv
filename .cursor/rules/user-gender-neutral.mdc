@@ -1,0 +1,92 @@
+---
+alwaysApply: true
+---
+
+# Gender-Neutral User References
+
+All user-facing text must refer to users, operators, employees, customers, or system actors using gender-neutral language.
+
+Never assume the gender of the person behind a user account.
+
+Avoid gendered labels such as:
+
+* "Vendedora"
+* "Vendedor"
+* "La encargada"
+* "El encargado"
+* "La usuaria"
+* "El usuario" when referring to a specific person in a UI label
+* "Atendida por"
+* "Atendido por" when the phrase itself introduces gender
+
+Prefer neutral labels based on the person's role, action, or relationship to the record.
+
+Recommended examples:
+
+* `Atendido por:`
+* `Registrado por:`
+* `Creado por:`
+* `Modificado por:`
+* `Asignado a:`
+* `Responsable:`
+* `Autorizado por:`
+* `Capturado por:`
+* `Procesado por:`
+* `Solicitado por:`
+* `Entregado por:`
+* `Recibido por:`
+* `Usuario responsable:`
+* `Persona responsable:`
+
+## Action Descriptions
+
+When describing an action performed by a user, avoid sentences that require gendered nouns.
+
+Avoid:
+
+* "La vendedora realizó la venta."
+* "El vendedor registró el pedido."
+* "La encargada autorizó el pago."
+
+Prefer:
+
+* "Venta registrada por: [Name]"
+* "Pedido registrado por: [Name]"
+* "Autorizado por: [Name]"
+* "[Name] registró la venta."
+* "[Name] procesó el pedido."
+
+When possible, prefer action-based phrasing over gendered role-based phrasing.
+
+## Applies to All New UI
+
+This rule applies to all newly created or modified:
+
+* labels;
+* tables;
+* column names;
+* cards;
+* forms;
+* tooltips;
+* notifications;
+* activity logs;
+* audit trails;
+* reports;
+* dashboards;
+* confirmation messages;
+* error messages;
+* empty states;
+* exports;
+* printable documents.
+
+## Existing Text
+
+When modifying an existing screen or component, if nearby user-facing text contains unnecessary gendered references, update those references to neutral wording when doing so is safe and within the scope of the change.
+
+Do not change the meaning of business roles that are officially gender-specific by definition. Otherwise, default to neutral wording.
+
+## Required Principle
+
+**Refer to the action, responsibility, role, or account — never assume the person's gender.**
+
+When multiple valid phrasings exist, prefer the shortest, clearest, and most natural gender-neutral wording for the interface.

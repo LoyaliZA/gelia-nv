@@ -279,6 +279,17 @@ class AltaTurnoPdvService
             ->lockForUpdate()
             ->get();
 
+        $vigente = $turnos->first(function (TurnoPdv $turno) use ($ahora): bool {
+            return $turno->reatencion_expira_at !== null
+                && $ahora->lessThan($turno->reatencion_expira_at);
+        });
+
+        if ($vigente instanceof TurnoPdv) {
+            throw ValidationException::withMessages([
+                'cliente_id' => 'Esta persona sigue en ventana de reatención. Reasígnala desde operación; no hace falta un turno nuevo.',
+            ]);
+        }
+
         foreach ($turnos as $turno) {
             $versionAnterior = (int) $turno->version;
             $actualizado = TurnoPdv::query()

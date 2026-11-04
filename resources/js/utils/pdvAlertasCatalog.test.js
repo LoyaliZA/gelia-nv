@@ -48,7 +48,15 @@ describe('pdvAlertasCatalog', () => {
                 snapshot_nombre_llamado: 'María López',
                 atencion: { primer_nombre: 'Ana' },
             },
-        })).toBe('Ana, tienes un nuevo cliente: María López.');
+        })).toBe('Ana, tienes una nueva reatención.');
+        expect(mensajeTtsTerminalPdv({
+            tipo: 'turno.transferido',
+            datos: { atencion: { primer_nombre: 'Juan' } },
+        })).toBe('Juan, se te ha transferido un cliente para atención.');
+        expect(mensajeTtsTerminalPdv({
+            tipo: 'pausa.finalizada',
+            datos: { anunciar: false, primer_nombre: 'Ana' },
+        })).toBeNull();
     });
 
     it('anuncia prórroga, pausa y resguardo nuevo solo con la frase breve', () => {

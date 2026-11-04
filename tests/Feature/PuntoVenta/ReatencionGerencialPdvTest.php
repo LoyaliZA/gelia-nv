@@ -21,11 +21,11 @@ use App\Services\PuntoVenta\Turnos\PlazosTurnosPdvConfig;
 use App\Support\PuntoVenta\Turnos\MotivosCierreAtencionTurnoPdv;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
-use Tests\Support\RefreshDatabaseSafe;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
+use Tests\Support\RefreshDatabaseSafe;
 use Tests\TestCase;
 
 class ReatencionGerencialPdvTest extends TestCase
@@ -67,6 +67,7 @@ class ReatencionGerencialPdvTest extends TestCase
 
     public function test_cerrar_atencion_crea_elegibilidad_en_bandeja(): void
     {
+        $this->activarVendedor($this->vendedorAnterior);
         $contexto = $this->crearTurnoAsignado($this->vendedorAnterior);
 
         $this->actingAs($this->vendedorAnterior)->postJson(
@@ -91,7 +92,7 @@ class ReatencionGerencialPdvTest extends TestCase
 
         $candidatos = collect($response->json('reatencion.0.candidatos'))->pluck('id');
         $this->assertTrue($candidatos->contains($this->vendedorDestino->id));
-        $this->assertFalse($candidatos->contains($this->vendedorAnterior->id));
+        $this->assertTrue($candidatos->contains($this->vendedorAnterior->id));
     }
 
     public function test_gerente_cierra_y_reasigna_con_datos_de_operacion_general(): void
@@ -181,7 +182,7 @@ class ReatencionGerencialPdvTest extends TestCase
                 ->json('reatencion.0.candidatos')
         )->pluck('id');
 
-        $this->assertFalse($candidatos->contains($this->vendedorAnterior->id));
+        $this->assertTrue($candidatos->contains($this->vendedorAnterior->id));
         $this->assertTrue($candidatos->contains($this->vendedorDestino->id));
 
         app(GestionarEquipoOperativoPdvService::class)->finalizarPausa(
@@ -206,7 +207,7 @@ class ReatencionGerencialPdvTest extends TestCase
                 ->json('reatencion.0.candidatos')
         )->pluck('id');
 
-        $this->assertFalse($candidatosConDestinoPausado->contains($this->vendedorAnterior->id));
+        $this->assertTrue($candidatosConDestinoPausado->contains($this->vendedorAnterior->id));
         $this->assertTrue($candidatosConDestinoPausado->contains($this->vendedorDestino->id));
 
         $disponibilidad = app(ConsultaPersonaDisponiblePdvService::class);
@@ -484,7 +485,7 @@ class ReatencionGerencialPdvTest extends TestCase
         )->assertForbidden();
     }
 
-    public function test_no_permite_asignar_al_vendedor_anterior_cuando_hay_otro_disponible(): void
+    public function test_permite_asignar_al_vendedor_anterior_cuando_hay_otro_disponible(): void
     {
         $this->activarVendedor($this->vendedorAnterior);
         $this->activarVendedor($this->vendedorDestino);
@@ -497,8 +498,8 @@ class ReatencionGerencialPdvTest extends TestCase
                 'destino_user_id' => $this->vendedorAnterior->id,
                 'idempotency_key' => 'pdv:reatencion:mismo-vendedor',
             ],
-        )->assertUnprocessable()
-            ->assertJsonValidationErrors(['destino_user_id']);
+        )->assertOk()
+            ->assertJsonPath('atencion.user_id', $this->vendedorAnterior->id);
     }
 
     public function test_permite_asignar_al_vendedor_anterior_cuando_es_el_unico_disponible(): void

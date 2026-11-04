@@ -1,0 +1,54 @@
+---
+alwaysApply: true
+---
+
+# Mandatory Component Reuse
+
+Before creating any new component, UI element, or reusable interface block:
+
+1. Inspect the existing components in the project first.
+2. Search for components that already fully or partially satisfy the current requirement.
+3. Prioritize reusing, extending, or parameterizing an existing component before creating a new one.
+4. Do not create duplicate components only because of minor differences such as:
+
+   * text;
+   * icons;
+   * colors;
+   * sizes;
+   * visual variants;
+   * states;
+   * configurable behavior.
+
+If an existing component can support the new use case through props, variants, composition, or a reasonable extension, reuse it.
+
+## When No Suitable Component Exists
+
+If, after reviewing the existing project structure, no appropriate component can be reused without forcing it beyond its intended responsibility:
+
+1. Create a new component.
+2. Design it to be reusable from the beginning.
+3. Avoid coupling it exclusively to the current use case when the component represents a more general UI pattern.
+4. Expose reasonable variations through props, variants, or configuration.
+5. Keep the component focused on a clear and well-defined responsibility.
+6. Place it according to the project's existing component structure and conventions.
+
+## Avoid Over-Abstraction
+
+Component reuse does not mean everything must become a generic component.
+
+Do not create unnecessary abstractions for elements that:
+
+* are only used once;
+* contain no meaningful reusable behavior;
+* do not represent a repeatable UI pattern;
+* would become harder to understand or maintain if generalized.
+
+Prefer reusable components only when there is actual reuse value or a clear reusable pattern.
+
+## Required Decision Order
+
+Before implementing any new UI element, follow this order:
+
+**Reuse an existing component → Extend an existing component → Create a reusable component → Create a specific implementation only when abstraction provides no real value.**
+
+Never create a new component without first checking whether the project already contains an equivalent or adaptable solution.

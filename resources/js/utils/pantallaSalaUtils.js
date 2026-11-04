@@ -6,8 +6,6 @@ import {
 /** Eventos que agregan o actualizan un llamado visible en sala. */
 export const PDV_SALA_TIPOS_LLAMADO = new Set([
     'turno.asignado',
-    'turno.reatencion',
-    'turno.transferido',
 ]);
 
 /** Eventos que cambian cola, actual o historial y requieren refetch del estado. */
@@ -79,7 +77,9 @@ export function esEventoLlamadoSala(envelope) {
 }
 
 export function esEventoQuitarLlamadoSala(envelope) {
-    return String(envelope?.tipo || '') === 'atencion.cerrada';
+    const tipo = String(envelope?.tipo || '');
+
+    return tipo === 'atencion.cerrada' || tipo === 'turno.transferido' || tipo === 'turno.reatencion';
 }
 
 export function esEventoRefetchSala(envelope) {

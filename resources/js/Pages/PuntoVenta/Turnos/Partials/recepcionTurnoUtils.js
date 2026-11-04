@@ -49,6 +49,13 @@ export function resumenBandejaRecepcion(bandeja) {
 }
 
 export function formatearEsperaTurno(turno) {
+    if (turno?.reatencion_vigente) {
+        const restante = Number(turno?.restante_segundos);
+        if (Number.isFinite(restante)) {
+            return `Reatención ${formatearDuracion(restante)}`;
+        }
+    }
+
     const segundos = Number(turno?.espera_segundos);
     if (!Number.isFinite(segundos)) return '—';
     return formatearDuracion(segundos);

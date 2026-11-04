@@ -21,15 +21,18 @@ final class SerializadorTableroVentasPdv
         array $plazos,
         CarbonInterface $ahora,
         ?TurnoPdvAtencion $atencionPrevia = null,
+        ?CarbonInterface $habilitarDesde = null,
     ): array {
         $atencion = $turno->relationLoaded('atencionActual')
             ? $turno->atencionActual
             : null;
 
-        $esReatencion = $atencion instanceof TurnoPdvAtencion && $atencion->numero_secuencia > 1;
+        $marca = self::marcaDe($turno, $atencion);
+        $esReatencion = $marca['marca_atencion'] === MarcaAtencionTurnoPdv::REATENCION;
 
         return array_merge(
             self::resumenTurno($turno, $ahora),
+            $marca,
             [
                 'es_reatencion' => $esReatencion,
                 'atencion_previa' => $esReatencion && $atencionPrevia instanceof TurnoPdvAtencion
@@ -38,7 +41,7 @@ final class SerializadorTableroVentasPdv
                 'version' => $turno->version,
                 'atencion_actual_id' => $turno->atencion_actual_id,
                 'atencion' => $atencion instanceof TurnoPdvAtencion
-                    ? self::atencion($atencion, $plazos, $ahora)
+                    ? self::atencion($atencion, $plazos, $ahora, $habilitarDesde, $marca)
                     : null,
             ],
         );
@@ -58,14 +61,24 @@ final class SerializadorTableroVentasPdv
      *   prorroga_minutos: int,
      *   ventana_reatencion_minutos: int
      * }  $plazos
+     * @param  array{marca_atencion?: string, folio_visible?: string, numero_reatencion?: int|null}|null  $marca
      * @return array<string, mixed>
      */
-    public static function atencion(TurnoPdvAtencion $atencion, array $plazos, CarbonInterface $ahora): array
-    {
+    public static function atencion(
+        TurnoPdvAtencion $atencion,
+        array $plazos,
+        CarbonInterface $ahora,
+        ?CarbonInterface $habilitarDesde = null,
+        ?array $marca = null,
+    ): array {
         $inicioAt = $atencion->inicio_at;
         $atencionInicioAt = $atencion->atencion_inicio_at;
+        $enCooldown = $atencionInicioAt === null
+            && $habilitarDesde instanceof CarbonInterface
+            && $habilitarDesde->greaterThan($ahora);
 
-        $esperaExpiraAt = $inicioAt?->copy()->addMinutes($plazos['espera_inicial_minutos']);
+        $baseEspera = $enCooldown ? $habilitarDesde : $inicioAt;
+        $esperaExpiraAt = $baseEspera?->copy()->addMinutes($plazos['espera_inicial_minutos']);
         $prorrogaExpiraAt = $atencionInicioAt?->copy()->addMinutes($plazos['prorroga_minutos']);
 
         $prorrogaRegistrada = $atencion->relationLoaded('prorroga')
@@ -75,17 +88,30 @@ final class SerializadorTableroVentasPdv
         $prorrogaActiva = $prorrogaRegistrada
             || ($atencionInicioAt !== null && $prorrogaExpiraAt !== null && $ahora->greaterThanOrEqualTo($prorrogaExpiraAt));
 
+        $marca ??= [
+            'marca_atencion' => $atencion->es_transferencia
+                ? MarcaAtencionTurnoPdv::TRANSFERENCIA
+                : MarcaAtencionTurnoPdv::NORMAL,
+            'folio_visible' => null,
+            'numero_reatencion' => null,
+        ];
+
         return [
             'id' => $atencion->id,
             'user_id' => $atencion->user_id,
             'numero_secuencia' => $atencion->numero_secuencia,
             'inicio_at' => $inicioAt?->toIso8601String(),
             'atencion_inicio_at' => $atencionInicioAt?->toIso8601String(),
+            'atencion_habilitada_desde' => $enCooldown ? $habilitarDesde->toIso8601String() : null,
             'fin_at' => $atencion->fin_at?->toIso8601String(),
             'es_transferencia' => $atencion->es_transferencia,
+            'marca_atencion' => $marca['marca_atencion'],
+            'folio_visible' => $marca['folio_visible'],
+            'numero_reatencion' => $marca['numero_reatencion'],
             'version' => $atencion->version,
             'espera_inicial_expira_at' => $esperaExpiraAt?->toIso8601String(),
-            'espera_inicial_vencida' => $atencionInicioAt === null
+            'espera_inicial_vencida' => ! $enCooldown
+                && $atencionInicioAt === null
                 && $esperaExpiraAt !== null
                 && $ahora->greaterThanOrEqualTo($esperaExpiraAt),
             'prorroga_expira_at' => $prorrogaExpiraAt?->toIso8601String(),
@@ -104,6 +130,23 @@ final class SerializadorTableroVentasPdv
             'cierre_at' => $atencion->fin_at?->toIso8601String(),
             'motivo_cierre' => $atencion->motivo_cierre,
         ];
+    }
+
+    /**
+     * @return array{marca_atencion: string, folio_visible: string, numero_reatencion: int|null}
+     */
+    private static function marcaDe(TurnoPdv $turno, ?TurnoPdvAtencion $atencion): array
+    {
+        if (! $atencion instanceof TurnoPdvAtencion) {
+            return MarcaAtencionTurnoPdv::desde((string) $turno->folio, false, 0);
+        }
+
+        if (! $atencion->relationLoaded('turno')) {
+            $atencion->setRelation('turno', $turno);
+        }
+
+        return MarcaAtencionTurnoPdv::paraAtenciones([$atencion])[(int) $atencion->id]
+            ?? MarcaAtencionTurnoPdv::desde((string) $turno->folio, (bool) $atencion->es_transferencia, 0);
     }
 
     /**

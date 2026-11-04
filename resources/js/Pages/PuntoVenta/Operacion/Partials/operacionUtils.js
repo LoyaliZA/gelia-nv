@@ -75,21 +75,21 @@ export function esAvisoDisponibilidad(estado) {
     return estado === 'en_retencion' || estado === 'en_espera';
 }
 
-export function mensajeAvisoDisponibilidad(estado, accion) {
-    if (estado === 'en_retencion') {
-        const cierre = accion === 'reatencion'
-            ? 'La reatención manual sí se puede confirmar.'
-            : 'La transferencia sí se puede confirmar.';
+export const ESTADOS_DESTINO_ASIGNACION_MANUAL = new Set(['disponible', 'en_espera', 'en_retencion']);
 
-        return `Está en pausa. La fila automática no asigna clientes hasta que termine. ${cierre}`;
+export function esDestinoAsignacionManual(estado) {
+    return ESTADOS_DESTINO_ASIGNACION_MANUAL.has(estado);
+}
+
+export function mensajeAvisoDisponibilidad(estado, accion) {
+    const verbo = accion === 'reatencion' ? 'La reatención' : 'La transferencia';
+
+    if (estado === 'en_retencion') {
+        return `Está en pausa. ${verbo} termina la pausa, inicia el tiempo de espera y asigna el turno. La atención comienza al terminar esa cuenta.`;
     }
 
     if (estado === 'en_espera') {
-        const cierre = accion === 'reatencion'
-            ? 'La reatención manual sí se puede confirmar.'
-            : 'La transferencia sí se puede confirmar.';
-
-        return `Pre-disponible. Volverá a la cola al terminar la cuenta. ${cierre}`;
+        return `Pre-disponible. ${verbo} asigna el turno de inmediato. La atención comienza al terminar la cuenta.`;
     }
 
     return '';

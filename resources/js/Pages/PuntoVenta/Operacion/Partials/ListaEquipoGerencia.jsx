@@ -4,13 +4,16 @@ import { geliaCardClass } from '../../../../utils/geliaTheme';
 import TarjetaVendedorGerencia from './TarjetaVendedorGerencia';
 import {
     INACTIVIDAD_SECCION_INACTIVOS_MS,
+    esDestinoAsignacionManual,
     particionarEquipoGerencia,
     resolverSeccionInactivos,
 } from './operacionUtils';
 
 function destinosTransferencia(equipo, personaId) {
     return equipo
-        .filter((miembro) => Number(miembro.id) !== Number(personaId) && !miembro.atencion_actual)
+        .filter((miembro) => Number(miembro.id) !== Number(personaId)
+            && !miembro.atencion_actual
+            && esDestinoAsignacionManual(miembro.estado_vendedor))
         .map((miembro) => ({
             id: miembro.id,
             nombre: miembro.nombre,

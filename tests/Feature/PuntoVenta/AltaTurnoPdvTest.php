@@ -459,7 +459,7 @@ class AltaTurnoPdvTest extends TestCase
         $this->assertSame(0, TurnoPdv::query()->count());
     }
 
-    public function test_alta_cierra_reatencion_previa_y_permite_nuevo_turno(): void
+    public function test_alta_no_cierra_reatencion_vigente(): void
     {
         Event::fake([TurnoCreado::class]);
 
@@ -472,9 +472,35 @@ class AltaTurnoPdvTest extends TestCase
             'reatencion_expira_at' => now()->addHour(),
         ]);
 
-        $response = $this->actingAs($this->recepcion)->postJson(
+        $this->actingAs($this->recepcion)->postJson(
             route('punto_venta.turnos.store'),
             $this->payloadAlta(clienteId: $cliente->id, clave: 'pdv:turno:reatencion-nueva-alta')
+        )->assertUnprocessable()
+            ->assertJsonValidationErrors(['cliente_id']);
+
+        $turnoPrevio->refresh();
+        $this->assertSame(TurnoPdv::ESTADO_EN_REATENCION, $turnoPrevio->estado);
+        $this->assertNull($turnoPrevio->cerrado_at);
+        $this->assertSame(1, TurnoPdv::query()->where('cliente_id', $cliente->id)->count());
+        Event::assertNotDispatched(TurnoCreado::class);
+    }
+
+    public function test_alta_cierra_reatencion_vencida_y_permite_nuevo_turno(): void
+    {
+        Event::fake([TurnoCreado::class]);
+
+        $cliente = $this->crearCliente('Cliente reatencion vencida');
+
+        $turnoPrevio = TurnoPdv::factory()->create([
+            'sucursal_id' => $this->sucursal->id,
+            'cliente_id' => $cliente->id,
+            'estado' => TurnoPdv::ESTADO_EN_REATENCION,
+            'reatencion_expira_at' => now()->subMinute(),
+        ]);
+
+        $response = $this->actingAs($this->recepcion)->postJson(
+            route('punto_venta.turnos.store'),
+            $this->payloadAlta(clienteId: $cliente->id, clave: 'pdv:turno:reatencion-vencida-alta')
         );
 
         $response->assertCreated()
@@ -485,12 +511,6 @@ class AltaTurnoPdvTest extends TestCase
         $this->assertSame(TurnoPdv::ESTADO_CERRADO, $turnoPrevio->estado);
         $this->assertNotNull($turnoPrevio->cerrado_at);
         $this->assertSame(2, TurnoPdv::query()->where('cliente_id', $cliente->id)->count());
-        $this->assertTrue(
-            TurnoPdvEvento::query()
-                ->where('turno_id', $turnoPrevio->id)
-                ->where('tipo_evento', TurnoPdvEvento::TIPO_VENTANA_REATENCION_VENCIDA)
-                ->exists()
-        );
     }
 
     /**

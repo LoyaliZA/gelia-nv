@@ -13,6 +13,7 @@ use App\Jobs\PuntoVenta\Turnos\VencerVentanaReatencionTurnoPdvJob;
 use App\Models\ConfiguracionSistema;
 use App\Models\PuntoVenta\IntervaloOperativoPdv;
 use App\Models\PuntoVenta\JornadaPdv;
+use App\Models\PuntoVenta\SucursalDiaOperacionPdv;
 use App\Models\PuntoVenta\TurnoPdv;
 use App\Models\PuntoVenta\TurnoPdvAtencion;
 use App\Models\PuntoVenta\TurnoPdvEvento;
@@ -280,8 +281,22 @@ class CicloAtencionTurnosPdvTest extends TestCase
 
         $contexto = $this->crearTurnoAsignado();
         $destino = User::factory()->create();
-        $destino->givePermissionTo(PuntoVentaModulo::PERMISO_TURNOS_ATENDER);
+        $destino->givePermissionTo([
+            PuntoVentaModulo::PERMISO_ACCEDER,
+            PuntoVentaModulo::PERMISO_TURNOS_ATENDER,
+        ]);
         $destino->concederAccesoSucursal($this->sucursal, esPrincipal: true);
+        SucursalDiaOperacionPdv::factory()->create([
+            'sucursal_id' => $this->sucursal->id,
+            'fecha_operativa' => now()->toDateString(),
+            'acepta_altas' => true,
+        ]);
+        app(AbrirJornadaPdvService::class)->abrirParaUsuario(
+            (int) $destino->id,
+            (int) $this->sucursal->id,
+            now(),
+            (int) $this->gerencia->id,
+        );
 
         $this->actingAs($this->gerencia)->postJson(
             route('punto_venta.turnos.transferir', $contexto['turno']),
@@ -347,6 +362,17 @@ class CicloAtencionTurnosPdvTest extends TestCase
         );
 
         Event::assertDispatched(TurnoVentanaReatencionVencida::class, 1);
+    }
+
+    public function test_cada_ventana_de_reatencion_programa_su_propio_vencimiento(): void
+    {
+        Queue::fake();
+
+        VencerVentanaReatencionTurnoPdvJob::dispatch(15, 1_700_000_000);
+        VencerVentanaReatencionTurnoPdvJob::dispatch(15, 1_700_003_600);
+        VencerVentanaReatencionTurnoPdvJob::dispatch(15, 1_700_003_600);
+
+        Queue::assertPushed(VencerVentanaReatencionTurnoPdvJob::class, 2);
     }
 
     public function test_job_prorroga_registra_evento_tras_iniciar_atencion(): void

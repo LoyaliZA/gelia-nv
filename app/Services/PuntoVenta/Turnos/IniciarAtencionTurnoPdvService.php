@@ -3,10 +3,12 @@
 namespace App\Services\PuntoVenta\Turnos;
 
 use App\Contracts\PuntoVenta\ResuelveAlcancePdv;
+use App\Models\PuntoVenta\JornadaPdv;
 use App\Models\PuntoVenta\TurnoPdv;
 use App\Models\PuntoVenta\TurnoPdvAtencion;
 use App\Models\User;
 use App\Services\PuntoVenta\PuntoVentaModulo;
+use App\Support\PuntoVenta\Operacion\EstadoJornadaPdv;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -70,6 +72,8 @@ class IniciarAtencionTurnoPdvService
                 ];
             }
 
+            $this->assertCooldownVencido($atencion, $turnoBloqueado, $ahora);
+
             $atencion = $this->inicioAtencion->ejecutar($atencion, $ahora);
 
             return [
@@ -84,6 +88,21 @@ class IniciarAtencionTurnoPdvService
         if ($turno->estado !== TurnoPdv::ESTADO_ASIGNADO) {
             throw ValidationException::withMessages([
                 'turno' => 'Solo se puede iniciar atención en turnos asignados.',
+            ]);
+        }
+    }
+
+    private function assertCooldownVencido(TurnoPdvAtencion $atencion, TurnoPdv $turno, CarbonInterface $ahora): void
+    {
+        $jornada = JornadaPdv::query()
+            ->where('user_id', $atencion->user_id)
+            ->where('sucursal_id', $turno->sucursal_id)
+            ->where('estado', EstadoJornadaPdv::Abierta)
+            ->first();
+
+        if ($jornada?->disponible_desde instanceof CarbonInterface && $ahora->lt($jornada->disponible_desde)) {
+            throw ValidationException::withMessages([
+                'turno' => 'La atención inicia al terminar el tiempo de espera.',
             ]);
         }
     }
