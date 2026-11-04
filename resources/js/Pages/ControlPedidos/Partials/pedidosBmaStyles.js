@@ -159,7 +159,22 @@ const etiquetaConsultaPedido = (pedido) => {
     return estadoConsultaPedido(pedido) === 'respondida' ? 'Consulta respondida' : 'Pendiente de respuesta';
 };
 
+export const estadoTransferenciaTienda = (pedido, fase = pedido?.estatus?.fase_ciclo) => {
+    const solicitud = pedido?.solicitud_preparacion;
+    if (solicitud?.modalidad_entrega !== 'tienda' || solicitud?.cobertura_tienda?.tipo !== 'transferencia'
+        || (solicitud.atencion_tienda || 'no') !== 'no' || pedido?.prioridad_md || ['CANCELADO', 'ENTREGADO'].includes(fase)) return null;
+    if (solicitud.seguimiento_recoleccion?.estado === 'pendiente_gestion') return { label: 'Pendiente de gestión', color: 'var(--color-aviso)' };
+    const estados = {
+        en_transito: 'En traslado a sucursal', recibido: 'Bolsas recibidas', en_recepcion: 'Pendiente de custodia', en_custodia: 'En custodia',
+    };
+    if (estados[pedido.estatus_sucursal]) return { label: estados[pedido.estatus_sucursal], color: pedido.estatus_sucursal === 'en_custodia' ? 'var(--color-exito)' : 'var(--color-primario)' };
+    if (solicitud.transferencia_tienda?.historial?.preparar && fase === 'PENDIENTE_DE_ENVIO') return { label: 'Bolsas preparadas', color: 'var(--color-primario)' };
+    return null;
+};
+
 export const etiquetaEstatusPedido = (estatus, { esResguardo = false, requiereLogistica = true, pedido = null } = {}) => {
+    const transferencia = estadoTransferenciaTienda(pedido, estatus?.fase_ciclo);
+    if (transferencia) return transferencia.label;
     if (pedido?.estatus_envio === 'apartado_liberado') return 'Apartado liberado';
     if (['PESAJE_PENDIENTE', 'PESAJE_RESPONDIDO'].includes(estatus?.fase_ciclo) && (estadoConsultaPedido(pedido) || pedido?.consulta_cerrada || pedido?.consulta_cerrada_at)) {
         return etiquetaConsultaPedido(pedido);
@@ -766,6 +781,8 @@ export const tieneErrorGuiaReportado = (pedido) => {
 
 /** Badge con color del catálogo + etiqueta semántica del estado. */
 export const badgeEstatusPedido = (estatus, { esResguardo = false, requiereLogistica = true, pedido = null } = {}) => {
+    const transferencia = estadoTransferenciaTienda(pedido, estatus?.fase_ciclo);
+    if (transferencia) return { label: transferencia.label, ...badgeClaseEstatusPedido({ color_hex: transferencia.color }) };
     const consulta = estadoConsultaPedido(pedido);
     if (pedido?.estatus_envio === 'apartado_liberado') return { label: 'Apartado liberado', ...badgeClaseEstatusPedido({ color_hex: 'var(--color-aviso)' }) };
     if ((consulta || pedido?.consulta_cerrada || pedido?.consulta_cerrada_at) && ['PESAJE_PENDIENTE', 'PESAJE_RESPONDIDO'].includes(estatus?.fase_ciclo)) {

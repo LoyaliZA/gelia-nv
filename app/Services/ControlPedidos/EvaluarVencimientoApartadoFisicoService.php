@@ -42,6 +42,9 @@ class EvaluarVencimientoApartadoFisicoService
             if (! $tarea || $tarea->estado === PedidoBmaTareaPreparacion::ESTADO_CANCELADA) {
                 continue;
             }
+            if (\App\Support\ControlPedidos\TransferenciaT02::aplica($tarea->pedido)) {
+                continue;
+            }
             if ($this->mercanciaPagada($tarea->pedido)) {
                 continue;
             }
@@ -71,6 +74,7 @@ class EvaluarVencimientoApartadoFisicoService
         }
 
         $movidas += $this->liberarPagadosPorRemision();
+        $movidas += app(SeguimientoRecoleccionT02Service::class)->ejecutar();
         $movidas += $this->cancelarCredito->ejecutar();
 
         return $movidas;
@@ -96,6 +100,9 @@ class EvaluarVencimientoApartadoFisicoService
         foreach ($filas as $cumplimiento) {
             $tarea = $cumplimiento->tarea;
             if (! $tarea || $tarea->estado === PedidoBmaTareaPreparacion::ESTADO_CANCELADA) {
+                continue;
+            }
+            if (\App\Support\ControlPedidos\TransferenciaT02::aplica($tarea->pedido)) {
                 continue;
             }
             $antes = PedidoBmaCumplimientoEvento::query()

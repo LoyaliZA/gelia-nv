@@ -63,6 +63,8 @@ class AlertaPedidoBma extends Notification implements ShouldQueue, ShouldBroadca
         'pedido_entregado_tienda' => 'Pedido entregado en Tienda',
         'pedido_apartado_confirmado' => 'Apartado confirmado en PDV',
         'pedido_apartado_vencido' => 'Revisar apartado en PDV',
+        'pedido_transferencia_tienda' => 'Transferencia y custodia en Tienda',
+        'pedido_custodia_20_dias' => 'Recolección pendiente de gestión',
         'pedido_preparacion_tienda_nueva' => 'Nueva preparación en Tienda',
         'pedido_preparacion_tienda_respondida' => 'Preparación en Tienda respondida',
         'pedido_preparacion_tienda_incidencia' => 'Incidencia en preparación Tienda',

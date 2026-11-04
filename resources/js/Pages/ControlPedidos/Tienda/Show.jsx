@@ -18,6 +18,7 @@ import AvisoOperativoPedido from '../Partials/AvisoOperativoPedido';
 import ModalSesionEvidenciaTienda from './Partials/ModalSesionEvidenciaTienda';
 import ModalLiberarMercancia from '../Partials/ModalLiberarMercancia';
 import ApartadoFisicoTienda from './Partials/ApartadoFisicoTienda';
+import SeguimientoTransferenciaTienda from '../Partials/SeguimientoTransferenciaTienda';
 import PrepararApartadoRecoge from './Partials/PrepararApartadoRecoge';
 import EmpaqueMunicipioTienda from './Partials/EmpaqueMunicipioTienda';
 import ResultadoPreparacionTienda from './Partials/ResultadoPreparacionTienda';
@@ -221,6 +222,16 @@ export default function Show({
     const progresoCaratula = tarea.progreso_caratula || [];
     const tieneRespuesta = Boolean(tarea.atendida_at) || ['RESPONDIDA', 'LISTA_PARA_TRASLADO', 'LISTA_PARA_CARATULA', 'EN_TRASLADO', 'RECIBIDA_CEDIS', 'LIBERACION_SOLICITADA', 'LIBERADA'].includes(tarea.estado);
 
+    if (tarea.pedido?.es_t02_documental && tarea.pedido?.consulta_cerrada) {
+        return <Layout {...(!embedded ? { auth } : {})}>
+            {!embedded && <Head title={`Transferencia y custodia — ${folio}`} />}
+            <GeliaPageShell className="gelia-tienda-op space-y-4">
+                {!embedded && <div className="flex flex-wrap items-center justify-between gap-3"><h1 className="text-lg font-bold">{folio}</h1><Link href={route('control_pedidos.tienda.index')} className={BTN_SECONDARY}>Volver al listado</Link></div>}
+                <AvisoResultadoTienda flash={flash} />
+                <SeguimientoTransferenciaTienda pedido={tarea.pedido} onDirtyChange={embedded ? onDirtyChange : setCapturaDirty} />
+            </GeliaPageShell>
+        </Layout>;
+    }
     if (tarea.estado === 'EN_ATENCION') {
         return <Layout {...(!embedded ? { auth } : {})}>
             {!embedded && <Head title={`Preparación Tienda — ${folio}`} />}

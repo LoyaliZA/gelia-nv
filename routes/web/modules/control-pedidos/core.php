@@ -7,6 +7,8 @@ use App\Http\Controllers\ControlPedidos\PedidoBmaSaldosPagosController;
 use App\Http\Controllers\ControlPedidos\PlazosRetrasoPedidoBmaController;
 
 Route::prefix('control-pedidos')->name('control_pedidos.')->group(function () {
+    Route::get('/{pedidoBma}/transferencia-tienda', [\App\Http\Controllers\ControlPedidos\TransferenciaTiendaController::class, 'show'])->name('transferencia_tienda.show');
+    Route::post('/{pedidoBma}/transferencia-tienda/{accion}', [\App\Http\Controllers\ControlPedidos\TransferenciaTiendaController::class, 'update'])->name('transferencia_tienda.update');
     Route::middleware(['can:control_pedidos.ver_listado'])->group(function () {
         Route::get('/', [PedidoBmaController::class, 'index'])->name('index');
         Route::get('/listado', [PedidoBmaController::class, 'listado'])->name('listado');

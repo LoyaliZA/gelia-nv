@@ -1,5 +1,7 @@
 # Continuidad para Cursor — Tienda T-01
 
+Nota posterior del mismo día: el usuario reanudó el trabajo con Codex y autorizó corregir el build y continuar [T-02 — transferencia y custodia](TIENDA_T02_IMPLEMENTACION.md). La instrucción de detener verificaciones de este documento describe el cierre previo de T-01; no cancela esa autorización posterior.
+
 Entrega del 4 de noviembre de 2026. Los cambios solicitados quedan implementados en el árbol de trabajo, pendientes de que el usuario los suba a Git. No se creó un commit ni se hizo push.
 
 Por instrucción del usuario, se cierra el trabajo en este servidor inestable sin ejecutar más pruebas, compilaciones ni capturas. Este documento permite continuar en otro servidor sin repetir la implementación ni perder la evidencia.

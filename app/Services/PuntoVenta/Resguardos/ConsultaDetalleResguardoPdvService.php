@@ -46,7 +46,7 @@ class ConsultaDetalleResguardoPdvService
         $resguardo->load([
             'sucursal:id,nombre',
             'cliente:id,numero_cliente',
-            'pedido:id,folio,folio_remision,envia_a_otra_persona,envia_otra_persona',
+            'pedido:id,folio,folio_remision,envia_a_otra_persona,envia_otra_persona,solicitud_preparacion_json,prioridad_md',
             'pedido.bultosEmpaque.documentos',
             'evidencias',
             'eventoRegistroManual.actor:id,name,username',
@@ -134,6 +134,7 @@ class ConsultaDetalleResguardoPdvService
             'estado' => $resguardo->estado,
             'estado_etiqueta' => EtiquetasResguardoPdv::etiquetaEstado($resguardo->estado),
             'pedido_bma_id' => $resguardo->pedido_bma_id,
+            'es_t02_documental' => \App\Support\ControlPedidos\TransferenciaT02::aplica($resguardo->pedido),
             'snapshot_folio' => $resguardo->snapshot_folio,
             'snapshot_cliente_nombre' => $resguardo->snapshot_cliente_nombre,
             'envia_a_otra_persona' => $retiro['envia_a_otra_persona'],

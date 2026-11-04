@@ -156,7 +156,9 @@ class AutorizarSalidaPreparacionService
             );
 
             if ($politica->abreResguardo()) {
-                $this->custodia->ejecutar($tarea, $cumplimiento, $usuario);
+                if (! \App\Support\ControlPedidos\TransferenciaT02::aplica($tarea->pedido)) {
+                    $this->custodia->ejecutar($tarea, $cumplimiento, $usuario);
+                }
             }
 
             return $cumplimiento->fresh();

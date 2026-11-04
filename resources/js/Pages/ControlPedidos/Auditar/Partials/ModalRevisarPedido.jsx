@@ -117,6 +117,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
     const [liberarCapturaAbierto, setLiberarCapturaAbierto] = useState(false);
     const [alerta, setAlerta] = useState({ abierto: false, tipo: 'success', titulo: '', mensaje: '' });
     const [numeroRemision, setNumeroRemision] = useState('');
+    const [fechaEmisionRemision, setFechaEmisionRemision] = useState('');
     const [rechazoPagos, setRechazoPagos] = useState({ abierto: false, ids: [], motivo: '' });
     const [bloqueosPago, setBloqueosPago] = useState([]);
     const [errorRechazo, setErrorRechazo] = useState(null);
@@ -128,6 +129,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
         if (abierto && pedidoInicial) {
             setPedido(pedidoInicial);
             setNumeroRemision(pedidoInicial.numero_remision || '');
+            setFechaEmisionRemision(pedidoInicial.solicitud_preparacion?.remision_tienda?.emitida_at?.slice(0, 10) || '');
             setProcesando(false);
             setAlerta({ abierto: false, tipo: 'success', titulo: '', mensaje: '' });
             setConfirmacion(null);
@@ -285,6 +287,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
         setProcesando(true);
         const formData = new FormData();
         formData.append('remision', archivo);
+        if (fechaEmisionRemision) formData.append('fecha_emision', fechaEmisionRemision);
         router.post(route('control_pedidos.auditar.remision.store', pedido.id), formData, {
             preserveScroll: true,
             forceFormData: true,
@@ -823,6 +826,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                 )}
                                 <section id="auditoria-remision" tabIndex={-1} className={SECCION_WRAP}>
                                     <h3 className="gelia-pedidos-seccion-titulo">{fichaTienda ? 'Archivo de tienda' : 'Remisión'}</h3>
+                                    {pedido.solicitud_preparacion?.cobertura_tienda?.tipo === 'transferencia' && esPendiente && <label className="block text-xs theme-text-muted mb-3">Fecha de emisión de remisión Wizerp<input type="date" className={`${THEME_INPUT} w-full mt-1`} value={fechaEmisionRemision || pedido.solicitud_preparacion?.remision_tienda?.emitida_at?.slice(0, 10) || ''} onChange={e => setFechaEmisionRemision(e.target.value)} disabled={procesando || Boolean(pedido.solicitud_preparacion?.remision_tienda?.emitida_at)} /><span className="block mt-1">Los 20 días naturales parten de esta emisión; reemplazar el PDF no reinicia el plazo.</span></label>}
                                     {esPendiente && !recogeTienda && (
                                         <div className="mb-4">
                                             <label htmlFor="auditoria-numero-remision" className="text-xs theme-text-muted">Número de remisión</label>

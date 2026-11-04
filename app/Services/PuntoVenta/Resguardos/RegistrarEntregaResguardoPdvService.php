@@ -25,6 +25,7 @@ use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 class RegistrarEntregaResguardoPdvService
 {
     public const METODO_VALIDACION_FIRMA = 'firma';
+    public const METODO_VALIDACION_FOTOGRAFIA_T02 = 'fotografia_t02';
 
     public function __construct(
         private readonly ResuelveAlcancePdv $alcance,
@@ -126,7 +127,11 @@ class RegistrarEntregaResguardoPdvService
 
         $this->assertVersionYEstado($resguardo, $versionEsperada);
         $this->assertEntregable($resguardo);
-        $this->assertMetodoValidacion($metodoValidacion);
+        $this->assertMetodoValidacion($metodoValidacion, $resguardo);
+        if ($metodoValidacion === self::METODO_VALIDACION_FOTOGRAFIA_T02) {
+            // T-02 requires a delivery photograph, not a fabricated signature.
+            $evidencias = [$firma];
+        }
 
         $bultosEntregables = $this->resolverBultosSeleccionados($resguardo, $bultoIds);
         $ahora = now();
@@ -222,7 +227,7 @@ class RegistrarEntregaResguardoPdvService
             throw $e;
         }
 
-        $this->persistirFirma(
+        if ($metodoValidacion === self::METODO_VALIDACION_FIRMA) $this->persistirFirma(
             $resguardo,
             $entrega,
             $evento,
@@ -335,8 +340,10 @@ class RegistrarEntregaResguardoPdvService
         }
     }
 
-    private function assertMetodoValidacion(string $metodoValidacion): void
+    private function assertMetodoValidacion(string $metodoValidacion, ResguardoPdv $resguardo): void
     {
+        if ($metodoValidacion === self::METODO_VALIDACION_FOTOGRAFIA_T02
+            && \App\Support\ControlPedidos\TransferenciaT02::aplica($resguardo->pedido)) return;
         if ($metodoValidacion !== self::METODO_VALIDACION_FIRMA) {
             throw ValidationException::withMessages([
                 'metodo_validacion' => 'El método de validación no es válido.',

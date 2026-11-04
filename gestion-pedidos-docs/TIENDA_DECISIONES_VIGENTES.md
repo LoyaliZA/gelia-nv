@@ -2,7 +2,7 @@
 
 Actualizado el 4 de noviembre de 2026. Referencia estable del módulo; no es una lista de tareas para volver a ejecutar.
 
-Entrega para cambiar de servidor: [continuidad para Cursor y capturas conservadas de T-01](CONTINUIDAD_CURSOR_TIENDA_T01.md). Por instrucción del usuario se cierra el trabajo en el servidor actual sin más pruebas, compilaciones ni capturas; el recorrido autenticado queda para el nuevo entorno.
+Entrega anterior: [continuidad para Cursor y capturas conservadas de T-01](CONTINUIDAD_CURSOR_TIENDA_T01.md). Después de ese cierre, el usuario autorizó continuar en este servidor: corrección de permisos del build y [T-02 — transferencia y custodia](TIENDA_T02_IMPLEMENTACION.md), con comprobaciones acotadas. La revisión autenticada y visual con usuarios reales sigue pendiente.
 
 ## Autoridad y alcance
 
@@ -15,6 +15,8 @@ Se retiran las instrucciones anteriores que limitaban esta entrega al prototipo,
 El cierre técnico registrado se limita a las cinco fases descritas; no acredita toda la operación de Tienda. Municipal y nacional mantienen su formulario y segmento propios. No activar políticas financieras, VIP ni automatismos pendientes como consecuencia de este cierre técnico.
 
 ## Decisiones vigentes
+
+- T-02: transferencia ordinaria conserva procedencia, registra sucursal de recolección y continúa con ingreso verificado y remisión emitida en Wizerp. Preparación de bolsas, salida, recepción, custodia identificada y entrega son acciones distintas. La fecha de emisión inicia 20 días naturales, sin reiniciarse al reemplazar el PDF; al cumplirse, solo se registra pendiente de gestión. Ver [implementación, accesos y evidencia T-02](TIENDA_T02_IMPLEMENTACION.md).
 
 - El alta no preselecciona modalidad. Guardar borrador no crea tarea ni exige pago. La solicitud usa el documento del pedido, cliente, departamento y almacén receptor ya definidos en la implementación revisada; no volver al prototipo antiguo sin documento.
 - T-01 consulta existencia física en PDV, sin pedir surtido a CEDIS. Transferencia puede consultar CEDIS; seleccionar cobertura no cambia retroactivamente el origen físico.

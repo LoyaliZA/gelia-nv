@@ -193,7 +193,7 @@ class FusionarSolicitudPreparacionPedido
         foreach ([
             'cobertura_tienda', 'segundo_traslado', 'credito_wizerp', 'tienda_md_reporte',
             'retiro_recoleccion', 'liberacion_fisica_20', 'cambio_modalidad',
-            'continuacion_ejecutor', 'entrega_custodia', 'compromisos_inventario', 'complemento_pdv', 'anexo_integracion',
+            'continuacion_ejecutor', 'entrega_custodia', 'compromisos_inventario', 'complemento_pdv', 'anexo_integracion', 'transferencia_tienda', 'seguimiento_recoleccion', 'remision_tienda',
         ] as $clave) {
             if (is_array($salida[$clave] ?? null) && $salida[$clave] !== []) {
                 return false;
@@ -314,6 +314,9 @@ class FusionarSolicitudPreparacionPedido
             'liberacion_fisica_20',
             'cambio_modalidad',
             'continuacion_ejecutor',
+            'transferencia_tienda',
+            'seguimiento_recoleccion',
+            'remision_tienda',
             'entrega_custodia',
             'compromisos_inventario',
             'complemento_pdv',

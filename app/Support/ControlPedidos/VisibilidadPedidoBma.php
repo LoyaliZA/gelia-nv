@@ -204,6 +204,13 @@ final class VisibilidadPedidoBma
         if (self::puedeConsultarEnListadoBma($usuario, $pedido)) {
             return true;
         }
+        if (TransferenciaT02::aplica($pedido)) {
+            $enDestino = $usuario->idsSucursalesOperables()->contains((int) $pedido->sucursal_destino_id)
+                && ($usuario->can('control_pedidos.tienda.ver') || $usuario->can('pdv.resguardos.ver') || $usuario->can('pdv.resguardos.entregar'));
+            $asignado = $usuario->can('control_pedidos.tienda.ver')
+                && (int) $pedido->instruccionEntregaVigente?->asignada_a_id === (int) $usuario->id;
+            if ($enDestino || $asignado) return true;
+        }
 
         $pedido->loadMissing('estatus');
         $fase = $pedido->estatus?->fase_ciclo;

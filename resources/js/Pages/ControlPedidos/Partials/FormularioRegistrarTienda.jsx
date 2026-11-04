@@ -42,6 +42,7 @@ import { archivosImagenDesdeClipboard } from './archivosDesdeClipboard';
 import { claseEtiquetaLista } from '../../Solicitudes/Partials/solicitudesStyles';
 import { GELIA_ESTADO_VIVO_TONO } from '../../../utils/geliaTheme';
 import ContinuidadTienda from './ContinuidadTienda';
+import SeguimientoTransferenciaTienda from './SeguimientoTransferenciaTienda';
 import { badgesListaPedido } from './pedidosListadoUi';
 import useActualizacionesPedidos from './useActualizacionesPedidos';
 import SeguimientoSolicitudTienda, { respuestaDeTiendaEmitida } from './SeguimientoSolicitudTienda';
@@ -1000,6 +1001,7 @@ export default function FormularioRegistrarTienda({
                                     <h3 id="registrar-tienda-atencion-titulo">Atención en tienda</h3>
                                 </div>
                                 <p className="registrar-tienda-ayuda">Elige el destino de esta solicitud.</p>
+                                <p className="text-sm theme-text-muted m-0 mb-3">Para transferencia y recolección posterior, se prefiere consultar CEDIS; si no hay existencia, consulte PDV. La procedencia se conserva al elegir sucursal de recolección.</p>
                                 {caso === 'mismo_dia_pdv' && (
                                     <p className="text-sm theme-text-main m-0 mb-3" role="status">
                                         {NOTA_TIENDA_MD} Esta captura conserva esa intención y no la convierte en apartado ni en consulta.
@@ -1183,6 +1185,7 @@ export default function FormularioRegistrarTienda({
                                 consultaCerrada={consultaCerrada}
                                 onConsultaCerrada={() => { setConsultaCerrada(true); refrescarRef.current?.(); }}
                             />
+                            <SeguimientoTransferenciaTienda pedido={{ ...pedido, id: pedidoId, solicitud_preparacion: solicitudViva }} sucursales={catalogos.sucursales || []} onActualizar={() => refrescarRef.current?.()} />
                             <ContinuidadTienda
                                 pedidoId={pedidoId}
                                 solicitud={solicitudViva}

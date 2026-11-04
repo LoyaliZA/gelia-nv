@@ -1,4 +1,5 @@
 import React from 'react';
+import SeguimientoTransferenciaTienda from '../../../ControlPedidos/Partials/SeguimientoTransferenciaTienda';
 import { Link } from '@inertiajs/react';
 import { AlertTriangle, Package, Printer } from 'lucide-react';
 import { geliaCardClass, THEME_BTN_PRIMARY } from '../../../../utils/geliaTheme';
@@ -35,6 +36,9 @@ export default function ContenidoDetalleResguardo({
     }
 
     const titulo = resguardo.snapshot_folio || `Resguardo #${resguardo.id}`;
+    if (resguardo.es_t02_documental) {
+        return <div className="space-y-4"><PanelPedidoRevisionResguardo resguardo={resguardo} /><SeguimientoTransferenciaTienda pedido={{ id: resguardo.pedido_bma_id, es_t02_documental: true }} soloLectura={modoAuditoria} onActualizar={onAccionExito} /></div>;
+    }
     const plazos = plazosOperativosResguardo(resguardo);
     const clasificacionesActivas = Object.entries(resguardo.clasificaciones || {})
         .filter(([, activa]) => activa)

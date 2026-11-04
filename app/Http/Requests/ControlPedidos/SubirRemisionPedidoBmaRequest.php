@@ -15,6 +15,7 @@ class SubirRemisionPedidoBmaRequest extends FormRequest
     {
         return [
             'remision' => ['required', 'file', 'mimes:pdf', 'max:10240'],
+            'fecha_emision' => ['nullable', 'date_format:Y-m-d', 'before_or_equal:today'],
         ];
     }
 

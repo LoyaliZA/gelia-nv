@@ -202,7 +202,7 @@ class PedidoBmaAuditoriaController extends Controller
     ): RedirectResponse {
         $this->assertPedidoVisible($pedidoBma);
         try {
-            $service->subir($pedidoBma, $request->file('remision'), Auth::id());
+            $service->subir($pedidoBma, $request->file('remision'), Auth::id(), $request->validated('fecha_emision'));
         } catch (\InvalidArgumentException|\RuntimeException $e) {
             return redirect()->back()->with('error', $e->getMessage());
         }

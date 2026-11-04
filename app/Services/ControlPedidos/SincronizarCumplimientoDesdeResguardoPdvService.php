@@ -38,7 +38,9 @@ class SincronizarCumplimientoDesdeResguardoPdvService
                 return;
             }
 
-            if ($cumplimiento->estado !== PedidoBmaCumplimientoFisico::ESTADO_LISTA_PARA_SALIDA) {
+            if ($cumplimiento->estado !== PedidoBmaCumplimientoFisico::ESTADO_LISTA_PARA_SALIDA
+                && ! ($cumplimiento->estado === PedidoBmaCumplimientoFisico::ESTADO_APARTADO_CONFIRMADO
+                    && \App\Support\ControlPedidos\TransferenciaT02::aplica($cumplimiento->tarea?->pedido))) {
                 return;
             }
 

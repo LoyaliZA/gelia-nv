@@ -38,7 +38,7 @@ class RegistrarBultosEmpaquePedidoBmaService
                 throw new \InvalidArgumentException('Cada bulto debe incluir foto del bulto.');
             }
 
-            if (! $fotoTicket instanceof UploadedFile || ! $fotoTicket->isValid()) {
+            if ((! $fotoTicket instanceof UploadedFile || ! $fotoTicket->isValid()) && ! \App\Support\ControlPedidos\TransferenciaT02::aplica($pedido)) {
                 throw new \InvalidArgumentException('Cada bulto debe incluir foto del ticket.');
             }
 
@@ -50,7 +50,9 @@ class RegistrarBultosEmpaquePedidoBmaService
             ]);
 
             $this->guardarDocumento($pedido, $bulto, PedidoBmaDocumento::TIPO_EVIDENCIA_BULTO_EMPAQUE, $fotoBulto, $ordenDoc++);
-            $this->guardarDocumento($pedido, $bulto, PedidoBmaDocumento::TIPO_EVIDENCIA_TICKET_BULTO_EMPAQUE, $fotoTicket, $ordenDoc++);
+            if ($fotoTicket instanceof UploadedFile) {
+                $this->guardarDocumento($pedido, $bulto, PedidoBmaDocumento::TIPO_EVIDENCIA_TICKET_BULTO_EMPAQUE, $fotoTicket, $ordenDoc++);
+            }
         }
 
         $pedido->update(['numero_cajas' => count($bultos)]);
