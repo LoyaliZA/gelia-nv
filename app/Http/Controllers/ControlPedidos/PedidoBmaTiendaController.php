@@ -923,6 +923,29 @@ class PedidoBmaTiendaController extends Controller
         return redirect()->route('control_pedidos.tienda.show', $tarea)->with('success', 'Salida autorizada sin PDF de remisión.');
     }
 
+    public function entregarApartadoPdv(PedidoBmaTareaPreparacion $tarea, Request $request, \App\Services\ControlPedidos\OperacionApartadoT01Service $service): JsonResponse|RedirectResponse
+    {
+        $datos = $request->validate([
+            'version' => ['required', 'integer', 'min:1'],
+            'pago_confirmado' => ['required', 'accepted'],
+            'numero_remision' => ['required', 'string', 'max:100'],
+            'receptor' => ['required', 'string', 'max:160'],
+            'foto' => ['required', 'file', 'max:10240', 'mimes:jpg,jpeg,png,webp'],
+            'ticket' => ['nullable', 'file', 'max:10240', 'mimes:pdf,jpg,jpeg,png,webp'],
+        ]);
+        $service->ejecutar($tarea, Auth::user(), $datos, true);
+        if (! $request->expectsJson()) return redirect()->route('control_pedidos.tienda.show', $tarea)->with('success', 'Pedido entregado. Cobro y remisión realizados en PDV.');
+        return response()->json(['ok' => true, 'message' => 'Pedido entregado. Cobro y remisión realizados en PDV.']);
+    }
+
+    public function liberarApartadoPdv(PedidoBmaTareaPreparacion $tarea, Request $request, \App\Services\ControlPedidos\OperacionApartadoT01Service $service): JsonResponse|RedirectResponse
+    {
+        $datos = $request->validate(['version' => ['required', 'integer', 'min:1'], 'motivo' => ['required', 'string', 'max:2000']]);
+        $service->ejecutar($tarea, Auth::user(), $datos, false);
+        if (! $request->expectsJson()) return redirect()->route('control_pedidos.tienda.show', $tarea)->with('success', 'Apartado liberado. Se notificó a la vendedora.');
+        return response()->json(['ok' => true, 'message' => 'Apartado liberado. Se notificó a la vendedora.']);
+    }
+
     public function confirmarEntregaRecogeHoy(
         PedidoBmaTareaPreparacion $tarea,
         ConfirmarEntregaRecogeHoyRequest $request,

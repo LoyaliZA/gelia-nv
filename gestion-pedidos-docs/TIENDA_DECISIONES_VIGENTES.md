@@ -2,6 +2,8 @@
 
 Actualizado el 4 de noviembre de 2026. Referencia estable del módulo; no es una lista de tareas para volver a ejecutar.
 
+Entrega para cambiar de servidor: [continuidad para Cursor y capturas conservadas de T-01](CONTINUIDAD_CURSOR_TIENDA_T01.md). Por instrucción del usuario se cierra el trabajo en el servidor actual sin más pruebas, compilaciones ni capturas; el recorrido autenticado queda para el nuevo entorno.
+
 ## Autoridad y alcance
 
 Esta referencia conserva las decisiones operativas vigentes y la evidencia del trabajo realizado en las fases 2.1.1–2.1.5. Las solicitudes explícitas posteriores del usuario prevalecen. Consultar el código y las pruebas para comprobar el estado actual antes de modificarlo; una anotación de cierre no demuestra por sí sola un recorrido operativo correcto.
@@ -22,7 +24,7 @@ El cierre técnico registrado se limita a las cinco fases descritas; no acredita
 - Anexo: PDF/captura como entrada principal, catálogo como alternativa. El auxiliar debe poder identificar y responder; solicitar no demuestra disponibilidad ni integración física. La respuesta identifica responsable, fecha, resultado y evidencia cuando corresponde.
 - Retiro: documentos o catálogo, motivo de catálogo y evidencia opcional de la petición del cliente, sin límite funcional de cantidad de capturas. El auxiliar asignado puede atenderlo incluso después del apartado; aplicar libera únicamente lo comprometido que corresponde, rechazar conserva las piezas e informa la razón.
 - Importes después del cierre vigente: mercancía, costos aplicables, SAF, total exigible, pagos y pendiente/excedente. Primero persistir y después registrar pago. Un pendiente de cero no bloquea las correcciones autorizadas.
-- La vendedora registra el cobro real: transferencia al banco permitido, cobro presencial a Caja PDV conservando el medio real, crédito sin exhibición ni comprobante ficticio. El botón rápido llena el pendiente neto, no registra automáticamente.
+- Para transferencia y los flujos de cobro gestionados en GELIA, la vendedora registra el cobro real al banco permitido o Caja PDV conservando el medio real; crédito no crea una exhibición ficticia. T-01 documental con Pago al recoger se cobra y remisiona en PDV, fuera del registro financiero de GELIA. El botón rápido llena el pendiente neto, no registra automáticamente.
 - Registrar pago, verificar ingreso, emitir remisión, salir, recibir y entregar son acciones distintas con responsables y permisos propios. No habilitar entrega solo por capturar un comprobante.
 - MD acompaña únicamente transferencia: facultad por usuario/departamento, lunes a viernes y corte a las 13:00 sobre el primer reporte aceptado por el servidor. La revisión o remisión posterior al corte no vuelve tardío un reporte oportuno. Un reporte tardío queda pendiente de acuerdo, sin reprogramar automáticamente. Conservar el instante al sustituir comprobantes.
 - Apartado impago vence a las 17:00 de lunes a viernes y a las 13:00 el sábado, salvo VIP autorizado conforme a la configuración vigente. No liberar mercancía pagada como si fuera impaga.
@@ -34,7 +36,7 @@ El cierre técnico registrado se limita a las cinco fases descritas; no acredita
 ### Preparación, respuesta y evidencia
 
 - Reutilizar el espacio de documento, escáner/buscador, atributos, evidencias y cierre contextual. La foto física del conjunto es obligatoria para responder sin excepciones; el PDF del pedido no la sustituye. Reconocer evidencia válida ya guardada en la misma revisión, sin exigir otra carga.
-- Disponibilidad no obliga a transcribir las piezas correctas. La separación posterior sí necesita identificar los productos y cantidades que exige el contrato de inventario. No inventar productos ni interpretar la ausencia de excepciones como confirmación implícita.
+- Disponibilidad no obliga a transcribir las piezas correctas. En T-01 documental, cerrar la consulta aprueba la separación del conjunto: el auxiliar confirma el pedido completo sin transcribir productos ni cantidades. Los demás flujos conservan el contrato de inventario y sus controles propios. No inventar productos ni interpretar la ausencia de excepciones como confirmación implícita.
 - Conservar productos capturados y atributos independientes «Única pieza» y «Mejor ejemplar». Sin existencias y daños son excepciones, no disponibilidad aceptada.
 - La respuesta identifica quién/cuándo, estado del conjunto, excepciones, cantidades conocidas, atributos y evidencias de la revisión vigente. Si solo se capturaron excepciones, su suma representa piezas afectadas, no el total del pedido. No mezclar evidencia de instrucciones sustituidas, otras revisiones o peticiones del cliente.
 
@@ -85,7 +87,7 @@ Entradas: `Tienda/Partials/ModalPreparacionTienda.jsx` y `Tienda/Show.jsx`. Cons
 
 El auxiliar asignado puede atender anexos/retiros pendientes sin reabrir indiscriminadamente la captura. Una solicitud atendida no puede aplicarse dos veces. No cambiar o sustituir piezas unilateralmente. Responder disponibilidad no declara integración física del anexo.
 
-T-01 entrega solo después del pago confirmado; transferencia/crédito conservan recepción y custodia identificadas. Mantener municipal separado y no mostrar sus campos logísticos en T-01.
+T-01 documental entrega después de la confirmación expresa del auxiliar de que PDV recibió el pago, con número de remisión y foto de entrega (ticket opcional), sin crear una exhibición en GELIA; transferencia/crédito conservan recepción y custodia identificadas. Mantener municipal separado y no mostrar sus campos logísticos en T-01.
 
 Referencias: `PreparacionTiendaWorkspaceTest`, `SolicitudRegistrarTiendaTest`, `RecogeTiendaFlujoTest`, `RecorridoTiendaIntegralTest` y pruebas de `PrepararApartadoRecoge`, modal y ajustes.
 
@@ -119,3 +121,39 @@ La sección de pago/entrega vuelve a estar accesible después de confirmar el ap
 La ejecución exploratoria amplia de ControlPedidos (596 pruebas) detectó 21 errores, 12 fallos, dos omitidas y una riesgosa antes de las correcciones enfocadas. Dos de esos bloqueos antiguos de reenvío quedaron resueltos en la preparación de prueba y pasan en las 159 anteriores; **no se volvió a acreditar toda esa suite como verde**. La ejecución amplia inicial de interfaz también mostró dos fallos de elegibilidad de paquetería en `modalElegibilidadCedisPdv.test.jsx`, fuera de los nueve archivos verificados aquí. Conservar estos pendientes visibles; este cierre no los borra ni afirma que sean inocuos.
 
 Pendiente de comprobación operativa: recorrido autenticado con usuarios reales de Ventas, Auxiliar PDV, CEDIS y Auditoría en el ambiente destinado a aceptación. Las pruebas HTTP/servicios, concurrencia y renderizado aislado aportan evidencia separada; ninguna se etiqueta como una sesión real de esos usuarios.
+
+### Seguimiento de modales — 4 de noviembre de 2026
+
+- `flujoCapturaPedido.js` concentra la selección: las marcas de captura actual abren Registrar pedidos; un borrador sin solicitud, sin origen y sin operación previa también continúa ahí. La fecha o `usa_preparacion_tienda` por sí solos no convierten un pedido del piloto. Se conserva la recuperación local anterior y el segmento municipal/nacional.
+- El borrador 20261004 se diagnosticó por lectura: no tenía solicitud ni origen; esa ausencia lo enviaba al formulario anterior. La corrección cambia la selección al abrir; no migra filas ni modifica pedidos por su fecha.
+- Registro, CEDIS y Auditoría reutilizan `ConsultaSolicitudTienda` para la respuesta del flujo actual: disponibilidad, revisión física y evidencias con los componentes de Registrar pedidos. Es consulta: no permite cerrar ni solicitar ajustes. Los modales conservan sus acciones y datos propios; esto no constituye una sustitución de todos los modales especializados de logística.
+- Referencia visual: `FormularioRegistrarTienda.jsx` y sus paneles existentes, conservando tema, fuente y acento. Reproducción de las 16 vistas aisladas en `scripts/qa/tienda-recorrido/README.md`. Queda pendiente validar el recorrido autenticado de edición, guardado y consulta entre responsables.
+
+### Estados de consulta y preparación — 4 de noviembre de 2026
+
+Decisión del usuario: distinguir la respuesta a una consulta de disponibilidad de la confirmación física del apartado o del pesaje. Para la consulta de Tienda y CEDIS, presentar «Pendiente de respuesta» y «Consulta respondida», sin variar por departamento. Las nomenclaturas de separación/pesaje siguen correspondiendo a su proceso físico; no usar «Pesaje listo — cotizar envío» para una respuesta de Tienda.
+
+Las etiquetas se calculan automáticamente con la revisión o respuesta persistida, incluso cuando la fase general todavía sea PESAJE_PENDIENTE. Responder con excepciones también constituye una respuesta; no equivale a cerrar consulta, apartar, pagar ni entregar. «Apartado confirmado» tiene etiqueta gráfica propia y requiere la confirmación física o el estado de apartado guardado; una foto, una tarea en atención o una consulta respondida no lo activan. Una actualización pendiente explícita conserva la indicación de respuesta pendiente. Las fases posteriores y los envíos que sí requieren pesaje mantienen sus estados operativos.
+
+Implementación compartida en `pedidosBmaStyles.js`, consumida por listado, detalle, encabezados de edición, CEDIS, Auditoría, Delegado y texto para compartir. No renombra fases persistidas ni modifica permisos, transiciones o tareas de los responsables. Las entradas históricas de bitácora conservan el estado que registraron.
+
+Comprobación aislada: tabla real con siete casos en escritorio/móvil, claro personalizado/oscuro; `scripts/qa/tienda-recorrido/verificar-estados.mjs`. Pruebas de derivación, actualización de respuesta, apartado independiente y preservación de logística. No acredita operación autenticada entre responsables.
+
+
+### T-01 — pago al recoger y confirmación del conjunto (4 de noviembre de 2026)
+
+Decisión posterior del usuario, prevalente sobre las reglas anteriores de captura individual y cobro presencial en GELIA para T-01:
+
+- Al cerrar una consulta en fase pendiente, se persiste el avance a la fase existente PESAJE_RESPONDIDO y se registra el cambio en el historial. La presentación contextual es «Separación aprobada» cuando no corresponde pesaje y «Pesaje respondido» cuando sí corresponde. La confirmación física posterior conserva «Apartado confirmado», con color propio.
+- El cierre avisa al auxiliar asignado para separar el pedido aprobado. Para T-01 documental ya cerrado, confirmar el apartado no exige productos, SKU, cantidades ni otra fotografía de disponibilidad. Conserva el documento, la revisión aprobada, los atributos y las excepciones anteriores; no inventa un total de piezas ni afirma sincronización de inventario. La carátula identifica el conjunto por su pedido y consulta aprobada. Los flujos legados y otras modalidades conservan sus controles.
+- Pago al recoger guarda la modalidad y su instante inicial; no registra un cobro, banco ni comprobante en GELIA. El resumen y el listado indican «Se paga en tienda». Si ya existen pagos de otra captura, se conservan y pueden consultarse; no se borran al cambiar de modalidad ni se permite liberar como impago un pedido con pagos activos.
+- La vigencia comienza al confirmar esa modalidad: hasta las 17:00 entre semana y las 13:00 el sábado, con inicio sabatino a las 09:00. Se guarda en servidor y se muestra un contador; guardar la misma modalidad no lo reinicia ni renueva un apartado vencido. El contador no entrega ni libera automáticamente.
+- El auxiliar asignado confirma que PDV recibió el pago y registra receptor, número de remisión y fotografía al entregar. Puede adjuntar el ticket de remisión de forma opcional. Se conservan actor, fecha, documentos y evento, y el pedido pasa a Entregado. No crea una exhibición ni pasa por Auditoría/CEDIS. La operación se valida por instrucción vigente, versión y ausencia de ajustes pendientes; un reintento no duplica documentos ni eventos.
+- El auxiliar puede liberar explícitamente un apartado impago indicando el motivo. Registra el retorno, libera únicamente compromisos existentes, conserva documentos y eventos, cambia la etiqueta a «Apartado liberado» y avisa a la vendedora. No admite entrega posterior ni nuevas ediciones de la venta: se utiliza la fase terminal existente Cancelado, presentada como «Apartado liberado». No admite liberación como impago de mercancía con cobro, remisión o SAF ya aplicado.
+- Al entregar se aplican las reservas de SAF existentes una sola vez, sin crear una exhibición de cobro. Al liberar el apartado impago se devuelven las reservas pendientes al disponible, conservando los movimientos y aplicaciones liberadas.
+- Los importes ocultan envío/reexpedición sin cargo o envío realizado y seguro sin aplicación. SAF conserva su alcance y validación, con checkbox GELIA. No se eliminan cargos existentes.
+- Las peticiones Axios del flujo usan la cookie XSRF vigente; se retiró la cabecera manual X-CSRF-TOKEN tomada del meta, que Laravel prioriza sobre la cookie y podía quedar obsoleta. Un 419 informa que la operación no quedó confirmada y pide recargar. No se excluyen rutas de la protección CSRF ni se reintenta automáticamente un cobro.
+
+Comprobación: 84 pruebas de servidor (768 aserciones), 37 de interfaz y 12 vistas renderizadas de importes/separación/entrega en escritorio y móvil, claro personalizado y oscuro. Las pruebas de servidor usan SQLite en memoria; se aíslan de la caché de rutas de la aplicación mediante `APP_ROUTES_CACHE=/tmp/gelia-t01-test-routes.php`. Se verificaron aviso al auxiliar y aviso de liberación a la vendedora, permisos, confirmación sin líneas e idempotencia de entrega/liberación. Referencia de composición: Registrar pedidos y paneles vigentes de GELIA.
+
+Referencias visuales: [importes móvil](../resources/design-references/tienda-t01/t01-importes-movil-claro.png), [separación escritorio](../resources/design-references/tienda-t01/t01-separacion-escritorio-oscuro.png), [entrega móvil](../resources/design-references/tienda-t01/t01-entrega-movil-oscuro.png). Las doce capturas y su informe están en `resources/design-references/tienda-t01/`; reproducción con `scripts/qa/tienda-recorrido/verificar-t01.mjs`. Son datos ficticios y transporte simulado, no una sesión autenticada. Queda pendiente corroborar el recorrido real y la desaparición del 419 en la sesión donde se reportó.

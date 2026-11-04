@@ -1,3 +1,4 @@
+import ConsultaSolicitudTienda from '../../Partials/ConsultaSolicitudTienda';
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { router, usePage } from '@inertiajs/react';
@@ -181,7 +182,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
     const fase = pedido.estatus?.fase_ciclo;
     const badge = badgeAuditoriaRevision(pedido) || badgeAuditoriaSemantico(fase, pedido.es_resguardo);
     const badgeHito = badgeHitoAuditoria(pedido.hito_auditoria);
-    const badgeEnvio = badgeEstatusEnvio(pedido.estatus_envio, {
+    const badgeEnvio = badgeEstatusEnvio(pedido.estatus_envio, { pedido,
         faseCiclo: fase,
         respondeTienda: Boolean(pedido.usa_preparacion_tienda),
     });
@@ -476,7 +477,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                     <h3 className="gelia-pedidos-seccion-titulo">Envío y costos</h3>
                                     <div className="grid grid-cols-2 gap-4 mb-3">
                                         <Campo label="Tipo operación" value={pedido.tipo_operacion_envio?.nombre} />
-                                        <Campo label="Estatus envío" value={etiquetaEstatusEnvio(pedido.estatus_envio, { respondeTienda: Boolean(pedido.usa_preparacion_tienda) }) || pedido.estatus_envio} />
+                                        <Campo label="Estatus envío" value={etiquetaEstatusEnvio(pedido.estatus_envio, { pedido, respondeTienda: Boolean(pedido.usa_preparacion_tienda) }) || pedido.estatus_envio} />
                                     </div>
                                     {badgeEnvio && (
                                         <span className={`${badgeEnvio.className} mb-3 inline-flex`} style={badgeEnvio.style}>{badgeEnvio.label}</span>
@@ -893,6 +894,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                         <p className="text-xs theme-text-muted font-bold italic">Sin remisión adjunta</p>
                                     )}
                                 </section>
+                                <ConsultaSolicitudTienda pedido={pedido} />
                                 {fichaTienda ? (
                                 <details
                                     id="auditoria-mas"

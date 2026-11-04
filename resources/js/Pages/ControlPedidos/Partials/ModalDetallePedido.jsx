@@ -1,3 +1,5 @@
+import ConsultaSolicitudTienda from './ConsultaSolicitudTienda';
+import { esCapturaTienda } from './flujoCapturaPedido';
 import usePedidoDialog from './usePedidoDialog';
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -55,6 +57,7 @@ export default function ModalDetallePedido({ abierto, onClose, pedido }) {
     if (!abierto || !pedido) return null;
 
     const opcionesEstatus = {
+        pedido,
         esResguardo: pedido.es_resguardo,
         requiereLogistica: pedidoRequiereLogistica(pedido),
     };
@@ -66,7 +69,10 @@ export default function ModalDetallePedido({ abierto, onClose, pedido }) {
     const evidenciasApartado = (pedido.documentos || []).filter((d) => d.tipo === 'evidencia_apartado');
     const badgeFisico = pedido.estado_fisico_general ? badgeEstadoFisico(pedido.estado_fisico_general) : null;
     const badgesSla = badgesRetrasoSla(pedido);
-    const respondeTienda = Boolean(pedido.usa_preparacion_tienda);
+    const capturaActual = esCapturaTienda(pedido);
+    const respondeTienda = capturaActual
+        ? pedido.solicitud_preparacion.area_revision === 'preparacion_tienda'
+        : Boolean(pedido.usa_preparacion_tienda);
     const snap = pedido.direccion_vigente || pedido.direccionVigente;
 
     return createPortal(
@@ -142,20 +148,20 @@ export default function ModalDetallePedido({ abierto, onClose, pedido }) {
                         <div className="min-w-0 space-y-4">
                         <section id="detalle-respuesta" tabIndex={-1} className="space-y-3">
                             <dl className="gelia-pedidos-resumen">
-                                <div><dt>{respondeTienda ? 'Respuesta de Tienda' : 'Respuesta CEDIS'}</dt><dd>{pedido.pesaje_respondido_at ? 'Recibida' : (pedido.resguardo_apartado_at ? 'Apartado confirmado' : 'Pendiente')}</dd></div>
-                                <div><dt>{pedidoRequiereLogistica(pedido) ? 'Peso cobrado' : 'Bultos aproximados'}</dt><dd>{pedidoRequiereLogistica(pedido) ? `${pedido.peso_cobrado_guia_kg ?? '—'} kg` : (pedido.numero_cajas ?? '—')}</dd></div>
+                                <div><dt>{respondeTienda ? 'Respuesta de Tienda' : 'Respuesta CEDIS'}</dt><dd>{pedido.solicitud_preparacion?.revision_disponibilidad || pedido.tarea_preparacion?.respuesta?.respondida || pedido.pesaje_respondido_at ? 'Recibida' : (pedido.resguardo_apartado_at ? 'Apartado confirmado' : 'Pendiente')}</dd></div>
+                                {capturaActual ? <div><dt>Consulta</dt><dd>{pedido.consulta_cerrada || pedido.consulta_cerrada_at ? 'Cerrada' : 'Abierta'}</dd></div> : <div><dt>{pedidoRequiereLogistica(pedido) ? 'Peso cobrado' : 'Bultos aproximados'}</dt><dd>{pedidoRequiereLogistica(pedido) ? `${pedido.peso_cobrado_guia_kg ?? '—'} kg` : (pedido.numero_cajas ?? '—')}</dd></div>}
                                 <div><dt>Total a cobrar</dt><dd>{formatearMoneda(pedido.total_a_cobrar)}</dd></div>
                             </dl>
-                        <SeccionRevisionFisicaPedido
+                        {capturaActual ? <ConsultaSolicitudTienda pedido={pedido} /> : <SeccionRevisionFisicaPedido
                             pedido={pedido}
                             titulo={respondeTienda ? 'Revisión física de Tienda' : undefined}
                             onVerDoc={setDocPreview}
                             onVerGaleria={(documentos, indice) => setDocPreview({ documentos, indice })}
                             puedeAtender={puedeAtender}
                             puedeCancelar={Boolean(pedido?.puede_cancelar)}
-                        />
+                        />}
 
-                            {!pedido.estado_fisico_general && !(pedido.revisiones_producto || pedido.revisionesProducto || []).length && !pedido.pesaje_respondido_at && (
+                            {!capturaActual && !pedido.estado_fisico_general && !(pedido.revisiones_producto || pedido.revisionesProducto || []).length && !pedido.pesaje_respondido_at && (
                                 <p className="text-sm theme-text-muted m-0 px-1">La revisión y sus evidencias aparecerán aquí cuando {respondeTienda ? 'Tienda registre su respuesta' : 'CEDIS registre su respuesta'}.</p>
                             )}
                         </section>

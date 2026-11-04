@@ -199,13 +199,13 @@ it('en la consulta de tienda responde disponibilidad y separa solo la selección
     expect(container.querySelector('#tienda-productos')).not.toBeNull();
     expect(container.querySelector('#tienda-evidencias')).toBeNull();
     await mount({ tarea: { ...consulta, pedido: { ...consulta.pedido, revision_disponibilidad: { estado: 'excepciones_pendientes' }, excepciones: [{ id: 1, descripcion: 'Crema agotada' }] } } });
-    expect(button('Confirmar separación')).toBeUndefined();
+    expect(button('Confirmar pedido separado')).toBeUndefined();
     expect(button('Enviar respuesta de disponibilidad')).toBeUndefined();
     expect(container.textContent).toContain('Ventas está revisando');
     await mount({ tarea: { ...consulta, pedido: { ...consulta.pedido, consulta_cerrada: true, revision_disponibilidad: { estado: 'excepciones_pendientes', aceptacion_vigente: true }, excepciones: [{ id: 1, descripcion: 'Crema agotada' }] } } });
-    expect(button('Confirmar separación')).toBeDefined();
+    expect(button('Confirmar pedido separado')).toBeDefined();
     await mount({ tarea: { ...consulta, pedido: { ...consulta.pedido, consulta_cerrada: true, revision_disponibilidad: { estado: 'sin_excepciones', aceptacion_vigente: true } } } });
-    expect(button('Confirmar separación')).toBeDefined();
+    expect(button('Confirmar pedido separado')).toBeDefined();
 });
 it('en móvil abre el pedido de referencia y vuelve a productos sin perder las cantidades', async () => {
     const media = window.matchMedia;
@@ -223,4 +223,12 @@ it('en móvil abre el pedido de referencia y vuelve a productos sin perder las c
         await click('Guardar y continuar después');
         expect(post.mock.calls[0][1].lineas[0].cantidad).toBe(1);
     } finally { window.matchMedia = media; }
+});
+it('después del cierre confirma el conjunto aprobado sin volver a pedir productos',async()=>{
+ await mount({tarea:{...tarea,modalidad:{codigo:'RECOGE_TIENDA'},pedido:{area_revision:'preparacion_tienda',consulta_cerrada:true,revision_disponibilidad:{estado:'sin_excepciones'},es_t01_documental:true}}});
+ expect(container.textContent).not.toContain('Registrar productos');
+ expect(button('Elegir crema')).toBeUndefined();
+ await click('Confirmar pedido separado');
+ expect(post).toHaveBeenCalledTimes(1);
+ expect(post.mock.lastCall[1].lineas).toEqual([]);
 });

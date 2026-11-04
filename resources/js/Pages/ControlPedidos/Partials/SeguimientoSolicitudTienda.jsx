@@ -32,12 +32,12 @@ const MOTIVOS_RETIRO = [
 function cabeceras() {
     return {
         Accept: 'application/json',
-        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '',
         'X-Requested-With': 'XMLHttpRequest',
     };
 }
 
 function mensajeDe(error, reserva) {
+    if (error?.response?.status === 419) return 'La sesión cambió o venció. Recargue GELIA antes de volver a guardar; no se confirmó la operación.';
     const datos = error?.response?.data;
     const lista = datos?.errors ? Object.values(datos.errors).flat() : [];
     return lista[0] || datos?.message || reserva;
@@ -732,6 +732,7 @@ export default function SeguimientoSolicitudTienda({
     consultaCerrada = false,
     onConsultaCerrada,
     onSolicitud,
+    soloLectura = false,
 }) {
     const [solicitud, setSolicitud] = useState(pedido?.solicitud_preparacion || {});
     const [aviso, setAviso] = useState('');
@@ -745,7 +746,7 @@ export default function SeguimientoSolicitudTienda({
     }, [pedido, marcaRespuesta]);
     const emitida = respuestaDeTiendaEmitida({ ...pedido, solicitud_preparacion: solicitud });
     const estado = solicitud?.revision_disponibilidad?.estado;
-    const puedeConfirmar = emitida && !consultaCerrada && Boolean(pedido?.puede_cerrar_consulta);
+    const puedeConfirmar = !soloLectura && emitida && !consultaCerrada && Boolean(pedido?.puede_cerrar_consulta);
     const causaCierre = pedido?.motivo_bloqueo_cierre
         || (solicitud?.revision_disponibilidad?.aceptacion_vigente === false ? 'Hay un ajuste pendiente. La aceptación de esta versión no sigue vigente.' : '')
         || ((solicitud?.retiro_piezas || []).some((retiro) => (retiro?.estado || 'pendiente') === 'pendiente') ? 'Hay un retiro pendiente de atención por el auxiliar.' : '');
@@ -772,7 +773,7 @@ export default function SeguimientoSolicitudTienda({
                 revisiones={revisiones}
                 onVer={(documentos, indice) => setVista({ documentos, indice })}
             />
-            {!consultaCerrada && (
+            {!soloLectura && !consultaCerrada && (
                 <AjustePiezas
                     pedidoId={pedidoId}
                     pedido={pedido}

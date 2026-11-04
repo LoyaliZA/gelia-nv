@@ -42,6 +42,7 @@ import { archivosImagenDesdeClipboard } from './archivosDesdeClipboard';
 import { claseEtiquetaLista } from '../../Solicitudes/Partials/solicitudesStyles';
 import { GELIA_ESTADO_VIVO_TONO } from '../../../utils/geliaTheme';
 import ContinuidadTienda from './ContinuidadTienda';
+import { badgesListaPedido } from './pedidosListadoUi';
 import useActualizacionesPedidos from './useActualizacionesPedidos';
 import SeguimientoSolicitudTienda, { respuestaDeTiendaEmitida } from './SeguimientoSolicitudTienda';
 
@@ -100,12 +101,12 @@ const OPCIONES_MODALIDAD = [
 function cabeceras() {
     return {
         Accept: 'application/json',
-        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '',
         'X-Requested-With': 'XMLHttpRequest',
     };
 }
 
 function mensajeDe(error, reserva) {
+    if (error?.response?.status === 419) return 'La sesión cambió o venció. Recargue GELIA antes de volver a guardar; no se confirmó la operación.';
     const datos = error?.response?.data;
     const lista = datos?.errors ? Object.values(datos.errors).flat() : [];
     return lista[0] || datos?.message || reserva;
@@ -819,11 +820,14 @@ export default function FormularioRegistrarTienda({
                             Gestión de pedidos{pedido?.folio ? ` · ${pedido.folio}` : ''}
                         </p>
                         <h2 id="registrar-tienda-titulo" className={GELIA_MODAL_TITLE}>
-                            Registrar pedido
+                            {pedidoInicial?.id ? 'Editar pedido' : 'Registrar pedido'}
                         </h2>
                         <p className="registrar-tienda-descripcion">
                             Captura el pedido y elige el destino de la revisión.
                         </p>
+                        {pedido?.estatus && <div className="flex flex-wrap gap-1.5 mt-2" aria-label="Estado del pedido" aria-live="polite">
+                            {badgesListaPedido(pedido).slice(0, 2).map((badge) => <span key={badge.key} className={badge.className} style={badge.style}>{badge.label}</span>)}
+                        </div>}
                     </div>
                     <button
                         type="button"

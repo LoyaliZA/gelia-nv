@@ -6,12 +6,12 @@ import ImportesPagoTienda from './ImportesPagoTienda';
 function cabeceras() {
     return {
         Accept: 'application/json',
-        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '',
         'X-Requested-With': 'XMLHttpRequest',
     };
 }
 
 function mensajeDe(error, reserva) {
+    if (error?.response?.status === 419) return 'La sesión cambió o venció. Recargue GELIA antes de volver a guardar; no se confirmó la operación.';
     const datos = error?.response?.data;
     const lista = datos?.errors ? Object.values(datos.errors).flat() : [];
     return lista[0] || datos?.message || reserva;

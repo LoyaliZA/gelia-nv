@@ -47,6 +47,9 @@ final class PlazoApartadoTienda
             return $this->rechazo(self::MOTIVO_VENCIDO, self::MENSAJE_VENCIDO, $fechaLimite->copy());
         }
 
+        if ($local->isSaturday() && $local->hour < 9) {
+            return $this->rechazo(self::MOTIVO_CIERRE, 'El horario sabatino de apartado comienza a las 09:00.', null);
+        }
         $corte = $this->corteDelDia($local);
         if ($corte === null || $momento->greaterThanOrEqualTo($corte)) {
             return $this->rechazo(self::MOTIVO_CIERRE, self::MENSAJE_CIERRE, $corte);

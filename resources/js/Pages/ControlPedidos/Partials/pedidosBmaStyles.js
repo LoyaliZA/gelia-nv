@@ -123,7 +123,47 @@ export const etiquetaResguardoVisible = (estatus, esResguardo = false) => {
     return Boolean(fase) && !['BORRADOR', 'PESAJE_PENDIENTE', 'PESAJE_RESPONDIDO', 'RECHAZADO_VENDEDORA'].includes(fase);
 };
 
-export const etiquetaEstatusPedido = (estatus, { esResguardo = false, requiereLogistica = true } = {}) => {
+/** Consulta y apartado son hechos distintos; las etiquetas se derivan de la respuesta guardada. */
+export const estadoConsultaPedido = (pedido) => {
+    if (!pedido) return null;
+    const solicitud = pedido.solicitud_preparacion || {};
+    const tarea = pedido.tarea_preparacion;
+    const consultaTienda = !['municipal', 'nacional'].includes(solicitud.modalidad_entrega)
+        && (['preparacion_tienda', 'control_pedidos'].includes(solicitud.area_revision) || solicitud.modalidad_entrega === 'tienda');
+    const esConsulta = consultaTienda || cedisConsultaEsRevisionMercancia(pedido);
+    if (!esConsulta) return null;
+    const fase = pedido.estatus?.fase_ciclo;
+    const enviada = Boolean(tarea || pedido.pesaje_solicitado_at || solicitud.revision_disponibilidad
+        || ['PESAJE_PENDIENTE', 'PESAJE_RESPONDIDO'].includes(fase)
+        || ['pendiente_pesaje', 'pesaje_listo', 'apartado_confirmado'].includes(pedido.estatus_envio));
+    if (!enviada) return null;
+    const respondida = ['sin_excepciones', 'excepciones_pendientes', 'decision_registrada'].includes(solicitud.revision_disponibilidad?.estado)
+        || ['sin_excepciones', 'excepciones_pendientes', 'decision_registrada'].includes(tarea?.respuesta?.revision?.estado)
+        || tarea?.respuesta?.respondida === true
+        || Boolean(pedido.pesaje_respondido_at)
+        || ['pesaje_listo', 'apartado_confirmado'].includes(pedido.estatus_envio)
+        || fase === 'PESAJE_RESPONDIDO';
+    return pedido.consulta_actualizacion_pendiente ? 'pendiente' : (respondida ? 'respondida' : 'pendiente');
+};
+
+export const apartadoConfirmadoPedido = (pedido) => Boolean(pedido && (
+    pedido.estatus_envio === 'apartado_confirmado'
+    || pedido.tarea_preparacion?.respuesta?.apartado_confirmado === true
+));
+
+const etiquetaConsultaPedido = (pedido) => {
+    if (pedido?.consulta_cerrada || pedido?.consulta_cerrada_at) {
+        return cedisConsultaEsRevisionMercancia(pedido) || pedido?.solicitud_preparacion?.modalidad_entrega === 'tienda'
+            ? 'Separación aprobada' : 'Pesaje respondido';
+    }
+    return estadoConsultaPedido(pedido) === 'respondida' ? 'Consulta respondida' : 'Pendiente de respuesta';
+};
+
+export const etiquetaEstatusPedido = (estatus, { esResguardo = false, requiereLogistica = true, pedido = null } = {}) => {
+    if (pedido?.estatus_envio === 'apartado_liberado') return 'Apartado liberado';
+    if (['PESAJE_PENDIENTE', 'PESAJE_RESPONDIDO'].includes(estatus?.fase_ciclo) && (estadoConsultaPedido(pedido) || pedido?.consulta_cerrada || pedido?.consulta_cerrada_at)) {
+        return etiquetaConsultaPedido(pedido);
+    }
     if (etiquetaResguardoVisible(estatus, esResguardo)) {
         return 'Resguardo';
     }
@@ -219,9 +259,14 @@ export const LABELS_ESTATUS_ENVIO = {
     consolidado: 'Consolidado',
     pendiente_pesaje: 'Pendiente de pesaje CEDIS',
     pesaje_listo: 'Pesaje listo — cotizar envío',
+    apartado_confirmado: 'Apartado confirmado',
+    apartado_liberado: 'Apartado liberado',
 };
 
-export const etiquetaEstatusEnvio = (estatusEnvio, { respondeTienda = false } = {}) => {
+export const etiquetaEstatusEnvio = (estatusEnvio, { respondeTienda = false, pedido = null } = {}) => {
+    if (['pendiente_pesaje', 'pesaje_listo', 'apartado_confirmado'].includes(estatusEnvio) && estadoConsultaPedido(pedido)) {
+        return apartadoConfirmadoPedido(pedido) ? 'Apartado confirmado' : etiquetaConsultaPedido(pedido);
+    }
     if (!estatusEnvio) return estatusEnvio;
     if (estatusEnvio === 'pendiente_pesaje' && respondeTienda) {
         return 'Pendiente de respuesta de Tienda';
@@ -388,7 +433,20 @@ export const badgeEstadoFisico = (estado) => {
     };
 };
 
-export const badgeEstatusEnvio = (estatusEnvio, { faseCiclo = null, forzarPesaje = false, respondeTienda = false } = {}) => {
+export const badgeEstatusEnvio = (estatusEnvio, { faseCiclo = null, forzarPesaje = false, respondeTienda = false, pedido = null } = {}) => {
+    const consulta = estadoConsultaPedido(pedido);
+    if (estatusEnvio === 'apartado_liberado') return null;
+    const fase = faseCiclo || pedido?.estatus?.fase_ciclo;
+    const finalizado = ['ENTREGADO', 'ENVIADO', 'CANCELADO'].includes(fase);
+    if (estatusEnvio === 'apartado_confirmado' && finalizado) return null;
+    if (apartadoConfirmadoPedido(pedido) && !finalizado) {
+        return { label: 'Apartado confirmado', ...badgeClaseEstatusPedido({ color_hex: 'var(--color-exito)' }) };
+    }
+    if (consulta && ['pendiente_pesaje', 'pesaje_listo'].includes(estatusEnvio)) {
+        if (!forzarPesaje && ['PESAJE_PENDIENTE', 'PESAJE_RESPONDIDO'].includes(faseCiclo)) return null;
+        if (!forzarPesaje && !esFasePreVenta(faseCiclo)) return null;
+        return { label: etiquetaConsultaPedido(pedido), ...badgeClaseEstatusPedido({ color_hex: consulta === 'respondida' || pedido?.consulta_cerrada || pedido?.consulta_cerrada_at ? 'var(--color-exito)' : 'var(--color-aviso)' }) };
+    }
     if (!estatusEnvio || estatusEnvio === 'completo') return null;
     // Pesaje no debe encimarse con fases posteriores (salvo vista CEDIS / forzarPesaje).
     if (['pendiente_pesaje', 'pesaje_listo'].includes(estatusEnvio)
@@ -411,10 +469,11 @@ export const badgeEstatusEnvio = (estatusEnvio, { faseCiclo = null, forzarPesaje
         consolidado: '#14B8A6',
         pendiente_pesaje: '#F97316',
         pesaje_listo: '#10B981',
+        apartado_confirmado: 'var(--color-exito)',
     };
     const hex = colores[estatusEnvio] || '#94A3B8';
     return {
-        label: etiquetaEstatusEnvio(estatusEnvio, { respondeTienda }),
+        label: etiquetaEstatusEnvio(estatusEnvio, { respondeTienda, pedido }),
         ...badgeClaseEstatusPedido({ color_hex: hex }),
     };
 };
@@ -617,7 +676,7 @@ export const badgeResguardoSemantico = () => ({
 });
 
 export const badgeResguardoApartado = () => ({
-    label: 'Apartado',
+    label: 'Apartado confirmado',
     ...badgeClaseEstatusPedido({ color_hex: '#0EA5E9' }),
 });
 
@@ -706,12 +765,17 @@ export const tieneErrorGuiaReportado = (pedido) => {
 };
 
 /** Badge con color del catálogo + etiqueta semántica del estado. */
-export const badgeEstatusPedido = (estatus, { esResguardo = false, requiereLogistica = true } = {}) => {
+export const badgeEstatusPedido = (estatus, { esResguardo = false, requiereLogistica = true, pedido = null } = {}) => {
+    const consulta = estadoConsultaPedido(pedido);
+    if (pedido?.estatus_envio === 'apartado_liberado') return { label: 'Apartado liberado', ...badgeClaseEstatusPedido({ color_hex: 'var(--color-aviso)' }) };
+    if ((consulta || pedido?.consulta_cerrada || pedido?.consulta_cerrada_at) && ['PESAJE_PENDIENTE', 'PESAJE_RESPONDIDO'].includes(estatus?.fase_ciclo)) {
+        return { label: etiquetaConsultaPedido(pedido), ...badgeClaseEstatusPedido({ color_hex: consulta === 'respondida' || pedido?.consulta_cerrada || pedido?.consulta_cerrada_at ? 'var(--color-exito)' : 'var(--color-aviso)' }) };
+    }
     if (etiquetaResguardoVisible(estatus, esResguardo)) {
         return badgeResguardoSemantico();
     }
     return {
-        label: etiquetaEstatusPedido(estatus, { esResguardo, requiereLogistica }),
+        label: etiquetaEstatusPedido(estatus, { esResguardo, requiereLogistica, pedido }),
         ...badgeClaseEstatusPedido(estatus),
     };
 };
@@ -1202,6 +1266,7 @@ export const textoWhatsAppPedido = (pedido) => {
         `Cliente: ${pedido.cliente?.nombre || ''}`,
         `Total: ${formatearMoneda(pedido.total_a_cobrar)}`,
         `Estado: ${etiquetaEstatusPedido(pedido.estatus, {
+            pedido,
             esResguardo: pedido.es_resguardo,
             requiereLogistica: pedidoRequiereLogistica(pedido),
         })}`,
@@ -1461,3 +1526,5 @@ export const validarCamposEnvioPedido = (data, {
         mensaje: faltantes.length ? 'Hay campos faltantes.' : null,
     };
 };
+
+export const montoVentaPedido = (pedido) => (pedido?.es_t01_documental && pedido?.solicitud_preparacion?.cobertura_tienda?.tipo === 'apartado') ? 'Se paga en tienda' : formatearMoneda(pedido?.total_a_cobrar);

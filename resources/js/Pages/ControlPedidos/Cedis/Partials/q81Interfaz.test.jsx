@@ -29,7 +29,7 @@ it('distingue tipo, almacén, destino, recorrido y folios en un traslado sin gu�
 it('mantiene la consulta y bloquea empaque y salida mientras hay actualización pendiente', async () => {
     const responder = vi.fn();
     await renderTarjeta({ estatus_envio: 'pendiente_pesaje', consulta_actualizacion_pendiente: true }, { onResponderPesaje: responder });
-    expect(container.textContent).toContain('Pendiente de consulta de mercancía');
+    expect(container.textContent).toContain('Pendiente de respuesta');
     expect(container.textContent).not.toContain('Pendiente de pesaje CEDIS');
     const botones = [...container.querySelectorAll('button')];
     expect(botones.some((b) => b.textContent.includes('Marcar empacado'))).toBe(false);

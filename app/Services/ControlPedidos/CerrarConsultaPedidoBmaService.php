@@ -44,7 +44,15 @@ class CerrarConsultaPedidoBmaService
 
         return DB::transaction(function () use ($pedido, $usuarioId) {
             $estatus = $pedido->estatus;
+            $yaCerrada = $pedido->consultaCerrada();
+            $destino = $estatus;
+            if ($estatus->fase_ciclo === \App\Models\ControlPedidos\CatalogoEstatusPedido::FASE_PESAJE_PENDIENTE) {
+                $destino = \App\Models\ControlPedidos\CatalogoEstatusPedido::porFase(\App\Models\ControlPedidos\CatalogoEstatusPedido::FASE_PESAJE_RESPONDIDO);
+                if (! $destino) throw new \RuntimeException('Falta configurar el estado de consulta aprobada.');
+                \App\Support\ControlPedidos\MaquinaEstadosPedidoBma::assertTransicion($estatus->fase_ciclo, $destino->fase_ciclo);
+            }
             $pedido->update([
+                'catalogo_estatus_pedido_id' => $destino->id,
                 'consulta_cerrada_at' => now(),
                 'consulta_cerrada_por_id' => $usuarioId,
                 'consulta_actualizacion_pendiente' => false,
@@ -55,11 +63,20 @@ class CerrarConsultaPedidoBmaService
                 $pedido->id,
                 $usuarioId,
                 $estatus->id,
-                $estatus->id,
+                $destino->id,
                 "{$label} cerrada por Ventas (cliente confirma piezas).",
                 AccionesHistorialPedidoBma::CIERRE_CONSULTA
             );
 
+            if (! $yaCerrada && \App\Support\ControlPedidos\ApartadoT01::aplica($pedido)) {
+                $tarea = \App\Support\ControlPedidos\InstruccionEntrega::abiertas((int) $pedido->id)->first();
+                if ($tarea?->asignada_a_id) {
+                    $auxiliar = \App\Models\User::find($tarea->asignada_a_id);
+                    if ($auxiliar) \Illuminate\Support\Facades\DB::afterCommit(fn () => $auxiliar->notify(new \App\Notifications\AlertaPedidoBma(
+                        $pedido, 'pedido_separacion_aprobada', 'Ventas cerró la consulta. Separe el pedido completo aprobado y confirme el apartado.', ['url' => '/control-pedidos/tienda/tareas/'.$tarea->id]
+                    )));
+                }
+            }
             return $pedido->fresh([
                 'cliente', 'estatus', 'documentos', 'cajas.tipoCaja', 'cajas.tipoGuia', 'origen',
             ]);

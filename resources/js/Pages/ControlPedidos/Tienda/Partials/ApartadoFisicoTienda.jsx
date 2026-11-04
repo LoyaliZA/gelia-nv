@@ -1,10 +1,11 @@
+import EntregaApartadoT01 from './EntregaApartadoT01';
 import React, { useState } from 'react';
 import { Banknote } from 'lucide-react';
 import { router } from '@inertiajs/react';
 import { THEME_INPUT, THEME_LABEL, THEME_SELECT, THEME_TEXTAREA } from '../../../../utils/geliaTheme';
 import { BTN_PRIMARY, BTN_SECONDARY, formatearFechaNegocio } from '../../Partials/pedidosBmaStyles';
 
-export default function ApartadoFisicoTienda({ soloSalida = false, onEnviar = null,  tarea, auth, config = {}, eventos = [], requisitos = {}, onConfirmarApartado = null }) {
+export default function ApartadoFisicoTienda({ soloSalida = false, onEnviar = null,  tarea, auth, config = {}, eventos = [], requisitos = {}, onConfirmarApartado = null, onDirtyChange = null }) {
     const postOperacion = (url, data, opciones) => onEnviar ? onEnviar(url, data, opciones) : router.post(url, data, opciones);
     const apartado = tarea.apartado;
     const permisos = { includes: (p) => auth?.user?.roles?.includes('Super Admin') || (auth?.user?.permissions || []).includes(p) };
@@ -35,6 +36,7 @@ export default function ApartadoFisicoTienda({ soloSalida = false, onEnviar = nu
     const [evidenciaModalidad, setEvidenciaModalidad] = useState(null);
 
     if (!apartado) return null;
+    if (tarea.pedido?.es_t01_documental) return <EntregaApartadoT01 tarea={tarea} auth={auth} onEnviar={onEnviar} onDirtyChange={onDirtyChange} />;
 
     const separar = () => {
         postOperacion(route('control_pedidos.tienda.apartado.separar', tarea.id), {

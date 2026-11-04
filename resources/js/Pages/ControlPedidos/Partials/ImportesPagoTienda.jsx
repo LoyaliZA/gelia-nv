@@ -3,6 +3,7 @@ import axios from 'axios';
 import { Banknote, Wallet } from 'lucide-react';
 import { THEME_BTN_SECONDARY, THEME_LABEL, THEME_SELECT } from '../../../utils/geliaTheme';
 import InputMoneda from './InputMoneda';
+import VigenciaApartadoTienda from './VigenciaApartadoTienda';
 import SeccionPagosExhibicion from './SeccionPagosExhibicion';
 import { calcularResumenCoberturaPago, formatearMoneda } from './pedidosBmaStyles';
 
@@ -11,12 +12,12 @@ const MEDIOS_TIENDA = ['efectivo', 'tarjeta', 'deposito', 'otro'];
 function cabeceras() {
     return {
         Accept: 'application/json',
-        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '',
         'X-Requested-With': 'XMLHttpRequest',
     };
 }
 
 function mensajeDe(error, reserva) {
+    if (error?.response?.status === 419) return 'La sesión cambió o venció. Recargue GELIA antes de volver a guardar; no se confirmó la operación.';
     const datos = error?.response?.data;
     const lista = datos?.errors ? Object.values(datos.errors).flat() : [];
     return lista[0] || datos?.message || reserva;
@@ -130,7 +131,8 @@ export default function ImportesPagoTienda({
     const reporte = solicitud?.atencion_tienda === 'prevista' && tipoGuardado === 'transferencia'
         ? solicitud?.tienda_md_reporte
         : null;
-    const mostrarCaptura = editable && cobertura === tipoGuardado && (tipoGuardado === 'apartado' || tipoGuardado === 'transferencia');
+    const mostrarCaptura = editable && cobertura === tipoGuardado && tipoGuardado === 'transferencia';
+    const pagoEnPdv = cobertura === 'apartado';
     const mostrarHistorial = tipoGuardado === 'credito' || tipoGuardado === 'apartado' || tipoGuardado === 'transferencia';
 
     const guardarModalidad = async (tipo, dia) => {
@@ -196,7 +198,7 @@ export default function ImportesPagoTienda({
                             className="w-full min-h-[44px]"
                         />
                     </div>
-                    <div className="grid min-w-0 gap-1 min-[32rem]:grid-cols-[minmax(0,1fr)_auto] min-[32rem]:items-center min-[32rem]:gap-4">
+                    {(Number(costos.costo_envio || 0) > 0 || costos.envio_realizado) && <><div className="grid min-w-0 gap-1 min-[32rem]:grid-cols-[minmax(0,1fr)_auto] min-[32rem]:items-center min-[32rem]:gap-4">
                         <span className="text-sm theme-text-muted">Envío</span>
                         <strong className="text-sm theme-text-main">{concepto(costos.costo_envio)}</strong>
                     </div>
@@ -204,16 +206,18 @@ export default function ImportesPagoTienda({
                         <span className="text-sm theme-text-muted">Reexpedición</span>
                         <strong className="text-sm theme-text-main">{Number(costos.costo_envio || 0) > 0 ? 'Incluida en envío, si corresponde' : 'No aplica'}</strong>
                     </div>
-                    <div className="grid min-w-0 gap-1 min-[32rem]:grid-cols-[minmax(0,1fr)_auto] min-[32rem]:items-center min-[32rem]:gap-4">
+                    </>}
+                    {(costos.aplica_seguro || Number(costos.costo_seguro || 0) > 0) && <div className="grid min-w-0 gap-1 min-[32rem]:grid-cols-[minmax(0,1fr)_auto] min-[32rem]:items-center min-[32rem]:gap-4">
                         <span className="text-sm theme-text-muted">Seguro</span>
                         <strong className="text-sm theme-text-main">
                             {costos.aplica_seguro ? concepto(costos.costo_seguro) : 'No aplica'}
                         </strong>
                     </div>
-                    <div className="grid gap-2">
+                    }<div className="grid gap-2">
                         <label className="flex items-center gap-2 text-sm theme-text-main">
                             <input
                                 type="checkbox"
+                                className="gelia-checkbox"
                                 checked={aplicaSaf}
                                 disabled={!editable || cargandoSaf || (!aplicaSaf && disponibleParaPedido <= 0)}
                                 onChange={(evento) => aplicarSaldo(evento.target.checked, disponibleParaPedido)}
@@ -246,7 +250,7 @@ export default function ImportesPagoTienda({
                     <div><dt>Saldo a favor aplicado</dt><dd>− {formatearMoneda(saldoAplicado)}</dd></div>
                     <div><dt>Pagos registrados computables</dt><dd>{formatearMoneda(resumenServidor?.total_pagado || 0)}</dd></div>
                     {Number(resumenServidor?.excedente_generado || anticipo.excedente_generado || 0) > 0 && <div><dt>Excedente del pedido</dt><dd>{formatearMoneda(resumenServidor?.excedente_generado || anticipo.excedente_generado)}</dd></div>}
-                    <div className="registrar-tienda-importes-pendiente"><dt>Importe pendiente por pagar</dt><dd>{formatearMoneda(pendiente)}</dd></div>
+                    <div className="registrar-tienda-importes-pendiente"><dt>{pagoEnPdv ? 'Pago al recoger' : 'Importe pendiente por pagar'}</dt><dd>{pagoEnPdv ? 'Se paga en tienda' : formatearMoneda(pendiente)}</dd></div>
                 </dl>
             </section>
             <section className="registrar-tienda-panel" aria-labelledby="registrar-tienda-pago">
@@ -275,7 +279,7 @@ export default function ImportesPagoTienda({
                         <label className="flex items-start gap-2 text-sm theme-text-main">
                             <input
                                 type="checkbox"
-                                className="mt-1"
+                                className="gelia-checkbox mt-1"
                                 checked={mismoDia}
                                 disabled={!editable || ocupado || !facultadMd}
                                 onChange={(evento) => setMismoDia(evento.target.checked)}
@@ -297,6 +301,8 @@ export default function ImportesPagoTienda({
                         </button>
                     )}
                     {aviso && <p className="text-sm theme-text-main m-0 break-words" role="status">{aviso}</p>}
+                    {pagoEnPdv && <p className="text-sm theme-text-main m-0">El cliente paga y recibe su remisión en PDV. Aquí no se registra el cobro ni se solicita comprobante. El auxiliar registra la entrega con número de remisión y fotografía.</p>}
+                    {tipoGuardado === 'apartado' && <VigenciaApartadoTienda venceAt={solicitud.cobertura_tienda?.vence_at} />}
                     {tipoGuardado === 'credito' && (
                         <p className="text-sm theme-text-main m-0">
                             Crédito{solicitud?.credito_wizerp?.resultado ? `: ${solicitud.credito_wizerp.resultado}` : ''}.
@@ -318,6 +324,7 @@ export default function ImportesPagoTienda({
                             pedidoId={pedidoId}
                             bancos={bancos}
                             puedeRegistrar={mostrarCaptura && importesListos}
+                            ocultarSiVacio={tipoGuardado === 'apartado'}
                             ocultarEncabezado
                             ocultarResumen
                             etiquetaCubrir="Cubrir pendiente"

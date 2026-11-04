@@ -81,14 +81,29 @@ final class RegistrarCoberturaTiendaService
 
             $json['codigo_modalidad'] = $codigo;
             $json['atencion_tienda'] = $mismoDia ? $atencion : 'no';
+            $anterior = $json['cobertura_tienda'] ?? [];
+            $registradaAt = ($anterior['tipo'] ?? '') === $cobertura ? ($anterior['registrada_at'] ?? now()->toIso8601String()) : now()->toIso8601String();
             $json['cobertura_tienda'] = [
                 'tipo' => $cobertura,
                 'confirmada' => false,
-                'registrada_at' => now()->toIso8601String(),
+                'registrada_at' => $registradaAt,
                 'registrada_por_id' => $usuario->id,
             ];
             if (($json['area_revision'] ?? null) === 'control_pedidos' && $cobertura === 'apartado') {
                 $json['origen_apartado'] = 'consulta_cedis_documentada';
+            }
+            $pedido->solicitud_preparacion_json = $json;
+            if ($cobertura === 'apartado' && \App\Support\ControlPedidos\ApartadoT01::aplica($pedido)) {
+                $evaluacion = (new \App\Support\ControlPedidos\PlazoApartadoTienda($this->config))->evaluarConfirmacion(
+                    now(), isset($anterior['vence_at']) && ($anterior['tipo'] ?? '') === 'apartado' ? \Carbon\Carbon::parse($anterior['vence_at']) : null
+                );
+                if (! $evaluacion['permite']) throw ValidationException::withMessages(['cobertura' => $evaluacion['mensaje']]);
+                $json['cobertura_tienda']['vence_at'] = $evaluacion['vence_at']->toIso8601String();
+                $tarea = InstruccionEntrega::abiertas((int) $pedido->id)->first();
+                if ($tarea) {
+                    $tarea->update(['fecha_limite' => $evaluacion['vence_at']]);
+                    $tarea->cumplimientoFisico()->update(['vence_at' => $evaluacion['vence_at']]);
+                }
             }
             $pedido->update([
                 'solicitud_preparacion_json' => $json,

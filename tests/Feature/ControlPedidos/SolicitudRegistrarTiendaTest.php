@@ -67,6 +67,7 @@ class SolicitudRegistrarTiendaTest extends TestCase
                 ['codigo_interno' => $codigo, 'nombre_visual' => $fase, 'color_hex' => '#999999', 'orden' => 1, 'activo' => true]
             );
         }
+        $this->estatusRespondido();
         CatalogoModalidadPreparacionPedido::query()->firstOrCreate(
             ['codigo' => CatalogoModalidadPreparacionPedido::CODIGO_RECOGE_TIENDA],
             ['nombre' => 'Recoge en tienda', 'activo' => true]
@@ -1011,6 +1012,146 @@ class SolicitudRegistrarTiendaTest extends TestCase
         $this->postJson($url.'/apartado/confirmar', ['version' => $tarea->cumplimientoFisico->version, 'lineas' => [['producto_id' => $producto->id, 'cantidad' => 1, 'estado_fisico' => 'bueno']]])->assertOk();
         $this->assertNotNull($pedido->fresh()->consulta_cerrada_at);
         $this->getJson('/control-pedidos/'.$pedido->id.'/pagos')->assertOk()->assertJsonPath('consulta_cerrada', true);
+    }
+
+    public function test_t01_confirma_el_conjunto_sin_transcribir_piezas_y_no_duplica(): void
+    {
+        $tarea = $this->t01Cerrado();
+        $url = '/control-pedidos/tienda/tareas/'.$tarea->id;
+        $version = $tarea->cumplimientoFisico->version;
+        $this->postJson($url.'/apartado/confirmar', ['version' => $version])->assertOk();
+        $this->postJson($url.'/apartado/confirmar', ['version' => $version])->assertOk();
+        $this->assertSame('APARTADO_CONFIRMADO', $tarea->cumplimientoFisico()->first()->estado);
+        $this->assertSame(0, $tarea->productos()->count());
+        $this->assertSame(CatalogoEstatusPedido::FASE_PESAJE_RESPONDIDO, $tarea->pedido->fresh()->estatus->fase_ciclo);
+        $this->assertNull($tarea->pedido->fresh()->cantidad_piezas);
+        $this->assertSame(1, $tarea->documentos()->where('tipo_evidencia', PedidoBmaTareaDocumento::TIPO_CARATULA_RECOGE)->count());
+    }
+
+    public function test_t01_la_modalidad_inicia_vigencia_sin_reiniciarla_al_guardar(): void
+    {
+        $tarea = $this->t01Cerrado();
+        $pedido = $tarea->pedido;
+        $primera = $pedido->fresh()->solicitud_preparacion_json['cobertura_tienda'];
+        $this->assertSame('17:00', \Carbon\Carbon::parse($primera['vence_at'])->timezone('America/Mexico_City')->format('H:i'));
+        $this->travel(30)->minutes();
+        $this->postJson('/control-pedidos/'.$pedido->id.'/cobertura-tienda', ['cobertura' => 'apartado'])->assertOk();
+        $actual = $pedido->fresh()->solicitud_preparacion_json['cobertura_tienda'];
+        $this->assertSame($primera['registrada_at'], $actual['registrada_at']);
+        $this->assertSame($primera['vence_at'], $actual['vence_at']);
+        $this->assertSame($primera['vence_at'], $tarea->fresh()->fecha_limite->toIso8601String());
+    }
+
+    public function test_t01_entrega_con_pago_externo_remision_y_foto_sin_exhibicion(): void
+    {
+        $tarea = $this->t01Cerrado(true);
+        CatalogoEstatusPedido::query()->firstOrCreate(['fase_ciclo' => CatalogoEstatusPedido::FASE_ENTREGADO], ['codigo_interno' => 'ENTREGADO', 'nombre_visual' => 'Entregado', 'color_hex' => '#999999', 'orden' => 20, 'activo' => true]);
+        $url = '/control-pedidos/tienda/tareas/'.$tarea->id.'/apartado/entregar-pdv';
+        $datos = ['version' => $tarea->cumplimientoFisico->version, 'pago_confirmado' => 1, 'numero_remision' => 'PDV-123', 'receptor' => 'Cliente'];
+        $this->postJson($url, $datos)->assertUnprocessable();
+        $this->post($url, [...$datos, 'foto' => UploadedFile::fake()->image('entrega.jpg')], ['Accept' => 'application/json'])->assertOk();
+        $this->post($url, [...$datos, 'foto' => UploadedFile::fake()->image('reintento.jpg')], ['Accept' => 'application/json'])->assertOk();
+        $this->assertSame('ENTREGADA', $tarea->cumplimientoFisico()->first()->estado);
+        $pedido = $tarea->pedido->fresh();
+        $this->assertSame('PDV-123', $pedido->numero_remision);
+        $this->assertSame(CatalogoEstatusPedido::FASE_ENTREGADO, $pedido->estatus->fase_ciclo);
+        $this->assertSame(0, $pedido->pagosExhibicion()->count());
+        $this->assertSame(1, $tarea->documentos()->where('tipo_evidencia', PedidoBmaTareaDocumento::TIPO_EVIDENCIA_ENTREGA)->count());
+    }
+
+    public function test_t01_libera_impago_y_no_permite_entregar_o_liberar_pago_registrado(): void
+    {
+        $tarea = $this->t01Cerrado(true);
+        $url = '/control-pedidos/tienda/tareas/'.$tarea->id.'/apartado/liberar-pdv';
+        $datos = ['version' => $tarea->cumplimientoFisico->version, 'motivo' => 'El cliente no acudió'];
+        $tarea->cumplimientoFisico()->update(['pago_confirmado_at' => now()]);
+        $this->postJson($url, $datos)->assertUnprocessable();
+        $tarea->cumplimientoFisico()->update(['pago_confirmado_at' => null]);
+        $this->postJson($url, $datos)->assertOk();
+        $this->postJson($url, $datos)->assertOk();
+        $this->assertSame('DEVUELTA_ANAQUEL', $tarea->cumplimientoFisico()->first()->estado);
+        $this->assertSame('apartado_liberado', $tarea->pedido->fresh()->estatus_envio);
+    }
+
+    public function test_t01_solo_el_auxiliar_asignado_entrega_o_libera(): void
+    {
+        $tarea = $this->t01Cerrado(true);
+        $otro = User::factory()->create(['departamento_id' => $this->departamento->id]);
+        $otro->givePermissionTo(Permission::findOrCreate('control_pedidos.tienda.apartado.separar', 'web'));
+        $this->actingAs($otro)->postJson('/control-pedidos/tienda/tareas/'.$tarea->id.'/apartado/liberar-pdv', ['version' => $tarea->cumplimientoFisico->version, 'motivo' => 'No acudió'])->assertForbidden();
+        $this->assertSame('APARTADO_CONFIRMADO', $tarea->cumplimientoFisico()->first()->estado);
+    }
+
+    public function test_t01_avisa_al_auxiliar_al_cerrar_y_a_ventas_al_liberar(): void
+    {
+        \Illuminate\Support\Facades\Notification::fake();
+        $tarea = $this->t01Cerrado(true);
+        \Illuminate\Support\Facades\Notification::assertSentTo($this->usuario, \App\Notifications\AlertaPedidoBma::class, fn ($alerta) => $alerta->tipoAlerta === 'pedido_separacion_aprobada');
+        $vendedora = User::factory()->create(['departamento_id' => $this->departamento->id]);
+        $tarea->pedido->update(['vendedor_id' => $vendedora->id]);
+        $this->postJson('/control-pedidos/tienda/tareas/'.$tarea->id.'/apartado/liberar-pdv', ['version' => $tarea->cumplimientoFisico->version, 'motivo' => 'El cliente no acudió'])->assertOk();
+        \Illuminate\Support\Facades\Notification::assertSentTo($vendedora, \App\Notifications\AlertaPedidoBma::class, fn ($alerta) => $alerta->tipoAlerta === 'pedido_apartado_liberado');
+    }
+
+    public function test_t01_entregar_aplica_saf_reservado_una_vez_sin_crear_cobro(): void
+    {
+        $tarea = $this->t01Cerrado(true);
+        $credito = $this->reservarSafT01($tarea->pedido);
+        $url = '/control-pedidos/tienda/tareas/'.$tarea->id.'/apartado/entregar-pdv';
+        $datos = ['version' => $tarea->cumplimientoFisico->version, 'pago_confirmado' => 1, 'numero_remision' => 'PDV-SAF', 'receptor' => 'Cliente'];
+        $this->post($url, [...$datos, 'foto' => UploadedFile::fake()->image('entrega.jpg')], ['Accept' => 'application/json'])->assertOk();
+        $this->post($url, [...$datos, 'foto' => UploadedFile::fake()->image('reintento.jpg')], ['Accept' => 'application/json'])->assertOk();
+        $this->assertEquals(50, $credito->fresh()->monto_aplicado);
+        $this->assertEquals(0, $credito->fresh()->monto_reservado);
+        $this->assertSame('aplicado', $tarea->pedido->safAplicaciones()->first()->estado);
+        $this->assertSame(0, $tarea->pedido->pagosExhibicion()->count());
+    }
+
+    public function test_t01_liberar_devuelve_saf_disponible_y_deja_el_pedido_terminal(): void
+    {
+        $tarea = $this->t01Cerrado(true);
+        $credito = $this->reservarSafT01($tarea->pedido);
+        $this->postJson('/control-pedidos/tienda/tareas/'.$tarea->id.'/apartado/liberar-pdv', ['version' => $tarea->cumplimientoFisico->version, 'motivo' => 'No acudió'])->assertOk();
+        $this->assertEquals(100, $credito->fresh()->monto_disponible);
+        $this->assertEquals(0, $credito->fresh()->monto_reservado);
+        $this->assertSame('liberado', $tarea->pedido->safAplicaciones()->first()->estado);
+        $pedido = $tarea->pedido->fresh();
+        $this->assertEquals(0, $pedido->saldo_a_favor);
+        $this->assertEquals(100, $pedido->total_a_cobrar);
+        $this->assertFalse($pedido->esEditablePorVendedora());
+    }
+
+    private function reservarSafT01(PedidoBma $pedido): \App\Models\SaldosAFavor\SafCredito
+    {
+        $cuenta = \App\Models\SaldosAFavor\SafCuenta::create(['cliente_id' => $pedido->cliente_id, 'moneda' => 'MXN']);
+        $credito = \App\Models\SaldosAFavor\SafCredito::create([
+            'folio' => 'SAF-T01-'.$pedido->id, 'saf_cuenta_id' => $cuenta->id, 'cliente_id' => $pedido->cliente_id,
+            'monto_original' => 100, 'monto_aplicado' => 0, 'monto_reservado' => 50, 'monto_disponible' => 50,
+            'fecha_generacion' => now(), 'fecha_vencimiento' => now()->addYear(),
+        ]);
+        $pedido->safAplicaciones()->create(['saf_credito_id' => $credito->id, 'monto' => 50, 'estado' => 'reservado', 'reservado_por_id' => $this->usuario->id, 'reservado_at' => now()]);
+        $pedido->update(['total_mercancia' => 100, 'saldo_a_favor' => 50, 'total_a_cobrar' => 50]);
+        return $credito;
+    }
+
+    private function t01Cerrado(bool $separar = false): PedidoBmaTareaPreparacion
+    {
+        $this->travelTo(\Carbon\Carbon::parse('2026-11-04 10:00:00', 'America/Mexico_City'));
+        Storage::fake('public');
+        Storage::fake('local');
+        CatalogoEstatusPedido::query()->firstOrCreate(['fase_ciclo' => CatalogoEstatusPedido::FASE_CANCELADO], ['codigo_interno' => 'CANCELADO', 'nombre_visual' => 'Cancelado', 'color_hex' => '#999999', 'orden' => 21, 'activo' => true]);
+        CatalogoEstatusPedido::query()->firstOrCreate(['fase_ciclo' => CatalogoEstatusPedido::FASE_ENTREGADO], ['codigo_interno' => 'ENTREGADO', 'nombre_visual' => 'Entregado', 'color_hex' => '#999999', 'orden' => 20, 'activo' => true]);
+        $this->permitirRevision();
+        $tarea = $this->solicitarTienda();
+        $url = '/control-pedidos/tienda/tareas/'.$tarea->id;
+        $this->postJson($url.'/tomar', ['version' => $tarea->version])->assertOk();
+        $this->post($url.'/disponibilidad', ['confirmacion_explicita' => 1, 'evidencias' => [UploadedFile::fake()->image('conjunto.jpg')]], ['Accept' => 'application/json'])->assertOk();
+        $this->postJson('/control-pedidos/'.$tarea->pedido_bma_id.'/cerrar-consulta')->assertOk();
+        $this->postJson('/control-pedidos/'.$tarea->pedido_bma_id.'/cobertura-tienda', ['cobertura' => 'apartado'])->assertOk();
+        $this->getJson($url)->assertOk()->assertJsonPath('tarea.pedido.es_t01_documental', true);
+        $tarea->refresh();
+        if ($separar) $this->postJson($url.'/apartado/confirmar', ['version' => $tarea->cumplimientoFisico->version])->assertOk();
+        return $tarea->fresh(['cumplimientoFisico', 'pedido']);
     }
 
     private function permitirRevision(): void

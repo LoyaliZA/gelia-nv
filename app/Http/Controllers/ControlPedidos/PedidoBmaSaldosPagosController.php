@@ -82,6 +82,9 @@ class PedidoBmaSaldosPagosController extends Controller
         if ($pedidoBma->requiereConsultaCerradaParaProceder() && ! $pedidoBma->consultaCerrada()) {
             return back()->with('error', 'Cierre la consulta CEDIS antes de registrar el pago.');
         }
+        if (\App\Support\ControlPedidos\ApartadoT01::aplica($pedidoBma) && ($pedidoBma->solicitud_preparacion_json['cobertura_tienda']['tipo'] ?? null) === 'apartado') {
+            throw \Illuminate\Validation\ValidationException::withMessages(['pago' => 'Pago al recoger se cobra en PDV. GELIA registra la entrega, no una exhibición de ese cobro.']);
+        }
         $forma = $request->input('forma_pago');
         $cobroEnTienda = app(ResolverBancoCajaPdv::class)->esCobroEnTienda($pedidoBma, $forma);
         $datos = $request->validate([

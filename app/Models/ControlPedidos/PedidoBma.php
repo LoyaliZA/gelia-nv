@@ -24,7 +24,7 @@ class PedidoBma extends Model
 {
     use BelongsToUsuario, SoftDeletes;
 
-    protected $appends = ['requiere_sucursal_destino', 'es_traslado_interno_pdv', 'requiere_bultos_empaque', 'solicitud_preparacion', 'base_captura'];
+    protected $appends = ['requiere_sucursal_destino', 'es_traslado_interno_pdv', 'requiere_bultos_empaque', 'solicitud_preparacion', 'base_captura', 'es_t01_documental'];
 
     protected $hidden = ['captura_creacion_clave', 'captura_creacion_hash', 'captura_creacion_base'];
 
@@ -234,6 +234,11 @@ class PedidoBma extends Model
      *
      * @return array<string, mixed>|null
      */
+    public function getEsT01DocumentalAttribute(): bool
+    {
+        return \App\Support\ControlPedidos\ApartadoT01::aplica($this);
+    }
+
     public function getSolicitudPreparacionAttribute(): ?array
     {
         return app(\App\Services\ControlPedidos\FusionarSolicitudPreparacionPedido::class)

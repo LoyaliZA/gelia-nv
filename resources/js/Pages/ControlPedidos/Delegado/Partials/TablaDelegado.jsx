@@ -23,7 +23,7 @@ import { etiquetaCtaListadoDelegado, pedidoConSenialOperativa } from './delegado
 const MAX_BADGES_VISIBLE = 2;
 
 function badgesLista(pedido) {
-    const badge = badgeEstatusPedido(pedido.estatus, {
+    const badge = badgeEstatusPedido(pedido.estatus, { pedido,
         esResguardo: pedido.es_resguardo,
         requiereLogistica: pedidoRequiereLogistica(pedido),
     });

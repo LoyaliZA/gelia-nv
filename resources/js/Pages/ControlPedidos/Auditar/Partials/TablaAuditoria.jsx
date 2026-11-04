@@ -269,7 +269,7 @@ export default function TablaAuditoria({
             <div className="lg:hidden space-y-3">
                 {items.map((pedido) => {
                     const badge = badgeAuditoriaRevision(pedido) || badgeAuditoriaSemantico(pedido.estatus?.fase_ciclo, pedido.es_resguardo);
-                    const badgeEnvio = badgeEstatusEnvio(pedido.estatus_envio, {
+                    const badgeEnvio = badgeEstatusEnvio(pedido.estatus_envio, { pedido,
                         faseCiclo: pedido.estatus?.fase_ciclo,
                         respondeTienda: Boolean(pedido.usa_preparacion_tienda),
                     });
@@ -314,7 +314,7 @@ export default function TablaAuditoria({
                     <tbody>
                         {items.map((pedido) => {
                             const badge = badgeAuditoriaRevision(pedido) || badgeAuditoriaSemantico(pedido.estatus?.fase_ciclo, pedido.es_resguardo);
-                            const badgeEnvio = badgeEstatusEnvio(pedido.estatus_envio, {
+                            const badgeEnvio = badgeEstatusEnvio(pedido.estatus_envio, { pedido,
                                 faseCiclo: pedido.estatus?.fase_ciclo,
                                 respondeTienda: Boolean(pedido.usa_preparacion_tienda),
                             });

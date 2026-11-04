@@ -31,9 +31,13 @@ class GuardarApartadoRecogeHoyService
         try {
             return DB::transaction(function () use ($tarea, $usuario, $datos, $confirmar, &$rutas) {
                 $tarea = InstruccionEntrega::bloquearParaEjecutar($tarea);
-                $tarea->load('modalidad');
+                $tarea->load(['modalidad', 'pedido', 'cumplimientoFisico']);
                 if ((int) $tarea->asignada_a_id !== (int) $usuario->id) {
                     throw ValidationException::withMessages(['tarea' => 'Solo el auxiliar que tomó la tarea puede registrar y confirmar las piezas.']);
+                }
+                if ($confirmar && \App\Support\ControlPedidos\ApartadoT01::aplica($tarea->pedido) && $tarea->pedido->consultaCerrada()
+                    && $tarea->cumplimientoFisico?->estado === PedidoBmaCumplimientoFisico::ESTADO_APARTADO_CONFIRMADO) {
+                    return $tarea->cumplimientoFisico;
                 }
                 if ($tarea->modalidad?->codigo !== CatalogoModalidadPreparacionPedido::CODIGO_RECOGE_TIENDA
                     || $tarea->estado !== PedidoBmaTareaPreparacion::ESTADO_EN_ATENCION) {
@@ -59,14 +63,15 @@ class GuardarApartadoRecogeHoyService
                     $datos['evidencias'] ?? [],
                     fn ($archivo) => $archivo instanceof \Illuminate\Http\UploadedFile
                 ));
-                if ($lineas === [] && $motivo === '' && $evidencias === []) {
+                $documental = $confirmar && \App\Support\ControlPedidos\ApartadoT01::aplica($tarea->pedido) && $tarea->pedido->consultaCerrada();
+                if (! $documental && $lineas === [] && $motivo === '' && $evidencias === []) {
                     throw ValidationException::withMessages(['lineas' => 'Registre piezas, adjunte la foto del conjunto o describa el problema de la solicitud.']);
                 }
-                if ($confirmar && $lineas === []) {
+                if ($confirmar && ! $documental && $lineas === []) {
                     throw ValidationException::withMessages(['lineas' => 'Identifique los productos y cantidades físicos antes de confirmar la separación.']);
                 }
                 $antes = $tarea->productos()->get()->toArray();
-                if ($lineas !== []) {
+                if (! $documental && $lineas !== []) {
                     $this->assertCatalogoDelAlmacen($tarea, $lineas, $confirmar);
                     $rutas = $this->registrar->ejecutar($tarea, $usuario, $lineas);
                 }

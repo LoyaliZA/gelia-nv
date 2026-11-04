@@ -30,6 +30,9 @@
             </tr>
         </thead>
         <tbody>
+            @if ($caratula['documental'] ?? false)
+                <tr><td colspan="4">Pedido completo conforme al documento y la consulta aprobada.</td></tr>
+            @endif
             @foreach (($caratula['piezas'] ?? []) as $pieza)
                 <tr>
                     <td>{{ $pieza['sku'] ?? '—' }}</td>

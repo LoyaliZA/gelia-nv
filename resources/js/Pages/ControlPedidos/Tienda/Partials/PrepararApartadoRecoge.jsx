@@ -4,6 +4,7 @@ import axios from 'axios';
 import { AlertTriangle, CheckCircle2, ClipboardCheck, FileText, ImagePlus, PackageMinus, ScanLine, Smartphone, Trash2 } from 'lucide-react';
 import useEscaneoPreparacion from './useEscaneoPreparacion';
 import AjustesSolicitadosTienda from './AjustesSolicitadosTienda';
+import VigenciaApartadoTienda from '../../Partials/VigenciaApartadoTienda';
 import { faltantesRespuesta } from './requisitosRespuesta';
 import ModalConfirmarAccion from '../../Partials/ModalConfirmarAccion';
 import DocumentoSolicitudTienda from './DocumentoSolicitudTienda';
@@ -177,7 +178,7 @@ export default function PrepararApartadoRecoge({ tarea, auth, documentos = [], d
     const momentoRevision = consultaTienda && editable && !estadoRevision;
     const momentoSeparacion = consultaTienda && editable && seleccionAceptada && !apartadoConfirmado;
     const momentoEspera = consultaTienda && editable && !momentoRevision && !momentoSeparacion && !apartadoConfirmado;
-    const faltantes = (momentoRevision || momentoEspera) ? [] : faltantesRespuesta({ lineas, esRecoge, extra, requisitos, documentos: documentosTarea, evidencias: evidencias.archivos });
+    const faltantes = (momentoRevision || momentoEspera || momentoSeparacion) ? [] : faltantesRespuesta({ lineas, esRecoge, extra, requisitos, documentos: documentosTarea, evidencias: evidencias.archivos });
     const irACampo = (id) => {
         const campo = formRef.current?.querySelector(`[id="${id}"]`);
         campo?.scrollIntoView?.({ block: 'nearest', behavior: 'auto' });
@@ -198,7 +199,7 @@ export default function PrepararApartadoRecoge({ tarea, auth, documentos = [], d
             if (vencida) { setError('La solicitud venció. Reporte el problema a Ventas para renovarla.'); return; }
             if (faltantes.length) { setError('Complete los campos señalados antes de enviar la respuesta.'); irACampo(faltantes[0].campo); return; }
         }
-        if (!lineas.length && !incidencia) {
+        if (!momentoSeparacion && !lineas.length && !incidencia) {
             if (confirmar) {
                 setError('Identifique los productos y cantidades físicos antes de confirmar la separación.');
                 return;
@@ -211,7 +212,7 @@ export default function PrepararApartadoRecoge({ tarea, auth, documentos = [], d
         if (incidencia && !motivo.trim()) { setError('Describa qué necesita resolver Ventas.'); irACampo('tienda-motivo'); return; }
         setProcesando(true);
         const datos = { version: esRecoge ? tarea.apartado?.version : tarea.version,
-            lineas: lineas.map(({ previews, detalle, ...l }) => l), motivo_incidencia: incidencia ? motivo : undefined,
+            lineas: momentoSeparacion ? [] : lineas.map(({ previews, detalle, ...l }) => l), motivo_incidencia: incidencia ? motivo : undefined,
             ...(!esRecoge ? extra : {}), evidencias: evidencias.archivos };
         const tieneArchivos = lineas.some((l) => l.evidencias.length) || evidencias.archivos.length;
         const payload = tieneArchivos ? formData(datos) : datos;
@@ -293,8 +294,8 @@ export default function PrepararApartadoRecoge({ tarea, auth, documentos = [], d
     const evidenciaGeneralObligatoria = !esRecoge && requisitos.evidencia_general_obligatoria;
     const fotoRevisionObligatoria = momentoRevision || puedeRegistrarRevision;
     const capturaExcepcion = momentoRevision && estadoPedido === 'detalle';
-    const mostrarProductos = (!momentoRevision || capturaExcepcion) && (!consultaTienda || editable || lineas.length > 0);
-    const mostrarEvidencias = editable && (!momentoRevision || estadoPedido === 'correcto' || (capturaExcepcion && lineas.length > 0));
+    const mostrarProductos = !momentoSeparacion && (!momentoRevision || capturaExcepcion) && (!consultaTienda || editable || lineas.length > 0);
+    const mostrarEvidencias = !momentoSeparacion && editable && (!momentoRevision || estadoPedido === 'correcto' || (capturaExcepcion && lineas.length > 0));
     const fotosProducto = (l, i) => <GaleriaEvidencias id={`tienda-fotos-${i}`} label="Evidencia del producto" obligatorio={!esRecoge && requisitos.evidencia_por_producto}
         maxArchivos={10} archivos={l.evidencias} previews={l.previews} error={validando ? faltantes.find((f) => f.campo === `tienda-fotos-${i}`)?.texto : undefined}
         onChange={(files, previews) => { cambiar(i, 'evidencias', files); cambiar(i, 'previews', previews); }} onVer={verDocs} disabled={ocupado} />;
@@ -325,6 +326,7 @@ export default function PrepararApartadoRecoge({ tarea, auth, documentos = [], d
                 </button>
             </div>
         </header>
+        {tarea.pedido?.es_t01_documental && !apartadoConfirmado && tarea.pedido?.cobertura_tienda?.tipo === 'apartado' && <div className="px-4 py-2"><VigenciaApartadoTienda venceAt={vence} finalizado={['ENTREGADA', 'DEVUELTA_ANAQUEL'].includes(tarea.apartado?.estado)} /></div>}
         {vencida && <div role="alert" className="gelia-preparacion-aviso"><AlertTriangle className="w-4 h-4 shrink-0" aria-hidden="true" /><div><strong>Solicitud vencida · {formatearFechaNegocio(vence)}</strong><p className="m-0">Puede guardar su avance. Reporte a Ventas para solicitar una nueva preparación del día.</p></div></div>}
         {error && <p role="alert" className="gelia-preparacion-aviso">{error}</p>}
         <div className="gelia-preparacion-workspace" data-pedido-visible={mostrarPedido}>
@@ -474,7 +476,7 @@ export default function PrepararApartadoRecoge({ tarea, auth, documentos = [], d
                     </section>}
                     {editable && !momentoRevision && <section id="tienda-cierre" tabIndex={-1} className="gelia-preparacion-seccion registrar-tienda-panel">
                         <div className="registrar-tienda-seccion-titulo"><ClipboardCheck size={18} aria-hidden="true" /><h3>{tituloCierre}</h3></div>
-                        {esRecoge ? <p className="gelia-preparacion-ayuda">{momentoRevision ? 'Confirme el conjunto o marque solo las piezas afectadas. La foto física es obligatoria y el PDF del pedido no la sustituye.' : momentoSeparacion ? 'Identifique los productos físicos de la selección aceptada y confirme la separación.' : 'Confirme las piezas separadas para avisar a Ventas.'}</p>
+                        {esRecoge ? <p className="gelia-preparacion-ayuda">{momentoRevision ? 'Confirme el conjunto o marque solo las piezas afectadas. La foto física es obligatoria y el PDF del pedido no la sustituye.' : momentoSeparacion ? 'La vendedora aprobó la separación al cerrar la consulta. Separe el pedido completo de referencia y confirme; no necesita volver a registrar las piezas.' : 'Confirme las piezas separadas para avisar a Ventas.'}</p>
                             : <div className="gelia-preparacion-pesaje">
                                 {['peso_real_kg', 'peso_volumetrico_kg'].filter((campo) => requisitos[campo === 'peso_real_kg' ? 'peso_real_obligatorio' : 'peso_volumetrico_obligatorio']).map((campo) => <div key={campo}><label htmlFor={`tienda-${campo}`} className={THEME_LABEL}>{campo === 'peso_real_kg' ? 'Peso real (kg)' : 'Peso volumétrico (kg)'} *<input {...atributosCampo(`tienda-${campo}`)} aria-required="true" name={campo} type="number" inputMode="decimal" step="0.001" min="0.001" disabled={ocupado} className={`${THEME_INPUT} w-full mt-1`} value={extra[campo]} onChange={(e) => actualizarExtra(campo, e.target.value)} placeholder="Ej. 1.250" /></label>{errorCampo(`tienda-${campo}`)}</div>)}
                                 {requisitos.caja_obligatoria && <div><label htmlFor="tienda-catalogo_tipo_caja_id" className={THEME_LABEL}>Tipo de caja *<select {...atributosCampo('tienda-catalogo_tipo_caja_id')} aria-required="true" name="catalogo_tipo_caja_id" disabled={ocupado} className={`${THEME_SELECT} w-full mt-1`} value={extra.catalogo_tipo_caja_id} onChange={(e) => actualizarExtra('catalogo_tipo_caja_id', e.target.value)}><option value="">Seleccione una caja…</option>{tiposCaja.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}</select></label>{errorCampo('tienda-catalogo_tipo_caja_id')}</div>}
@@ -491,25 +493,25 @@ export default function PrepararApartadoRecoge({ tarea, auth, documentos = [], d
                                 : <label className="flex items-start gap-2 text-sm theme-text-main"><input type="checkbox" className="mt-1" checked={confirmacionConjunto} disabled={ocupado} onChange={(evento) => setConfirmacionConjunto(evento.target.checked)} />Confirmo el conjunto sin incidencias.</label>}
                         </div>}
                         {revisionRegistrada && esRecoge && <p className="gelia-preparacion-ayuda" role="status">La revisión ya quedó registrada. Confirmar el apartado es un paso distinto y no repite la captura.</p>}
-                        <div className="gelia-preparacion-resumen" aria-label="Revisión de la respuesta"><strong>{momentoRevision && lineas.some(esExcepcionFisica) ? `${lineas.filter(esExcepcionFisica).length} piezas afectadas` : `${total} piezas · ${lineas.length} productos`}</strong><p>{momentoRevision ? 'Al enviar, Ventas recibe la respuesta de disponibilidad. Todavía no hay apartado.' : esRecoge ? 'Al confirmar la separación, Ventas recibe el apartado físico.' : 'Al responder, Ventas recibirá las cantidades, el estado de la mercancía y las evidencias registradas.'}</p>
+                        <div className="gelia-preparacion-resumen" aria-label="Revisión de la respuesta"><strong>{momentoRevision && lineas.some(esExcepcionFisica) ? `${lineas.filter(esExcepcionFisica).length} piezas afectadas` : momentoSeparacion ? 'Pedido completo aprobado' : `${total} piezas · ${lineas.length} productos`}</strong><p>{momentoRevision ? 'Al enviar, Ventas recibe la respuesta de disponibilidad. Todavía no hay apartado.' : esRecoge ? 'Al confirmar la separación, Ventas recibe el apartado físico.' : 'Al responder, Ventas recibirá las cantidades, el estado de la mercancía y las evidencias registradas.'}</p>
                             {faltantes.length > 0 && <div className="gelia-preparacion-pendientes"><span>Por completar antes de enviar:</span><ul>{faltantes.map((f) => <li key={f.campo}><button type="button" onClick={() => { setValidando(true); irACampo(f.campo); }}>{f.texto}</button></li>)}</ul></div>}
                         </div>
                     </section>}
                     {editable && modoIncidencia && <section className="gelia-preparacion-seccion gelia-preparacion-incidencia"><h4>Reportar problema a Ventas</h4><p className="gelia-preparacion-ayuda">Describa qué impide continuar. Puede reportarlo aunque no haya encontrado piezas.</p><label htmlFor="tienda-motivo" className={THEME_LABEL}>Qué necesita resolver Ventas *<textarea id="tienda-motivo" name="motivo_incidencia" maxLength={2000} className={`${THEME_TEXTAREA} w-full mt-1`} rows={3} value={motivo} disabled={ocupado} onChange={(e) => { setDirty(true); setMotivo(e.target.value); }} /></label><div className="flex flex-wrap gap-2 mt-3"><button type="button" className={BTN_PRIMARY} disabled={guardando} onClick={() => guardar(false, true)}>Enviar problema a Ventas</button><button type="button" className={BTN_SECONDARY} disabled={ocupado} onClick={() => setModoIncidencia(false)}>Cancelar reporte</button></div></section>}
             </div>
-            {mostrarPedido && <aside id="tienda-pedido-referencia" tabIndex={-1} className="gelia-preparacion-documento" aria-label="Pedido de referencia"><button type="button" className={`${BTN_SECONDARY} mb-3 min-h-[44px]`} onClick={() => { setMostrarPedido(false); irACampo('tienda-productos'); }}>Volver a productos</button><DocumentoSolicitudTienda tareaId={tarea.id} documentos={documentos} /></aside>}
+            {mostrarPedido && <aside id="tienda-pedido-referencia" tabIndex={-1} className="gelia-preparacion-documento" aria-label="Pedido de referencia"><button type="button" className={`${BTN_SECONDARY} mb-3 min-h-[44px]`} onClick={() => { setMostrarPedido(false); irACampo('tienda-productos'); }}>{momentoSeparacion ? 'Volver a la confirmación' : 'Volver a productos'}</button><DocumentoSolicitudTienda tareaId={tarea.id} documentos={documentos} /></aside>}
         </div>
         <footer className="gelia-preparacion-footer">
             {editable ? <>
-                <div className="gelia-preparacion-estado-guardado" role="status"><strong>{guardando ? escaneo.pendientes ? 'Procesando lecturas…' : 'Guardando…' : dirty ? 'Cambios sin guardar' : 'Sin cambios pendientes'}</strong><span>{vencida ? 'Solicitud vencida. Guarde su avance o reporte a Ventas.' : momentoRevision ? 'Envíe la respuesta de disponibilidad. La separación se confirma cuando la consulta esté cerrada.' : momentoEspera ? 'Hay un ajuste pendiente. No confirme la separación.' : momentoSeparacion ? 'La consulta está cerrada. Identifique lo físico y confirme la separación.' : faltantes.length ? `${faltantes.length} pendiente(s) para enviar. Puede guardar su avance.` : 'Respuesta completa. Revise y confirme para avisar a Ventas.'}</span></div>
+                <div className="gelia-preparacion-estado-guardado" role="status"><strong>{guardando ? escaneo.pendientes ? 'Procesando lecturas…' : 'Guardando…' : momentoSeparacion ? 'Separación aprobada' : dirty ? 'Cambios sin guardar' : 'Sin cambios pendientes'}</strong><span>{vencida ? 'Solicitud vencida. Guarde su avance o reporte a Ventas.' : momentoRevision ? 'Envíe la respuesta de disponibilidad. La separación se confirma cuando la consulta esté cerrada.' : momentoEspera ? 'Hay un ajuste pendiente. No confirme la separación.' : momentoSeparacion ? 'La consulta está cerrada. Separe el pedido aprobado y confirme el apartado.' : faltantes.length ? `${faltantes.length} pendiente(s) para enviar. Puede guardar su avance.` : 'Respuesta completa. Revise y confirme para avisar a Ventas.'}</span></div>
                 <div className="gelia-preparacion-footer-acciones">
-                    {!momentoEspera && <button type="button" className={BTN_SECONDARY} disabled={guardando} onClick={() => guardar()}>Guardar y continuar después</button>}
+                    {!momentoEspera && !momentoSeparacion && <button type="button" className={BTN_SECONDARY} disabled={guardando} onClick={() => guardar()}>Guardar y continuar después</button>}
                     {momentoRevision && <button type="button" className={BTN_PRIMARY} disabled={guardando || vencida} onClick={registrarRevision}><CheckCircle2 className="w-4 h-4" aria-hidden="true" />{procesando ? 'Guardando…' : 'Enviar respuesta'}</button>}
-                    {momentoSeparacion && <button type="button" className={BTN_PRIMARY} disabled={guardando || vencida} onClick={() => guardar(true)}><CheckCircle2 className="w-4 h-4" aria-hidden="true" />{procesando ? 'Guardando…' : 'Confirmar separación'}</button>}
+                    {momentoSeparacion && <button type="button" className={BTN_PRIMARY} disabled={guardando || vencida} onClick={() => guardar(true)}><CheckCircle2 className="w-4 h-4" aria-hidden="true" />{procesando ? 'Guardando…' : 'Confirmar pedido separado'}</button>}
                     {momentoEspera && <p className="text-sm theme-text-main m-0">Hay un ajuste pendiente. No se confirma la separación hasta recibir la respuesta vigente.</p>}
                     {!consultaTienda && <button type="button" className={BTN_PRIMARY} disabled={guardando || vencida} onClick={() => guardar(true)}><CheckCircle2 className="w-4 h-4" aria-hidden="true" />{procesando ? 'Guardando…' : esRecoge ? 'Confirmar apartado' : 'Responder preparación'}</button>}
                 </div>
-            </> : <p className="text-sm theme-text-main m-0">Total preparado: {total} piezas{tarea.apartado?.ubicacion ? ` · Ubicación: ${tarea.apartado.ubicacion}` : ''}{apartadoConfirmado ? ` · Apartado confirmado. ${tarea.apartado?.pago_confirmado_at ? 'Pago presencial confirmado.' : 'Pago presencial pendiente.'} ${tarea.apartado?.entregada_at ? 'Entrega registrada.' : 'Entrega pendiente.'}` : ''}</p>}
+            </> : <p className="text-sm theme-text-main m-0">{tarea.pedido?.es_t01_documental ? 'Pedido completo conforme a la consulta aprobada' : `Total preparado: ${total} piezas`}{tarea.apartado?.ubicacion ? ` · Ubicación: ${tarea.apartado.ubicacion}` : ''}{apartadoConfirmado ? ` · Apartado confirmado. ${tarea.apartado?.pago_confirmado_at ? 'Pago presencial confirmado.' : 'Pago presencial pendiente.'} ${tarea.apartado?.entregada_at ? 'Entrega registrada.' : 'Entrega pendiente.'}` : ''}</p>}
         </footer>
         <ModalConfirmarAccion abierto={quitarLinea !== null} titulo="Quitar producto de la preparación" mensaje="Se quitarán su cantidad y las evidencias pendientes de guardar." etiquetaConfirmar="Quitar producto" variante="danger" onClose={() => setQuitarLinea(null)} onConfirm={() => {
             const linea = lineas[quitarLinea];

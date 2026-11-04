@@ -1970,6 +1970,7 @@ export default function ModalFormPedidoLegado({
     const etiquetaCandidatoPrincipal = (p) => {
         const fase = p.estatus?.fase_ciclo;
         const estatus = etiquetaEstatusPedido(p.estatus, {
+            pedido: p,
             esResguardo: p.es_resguardo,
             requiereLogistica: p.origen?.requiere_logistica ?? true,
         });
@@ -2762,6 +2763,7 @@ export default function ModalFormPedidoLegado({
                 <GeliaLoader isVisible={processing} message="Guardando pedido_" />
                 {modoProgresivo ? (
                     <EncabezadoPedido
+                        pedido={pedido}
                         titulo="Pedido"
                         folio={pedido?.folio_remision || pedido?.folio || data.folio_remision || null}
                         clienteNombre={infoCliente?.nombre || pedido?.cliente?.nombre || null}
@@ -3646,7 +3648,7 @@ export default function ModalFormPedidoLegado({
                             && !(pedido.estatus_envio === 'pendiente_pesaje' && fasePedido === 'PESAJE_PENDIENTE')
                             && !(pedido.estatus_envio === 'pesaje_listo' && fasePedido === 'PESAJE_RESPONDIDO') && (
                             <p className="text-xs font-bold theme-text-muted mb-3 m-0">
-                                Estado envío: {etiquetaEstatusEnvio(pedido.estatus_envio, { respondeTienda: enFlujoTienda })}
+                                Estado envío: {etiquetaEstatusEnvio(pedido.estatus_envio, { pedido, respondeTienda: enFlujoTienda })}
                             </p>
                         )}
                         {progresoTraslado.length > 0 && (
@@ -4720,7 +4722,7 @@ export default function ModalFormPedidoLegado({
                                 <input
                                     type="text"
                                     readOnly
-                                    value={etiquetaEstatusPedido(pedido?.estatus, {
+                                    value={etiquetaEstatusPedido(pedido?.estatus, { pedido,
                                         esResguardo: Boolean(pedido?.es_resguardo || data.es_resguardo),
                                         requiereLogistica: origenSeleccionado ? Boolean(origenSeleccionado.requiere_logistica) : true,
                                     }) || 'Borrador'}

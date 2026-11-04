@@ -12,6 +12,7 @@ import {
 import GeliaPaginacion from '../../../Components/GeliaPaginacion';
 import {
     formatearMoneda,
+    montoVentaPedido,
     etiquetaAlmacen,
     formatearFechaNegocio,
     etiquetaOrigenGuia,
@@ -333,7 +334,7 @@ function CardPedido({
 
             <footer className="flex items-center justify-between gap-3 pt-2 border-t theme-border">
                 <p className="text-sm font-bold tabular-nums theme-text-main m-0">
-                    {formatearMoneda(pedido.total_a_cobrar)}
+                    {montoVentaPedido(pedido)}
                 </p>
                 <div className="flex items-center justify-end gap-1.5 shrink-0">
                     {primaria ? (
@@ -540,7 +541,7 @@ export default function TablaPedidos({
                                             </td>
                                             <td className="align-top py-2.5 text-right whitespace-nowrap">
                                                 <span className="text-sm font-bold tabular-nums theme-text-main">
-                                                    {formatearMoneda(pedido.total_a_cobrar)}
+                                                    {montoVentaPedido(pedido)}
                                                 </span>
                                             </td>
                                             <td className="align-top py-2.5">

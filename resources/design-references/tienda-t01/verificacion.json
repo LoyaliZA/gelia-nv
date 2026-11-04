@@ -1,0 +1,86 @@
+[
+  {
+    "view": "t01-importes",
+    "size": "escritorio",
+    "theme": "claro",
+    "errors": [],
+    "overflow": []
+  },
+  {
+    "view": "t01-separacion",
+    "size": "escritorio",
+    "theme": "claro",
+    "errors": [],
+    "overflow": []
+  },
+  {
+    "view": "t01-entrega",
+    "size": "escritorio",
+    "theme": "claro",
+    "errors": [],
+    "overflow": []
+  },
+  {
+    "view": "t01-importes",
+    "size": "escritorio",
+    "theme": "oscuro",
+    "errors": [],
+    "overflow": []
+  },
+  {
+    "view": "t01-separacion",
+    "size": "escritorio",
+    "theme": "oscuro",
+    "errors": [],
+    "overflow": []
+  },
+  {
+    "view": "t01-entrega",
+    "size": "escritorio",
+    "theme": "oscuro",
+    "errors": [],
+    "overflow": []
+  },
+  {
+    "view": "t01-importes",
+    "size": "movil",
+    "theme": "claro",
+    "errors": [],
+    "overflow": []
+  },
+  {
+    "view": "t01-separacion",
+    "size": "movil",
+    "theme": "claro",
+    "errors": [],
+    "overflow": []
+  },
+  {
+    "view": "t01-entrega",
+    "size": "movil",
+    "theme": "claro",
+    "errors": [],
+    "overflow": []
+  },
+  {
+    "view": "t01-importes",
+    "size": "movil",
+    "theme": "oscuro",
+    "errors": [],
+    "overflow": []
+  },
+  {
+    "view": "t01-separacion",
+    "size": "movil",
+    "theme": "oscuro",
+    "errors": [],
+    "overflow": []
+  },
+  {
+    "view": "t01-entrega",
+    "size": "movil",
+    "theme": "oscuro",
+    "errors": [],
+    "overflow": []
+  }
+]

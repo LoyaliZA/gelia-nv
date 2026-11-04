@@ -53,11 +53,7 @@ function TarjetaPedido({
     const empaqueConsulta = soloMercancia ? terminologiaEmpaqueConsultaCedis(pedido) : null;
     const pendientePesaje = pedido.estatus_envio === 'pendiente_pesaje';
     const badgeEmpaque = badgeEmpaqueSemantico(fase, pedido.es_resguardo, Boolean(pedido.resguardo_apartado_at));
-    const badgeEnvio = badgeEstatusEnvio(pedido.estatus_envio, { forzarPesaje: true });
-    if (badgeEnvio && soloMercancia) {
-        if (pedido.estatus_envio === 'pendiente_pesaje') badgeEnvio.label = 'Pendiente de consulta de mercancía';
-        if (pedido.estatus_envio === 'pesaje_listo') badgeEnvio.label = 'Consulta de mercancía respondida';
-    }
+    const badgeEnvio = badgeEstatusEnvio(pedido.estatus_envio, { pedido, forzarPesaje: true });
     const badgeRetraso = pedido.guia_retraso ? badgeRetrasoGuia() : null;
     const badgesSla = badgesRetrasoSla(pedido);
     const badgeComp = badgeConComplementos(pedido);

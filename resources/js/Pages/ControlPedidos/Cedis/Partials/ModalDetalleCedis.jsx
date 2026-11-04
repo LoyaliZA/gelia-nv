@@ -1,3 +1,5 @@
+import { esCapturaTienda } from '../../Partials/flujoCapturaPedido';
+import ConsultaSolicitudTienda from '../../Partials/ConsultaSolicitudTienda';
 import { pedidoEsTrasladoInternoPdv } from '../../Partials/destinoSucursalPedido';
 import ListaProductosOk from '../../Partials/ListaProductosOk';
 import usePedidoDialog from '../../Partials/usePedidoDialog';
@@ -493,7 +495,8 @@ export default function ModalDetalleCedis({
                         </section>
                         )}
 
-                        {tieneRevisionFisica && (
+                        <ConsultaSolicitudTienda pedido={pedido} />
+                        {!esCapturaTienda(pedido) && tieneRevisionFisica && (
                             <section id="cedis-revision" tabIndex={-1} className={`${SECCION_WRAP} gelia-pedidos-seccion`}>
                                 <h3 className="gelia-pedidos-seccion-titulo mb-3">{esTienda ? 'Registro de productos' : 'Revisión física'}</h3>
                                 <div className="space-y-3">

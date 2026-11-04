@@ -50,12 +50,13 @@ class GenerarCaratulaRecogeHoyService
         };
 
         $snapshot = [
+            'documental' => \App\Support\ControlPedidos\ApartadoT01::aplica($tarea->pedido),
             'folio' => $folio['folio'] !== '' ? $folio['folio'] : (string) $tarea->pedido_bma_id,
             'folio_etiqueta' => $folio['etiqueta'],
             'cliente' => $cliente,
             'origen' => $origen,
             'fecha' => now()->timezone('America/Mexico_City')->format('d/m/Y H:i'),
-            'piezas' => $tarea->productos->map(fn ($p) => [
+            'piezas' => \App\Support\ControlPedidos\ApartadoT01::aplica($tarea->pedido) ? [] : $tarea->productos->map(fn ($p) => [
                 'sku' => $p->sku,
                 'descripcion' => $p->descripcion_snapshot,
                 'cantidad' => $p->cantidad_encontrada ?? $p->cantidad_solicitada,

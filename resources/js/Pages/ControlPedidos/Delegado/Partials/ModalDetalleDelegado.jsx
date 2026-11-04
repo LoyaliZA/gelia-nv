@@ -337,7 +337,7 @@ export default function ModalDetalleDelegado({
     if (!abierto || !pedido) return null;
 
     const fase = pedido.estatus?.fase_ciclo;
-    const badgeEstatus = badgeEstatusPedido(pedido.estatus, {
+    const badgeEstatus = badgeEstatusPedido(pedido.estatus, { pedido,
         esResguardo: pedido.es_resguardo,
         requiereLogistica: pedidoRequiereLogistica(pedido),
     });

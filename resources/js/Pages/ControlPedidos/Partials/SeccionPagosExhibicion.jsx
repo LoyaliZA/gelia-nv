@@ -109,6 +109,7 @@ export default function SeccionPagosExhibicion({
     bancos = [],
     formasPago = [],
     puedeRegistrar = false,
+    ocultarSiVacio = false,
     puedeRevisar = false,
     puedeGenerarSaldo = false,
     modoAuxiliarSimplificado = false,
@@ -533,6 +534,8 @@ export default function SeccionPagosExhibicion({
             </p>
         );
     }
+
+    if (ocultarSiVacio && !puedeRegistrar && pagos.length === 0) return null;
 
     const badgeCob = resumen?.cobertura ? badgeCoberturaPago(resumen.cobertura) : null;
     const badgeRev = resumen?.revision ? badgeRevisionPagoPedido(resumen.revision) : null;

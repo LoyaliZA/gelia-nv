@@ -15,7 +15,7 @@ describe('etiquetaEstatusPedido tienda', () => {
         expect(etiquetaEstatusPedido(respondido, { requiereLogistica: false })).toBe('Separación respondida');
     });
 
-    it('incluye la etiqueta de tienda en el texto de WhatsApp', () => {
+    it('comparte el estado automático de consulta en el texto de WhatsApp', () => {
         const texto = decodeURIComponent(textoWhatsAppPedido({
             folio: 'BMA-1',
             cliente: { nombre: 'Cliente' },
@@ -23,6 +23,6 @@ describe('etiquetaEstatusPedido tienda', () => {
             estatus: pendiente,
             origen: { requiere_logistica: false },
         }));
-        expect(texto).toContain('Estado: Separación pendiente');
+        expect(texto).toContain('Estado: Pendiente de respuesta');
     });
 });

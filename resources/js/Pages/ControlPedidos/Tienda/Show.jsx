@@ -351,7 +351,7 @@ export default function Show({
                             onConfirmarApartado={null}
                         />}
 
-                        {esRecogeHoy && tarea.apartado?.estado === 'APARTADO_CONFIRMADO' && <ApartadoFisicoTienda soloSalida tarea={tarea} auth={auth} config={config} requisitos={requisitos} eventos={eventos_apartado} onEnviar={onEnviar} />}
+                        {esRecogeHoy && (tarea.apartado?.estado === 'APARTADO_CONFIRMADO' || (tarea.pedido?.es_t01_documental && ['ENTREGADA', 'DEVUELTA_ANAQUEL'].includes(tarea.apartado?.estado))) && <ApartadoFisicoTienda soloSalida onDirtyChange={embedded ? onDirtyChange : setCapturaDirty} tarea={tarea} auth={auth} config={config} requisitos={requisitos} eventos={eventos_apartado} onEnviar={onEnviar} />}
 
                         {esRecogeHoy && documentos.some((d) => d.tipo_evidencia === 'caratula_recoge_tienda') && (
                             <section className={`${geliaCardClass()} p-4 space-y-2`}>

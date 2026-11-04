@@ -59,6 +59,7 @@ final class RespuestaPreparacionTienda
         $apartado = $tarea->cumplimientoFisico?->estado === PedidoBmaCumplimientoFisico::ESTADO_APARTADO_CONFIRMADO;
 
         return [
+            'documental' => ApartadoT01::aplica($pedido),
             'estado' => $tarea->estado,
             'respondida' => $tarea->atendida_at !== null,
             'respondida_at' => $tarea->atendida_at?->toIso8601String() ?: ($revision['respondida_at'] ?? null),

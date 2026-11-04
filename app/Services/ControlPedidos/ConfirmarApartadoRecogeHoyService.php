@@ -73,10 +73,14 @@ class ConfirmarApartadoRecogeHoyService
             if ($bloqueo !== null) {
                 throw ValidationException::withMessages(['estado' => $bloqueo]);
             }
-            $this->aplicarRevision($tarea, $productos);
+            $documental = \App\Support\ControlPedidos\ApartadoT01::aplica($tarea->pedido);
+            if ($documental && ! $tarea->pedido->consultaCerrada()) {
+                throw ValidationException::withMessages(['estado' => 'La separación requiere el cierre vigente de la consulta.']);
+            }
+            if (! $documental) $this->aplicarRevision($tarea, $productos);
             app(\App\Services\Traspasos\AbastecerPreparacionService::class)->asegurarSatisfecho($tarea);
             $tarea->load('productos');
-            $cantidad = $this->cantidadConfirmable($tarea->productos);
+            $cantidad = $documental ? 0 : $this->cantidadConfirmable($tarea->productos);
             $evaluacion = (new PlazoApartadoTienda($this->config))->evaluarConfirmacion(now(), $tarea->fecha_limite);
             if (! $evaluacion['permite']) {
                 throw ValidationException::withMessages(['estado' => $evaluacion['mensaje']]);
@@ -139,7 +143,7 @@ class ConfirmarApartadoRecogeHoyService
                     'pesaje_respondido_at' => null,
                     'consulta_cerrada_at' => $pedido->esConsultaDisponibilidadTienda() ? $pedido->consulta_cerrada_at : null,
                     'consulta_actualizacion_pendiente' => false,
-                    'cantidad_piezas' => $cantidad,
+                    'cantidad_piezas' => $documental ? null : $cantidad,
                 ]);
                 $estatusId = $pedido->estatus?->id;
                 if ($estatusId) {
@@ -157,7 +161,7 @@ class ConfirmarApartadoRecogeHoyService
             $this->caratula->ejecutar($tarea->fresh(['modalidad', 'productos', 'pedido.cliente', 'pedido.estatus']), $usuario, true);
             if ($pedido) {
                 $lugar = trim((string) $cumplimiento->ubicacion);
-                $detalle = $lugar !== '' ? "{$cantidad} piezas en {$lugar}." : "{$cantidad} piezas.";
+                $detalle = $documental ? 'Pedido completo conforme a la consulta aprobada.' : ($lugar !== '' ? "{$cantidad} piezas en {$lugar}." : "{$cantidad} piezas.");
                 $this->notificar->ejecutar($pedido->fresh(['cliente', 'vendedor']), 'pedido_apartado_confirmado',
                     "Apartado confirmado en PDV: {$detalle}", [], $usuario->id, true);
             }

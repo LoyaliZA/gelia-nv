@@ -5,7 +5,7 @@ alwaysApply: false
 
 Aplicar cuando el usuario mencione esta regla o pida revisar cómo validar/compilar el frontend. Complementa `comando-entorno-desarrollo.mdc`; no impone una prohibición absoluta de build.
 
-Comprobar el modo real de assets de la aplicación. Con Vite activo y accesible, reutilizarlo para ajustes y revisión visual. No levantar otro servidor ni reiniciar el existente sin motivo.
+Comprobar el modo real de assets de la aplicación. gelianv y gelianv-develop-2 usan el build de `public/build`. No levantar el servidor de desarrollo de Vite ni conservar `public/hot`.
 
 Con assets compilados, ejecutar un build al terminar el lote si hace falta servir los cambios. También procede por solicitud del usuario, preparación de despliegue o diagnóstico/verificación del bundle. Confirmar que la página utiliza los assets previstos. No ejecutar build tras cada edición ni confundir compilación correcta con validación funcional.
 

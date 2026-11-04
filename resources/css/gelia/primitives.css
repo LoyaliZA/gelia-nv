@@ -952,3 +952,42 @@ body > .gelia-modal-overlay {
     width: 0.875rem;
     height: 0.875rem;
 }
+
+/* Selección de formularios operativos; conserva acento y foco del usuario. */
+.gelia-checkbox {
+    appearance: none;
+    display: inline-grid;
+    place-content: center;
+    width: 1.125rem;
+    height: 1.125rem;
+    flex-shrink: 0;
+    border: 1px solid var(--theme-text-muted);
+    border-radius: 0.3rem;
+    background: var(--theme-element-bg);
+    vertical-align: middle;
+    cursor: pointer;
+}
+
+.gelia-checkbox:checked {
+    border-color: var(--color-primario);
+    background: var(--color-primario);
+}
+
+.gelia-checkbox:checked::after {
+    content: '';
+    width: 0.35rem;
+    height: 0.6rem;
+    border: solid var(--theme-surface-solid);
+    border-width: 0 2px 2px 0;
+    transform: translateY(-1px) rotate(45deg);
+}
+
+.gelia-checkbox:focus-visible {
+    outline: 2px solid var(--color-primario);
+    outline-offset: 3px;
+}
+
+.gelia-checkbox:disabled {
+    opacity: 0.5;
+    cursor: default;
+}

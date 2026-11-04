@@ -21,6 +21,7 @@ export const MAX_BADGES_LISTADO = 2;
 
 export function badgesListaPedido(pedido) {
     const badge = badgeEstatusPedido(pedido.estatus, {
+        pedido,
         esResguardo: pedido.es_resguardo,
         requiereLogistica: pedidoRequiereLogistica(pedido),
     });
@@ -28,6 +29,7 @@ export function badgesListaPedido(pedido) {
 
     const fase = pedido.estatus?.fase_ciclo;
     const badgeEnvio = badgeEstatusEnvio(pedido.estatus_envio, {
+        pedido,
         faseCiclo: fase,
         respondeTienda: Boolean(pedido.usa_preparacion_tienda),
     });

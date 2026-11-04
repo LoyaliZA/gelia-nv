@@ -99,11 +99,13 @@ final class VisibilidadTareaPreparacion
                 'origen_solicitud' => $pedido->origen_solicitud,
                 'requiere_logistica' => (bool) ($pedido->origen?->requiere_logistica ?? false),
                 'vendedora_nombre' => $pedido->vendedor?->name,
+                'es_t01_documental' => \App\Support\ControlPedidos\ApartadoT01::aplica($tarea->pedido),
                 'cliente_nombre' => $pedido->cliente?->nombre_comercial ?: $pedido->cliente?->nombre ?: $pedido->contacto_nombre_snapshot,
                 'cantidad_piezas' => $pedido->cantidad_piezas,
                 'area_revision' => ($pedido->solicitud_preparacion ?? [])['area_revision'] ?? null,
                 'motivo_bloqueo_entrega' => $pedido->motivoBloqueoEntregaTienda(),
                 'consulta_cerrada' => $pedido->consultaCerrada(),
+                'cobertura_tienda' => ($pedido->solicitud_preparacion ?? [])['cobertura_tienda'] ?? null,
                 'revision_disponibilidad' => ($pedido->solicitud_preparacion ?? [])['revision_disponibilidad'] ?? null,
                 'retiros' => self::retirosVisibles($pedido),
                 'anexos_pendientes' => collect(($pedido->solicitud_preparacion ?? [])['anexo_sin_remision'] ?? [])
