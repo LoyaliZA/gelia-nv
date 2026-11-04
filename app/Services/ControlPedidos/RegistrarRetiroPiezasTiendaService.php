@@ -93,7 +93,7 @@ final class RegistrarRetiroPiezasTiendaService
             if (is_array($json['revision_disponibilidad'] ?? null)) {
                 $json['revision_disponibilidad']['aceptacion_vigente'] = false;
             }
-            $pedido->update(['solicitud_preparacion_json' => $json]);
+            $pedido->update(['solicitud_preparacion_json' => $json, 'consulta_cerrada_at' => null, 'consulta_cerrada_por_id' => null]);
 
             $area = (string) ($json['area_revision'] ?? '');
             $estatusId = $pedido->catalogo_estatus_pedido_id;

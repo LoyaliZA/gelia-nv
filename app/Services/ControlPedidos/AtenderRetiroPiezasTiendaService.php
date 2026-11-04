@@ -35,7 +35,10 @@ final class AtenderRetiroPiezasTiendaService
         }
 
         return DB::transaction(function () use ($tarea, $usuario, $version, $decision, $piezasIdentificadas, $nota) {
-            $tarea = PedidoBmaTareaPreparacion::query()->lockForUpdate()->findOrFail($tarea->id);
+            $tarea = \App\Support\ControlPedidos\InstruccionEntrega::bloquearParaEjecutar($tarea);
+            if (! in_array($tarea->estado, ['EN_ATENCION', 'RESPONDIDA'], true)) {
+                throw ValidationException::withMessages(['tarea' => 'La tarea no admite atender este retiro.']);
+            }
             $pedido = PedidoBma::query()->lockForUpdate()->findOrFail($tarea->pedido_bma_id);
             if ((int) $tarea->asignada_a_id !== (int) $usuario->id) {
                 throw ValidationException::withMessages(['tarea' => 'Solo el auxiliar que tomó la tarea atiende el retiro.']);
@@ -143,40 +146,26 @@ final class AtenderRetiroPiezasTiendaService
     private function aplicarPiezas(PedidoBma $pedido, PedidoBmaTareaPreparacion $tarea, array $piezas): void
     {
         foreach ($piezas as $pieza) {
-            $producto = PedidoBmaTareaProducto::query()
+            $productos = PedidoBmaTareaProducto::query()
                 ->where('pedido_bma_tarea_preparacion_id', $tarea->id)
-                ->whereRaw('lower(sku) = ?', [mb_strtolower($pieza['sku'])])
-                ->lockForUpdate()
-                ->first();
-            $comprometida = $producto ? (int) ($producto->cantidad_encontrada ?? $producto->cantidad_solicitada ?? 0) : 0;
-            if (! $producto || $comprometida < $pieza['cantidad']) {
-                throw ValidationException::withMessages([
-                    'piezas' => 'La pieza no está comprometida en este pedido o la cantidad supera la reserva.',
-                ]);
+                ->whereRaw('lower(sku) = ?', [mb_strtolower($pieza['sku'])])->orderBy('id')->lockForUpdate()->get();
+            $comprometida = $productos->sum(fn ($producto) => (int) ($producto->cantidad_encontrada ?? $producto->cantidad_solicitada ?? 0));
+            if ($comprometida < $pieza['cantidad']) {
+                throw ValidationException::withMessages(['piezas' => 'La pieza no está comprometida en este pedido o la cantidad supera la reserva.']);
             }
-            $queda = $comprometida - $pieza['cantidad'];
-            $producto->update([
-                'cantidad_encontrada' => $queda,
-                'observacion' => $queda === 0
-                    ? 'Retirada por petición del cliente.'
-                    : trim((string) $producto->observacion),
-            ]);
-            $this->liberarCompromisoCompleto($pedido, $pieza['sku'], $pieza['cantidad'], $comprometida);
-        }
-    }
-
-    private function liberarCompromisoCompleto(PedidoBma $pedido, string $sku, int $cantidad, int $comprometida): void
-    {
-        if ($cantidad < $comprometida) {
-            // shortcut: la liberación de inventario es por clave completa; un retiro parcial ajusta la cantidad de la pieza y no parte el apartado, cuando haya que liberar una fracción.
-            return;
-        }
-        $pedido->refresh();
-        $json = is_array($pedido->solicitud_preparacion_json) ? $pedido->solicitud_preparacion_json : [];
-        foreach ((array) ($json['compromisos_inventario'] ?? []) as $clave => $fila) {
-            if (is_array($fila) && ($fila['sku'] ?? null) === $sku && ($fila['activo'] ?? false) === true) {
-                $this->inventario->liberarClave($pedido, (string) $clave);
+            $restante = $pieza['cantidad'];
+            foreach ($productos as $producto) {
+                $tomar = min($restante, (int) ($producto->cantidad_encontrada ?? $producto->cantidad_solicitada ?? 0));
+                if ($tomar < 1) continue;
+                $queda = (int) ($producto->cantidad_encontrada ?? $producto->cantidad_solicitada) - $tomar;
+                $producto->update(['cantidad_encontrada' => $queda, 'estado_fisico' => $queda === 0 ? 'bueno' : $producto->estado_fisico, 'observacion' => $queda === 0 ? 'Retirada por petición del cliente.' : $producto->observacion]);
+                $restante -= $tomar;
+                if ($restante === 0) break;
             }
+            $this->inventario->liberarCantidad($pedido, (int) $tarea->almacen_id, $pieza['sku'], $pieza['cantidad']);
+        }
+        if ($cumplimiento = $tarea->cumplimientoFisico) {
+            $cumplimiento->update(['cantidad' => (int) $tarea->productos()->sum('cantidad_encontrada'), 'version' => $cumplimiento->version + 1]);
         }
     }
 

@@ -213,7 +213,7 @@ class ControlPedidosErroresPorDuenoTest extends TestCase
             'orden' => 1,
         ]);
 
-        $total = (float) ($reportado->total_a_cobrar ?: ($reportado->total_mercancia + ($reportado->costo_envio ?? 0)));
+        $total = (float) app(\App\Services\SaldosAFavor\RegistrarPagoPedidoBmaService::class)->resumenPago($reportado->fresh())['total_a_cobrar'];
         $reportado->update(['total_a_cobrar' => $total]);
         \App\Models\SaldosAFavor\PedidoBmaPago::query()->where('pedido_bma_id', $reportado->id)->delete();
         \App\Models\SaldosAFavor\PedidoBmaPago::create([
@@ -228,6 +228,17 @@ class ControlPedidosErroresPorDuenoTest extends TestCase
             'capturado_por_id' => $this->usuario->id,
         ]);
 
+        PedidoBmaDocumento::create([
+            'pedido_bma_id' => $reportado->id,
+            'tipo' => PedidoBmaDocumento::TIPO_PDF_PEDIDO,
+            'ruta_archivo' => 'pedidos_bma/pedidos/inicial.pdf',
+            'nombre_original' => 'pedido.pdf',
+            'mime_type' => 'application/pdf',
+            'tamano_bytes' => 100,
+            'orden' => 0,
+        ]);
+
+        app(\App\Services\ControlPedidos\CerrarConsultaPedidoBmaService::class)->ejecutar($reportado->fresh(), $this->usuario->id);
         app(EnviarPedidoBmaService::class)->ejecutar(
             $reportado->fresh(['estatus', 'origen', 'documentos', 'comprobantes', 'cliente', 'cajas']),
             $this->usuario->id
@@ -289,8 +300,9 @@ class ControlPedidosErroresPorDuenoTest extends TestCase
         $reportado->update(['pesaje_respondido_at' => now()]);
         $this->asegurarCajasPesaje($reportado);
 
-        $total = (float) ($reportado->total_a_cobrar ?: ($reportado->total_mercancia + ($reportado->costo_envio ?? 0)));
+        $total = (float) app(\App\Services\SaldosAFavor\RegistrarPagoPedidoBmaService::class)->resumenPago($reportado->fresh())['total_a_cobrar'];
         $reportado->update(['total_a_cobrar' => $total]);
+        \App\Models\SaldosAFavor\PedidoBmaPago::where('pedido_bma_id', $reportado->id)->update(['monto' => $total]);
         if (! \App\Models\SaldosAFavor\PedidoBmaPago::where('pedido_bma_id', $reportado->id)->exists()) {
             \App\Models\SaldosAFavor\PedidoBmaPago::create([
                 'pedido_bma_id' => $reportado->id,
@@ -305,6 +317,17 @@ class ControlPedidosErroresPorDuenoTest extends TestCase
             ]);
         }
 
+        PedidoBmaDocumento::create([
+            'pedido_bma_id' => $reportado->id,
+            'tipo' => PedidoBmaDocumento::TIPO_PDF_PEDIDO,
+            'ruta_archivo' => 'pedidos_bma/pedidos/inicial.pdf',
+            'nombre_original' => 'pedido.pdf',
+            'mime_type' => 'application/pdf',
+            'tamano_bytes' => 100,
+            'orden' => 0,
+        ]);
+
+        app(\App\Services\ControlPedidos\CerrarConsultaPedidoBmaService::class)->ejecutar($reportado->fresh(), $this->usuario->id);
         $enviado = app(EnviarPedidoBmaService::class)->ejecutar(
             $reportado->fresh(['estatus', 'origen', 'documentos', 'comprobantes', 'cliente', 'cajas']),
             $this->usuario->id
@@ -432,6 +455,7 @@ class ControlPedidosErroresPorDuenoTest extends TestCase
             'catalogo_tipo_caja_id' => DB::table('catalogo_tipos_caja_pedido')->value('id'),
             'peso_real_kg' => 2,
             'peso_volumetrico_kg' => 1.5,
+            'costo_envio' => $pedido->costo_envio,
             'orden' => 0,
             'created_at' => now(),
             'updated_at' => now(),
@@ -586,6 +610,15 @@ class ControlPedidosErroresPorDuenoTest extends TestCase
             'estado_revision' => \App\Models\SaldosAFavor\PedidoBmaPago::REVISION_PENDIENTE,
             'capturado_por_id' => $this->usuario->id,
         ]);
+
+        // La fábrica comienza en CEDIS; conserva el primer envío que precede a la devolución.
+        app(\App\Services\ControlPedidos\RegistrarHistorialPedidoService::class)->ejecutar(
+            $pedido->id,
+            $this->usuario->id,
+            CatalogoEstatusPedido::porFase(CatalogoEstatusPedido::FASE_BORRADOR)->id,
+            CatalogoEstatusPedido::porFase(CatalogoEstatusPedido::FASE_PENDIENTE_AUXILIAR)->id,
+            'Envío inicial de la preparación de prueba'
+        );
 
         return $pedido->fresh();
     }

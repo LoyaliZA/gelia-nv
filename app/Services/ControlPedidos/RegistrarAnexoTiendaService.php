@@ -52,7 +52,7 @@ final class RegistrarAnexoTiendaService
             }
 
             $ruta = $evidencia->store('pedidos_bma/'.$pedido->id.'/anexo', 'public');
-            $pedido->documentos()->create([
+            $documento = $pedido->documentos()->create([
                 'tipo' => PedidoBmaDocumento::TIPO_ANEXO_PIEZAS,
                 'ruta_archivo' => $ruta,
                 'nombre_original' => $evidencia->getClientOriginalName(),
@@ -63,12 +63,16 @@ final class RegistrarAnexoTiendaService
                 'activo' => true,
             ]);
             $json = is_array($pedido->solicitud_preparacion_json) ? $pedido->solicitud_preparacion_json : [];
+            $lineas = array_map(fn ($linea) => array_merge($linea, ['pendiente_revision' => true, 'documento_id' => $documento->id]), $lineas);
+            if (is_array($json['revision_disponibilidad'] ?? null)) {
+                $json['revision_disponibilidad']['aceptacion_vigente'] = false;
+            }
             $json['anexo_sin_remision'] = array_values(array_merge(
                 is_array($json['anexo_sin_remision'] ?? null) ? $json['anexo_sin_remision'] : [],
                 $lineas
             ));
             $json['anexo_integrado'] = false;
-            $pedido->update(['solicitud_preparacion_json' => $json]);
+            $pedido->update(['solicitud_preparacion_json' => $json, 'consulta_cerrada_at' => null, 'consulta_cerrada_por_id' => null]);
             $this->nota($pedido, $usuario->id, $this->textoDe($lineas, false));
             $this->avisarEjecutor($pedido, $usuario, $lineas);
 

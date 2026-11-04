@@ -780,6 +780,57 @@ class SolicitudRegistrarTiendaTest extends TestCase
         ])->assertStatus(422);
     }
 
+    public function test_las_excepciones_se_cierran_con_la_consulta_sin_decision_del_cliente(): void
+    {
+        Storage::fake('public');
+        $this->permitirRevision();
+        $tarea = $this->solicitarTienda();
+        $pedido = $tarea->pedido;
+        $this->actingAs($this->usuario)->postJson(
+            '/control-pedidos/tienda/tareas/'.$tarea->id.'/tomar',
+            ['version' => $tarea->version]
+        )->assertOk();
+
+        $this->actingAs($this->usuario)->post(
+            '/control-pedidos/tienda/tareas/'.$tarea->id.'/disponibilidad',
+            [
+                'confirmacion_explicita' => 0,
+                'excepciones' => [[
+                    'descripcion' => 'Carolina 212',
+                    'cantidad' => 1,
+                    'condicion' => 'detalle',
+                    'detalle' => 'Rayadura en el empaque',
+                ]],
+                'evidencias' => [UploadedFile::fake()->image('conjunto.jpg')],
+            ],
+            ['Accept' => 'application/json']
+        )->assertOk()->assertJsonPath('estado', 'excepciones_pendientes');
+
+        $fresco = $pedido->fresh();
+        $this->assertNull($fresco->motivoBloqueoCierreConsultaTienda());
+        $this->assertNull($fresco->motivoBloqueoSeparacion());
+        $this->assertNull($fresco->revisionesProducto()->value('resolucion'));
+        $this->assertSame(
+            ResponderDisponibilidadInicialService::DECISION_EXCEPCIONES,
+            app(ExpedienteRegistrarPedidos::class)->desdePedido($fresco)['decision_pendiente']
+        );
+
+        $this->actingAs($this->usuario)->postJson("/control-pedidos/{$pedido->id}/decision-tienda", [
+            'revision_id' => $fresco->revisionesProducto()->value('id'),
+            'accion' => 'aceptar_condicion',
+        ])->assertNotFound();
+
+        $this->actingAs($this->usuario)->postJson("/control-pedidos/{$pedido->id}/cerrar-consulta")
+            ->assertOk();
+        $cerrado = $pedido->fresh();
+        $this->assertNotNull($cerrado->consulta_cerrada_at);
+        $this->assertNull($cerrado->revisionesProducto()->value('resolucion'));
+
+        $this->actingAs($this->usuario)->postJson("/control-pedidos/{$pedido->id}/cobertura-tienda", [
+            'cobertura' => 'apartado',
+        ])->assertOk()->assertJsonPath('solicitud_preparacion.cobertura_tienda.tipo', 'apartado');
+    }
+
     public function test_la_cobertura_y_el_cierre_esperan_una_consulta_vigente(): void
     {
         Storage::fake('public');
@@ -836,6 +887,130 @@ class SolicitudRegistrarTiendaTest extends TestCase
             PedidoBmaCumplimientoFisico::ESTADO_APARTADO_CONFIRMADO,
             $tarea->fresh()->cumplimientoFisico->estado
         );
+    }
+
+    public function test_el_auxiliar_espera_el_cierre_y_un_reintento_no_modifica_las_piezas(): void
+    {
+        Storage::fake('public');
+        $this->permitirRevision();
+        $tarea = $this->solicitarTienda();
+        $this->postJson('/control-pedidos/tienda/tareas/'.$tarea->id.'/tomar', ['version' => $tarea->version])->assertOk();
+        $url = '/control-pedidos/tienda/tareas/'.$tarea->id;
+        $this->post($url.'/disponibilidad', ['confirmacion_explicita' => 1, 'evidencias' => [UploadedFile::fake()->image('conjunto.jpg')]], ['Accept' => 'application/json'])->assertOk();
+        $this->postJson($url.'/apartado/guardar', ['version' => 1, 'lineas' => [['sku' => 'INVENTADO', 'descripcion' => 'No solicitada', 'cantidad' => 1, 'estado_fisico' => 'bueno']]])->assertUnprocessable();
+        $this->postJson($url.'/disponibilidad', ['confirmacion_explicita' => 1, 'lineas' => [['sku' => 'INVENTADO', 'descripcion' => 'No solicitada', 'cantidad' => 1, 'estado_fisico' => 'bueno']]])->assertOk()->assertJsonPath('idempotente', true);
+        $this->assertSame(0, $tarea->productos()->count());
+        $this->getJson($url)->assertOk()->assertJsonPath('tarea.pedido.consulta_cerrada', false);
+    }
+
+    public function test_el_auxiliar_responde_un_anexo_documental_despues_del_apartado_y_no_lo_separa_por_responder(): void
+    {
+        Storage::fake('public');
+        $this->permitirRevision();
+        $tarea = $this->solicitarTienda();
+        $tarea->update(['estado' => 'RESPONDIDA', 'asignada_a_id' => $this->usuario->id]);
+        $pedido = $tarea->pedido;
+        $json = $pedido->solicitud_preparacion_json;
+        $json['revision_disponibilidad'] = ['estado' => 'sin_excepciones'];
+        $pedido->update(['solicitud_preparacion_json' => $json, 'consulta_cerrada_at' => now()]);
+        $this->post('/control-pedidos/'.$pedido->id.'/anexo-tienda', ['entrada' => 'documento', 'evidencia' => UploadedFile::fake()->create('anexo.pdf', 10, 'application/pdf')], ['Accept' => 'application/json'])->assertOk();
+        $this->assertNull($pedido->fresh()->consulta_cerrada_at);
+        $url = '/control-pedidos/tienda/tareas/'.$tarea->id;
+        $this->getJson($url)->assertOk()->assertJsonPath('tarea.pedido.anexos_pendientes.0.indice', 0)->assertJsonStructure(['tarea' => ['pedido' => ['anexos_pendientes' => [['documento' => ['url']]]]]]);
+        $this->postJson($url.'/anexo/atender', ['indice' => 0, 'decision' => 'rechazar', 'nota' => 'No hay piezas de este aroma.'])->assertOk();
+        $this->getJson($url)->assertOk()->assertJsonCount(0, 'tarea.pedido.anexos_pendientes');
+        $anexo = $pedido->fresh()->solicitud_preparacion_json['anexo_sin_remision'][0];
+        $this->assertSame('con_detalle', $anexo['estado']);
+        $this->assertSame($this->usuario->id, $anexo['respondida_por_id']);
+        $this->assertSame('RESPONDIDA', $tarea->fresh()->estado);
+        $this->assertSame(0, $tarea->productos()->count());
+        $this->postJson($url.'/anexo/atender', ['indice' => 0, 'decision' => 'rechazar', 'nota' => 'Reintento'])->assertUnprocessable();
+        $this->getJson('/control-pedidos/'.$pedido->id.'/pagos')->assertOk()->assertJsonPath('consulta_cerrada', false)->assertJsonPath('solicitud_preparacion.anexo_sin_remision.0.estado', 'con_detalle');
+    }
+
+    public function test_un_auxiliar_ajeno_no_responde_el_anexo_y_un_pendiente_bloquea_cobertura(): void
+    {
+        Storage::fake('public');
+        $this->permitirRevision();
+        $tarea = $this->solicitarTienda();
+        $tarea->update(['estado' => 'EN_ATENCION', 'asignada_a_id' => User::factory()->create()->id]);
+        $pedido = $tarea->pedido;
+        $json = $pedido->solicitud_preparacion_json;
+        $json['revision_disponibilidad'] = ['estado' => 'sin_excepciones'];
+        $pedido->update(['solicitud_preparacion_json' => $json]);
+        $this->post('/control-pedidos/'.$pedido->id.'/anexo-tienda', ['entrada' => 'documento', 'evidencia' => UploadedFile::fake()->create('anexo.pdf', 10, 'application/pdf')], ['Accept' => 'application/json'])->assertOk();
+        $this->postJson('/control-pedidos/tienda/tareas/'.$tarea->id.'/anexo/atender', ['indice' => 0, 'decision' => 'rechazar', 'nota' => 'Ajeno'])->assertUnprocessable();
+        $this->postJson('/control-pedidos/'.$pedido->id.'/cerrar-consulta')->assertUnprocessable();
+        $this->postJson('/control-pedidos/'.$pedido->id.'/cobertura-tienda', ['cobertura' => 'transferencia'])->assertUnprocessable();
+    }
+
+    public function test_el_anexo_disponible_se_separa_solo_despues_del_cierre_y_una_sola_vez(): void
+    {
+        Storage::fake('public');
+        $this->permitirRevision();
+        $tarea = $this->solicitarTienda();
+        $tarea->update(['estado' => 'RESPONDIDA', 'asignada_a_id' => $this->usuario->id]);
+        $pedido = $tarea->pedido;
+        $json = $pedido->solicitud_preparacion_json;
+        $json['revision_disponibilidad'] = ['estado' => 'sin_excepciones'];
+        $pedido->update(['solicitud_preparacion_json' => $json]);
+        $producto = \App\Models\Producto::create(['folio' => 98731, 'sku' => 'ANEXO-REAL', 'descripcion' => 'Aroma anexo', 'activo' => true]);
+        $inventario = \App\Models\Inventario::create(['producto_id' => $producto->id, 'almacen_id' => $tarea->almacen_id, 'existencia' => 10, 'apartado' => 0]);
+        $this->post('/control-pedidos/'.$pedido->id.'/anexo-tienda', ['entrada' => 'documento', 'evidencia' => UploadedFile::fake()->create('anexo.pdf', 10, 'application/pdf')], ['Accept' => 'application/json'])->assertOk();
+        $url = '/control-pedidos/tienda/tareas/'.$tarea->id.'/anexo/atender';
+        $this->post($url, ['indice' => 0, 'decision' => 'disponible', 'piezas' => [['producto_id' => $producto->id, 'cantidad' => 3]], 'evidencia' => UploadedFile::fake()->image('anexo.jpg')], ['Accept' => 'application/json'])->assertOk();
+        $this->assertSame(0, $tarea->productos()->count());
+        $this->assertEquals(0, $inventario->fresh()->apartado);
+        $this->assertNotNull($pedido->fresh()->motivoBloqueoEntregaTienda());
+        $this->postJson($url, ['indice' => 0, 'decision' => 'separar'])->assertUnprocessable();
+        $this->postJson('/control-pedidos/'.$pedido->id.'/cerrar-consulta')->assertOk();
+        $this->postJson($url, ['indice' => 0, 'decision' => 'separar'])->assertOk();
+        $this->postJson($url, ['indice' => 0, 'decision' => 'separar'])->assertOk();
+        $this->assertSame(1, $tarea->productos()->count());
+        $this->assertNull($pedido->fresh()->motivoBloqueoEntregaTienda());
+        $this->assertEquals(3, $inventario->fresh()->apartado);
+        $this->assertNotEmpty($pedido->fresh()->solicitud_preparacion_json['anexo_sin_remision'][0]['separada_at']);
+        $this->getJson('/control-pedidos/tienda/tareas/'.$tarea->id)->assertOk()->assertJsonCount(0, 'tarea.pedido.anexos_por_separar');
+    }
+
+    public function test_retiro_parcial_libera_solo_la_cantidad_solicitada_y_conserva_el_resto(): void
+    {
+        Storage::fake('public');
+        $this->permitirRevision();
+        $tarea = $this->solicitarTienda();
+        $tarea->update(['estado' => 'RESPONDIDA', 'asignada_a_id' => $this->usuario->id]);
+        $pedido = $tarea->pedido;
+        $producto = \App\Models\Producto::create(['folio' => 98732, 'sku' => 'RETIRO-PARCIAL', 'descripcion' => 'Aroma', 'activo' => true]);
+        $inventario = \App\Models\Inventario::create(['producto_id' => $producto->id, 'almacen_id' => $tarea->almacen_id, 'existencia' => 10, 'apartado' => 0]);
+        $tarea->productos()->create(['pedido_bma_origen_id' => $pedido->id, 'producto_id' => $producto->id, 'sku' => $producto->sku, 'descripcion_snapshot' => 'Aroma', 'cantidad_solicitada' => 3, 'cantidad_encontrada' => 3, 'estado_fisico' => 'bueno', 'orden' => 1]);
+        app(\App\Services\ControlPedidos\CompromisoInventarioTienda::class)->comprometer($pedido, $tarea->almacen_id, $producto->id, '3', 'reserva-prueba', $producto->sku);
+        $json = $pedido->fresh()->solicitud_preparacion_json;
+        $json['retiro_piezas'] = [['version' => 1, 'entrada' => 'catalogo', 'estado' => 'pendiente', 'piezas' => [['sku' => $producto->sku, 'descripcion' => 'Aroma', 'cantidad' => 1]]]];
+        $pedido->update(['solicitud_preparacion_json' => $json]);
+        $this->postJson('/control-pedidos/tienda/tareas/'.$tarea->id.'/retiro-piezas/atender', ['version' => 1, 'decision' => 'aplicar'])->assertOk();
+        $this->assertEquals(2, $inventario->fresh()->apartado);
+        $this->assertEquals(2, $tarea->productos()->sum('cantidad_encontrada'));
+        $this->assertEquals(2, $pedido->fresh()->solicitud_preparacion_json['compromisos_inventario']['reserva-prueba']['cantidad']);
+    }
+
+    public function test_confirmar_la_separacion_no_reabre_la_consulta_ya_cerrada(): void
+    {
+        $this->travelTo(\Carbon\Carbon::parse('2026-11-04 10:00:00', 'America/Mexico_City'));
+        Storage::fake('public');
+        $this->permitirRevision();
+        $tarea = $this->solicitarTienda();
+        $url = '/control-pedidos/tienda/tareas/'.$tarea->id;
+        $this->postJson($url.'/tomar', ['version' => $tarea->version])->assertOk();
+        $this->post($url.'/disponibilidad', ['confirmacion_explicita' => 1, 'evidencias' => [UploadedFile::fake()->image('conjunto.jpg')]], ['Accept' => 'application/json'])->assertOk();
+        $pedido = $tarea->pedido;
+        $this->postJson('/control-pedidos/'.$pedido->id.'/cerrar-consulta')->assertOk();
+        $producto = \App\Models\Producto::create(['folio' => 98733, 'sku' => 'SEPARAR-REAL', 'descripcion' => 'Aroma', 'activo' => true]);
+        \App\Models\Inventario::create(['producto_id' => $producto->id, 'almacen_id' => $tarea->almacen_id, 'existencia' => 10, 'apartado' => 0]);
+        $this->getJson($url)->assertOk();
+        $tarea->refresh();
+        $this->postJson($url.'/apartado/confirmar', ['version' => $tarea->cumplimientoFisico->version, 'lineas' => [['producto_id' => $producto->id, 'cantidad' => 1, 'estado_fisico' => 'bueno']]])->assertOk();
+        $this->assertNotNull($pedido->fresh()->consulta_cerrada_at);
+        $this->getJson('/control-pedidos/'.$pedido->id.'/pagos')->assertOk()->assertJsonPath('consulta_cerrada', true);
     }
 
     private function permitirRevision(): void

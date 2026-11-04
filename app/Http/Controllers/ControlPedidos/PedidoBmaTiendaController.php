@@ -740,12 +740,33 @@ class PedidoBmaTiendaController extends Controller
         ]);
     }
 
+    public function atenderAnexo(
+        PedidoBmaTareaPreparacion $tarea,
+        Request $request,
+        \App\Services\ControlPedidos\AtenderAnexoTiendaService $service,
+    ): JsonResponse {
+        $datos = $request->validate([
+            'indice' => ['required', 'integer', 'min:0'],
+            'decision' => ['required', 'in:disponible,rechazar,separar'],
+            'nota' => ['nullable', 'string', 'max:2000'],
+            'piezas' => ['nullable', 'array'],
+            'piezas.*.producto_id' => ['required', 'integer', 'exists:productos,id'],
+            'piezas.*.cantidad' => ['required', 'integer', 'min:1'],
+            'evidencia' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:10240'],
+        ]);
+        $service->ejecutar($tarea, Auth::user(), $datos, $request->file('evidencia'));
+        return response()->json(['ok' => true, 'message' => $datos['decision'] === 'separar' ? 'Separación del anexo confirmada. No confirma pago ni entrega.' : 'Respuesta del anexo enviada a Ventas. No confirma separación, pago ni entrega.']);
+    }
+
     public function responderDisponibilidad(
         PedidoBmaTareaPreparacion $tarea,
         \App\Http\Requests\ControlPedidos\ResponderDisponibilidadInicialRequest $request,
         \App\Services\ControlPedidos\ResponderDisponibilidadInicialService $service,
     ): JsonResponse {
         $tarea->loadMissing(['pedido', 'modalidad', 'cumplimientoFisico']);
+        if (isset($tarea->pedido->solicitud_preparacion_json['revision_disponibilidad']['estado'])) {
+            return response()->json($service->ejecutar($tarea->pedido, Auth::user(), $request->validated(), [], $tarea));
+        }
         $lineas = $request->all()['lineas'] ?? null;
         if (is_array($lineas) && $lineas !== []
             && $tarea->modalidad?->codigo === \App\Models\ControlPedidos\CatalogoModalidadPreparacionPedido::CODIGO_RECOGE_TIENDA) {

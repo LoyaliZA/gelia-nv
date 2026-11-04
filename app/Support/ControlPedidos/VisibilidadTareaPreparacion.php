@@ -102,12 +102,22 @@ final class VisibilidadTareaPreparacion
                 'cliente_nombre' => $pedido->cliente?->nombre_comercial ?: $pedido->cliente?->nombre ?: $pedido->contacto_nombre_snapshot,
                 'cantidad_piezas' => $pedido->cantidad_piezas,
                 'area_revision' => ($pedido->solicitud_preparacion ?? [])['area_revision'] ?? null,
+                'motivo_bloqueo_entrega' => $pedido->motivoBloqueoEntregaTienda(),
+                'consulta_cerrada' => $pedido->consultaCerrada(),
                 'revision_disponibilidad' => ($pedido->solicitud_preparacion ?? [])['revision_disponibilidad'] ?? null,
                 'retiros' => self::retirosVisibles($pedido),
                 'anexos_pendientes' => collect(($pedido->solicitud_preparacion ?? [])['anexo_sin_remision'] ?? [])
-                    ->filter(fn ($linea) => is_array($linea) && (($linea['entrada'] ?? '') === 'documento' || ($linea['pendiente_identificacion'] ?? false) === true))
-                    ->values()
-                    ->all(),
+                    ->map(function ($linea, $indice) use ($pedido) {
+                        if (! is_array($linea)) return null;
+                        $documento = isset($linea['documento_id']) ? $pedido->documentos()->whereKey($linea['documento_id'])->first() : null;
+                        return array_merge($linea, ['indice' => $indice, 'documento' => $documento]);
+                    })
+                    ->filter(fn ($linea) => is_array($linea) && ! isset($linea['respondida_at']))
+                    ->values()->all(),
+                'anexos_por_separar' => collect(($pedido->solicitud_preparacion ?? [])['anexo_sin_remision'] ?? [])
+                    ->map(fn ($linea, $indice) => is_array($linea) ? array_merge($linea, ['indice' => $indice]) : null)
+                    ->filter(fn ($linea) => is_array($linea) && ($linea['estado'] ?? null) === 'disponible' && ! isset($linea['separada_at']))
+                    ->values()->all(),
                 'excepciones' => $pedido->relationLoaded('revisionesProducto')
                     ? $pedido->revisionesProducto
                         ->filter(fn ($revision) => $revision->resolucion === null

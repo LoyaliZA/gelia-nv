@@ -87,7 +87,7 @@ function respuestaSoloConDetalle(productos) {
 
 function detalleRevision(area, estado) {
     if (estado === 'excepciones_pendientes') {
-        return 'Falta la decisión del cliente sobre las piezas con excepción. Esas piezas no continúan como aceptadas.';
+        return 'La respuesta incluye piezas con excepción. El pedido se cierra con Cerrar consulta. Para cambiar piezas, registre un anexo o un retiro.';
     }
     if (estado === 'sin_excepciones' && area === 'preparacion_tienda') {
         return 'Revisión sin excepciones. Falta el apartado físico de lo aceptado. No hay pago ni entrega.';
@@ -96,7 +96,7 @@ function detalleRevision(area, estado) {
         return 'Consulta de disponibilidad sin excepciones. No hay traslado, pago ni entrega.';
     }
     if (estado === 'decision_registrada') {
-        return 'La decisión del cliente quedó registrada. No hay pago ni entrega.';
+        return 'La revisión quedó registrada. No hay pago ni entrega.';
     }
     return '';
 }
@@ -687,7 +687,9 @@ function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso, onVer
                     <ul className="m-0 mt-1 pl-4">
                         {anexos.map((linea, indice) => (
                             <li key={`${linea.sku || 'documento'}-${indice}`} className="text-sm theme-text-main">
-                                {linea.entrada === 'documento' || linea.pendiente_identificacion
+                                {linea.respondida_at
+                                    ? `${linea.separada_at ? 'Separación confirmada' : linea.estado === 'disponible' ? 'Disponible · separación pendiente' : 'Con detalle'} · ${linea.resultado || ''}${linea.respondida_por ? ` · Respondió ${linea.respondida_por}` : ''}${linea.piezas_respuesta?.length ? ` · ${linea.piezas_respuesta.map((pieza) => `${pieza.descripcion} (${pieza.cantidad})`).join(', ')}` : ''}`
+                                    : linea.entrada === 'documento' || linea.pendiente_identificacion
                                     ? 'Documento del anexo · pendiente de identificación'
                                     : `${linea.descripcion} · ${linea.cantidad}${linea.condicion ? ` · ${linea.condicion}` : ''}`}
                             </li>
@@ -729,6 +731,7 @@ export default function SeguimientoSolicitudTienda({
     revisiones = [],
     consultaCerrada = false,
     onConsultaCerrada,
+    onSolicitud,
 }) {
     const [solicitud, setSolicitud] = useState(pedido?.solicitud_preparacion || {});
     const [aviso, setAviso] = useState('');
@@ -742,9 +745,8 @@ export default function SeguimientoSolicitudTienda({
     }, [pedido, marcaRespuesta]);
     const emitida = respuestaDeTiendaEmitida({ ...pedido, solicitud_preparacion: solicitud });
     const estado = solicitud?.revision_disponibilidad?.estado;
-    const puedeConfirmar = emitida && !consultaCerrada && Boolean(pedido?.puede_cerrar_consulta) && estado !== 'excepciones_pendientes';
+    const puedeConfirmar = emitida && !consultaCerrada && Boolean(pedido?.puede_cerrar_consulta);
     const causaCierre = pedido?.motivo_bloqueo_cierre
-        || (estado === 'excepciones_pendientes' ? 'Falta la decisión del cliente sobre las piezas con excepción.' : '')
         || (solicitud?.revision_disponibilidad?.aceptacion_vigente === false ? 'Hay un ajuste pendiente. La aceptación de esta versión no sigue vigente.' : '')
         || ((solicitud?.retiro_piezas || []).some((retiro) => (retiro?.estado || 'pendiente') === 'pendiente') ? 'Hay un retiro pendiente de atención por el auxiliar.' : '');
 
@@ -775,7 +777,7 @@ export default function SeguimientoSolicitudTienda({
                     pedidoId={pedidoId}
                     pedido={pedido}
                     solicitud={solicitud}
-                    onSolicitud={setSolicitud}
+                    onSolicitud={(siguiente) => { setSolicitud(siguiente); onSolicitud?.(siguiente); }}
                     onAviso={setAviso}
                     onVer={(documentos, indice) => setVista({ documentos, indice })}
                 />

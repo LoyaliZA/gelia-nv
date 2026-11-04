@@ -9,8 +9,11 @@ use App\Models\Cliente;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Models\SaldosAFavor\PedidoBmaPago;
 use App\Models\SaldosAFavor\SafCredito;
+use App\Exceptions\ControlPedidos\ConflictoCapturaPedido;
 use App\Services\SaldosAFavor\ActualizarPagoPedidoBmaService;
 use App\Services\SaldosAFavor\ConsultarCuentaClienteSafService;
+use App\Services\SaldosAFavor\ResolverBancoCajaPdv;
+use App\Support\ControlPedidos\LecturaFinancieraPedido;
 use App\Services\SaldosAFavor\EliminarPagoPedidoBmaService;
 use App\Services\SaldosAFavor\RechazarPagosPedidoBmaService;
 use App\Services\SaldosAFavor\RegistrarPagoPedidoBmaService;
@@ -46,6 +49,13 @@ class PedidoBmaSaldosPagosController extends Controller
         $cuenta = $consultar->handle($cliente->id, 'MXN', $alcance);
 
         return response()->json([
+            'reservas_pedido' => isset($pedido) && (int) $pedido->cliente_id === (int) $cliente->id
+                ? $pedido->safAplicaciones()->with('credito')->where('estado', 'reservado')->get()->map(fn ($aplicacion) => [
+                    'id' => (int) $aplicacion->saf_credito_id,
+                    'folio' => $aplicacion->credito?->folio,
+                    'monto_reservado' => (float) $aplicacion->monto,
+                    'fecha_vencimiento' => $aplicacion->credito?->fecha_vencimiento?->toDateString(),
+                ])->values()->all() : [],
             'disponible' => $cuenta['disponible'],
             'reservado' => $cuenta['reservado'],
             'creditos_usables' => $cuenta['creditos_usables']->map(fn (SafCredito $c) => [
@@ -73,11 +83,12 @@ class PedidoBmaSaldosPagosController extends Controller
             return back()->with('error', 'Cierre la consulta CEDIS antes de registrar el pago.');
         }
         $forma = $request->input('forma_pago');
+        $cobroEnTienda = app(ResolverBancoCajaPdv::class)->esCobroEnTienda($pedidoBma, $forma);
         $datos = $request->validate([
             'monto' => ['required', 'numeric', 'min:0.01'],
             'idempotency_key' => ['nullable', 'string', 'max:64'],
             'catalogo_banco_id' => [
-                Rule::requiredIf(fn () => PedidoBmaPago::formaRequiereBanco($forma)),
+                Rule::requiredIf(fn () => ! $cobroEnTienda && PedidoBmaPago::formaRequiereBanco($forma)),
                 'nullable',
                 'exists:catalogo_bancos,id',
             ],
@@ -93,11 +104,12 @@ class PedidoBmaSaldosPagosController extends Controller
                 'max:'.PedidoBmaPago::MAX_COMPROBANTES,
             ],
             'comprobantes.*' => ['file', 'max:10240'],
+            ...$this->reglasVersionFinanciera(),
         ]);
 
         try {
             $service->handle($pedidoBma, $datos, $this->comprobantesSubidos($request), Auth::id());
-        } catch (InvalidArgumentException $e) {
+        } catch (InvalidArgumentException|ConflictoCapturaPedido $e) {
             return back()->with('error', $e->getMessage());
         }
 
@@ -111,10 +123,12 @@ class PedidoBmaSaldosPagosController extends Controller
     ): RedirectResponse {
         $this->assertPuedeMutarPago($pago);
         $forma = $request->input('forma_pago', $pago->forma_pago);
+        $pago->loadMissing('pedido');
+        $cobroEnTienda = $pago->pedido && app(ResolverBancoCajaPdv::class)->esCobroEnTienda($pago->pedido, $forma);
         $datos = $request->validate([
             'monto' => ['sometimes', 'numeric', 'min:0.01'],
             'catalogo_banco_id' => [
-                Rule::requiredIf(fn () => PedidoBmaPago::formaRequiereBanco($forma)),
+                Rule::requiredIf(fn () => ! $cobroEnTienda && PedidoBmaPago::formaRequiereBanco($forma)),
                 'nullable',
                 'exists:catalogo_bancos,id',
             ],
@@ -125,6 +139,7 @@ class PedidoBmaSaldosPagosController extends Controller
             'comprobante' => ['nullable', 'file', 'max:10240'],
             'comprobantes' => ['nullable', 'array', 'max:'.PedidoBmaPago::MAX_COMPROBANTES],
             'comprobantes.*' => ['file', 'max:10240'],
+            ...$this->reglasVersionFinanciera(),
         ]);
 
         try {
@@ -161,11 +176,12 @@ class PedidoBmaSaldosPagosController extends Controller
             'banco',
         ]);
 
-        return response()->json([
+        return response()->json(array_merge([
             'pagos' => $pedidoBma->pagosExhibicion,
             'resumen' => $service->resumenPago($pedidoBma),
             'formas_pago' => PedidoBmaPago::formasPagoCatalogo(),
-        ]);
+            'caja_pdv' => app(ResolverBancoCajaPdv::class)->estado($pedidoBma),
+        ], LecturaFinancieraPedido::de($pedidoBma)));
     }
 
     public function generarSaldoExcedente(
@@ -268,6 +284,16 @@ class PedidoBmaSaldosPagosController extends Controller
         }
 
         return back()->with('success', 'Exhibición sustituida. El registro anterior se conserva.');
+    }
+
+    /** @return array<string, list<string>> */
+    private function reglasVersionFinanciera(): array
+    {
+        return [
+            'revision_esperada' => ['nullable', 'integer', 'min:0'],
+            'total_mercancia_confirmado' => ['nullable', 'numeric', 'min:0'],
+            'saldo_a_favor_confirmado' => ['nullable', 'numeric', 'min:0'],
+        ];
     }
 
     private function assertPuedeMutarPago(PedidoBmaPago $pago): void

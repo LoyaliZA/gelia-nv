@@ -2,7 +2,11 @@
 
 <!-- impeccable:product-schema 1 -->
 
-Contexto basado en las decisiones del usuario y en la inspección del repositorio. Fecha de actualización: 2 de noviembre de 2026. Este archivo orienta el diseño; no acredita implementaciones, pruebas ni despliegues.
+Contexto basado en las decisiones del usuario y en la inspección del repositorio. Fecha de actualización: 4 de noviembre de 2026. Este archivo orienta el diseño; no acredita implementaciones, pruebas ni despliegues.
+
+## Referencia vigente para continuar Tienda
+
+Usar [Tienda — decisiones vigentes y estado verificado](gestion-pedidos-docs/TIENDA_DECISIONES_VIGENTES.md) como punto de entrada operativo y de comprobaciones para las fases 2.1.1–2.1.5. Sustituye los tres planes retirados y las instrucciones históricas de prototipo, aprobación pendiente y bloqueo global de solicitudes. Consultar [GUIA_DISENO_GELIA.md](GUIA_DISENO_GELIA.md) para la composición. El panel independiente de Decisión del cliente fue retirado: los cambios se tramitan con anexo/retiro y Cerrar consulta. El contexto histórico de este documento no autoriza restaurar ese flujo ni omitir importes/pagos ya autorizados.
 
 ## Platform
 
@@ -34,7 +38,7 @@ La operación utiliza pedidos y remisiones de Wizerp, comprobantes, instruccione
 
 El trabajo de diseño y desarrollo se realiza por fases revisables. El usuario ejecuta las instrucciones en Cursor y comparte planes, cambios y pruebas para supervisión. Los commits por fase permiten revisar modificaciones concretas. No se declara una fase completa solo por implementar pantallas.
 
-La fase 1 de instrucción vigente fue reportada como implementada. Su cierre sigue con observaciones de concurrencia, autorización del segundo traslado y tres fallos de pruebas no reejecutados. La comprobación de concurrencia puede avanzar en paralelo con el diseño de la fase 2.1 y debe quedar resuelta antes de habilitar acciones nuevas que dependan de ella. No queda reservada como única validación para el cierre 2.1.5. Este documento no da la fase 1 por validada.
+La comprobación del 4 de noviembre registró concurrencia real sobre una base aislada, autorización de segundo traslado y pruebas enfocadas de Tienda. Los resultados y límites están en la referencia vigente del módulo. No mantener como bloqueo actual el estado anterior de concurrencia pendiente ni deducir que toda la suite general está validada: sigue pendiente el recorrido autenticado de aceptación y quedan fallos generales documentados.
 
 ## Capabilities and Constraints
 
@@ -84,11 +88,11 @@ Estas decisiones actualizan la interpretación del análisis. El archivo V02.1 n
 - La revisión de disponibilidad, en Control Pedidos y en Preparación Tienda, registra solo excepciones: daño o detalle, falta de existencia y disponibilidad parcial. Sin excepciones, la revisión queda concluida únicamente con confirmación explícita y evidencia del pedido completo. Un borrador o la ausencia de marcas por pieza no significan revisión terminada. No se inventan inspecciones de las piezas no capturadas. La misma capacidad sirve a ambas vistas. El efecto sobre municipal y nacional queda identificado para sus fases y no se implementa con este diseño.
 - Mismo día (Tienda MD) es una condición de atención de la modalidad Tienda con cobertura por transferencia. No es una cobertura alternativa y no se combina con crédito ni con pago al recoger. La facultad es configurable por departamento o usuario. Opera de lunes a viernes y no el sábado. La solicitud sin pago reportado queda prevista, no confirmada. El corte de las 13:00 corresponde a la hora en que el servidor acepta el reporte del pago: `pedido_bma_pagos.created_at` del primer reporte aceptado. Verificar el ingreso o registrar la remisión después de las 13:00 no rechaza un reporte que entró al corte. La entrega el mismo día además exige disponibilidad, documentación, preparación y traslado. Un reporte fuera del corte no cambia la modalidad ni reprograma.
 - Las altas actuales de Municipal y Nacional siguen en su formulario. La sección nueva es de Tienda. Un cambio de modalidad sobre un pedido ya iniciado respeta los límites físicos, documentales y financieros, y no abre cruces nuevos.
-- Adjuntar PDF o capturas de Wizerp en T-01 no está confirmado. No es requisito de este diseño.
+- Actualización del 4 de noviembre: la solicitud T-01 utiliza el documento del pedido (PDF/capturas) en la implementación revisada. Esta decisión sustituye la incertidumbre inicial sobre el documento; no se exige pago ni importe para consultar disponibilidad.
 
 ### Decisiones abiertas
 
-Siguen sin regla aprobada: momento exacto del vencimiento de crédito, duración VIP, consecuencia financiera de mercancía pagada liberada, excedentes menores a $10, remisión asegurada que no cabe en una caja, absorción de costos internos, archivo de Wizerp en T-01, piezas ya disponibles en PDV dentro de Mismo día (Tienda MD) y la continuación cuando el reporte del pago queda fuera del corte de las 13:00. No elegir valores ni bloquear acciones confirmadas por inferencia.
+Siguen sin regla aprobada: momento exacto del vencimiento de crédito, duración VIP, consecuencia financiera de mercancía pagada liberada, excedentes menores a $10, remisión asegurada que no cabe en una caja, absorción de costos internos, piezas ya disponibles en PDV dentro de Mismo día (Tienda MD) y la continuación cuando el reporte del pago queda fuera del corte de las 13:00. No elegir valores ni bloquear acciones confirmadas por inferencia.
 
 ## Brand Commitments
 

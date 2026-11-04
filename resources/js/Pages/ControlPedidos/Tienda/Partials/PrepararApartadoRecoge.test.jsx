@@ -201,8 +201,10 @@ it('en la consulta de tienda responde disponibilidad y separa solo la selección
     await mount({ tarea: { ...consulta, pedido: { ...consulta.pedido, revision_disponibilidad: { estado: 'excepciones_pendientes' }, excepciones: [{ id: 1, descripcion: 'Crema agotada' }] } } });
     expect(button('Confirmar separación')).toBeUndefined();
     expect(button('Enviar respuesta de disponibilidad')).toBeUndefined();
-    expect(container.textContent).toContain('todavía no está aceptado');
-    await mount({ tarea: { ...consulta, pedido: { ...consulta.pedido, revision_disponibilidad: { estado: 'sin_excepciones', aceptacion_vigente: true } } } });
+    expect(container.textContent).toContain('Ventas está revisando');
+    await mount({ tarea: { ...consulta, pedido: { ...consulta.pedido, consulta_cerrada: true, revision_disponibilidad: { estado: 'excepciones_pendientes', aceptacion_vigente: true }, excepciones: [{ id: 1, descripcion: 'Crema agotada' }] } } });
+    expect(button('Confirmar separación')).toBeDefined();
+    await mount({ tarea: { ...consulta, pedido: { ...consulta.pedido, consulta_cerrada: true, revision_disponibilidad: { estado: 'sin_excepciones', aceptacion_vigente: true } } } });
     expect(button('Confirmar separación')).toBeDefined();
 });
 it('en móvil abre el pedido de referencia y vuelve a productos sin perder las cantidades', async () => {

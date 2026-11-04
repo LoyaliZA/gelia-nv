@@ -1,0 +1,590 @@
+[
+  {
+    "view": "solicitud",
+    "size": "escritorio",
+    "theme": "claro",
+    "errors": [],
+    "scroll": 1440,
+    "width": 1440,
+    "text": "GESTIÓN DE PEDIDOS · PRUEBA-9\n\nREGISTRAR PEDIDO\n\nCaptura el pedido y elige el destino de la revisión.\n\nEste pedido ya tiene una instrucción, un pago o",
+    "buttons": [
+      "",
+      "Revisar y apartar en tiendaLa sucursal revisa el archivo y aparta lo aceptado. No confirma pago ni entrega.",
+      "Consultar disponibilidad en CEDISControl Pedidos responde la disponibilidad. Enviar la consulta no registra un traslado.",
+      "Reemplazar",
+      "Ampliar",
+      "Retirar",
+      "Guardar borrador"
+    ]
+  },
+  {
+    "view": "importes",
+    "size": "escritorio",
+    "theme": "claro",
+    "errors": [],
+    "scroll": 1440,
+    "width": 1440,
+    "text": "GESTIÓN DE PEDIDOS · PRUEBA-9\n\nREGISTRAR PEDIDO\n\nCaptura el pedido y elige el destino de la revisión.\n\nEste pedido ya tiene una instrucción, un pago o",
+    "buttons": [
+      "",
+      "Revisar y apartar en tiendaLa sucursal revisa el archivo y aparta lo aceptado. No confirma pago ni entrega.",
+      "Consultar disponibilidad en CEDISControl Pedidos responde la disponibilidad. Enviar la consulta no registra un traslado.",
+      "Reemplazar",
+      "Ampliar",
+      "Retirar",
+      "Guardar modalidad",
+      "Editar",
+      "Guardar borrador"
+    ]
+  },
+  {
+    "view": "revision",
+    "size": "escritorio",
+    "theme": "claro",
+    "errors": [],
+    "scroll": 1440,
+    "width": 1440,
+    "text": "PRUEBA-9\n\nEn atención\n\nSeparación y apartado en tienda\nAlmacén\nSucursal Centro\nCliente\nCliente de ejemplo\nOcultar pedido\nDatos y opciones de preparaci",
+    "buttons": [
+      "",
+      "Ocultar pedido",
+      "Reportar problema",
+      "Volver a productos",
+      "Ampliar pedido",
+      "Guardar y continuar después",
+      "Enviar respuesta"
+    ]
+  },
+  {
+    "view": "espera",
+    "size": "escritorio",
+    "theme": "claro",
+    "errors": [],
+    "scroll": 1440,
+    "width": 1440,
+    "text": "PRUEBA-9\n\nEn atención\n\nSeparación y apartado en tienda\nAlmacén\nSucursal Centro\nCliente\nCliente de ejemplo\nOcultar pedido\nDatos y opciones de preparaci",
+    "buttons": [
+      "",
+      "Ocultar pedido",
+      "Volver a productos",
+      "Ampliar pedido"
+    ]
+  },
+  {
+    "view": "anexo",
+    "size": "escritorio",
+    "theme": "claro",
+    "errors": [],
+    "scroll": 1440,
+    "width": 1440,
+    "text": "PRUEBA-9\n\nRespondida\n\nSeparación y apartado en tienda\nAlmacén\nSucursal Centro\nCliente\nCliente de ejemplo\nOcultar pedido\nDatos y opciones de preparació",
+    "buttons": [
+      "",
+      "Ocultar pedido",
+      "Agregar al anexo",
+      "Responder disponibilidad del anexo",
+      "Reportar faltante o detalle",
+      "Volver a productos",
+      "Ampliar pedido"
+    ]
+  },
+  {
+    "view": "retiro",
+    "size": "escritorio",
+    "theme": "claro",
+    "errors": [],
+    "scroll": 1440,
+    "width": 1440,
+    "text": "PRUEBA-9\n\nRespondida\n\nSeparación y apartado en tienda\nAlmacén\nSucursal Centro\nCliente\nCliente de ejemplo\nOcultar pedido\nDatos y opciones de preparació",
+    "buttons": [
+      "",
+      "Ocultar pedido",
+      "Aplicar retiro",
+      "Rechazar",
+      "Volver a productos",
+      "Ampliar pedido"
+    ]
+  },
+  {
+    "view": "entrega",
+    "size": "escritorio",
+    "theme": "claro",
+    "errors": [],
+    "scroll": 1440,
+    "width": 1440,
+    "text": "PRUEBA-9\n\nApartado confirmado\n\nSeparación y apartado en tienda\nAlmacén\nSucursal Centro\nCliente\nCliente de ejemplo\nOcultar pedido\nDatos y opciones de p",
+    "buttons": [
+      "",
+      "Ocultar pedido",
+      "Volver a productos",
+      "Ampliar pedido",
+      "Confirmar entrega"
+    ]
+  },
+  {
+    "view": "cedis",
+    "size": "escritorio",
+    "theme": "claro",
+    "errors": [],
+    "scroll": 1440,
+    "width": 1440,
+    "text": "Consulta de disponibilidad\nRespuesta de disponibilidad\n\nSin excepciones exige confirmación explícita y evidencia del pedido completo. Con excepciones,",
+    "buttons": [
+      "",
+      "Registrar revisión"
+    ]
+  },
+  {
+    "view": "auditar",
+    "size": "escritorio",
+    "theme": "claro",
+    "errors": [],
+    "scroll": 1440,
+    "width": 1440,
+    "text": "Revisión de pedido\n\nWIZ-9\n\nCliente de ejemplo para revisión operativa de Tienda\n\nPendiente de auditoría\nDatos de revisión\nMás acciones\nAprobar pedido\n",
+    "buttons": [
+      "Reportar error",
+      " Aprobar pedido",
+      "",
+      "Rechazado",
+      "Pagado y validado",
+      "Guardar número"
+    ]
+  },
+  {
+    "view": "solicitud",
+    "size": "escritorio",
+    "theme": "oscuro",
+    "errors": [],
+    "scroll": 1440,
+    "width": 1440,
+    "text": "GESTIÓN DE PEDIDOS · PRUEBA-9\n\nREGISTRAR PEDIDO\n\nCaptura el pedido y elige el destino de la revisión.\n\nEste pedido ya tiene una instrucción, un pago o",
+    "buttons": [
+      "",
+      "Revisar y apartar en tiendaLa sucursal revisa el archivo y aparta lo aceptado. No confirma pago ni entrega.",
+      "Consultar disponibilidad en CEDISControl Pedidos responde la disponibilidad. Enviar la consulta no registra un traslado.",
+      "Reemplazar",
+      "Ampliar",
+      "Retirar",
+      "Guardar borrador"
+    ]
+  },
+  {
+    "view": "importes",
+    "size": "escritorio",
+    "theme": "oscuro",
+    "errors": [],
+    "scroll": 1440,
+    "width": 1440,
+    "text": "GESTIÓN DE PEDIDOS · PRUEBA-9\n\nREGISTRAR PEDIDO\n\nCaptura el pedido y elige el destino de la revisión.\n\nEste pedido ya tiene una instrucción, un pago o",
+    "buttons": [
+      "",
+      "Revisar y apartar en tiendaLa sucursal revisa el archivo y aparta lo aceptado. No confirma pago ni entrega.",
+      "Consultar disponibilidad en CEDISControl Pedidos responde la disponibilidad. Enviar la consulta no registra un traslado.",
+      "Reemplazar",
+      "Ampliar",
+      "Retirar",
+      "Guardar modalidad",
+      "Editar",
+      "Guardar borrador"
+    ]
+  },
+  {
+    "view": "revision",
+    "size": "escritorio",
+    "theme": "oscuro",
+    "errors": [],
+    "scroll": 1440,
+    "width": 1440,
+    "text": "PRUEBA-9\n\nEn atención\n\nSeparación y apartado en tienda\nAlmacén\nSucursal Centro\nCliente\nCliente de ejemplo\nOcultar pedido\nDatos y opciones de preparaci",
+    "buttons": [
+      "",
+      "Ocultar pedido",
+      "Reportar problema",
+      "Volver a productos",
+      "Ampliar pedido",
+      "Guardar y continuar después",
+      "Enviar respuesta"
+    ]
+  },
+  {
+    "view": "espera",
+    "size": "escritorio",
+    "theme": "oscuro",
+    "errors": [],
+    "scroll": 1440,
+    "width": 1440,
+    "text": "PRUEBA-9\n\nEn atención\n\nSeparación y apartado en tienda\nAlmacén\nSucursal Centro\nCliente\nCliente de ejemplo\nOcultar pedido\nDatos y opciones de preparaci",
+    "buttons": [
+      "",
+      "Ocultar pedido",
+      "Volver a productos",
+      "Ampliar pedido"
+    ]
+  },
+  {
+    "view": "anexo",
+    "size": "escritorio",
+    "theme": "oscuro",
+    "errors": [],
+    "scroll": 1440,
+    "width": 1440,
+    "text": "PRUEBA-9\n\nRespondida\n\nSeparación y apartado en tienda\nAlmacén\nSucursal Centro\nCliente\nCliente de ejemplo\nOcultar pedido\nDatos y opciones de preparació",
+    "buttons": [
+      "",
+      "Ocultar pedido",
+      "Agregar al anexo",
+      "Responder disponibilidad del anexo",
+      "Reportar faltante o detalle",
+      "Volver a productos",
+      "Ampliar pedido"
+    ]
+  },
+  {
+    "view": "retiro",
+    "size": "escritorio",
+    "theme": "oscuro",
+    "errors": [],
+    "scroll": 1440,
+    "width": 1440,
+    "text": "PRUEBA-9\n\nRespondida\n\nSeparación y apartado en tienda\nAlmacén\nSucursal Centro\nCliente\nCliente de ejemplo\nOcultar pedido\nDatos y opciones de preparació",
+    "buttons": [
+      "",
+      "Ocultar pedido",
+      "Aplicar retiro",
+      "Rechazar",
+      "Volver a productos",
+      "Ampliar pedido"
+    ]
+  },
+  {
+    "view": "entrega",
+    "size": "escritorio",
+    "theme": "oscuro",
+    "errors": [],
+    "scroll": 1440,
+    "width": 1440,
+    "text": "PRUEBA-9\n\nApartado confirmado\n\nSeparación y apartado en tienda\nAlmacén\nSucursal Centro\nCliente\nCliente de ejemplo\nOcultar pedido\nDatos y opciones de p",
+    "buttons": [
+      "",
+      "Ocultar pedido",
+      "Volver a productos",
+      "Ampliar pedido",
+      "Confirmar entrega"
+    ]
+  },
+  {
+    "view": "cedis",
+    "size": "escritorio",
+    "theme": "oscuro",
+    "errors": [],
+    "scroll": 1440,
+    "width": 1440,
+    "text": "Consulta de disponibilidad\nRespuesta de disponibilidad\n\nSin excepciones exige confirmación explícita y evidencia del pedido completo. Con excepciones,",
+    "buttons": [
+      "",
+      "Registrar revisión"
+    ]
+  },
+  {
+    "view": "auditar",
+    "size": "escritorio",
+    "theme": "oscuro",
+    "errors": [],
+    "scroll": 1440,
+    "width": 1440,
+    "text": "Revisión de pedido\n\nWIZ-9\n\nCliente de ejemplo para revisión operativa de Tienda\n\nPendiente de auditoría\nDatos de revisión\nMás acciones\nAprobar pedido\n",
+    "buttons": [
+      "Reportar error",
+      " Aprobar pedido",
+      "",
+      "Rechazado",
+      "Pagado y validado",
+      "Guardar número"
+    ]
+  },
+  {
+    "view": "solicitud",
+    "size": "movil",
+    "theme": "claro",
+    "errors": [],
+    "scroll": 390,
+    "width": 390,
+    "text": "GESTIÓN DE PEDIDOS · PRUEBA-9\n\nREGISTRAR PEDIDO\n\nCaptura el pedido y elige el destino de la revisión.\n\nEste pedido ya tiene una instrucción, un pago o",
+    "buttons": [
+      "",
+      "Revisar y apartar en tiendaLa sucursal revisa el archivo y aparta lo aceptado. No confirma pago ni entrega.",
+      "Consultar disponibilidad en CEDISControl Pedidos responde la disponibilidad. Enviar la consulta no registra un traslado.",
+      "Reemplazar",
+      "Ampliar",
+      "Retirar",
+      "Guardar borrador"
+    ]
+  },
+  {
+    "view": "importes",
+    "size": "movil",
+    "theme": "claro",
+    "errors": [],
+    "scroll": 390,
+    "width": 390,
+    "text": "GESTIÓN DE PEDIDOS · PRUEBA-9\n\nREGISTRAR PEDIDO\n\nCaptura el pedido y elige el destino de la revisión.\n\nEste pedido ya tiene una instrucción, un pago o",
+    "buttons": [
+      "",
+      "Revisar y apartar en tiendaLa sucursal revisa el archivo y aparta lo aceptado. No confirma pago ni entrega.",
+      "Consultar disponibilidad en CEDISControl Pedidos responde la disponibilidad. Enviar la consulta no registra un traslado.",
+      "Reemplazar",
+      "Ampliar",
+      "Retirar",
+      "Guardar modalidad",
+      "Editar",
+      "Guardar borrador"
+    ]
+  },
+  {
+    "view": "revision",
+    "size": "movil",
+    "theme": "claro",
+    "errors": [],
+    "scroll": 390,
+    "width": 390,
+    "text": "PRUEBA-9\n\nEn atención\n\nSeparación y apartado en tienda\nAlmacén\nSucursal Centro\nCliente\nCliente de ejemplo\nVer pedido\nDatos y opciones de preparación\nI",
+    "buttons": [
+      "",
+      "Ver pedido",
+      "Reportar problema",
+      "Guardar y continuar después",
+      "Enviar respuesta"
+    ]
+  },
+  {
+    "view": "espera",
+    "size": "movil",
+    "theme": "claro",
+    "errors": [],
+    "scroll": 390,
+    "width": 390,
+    "text": "PRUEBA-9\n\nEn atención\n\nSeparación y apartado en tienda\nAlmacén\nSucursal Centro\nCliente\nCliente de ejemplo\nVer pedido\nDatos y opciones de preparación\nR",
+    "buttons": [
+      "",
+      "Ver pedido"
+    ]
+  },
+  {
+    "view": "anexo",
+    "size": "movil",
+    "theme": "claro",
+    "errors": [],
+    "scroll": 390,
+    "width": 390,
+    "text": "PRUEBA-9\n\nRespondida\n\nSeparación y apartado en tienda\nAlmacén\nSucursal Centro\nCliente\nCliente de ejemplo\nVer pedido\nDatos y opciones de preparación\nAn",
+    "buttons": [
+      "",
+      "Ver pedido",
+      "Agregar al anexo",
+      "Responder disponibilidad del anexo",
+      "Reportar faltante o detalle"
+    ]
+  },
+  {
+    "view": "retiro",
+    "size": "movil",
+    "theme": "claro",
+    "errors": [],
+    "scroll": 390,
+    "width": 390,
+    "text": "PRUEBA-9\n\nRespondida\n\nSeparación y apartado en tienda\nAlmacén\nSucursal Centro\nCliente\nCliente de ejemplo\nVer pedido\nDatos y opciones de preparación\nRe",
+    "buttons": [
+      "",
+      "Ver pedido",
+      "Aplicar retiro",
+      "Rechazar"
+    ]
+  },
+  {
+    "view": "entrega",
+    "size": "movil",
+    "theme": "claro",
+    "errors": [],
+    "scroll": 390,
+    "width": 390,
+    "text": "PRUEBA-9\n\nApartado confirmado\n\nSeparación y apartado en tienda\nAlmacén\nSucursal Centro\nCliente\nCliente de ejemplo\nVer pedido\nDatos y opciones de prepa",
+    "buttons": [
+      "",
+      "Ver pedido",
+      "Confirmar entrega"
+    ]
+  },
+  {
+    "view": "cedis",
+    "size": "movil",
+    "theme": "claro",
+    "errors": [],
+    "scroll": 390,
+    "width": 390,
+    "text": "Consulta de disponibilidad\nRespuesta de disponibilidad\n\nSin excepciones exige confirmación explícita y evidencia del pedido completo. Con excepciones,",
+    "buttons": [
+      "",
+      "Registrar revisión"
+    ]
+  },
+  {
+    "view": "auditar",
+    "size": "movil",
+    "theme": "claro",
+    "errors": [],
+    "scroll": 390,
+    "width": 390,
+    "text": "Revisión de pedido\n\nWIZ-9\n\nCliente de ejemplo para revisión operativa de Tienda\n\nPendiente de auditoría\nDatos de revisión\nMás acciones\nAprobar pedido\n",
+    "buttons": [
+      "Reportar error",
+      " Aprobar pedido",
+      "",
+      "Rechazado",
+      "Pagado y validado",
+      "Guardar número"
+    ]
+  },
+  {
+    "view": "solicitud",
+    "size": "movil",
+    "theme": "oscuro",
+    "errors": [],
+    "scroll": 390,
+    "width": 390,
+    "text": "GESTIÓN DE PEDIDOS · PRUEBA-9\n\nREGISTRAR PEDIDO\n\nCaptura el pedido y elige el destino de la revisión.\n\nEste pedido ya tiene una instrucción, un pago o",
+    "buttons": [
+      "",
+      "Revisar y apartar en tiendaLa sucursal revisa el archivo y aparta lo aceptado. No confirma pago ni entrega.",
+      "Consultar disponibilidad en CEDISControl Pedidos responde la disponibilidad. Enviar la consulta no registra un traslado.",
+      "Reemplazar",
+      "Ampliar",
+      "Retirar",
+      "Guardar borrador"
+    ]
+  },
+  {
+    "view": "importes",
+    "size": "movil",
+    "theme": "oscuro",
+    "errors": [],
+    "scroll": 390,
+    "width": 390,
+    "text": "GESTIÓN DE PEDIDOS · PRUEBA-9\n\nREGISTRAR PEDIDO\n\nCaptura el pedido y elige el destino de la revisión.\n\nEste pedido ya tiene una instrucción, un pago o",
+    "buttons": [
+      "",
+      "Revisar y apartar en tiendaLa sucursal revisa el archivo y aparta lo aceptado. No confirma pago ni entrega.",
+      "Consultar disponibilidad en CEDISControl Pedidos responde la disponibilidad. Enviar la consulta no registra un traslado.",
+      "Reemplazar",
+      "Ampliar",
+      "Retirar",
+      "Guardar modalidad",
+      "Editar",
+      "Guardar borrador"
+    ]
+  },
+  {
+    "view": "revision",
+    "size": "movil",
+    "theme": "oscuro",
+    "errors": [],
+    "scroll": 390,
+    "width": 390,
+    "text": "PRUEBA-9\n\nEn atención\n\nSeparación y apartado en tienda\nAlmacén\nSucursal Centro\nCliente\nCliente de ejemplo\nVer pedido\nDatos y opciones de preparación\nI",
+    "buttons": [
+      "",
+      "Ver pedido",
+      "Reportar problema",
+      "Guardar y continuar después",
+      "Enviar respuesta"
+    ]
+  },
+  {
+    "view": "espera",
+    "size": "movil",
+    "theme": "oscuro",
+    "errors": [],
+    "scroll": 390,
+    "width": 390,
+    "text": "PRUEBA-9\n\nEn atención\n\nSeparación y apartado en tienda\nAlmacén\nSucursal Centro\nCliente\nCliente de ejemplo\nVer pedido\nDatos y opciones de preparación\nR",
+    "buttons": [
+      "",
+      "Ver pedido"
+    ]
+  },
+  {
+    "view": "anexo",
+    "size": "movil",
+    "theme": "oscuro",
+    "errors": [],
+    "scroll": 390,
+    "width": 390,
+    "text": "PRUEBA-9\n\nRespondida\n\nSeparación y apartado en tienda\nAlmacén\nSucursal Centro\nCliente\nCliente de ejemplo\nVer pedido\nDatos y opciones de preparación\nAn",
+    "buttons": [
+      "",
+      "Ver pedido",
+      "Agregar al anexo",
+      "Responder disponibilidad del anexo",
+      "Reportar faltante o detalle"
+    ]
+  },
+  {
+    "view": "retiro",
+    "size": "movil",
+    "theme": "oscuro",
+    "errors": [],
+    "scroll": 390,
+    "width": 390,
+    "text": "PRUEBA-9\n\nRespondida\n\nSeparación y apartado en tienda\nAlmacén\nSucursal Centro\nCliente\nCliente de ejemplo\nVer pedido\nDatos y opciones de preparación\nRe",
+    "buttons": [
+      "",
+      "Ver pedido",
+      "Aplicar retiro",
+      "Rechazar"
+    ]
+  },
+  {
+    "view": "entrega",
+    "size": "movil",
+    "theme": "oscuro",
+    "errors": [],
+    "scroll": 390,
+    "width": 390,
+    "text": "PRUEBA-9\n\nApartado confirmado\n\nSeparación y apartado en tienda\nAlmacén\nSucursal Centro\nCliente\nCliente de ejemplo\nVer pedido\nDatos y opciones de prepa",
+    "buttons": [
+      "",
+      "Ver pedido",
+      "Confirmar entrega"
+    ]
+  },
+  {
+    "view": "cedis",
+    "size": "movil",
+    "theme": "oscuro",
+    "errors": [],
+    "scroll": 390,
+    "width": 390,
+    "text": "Consulta de disponibilidad\nRespuesta de disponibilidad\n\nSin excepciones exige confirmación explícita y evidencia del pedido completo. Con excepciones,",
+    "buttons": [
+      "",
+      "Registrar revisión"
+    ]
+  },
+  {
+    "view": "auditar",
+    "size": "movil",
+    "theme": "oscuro",
+    "errors": [],
+    "scroll": 390,
+    "width": 390,
+    "text": "Revisión de pedido\n\nWIZ-9\n\nCliente de ejemplo para revisión operativa de Tienda\n\nPendiente de auditoría\nDatos de revisión\nMás acciones\nAprobar pedido\n",
+    "buttons": [
+      "Reportar error",
+      " Aprobar pedido",
+      "",
+      "Rechazado",
+      "Pagado y validado",
+      "Guardar número"
+    ]
+  }
+]

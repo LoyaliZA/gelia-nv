@@ -81,6 +81,32 @@ final class CompromisoInventarioTienda
         });
     }
 
+    /** Libera solo la cantidad retirada; conserva el resto de cada compromiso. */
+    public function liberarCantidad(PedidoBma $pedido, int $almacenId, string $sku, int $cantidad): void
+    {
+        DB::transaction(function () use ($pedido, $almacenId, $sku, $cantidad) {
+            $pedido = PedidoBma::query()->lockForUpdate()->findOrFail($pedido->id);
+            $json = $this->json($pedido);
+            $restante = (string) $cantidad;
+            foreach ((array) ($json['compromisos_inventario'] ?? []) as $clave => $fila) {
+                if (bccomp($restante, '0', 3) <= 0) break;
+                if (! is_array($fila) || ! ($fila['activo'] ?? false) || (int) ($fila['almacen_id'] ?? 0) !== $almacenId || strcasecmp((string) ($fila['sku'] ?? ''), $sku) !== 0) continue;
+                $tomar = bccomp((string) $fila['cantidad'], $restante, 3) <= 0 ? (string) $fila['cantidad'] : $restante;
+                $inventario = Inventario::query()->where('almacen_id', $almacenId)->where('producto_id', $fila['producto_id'])->lockForUpdate()->first();
+                if ($inventario) {
+                    $queda = bcsub((string) $inventario->apartado, $tomar, 3);
+                    $inventario->update(['apartado' => bccomp($queda, '0', 3) > 0 ? $queda : '0.000']);
+                }
+                $fila['cantidad'] = bcsub((string) $fila['cantidad'], $tomar, 3);
+                $fila['activo'] = bccomp($fila['cantidad'], '0', 3) > 0;
+                $fila['liberacion_parcial_at'] = now()->toIso8601String();
+                $json['compromisos_inventario'][$clave] = $fila;
+                $restante = bcsub($restante, $tomar, 3);
+            }
+            $pedido->update(['solicitud_preparacion_json' => $json]);
+        });
+    }
+
     public function liberarPedido(PedidoBma $pedido): void
     {
         $pedido = $pedido->fresh() ?: $pedido;

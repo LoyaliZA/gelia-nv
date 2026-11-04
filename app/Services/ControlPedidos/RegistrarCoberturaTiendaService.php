@@ -52,9 +52,9 @@ final class RegistrarCoberturaTiendaService
                 }
             }
             $estado = $json['revision_disponibilidad']['estado'] ?? null;
-            if (! in_array($estado, ['sin_excepciones', 'decision_registrada'], true)) {
+            if (! in_array($estado, ['sin_excepciones', 'excepciones_pendientes', 'decision_registrada'], true)) {
                 throw ValidationException::withMessages([
-                    'cobertura' => 'La cobertura espera el resultado de la revisión y la decisión del cliente.',
+                    'cobertura' => 'La cobertura espera el cierre vigente de la consulta.',
                 ]);
             }
             if (filled($pedido->numero_remision) || $pedido->tieneRemision()) {

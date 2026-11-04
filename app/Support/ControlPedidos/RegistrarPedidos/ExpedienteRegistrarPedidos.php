@@ -45,7 +45,7 @@ final class ExpedienteRegistrarPedidos
             'folio_interno' => $pedido->folio,
             'cobertura' => $cobertura !== '' ? $cobertura : null,
             'atencion' => $atencion,
-            'atencion_confirmada' => false,
+            'atencion_confirmada' => (bool) (\App\Support\ControlPedidos\AtencionMismoDiaTienda::datos($pedido)['confirmada'] ?? false),
             'pago_registrado' => $pagoRegistrado,
             'sucursal' => $pedido->sucursalDestino?->nombre,
             'sucursal_destino_id' => $pedido->sucursal_destino_id,
@@ -59,7 +59,7 @@ final class ExpedienteRegistrarPedidos
             'revision_disponibilidad' => is_array($json['revision_disponibilidad'] ?? null) ? $json['revision_disponibilidad'] : null,
             'decision_pendiente' => $this->decisionPendiente($json, $area),
             'excepciones' => $this->excepcionesPendientes($pedido, $json),
-            'tienda_md' => $this->mismoDia($json),
+            'tienda_md' => \App\Support\ControlPedidos\AtencionMismoDiaTienda::datos($pedido),
             'cobertura_elegida' => is_array($json['cobertura_tienda'] ?? null) ? $json['cobertura_tienda'] : null,
             'decisiones' => $this->decisiones($pedido),
             'segundo_traslado' => is_array($json['segundo_traslado'] ?? null) ? $json['segundo_traslado'] : null,
@@ -130,27 +130,6 @@ final class ExpedienteRegistrarPedidos
      * @param  array<string, mixed>  $json
      * @return array<string, mixed>|null
      */
-    private function mismoDia(array $json): ?array
-    {
-        $reporte = is_array($json['tienda_md_reporte'] ?? null) ? $json['tienda_md_reporte'] : null;
-        $intencion = ($json['atencion_tienda'] ?? null) === 'prevista' || ($json['caso_tienda'] ?? null) === 'mismo_dia_pdv';
-        if (! $intencion && $reporte === null) {
-            return null;
-        }
-
-        return [
-            'ficha' => 'T-02.1',
-            'cobertura' => 'transferencia',
-            'intencion' => $intencion ? 'prevista' : 'no',
-            'confirmada' => false,
-            'reporte' => $reporte['estado'] ?? null,
-            'motivo' => $reporte['motivo'] ?? null,
-        ];
-    }
-
-    /**
-     * @return list<array<string, mixed>>
-     */
     private function decisiones(PedidoBma $pedido): array
     {
         return $pedido->revisionesProducto
@@ -172,10 +151,7 @@ final class ExpedienteRegistrarPedidos
     private function siguiente(array $json, string $area, mixed $instruccion): string
     {
         $estado = $json['revision_disponibilidad']['estado'] ?? null;
-        if ($estado === 'excepciones_pendientes') {
-            return ResponderDisponibilidadInicialService::DECISION_EXCEPCIONES;
-        }
-        if (! in_array($estado, ['sin_excepciones', 'decision_registrada'], true)) {
+        if (! in_array($estado, ['sin_excepciones', 'excepciones_pendientes', 'decision_registrada'], true)) {
             return $area === DestinoRevisionRegistrarPedidos::PREPARACION_TIENDA
                 ? 'Enviado a Preparación Tienda. Se espera la revisión del archivo.'
                 : 'Enviado a Control Pedidos. Se espera la consulta de disponibilidad.';

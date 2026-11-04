@@ -20,7 +20,7 @@ use Illuminate\Validation\ValidationException;
 /** Respuesta inicial por excepciones. No aparta, no traslada y no confirma pago. */
 class ResponderDisponibilidadInicialService
 {
-    public const DECISION_EXCEPCIONES = 'Falta la decisión del cliente sobre las piezas con excepción. Esas piezas no continúan como aceptadas.';
+    public const DECISION_EXCEPCIONES = 'La respuesta incluye piezas con excepción. El pedido se cierra con Cerrar consulta. Para cambiar piezas, registre un anexo o un retiro.';
 
     public const DECISION_TIENDA = 'Revisión sin excepciones. Falta el apartado físico de lo aceptado. No hay pago ni entrega.';
 

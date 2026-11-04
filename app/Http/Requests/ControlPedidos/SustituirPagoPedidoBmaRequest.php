@@ -3,6 +3,7 @@
 namespace App\Http\Requests\ControlPedidos;
 
 use App\Models\SaldosAFavor\PedidoBmaPago;
+use App\Services\SaldosAFavor\ResolverBancoCajaPdv;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -19,14 +20,23 @@ class SustituirPagoPedidoBmaRequest extends FormRequest
     public function rules(): array
     {
         $forma = $this->input('forma_pago');
+        $pago = $this->route('pago');
+        if (! $pago instanceof PedidoBmaPago && $pago) {
+            $pago = PedidoBmaPago::query()->find($pago);
+        }
+        $pedido = $pago instanceof PedidoBmaPago ? $pago->pedido : null;
+        $cobroEnTienda = $pedido && app(ResolverBancoCajaPdv::class)->esCobroEnTienda($pedido, is_string($forma) ? $forma : null);
 
         return [
             'monto' => ['nullable', 'numeric', 'min:0.01'],
             'catalogo_banco_id' => [
-                Rule::requiredIf(fn () => PedidoBmaPago::formaRequiereBanco($forma)),
+                Rule::requiredIf(fn () => ! $cobroEnTienda && PedidoBmaPago::formaRequiereBanco($forma)),
                 'nullable',
                 'exists:catalogo_bancos,id',
             ],
+            'revision_esperada' => ['nullable', 'integer', 'min:0'],
+            'total_mercancia_confirmado' => ['nullable', 'numeric', 'min:0'],
+            'saldo_a_favor_confirmado' => ['nullable', 'numeric', 'min:0'],
             'forma_pago' => ['nullable', 'in:'.implode(',', PedidoBmaPago::FORMAS_PAGO)],
             'fecha_pago' => ['nullable', 'date'],
             'referencia' => ['nullable', 'string', 'max:128'],

@@ -22,8 +22,13 @@ final class AplicarCorteMismoDiaTienda
             return;
         }
 
-        $intencion = ($json['atencion_tienda'] ?? null) === 'prevista';
-        $evaluacion = $this->corte->evaluar($pago->created_at ?? now(), $this->config->zonaHoraria(), $intencion);
+        $intencion = ($json['atencion_tienda'] ?? null) === 'prevista'
+            && ($json['cobertura_tienda']['tipo'] ?? null) === 'transferencia'
+            && $pago->forma_pago === 'transferencia';
+        if (! $intencion) {
+            return;
+        }
+        $evaluacion = $this->corte->evaluar($pago->created_at ?? now(), $this->config->zonaHoraria(), true);
         $json['tienda_md_reporte'] = [
             'estado' => $evaluacion['estado'],
             'oportuno' => $evaluacion['oportuno'],

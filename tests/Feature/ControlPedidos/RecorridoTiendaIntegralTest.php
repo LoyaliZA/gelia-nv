@@ -14,7 +14,6 @@ use App\Models\ControlPedidos\CatalogoOrigenPedido;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Models\ControlPedidos\PedidoBmaCumplimientoFisico;
 use App\Models\ControlPedidos\PedidoBmaDocumento;
-use App\Models\ControlPedidos\PedidoBmaRevisionProducto;
 use App\Models\ControlPedidos\PedidoBmaTareaDocumento;
 use App\Models\ControlPedidos\PedidoBmaTareaPreparacion;
 use App\Models\Departamento;
@@ -38,7 +37,6 @@ use App\Services\ControlPedidos\RegistrarRemisionCreditoTiendaService;
 use App\Services\ControlPedidos\TrasladarCustodiaHaciaCedisService;
 use App\Services\PuntoVenta\PuntoVentaModulo;
 use App\Services\ControlPedidos\RegistrarCoberturaTiendaService;
-use App\Services\ControlPedidos\RegistrarDecisionClienteTiendaService;
 use App\Services\ControlPedidos\RegistrarResultadoCreditoTiendaService;
 use App\Services\ControlPedidos\RetirarCustodiaParaEnvioService;
 use App\Services\SaldosAFavor\RegistrarPagoPedidoBmaService;
@@ -99,66 +97,6 @@ class RecorridoTiendaIntegralTest extends TestCase
     {
         Carbon::setTestNow();
         parent::tearDown();
-    }
-
-    public function test_una_pieza_inexistente_no_se_acepta_y_la_misma_decision_no_se_duplica(): void
-    {
-        $pedido = $this->pedido();
-        $inexistente = $this->revision($pedido, PedidoBmaRevisionProducto::ESTADO_SIN_EXISTENCIA, 0);
-        try {
-            app(RegistrarDecisionClienteTiendaService::class)->ejecutar(
-                $pedido,
-                $this->usuario,
-                $inexistente->id,
-                PedidoBmaRevisionProducto::RESOLUCION_ACEPTAR_DISPONIBLE
-            );
-            $this->fail('La aceptación no vuelve disponible una pieza inexistente.');
-        } catch (ValidationException $e) {
-            $this->assertSame(RegistrarDecisionClienteTiendaService::MENSAJE_INEXISTENTE, $e->errors()['accion'][0]);
-        }
-
-        $regular = $this->revision($pedido, PedidoBmaRevisionProducto::ESTADO_REGULAR, 1);
-        app(RegistrarDecisionClienteTiendaService::class)->ejecutar(
-            $pedido,
-            $this->usuario,
-            $regular->id,
-            PedidoBmaRevisionProducto::RESOLUCION_RETIRAR
-        );
-        app(RegistrarDecisionClienteTiendaService::class)->ejecutar(
-            $pedido,
-            $this->usuario,
-            $regular->id,
-            PedidoBmaRevisionProducto::RESOLUCION_RETIRAR
-        );
-        $this->assertSame(1, PedidoBmaRevisionProducto::query()->where('resolucion', PedidoBmaRevisionProducto::RESOLUCION_RETIRAR)->count());
-
-        try {
-            app(RegistrarDecisionClienteTiendaService::class)->ejecutar(
-                $pedido,
-                $this->usuario,
-                $regular->id,
-                PedidoBmaRevisionProducto::RESOLUCION_DESISTIR,
-                'El cliente desiste.'
-            );
-            $this->fail('Una decisión distinta no sustituye la anterior.');
-        } catch (ValidationException $e) {
-            $this->assertArrayHasKey('revision', $e->errors());
-        }
-
-        $ajeno = User::factory()->create();
-        $ajeno->givePermissionTo(Permission::findOrCreate('control_pedidos.crear', 'web'));
-        $otra = $this->revision($pedido, PedidoBmaRevisionProducto::ESTADO_REGULAR, 1);
-        try {
-            app(RegistrarDecisionClienteTiendaService::class)->ejecutar(
-                $pedido,
-                $ajeno,
-                $otra->id,
-                PedidoBmaRevisionProducto::RESOLUCION_RETIRAR
-            );
-            $this->fail('Otra cuenta no informa la decisión.');
-        } catch (ValidationException $e) {
-            $this->assertArrayHasKey('permiso', $e->errors());
-        }
     }
 
     public function test_la_cobertura_de_mismo_dia_exige_facultad_y_dia_habil_sin_confirmarla(): void
@@ -256,7 +194,8 @@ class RecorridoTiendaIntegralTest extends TestCase
             'referencia' => 'SPEI-77',
             'idempotency_key' => 'ingreso-1',
         ], $comprobante('spei-77.pdf'), $this->usuario->id);
-        $this->assertNotNull($pedido->fresh()->solicitud_preparacion_json['tienda_md_reporte']['primer_pago_at']);
+        $this->assertArrayNotHasKey('tienda_md', $pedido->fresh()->solicitud_preparacion_json);
+        $this->assertArrayNotHasKey('tienda_md_reporte', $pedido->fresh()->solicitud_preparacion_json);
 
         try {
             $pagos->handle($pedido->fresh(), [
@@ -278,7 +217,8 @@ class RecorridoTiendaIntegralTest extends TestCase
         ], $comprobante('spei-78.pdf'), $this->usuario->id);
         $this->assertNotSame($primero->id, $segundo->id);
         $this->assertSame(2, PedidoBmaPago::query()->where('pedido_bma_id', $pedido->id)->count());
-        $this->assertSame($primero->id, $pedido->fresh()->solicitud_preparacion_json['tienda_md_reporte']['primer_pago_id']);
+        $this->assertArrayNotHasKey('tienda_md', $pedido->fresh()->solicitud_preparacion_json);
+        $this->assertSame((float) $primero->monto, (float) $primero->fresh()->monto);
     }
 
     public function test_el_credito_aprobado_no_pide_transferencia_y_el_bloqueado_sigue_bloqueado(): void
@@ -611,70 +551,6 @@ class RecorridoTiendaIntegralTest extends TestCase
         $this->assertSame(PedidoBmaTareaPreparacion::ESTADO_RESPONDIDA, $integrado->tareasPreparacion()->first()->estado);
     }
 
-    public function test_retirar_libera_el_compromiso_y_la_sustituta_exige_disponibilidad(): void
-    {
-        $pedido = $this->pedido();
-        $tarea = $this->tarea($pedido, CatalogoModalidadPreparacionPedido::CODIGO_RECOGE_TIENDA_TRANSFERENCIA);
-        $vieja = $this->producto('SKU-VIEJA');
-        $nueva = $this->producto('SKU-NUEVA');
-        $sinStock = $this->producto('SKU-CERO');
-        $inventarioViejo = Inventario::query()->create([
-            'producto_id' => $vieja->id, 'almacen_id' => $pedido->almacen_id, 'existencia' => '2.000', 'apartado' => '0.000',
-        ]);
-        Inventario::query()->create([
-            'producto_id' => $nueva->id, 'almacen_id' => $pedido->almacen_id, 'existencia' => '3.000', 'apartado' => '0.000',
-        ]);
-        Inventario::query()->create([
-            'producto_id' => $sinStock->id, 'almacen_id' => $pedido->almacen_id, 'existencia' => '0.000', 'apartado' => '0.000',
-        ]);
-        $linea = $tarea->productos()->create([
-            'producto_id' => $vieja->id,
-            'sku' => $vieja->sku,
-            'descripcion_snapshot' => 'Pieza a retirar',
-            'cantidad_solicitada' => 1,
-            'cantidad_encontrada' => 1,
-            'orden' => 1,
-        ]);
-        app(\App\Services\ControlPedidos\CompromisoInventarioTienda::class)->comprometer(
-            $pedido, (int) $pedido->almacen_id, $vieja->id, '1', 'tarea:'.$tarea->id.':producto:'.$linea->id, $vieja->sku
-        );
-        $revision = $this->revision($pedido, PedidoBmaRevisionProducto::ESTADO_REGULAR, 1);
-        $revision->update(['sku' => $vieja->sku]);
-        $pedido->documentos()->create([
-            'tipo' => PedidoBmaDocumento::TIPO_PDF_PEDIDO,
-            'ruta_archivo' => 'pedidos/pedido.pdf',
-            'nombre_original' => 'pedido.pdf',
-            'mime_type' => 'application/pdf',
-            'tamano_bytes' => 10,
-            'orden' => 1,
-            'activo' => true,
-        ]);
-
-        try {
-            app(RegistrarDecisionClienteTiendaService::class)->ejecutar(
-                $pedido, $this->usuario, $revision->id, PedidoBmaRevisionProducto::RESOLUCION_SUSTITUIR, '', $sinStock->sku
-            );
-            $this->fail('Sin disponibilidad no hay sustitución.');
-        } catch (ValidationException $e) {
-            $this->assertArrayHasKey('inventario', $e->errors());
-        }
-        $this->assertNull($revision->fresh()->resolucion);
-        $this->assertSame('1.000', $inventarioViejo->fresh()->apartado);
-
-        $sustituido = app(RegistrarDecisionClienteTiendaService::class)->ejecutar(
-            $pedido->fresh(), $this->usuario, $revision->id, PedidoBmaRevisionProducto::RESOLUCION_SUSTITUIR, '', $nueva->sku
-        );
-        $this->assertSame(PedidoBmaRevisionProducto::RESOLUCION_SUSTITUIR, $revision->fresh()->resolucion);
-        $this->assertSame(0, (int) $linea->fresh()->cantidad_encontrada);
-        $this->assertSame('0.000', $inventarioViejo->fresh()->apartado);
-        $this->assertSame('1.000', Inventario::query()->where('producto_id', $nueva->id)->value('apartado'));
-        $this->assertSame('vigente', $sustituido->solicitud_preparacion_json['continuacion_ejecutor']['estado']);
-        $this->assertSame(
-            'Continúe solo con las piezas aceptadas. Las retiradas ya no están comprometidas.',
-            $tarea->fresh()->observaciones_solicitud
-        );
-    }
-
     public function test_el_credito_se_remisiona_entrega_y_se_cancela_al_terminar_el_dia_siguiente(): void
     {
         Storage::fake('local');
@@ -857,19 +733,6 @@ class RecorridoTiendaIntegralTest extends TestCase
             'prioridad_md' => false,
             'solicitud_preparacion_json' => ['version' => 1, 'modalidad_entrega' => 'tienda'],
         ], $extra));
-    }
-
-    private function revision(PedidoBma $pedido, string $estado, int $encontrada): PedidoBmaRevisionProducto
-    {
-        return PedidoBmaRevisionProducto::query()->create([
-            'pedido_bma_id' => $pedido->id,
-            'orden' => (int) $pedido->revisionesProducto()->max('orden') + 1,
-            'descripcion_producto' => 'Pieza '.$estado,
-            'sku' => 'SKU-'.$estado,
-            'cantidad_solicitada' => 1,
-            'cantidad_encontrada' => $encontrada,
-            'estado_fisico' => $estado,
-        ]);
     }
 
     private function producto(string $sku): Producto

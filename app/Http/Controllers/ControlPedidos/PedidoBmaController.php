@@ -168,15 +168,11 @@ class PedidoBmaController extends Controller
         return response()->json(array_merge([
             'id' => $pedido->id,
             'folio' => $pedido->folio,
-            'revision_registro' => (int) $pedido->revision_registro,
-            'base_captura' => $pedido->base_captura,
             'saved_at' => now()->toIso8601String(),
             'updated_at' => optional($pedido->updated_at)?->toIso8601String(),
             'progreso' => $progresoService->calcular($pedido),
-            'prioridad_md' => (bool) $pedido->prioridad_md,
             'origen_id' => $pedido->origen_id,
-            'solicitud_preparacion' => $pedido->solicitud_preparacion,
-        ], $this->contextoRegistrarTienda($pedido)));
+        ], \App\Support\ControlPedidos\LecturaFinancieraPedido::de($pedido), $this->contextoRegistrarTienda($pedido)));
     }
 
     public function solicitarTienda(
@@ -219,36 +215,6 @@ class PedidoBmaController extends Controller
             'revision_registro' => (int) $resultado['pedido']->revision_registro,
             'base_captura' => $resultado['pedido']->base_captura,
             'solicitud_preparacion' => $resultado['pedido']->solicitud_preparacion,
-        ]));
-    }
-
-    public function decidirTienda(
-        Request $request,
-        PedidoBma $pedidoBma,
-        ListarPedidosBmaService $listarService,
-        \App\Services\ControlPedidos\RegistrarDecisionClienteTiendaService $servicio,
-    ): JsonResponse {
-        Gate::authorize('control_pedidos.crear');
-        $listarService->asegurarAcceso($pedidoBma, Auth::user());
-        $datos = $request->validate([
-            'revision_id' => ['required', 'integer'],
-            'accion' => ['required', 'string', 'max:40'],
-            'nota' => ['nullable', 'string', 'max:500'],
-            'sku_sustituto' => ['nullable', 'string', 'max:80'],
-        ]);
-
-        $pedido = $servicio->ejecutar(
-            $pedidoBma,
-            Auth::user(),
-            (int) $datos['revision_id'],
-            $datos['accion'],
-            (string) ($datos['nota'] ?? ''),
-            (string) ($datos['sku_sustituto'] ?? '')
-        );
-
-        return response()->json(array_merge(['ok' => true], $this->contextoRegistrarTienda($pedido), [
-            'solicitud_preparacion' => $pedido->solicitud_preparacion,
-            'revisiones_producto' => $pedido->revisionesProducto,
         ]));
     }
 

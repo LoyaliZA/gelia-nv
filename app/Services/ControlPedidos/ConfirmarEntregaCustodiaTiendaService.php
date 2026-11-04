@@ -34,6 +34,10 @@ final class ConfirmarEntregaCustodiaTiendaService
 
         return DB::transaction(function () use ($tarea, $usuario, $receptor, $foto) {
             $tarea->loadMissing(['pedido', 'cumplimientoFisico']);
+            $pedidoVigente = \App\Models\ControlPedidos\PedidoBma::query()->lockForUpdate()->findOrFail($tarea->pedido_bma_id);
+            if ($motivo = $pedidoVigente->motivoBloqueoEntregaTienda()) {
+                throw ValidationException::withMessages(['ajuste' => $motivo]);
+            }
             $cumplimiento = $tarea->cumplimientoFisico;
             $resguardo = $cumplimiento?->resguardo_pdv_id
                 ? ResguardoPdv::query()->find($cumplimiento->resguardo_pdv_id)

@@ -62,11 +62,12 @@ class SustituirPagoPedidoBmaService
                 : null)
             : $rechazado->catalogo_banco_id;
 
-        if (PedidoBmaPago::formaRequiereBanco($forma) && ! $bancoId) {
-            throw new InvalidArgumentException('Esta forma de pago requiere banco receptor.');
-        }
         if (! PedidoBmaPago::formaRequiereBanco($forma)) {
             $bancoId = null;
+        }
+        $bancoId = app(ResolverBancoCajaPdv::class)->destino($bancoId, $pedido, $forma);
+        if (PedidoBmaPago::formaRequiereBanco($forma) && ! $bancoId) {
+            throw new InvalidArgumentException('Esta forma de pago requiere banco receptor.');
         }
 
         CoberturaPagoPedidoBmaService::assertBancoPermitido($pedido, $bancoId);
@@ -87,6 +88,10 @@ class SustituirPagoPedidoBmaService
             return DB::transaction(function () use (
                 $rechazado, $pedido, $datos, $archivos, $usuarioId, $monto, $forma, $bancoId, &$rutasNuevas
             ) {
+                $pedido = PedidoBma::query()->lockForUpdate()->findOrFail($pedido->id);
+                app(ComprobarVersionFinancieraPago::class)->comprobar($pedido, $datos);
+                $bancoId = app(ResolverBancoCajaPdv::class)->destino($bancoId, $pedido, $forma);
+                CoberturaPagoPedidoBmaService::assertBancoPermitido($pedido, $bancoId);
                 $rechazado = PedidoBmaPago::query()->lockForUpdate()->findOrFail($rechazado->id);
                 if ($rechazado->sustituto()->exists()) {
                     throw new InvalidArgumentException('Esta exhibición ya tiene un sustituto vigente.');

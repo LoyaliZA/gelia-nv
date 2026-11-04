@@ -1131,10 +1131,8 @@ class PedidoBma extends Model
         if (($revision['vigente'] ?? true) === false || filled($revision['sustituida_at'] ?? null)) {
             return 'La respuesta vigente fue sustituida. No se cierra ni se cubre con la versión anterior.';
         }
-        if (! in_array($estado, ['sin_excepciones', 'decision_registrada'], true)) {
-            return $estado === 'excepciones_pendientes'
-                ? 'Falta la decisión del cliente sobre las piezas con excepción.'
-                : 'La consulta sigue abierta: falta la respuesta de disponibilidad.';
+        if (! in_array($estado, ['sin_excepciones', 'excepciones_pendientes', 'decision_registrada'], true)) {
+            return 'La consulta sigue abierta: falta la respuesta de disponibilidad.';
         }
         if (($revision['aceptacion_vigente'] ?? true) === false || $this->tieneAjusteTiendaPendiente()) {
             return 'Hay un ajuste pendiente. La aceptación de esta versión no sigue vigente.';
@@ -1151,8 +1149,8 @@ class PedidoBma extends Model
         $json = is_array($this->solicitud_preparacion_json) ? $this->solicitud_preparacion_json : [];
         $revision = is_array($json['revision_disponibilidad'] ?? null) ? $json['revision_disponibilidad'] : [];
         $estado = $revision['estado'] ?? null;
-        if (! in_array($estado, ['sin_excepciones', 'decision_registrada'], true)) {
-            return 'No se confirma la separación: la selección todavía no está aceptada.';
+        if (! in_array($estado, ['sin_excepciones', 'excepciones_pendientes', 'decision_registrada'], true)) {
+            return 'No se confirma la separación: falta la respuesta de disponibilidad.';
         }
         if (($revision['aceptacion_vigente'] ?? true) === false || $this->tieneAjusteTiendaPendiente()) {
             return 'No se confirma la separación: hay un ajuste pendiente o la aceptación de esta versión no sigue vigente.';
@@ -1170,15 +1168,23 @@ class PedidoBma extends Model
             }
         }
         foreach ((array) ($json['anexo_sin_remision'] ?? []) as $anexo) {
-            if (is_array($anexo) && ($anexo['pendiente_identificacion'] ?? false) === true) {
+            if (is_array($anexo) && ! isset($anexo['respondida_at'])) {
                 return true;
             }
         }
 
-        return $this->revisionesProducto()
-            ->whereNull('resolucion')
-            ->whereIn('estado_fisico', ['regular', 'malo', 'danado', 'sin_existencia'])
-            ->exists();
+        return false;
+    }
+
+    public function motivoBloqueoEntregaTienda(): ?string
+    {
+        if ($this->tieneAjusteTiendaPendiente()) return 'Hay un anexo o retiro pendiente de atención. Resuélvalo antes de entregar.';
+        foreach ((array) ($this->solicitud_preparacion_json['anexo_sin_remision'] ?? []) as $anexo) {
+            if (is_array($anexo) && ($anexo['estado'] ?? null) === 'disponible' && ! isset($anexo['separada_at'])) {
+                return 'Falta confirmar la separación física del anexo antes de entregar.';
+            }
+        }
+        return null;
     }
 
     public function pedidoPagadoORemisionado(): bool

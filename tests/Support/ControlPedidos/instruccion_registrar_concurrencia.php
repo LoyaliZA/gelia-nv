@@ -4,7 +4,7 @@
  * Concurrencia real sobre gelia_solicitud_211_test.
  * No usa la base de trabajo y no ejecuta migrate:fresh.
  *
- * Uso: php instruccion_registrar_concurrencia.php {setup|sostener|competir|bloqueo|afirmar} {duplicar|sustituir|decidir} {directorio}
+ * Uso: php instruccion_registrar_concurrencia.php {setup|sostener|competir|bloqueo|afirmar} {duplicar|sustituir} {directorio}
  */
 
 use App\Models\Almacen;
@@ -17,7 +17,6 @@ use App\Models\ControlPedidos\CatalogoOrigenPedido;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Models\ControlPedidos\PedidoBmaCumplimientoFisico;
 use App\Models\ControlPedidos\PedidoBmaDocumento;
-use App\Models\ControlPedidos\PedidoBmaRevisionProducto;
 use App\Models\ControlPedidos\PedidoBmaTareaPreparacion;
 use App\Models\Departamento;
 use App\Models\Sucursal;
@@ -25,7 +24,6 @@ use App\Models\User;
 use App\Services\ControlPedidos\CambiarModalidadPreparacionService;
 use App\Services\ControlPedidos\ConfirmarDespachoMunicipioService;
 use App\Services\ControlPedidos\PreparacionTiendaConfig;
-use App\Services\ControlPedidos\RegistrarDecisionClienteTiendaService;
 use App\Services\ControlPedidos\SolicitarRevisionRegistrarPedidosService;
 use App\Support\ControlPedidos\InstruccionEntrega;
 use App\Support\ControlPedidos\RevisionCapturaPedido;
@@ -63,6 +61,20 @@ require __DIR__.'/../../../vendor/autoload.php';
 $app = require __DIR__.'/../../../bootstrap/app.php';
 $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
 
+// La configuración cacheada de la aplicación no debe redirigir esta prueba
+// a la base operativa. Fijar la conexión aislada antes de cualquier consulta.
+$app['config']->set('database.default', 'mysql');
+$app['config']->set('database.connections.mysql.host', $host);
+$app['config']->set('database.connections.mysql.port', $puerto);
+$app['config']->set('database.connections.mysql.database', $baseDatos);
+$app['config']->set('database.connections.mysql.username', $usuarioBd);
+$app['config']->set('database.connections.mysql.password', $claveBd);
+$app['config']->set('app.env', 'testing');
+$app['config']->set('broadcasting.default', 'null');
+$app['config']->set('queue.default', 'sync');
+$app['config']->set('cache.default', 'array');
+DB::purge('mysql');
+
 if (DB::connection()->getDatabaseName() !== $baseDatos) {
     fwrite(STDERR, 'Conexión inesperada: '.DB::connection()->getDatabaseName()."\n");
     exit(3);
@@ -71,7 +83,7 @@ if (DB::connection()->getDatabaseName() !== $baseDatos) {
 $rol = $argv[1] ?? '';
 $caso = $argv[2] ?? '';
 $dir = $argv[3] ?? '';
-if (! in_array($caso, ['duplicar', 'sustituir', 'decidir'], true) || $dir === '') {
+if (! in_array($caso, ['duplicar', 'sustituir'], true) || $dir === '') {
     fwrite(STDERR, "Argumentos inválidos.\n");
     exit(2);
 }
@@ -104,12 +116,8 @@ function setup(string $caso, string $metaRuta): void
     $usuario = usuario();
     $pedido = pedido($usuario);
     $tareaId = null;
-    $revisionId = null;
     if ($caso === 'sustituir') {
         $tareaId = tareaMunicipal($pedido, $usuario);
-    }
-    if ($caso === 'decidir') {
-        $revisionId = revisionPendiente($pedido);
     }
     $pedido = $pedido->fresh();
     file_put_contents($metaRuta, json_encode([
@@ -118,7 +126,6 @@ function setup(string $caso, string $metaRuta): void
         'almacen_id' => $pedido->almacen_revision ?? null,
         'pdv_id' => pdv()->id,
         'tarea_id' => $tareaId,
-        'revision_id' => $revisionId,
         'revision' => (int) $pedido->revision_registro,
         'base' => RevisionCapturaPedido::base($pedido),
     ], JSON_THROW_ON_ERROR));
@@ -146,13 +153,6 @@ function sostener(string $caso, string $metaRuta, string $held, string $release)
             'preparacion_tienda',
             (int) $meta['pdv_id'],
             ['revision_esperada' => $meta['revision'], 'base_captura' => $meta['base']]
-        );
-    } elseif ($caso === 'decidir') {
-        app(RegistrarDecisionClienteTiendaService::class)->ejecutar(
-            PedidoBma::query()->findOrFail($meta['pedido_id']),
-            $usuario,
-            (int) $meta['revision_id'],
-            PedidoBmaRevisionProducto::RESOLUCION_RETIRAR
         );
     } else {
         $tarea = PedidoBmaTareaPreparacion::query()->findOrFail($meta['tarea_id']);
@@ -184,14 +184,6 @@ function competir(string $caso, string $metaRuta, string $salida): void
                 ['revision_esperada' => $meta['revision'], 'base_captura' => $meta['base']]
             );
             $ok = (bool) $resultado['idempotente'];
-        } elseif ($caso === 'decidir') {
-            app(RegistrarDecisionClienteTiendaService::class)->ejecutar(
-                PedidoBma::query()->findOrFail($meta['pedido_id']),
-                $usuario,
-                (int) $meta['revision_id'],
-                PedidoBmaRevisionProducto::RESOLUCION_RETIRAR
-            );
-            $ok = true;
         } else {
             $tarea = PedidoBmaTareaPreparacion::query()->findOrFail($meta['tarea_id']);
             app(ConfirmarDespachoMunicipioService::class)->ejecutar($tarea, $usuario, 'Transporte de prueba');
@@ -232,17 +224,6 @@ function afirmar(string $caso, string $metaRuta, string $competirRuta): void
         $tareas = PedidoBmaTareaPreparacion::query()->where('pedido_bma_id', $meta['pedido_id'])->count();
         if ($tareas !== 1 || ! ($competir['ok'] ?? false)) {
             throw new RuntimeException('Se creó más de una tarea o el reintento no fue idempotente.');
-        }
-
-        return;
-    }
-    if ($caso === 'decidir') {
-        $resoluciones = PedidoBmaRevisionProducto::query()
-            ->where('pedido_bma_id', $meta['pedido_id'])
-            ->where('resolucion', PedidoBmaRevisionProducto::RESOLUCION_RETIRAR)
-            ->count();
-        if ($resoluciones !== 1 || ! ($competir['ok'] ?? false)) {
-            throw new RuntimeException('La decisión concurrente no quedó en una sola resolución.');
         }
 
         return;
@@ -371,19 +352,6 @@ function pedido(User $usuario): PedidoBma
     ]);
 
     return $pedido;
-}
-
-function revisionPendiente(PedidoBma $pedido): int
-{
-    return PedidoBmaRevisionProducto::query()->create([
-        'pedido_bma_id' => $pedido->id,
-        'orden' => 1,
-        'descripcion_producto' => 'Pieza con excepción',
-        'sku' => 'EX-211',
-        'cantidad_solicitada' => 1,
-        'cantidad_encontrada' => 1,
-        'estado_fisico' => PedidoBmaRevisionProducto::ESTADO_REGULAR,
-    ])->id;
 }
 
 function pdv(): Almacen

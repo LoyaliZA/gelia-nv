@@ -51,12 +51,13 @@ class RegistrarPagoPedidoBmaService
             ? (int) $datos['catalogo_banco_id']
             : null;
 
-        if (PedidoBmaPago::formaRequiereBanco($forma) && ! $bancoId) {
-            throw new InvalidArgumentException('Esta forma de pago requiere banco receptor.');
-        }
-
         if (! PedidoBmaPago::formaRequiereBanco($forma)) {
             $bancoId = null;
+        }
+
+        $bancoId = app(ResolverBancoCajaPdv::class)->destino($bancoId, $pedido, $forma);
+        if (PedidoBmaPago::formaRequiereBanco($forma) && ! $bancoId) {
+            throw new InvalidArgumentException('Esta forma de pago requiere banco receptor.');
         }
 
         CoberturaPagoPedidoBmaService::assertBancoPermitido($pedido, $bancoId);
@@ -117,6 +118,9 @@ class RegistrarPagoPedidoBmaService
                     return $existente->fresh(['banco', 'archivos']);
                 }
             }
+            app(ComprobarVersionFinancieraPago::class)->comprobar($pedido, $datos);
+            $bancoId = app(ResolverBancoCajaPdv::class)->destino($bancoId, $pedido, $forma);
+            CoberturaPagoPedidoBmaService::assertBancoPermitido($pedido, $bancoId);
 
             $referencia = trim((string) ($datos['referencia'] ?? ''));
             if ($referencia !== '') {

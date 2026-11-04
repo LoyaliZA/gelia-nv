@@ -1462,3 +1462,43 @@
         width: 100%;
     }
 }
+
+.registrar-tienda-importes-resumen {
+    display: grid;
+    gap: 0.75rem;
+    margin: 1rem 0 0;
+    padding-top: 1rem;
+    border-top: 1px solid var(--theme-border);
+    font-size: 0.875rem;
+}
+
+.gelia-pedidos-bma .registrar-tienda-importes-resumen > div {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.375rem 1rem;
+    min-width: 0;
+}
+
+.registrar-tienda-importes-resumen dt {
+    color: var(--theme-text-muted);
+}
+
+.registrar-tienda-importes-resumen dd {
+    margin: 0;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+}
+
+.registrar-tienda-importes-pendiente {
+    padding: 1rem;
+    border: 1px solid var(--color-primario);
+    border-radius: var(--theme-radius-input);
+}
+
+.registrar-tienda-importes-pendiente dd {
+    color: var(--color-primario);
+    font-size: 1.5rem;
+}

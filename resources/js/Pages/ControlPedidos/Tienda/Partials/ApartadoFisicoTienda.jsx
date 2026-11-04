@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
+import { Banknote } from 'lucide-react';
 import { router } from '@inertiajs/react';
 import { THEME_INPUT, THEME_LABEL, THEME_SELECT, THEME_TEXTAREA } from '../../../../utils/geliaTheme';
 import { BTN_PRIMARY, BTN_SECONDARY, formatearFechaNegocio } from '../../Partials/pedidosBmaStyles';
 
-export default function ApartadoFisicoTienda({ onEnviar = null,  tarea, auth, config = {}, eventos = [], requisitos = {}, onConfirmarApartado = null }) {
+export default function ApartadoFisicoTienda({ soloSalida = false, onEnviar = null,  tarea, auth, config = {}, eventos = [], requisitos = {}, onConfirmarApartado = null }) {
     const postOperacion = (url, data, opciones) => onEnviar ? onEnviar(url, data, opciones) : router.post(url, data, opciones);
     const apartado = tarea.apartado;
     const permisos = { includes: (p) => auth?.user?.roles?.includes('Super Admin') || (auth?.user?.permissions || []).includes(p) };
@@ -148,9 +149,9 @@ export default function ApartadoFisicoTienda({ onEnviar = null,  tarea, auth, co
     const tareaAbierta = !['EN_TRASLADO', 'RECIBIDA_CEDIS', 'LIBERADA', 'CANCELADA'].includes(tarea.estado);
 
     return (
-        <section className="gelia-callout-aviso p-4 space-y-3">
+        <section className={soloSalida ? 'registrar-tienda-panel gelia-tienda-salida space-y-3' : 'gelia-callout-aviso p-4 space-y-3'}>
             <div className="flex flex-wrap items-center justify-between gap-2">
-                <h3 className="text-[10px] font-black uppercase tracking-widest m-0">Apartado físico</h3>
+                <div className="registrar-tienda-seccion-titulo"><Banknote size={18} aria-hidden="true" /><h3>{soloSalida ? 'Pago y entrega en tienda' : 'Apartado físico'}</h3></div>
                 <span className="text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-full border theme-border">
                     {apartado.estado_label}
                 </span>
@@ -211,12 +212,13 @@ export default function ApartadoFisicoTienda({ onEnviar = null,  tarea, auth, co
                 <button type="button" className={BTN_PRIMARY} onClick={recibirCustodia}>Confirmar recepción y custodia</button>
             )}
 
+            {tarea.pedido?.motivo_bloqueo_entrega && <p role="status" className="text-sm theme-text-muted m-0">{tarea.pedido.motivo_bloqueo_entrega}</p>}
             {esCustodiaDiferida && apartado.estado === 'LISTA_PARA_SALIDA' && permisos.includes('pdv.resguardos.entregar') && (
                 <div className="grid gap-3">
                     <p className="text-xs font-bold m-0">La mercancía está en custodia. Falta la entrega con fotografía.</p>
                     <input className={`${THEME_INPUT} w-full`} placeholder="Quién recibe" value={receptorEntrega} onChange={(e) => setReceptorEntrega(e.target.value)} />
                     <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => setFotoEntrega(e.target.files?.[0] || null)} />
-                    <button type="button" className={BTN_PRIMARY} onClick={entregarCustodia}>Confirmar entrega de custodia</button>
+                    <button type="button" className={BTN_PRIMARY} disabled={Boolean(tarea.pedido?.motivo_bloqueo_entrega)} onClick={entregarCustodia}>Confirmar entrega de custodia</button>
                 </div>
             )}
 
@@ -225,7 +227,7 @@ export default function ApartadoFisicoTienda({ onEnviar = null,  tarea, auth, co
                     <p className="text-xs font-bold m-0">Pago presencial registrado. Falta la fotografía de entrega.</p>
                     <input className={`${THEME_INPUT} w-full`} placeholder="Quién recibe" value={receptorEntrega} onChange={(e) => setReceptorEntrega(e.target.value)} />
                     <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => setFotoEntrega(e.target.files?.[0] || null)} />
-                    <button type="button" className={BTN_PRIMARY} onClick={entregarApartado}>Confirmar entrega</button>
+                    <button type="button" className={BTN_PRIMARY} disabled={Boolean(tarea.pedido?.motivo_bloqueo_entrega)} onClick={entregarApartado}>Confirmar entrega</button>
                 </div>
             )}
 
@@ -313,7 +315,7 @@ export default function ApartadoFisicoTienda({ onEnviar = null,  tarea, auth, co
                 </div>
             )}
 
-            {puedeModalidad && tareaAbierta && modalidades.length > 0 && (
+            {!soloSalida && puedeModalidad && tareaAbierta && modalidades.length > 0 && (
                 <div className="space-y-2 border-t theme-border pt-3">
                     <label className={THEME_LABEL}>Cambiar modalidad</label>
                     <p className="text-xs theme-text-muted m-0">La venta y los pagos reconocidos se conservan. Adjunte la evidencia del cambio.</p>

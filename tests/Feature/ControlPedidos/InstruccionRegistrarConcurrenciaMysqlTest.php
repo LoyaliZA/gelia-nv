@@ -25,11 +25,6 @@ class InstruccionRegistrarConcurrenciaMysqlTest extends TestCase
         $this->carrera('sustituir');
     }
 
-    public function test_dos_decisiones_concurrentes_dejan_una_resolucion(): void
-    {
-        $this->carrera('decidir');
-    }
-
     private function carrera(string $caso): void
     {
         $dir = sys_get_temp_dir().'/solicitud-211-'.bin2hex(random_bytes(4));

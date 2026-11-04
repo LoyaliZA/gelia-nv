@@ -137,7 +137,7 @@ class ConfirmarApartadoRecogeHoyService
                 $pedido->update([
                     'estatus_envio' => PedidoBma::ESTATUS_ENVIO_APARTADO_CONFIRMADO,
                     'pesaje_respondido_at' => null,
-                    'consulta_cerrada_at' => null,
+                    'consulta_cerrada_at' => $pedido->esConsultaDisponibilidadTienda() ? $pedido->consulta_cerrada_at : null,
                     'consulta_actualizacion_pendiente' => false,
                     'cantidad_piezas' => $cantidad,
                 ]);

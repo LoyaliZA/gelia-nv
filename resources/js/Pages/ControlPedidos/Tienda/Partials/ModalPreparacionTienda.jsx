@@ -94,7 +94,7 @@ export default function ModalPreparacionTienda({ tareaId, atender = false, auth,
                         onClick={() => enviar(route('control_pedidos.tienda.tomar', tarea.id), { version: tarea.version })}>Atender pedido</button>}
                     {['PENDIENTE', 'EN_ATENCION'].includes(tarea.estado) ? <PrepararApartadoRecoge key={`${tarea.id}-${capturaVersion}`} tarea={tarea} auth={auth}
                         documentos={datos.documentos_solicitud} documentosTarea={datos.documentos} requisitos={datos.requisitos} tiposCaja={datos.tipos_caja} onEnviar={enviar} bloqueado={ocupado} onDirtyChange={setDirty} onRefrescarDocumentos={() => cargar(undefined, true).catch(() => setError('No se pudieron actualizar las fotos.'))} />
-                        : <ShowTienda {...datos} auth={auth} embedded onEnviar={enviar} />}
+                        : <ShowTienda key={`${tarea.id}-${capturaVersion}`} {...datos} auth={auth} embedded onEnviar={enviar} onDirtyChange={setDirty} />}
                     {caratula && tarea.apartado?.estado === 'APARTADO_CONFIRMADO' && <a className="inline-block underline text-sm font-bold theme-text-primario px-4 pb-3"
                         href={route('control_pedidos.tienda.evidencia.descargar', [tarea.id, caratula.id])}>Descargar carátula del apartado</a>}
                 </>}

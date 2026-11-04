@@ -39,6 +39,12 @@ class GuardarApartadoRecogeHoyService
                     || $tarea->estado !== PedidoBmaTareaPreparacion::ESTADO_EN_ATENCION) {
                     throw ValidationException::withMessages(['estado' => 'Tome la solicitud de recoge en tienda antes de registrar las piezas.']);
                 }
+                $tarea->load('pedido');
+                if ($tarea->pedido?->esConsultaDisponibilidadTienda()
+                    && isset($tarea->pedido->solicitud_preparacion_json['revision_disponibilidad']['estado'])
+                    && (! $tarea->pedido->consultaCerrada() || $tarea->pedido->tieneAjusteTiendaPendiente())) {
+                    throw ValidationException::withMessages(['estado' => 'La respuesta ya fue enviada. Espere la confirmación de Ventas o atienda el ajuste solicitado.']);
+                }
                 $this->asegurar->ejecutar($tarea);
                 $apartado = PedidoBmaCumplimientoFisico::query()->where('pedido_bma_tarea_preparacion_id', $tarea->id)->lockForUpdate()->firstOrFail();
                 if ((int) $apartado->version !== (int) ($datos['version'] ?? 0)) {
@@ -61,7 +67,7 @@ class GuardarApartadoRecogeHoyService
                 }
                 $antes = $tarea->productos()->get()->toArray();
                 if ($lineas !== []) {
-                    $this->assertCatalogoDelAlmacen($tarea, $lineas);
+                    $this->assertCatalogoDelAlmacen($tarea, $lineas, $confirmar);
                     $rutas = $this->registrar->ejecutar($tarea, $usuario, $lineas);
                 }
                 $rutas = array_merge($rutas, $this->registrar->guardarGenerales($tarea, $usuario, $datos['evidencias'] ?? []));
@@ -92,7 +98,7 @@ class GuardarApartadoRecogeHoyService
     /**
      * @param  list<array<string, mixed>>  $lineas
      */
-    private function assertCatalogoDelAlmacen(PedidoBmaTareaPreparacion $tarea, array $lineas): void
+    private function assertCatalogoDelAlmacen(PedidoBmaTareaPreparacion $tarea, array $lineas, bool $confirmar): void
     {
         if (! $tarea->almacen_id) {
             return;
@@ -107,6 +113,13 @@ class GuardarApartadoRecogeHoyService
                 ->where('producto_id', $productoId)
                 ->where('almacen_id', $tarea->almacen_id)
                 ->exists();
+            if (($linea['estado_fisico'] ?? '') === 'sin_existencia' && (int) ($linea['cantidad'] ?? 0) === 0) continue;
+            if (! $confirmar && ! $enAlmacen && ! DB::table('inventarios')->where('producto_id', $productoId)->exists()) continue;
+            $registrada = ! empty($linea['id']) ? $tarea->productos()->find($linea['id']) : null;
+            if (! $enAlmacen && $registrada && \App\Models\SolicitudTraspasoProducto::query()->where('tarea_producto_receptor_id', $registrada->id)->exists()) {
+                app(\App\Services\Traspasos\AbastecerPreparacionService::class)->asegurarSatisfecho($tarea);
+                continue;
+            }
             if (! $enAlmacen) {
                 throw ValidationException::withMessages([
                     'lineas' => 'Seleccione un producto del almacén de esta tarea.',

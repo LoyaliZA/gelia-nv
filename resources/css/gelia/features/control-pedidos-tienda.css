@@ -995,3 +995,46 @@
         white-space: normal;
     }
 }
+
+.gelia-preparacion-ajustes {
+    min-width: 0;
+    grid-template-columns: minmax(0, 1fr);
+    margin-bottom: 1rem;
+}
+
+.gelia-preparacion-ajustes .registrar-tienda-panel {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.gelia-preparacion-ajustes :is(input, select, textarea) {
+    min-width: 0;
+    max-width: 100%;
+}
+
+.gelia-preparacion-ajustes :is(p, li) {
+    overflow-wrap: anywhere;
+}
+
+.gelia-pedidos-bma .gelia-preparacion-ajustes button {
+    max-width: 100%;
+    white-space: normal;
+}
+
+.gelia-preparacion-modal .gelia-modal-body > .gelia-tienda-embebida {
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+    width: 100%;
+    overflow-y: auto;
+}
+
+.gelia-pedidos-bma .gelia-tienda-salida,
+.gelia-pedidos-bma .gelia-tienda-salida > div {
+    min-width: 0;
+}
+
+.gelia-pedidos-bma .gelia-tienda-salida input,
+.gelia-pedidos-bma .gelia-tienda-salida button {
+    min-width: 0;
+    max-width: 100%;
+}

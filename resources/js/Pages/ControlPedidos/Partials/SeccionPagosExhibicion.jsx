@@ -135,6 +135,15 @@ export default function SeccionPagosExhibicion({
     limiteCreditoAutorizado = null,
     envioEsBase = false,
     formaPagoInicial = 'transferencia',
+    etiquetaCubrir = 'Usar saldo restante',
+    capturaBloqueada = false,
+    destinoCajaPdv = false,
+    formasPermitidas = null,
+    formaPagoFija = null,
+    onLectura = null,
+    revisionEsperada = null,
+    totalMercanciaConfirmado = null,
+    saldoAFavorConfirmado = null,
 }) {
     const [resumen, setResumen] = useState(null);
     const [pagos, setPagos] = useState([]);
@@ -146,6 +155,7 @@ export default function SeccionPagosExhibicion({
     const [revisionModal, setRevisionModal] = useState(null); // { pago, estado }
     const [sustituyendoId, setSustituyendoId] = useState(null);
     const [previews, setPreviews] = useState([]);
+    const [cajaPdv, setCajaPdv] = useState(null);
 
     const form = useForm({
         monto: '',
@@ -281,6 +291,8 @@ export default function SeccionPagosExhibicion({
             }
             const nextResumen = mezclarResumenVivo(json.resumen || null, nextPagos);
             setResumen(nextResumen);
+            if (json.caja_pdv) setCajaPdv(json.caja_pdv);
+            if (typeof onLectura === 'function') onLectura(json);
             if (nextPagos.length > 1) {
                 setDividido(true);
             }
@@ -311,13 +323,30 @@ export default function SeccionPagosExhibicion({
     }, [formasPago]);
 
     const opcionesForma = useMemo(() => {
-        if (formas.length) return formas;
-        return Object.entries(LABELS_FORMA_PAGO).map(([codigo, label]) => ({
-            codigo,
-            label,
-            requiere_banco: formaRequiereBanco(codigo, []),
-        }));
-    }, [formas]);
+        const base = formas.length
+            ? formas
+            : Object.entries(LABELS_FORMA_PAGO).map(([codigo, label]) => ({
+                codigo,
+                label,
+                requiere_banco: formaRequiereBanco(codigo, []),
+            }));
+        if (!Array.isArray(formasPermitidas) || formasPermitidas.length === 0) return base;
+        return base.filter((forma) => formasPermitidas.includes(forma.codigo));
+    }, [formas, formasPermitidas]);
+
+    useEffect(() => {
+        if (!formaPagoFija) return;
+        form.setData('forma_pago', formaPagoFija);
+    }, [formaPagoFija]);
+
+    useEffect(() => {
+        const version = {};
+        if (revisionEsperada != null && revisionEsperada !== '') version.revision_esperada = revisionEsperada;
+        if (totalMercanciaConfirmado != null && totalMercanciaConfirmado !== '') version.total_mercancia_confirmado = totalMercanciaConfirmado;
+        if (saldoAFavorConfirmado != null && saldoAFavorConfirmado !== '') version.saldo_a_favor_confirmado = saldoAFavorConfirmado;
+        if (Object.keys(version).length === 0) return;
+        form.setData((actual) => ({ ...actual, ...version }));
+    }, [revisionEsperada, totalMercanciaConfirmado, saldoAFavorConfirmado]);
 
     const resetForm = () => {
         form.reset('monto', 'referencia', 'comprobantes', 'catalogo_banco_id');
@@ -335,7 +364,7 @@ export default function SeccionPagosExhibicion({
             form.setError('comprobantes', 'Adjunte el comprobante de esta exhibición.');
             return;
         }
-        if (requiereBanco && !form.data.catalogo_banco_id) {
+        if (requiereBanco && !destinoCajaPdv && !form.data.catalogo_banco_id) {
             form.setError('catalogo_banco_id', 'Seleccione el banco receptor.');
             return;
         }
@@ -526,18 +555,18 @@ export default function SeccionPagosExhibicion({
                             : 'Pago único: una sola fuente de pago con sus comprobantes.'}
                     </p>
                 </div>
-                {puedeRegistrar && (
-                    <label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-wide theme-text-main cursor-pointer">
-                        <input
-                            type="checkbox"
-                            checked={dividido}
-                            onChange={(e) => toggleDividido(e.target.checked)}
-                            className="rounded border theme-border"
-                        />
-                        Dividir el pago entre diferentes métodos o bancos
-                    </label>
-                )}
             </div>
+            )}
+            {puedeRegistrar && (
+                <label className="flex items-center gap-2 text-sm theme-text-main cursor-pointer">
+                    <input
+                        type="checkbox"
+                        checked={dividido}
+                        onChange={(e) => toggleDividido(e.target.checked)}
+                        className="rounded border theme-border"
+                    />
+                    {ocultarEncabezado ? 'Agregar otra exhibición' : 'Dividir el pago entre diferentes métodos o bancos'}
+                </label>
             )}
             {mensajeBloqueo && (
                 <p className="text-xs theme-text-muted font-bold m-0">{mensajeBloqueo}</p>
@@ -800,10 +829,10 @@ export default function SeccionPagosExhibicion({
                             <button
                                 type="button"
                                 className={`${BTN_SECONDARY} text-xs min-h-[44px] outline-none`}
-                                disabled={importeNetoRestante(resumen) <= 0}
+                                disabled={!resumen || cargando || capturaBloqueada || importeNetoRestante(resumen) <= 0}
                                 onClick={() => form.setData('monto', importeNetoRestante(resumen))}
                             >
-                                Usar saldo restante
+                                {etiquetaCubrir}
                             </button>
                         </div>
                         {form.errors.monto && (
@@ -825,6 +854,11 @@ export default function SeccionPagosExhibicion({
                     </div>
                     <div>
                         <label className={`${THEME_LABEL} mb-1.5 block`}>Forma de pago</label>
+                        {formaPagoFija ? (
+                            <p className="text-sm theme-text-main m-0 min-h-[44px] flex items-center">
+                                {opcionesForma.find((f) => f.codigo === formaPagoFija)?.label || LABELS_FORMA_PAGO[formaPagoFija] || formaPagoFija}
+                            </p>
+                        ) : (
                         <select
                             className={`${THEME_SELECT} w-full py-2.5`}
                             value={form.data.forma_pago}
@@ -835,7 +869,7 @@ export default function SeccionPagosExhibicion({
                                 form.setData({
                                     ...form.data,
                                     forma_pago: next,
-                                    catalogo_banco_id: pideBanco ? form.data.catalogo_banco_id : '',
+                                    catalogo_banco_id: pideBanco && !destinoCajaPdv ? form.data.catalogo_banco_id : '',
                                     comprobantes: pideComp ? form.data.comprobantes : [],
                                 });
                             }}
@@ -844,13 +878,25 @@ export default function SeccionPagosExhibicion({
                                 <option key={f.codigo} value={f.codigo}>{f.label}</option>
                             ))}
                         </select>
+                        )}
                     </div>
                     {form.data.forma_pago === 'credito' && limiteCredito > 0 && (
                         <p className="md:col-span-2 text-[11px] theme-text-muted font-bold m-0">
                             Límite de crédito autorizado: {formatearMoneda(limiteCredito)} (referencia; no impide registrar).
                         </p>
                     )}
-                    {requiereBanco && (
+                    {destinoCajaPdv && (
+                        <div>
+                            <p className={`${THEME_LABEL} mb-1.5`}>Destino</p>
+                            <p className="text-sm theme-text-main m-0 min-h-[44px] flex items-center">Caja PDV</p>
+                            {cajaPdv && cajaPdv.disponible === false && (
+                                <p className="text-xs m-0 mt-1" style={{ color: 'var(--color-peligro)' }} role="alert">
+                                    No hay una Caja PDV activa y permitida para este departamento. El cobro en tienda no se guardó.
+                                </p>
+                            )}
+                        </div>
+                    )}
+                    {requiereBanco && !destinoCajaPdv && (
                         <div>
                             <label className={`${THEME_LABEL} mb-1.5 block`}>Banco receptor</label>
                             <select
@@ -936,7 +982,7 @@ export default function SeccionPagosExhibicion({
                     <div className="md:col-span-2 flex flex-wrap gap-2">
                         <button
                             type="submit"
-                            disabled={form.processing}
+                            disabled={form.processing || ((capturaBloqueada || (destinoCajaPdv && cajaPdv && cajaPdv.disponible === false)) && !editandoId && !sustituyendoId)}
                             className={`${BTN_PRIMARY} outline-none disabled:opacity-50`}
                         >
                             {editandoId ? 'Guardar cambios' : (dividido ? 'Agregar exhibición' : 'Registrar pago')}

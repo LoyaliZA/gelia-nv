@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X } from 'lucide-react';
+import { ClipboardCheck, X } from 'lucide-react';
 import usePedidoDialog from './usePedidoDialog';
 import { THEME_BTN_PRIMARY, THEME_BTN_SECONDARY, THEME_INPUT, THEME_LABEL, THEME_MODAL_OVERLAY, THEME_MODAL_SHELL, THEME_TEXTAREA } from '../../../utils/geliaTheme';
 
@@ -70,9 +70,9 @@ export default function PanelRespuestaDisponibilidad({
     };
 
     const cuerpo = (
-        <section className="grid gap-3 p-4 border theme-border rounded-xl theme-element" aria-label="Respuesta de disponibilidad">
+        <section className="registrar-tienda-panel grid gap-3" aria-label="Respuesta de disponibilidad">
             <div>
-                <h3 className="text-base font-bold theme-text-main m-0">Respuesta de disponibilidad</h3>
+                <div className="registrar-tienda-seccion-titulo"><ClipboardCheck size={18} aria-hidden="true" /><h3>Respuesta de disponibilidad</h3></div>
                 <p className="text-sm theme-text-muted m-0 mt-1">
                     Sin excepciones exige confirmación explícita y evidencia del pedido completo. Con excepciones, indique solo las piezas afectadas.
                 </p>
@@ -96,7 +96,7 @@ export default function PanelRespuestaDisponibilidad({
                 <div role="status" className="grid gap-2">
                     <p className="text-sm font-semibold theme-text-main m-0">
                         {revision.estado === 'excepciones_pendientes'
-                            ? 'Falta la decisión del cliente sobre las piezas con excepción. Esas piezas no continúan como aceptadas.'
+                            ? 'La respuesta incluye piezas con excepción. El pedido se cierra con Cerrar consulta. Para cambiar piezas, registre un anexo o un retiro.'
                             : 'La revisión quedó registrada. No confirma pago ni entrega.'}
                     </p>
                     {piezas.length > 0 && (

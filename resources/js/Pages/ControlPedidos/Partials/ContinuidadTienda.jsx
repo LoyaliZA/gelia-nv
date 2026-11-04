@@ -1,15 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { THEME_BTN_PRIMARY, THEME_BTN_SECONDARY, THEME_INPUT, THEME_LABEL, THEME_SELECT } from '../../../utils/geliaTheme';
-
-const DECISIONES = [
-    ['aceptar_disponible', 'Aceptar lo disponible'],
-    ['aceptar_condicion', 'Aceptar la condición'],
-    ['retirar', 'Retirar'],
-    ['sustituir', 'Sustituir'],
-    ['solicitar_alternativa', 'Solicitar alternativa'],
-    ['desistir', 'Desistir'],
-];
+import ImportesPagoTienda from './ImportesPagoTienda';
 
 function cabeceras() {
     return {
@@ -28,7 +20,6 @@ function mensajeDe(error, reserva) {
 export default function ContinuidadTienda({
     pedidoId,
     solicitud = {},
-    revisiones = [],
     sucursales = [],
     facultadMd = false,
     puedeResolverTraslado = false,
@@ -37,15 +28,11 @@ export default function ContinuidadTienda({
     siguiente = '',
     mostrarCustodia = false,
     consultaCerrada = false,
+    importes = null,
 }) {
-    const [nota, setNota] = useState('');
-    const [skuSustituto, setSkuSustituto] = useState('');
-    const [cobertura, setCobertura] = useState(solicitud?.cobertura_tienda?.tipo || '');
-    const [mismoDia, setMismoDia] = useState(solicitud?.atencion_tienda === 'prevista');
     const [sucursalId, setSucursalId] = useState('');
     const [aviso, setAviso] = useState(siguiente);
     const [ocupado, setOcupado] = useState(false);
-    const [piezasLocales, setPiezasLocales] = useState(revisiones || []);
     const [solicitudLocal, setSolicitudLocal] = useState(solicitud || {});
     const [recorrido, setRecorrido] = useState('');
     const [principalId, setPrincipalId] = useState('');
@@ -55,68 +42,14 @@ export default function ContinuidadTienda({
     const [cantidad, setCantidad] = useState('1');
     const [condicion, setCondicion] = useState('');
     const [evidencia, setEvidencia] = useState(null);
-    const marcaContinuidad = `${pedidoId}|${consultaCerrada}|${solicitud?.revision_disponibilidad?.estado}|${solicitud?.revision_disponibilidad?.aceptacion_vigente}|${(solicitud?.retiro_piezas || []).map((retiro) => retiro.estado || 'pendiente').join(',')}|${(revisiones || []).map((pieza) => `${pieza.id}:${pieza.resolucion || ''}`).join(',')}`;
-    useEffect(() => {
-        setSolicitudLocal(solicitud || {});
-        setPiezasLocales(revisiones || []);
-    }, [marcaContinuidad]);
-    const piezas = (piezasLocales || []).filter(
-        (pieza) => !pieza?.resolucion && ['regular', 'malo', 'danado', 'sin_existencia'].includes(pieza?.estado_fisico),
-    );
+    useEffect(() => { setSolicitudLocal(solicitud || {}); }, [pedidoId, solicitud]);
     const revision = solicitudLocal?.revision_disponibilidad?.estado;
     const aceptacionVigente = solicitudLocal?.revision_disponibilidad?.aceptacion_vigente !== false && solicitudLocal?.revision_disponibilidad?.vigente !== false && !solicitudLocal?.revision_disponibilidad?.sustituida_at;
     const retiroPendiente = (solicitudLocal?.retiro_piezas || []).some((retiro) => (retiro?.estado || 'pendiente') === 'pendiente');
-    const anexoPendiente = (solicitudLocal?.anexo_sin_remision || []).some((anexo) => anexo?.pendiente_identificacion);
-    const cierreVigente = consultaCerrada && aceptacionVigente && !retiroPendiente && !anexoPendiente && piezas.length === 0;
-    const puedeCobertura = cierreVigente && (revision === 'sin_excepciones' || revision === 'decision_registrada');
+    const anexoPendiente = (solicitudLocal?.anexo_sin_remision || []).some((anexo) => !anexo?.respondida_at);
+    const cierreVigente = consultaCerrada && aceptacionVigente && !retiroPendiente && !anexoPendiente;
+    const puedeCobertura = cierreVigente && (revision === 'sin_excepciones' || revision === 'excepciones_pendientes' || revision === 'decision_registrada');
     const traslado = solicitudLocal?.segundo_traslado;
-
-    const decidir = async (pieza, accion) => {
-        setOcupado(true);
-        setAviso('');
-        try {
-            const respuesta = await axios.post(
-                `/control-pedidos/${pedidoId}/decision-tienda`,
-                { revision_id: pieza.id, accion, nota, sku_sustituto: skuSustituto },
-                { headers: cabeceras() },
-            );
-            if (Array.isArray(respuesta.data?.revisiones_producto)) {
-                setPiezasLocales(respuesta.data.revisiones_producto);
-            } else {
-                setPiezasLocales((actuales) => actuales.map((fila) => (
-                    fila.id === pieza.id ? { ...fila, resolucion: accion } : fila
-                )));
-            }
-            if (respuesta.data?.solicitud_preparacion) {
-                setSolicitudLocal(respuesta.data.solicitud_preparacion);
-            }
-            setAviso(respuesta.data?.expediente?.siguiente || 'Decisión registrada.');
-        } catch (error) {
-            setAviso(mensajeDe(error, 'No se registró la decisión.'));
-        } finally {
-            setOcupado(false);
-        }
-    };
-
-    const guardarCobertura = async () => {
-        setOcupado(true);
-        setAviso('');
-        try {
-            const respuesta = await axios.post(
-                `/control-pedidos/${pedidoId}/cobertura-tienda`,
-                { cobertura, mismo_dia: mismoDia },
-                { headers: cabeceras() },
-            );
-            if (respuesta.data?.solicitud_preparacion) {
-                setSolicitudLocal(respuesta.data.solicitud_preparacion);
-            }
-            setAviso(respuesta.data?.expediente?.siguiente || 'Cobertura registrada. No confirma pago ni entrega.');
-        } catch (error) {
-            setAviso(mensajeDe(error, 'No se registró la cobertura.'));
-        } finally {
-            setOcupado(false);
-        }
-    };
 
     const pedirTraslado = async () => {
         setOcupado(true);
@@ -250,7 +183,7 @@ export default function ContinuidadTienda({
         }
     };
 
-    const hayContenido = Boolean(aviso) || piezas.length > 0 || puedeCobertura || (cierreVigente && mostrarCustodia);
+    const hayContenido = Boolean(aviso) || puedeCobertura || importes?.conservar || (cierreVigente && mostrarCustodia);
     if (!hayContenido) return null;
 
     return (
@@ -260,84 +193,18 @@ export default function ContinuidadTienda({
                     {aviso}
                 </p>
             )}
-            {piezas.length > 0 && (
-                <section className="rounded-xl border theme-border theme-element p-4 grid gap-3">
-                    <h3 className="text-sm font-semibold theme-text-main m-0">Decisión del cliente</h3>
-                    <p className="text-sm theme-text-muted m-0">
-                        Una pieza inexistente no queda disponible por aceptarla. La decisión regresa a quien revisa.
-                    </p>
-                    <label className={THEME_LABEL} htmlFor="decision-nota">
-                        Nota del acuerdo
-                    </label>
-                    <textarea
-                        id="decision-nota"
-                        className={`${THEME_INPUT} min-h-16`}
-                        value={nota}
-                        onChange={(evento) => setNota(evento.target.value)}
-                    />
-                    <label className={THEME_LABEL} htmlFor="sku-sustituto">SKU sustituto, si la decisión es sustituir</label>
-                    <input
-                        id="sku-sustituto"
-                        className={THEME_INPUT}
-                        value={skuSustituto}
-                        onChange={(evento) => setSkuSustituto(evento.target.value)}
-                    />
-                    {piezas.map((pieza) => (
-                        <div key={pieza.id} className="grid gap-2 border-t theme-border pt-3">
-                            <p className="text-sm theme-text-main m-0">
-                                {pieza.descripcion_producto || pieza.descripcion}
-                                {pieza.comentario ? ` · ${pieza.comentario}` : ''}
-                            </p>
-                            <div className="flex flex-wrap gap-2">
-                                {DECISIONES.map(([accion, etiqueta]) => (
-                                    <button
-                                        key={accion}
-                                        type="button"
-                                        className={`${THEME_BTN_SECONDARY} min-h-[44px]`}
-                                        disabled={ocupado}
-                                        onClick={() => decidir(pieza, accion)}
-                                    >
-                                        {etiqueta}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                    ))}
-                </section>
-            )}
-            {puedeCobertura && (
-                <section className="rounded-xl border theme-border theme-element p-4 grid gap-3">
-                    <h3 className="text-sm font-semibold theme-text-main m-0">Cobertura</h3>
-                    <p className="text-sm theme-text-muted m-0">
-                        Elegirla no confirma el pago, la remisión ni la entrega. Mismo día solo acompaña a la transferencia.
-                    </p>
-                    <label className={THEME_LABEL} htmlFor="cobertura-tienda">
-                        Forma de cobertura
-                    </label>
-                    <select
-                        id="cobertura-tienda"
-                        className={THEME_SELECT}
-                        value={cobertura}
-                        onChange={(evento) => setCobertura(evento.target.value)}
-                    >
-                        <option value="">Elegir</option>
-                        <option value="apartado">Pago al recoger</option>
-                        <option value="transferencia">Transferencia</option>
-                        <option value="credito">Crédito</option>
-                    </select>
-                    <label className="flex items-center gap-2 text-sm theme-text-main">
-                        <input
-                            type="checkbox"
-                            checked={mismoDia}
-                            onChange={(evento) => setMismoDia(evento.target.checked)}
-                        />
-                        Solicitar Mismo día
-                        {!facultadMd ? ' — esta cuenta no muestra facultad confirmada.' : ''}
-                    </label>
-                    <button type="button" className={`${THEME_BTN_PRIMARY} min-h-[44px]`} disabled={ocupado || !cobertura} onClick={guardarCobertura}>
-                        Registrar cobertura
-                    </button>
-                </section>
+            {(puedeCobertura || importes?.conservar) && (
+                <ImportesPagoTienda
+                    {...(importes || {})}
+                    pedidoId={pedidoId}
+                    solicitud={solicitudLocal}
+                    onSolicitud={(siguienteSolicitud) => {
+                        setSolicitudLocal(siguienteSolicitud || {});
+                        importes?.onSolicitud?.(siguienteSolicitud);
+                    }}
+                    facultadMd={facultadMd}
+                    editable={puedeCobertura}
+                />
             )}
             {cierreVigente && mostrarCustodia && <section className="rounded-xl border theme-border theme-element p-4 grid gap-3">
                 <h3 className="text-sm font-semibold theme-text-main m-0">Sucursal, anexo y custodia</h3>

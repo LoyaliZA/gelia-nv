@@ -1,3 +1,4 @@
+import AjustesSolicitadosTienda from './Partials/AjustesSolicitadosTienda';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import {
@@ -53,6 +54,7 @@ export default function Show({
     conciliacion_grupo = null,
     discrepancias_traspaso = [],
     config = {},
+    onDirtyChange = null,
     embedded = false,
     onEnviar = null,
 }) {
@@ -296,7 +298,7 @@ export default function Show({
     return (
         <Layout {...(!embedded ? { auth } : {})}>
             {!embedded && <Head title={`Preparación Tienda — ${folio}`} />}
-            <GeliaPageShell className="gelia-tienda-op space-y-4 md:space-y-6">
+            <GeliaPageShell className={`gelia-tienda-op space-y-4 md:space-y-6 ${embedded ? 'gelia-tienda-embebida' : ''}`}>
                 {!embedded && <GeliaTituloCard
                     eyebrow="Preparación tienda"
                     title={folio}
@@ -314,15 +316,15 @@ export default function Show({
 
                 <AvisoResultadoTienda flash={flash} />
 
-                <div className="grid lg:grid-cols-3 gap-4">
-                    <div className="lg:col-span-2 space-y-4">
+                <div className="grid min-w-0 lg:grid-cols-3 gap-4">
+                    <div className="min-w-0 lg:col-span-2 space-y-4">
                         {aviso && (
                             <AvisoOperativoPedido label={aviso.label} tono={aviso.tono} icon={aviso.icon}>
                                 {aviso.texto}
                             </AvisoOperativoPedido>
                         )}
 
-                        {tieneRespuesta && <ResultadoPreparacionTienda tarea={tarea} documentos={documentos} tiposCaja={tipos_caja} />}
+                        {tieneRespuesta && !esRecogeHoy && <ResultadoPreparacionTienda tarea={tarea} documentos={documentos} tiposCaja={tipos_caja} />}
 
                         {entrega && (
                             <section className={`${geliaCardClass()} p-4 space-y-3 theme-element border theme-border`}>
@@ -338,7 +340,8 @@ export default function Show({
                             </section>
                         )}
 
-                        {esRecogeHoy ? <PrepararApartadoRecoge key={`${tarea.id}-${tarea.apartado?.version}-${tarea.estado}`} tarea={tarea} auth={auth} documentos={documentos_solicitud} documentosTarea={documentos} requisitos={requisitos} tiposCaja={tipos_caja} onEnviar={onEnviar} /> : <ApartadoFisicoTienda
+                        {!esRecogeHoy && <AjustesSolicitadosTienda tarea={tarea} auth={auth} onEnviar={onEnviar} onDirtyChange={embedded ? onDirtyChange : setCapturaDirty} />}
+                        {esRecogeHoy ? <PrepararApartadoRecoge key={`${tarea.id}-${tarea.apartado?.version}-${tarea.estado}`} tarea={tarea} auth={auth} documentos={documentos_solicitud} documentosTarea={documentos} requisitos={requisitos} tiposCaja={tipos_caja} onEnviar={onEnviar} onDirtyChange={embedded ? onDirtyChange : setCapturaDirty} /> : <ApartadoFisicoTienda
                             tarea={tarea}
                             onEnviar={onEnviar}
                             auth={auth}
@@ -347,6 +350,8 @@ export default function Show({
                             requisitos={requisitos}
                             onConfirmarApartado={null}
                         />}
+
+                        {esRecogeHoy && tarea.apartado?.estado === 'APARTADO_CONFIRMADO' && <ApartadoFisicoTienda soloSalida tarea={tarea} auth={auth} config={config} requisitos={requisitos} eventos={eventos_apartado} onEnviar={onEnviar} />}
 
                         {esRecogeHoy && documentos.some((d) => d.tipo_evidencia === 'caratula_recoge_tienda') && (
                             <section className={`${geliaCardClass()} p-4 space-y-2`}>

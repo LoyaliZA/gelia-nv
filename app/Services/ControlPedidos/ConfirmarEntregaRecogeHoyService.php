@@ -152,6 +152,10 @@ class ConfirmarEntregaRecogeHoyService
                 return $cumplimiento;
             }
 
+            $pedidoVigente = \App\Models\ControlPedidos\PedidoBma::query()->lockForUpdate()->findOrFail($tarea->pedido_bma_id);
+            if ($motivo = $pedidoVigente->motivoBloqueoEntregaTienda()) {
+                throw ValidationException::withMessages(['ajuste' => $motivo]);
+            }
             if ($cumplimiento->pago_confirmado_at === null) {
                 throw ValidationException::withMessages([
                     'pago' => 'Falta el pago presencial confirmado. La entrega no lo sustituye.',

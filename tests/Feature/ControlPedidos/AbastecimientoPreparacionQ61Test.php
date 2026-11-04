@@ -59,6 +59,9 @@ class AbastecimientoPreparacionQ61Test extends TestCase
         foreach (['Pendiente', 'Respondida', 'Verificada', 'Incorrecta'] as $nombre) {
             CatalogoEstadoSolicitud::firstOrCreate(['nombre' => $nombre]);
         }
+        // RefreshDatabase reemplaza los registros; los IDs estáticos de otra
+        // clase de pruebas no pertenecen a esta base en memoria.
+        CatalogoEstadoSolicitud::reiniciarCache();
         $sucursal = Sucursal::factory()->create();
         $this->actor->concederAccesoSucursal($sucursal, true);
         $destino = Almacen::create(['codigo' => 'PDV', 'nombre' => 'Destino', 'activo' => true, 'sucursal_id' => $sucursal->id]);

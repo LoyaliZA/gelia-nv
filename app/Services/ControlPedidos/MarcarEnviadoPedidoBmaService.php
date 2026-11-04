@@ -47,6 +47,8 @@ class MarcarEnviadoPedidoBmaService
             throw new \RuntimeException('Hay una actualización de mercancía pendiente. CEDIS debe confirmarla antes de marcar el envío.');
         }
 
+        \App\Support\ControlPedidos\AtencionMismoDiaTienda::assertSalida($pedido);
+
         if ($pedido->esTrasladoInternoAPdv()) {
             app(ValidarSucursalDestinoPedidoBma::class)->ejecutar($pedido, (int) $pedido->sucursal_destino_id, exigirSiAplica: true);
         }

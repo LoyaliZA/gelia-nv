@@ -42,6 +42,7 @@ import { archivosImagenDesdeClipboard } from './archivosDesdeClipboard';
 import { claseEtiquetaLista } from '../../Solicitudes/Partials/solicitudesStyles';
 import { GELIA_ESTADO_VIVO_TONO } from '../../../utils/geliaTheme';
 import ContinuidadTienda from './ContinuidadTienda';
+import useActualizacionesPedidos from './useActualizacionesPedidos';
 import SeguimientoSolicitudTienda, { respuestaDeTiendaEmitida } from './SeguimientoSolicitudTienda';
 
 const MENSAJE_ARCHIVO = 'Adjunta el PDF o la imagen del pedido.';
@@ -179,6 +180,30 @@ function esperaDe(area, nombre) {
     return '';
 }
 
+function canonMonto(valor) {
+    if (valor === '' || valor === null || valor === undefined) return null;
+    const numero = Number(valor);
+    if (Number.isNaN(numero)) return null;
+    return Math.round(numero * 100) / 100;
+}
+
+function mismoMonto(a, b) {
+    return canonMonto(a) === canonMonto(b);
+}
+
+function aplicacionesDe(pedido) {
+    return (pedido?.saf_aplicaciones || [])
+        .filter((fila) => fila && fila.estado !== 'liberado' && fila.saf_credito_id)
+        .map((fila) => ({ saf_credito_id: fila.saf_credito_id, monto: Number(fila.monto) }));
+}
+
+function saldoDeDatos(datos) {
+    if (!datos?.aplicaSaf) return 0;
+    const filas = datos.safAplicaciones || [];
+    if (filas.length) return filas.reduce((suma, fila) => suma + Number(fila.monto || 0), 0);
+    return canonMonto(datos.saldoFavor) ?? 0;
+}
+
 function motivoSolicitud({ modalidad, tieneCliente, tieneDepartamento, tieneFolio, tieneArchivo, receptor, enviada }) {
     if (modalidad !== 'tienda' || enviada) return '';
     if (!tieneCliente) return 'Indica el número de cliente.';
@@ -192,13 +217,15 @@ function motivoSolicitud({ modalidad, tieneCliente, tieneDepartamento, tieneFoli
 export default function FormularioRegistrarTienda({
     abierto,
     onClose,
-    pedido = null,
+    pedido: pedidoInicial = null,
     catalogos = {},
     registrarTienda = {},
     onPedidoCreado = null,
     onContinuarEnvio,
 }) {
     const { auth } = usePage().props;
+    const [pedido, setPedido] = useState(pedidoInicial);
+    useEffect(() => { setPedido(pedidoInicial); }, [pedidoInicial]);
     const solicitud = pedido?.solicitud_preparacion || {};
     const departamentosUsuario = [
         ...new Set([auth?.user?.departamento_id, ...(auth?.user?.departamento_ids || [])].filter(Boolean).map(String)),
@@ -258,6 +285,22 @@ export default function FormularioRegistrarTienda({
     const [ampliado, setAmpliado] = useState(false);
     const [pedidoId, setPedidoId] = useState(pedido?.id || null);
     const [consultaCerrada, setConsultaCerrada] = useState(Boolean(pedido?.consulta_cerrada || pedido?.consulta_cerrada_at));
+    const [totalMercancia, setTotalMercancia] = useState(
+        pedido?.total_mercancia === null || pedido?.total_mercancia === undefined ? '' : pedido.total_mercancia,
+    );
+    const [aplicaSaf, setAplicaSaf] = useState(Number(pedido?.saldo_a_favor || 0) > 0);
+    const [saldoFavor, setSaldoFavor] = useState(Number(pedido?.saldo_a_favor || 0) > 0 ? pedido.saldo_a_favor : '');
+    const [safAplicaciones, setSafAplicaciones] = useState(() => aplicacionesDe(pedido));
+    const [safTocado, setSafTocado] = useState(false);
+    const [solicitudViva, setSolicitudViva] = useState(solicitud);
+    const [confirmados, setConfirmados] = useState({
+        total_mercancia: pedido?.total_mercancia ?? null,
+        saldo_a_favor: pedido?.saldo_a_favor ?? 0,
+        costo_envio: pedido?.costo_envio ?? null,
+        aplica_seguro: Boolean(pedido?.aplica_seguro),
+        costo_seguro: pedido?.costo_seguro ?? null,
+        revision_registro: pedido?.revision_registro ?? 0,
+    });
     const [base, setBase] = useState({
         revision_esperada: pedido?.revision_registro ?? 0,
         base_captura: pedido?.base_captura || null,
@@ -323,7 +366,12 @@ export default function FormularioRegistrarTienda({
         setCoincidencias([]);
     };
 
-    datosRef.current = { clienteId, numeroCliente, departamentoId, folio, modalidad, area, caso, almacenId };
+    const confirmadosRef = useRef(confirmados);
+    confirmadosRef.current = confirmados;
+    datosRef.current = {
+        clienteId, numeroCliente, departamentoId, folio, modalidad, area, caso, almacenId,
+        totalMercancia, aplicaSaf, saldoFavor, safAplicaciones, safTocado,
+    };
 
     const encolar = (trabajo) => {
         const siguiente = colaRef.current.then(trabajo, trabajo);
@@ -355,7 +403,7 @@ export default function FormularioRegistrarTienda({
                           : {}),
                   }
                 : {});
-        return {
+        const cuerpo = {
             pedido_id: pedidoIdRef.current || undefined,
             cliente_id: datos.clienteId || null,
             numero_cliente: datos.numeroCliente || null,
@@ -365,6 +413,19 @@ export default function FormularioRegistrarTienda({
             captura_clave: pedidoIdRef.current ? undefined : clave.current,
             ...baseRef.current,
         };
+        const mercancia = datos.totalMercancia;
+        if (mercancia !== '' && mercancia !== null && mercancia !== undefined) {
+            cuerpo.total_mercancia = mercancia;
+        }
+        if (datos.safTocado) {
+            const filas = (datos.safAplicaciones || [])
+                .filter((fila) => fila.saf_credito_id && Number(fila.monto) > 0)
+                .map((fila) => ({ saf_credito_id: fila.saf_credito_id, monto: Number(fila.monto) }));
+            cuerpo.aplica_saldo_favor = filas.length > 0;
+            cuerpo.saldo_a_favor = filas.reduce((suma, fila) => suma + Number(fila.monto), 0);
+            cuerpo.saf_aplicaciones = filas;
+        }
+        return cuerpo;
     };
 
     const aplicarRespuesta = (respuesta) => {
@@ -381,6 +442,18 @@ export default function FormularioRegistrarTienda({
             baseRef.current = siguiente;
             setBase(siguiente);
         }
+        if (respuesta.total_mercancia !== undefined || respuesta.saldo_a_favor !== undefined) {
+            setConfirmados((actual) => ({
+                ...actual,
+                ...(respuesta.total_mercancia !== undefined ? { total_mercancia: respuesta.total_mercancia } : {}),
+                ...(respuesta.saldo_a_favor !== undefined ? { saldo_a_favor: respuesta.saldo_a_favor } : {}),
+                ...(respuesta.costo_envio !== undefined ? { costo_envio: respuesta.costo_envio } : {}),
+                ...(respuesta.aplica_seguro !== undefined ? { aplica_seguro: respuesta.aplica_seguro } : {}),
+                ...(respuesta.costo_seguro !== undefined ? { costo_seguro: respuesta.costo_seguro } : {}),
+                ...(respuesta.revision_registro != null ? { revision_registro: respuesta.revision_registro } : {}),
+            }));
+        }
+        if (respuesta.solicitud_preparacion) setSolicitudViva(respuesta.solicitud_preparacion);
         if (respuesta.soporte_pedido?.url) setDocumento(respuesta.soporte_pedido);
         if (respuesta.id) onPedidoCreado?.({ id: respuesta.id, folio: respuesta.folio });
         setConflicto('');
@@ -622,7 +695,13 @@ export default function FormularioRegistrarTienda({
 
     useEffect(() => {
         if (!abierto) return undefined;
-        if (!huellaRef.current) huellaRef.current = huellaActual();
+        const actual = huellaActual();
+        if (!huellaRef.current) {
+            huellaRef.current = actual;
+            return undefined;
+        }
+        if (actual === huellaRef.current) return undefined;
+        setEstadoGuardado((estado) => (estado === 'guardando' ? estado : 'pendiente'));
         const timer = window.setTimeout(() => {
             if (suspenderRef.current || huellaActual() === huellaRef.current) return;
             const datos = datosRef.current;
@@ -641,7 +720,7 @@ export default function FormularioRegistrarTienda({
             });
         }, 700);
         return () => window.clearTimeout(timer);
-    }, [abierto, clienteId, numeroCliente, departamentoId, folio, modalidad, area, caso, almacenId]);
+    }, [abierto, clienteId, numeroCliente, departamentoId, folio, modalidad, area, caso, almacenId, totalMercancia, aplicaSaf, saldoFavor, safAplicaciones, safTocado]);
 
     const dialog = usePedidoDialog({
         abierto,
@@ -649,9 +728,69 @@ export default function FormularioRegistrarTienda({
         bloqueado: guardando || enviando || estadoArchivo === 'cargando',
     });
 
+    const refrescarRef = useRef(null);
+    useActualizacionesPedidos({
+        activo: abierto && Boolean(pedidoId), pedidoId,
+        pausado: guardando || enviando || ['pendiente', 'guardando'].includes(estadoGuardado),
+        onActualizar: () => refrescarRef.current?.(),
+        onPendiente: () => setAviso('El pedido cambió. Se conserva su captura mientras termina de guardar.'),
+    });
     if (!abierto) return null;
 
     const nombreAlmacenVisible = almacenes.find((almacen) => String(almacen.id) === String(almacenId))?.nombre || '';
+    const importesListos = mismoMonto(totalMercancia, confirmados.total_mercancia)
+        && mismoMonto(saldoDeDatos(datosRef.current), confirmados.saldo_a_favor)
+        && canonMonto(totalMercancia) !== null
+        && !conflicto
+        && !['guardando', 'pendiente', 'error', 'conflicto'].includes(estadoGuardado);
+    const bancosContexto = (catalogos.bancos || []).filter((banco) => (
+        banco.compartido !== false
+        || (banco.departamento_ids || []).some((id) => String(id) === String(departamentoId))
+    ));
+    const adoptarLectura = (lectura) => {
+        if (!lectura) return;
+        setPedido((actual) => ({ ...actual, ...lectura }));
+        if (lectura.consulta_cerrada !== undefined) setConsultaCerrada(Boolean(lectura.consulta_cerrada));
+        if (lectura.solicitud_preparacion) setSolicitudViva(lectura.solicitud_preparacion);
+        const limpio = mismoMonto(datosRef.current.totalMercancia, confirmadosRef.current.total_mercancia)
+            && mismoMonto(saldoDeDatos(datosRef.current), confirmadosRef.current.saldo_a_favor);
+        if (!limpio) {
+            if (lectura.revision_registro != null && Number(lectura.revision_registro) !== Number(confirmadosRef.current.revision_registro)) {
+                setConflicto('Los importes guardados cambiaron. Conserve esta captura y actualice los datos antes de registrar el pago.');
+            }
+            return;
+        }
+        setConfirmados((actual) => ({
+            ...actual,
+            ...(lectura.total_mercancia !== undefined ? { total_mercancia: lectura.total_mercancia } : {}),
+            ...(lectura.saldo_a_favor !== undefined ? { saldo_a_favor: lectura.saldo_a_favor } : {}),
+            ...(lectura.costo_envio !== undefined ? { costo_envio: lectura.costo_envio } : {}),
+            ...(lectura.aplica_seguro !== undefined ? { aplica_seguro: lectura.aplica_seguro } : {}),
+            ...(lectura.costo_seguro !== undefined ? { costo_seguro: lectura.costo_seguro } : {}),
+            ...(lectura.revision_registro != null ? { revision_registro: lectura.revision_registro } : {}),
+        }));
+        if (lectura.revision_registro != null && lectura.base_captura) {
+            const siguiente = { revision_esperada: lectura.revision_registro, base_captura: lectura.base_captura };
+            baseRef.current = siguiente;
+            setBase(siguiente);
+        }
+    };
+    refrescarRef.current = async () => {
+        try {
+            const { data } = await axios.get(route('control_pedidos.pagos.resumen', pedidoId), { headers: { Accept: 'application/json' } });
+            adoptarLectura(data);
+        } catch {
+            setAviso('No se pudo actualizar el pedido. Vuelva a abrirlo para consultar su estado.');
+        }
+    };
+    const actualizarSolicitud = (siguiente) => {
+        setSolicitudViva(siguiente);
+        setPedido((actual) => ({ ...actual, solicitud_preparacion: siguiente }));
+        const pendientes = (siguiente?.retiro_piezas || []).some((fila) => (fila.estado || 'pendiente') === 'pendiente')
+            || (siguiente?.anexo_sin_remision || []).some((fila) => !fila.respondida_at);
+        if (pendientes) setConsultaCerrada(false);
+        refrescarRef.current?.();
+    };
     const campo = `${THEME_INPUT} w-full min-h-[44px] text-base`;
     const opcionesDepartamento = [...departamentos];
     if (
@@ -1032,17 +1171,17 @@ export default function FormularioRegistrarTienda({
                         <>
                             <SeguimientoSolicitudTienda
                                 pedidoId={pedidoId}
-                                pedido={pedido}
+                                pedido={{ ...pedido, solicitud_preparacion: solicitudViva }}
+                                onSolicitud={actualizarSolicitud}
                                 area={area}
                                 nombreAlmacen={nombreAlmacenVisible}
                                 revisiones={pedido?.revisiones_producto || pedido?.revisionesProducto || []}
                                 consultaCerrada={consultaCerrada}
-                                onConsultaCerrada={() => setConsultaCerrada(true)}
+                                onConsultaCerrada={() => { setConsultaCerrada(true); refrescarRef.current?.(); }}
                             />
                             <ContinuidadTienda
                                 pedidoId={pedidoId}
-                                solicitud={pedido?.solicitud_preparacion || {}}
-                                revisiones={pedido?.revisiones_producto || pedido?.revisionesProducto || []}
+                                solicitud={solicitudViva}
                                 sucursales={catalogos.sucursales || []}
                                 facultadMd={Boolean(registrarTienda.facultad_md)}
                                 puedeResolverTraslado={superAdmin || (auth?.user?.permissions || []).includes('control_pedidos.tienda.autorizar_segundo_traslado')}
@@ -1050,6 +1189,32 @@ export default function FormularioRegistrarTienda({
                                 puedeCedis={superAdmin || (auth?.user?.permissions || []).includes('control_pedidos.cedis')}
                                 mostrarCustodia={false}
                                 consultaCerrada={consultaCerrada}
+                                importes={{
+                                    clienteId,
+                                    totalMercancia,
+                                    onTotalMercancia: setTotalMercancia,
+                                    aplicaSaf,
+                                    onAplicaSaf: (valor) => { setSafTocado(true); setAplicaSaf(valor); },
+                                    saldoFavor,
+                                    onSaldoFavor: (valor) => { setSafTocado(true); setSaldoFavor(valor); },
+                                    safAplicaciones,
+                                    onSafAplicaciones: (filas) => { setSafTocado(true); setSafAplicaciones(filas); },
+                                    costos: {
+                                        costo_envio: confirmados.costo_envio,
+                                        aplica_seguro: confirmados.aplica_seguro,
+                                        costo_seguro: confirmados.costo_seguro,
+                                    },
+                                    importesListos,
+                                    bancos: bancosContexto,
+                                    revisionEsperada: confirmados.revision_registro,
+                                    totalMercanciaConfirmado: confirmados.total_mercancia,
+                                    saldoAFavorConfirmado: confirmados.saldo_a_favor,
+                                    conservar: Boolean(solicitudViva?.cobertura_tienda)
+                                        || Number(confirmados.saldo_a_favor) > 0
+                                        || (Number(canonMonto(confirmados.total_mercancia)) > 0 && !consultaCerrada),
+                                    onLectura: adoptarLectura,
+                                    onSolicitud: actualizarSolicitud,
+                                }}
                             />
                         </>
                     )}

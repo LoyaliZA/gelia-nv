@@ -44,6 +44,8 @@ export default function InputMoneda({
     readOnly = false,
     disabled = false,
     placeholder = '0.00',
+    id,
+    'aria-label': ariaLabel,
 }) {
     const [focused, setFocused] = useState(false);
     const [texto, setTexto] = useState('');
@@ -76,6 +78,8 @@ export default function InputMoneda({
 
     return (
         <input
+            id={id}
+            aria-label={ariaLabel}
             type="text"
             inputMode="decimal"
             readOnly={readOnly}

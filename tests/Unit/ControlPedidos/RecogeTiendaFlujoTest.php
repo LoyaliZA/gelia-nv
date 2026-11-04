@@ -51,6 +51,7 @@ class RecogeTiendaFlujoTest extends TestCase
             'productos' => ['sku', 'descripcion', 'activo', 'es_demo'],
             'inventarios' => ['producto_id', 'almacen_id', 'existencia'],
             'pedido_bma_tarea_documentos' => ['pedido_bma_tarea_preparacion_id', 'pedido_bma_tarea_producto_id', 'tipo_evidencia', 'ruta_interna', 'nombre_original', 'mime_type', 'tamano_bytes', 'hash_sha256', 'subido_por_id', 'subido_at', 'inmutable', 'version'],
+            'pedido_bma_revisiones_producto' => ['pedido_bma_id', 'sku', 'descripcion_producto', 'cantidad_solicitada', 'cantidad_encontrada', 'estado_fisico', 'comentario', 'resolucion', 'orden'],
             'pedido_bma_documentos' => ['pedido_bma_id', 'tipo', 'ruta_archivo', 'nombre_original', 'mime_type', 'tamano_bytes', 'activo', 'comentario'],
             'catalogo_modalidades_preparacion_pedido' => ['codigo', 'nombre'],
             'pedidos_bma' => ['estatus_envio', 'pesaje_respondido_at', 'pesaje_respondido_por_id', 'consulta_cerrada_at', 'consulta_actualizacion_pendiente', 'cantidad_piezas', 'cliente_id', 'vendedor_id', 'catalogo_estatus_pedido_id', 'deleted_at'],

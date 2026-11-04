@@ -70,11 +70,12 @@ class ActualizarPagoPedidoBmaService
                 : null)
             : $pago->catalogo_banco_id;
 
-        if (PedidoBmaPago::formaRequiereBanco($forma) && ! $bancoId) {
-            throw new InvalidArgumentException('Esta forma de pago requiere banco receptor.');
-        }
         if (! PedidoBmaPago::formaRequiereBanco($forma)) {
             $bancoId = null;
+        }
+        $bancoId = app(ResolverBancoCajaPdv::class)->destino($bancoId, $pedido, $forma);
+        if (PedidoBmaPago::formaRequiereBanco($forma) && ! $bancoId) {
+            throw new InvalidArgumentException('Esta forma de pago requiere banco receptor.');
         }
 
         if (PedidoBmaPago::formaRequiereComprobante($forma) && $cantidadTrasAgregar === 0) {
@@ -108,6 +109,10 @@ class ActualizarPagoPedidoBmaService
                 $cambioMaterial,
                 &$rutasNuevas
             ) {
+                $pedido = \App\Models\ControlPedidos\PedidoBma::query()->lockForUpdate()->findOrFail($pedido->id);
+                app(ComprobarVersionFinancieraPago::class)->comprobar($pedido, $datos);
+                $bancoId = app(ResolverBancoCajaPdv::class)->destino($bancoId, $pedido, $forma);
+                CoberturaPagoPedidoBmaService::assertBancoPermitido($pedido, $bancoId);
                 $antesRevision = $pago->estado_revision;
                 $montoAnterior = (float) $pago->monto;
                 $attrs = [
