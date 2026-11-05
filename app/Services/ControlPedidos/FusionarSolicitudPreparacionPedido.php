@@ -18,6 +18,7 @@ class FusionarSolicitudPreparacionPedido
         'traspaso_cedis',
         'consulta_cedis',
     ];
+
     /**
      * @param  array<string, mixed>|null  $actual
      * @param  array<string, mixed>|null  $entrada
@@ -191,7 +192,7 @@ class FusionarSolicitudPreparacionPedido
             return false;
         }
         foreach ([
-            'cobertura_tienda', 'segundo_traslado', 'credito_wizerp', 'tienda_md_reporte',
+            'acciones_disponibilidad', 'reapertura_disponibilidad', 'solicitudes_ajuste_ids', 'cobertura_tienda', 'segundo_traslado', 'historial_traslados_tienda', 'movimientos_tienda_version', 'cambio_modalidad_tienda', 'credito_wizerp', 'tienda_md_reporte',
             'retiro_recoleccion', 'liberacion_fisica_20', 'cambio_modalidad',
             'continuacion_ejecutor', 'entrega_custodia', 'compromisos_inventario', 'complemento_pdv', 'anexo_integracion', 'transferencia_tienda', 'seguimiento_recoleccion', 'remision_tienda',
         ] as $clave) {
@@ -302,8 +303,8 @@ class FusionarSolicitudPreparacionPedido
     private function conservarOperacionTienda(array &$salida, array $origen): void
     {
         foreach ([
-            'cobertura_tienda',
-            'segundo_traslado',
+            'acciones_disponibilidad', 'reapertura_disponibilidad', 'solicitudes_ajuste_ids', 'cobertura_tienda',
+            'segundo_traslado', 'historial_traslados_tienda', 'movimientos_tienda_version', 'cambio_modalidad_tienda',
             'credito_wizerp',
             'tienda_md_reporte',
             'tienda_md',

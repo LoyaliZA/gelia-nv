@@ -263,6 +263,7 @@ class PedidoBmaController extends Controller
         Gate::authorize('control_pedidos.crear');
         $listarService->asegurarAcceso($pedidoBma, Auth::user());
         $datos = $request->validate([
+            'solicitud_id' => ['nullable', 'uuid'],
             'entrada' => ['nullable', 'in:documento,catalogo'],
             'sku' => ['required_without:entrada', 'nullable', 'string', 'max:80'],
             'descripcion' => ['required_with:sku', 'nullable', 'string', 'max:180'],
@@ -285,7 +286,7 @@ class PedidoBmaController extends Controller
                 'condicion' => $datos['condicion'] ?? '',
             ]];
         }
-        $resultado = $servicio->ejecutar(
+        $resultado = app(\App\Services\ControlPedidos\EjecutarSolicitudAjusteTienda::class)->ejecutar($pedidoBma, $datos['solicitud_id'] ?? null, fn () => $servicio->ejecutar(
             $pedidoBma,
             Auth::user(),
             $datos['sku'] ?? null,
@@ -295,10 +296,11 @@ class PedidoBmaController extends Controller
             $request->file('evidencia'),
             $piezas,
             $entrada
-        );
+        ));
 
         return response()->json([
             'ok' => true,
+            'solicitud_preparacion' => $pedidoBma->fresh()->solicitud_preparacion,
             'pedido_id' => $resultado->id,
             'folio' => $resultado->folio,
             'principal_id' => $resultado->pedido_principal_id ?: $pedidoBma->id,
@@ -317,6 +319,7 @@ class PedidoBmaController extends Controller
         Gate::authorize('control_pedidos.crear');
         $listarService->asegurarAcceso($pedidoBma, Auth::user());
         $datos = $request->validate([
+            'solicitud_id' => ['nullable', 'uuid'],
             'entrada' => ['nullable', 'in:documento,catalogo'],
             'motivo' => ['required', 'string', 'max:500'],
             'motivo_opcion' => ['nullable', 'string', 'max:120'],
@@ -331,7 +334,7 @@ class PedidoBmaController extends Controller
             'evidencias.*' => ['file', 'max:10240', 'mimes:pdf,jpg,jpeg,png,webp'],
         ]);
         $entrada = $datos['entrada'] ?? 'catalogo';
-        $pedido = $servicio->ejecutar(
+        $pedido = app(\App\Services\ControlPedidos\EjecutarSolicitudAjusteTienda::class)->ejecutar($pedidoBma, $datos['solicitud_id'] ?? null, fn () => $servicio->ejecutar(
             $pedidoBma,
             Auth::user(),
             $datos['piezas'] ?? [],
@@ -340,7 +343,7 @@ class PedidoBmaController extends Controller
             $entrada,
             array_values($request->file('documentos') ?? []),
             $datos['motivo_opcion'] ?? null,
-        );
+        ));
 
         return response()->json([
             'ok' => true,
@@ -372,9 +375,15 @@ class PedidoBmaController extends Controller
     ): JsonResponse {
         Gate::authorize('control_pedidos.crear');
         $listarService->asegurarAcceso($pedidoBma, Auth::user());
-        $datos = $request->validate(['sucursal_destino_id' => ['required', 'integer']]);
+        $datos = $request->validate([
+            'sucursal_destino_id' => ['required', 'integer'],
+            'motivo' => ['nullable', 'string', 'max:200'],
+            'error_captura' => ['sometimes', 'boolean'],
+            'evidencias' => ['nullable', 'array', 'max:8'],
+            'evidencias.*' => ['file', 'mimes:pdf,jpg,jpeg,png,webp', 'max:10240'],
+        ]);
         try {
-            $pedido = $servicio->ejecutar($pedidoBma, Auth::user(), (int) $datos['sucursal_destino_id']);
+            $pedido = $servicio->ejecutar($pedidoBma, Auth::user(), (int) $datos['sucursal_destino_id'], datosTraslado: $datos);
         } catch (\RuntimeException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
@@ -407,10 +416,16 @@ class PedidoBmaController extends Controller
     }
 
     public function recibirSegundoTraslado(
+        Request $request,
         PedidoBma $pedidoBma,
         \App\Services\ControlPedidos\EjecutarSegundoTrasladoTiendaService $servicio,
     ): JsonResponse {
-        $pedido = $servicio->recibir($pedidoBma, Auth::user());
+        $datos = $request->validate([
+            'bolsas_verificadas' => ['accepted'],
+            'almacen_id' => ['required', 'integer'],
+            'ubicacion' => ['required', 'string', 'max:240'],
+        ]);
+        $pedido = $servicio->recibir($pedidoBma, Auth::user(), $datos);
 
         return response()->json(array_merge(['ok' => true], $this->contextoRegistrarTienda($pedido)));
     }
@@ -1037,10 +1052,11 @@ class PedidoBmaController extends Controller
     }
 
     public function reabrirConsulta(
+        Request $request,
         PedidoBma $pedidoBma,
         ListarPedidosBmaService $listarService,
         ReabrirConsultaPedidoBmaService $service
-    ): RedirectResponse {
+    ): RedirectResponse|JsonResponse {
         Gate::authorize('control_pedidos.crear');
         $listarService->asegurarAcceso($pedidoBma, Auth::user());
 
@@ -1054,6 +1070,8 @@ class PedidoBmaController extends Controller
                 'No se pudo reabrir la consulta. Intente de nuevo o contacte a soporte.'
             );
         }
+
+        if ($request->expectsJson()) return response()->json($listarService->presentar($pedidoBma->fresh(), Auth::user()));
 
         return redirect()->back()->with('success', 'Consulta CEDIS reabierta. El monto y el pago quedan bloqueados hasta cerrar de nuevo.');
     }

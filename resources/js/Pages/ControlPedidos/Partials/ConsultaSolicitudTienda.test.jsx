@@ -12,7 +12,7 @@ describe('Respuesta actual en las vistas de consulta', () => {
     it('muestra la respuesta sin habilitar cierre ni ajustes aunque el usuario tenga permiso', async () => {
         await act(() => root.render(<ConsultaSolicitudTienda pedido={pedido} />));
         expect(container.textContent).toContain('Resultado de la revisión en tienda');
-        expect(container.textContent).toContain('Revisión sin excepciones');
+        expect(container.textContent).toContain('Sin incidencias');
         expect(container.querySelectorAll('button,input,select,textarea')).toHaveLength(0);
     });
     it('muestra cierre y respuesta física sin habilitar acciones', async () => {

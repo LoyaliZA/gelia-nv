@@ -3,7 +3,7 @@ import { ClipboardCheck } from 'lucide-react';
 import { formatearFechaNegocio } from './pedidosBmaStyles';
 import { esPdf, MiniaturaDocumento } from './ModalVistaPreviaDocumento';
 
-export default function RespuestaPreparacionTienda({ tarea, onVerDocumentos }) {
+export default function RespuestaPreparacionTienda({ tarea, onVerDocumentos, accionesDePieza }) {
     const respuesta = tarea?.respuesta;
     const documentos = respuesta?.documentos || [];
     const hayFotos = documentos.some((d) => d?.url);
@@ -29,16 +29,16 @@ export default function RespuestaPreparacionTienda({ tarea, onVerDocumentos }) {
     const excepciones = Array.isArray(respuesta.excepciones) ? respuesta.excepciones : [];
     const skusEnTabla = new Set((respuesta.productos || []).map((producto) => String(producto.sku || '')));
     const excepcionesSueltas = excepciones.filter((pieza) => !skusEnTabla.has(String(pieza.sku || '')) || !pieza.sku);
-    return <section className="registrar-tienda-panel space-y-3" aria-label="Respuesta de preparación">
+    return <section className="registrar-tienda-panel space-y-3 theme-text-main" aria-label="Respuesta de preparación">
         <div className="registrar-tienda-seccion-titulo">
             <ClipboardCheck size={18} aria-hidden="true" />
             <h3>{titulo}</h3>
         </div>
         <p className="text-sm theme-text-muted m-0">{respuesta.responsable && `Respondió ${respuesta.responsable}`}{respuesta.respondida_at && ` · ${formatearFechaNegocio(respuesta.respondida_at)}`}{!respuesta.respondida && hayFotos && ' · Evidencias registradas'}</p>
-        {(respuesta.productos || []).length > 0 && <div className="overflow-x-auto"><table className="w-full text-sm text-left"><thead><tr className="border-b theme-border"><th className="p-2">Producto</th><th className="p-2">{respuesta.apartado_confirmado ? 'Preparadas' : 'Revisadas'}</th><th className="p-2">Resultado</th><th className="p-2">Foto</th></tr></thead>
+        {(respuesta.productos || []).length > 0 && <div className="overflow-x-auto"><table className="w-full text-sm text-left tienda-respuesta-tabla"><thead><tr className="border-b theme-border"><th className="p-2">Producto</th><th className="p-2">{respuesta.apartado_confirmado ? 'Preparadas' : 'Revisadas'}</th><th className="p-2">Resultado</th><th className="p-2">Foto</th></tr></thead>
             <tbody>{respuesta.productos.map((p) => {
                 const fotos = fotosDe(p.id);
-                return <tr key={p.id} className="border-b theme-border"><td className="p-2">{p.descripcion}<span className="block text-xs theme-text-muted">{p.sku}</span></td><td className="p-2">{p.cantidad ?? 'Pendiente'}</td><td className="p-2">{estados[p.estado_fisico] || 'Pendiente'}{(p.estado_fisico !== 'sin_existencia' && (p.unica_pieza || p.mejor_ejemplar)) && <span className="block text-xs">{p.unica_pieza && <span className="gelia-pedidos-atributo">Única pieza</span>}{p.mejor_ejemplar && <span className="gelia-pedidos-atributo">Mejor ejemplar</span>}</span>}{p.observacion && p.observacion.trim().toLowerCase() !== (estados[p.estado_fisico] || '').toLowerCase() && <span className="block">{p.observacion}</span>}</td><td className="p-2">{fotos.length ? <div className="flex flex-wrap gap-2">{fotos.map((d, i) => <MiniaturaDocumento key={d.id} documento={d} onVer={() => ver(fotos, i)} />)}</div> : <span className="theme-text-muted text-xs">Sin foto</span>}</td></tr>;
+                return <tr key={p.id} className="border-b theme-border"><td className="p-2">{p.descripcion}<span className="block text-xs theme-text-muted">{p.sku}</span>{accionesDePieza?.(p)}</td><td className="p-2" data-label={respuesta.apartado_confirmado ? 'Preparadas' : 'Revisadas'}>{p.cantidad ?? 'Pendiente'}</td><td className="p-2" data-label="Resultado">{estados[p.estado_fisico] || 'Pendiente'}{(p.estado_fisico !== 'sin_existencia' && (p.unica_pieza || p.mejor_ejemplar)) && <span className="block text-xs">{p.unica_pieza && <span className="gelia-pedidos-atributo">Única pieza</span>}{p.mejor_ejemplar && <span className="gelia-pedidos-atributo">Mejor ejemplar</span>}</span>}{p.observacion && p.observacion.trim().toLowerCase() !== (estados[p.estado_fisico] || '').toLowerCase() && <span className="block">{p.observacion}</span>}</td><td className="p-2" data-label="Foto">{fotos.length ? <div className="flex flex-wrap gap-2">{fotos.map((d, i) => <MiniaturaDocumento key={d.id} documento={d} onVer={() => ver(fotos, i)} />)}</div> : <span className="theme-text-muted text-xs">Sin foto</span>}</td></tr>;
             })}</tbody>
         </table></div>}
         {respuesta.revision?.estado && <div className="flex flex-wrap gap-2 items-center text-xs">

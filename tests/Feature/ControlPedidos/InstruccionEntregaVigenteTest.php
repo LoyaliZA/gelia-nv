@@ -18,25 +18,27 @@ use App\Models\SaldosAFavor\PedidoBmaPago;
 use App\Models\Sucursal;
 use App\Models\User;
 use App\Services\ControlPedidos\ActualizarPedidoBmaService;
+use App\Services\ControlPedidos\AsegurarCumplimientoFisicoService;
 use App\Services\ControlPedidos\AsignarGuiaPedidoBmaService;
 use App\Services\ControlPedidos\AsignarSucursalDestinoPedidoService;
-use App\Services\ControlPedidos\ResolverSegundoTrasladoTiendaService;
-use App\Services\ControlPedidos\SolicitarSegundoTrasladoTiendaService;
-use App\Services\ControlPedidos\AsegurarCumplimientoFisicoService;
 use App\Services\ControlPedidos\CambiarModalidadPreparacionService;
 use App\Services\ControlPedidos\ConfirmarDespachoMunicipioService;
 use App\Services\ControlPedidos\CrearTareaPreparacionService;
 use App\Services\ControlPedidos\EnviarPedidoBmaService;
 use App\Services\ControlPedidos\NotificarPedidoBmaService;
 use App\Services\ControlPedidos\PreparacionTiendaConfig;
+use App\Services\ControlPedidos\ResolverSegundoTrasladoTiendaService;
+use App\Services\ControlPedidos\SolicitarSegundoTrasladoTiendaService;
 use App\Support\ControlPedidos\EstatusSucursalPedidoBma;
 use App\Support\ControlPedidos\InstruccionEntrega;
 use App\Support\ControlPedidos\RevisionCapturaPedido;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class InstruccionEntregaVigenteTest extends TestCase
@@ -163,7 +165,7 @@ class InstruccionEntregaVigenteTest extends TestCase
     public function test_reenvio_a_auxiliar_conserva_remision_y_pago_comprobado(): void
     {
         config(['control_pedidos.direcciones_normalizadas' => false]);
-        $listaId = \Illuminate\Support\Facades\DB::table('catalogo_listas_descuento')->insertGetId([
+        $listaId = DB::table('catalogo_listas_descuento')->insertGetId([
             'nombre' => 'Lista fase 1',
             'activo' => true,
             'created_at' => now(),
@@ -387,15 +389,18 @@ class InstruccionEntregaVigenteTest extends TestCase
     public function test_segundo_traslado_exige_autorizacion_y_no_simula_recepcion(): void
     {
         $pedido = $this->pedido([
-            'estatus_sucursal' => EstatusSucursalPedidoBma::EN_TRANSITO,
+            'estatus_sucursal' => EstatusSucursalPedidoBma::EN_CUSTODIA,
         ]);
         $this->tarea($pedido, CatalogoModalidadPreparacionPedido::CODIGO_RECOGE_TIENDA);
+        $origen = Sucursal::factory()->create(['activo' => true]);
+        $pedido->update(['sucursal_destino_id' => $origen->id]);
+        ResguardoPdv::factory()->create(['pedido_bma_id' => $pedido->id, 'sucursal_id' => $origen->id, 'estado' => ResguardoPdv::ESTADO_EN_CUSTODIA]);
         $destino = Sucursal::factory()->create(['activo' => true]);
         $servicio = app(AsignarSucursalDestinoPedidoService::class);
 
-        $solicitado = $servicio->ejecutar($pedido, $this->usuario, $destino->id);
+        $solicitado = $servicio->ejecutar($pedido, $this->usuario, $destino->id, datosTraslado: ['motivo' => 'Corrección solicitada', 'error_captura' => true]);
 
-        $this->assertSame(EstatusSucursalPedidoBma::EN_TRANSITO, $solicitado->estatus_sucursal);
+        $this->assertSame(EstatusSucursalPedidoBma::EN_CUSTODIA, $solicitado->estatus_sucursal);
         $this->assertNotSame($destino->id, $solicitado->sucursal_destino_id);
         $this->assertSame('pendiente', $solicitado->solicitud_preparacion_json['segundo_traslado']['estado']);
 
@@ -409,6 +414,7 @@ class InstruccionEntregaVigenteTest extends TestCase
         }
 
         $gerencia = User::factory()->create();
+        $gerencia->assignRole(Role::findOrCreate('Administrador', 'web'));
         $gerencia->givePermissionTo(Permission::findOrCreate(SolicitarSegundoTrasladoTiendaService::PERMISO, 'web'));
         $actualizado = app(ResolverSegundoTrasladoTiendaService::class)->ejecutar(
             $solicitado->fresh(),
@@ -418,7 +424,7 @@ class InstruccionEntregaVigenteTest extends TestCase
         );
 
         $this->assertSame($destino->id, $actualizado->sucursal_destino_id);
-        $this->assertSame(EstatusSucursalPedidoBma::EN_TRANSITO, $actualizado->estatus_sucursal);
+        $this->assertSame(EstatusSucursalPedidoBma::EN_CUSTODIA, $actualizado->estatus_sucursal);
         $this->assertFalse($actualizado->solicitud_preparacion_json['segundo_traslado']['recepcion_confirmada']);
     }
 

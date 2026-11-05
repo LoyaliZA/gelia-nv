@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { THEME_BTN_PRIMARY, THEME_BTN_SECONDARY, THEME_INPUT, THEME_LABEL, THEME_SELECT } from '../../../utils/geliaTheme';
+import ModalMovimientosTienda from './ModalMovimientosTienda';
 import ImportesPagoTienda from './ImportesPagoTienda';
 
 function cabeceras() {
@@ -30,11 +31,10 @@ export default function ContinuidadTienda({
     consultaCerrada = false,
     importes = null,
 }) {
-    const [sucursalId, setSucursalId] = useState('');
+    const [movimiento, setMovimiento] = useState(false);
     const [aviso, setAviso] = useState(siguiente);
     const [ocupado, setOcupado] = useState(false);
     const [solicitudLocal, setSolicitudLocal] = useState(solicitud || {});
-    const [recorrido, setRecorrido] = useState('');
     const [principalId, setPrincipalId] = useState('');
     const [anexoId, setAnexoId] = useState('');
     const [sku, setSku] = useState('');
@@ -49,78 +49,6 @@ export default function ContinuidadTienda({
     const anexoPendiente = (solicitudLocal?.anexo_sin_remision || []).some((anexo) => !anexo?.respondida_at);
     const cierreVigente = consultaCerrada && aceptacionVigente && !retiroPendiente && !anexoPendiente;
     const puedeCobertura = cierreVigente && (revision === 'sin_excepciones' || revision === 'excepciones_pendientes' || revision === 'decision_registrada');
-    const traslado = solicitudLocal?.segundo_traslado;
-
-    const pedirTraslado = async () => {
-        setOcupado(true);
-        setAviso('');
-        try {
-            const respuesta = await axios.post(
-                `/control-pedidos/${pedidoId}/sucursal-destino`,
-                { sucursal_destino_id: Number(sucursalId) },
-                { headers: cabeceras() },
-            );
-            if (respuesta.data?.expediente) {
-                setSolicitudLocal((actual) => ({
-                    ...actual,
-                    segundo_traslado: respuesta.data.expediente.segundo_traslado,
-                }));
-            }
-            setAviso(respuesta.data?.expediente?.segundo_traslado?.estado === 'pendiente'
-                ? 'Solicitud de segundo traslado pendiente de gerencia. La mercancía no se movió.'
-                : 'Destino actualizado en la instrucción vigente. Si la mercancía ya salió, autorizar no confirma la recepción.');
-        } catch (error) {
-            setAviso(mensajeDe(error, 'No se actualizó la sucursal.'));
-        } finally {
-            setOcupado(false);
-        }
-    };
-
-    const resolverTraslado = async (decision) => {
-        setOcupado(true);
-        setAviso('');
-        try {
-            const respuesta = await axios.post(
-                `/control-pedidos/${pedidoId}/segundo-traslado`,
-                { decision, recorrido },
-                { headers: cabeceras() },
-            );
-            if (respuesta.data?.expediente) {
-                setSolicitudLocal((actual) => ({
-                    ...actual,
-                    segundo_traslado: respuesta.data.expediente.segundo_traslado,
-                }));
-            }
-            setAviso(decision === 'autorizar'
-                ? 'Traslado autorizado. Falta registrar la salida y la recepción.'
-                : 'Traslado rechazado.');
-        } catch (error) {
-            setAviso(mensajeDe(error, 'No se resolvió el traslado.'));
-        } finally {
-            setOcupado(false);
-        }
-    };
-
-    const moverTraslado = async (paso) => {
-        setOcupado(true);
-        setAviso('');
-        try {
-            const respuesta = await axios.post(`/control-pedidos/${pedidoId}/segundo-traslado/${paso}`, {}, { headers: cabeceras() });
-            if (respuesta.data?.expediente?.segundo_traslado) {
-                setSolicitudLocal((actual) => ({
-                    ...actual,
-                    segundo_traslado: respuesta.data.expediente.segundo_traslado,
-                }));
-            }
-            setAviso(paso === 'salida'
-                ? 'Salida registrada. Falta la recepción en destino.'
-                : 'Recepción confirmada. La mercancía quedó en la sucursal de destino.');
-        } catch (error) {
-            setAviso(mensajeDe(error, 'No se registró el movimiento.'));
-        } finally {
-            setOcupado(false);
-        }
-    };
 
     const postSimple = async (url, exito) => {
         setOcupado(true);
@@ -208,56 +136,8 @@ export default function ContinuidadTienda({
             )}
             {cierreVigente && mostrarCustodia && <section className="rounded-xl border theme-border theme-element p-4 grid gap-3">
                 <h3 className="text-sm font-semibold theme-text-main m-0">Sucursal, anexo y custodia</h3>
-                {traslado?.estado === 'pendiente' && (
-                    <div className="grid gap-2">
-                        <p className="text-sm theme-text-main m-0" role="status">
-                            Hay una solicitud de segundo traslado pendiente de gerencia. Autorizar no confirma la recepción.
-                        </p>
-                        {puedeResolverTraslado && (
-                            <>
-                                <label className={THEME_LABEL} htmlFor="recorrido-traslado">Recorrido</label>
-                                <textarea
-                                    id="recorrido-traslado"
-                                    className={`${THEME_INPUT} min-h-16`}
-                                    value={recorrido}
-                                    onChange={(evento) => setRecorrido(evento.target.value)}
-                                />
-                                <div className="flex flex-wrap gap-2">
-                                    <button type="button" className={`${THEME_BTN_PRIMARY} min-h-[44px]`} disabled={ocupado} onClick={() => resolverTraslado('autorizar')}>Autorizar traslado</button>
-                                    <button type="button" className={`${THEME_BTN_SECONDARY} min-h-[44px]`} disabled={ocupado} onClick={() => resolverTraslado('rechazar')}>Rechazar</button>
-                                </div>
-                            </>
-                        )}
-                    </div>
-                )}
-                {traslado?.estado === 'autorizada' && !traslado?.recepcion_confirmada && puedeOperarTienda && (
-                    <div className="flex flex-wrap gap-2">
-                        {traslado.movimiento_estado !== 'en_camino' && (
-                            <button type="button" className={`${THEME_BTN_PRIMARY} min-h-[44px]`} disabled={ocupado} onClick={() => moverTraslado('salida')}>
-                                Registrar salida
-                            </button>
-                        )}
-                        {traslado.movimiento_estado === 'en_camino' && (
-                            <button type="button" className={`${THEME_BTN_PRIMARY} min-h-[44px]`} disabled={ocupado} onClick={() => moverTraslado('recepcion')}>
-                                Confirmar recepción
-                            </button>
-                        )}
-                    </div>
-                )}
-                <label className={THEME_LABEL} htmlFor="sucursal-continuidad">
-                    Cambiar sucursal de recolección
-                </label>
-                <select id="sucursal-continuidad" className={THEME_SELECT} value={sucursalId} onChange={(evento) => setSucursalId(evento.target.value)}>
-                    <option value="">Elegir sucursal</option>
-                    {sucursales.map((sucursal) => (
-                        <option key={sucursal.id} value={sucursal.id}>
-                            {sucursal.nombre}
-                        </option>
-                    ))}
-                </select>
-                <button type="button" className={`${THEME_BTN_SECONDARY} min-h-[44px]`} disabled={ocupado || !sucursalId} onClick={pedirTraslado}>
-                    Actualizar destino
-                </button>
+                <button type="button" className={`${THEME_BTN_SECONDARY} min-h-[44px]`} disabled={ocupado} onClick={() => setMovimiento(true)}>Traslado entre sucursales</button>
+                <ModalMovimientosTienda abierto={movimiento} pedido={{ id: pedidoId, folio: `Pedido ${pedidoId}` }} onClose={() => setMovimiento(false)} />
                 <label className={THEME_LABEL} htmlFor="principal-retiro">Pedido de envío que recibe la custodia</label>
                 <input id="principal-retiro" className={THEME_INPUT} inputMode="numeric" placeholder="Identificador del pedido de envío" value={principalId} onChange={(evento) => setPrincipalId(evento.target.value)} />
                 <button type="button" className={`${THEME_BTN_SECONDARY} min-h-[44px]`} disabled={ocupado || !principalId} onClick={retirarCustodia}>

@@ -225,7 +225,18 @@ export default function FormularioRegistrarTienda({
 }) {
     const { auth } = usePage().props;
     const [pedido, setPedido] = useState(pedidoInicial);
-    useEffect(() => { setPedido(pedidoInicial); }, [pedidoInicial]);
+    useEffect(() => {
+        setPedido(actual => {
+            if (actual?.id === pedidoInicial?.id) {
+                const anterior = actual?.solicitud_preparacion || {};
+                const entrante = pedidoInicial?.solicitud_preparacion || {};
+                const conteo = s => (s.anexo_sin_remision?.length || 0) + (s.retiro_piezas?.length || 0) + Object.keys(s.acciones_disponibilidad || {}).length;
+                if (conteo(anterior) > conteo(entrante)) return actual;
+                if (actual?.updated_at && pedidoInicial?.updated_at && new Date(actual.updated_at) > new Date(pedidoInicial.updated_at)) return actual;
+            }
+            return pedidoInicial;
+        });
+    }, [pedidoInicial]);
     const solicitud = pedido?.solicitud_preparacion || {};
     const departamentosUsuario = [
         ...new Set([auth?.user?.departamento_id, ...(auth?.user?.departamento_ids || [])].filter(Boolean).map(String)),
@@ -293,7 +304,10 @@ export default function FormularioRegistrarTienda({
     const [saldoFavor, setSaldoFavor] = useState(Number(pedido?.saldo_a_favor || 0) > 0 ? pedido.saldo_a_favor : '');
     const [safAplicaciones, setSafAplicaciones] = useState(() => aplicacionesDe(pedido));
     const [safTocado, setSafTocado] = useState(false);
+    const [lecturaOperativaLista, setLecturaOperativaLista] = useState(!pedidoInicial?.id);
+    const [revisionLecturaOperativa, setRevisionLecturaOperativa] = useState(0);
     const [solicitudViva, setSolicitudViva] = useState(solicitud);
+    const solicitudVivaRef = useRef(solicitud); solicitudVivaRef.current = solicitudViva;
     const [confirmados, setConfirmados] = useState({
         total_mercancia: pedido?.total_mercancia ?? null,
         saldo_a_favor: pedido?.saldo_a_favor ?? 0,
@@ -739,6 +753,20 @@ export default function FormularioRegistrarTienda({
         onActualizar: () => refrescarRef.current?.(),
         onPendiente: () => setAviso('El pedido cambió. Se conserva su captura mientras termina de guardar.'),
     });
+    useEffect(() => {
+        if (!abierto || !pedidoId) return;
+        let vigente = true;
+        setLecturaOperativaLista(false);
+        axios.get(`/control-pedidos/${pedidoId}/disponibilidad-tienda`).then(({ data }) => {
+            if (vigente && data?.id === pedidoId) {
+                setPedido(data);
+                setLecturaOperativaLista(true);
+                if (data.solicitud_preparacion) setSolicitudViva(data.solicitud_preparacion);
+                setConsultaCerrada(Boolean(data.consulta_cerrada || data.consulta_cerrada_at));
+            }
+        }).catch(() => { if (vigente) setAviso('No se pudo leer el estado guardado. Actualice antes de solicitar otro ajuste.'); });
+        return () => { vigente = false; };
+    }, [abierto, pedidoId, revisionLecturaOperativa]);
     if (!abierto) return null;
 
     const nombreAlmacenVisible = almacenes.find((almacen) => String(almacen.id) === String(almacenId))?.nombre || '';
@@ -787,7 +815,10 @@ export default function FormularioRegistrarTienda({
             setAviso('No se pudo actualizar el pedido. Vuelva a abrirlo para consultar su estado.');
         }
     };
-    const actualizarSolicitud = (siguiente) => {
+    const actualizarSolicitud = (valor) => {
+        const siguiente = typeof valor === 'function' ? valor(solicitudVivaRef.current) : valor;
+        if (!siguiente || typeof siguiente !== 'object') return;
+        solicitudVivaRef.current = siguiente;
         setSolicitudViva(siguiente);
         setPedido((actual) => ({ ...actual, solicitud_preparacion: siguiente }));
         const pendientes = (siguiente?.retiro_piezas || []).some((fila) => (fila.estado || 'pendiente') === 'pendiente')
@@ -1162,10 +1193,14 @@ export default function FormularioRegistrarTienda({
                     </div>
                     {(enviada || respuestaDeTiendaEmitida(pedido)) && (
                         <>
+                            {!lecturaOperativaLista && <div className="flex flex-wrap items-center gap-2 text-sm theme-text-muted" role="status"><span>Consultando los cambios guardados antes de habilitar ajustes.</span><button type="button" className={GELIA_BTN_OUTLINE} onClick={() => setRevisionLecturaOperativa(n => n + 1)}>Actualizar cambios guardados</button></div>}
                             <SeguimientoSolicitudTienda
+                                soloLectura={!lecturaOperativaLista}
                                 pedidoId={pedidoId}
                                 pedido={{ ...pedido, solicitud_preparacion: solicitudViva }}
                                 onSolicitud={actualizarSolicitud}
+                                onPedidoActualizado={adoptarLectura}
+                                onConsultaReabierta={() => { setConsultaCerrada(false); refrescarRef.current?.(); }}
                                 area={area}
                                 nombreAlmacen={nombreAlmacenVisible}
                                 revisiones={pedido?.revisiones_producto || pedido?.revisionesProducto || []}

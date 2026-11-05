@@ -205,7 +205,7 @@ function MenuAccionesPedido({ acciones, primaria, idBase }) {
 function useAccionesProps(props) {
     const {
         pedido, can, esPapelera, puedeEditar, puedeEliminarBorrador, puedeEliminarRegistro, puedeCancelar,
-        onVer, onEditar, onEliminar, onEliminarRegistro, onRestaurar, onVerAuditoria, onCancelar, onBitacora,
+        onVer, onEditar, onEliminar, onEliminarRegistro, onRestaurar, onVerAuditoria, onCancelar, onBitacora, onMovimientoTienda,
         onVerGuia, onAnexarEnvio, onCompletarEnvio, onCargarGuia,
     } = props;
 
@@ -225,6 +225,7 @@ function useAccionesProps(props) {
         onVerAuditoria,
         onCancelar,
         onBitacora,
+        onMovimientoTienda,
         onVerGuia,
         onAnexarEnvio,
         onCompletarEnvio,
@@ -232,7 +233,7 @@ function useAccionesProps(props) {
         onEsperaPago: (p) => router.post(route('control_pedidos.espera_pago', p.id), {}, { preserveScroll: true }),
     }), [
         pedido, can, esPapelera, puedeEditar, puedeEliminarBorrador, puedeEliminarRegistro, puedeCancelar,
-        onVer, onEditar, onEliminar, onEliminarRegistro, onRestaurar, onVerAuditoria, onCancelar, onBitacora,
+        onVer, onEditar, onEliminar, onEliminarRegistro, onRestaurar, onVerAuditoria, onCancelar, onBitacora, onMovimientoTienda,
         onVerGuia, onAnexarEnvio, onCompletarEnvio, onCargarGuia,
     ]);
 }
@@ -379,6 +380,7 @@ export default function TablaPedidos({
     onVerAuditoria,
     onCancelar,
     onBitacora,
+    onMovimientoTienda,
     onAnexarEnvio,
     onCompletarEnvio,
     onCargarGuia,
@@ -431,6 +433,7 @@ export default function TablaPedidos({
         onVerAuditoria,
         onCancelar,
         onBitacora,
+        onMovimientoTienda,
         onVerGuia: setDocPreview,
         onAnexarEnvio,
         onCompletarEnvio,

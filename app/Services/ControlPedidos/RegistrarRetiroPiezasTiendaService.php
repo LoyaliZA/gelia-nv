@@ -149,6 +149,10 @@ final class RegistrarRetiroPiezasTiendaService
         $encontradas = collect();
         $pendientes = [];
         foreach ($piezas as $pieza) {
+            if (!empty($pieza['revision_id'])) {
+                $revision = $pedido->revisionesProducto()->find($pieza['revision_id']);
+                if ($revision && $revision->estado_fisico !== 'sin_existencia') { $pendientes[] = $pieza; continue; }
+            }
             $query = $pedido->revisionesProducto()->where('estado_fisico', 'sin_existencia')->whereNull('resolucion');
             if (! empty($pieza['revision_id'])) {
                 $query->whereKey($pieza['revision_id']);

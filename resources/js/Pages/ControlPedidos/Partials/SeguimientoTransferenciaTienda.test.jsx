@@ -34,7 +34,7 @@ it('TIENDA MD participa en el recorrido y el acuerdo posterior exige confirmaci�
     axios.get.mockResolvedValue({ data: { ...respuesta, estado: 'pendiente_preparacion', puede_entregar: false, puede_continuar_posterior: true,
         flujo: 'T-02.1', atencion_md: { pendiente_acuerdo: true, primer_pago_at: '2026-11-04T13:01:00-06:00', motivo: 'Pendiente de acuerdo.' } } });
     await act(() => root.render(<SeguimientoTransferenciaTienda pedido={mdPedido} />));
-    expect(container.textContent).toContain('TIENDA MD · Pendiente de acuerdo');
+    expect(container.textContent).toContain('Mismo día · Pendiente de acuerdo');
     expect(axios.post).not.toHaveBeenCalled();
     await act(() => [...container.querySelectorAll('button')].find(button => button.textContent === 'Acordar recolección posterior').click());
     await act(() => [...container.querySelectorAll('button')].find(button => button.textContent === 'Confirmar recolección y resguardo en tienda').click());

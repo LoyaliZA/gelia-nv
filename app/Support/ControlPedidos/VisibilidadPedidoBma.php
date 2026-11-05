@@ -204,12 +204,21 @@ final class VisibilidadPedidoBma
         if (self::puedeConsultarEnListadoBma($usuario, $pedido)) {
             return true;
         }
+        $traslado = $pedido->solicitud_preparacion_json['segundo_traslado'] ?? [];
+        if (($pedido->solicitud_preparacion_json['modalidad_entrega'] ?? '') === 'tienda'
+            && ($traslado['estado'] ?? '') === 'autorizada' && ! ($traslado['recepcion_confirmada'] ?? false)
+            && ($usuario->can('control_pedidos.tienda.responder') || $usuario->can('control_pedidos.tienda.trasladar'))
+            && $usuario->idsSucursalesOperables()->contains((int) ($traslado['sucursal_origen_id'] ?? 0))) {
+            return true;
+        }
         if (TransferenciaT02::documental($pedido)) {
             $enDestino = $usuario->idsSucursalesOperables()->contains((int) $pedido->sucursal_destino_id)
                 && ($usuario->can('control_pedidos.tienda.ver') || $usuario->can('pdv.resguardos.ver') || $usuario->can('pdv.resguardos.entregar'));
             $asignado = $usuario->can('control_pedidos.tienda.ver')
                 && (int) $pedido->instruccionEntregaVigente?->asignada_a_id === (int) $usuario->id;
-            if ($enDestino || $asignado) return true;
+            if ($enDestino || $asignado) {
+                return true;
+            }
         }
 
         $pedido->loadMissing('estatus');

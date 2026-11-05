@@ -108,6 +108,10 @@ final class VisibilidadTareaPreparacion
                 'consulta_cerrada' => $pedido->consultaCerrada(),
                 'cobertura_tienda' => ($pedido->solicitud_preparacion ?? [])['cobertura_tienda'] ?? null,
                 'revision_disponibilidad' => ($pedido->solicitud_preparacion ?? [])['revision_disponibilidad'] ?? null,
+                'acciones_disponibilidad' => $pedido->solicitud_preparacion_json['acciones_disponibilidad'] ?? [],
+                'reapertura_disponibilidad' => $pedido->solicitud_preparacion_json['reapertura_disponibilidad'] ?? null,
+                'anexo_sin_remision' => $pedido->solicitud_preparacion_json['anexo_sin_remision'] ?? [],
+                'retiro_piezas' => $pedido->solicitud_preparacion_json['retiro_piezas'] ?? [],
                 'retiros' => self::retirosVisibles($pedido),
                 'anexos_pendientes' => collect(($pedido->solicitud_preparacion ?? [])['anexo_sin_remision'] ?? [])
                     ->map(function ($linea, $indice) use ($pedido) {

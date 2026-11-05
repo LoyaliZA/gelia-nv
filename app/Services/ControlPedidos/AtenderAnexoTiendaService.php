@@ -76,6 +76,16 @@ final class AtenderAnexoTiendaService
                     'piezas_respuesta' => $piezas, 'resultado' => $nota ?: 'Disponibilidad confirmada. Falta el cierre de la consulta y la separación física del anexo.',
                     'respondida_at' => now()->toIso8601String(), 'respondida_por_id' => $usuario->id, 'respondida_por' => $usuario->name,
                 ]);
+                if (!empty($anexo['sustituye_revision_id'])) {
+                    $lineasRevision = $disponible ? $piezas : [['descripcion' => $anexo['descripcion'], 'sku' => $anexo['sku'] ?? null, 'cantidad' => $anexo['cantidad'] ?: 1]];
+                    foreach ($lineasRevision as $linea) $pedido->revisionesProducto()->create([
+                        'orden' => (int) $pedido->revisionesProducto()->max('orden') + 1,
+                        'descripcion_producto' => $linea['descripcion'], 'sku' => $linea['sku'] ?? null,
+                        'producto_id' => $linea['producto_id'] ?? null, 'cantidad_solicitada' => $linea['cantidad'],
+                        'cantidad_encontrada' => $disponible ? $linea['cantidad'] : 0,
+                        'estado_fisico' => $disponible ? 'bueno' : 'sin_existencia', 'comentario' => $nota,
+                    ]);
+                }
                 $json['anexo_sin_remision'][$indice] = $anexo;
                 $pedido->update(['solicitud_preparacion_json' => $json]);
                 $pedido->refresh();

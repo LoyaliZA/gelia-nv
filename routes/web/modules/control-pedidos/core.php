@@ -7,6 +7,11 @@ use App\Http\Controllers\ControlPedidos\PedidoBmaSaldosPagosController;
 use App\Http\Controllers\ControlPedidos\PlazosRetrasoPedidoBmaController;
 
 Route::prefix('control-pedidos')->name('control_pedidos.')->group(function () {
+    Route::get('/{pedidoBma}/disponibilidad-tienda', [\App\Http\Controllers\ControlPedidos\DisponibilidadTiendaController::class, 'show'])->name('disponibilidad_tienda.show');
+    Route::post('/{pedidoBma}/disponibilidad-tienda', [\App\Http\Controllers\ControlPedidos\DisponibilidadTiendaController::class, 'update'])->name('disponibilidad_tienda.update');
+    Route::post('/{pedidoBma}/disponibilidad-tienda/alternativa', [\App\Http\Controllers\ControlPedidos\DisponibilidadTiendaController::class, 'alternativa'])->name('disponibilidad_tienda.alternativa');
+    Route::get('/{pedidoBma}/movimientos-tienda', [\App\Http\Controllers\ControlPedidos\MovimientosTiendaController::class, 'show'])->name('movimientos_tienda.show');
+    Route::post('/{pedidoBma}/movimientos-tienda/{accion}', [\App\Http\Controllers\ControlPedidos\MovimientosTiendaController::class, 'update'])->name('movimientos_tienda.update');
     Route::get('/{pedidoBma}/transferencia-tienda', [\App\Http\Controllers\ControlPedidos\TransferenciaTiendaController::class, 'show'])->name('transferencia_tienda.show');
     Route::post('/{pedidoBma}/transferencia-tienda/{accion}', [\App\Http\Controllers\ControlPedidos\TransferenciaTiendaController::class, 'update'])->name('transferencia_tienda.update');
     Route::middleware(['can:control_pedidos.ver_listado'])->group(function () {

@@ -1,3 +1,4 @@
+import ResumenCambiosDisponibilidad from '../../Partials/ResumenCambiosDisponibilidad';
 import React, { useEffect, useState } from 'react';
 import { router } from '@inertiajs/react';
 import { PackageMinus, PackagePlus } from 'lucide-react';
@@ -124,8 +125,10 @@ export default function AjustesSolicitadosTienda({ tarea, auth, ocupado = false,
     const permisos = auth?.user?.permissions || [];
     const autorizado = (tarea.puede_preparar || tarea.puede_responder)
         ?? (Number(tarea.responsable?.id) === Number(auth?.user?.id) && (auth?.user?.roles?.includes('Super Admin') || permisos.includes('control_pedidos.tienda.responder') || permisos.includes('control_pedidos.tienda.apartado.separar')));
-    if (!autorizado || !['EN_ATENCION', 'RESPONDIDA'].includes(tarea.estado)) return null;
+    const resumen = <ResumenCambiosDisponibilidad solicitud={tarea.pedido || {}} documentos={tarea.pedido?.documentos || []} />;
+    if (!autorizado || !['EN_ATENCION', 'RESPONDIDA'].includes(tarea.estado)) return resumen;
     return <div className="gelia-preparacion-ajustes grid gap-4">
+        {resumen}
         <AtencionRetiro key={retirosPendientes.map((retiro) => retiro.version).join('-')} tarea={tarea} ocupado={ocupado} onEnviar={onEnviar} onDirtyChange={(valor) => marcar('retiro', valor)} />
         {(tarea.pedido?.anexos_por_separar || []).map((anexo) => <section key={`separar-${anexo.indice}`} className="registrar-tienda-panel grid gap-3">
             <div className="registrar-tienda-seccion-titulo"><PackagePlus size={18} aria-hidden="true" /><h3>Separación del anexo</h3></div>

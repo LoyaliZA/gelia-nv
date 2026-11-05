@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ClipboardCheck, FileText, ScanLine, Trash2, X } from 'lucide-react';
 import usePedidoDialog from './usePedidoDialog';
+import AlternativasDisponibilidadCedis from './AlternativasDisponibilidadCedis';
 import SelectorProducto from '../../../Components/Almacenes/SelectorProducto';
 import DocumentoSolicitudTienda from '../Tienda/Partials/DocumentoSolicitudTienda';
 import useEscaneoPreparacion from '../Tienda/Partials/useEscaneoPreparacion';
@@ -89,6 +90,7 @@ export default function PanelRespuestaDisponibilidad({ modo = 'seccion', abierto
         </header>
         <div className="gelia-preparacion-workspace" data-pedido-visible={mostrarPedido}>
             <div className="gelia-preparacion-captura space-y-4">
+                <AlternativasDisponibilidadCedis pedido={pedido} onVer={(documentos, indice) => setVista({ documentos, indice })} />
                 {respondida ? <div className="grid gap-3" role="status">
                     <span className="gelia-estado-vivo gelia-estado-vivo--compacto gelia-estado-vivo--exito justify-self-start">Consulta respondida</span>
                     <p className="text-sm theme-text-muted m-0">Ventas confirma las piezas con el cliente.</p>

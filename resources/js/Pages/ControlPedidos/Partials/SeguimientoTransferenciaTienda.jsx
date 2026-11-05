@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import axios from 'axios';
-import { Archive, Truck } from 'lucide-react';
-import { THEME_BTN_PRIMARY, THEME_BTN_SECONDARY, THEME_INPUT, THEME_LABEL, THEME_SELECT, THEME_TEXTAREA } from '../../../utils/geliaTheme';
+import { Archive, Truck, CheckCircle2, RefreshCw, MapPin, Save, MessageSquare, CalendarClock, ArrowRightLeft, Send, Camera, ClipboardCheck, PackageCheck, HandCoins } from 'lucide-react';
+import { GELIA_BTN_OUTLINE, THEME_BTN_PRIMARY, THEME_BTN_SECONDARY, THEME_INPUT, THEME_LABEL, THEME_SELECT, THEME_TEXTAREA } from '../../../utils/geliaTheme';
+import AvisoOperativoPedido from './AvisoOperativoPedido';
+import ModalMovimientosTienda from './ModalMovimientosTienda';
 import GaleriaEvidenciasPedido from './GaleriaEvidenciasPedido';
 import ModalVistaPreviaDocumento from './ModalVistaPreviaDocumento';
 import { formatearFechaNegocio } from './pedidosBmaStyles';
@@ -19,7 +21,7 @@ export function esTransferenciaDocumental(pedido) {
 }
 const fechaHoraMexico = valor => valor ? new Intl.DateTimeFormat('es-MX', { timeZone: 'America/Mexico_City', dateStyle: 'short', timeStyle: 'medium' }).format(new Date(valor)) : 'Pendiente';
 
-const ESTADOS = { pendiente_preparacion: 'Pendiente de preparación', preparada: 'Bolsas preparadas', en_traslado: 'Pendiente de recepción', recibida: 'Bolsas recibidas', en_custodia: 'En custodia', entregada: 'Pedido entregado' };
+const ESTADOS = { pendiente_salida_sucursal: 'Pendiente de salida de sucursal', pendiente_preparacion: 'Pendiente de preparación', preparada: 'Bolsas preparadas', en_traslado: 'Pendiente de recepción', recibida: 'Bolsas recibidas', en_custodia: 'En custodia', entregada: 'Pedido entregado' };
 const ACCIONES = { preparar: 'Preparación', salida: 'Salida o entrega interna', recibir: 'Recepción verificada', custodia: 'Custodia identificada', entregar: 'Entrega al cliente' };
 const mensajeError = (error) => error?.response?.status === 419
     ? 'La sesión cambió o venció. Recargue GELIA antes de continuar; no se confirmó la operación.'
@@ -28,6 +30,8 @@ const mensajeError = (error) => error?.response?.status === 419
 /** Una vista por pedido; las facultades y etapas se calculan en el servidor. */
 export default function SeguimientoTransferenciaTienda({ pedido, sucursales = [], soloLectura = false, onActualizar, onDirtyChange }) {
     const activo = esTransferenciaDocumental(pedido);
+    const [herramienta, setHerramienta] = useState('');
+    const [movimiento, setMovimiento] = useState(null);
     const [datos, setDatos] = useState(null);
     const [error, setError] = useState('');
     const [ocupado, setOcupado] = useState(false);
@@ -45,7 +49,7 @@ export default function SeguimientoTransferenciaTienda({ pedido, sucursales = []
     const id = useId();
     const urls = useRef([]);
     useEffect(() => { urls.current = previews; }, [previews]);
-    useEffect(() => () => urls.current.forEach(url => { if (typeof url === 'string' && url.startsWith('blob:')) URL.revokeObjectURL(url); }), []);
+    useEffect(() => () => urls.current.forEach(p => { if (p.url?.startsWith('blob:')) URL.revokeObjectURL(p.url); }), []);
     const cargar = useCallback(async () => {
         if (!activo || !pedido?.id) return;
         try { const respuesta = await axios.get(`/control-pedidos/${pedido.id}/transferencia-tienda`); setDatos(respuesta.data); setError(''); }
@@ -74,8 +78,8 @@ export default function SeguimientoTransferenciaTienda({ pedido, sucursales = []
         setOcupado(true);
         try {
             const respuesta = await axios.post(`/control-pedidos/${pedido.id}/transferencia-tienda/${accion}`, form, { headers: { Accept: 'application/json' } });
-            setDatos(respuesta.data); previews.forEach(url => { if (typeof url === 'string' && url.startsWith('blob:')) URL.revokeObjectURL(url); });
-            setArchivos([]); setPreviews([]); setObservaciones(''); setUbicacion(''); setReceptor(''); setAcuerdo(''); setContinuar(false); onActualizar?.(respuesta.data);
+            setDatos(respuesta.data); previews.forEach(p => { if (p.url?.startsWith('blob:')) URL.revokeObjectURL(p.url); });
+            setArchivos([]); setPreviews([]); setObservaciones(''); setUbicacion(''); setReceptor(''); setAcuerdo(''); setContinuar(false); setHerramienta(''); onActualizar?.(respuesta.data);
         } catch (fallo) { setError(mensajeError(fallo)); } finally { setOcupado(false); }
     };
     const guardarDestino = async () => {
@@ -89,56 +93,63 @@ export default function SeguimientoTransferenciaTienda({ pedido, sucursales = []
     const enDestino = ['en_traslado', 'recibida', 'en_custodia', 'entregada'].includes(estado);
     const requiereFoto = datos?.puede_preparar || datos?.puede_entregar;
     const tono = datos?.pendiente_gestion ? 'var(--color-aviso)' : ['en_custodia', 'entregada'].includes(estado) ? 'var(--color-exito)' : 'var(--color-primario)';
-    return <section className="registrar-tienda-panel space-y-4 min-w-0" aria-label="Transferencia y custodia en tienda">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="registrar-tienda-seccion-titulo"><Archive size={18} aria-hidden="true" /><h3>{md ? 'TIENDA MD · Transferencia' : 'Transferencia · Recoger posteriormente'}</h3></div>
-            {estado && <span className="rounded-full border px-3 py-1 text-xs font-bold" style={{ color: tono, borderColor: tono, backgroundColor: `color-mix(in srgb, ${tono} 12%, transparent)` }}>{datos.pendiente_gestion ? 'Pendiente de gestión' : ESTADOS[estado]}</span>}
+    const siguiente = datos?.bloqueo || !datos?.consulta_cerrada ? 'Resolver la consulta de disponibilidad'
+        : !datos?.pago_validado ? 'El auxiliar debe verificar el ingreso'
+        : !datos?.numero_remision || !datos?.remision_adjunta ? 'El auxiliar debe registrar la remisión'
+        : ESTADOS[estado] || 'Consultar seguimiento';
+    return <section className="registrar-tienda-panel space-y-4 min-w-0 tienda-transferencia" aria-label="Transferencia y custodia en tienda">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="registrar-tienda-seccion-titulo"><Archive size={20} aria-hidden="true" /><h3>{md ? 'Tienda · Recolección el mismo día' : 'Transferencia · Recoger posteriormente'}</h3></div>
+            <button type="button" className={GELIA_BTN_OUTLINE} disabled={ocupado} onClick={cargar}><RefreshCw size={16} />Actualizar seguimiento</button>
         </div>
-        {error && <p role="alert" className="text-sm theme-text-peligro m-0">{error}</p>}
+        {error && <div role="alert" className="tienda-alerta-disponibilidad rounded-xl border p-3 text-sm">{error}</div>}
         {!datos && !error && <p role="status" className="text-sm theme-text-muted m-0">Cargando seguimiento…</p>}
         {datos && <>
-            {md && <div className="gelia-callout-aviso p-3 grid gap-2 text-sm" role="status">
-                <strong>{!enDestino && md.pendiente_acuerdo ? 'TIENDA MD · Pendiente de acuerdo' : 'TIENDA MD · Recolección solicitada para el mismo día'}</strong>
-                {md.fecha_objetivo && <span>Fecha solicitada de recolección: {md.fecha_objetivo}.</span>}
-                <span>Primer reporte aceptado: {fechaHoraMexico(md.primer_pago_at)}</span>
-                <span>{enDestino ? 'Mercancía pagada en custodia hasta su entrega.' : md.motivo}</span>
-            </div>}
-            <div className="grid sm:grid-cols-2 gap-3 text-sm">
-                <p className="m-0"><span className="theme-text-muted">Procedencia</span><br /><strong>{datos.origen || 'Pendiente de definir'}</strong></p>
-                <p className="m-0"><span className="theme-text-muted">Sucursal de recolección</span><br /><strong>{datos.sucursal || 'Seleccione el destino'}</strong></p>
-                <p className="m-0"><span className="theme-text-muted">Transferencia</span><br /><strong>{datos.pago_validado ? 'Ingreso verificado por auxiliar' : 'Pendiente de verificar ingreso'}</strong></p>
-                <p className="m-0"><span className="theme-text-muted">Remisión Wizerp</span><br /><strong>{datos.numero_remision || 'Pendiente'}{datos.remision_adjunta ? ' · Adjunta' : ' · Sin documento'}</strong></p>
+            <div className="rounded-xl border theme-border theme-element p-4 grid gap-2" role="status">
+                <span className="text-xs theme-text-muted">{datos.pendiente_gestion ? 'Pendiente de gestión' : ESTADOS[estado]}</span>
+                <strong className="text-base theme-text-main">{siguiente}</strong>
+                <span className="text-sm theme-text-main"><MapPin size={16} className="inline mr-1" />{datos.sucursal || 'Sucursal de recolección pendiente'}{md?.fecha_objetivo ? ` · ${md.fecha_objetivo}` : ''}</span>
             </div>
-            {!soloLectura && sucursales.length > 0 && ['pendiente_preparacion', 'preparada'].includes(estado) && <div className="grid sm:grid-cols-[1fr_auto] gap-3 items-end">
-                <label className={THEME_LABEL} htmlFor={`${id}-sucursal`}>Sucursal de recolección<select id={`${id}-sucursal`} className={`${THEME_SELECT} w-full mt-1`} value={sucursal || String(datos.sucursal_destino_id || '')} onChange={e => setSucursal(e.target.value)} disabled={ocupado}><option value="">Elegir sucursal</option>{sucursales.map(item => <option key={item.id} value={item.id}>{item.nombre}</option>)}</select></label>
-                <button type="button" className={`${THEME_BTN_SECONDARY} min-h-[44px]`} disabled={ocupado || !sucursal} onClick={guardarDestino}>Guardar destino</button>
-            </div>}
-            {!datos.consulta_cerrada && <p className="text-sm theme-text-muted m-0">El pedido espera la aceptación del cliente y el cierre de consulta de la vendedora.</p>}
-            {datos.derivacion && <p role="status" className="text-sm theme-text-aviso m-0">City Center requiere coordinar su recepción y resguardo antes de autorizar la salida.</p>}
-            {datos.bloqueo && <p role="status" className="text-sm theme-text-aviso m-0">{datos.bloqueo}</p>}
-            {datos.limite_recoleccion && <p className="text-sm m-0 theme-text-main">Seguimiento de recolección hasta {formatearFechaNegocio(datos.limite_recoleccion)} · {datos.plazo_recoleccion_dias} días naturales desde la emisión de remisión.</p>}
+            {md && !enDestino && <AvisoOperativoPedido label={md.pendiente_acuerdo ? 'Mismo día · Pendiente de acuerdo' : 'Solicitud para el mismo día'} tono={md.pendiente_acuerdo ? 'warning' : 'info'} icon={CalendarClock}>{md.motivo}</AvisoOperativoPedido>}
+            {datos.bloqueo && <div role="alert" className="tienda-alerta-disponibilidad border rounded-xl p-4 text-sm"><strong>Revisión de disponibilidad pendiente</strong><p className="m-0 mt-1">{datos.bloqueo}</p></div>}
+            {datos.bloqueo_destino && <AvisoOperativoPedido tono="warning" label="Custodia en destino" icon={MapPin}>{datos.bloqueo_destino}</AvisoOperativoPedido>}
+            <details className="border theme-border rounded-xl p-3">
+                <summary className="text-sm font-semibold theme-text-main cursor-pointer">Datos y documentos del recorrido</summary>
+                <div className="grid sm:grid-cols-2 gap-3 mt-3 text-sm theme-text-main">
+                    <p className="m-0"><span className="theme-text-muted">Procedencia</span><br /><strong>{datos.origen || 'Pendiente de definir'}</strong></p>
+                    <p className="m-0"><span className="theme-text-muted">Transferencia</span><br /><strong>{datos.pago_validado ? 'Ingreso verificado por auxiliar' : 'Pendiente de verificar ingreso'}</strong></p>
+                    <p className="m-0"><span className="theme-text-muted">Remisión Wizerp</span><br /><strong>{datos.numero_remision || 'Pendiente'}{datos.remision_adjunta ? ' · Adjunta' : ' · Sin documento'}</strong></p>
+                    {md && <p className="m-0"><span className="theme-text-muted">Primer reporte aceptado</span><br /><strong>{fechaHoraMexico(md.primer_pago_at)}</strong></p>}
+                </div>
+                {datos.limite_recoleccion && <p className="text-sm mt-3 mb-0 theme-text-muted">Seguimiento hasta {formatearFechaNegocio(datos.limite_recoleccion)} · {datos.plazo_recoleccion_dias} días desde remisión.</p>}
+                {datos.observaciones && <p className="text-sm theme-text-main mt-3 mb-0">{datos.observaciones}</p>}
+            </details>
             {datos.pendiente_gestion && <p className="text-sm m-0 theme-text-aviso">Contacte al cliente y registre el seguimiento. El vencimiento no cancela la venta ni libera la mercancía pagada.</p>}
-            {datos.ubicacion && <p className="text-sm theme-text-main m-0"><strong>Ubicación de custodia:</strong> {datos.ubicacion}{datos.resguardo_id ? ` · Resguardo ${datos.resguardo_id}` : ''}</p>}
-            {datos.observaciones && <p className="text-sm theme-text-main m-0"><strong>Observaciones de preparación:</strong> {datos.observaciones}</p>}
-            {datos.bultos?.length > 0 && <div className="space-y-2"><p className="text-sm font-semibold m-0 theme-text-main">Bolsas identificadas · {datos.bultos.length}</p><div className="flex flex-wrap gap-2">{datos.bultos.map(bulto => <button key={bulto.id} type="button" className={THEME_BTN_SECONDARY} onClick={() => setVista({ documentos: bulto.documentos || [], indice: 0 })}>Bolsa {bulto.numero} · Ver evidencia</button>)}</div></div>}
+            {datos.ubicacion && <p className="text-sm theme-text-main m-0"><MapPin size={16} className="inline mr-1" /><strong>Custodia:</strong> {datos.ubicacion}</p>}
+            {enDestino && md && <p className="text-sm theme-text-muted m-0">Mercancía pagada en custodia hasta su entrega.</p>}
+            {datos.bultos?.length > 0 && <div className="flex flex-wrap gap-2">{datos.bultos.map(b => <button key={b.id} type="button" className={GELIA_BTN_OUTLINE} onClick={() => setVista({ documentos: b.documentos || [], indice: 0 })}><Camera size={16} />Bolsa {b.numero} · Ver evidencia</button>)}</div>}
             {!soloLectura && <fieldset disabled={ocupado} className="grid gap-4 min-w-0">
-                {requiereFoto && <GaleriaEvidenciasPedido id={`${id}-evidencia`} label={datos.puede_preparar ? 'Fotografía de cada bolsa · Una imagen por bolsa' : 'Fotografía de entrega'} obligatorio soloImagenes maxArchivos={datos.puede_preparar ? 50 : 1} archivos={archivos} previews={previews} onChange={(nuevos, vistas) => { setArchivos(nuevos); setPreviews(vistas); }} onVer={(documentos, indice) => setVista({ documentos, indice })} disabled={ocupado} />}
-                {(datos.puede_preparar || datos.puede_recibir || datos.puede_gestionar) && <label className={THEME_LABEL}>{datos.puede_gestionar ? 'Seguimiento con el cliente' : 'Observaciones'}<textarea className={`${THEME_TEXTAREA} w-full mt-1`} maxLength={2000} value={observaciones} onChange={e => setObservaciones(e.target.value)} /></label>}
-                {datos.puede_gestionar && <button type="button" className={`${THEME_BTN_SECONDARY} min-h-[44px]`} onClick={() => enviar('gestionar')}>Registrar seguimiento</button>}
-                {datos.puede_preparar && <button type="button" className={`${THEME_BTN_PRIMARY} min-h-[44px]`} onClick={() => enviar('preparar')}>Confirmar bolsas preparadas</button>}
-                {datos.puede_salida && <button type="button" className={`${THEME_BTN_PRIMARY} min-h-[44px]`} onClick={() => enviar('salida')}><Truck size={18} aria-hidden="true" />{datos.requiere_traslado ? 'Confirmar salida a sucursal' : 'Entregar bolsas a recepción de la misma sucursal'}</button>}
-                {datos.puede_recibir && <><label className="flex items-start gap-2 text-sm theme-text-main"><input type="checkbox" className="gelia-checkbox mt-0.5" checked={verificadas} onChange={e => setVerificadas(e.target.checked)} />Verifiqué todas las bolsas identificadas y sus observaciones.</label><button type="button" className={`${THEME_BTN_PRIMARY} min-h-[44px]`} onClick={() => enviar('recibir')}>Confirmar recepción de bolsas</button></>}
-                {datos.puede_custodia && <><label className={THEME_LABEL}>Almacén de custodia<select className={`${THEME_SELECT} w-full mt-1`} value={almacen} onChange={e => setAlmacen(e.target.value)}><option value="">Elegir almacén</option>{datos.almacenes_destino.map(item => <option key={item.id} value={item.id}>{item.nombre}</option>)}</select></label><label className={THEME_LABEL}>Ubicación e identificación del pedido<input className={`${THEME_INPUT} w-full mt-1`} maxLength={240} value={ubicacion} onChange={e => setUbicacion(e.target.value)} placeholder="Referencia de ubicación en recepción" /></label><button type="button" className={`${THEME_BTN_PRIMARY} min-h-[44px]`} onClick={() => enviar('custodia')}>Confirmar custodia identificada</button></>}
-                {datos.puede_entregar && <><label className={THEME_LABEL}>Quién recibe<input className={`${THEME_INPUT} w-full mt-1`} maxLength={160} value={receptor} onChange={e => setReceptor(e.target.value)} /></label><button type="button" className={`${THEME_BTN_PRIMARY} min-h-[44px]`} onClick={() => enviar('entregar')}>Confirmar entrega al cliente</button></>}
+                {requiereFoto && <GaleriaEvidenciasPedido id={`${id}-evidencia`} label={datos.puede_preparar ? 'Fotografía de cada bolsa · Una imagen por bolsa' : 'Fotografía de entrega'} obligatorio soloImagenes maxArchivos={datos.puede_preparar ? 50 : 1} archivos={archivos} previews={previews} onChange={(a,p) => { setArchivos(a); setPreviews(p); }} onVer={(documentos, indice) => setVista({ documentos, indice })} disabled={ocupado} />}
+                {(datos.puede_preparar || datos.puede_recibir) && <label className={THEME_LABEL}>Observaciones<textarea className={`${THEME_TEXTAREA} w-full mt-1`} maxLength={2000} value={observaciones} onChange={e => setObservaciones(e.target.value)} /></label>}
+                {datos.puede_preparar && <button type="button" className={THEME_BTN_PRIMARY} onClick={() => enviar('preparar')}><PackageCheck size={18} />Confirmar bolsas preparadas</button>}
+                {datos.puede_salida && <button type="button" className={THEME_BTN_PRIMARY} onClick={() => enviar('salida')}><Truck size={18} />{datos.requiere_traslado ? 'Confirmar salida a sucursal' : 'Entregar bolsas a recepción de la misma sucursal'}</button>}
+                {datos.puede_recibir && <><label className="flex items-start gap-2 text-sm theme-text-main"><input type="checkbox" className="gelia-checkbox mt-0.5" checked={verificadas} onChange={e => setVerificadas(e.target.checked)} />Verifiqué todas las bolsas identificadas y sus observaciones.</label><button type="button" className={THEME_BTN_PRIMARY} onClick={() => enviar('recibir')}><ClipboardCheck size={18} />Confirmar recepción de bolsas</button></>}
+                {datos.puede_custodia && <><label className={THEME_LABEL}>Almacén de custodia<select className={`${THEME_SELECT} w-full mt-1`} value={almacen} onChange={e => setAlmacen(e.target.value)}><option value="">Elegir almacén</option>{datos.almacenes_destino.map(a => <option key={a.id} value={a.id}>{a.nombre}</option>)}</select></label><label className={THEME_LABEL}>Ubicación e identificación del pedido<input className={`${THEME_INPUT} w-full mt-1`} maxLength={240} value={ubicacion} onChange={e => setUbicacion(e.target.value)} /></label><button type="button" className={THEME_BTN_PRIMARY} onClick={() => enviar('custodia')}><Archive size={18} />Confirmar custodia identificada</button></>}
+                {datos.puede_entregar && <><label className={THEME_LABEL}>Quién recibe<input className={`${THEME_INPUT} w-full mt-1`} maxLength={160} value={receptor} onChange={e => setReceptor(e.target.value)} /></label><button type="button" className={THEME_BTN_PRIMARY} onClick={() => enviar('entregar')}><CheckCircle2 size={18} />Confirmar entrega al cliente</button></>}
             </fieldset>}
-            {Object.keys(datos.historial || {}).length > 0 && <details><summary className="text-sm font-semibold theme-text-main cursor-pointer">Historial del recorrido</summary><ul className="pl-4 text-sm theme-text-muted space-y-1">{Object.entries(datos.historial).map(([accion, evento]) => <li key={accion}>{ACCIONES[accion]} · {evento.por} · {formatearFechaNegocio(evento.fecha)}</li>)}</ul></details>}
-            {datos.gestiones?.length > 0 && <ul className="pl-4 space-y-1 text-sm theme-text-main">{datos.gestiones.map((gestion, indice) => <li key={indice}>{gestion.nota} · {gestion.por} · {formatearFechaNegocio(gestion.fecha)}</li>)}</ul>}
-            {!soloLectura && datos.puede_continuar_posterior && <div className="border-t theme-border pt-3 grid gap-3">
-                <button type="button" className={`${THEME_BTN_SECONDARY} min-h-[44px]`} disabled={ocupado} aria-expanded={continuar} onClick={() => setContinuar(!continuar)}>Acordar recolección posterior</button>
-                {continuar && <><label className={THEME_LABEL}>Acuerdo con el cliente<textarea className={`${THEME_TEXTAREA} w-full mt-1`} maxLength={2000} value={acuerdo} onChange={evento => setAcuerdo(evento.target.value)} /></label><p className="text-sm theme-text-muted m-0">Al confirmar, se continúa como transferencia para recoger posteriormente. Se conservan los pagos, la remisión y la hora original del reporte.</p><button type="button" className={`${THEME_BTN_PRIMARY} min-h-[44px]`} disabled={ocupado} onClick={() => enviar('continuar_posterior')}>Confirmar recolección y resguardo en tienda</button></>}
+            {!soloLectura && <div className="flex flex-wrap gap-2 border-t theme-border pt-3">
+                {sucursales.length > 0 && ['pendiente_preparacion','preparada'].includes(estado) && <button type="button" className={GELIA_BTN_OUTLINE} aria-expanded={herramienta === 'destino'} disabled={ocupado} onClick={() => setHerramienta(herramienta === 'destino' ? '' : 'destino')}><MapPin size={16} />Cambiar destino</button>}
+                {datos.puede_gestionar && <button type="button" className={GELIA_BTN_OUTLINE} aria-expanded={herramienta === 'seguimiento'} disabled={ocupado} onClick={() => setHerramienta(herramienta === 'seguimiento' ? '' : 'seguimiento')}><MessageSquare size={16} />Seguimiento con el cliente</button>}
+                {datos.puede_continuar_posterior && <button type="button" className={GELIA_BTN_OUTLINE} aria-expanded={continuar} disabled={ocupado} onClick={() => { setContinuar(!continuar); setHerramienta(''); }}><CalendarClock size={16} />Acordar recolección posterior</button>}
+                {['en_custodia','pendiente_salida_sucursal'].includes(estado) && <button type="button" className={GELIA_BTN_OUTLINE} disabled={ocupado} onClick={() => setMovimiento('traslado')}><ArrowRightLeft size={16} />Traslado entre sucursales</button>}
+                {estado === 'en_custodia' && <button type="button" className={GELIA_BTN_OUTLINE} disabled={ocupado} onClick={() => setMovimiento('modalidad')}><Truck size={16} />Cambiar modalidad</button>}
             </div>}
+            {!soloLectura && herramienta === 'destino' && <div className="grid gap-3"><label className={THEME_LABEL}>Sucursal de recolección<select className={`${THEME_SELECT} w-full mt-1`} value={sucursal || String(datos.sucursal_destino_id || '')} onChange={e => setSucursal(e.target.value)} disabled={ocupado}><option value="">Elegir sucursal</option>{sucursales.map(a => <option key={a.id} value={a.id}>{a.nombre}</option>)}</select></label><button type="button" className={`${GELIA_BTN_OUTLINE} justify-self-start`} disabled={ocupado || !sucursal} onClick={guardarDestino}><Save size={16} />Guardar destino</button></div>}
+            {!soloLectura && herramienta === 'seguimiento' && <div className="grid gap-3"><label className={THEME_LABEL}>Seguimiento con el cliente<textarea className={`${THEME_TEXTAREA} w-full mt-1`} maxLength={2000} value={observaciones} onChange={e => setObservaciones(e.target.value)} /></label><button type="button" className={`${GELIA_BTN_OUTLINE} justify-self-start`} disabled={ocupado || !observaciones.trim()} onClick={() => enviar('gestionar')}><Send size={16} />Registrar seguimiento</button></div>}
+            {!soloLectura && continuar && <div className="border theme-border rounded-xl p-3 grid gap-3"><label className={THEME_LABEL}>Acuerdo con el cliente<textarea className={`${THEME_TEXTAREA} w-full mt-1`} maxLength={2000} value={acuerdo} onChange={e => setAcuerdo(e.target.value)} /></label><p className="text-sm theme-text-muted m-0">Se conservan los pagos, la remisión y la hora original del reporte.</p><button type="button" className={THEME_BTN_PRIMARY} disabled={ocupado} onClick={() => enviar('continuar_posterior')}><CheckCircle2 size={18} />Confirmar recolección y resguardo en tienda</button></div>}
+            {(Object.keys(datos.historial || {}).length > 0 || datos.gestiones?.length > 0) && <details><summary className="text-sm font-semibold theme-text-main cursor-pointer">Historial y seguimiento</summary><ul className="pl-4 text-sm theme-text-muted space-y-1">{Object.entries(datos.historial || {}).map(([a,e]) => <li key={a}>{ACCIONES[a] || 'Seguimiento'} · {e.por} · {formatearFechaNegocio(e.fecha)}</li>)}{(datos.gestiones || []).map((g,i) => <li key={`gestion-${i}`}>{g.nota} · {g.por} · {formatearFechaNegocio(g.fecha)}</li>)}</ul></details>}
         </>}
-        <button type="button" className={`${THEME_BTN_SECONDARY} min-h-[44px]`} disabled={ocupado} onClick={cargar}>Actualizar seguimiento</button>
+        <ModalMovimientosTienda abierto={Boolean(movimiento)} pedido={pedido} modo={movimiento || 'traslado'} onClose={() => setMovimiento(null)} onActualizar={() => { cargar(); onActualizar?.(); }} />
         <ModalVistaPreviaDocumento abierto={Boolean(vista)} documentos={vista?.documentos || []} indice={vista?.indice || 0} onClose={() => setVista(null)} />
     </section>;
 }

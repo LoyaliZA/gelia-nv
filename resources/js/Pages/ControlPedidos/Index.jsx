@@ -8,6 +8,7 @@ import EncabezadoGestionPedidos from './Partials/EncabezadoGestionPedidos';
 import FiltrosPedidos from './Partials/FiltrosPedidos';
 import MetricasBandejaPedidos from './Partials/MetricasBandejaPedidos';
 import TablaPedidos from './Partials/TablaPedidos';
+import ModalMovimientosTienda from './Partials/ModalMovimientosTienda';
 import ModalFormPedido, { hayBorradorPedidoLocal } from './Partials/ModalFormPedido';
 import ModalDetallePedido from './Partials/ModalDetallePedido';
 import ModalBitacoraPedido from './Partials/ModalBitacoraPedido';
@@ -46,6 +47,7 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
     const [modalForm, setModalForm] = useState({ abierto: false, pedido: null, recuperarBorrador: false, instancia: 'new-clean' });
     const [confirmarBorradorNuevo, setConfirmarBorradorNuevo] = useState(false);
     const [modalDetalle, setModalDetalle] = useState({ abierto: false, pedido: null });
+    const [movimientoTienda, setMovimientoTienda] = useState(null);
     const [modalBitacora, setModalBitacora] = useState({ abierto: false, pedido: null });
     const [pedidoAEliminar, setPedidoAEliminar] = useState(null);
     const [pedidoAEliminarRegistro, setPedidoAEliminarRegistro] = useState(null);
@@ -273,6 +275,7 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
                     onIrAPagina={onIrAPagina}
                     onVer={abrirVer}
                     onBitacora={abrirBitacora}
+                    onMovimientoTienda={(pedido, modo) => setMovimientoTienda({ pedido, modo })}
                     onEditar={abrirEditar}
                     onEliminar={setPedidoAEliminar}
                     onEliminarRegistro={setPedidoAEliminarRegistro}
@@ -336,6 +339,7 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
                 pedido={modalDetalle.pedido}
                 onClose={() => setModalDetalle({ abierto: false, pedido: null })}
             />
+            <ModalMovimientosTienda abierto={Boolean(movimientoTienda)} pedido={movimientoTienda?.pedido} modo={movimientoTienda?.modo} onClose={() => setMovimientoTienda(null)} onActualizar={() => cargar({ tab: tabActiva, q: busqueda })} />
             <ModalBitacoraPedido
                 abierto={modalBitacora.abierto}
                 pedido={modalBitacora.pedido}

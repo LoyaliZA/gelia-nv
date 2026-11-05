@@ -1165,6 +1165,12 @@ class PedidoBma extends Model
         if (! in_array($estado, ['sin_excepciones', 'excepciones_pendientes', 'decision_registrada'], true)) {
             return 'La consulta sigue abierta: falta la respuesta de disponibilidad.';
         }
+        if ($this->tieneSinExistenciaAbierta()) {
+            return 'Hay piezas sin existencias: retírelas o solicite su sustitución antes de cerrar la consulta.';
+        }
+        if ($this->revisionesProducto()->whereIn('estado_fisico', ['regular', 'malo', 'danado'])->whereNull('resolucion')->exists()) {
+            return 'Confirme el estado de las piezas con detalle, retírelas o solicite su sustitución antes de cerrar la consulta.';
+        }
         if (($revision['aceptacion_vigente'] ?? true) === false || $this->tieneAjusteTiendaPendiente()) {
             return 'Hay un ajuste pendiente. La aceptación de esta versión no sigue vigente.';
         }
@@ -1177,6 +1183,7 @@ class PedidoBma extends Model
         if (! $this->esConsultaDisponibilidadTienda()) {
             return null;
         }
+        if ($bloqueo = $this->motivoBloqueoCierreConsultaTienda()) return $bloqueo;
         $json = is_array($this->solicitud_preparacion_json) ? $this->solicitud_preparacion_json : [];
         $revision = is_array($json['revision_disponibilidad'] ?? null) ? $json['revision_disponibilidad'] : [];
         $estado = $revision['estado'] ?? null;
@@ -1209,11 +1216,16 @@ class PedidoBma extends Model
 
     public function motivoBloqueoEntregaTienda(): ?string
     {
+        $traslado = $this->solicitud_preparacion_json['segundo_traslado'] ?? [];
+        if (($traslado['estado'] ?? '') === 'autorizada' && ! ($traslado['recepcion_confirmada'] ?? false)) {
+            return 'Hay un traslado autorizado pendiente de salida o recepción en la sucursal de destino.';
+        }
+
         if ($this->tieneAjusteTiendaPendiente()) {
             return 'Hay un anexo o retiro pendiente de atención. Resuélvalo antes de entregar.';
         }
         foreach ((array) ($this->solicitud_preparacion_json['anexo_sin_remision'] ?? []) as $anexo) {
-            if (is_array($anexo) && ($anexo['estado'] ?? null) === 'disponible' && ! isset($anexo['separada_at'])) {
+            if (! $this->esConsultaDisponibilidadCedis() && is_array($anexo) && ($anexo['estado'] ?? null) === 'disponible' && ! isset($anexo['separada_at'])) {
                 return 'Falta confirmar la separación física del anexo antes de entregar.';
             }
         }

@@ -1,0 +1,50 @@
+[
+  {
+    "caso": "solicitud",
+    "tamaño": "escritorio",
+    "tema": "dark",
+    "errores": [],
+    "desborde": false,
+    "enviosAntesDeConfirmar": 0
+  },
+  {
+    "caso": "modalidad",
+    "tamaño": "escritorio",
+    "tema": "dark",
+    "errores": [],
+    "desborde": false,
+    "enviosAntesDeConfirmar": 0
+  },
+  {
+    "caso": "recepcion",
+    "tamaño": "escritorio",
+    "tema": "dark",
+    "errores": [],
+    "desborde": false,
+    "enviosAntesDeConfirmar": 0
+  },
+  {
+    "caso": "solicitud",
+    "tamaño": "movil",
+    "tema": "light",
+    "errores": [],
+    "desborde": false,
+    "enviosAntesDeConfirmar": 0
+  },
+  {
+    "caso": "modalidad",
+    "tamaño": "movil",
+    "tema": "light",
+    "errores": [],
+    "desborde": false,
+    "enviosAntesDeConfirmar": 0
+  },
+  {
+    "caso": "recepcion",
+    "tamaño": "movil",
+    "tema": "light",
+    "errores": [],
+    "desborde": false,
+    "enviosAntesDeConfirmar": 0
+  }
+]

@@ -124,6 +124,9 @@ export default function Index({
     const abrirPesaje = (pedido) => {
         if (pedido?.solicitud_preparacion?.area_revision === 'control_pedidos') {
             setDisponibilidad({ abierto: true, pedido });
+            axios.get(`/control-pedidos/${pedido.id}/disponibilidad-tienda`).then(({ data }) => {
+                setDisponibilidad(actual => actual.abierto && actual.pedido?.id === pedido.id ? { ...actual, pedido: data } : actual);
+            }).catch(() => {});
             return;
         }
         setModalPesaje({ abierto: true, pedido });

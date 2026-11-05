@@ -71,10 +71,15 @@ final class TransferenciaTiendaService
             ResguardoPdv::ESTADO_PENDIENTE_RECEPCION => 'en_traslado',
             default => $pedido->empacado_at ? 'preparada' : 'pendiente_preparacion',
         };
+        $segundo = $json['segundo_traslado'] ?? [];
+        if (($segundo['estado'] ?? '') === 'autorizada' && ! ($segundo['recepcion_confirmada'] ?? false)) {
+            $estado = ($segundo['movimiento_estado'] ?? '') === 'en_camino' ? 'en_traslado' : 'pendiente_salida_sucursal';
+        }
+        $custodiaDestino = app(MovimientosTiendaService::class)->tieneCustodiaDestino((int) $pedido->sucursal_destino_id);
         $derivacion = preg_match('/city[\s-]*center/iu', $pedido->sucursalDestino?->nombre ?? '') ? 'T-03' : null;
-        $listo = $pedido->consultaCerrada() && $pedido->tienePagoValidado() && $pedido->tieneRemision()
+        $listo = ! $pedido->tieneSinExistenciaAbierta() && $pedido->consultaCerrada() && $pedido->tienePagoValidado() && $pedido->tieneRemision()
             && filled($pedido->numero_remision) && (int) $pedido->sucursal_destino_id > 0
-            && ! $pedido->motivoBloqueoEntregaTienda() && ! $pedido->cancelado_at && ! $derivacion
+            && ! $pedido->motivoBloqueoEntregaTienda() && ! $pedido->cancelado_at
             && ! $pedido->consulta_actualizacion_pendiente && ! $resguardo?->entrega_bloqueada
             && ($json['retiro_recoleccion']['estado'] ?? '') !== 'pendiente_traslado'
             && ! (($json['segundo_traslado']['estado'] ?? '') === 'autorizada' && ! ($json['segundo_traslado']['recepcion_confirmada'] ?? false));
@@ -96,14 +101,15 @@ final class TransferenciaTiendaService
             'remision_adjunta' => $pedido->tieneRemision(),
             'sucursal_destino_id' => $pedido->sucursal_destino_id,
             'sucursal' => $pedido->sucursalDestino?->nombre,
-            'origen' => $pedido->almacen?->nombre,
+            'origen' => $pedido->almacen?->nombre ?? (($json['area_revision'] ?? '') === 'control_pedidos' ? 'CEDIS' : $pedido->instruccionEntregaVigente?->almacen?->nombre),
+            'requiere_corregir_disponibilidad' => $pedido->consultaCerrada() && $pedido->tieneSinExistenciaAbierta(),
             'requiere_traslado' => $pedido->esTrasladoInternoAPdv(),
-            'ubicacion' => $operacion['ubicacion'] ?? ($resguardo?->snapshot_json['ubicacion_t02'] ?? null),
+            'ubicacion' => $resguardo && $estado === 'en_custodia' ? ($operacion['ubicacion'] ?? ($resguardo->snapshot_json['ubicacion_t02'] ?? null)) : null,
             'observaciones' => $operacion['observaciones'] ?? null,
             'historial' => $operacion['historial'] ?? [],
             'gestiones' => $operacion['gestiones'] ?? [],
-            'puede_gestionar' => (int) $pedido->vendedor_id === (int) $actor->id && $actor->can('control_pedidos.crear') && $estado !== 'entregada' && ! $pedido->cancelado_at,
-            'puede_continuar_posterior' => $md !== null && (int) $pedido->vendedor_id === (int) $actor->id
+            'puede_gestionar' => ! $pedido->tieneSinExistenciaAbierta() && (int) $pedido->vendedor_id === (int) $actor->id && $actor->can('control_pedidos.crear') && $estado !== 'entregada' && ! $pedido->cancelado_at,
+            'puede_continuar_posterior' => ! $pedido->tieneSinExistenciaAbierta() && $md !== null && (int) $pedido->vendedor_id === (int) $actor->id
                 && $actor->can('control_pedidos.crear') && ! $pedido->cancelado_at && ! $resguardo && in_array($estado, ['pendiente_preparacion', 'preparada'], true),
             'resguardo_id' => $resguardo?->id,
             'bultos' => $pedido->bultosEmpaque()->with('documentos')->get(),
@@ -111,10 +117,11 @@ final class TransferenciaTiendaService
             'nota_md' => app(ConfiguracionOperativaTienda::class)->notaMd(),
             'limite_recoleccion' => $limite?->toIso8601String(),
             'pendiente_gestion' => $estado !== 'entregada' && $limite && now()->gte($limite),
-            'bloqueo' => $pedido->motivoBloqueoEntregaTienda(),
+            'bloqueo' => $pedido->tieneSinExistenciaAbierta() ? 'Hay piezas sin existencias pendientes. Reabra la consulta para retirarlas o sustituirlas.' : $pedido->motivoBloqueoEntregaTienda(),
             'puede_preparar' => $listo && (! $md || $md['puede_preparar_md']) && $pedido->puedeMarcarEmpacado() && $estado === 'pendiente_preparacion' && $this->puedeOrigen($pedido, $actor)
                 && (($json['area_revision'] ?? '') !== 'control_pedidos' || $actor->can('control_pedidos.cedis.empacar')),
-            'puede_salida' => $listo && (! $md || $md['puede_preparar_md']) && $estado === 'preparada' && $this->puedeOrigen($pedido, $actor)
+            'bloqueo_destino' => ! $custodiaDestino ? 'La sucursal destino necesita un almacén PDV activo de custodia antes de confirmar la salida.' : null,
+            'puede_salida' => $custodiaDestino && $listo && (! $md || $md['puede_preparar_md']) && $estado === 'preparada' && $this->puedeOrigen($pedido, $actor)
                 && (($json['area_revision'] ?? '') !== 'control_pedidos' || $actor->can('control_pedidos.cedis.enviar')),
             'puede_recibir' => $listo && $estado === 'en_traslado' && $this->puedeDestino($pedido, $actor),
             'puede_custodia' => $listo && $estado === 'recibida' && $this->puedeDestino($pedido, $actor),

@@ -72,7 +72,8 @@ final class RegistrarAnexoTiendaService
                 $lineas
             ));
             $json['anexo_integrado'] = false;
-            $pedido->update(['solicitud_preparacion_json' => $json, 'consulta_cerrada_at' => null, 'consulta_cerrada_por_id' => null]);
+            $pedido->update(['solicitud_preparacion_json' => $json, 'consulta_cerrada_at' => null, 'consulta_cerrada_por_id' => null,
+                'estatus_envio' => ($json['area_revision'] ?? '') === 'control_pedidos' ? PedidoBma::ESTATUS_ENVIO_PENDIENTE_PESAJE : $pedido->estatus_envio]);
             $this->nota($pedido, $usuario->id, $this->textoDe($lineas, false));
             $this->avisarEjecutor($pedido, $usuario, $lineas);
 

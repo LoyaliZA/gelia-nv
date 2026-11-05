@@ -6,8 +6,6 @@ use App\Models\Almacen;
 use App\Models\CatalogoEstadoSolicitud;
 use App\Models\Cliente;
 use App\Models\ConfiguracionSistema;
-use App\Models\Inventario;
-use App\Models\Producto;
 use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\CatalogoModalidadPreparacionPedido;
 use App\Models\ControlPedidos\CatalogoOrigenPedido;
@@ -17,6 +15,8 @@ use App\Models\ControlPedidos\PedidoBmaDocumento;
 use App\Models\ControlPedidos\PedidoBmaTareaDocumento;
 use App\Models\ControlPedidos\PedidoBmaTareaPreparacion;
 use App\Models\Departamento;
+use App\Models\Inventario;
+use App\Models\Producto;
 use App\Models\PuntoVenta\ResguardoPdv;
 use App\Models\SaldosAFavor\PedidoBmaPago;
 use App\Models\SaldosAFavor\SafCredito;
@@ -24,6 +24,7 @@ use App\Models\Sucursal;
 use App\Models\User;
 use App\Services\ControlPedidos\CancelarCreditoSinRemisionTiendaService;
 use App\Services\ControlPedidos\CancelarPedidoBmaService;
+use App\Services\ControlPedidos\CompromisoInventarioTienda;
 use App\Services\ControlPedidos\ConfirmarEntregaCustodiaTiendaService;
 use App\Services\ControlPedidos\ConfirmarEntregaRecogeHoyService;
 use App\Services\ControlPedidos\ConfirmarPagoSalidaPreparacionService;
@@ -32,13 +33,13 @@ use App\Services\ControlPedidos\EvaluarVencimientoApartadoFisicoService;
 use App\Services\ControlPedidos\IntegrarAnexoFisicoTiendaService;
 use App\Services\ControlPedidos\PreparacionTiendaConfig;
 use App\Services\ControlPedidos\RegistrarAnexoTiendaService;
+use App\Services\ControlPedidos\RegistrarCoberturaTiendaService;
 use App\Services\ControlPedidos\RegistrarRecepcionCustodiaTiendaService;
 use App\Services\ControlPedidos\RegistrarRemisionCreditoTiendaService;
-use App\Services\ControlPedidos\TrasladarCustodiaHaciaCedisService;
-use App\Services\PuntoVenta\PuntoVentaModulo;
-use App\Services\ControlPedidos\RegistrarCoberturaTiendaService;
 use App\Services\ControlPedidos\RegistrarResultadoCreditoTiendaService;
 use App\Services\ControlPedidos\RetirarCustodiaParaEnvioService;
+use App\Services\ControlPedidos\TrasladarCustodiaHaciaCedisService;
+use App\Services\PuntoVenta\PuntoVentaModulo;
 use App\Services\SaldosAFavor\RegistrarPagoPedidoBmaService;
 use App\Support\ControlPedidos\EstatusSucursalPedidoBma;
 use App\Support\ControlPedidos\PoliticaSalidaPreparacion;
@@ -46,10 +47,13 @@ use App\Support\ControlPedidos\RegistrarPedidos\PoliticaAccionesRegistrarPedidos
 use App\Support\SaldosAFavor\AlcanceSaf;
 use App\Support\SaldosAFavor\ReglasSaf;
 use Carbon\Carbon;
+use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
+use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
 use Spatie\Permission\Models\Permission;
@@ -340,7 +344,7 @@ class RecorridoTiendaIntegralTest extends TestCase
             'cantidad_encontrada' => 1,
             'orden' => 1,
         ]);
-        app(\App\Services\ControlPedidos\CompromisoInventarioTienda::class)->comprometer(
+        app(CompromisoInventarioTienda::class)->comprometer(
             $pedido,
             (int) $pedido->almacen_id,
             $producto->id,
@@ -430,6 +434,7 @@ class RecorridoTiendaIntegralTest extends TestCase
                 'modalidad_entrega' => 'tienda',
                 'segundo_traslado' => [
                     'estado' => 'autorizada',
+                    'sucursal_origen_id' => $origen->id,
                     'sucursal_destino_id' => $destino->id,
                     'recepcion_confirmada' => false,
                     'recorrido' => 'Origen a destino, sin paso por CEDIS',
@@ -437,6 +442,10 @@ class RecorridoTiendaIntegralTest extends TestCase
             ],
         ]);
         $this->usuario->givePermissionTo(Permission::findOrCreate('control_pedidos.tienda.trasladar', 'web'));
+        $this->usuario->concederAccesoSucursal($origen, true);
+        $this->usuario->concederAccesoSucursal($destino, true);
+        ResguardoPdv::factory()->create(['pedido_bma_id' => $pedido->id, 'sucursal_id' => $origen->id, 'estado' => ResguardoPdv::ESTADO_EN_CUSTODIA]);
+        $almacen = Almacen::query()->create(['codigo' => 'PDV', 'nombre' => 'Custodia destino', 'sucursal_id' => $destino->id, 'activo' => true]);
         $servicio = app(EjecutarSegundoTrasladoTiendaService::class);
 
         try {
@@ -451,7 +460,7 @@ class RecorridoTiendaIntegralTest extends TestCase
         $this->assertFalse($enCamino->solicitud_preparacion_json['segundo_traslado']['recepcion_confirmada']);
         $this->assertSame(EstatusSucursalPedidoBma::EN_TRANSITO, $enCamino->estatus_sucursal);
 
-        $recibido = $servicio->recibir($enCamino, $this->usuario);
+        $recibido = $servicio->recibir($enCamino, $this->usuario, ['bolsas_verificadas' => true, 'almacen_id' => $almacen->id, 'ubicacion' => 'Destino B']);
         $this->assertTrue($recibido->solicitud_preparacion_json['segundo_traslado']['recepcion_confirmada']);
         $this->assertSame('recibido', $recibido->solicitud_preparacion_json['segundo_traslado']['movimiento_estado']);
         $this->assertSame(EstatusSucursalPedidoBma::EN_CUSTODIA, $recibido->estatus_sucursal);
@@ -633,8 +642,8 @@ class RecorridoTiendaIntegralTest extends TestCase
         $tarea = $this->tarea($pedido, CatalogoModalidadPreparacionPedido::CODIGO_RECOGE_TIENDA);
         $this->usuario->givePermissionTo(Permission::findOrCreate('control_pedidos.preparacion.solicitar', 'web'));
         $this->withoutMiddleware([
-            \Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class,
-            \Illuminate\Foundation\Http\Middleware\PreventRequestForgery::class,
+            ValidateCsrfToken::class,
+            PreventRequestForgery::class,
         ]);
 
         $this->actingAs($this->usuario)
@@ -734,7 +743,7 @@ class RecorridoTiendaIntegralTest extends TestCase
     private function producto(string $sku): Producto
     {
         return Producto::query()->create([
-            'uuid' => (string) \Illuminate\Support\Str::uuid(),
+            'uuid' => (string) Str::uuid(),
             'sku' => $sku.'-'.uniqid(),
             'descripcion' => 'Pieza ficticia '.$sku,
             'folio' => (string) random_int(100000, 999999),

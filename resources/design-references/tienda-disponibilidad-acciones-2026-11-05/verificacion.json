@@ -1,0 +1,50 @@
+[
+  {
+    "caso": "consulta",
+    "tamaño": "escritorio",
+    "tema": "dark",
+    "errores": [],
+    "desborde": false,
+    "enviosAntesDeConfirmar": 0
+  },
+  {
+    "caso": "transferencia",
+    "tamaño": "escritorio",
+    "tema": "dark",
+    "errores": [],
+    "desborde": false,
+    "enviosAntesDeConfirmar": 0
+  },
+  {
+    "caso": "cedis",
+    "tamaño": "escritorio",
+    "tema": "dark",
+    "errores": [],
+    "desborde": false,
+    "enviosAntesDeConfirmar": 0
+  },
+  {
+    "caso": "consulta",
+    "tamaño": "movil",
+    "tema": "light",
+    "errores": [],
+    "desborde": false,
+    "enviosAntesDeConfirmar": 0
+  },
+  {
+    "caso": "transferencia",
+    "tamaño": "movil",
+    "tema": "light",
+    "errores": [],
+    "desborde": false,
+    "enviosAntesDeConfirmar": 0
+  },
+  {
+    "caso": "cedis",
+    "tamaño": "movil",
+    "tema": "light",
+    "errores": [],
+    "desborde": false,
+    "enviosAntesDeConfirmar": 0
+  }
+]

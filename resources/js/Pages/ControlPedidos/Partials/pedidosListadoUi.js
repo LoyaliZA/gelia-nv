@@ -27,6 +27,11 @@ export function badgesListaPedido(pedido) {
     });
     const items = [{ key: 'estatus', className: badge.className, style: badge.style, label: badge.label }];
 
+    const traslado = (pedido.solicitud_preparacion || pedido.solicitud_preparacion_json)?.segundo_traslado;
+    if (traslado && !traslado.recepcion_confirmada && ['pendiente', 'autorizada'].includes(traslado.estado)) {
+        items.unshift({ key: 'traslado-sucursal', className: 'rounded-full border theme-border theme-element px-3 py-1 text-xs font-bold theme-text-main', label: traslado.estado === 'pendiente' ? 'Traslado por autorizar' : traslado.movimiento_estado === 'en_camino' ? 'En traslado' : 'Pendiente de salida de sucursal' });
+    }
+
     const fase = pedido.estatus?.fase_ciclo;
     const badgeEnvio = badgeEstatusEnvio(pedido.estatus_envio, {
         pedido,
@@ -89,6 +94,7 @@ export function accionesPedidoLista({
     onVerAuditoria,
     onCancelar,
     onBitacora,
+    onMovimientoTienda,
     onVerGuia,
     onAnexarEnvio,
     onCompletarEnvio,
@@ -127,6 +133,15 @@ export function accionesPedidoLista({
     }
     if (can('control_pedidos.ver_detalle') && onVer) {
         out.push({ key: 'ver', label: 'Ver', onClick: () => onVer(pedido) });
+    }
+    const solicitudTienda = pedido.solicitud_preparacion || pedido.solicitud_preparacion_json || {};
+    if (!esPapelera && onMovimientoTienda && solicitudTienda.modalidad_entrega === 'tienda' && !pedido.cancelado_at && pedido.estatus?.fase_ciclo !== 'ENTREGADO') {
+        if (pedido.estatus_sucursal === 'en_custodia' && pedido.puede_mutar && can('control_pedidos.crear') && (!['pendiente', 'autorizada'].includes(solicitudTienda.segundo_traslado?.estado) || solicitudTienda.segundo_traslado?.recepcion_confirmada) && !solicitudTienda.cambio_modalidad_tienda) {
+            out.push({ key: 'traslado-tienda', label: 'Solicitar traslado', onClick: () => onMovimientoTienda(pedido, 'traslado') });
+            out.push({ key: 'modalidad-tienda', label: 'Cambiar modalidad', onClick: () => onMovimientoTienda(pedido, 'modalidad') });
+        } else if (solicitudTienda.segundo_traslado || solicitudTienda.cambio_modalidad_tienda) {
+            out.push({ key: 'traslado-tienda', label: 'Seguimiento de traslado y modalidad', onClick: () => onMovimientoTienda(pedido, 'traslado') });
+        }
     }
     if (onBitacora) {
         out.push({ key: 'bitacora', label: 'Bitácora', tone: 'purple', onClick: () => onBitacora(pedido) });

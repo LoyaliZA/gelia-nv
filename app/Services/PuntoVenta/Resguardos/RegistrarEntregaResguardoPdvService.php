@@ -293,6 +293,11 @@ class RegistrarEntregaResguardoPdvService
 
     private function assertVersionYEstado(ResguardoPdv $resguardo, int $versionEsperada): void
     {
+        $pedido = \App\Models\ControlPedidos\PedidoBma::find($resguardo->pedido_bma_id);
+        if ($pedido && ($bloqueo = $pedido->motivoBloqueoEntregaTienda())) {
+            throw ValidationException::withMessages(['estado' => $bloqueo]);
+        }
+
         if ((int) $resguardo->version !== $versionEsperada) {
             throw ValidationException::withMessages([
                 'version' => 'Otro usuario modificó este resguardo. Actualice la página e intente de nuevo.',

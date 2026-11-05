@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { uuidSolicitud } from '../../../utils/uuidSolicitud';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
-import { CheckCircle2, ClipboardCheck, Clock, PackageMinus, PackagePlus, FileImage, Search } from 'lucide-react';
+import { AlertTriangle, RotateCcw, Pencil, ChevronDown, CheckCircle2, ClipboardCheck, Clock, PackageMinus, PackagePlus, FileImage, Search } from 'lucide-react';
 import {
     GELIA_BTN_OUTLINE,
     GELIA_SEGMENT_TABS_TRACK_COMPACT,
@@ -16,6 +17,8 @@ import GaleriaEvidenciasPedido from './GaleriaEvidenciasPedido';
 import AvisoOperativoPedido from './AvisoOperativoPedido';
 import ModalVistaPreviaDocumento, { MiniaturaDocumento } from './ModalVistaPreviaDocumento';
 import { formatearFechaNegocio } from './pedidosBmaStyles';
+import AccionesRapidasDisponibilidad from './AccionesRapidasDisponibilidad';
+import ResumenCambiosDisponibilidad from './ResumenCambiosDisponibilidad';
 import RespuestaPreparacionTienda from './RespuestaPreparacionTienda';
 
 const ESTADOS_REVISION = ['sin_excepciones', 'excepciones_pendientes', 'decision_registrada'];
@@ -124,7 +127,7 @@ function EsperaRevision({ area, nombreAlmacen }) {
     );
 }
 
-function ResultadoDisponibilidad({ area, pedido, revisiones, onVer }) {
+function ResultadoDisponibilidad({ area, pedido, revisiones, onVer, accionesDePieza }) {
     const revision = pedido?.solicitud_preparacion?.revision_disponibilidad;
     if (!revision?.estado || preparacionVisible(pedido?.tarea_preparacion)) return null;
     const preparacion = preparacionVisible(pedido?.tarea_preparacion);
@@ -158,6 +161,7 @@ function ResultadoDisponibilidad({ area, pedido, revisiones, onVer }) {
                             {pieza.descripcion_producto || pieza.descripcion}
                             {pieza.cantidad_solicitada ? ` · ${pieza.cantidad_solicitada}` : ''}
                             {pieza.comentario ? ` · ${pieza.comentario}` : ''}
+                            {accionesDePieza?.(pieza)}
                         </li>
                     ))}
                 </ul>
@@ -180,7 +184,7 @@ function ResultadoDisponibilidad({ area, pedido, revisiones, onVer }) {
     );
 }
 
-function ConfirmacionSolicitud({ pedidoId, visible, cerrada, onCerrada }) {
+function ConfirmacionSolicitud({ pedidoId, visible, cerrada, onCerrada, faltante, onReabrir, soloLectura }) {
     const [ocupado, setOcupado] = useState(false);
     const [error, setError] = useState('');
     if (!visible && !cerrada) return null;
@@ -199,6 +203,7 @@ function ConfirmacionSolicitud({ pedidoId, visible, cerrada, onCerrada }) {
         }
     };
 
+    if (cerrada && faltante) return <div className="tienda-alerta-disponibilidad rounded-xl border p-4 grid gap-3" role="alert"><div className="flex gap-2 items-start"><AlertTriangle size={20} className="shrink-0" /><div><strong>Consulta cerrada con piezas sin existencias</strong><p className="text-sm m-0 mt-1">Reabre la consulta y retira o sustituye los faltantes antes de continuar.</p></div></div>{!soloLectura && <button type="button" className={`${GELIA_BTN_OUTLINE} justify-self-start`} onClick={onReabrir}><RotateCcw size={16} />Reabrir consulta</button>}</div>;
     if (cerrada) {
         return (
             <AvisoOperativoPedido label="Consulta cerrada" tono="success" icon={CheckCircle2}>
@@ -234,6 +239,8 @@ export function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso
         return piezasRespuesta(pedido?.tarea_preparacion, pedido?.revisiones_producto || pedido?.revisionesProducto || [])
             .filter(pieza => !retiradas.has(Number(pieza.revision_id)));
     }, [pedido, solicitud]);
+    const claveAnexo = useRef(uuidSolicitud());
+    const claveRetiro = useRef(uuidSolicitud());
     const [modo, setModo] = useState('anexo');
     const [entrada, setEntrada] = useState('documento');
     const [producto, setProducto] = useState(null);
@@ -264,8 +271,6 @@ export function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso
         return () => URL.revokeObjectURL(url);
     }, [evidenciaAnexo]);
     const mostrarBusqueda = productos.length === 0 || manual;
-    const anexos = Array.isArray(solicitud?.anexo_sin_remision) ? solicitud.anexo_sin_remision : [];
-    const retiros = Array.isArray(solicitud?.retiro_piezas) ? solicitud.retiro_piezas : [];
     const campo = `${THEME_INPUT} w-full min-h-[44px] text-base`;
 
     const alternar = (pieza) => {
@@ -307,6 +312,7 @@ export function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso
         setOcupado(true);
         setError('');
         const form = new FormData();
+        form.append('solicitud_id', claveAnexo.current);
         form.append('entrada', entrada);
         form.append('evidencia', evidenciaAnexo);
         if (nota.trim()) form.append('condicion', nota.trim());
@@ -323,9 +329,9 @@ export function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso
         try {
             const respuesta = await axios.post(`/control-pedidos/${pedidoId}/anexo-tienda`, form, { headers: cabeceras() });
             const lineas = respuesta.data?.expediente?.anexo?.sin_remision;
-            if (Array.isArray(lineas)) {
-                onSolicitud((actual) => ({ ...actual, anexo_sin_remision: lineas }));
-            }
+            if (respuesta.data?.solicitud_preparacion) onSolicitud(respuesta.data.solicitud_preparacion);
+            else if (Array.isArray(lineas)) onSolicitud({ ...solicitud, anexo_sin_remision: lineas });
+            claveAnexo.current = uuidSolicitud();
             setSeleccionadas([]);
             setProducto(null);
             setCantidad('1');
@@ -400,6 +406,7 @@ export function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso
         setOcupado(true);
         setError('');
         const form = new FormData();
+        form.append('solicitud_id', claveRetiro.current);
         form.append('entrada', entradaRetiro);
         form.append('motivo', motivo);
         form.append('motivo_opcion', motivoOpcion);
@@ -418,6 +425,7 @@ export function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso
                 headers: cabeceras(),
             });
             if (respuesta.data?.solicitud_preparacion) onSolicitud(respuesta.data.solicitud_preparacion);
+            claveRetiro.current = uuidSolicitud();
             [...previewsRetiro, ...previewsDocumentos].forEach((preview) => {
                 if (preview.url?.startsWith('blob:')) URL.revokeObjectURL(preview.url);
             });
@@ -490,7 +498,7 @@ export function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso
                                     <label className={THEME_LABEL} htmlFor="ajuste-cantidad">Cantidad</label>
                                     <input id="ajuste-cantidad" className={campo} inputMode="numeric" min="1" value={cantidad} onChange={(evento) => setCantidad(evento.target.value)} />
                                 </div>
-                                <button type="button" className={`${THEME_BTN_SECONDARY} min-h-[44px]`} disabled={ocupado || !producto} onClick={agregarProducto}>Agregar</button>
+                                <button type="button" className={`${GELIA_BTN_OUTLINE} min-h-[44px]`} disabled={ocupado || !producto} onClick={agregarProducto}>Agregar</button>
                             </div>
                             {seleccionadas.length > 0 && (
                                 <ul className="m-0 pl-0 list-none grid gap-2">
@@ -594,7 +602,7 @@ export function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso
                                     <label className={THEME_LABEL} htmlFor="retiro-cantidad">Cantidad</label>
                                     <input id="retiro-cantidad" className={campo} inputMode="numeric" min="1" value={cantidadBuscada} onChange={(evento) => setCantidadBuscada(evento.target.value)} />
                                 </div>
-                                <button type="button" className={`${THEME_BTN_SECONDARY} min-h-[44px]`} disabled={ocupado || !piezaBuscada} onClick={agregarPiezaBuscada}>Agregar</button>
+                                <button type="button" className={`${GELIA_BTN_OUTLINE} min-h-[44px]`} disabled={ocupado || !piezaBuscada} onClick={agregarPiezaBuscada}>Agregar</button>
                             </div>
                             {agregadas.length > 0 && (
                                 <ul className="m-0 pl-0 list-none grid gap-2">
@@ -649,7 +657,7 @@ export function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso
                         disabled={ocupado}
                     />
                     <button type="button" className={`${THEME_BTN_PRIMARY} min-h-[44px] justify-self-start`} disabled={ocupado} onClick={solicitarRetiro}>
-                        {ocupado ? 'Enviando…' : 'Solicitar retiro'}
+                        <PackageMinus size={16} aria-hidden="true" />{ocupado ? 'Enviando…' : 'Solicitar retiro'}
                     </button>
                 </div>
             )}
@@ -657,43 +665,6 @@ export function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso
                 <p className="text-sm theme-text-main m-0" role="alert">
                     {error}
                 </p>
-            )}
-            {anexos.length > 0 && (
-                <div>
-                    <p className="text-sm font-semibold theme-text-main m-0">Anexos documentados</p>
-                    <ul className="m-0 mt-1 pl-4">
-                        {anexos.map((linea, indice) => (
-                            <li key={`${linea.sku || 'documento'}-${indice}`} className="text-sm theme-text-main">
-                                {linea.respondida_at
-                                    ? `${linea.separada_at ? 'Separación confirmada' : linea.estado === 'disponible' ? 'Disponible · separación pendiente' : 'Con detalle'} · ${linea.resultado || ''}${linea.respondida_por ? ` · Respondió ${linea.respondida_por}` : ''}${linea.piezas_respuesta?.length ? ` · ${linea.piezas_respuesta.map((pieza) => `${pieza.descripcion} (${pieza.cantidad})`).join(', ')}` : ''}`
-                                    : linea.entrada === 'documento' || linea.pendiente_identificacion
-                                    ? 'Documento del anexo · pendiente de identificación'
-                                    : `${linea.descripcion} · ${linea.cantidad}${linea.condicion ? ` · ${linea.condicion}` : ''}`}
-                            </li>
-                        ))}
-                    </ul>
-                </div>
-            )}
-            {retiros.length > 0 && (
-                <div>
-                    <p className="text-sm font-semibold theme-text-main m-0">Retiros solicitados</p>
-                    <ul className="m-0 mt-1 pl-4">
-                        {retiros.map((lote, indice) => (
-                            <li key={`${lote.version || lote.solicitado_at || indice}`} className="text-sm theme-text-main">
-                                {lote.motivo}
-                                {` · ${lote.estado || 'pendiente'}`}
-                                {lote.solicitado_por ? ` · ${lote.solicitado_por}` : ''}
-                                {Array.isArray(lote.piezas_solicitadas || lote.piezas) && (lote.piezas_solicitadas || lote.piezas).length > 0
-                                    ? ` · ${(lote.piezas_solicitadas || lote.piezas).map((pieza) => `${pieza.descripcion} (${pieza.cantidad})`).join(', ')}`
-                                    : ' · Pendiente de identificación por el auxiliar'}
-                                {lote.resultado ? ` · ${lote.resultado}` : ''}
-                                {Array.isArray(lote.documentos_piezas) && lote.documentos_piezas.length > 0
-                                    ? ` · ${lote.documentos_piezas.length} captura(s) de piezas`
-                                    : ''}
-                            </li>
-                        ))}
-                    </ul>
-                </div>
             )}
             </div>
         </section>
@@ -709,9 +680,30 @@ export default function SeguimientoSolicitudTienda({
     consultaCerrada = false,
     onConsultaCerrada,
     onSolicitud,
+    onPedidoActualizado,
+    onConsultaReabierta,
     soloLectura = false,
 }) {
     const [solicitud, setSolicitud] = useState(pedido?.solicitud_preparacion || {});
+    const [lectura, setLectura] = useState(null);
+    const [modificar, setModificar] = useState(false);
+    const [reabriendo, setReabriendo] = useState(false);
+    const [cerradaLocal, setCerradaLocal] = useState(null);
+    const visto = lectura || pedido;
+    const cerrada = cerradaLocal ?? consultaCerrada;
+    const filas = lectura?.revisiones_producto || revisiones;
+    const aplicar = datos => { setLectura(datos); setSolicitud(datos.solicitud_preparacion || {}); setCerradaLocal(Boolean(datos.consulta_cerrada || datos.consulta_cerrada_at)); onSolicitud?.(datos.solicitud_preparacion || {}); onPedidoActualizado?.(datos); };
+    const reabrir = async () => {
+        if (reabriendo) return; setReabriendo(true);
+        try { await axios.post(`/control-pedidos/${pedidoId}/reabrir-consulta`, {}, { headers: cabeceras() }); const { data } = await axios.get(`/control-pedidos/${pedidoId}/disponibilidad-tienda`); aplicar(data); setCerradaLocal(false); onConsultaReabierta?.(); setAviso('Consulta reabierta. Se notificó a quien revisó el pedido.'); }
+        catch (e) { setAviso(mensajeDe(e, 'No se pudo reabrir la consulta.')); } finally { setReabriendo(false); }
+    };
+    const accionesDePieza = pieza => {
+        const revision = filas.find(r => (pieza.descripcion_producto && Number(r.id) === Number(pieza.id)) || (r.sku && r.sku === pieza.sku) || (!r.sku && r.descripcion_producto === (pieza.descripcion || pieza.descripcion_producto)));
+        return revision ? <AccionesRapidasDisponibilidad key={revision.id} pedidoId={pedidoId} pieza={revision} almacenId={visto?.almacen_id || visto?.tarea_preparacion?.almacen?.id} soloLectura={soloLectura || cerrada} onActualizar={aplicar} onVer={(documentos, indice) => setVista({ documentos, indice })} /> : null;
+    };
+    const faltante = filas.some(p => p.estado_fisico === 'sin_existencia' && !p.resolucion);
+
     const [aviso, setAviso] = useState('');
     const [vista, setVista] = useState(null);
     const marcaRespuesta = pedido?.solicitud_preparacion?.revision_disponibilidad?.estado
@@ -719,11 +711,13 @@ export default function SeguimientoSolicitudTienda({
         || pedido?.pesaje_respondido_at
         || '';
     useEffect(() => {
-        setSolicitud(pedido?.solicitud_preparacion || {});
+        if (!lectura || (pedido?.updated_at && lectura?.updated_at && new Date(pedido.updated_at) > new Date(lectura.updated_at))) {
+            setSolicitud(pedido?.solicitud_preparacion || {}); setLectura(null); setCerradaLocal(null);
+        }
     }, [pedido, marcaRespuesta]);
     const emitida = respuestaDeTiendaEmitida({ ...pedido, solicitud_preparacion: solicitud });
     const estado = solicitud?.revision_disponibilidad?.estado;
-    const puedeConfirmar = !soloLectura && emitida && !consultaCerrada && Boolean(pedido?.puede_cerrar_consulta);
+    const puedeConfirmar = !soloLectura && emitida && !cerrada && Boolean(visto?.puede_cerrar_consulta) && !faltante;
     const causaCierre = pedido?.motivo_bloqueo_cierre
         || (solicitud?.revision_disponibilidad?.aceptacion_vigente === false ? 'Hay un ajuste pendiente. La aceptación de esta versión no sigue vigente.' : '')
         || ((solicitud?.retiro_piezas || []).some((retiro) => (retiro?.estado || 'pendiente') === 'pendiente') ? 'Hay un retiro pendiente de atención por el auxiliar.' : '');
@@ -734,23 +728,28 @@ export default function SeguimientoSolicitudTienda({
     }
 
     return (
-        <div className="mt-4 grid gap-4">
+        <div className="mt-4 grid gap-4 theme-text-main">
             {aviso && (
                 <p className="text-sm theme-text-main m-0 break-words" role="status">
                     {aviso}
                 </p>
             )}
+            {cerrada && <ConfirmacionSolicitud pedidoId={pedidoId} cerrada faltante={faltante} soloLectura={soloLectura} onReabrir={reabrir} />}
             <RespuestaPreparacionTienda
-                tarea={pedido?.tarea_preparacion}
+                tarea={visto?.tarea_preparacion}
+                accionesDePieza={accionesDePieza}
                 onVerDocumentos={(documentos, indice) => setVista({ documentos, indice })}
             />
             <ResultadoDisponibilidad
                 area={area}
-                pedido={{ ...pedido, solicitud_preparacion: solicitud }}
-                revisiones={revisiones}
+                pedido={{ ...visto, solicitud_preparacion: solicitud }}
+                revisiones={filas}
+                accionesDePieza={accionesDePieza}
                 onVer={(documentos, indice) => setVista({ documentos, indice })}
             />
-            {!soloLectura && !consultaCerrada && (
+            <ResumenCambiosDisponibilidad solicitud={solicitud} documentos={visto?.documentos || []} onVer={(documentos, indice) => setVista({ documentos, indice })} />
+            {!soloLectura && !cerrada && <button type="button" className={`${GELIA_BTN_OUTLINE} justify-self-start`} aria-expanded={modificar} onClick={() => setModificar(!modificar)}><Pencil size={16} />Modificar pedido<ChevronDown size={16} /></button>}
+            {!soloLectura && !cerrada && modificar && (
                 <AjustePiezas
                     pedidoId={pedidoId}
                     pedido={pedido}
@@ -760,20 +759,23 @@ export default function SeguimientoSolicitudTienda({
                     onVer={(documentos, indice) => setVista({ documentos, indice })}
                 />
             )}
-            {!consultaCerrada && !puedeConfirmar && causaCierre && (
+            {!cerrada && !puedeConfirmar && causaCierre && (
                 <PanelEspera label="La consulta no puede cerrarse" icon={Clock}>
                     {causaCierre}
                 </PanelEspera>
             )}
-            <ConfirmacionSolicitud
+            {!cerrada && <ConfirmacionSolicitud
                 pedidoId={pedidoId}
                 visible={puedeConfirmar}
-                cerrada={consultaCerrada}
+                cerrada={cerrada}
+                faltante={faltante}
+                soloLectura={soloLectura}
+                onReabrir={reabrir}
                 onCerrada={() => {
-                    onConsultaCerrada?.();
+                    setCerradaLocal(true); onConsultaCerrada?.();
                     setAviso('Consulta cerrada. La mercancía quedó confirmada con el cliente.');
                 }}
-            />
+            />}
             <ModalVistaPreviaDocumento
                 abierto={Boolean(vista)}
                 documentos={vista?.documentos || []}

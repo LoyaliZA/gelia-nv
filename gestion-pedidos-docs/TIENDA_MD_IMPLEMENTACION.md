@@ -36,3 +36,7 @@ Se publica un build al cerrar el lote con Sail, conservando la corrección de pe
 No se hizo commit ni push. Incorporar los archivos nuevos de documentación al subir la entrega.
 
 Ajuste posterior: [Configuración operativa y consulta por sucursal](CONFIGURACION_OPERATIVA_TIENDA.md) documenta los parámetros, permisos y comprobaciones de esta continuación.
+
+## Claridad y recuperación — 5 de noviembre
+
+La [revisión de disponibilidad y Mismo día](DISPONIBILIDAD_ACCIONES_RAPIDAS.md) actualiza presentación y bloqueo de piezas. El pendiente actual tiene prioridad; datos/documentos, primer reporte e historial quedan desplegables. Los botones usan borde e iconos; seguimiento y acuerdos se capturan al solicitarlos. Reabrir una consulta cerrada con faltantes no borra ni reinicia el reporte original de transferencia. Las nuevas consultas no pueden cerrarse con faltantes aceptados; se retiran o se sustituyen y se espera la respuesta correspondiente.

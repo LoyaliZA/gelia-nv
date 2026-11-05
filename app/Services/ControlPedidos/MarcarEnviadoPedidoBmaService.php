@@ -48,6 +48,10 @@ class MarcarEnviadoPedidoBmaService
         }
 
         \App\Support\ControlPedidos\AtencionMismoDiaTienda::assertSalida($pedido);
+        if (\App\Support\ControlPedidos\TransferenciaT02::documental($pedido)
+            && ! app(MovimientosTiendaService::class)->tieneCustodiaDestino((int) $pedido->sucursal_destino_id)) {
+            throw new \RuntimeException('Configure un almacén PDV activo de custodia en destino antes de confirmar la salida.');
+        }
 
         if ($pedido->esTrasladoInternoAPdv()) {
             app(ValidarSucursalDestinoPedidoBma::class)->ejecutar($pedido, (int) $pedido->sucursal_destino_id, exigirSiAplica: true);

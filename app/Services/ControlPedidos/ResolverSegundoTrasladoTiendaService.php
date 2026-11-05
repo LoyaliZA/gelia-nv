@@ -6,6 +6,7 @@ use App\Models\ControlPedidos\PedidoBma;
 use App\Models\Sucursal;
 use App\Models\User;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
+use App\Support\ControlPedidos\VisibilidadPedidoBma;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -38,6 +39,10 @@ final class ResolverSegundoTrasladoTiendaService
         return DB::transaction(function () use ($pedido, $usuario, $decision, $recorrido) {
             $pedido = PedidoBma::query()->lockForUpdate()->findOrFail($pedido->id);
             $pedido->loadMissing('estatus');
+            abort_unless(VisibilidadPedidoBma::puedeConsultar($usuario, $pedido), 403);
+            if ($pedido->cancelado_at || $pedido->estatus?->fase_ciclo === 'ENTREGADO') {
+                throw ValidationException::withMessages(['traslado' => 'El pedido ya está cerrado.']);
+            }
             $json = is_array($pedido->solicitud_preparacion_json) ? $pedido->solicitud_preparacion_json : [];
             $solicitud = is_array($json['segundo_traslado'] ?? null) ? $json['segundo_traslado'] : null;
             if (($solicitud['estado'] ?? null) !== 'pendiente') {
@@ -57,6 +62,10 @@ final class ResolverSegundoTrasladoTiendaService
             $cambios = ['solicitud_preparacion_json' => $json];
             $texto = 'Gerencia rechazó el segundo traslado. La mercancía permanece en su ubicación.';
             if ($decision === 'autorizar') {
+                if (! app(MovimientosTiendaService::class)->enCustodia($pedido)) {
+                    throw ValidationException::withMessages(['custodia' => 'El pedido debe seguir en custodia en origen para autorizar.']);
+                }
+                app(ValidarSucursalDestinoPedidoBma::class)->ejecutar($pedido, (int) $solicitud['sucursal_destino_id']);
                 $destino = Sucursal::query()->find($solicitud['sucursal_destino_id']);
                 $cambios['sucursal_destino_id'] = (int) $solicitud['sucursal_destino_id'];
                 $nombre = $destino?->nombre ?: 'la sucursal indicada';
@@ -78,6 +87,8 @@ final class ResolverSegundoTrasladoTiendaService
                     AccionesHistorialPedidoBma::CAMBIO_SUCURSAL_DESTINO
                 );
             }
+
+            app(NotificarPedidoBmaService::class)->ejecutar($pedido, 'pedido_traslado_resuelto', $texto, ['control_pedidos.tienda.trasladar'], $usuario->id, true);
 
             return $pedido->fresh(['sucursalDestino', 'estatus']);
         });

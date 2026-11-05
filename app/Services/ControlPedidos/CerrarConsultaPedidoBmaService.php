@@ -62,6 +62,7 @@ class CerrarConsultaPedidoBmaService
                 'consulta_cerrada_at' => now(),
                 'consulta_cerrada_por_id' => $usuarioId,
                 'consulta_actualizacion_pendiente' => false,
+                'estatus_envio' => $pedido->esConsultaDisponibilidadCedis() ? PedidoBma::ESTATUS_ENVIO_PESAJE_LISTO : $pedido->estatus_envio,
             ]);
 
             $label = $pedido->consultaCedisModoRevisionMercancia() ? 'Consulta de mercancía' : 'Consulta de pesaje';

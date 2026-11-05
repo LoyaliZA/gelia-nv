@@ -21,6 +21,7 @@ class AsignarSucursalDestinoPedidoService
         User $usuario,
         ?int $sucursalDestinoId,
         ?string $codigoModalidad = null,
+        array $datosTraslado = [],
     ): PedidoBma {
         if (! $usuario->can('control_pedidos.crear') && ! $usuario->can('control_pedidos.editar')) {
             throw new \RuntimeException('No tiene permiso para asignar o cambiar la sucursal destino.');
@@ -35,15 +36,23 @@ class AsignarSucursalDestinoPedidoService
             return $pedido;
         }
 
-        return DB::transaction(function () use ($pedido, $usuario, $viejo, $nuevo) {
+        return DB::transaction(function () use ($pedido, $usuario, $nuevo, $datosTraslado) {
             $pedido = PedidoBma::query()->lockForUpdate()->findOrFail($pedido->id);
             $pedido->loadMissing(['estatus', 'sucursalDestino']);
+            abort_unless((int) $pedido->vendedor_id === (int) $usuario->id, 403);
+            if ($pedido->cancelado_at || $pedido->estatus?->fase_ciclo === 'ENTREGADO') {
+                throw new \RuntimeException('El pedido ya está cerrado.');
+            }
+            $viejo = $pedido->sucursal_destino_id;
+            if ((int) $viejo === (int) $nuevo) {
+                return $pedido;
+            }
             if (InstruccionEntrega::mercanciaYaSalio($pedido)) {
                 if ($nuevo === null) {
                     throw new \RuntimeException(InstruccionEntrega::MENSAJE_SEGUNDO_TRASLADO);
                 }
 
-                return app(SolicitarSegundoTrasladoTiendaService::class)->ejecutar($pedido, $usuario, $nuevo);
+                return app(SolicitarSegundoTrasladoTiendaService::class)->ejecutar($pedido, $usuario, $nuevo, $datosTraslado);
             }
 
             $etiquetaAnterior = $this->etiquetaSucursal($viejo, $pedido->sucursalDestino);
@@ -62,6 +71,8 @@ class AsignarSucursalDestinoPedidoService
                     AccionesHistorialPedidoBma::CAMBIO_SUCURSAL_DESTINO
                 );
             }
+
+            app(NotificarPedidoBmaService::class)->ejecutar($pedido, 'pedido_destino_actualizado', 'Sucursal de recolección actualizada antes de la salida: '.$etiquetaNueva.'. Conserve las bolsas y documentos del pedido.', ['control_pedidos.cedis', 'control_pedidos.tienda.trasladar'], $usuario->id, true);
 
             return $pedido->fresh(['sucursalDestino', 'estatus']);
         });

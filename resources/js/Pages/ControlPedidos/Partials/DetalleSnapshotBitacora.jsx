@@ -99,6 +99,13 @@ export default function DetalleSnapshotBitacora({ snapshot = null, onVerArchivo 
 
     return (
         <div className="space-y-4 pt-3 border-t theme-border">
+            {data.traslado_tienda && <div className="space-y-1.5">
+                <p className="text-xs font-semibold theme-text-main m-0">Traslado solicitado</p>
+                <FILA label="Sucursal de origen" value={data.traslado_tienda.sucursal_origen} />
+                <FILA label="Destino solicitado" value={data.traslado_tienda.sucursal_destino} />
+                <FILA label="Motivo" value={data.traslado_tienda.motivo} />
+                {data.traslado_tienda.anotacion && <p className="text-xs theme-text-muted m-0">{data.traslado_tienda.anotacion}</p>}
+            </div>}
             {bloqueFinanciero(data.financiero)}
             {bloqueExhibicion(data.exhibicion)}
             {bloqueCobertura(data.cobertura)}

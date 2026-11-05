@@ -1502,3 +1502,27 @@
     color: var(--color-primario);
     font-size: 1.5rem;
 }
+
+/* La corrección de disponibilidad debe conservar contraste en ambos temas. */
+.tienda-alerta-disponibilidad {
+    color: color-mix(in srgb, var(--color-peligro) 88%, black);
+    border-color: var(--color-peligro);
+    background: color-mix(in srgb, var(--color-peligro) 8%, var(--theme-surface-solid));
+}
+.dark .tienda-alerta-disponibilidad {
+    color: color-mix(in srgb, var(--color-peligro) 55%, white);
+    border-color: color-mix(in srgb, var(--color-peligro) 70%, white);
+    background: color-mix(in srgb, var(--color-peligro) 12%, var(--theme-surface-solid));
+}
+.tienda-transferencia button { min-height: 2.75rem; }
+.tienda-transferencia .theme-btn-primary:hover:not(:disabled) { transform: none; }
+
+@media (max-width: 640px) {
+    .tienda-respuesta-tabla, .tienda-respuesta-tabla tbody { display: block; }
+    .tienda-respuesta-tabla thead { display: none; }
+    .tienda-respuesta-tabla tr { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); }
+    .tienda-respuesta-tabla td { min-width: 0; overflow-wrap: anywhere; }
+    .tienda-respuesta-tabla td:first-child, .tienda-respuesta-tabla td:last-child { grid-column: 1 / -1; }
+    .tienda-respuesta-tabla td[data-label="Resultado"] { overflow-wrap: normal; }
+    .tienda-respuesta-tabla td[data-label]::before { content: attr(data-label); display: block; margin-bottom: .375rem; color: var(--theme-text-muted); font-size: .75rem; }
+}
