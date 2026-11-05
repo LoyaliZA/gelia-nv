@@ -4,11 +4,15 @@ namespace App\Services\ControlPedidos;
 
 use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\PedidoBma;
+use App\Models\ControlPedidos\PedidoBmaReferencia;
 use App\Models\ControlPedidos\PedidoBmaTareaPreparacion;
 use App\Models\User;
+use App\Support\ControlPedidos\ContextoDepartamentoPedido;
 use App\Support\ControlPedidos\MaquinaEstadosPedidoBma;
+use App\Support\ControlPedidos\RespuestaPreparacionTienda;
 use App\Support\ControlPedidos\RevisionEnCursoPedidoBma;
 use App\Support\ControlPedidos\VisibilidadPedidoBma;
+use App\Support\ControlPedidos\VisibilidadTareaPreparacion;
 use Illuminate\Database\Eloquent\Builder;
 
 class ListarPedidosBmaService
@@ -135,7 +139,7 @@ class ListarPedidosBmaService
             ? VisibilidadPedidoBma::puedeMutarComoVendedora($usuario, $pedido)
             : false;
 
-        $pedido->setAttribute('departamento_operacion_id', \App\Support\ControlPedidos\ContextoDepartamentoPedido::dePedido($pedido));
+        $pedido->setAttribute('departamento_operacion_id', ContextoDepartamentoPedido::dePedido($pedido));
         $pedido->setAttribute('puede_editar', $puedeEditar);
         $pedido->setAttribute('puede_anexar_pago_envio', $pedido->puedeAnexarPagoEnvio());
         $pedido->setAttribute('puede_mutar', $puedeEditar);
@@ -143,7 +147,7 @@ class ListarPedidosBmaService
         $pedido->setAttribute('tiene_sin_existencia_abierta', $pedido->tieneSinExistenciaAbierta());
         $pedido->setAttribute('consulta_cerrada', $pedido->consultaCerrada());
         $pedido->setAttribute('puede_cerrar_consulta', $puedeEditar && $pedido->puedeCerrarConsulta());
-        $pedido->setAttribute('motivo_bloqueo_cierre', $pedido->esConsultaDisponibilidadTienda() ? $pedido->motivoBloqueoCierreConsultaTienda() : null);
+        $pedido->setAttribute('motivo_bloqueo_cierre', ($pedido->esConsultaDisponibilidadTienda() || $pedido->esConsultaDisponibilidadCedis()) ? $pedido->motivoBloqueoCierreConsultaTienda() : null);
         $pedido->setAttribute('es_consulta_mercancia', $pedido->esConsultaMercancia());
         $pedido->setAttribute('consulta_cedis_modo_revision_mercancia', $pedido->consultaCedisModoRevisionMercancia());
         $pedido->setAttribute('fuentes_pago', $pedido->fuentesPagoResumen());
@@ -221,9 +225,9 @@ class ListarPedidosBmaService
             ? $pedido->referencias
                 ->where('vigente', true)
                 ->whereIn('tipo', [
-                    \App\Models\ControlPedidos\PedidoBmaReferencia::TIPO_COTIZACION,
-                    \App\Models\ControlPedidos\PedidoBmaReferencia::TIPO_PEDIDO,
-                    \App\Models\ControlPedidos\PedidoBmaReferencia::TIPO_OTRO,
+                    PedidoBmaReferencia::TIPO_COTIZACION,
+                    PedidoBmaReferencia::TIPO_PEDIDO,
+                    PedidoBmaReferencia::TIPO_OTRO,
                 ])
                 ->sortByDesc('id')
                 ->first()
@@ -276,7 +280,7 @@ class ListarPedidosBmaService
             'version' => $tarea->version,
             'observaciones_solicitud' => $tarea->observaciones_solicitud,
             'observaciones_respuesta' => $tarea->observaciones_respuesta,
-            'respuesta' => \App\Support\ControlPedidos\RespuestaPreparacionTienda::datos($tarea),
+            'respuesta' => RespuestaPreparacionTienda::datos($tarea),
             'fecha_limite' => $tarea->fecha_limite?->toIso8601String(),
             'modalidad' => $tarea->modalidad ? [
                 'id' => $tarea->modalidad->id,
@@ -302,8 +306,8 @@ class ListarPedidosBmaService
             'requiere_traslado_cedis' => (bool) $tarea->requiere_traslado_cedis,
             'pago_confirmado' => $tarea->cumplimientoFisico?->pago_confirmado_at !== null,
             'salida_autorizada' => $tarea->cumplimientoFisico?->salida_autorizada_at !== null,
-            'progreso_traslado' => \App\Support\ControlPedidos\VisibilidadTareaPreparacion::progresoTraslado($tarea),
-            'progreso_caratula' => \App\Support\ControlPedidos\VisibilidadTareaPreparacion::progresoCaratula($tarea),
+            'progreso_traslado' => VisibilidadTareaPreparacion::progresoTraslado($tarea),
+            'progreso_caratula' => VisibilidadTareaPreparacion::progresoCaratula($tarea),
             'motivo_rechazo_cedis' => $tarea->motivo_rechazo_cedis,
             'enviada_cedis_at' => $tarea->enviada_cedis_at?->toIso8601String(),
             'recibida_cedis_at' => $tarea->recibida_cedis_at?->toIso8601String(),
@@ -331,7 +335,7 @@ class ListarPedidosBmaService
 
     private function aplicarFiltros(Builder $query, array $filtros, ?User $usuario = null): void
     {
-        if (!empty($filtros['q'])) {
+        if (! empty($filtros['q'])) {
             $termino = trim($filtros['q']);
             $query->where(function (Builder $q) use ($termino) {
                 $q->where('folio', 'like', "%{$termino}%")

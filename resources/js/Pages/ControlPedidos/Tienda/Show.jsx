@@ -1,3 +1,4 @@
+import { textoProcesoTienda } from '../Partials/textoProcesoTienda';
 import AjustesSolicitadosTienda from './Partials/AjustesSolicitadosTienda';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Head, Link, router, usePage } from '@inertiajs/react';
@@ -668,7 +669,7 @@ export default function Show({
                                             <p className="font-bold theme-text-main m-0">
                                                 {h.accion || `${h.estado_anterior || '—'} → ${h.estado_nuevo || '—'}`}
                                             </p>
-                                            {h.comentario && <p className="text-xs theme-text-muted m-0 mt-0.5">{h.comentario}</p>}
+                                            {h.comentario && <p className="text-xs theme-text-muted m-0 mt-0.5">{textoProcesoTienda(h.comentario)}</p>}
                                             <p className="text-[10px] theme-text-muted font-bold m-0 mt-1">
                                                 {h.usuario || 'Sistema'}
                                                 {h.created_at ? ` · ${formatearFechaNegocio(h.created_at)}` : ''}

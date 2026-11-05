@@ -36,8 +36,8 @@ it('TIENDA MD participa en el recorrido y el acuerdo posterior exige confirmaci�
     await act(() => root.render(<SeguimientoTransferenciaTienda pedido={mdPedido} />));
     expect(container.textContent).toContain('TIENDA MD · Pendiente de acuerdo');
     expect(axios.post).not.toHaveBeenCalled();
-    await act(() => [...container.querySelectorAll('button')].find(button => button.textContent === 'Acordar recolección posterior · T-02').click());
-    await act(() => [...container.querySelectorAll('button')].find(button => button.textContent === 'Confirmar acuerdo y continuar como T-02').click());
+    await act(() => [...container.querySelectorAll('button')].find(button => button.textContent === 'Acordar recolección posterior').click());
+    await act(() => [...container.querySelectorAll('button')].find(button => button.textContent === 'Confirmar recolección y resguardo en tienda').click());
     expect(axios.post).not.toHaveBeenCalled();
     expect(container.textContent).toContain('Describa el acuerdo');
 });

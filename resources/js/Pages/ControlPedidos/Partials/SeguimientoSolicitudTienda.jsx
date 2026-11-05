@@ -56,33 +56,21 @@ export function respuestaDeTiendaEmitida(pedido) {
     return Boolean(pedido?.pesaje_respondido_at);
 }
 
-function piezasRespuesta(tarea) {
-    const desdeRespuesta = tarea?.respuesta?.productos || [];
-    if (desdeRespuesta.length > 0) {
-        return desdeRespuesta
-            .filter((pieza) => pieza?.descripcion || pieza?.sku)
-            .map((pieza) => ({
-                id: pieza.id,
-                sku: pieza.sku || '',
-                descripcion: pieza.descripcion || '',
-                cantidad: Math.max(1, Number(pieza.cantidad) || 1),
-                estado: pieza.estado_fisico || '',
-            }));
-    }
-    return (tarea?.productos || [])
-        .filter((pieza) => pieza?.descripcion_snapshot || pieza?.sku)
-        .map((pieza) => ({
-            id: pieza.id,
-            sku: pieza.sku || '',
-            descripcion: pieza.descripcion_snapshot || '',
-            cantidad: Math.max(1, Number(pieza.cantidad_encontrada || pieza.cantidad_solicitada) || 1),
-            estado: pieza.estado_fisico || '',
-        }));
+function piezasRespuesta(tarea, revisiones = []) {
+    const respuesta = tarea?.respuesta?.productos || [];
+    const productos = respuesta.length ? respuesta : (tarea?.productos || []);
+    const faltantes = revisiones.filter(p => p.estado_fisico === 'sin_existencia');
+    const coincide = (pieza, revision) => pieza.sku && revision.sku
+        ? pieza.sku === revision.sku
+        : (pieza.descripcion || pieza.descripcion_snapshot) === (revision.descripcion_producto || revision.descripcion);
+    const conocidas = productos
+        .filter(p => !faltantes.some(r => coincide(p, r)))
+        .map(p => ({ id: `pieza-${p.id}`, sku: p.sku || '', descripcion: p.descripcion || p.descripcion_snapshot || '', cantidad: Math.max(1, Number(p.cantidad || p.cantidad_encontrada || p.cantidad_solicitada) || 1), estado: p.estado_fisico || '' }));
+    const reportadas = revisiones.filter(p => !p.resolucion && (p.estado_fisico === 'sin_existencia' || !productos.length))
+        .map(p => ({ id: `revision-${p.id}`, revision_id: p.estado_fisico === 'sin_existencia' ? p.id : undefined, sku: p.sku || '', descripcion: p.descripcion_producto || p.descripcion, cantidad: Math.max(1, Number(p.cantidad_solicitada) || 1), estado: p.estado_fisico }));
+    return [...reportadas, ...conocidas];
 }
 
-function respuestaSoloConDetalle(productos) {
-    return productos.length > 0 && productos.every((pieza) => pieza.estado && pieza.estado !== 'bueno');
-}
 
 function detalleRevision(area, estado) {
     if (estado === 'excepciones_pendientes') {
@@ -241,8 +229,11 @@ function ConfirmacionSolicitud({ pedidoId, visible, cerrada, onCerrada }) {
 }
 
 export function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso, onVer }) {
-    const productos = useMemo(() => piezasRespuesta(pedido?.tarea_preparacion), [pedido]);
-    const soloDetalle = respuestaSoloConDetalle(productos);
+    const productos = useMemo(() => {
+        const retiradas = new Set((solicitud?.retiro_piezas || []).flatMap(retiro => retiro.faltantes_retirados || []).map(Number));
+        return piezasRespuesta(pedido?.tarea_preparacion, pedido?.revisiones_producto || pedido?.revisionesProducto || [])
+            .filter(pieza => !retiradas.has(Number(pieza.revision_id)));
+    }, [pedido, solicitud]);
     const [modo, setModo] = useState('anexo');
     const [entrada, setEntrada] = useState('documento');
     const [producto, setProducto] = useState(null);
@@ -254,7 +245,7 @@ export function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso
     const [cantidades, setCantidades] = useState({});
     const [motivoOpcion, setMotivoOpcion] = useState('');
     const [motivoLibre, setMotivoLibre] = useState('');
-    const [entradaRetiro, setEntradaRetiro] = useState('documento');
+    const [entradaRetiro, setEntradaRetiro] = useState(productos.length ? 'catalogo' : 'documento');
     const [documentosRetiro, setDocumentosRetiro] = useState([]);
     const [previewsDocumentos, setPreviewsDocumentos] = useState([]);
     const [evidenciasRetiro, setEvidenciasRetiro] = useState([]);
@@ -272,7 +263,7 @@ export function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso
         setPreviewAnexo([{ url, name: evidenciaAnexo.name, mime: evidenciaAnexo.type }]);
         return () => URL.revokeObjectURL(url);
     }, [evidenciaAnexo]);
-    const mostrarBusqueda = soloDetalle || productos.length === 0 || manual;
+    const mostrarBusqueda = productos.length === 0 || manual;
     const anexos = Array.isArray(solicitud?.anexo_sin_remision) ? solicitud.anexo_sin_remision : [];
     const retiros = Array.isArray(solicitud?.retiro_piezas) ? solicitud.retiro_piezas : [];
     const campo = `${THEME_INPUT} w-full min-h-[44px] text-base`;
@@ -321,6 +312,7 @@ export function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso
         if (nota.trim()) form.append('condicion', nota.trim());
         if (entrada === 'catalogo') {
             seleccionadas.forEach((pieza, indice) => {
+                if (pieza.revision_id) form.append(`piezas[${indice}][revision_id]`, String(pieza.revision_id));
                 form.append(`piezas[${indice}][sku]`, pieza.sku);
                 form.append(`piezas[${indice}][descripcion]`, pieza.descripcion);
                 form.append(`piezas[${indice}][cantidad]`, String(pieza.cantidad));
@@ -376,16 +368,15 @@ export function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso
     const solicitarRetiro = async () => {
         if (ocupado) return;
         const motivo = motivoOpcion === 'Otro' ? motivoLibre.trim() : motivoOpcion;
-        const desdeLista = soloDetalle
-            ? []
-            : productos
+        const desdeLista = productos
                 .filter((pieza) => marcadas[pieza.id])
                 .map((pieza) => ({
                     sku: pieza.sku,
+                    revision_id: pieza.revision_id,
                     descripcion: pieza.descripcion,
                     cantidad: Math.max(1, Number(cantidades[pieza.id] || pieza.cantidad) || 1),
                 }))
-                .filter((pieza) => pieza.sku && pieza.descripcion);
+                .filter((pieza) => (pieza.sku || pieza.revision_id) && pieza.descripcion);
         const elegidas = mostrarBusqueda ? [...desdeLista] : desdeLista;
         if (mostrarBusqueda) {
             agregadas.forEach((pieza) => {
@@ -414,6 +405,7 @@ export function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso
         form.append('motivo_opcion', motivoOpcion);
         if (entradaRetiro === 'catalogo') {
             elegidas.forEach((pieza, indice) => {
+                if (pieza.revision_id) form.append(`piezas[${indice}][revision_id]`, String(pieza.revision_id));
                 form.append(`piezas[${indice}][sku]`, pieza.sku);
                 form.append(`piezas[${indice}][descripcion]`, pieza.descripcion);
                 form.append(`piezas[${indice}][cantidad]`, String(pieza.cantidad));
@@ -555,14 +547,14 @@ export function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso
                             disabled={ocupado}
                         />
                     )}
-                    {entradaRetiro === 'catalogo' && !soloDetalle && productos.length > 0 && (
+                    {entradaRetiro === 'catalogo' && productos.length > 0 && (
                         <ul className="m-0 pl-0 list-none grid gap-2">
                             {productos.map((pieza) => (
                                 <li key={pieza.id} className="grid gap-2 rounded-lg border theme-border px-3 py-2 sm:grid-cols-[minmax(0,1fr)_6rem] sm:items-center">
                                     <label className="flex items-start gap-2 text-sm theme-text-main">
                                         <input
                                             type="checkbox"
-                                            className="mt-1"
+                                            className="gelia-checkbox mt-1"
                                             checked={Boolean(marcadas[pieza.id])}
                                             onChange={() => alternar(pieza)}
                                         />
@@ -619,7 +611,7 @@ export function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso
                             )}
                         </div>
                     )}
-                    {entradaRetiro === 'catalogo' && !soloDetalle && productos.length > 0 && (
+                    {entradaRetiro === 'catalogo' && productos.length > 0 && (
                         <button type="button" className={`${GELIA_BTN_OUTLINE} min-h-[44px] justify-self-start`} onClick={() => setManual((actual) => !actual)}>
                             {manual ? 'Ocultar búsqueda' : 'La pieza no está en la respuesta'}
                         </button>
@@ -691,8 +683,8 @@ export function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso
                                 {lote.motivo}
                                 {` · ${lote.estado || 'pendiente'}`}
                                 {lote.solicitado_por ? ` · ${lote.solicitado_por}` : ''}
-                                {Array.isArray(lote.piezas) && lote.piezas.length > 0
-                                    ? ` · ${lote.piezas.map((pieza) => `${pieza.descripcion} (${pieza.cantidad})`).join(', ')}`
+                                {Array.isArray(lote.piezas_solicitadas || lote.piezas) && (lote.piezas_solicitadas || lote.piezas).length > 0
+                                    ? ` · ${(lote.piezas_solicitadas || lote.piezas).map((pieza) => `${pieza.descripcion} (${pieza.cantidad})`).join(', ')}`
                                     : ' · Pendiente de identificación por el auxiliar'}
                                 {lote.resultado ? ` · ${lote.resultado}` : ''}
                                 {Array.isArray(lote.documentos_piezas) && lote.documentos_piezas.length > 0

@@ -130,7 +130,7 @@ export default function ModalDetallePedido({ abierto, onClose, pedido }) {
                         { id: 'detalle-respuesta', label: respondeTienda ? 'Respuesta de Tienda' : 'Respuesta CEDIS' },
                         { id: 'detalle-compartido', label: 'Pedido compartido' },
                         { id: 'detalle-datos', label: 'Datos del pedido' },
-                        { id: 'detalle-envio', label: 'Entrega' },
+                        ...(!capturaActual ? [{ id: 'detalle-envio', label: 'Entrega' }] : []),
                         { id: 'detalle-documentos', label: 'Documentos' },
                     ]} />
                     <div className="gelia-modal-body p-4 md:p-6">
@@ -150,7 +150,7 @@ export default function ModalDetallePedido({ abierto, onClose, pedido }) {
                             <dl className="gelia-pedidos-resumen">
                                 <div><dt>{respondeTienda ? 'Respuesta de Tienda' : 'Respuesta CEDIS'}</dt><dd>{pedido.solicitud_preparacion?.revision_disponibilidad || pedido.tarea_preparacion?.respuesta?.respondida || pedido.pesaje_respondido_at ? 'Recibida' : (pedido.resguardo_apartado_at ? 'Apartado confirmado' : 'Pendiente')}</dd></div>
                                 {capturaActual ? <div><dt>Consulta</dt><dd>{pedido.consulta_cerrada || pedido.consulta_cerrada_at ? 'Cerrada' : 'Abierta'}</dd></div> : <div><dt>{pedidoRequiereLogistica(pedido) ? 'Peso cobrado' : 'Bultos aproximados'}</dt><dd>{pedidoRequiereLogistica(pedido) ? `${pedido.peso_cobrado_guia_kg ?? '—'} kg` : (pedido.numero_cajas ?? '—')}</dd></div>}
-                                <div><dt>Total a cobrar</dt><dd>{formatearMoneda(pedido.total_a_cobrar)}</dd></div>
+                                {(!capturaActual || pedido.consulta_cerrada || pedido.consulta_cerrada_at) && <div><dt>{capturaActual && pedido.solicitud_preparacion?.cobertura_tienda?.tipo === 'apartado' ? 'Pago al recoger' : 'Importe'}</dt><dd>{capturaActual && pedido.solicitud_preparacion?.cobertura_tienda?.tipo === 'apartado' ? 'Se paga en tienda' : formatearMoneda(pedido.total_a_cobrar)}</dd></div>}
                             </dl>
                         {capturaActual ? <ConsultaSolicitudTienda pedido={pedido} /> : <SeccionRevisionFisicaPedido
                             pedido={pedido}
@@ -165,6 +165,17 @@ export default function ModalDetallePedido({ abierto, onClose, pedido }) {
                                 <p className="text-sm theme-text-muted m-0 px-1">La revisión y sus evidencias aparecerán aquí cuando {respondeTienda ? 'Tienda registre su respuesta' : 'CEDIS registre su respuesta'}.</p>
                             )}
                         </section>
+                        {capturaActual ? <section id="detalle-datos" tabIndex={-1} className="gelia-pedidos-seccion space-y-4">
+                            <h3 className="gelia-pedidos-seccion-titulo">Recolección en tienda</h3>
+                            <dl className="grid grid-cols-2 gap-4">
+                                <Campo label="Consulta" value={respondeTienda ? 'Tienda' : 'CEDIS'} />
+                                <Campo label="Sucursal de recolección" value={pedido.sucursal_destino?.nombre || pedido.sucursal_destino_nombre || 'Por confirmar'} />
+                                {pedido.almacen?.nombre && <Campo label="Procedencia" value={pedido.almacen.nombre} />}
+                                <Campo label="Pago" value={({apartado: 'Al recoger', transferencia: 'Transferencia', credito: 'Crédito'})[pedido.solicitud_preparacion?.cobertura_tienda?.tipo] || 'Por definir'} />
+                                {pedido.numero_remision && <Campo label="Remisión" value={pedido.numero_remision} />}
+                                {(pedido.consulta_cerrada || pedido.consulta_cerrada_at) && <Campo label="Mercancía" value={formatearMoneda(pedido.total_mercancia)} />}
+                            </dl>
+                        </section> : <>
                         <section id="detalle-datos" tabIndex={-1} className="gelia-pedidos-seccion space-y-4">
                         <h3 className="gelia-pedidos-seccion-titulo flex items-center gap-2"><ClipboardCheck className="w-4 h-4 theme-text-muted" aria-hidden="true" /> Datos del pedido</h3>
                         <dl className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-5">
@@ -213,7 +224,8 @@ export default function ModalDetallePedido({ abierto, onClose, pedido }) {
                             <Campo label="Total a cobrar" value={formatearMoneda(pedido.total_a_cobrar)} />
                         </dl>
                         </section>
-                        {(pedido.cajas || []).length > 0 && (
+                        </>}
+                        {!capturaActual && (pedido.cajas || []).length > 0 && (
                             <section className="gelia-pedidos-seccion space-y-3">
                                 <h3 className="gelia-pedidos-seccion-titulo flex items-center gap-2"><Package className="w-4 h-4 theme-text-muted" aria-hidden="true" /> Envíos y pesaje</h3>
                                 {[...(pedido.cajas || [])].sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)).map((c, idx) => (
@@ -241,6 +253,7 @@ export default function ModalDetallePedido({ abierto, onClose, pedido }) {
                                 ))}
                             </section>
                         )}
+                        {!capturaActual && <>
                         <section id="detalle-envio" tabIndex={-1} className="gelia-pedidos-seccion space-y-4">
                             <SeccionGuiaRastreo pedido={pedido} onVerPdf={setDocPreview} />
                             <div className="flex items-center justify-between gap-2">
@@ -266,6 +279,7 @@ export default function ModalDetallePedido({ abierto, onClose, pedido }) {
                             )}
                             <dl><Campo label="Comentarios" value={pedido.comentarios_drive} /></dl>
                         </section>
+                        </>}
                         <section id="detalle-documentos" tabIndex={-1} className="gelia-pedidos-seccion space-y-3">
                         <h3 className="gelia-pedidos-seccion-titulo flex items-center gap-2"><FileText className="w-4 h-4 theme-text-muted" aria-hidden="true" /> Documentos y apartado</h3>
                         {!docsSinGuia.filter((d) => d.tipo !== 'evidencia_condicion').length && !pedido.detalle_resguardo_apartado && <p className="text-sm theme-text-muted m-0">Sin documentos adicionales.</p>}

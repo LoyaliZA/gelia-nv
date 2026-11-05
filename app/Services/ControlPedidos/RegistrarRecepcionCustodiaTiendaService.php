@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Support\ControlPedidos\EstatusSucursalPedidoBma;
 use App\Support\ControlPedidos\InstruccionEntrega;
 use App\Support\ControlPedidos\MaquinaEstadosCumplimientoFisico;
+use App\Support\ControlPedidos\TransferenciaT02;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -25,8 +26,8 @@ final class RegistrarRecepcionCustodiaTiendaService
 
     public function ejecutar(PedidoBmaTareaPreparacion $tarea, User $usuario): PedidoBmaTareaPreparacion
     {
-        if (\App\Support\ControlPedidos\TransferenciaT02::documental($tarea->pedido)) {
-            throw ValidationException::withMessages(['custodia' => 'En T-02 registre por separado la recepción de bolsas y su ubicación de custodia.']);
+        if (TransferenciaT02::documental($tarea->pedido)) {
+            throw ValidationException::withMessages(['custodia' => 'Registre la recepción de bolsas y su ubicación de resguardo por separado.']);
         }
         if (! $usuario->can('control_pedidos.tienda.responder') && ! $usuario->can('control_pedidos.tienda.trasladar')) {
             throw ValidationException::withMessages([

@@ -5,15 +5,18 @@ namespace App\Models\ControlPedidos;
 use App\Models\Almacen;
 use App\Models\CatalogoBanco;
 use App\Models\Cliente;
+use App\Models\ClienteDireccion;
+use App\Models\Concerns\BelongsToUsuario;
 use App\Models\PuntoVenta\ResguardoPdv;
-use App\Models\Sucursal;
 use App\Models\SaldosAFavor\PedidoBmaPago;
 use App\Models\SaldosAFavor\SafIncidencia;
 use App\Models\SaldosAFavor\SafPedidoAplicacion;
-use App\Models\Concerns\BelongsToUsuario;
-use App\Models\User;
+use App\Models\Sucursal;
+use App\Services\ControlPedidos\FusionarSolicitudPreparacionPedido;
 use App\Support\ControlPedidos\AlmacenPdv;
+use App\Support\ControlPedidos\ApartadoT01;
 use App\Support\ControlPedidos\MaquinaEstadosPedidoBma;
+use App\Support\ControlPedidos\RevisionCapturaPedido;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -31,15 +34,23 @@ class PedidoBma extends Model
     protected $table = 'pedidos_bma';
 
     public const ESTATUS_ENVIO_COMPLETO = 'completo';
+
     public const ESTATUS_ENVIO_PENDIENTE_REGULARIZACION = 'pendiente_regularizacion';
+
     public const ESTATUS_ENVIO_PENDIENTE_REVISION_ANEXO = 'pendiente_revision_anexo';
+
     public const ESTATUS_ENVIO_ANEXO_RECHAZADO = 'anexo_rechazado';
+
     public const ESTATUS_ENVIO_PENDIENTE_LIBERACION = 'pendiente_liberacion';
+
     public const ESTATUS_ENVIO_PENDIENTE_CONSOLIDACION = 'pendiente_consolidacion';
+
     public const ESTATUS_ENVIO_CONSOLIDADO = 'consolidado';
+
     public const ESTATUS_ENVIO_PENDIENTE_PESAJE = 'pendiente_pesaje';
 
     public const ESTATUS_ENVIO_APARTADO_CONFIRMADO = 'apartado_confirmado';
+
     public const ESTATUS_ENVIO_PESAJE_LISTO = 'pesaje_listo';
 
     public const ESTATUS_SUCURSAL_EN_TRANSITO = 'en_transito';
@@ -53,8 +64,11 @@ class PedidoBma extends Model
     public const ESTATUS_SUCURSAL_EN_CUSTODIA = 'en_custodia';
 
     public const MOTIVO_REPESAJE_ANEXO_PIEZAS = 'anexo_piezas';
+
     public const MOTIVO_REPESAJE_QUITA_PIEZAS = 'quita_piezas';
+
     public const MOTIVO_REPESAJE_CAMBIO_SURTIDO = 'cambio_surtido';
+
     public const MOTIVO_REPESAJE_OTRO = 'otro';
 
     public const MOTIVOS_REPESAJE = [
@@ -90,7 +104,7 @@ class PedidoBma extends Model
 
     public function getBaseCapturaAttribute(): string
     {
-        return \App\Support\ControlPedidos\RevisionCapturaPedido::base($this);
+        return RevisionCapturaPedido::base($this);
     }
 
     protected $fillable = [
@@ -236,12 +250,12 @@ class PedidoBma extends Model
      */
     public function getEsT01DocumentalAttribute(): bool
     {
-        return \App\Support\ControlPedidos\ApartadoT01::aplica($this);
+        return ApartadoT01::aplica($this);
     }
 
     public function getSolicitudPreparacionAttribute(): ?array
     {
-        return app(\App\Services\ControlPedidos\FusionarSolicitudPreparacionPedido::class)
+        return app(FusionarSolicitudPreparacionPedido::class)
             ->normalizar($this->solicitud_preparacion_json);
     }
 
@@ -257,7 +271,7 @@ class PedidoBma extends Model
 
     public function clienteDireccion(): BelongsTo
     {
-        return $this->belongsTo(\App\Models\ClienteDireccion::class, 'cliente_direccion_id');
+        return $this->belongsTo(ClienteDireccion::class, 'cliente_direccion_id');
     }
 
     public function direccionesSnapshot(): HasMany
@@ -265,7 +279,7 @@ class PedidoBma extends Model
         return $this->hasMany(PedidoBmaDireccion::class, 'pedido_bma_id');
     }
 
-    public function direccionVigente(): \Illuminate\Database\Eloquent\Relations\HasOne
+    public function direccionVigente(): HasOne
     {
         return $this->hasOne(PedidoBmaDireccion::class, 'pedido_bma_id')->where('es_vigente', true);
     }
@@ -910,7 +924,7 @@ class PedidoBma extends Model
     public function tieneCaratulaMunicipalPendiente(): bool
     {
         return $this->tareasPreparacion()
-            ->whereHas('modalidad', fn ($q) => $q->where('codigo', \App\Models\ControlPedidos\CatalogoModalidadPreparacionPedido::CODIGO_ENVIO_MUNICIPIO))
+            ->whereHas('modalidad', fn ($q) => $q->where('codigo', CatalogoModalidadPreparacionPedido::CODIGO_ENVIO_MUNICIPIO))
             ->whereNotIn('estado', [
                 PedidoBmaTareaPreparacion::ESTADO_RESPONDIDA,
                 PedidoBmaTareaPreparacion::ESTADO_CANCELADA,
@@ -1089,6 +1103,9 @@ class PedidoBma extends Model
         if (! $this->esEditablePorVendedora()) {
             return false;
         }
+        if ($this->esConsultaDisponibilidadCedis()) {
+            return ! $this->consulta_actualizacion_pendiente && $this->motivoBloqueoCierreConsultaTienda() === null;
+        }
         if ($this->estatus_envio === self::ESTATUS_ENVIO_PENDIENTE_PESAJE && ! $this->listaParaCerrarConsultaTienda()) {
             return false;
         }
@@ -1113,6 +1130,15 @@ class PedidoBma extends Model
         return $this->tienePesajeRespondido();
     }
 
+    /** Consulta documental de Tienda en CEDIS; no sustituye el pesaje de envíos. */
+    public function esConsultaDisponibilidadCedis(): bool
+    {
+        $json = $this->solicitud_preparacion_json ?? [];
+
+        return ($json['modalidad_entrega'] ?? null) === 'tienda'
+            && ($json['area_revision'] ?? null) === 'control_pedidos';
+    }
+
     public function esConsultaDisponibilidadTienda(): bool
     {
         $json = is_array($this->solicitud_preparacion_json) ? $this->solicitud_preparacion_json : [];
@@ -1127,7 +1153,7 @@ class PedidoBma extends Model
 
     public function motivoBloqueoCierreConsultaTienda(): ?string
     {
-        if (! $this->esConsultaDisponibilidadTienda()) {
+        if (! $this->esConsultaDisponibilidadTienda() && ! $this->esConsultaDisponibilidadCedis()) {
             return null;
         }
         $json = is_array($this->solicitud_preparacion_json) ? $this->solicitud_preparacion_json : [];
@@ -1183,12 +1209,15 @@ class PedidoBma extends Model
 
     public function motivoBloqueoEntregaTienda(): ?string
     {
-        if ($this->tieneAjusteTiendaPendiente()) return 'Hay un anexo o retiro pendiente de atención. Resuélvalo antes de entregar.';
+        if ($this->tieneAjusteTiendaPendiente()) {
+            return 'Hay un anexo o retiro pendiente de atención. Resuélvalo antes de entregar.';
+        }
         foreach ((array) ($this->solicitud_preparacion_json['anexo_sin_remision'] ?? []) as $anexo) {
             if (is_array($anexo) && ($anexo['estado'] ?? null) === 'disponible' && ! isset($anexo['separada_at'])) {
                 return 'Falta confirmar la separación física del anexo antes de entregar.';
             }
         }
+
         return null;
     }
 
@@ -1452,19 +1481,19 @@ class PedidoBma extends Model
     public function guiaSoloLecturaHastaEmpaque(): bool
     {
         return $this->estatus?->fase_ciclo === CatalogoEstatusPedido::FASE_EN_CEDIS
-            && !empty($this->numero_rastreo)
+            && ! empty($this->numero_rastreo)
             && $this->empacado_at === null;
     }
 
     public function puedeAsignarGuia(): bool
     {
-        if ($this->es_resguardo || !empty($this->numero_rastreo) || $this->cliente_proporciona_guia) {
+        if ($this->es_resguardo || ! empty($this->numero_rastreo) || $this->cliente_proporciona_guia) {
             return false;
         }
 
         $this->loadMissing(['paqueteria', 'origen']);
 
-        if (!$this->ofreceRastreo()) {
+        if (! $this->ofreceRastreo()) {
             return false;
         }
 
@@ -1547,7 +1576,9 @@ class PedidoBma extends Model
     {
         if ($this->tieneSinExistenciaAbierta()) {
             throw new \RuntimeException(
-                'Hay productos sin existencias sin atender. Ventas debe elegir una acción (retirar, sustituir, esperar o cancelar) antes de continuar.'
+                ($this->solicitud_preparacion_json['modalidad_entrega'] ?? '') === 'tienda'
+                    ? 'Hay piezas sin existencias pendientes. Retíralas desde Ajuste de piezas antes de continuar.'
+                    : 'Hay productos sin existencias sin atender. Ventas debe elegir una acción antes de continuar.'
             );
         }
     }
@@ -1582,7 +1613,7 @@ class PedidoBma extends Model
         return in_array($this->estatus?->fase_ciclo, [
             CatalogoEstatusPedido::FASE_PENDIENTE_DE_ENVIO,
             CatalogoEstatusPedido::FASE_ENVIADO,
-        ], true) && !empty($this->numero_rastreo);
+        ], true) && ! empty($this->numero_rastreo);
     }
 
     public function puedeMarcarEnviado(): bool

@@ -3,8 +3,8 @@
 namespace App\Services\ControlPedidos;
 
 use App\Models\Almacen;
-use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\PedidoBma;
+use App\Models\ControlPedidos\PedidoBmaCumplimientoEvento;
 use App\Models\ControlPedidos\PedidoBmaDocumento;
 use App\Models\PuntoVenta\ResguardoPdv;
 use App\Models\PuntoVenta\ResguardoPdvBulto;
@@ -13,9 +13,14 @@ use App\Models\PuntoVenta\ResguardoPdvEvento;
 use App\Models\User;
 use App\Services\PuntoVenta\Resguardos\RegistrarEntregaResguardoPdvService;
 use App\Support\ControlPedidos\AlmacenPdv;
+use App\Support\ControlPedidos\AtencionMismoDiaTienda;
 use App\Support\ControlPedidos\EstatusSucursalPedidoBma;
+use App\Support\ControlPedidos\InstruccionEntrega;
+use App\Support\ControlPedidos\MaquinaEstadosCumplimientoFisico;
 use App\Support\ControlPedidos\TransferenciaT02;
 use App\Support\ControlPedidos\VisibilidadPedidoBma;
+use App\Support\PuntoVenta\Resguardos\GeneradorCodigoEtiquetaResguardoPdv;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -54,10 +59,10 @@ final class TransferenciaTiendaService
         $this->assertVisible($pedido, $actor);
         $json = $pedido->solicitud_preparacion_json ?? [];
         $operacion = $json['transferencia_tienda'] ?? [];
-        $md = \App\Support\ControlPedidos\AtencionMismoDiaTienda::datos($pedido);
+        $md = AtencionMismoDiaTienda::datos($pedido);
         $resguardo = $this->resguardo($pedido);
         $remision = $pedido->documentos()->where('tipo', PedidoBmaDocumento::TIPO_REMISION)->where('activo', true)->oldest()->first();
-        $desde = isset($json['remision_tienda']['emitida_at']) ? \Carbon\Carbon::parse($json['remision_tienda']['emitida_at']) : $remision?->created_at;
+        $desde = isset($json['remision_tienda']['emitida_at']) ? Carbon::parse($json['remision_tienda']['emitida_at']) : $remision?->created_at;
         $limite = $md ? null : $desde?->copy()->addDays(app(ConfiguracionOperativaTienda::class)->diasRecoleccion($pedido));
         $estado = match ($resguardo?->estado) {
             ResguardoPdv::ESTADO_ENTREGADO => 'entregada',
@@ -144,19 +149,23 @@ final class TransferenciaTiendaService
             AssertPedidoNoBloqueadoFase7::assert($pedido);
             $pedido->assertSinExistenciaAtendida();
             if (in_array($accion, ['preparar', 'salida'], true) && ($json['area_revision'] ?? '') === 'preparacion_tienda') {
-                \App\Support\ControlPedidos\InstruccionEntrega::assertEjecutable($pedido->instruccionEntregaVigente);
+                InstruccionEntrega::assertEjecutable($pedido->instruccionEntregaVigente);
             }
             app(ValidarSucursalDestinoPedidoBma::class)->ejecutar($pedido, (int) $pedido->sucursal_destino_id, exigirSiAplica: true);
             if ($accion === 'continuar_posterior') {
                 $motivo = trim($datos['observaciones'] ?? '');
-                if ($motivo === '') throw ValidationException::withMessages(['observaciones' => 'Registre el acuerdo con el cliente para continuar con recolección posterior.']);
+                if ($motivo === '') {
+                    throw ValidationException::withMessages(['observaciones' => 'Registre el acuerdo con el cliente para continuar con recolección posterior.']);
+                }
                 $json['tienda_md_continuacion'] = ['destino' => 'T-02', 'acuerdo' => $motivo, 'por_id' => $actor->id, 'por' => $actor->name,
                     'fecha' => now()->toIso8601String(), 'reporte_original' => $json['tienda_md_reporte'] ?? null];
                 $json['atencion_tienda'] = 'no';
                 $json['caso_tienda'] = ($json['area_revision'] ?? '') === 'control_pedidos' ? 'consultar_cedis' : 'revisar_apartar';
                 $pedido->update(['solicitud_preparacion_json' => $json, 'prioridad_md' => false]);
             } elseif ($accion === 'gestionar') {
-                if (trim($datos['observaciones'] ?? '') === '') throw ValidationException::withMessages(['observaciones' => 'Describa el seguimiento con el cliente.']);
+                if (trim($datos['observaciones'] ?? '') === '') {
+                    throw ValidationException::withMessages(['observaciones' => 'Describa el seguimiento con el cliente.']);
+                }
                 $operacion['gestiones'][] = ['nota' => trim($datos['observaciones']), 'por_id' => $actor->id, 'por' => $actor->name, 'fecha' => now()->toIso8601String()];
             } elseif ($accion === 'preparar') {
                 app(MarcarEmpacadoPedidoBmaService::class)->ejecutar($pedido, $actor->id, [$pedido->id => $datos['bultos']]);
@@ -176,7 +185,7 @@ final class TransferenciaTiendaService
                 foreach ($pedido->bultosEmpaque as $bulto) {
                     $resguardo->bultos()->firstOrCreate(['folio' => 'BOLSA-'.$pedido->id.'-'.$bulto->numero], [
                         'pedido_bma_id' => $pedido->id, 'tipo' => ResguardoPdvBulto::TIPO_BOLSA,
-                        'codigo_etiqueta' => \App\Support\PuntoVenta\Resguardos\GeneradorCodigoEtiquetaResguardoPdv::generar(),
+                        'codigo_etiqueta' => GeneradorCodigoEtiquetaResguardoPdv::generar(),
                         'piezas' => 0, 'condicion' => 'bueno', 'estado' => ResguardoPdvBulto::ESTADO_RECIBIDO_GERENTE,
                         'recepcion_at' => now(), 'recepcion_por_id' => $actor->id, 'version' => 1,
                     ]);
@@ -193,7 +202,9 @@ final class TransferenciaTiendaService
                 $resguardo = $this->resguardo($pedido, true);
                 $anterior = $resguardo->estado;
                 $ubicacion = trim($datos['ubicacion']);
-                if ($ubicacion === '') throw ValidationException::withMessages(['ubicacion' => 'Identifique la ubicación de custodia.']);
+                if ($ubicacion === '') {
+                    throw ValidationException::withMessages(['ubicacion' => 'Identifique la ubicación de custodia.']);
+                }
                 $snapshot = array_merge($resguardo->snapshot_json ?? [], ['ubicacion_t02' => $ubicacion, 'almacen_origen_id' => $pedido->almacen_id]);
                 $resguardo->bultos()->update(['estado' => ResguardoPdvBulto::ESTADO_EN_CUSTODIA, 'custodia_at' => now(), 'custodia_por_id' => $actor->id]);
                 $resguardo->update(['estado' => ResguardoPdv::ESTADO_EN_CUSTODIA, 'almacen_id' => $almacen->id,
@@ -208,7 +219,7 @@ final class TransferenciaTiendaService
                 $entregado = app(RegistrarEntregaResguardoPdvService::class)->ejecutar($resguardo, $actor, $resguardo->version,
                     'entrega-t02:'.$resguardo->id, ResguardoPdvEntrega::RELACION_TITULAR, trim($datos['receptor']),
                     RegistrarEntregaResguardoPdvService::METODO_VALIDACION_FOTOGRAFIA_T02, $datos['foto'],
-                    'Entrega T-02 con fotografía.');
+                    'Entrega en tienda con fotografía.');
                 if (! app(InformarEntregaResguardoPdvService::class)->ejecutar($entregado, $entregado->entregas()->latest('id')->firstOrFail(), $actor->id)) {
                     throw ValidationException::withMessages(['entrega' => 'No se pudo reflejar la entrega. No se confirmó la operación.']);
                 }
@@ -219,19 +230,23 @@ final class TransferenciaTiendaService
             // Nested services may have persisted inventory/financial metadata. Preserve it.
             $pedido->refresh();
             $json = $pedido->solicitud_preparacion_json ?? [];
-            if ($accion !== 'gestionar') $operacion['historial'][$accion] = ['por_id' => $actor->id, 'por' => $actor->name, 'fecha' => now()->toIso8601String()];
+            if ($accion !== 'gestionar') {
+                $operacion['historial'][$accion] = ['por_id' => $actor->id, 'por' => $actor->name, 'fecha' => now()->toIso8601String()];
+            }
             $operacion['version'] = (int) ($operacion['version'] ?? 0) + 1;
             $json['transferencia_tienda'] = $operacion;
             $pedido->update(['solicitud_preparacion_json' => $json]);
-            if ($accion !== 'gestionar') app(NotificarPedidoBmaService::class)->ejecutar($pedido, 'pedido_transferencia_tienda',
-                match ($accion) {
-                    'preparar' => 'Bolsas preparadas. Falta confirmar su salida o entrega interna a custodia.',
-                    'salida' => 'Mercancía enviada a la sucursal de recolección. Falta verificar la recepción.',
-                    'recibir' => 'Bolsas verificadas en la sucursal. Falta identificar su custodia.',
-                    'custodia' => 'Pedido en custodia identificada, listo para que el cliente lo recoja.',
-                    'continuar_posterior' => 'Ventas registró el acuerdo para continuar como T-02. Se conservan los pagos, la remisión y el reporte original de TIENDA MD.',
-                    default => 'Pedido entregado al cliente desde custodia, con fotografía.',
-                }, [], $actor->id, true);
+            if ($accion !== 'gestionar') {
+                app(NotificarPedidoBmaService::class)->ejecutar($pedido, 'pedido_transferencia_tienda',
+                    match ($accion) {
+                        'preparar' => 'Bolsas preparadas. Falta confirmar su salida o entrega interna a custodia.',
+                        'salida' => 'Mercancía enviada a la sucursal de recolección. Falta verificar la recepción.',
+                        'recibir' => 'Bolsas verificadas en la sucursal. Falta identificar su custodia.',
+                        'custodia' => 'Pedido en custodia identificada, listo para que el cliente lo recoja.',
+                        'continuar_posterior' => 'Ventas confirmó la recolección posterior y el resguardo en tienda. Se conservan los pagos, la remisión y el reporte original de TIENDA MD.',
+                        default => 'Pedido entregado al cliente desde custodia, con fotografía.',
+                    }, [], $actor->id, true);
+            }
 
             return $this->resumen($pedido->fresh(), $actor);
         });
@@ -246,7 +261,9 @@ final class TransferenciaTiendaService
     private function reflejarPreparacion(PedidoBma $pedido, User $actor, ?ResguardoPdv $resguardo = null): void
     {
         $tarea = $pedido->instruccionEntregaVigente;
-        if (! $tarea) return;
+        if (! $tarea) {
+            return;
+        }
         $cumplimiento = app(AsegurarCumplimientoFisicoService::class)->ejecutar($tarea);
         $cumplimiento = $cumplimiento->newQuery()->lockForUpdate()->findOrFail($cumplimiento->id);
         if ($resguardo && $cumplimiento->estado === 'POR_SEPARAR') {
@@ -254,12 +271,14 @@ final class TransferenciaTiendaService
             $cumplimiento->refresh();
         }
         $destino = $resguardo ? 'LISTA_PARA_SALIDA' : 'SEPARADA';
-        if ($cumplimiento->estado === 'APARTADO_CONFIRMADO') $destino = 'APARTADO_CONFIRMADO';
+        if ($cumplimiento->estado === 'APARTADO_CONFIRMADO') {
+            $destino = 'APARTADO_CONFIRMADO';
+        }
         if ($cumplimiento->estado !== $destino) {
-            \App\Support\ControlPedidos\MaquinaEstadosCumplimientoFisico::assertTransicion($cumplimiento->estado, $destino);
+            MaquinaEstadosCumplimientoFisico::assertTransicion($cumplimiento->estado, $destino);
             $cumplimiento->update(['estado' => $destino, 'version' => $cumplimiento->version + 1]);
             app(RegistrarEventoCumplimientoFisicoService::class)->ejecutar($cumplimiento,
-                $resguardo ? \App\Models\ControlPedidos\PedidoBmaCumplimientoEvento::TIPO_SALIDA_AUTORIZADA : \App\Models\ControlPedidos\PedidoBmaCumplimientoEvento::TIPO_PIEZA_SEPARADA,
+                $resguardo ? PedidoBmaCumplimientoEvento::TIPO_SALIDA_AUTORIZADA : PedidoBmaCumplimientoEvento::TIPO_PIEZA_SEPARADA,
                 $actor, 't02:'.$tarea->id.':'.$destino, $resguardo ? 'Pedido recibido en custodia identificada; falta entrega al cliente.' : 'Conjunto preparado en bolsas conforme a la consulta cerrada.');
         }
         $cumplimiento->update(['resguardo_pdv_id' => $resguardo?->id ?? $cumplimiento->resguardo_pdv_id,

@@ -15,17 +15,25 @@ use App\Models\ControlPedidos\PedidoBmaRevisionProducto;
 use App\Models\ControlPedidos\PedidoBmaTareaDocumento;
 use App\Models\ControlPedidos\PedidoBmaTareaPreparacion;
 use App\Models\Departamento;
+use App\Models\Inventario;
+use App\Models\Producto;
+use App\Models\SaldosAFavor\SafCredito;
+use App\Models\SaldosAFavor\SafCuenta;
 use App\Models\Sucursal;
 use App\Models\User;
+use App\Notifications\AlertaPedidoBma;
+use App\Services\ControlPedidos\CompromisoInventarioTienda;
 use App\Services\ControlPedidos\ResponderDisponibilidadInicialService;
 use App\Support\ControlPedidos\RegistrarPedidos\ExpedienteRegistrarPedidos;
 use App\Support\ControlPedidos\RespuestaPreparacionTienda;
 use App\Support\ControlPedidos\RevisionCapturaPedido;
-use Illuminate\Http\UploadedFile;
+use Carbon\Carbon;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\PermissionRegistrar;
@@ -217,10 +225,11 @@ class SolicitudRegistrarTiendaTest extends TestCase
 
     public function test_tienda_md_se_identifica_desde_la_solicitud_a_cedis_con_sucursal_sin_permiso_especial_md(): void
     {
-        \Carbon\Carbon::setTestNow(\Carbon\Carbon::parse('2026-11-04 11:00:00', 'America/Mexico_City'));
-        $this->beforeApplicationDestroyed(fn () => \Carbon\Carbon::setTestNow());
+        Carbon::setTestNow(Carbon::parse('2026-11-04 11:00:00', 'America/Mexico_City'));
+        $this->beforeApplicationDestroyed(fn () => Carbon::setTestNow());
         CatalogoModalidadPreparacionPedido::query()->firstOrCreate(['codigo' => 'RECOGE_TIENDA_TRANSFERENCIA'], ['nombre' => 'Transferencia', 'activo' => true]);
-        $pedido = $this->pedido(); $this->documento($pedido);
+        $pedido = $this->pedido();
+        $this->documento($pedido);
         $this->actingAs($this->usuario)->postJson('/control-pedidos/autoguardar', $this->captura($pedido, [
             'sucursal_destino_id' => $pedido->sucursal_destino_id,
             'solicitud_preparacion' => ['modalidad_entrega' => 'tienda', 'caso_tienda' => 'mismo_dia_pdv', 'area_revision' => 'control_pedidos',
@@ -398,6 +407,76 @@ class SolicitudRegistrarTiendaTest extends TestCase
         $this->assertSame(ResponderDisponibilidadInicialService::DECISION_EXCEPCIONES, $expediente['decision_pendiente']);
         $this->assertSame('Crema corporal', $expediente['excepciones'][0]['descripcion']);
         $this->assertNull($pieza->fresh()->resolucion);
+
+        $this->getJson('/control-pedidos/'.$pedido->id.'/pagos')->assertOk()
+            ->assertJsonPath('puede_cerrar_consulta', true);
+        // Una respuesta sustituida conserva el bloqueo aunque tenga incidencias registradas.
+        $json = $fresco->solicitud_preparacion_json;
+        $json['revision_disponibilidad']['vigente'] = false;
+        $fresco->update(['solicitud_preparacion_json' => $json]);
+        $this->getJson('/control-pedidos/'.$pedido->id.'/pagos')->assertOk()
+            ->assertJsonPath('puede_cerrar_consulta', false);
+        $this->postJson('/control-pedidos/'.$pedido->id.'/cerrar-consulta')->assertStatus(422);
+        $json['revision_disponibilidad']['vigente'] = true;
+        $json['anexo_sin_remision'] = [['entrada' => 'documento', 'documento_id' => 1]];
+        $fresco->update(['solicitud_preparacion_json' => $json]);
+        $this->assertFalse($fresco->fresh()->puedeCerrarConsulta());
+        unset($json['anexo_sin_remision']);
+        $fresco->update(['solicitud_preparacion_json' => $json]);
+        $this->postJson('/control-pedidos/'.$pedido->id.'/cerrar-consulta')->assertOk();
+        $this->assertTrue($fresco->fresh()->consultaCerrada());
+        $this->postJson('/control-pedidos/'.$pedido->id.'/cobertura-tienda', ['cobertura' => 'transferencia'])->assertOk();
+        $this->assertNull($fresco->fresh()->pago_validado_at);
+        $this->assertSame(0, PedidoBmaTareaPreparacion::query()->count());
+    }
+
+    public function test_ventas_retira_faltantes_sin_sku_y_conserva_pendiente_el_retiro_fisico(): void
+    {
+        $pedido = $this->pedido(['total_mercancia' => 899, 'solicitud_preparacion_json' => [
+            'modalidad_entrega' => 'tienda', 'area_revision' => 'control_pedidos',
+            'revision_disponibilidad' => ['estado' => 'excepciones_pendientes', 'vigente' => true],
+        ]]);
+        $faltante = $pedido->revisionesProducto()->create([
+            'descripcion_producto' => 'Crema sin SKU', 'cantidad_solicitada' => 2,
+            'estado_fisico' => 'sin_existencia', 'orden' => 1,
+        ]);
+        $ruta = "/control-pedidos/{$pedido->id}/retiro-piezas-tienda";
+        $this->actingAs($this->usuario)->postJson($ruta, [
+            'motivo' => 'Cliente acepta retirar el faltante',
+            'piezas' => [['revision_id' => $faltante->id, 'descripcion' => 'Crema sin SKU', 'cantidad' => 1]],
+        ])->assertUnprocessable();
+        $this->assertNull($faltante->fresh()->resolucion);
+        $this->postJson($ruta, [
+            'motivo' => 'Cliente acepta retirar el faltante',
+            'piezas' => [['revision_id' => $faltante->id, 'descripcion' => 'Crema sin SKU', 'cantidad' => 2]],
+        ])->assertOk();
+        $fresco = $pedido->fresh();
+        $this->assertSame('retirar', $faltante->fresh()->resolucion);
+        $this->assertFalse($fresco->tieneSinExistenciaAbierta());
+        $this->assertFalse($fresco->tieneAjusteTiendaPendiente());
+        $this->assertSame('aplicada', $fresco->solicitud_preparacion_json['retiro_piezas'][0]['estado']);
+        $this->assertTrue($fresco->puedeCerrarConsulta());
+        $this->assertEquals(899, $fresco->total_mercancia);
+        $this->assertNull($fresco->pago_validado_at);
+        $this->assertNull($fresco->numero_remision);
+        $this->assertSame(0, PedidoBmaTareaPreparacion::query()->count());
+        // Una selección ajena o ya atendida no se convierte en un retiro físico pendiente.
+        $this->postJson($ruta, ['motivo' => 'Repetido', 'piezas' => [
+            ['revision_id' => $faltante->id, 'descripcion' => 'Crema', 'cantidad' => 2],
+        ]])->assertUnprocessable();
+        $otro = $pedido->revisionesProducto()->create([
+            'sku' => 'SIN-STOCK', 'descripcion_producto' => 'Perfume agotado',
+            'cantidad_solicitada' => 1, 'estado_fisico' => 'sin_existencia', 'orden' => 2,
+        ]);
+        $this->postJson($ruta, ['motivo' => 'Ajustar ambas piezas', 'piezas' => [
+            ['sku' => 'SIN-STOCK', 'descripcion' => 'Perfume agotado', 'cantidad' => 1],
+            ['sku' => 'APARTADO', 'descripcion' => 'Perfume reservado', 'cantidad' => 1],
+        ]])->assertOk();
+        $fresco = $pedido->fresh();
+        $this->assertSame('retirar', $otro->fresh()->resolucion);
+        $this->assertTrue($fresco->tieneAjusteTiendaPendiente());
+        $this->assertFalse($fresco->puedeCerrarConsulta());
+        $this->assertSame('APARTADO', $fresco->solicitud_preparacion_json['retiro_piezas'][1]['piezas'][0]['sku']);
     }
 
     public function test_el_retiro_de_piezas_queda_documentado_despues_de_la_respuesta(): void
@@ -978,8 +1057,8 @@ class SolicitudRegistrarTiendaTest extends TestCase
         $json = $pedido->solicitud_preparacion_json;
         $json['revision_disponibilidad'] = ['estado' => 'sin_excepciones'];
         $pedido->update(['solicitud_preparacion_json' => $json]);
-        $producto = \App\Models\Producto::create(['folio' => 98731, 'sku' => 'ANEXO-REAL', 'descripcion' => 'Aroma anexo', 'activo' => true]);
-        $inventario = \App\Models\Inventario::create(['producto_id' => $producto->id, 'almacen_id' => $tarea->almacen_id, 'existencia' => 10, 'apartado' => 0]);
+        $producto = Producto::create(['folio' => 98731, 'sku' => 'ANEXO-REAL', 'descripcion' => 'Aroma anexo', 'activo' => true]);
+        $inventario = Inventario::create(['producto_id' => $producto->id, 'almacen_id' => $tarea->almacen_id, 'existencia' => 10, 'apartado' => 0]);
         $this->post('/control-pedidos/'.$pedido->id.'/anexo-tienda', ['entrada' => 'documento', 'evidencia' => UploadedFile::fake()->create('anexo.pdf', 10, 'application/pdf')], ['Accept' => 'application/json'])->assertOk();
         $url = '/control-pedidos/tienda/tareas/'.$tarea->id.'/anexo/atender';
         $this->post($url, ['indice' => 0, 'decision' => 'disponible', 'piezas' => [['producto_id' => $producto->id, 'cantidad' => 3]], 'evidencia' => UploadedFile::fake()->image('anexo.jpg')], ['Accept' => 'application/json'])->assertOk();
@@ -1004,10 +1083,10 @@ class SolicitudRegistrarTiendaTest extends TestCase
         $tarea = $this->solicitarTienda();
         $tarea->update(['estado' => 'RESPONDIDA', 'asignada_a_id' => $this->usuario->id]);
         $pedido = $tarea->pedido;
-        $producto = \App\Models\Producto::create(['folio' => 98732, 'sku' => 'RETIRO-PARCIAL', 'descripcion' => 'Aroma', 'activo' => true]);
-        $inventario = \App\Models\Inventario::create(['producto_id' => $producto->id, 'almacen_id' => $tarea->almacen_id, 'existencia' => 10, 'apartado' => 0]);
+        $producto = Producto::create(['folio' => 98732, 'sku' => 'RETIRO-PARCIAL', 'descripcion' => 'Aroma', 'activo' => true]);
+        $inventario = Inventario::create(['producto_id' => $producto->id, 'almacen_id' => $tarea->almacen_id, 'existencia' => 10, 'apartado' => 0]);
         $tarea->productos()->create(['pedido_bma_origen_id' => $pedido->id, 'producto_id' => $producto->id, 'sku' => $producto->sku, 'descripcion_snapshot' => 'Aroma', 'cantidad_solicitada' => 3, 'cantidad_encontrada' => 3, 'estado_fisico' => 'bueno', 'orden' => 1]);
-        app(\App\Services\ControlPedidos\CompromisoInventarioTienda::class)->comprometer($pedido, $tarea->almacen_id, $producto->id, '3', 'reserva-prueba', $producto->sku);
+        app(CompromisoInventarioTienda::class)->comprometer($pedido, $tarea->almacen_id, $producto->id, '3', 'reserva-prueba', $producto->sku);
         $json = $pedido->fresh()->solicitud_preparacion_json;
         $json['retiro_piezas'] = [['version' => 1, 'entrada' => 'catalogo', 'estado' => 'pendiente', 'piezas' => [['sku' => $producto->sku, 'descripcion' => 'Aroma', 'cantidad' => 1]]]];
         $pedido->update(['solicitud_preparacion_json' => $json]);
@@ -1019,7 +1098,7 @@ class SolicitudRegistrarTiendaTest extends TestCase
 
     public function test_confirmar_la_separacion_no_reabre_la_consulta_ya_cerrada(): void
     {
-        $this->travelTo(\Carbon\Carbon::parse('2026-11-04 10:00:00', 'America/Mexico_City'));
+        $this->travelTo(Carbon::parse('2026-11-04 10:00:00', 'America/Mexico_City'));
         Storage::fake('public');
         $this->permitirRevision();
         $tarea = $this->solicitarTienda();
@@ -1030,8 +1109,8 @@ class SolicitudRegistrarTiendaTest extends TestCase
         $this->postJson('/control-pedidos/'.$pedido->id.'/cerrar-consulta')->assertOk();
         $this->postJson('/control-pedidos/'.$pedido->id.'/cobertura-tienda', ['cobertura' => 'apartado'])->assertOk();
         $this->postJson('/control-pedidos/'.$pedido->id.'/confirmar-pedido-tienda')->assertOk();
-        $producto = \App\Models\Producto::create(['folio' => 98733, 'sku' => 'SEPARAR-REAL', 'descripcion' => 'Aroma', 'activo' => true]);
-        \App\Models\Inventario::create(['producto_id' => $producto->id, 'almacen_id' => $tarea->almacen_id, 'existencia' => 10, 'apartado' => 0]);
+        $producto = Producto::create(['folio' => 98733, 'sku' => 'SEPARAR-REAL', 'descripcion' => 'Aroma', 'activo' => true]);
+        Inventario::create(['producto_id' => $producto->id, 'almacen_id' => $tarea->almacen_id, 'existencia' => 10, 'apartado' => 0]);
         $this->getJson($url)->assertOk();
         $tarea->refresh();
         $this->postJson($url.'/apartado/confirmar', ['version' => $tarea->cumplimientoFisico->version, 'lineas' => [['producto_id' => $producto->id, 'cantidad' => 1, 'estado_fisico' => 'bueno']]])->assertOk();
@@ -1058,7 +1137,7 @@ class SolicitudRegistrarTiendaTest extends TestCase
         $tarea = $this->t01Cerrado();
         $pedido = $tarea->pedido;
         $primera = $pedido->fresh()->solicitud_preparacion_json['cobertura_tienda'];
-        $this->assertSame('17:00', \Carbon\Carbon::parse($primera['vence_at'])->timezone('America/Mexico_City')->format('H:i'));
+        $this->assertSame('17:00', Carbon::parse($primera['vence_at'])->timezone('America/Mexico_City')->format('H:i'));
         $this->travel(30)->minutes();
         $this->postJson('/control-pedidos/'.$pedido->id.'/cobertura-tienda', ['cobertura' => 'apartado'])->assertOk();
         $actual = $pedido->fresh()->solicitud_preparacion_json['cobertura_tienda'];
@@ -1109,13 +1188,13 @@ class SolicitudRegistrarTiendaTest extends TestCase
 
     public function test_t01_avisa_al_auxiliar_al_cerrar_y_a_ventas_al_liberar(): void
     {
-        \Illuminate\Support\Facades\Notification::fake();
+        Notification::fake();
         $tarea = $this->t01Cerrado(true);
-        \Illuminate\Support\Facades\Notification::assertSentTo($this->usuario, \App\Notifications\AlertaPedidoBma::class, fn ($alerta) => $alerta->tipoAlerta === 'pedido_separacion_aprobada');
+        Notification::assertSentTo($this->usuario, AlertaPedidoBma::class, fn ($alerta) => $alerta->tipoAlerta === 'pedido_separacion_aprobada');
         $vendedora = User::factory()->create(['departamento_id' => $this->departamento->id]);
         $tarea->pedido->update(['vendedor_id' => $vendedora->id]);
         $this->postJson('/control-pedidos/tienda/tareas/'.$tarea->id.'/apartado/liberar-pdv', ['version' => $tarea->cumplimientoFisico->version, 'motivo' => 'El cliente no acudió'])->assertOk();
-        \Illuminate\Support\Facades\Notification::assertSentTo($vendedora, \App\Notifications\AlertaPedidoBma::class, fn ($alerta) => $alerta->tipoAlerta === 'pedido_apartado_liberado');
+        Notification::assertSentTo($vendedora, AlertaPedidoBma::class, fn ($alerta) => $alerta->tipoAlerta === 'pedido_apartado_liberado');
     }
 
     public function test_t01_entregar_aplica_saf_reservado_una_vez_sin_crear_cobro(): void
@@ -1146,22 +1225,23 @@ class SolicitudRegistrarTiendaTest extends TestCase
         $this->assertFalse($pedido->esEditablePorVendedora());
     }
 
-    private function reservarSafT01(PedidoBma $pedido): \App\Models\SaldosAFavor\SafCredito
+    private function reservarSafT01(PedidoBma $pedido): SafCredito
     {
-        $cuenta = \App\Models\SaldosAFavor\SafCuenta::create(['cliente_id' => $pedido->cliente_id, 'moneda' => 'MXN']);
-        $credito = \App\Models\SaldosAFavor\SafCredito::create([
+        $cuenta = SafCuenta::create(['cliente_id' => $pedido->cliente_id, 'moneda' => 'MXN']);
+        $credito = SafCredito::create([
             'folio' => 'SAF-T01-'.$pedido->id, 'saf_cuenta_id' => $cuenta->id, 'cliente_id' => $pedido->cliente_id,
             'monto_original' => 100, 'monto_aplicado' => 0, 'monto_reservado' => 50, 'monto_disponible' => 50,
             'fecha_generacion' => now(), 'fecha_vencimiento' => now()->addYear(),
         ]);
         $pedido->safAplicaciones()->create(['saf_credito_id' => $credito->id, 'monto' => 50, 'estado' => 'reservado', 'reservado_por_id' => $this->usuario->id, 'reservado_at' => now()]);
         $pedido->update(['total_mercancia' => 100, 'saldo_a_favor' => 50, 'total_a_cobrar' => 50]);
+
         return $credito;
     }
 
     public function test_t01_guarda_modalidad_y_envia_confirmacion_al_auxiliar_sin_cobro_ni_duplicados(): void
     {
-        \Illuminate\Support\Facades\Notification::fake();
+        Notification::fake();
         $tarea = $this->t01Cerrado(false, false);
         $pedido = $tarea->pedido;
         $cobertura = $pedido->solicitud_preparacion_json['cobertura_tienda'];
@@ -1171,9 +1251,9 @@ class SolicitudRegistrarTiendaTest extends TestCase
         $url = '/control-pedidos/'.$pedido->id.'/confirmar-pedido-tienda';
         $this->postJson($url)->assertOk()->assertJsonPath('solicitud_preparacion.cobertura_tienda.confirmacion_enviada_por_id', $this->usuario->id);
         $this->postJson($url)->assertOk();
-        \Illuminate\Support\Facades\Notification::assertSentTo($this->usuario, \App\Notifications\AlertaPedidoBma::class,
+        Notification::assertSentTo($this->usuario, AlertaPedidoBma::class,
             fn ($alerta) => $alerta->tipoAlerta === 'pedido_confirmado_tienda');
-        $confirmaciones = \Illuminate\Support\Facades\Notification::sent($this->usuario, \App\Notifications\AlertaPedidoBma::class)
+        $confirmaciones = Notification::sent($this->usuario, AlertaPedidoBma::class)
             ->filter(fn ($alerta) => $alerta->tipoAlerta === 'pedido_confirmado_tienda');
         $this->assertCount(1, $confirmaciones);
         $this->postJson('/control-pedidos/'.$pedido->id.'/cobertura-tienda', ['cobertura' => 'apartado'])->assertOk();
@@ -1191,19 +1271,19 @@ class SolicitudRegistrarTiendaTest extends TestCase
         $json = $pedido->solicitud_preparacion_json;
         unset($json['cobertura_tienda']);
         $pedido->update(['solicitud_preparacion_json' => $json]);
-        $this->travelTo(\Carbon\Carbon::parse('2026-11-04 18:00:00', 'America/Mexico_City'));
+        $this->travelTo(Carbon::parse('2026-11-04 18:00:00', 'America/Mexico_City'));
         $this->postJson('/control-pedidos/'.$pedido->id.'/cobertura-tienda', ['cobertura' => 'apartado'])->assertOk()
             ->assertJsonPath('solicitud_preparacion.cobertura_tienda.tipo', 'apartado');
         $guardada = $pedido->fresh()->solicitud_preparacion_json['cobertura_tienda'];
         $this->assertNotEmpty($guardada['motivo_vigencia']);
-        $this->assertSame('17:00', \Carbon\Carbon::parse($guardada['vence_at'])->format('H:i'));
+        $this->assertSame('17:00', Carbon::parse($guardada['vence_at'])->format('H:i'));
         $this->postJson('/control-pedidos/'.$pedido->id.'/confirmar-pedido-tienda')->assertUnprocessable();
         $this->assertArrayNotHasKey('confirmacion_enviada_at', $pedido->fresh()->solicitud_preparacion_json['cobertura_tienda']);
     }
 
     private function t01Cerrado(bool $separar = false, bool $confirmar = true): PedidoBmaTareaPreparacion
     {
-        $this->travelTo(\Carbon\Carbon::parse('2026-11-04 10:00:00', 'America/Mexico_City'));
+        $this->travelTo(Carbon::parse('2026-11-04 10:00:00', 'America/Mexico_City'));
         Storage::fake('public');
         Storage::fake('local');
         CatalogoEstatusPedido::query()->firstOrCreate(['fase_ciclo' => CatalogoEstatusPedido::FASE_CANCELADO], ['codigo_interno' => 'CANCELADO', 'nombre_visual' => 'Cancelado', 'color_hex' => '#999999', 'orden' => 21, 'activo' => true]);
@@ -1215,10 +1295,15 @@ class SolicitudRegistrarTiendaTest extends TestCase
         $this->post($url.'/disponibilidad', ['confirmacion_explicita' => 1, 'evidencias' => [UploadedFile::fake()->image('conjunto.jpg')]], ['Accept' => 'application/json'])->assertOk();
         $this->postJson('/control-pedidos/'.$tarea->pedido_bma_id.'/cerrar-consulta')->assertOk();
         $this->postJson('/control-pedidos/'.$tarea->pedido_bma_id.'/cobertura-tienda', ['cobertura' => 'apartado'])->assertOk();
-        if ($confirmar) $this->postJson('/control-pedidos/'.$tarea->pedido_bma_id.'/confirmar-pedido-tienda')->assertOk();
+        if ($confirmar) {
+            $this->postJson('/control-pedidos/'.$tarea->pedido_bma_id.'/confirmar-pedido-tienda')->assertOk();
+        }
         $this->getJson($url)->assertOk()->assertJsonPath('tarea.pedido.es_t01_documental', true);
         $tarea->refresh();
-        if ($separar) $this->postJson($url.'/apartado/confirmar', ['version' => $tarea->cumplimientoFisico->version])->assertOk();
+        if ($separar) {
+            $this->postJson($url.'/apartado/confirmar', ['version' => $tarea->cumplimientoFisico->version])->assertOk();
+        }
+
         return $tarea->fresh(['cumplimientoFisico', 'pedido']);
     }
 

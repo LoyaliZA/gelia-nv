@@ -76,9 +76,13 @@ final class RegistrarRetiroPiezasTiendaService
             $orden += count($docsPiezas);
             $docsPeticion = $this->guardarArchivos($pedido, $archivosPeticion, $orden, PedidoBmaDocumento::RELACION_RETIRO_PETICION, 'Evidencia petición Cliente', $version);
 
+            $solicitadas = $lineas;
+            $retiradas = $entrada === 'catalogo' ? $this->retirarFaltantes($pedido, $usuario, $lineas, $motivo) : [];
+            $soloFaltantes = $retiradas !== [] && $lineas === [];
             $previos[] = [
                 'version' => $version,
-                'estado' => 'pendiente',
+                'estado' => $soloFaltantes ? 'aplicada' : 'pendiente',
+                ...($soloFaltantes ? ['atendido_at' => now()->toIso8601String(), 'atendido_por_id' => $usuario->id, 'atendido_por' => $usuario->name, 'revisiones_retiradas' => $retiradas, 'resultado' => 'Piezas sin existencias retiradas del pedido.'] : []),
                 'entrada' => $entrada,
                 'motivo' => $motivo,
                 'motivo_opcion' => $motivoOpcion,
@@ -86,12 +90,15 @@ final class RegistrarRetiroPiezasTiendaService
                 'solicitado_por_id' => $usuario->id,
                 'solicitado_por' => $usuario->name,
                 'piezas' => $lineas,
+                'piezas_solicitadas' => $solicitadas,
+                'faltantes_retirados' => $retiradas,
                 'documentos_piezas' => $docsPiezas,
                 'documentos_peticion' => $docsPeticion,
             ];
             $json['retiro_piezas'] = array_values($previos);
             if (is_array($json['revision_disponibilidad'] ?? null)) {
-                $json['revision_disponibilidad']['aceptacion_vigente'] = false;
+                $pedido->solicitud_preparacion_json = $json;
+                $json['revision_disponibilidad']['aceptacion_vigente'] = $retiradas !== [] && ! $pedido->tieneAjusteTiendaPendiente();
             }
             $pedido->update(['solicitud_preparacion_json' => $json, 'consulta_cerrada_at' => null, 'consulta_cerrada_por_id' => null]);
 
@@ -103,7 +110,7 @@ final class RegistrarRetiroPiezasTiendaService
                     $usuario->id,
                     $estatusId,
                     $estatusId,
-                    'Retiro de piezas solicitado. Quien revisó debe retirarlas. No hay pago ni entrega.',
+                    $soloFaltantes ? 'Piezas sin existencias retiradas del pedido por Ventas.' : 'Retiro de piezas solicitado. Quien revisó debe retirar las piezas apartadas.',
                     AccionesHistorialPedidoBma::COMPLEMENTO
                 );
             }
@@ -119,7 +126,7 @@ final class RegistrarRetiroPiezasTiendaService
             $this->notificar->ejecutar(
                 $pedido->fresh(['cliente', 'vendedor']),
                 'pedido_decision_cliente',
-                'Se solicitó el retiro de piezas. Continúe solo con las que siguen en el pedido.',
+                $soloFaltantes ? 'Ventas retiró las piezas sin existencias del pedido.' : 'Se solicitó el retiro de piezas. Continúe solo con las que siguen en el pedido.',
                 [$permiso],
                 $usuario->id,
                 true,
@@ -131,8 +138,52 @@ final class RegistrarRetiroPiezasTiendaService
     }
 
     /**
-     * @param  array<string, mixed>  $json
+     * @param  list<array<string, mixed>>  $piezas
+     * @return list<int>
      */
+    private function retirarFaltantes(PedidoBma $pedido, User $actor, array &$piezas, string $motivo): array
+    {
+        if (($pedido->solicitud_preparacion_json['modalidad_entrega'] ?? '') !== 'tienda') {
+            return [];
+        }
+        $encontradas = collect();
+        $pendientes = [];
+        foreach ($piezas as $pieza) {
+            $query = $pedido->revisionesProducto()->where('estado_fisico', 'sin_existencia')->whereNull('resolucion');
+            if (! empty($pieza['revision_id'])) {
+                $query->whereKey($pieza['revision_id']);
+            } else {
+                $query->whereRaw('lower(sku) = ?', [mb_strtolower($pieza['sku'])]);
+            }
+            $filas = $query->lockForUpdate()->get();
+            if ($filas->isEmpty()) {
+                if (! empty($pieza['revision_id'])) {
+                    throw ValidationException::withMessages(['piezas' => 'La pieza sin existencias ya no está pendiente en este pedido.']);
+                }
+
+                $pendientes[] = $pieza;
+
+                continue;
+            }
+            if ((int) $filas->sum('cantidad_solicitada') !== $pieza['cantidad']) {
+                throw ValidationException::withMessages(['piezas' => 'Indique la cantidad completa reportada sin existencias para retirarla.']);
+            }
+            foreach ($filas as $fila) {
+                if ($encontradas->has($fila->id)) {
+                    throw ValidationException::withMessages(['piezas' => 'La pieza está seleccionada más de una vez.']);
+                }
+                $encontradas->put($fila->id, $fila);
+            }
+        }
+        foreach ($encontradas as $fila) {
+            $fila->update(['resolucion' => 'retirar', 'resolucion_nota' => $motivo, 'resolucion_por_id' => $actor->id, 'resolucion_at' => now()]);
+        }
+
+        $piezas = $pendientes;
+
+        return $encontradas->keys()->all();
+    }
+
     private function hayRespuesta(PedidoBma $pedido, array $json): bool
     {
         $estado = $json['revision_disponibilidad']['estado'] ?? null;
@@ -161,11 +212,12 @@ final class RegistrarRetiroPiezasTiendaService
             $sku = trim((string) ($pieza['sku'] ?? ''));
             $descripcion = trim((string) ($pieza['descripcion'] ?? ''));
             $cantidad = (int) ($pieza['cantidad'] ?? 0);
-            if ($sku === '' || $descripcion === '' || $cantidad < 1) {
+            if (($sku === '' && empty($pieza['revision_id'])) || $descripcion === '' || $cantidad < 1) {
                 continue;
             }
             $salida[] = [
                 'sku' => $sku,
+                ...(! empty($pieza['revision_id']) ? ['revision_id' => (int) $pieza['revision_id']] : []),
                 'descripcion' => $descripcion,
                 'cantidad' => $cantidad,
             ];

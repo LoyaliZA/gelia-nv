@@ -1,3 +1,4 @@
+import { textoProcesoTienda } from './textoProcesoTienda';
 import React, { useState } from 'react';
 import { ChevronDown, ChevronUp, Paperclip } from 'lucide-react';
 import {
@@ -37,7 +38,7 @@ export default function TarjetaEntradaBitacora({
     requiereLogistica = true,
 }) {
     const [expandido, setExpandido] = useState(false);
-    const h = entrada;
+    const h = { ...entrada, comentarios: textoProcesoTienda(entrada.comentarios), accion_etiqueta: textoProcesoTienda(entrada.accion_etiqueta), accionEtiqueta: textoProcesoTienda(entrada.accionEtiqueta) };
     const estatusNuevo = h.estatus_nuevo || h.estatusNuevo;
     const estatusAnterior = h.estatus_anterior || h.estatusAnterior;
     const opcionesEstatus = { requiereLogistica };

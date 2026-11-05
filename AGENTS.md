@@ -41,3 +41,5 @@ Antes de analizar, crear o modificar una interfaz, leer [GUIA_DISENO_GELIA.md](G
 - Continuar con las decisiones ya autorizadas. No reiniciar una exploración ni solicitar de nuevo una aprobación existente por una recomendación genérica de una skill.
 
 Estas indicaciones se limitan al trabajo con interfaz. Un cambio de backend no inicia un rediseño. Las instrucciones de la sesión y las reglas del entorno conservan su precedencia.
+
+Ajuste del 5 de noviembre: nunca mostrar códigos de fichas de proceso en botones, avisos o movimientos de usuario; usar nombres de operación. Conservar los identificadores internos para compatibilidad. El retiro de un faltante reportado permite seleccionar su revisión incluso sin SKU, registra la decisión de Ventas y no libera inventario inexistente. Los retiros físicos siguen a cargo del auxiliar. «Ver detalles» del flujo actual de Tienda omite campos heredados de envíos, pesos y domicilio. Véase la depuración visible en TIENDA_T02_IMPLEMENTACION.md y sus capturas con datos ficticios.

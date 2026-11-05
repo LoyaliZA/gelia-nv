@@ -43,3 +43,12 @@ it('conserva las capacidades de agregar y retirar por catálogo y permite correg
     expect(container.textContent).toContain('Perfume del catálogo');
     expect(container.textContent).toContain('Solicitar retiro');
 });
+it('ofrece el faltante sin SKU desde la respuesta para retirarlo sin buscar inventario', async () => {
+    await act(() => root.render(<AjustePiezas pedidoId={1} pedido={{ revisiones_producto: [{ id: 9, descripcion_producto: 'Crema agotada', cantidad_solicitada: 2, estado_fisico: 'sin_existencia' }] }} solicitud={{}} />));
+    await click('Retirar piezas'); await click('SKU / nombre');
+    expect(container.textContent).toContain('Crema agotada');
+    const cantidad = container.querySelector('[aria-label="Cantidad a retirar de Crema agotada"]');
+    expect(cantidad.value).toBe('2');
+    await act(() => container.querySelector('input[type=checkbox]').click());
+    expect(cantidad.disabled).toBe(false);
+});

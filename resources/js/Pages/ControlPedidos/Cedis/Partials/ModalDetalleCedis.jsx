@@ -741,17 +741,17 @@ export default function ModalDetalleCedis({
                                 <Campo label="N° Cliente" value={pedido.cliente?.numero_cliente} />
                                 <Campo label="Tipo de pedido" value={pedido.origen?.nombre} />
                                 <Campo label="Almacén" value={etiquetaAlmacen(pedido.almacen)} />
-                                {trasladoInterno
+                                {!esCapturaTienda(pedido) && (trasladoInterno
                                     ? <Campo label="Recorrido" value="Traslado interno" />
-                                    : <Campo label="Paquetería" value={pedido.paqueteria?.nombre} />}
-                                <Campo label={esTienda ? empaqueConsulta.campo : 'N° de envíos'} value={pedido.numero_cajas} />
-                                {!trasladoInterno && <>
+                                    : <Campo label="Paquetería" value={pedido.paqueteria?.nombre} />)}
+                                {(!esCapturaTienda(pedido) || pedido.numero_cajas > 0) && <Campo label={esTienda ? empaqueConsulta.campo : 'N° de envíos'} value={pedido.numero_cajas} />}
+                                {!esCapturaTienda(pedido) && !trasladoInterno && <>
                                 <Campo label="Origen de la guía" value={etiquetaOrigenGuia(pedido)} />
                                 <Campo label="Tipo de guía" value={pedido.tipo_guia?.nombre} />
                                 <Campo label="Peso real" value={pedido.peso_real_kg != null ? `${pedido.peso_real_kg} kg` : null} />
                                 </>}
                                 <Campo label="Registrado" value={formatearFechaHoraAuditoria(pedido.created_at)} />
-                                <Campo label="Seguro" value={pedido.aplica_seguro ? formatearMoneda(pedido.costo_seguro) : 'No aplica'} />
+                                {!esCapturaTienda(pedido) && <Campo label="Seguro" value={pedido.aplica_seguro ? formatearMoneda(pedido.costo_seguro) : 'No aplica'} />}
                             </div>
                             {(pedido.cajas || []).length > 0 && (
                                 <div className="mt-3 space-y-2">
@@ -843,7 +843,7 @@ export default function ModalDetalleCedis({
                         </section>
 
                         {/* 5. Costos */}
-                        <section className={`${SECCION_WRAP} gelia-pedidos-seccion`}>
+                        {!esCapturaTienda(pedido) && <section className={`${SECCION_WRAP} gelia-pedidos-seccion`}>
                             <p className={SECCION}>Costos</p>
                             <div className="space-y-3">
                                 <Campo label="Código postal" value={pedido.codigo_postal} />
@@ -887,7 +887,7 @@ export default function ModalDetalleCedis({
                                     </div>
                                 </div>
                             </div>
-                        </section>
+                        </section>}
                     </div>
 
                     <div className="gelia-modal-footer flex flex-col-reverse sm:flex-row sm:flex-wrap gap-3 p-4 md:p-6 pb-[max(1rem,env(safe-area-inset-bottom))] border-t theme-border shrink-0">

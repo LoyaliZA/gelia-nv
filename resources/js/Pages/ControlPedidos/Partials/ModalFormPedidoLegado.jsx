@@ -2996,7 +2996,7 @@ export default function ModalFormPedidoLegado({
                                                     ? 'Envío preparado en Tienda: complete el transporte y la preparación elegida. La salida y la recepción se confirman en sus etapas.'
                                                     : 'Envío: elija el almacén de salida. La paquetería aparece enseguida para envíos al cliente, también en resguardo. La sucursal destino es opcional y solo aplica si la mercancía se custodia o se traslada a una sucursal. Si el recorrido es interno, active Traslado interno a PDV.')
                                             : (esRecogeTienda
-                                                ? 'Recoge en tienda: apartado en el almacén PDV. No es Mismo día (T-02.1). Personal de preparación revisa las piezas y confirma el apartado. Sin pago ni transferencia.'
+                                                ? 'Recoge en tienda: apartado en el almacén PDV. Personal de preparación revisa las piezas y confirma el apartado. Sin pago ni transferencia.'
                                                 : (esModalidadCredito
                                                     ? 'Resguardo con crédito: el pago se registra con el crédito autorizado. La mercancía queda en tienda hasta que la persona recoja.'
                                                     : (esModalidadTransferencia
@@ -3032,7 +3032,7 @@ export default function ModalFormPedidoLegado({
                                     >
                                         <span className="block text-sm font-bold theme-text-main">Recoge hoy</span>
                                         <span className="block text-[11px] font-bold theme-text-muted mt-1">
-                                            Apartado para pagar y recoger en la sucursal. No es Mismo día (T-02.1) ni confirma cobertura.
+                                            Apartado para pagar y recoger en la sucursal. El pago se realiza al recoger.
                                         </span>
                                     </button>
                                     )}
@@ -3089,7 +3089,7 @@ export default function ModalFormPedidoLegado({
                                     )}
                                 </div>
                                 <p className="text-xs theme-text-muted m-0">
-                                    Mismo día (T-02.1) es transferencia, con facultad por departamento o usuario, de lunes a viernes. El servidor acepta el reporte de pago hasta las 13:00. Elegirlo no confirma cobertura, preparación ni entrega. Las piezas ya disponibles en punto de venta y la continuación después del corte no tienen una regla automática.
+                                    Mismo día es transferencia, con facultad por departamento o usuario, de lunes a viernes. El servidor acepta el reporte de pago hasta las 13:00. Elegirlo no confirma cobertura, preparación ni entrega. Las piezas ya disponibles en punto de venta y la continuación después del corte no tienen una regla automática.
                                 </p>
                             </div>
                             )}
@@ -3237,7 +3237,7 @@ export default function ModalFormPedidoLegado({
                                 </select>
                                 {esRecogeTienda && (
                                     <p className="text-[10px] font-black uppercase tracking-widest theme-text-aviso m-0 mt-2">
-                                        Apartado en PDV. No es Mismo día (T-02.1). Solo apartado y confirmación, sin pago ni transferencia.
+                                        Apartado en PDV. Solo apartado y confirmación, sin pago ni transferencia.
                                     </p>
                                 )}
                                 {esModalidadTransferencia && (

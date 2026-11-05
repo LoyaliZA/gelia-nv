@@ -1,0 +1,18 @@
+[
+  {
+    "tamaño": "escritorio",
+    "tema": "dark",
+    "errores": [],
+    "desborde": false,
+    "detalle": true,
+    "faltanteSinSkuSeleccionable": true
+  },
+  {
+    "tamaño": "movil",
+    "tema": "light",
+    "errores": [],
+    "desborde": false,
+    "detalle": true,
+    "faltanteSinSkuSeleccionable": true
+  }
+]
