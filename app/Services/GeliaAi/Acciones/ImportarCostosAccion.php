@@ -16,7 +16,7 @@ class ImportarCostosAccion extends ImportarCatalogoAlmacenAccion
 
     public function descripcion(): string
     {
-        return 'Prepara (no ejecuta) la importación de costos/precios de un archivo adjunto a un almacén. La persona usuaria confirma en la interfaz. Si faltan archivo, almacén o columnas, la respuesta indica qué falta.';
+        return 'Prepara (no ejecuta) la importación del costo de empresa desde un archivo adjunto. La persona usuaria confirma en la interfaz. Si faltan archivo o columnas, la respuesta indica qué falta.';
     }
 
     protected function tipo(): string
@@ -36,16 +36,26 @@ class ImportarCostosAccion extends ImportarCatalogoAlmacenAccion
 
     protected function columnasObligatorias(): array
     {
-        return ['sku'];
+        return [];
     }
 
     protected function columnasOpcionales(): array
     {
-        return ['costo', 'costo_reposicion', 'precio_venta'];
+        return ['folio', 'sku', 'costo', 'costo_reposicion'];
+    }
+
+    protected function exigeIdentificador(): bool
+    {
+        return true;
     }
 
     protected function columnasValor(): array
     {
-        return ['costo', 'costo_reposicion', 'precio_venta'];
+        return ['costo', 'costo_reposicion'];
+    }
+
+    protected function exigeAlmacen(): bool
+    {
+        return false;
     }
 }

@@ -36,11 +36,16 @@ class ImportarInventariosAccion extends ImportarCatalogoAlmacenAccion
 
     protected function columnasObligatorias(): array
     {
-        return ['sku', 'folio', 'descripcion', 'existencia'];
+        return ['existencia'];
     }
 
     protected function columnasOpcionales(): array
     {
-        return [];
+        return ['folio', 'sku', 'ubicacion'];
+    }
+
+    protected function exigeIdentificador(): bool
+    {
+        return true;
     }
 }

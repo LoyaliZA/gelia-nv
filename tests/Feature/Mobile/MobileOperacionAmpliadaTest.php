@@ -140,9 +140,7 @@ class MobileOperacionAmpliadaTest extends TestCase
         ]);
         ProductoCosto::query()->create([
             'producto_id' => $visible->id,
-            'almacen_id' => $propia->id,
             'costo' => 80,
-            'precio_venta' => 150,
         ]);
 
         $this->con($usuario)

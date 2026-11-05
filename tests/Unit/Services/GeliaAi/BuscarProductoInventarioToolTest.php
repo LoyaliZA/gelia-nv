@@ -54,14 +54,15 @@ class BuscarProductoInventarioToolTest extends TestCase
         $almacen = $this->almacenOperable($user, 'VTA');
         $producto = $this->producto('PRC1', 'Perfume precio test', 880099, '7509999999999');
         Inventario::create(['producto_id' => $producto->id, 'almacen_id' => $almacen->id, 'existencia' => 5, 'apartado' => 0]);
-        ProductoCosto::create(['producto_id' => $producto->id, 'almacen_id' => $almacen->id, 'costo' => 12.5, 'precio_venta' => 99.9]);
+        $producto->update(['margen' => 20, 'precio_publico' => 15]);
+        ProductoCosto::create(['producto_id' => $producto->id, 'costo' => 12.5]);
 
         $result = app(BuscarProductoInventarioTool::class)->ejecutar($user, ['q' => 'Perfume precio test', 'con_precios' => true]);
 
         $this->assertTrue($result['ok']);
         $this->assertTrue($result['con_precios']);
         $this->assertSame(12.5, $result['items'][0]['p'][0]['co']);
-        $this->assertSame(99.9, $result['items'][0]['p'][0]['pv']);
+        $this->assertSame(15.0, $result['items'][0]['p'][0]['pv']);
         $this->assertStringNotContainsString('precio_venta', strtolower(json_encode($result)));
     }
 
@@ -131,7 +132,7 @@ class BuscarProductoInventarioToolTest extends TestCase
         $producto = $this->producto('SCOPE1', 'Perfume alcance', 770001, '7700000000001');
         Inventario::create(['producto_id' => $producto->id, 'almacen_id' => $propio->id, 'existencia' => 3, 'apartado' => 0]);
         Inventario::create(['producto_id' => $producto->id, 'almacen_id' => $ajeno->id, 'existencia' => 500, 'apartado' => 0]);
-        ProductoCosto::create(['producto_id' => $producto->id, 'almacen_id' => $ajeno->id, 'costo' => 77, 'precio_venta' => 150]);
+        ProductoCosto::create(['producto_id' => $producto->id, 'costo' => 77]);
 
         $tool = app(BuscarProductoInventarioTool::class);
         $result = $tool->ejecutar($user, ['q' => 'SCOPE1', 'con_precios' => true]);
@@ -139,7 +140,8 @@ class BuscarProductoInventarioToolTest extends TestCase
         $this->assertSame(1, $result['items'][0]['stock']['almacenes_con_registro']);
         $this->assertSame(3.0, $result['items'][0]['stock']['total']['e']);
         $this->assertSame(['PROPIO'], array_column($result['items'][0]['stock']['filas'], 'a'));
-        $this->assertSame([], $result['items'][0]['p']);
+        $this->assertSame(77.0, $result['items'][0]['p'][0]['co']);
+        $this->assertNull($result['items'][0]['p'][0]['pv']);
         $this->assertStringNotContainsString('500', json_encode($result['items'][0]['stock']));
 
         $filtrado = $tool->ejecutar($user, ['q' => 'SCOPE1', 'almacen' => 'AJENO']);

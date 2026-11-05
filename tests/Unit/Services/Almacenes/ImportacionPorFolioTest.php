@@ -74,7 +74,7 @@ class ImportacionPorFolioTest extends TestCase
         $this->assertSame('SKU-REAL', $producto->fresh()->sku);
     }
 
-    public function test_caso_productos_vincula_el_alta_al_almacen(): void
+    public function test_caso_productos_no_vincula_almacen(): void
     {
         $almacen = $this->almacen();
         $svc = app(ProcesarFilaImportacionHubService::class);
@@ -83,18 +83,16 @@ class ImportacionPorFolioTest extends TestCase
             ['folio' => '', 'sku' => 'ALTA-1', 'descripcion' => 'Nuevo en almacén', 'ubicacion' => 'C-1'],
             ['folio' => 'folio', 'sku' => 'sku', 'descripcion' => 'descripcion', 'ubicacion' => 'ubicacion'],
             $almacen->id,
-            ['ficha_producto', 'asignacion_almacen'],
+            ['ficha_producto'],
         );
 
         $this->assertSame(1, $resultado['productos_creados']);
-        $this->assertSame(1, $resultado['asignaciones_creadas']);
+        $this->assertSame(0, $resultado['asignaciones_creadas']);
         $producto = Producto::query()->where('sku', 'ALTA-1')->first();
         $this->assertNotNull($producto);
         $this->assertGreaterThanOrEqual(100001, (int) $producto->folio);
-        $this->assertTrue(ProductoAlmacen::query()
+        $this->assertFalse(ProductoAlmacen::query()
             ->where('producto_id', $producto->id)
-            ->where('almacen_id', $almacen->id)
-            ->where('ubicacion', 'C-1')
             ->exists());
     }
 
@@ -126,9 +124,7 @@ class ImportacionPorFolioTest extends TestCase
         ]);
         ProductoCosto::create([
             'producto_id' => $producto->id,
-            'almacen_id' => $almacen->id,
             'costo' => 8,
-            'precio_venta' => 12,
         ]);
 
         $resultado = app(ProcesarFilaCantidadReferenciaImportacionService::class)->ejecutar(
@@ -147,9 +143,7 @@ class ImportacionPorFolioTest extends TestCase
         $this->assertSame('Producto 610030', $producto->descripcion);
         $this->assertDatabaseHas('producto_costos', [
             'producto_id' => $producto->id,
-            'almacen_id' => $almacen->id,
             'costo' => '8.00',
-            'precio_venta' => '12.00',
         ]);
     }
 

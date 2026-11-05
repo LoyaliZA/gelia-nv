@@ -165,10 +165,10 @@ class ImportacionAlmacenAsyncTest extends TestCase
 
         $this->assertDatabaseHas('producto_costos', [
             'producto_id' => $producto->id,
-            'almacen_id' => $almacen->id,
             'costo' => '10.50',
-            'precio_venta' => '19.99',
+            'costo_reposicion' => '11.00',
         ]);
+        $this->assertNull($producto->fresh()->precio_publico);
 
         $this->assertDatabaseHas('inventarios', [
             'producto_id' => $producto->id,
@@ -283,9 +283,10 @@ class ImportacionAlmacenAsyncTest extends TestCase
         $this->assertSame('Precio', $log->mapping['precio_venta'] ?? null);
     }
 
-    public function test_job_inventarios_con_costo_crea_producto_costos(): void
+    public function test_job_inventarios_no_escribe_costo_ni_crea_producto(): void
     {
         $almacen = $this->crearAlmacen();
+        $producto = $this->crearProducto(['sku' => 'INVCOST1', 'folio' => 100401, 'descripcion' => 'Prod Costo']);
         $csv = "Folio,SKU,Descripcion,Existencia,Costo,Precio\n100401,INVCOST1,Prod Costo,3,15.25,40.00\n";
         $persistente = 'importaciones_almacenes/invcost/source.csv';
         Storage::put($persistente, $csv);
@@ -316,13 +317,12 @@ class ImportacionAlmacenAsyncTest extends TestCase
             app(\App\Services\Almacenes\FinalizarImportacionAlmacenAsyncService::class),
         );
 
-        $producto = Producto::where('sku', 'INVCOST1')->first();
-        $this->assertNotNull($producto);
-        $this->assertDatabaseHas('producto_costos', [
+        $this->assertSame(1, Producto::where('sku', 'INVCOST1')->count());
+        $this->assertSame(0, \App\Models\ProductoCosto::where('producto_id', $producto->id)->count());
+        $this->assertDatabaseHas('inventarios', [
             'producto_id' => $producto->id,
             'almacen_id' => $almacen->id,
-            'costo' => '15.25',
-            'precio_venta' => '40.00',
+            'existencia' => '3.000',
         ]);
     }
 

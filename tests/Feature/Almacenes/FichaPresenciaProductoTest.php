@@ -196,12 +196,18 @@ class FichaPresenciaProductoTest extends TestCase
         $sucursal = Sucursal::factory()->create();
         $almacen = $this->almacen($sucursal, 'COSTO');
         $producto = $this->producto();
+        $producto->update(['margen' => 50]);
         ProductoCosto::create([
             'producto_id' => $producto->id,
-            'almacen_id' => $almacen->id,
-            'costo' => 12.5,
+            'costo' => 20,
             'costo_reposicion' => 10,
-            'precio_venta' => 30,
+        ]);
+        app(\App\Services\Productos\CalcularPrecioPublicoService::class)->aplicar($producto);
+        ProductoAlmacen::create([
+            'producto_id' => $producto->id,
+            'almacen_id' => $almacen->id,
+            'activo_en_almacen' => true,
+            'origen_asignacion' => 'manual',
         ]);
         ProductoVentaAlmacen::create([
             'producto_id' => $producto->id,
@@ -219,7 +225,8 @@ class FichaPresenciaProductoTest extends TestCase
             ->assertInertia(fn ($page) => $page
                 ->where('incluye_costos', true)
                 ->where('incluye_ventas', true)
-                ->where('presencia.data.0.precio_venta', '30.00')
+                ->where('costo_empresa.precio_publico', '30.00')
+                ->where('costo_empresa.costo', '20.00')
                 ->where('presencia.data.0.ventas.0.periodo', '2026-10')
             );
     }

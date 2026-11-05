@@ -57,6 +57,7 @@ class FichaProductoAlmacenController extends Controller
             'presencia' => $consulta['filas'],
             'incluye_costos' => $consulta['incluye_costos'],
             'incluye_ventas' => $consulta['incluye_ventas'],
+            'costo_empresa' => $consulta['costo_empresa'],
             'galeria' => $galeria,
             'puede_gestionar_imagenes' => $this->autorizacion->puedeGestionar($user),
             'retorno' => $retorno,

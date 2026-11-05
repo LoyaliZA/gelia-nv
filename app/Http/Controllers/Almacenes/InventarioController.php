@@ -37,7 +37,7 @@ class InventarioController extends Controller
             'almacenes' => $alcance->almacenesOperables($user),
             'filtros' => (object) $request->only(['sucursal_id', 'almacen_id', 'q', 'sort', 'dir']),
             'sin_sucursales_operables' => $sucursales->isEmpty(),
-            'puede_carga_completa' => OperacionesImportacionAlmacen::usuarioPuedeCaso($user, 'completa'),
+            'puede_carga_completa' => OperacionesImportacionAlmacen::usuarioPuedeCaso($user, 'existencias'),
         ]);
     }
 

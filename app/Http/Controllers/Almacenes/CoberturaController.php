@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Models\Inventario;
 use App\Models\Producto;
 use App\Models\ProductoAlmacen;
-use App\Models\ProductoCosto;
 use App\Services\Almacenes\AlcanceAlmacenesService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -28,10 +27,11 @@ class CoberturaController extends Controller
             $almacenId ? (int) $almacenId : null,
         );
         $query = Producto::query()
-            ->with(['marca', 'categoria'])
+            ->with(['marca', 'categoria', 'costos'])
             ->when($request->query('q'), fn ($q, $busqueda) => $q->buscarPorTexto($busqueda))
             ->when($request->query('activo') === '1', fn ($q) => $q->where('activo', true))
-            ->when($request->query('activo') === '0', fn ($q) => $q->where('activo', false));
+            ->when($request->query('activo') === '0', fn ($q) => $q->where('activo', false))
+            ->when($request->query('costo') === 'sin', fn ($q) => $q->whereDoesntHave('costos'));
 
         if ($almacenId) {
             $query->when($request->query('asignacion') === 'sin', function ($q) use ($almacenId) {
@@ -40,27 +40,21 @@ class CoberturaController extends Controller
             $query->when($request->query('asignacion') === 'con', function ($q) use ($almacenId) {
                 $q->whereHas('asignacionesAlmacen', fn ($a) => $a->where('almacen_id', $almacenId));
             });
-            $query->when($request->query('costo') === 'sin', function ($q) use ($almacenId) {
-                $q->whereDoesntHave('costos', fn ($c) => $c->where('almacen_id', $almacenId));
-            });
         }
 
         $productos = $query->orderBy('descripcion')->paginate(50)->withQueryString();
 
         $ids = $productos->getCollection()->pluck('id')->all();
         $asignaciones = [];
-        $costos = [];
         $inventarios = [];
 
         if ($almacenId && $ids !== []) {
             $asignaciones = ProductoAlmacen::where('almacen_id', $almacenId)->whereIn('producto_id', $ids)->get()->keyBy('producto_id');
-            $costos = ProductoCosto::where('almacen_id', $almacenId)->whereIn('producto_id', $ids)->get()->keyBy('producto_id');
             $inventarios = Inventario::where('almacen_id', $almacenId)->whereIn('producto_id', $ids)->get()->keyBy('producto_id');
         }
 
-        $filas = $productos->getCollection()->map(function (Producto $p) use ($asignaciones, $costos, $inventarios) {
+        $filas = $productos->getCollection()->map(function (Producto $p) use ($asignaciones, $inventarios) {
             $asig = $asignaciones[$p->id] ?? null;
-            $costo = $costos[$p->id] ?? null;
             $inv = $inventarios[$p->id] ?? null;
 
             return [
@@ -72,8 +66,8 @@ class CoberturaController extends Controller
                 'activo' => $p->activo,
                 'asignado' => $asig !== null,
                 'ubicacion' => $asig?->ubicacion,
-                'costo' => $costo?->costo,
-                'precio_venta' => $costo?->precio_venta,
+                'costo' => $p->costos?->costo,
+                'precio_publico' => $p->precio_publico,
                 'existencia' => $inv?->existencia,
                 'tiene_inventario' => $inv !== null,
                 'tiene_cantidad' => $inv !== null && $inv->existencia !== null,
