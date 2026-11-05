@@ -90,7 +90,7 @@ final class RespuestaPreparacionTienda
             'productos' => $tarea->productos->map(fn ($p) => [
                 'id' => $p->id, 'sku' => $p->sku, 'descripcion' => $p->descripcion_snapshot,
                 'cantidad' => $p->cantidad_encontrada, 'estado_fisico' => $p->estado_fisico, 'observacion' => $p->observacion,
-                'unica_pieza' => (bool) $p->unica_pieza, 'mejor_ejemplar' => (bool) $p->mejor_ejemplar,
+                'unica_pieza' => $p->estado_fisico !== 'sin_existencia' && (bool) $p->unica_pieza, 'mejor_ejemplar' => $p->estado_fisico !== 'sin_existencia' && (bool) $p->mejor_ejemplar,
             ])->values()->all(),
             'documentos' => $documentos->values()->all(),
         ];

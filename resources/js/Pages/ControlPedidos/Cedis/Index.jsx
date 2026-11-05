@@ -254,6 +254,8 @@ export default function Index({
                 onClose={() => setModalBitacora({ abierto: false, pedido: null })}
             />
             <PanelRespuestaDisponibilidad
+                key={disponibilidad.pedido?.id || 'cerrada'}
+                pedido={disponibilidad.pedido || {}}
                 modo="dialogo"
                 abierto={disponibilidad.abierto}
                 onClose={() => setDisponibilidad({ abierto: false, pedido: null })}

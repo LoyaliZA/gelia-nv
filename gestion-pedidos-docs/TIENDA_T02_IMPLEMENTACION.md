@@ -51,3 +51,18 @@ Usar `./vendor/bin/sail npm run build`; no compilar como root ni levantar Vite p
 - Se conserva la evidencia visual anterior de T-01. **No se generaron capturas de T-02 ni se acredita revisión visual en escritorio/móvil o un recorrido autenticado con cuentas reales.** La siguiente revisión con el usuario debe comprobar esas superficies, los permisos de los usuarios operativos y un caso real de origen/destino. Las capturas T-01 no se presentan como evidencia T-02.
 
 Los cambios están en el árbol de trabajo, incluidos archivos nuevos que deben incorporarse a Git. No se hizo commit ni push.
+
+## Consulta de CEDIS — adecuación visual posterior
+
+El usuario inició la revisión de T-02 y señaló que el modal de disponibilidad estaba incompleto. Se tomó Preparación en tienda como referencia, conservando el contrato de consulta existente.
+
+- `PanelRespuestaDisponibilidad` presenta cliente, folio y origen, un espacio de captura y el pedido de referencia en paralelo. En móvil el documento se abre con Ver pedido; la captura y las acciones comparten desplazamiento.
+- Se elige Sin incidencias o Con detalle/faltante, de forma excluyente. El conjunto correcto no exige transcribir productos. Las excepciones admiten búsqueda por SKU/nombre, escaneo con la cola compartida y captura manual cuando falta catálogo. La búsqueda conserva incluir_sin_inventario; cantidad afectada no representa inventario reservado.
+- Sin existencias genera su motivo sin redactarlo; Con detalle exige descripción. Las filas se pueden quitar antes de enviar. Se serializa SKU cuando existe, sin introducir atributos incompatibles ni confirmar piezas correctas una por una.
+- GaleriaEvidenciasPedido sustituye el input nativo: arrastrar/pegar, selección múltiple, miniaturas, eliminación, validación y visor modal. Se conservan los límites del endpoint (8 archivos, 10 MB por archivo) y la compatibilidad de imágenes/PDF. Al reabrir una respuesta se muestran sus evidencias generales vigentes.
+- DocumentoSolicitudTienda se reutiliza con la URL autorizada del documento de CEDIS; las tareas de Tienda conservan su ruta específica. Se puede ampliar tanto el pedido como la evidencia. El estado del formulario se reinicia por pedido al abrir otro modal.
+- La respuesta queda en Consulta respondida, a la espera de Ventas. No prepara bolsas, confirma pago, registra remisión, traslada ni crea custodia. Continúan las reglas de T-02 existentes después del cierre y documentación. No se modificó el formulario de pesaje de los flujos legados/nacional/municipal.
+
+Comprobación acotada: 18 pruebas de interfaz aprobadas (tres de esta consulta y quince de regresión de Preparación Tienda), una prueba de servidor de consulta CEDIS sin traslado con 11 aserciones. Build publicado sin EACCES y diferencias sin errores de espacios. Cuatro capturas del build con datos ficticios: captura y visor en escritorio oscuro 1440×1000 y móvil claro 390×844, conservadas en `resources/design-references/cedis-disponibilidad`. Se comprobaron errores JS, desbordamiento y acceso a Enviar respuesta en móvil. Se inspeccionaron las capturas de ambos tamaños. No acredita sesión autenticada ni el recorrido completo entre CEDIS, Ventas y sucursal.
+
+Reproducción: `./vendor/bin/sail node scripts/qa/tienda-recorrido/verificar-cedis-disponibilidad.mjs`. Sin commit ni push; conservar los cambios previos del árbol de trabajo.

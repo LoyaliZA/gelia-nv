@@ -51,7 +51,13 @@ class CerrarConsultaPedidoBmaService
                 if (! $destino) throw new \RuntimeException('Falta configurar el estado de consulta aprobada.');
                 \App\Support\ControlPedidos\MaquinaEstadosPedidoBma::assertTransicion($estatus->fase_ciclo, $destino->fase_ciclo);
             }
+            $json = $pedido->solicitud_preparacion_json ?? [];
+            if (\App\Support\ControlPedidos\ApartadoT01::aplica($pedido)) {
+                $json['cobertura_tienda']['requiere_confirmacion_pedido'] = true;
+                if (! $yaCerrada) unset($json['cobertura_tienda']['confirmacion_enviada_at'], $json['cobertura_tienda']['confirmacion_enviada_por_id']);
+            }
             $pedido->update([
+                'solicitud_preparacion_json' => $json,
                 'catalogo_estatus_pedido_id' => $destino->id,
                 'consulta_cerrada_at' => now(),
                 'consulta_cerrada_por_id' => $usuarioId,
@@ -73,7 +79,7 @@ class CerrarConsultaPedidoBmaService
                 if ($tarea?->asignada_a_id) {
                     $auxiliar = \App\Models\User::find($tarea->asignada_a_id);
                     if ($auxiliar) \Illuminate\Support\Facades\DB::afterCommit(fn () => $auxiliar->notify(new \App\Notifications\AlertaPedidoBma(
-                        $pedido, 'pedido_separacion_aprobada', 'Ventas cerró la consulta. Separe el pedido completo aprobado y confirme el apartado.', ['url' => '/control-pedidos/tienda/tareas/'.$tarea->id]
+                        $pedido, 'pedido_separacion_aprobada', 'Consulta aprobada. Espera la confirmación del pedido de Ventas.', ['url' => '/control-pedidos/tienda/tareas/'.$tarea->id]
                     )));
                 }
             }

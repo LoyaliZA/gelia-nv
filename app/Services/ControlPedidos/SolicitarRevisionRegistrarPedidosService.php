@@ -144,8 +144,8 @@ class SolicitarRevisionRegistrarPedidosService
             if ($area !== DestinoRevisionRegistrarPedidos::CONTROL_PEDIDOS) {
                 throw ValidationException::withMessages(['caso_tienda' => 'TIENDA MD solicita disponibilidad y traslado desde CEDIS. El caso de piezas ya disponibles en PDV queda pendiente de definición.']);
             }
-            if (now(app(PreparacionTiendaConfig::class)->zonaHoraria())->isWeekend()) {
-                throw ValidationException::withMessages(['caso_tienda' => 'TIENDA MD se realiza de lunes a viernes.']);
+            if (! app(ConfiguracionOperativaTienda::class)->diaMd(now(app(PreparacionTiendaConfig::class)->zonaHoraria()))) {
+                throw ValidationException::withMessages(['caso_tienda' => 'Mismo día no está habilitado para esta fecha.']);
             }
             app(ValidarSucursalDestinoPedidoBma::class)->ejecutar($pedido, $pedido->sucursal_destino_id, 'RECOGE_TIENDA_TRANSFERENCIA', true);
         }

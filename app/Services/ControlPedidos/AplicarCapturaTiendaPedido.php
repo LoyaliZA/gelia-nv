@@ -32,7 +32,7 @@ final class AplicarCapturaTiendaPedido
                     $usuario,
                     $pedido->departamento_operacion_id
                 ),
-                'sabado' => now(app(PreparacionTiendaConfig::class)->zonaHoraria())->isWeekend(),
+                'sabado' => ! app(ConfiguracionOperativaTienda::class)->diaMd(now(app(PreparacionTiendaConfig::class)->zonaHoraria())),
             ]);
             if ($atencion['motivo']) {
                 throw ValidationException::withMessages([

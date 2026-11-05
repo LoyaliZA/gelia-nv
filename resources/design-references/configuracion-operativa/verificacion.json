@@ -1,0 +1,38 @@
+[
+  {
+    "tamaño": "escritorio",
+    "tema": "light",
+    "errores": [],
+    "desborde": {
+      "pagina": false,
+      "secciones": 0
+    }
+  },
+  {
+    "tamaño": "escritorio",
+    "tema": "dark",
+    "errores": [],
+    "desborde": {
+      "pagina": false,
+      "secciones": 0
+    }
+  },
+  {
+    "tamaño": "movil",
+    "tema": "light",
+    "errores": [],
+    "desborde": {
+      "pagina": false,
+      "secciones": 0
+    }
+  },
+  {
+    "tamaño": "movil",
+    "tema": "dark",
+    "errores": [],
+    "desborde": {
+      "pagina": false,
+      "secciones": 0
+    }
+  }
+]

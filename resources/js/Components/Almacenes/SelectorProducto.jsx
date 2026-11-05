@@ -135,8 +135,8 @@ export default function SelectorProducto({ value, onChange, productoInicial, dis
 
     return (
         <div ref={contenedorRef} className="relative">
-            <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 theme-text-muted pointer-events-none" />
+            <div className="theme-field-with-icon">
+                <Search className="theme-field-icon" aria-hidden="true" />
                 <input
                     id={inputId}
                     aria-label="Buscar producto por nombre o código"
@@ -144,7 +144,7 @@ export default function SelectorProducto({ value, onChange, productoInicial, dis
                     value={texto}
                     required={required && !value}
                     disabled={disabled}
-                    placeholder="Buscar por nombre o código..."
+                    placeholder="SKU o nombre…"
                     className="theme-input w-full mt-1 pl-10 pr-3 py-3 text-sm font-bold"
                     onFocus={abrirLista}
                     onChange={(e) => {

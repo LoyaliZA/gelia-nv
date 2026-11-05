@@ -17,7 +17,7 @@ final class PoliticaAccionesRegistrarPedidos
 
     public const MENSAJE_ARCHIVO = 'Adjunta el PDF o la imagen del pedido.';
 
-    public const MENSAJE_SABADO = 'Mismo día (Tienda MD) no se realiza en sábado.';
+    public const MENSAJE_SABADO = 'Mismo día no está habilitado para esta fecha.';
 
     public const MENSAJE_FACULTAD = 'Este departamento no tiene la facultad de Mismo día (Tienda MD).';
 

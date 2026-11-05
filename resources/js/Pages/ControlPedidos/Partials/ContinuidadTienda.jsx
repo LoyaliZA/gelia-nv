@@ -21,7 +21,7 @@ export default function ContinuidadTienda({
     pedidoId,
     solicitud = {},
     sucursales = [],
-    facultadMd = false,
+    notaMismoDia,
     puedeResolverTraslado = false,
     puedeOperarTienda = false,
     puedeCedis = false,
@@ -202,7 +202,7 @@ export default function ContinuidadTienda({
                         setSolicitudLocal(siguienteSolicitud || {});
                         importes?.onSolicitud?.(siguienteSolicitud);
                     }}
-                    facultadMd={facultadMd}
+                    notaMismoDia={notaMismoDia}
                     editable={puedeCobertura}
                 />
             )}

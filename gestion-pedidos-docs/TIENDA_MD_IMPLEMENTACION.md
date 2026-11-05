@@ -4,8 +4,8 @@ Implementación del 4 de noviembre de 2026, continuación de T-02. Por decisión
 
 ## Comportamiento implementado
 
-- La captura ofrece «TIENDA MD · Recoger hoy», exige sucursal y envía PDF/capturas a CEDIS. Identifica la intención antes del pago, sin confirmar prioridad, disponibilidad, ingreso ni entrega. Guardar un borrador no solicita mercancía.
-- La solicitud opera de lunes a viernes. Sábado y domingo no permiten crear la solicitud MD. Las piezas ya disponibles en PDV conservan la ramificación pendiente de definición; no se convierten automáticamente en MD ni en apartado con otro pago.
+- Ajuste posterior autorizado: la captura ofrece únicamente consulta en Tienda o CEDIS. Mismo día se solicita al confirmar transferencia, después del cierre de consulta, con sucursal de recolección. Se retiró la tercera entrada inicial y su explicación extensa; se conserva compatibilidad con solicitudes MD previamente guardadas. Guardar un borrador no solicita mercancía.
+- Los días y el corte se administran en Configuración operativa. Por defecto, lunes a viernes hasta las 13:00; sábado y domingo no permiten crear la solicitud MD. Las piezas ya disponibles en PDV conservan la ramificación pendiente de definición; no se convierten automáticamente en MD ni en apartado con otro pago.
 - Después de la respuesta y del cierre de consulta, la vendedora confirma cobertura de transferencia y registra comprobantes mediante los controles existentes. MD no se restringe a Bellaroma ni a una lista de departamentos/usuarios.
 - El servidor conserva la fecha y hora del primer reporte aceptado de transferencia, con corte a las 13:00 de México. A las 13:00:00 es oportuno; después, tardío. Sustituir el comprobante, agregar una exhibición o guardar de nuevo la misma modalidad no reinicia ese instante.
 - Una solicitud MD tiene fecha propia. Reportar el pago en otra fecha no lo vuelve oportuno por entrar antes de las 13:00 del día siguiente. El fin de semana tampoco habilita MD. La fecha y hora declaradas por el usuario no sustituyen el instante aceptado por el servidor.
@@ -20,7 +20,7 @@ La hora de cierre de atención al público de cada sucursal no se inventa ni se 
 ## Entradas del código
 
 - `PreparacionTiendaConfig::facultadMismoDia`: disponibilidad sin filtro especial por departamento/usuario en esta etapa.
-- `SolicitarRevisionRegistrarPedidosService` y `FormularioRegistrarTienda.jsx`: intención MD y sucursal desde la solicitud inicial a CEDIS.
+- `SolicitarRevisionRegistrarPedidosService` y `FormularioRegistrarTienda.jsx`: compatibilidad de solicitudes iniciales MD guardadas; las nuevas capturas usan consulta normal y después transferencia.
 - `RegistrarCoberturaTiendaService`, `AplicarCorteMismoDiaTienda`, `CorteMismoDiaTienda` y `AtencionMismoDiaTienda`: modalidad, primer reporte, fecha solicitada, corte y continuación pendiente.
 - `TransferenciaT02::documental`: alcance compartido de transferencia ordinaria y MD; `TransferenciaT02::aplica` mantiene la clasificación ordinaria para sus reglas específicas.
 - `TransferenciaTiendaService` y `SeguimientoTransferenciaTienda.jsx`: operación compartida y acción explícita `continuar_posterior` en el endpoint existente.
@@ -34,3 +34,5 @@ Comprobación dirigida, sin suite general: 34 pruebas de servidor aprobadas, 216
 Se publica un build al cerrar el lote con Sail, conservando la corrección de permisos de publicación. No se agregaron migraciones ni dependencias. No se crean capturas nuevas ni se acredita revisión renderizada en escritorio/móvil o un recorrido autenticado con cuentas reales; siguen pendientes para la revisión del usuario. Las capturas conservadas de T-01 no representan MD.
 
 No se hizo commit ni push. Incorporar los archivos nuevos de documentación al subir la entrega.
+
+Ajuste posterior: [Configuración operativa y consulta por sucursal](CONFIGURACION_OPERATIVA_TIENDA.md) documenta los parámetros, permisos y comprobaciones de esta continuación.

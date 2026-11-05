@@ -10,7 +10,7 @@ export default function DocumentoSolicitudTienda({ tareaId, documentos = [] }) {
     const [ampliado, setAmpliado] = useState(false);
     const documento = documentos.find((d) => d.id === Number(documentoId)) || documentos[0];
     if (!documento) return <div className="gelia-preparacion-vacio"><FileText className="w-6 h-6" aria-hidden="true" /><strong>Sin pedido adjunto</strong><p>El pedido no tiene documento adjunto. Consulte las indicaciones de Ventas; si necesita el desglose, solicítelo antes de confirmar.</p></div>;
-    const url = route('control_pedidos.tienda.solicitud.documento', [tareaId, documento.id]);
+    const url = tareaId != null ? route('control_pedidos.tienda.solicitud.documento', [tareaId, documento.id]) : documento.url;
     const imagen = documento.mime_type?.startsWith('image/') || /\.(png|jpe?g|webp)$/i.test(documento.nombre_original || '');
 
     return <section className="gelia-preparacion-documento-panel">

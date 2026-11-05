@@ -34,13 +34,16 @@ final class CorteMismoDiaTienda
         }
 
         $local = $aceptadoEn->copy()->timezone($zona);
-        $corte = $local->copy()->setTime(13, 0, 0);
-        if ($local->isWeekend()) {
+        $config = app(\App\Services\ControlPedidos\ConfiguracionOperativaTienda::class)->obtener();
+        $hora = $config['md_corte'];
+        [$h, $m] = array_map('intval', explode(':', $hora));
+        $corte = $local->copy()->setTime($h, $m, 0);
+        if (! in_array($local->dayOfWeekIso, $config['md_dias'], true)) {
             return [
                 'estado' => self::TARDIO,
                 'oportuno' => false,
                 'confirmada' => false,
-                'motivo' => 'Mismo día se solicita de lunes a viernes. Este reporte queda pendiente de acuerdo.',
+                'motivo' => 'Este día no está habilitado para Mismo día. Reporte pendiente de acuerdo.',
                 'corte' => $corte->toIso8601String(),
             ];
         }
@@ -52,8 +55,8 @@ final class CorteMismoDiaTienda
             'oportuno' => $oportuno,
             'confirmada' => false,
             'motivo' => $oportuno
-                ? 'El reporte de pago entró hasta las 13:00. Aún faltan disponibilidad, documentación, preparación y traslado.'
-                : 'El reporte llegó después de las 13:00. Queda pendiente de acuerdo, sin cambiar la modalidad.',
+                ? 'Reporte dentro del corte de '.$hora.'. Falta verificar ingreso y remisión.'
+                : 'Reporte después del corte de '.$hora.'. Pendiente de acuerdo.',
             'corte' => $corte->toIso8601String(),
         ];
     }

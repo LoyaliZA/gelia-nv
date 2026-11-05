@@ -7,7 +7,7 @@ use Carbon\Carbon;
 
 /**
  * Vigencia del apartado impago T-01.
- * Lunes a viernes 17:00 y sábado 13:00, en la zona de preparación.
+ * Días y cortes de Configuración operativa, en la zona de preparación.
  * El cierre operativo configurado (predeterminado 20:00) no alarga ni sustituye este plazo.
  */
 final class PlazoApartadoTienda
@@ -47,8 +47,9 @@ final class PlazoApartadoTienda
             return $this->rechazo(self::MOTIVO_VENCIDO, self::MENSAJE_VENCIDO, $fechaLimite->copy());
         }
 
-        if ($local->isSaturday() && $local->hour < 9) {
-            return $this->rechazo(self::MOTIVO_CIERRE, 'El horario sabatino de apartado comienza a las 09:00.', null);
+        $reglas = app(\App\Services\ControlPedidos\ConfiguracionOperativaTienda::class)->obtener();
+        if ($local->isSaturday() && $local->format('H:i') < $reglas['sabado_apertura']) {
+            return $this->rechazo(self::MOTIVO_CIERRE, 'El horario sabatino comienza a las '.$reglas['sabado_apertura'].'.', null);
         }
         $corte = $this->corteDelDia($local);
         if ($corte === null || $momento->greaterThanOrEqualTo($corte)) {
@@ -70,11 +71,12 @@ final class PlazoApartadoTienda
 
     public function corteDelDia(Carbon $local): ?Carbon
     {
-        if ($local->isSunday()) {
+        $reglas = app(\App\Services\ControlPedidos\ConfiguracionOperativaTienda::class)->obtener();
+        if (! in_array($local->dayOfWeekIso, $reglas['apartado_dias'], true)) {
             return null;
         }
 
-        $hora = $local->isSaturday() ? self::HORA_SABADO : self::HORA_SEMANA;
+        $hora = $local->isSaturday() ? $reglas['sabado_cierre'] : $reglas['apartado_cierre'];
         [$h, $m] = array_map('intval', explode(':', $hora));
 
         return $local->copy()->setTime($h, $m, 0);

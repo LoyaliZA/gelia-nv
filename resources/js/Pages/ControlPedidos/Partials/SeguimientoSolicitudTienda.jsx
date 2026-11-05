@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
-import { CheckCircle2, ClipboardCheck, Clock, PackageMinus } from 'lucide-react';
+import { CheckCircle2, ClipboardCheck, Clock, PackageMinus, PackagePlus, FileImage, Search } from 'lucide-react';
 import {
     GELIA_BTN_OUTLINE,
     GELIA_SEGMENT_TABS_TRACK_COMPACT,
@@ -14,7 +14,6 @@ import {
 import SelectorProducto from '../../../Components/Almacenes/SelectorProducto';
 import GaleriaEvidenciasPedido from './GaleriaEvidenciasPedido';
 import AvisoOperativoPedido from './AvisoOperativoPedido';
-import { archivosImagenDesdeClipboard } from './archivosDesdeClipboard';
 import ModalVistaPreviaDocumento, { MiniaturaDocumento } from './ModalVistaPreviaDocumento';
 import { formatearFechaNegocio } from './pedidosBmaStyles';
 import RespuestaPreparacionTienda from './RespuestaPreparacionTienda';
@@ -87,25 +86,18 @@ function respuestaSoloConDetalle(productos) {
 
 function detalleRevision(area, estado) {
     if (estado === 'excepciones_pendientes') {
-        return 'La respuesta incluye piezas con excepción. El pedido se cierra con Cerrar consulta. Para cambiar piezas, registre un anexo o un retiro.';
+        return 'Con incidencias';
     }
     if (estado === 'sin_excepciones' && area === 'preparacion_tienda') {
-        return 'Revisión sin excepciones. Falta el apartado físico de lo aceptado. No hay pago ni entrega.';
+        return 'Sin incidencias';
     }
     if (estado === 'sin_excepciones') {
-        return 'Consulta de disponibilidad sin excepciones. No hay traslado, pago ni entrega.';
+        return 'Sin incidencias';
     }
     if (estado === 'decision_registrada') {
-        return 'La revisión quedó registrada. No hay pago ni entrega.';
+        return 'Revisión registrada';
     }
     return '';
-}
-
-function pegarArchivo(evento, asignar) {
-    const archivos = archivosImagenDesdeClipboard(evento.clipboardData);
-    if (!archivos.length) return;
-    evento.preventDefault();
-    asignar(archivos[0]);
 }
 
 function PanelEspera({ label, icon: Icono, children }) {
@@ -242,13 +234,13 @@ function ConfirmacionSolicitud({ pedidoId, visible, cerrada, onCerrada }) {
                 onClick={cerrar}
             >
                 <CheckCircle2 className="w-4 h-4" aria-hidden="true" />
-                {ocupado ? 'Confirmando…' : 'Cerrar consulta / Confirmar mercancía con el cliente'}
+                {ocupado ? 'Confirmando…' : 'Cerrar consulta'}
             </button>
         </PanelEspera>
     );
 }
 
-function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso, onVer }) {
+export function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso, onVer }) {
     const productos = useMemo(() => piezasRespuesta(pedido?.tarea_preparacion), [pedido]);
     const soloDetalle = respuestaSoloConDetalle(productos);
     const [modo, setModo] = useState('anexo');
@@ -273,7 +265,13 @@ function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso, onVer
     const [manual, setManual] = useState(false);
     const [ocupado, setOcupado] = useState(false);
     const [error, setError] = useState('');
-    const evidenciaAnexoRef = useRef(null);
+    const [previewAnexo, setPreviewAnexo] = useState([]);
+    useEffect(() => {
+        if (!evidenciaAnexo) { setPreviewAnexo([]); return; }
+        const url = URL.createObjectURL(evidenciaAnexo);
+        setPreviewAnexo([{ url, name: evidenciaAnexo.name, mime: evidenciaAnexo.type }]);
+        return () => URL.revokeObjectURL(url);
+    }, [evidenciaAnexo]);
     const mostrarBusqueda = soloDetalle || productos.length === 0 || manual;
     const anexos = Array.isArray(solicitud?.anexo_sin_remision) ? solicitud.anexo_sin_remision : [];
     const retiros = Array.isArray(solicitud?.retiro_piezas) ? solicitud.retiro_piezas : [];
@@ -457,33 +455,33 @@ function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso, onVer
             </div>
             <div className="grid gap-3">
             <p className="text-sm theme-text-muted m-0">
-                Después de la respuesta se puede anexar una pieza o pedir el retiro. Quien revisó incorpora el cambio. No confirma pago ni entrega.
+                Solicita un cambio al auxiliar.
             </p>
             <div className={`gelia-segment ${GELIA_SEGMENT_TABS_TRACK_COMPACT}`} role="tablist" aria-label="Tipo de ajuste">
                 <button type="button" role="tab" className="gelia-segment-btn min-h-[44px]" aria-selected={modo === 'anexo'} data-active={modo === 'anexo'} onClick={() => setModo('anexo')}>
-                    Anexar pieza
+                    <PackagePlus size={16} aria-hidden="true" /> Agregar piezas
                 </button>
                 <button type="button" role="tab" className="gelia-segment-btn min-h-[44px]" aria-selected={modo === 'retiro'} data-active={modo === 'retiro'} onClick={() => setModo('retiro')}>
-                    Retirar piezas
+                    <PackageMinus size={16} aria-hidden="true" /> Retirar piezas
                 </button>
             </div>
             {modo === 'anexo' ? (
-                <div className="grid gap-3" onPaste={(evento) => pegarArchivo(evento, setEvidenciaAnexo)}>
+                <div className="grid gap-3">
                     <div className={`gelia-segment ${GELIA_SEGMENT_TABS_TRACK_COMPACT}`} role="tablist" aria-label="Forma del anexo">
                         <button type="button" role="tab" className="gelia-segment-btn min-h-[44px]" aria-selected={entrada === 'documento'} data-active={entrada === 'documento'} onClick={() => setEntrada('documento')}>
-                            PDF o captura del anexo
+                            <FileImage size={16} aria-hidden="true" /> PDF / imágenes
                         </button>
                         <button type="button" role="tab" className="gelia-segment-btn min-h-[44px]" aria-selected={entrada === 'catalogo'} data-active={entrada === 'catalogo'} onClick={() => setEntrada('catalogo')}>
-                            Seleccionar productos
+                            <Search size={16} aria-hidden="true" /> SKU / nombre
                         </button>
                     </div>
                     {entrada === 'documento' ? (
                         <p className="text-sm theme-text-muted m-0">
-                            Adjunte el documento del anexo. No hace falta transcribir SKU ni cantidades. Quien prepara identifica las piezas. Adjuntar el archivo no confirma disponibilidad.
+                            Adjunta las piezas a agregar.
                         </p>
                     ) : (
                         <div className="grid gap-3">
-                            <p className="text-sm theme-text-muted m-0">Busque por nombre o SKU y indique la cantidad. La selección no declara que la pieza ya esté apartada.</p>
+                            <p className="text-sm theme-text-muted m-0">Busca en el catálogo e indica la cantidad.</p>
                             <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_6rem_auto] sm:items-end">
                                 <div className="min-w-0">
                                     <label className={THEME_LABEL} htmlFor="ajuste-buscar-producto">Producto</label>
@@ -507,7 +505,8 @@ function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso, onVer
                                     {seleccionadas.map((pieza) => (
                                         <li key={pieza.sku} className="flex items-center justify-between gap-3 rounded-lg border theme-border px-3 py-2 text-sm theme-text-main">
                                             <span className="min-w-0">{pieza.descripcion}<span className="block text-xs theme-text-muted">{pieza.sku}</span></span>
-                                            <span className="font-semibold tabular-nums">{pieza.cantidad}</span>
+                                            <span className="flex items-center gap-3"><span className="font-semibold tabular-nums">{pieza.cantidad}</span>
+                                                <button type="button" className={`${GELIA_BTN_OUTLINE} min-h-[44px]`} disabled={ocupado} onClick={() => setSeleccionadas(actual => actual.filter(fila => fila.sku !== pieza.sku))}>Quitar</button></span>
                                         </li>
                                     ))}
                                 </ul>
@@ -515,48 +514,34 @@ function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso, onVer
                         </div>
                     )}
                     <div>
-                        <label className={THEME_LABEL} htmlFor="ajuste-nota">{entrada === 'documento' ? 'Nota, si hace falta' : 'Nota para quien prepara'}</label>
+                        <label className={THEME_LABEL} htmlFor="ajuste-nota">Nota (opcional)</label>
                         <input id="ajuste-nota" className={campo} value={nota} onChange={(evento) => setNota(evento.target.value)} />
                     </div>
-                    <div>
-                        <p className={THEME_LABEL} id="ajuste-evidencia-titulo">{entrada === 'documento' ? 'PDF o captura del anexo' : 'Soporte del anexo'}</p>
-                        <button type="button" className={`${GELIA_BTN_OUTLINE} min-h-[44px]`} onClick={() => evidenciaAnexoRef.current?.click()}>
-                            {evidenciaAnexo ? 'Reemplazar archivo' : 'Adjuntar archivo'}
-                        </button>
-                        <input
-                            id="ajuste-evidencia"
-                            ref={evidenciaAnexoRef}
-                            className="hidden"
-                            type="file"
-                            accept="application/pdf,image/jpeg,image/png,image/webp"
-                            aria-labelledby="ajuste-evidencia-titulo"
-                            onChange={(evento) => setEvidenciaAnexo(evento.target.files?.[0] || null)}
-                        />
-                        <p className="text-xs theme-text-muted m-0 mt-1">
-                            {evidenciaAnexo ? evidenciaAnexo.name : 'Puede pegar una captura en este apartado.'}
-                        </p>
-                    </div>
+                    <GaleriaEvidenciasPedido compacto id="ajuste-evidencia" label={entrada === 'documento' ? 'Piezas a agregar' : 'Soporte del agregado'}
+                        obligatorio maxArchivos={1} archivos={evidenciaAnexo ? [evidenciaAnexo] : []}
+                        previews={previewAnexo} disabled={ocupado}
+                        onChange={archivos => setEvidenciaAnexo(archivos[0] || null)} onVer={onVer} />
                     <button type="button" className={`${THEME_BTN_PRIMARY} min-h-[44px] justify-self-start`} disabled={ocupado} onClick={solicitarAnexo}>
-                        {ocupado ? 'Enviando…' : 'Solicitar anexo'}
+                        {ocupado ? 'Enviando…' : 'Solicitar agregado'}
                     </button>
                 </div>
             ) : (
                 <div className="grid gap-3">
                     <div className={`gelia-segment ${GELIA_SEGMENT_TABS_TRACK_COMPACT}`} role="tablist" aria-label="Forma del retiro">
                         <button type="button" role="tab" className="gelia-segment-btn min-h-[44px]" aria-selected={entradaRetiro === 'documento'} data-active={entradaRetiro === 'documento'} onClick={() => setEntradaRetiro('documento')}>
-                            PDF o capturas
+                            <FileImage size={16} aria-hidden="true" /> PDF / imágenes
                         </button>
                         <button type="button" role="tab" className="gelia-segment-btn min-h-[44px]" aria-selected={entradaRetiro === 'catalogo'} data-active={entradaRetiro === 'catalogo'} onClick={() => setEntradaRetiro('catalogo')}>
-                            Seleccionar productos
+                            <Search size={16} aria-hidden="true" /> SKU / nombre
                         </button>
                     </div>
                     <p className="text-sm theme-text-muted m-0">
                         {entradaRetiro === 'documento'
-                            ? 'Adjunte el PDF o las capturas de las piezas a retirar. No hace falta transcribir SKU. El auxiliar identifica productos y cantidades. Solicitar no retira ni libera stock.'
-                            : 'Elija piezas conocidas o búsquelas por nombre o SKU, aunque no tengan existencia libre. Un producto del catálogo no prueba que esté en el pedido.'}
+                            ? 'Adjunta las piezas a retirar.'
+                            : 'Selecciona las piezas a retirar o búscalas en el catálogo.'}
                     </p>
                     {entradaRetiro === 'documento' && (
-                        <GaleriaEvidenciasPedido
+                        <GaleriaEvidenciasPedido compacto
                             id="retiro-piezas-documento"
                             label="Piezas a retirar"
                             obligatorio
@@ -659,7 +644,7 @@ function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso, onVer
                             <textarea id="retiro-motivo-libre" className={`${THEME_TEXTAREA} w-full text-base`} rows={2} value={motivoLibre} onChange={(evento) => setMotivoLibre(evento.target.value)} />
                         </div>
                     )}
-                    <GaleriaEvidenciasPedido
+                    <GaleriaEvidenciasPedido compacto
                         id="retiro-evidencia"
                         label="Evidencia petición cliente"
                         archivos={evidenciasRetiro}

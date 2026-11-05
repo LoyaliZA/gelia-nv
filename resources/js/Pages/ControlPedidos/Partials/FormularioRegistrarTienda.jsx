@@ -52,19 +52,12 @@ const MENSAJE_AREA = 'Elige el destino de la revisión.';
 const MENSAJE_ALMACEN = 'Elige la sucursal o el almacén de tienda.';
 const MENSAJE_SIN_ALMACEN = 'No hay un almacén de tienda para recibir el apartado.';
 const MENSAJE_MODALIDAD = 'Este pedido ya tiene una instrucción, un pago o una remisión. La modalidad se conserva.';
-const NOTA_TIENDA_MD =
-    'TIENDA MD (T-02.1) usa transferencia y surtido desde CEDIS, de lunes a viernes. El servidor acepta el reporte de pago hasta las 13:00. Está disponible sin restricción de departamento por ahora. Fuera del corte se requiere acordar la continuación; no se reprograma automáticamente.';
 const ETIQUETA_AREA = {
     preparacion_tienda: 'Revisar y apartar en tienda',
     control_pedidos: 'Consultar disponibilidad en CEDIS',
 };
 
 const DESTINOS_TIENDA = [
-    {
-        id: 'mismo_dia_pdv', icono: Truck, area: 'control_pedidos',
-        titulo: 'TIENDA MD · Recoger hoy',
-        detalle: 'Consultar CEDIS para traslado a sucursal. Transferencia reportada hasta las 13:00, de lunes a viernes.',
-    },
     {
         id: 'revisar_apartar',
         icono: Store,
@@ -1010,19 +1003,13 @@ export default function FormularioRegistrarTienda({
                                     <h3 id="registrar-tienda-atencion-titulo">Atención en tienda</h3>
                                 </div>
                                 <p className="registrar-tienda-ayuda">Elige el destino de esta solicitud.</p>
-                                <p className="text-sm theme-text-muted m-0 mb-3">Para transferencia y recolección posterior, se prefiere consultar CEDIS; si no hay existencia, consulte PDV. La procedencia se conserva al elegir sucursal de recolección.</p>
-                                {caso === 'mismo_dia_pdv' && (
-                                    <p className="text-sm theme-text-main m-0 mb-3" role="status">
-                                        {NOTA_TIENDA_MD} Esta captura conserva esa intención y no la convierte en apartado ni en consulta.
-                                    </p>
-                                )}
                                 <div className="registrar-tienda-casos">
                                     {DESTINOS_TIENDA.map((opcion) => (
                                         <button
                                             key={opcion.id}
                                             type="button"
                                             className="registrar-tienda-destino"
-                                            aria-pressed={caso === opcion.id}
+                                            aria-pressed={caso === opcion.id || (caso === 'mismo_dia_pdv' && opcion.id === 'consultar_cedis')}
                                             disabled={enviada || avanzado || enviando || guardando}
                                             onClick={() => {
                                                 setCaso(opcion.id);
@@ -1041,32 +1028,22 @@ export default function FormularioRegistrarTienda({
                                                 <span className="registrar-tienda-caso-detalle">{opcion.detalle}</span>
                                             </span>
                                             <span className="registrar-tienda-caso-marca" aria-hidden="true">
-                                                {caso === opcion.id && <Check size={12} />}
+                                                {(caso === opcion.id || (caso === 'mismo_dia_pdv' && opcion.id === 'consultar_cedis')) && <Check size={12} />}
                                             </span>
                                         </button>
                                     ))}
                                 </div>
                                 {caso === 'mismo_dia_pdv' && <label className={`${THEME_LABEL} block mt-3`} htmlFor="sucursal-md-inicial">Sucursal de recolección hoy<select id="sucursal-md-inicial" className={`${THEME_SELECT} w-full mt-1`} value={sucursalMd} disabled={enviada || avanzado || enviando || guardando} onChange={evento => setSucursalMd(evento.target.value)}><option value="">Elegir sucursal</option>{(catalogos.sucursales || []).map(sucursal => <option key={sucursal.id} value={String(sucursal.id)}>{sucursal.nombre}</option>)}</select></label>}
-                                {area === 'preparacion_tienda' && almacenes.length === 1 && (
-                                    <div className="m-0 mt-2" role="status">
-                                        <div
-                                            className={`gelia-estado-vivo gelia-estado-vivo--compacto inline-flex items-center gap-1 ${GELIA_ESTADO_VIVO_TONO.info}`}
-                                        >
-                                            <MapPinIcon size={14} aria-hidden="true" />
-                                            {almacenes[0].nombre}
-                                        </div>
-                                    </div>
-                                )}
-                                {area === 'preparacion_tienda' && almacenes.length > 1 && (
+                                {area === 'preparacion_tienda' && almacenes.length > 0 && (
                                     <div className="mt-2">
                                         <label className={THEME_LABEL} htmlFor="almacen-tienda">
-                                            Sucursal o almacén
+                                            Sucursal de consulta
                                         </label>
                                         <select
                                             id="almacen-tienda"
                                             className={`${THEME_SELECT} w-full min-h-[44px] text-base`}
                                             value={String(almacenId)}
-                                            disabled={enviada || enviando}
+                                            disabled={enviada || avanzado || enviando || guardando}
                                             onChange={(evento) => setAlmacenId(evento.target.value)}
                                         >
                                             <option value="">Elegir</option>
@@ -1200,7 +1177,7 @@ export default function FormularioRegistrarTienda({
                                 pedidoId={pedidoId}
                                 solicitud={solicitudViva}
                                 sucursales={catalogos.sucursales || []}
-                                facultadMd={Boolean(registrarTienda.facultad_md)}
+                                notaMismoDia={catalogos.nota_mismo_dia}
                                 puedeResolverTraslado={superAdmin || (auth?.user?.permissions || []).includes('control_pedidos.tienda.autorizar_segundo_traslado')}
                                 puedeOperarTienda={superAdmin || (auth?.user?.permissions || []).includes('control_pedidos.tienda.responder') || (auth?.user?.permissions || []).includes('control_pedidos.tienda.trasladar')}
                                 puedeCedis={superAdmin || (auth?.user?.permissions || []).includes('control_pedidos.cedis')}

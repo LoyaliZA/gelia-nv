@@ -569,6 +569,8 @@ class SolicitudRegistrarTiendaTest extends TestCase
                     [
                         'sku' => 'SKU-FALTA',
                         'descripcion' => 'Crema agotada',
+                        'unica_pieza' => 1,
+                        'mejor_ejemplar' => 1,
                         'cantidad' => 0,
                         'estado_fisico' => 'sin_existencia',
                         'observacion' => 'Sin existencias',
@@ -591,6 +593,9 @@ class SolicitudRegistrarTiendaTest extends TestCase
         $this->assertTrue((bool) $unica->unica_pieza);
         $this->assertTrue((bool) $unica->mejor_ejemplar);
         $this->assertSame('bueno', $unica->estado_fisico);
+        $faltante = $tarea->productos->firstWhere('sku', 'SKU-FALTA');
+        $this->assertFalse((bool) $faltante->unica_pieza);
+        $this->assertFalse((bool) $faltante->mejor_ejemplar);
         $this->assertSame(1, $tarea->pedido->revisionesProducto()->count());
         $this->assertSame('Crema agotada', $tarea->pedido->revisionesProducto()->value('descripcion_producto'));
         $visible = RespuestaPreparacionTienda::datos($tarea);
@@ -1023,6 +1028,8 @@ class SolicitudRegistrarTiendaTest extends TestCase
         $this->post($url.'/disponibilidad', ['confirmacion_explicita' => 1, 'evidencias' => [UploadedFile::fake()->image('conjunto.jpg')]], ['Accept' => 'application/json'])->assertOk();
         $pedido = $tarea->pedido;
         $this->postJson('/control-pedidos/'.$pedido->id.'/cerrar-consulta')->assertOk();
+        $this->postJson('/control-pedidos/'.$pedido->id.'/cobertura-tienda', ['cobertura' => 'apartado'])->assertOk();
+        $this->postJson('/control-pedidos/'.$pedido->id.'/confirmar-pedido-tienda')->assertOk();
         $producto = \App\Models\Producto::create(['folio' => 98733, 'sku' => 'SEPARAR-REAL', 'descripcion' => 'Aroma', 'activo' => true]);
         \App\Models\Inventario::create(['producto_id' => $producto->id, 'almacen_id' => $tarea->almacen_id, 'existencia' => 10, 'apartado' => 0]);
         $this->getJson($url)->assertOk();
@@ -1152,7 +1159,49 @@ class SolicitudRegistrarTiendaTest extends TestCase
         return $credito;
     }
 
-    private function t01Cerrado(bool $separar = false): PedidoBmaTareaPreparacion
+    public function test_t01_guarda_modalidad_y_envia_confirmacion_al_auxiliar_sin_cobro_ni_duplicados(): void
+    {
+        \Illuminate\Support\Facades\Notification::fake();
+        $tarea = $this->t01Cerrado(false, false);
+        $pedido = $tarea->pedido;
+        $cobertura = $pedido->solicitud_preparacion_json['cobertura_tienda'];
+        $this->assertTrue($cobertura['requiere_confirmacion_pedido']);
+        $this->assertArrayNotHasKey('confirmacion_enviada_at', $cobertura);
+        $this->postJson('/control-pedidos/tienda/tareas/'.$tarea->id.'/apartado/confirmar', ['version' => $tarea->cumplimientoFisico->version])->assertUnprocessable();
+        $url = '/control-pedidos/'.$pedido->id.'/confirmar-pedido-tienda';
+        $this->postJson($url)->assertOk()->assertJsonPath('solicitud_preparacion.cobertura_tienda.confirmacion_enviada_por_id', $this->usuario->id);
+        $this->postJson($url)->assertOk();
+        \Illuminate\Support\Facades\Notification::assertSentTo($this->usuario, \App\Notifications\AlertaPedidoBma::class,
+            fn ($alerta) => $alerta->tipoAlerta === 'pedido_confirmado_tienda');
+        $confirmaciones = \Illuminate\Support\Facades\Notification::sent($this->usuario, \App\Notifications\AlertaPedidoBma::class)
+            ->filter(fn ($alerta) => $alerta->tipoAlerta === 'pedido_confirmado_tienda');
+        $this->assertCount(1, $confirmaciones);
+        $this->postJson('/control-pedidos/'.$pedido->id.'/cobertura-tienda', ['cobertura' => 'apartado'])->assertOk();
+        $this->assertNotEmpty($pedido->fresh()->solicitud_preparacion_json['cobertura_tienda']['confirmacion_enviada_at']);
+        $this->assertSame($cobertura['vence_at'], $pedido->fresh()->solicitud_preparacion_json['cobertura_tienda']['vence_at']);
+        $this->assertSame(0, $pedido->pagosExhibicion()->count());
+        $this->assertNull($pedido->fresh()->pago_validado_at);
+        $this->postJson('/control-pedidos/tienda/tareas/'.$tarea->id.'/apartado/confirmar', ['version' => $tarea->cumplimientoFisico->version])->assertOk();
+    }
+
+    public function test_t01_fuera_de_horario_guarda_la_modalidad_pero_no_confirma_una_vigencia_vencida(): void
+    {
+        $tarea = $this->t01Cerrado(false, false);
+        $pedido = $tarea->pedido;
+        $json = $pedido->solicitud_preparacion_json;
+        unset($json['cobertura_tienda']);
+        $pedido->update(['solicitud_preparacion_json' => $json]);
+        $this->travelTo(\Carbon\Carbon::parse('2026-11-04 18:00:00', 'America/Mexico_City'));
+        $this->postJson('/control-pedidos/'.$pedido->id.'/cobertura-tienda', ['cobertura' => 'apartado'])->assertOk()
+            ->assertJsonPath('solicitud_preparacion.cobertura_tienda.tipo', 'apartado');
+        $guardada = $pedido->fresh()->solicitud_preparacion_json['cobertura_tienda'];
+        $this->assertNotEmpty($guardada['motivo_vigencia']);
+        $this->assertSame('17:00', \Carbon\Carbon::parse($guardada['vence_at'])->format('H:i'));
+        $this->postJson('/control-pedidos/'.$pedido->id.'/confirmar-pedido-tienda')->assertUnprocessable();
+        $this->assertArrayNotHasKey('confirmacion_enviada_at', $pedido->fresh()->solicitud_preparacion_json['cobertura_tienda']);
+    }
+
+    private function t01Cerrado(bool $separar = false, bool $confirmar = true): PedidoBmaTareaPreparacion
     {
         $this->travelTo(\Carbon\Carbon::parse('2026-11-04 10:00:00', 'America/Mexico_City'));
         Storage::fake('public');
@@ -1166,6 +1215,7 @@ class SolicitudRegistrarTiendaTest extends TestCase
         $this->post($url.'/disponibilidad', ['confirmacion_explicita' => 1, 'evidencias' => [UploadedFile::fake()->image('conjunto.jpg')]], ['Accept' => 'application/json'])->assertOk();
         $this->postJson('/control-pedidos/'.$tarea->pedido_bma_id.'/cerrar-consulta')->assertOk();
         $this->postJson('/control-pedidos/'.$tarea->pedido_bma_id.'/cobertura-tienda', ['cobertura' => 'apartado'])->assertOk();
+        if ($confirmar) $this->postJson('/control-pedidos/'.$tarea->pedido_bma_id.'/confirmar-pedido-tienda')->assertOk();
         $this->getJson($url)->assertOk()->assertJsonPath('tarea.pedido.es_t01_documental', true);
         $tarea->refresh();
         if ($separar) $this->postJson($url.'/apartado/confirmar', ['version' => $tarea->cumplimientoFisico->version])->assertOk();

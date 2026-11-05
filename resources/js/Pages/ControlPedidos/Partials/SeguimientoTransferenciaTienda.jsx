@@ -100,8 +100,8 @@ export default function SeguimientoTransferenciaTienda({ pedido, sucursales = []
             {md && <div className="gelia-callout-aviso p-3 grid gap-2 text-sm" role="status">
                 <strong>{!enDestino && md.pendiente_acuerdo ? 'TIENDA MD · Pendiente de acuerdo' : 'TIENDA MD · Recolección solicitada para el mismo día'}</strong>
                 {md.fecha_objetivo && <span>Fecha solicitada de recolección: {md.fecha_objetivo}.</span>}
-                <span>Primer reporte aceptado: {fechaHoraMexico(md.primer_pago_at)} · Corte: 13:00, lunes a viernes, hora de México.</span>
-                <span>{enDestino ? 'La mercancía pagada conserva su identificación y custodia hasta la entrega. No se libera como apartado impago si el cliente no recoge hoy.' : md.motivo}</span>
+                <span>Primer reporte aceptado: {fechaHoraMexico(md.primer_pago_at)}</span>
+                <span>{enDestino ? 'Mercancía pagada en custodia hasta su entrega.' : md.motivo}</span>
             </div>}
             <div className="grid sm:grid-cols-2 gap-3 text-sm">
                 <p className="m-0"><span className="theme-text-muted">Procedencia</span><br /><strong>{datos.origen || 'Pendiente de definir'}</strong></p>
@@ -116,7 +116,7 @@ export default function SeguimientoTransferenciaTienda({ pedido, sucursales = []
             {!datos.consulta_cerrada && <p className="text-sm theme-text-muted m-0">El pedido espera la aceptación del cliente y el cierre de consulta de la vendedora.</p>}
             {datos.derivacion && <p role="status" className="text-sm theme-text-aviso m-0">Destino City Center: corresponde al proceso {datos.derivacion}. Continúe por esa ramificación; no se habilita la salida ordinaria T-02.</p>}
             {datos.bloqueo && <p role="status" className="text-sm theme-text-aviso m-0">{datos.bloqueo}</p>}
-            {datos.limite_recoleccion && <p className="text-sm m-0 theme-text-main">Seguimiento de recolección hasta {formatearFechaNegocio(datos.limite_recoleccion)} · 20 días naturales desde la emisión de remisión.</p>}
+            {datos.limite_recoleccion && <p className="text-sm m-0 theme-text-main">Seguimiento de recolección hasta {formatearFechaNegocio(datos.limite_recoleccion)} · {datos.plazo_recoleccion_dias} días naturales desde la emisión de remisión.</p>}
             {datos.pendiente_gestion && <p className="text-sm m-0 theme-text-aviso">Contacte al cliente y registre el seguimiento. El vencimiento no cancela la venta ni libera la mercancía pagada.</p>}
             {datos.ubicacion && <p className="text-sm theme-text-main m-0"><strong>Ubicación de custodia:</strong> {datos.ubicacion}{datos.resguardo_id ? ` · Resguardo ${datos.resguardo_id}` : ''}</p>}
             {datos.observaciones && <p className="text-sm theme-text-main m-0"><strong>Observaciones de preparación:</strong> {datos.observaciones}</p>}

@@ -9,6 +9,7 @@ use Tests\TestCase;
 
 class CorteMismoDiaTiendaTest extends TestCase
 {
+    use \Illuminate\Foundation\Testing\RefreshDatabase;
     public function test_el_corte_usa_el_instante_aceptado_y_no_confirma(): void
     {
         $corte = new CorteMismoDiaTienda;

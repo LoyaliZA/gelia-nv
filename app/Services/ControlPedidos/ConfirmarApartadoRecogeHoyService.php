@@ -74,6 +74,10 @@ class ConfirmarApartadoRecogeHoyService
                 throw ValidationException::withMessages(['estado' => $bloqueo]);
             }
             $documental = \App\Support\ControlPedidos\ApartadoT01::aplica($tarea->pedido);
+            $cobertura = $tarea->pedido->solicitud_preparacion_json['cobertura_tienda'] ?? [];
+            if ($documental && ($cobertura['requiere_confirmacion_pedido'] ?? false) && empty($cobertura['confirmacion_enviada_at'])) {
+                throw ValidationException::withMessages(['estado' => 'Ventas debe enviar la confirmación del pedido antes de mantener el apartado.']);
+            }
             if ($documental && ! $tarea->pedido->consultaCerrada()) {
                 throw ValidationException::withMessages(['estado' => 'La separación requiere el cierre vigente de la consulta.']);
             }

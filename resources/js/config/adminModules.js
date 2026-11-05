@@ -117,6 +117,15 @@ export const ADMIN_MODULES = [
         permission: 'tiendanube.configurar',
     },
     {
+        id: 'configuracion_operativa',
+        title: 'Configuración operativa',
+        description: 'Horarios, días hábiles y plazos de Tienda y pedidos.',
+        path: '/admin/configuracion-operativa',
+        routeName: 'admin.configuracion_operativa.index',
+        icon: Settings,
+        permission: 'configuracion_sistema.gestionar',
+    },
+    {
         id: 'configuracion_sistema',
         title: 'Configuración del Sistema',
         description: 'Variables globales, sobreescritura de .env y testeo de integraciones clave.',

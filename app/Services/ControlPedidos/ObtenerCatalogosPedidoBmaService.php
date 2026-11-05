@@ -34,6 +34,7 @@ class ObtenerCatalogosPedidoBmaService
     public function ejecutar(?array $departamentoIds = null): array
     {
         return [
+            'nota_mismo_dia' => app(ConfiguracionOperativaTienda::class)->notaMd(),
             'origenes' => CatalogoOrigenPedido::where('activo', true)->orderBy('nombre')->get(['id', 'nombre', 'requiere_logistica']),
             'tipos_operacion_envio' => CatalogoTipoOperacionEnvio::where('activo', true)
                 ->whereIn('codigo', [

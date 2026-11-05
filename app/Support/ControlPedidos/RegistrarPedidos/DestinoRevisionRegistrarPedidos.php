@@ -18,7 +18,7 @@ final class DestinoRevisionRegistrarPedidos
 
     public const MENSAJE_AREA = 'Elige el destino de la revisión.';
 
-    public const MENSAJE_MISMO_DIA = 'TIENDA MD solicita disponibilidad y traslado desde CEDIS, de lunes a viernes, con sucursal de recolección definida.';
+    public const MENSAJE_MISMO_DIA = 'Mismo día requiere consulta a CEDIS y sucursal de recolección definida.';
 
     public const MENSAJE_ALMACEN = 'Elige la sucursal o el almacén de tienda.';
 
@@ -40,6 +40,8 @@ final class DestinoRevisionRegistrarPedidos
         $habilitados = $this->config->almacenesHabilitados();
         $consulta = Almacen::query()
             ->where('activo', true)
+            ->where(fn ($query) => $query->whereNull('sucursal_id')->orWhereHas('sucursal', fn ($sucursal) => $sucursal->where('activo', true)))
+            ->with('sucursal:id,nombre')
             ->where('visible_en_pedidos', true)
             ->where(function ($query) {
                 $query->where('permite_salida_pedidos', true)
@@ -68,7 +70,7 @@ final class DestinoRevisionRegistrarPedidos
         return $this->almacenesTienda()
             ->map(fn (Almacen $almacen) => [
                 'id' => (int) $almacen->id,
-                'nombre' => (string) $almacen->nombre,
+                'nombre' => $almacen->sucursal?->nombre ? $almacen->sucursal->nombre.' · '.$almacen->nombre : (string) $almacen->nombre,
                 'sucursal_id' => $almacen->sucursal_id !== null ? (int) $almacen->sucursal_id : null,
             ])
             ->values()

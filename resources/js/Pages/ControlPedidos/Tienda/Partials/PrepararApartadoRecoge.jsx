@@ -56,7 +56,8 @@ export default function PrepararApartadoRecoge({ tarea, auth, documentos = [], d
     const consultaCerrada = Boolean(tarea.pedido?.consulta_cerrada);
     const hayAjustes = (tarea.pedido?.retiros || []).some((retiro) => (retiro.estado || 'pendiente') === 'pendiente')
         || (tarea.pedido?.anexos_pendientes || []).length > 0;
-    const esperandoVentas = consultaTienda && revisionRegistrada && !consultaCerrada && tarea.apartado?.estado !== 'APARTADO_CONFIRMADO';
+    const faltaConfirmacionPedido = Boolean(tarea.pedido?.cobertura_tienda?.requiere_confirmacion_pedido && !tarea.pedido?.cobertura_tienda?.confirmacion_enviada_at);
+    const esperandoVentas = consultaTienda && revisionRegistrada && (!consultaCerrada || faltaConfirmacionPedido) && tarea.apartado?.estado !== 'APARTADO_CONFIRMADO';
     const editable = tarea.estado === 'EN_ATENCION' && autorizado && !hayAjustes && !esperandoVentas;
     const puedeIncidencia = tarea.puede_reportar_incidencia ?? (esAdmin || permisos.includes('control_pedidos.tienda.reportar_error'));
     const [lineas, setLineas] = useState(() => (tarea.productos || []).filter((p) => p.sku).map((p) => ({ id: p.id, producto_id: p.producto_id, sku: p.sku, descripcion: p.descripcion_snapshot, cantidad: p.cantidad_encontrada ?? '', estado_fisico: p.estado_fisico || 'bueno', observacion: p.observacion || '', unica_pieza: Boolean(p.unica_pieza), mejor_ejemplar: Boolean(p.mejor_ejemplar), evidencias: [], previews: [], detalle: false })));
@@ -93,6 +94,7 @@ export default function PrepararApartadoRecoge({ tarea, auth, documentos = [], d
         setDirty(true);
         setLineas((prev) => prev.map((l, j) => {
             if (j !== i) return l;
+            if (l.estado_fisico === 'sin_existencia' && clave !== 'sin_existencia') return l;
             if (clave === 'unica_pieza') return { ...l, unica_pieza: !l.unica_pieza };
             if (clave === 'mejor_ejemplar') return { ...l, mejor_ejemplar: !l.mejor_ejemplar };
             if (clave !== 'sin_existencia') return l;
@@ -107,7 +109,7 @@ export default function PrepararApartadoRecoge({ tarea, auth, documentos = [], d
             }
             return {
                 ...l,
-                estado_fisico: 'sin_existencia',
+                estado_fisico: 'sin_existencia', unica_pieza: false, mejor_ejemplar: false,
                 cantidad_consulta: Number(l.cantidad) > 0 ? Number(l.cantidad) : (l.cantidad_consulta || 1),
                 cantidad: 0,
                 observacion: String(l.observacion || '').trim() || MOTIVO_SIN_EXISTENCIA,
@@ -339,7 +341,7 @@ export default function PrepararApartadoRecoge({ tarea, auth, documentos = [], d
                 </details>
                 {tarea.abastecimiento_aviso && <p role="status" className="theme-text-aviso">{tarea.abastecimiento_aviso}</p>}
                 {tarea.abastecimiento_pendiente && <p role="status" className="theme-text-aviso">Hay abastecimiento pendiente de salida, llegada o resolución de incidencias. Confirme las llegadas antes de cerrar la preparación.</p>}
-                {esperandoVentas && !hayAjustes && <aside className="gelia-preparacion-instrucciones" role="status"><h4>Respuesta enviada</h4><p>Ventas está revisando la disponibilidad con el cliente. La captura queda cerrada hasta que confirme la mercancía o solicite un ajuste.</p></aside>}
+                {esperandoVentas && !hayAjustes && <aside className="gelia-preparacion-instrucciones" role="status"><h4>Respuesta enviada</h4><p>{faltaConfirmacionPedido ? 'Espera la confirmación del pedido de Ventas.' : 'Ventas está confirmando las piezas con el cliente.'}</p></aside>}
                 {tarea.observaciones_solicitud && <aside className="gelia-preparacion-instrucciones"><h4>Indicaciones de Ventas</h4><p>{tarea.observaciones_solicitud}</p></aside>}
                 {tarea.estado === 'EN_ATENCION' && !autorizado && <p role="status" className="text-sm theme-text-muted">Esta tarea está asignada a {tarea.responsable?.name || 'otro auxiliar'}. Solo su responsable puede responder.</p>}
                 {tarea.estado === 'PENDIENTE' && <p className="text-sm theme-text-muted">Seleccione «Atender pedido» para comenzar la captura.</p>}
@@ -393,7 +395,7 @@ export default function PrepararApartadoRecoge({ tarea, auth, documentos = [], d
                                 setDirty(true);
                                 setLineas((prev) => prev.map((fila, j) => j !== i ? fila : {
                                     ...fila,
-                                    estado_fisico: 'sin_existencia',
+                                    estado_fisico: 'sin_existencia', unica_pieza: false, mejor_ejemplar: false,
                                     cantidad_consulta: Number(fila.cantidad) > 0 ? Number(fila.cantidad) : (fila.cantidad_consulta || 1),
                                     cantidad: 0,
                                     observacion: String(fila.observacion || '').trim() || MOTIVO_SIN_EXISTENCIA,
@@ -413,8 +415,8 @@ export default function PrepararApartadoRecoge({ tarea, auth, documentos = [], d
                                 {!sinExistencia && l.detalle && <div id={`tienda-detalle-${i}`} className="gelia-preparacion-detalle">
                                     <label className={THEME_LABEL} htmlFor={`tienda-cantidad-${i}`}>Preparadas<input {...atributosCampo(`tienda-cantidad-${i}`)} aria-label={`Cantidad de ${l.descripcion}`} name={`cantidad-${i}`} type="number" inputMode="numeric" min="0" step="1" disabled={ocupado} className={`${THEME_INPUT} w-full mt-1`} value={l.cantidad} onChange={(e) => cambiar(i, 'cantidad', e.target.value)} /></label>
                                     <div className="gelia-pedidos-atributos" aria-label="Marcas rápidas de la pieza">
-                                        <label className="gelia-pedidos-atributo gelia-pedidos-atributo-control"><input type="checkbox" checked={l.unica_pieza} onChange={() => alternarEtiqueta(i, 'unica_pieza')} disabled={ocupado} />Única pieza</label>
-                                        <label className="gelia-pedidos-atributo gelia-pedidos-atributo-control"><input type="checkbox" checked={l.mejor_ejemplar} onChange={() => alternarEtiqueta(i, 'mejor_ejemplar')} disabled={ocupado} />Mejor ejemplar</label>
+                                        <label className="gelia-pedidos-atributo gelia-pedidos-atributo-control"><input type="checkbox" checked={l.unica_pieza} onChange={() => alternarEtiqueta(i, 'unica_pieza')} disabled={ocupado || l.estado_fisico === 'sin_existencia'} />Única pieza</label>
+                                        <label className="gelia-pedidos-atributo gelia-pedidos-atributo-control"><input type="checkbox" checked={l.mejor_ejemplar} onChange={() => alternarEtiqueta(i, 'mejor_ejemplar')} disabled={ocupado || l.estado_fisico === 'sin_existencia'} />Mejor ejemplar</label>
                                         {permitirSinExistencia && <label className="gelia-pedidos-atributo gelia-pedidos-atributo-control"><input type="checkbox" checked={false} onChange={marcarSinExistencia} disabled={ocupado} />Sin existencias</label>}
                                     </div>
                                     <label className={THEME_LABEL}>Estado de la pieza<select name={`estado-${i}`} className={`${THEME_SELECT} w-full mt-1`} value={l.estado_fisico === 'bueno' ? 'regular' : l.estado_fisico} onChange={(e) => { if (e.target.value === 'sin_existencia') marcarSinExistencia(); else cambiar(i, 'estado_fisico', e.target.value); }} disabled={ocupado}>
@@ -436,8 +438,8 @@ export default function PrepararApartadoRecoge({ tarea, auth, documentos = [], d
                             {editable && (!capturaEstadoPieza || !l.id) && <div className="gelia-preparacion-producto-acciones">{!capturaEstadoPieza && <button type="button" className={BTN_SECONDARY} aria-expanded={l.detalle || Number(l.cantidad) === 0} aria-controls={`tienda-detalle-${i}`} disabled={ocupado} onClick={() => cambiar(i, 'detalle', !l.detalle)}>{l.detalle ? 'Ocultar detalle' : 'Reportar detalle'}</button>}
                                 {!l.id && <button type="button" className={BTN_SECONDARY} disabled={guardando} onClick={() => setQuitarLinea(i)}><Trash2 className="w-4 h-4" aria-hidden="true" />Quitar pieza</button>}</div>}
                             {editable && <div className="gelia-pedidos-atributos" aria-label="Marcas rápidas de la pieza">
-                                <label className="gelia-pedidos-atributo gelia-pedidos-atributo-control"><input type="checkbox" checked={l.unica_pieza} onChange={() => alternarEtiqueta(i, 'unica_pieza')} disabled={ocupado} />Única pieza</label>
-                                <label className="gelia-pedidos-atributo gelia-pedidos-atributo-control"><input type="checkbox" checked={l.mejor_ejemplar} onChange={() => alternarEtiqueta(i, 'mejor_ejemplar')} disabled={ocupado} />Mejor ejemplar</label>
+                                <label className="gelia-pedidos-atributo gelia-pedidos-atributo-control"><input type="checkbox" checked={l.unica_pieza} onChange={() => alternarEtiqueta(i, 'unica_pieza')} disabled={ocupado || l.estado_fisico === 'sin_existencia'} />Única pieza</label>
+                                <label className="gelia-pedidos-atributo gelia-pedidos-atributo-control"><input type="checkbox" checked={l.mejor_ejemplar} onChange={() => alternarEtiqueta(i, 'mejor_ejemplar')} disabled={ocupado || l.estado_fisico === 'sin_existencia'} />Mejor ejemplar</label>
                                 {permitirSinExistencia && <label className="gelia-pedidos-atributo gelia-pedidos-atributo-control"><input type="checkbox" checked={l.estado_fisico === 'sin_existencia'} onChange={() => alternarEtiqueta(i, 'sin_existencia')} disabled={ocupado} />Sin existencias</label>}
                             </div>}
                             {editable && (capturaEstadoPieza || l.detalle || Number(l.cantidad) === 0) && <div id={`tienda-detalle-${i}`} className="gelia-preparacion-detalle">
@@ -447,7 +449,7 @@ export default function PrepararApartadoRecoge({ tarea, auth, documentos = [], d
                                     setDirty(true);
                                     setLineas((prev) => prev.map((fila, j) => j !== i ? fila : {
                                         ...fila,
-                                        estado_fisico: 'sin_existencia',
+                                        estado_fisico: 'sin_existencia', unica_pieza: false, mejor_ejemplar: false,
                                         cantidad_consulta: Number(fila.cantidad) > 0 ? Number(fila.cantidad) : (fila.cantidad_consulta || 1),
                                         cantidad: 0,
                                         observacion: String(fila.observacion || '').trim() || MOTIVO_SIN_EXISTENCIA,

@@ -165,7 +165,8 @@ class ConfiguracionSistemaController extends Controller
 
     private function olvidarCachePreparacionTienda(string $clave): void
     {
-        if ($clave !== \App\Services\ControlPedidos\PreparacionTiendaConfig::CLAVE_FLAG) {
+        \Illuminate\Support\Facades\Cache::forget(\App\Services\ControlPedidos\PlazosRetrasoPedidoBmaConfig::CACHE_KEY);
+        if (! str_starts_with($clave, 'control_pedidos.preparacion')) {
             return;
         }
 

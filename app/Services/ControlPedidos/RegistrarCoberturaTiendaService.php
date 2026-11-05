@@ -75,7 +75,7 @@ final class RegistrarCoberturaTiendaService
                     'cobertura' => $cobertura,
                     'atencion' => 'prevista',
                     'facultad' => $this->config->facultadMismoDia($usuario, $pedido->departamento_operacion_id),
-                    'sabado' => $local->isSaturday() || $local->isSunday(),
+                    'sabado' => ! app(ConfiguracionOperativaTienda::class)->diaMd($local),
                 ]);
                 if ($evaluada['motivo']) {
                     throw ValidationException::withMessages(['atencion_tienda' => $evaluada['motivo']]);
@@ -96,6 +96,11 @@ final class RegistrarCoberturaTiendaService
                 'registrada_at' => $registradaAt,
                 'registrada_por_id' => $usuario->id,
             ];
+            if (($anterior['tipo'] ?? '') === $cobertura) {
+                foreach (['confirmacion_enviada_at', 'confirmacion_enviada_por_id'] as $clave) {
+                    if (isset($anterior[$clave])) $json['cobertura_tienda'][$clave] = $anterior[$clave];
+                }
+            }
             if (($json['area_revision'] ?? null) === 'control_pedidos' && $cobertura === 'apartado') {
                 $json['origen_apartado'] = 'consulta_cedis_documentada';
             }
@@ -104,8 +109,9 @@ final class RegistrarCoberturaTiendaService
                 $evaluacion = (new \App\Support\ControlPedidos\PlazoApartadoTienda($this->config))->evaluarConfirmacion(
                     now(), isset($anterior['vence_at']) && ($anterior['tipo'] ?? '') === 'apartado' ? \Carbon\Carbon::parse($anterior['vence_at']) : null
                 );
-                if (! $evaluacion['permite']) throw ValidationException::withMessages(['cobertura' => $evaluacion['mensaje']]);
-                $json['cobertura_tienda']['vence_at'] = $evaluacion['vence_at']->toIso8601String();
+                $json['cobertura_tienda']['requiere_confirmacion_pedido'] = true;
+                $json['cobertura_tienda']['vence_at'] = $evaluacion['vence_at']?->toIso8601String();
+                if (! $evaluacion['permite']) $json['cobertura_tienda']['motivo_vigencia'] = $evaluacion['mensaje'];
                 $tarea = InstruccionEntrega::abiertas((int) $pedido->id)->first();
                 if ($tarea) {
                     $tarea->update(['fecha_limite' => $evaluacion['vence_at']]);

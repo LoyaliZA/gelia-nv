@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { Banknote, Wallet } from 'lucide-react';
-import { THEME_BTN_SECONDARY, THEME_LABEL, THEME_SELECT } from '../../../utils/geliaTheme';
+import { THEME_BTN_PRIMARY, THEME_BTN_SECONDARY, THEME_LABEL, THEME_SELECT } from '../../../utils/geliaTheme';
 import InputMoneda from './InputMoneda';
 import VigenciaApartadoTienda from './VigenciaApartadoTienda';
 import SeccionPagosExhibicion from './SeccionPagosExhibicion';
 import { calcularResumenCoberturaPago, formatearMoneda } from './pedidosBmaStyles';
+
+const SOLICITUD_VACIA = {};
 
 const MEDIOS_TIENDA = ['efectivo', 'tarjeta', 'deposito', 'otro'];
 
@@ -54,9 +56,10 @@ function repartirSaf(creditos, montoDeseado) {
 }
 
 export default function ImportesPagoTienda({
+    notaMismoDia = 'Mismo día: consulta el horario operativo vigente.',
     pedidoId,
     clienteId,
-    solicitud = {},
+    solicitud: solicitudInicial = SOLICITUD_VACIA,
     onSolicitud,
     editable = false,
     totalMercancia = '',
@@ -75,6 +78,8 @@ export default function ImportesPagoTienda({
     saldoAFavorConfirmado = null,
     onLectura,
 }) {
+    const [solicitud, setSolicitud] = useState(solicitudInicial);
+    useEffect(() => setSolicitud(solicitudInicial), [solicitudInicial]);
     const tipoGuardado = solicitud?.cobertura_tienda?.tipo || '';
     const [cobertura, setCobertura] = useState(tipoGuardado || (solicitud?.atencion_tienda === 'prevista' ? 'transferencia' : ''));
     const [mismoDia, setMismoDia] = useState(solicitud?.atencion_tienda === 'prevista' && ['', 'transferencia'].includes(tipoGuardado));
@@ -143,14 +148,38 @@ export default function ImportesPagoTienda({
                 { cobertura: tipo, mismo_dia: tipo === 'transferencia' && dia },
                 { headers: cabeceras() },
             );
-            if (respuesta.data?.solicitud_preparacion) onSolicitud?.(respuesta.data.solicitud_preparacion);
-            setAviso('Modalidad guardada. No confirma el pago, la remisión ni la entrega.');
+            if (respuesta.data?.solicitud_preparacion) {
+                setSolicitud(respuesta.data.solicitud_preparacion);
+                onSolicitud?.(respuesta.data.solicitud_preparacion);
+            }
+            onLectura?.(respuesta.data);
+            setAviso('Modalidad guardada.');
         } catch (error) {
             setAviso(mensajeDe(error, 'No se guardó la modalidad.'));
         } finally {
             setOcupado(false);
         }
     };
+
+    const confirmarPedido = async () => {
+        if (ocupado) return;
+        setOcupado(true);
+        setAviso('');
+        try {
+            const { data } = await axios.post(`/control-pedidos/${pedidoId}/confirmar-pedido-tienda`, {}, { headers: cabeceras() });
+            if (data?.solicitud_preparacion) {
+                setSolicitud(data.solicitud_preparacion);
+                onSolicitud?.(data.solicitud_preparacion);
+            }
+            setAviso('Confirmación enviada a tienda.');
+        } catch (error) {
+            setAviso(mensajeDe(error, 'No se envió la confirmación.'));
+        } finally { setOcupado(false); }
+    };
+    const confirmacionEnviada = Boolean(solicitud.cobertura_tienda?.confirmacion_enviada_at);
+    const venceApartado = solicitud.cobertura_tienda?.vence_at;
+    const bloqueoConfirmacion = solicitud.cobertura_tienda?.motivo_vigencia
+        || (!venceApartado ? 'Guarda la modalidad para calcular la vigencia.' : Date.parse(venceApartado) <= Date.now() ? 'La vigencia terminó. Revisa los horarios de Tienda.' : '');
 
     const cambiarCobertura = (valor) => {
         setCobertura(valor);
@@ -284,7 +313,7 @@ export default function ImportesPagoTienda({
                                 onChange={(evento) => setMismoDia(evento.target.checked)}
                             />
                             <span>
-                                Solicitar TIENDA MD · lunes a viernes, pago reportado hasta las 13:00. Disponible para todos los departamentos.
+                                {notaMismoDia}
                             </span>
                         </label>
                     )}
@@ -301,6 +330,15 @@ export default function ImportesPagoTienda({
                     {aviso && <p className="text-sm theme-text-main m-0 break-words" role="status">{aviso}</p>}
                     {pagoEnPdv && <p className="text-sm theme-text-main m-0">El cliente paga y recibe su remisión en PDV. Aquí no se registra el cobro ni se solicita comprobante. El auxiliar registra la entrega con número de remisión y fotografía.</p>}
                     {tipoGuardado === 'apartado' && <VigenciaApartadoTienda venceAt={solicitud.cobertura_tienda?.vence_at} />}
+                    {tipoGuardado === 'apartado' && solicitud.area_revision === 'preparacion_tienda' && (
+                        <div className="border-t theme-border pt-3 grid gap-2">
+                            <h4 className="text-sm font-semibold theme-text-main m-0">Confirmación del pedido</h4>
+                            {confirmacionEnviada ? <span className="gelia-estado-vivo gelia-estado-vivo--compacto gelia-estado-vivo--exito justify-self-start">Enviada a tienda</span> : <>
+                                {bloqueoConfirmacion && <p className="text-sm theme-text-muted m-0" role="status">{bloqueoConfirmacion}</p>}
+                                {editable && <button type="button" className={`${THEME_BTN_PRIMARY} min-h-[44px] justify-self-start`} disabled={ocupado || Boolean(bloqueoConfirmacion) || cobertura !== tipoGuardado} onClick={confirmarPedido}>Enviar confirmación a tienda</button>}
+                            </>}
+                        </div>
+                    )}
                     {tipoGuardado === 'credito' && (
                         <p className="text-sm theme-text-main m-0">
                             Crédito{solicitud?.credito_wizerp?.resultado ? `: ${solicitud.credito_wizerp.resultado}` : ''}.
@@ -310,7 +348,7 @@ export default function ImportesPagoTienda({
                     {reporte && (
                         <p className="text-sm theme-text-main m-0" role="status">
                             {atencionMd?.motivo || reporte.motivo || (reporte.oportuno
-                                ? 'El reporte entró hasta las 13:00. Complete verificación del ingreso y remisión para continuar.'
+                                ? 'Reporte oportuno. Complete la verificación del ingreso y la remisión.'
                                 : 'El reporte quedó pendiente de acuerdo. No se reprograma solo.')}
                         </p>
                     )}

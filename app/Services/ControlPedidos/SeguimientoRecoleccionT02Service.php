@@ -28,12 +28,12 @@ final class SeguimientoRecoleccionT02Service
                             || ResguardoPdv::query()->where('pedido_bma_id', $pedido->id)->where('estado', ResguardoPdv::ESTADO_ENTREGADO)->exists()) return 0;
                         $remision = $pedido->documentos()->where('tipo', PedidoBmaDocumento::TIPO_REMISION)->oldest()->first();
                         $desde = isset($json['remision_tienda']['emitida_at']) ? \Carbon\Carbon::parse($json['remision_tienda']['emitida_at']) : $remision?->created_at;
-                        if (! $desde || now()->lt($desde->copy()->addDays(20))) return 0;
+                        if (! $desde || now()->lt($desde->copy()->addDays(app(ConfiguracionOperativaTienda::class)->diasRecoleccion($pedido)))) return 0;
                         $json['seguimiento_recoleccion'] = ['estado' => 'pendiente_gestion', 'desde_remision' => $desde->toIso8601String(),
-                            'limite' => $desde->copy()->addDays(20)->toIso8601String(), 'avisado_at' => now()->toIso8601String()];
+                            'limite' => $desde->copy()->addDays(app(ConfiguracionOperativaTienda::class)->diasRecoleccion($pedido))->toIso8601String(), 'avisado_at' => now()->toIso8601String()];
                         $pedido->update(['solicitud_preparacion_json' => $json]);
                         app(NotificarPedidoBmaService::class)->ejecutar($pedido, 'pedido_custodia_20_dias',
-                            'Pasaron 20 días naturales desde la remisión. Recolección pendiente de gestión; la mercancía y el pago se conservan.', [], null, true);
+                            'Se cumplió el plazo de recolección desde la remisión. Pendiente de gestión; la mercancía y el pago se conservan.', [], null, true);
 
                         return 1;
                     });

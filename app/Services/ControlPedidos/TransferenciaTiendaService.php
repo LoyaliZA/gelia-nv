@@ -58,7 +58,7 @@ final class TransferenciaTiendaService
         $resguardo = $this->resguardo($pedido);
         $remision = $pedido->documentos()->where('tipo', PedidoBmaDocumento::TIPO_REMISION)->where('activo', true)->oldest()->first();
         $desde = isset($json['remision_tienda']['emitida_at']) ? \Carbon\Carbon::parse($json['remision_tienda']['emitida_at']) : $remision?->created_at;
-        $limite = $md ? null : $desde?->copy()->addDays(20);
+        $limite = $md ? null : $desde?->copy()->addDays(app(ConfiguracionOperativaTienda::class)->diasRecoleccion($pedido));
         $estado = match ($resguardo?->estado) {
             ResguardoPdv::ESTADO_ENTREGADO => 'entregada',
             ResguardoPdv::ESTADO_EN_CUSTODIA => 'en_custodia',
@@ -102,6 +102,8 @@ final class TransferenciaTiendaService
                 && $actor->can('control_pedidos.crear') && ! $pedido->cancelado_at && ! $resguardo && in_array($estado, ['pendiente_preparacion', 'preparada'], true),
             'resguardo_id' => $resguardo?->id,
             'bultos' => $pedido->bultosEmpaque()->with('documentos')->get(),
+            'plazo_recoleccion_dias' => app(ConfiguracionOperativaTienda::class)->diasRecoleccion($pedido),
+            'nota_md' => app(ConfiguracionOperativaTienda::class)->notaMd(),
             'limite_recoleccion' => $limite?->toIso8601String(),
             'pendiente_gestion' => $estado !== 'entregada' && $limite && now()->gte($limite),
             'bloqueo' => $pedido->motivoBloqueoEntregaTienda(),

@@ -49,7 +49,7 @@ it('en separación de mercancía marca única pieza y sin existencias sin redact
     expect(container.querySelector('[name="estado-0"]').value).toBe('sin_existencia');
     await click('Guardar y continuar después');
     expect(post.mock.calls[0][1].lineas[0]).toMatchObject({
-        unica_pieza: true, estado_fisico: 'sin_existencia', observacion: 'Sin existencias', cantidad: 0,
+        unica_pieza: false, estado_fisico: 'sin_existencia', observacion: 'Sin existencias', cantidad: 0,
     });
 });
 it('en recoge y transferencia muestra estado, comentario y marcas de la pieza', async () => {
@@ -77,7 +77,7 @@ it('en recoge y transferencia muestra estado, comentario y marcas de la pieza', 
     });
     await click('Guardar y continuar después');
     expect(post.mock.calls[0][1].lineas[0]).toMatchObject({
-        estado_fisico: 'sin_existencia', observacion: 'Sin existencia en anaquel', unica_pieza: true, mejor_ejemplar: true, cantidad: 0,
+        estado_fisico: 'sin_existencia', observacion: 'Sin existencia en anaquel', unica_pieza: false, mejor_ejemplar: false, cantidad: 0,
     });
     post.mockClear();
     await mount({ tarea: { ...tarea, modalidad: { codigo: 'RECOGE_TIENDA_TRANSFERENCIA' }, puede_responder: true } });
@@ -201,7 +201,7 @@ it('en la consulta de tienda responde disponibilidad y separa solo la selección
     await mount({ tarea: { ...consulta, pedido: { ...consulta.pedido, revision_disponibilidad: { estado: 'excepciones_pendientes' }, excepciones: [{ id: 1, descripcion: 'Crema agotada' }] } } });
     expect(button('Confirmar pedido separado')).toBeUndefined();
     expect(button('Enviar respuesta de disponibilidad')).toBeUndefined();
-    expect(container.textContent).toContain('Ventas está revisando');
+    expect(container.textContent).toContain('Ventas está confirmando');
     await mount({ tarea: { ...consulta, pedido: { ...consulta.pedido, consulta_cerrada: true, revision_disponibilidad: { estado: 'excepciones_pendientes', aceptacion_vigente: true }, excepciones: [{ id: 1, descripcion: 'Crema agotada' }] } } });
     expect(button('Confirmar pedido separado')).toBeDefined();
     await mount({ tarea: { ...consulta, pedido: { ...consulta.pedido, consulta_cerrada: true, revision_disponibilidad: { estado: 'sin_excepciones', aceptacion_vigente: true } } } });

@@ -40,8 +40,8 @@ class RegistrarProductosPreparacionService
                 $cantidad = (int) ($linea['cantidad'] ?? 0);
                 $estado = $linea['estado_fisico'] ?? 'bueno';
                 $observacion = trim((string) ($linea['observacion'] ?? ''));
-                $unicaPieza = filter_var($linea['unica_pieza'] ?? false, FILTER_VALIDATE_BOOLEAN);
-                $mejorEjemplar = filter_var($linea['mejor_ejemplar'] ?? false, FILTER_VALIDATE_BOOLEAN);
+                $unicaPieza = $estado !== 'sin_existencia' && filter_var($linea['unica_pieza'] ?? false, FILTER_VALIDATE_BOOLEAN);
+                $mejorEjemplar = $estado !== 'sin_existencia' && filter_var($linea['mejor_ejemplar'] ?? false, FILTER_VALIDATE_BOOLEAN);
                 if ($sku === '' || $descripcion === '' || $cantidad < 0 || ! in_array($estado, PedidoBmaRevisionProducto::ESTADOS, true)
                     || (($cantidad === 0 || $estado !== 'bueno') && $observacion === '') || ($estado === 'sin_existencia' && $cantidad > 0)) {
                     throw ValidationException::withMessages(['lineas.'.$orden => 'Seleccione producto y cantidad; describa el faltante, retiro o detalle.']);

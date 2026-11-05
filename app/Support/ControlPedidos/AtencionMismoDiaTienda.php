@@ -20,8 +20,10 @@ final class AtencionMismoDiaTienda
         $diaVigente = $fechaObjetivo !== null && $fechaObjetivo === now($zona)->toDateString();
         $origenCedis = ($json['area_revision'] ?? null) === 'control_pedidos';
         $local = now($zona);
+        $reglas = app(\App\Services\ControlPedidos\ConfiguracionOperativaTienda::class)->obtener();
+        [$h, $m] = array_map('intval', explode(':', $reglas['md_corte']));
         $continuacion = (! $oportuno && filled($reporte['primer_pago_at'] ?? null)) || ($fechaObjetivo !== null && ! $diaVigente)
-            || (blank($reporte['primer_pago_at'] ?? null) && ($local->isWeekend() || $local->gt($local->copy()->setTime(13, 0))));
+            || (blank($reporte['primer_pago_at'] ?? null) && (! in_array($local->dayOfWeekIso, $reglas['md_dias'], true) || $local->gt($local->copy()->setTime($h, $m))));
         $motivo = 'Mismo día previsto. Falta reportar el pago.';
         if (! $origenCedis) $motivo = 'Las piezas ya disponibles en PDV requieren acordar la modalidad; no se clasifican automáticamente como TIENDA MD.';
         elseif ($continuacion) $motivo = 'TIENDA MD pendiente de acuerdo de continuación. No se reprograma automáticamente.';

@@ -7,7 +7,7 @@ import ModalConfirmarAccion from './ModalConfirmarAccion';
 
 export default function GaleriaEvidenciasPedido({
     archivos = [], previews = [], onChange, onVer, label = 'Evidencias', obligatorio = false,
-    id, error, soloImagenes = false, maxArchivos = Infinity, maxMb = 10, disabled = false,
+    id, error, compacto = false, soloImagenes = false, maxArchivos = Infinity, maxMb = 10, disabled = false,
 }) {
     const uid = useId();
     const controlId = id || `evidencias-${uid}`;
@@ -71,7 +71,7 @@ export default function GaleriaEvidenciasPedido({
                     <button id={controlId} type="button" disabled={disabled} onClick={() => adjuntosRef.current?.click()}
                         aria-labelledby={`${controlId}-label ${controlId}-accion`} aria-invalid={Boolean(mensaje)} aria-describedby={`${controlId}-ayuda${mensaje ? ` ${controlId}-error` : ''}`}
                         className={`${BTN_SECONDARY} inline-flex items-center justify-center gap-2 ${esMovil ? 'flex-1' : ''}`}>
-                        <ImagePlus className="w-4 h-4" aria-hidden="true" /><span id={`${controlId}-accion`}>{esMovil ? 'Galería' : (soloImagenes ? 'Adjuntar fotos' : 'Adjuntar fotos o PDF')}</span>
+                        <ImagePlus className="w-4 h-4" aria-hidden="true" /><span id={`${controlId}-accion`}>{esMovil ? 'Galería' : (compacto ? 'Adjuntar' : soloImagenes ? 'Adjuntar fotos' : 'Adjuntar fotos o PDF')}</span>
                     </button>
                 </div>
                 <input ref={camaraRef} type="file" accept="image/*" capture="environment" className="hidden" aria-label={`Tomar foto: ${label}`} disabled={disabled}
@@ -79,7 +79,7 @@ export default function GaleriaEvidenciasPedido({
                 <input ref={adjuntosRef} type="file" accept={accept} multiple className="hidden" aria-label={`Adjuntar: ${label}`} disabled={disabled}
                     onChange={(event) => { agregar(event.target.files); event.target.value = ''; }} />
                 <p id={`${controlId}-ayuda`} className="text-xs theme-text-muted m-0 mt-2">
-                    {esMovil ? 'Revisa la foto antes de registrar.' : 'Arrastra archivos aquí o pega capturas con Ctrl+V.'} {formatos}, hasta {maxMb} MB por archivo.
+                    {compacto ? `Arrastra o pega · ${soloImagenes ? 'Imágenes' : 'PDF / imágenes'} · ${maxMb} MB por archivo` : <>{esMovil ? 'Revisa la foto antes de registrar.' : 'Arrastra archivos aquí o pega capturas con Ctrl+V.'} {formatos}, hasta {maxMb} MB por archivo.</>}
                 </p>
             </div>
             {mensaje && <p id={`${controlId}-error`} role="alert" className="text-sm theme-text-peligro m-0">{mensaje}</p>}

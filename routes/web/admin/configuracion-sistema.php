@@ -10,3 +10,8 @@ Route::middleware(['can:configuracion_sistema.gestionar'])->prefix('configuracio
     Route::delete('/{configuracion}', [ConfiguracionSistemaController::class, 'destroy'])->name('destroy');
     Route::post('/test-mail', [ConfiguracionSistemaController::class, 'testMail'])->name('test_mail');
 });
+
+Route::middleware(['can:configuracion_sistema.gestionar'])->prefix('configuracion-operativa')->name('configuracion_operativa.')->group(function () {
+    Route::get('/', [\App\Http\Controllers\Admin\ConfiguracionOperativaController::class, 'index'])->name('index');
+    Route::put('/', [\App\Http\Controllers\Admin\ConfiguracionOperativaController::class, 'update'])->name('update');
+});

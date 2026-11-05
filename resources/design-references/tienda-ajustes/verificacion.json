@@ -1,0 +1,18 @@
+[
+  {
+    "tamaño": "escritorio",
+    "tema": "dark",
+    "errores": [],
+    "desborde": false,
+    "miniatura": true,
+    "visor": true
+  },
+  {
+    "tamaño": "movil",
+    "tema": "light",
+    "errores": [],
+    "desborde": false,
+    "miniatura": true,
+    "visor": true
+  }
+]

@@ -13,9 +13,11 @@ const callbacks={onTotalMercancia:vi.fn(),onAplicaSaf:vi.fn(),onSaldoFavor:vi.fn
 const props={pedidoId:9,clienteId:8,solicitud:{cobertura_tienda:{tipo:'transferencia'}},editable:true,totalMercancia:8999,aplicaSaf:true,saldoFavor:500,safAplicaciones:[{saf_credito_id:1,monto:500}],importesListos:true,...callbacks};
 const render=(extra={})=>act(async()=>{ root.render(<ImportesPagoTienda {...props} {...extra}/>); await Promise.resolve(); });
 it('permite solicitar TIENDA MD sin facultad especial de departamento', async () => {
- await render({facultadMd:false});
- const check=[...container.querySelectorAll('input[type="checkbox"]')].find(input=>input.closest('label')?.textContent.includes('Solicitar TIENDA MD'));
+ await render({notaMismoDia:'Mismo día: transferencia reportada hasta las 12:15 (sáb).'});
+ const check=[...container.querySelectorAll('input[type="checkbox"]')].find(input=>input.closest('label')?.textContent.includes('Mismo día:'));
  expect(check).toBeTruthy();expect(check.disabled).toBe(false);
+ expect(container.textContent).toContain('hasta las 12:15 (sáb)');
+ expect(container.textContent).not.toContain('Disponible para todos los departamentos');
 });
 beforeEach(()=>{globalThis.IS_REACT_ACT_ENVIRONMENT=true;globalThis.route=(name,id)=>`${name}/${id}`;get.mockResolvedValue({data:{disponible:0,creditos_usables:[]}});post.mockReset();Object.values(callbacks).forEach(fn=>fn.mockReset());container=document.createElement('div');document.body.append(container);root=createRoot(container);});
 afterEach(async()=>{await act(()=>root.unmount());container.remove();});
@@ -67,4 +69,25 @@ it('conserva cargos existentes y usa la cookie actual sin adjuntar un token CSRF
  await act(async()=>{ [...container.querySelectorAll('button')].find(b=>b.textContent==='Guardar modalidad').click(); await Promise.resolve(); });
  expect(post.mock.lastCall[2].headers).not.toHaveProperty('X-CSRF-TOKEN');
  meta.remove();
+});
+it('guardar Pago al recoger adopta la respuesta y permite enviar la confirmación sin comprobante', async () => {
+ const solicitud={area_revision:'preparacion_tienda',revision_disponibilidad:{estado:'sin_excepciones'}};
+ const guardada={...solicitud,cobertura_tienda:{tipo:'apartado',requiere_confirmacion_pedido:true,vence_at:'2100-11-04T17:00:00-06:00'}};
+ post.mockResolvedValueOnce({data:{solicitud_preparacion:guardada}}).mockResolvedValueOnce({data:{solicitud_preparacion:{...guardada,cobertura_tienda:{...guardada.cobertura_tienda,confirmacion_enviada_at:'2026-11-04T11:00:00-06:00'}}}});
+ await render({solicitud});
+ const select=container.querySelector('select');
+ await act(()=>{select.value='apartado';select.dispatchEvent(new Event('change',{bubbles:true}));});
+ await act(async()=>{[...container.querySelectorAll('button')].find(b=>b.textContent==='Guardar modalidad').click();await Promise.resolve();});
+ const confirmar=[...container.querySelectorAll('button')].find(b=>b.textContent==='Enviar confirmación a tienda');
+ expect(confirmar).toBeTruthy();expect(confirmar.disabled).toBe(false);
+ await act(async()=>{confirmar.click();await Promise.resolve();});
+ expect(post.mock.lastCall[0]).toBe('/control-pedidos/9/confirmar-pedido-tienda');
+ expect(container.textContent).toContain('Enviada a tienda');
+ expect(pagoProps.current.puedeRegistrar).toBe(false);
+});
+it('una modalidad guardada fuera de vigencia explica el bloqueo de confirmación', async () => {
+ await render({solicitud:{area_revision:'preparacion_tienda',cobertura_tienda:{tipo:'apartado',vence_at:'2020-11-04T17:00:00-06:00'}}});
+ const confirmar=[...container.querySelectorAll('button')].find(b=>b.textContent==='Enviar confirmación a tienda');
+ expect(confirmar.disabled).toBe(true);
+ expect(container.textContent).toContain('La vigencia terminó');
 });

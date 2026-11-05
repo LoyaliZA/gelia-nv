@@ -242,6 +242,18 @@ class PedidoBmaController extends Controller
         ]));
     }
 
+    public function confirmarPedidoTienda(
+        PedidoBma $pedidoBma,
+        ListarPedidosBmaService $listarService,
+        \App\Services\ControlPedidos\ConfirmarPedidoTiendaService $servicio,
+    ): JsonResponse {
+        Gate::authorize('control_pedidos.crear');
+        $listarService->asegurarAcceso($pedidoBma, Auth::user());
+        $pedido = $servicio->ejecutar($pedidoBma, Auth::user());
+
+        return response()->json(['ok' => true, 'solicitud_preparacion' => $pedido->solicitud_preparacion]);
+    }
+
     public function anexoTienda(
         Request $request,
         PedidoBma $pedidoBma,
