@@ -23,6 +23,7 @@ use App\Services\Almacenes\LeerEncabezadosArchivoImportacionService;
 use App\Services\Almacenes\RegistrarAuditoriaAlmacenService;
 use App\Services\Catalogos\PlantillaImportacionCatalogoService;
 use App\Services\Productos\ArmarFichaProductoService;
+use App\Services\Productos\CalcularPrecioPublicoService;
 use App\Services\Productos\Extensiones\PerfumeriaExtensionService;
 use App\Services\Productos\GenerarFolioProductoService;
 use App\Services\Productos\GuardarAtributosProductoService;
@@ -33,6 +34,7 @@ use App\Support\Almacenes\OrdenamientoListadoAlmacen;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -52,7 +54,7 @@ class ProductoController extends Controller
 
     public function index(Request $request): Response
     {
-        $query = Producto::with(['marca', 'categoria', 'tipoProducto', 'imagenPrincipal']);
+        $query = Producto::with(['marca', 'categoria', 'tipoProducto', 'imagenPrincipal', 'costos']);
 
         if ($busqueda = $request->query('q')) {
             $query->buscarPorTexto($busqueda);
@@ -208,6 +210,7 @@ class ProductoController extends Controller
     public function store(
         StoreProductoRequest $request,
         GenerarFolioProductoService $generarFolio,
+        CalcularPrecioPublicoService $precios,
     ): RedirectResponse {
         $producto = Producto::create([
             'uuid' => (string) Str::uuid(),
@@ -220,8 +223,13 @@ class ProductoController extends Controller
             'tipo_producto_id' => $request->tipo_producto_id,
             'codigo_barras' => $request->codigo_barras,
             'peso' => $request->peso,
+            'margen' => $request->input('margen'),
+            'largo' => $request->input('largo'),
+            'ancho' => $request->input('ancho'),
+            'altura' => $request->input('altura'),
             'activo' => $request->boolean('activo', true),
         ]);
+        $precios->aplicar($producto);
 
         $this->persistirExtensiones($producto, $request->validated());
 
@@ -233,7 +241,7 @@ class ProductoController extends Controller
         return back()->with('success', 'Producto registrado correctamente.');
     }
 
-    public function update(UpdateProductoRequest $request, Producto $producto): RedirectResponse
+    public function update(UpdateProductoRequest $request, Producto $producto, CalcularPrecioPublicoService $precios): RedirectResponse
     {
         $producto->update([
             'sku' => $request->sku,
@@ -244,8 +252,13 @@ class ProductoController extends Controller
             'tipo_producto_id' => $request->tipo_producto_id,
             'codigo_barras' => $request->codigo_barras,
             'peso' => $request->peso,
+            'margen' => $request->input('margen'),
+            'largo' => $request->input('largo'),
+            'ancho' => $request->input('ancho'),
+            'altura' => $request->input('altura'),
             'activo' => $request->boolean('activo', true),
         ]);
+        $precios->aplicar($producto);
 
         $this->persistirExtensiones($producto, $request->validated());
 
@@ -254,6 +267,26 @@ class ProductoController extends Controller
         ]);
 
         return back()->with('success', 'Producto actualizado correctamente.');
+    }
+
+    public function exportarListaPrecios(): StreamedResponse
+    {
+        return response()->streamDownload(function () {
+            $out = fopen('php://output', 'w');
+            fprintf($out, chr(0xEF).chr(0xBB).chr(0xBF));
+            fputcsv($out, ['sku', 'descripcion', 'precio_publico_general']);
+            Producto::query()
+                ->orderBy('sku')
+                ->select(['id', 'sku', 'descripcion', 'precio_publico'])
+                ->chunkById(500, function ($productos) use ($out) {
+                    foreach ($productos as $producto) {
+                        fputcsv($out, [$producto->sku, $producto->descripcion, $producto->precio_publico]);
+                    }
+                });
+            fclose($out);
+        }, 'lista_precios_publico_general.csv', [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+        ]);
     }
 
     public function destroy(Producto $producto): RedirectResponse

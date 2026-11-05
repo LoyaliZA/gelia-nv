@@ -26,6 +26,7 @@ Route::prefix('gestion-interna')->name('gestion_interna.')->group(function () {
         Route::post('/{producto}/imagenes/{imagen}/principal', [ProductoImagenController::class, 'principal'])->middleware($gestionarImagenes)->name('imagenes.principal');
         Route::post('/{producto}/imagenes/{imagen}/miniatura', [ProductoImagenController::class, 'miniatura'])->middleware($gestionarImagenes)->name('imagenes.miniatura');
         Route::delete('/{producto}/imagenes/{imagen}', [ProductoImagenController::class, 'destroy'])->middleware($gestionarImagenes)->name('imagenes.destruir');
+        Route::get('/lista-precios', [GestionInternaProductoController::class, 'exportarListaPrecios'])->name('lista_precios');
         Route::get('/plantilla-importacion', [GestionInternaProductoController::class, 'descargarPlantillaImportacion'])->middleware('role_or_permission:gestion_interna.productos.importar|gestion_interna.productos.gestionar|catalogos.gestionar')->name('plantilla_importacion');
         Route::post('/import-preview', [GestionInternaProductoController::class, 'importPreview'])->middleware('role_or_permission:gestion_interna.productos.importar|gestion_interna.productos.gestionar|catalogos.gestionar')->name('import_preview');
         Route::post('/import-iniciar', [GestionInternaProductoController::class, 'importIniciar'])->middleware('role_or_permission:gestion_interna.productos.importar|gestion_interna.productos.gestionar|catalogos.gestionar')->name('import_iniciar');

@@ -4,31 +4,33 @@ namespace App\Services\Almacenes;
 
 use App\Models\Producto;
 use App\Models\ProductoCosto;
+use App\Services\Productos\CalcularPrecioPublicoService;
 
 class ProcesarFilaCostoImportacionService
 {
     public function __construct(
         private readonly ResolverProductoPorFolioImportacionService $folios,
+        private readonly CalcularPrecioPublicoService $precios,
     ) {}
 
     /**
+     * Un costo por producto. El almacén no participa.
+     *
      * @return array{accion: string, producto: Producto}
      */
-    public function ejecutar(array $row, array $mapping, int $almacenId, ?Producto $producto = null): array
+    public function ejecutar(array $row, array $mapping, ?int $almacenId = null, ?Producto $producto = null): array
     {
         $producto ??= $this->folios->exigirExistente($row, $mapping);
 
         $costo = $this->monto($row, $mapping, 'costo');
         $costoReposicion = $this->monto($row, $mapping, 'costo_reposicion');
-        $precioVenta = $this->monto($row, $mapping, 'precio_venta');
 
-        if ($costo === null && $costoReposicion === null && $precioVenta === null) {
-            throw new \RuntimeException('Debe indicar al menos costo, costo de reposición o precio de venta.');
+        if ($costo === null && $costoReposicion === null) {
+            throw new \RuntimeException('Debe indicar al menos costo promedio o costo de reposición.');
         }
 
         $existente = ProductoCosto::query()
             ->where('producto_id', $producto->id)
-            ->where('almacen_id', $almacenId)
             ->first();
 
         $datos = [];
@@ -38,23 +40,20 @@ class ProcesarFilaCostoImportacionService
         if ($costoReposicion !== null) {
             $datos['costo_reposicion'] = $costoReposicion;
         }
-        if ($precioVenta !== null) {
-            $datos['precio_venta'] = $precioVenta;
-        }
 
         if ($existente) {
             $existente->update($datos);
+            $this->precios->aplicar($producto);
 
             return ['accion' => 'actualizado', 'producto' => $producto];
         }
 
         ProductoCosto::create([
             'producto_id' => $producto->id,
-            'almacen_id' => $almacenId,
             'costo' => $costo ?? 0,
             'costo_reposicion' => $costoReposicion,
-            'precio_venta' => $precioVenta,
         ]);
+        $this->precios->aplicar($producto);
 
         return ['accion' => 'importado', 'producto' => $producto];
     }

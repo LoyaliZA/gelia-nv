@@ -328,7 +328,7 @@ class GeliaAiAgenteTest extends TestCase
         $meta = $this->subir($admin, 'costos.csv', "sku,costo\nMSKY100,9.9\n");
 
         Http::fake(['api.deepseek.test/*' => Http::sequence()
-            ->push($this->tools([['i1', 'proponer_importar_costos', ['file_id' => $meta['file_id'], 'almacen' => 'AJENO']]]))
+            ->push($this->tools([['i1', 'proponer_importar_inventarios', ['file_id' => $meta['file_id'], 'almacen' => 'AJENO']]]))
             ->push($this->texto('No tienes acceso a ese almacén.'))]);
 
         $this->actingAs($admin)->postJson(route('gelia_ai.chat'), [
@@ -337,16 +337,17 @@ class GeliaAiAgenteTest extends TestCase
         ])->assertOk()->assertJsonPath('propuesta_accion', null);
         $this->assertSame('sin_permiso_almacen', $this->mensajesTool($this->peticiones()[1])['i1']['error_code']);
 
-        // Aunque exista una propuesta guardada con ese almacén, al ejecutar se vuelve a validar el acceso.
+        // El costo es de la empresa: un almacén ajeno en la propuesta no se usa ni bloquea la importación.
         $propuesta = app(PropuestasAccionGeliaAi::class)->registrar($admin, 'importar_costos', [
             'file_id' => $meta['file_id'], 'almacen_id' => $ajeno->id, 'mapping' => ['sku' => 'sku', 'costo' => 'costo'],
         ], 'x');
         $this->actingAs($admin)->postJson(route('gelia_ai.acciones.ejecutar'), [
             'propuesta_id' => $propuesta['id'],
             'confirmado' => true,
-        ])->assertForbidden()->assertJsonPath('estado_propuesta', 'fallida');
+        ])->assertOk()->assertJsonPath('estado_propuesta', 'ejecutada');
 
-        Queue::assertNothingPushed();
+        $this->assertNull(\App\Models\Almacenes\ImportacionAlmacenLog::sole()->almacen_id);
+        Queue::assertPushed(\App\Jobs\Almacenes\ImportarAlmacenCatalogoJob::class, 1);
     }
 
     public function test_propuesta_de_otra_persona_no_se_puede_confirmar(): void

@@ -34,28 +34,28 @@ class PlantillaImportacionCatalogoService
         ],
         'productos' => [
             'filename' => 'plantilla_productos.csv',
-            'headers' => ['folio', 'sku', 'descripcion', 'marca', 'categoria', 'codigo_barras', 'peso', 'activo', 'ubicacion'],
-            'ejemplo' => ['100125', '12345', 'Producto demo', 'Marca X', 'Categoria Y', '7501234567890', '0.5', '1', 'A-01'],
+            'headers' => ['folio', 'sku', 'descripcion', 'marca', 'categoria', 'codigo_barras', 'peso', 'margen', 'largo', 'ancho', 'altura', 'activo'],
+            'ejemplo' => ['100125', '12345', 'Producto demo', 'Marca X', 'Categoria Y', '7501234567890', '0.5', '30', '10', '5', '15', '1'],
         ],
         'existencias' => [
             'filename' => 'plantilla_existencias.csv',
-            'headers' => ['folio', 'existencia'],
-            'ejemplo' => ['100125', '100'],
+            'headers' => ['folio', 'ubicacion', 'existencia'],
+            'ejemplo' => ['100125', 'A-01', '100'],
         ],
         'completa' => [
-            'filename' => 'plantilla_carga_completa.csv',
-            'headers' => ['folio', 'sku', 'descripcion', 'marca', 'categoria', 'codigo_barras', 'peso', 'activo', 'ubicacion', 'existencia', 'costo', 'costo_reposicion', 'precio_venta'],
-            'ejemplo' => ['100125', '12345', 'Producto demo', 'Marca X', 'Categoria Y', '7501234567890', '0.5', '1', 'A-01', '100', '50.00', '55.00', '89.99'],
+            'filename' => 'plantilla_existencias.csv',
+            'headers' => ['folio', 'ubicacion', 'existencia'],
+            'ejemplo' => ['100125', 'A-01', '100'],
         ],
         'inventarios' => [
             'filename' => 'plantilla_inventarios.csv',
-            'headers' => ['folio', 'sku', 'descripcion', 'categoria', 'marca', 'existencia', 'costo', 'costo_reposicion', 'precio_venta'],
-            'ejemplo' => ['100125', '12345', 'Producto demo', 'Aromas', 'Marca X', '100', '50.00', '55.00', '89.99'],
+            'headers' => ['folio', 'sku', 'ubicacion', 'existencia'],
+            'ejemplo' => ['100125', '12345', 'A-01', '100'],
         ],
         'costos' => [
             'filename' => 'plantilla_costos.csv',
-            'headers' => ['folio', 'costo', 'costo_reposicion', 'precio_venta'],
-            'ejemplo' => ['100125', '50.00', '55.00', '89.99'],
+            'headers' => ['folio', 'costo', 'costo_reposicion'],
+            'ejemplo' => ['100125', '50.00', '55.00'],
         ],
     ];
 

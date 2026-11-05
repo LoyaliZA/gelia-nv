@@ -3,6 +3,7 @@
 namespace App\Services\Almacenes;
 
 use App\Models\Producto;
+use App\Services\Productos\CalcularPrecioPublicoService;
 use App\Services\Productos\GenerarFolioProductoService;
 use Illuminate\Support\Str;
 
@@ -13,6 +14,7 @@ class ProcesarFilaProductoImportacionService
         private readonly ResolverRelacionCatalogoService $resolverCatalogo,
         private readonly GenerarFolioProductoService $generarFolio,
         private readonly ResolverProductoPorFolioImportacionService $folios,
+        private readonly CalcularPrecioPublicoService $precios,
     ) {}
 
     /**
@@ -71,6 +73,8 @@ class ProcesarFilaProductoImportacionService
             $datos['peso'] = (float) $row[$mapping['peso']];
         }
 
+        $datos = array_merge($datos, $this->medidasYMargen($row, $mapping));
+
         if ($this->celdaConValor($row, $mapping['activo'] ?? null)) {
             $activoStr = mb_strtolower(trim((string) $row[$mapping['activo']]));
             $datos['activo'] = ! in_array($activoStr, ['0', 'no', 'false', 'inactivo'], true);
@@ -81,6 +85,7 @@ class ProcesarFilaProductoImportacionService
         }
 
         $producto->update($datos);
+        $this->precios->aplicar($producto);
 
         return ['accion' => 'actualizado', 'producto' => $producto->fresh()];
     }
@@ -119,12 +124,39 @@ class ProcesarFilaProductoImportacionService
                 ? $this->normalizador->codigoBarras($row[$mapping['codigo_barras']] ?? null, $sku)
                 : $sku,
             'peso' => $this->celdaConValor($row, $mapping['peso'] ?? null) ? (float) $row[$mapping['peso']] : null,
+            ...$this->medidasYMargen($row, $mapping),
             'activo' => $this->celdaConValor($row, $mapping['activo'] ?? null)
                 ? ! in_array(mb_strtolower(trim((string) $row[$mapping['activo']])), ['0', 'no', 'false', 'inactivo'], true)
                 : true,
         ]);
+        $this->precios->aplicar($producto);
 
         return ['accion' => 'importado', 'producto' => $producto];
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     * @param  array<string, mixed>  $mapping
+     * @return array<string, float>
+     */
+    private function medidasYMargen(array $row, array $mapping): array
+    {
+        $datos = [];
+        foreach (['largo', 'ancho', 'altura'] as $campo) {
+            if ($this->celdaConValor($row, $mapping[$campo] ?? null)) {
+                $datos[$campo] = (float) $row[$mapping[$campo]];
+            }
+        }
+
+        if ($this->celdaConValor($row, $mapping['margen'] ?? null)) {
+            $margen = round((float) $row[$mapping['margen']], 2);
+            if ($margen < 0 || $margen > 100) {
+                throw new \RuntimeException('El margen debe estar entre 0 y 100.');
+            }
+            $datos['margen'] = $margen;
+        }
+
+        return $datos;
     }
 
     private function asegurarSkuLibre(string $sku, ?int $exceptoId): void

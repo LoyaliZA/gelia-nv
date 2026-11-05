@@ -47,9 +47,7 @@ class AlmacenesResumenController extends Controller
                 'inventarios' => $idsAlmacen->isEmpty()
                     ? 0
                     : Inventario::whereIn('almacen_id', $idsAlmacen)->count(),
-                'costos' => $idsAlmacen->isEmpty()
-                    ? 0
-                    : ProductoCosto::whereIn('almacen_id', $idsAlmacen)->count(),
+                'costos' => ProductoCosto::count(),
             ],
             'ultimasImportaciones' => $ultimasImportaciones,
             'sin_sucursales_operables' => $idsSucursal->isEmpty(),

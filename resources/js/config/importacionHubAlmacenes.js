@@ -6,12 +6,15 @@ export const MAPPING_HUB_DEFAULT = {
     categoria: '',
     codigo_barras: '',
     peso: '',
+    margen: '',
+    largo: '',
+    ancho: '',
+    altura: '',
     activo: '',
     ubicacion: '',
     existencia: '',
     costo: '',
     costo_reposicion: '',
-    precio_venta: '',
 };
 
 export const MAPPING_HUB_FICHA_REQUIRED = ['sku', 'folio', 'descripcion'];
@@ -24,12 +27,15 @@ export const MAPPING_HUB_LABELS = {
     categoria: 'Categoría',
     codigo_barras: 'Código de barras',
     peso: 'Peso',
+    margen: 'Margen (%)',
+    largo: 'Largo (cm)',
+    ancho: 'Ancho (cm)',
+    altura: 'Altura (cm)',
     activo: 'Activo',
     ubicacion: 'Ubicación',
     existencia: 'Existencia',
-    costo: 'Costo',
+    costo: 'Costo promedio',
     costo_reposicion: 'Costo reposición',
-    precio_venta: 'Precio de referencia',
 };
 
 export function autoMapearHub(headers, base = MAPPING_HUB_DEFAULT) {
@@ -43,11 +49,14 @@ export function autoMapearHub(headers, base = MAPPING_HUB_DEFAULT) {
         if ((lower.includes('cat') || lower.includes('fam')) && !mapping.categoria) mapping.categoria = h;
         if (lower.includes('barras') && !mapping.codigo_barras) mapping.codigo_barras = h;
         if (lower.includes('peso') && !mapping.peso) mapping.peso = h;
+        if (lower.includes('margen') && !mapping.margen) mapping.margen = h;
+        if (lower.includes('largo') && !mapping.largo) mapping.largo = h;
+        if (lower.includes('ancho') && !mapping.ancho) mapping.ancho = h;
+        if ((lower.includes('altura') || lower.includes('alto')) && !mapping.altura) mapping.altura = h;
         if (lower.includes('ubic') && !mapping.ubicacion) mapping.ubicacion = h;
         if ((lower.includes('exis') || lower.includes('stock')) && !mapping.existencia) mapping.existencia = h;
         if (lower.includes('repos') && !mapping.costo_reposicion) mapping.costo_reposicion = h;
         else if (lower.includes('costo') && !mapping.costo) mapping.costo = h;
-        if ((lower.includes('precio') || lower.includes('venta')) && !mapping.precio_venta) mapping.precio_venta = h;
         if (lower.includes('activ') && !mapping.activo) mapping.activo = h;
     });
     return mapping;

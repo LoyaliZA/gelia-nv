@@ -29,7 +29,10 @@ class IniciarImportacionAlmacenService
 
         if ($tipo === 'productos') {
             $rules = array_merge($rules, ReglasFichaProductoImportacion::reglasValidacionMapping());
-        } else {
+        } elseif ($tipo === 'inventarios') {
+            $rules['almacen_id'] = 'required|exists:almacenes,id';
+            $rules['mapping.existencia'] = 'required|string';
+        } elseif ($tipo !== 'costos') {
             $rules['mapping.sku'] = 'required|string';
         }
 
@@ -38,14 +41,6 @@ class IniciarImportacionAlmacenService
             $rules['mapping.monto_venta'] = 'required|string';
             // codigo_almacen o almacen_id
             $rules['almacen_id'] = 'nullable|exists:almacenes,id';
-        }
-
-        if (in_array($tipo, ['inventarios', 'costos'], true)) {
-            $rules['almacen_id'] = 'required|exists:almacenes,id';
-            if ($tipo === 'inventarios') {
-                $rules = array_merge($rules, ReglasFichaProductoImportacion::reglasValidacionMapping());
-                $rules['mapping.existencia'] = 'required|string';
-            }
         }
 
         $validated = $request->validate($rules);
@@ -59,6 +54,13 @@ class IniciarImportacionAlmacenService
 
         $userId = (int) $request->user()->id;
         $this->vistaPrevia->assertPerteneceAlUsuario($validated['file_path'], $userId);
+
+        $mappingEntrada = $request->input('mapping', []);
+        if (in_array($tipo, ['costos', 'inventarios'], true) && empty($mappingEntrada['folio']) && empty($mappingEntrada['sku'])) {
+            throw ValidationException::withMessages([
+                'mapping' => 'Mapea folio o SKU.',
+            ]);
+        }
 
         if (isset($validated['almacen_id'])) {
             $this->alcance->asegurarAlmacenOperable($request->user(), (int) $validated['almacen_id']);
@@ -98,7 +100,7 @@ class IniciarImportacionAlmacenService
             ]);
         }
 
-        if (in_array($tipo, ['inventarios', 'costos'], true) && ! $almacenId) {
+        if ($tipo === 'inventarios' && ! $almacenId) {
             throw ValidationException::withMessages([
                 'almacen_id' => 'Almacén requerido.',
             ]);

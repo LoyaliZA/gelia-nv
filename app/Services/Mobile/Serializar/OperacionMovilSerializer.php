@@ -55,8 +55,8 @@ class OperacionMovilSerializer
             'transito_ot' => $inventario->transito_ot,
             'minimo' => $inventario->minimo,
             'maximo' => $inventario->maximo,
-            'costo' => $this->decimal($inventario->getAttribute('costo_valor'), 2),
-            'precio_venta' => $this->decimal($inventario->getAttribute('precio_venta_valor'), 2),
+            'costo' => $this->decimal($producto?->costos?->costo, 2),
+            'precio_venta' => $this->decimal($producto?->precio_publico, 2),
             'producto' => $producto ? [
                 'id' => $producto->id,
                 'folio' => $producto->folio,

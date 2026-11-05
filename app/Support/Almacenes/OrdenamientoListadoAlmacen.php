@@ -37,6 +37,8 @@ class OrdenamientoListadoAlmacen
             ),
             'codigo_barras' => $query->orderBy('codigo_barras', $dir),
             'peso' => $query->orderBy('peso', $dir),
+            'margen' => $query->orderBy('margen', $dir),
+            'precio_publico' => $query->orderBy('precio_publico', $dir),
             default => $query->orderByDesc('id'),
         };
     }
@@ -52,15 +54,8 @@ class OrdenamientoListadoAlmacen
                     ->limit(1),
                 $dir
             ),
-            'almacen' => $query->orderBy(
-                Almacen::select('nombre')
-                    ->whereColumn('almacenes.id', 'producto_costos.almacen_id')
-                    ->limit(1),
-                $dir
-            ),
             'costo' => $query->orderBy('costo', $dir),
             'costo_reposicion' => $query->orderBy('costo_reposicion', $dir),
-            'precio_venta' => $query->orderBy('precio_venta', $dir),
             default => $query->orderByDesc('id'),
         };
     }

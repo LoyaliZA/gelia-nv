@@ -29,7 +29,7 @@ class CrearLoteImportacionAlmacenService
         $operaciones = array_values(array_intersect($operaciones, OperacionesImportacionAlmacen::todas()));
         if (OperacionesImportacionAlmacen::casoDesdeOperaciones($operaciones) === null) {
             throw ValidationException::withMessages([
-                'operaciones' => 'Elige un caso de importación: productos, costos, existencias o carga completa.',
+                'operaciones' => 'Elige un caso de importación: productos, costos o existencias.',
             ]);
         }
 

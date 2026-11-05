@@ -42,6 +42,16 @@ abstract class ImportarCatalogoAlmacenAccion implements AccionGeliaAi
         return [];
     }
 
+    protected function exigeAlmacen(): bool
+    {
+        return true;
+    }
+
+    protected function exigeIdentificador(): bool
+    {
+        return false;
+    }
+
     public function parametros(): array
     {
         $cols = [...$this->columnasObligatorias(), ...$this->columnasOpcionales()];
@@ -71,14 +81,16 @@ abstract class ImportarCatalogoAlmacenAccion implements AccionGeliaAi
         $almacenRef = $args['almacen'] ?? $args['almacen_codigo'] ?? null;
         $almacenId = isset($args['almacen_id']) ? (int) $args['almacen_id'] : null;
         $almacen = null;
-        if (! $almacenId && ($almacenRef === null || trim((string) $almacenRef) === '')) {
-            $faltantes[] = ['dato' => 'almacen', 'detalle' => 'Almacén destino (código o nombre)'];
-        } else {
-            $res = $this->almacenes->resolverParaUsuario($user, $almacenId, $almacenRef !== null ? (string) $almacenRef : null);
-            if (! $res['ok']) {
-                return $res + ($faltantes ? ['faltantes' => $faltantes] : []);
+        if ($this->exigeAlmacen()) {
+            if (! $almacenId && ($almacenRef === null || trim((string) $almacenRef) === '')) {
+                $faltantes[] = ['dato' => 'almacen', 'detalle' => 'Almacén destino (código o nombre)'];
+            } else {
+                $res = $this->almacenes->resolverParaUsuario($user, $almacenId, $almacenRef !== null ? (string) $almacenRef : null);
+                if (! $res['ok']) {
+                    return $res + ($faltantes ? ['faltantes' => $faltantes] : []);
+                }
+                $almacen = $res['almacen'];
             }
-            $almacen = $res['almacen'];
         }
 
         if ($faltantes !== []) {
@@ -103,6 +115,18 @@ abstract class ImportarCatalogoAlmacenAccion implements AccionGeliaAi
                 'error_code' => 'mapping_incompleto',
                 'error' => 'No se pudieron identificar estas columnas: '.implode(', ', $sinMapear).'. Pide a la persona usuaria qué encabezado corresponde.',
                 'faltantes' => array_map(fn ($c) => ['dato' => "mapping.{$c}", 'detalle' => "Columna del archivo para {$c}"], $sinMapear),
+                'opciones' => $headers,
+            ];
+        }
+
+        if ($this->exigeIdentificador() && ! isset($mapping['folio']) && ! isset($mapping['sku'])) {
+            return [
+                'ok' => false,
+                'error_code' => 'mapping_incompleto',
+                'error' => 'Mapea folio o SKU.',
+                'faltantes' => [
+                    ['dato' => 'mapping.folio', 'detalle' => 'Columna del archivo para folio o SKU'],
+                ],
                 'opciones' => $headers,
             ];
         }
@@ -141,16 +165,17 @@ abstract class ImportarCatalogoAlmacenAccion implements AccionGeliaAi
             'ok' => true,
             'payload' => [
                 'file_id' => (string) $meta['file_id'],
-                'almacen_id' => (int) $almacen->id,
+                'almacen_id' => $almacen?->id,
                 'mapping' => $mapping,
             ],
             'resumen' => "Importar {$this->etiqueta()} desde «{$meta['original_name']}»"
                 .($filas > 0 ? " (≈{$filas} filas)" : '')
-                ." al almacén {$almacen->codigo} · {$almacen->nombre}. Columnas: {$columnas}.",
+                .($almacen ? " al almacén {$almacen->codigo} · {$almacen->nombre}" : ' para el catálogo de la empresa')
+                .". Columnas: {$columnas}.",
             'advertencias' => $advertencias,
             'detalle' => [
                 'operacion' => 'Importar '.$this->etiqueta(),
-                'almacen' => "{$almacen->codigo} · {$almacen->nombre}",
+                'almacen' => $almacen ? "{$almacen->codigo} · {$almacen->nombre}" : null,
                 'archivos' => [array_filter([
                     'nombre' => (string) $meta['original_name'],
                     'filas' => $filas > 0 ? $filas : null,
@@ -189,16 +214,17 @@ abstract class ImportarCatalogoAlmacenAccion implements AccionGeliaAi
             $this->tipo(),
             $destino,
             $p['mapping'],
-            $p['almacen_id'],
+            $p['almacen_id'] ?? null,
         );
 
-        $almacen = $this->almacenes->resolver($p['almacen_id'], null);
+        $almacen = ! empty($p['almacen_id']) ? $this->almacenes->resolver($p['almacen_id'], null) : null;
+        $destinoTexto = $almacen?->codigo ? " para {$almacen->codigo}" : '';
 
         return [
             'ok' => true,
             'accion' => $this->id(),
             'reporte' => [
-                'resumen' => "Importación de {$this->etiqueta()} en cola para {$almacen?->codigo} (archivo «".($meta['original_name'] ?? '')."»). El resultado final se revisa en Almacenes → Importaciones.",
+                'resumen' => "Importación de {$this->etiqueta()} en cola{$destinoTexto} (archivo «".($meta['original_name'] ?? '')."»). El resultado final se revisa en Almacenes → Importaciones.",
                 'estado' => 'en_cola',
                 'detalles' => [],
                 'log_id' => $result['log_id'],

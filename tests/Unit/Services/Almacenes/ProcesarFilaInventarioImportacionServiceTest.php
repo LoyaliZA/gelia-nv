@@ -13,42 +13,42 @@ class ProcesarFilaInventarioImportacionServiceTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_solo_precio_venta_crea_fila_en_producto_costos(): void
+    public function test_no_crea_producto_ni_escribe_costo(): void
     {
         $almacen = Almacen::create([
             'codigo' => 'CEDIS',
             'nombre' => 'CEDIS',
             'activo' => true,
         ]);
+        $producto = Producto::create([
+            'sku' => 'SOLOPV',
+            'folio' => 800001,
+            'descripcion' => 'Ya existe',
+            'activo' => true,
+        ]);
 
-        $svc = app(ProcesarFilaInventarioImportacionService::class);
-        $svc->ejecutar(
+        app(ProcesarFilaInventarioImportacionService::class)->ejecutar(
             [
                 'sku' => 'SOLOPV',
                 'folio' => '800001',
-                'descripcion' => 'Solo precio',
                 'existencia' => '5',
-                'precio_venta' => '88.5',
+                'costo' => '88.5',
             ],
             [
                 'sku' => 'sku',
                 'folio' => 'folio',
-                'descripcion' => 'descripcion',
                 'existencia' => 'existencia',
-                'precio_venta' => 'precio_venta',
+                'costo' => 'costo',
             ],
             $almacen->id,
         );
 
-        $producto = Producto::where('sku', 'SOLOPV')->first();
-        $this->assertNotNull($producto);
         $this->assertSame(1, Producto::where('sku', 'SOLOPV')->count());
-
-        $costo = ProductoCosto::where('producto_id', $producto->id)
-            ->where('almacen_id', $almacen->id)
-            ->first();
-        $this->assertNotNull($costo);
-        $this->assertSame('88.50', (string) $costo->precio_venta);
-        $this->assertSame('0.00', (string) $costo->costo);
+        $this->assertSame(0, ProductoCosto::where('producto_id', $producto->id)->count());
+        $this->assertDatabaseHas('inventarios', [
+            'producto_id' => $producto->id,
+            'almacen_id' => $almacen->id,
+            'existencia' => '5.000',
+        ]);
     }
 }

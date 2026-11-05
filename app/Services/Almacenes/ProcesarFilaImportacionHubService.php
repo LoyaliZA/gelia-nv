@@ -64,7 +64,7 @@ class ProcesarFilaImportacionHubService
             }
         }
 
-        if ($almacenId && in_array(OperacionesImportacionAlmacen::COSTOS_PRECIOS, $operaciones, true)) {
+        if (in_array(OperacionesImportacionAlmacen::COSTOS_PRECIOS, $operaciones, true)) {
             if ($this->filaTieneDatosDeCosto($row, $mapping)) {
                 $r = $this->costos->ejecutar($row, $mapping, $almacenId, $producto);
                 $producto = $r['producto'];
@@ -76,16 +76,14 @@ class ProcesarFilaImportacionHubService
                     $hubioCambio = true;
                 }
             } elseif ($this->operacionUnica($operaciones, OperacionesImportacionAlmacen::COSTOS_PRECIOS)) {
-                throw new \RuntimeException('Debe indicar al menos costo, costo de reposición o precio de venta.');
+                throw new \RuntimeException('Debe indicar al menos costo promedio o costo de reposición.');
             }
         }
 
         if ($almacenId && in_array(OperacionesImportacionAlmacen::CANTIDADES_REFERENCIA, $operaciones, true) && ! empty($mapping['existencia'])) {
             $valor = trim((string) ($row[$mapping['existencia']] ?? ''));
             if ($valor === '') {
-                if ($this->operacionUnica($operaciones, OperacionesImportacionAlmacen::CANTIDADES_REFERENCIA)) {
-                    throw new \RuntimeException('Existencia obligatoria para cantidades de referencia.');
-                }
+                throw new \RuntimeException('Existencia obligatoria para cantidades de referencia.');
             } else {
                 $r = $this->cantidades->ejecutar($row, $mapping, $almacenId, $producto);
                 if ($r['accion'] === 'importado' || $r['accion'] === 'actualizado') {
@@ -118,7 +116,7 @@ class ProcesarFilaImportacionHubService
      */
     private function filaTieneDatosDeCosto(array $row, array $mapping): bool
     {
-        foreach (['costo', 'costo_reposicion', 'precio_venta'] as $campo) {
+        foreach (['costo', 'costo_reposicion'] as $campo) {
             if (! empty($mapping[$campo]) && isset($row[$mapping[$campo]]) && trim((string) $row[$mapping[$campo]]) !== '') {
                 return true;
             }

@@ -81,7 +81,7 @@ class GeliaAiPropuestasTest extends TestCase
 
         $log = ImportacionAlmacenLog::sole();
         $this->assertSame('costos', $log->tipo);
-        $this->assertSame($cedis->id, (int) $log->almacen_id);
+        $this->assertNull($log->almacen_id);
         $this->assertSame(self::MAPPING, $log->mapping);
         Queue::assertPushed(ImportarAlmacenCatalogoJob::class, 1);
     }

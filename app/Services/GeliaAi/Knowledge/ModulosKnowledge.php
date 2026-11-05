@@ -47,7 +47,7 @@ TXT;
         return <<<'TXT'
 Inventario (Almacenes): stock por producto+almacén (existencia, apartado, disponible=existencia-apartado; tránsito OC y tránsito OT como campos aparte).
 Buscar por SKU, descripción, código de barras o folio. Filtrar por almacén/sucursal en la UI. Cada persona ve solo almacenes de sus sucursales operables.
-GELIA consulta existencias de referencia (no stock confirmado para venta); con permiso almacenes.costos.ver también puede reportar costo y precio_venta de referencia por almacén. Importaciones unificadas en /almacenes/importaciones; GELIA puede preparar importaciones de costos/inventarios desde archivos adjuntos, que se ejecutan solo al confirmar.
+GELIA consulta existencias de referencia (no stock confirmado para venta); con permiso almacenes.costos.ver también puede reportar el costo de empresa y el precio de Público General, uno por producto. Importaciones unificadas en /almacenes/importaciones; GELIA puede preparar importaciones de costos/inventarios desde archivos adjuntos, que se ejecutan solo al confirmar.
 GELIA no crea ni ajusta inventario. No inventa precios.
 Permisos: almacenes.inventarios.ver, almacenes.costos.ver (precios).
 TXT;
@@ -60,7 +60,7 @@ Productos viven en Gestión Interna → Productos (ya no en Almacenes).
 Cada SKU es un producto independiente. Atributos tipados por categoría.
 Extensiones (p. ej. Perfumería/notas olfativas) solo aplican si la categoría las tiene asignadas; no son universales.
 Relaciones opcionales entre presentaciones hermanas (sin cascada). Contenido comercial (pitch/SEO) por canal.
-Inventarios y costos siguen en Almacenes.
+El costo y el margen son de la empresa. Inventarios, por sucursal y almacén, siguen en Almacenes.
 Permisos: gestion_interna.productos.ver / gestionar / importar.
 TXT;
     }

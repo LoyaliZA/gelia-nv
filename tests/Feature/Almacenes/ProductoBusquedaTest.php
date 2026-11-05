@@ -161,13 +161,12 @@ class ProductoBusquedaTest extends TestCase
     public function test_costos_ordenan_por_producto_y_costo(): void
     {
         Permission::findOrCreate('almacenes.costos.ver', 'web');
-        $almacen = $this->crearAlmacen();
 
         $productoA = $this->crearProducto(['sku' => 'A1', 'descripcion' => 'AAA Producto', 'folio' => 300001]);
         $productoZ = $this->crearProducto(['sku' => 'Z9', 'descripcion' => 'ZZZ Producto', 'folio' => 300002]);
 
-        ProductoCosto::create(['producto_id' => $productoZ->id, 'almacen_id' => $almacen->id, 'costo' => 5]);
-        ProductoCosto::create(['producto_id' => $productoA->id, 'almacen_id' => $almacen->id, 'costo' => 50]);
+        ProductoCosto::create(['producto_id' => $productoZ->id, 'costo' => 5]);
+        ProductoCosto::create(['producto_id' => $productoA->id, 'costo' => 50]);
 
         $this->actingAs($this->usuario)
             ->get(route('almacenes.costos.index', ['sort' => 'producto', 'dir' => 'asc']))

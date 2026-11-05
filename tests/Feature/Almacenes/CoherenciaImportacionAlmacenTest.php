@@ -60,7 +60,7 @@ class CoherenciaImportacionAlmacenTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_preset_inventario_abre_carga_completa_solo_si_puede_las_cuatro_operaciones(): void
+    public function test_preset_inventario_abre_existencias(): void
     {
         $completa = $this->usuario([
             'almacenes.inventarios.ver',
@@ -73,10 +73,10 @@ class CoherenciaImportacionAlmacenTest extends TestCase
             ->get(route('almacenes.importaciones.index', ['preset' => 'inventario']))
             ->assertOk()
             ->assertInertia(fn ($page) => $page
-                ->where('caso_inicial', 'completa')
-                ->has('casos', 4)
-                ->where('casos.3.id', 'completa')
-                ->where('casos.3.titulo', 'Carga completa')
+                ->where('caso_inicial', 'existencias')
+                ->has('casos', 3)
+                ->where('casos.2.id', 'existencias')
+                ->where('casos.2.titulo', 'Existencias')
             );
 
         $this->actingAs($completa)
@@ -101,7 +101,7 @@ class CoherenciaImportacionAlmacenTest extends TestCase
         $this->actingAs($parcial)
             ->get(route('almacenes.inventarios.index'))
             ->assertOk()
-            ->assertInertia(fn ($page) => $page->where('puede_carga_completa', false));
+            ->assertInertia(fn ($page) => $page->where('puede_carga_completa', true));
     }
 
     public function test_simular_existencias_no_cambia_el_catalogo(): void
@@ -120,9 +120,7 @@ class CoherenciaImportacionAlmacenTest extends TestCase
         ]);
         ProductoCosto::create([
             'producto_id' => $producto->id,
-            'almacen_id' => $almacen->id,
             'costo' => 8,
-            'precio_venta' => 12,
         ]);
         ProductoAlmacen::create([
             'producto_id' => $producto->id,
