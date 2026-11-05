@@ -3,7 +3,7 @@ import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import axios from 'axios';
-import SeguimientoTransferenciaTienda, { esTransferenciaT02 } from './SeguimientoTransferenciaTienda';
+import SeguimientoTransferenciaTienda, { esTransferenciaT02, esTransferenciaDocumental } from './SeguimientoTransferenciaTienda';
 vi.mock('axios', () => ({ default: { get: vi.fn(), post: vi.fn() } }));
 let container, root;
 const pedido = { id: 55, solicitud_preparacion: { modalidad_entrega: 'tienda', cobertura_tienda: { tipo: 'transferencia' } } };
@@ -27,4 +27,17 @@ it('el plazo vencido informa gestión sin ofrecer liberar mercancía y respeta s
     expect(container.textContent).toContain('Pendiente de gestión'); expect(container.textContent).toContain('no cancela la venta ni libera');
     expect(container.querySelectorAll('input,textarea,select')).toHaveLength(0);
     expect([...container.querySelectorAll('button')].some(button => button.textContent === 'Confirmar entrega al cliente')).toBe(false);
+});
+it('TIENDA MD participa en el recorrido y el acuerdo posterior exige confirmación expresa', async () => {
+    const mdPedido = { ...pedido, solicitud_preparacion: { ...pedido.solicitud_preparacion, atencion_tienda: 'prevista' } };
+    expect(esTransferenciaDocumental(mdPedido)).toBe(true);
+    axios.get.mockResolvedValue({ data: { ...respuesta, estado: 'pendiente_preparacion', puede_entregar: false, puede_continuar_posterior: true,
+        flujo: 'T-02.1', atencion_md: { pendiente_acuerdo: true, primer_pago_at: '2026-11-04T13:01:00-06:00', motivo: 'Pendiente de acuerdo.' } } });
+    await act(() => root.render(<SeguimientoTransferenciaTienda pedido={mdPedido} />));
+    expect(container.textContent).toContain('TIENDA MD · Pendiente de acuerdo');
+    expect(axios.post).not.toHaveBeenCalled();
+    await act(() => [...container.querySelectorAll('button')].find(button => button.textContent === 'Acordar recolección posterior · T-02').click());
+    await act(() => [...container.querySelectorAll('button')].find(button => button.textContent === 'Confirmar acuerdo y continuar como T-02').click());
+    expect(axios.post).not.toHaveBeenCalled();
+    expect(container.textContent).toContain('Describa el acuerdo');
 });

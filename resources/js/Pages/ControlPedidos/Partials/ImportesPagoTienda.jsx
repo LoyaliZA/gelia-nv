@@ -58,7 +58,6 @@ export default function ImportesPagoTienda({
     clienteId,
     solicitud = {},
     onSolicitud,
-    facultadMd = false,
     editable = false,
     totalMercancia = '',
     onTotalMercancia,
@@ -77,8 +76,8 @@ export default function ImportesPagoTienda({
     onLectura,
 }) {
     const tipoGuardado = solicitud?.cobertura_tienda?.tipo || '';
-    const [cobertura, setCobertura] = useState(tipoGuardado);
-    const [mismoDia, setMismoDia] = useState(solicitud?.atencion_tienda === 'prevista' && tipoGuardado === 'transferencia');
+    const [cobertura, setCobertura] = useState(tipoGuardado || (solicitud?.atencion_tienda === 'prevista' ? 'transferencia' : ''));
+    const [mismoDia, setMismoDia] = useState(solicitud?.atencion_tienda === 'prevista' && ['', 'transferencia'].includes(tipoGuardado));
     const [aviso, setAviso] = useState('');
     const [ocupado, setOcupado] = useState(false);
     const [safCuenta, setSafCuenta] = useState(null);
@@ -89,8 +88,8 @@ export default function ImportesPagoTienda({
     const sello = `${tipoGuardado}|${solicitud?.atencion_tienda || ''}|${solicitud?.tienda_md_reporte?.estado || ''}|${solicitud?.tienda_md_reporte?.primer_pago_at || ''}`;
 
     useEffect(() => {
-        setCobertura(tipoGuardado);
-        setMismoDia(solicitud?.atencion_tienda === 'prevista' && tipoGuardado === 'transferencia');
+        setCobertura(tipoGuardado || (solicitud?.atencion_tienda === 'prevista' ? 'transferencia' : ''));
+        setMismoDia(solicitud?.atencion_tienda === 'prevista' && ['', 'transferencia'].includes(tipoGuardado));
     }, [sello]);
 
     useEffect(() => {
@@ -281,12 +280,11 @@ export default function ImportesPagoTienda({
                                 type="checkbox"
                                 className="gelia-checkbox mt-1"
                                 checked={mismoDia}
-                                disabled={!editable || ocupado || !facultadMd}
+                                disabled={!editable || ocupado}
                                 onChange={(evento) => setMismoDia(evento.target.checked)}
                             />
                             <span>
-                                Solicitar Mismo día · lunes a viernes, pago reportado hasta las 13:00.
-                                {!facultadMd ? ' Esta cuenta no muestra facultad confirmada.' : ''}
+                                Solicitar TIENDA MD · lunes a viernes, pago reportado hasta las 13:00. Disponible para todos los departamentos.
                             </span>
                         </label>
                     )}
@@ -312,7 +310,7 @@ export default function ImportesPagoTienda({
                     {reporte && (
                         <p className="text-sm theme-text-main m-0" role="status">
                             {atencionMd?.motivo || reporte.motivo || (reporte.oportuno
-                                ? 'El reporte entró hasta las 13:00. Falta acuerdo de continuación; no se reprograma solo.'
+                                ? 'El reporte entró hasta las 13:00. Complete verificación del ingreso y remisión para continuar.'
                                 : 'El reporte quedó pendiente de acuerdo. No se reprograma solo.')}
                         </p>
                     )}

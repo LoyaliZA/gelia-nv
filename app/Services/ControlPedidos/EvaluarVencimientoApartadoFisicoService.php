@@ -42,7 +42,7 @@ class EvaluarVencimientoApartadoFisicoService
             if (! $tarea || $tarea->estado === PedidoBmaTareaPreparacion::ESTADO_CANCELADA) {
                 continue;
             }
-            if (\App\Support\ControlPedidos\TransferenciaT02::aplica($tarea->pedido)) {
+            if (\App\Support\ControlPedidos\TransferenciaT02::documental($tarea->pedido)) {
                 continue;
             }
             if ($this->mercanciaPagada($tarea->pedido)) {
@@ -102,7 +102,7 @@ class EvaluarVencimientoApartadoFisicoService
             if (! $tarea || $tarea->estado === PedidoBmaTareaPreparacion::ESTADO_CANCELADA) {
                 continue;
             }
-            if (\App\Support\ControlPedidos\TransferenciaT02::aplica($tarea->pedido)) {
+            if (\App\Support\ControlPedidos\TransferenciaT02::documental($tarea->pedido)) {
                 continue;
             }
             $antes = PedidoBmaCumplimientoEvento::query()

@@ -53,13 +53,18 @@ const MENSAJE_ALMACEN = 'Elige la sucursal o el almacén de tienda.';
 const MENSAJE_SIN_ALMACEN = 'No hay un almacén de tienda para recibir el apartado.';
 const MENSAJE_MODALIDAD = 'Este pedido ya tiene una instrucción, un pago o una remisión. La modalidad se conserva.';
 const NOTA_TIENDA_MD =
-    'Mismo día (T-02.1) es transferencia, con facultad por departamento o usuario, de lunes a viernes. El servidor acepta el reporte de pago hasta las 13:00. Elegirlo no confirma cobertura, preparación ni entrega. Las piezas ya disponibles en punto de venta y la continuación después del corte no tienen una regla automática.';
+    'TIENDA MD (T-02.1) usa transferencia y surtido desde CEDIS, de lunes a viernes. El servidor acepta el reporte de pago hasta las 13:00. Está disponible sin restricción de departamento por ahora. Fuera del corte se requiere acordar la continuación; no se reprograma automáticamente.';
 const ETIQUETA_AREA = {
     preparacion_tienda: 'Revisar y apartar en tienda',
     control_pedidos: 'Consultar disponibilidad en CEDIS',
 };
 
 const DESTINOS_TIENDA = [
+    {
+        id: 'mismo_dia_pdv', icono: Truck, area: 'control_pedidos',
+        titulo: 'TIENDA MD · Recoger hoy',
+        detalle: 'Consultar CEDIS para traslado a sucursal. Transferencia reportada hasta las 13:00, de lunes a viernes.',
+    },
     {
         id: 'revisar_apartar',
         icono: Store,
@@ -269,6 +274,7 @@ export default function FormularioRegistrarTienda({
     const [area, setArea] = useState(areaInicial);
     const [caso, setCaso] = useState(casoInicial);
     const [almacenId, setAlmacenId] = useState(almacenInicial);
+    const [sucursalMd, setSucursalMd] = useState(String(pedido?.sucursal_destino_id || ''));
     const [enviada, setEnviada] = useState(enviadaInicial);
     const [espera, setEspera] = useState(
         enviadaInicial
@@ -336,8 +342,8 @@ export default function FormularioRegistrarTienda({
                 tieneArchivo: Boolean(documento?.id && documento?.url),
                 receptor,
                 enviada,
-            }),
-        [modalidad, clienteId, departamentoId, folio, documento, receptor, enviada],
+            }) || (caso === 'mismo_dia_pdv' && !sucursalMd ? 'Elige la sucursal de recolección de TIENDA MD.' : ''),
+        [modalidad, clienteId, departamentoId, folio, documento, receptor, enviada, caso, sucursalMd],
     );
 
     const departamentoNombre =
@@ -371,7 +377,7 @@ export default function FormularioRegistrarTienda({
     const confirmadosRef = useRef(confirmados);
     confirmadosRef.current = confirmados;
     datosRef.current = {
-        clienteId, numeroCliente, departamentoId, folio, modalidad, area, caso, almacenId,
+        clienteId, numeroCliente, departamentoId, folio, modalidad, area, caso, almacenId, sucursalMd,
         totalMercancia, aplicaSaf, saldoFavor, safAplicaciones, safTocado,
     };
 
@@ -395,6 +401,8 @@ export default function FormularioRegistrarTienda({
                       modalidad_entrega: datos.modalidad,
                       ...(datos.modalidad === 'tienda' && datos.caso ? { caso_tienda: datos.caso } : {}),
                       ...(datos.modalidad === 'tienda' && datos.area ? { area_revision: datos.area } : {}),
+                      ...(datos.modalidad === 'tienda' && !enviada ? { atencion_tienda: datos.caso === 'mismo_dia_pdv' ? 'prevista' : null } : {}),
+                      ...(datos.modalidad === 'tienda' && !enviada && datos.caso === 'mismo_dia_pdv' ? { codigo_modalidad: 'RECOGE_TIENDA_TRANSFERENCIA' } : {}),
                       ...(datos.modalidad === 'tienda'
                           ? {
                                 almacen_revision_id:
@@ -416,6 +424,7 @@ export default function FormularioRegistrarTienda({
             ...baseRef.current,
         };
         const mercancia = datos.totalMercancia;
+        if (!enviada && datos.modalidad === 'tienda' && datos.caso === 'mismo_dia_pdv') cuerpo.sucursal_destino_id = datos.sucursalMd ? Number(datos.sucursalMd) : null;
         if (mercancia !== '' && mercancia !== null && mercancia !== undefined) {
             cuerpo.total_mercancia = mercancia;
         }
@@ -722,7 +731,7 @@ export default function FormularioRegistrarTienda({
             });
         }, 700);
         return () => window.clearTimeout(timer);
-    }, [abierto, clienteId, numeroCliente, departamentoId, folio, modalidad, area, caso, almacenId, totalMercancia, aplicaSaf, saldoFavor, safAplicaciones, safTocado]);
+    }, [abierto, clienteId, numeroCliente, departamentoId, folio, modalidad, area, caso, almacenId, sucursalMd, totalMercancia, aplicaSaf, saldoFavor, safAplicaciones, safTocado]);
 
     const dialog = usePedidoDialog({
         abierto,
@@ -1037,6 +1046,7 @@ export default function FormularioRegistrarTienda({
                                         </button>
                                     ))}
                                 </div>
+                                {caso === 'mismo_dia_pdv' && <label className={`${THEME_LABEL} block mt-3`} htmlFor="sucursal-md-inicial">Sucursal de recolección hoy<select id="sucursal-md-inicial" className={`${THEME_SELECT} w-full mt-1`} value={sucursalMd} disabled={enviada || avanzado || enviando || guardando} onChange={evento => setSucursalMd(evento.target.value)}><option value="">Elegir sucursal</option>{(catalogos.sucursales || []).map(sucursal => <option key={sucursal.id} value={String(sucursal.id)}>{sucursal.nombre}</option>)}</select></label>}
                                 {area === 'preparacion_tienda' && almacenes.length === 1 && (
                                     <div className="m-0 mt-2" role="status">
                                         <div

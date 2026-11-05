@@ -25,7 +25,7 @@ final class RegistrarRecepcionCustodiaTiendaService
 
     public function ejecutar(PedidoBmaTareaPreparacion $tarea, User $usuario): PedidoBmaTareaPreparacion
     {
-        if (\App\Support\ControlPedidos\TransferenciaT02::aplica($tarea->pedido)) {
+        if (\App\Support\ControlPedidos\TransferenciaT02::documental($tarea->pedido)) {
             throw ValidationException::withMessages(['custodia' => 'En T-02 registre por separado la recepción de bolsas y su ubicación de custodia.']);
         }
         if (! $usuario->can('control_pedidos.tienda.responder') && ! $usuario->can('control_pedidos.tienda.trasladar')) {

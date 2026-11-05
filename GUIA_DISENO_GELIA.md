@@ -1,5 +1,7 @@
 # Dirección visual de GELIA para agentes
 
+Continuación del 4 de noviembre para [TIENDA MD](gestion-pedidos-docs/TIENDA_MD_IMPLEMENTACION.md): identificar MD y sucursal desde la solicitud a CEDIS; reutilizar el panel de transferencia para bolsas, recepción, custodia y entrega. Mostrar la hora del primer reporte en México y la continuación pendiente sin prometer reprogramación. La acción de continuar como T-02 exige acuerdo explícito. MD queda abierto a todos los departamentos por decisión del usuario. Conservar la composición, las galerías y la personalización GELIA.
+
 Continuación operativa del 4 de noviembre de 2026: [T-02 — transferencia y custodia](gestion-pedidos-docs/TIENDA_T02_IMPLEMENTACION.md) reutiliza los paneles de Registrar pedidos, galerías de evidencia y primitivas GELIA. Presentar procedencia y sucursal de recolección como datos distintos, y separar preparación, salida, recepción, ubicación de custodia y entrega. Conservar tema, acento y fuente; el plazo de 20 días identifica gestión pendiente, sin liberar mercancía pagada automáticamente. La referencia registra el alcance y los límites de comprobación visual.
 
 Esta guía recoge la decisión del usuario del 2 de noviembre de 2026: las skills de diseño son útiles si mantienen el rumbo de GELIA. La calidad se evalúa por el resultado completo y su relación con la aplicación existente.

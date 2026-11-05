@@ -1,5 +1,7 @@
 # Tienda T-02 — transferencia y recolección posterior
 
+Continuación posterior del mismo día: [T-02.1 — TIENDA MD](TIENDA_MD_IMPLEMENTACION.md) extiende el recorrido compartido. La exclusión de MD que describe el alcance original de esta entrega queda actualizada por esa implementación y por las decisiones vigentes.
+
 Decisión e implementación del 4 de noviembre de 2026. Esta entrega continúa T-01 por solicitud del usuario. Las instrucciones anteriores de detener el trabajo en el servidor correspondían al cierre anterior; el usuario autorizó resolver el build y continuar T-02 con comprobaciones acotadas.
 
 ## Recorrido implementado

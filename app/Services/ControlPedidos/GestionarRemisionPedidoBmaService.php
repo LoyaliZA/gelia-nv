@@ -26,12 +26,12 @@ class GestionarRemisionPedidoBmaService
             throw new \InvalidArgumentException('La remisión debe ser un archivo PDF.');
         }
 
-        if (\App\Support\ControlPedidos\TransferenciaT02::aplica($pedido) && ! isset($pedido->solicitud_preparacion_json['remision_tienda']['emitida_at']) && ! $fechaEmision) {
+        if (\App\Support\ControlPedidos\TransferenciaT02::documental($pedido) && ! isset($pedido->solicitud_preparacion_json['remision_tienda']['emitida_at']) && ! $fechaEmision) {
             throw new \InvalidArgumentException('Indique la fecha de emisión de la remisión Wizerp para iniciar los 20 días naturales.');
         }
         return DB::transaction(function () use ($pedido, $archivo, $usuarioId, $fechaEmision) {
             $pedido = PedidoBma::query()->lockForUpdate()->findOrFail($pedido->id);
-            if (\App\Support\ControlPedidos\TransferenciaT02::aplica($pedido) && ! isset($pedido->solicitud_preparacion_json['remision_tienda']['emitida_at'])) {
+            if (\App\Support\ControlPedidos\TransferenciaT02::documental($pedido) && ! isset($pedido->solicitud_preparacion_json['remision_tienda']['emitida_at'])) {
                 $json = $pedido->solicitud_preparacion_json ?? [];
                 $json['remision_tienda'] = ['emitida_at' => \Carbon\Carbon::parse($fechaEmision, 'America/Mexico_City')->startOfDay()->toIso8601String(),
                     'registrada_por_id' => $usuarioId, 'registrada_at' => now()->toIso8601String()];

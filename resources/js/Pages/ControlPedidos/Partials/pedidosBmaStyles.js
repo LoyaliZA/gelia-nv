@@ -161,8 +161,18 @@ const etiquetaConsultaPedido = (pedido) => {
 
 export const estadoTransferenciaTienda = (pedido, fase = pedido?.estatus?.fase_ciclo) => {
     const solicitud = pedido?.solicitud_preparacion;
-    if (solicitud?.modalidad_entrega !== 'tienda' || solicitud?.cobertura_tienda?.tipo !== 'transferencia'
-        || (solicitud.atencion_tienda || 'no') !== 'no' || pedido?.prioridad_md || ['CANCELADO', 'ENTREGADO'].includes(fase)) return null;
+    if (solicitud?.modalidad_entrega !== 'tienda' || ['CANCELADO', 'ENTREGADO'].includes(fase)) return null;
+    const md = solicitud.atencion_tienda === 'prevista';
+    if (md) {
+        const estadoFisico = { en_transito: 'En traslado', recibido: 'Bolsas recibidas', en_recepcion: 'Pendiente de custodia', en_custodia: 'En custodia' }[pedido.estatus_sucursal];
+        if (estadoFisico) return { label: `TIENDA MD · ${estadoFisico}`, color: pedido.estatus_sucursal === 'en_custodia' ? 'var(--color-exito)' : 'var(--color-primario)' };
+        const reporte = solicitud.tienda_md_reporte;
+        const fechaLocal = valor => new Date(valor).toLocaleDateString('en-CA', { timeZone: 'America/Mexico_City' });
+        if (reporte?.estado === 'tardio' || (reporte?.primer_pago_at && fechaLocal(reporte.primer_pago_at) !== fechaLocal(Date.now()))) return { label: 'TIENDA MD · Pendiente de acuerdo', color: 'var(--color-aviso)' };
+        if (['PESAJE_PENDIENTE', 'PESAJE_RESPONDIDO'].includes(fase)) return { label: `TIENDA MD · ${etiquetaConsultaPedido(pedido)}`, color: 'var(--color-primario)' };
+        return { label: `TIENDA MD · ${fase === 'BORRADOR' ? 'Borrador' : fase === 'PENDIENTE_DE_ENVIO' ? 'Bolsas preparadas' : reporte?.oportuno ? 'Pago reportado' : 'Pendiente de pago'}`, color: 'var(--color-primario)' };
+    }
+    if (solicitud?.cobertura_tienda?.tipo !== 'transferencia') return null;
     if (solicitud.seguimiento_recoleccion?.estado === 'pendiente_gestion') return { label: 'Pendiente de gestión', color: 'var(--color-aviso)' };
     const estados = {
         en_transito: 'En traslado a sucursal', recibido: 'Bolsas recibidas', en_recepcion: 'Pendiente de custodia', en_custodia: 'En custodia',

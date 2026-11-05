@@ -1,6 +1,6 @@
 import { esCapturaTienda } from '../../Partials/flujoCapturaPedido';
 import ConsultaSolicitudTienda from '../../Partials/ConsultaSolicitudTienda';
-import { esTransferenciaT02 } from '../../Partials/SeguimientoTransferenciaTienda';
+import { esTransferenciaDocumental } from '../../Partials/SeguimientoTransferenciaTienda';
 import { pedidoEsTrasladoInternoPdv } from '../../Partials/destinoSucursalPedido';
 import ListaProductosOk from '../../Partials/ListaProductosOk';
 import usePedidoDialog from '../../Partials/usePedidoDialog';
@@ -163,9 +163,9 @@ export default function ModalDetalleCedis({
     const esEmpacado = esPedidoEmpacadoCedis(fase);
     const haySinExAbierta = revisiones.some(revisionSinExistenciaAbierta);
     const actualizacionMercanciaPendiente = Boolean(pedido.consulta_actualizacion_pendiente);
-    const puedeEmpacar = !esTransferenciaT02(pedido) && (fase === 'EN_CEDIS' || fase === 'INCIDENCIA_CEDIS') && !pedido.es_resguardo && !haySinExAbierta && !actualizacionMercanciaPendiente;
+    const puedeEmpacar = !esTransferenciaDocumental(pedido) && (fase === 'EN_CEDIS' || fase === 'INCIDENCIA_CEDIS') && !pedido.es_resguardo && !haySinExAbierta && !actualizacionMercanciaPendiente;
     const puedeReportarSinEx = (fase === 'EN_CEDIS' || fase === 'INCIDENCIA_CEDIS') && !pedido.empacado_at;
-    const puedeMarcarEnviado = !esTransferenciaT02(pedido) && fase === 'PENDIENTE_DE_ENVIO' && Boolean(puedeEnviar) && !actualizacionMercanciaPendiente;
+    const puedeMarcarEnviado = !esTransferenciaDocumental(pedido) && fase === 'PENDIENTE_DE_ENVIO' && Boolean(puedeEnviar) && !actualizacionMercanciaPendiente;
     const puedeReabrirEnvio = fase === 'ENVIADO' && Boolean(puedeReabrir);
     const cajasPendientes = cajasOrdenadas.filter((c) => (c.estatus_recoleccion || 'pendiente') === 'pendiente');
     const cajasRecolectadasCount = pedido.cajas_recolectadas
@@ -496,7 +496,7 @@ export default function ModalDetalleCedis({
                         </section>
                         )}
 
-                        <ConsultaSolicitudTienda pedido={pedido} operarTransferencia onTransferenciaActualizada={avance => setPedido(actual => ({ ...actual, estatus: avance.estatus, estatus_sucursal: avance.estatus_sucursal, empacado_at: avance.empacado_at, solicitud_preparacion: { ...actual.solicitud_preparacion, transferencia_tienda: { ...actual.solicitud_preparacion?.transferencia_tienda, historial: avance.historial } } }))} />
+                        <ConsultaSolicitudTienda pedido={pedido} operarTransferencia onTransferenciaActualizada={avance => setPedido(actual => ({ ...actual, estatus: avance.estatus, estatus_sucursal: avance.estatus_sucursal, empacado_at: avance.empacado_at, solicitud_preparacion: avance.solicitud_preparacion || actual.solicitud_preparacion }))} />
                         {!esCapturaTienda(pedido) && tieneRevisionFisica && (
                             <section id="cedis-revision" tabIndex={-1} className={`${SECCION_WRAP} gelia-pedidos-seccion`}>
                                 <h3 className="gelia-pedidos-seccion-titulo mb-3">{esTienda ? 'Registro de productos' : 'Revisión física'}</h3>

@@ -160,7 +160,7 @@ final class ExpedienteRegistrarPedidos
             return 'Falta elegir la cobertura: pago al recoger, transferencia o crédito.';
         }
         $reporte = $json['tienda_md_reporte']['estado'] ?? null;
-        if ($reporte === 'tardio') {
+        if ($reporte === 'tardio' && ($json['atencion_tienda'] ?? '') === 'prevista') {
             return 'El reporte de Mismo día llegó fuera de corte. Queda pendiente de acuerdo.';
         }
         $credito = $json['credito_wizerp']['resultado'] ?? null;

@@ -29,6 +29,12 @@ final class AplicarCorteMismoDiaTienda
             return;
         }
         $evaluacion = $this->corte->evaluar($pago->created_at ?? now(), $this->config->zonaHoraria(), true);
+        $fechaSolicitud = $json['tienda_md_solicitud']['fecha'] ?? null;
+        if ($fechaSolicitud && $fechaSolicitud !== ($pago->created_at ?? now())->copy()->timezone($this->config->zonaHoraria())->toDateString()) {
+            $evaluacion['estado'] = CorteMismoDiaTienda::TARDIO;
+            $evaluacion['oportuno'] = false;
+            $evaluacion['motivo'] = 'El pago se reportó en otra fecha que la solicitud TIENDA MD. Falta acordar la continuación; no se reprograma automáticamente.';
+        }
         $json['tienda_md_reporte'] = [
             'estado' => $evaluacion['estado'],
             'oportuno' => $evaluacion['oportuno'],

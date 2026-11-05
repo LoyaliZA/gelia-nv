@@ -18,7 +18,7 @@ final class DestinoRevisionRegistrarPedidos
 
     public const MENSAJE_AREA = 'Elige el destino de la revisión.';
 
-    public const MENSAJE_MISMO_DIA = 'Mismo día (T-02.1) no se envía como apartado ni como consulta desde esta captura.';
+    public const MENSAJE_MISMO_DIA = 'TIENDA MD solicita disponibilidad y traslado desde CEDIS, de lunes a viernes, con sucursal de recolección definida.';
 
     public const MENSAJE_ALMACEN = 'Elige la sucursal o el almacén de tienda.';
 

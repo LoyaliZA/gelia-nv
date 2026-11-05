@@ -204,7 +204,7 @@ final class VisibilidadPedidoBma
         if (self::puedeConsultarEnListadoBma($usuario, $pedido)) {
             return true;
         }
-        if (TransferenciaT02::aplica($pedido)) {
+        if (TransferenciaT02::documental($pedido)) {
             $enDestino = $usuario->idsSucursalesOperables()->contains((int) $pedido->sucursal_destino_id)
                 && ($usuario->can('control_pedidos.tienda.ver') || $usuario->can('pdv.resguardos.ver') || $usuario->can('pdv.resguardos.entregar'));
             $asignado = $usuario->can('control_pedidos.tienda.ver')

@@ -43,6 +43,7 @@ class TransferenciaTiendaTest extends TestCase
         $depto = Departamento::query()->create(['nombre' => 'Tienda T02', 'activo' => true]);
         $this->cedis = User::factory()->create(['departamento_id' => $depto->id]);
         $this->vendedora = User::factory()->create(['departamento_id' => $depto->id]);
+        $this->vendedora->givePermissionTo(Permission::findOrCreate('control_pedidos.crear', 'web'));
         $this->auxiliar = User::factory()->create(['departamento_id' => $depto->id]);
         foreach (['control_pedidos.cedis', 'control_pedidos.cedis.empacar', 'control_pedidos.cedis.enviar'] as $permiso) $this->cedis->givePermissionTo(Permission::findOrCreate($permiso, 'web'));
         foreach (['control_pedidos.tienda.responder', 'pdv.resguardos.entregar', 'pdv.acceder'] as $permiso) $this->auxiliar->givePermissionTo(Permission::findOrCreate($permiso, 'web'));
@@ -70,6 +71,78 @@ class TransferenciaTiendaTest extends TestCase
     {
         $version = $this->pedido->fresh()->solicitud_preparacion_json['transferencia_tienda']['version'] ?? 0;
         return app(TransferenciaTiendaService::class)->ejecutar($this->pedido, $actor, $accion, array_merge(['version' => $version], $datos));
+    }
+
+    protected function tearDown(): void
+    {
+        \Carbon\Carbon::setTestNow();
+        parent::tearDown();
+    }
+
+    private function activarMd(bool $oportuno = true): void
+    {
+        \Carbon\Carbon::setTestNow(\Carbon\Carbon::parse('2026-11-04 14:00:00', 'America/Mexico_City'));
+        $json = $this->pedido->fresh()->solicitud_preparacion_json;
+        $json['atencion_tienda'] = 'prevista';
+        $json['tienda_md_solicitud'] = ['fecha' => '2026-11-04'];
+        $json['tienda_md_reporte'] = ['estado' => $oportuno ? 'oportuno' : 'tardio', 'oportuno' => $oportuno,
+            'primer_pago_at' => $oportuno ? '2026-11-04T12:59:00-06:00' : '2026-11-04T13:01:00-06:00'];
+        $this->pedido->update(['solicitud_preparacion_json' => $json, 'prioridad_md' => $oportuno]);
+    }
+
+    public function test_md_oportuno_se_traslada_y_conserva_custodia_pagada_si_no_recoge_hoy(): void
+    {
+        $this->activarMd();
+        $this->assertSame('T-02.1', $this->preparar()['flujo']);
+        $this->operar('salida', $this->cedis);
+        $this->operar('recibir', $this->auxiliar, ['bolsas_verificadas' => true]);
+        $this->operar('custodia', $this->auxiliar, ['almacen_id' => $this->destino->id, 'ubicacion' => 'MD, anaquel B']);
+        \Carbon\Carbon::setTestNow(\Carbon\Carbon::parse('2026-11-05 10:00:00', 'America/Mexico_City'));
+        $estado = app(TransferenciaTiendaService::class)->resumen($this->pedido->fresh(), $this->auxiliar);
+        $this->assertSame('en_custodia', $estado['estado']);
+        $this->assertTrue($estado['puede_entregar']);
+        $this->assertNull($estado['limite_recoleccion']);
+        $this->assertSame('entregada', $this->operar('entregar', $this->auxiliar, ['receptor' => 'Cliente MD', 'foto' => UploadedFile::fake()->image('md-entrega.jpg')])['estado']);
+    }
+
+    public function test_md_tardio_no_prepara_y_espera_acuerdo_explicito_para_continuar_t02(): void
+    {
+        $this->activarMd(false);
+        $resumen = app(TransferenciaTiendaService::class)->resumen($this->pedido->fresh(), $this->cedis);
+        $this->assertFalse($resumen['puede_preparar']);
+        $this->assertTrue($resumen['atencion_md']['pendiente_acuerdo']);
+        $this->assertSame('prevista', $this->pedido->fresh()->solicitud_preparacion_json['atencion_tienda']);
+        $original = $this->pedido->fresh()->solicitud_preparacion_json['tienda_md_reporte'];
+        $resultado = $this->operar('continuar_posterior', $this->vendedora, ['observaciones' => 'Cliente acepta recoger mañana en la misma sucursal.']);
+        $this->assertSame('T-02', $resultado['flujo']);
+        $this->assertSame($original, $this->pedido->fresh()->solicitud_preparacion_json['tienda_md_reporte']);
+        $this->assertSame('REM-T02', $this->pedido->fresh()->numero_remision);
+        $this->assertFalse($this->pedido->fresh()->prioridad_md);
+        $this->assertSame('preparada', $this->preparar()['estado']);
+    }
+
+    public function test_md_tardio_no_se_prepara_por_la_ruta_de_empaque_anterior(): void
+    {
+        $this->activarMd(false);
+        $this->expectException(\RuntimeException::class);
+        app(\App\Services\ControlPedidos\MarcarEmpacadoPedidoBmaService::class)->ejecutar($this->pedido->fresh(), $this->cedis->id);
+    }
+
+    public function test_md_reportado_en_otro_dia_no_se_reprograma_solo(): void
+    {
+        $this->activarMd();
+        \Carbon\Carbon::setTestNow(\Carbon\Carbon::parse('2026-11-05 10:00:00', 'America/Mexico_City'));
+        $resumen = app(TransferenciaTiendaService::class)->resumen($this->pedido->fresh(), $this->cedis);
+        $this->assertFalse($resumen['puede_preparar']);
+        $this->assertTrue($resumen['atencion_md']['pendiente_acuerdo']);
+        $this->assertSame('T-02.1', $resumen['flujo']);
+    }
+
+    public function test_cedis_no_puede_acordar_la_continuacion_por_la_vendedora(): void
+    {
+        $this->activarMd(false);
+        $this->expectException(ValidationException::class);
+        $this->operar('continuar_posterior', $this->cedis, ['observaciones' => 'Se pretende continuar sin vendedora.']);
     }
 
     private function preparar(): array

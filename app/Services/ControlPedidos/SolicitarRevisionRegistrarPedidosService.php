@@ -68,6 +68,11 @@ class SolicitarRevisionRegistrarPedidosService
             }
 
             $this->guardarDestino($pedido, $area, $almacen?->id);
+            if (($pedido->solicitud_preparacion_json['caso_tienda'] ?? '') === 'mismo_dia_pdv') {
+                $json = $pedido->solicitud_preparacion_json ?? [];
+                $json['tienda_md_solicitud'] ??= ['fecha' => now(app(PreparacionTiendaConfig::class)->zonaHoraria())->toDateString(), 'registrada_at' => now()->toIso8601String(), 'por_id' => $usuario->id];
+                $pedido->update(['solicitud_preparacion_json' => $json]);
+            }
             $pedido = $pedido->fresh(['estatus', 'cliente']);
             $nombre = $almacen?->nombre;
 
@@ -136,9 +141,13 @@ class SolicitarRevisionRegistrarPedidosService
             throw ValidationException::withMessages(['pdf' => 'Adjunta el PDF o la imagen del pedido.']);
         }
         if (($json['caso_tienda'] ?? '') === 'mismo_dia_pdv') {
-            throw ValidationException::withMessages([
-                'caso_tienda' => DestinoRevisionRegistrarPedidos::MENSAJE_MISMO_DIA,
-            ]);
+            if ($area !== DestinoRevisionRegistrarPedidos::CONTROL_PEDIDOS) {
+                throw ValidationException::withMessages(['caso_tienda' => 'TIENDA MD solicita disponibilidad y traslado desde CEDIS. El caso de piezas ya disponibles en PDV queda pendiente de definición.']);
+            }
+            if (now(app(PreparacionTiendaConfig::class)->zonaHoraria())->isWeekend()) {
+                throw ValidationException::withMessages(['caso_tienda' => 'TIENDA MD se realiza de lunes a viernes.']);
+            }
+            app(ValidarSucursalDestinoPedidoBma::class)->ejecutar($pedido, $pedido->sucursal_destino_id, 'RECOGE_TIENDA_TRANSFERENCIA', true);
         }
         if ($pedido->estatus?->fase_ciclo !== CatalogoEstatusPedido::FASE_BORRADOR) {
             throw ValidationException::withMessages(['estado' => 'Este pedido ya no está en captura.']);

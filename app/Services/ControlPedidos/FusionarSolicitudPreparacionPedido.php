@@ -307,6 +307,8 @@ class FusionarSolicitudPreparacionPedido
             'credito_wizerp',
             'tienda_md_reporte',
             'tienda_md',
+            'tienda_md_solicitud',
+            'tienda_md_continuacion',
             'retiro_recoleccion',
             'anexo_sin_remision',
             'anexos_relacionados',

@@ -99,7 +99,7 @@ class RecorridoTiendaIntegralTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_la_cobertura_de_mismo_dia_exige_facultad_y_dia_habil_sin_confirmarla(): void
+    public function test_la_cobertura_de_mismo_dia_esta_abierta_a_departamentos_y_exige_dia_habil_sin_confirmarla(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-11-07 10:00:00', 'America/Mexico_City'));
         $pedido = $this->pedido([
@@ -129,12 +129,8 @@ class RecorridoTiendaIntegralTest extends TestCase
                 'revision_disponibilidad' => ['estado' => 'sin_excepciones', 'confirmada' => false],
             ],
         ]);
-        try {
-            app(RegistrarCoberturaTiendaService::class)->ejecutar($pedidoFacultad, $sinFacultad, 'transferencia', true);
-            $this->fail('Sin facultad no queda prevista la atención.');
-        } catch (ValidationException $e) {
-            $this->assertSame(PoliticaAccionesRegistrarPedidos::MENSAJE_FACULTAD, $e->errors()['atencion_tienda'][0]);
-        }
+        $sinRestriccion = app(RegistrarCoberturaTiendaService::class)->ejecutar($pedidoFacultad, $sinFacultad, 'transferencia', true);
+        $this->assertSame('prevista', $sinRestriccion->solicitud_preparacion_json['atencion_tienda']);
 
         $registrada = app(RegistrarCoberturaTiendaService::class)->ejecutar($pedido->fresh(), $this->usuario, 'transferencia', true);
         $this->assertSame('prevista', $registrada->solicitud_preparacion_json['atencion_tienda']);

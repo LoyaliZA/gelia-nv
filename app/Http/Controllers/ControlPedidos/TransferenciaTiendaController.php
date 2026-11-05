@@ -31,6 +31,7 @@ final class TransferenciaTiendaController extends Controller
             'entregar' => ['receptor' => ['required', 'string', 'max:160'], 'foto' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:10240']],
             'salida' => [],
             'gestionar' => ['observaciones' => ['required', 'string', 'max:2000']],
+            'continuar_posterior' => ['observaciones' => ['required', 'string', 'max:2000']],
             default => throw ValidationException::withMessages(['accion' => 'La acción no existe.']),
         };
         try {

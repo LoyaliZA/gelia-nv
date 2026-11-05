@@ -54,10 +54,11 @@ final class TransferenciaTiendaService
         $this->assertVisible($pedido, $actor);
         $json = $pedido->solicitud_preparacion_json ?? [];
         $operacion = $json['transferencia_tienda'] ?? [];
+        $md = \App\Support\ControlPedidos\AtencionMismoDiaTienda::datos($pedido);
         $resguardo = $this->resguardo($pedido);
         $remision = $pedido->documentos()->where('tipo', PedidoBmaDocumento::TIPO_REMISION)->where('activo', true)->oldest()->first();
         $desde = isset($json['remision_tienda']['emitida_at']) ? \Carbon\Carbon::parse($json['remision_tienda']['emitida_at']) : $remision?->created_at;
-        $limite = $desde?->copy()->addDays(20);
+        $limite = $md ? null : $desde?->copy()->addDays(20);
         $estado = match ($resguardo?->estado) {
             ResguardoPdv::ESTADO_ENTREGADO => 'entregada',
             ResguardoPdv::ESTADO_EN_CUSTODIA => 'en_custodia',
@@ -74,7 +75,10 @@ final class TransferenciaTiendaService
             && ! (($json['segundo_traslado']['estado'] ?? '') === 'autorizada' && ! ($json['segundo_traslado']['recepcion_confirmada'] ?? false));
 
         return [
-            'aplica' => TransferenciaT02::aplica($pedido),
+            'aplica' => TransferenciaT02::documental($pedido),
+            'flujo' => $md ? 'T-02.1' : 'T-02',
+            'atencion_md' => $md,
+            'solicitud_preparacion' => $pedido->solicitud_preparacion,
             'derivacion' => $derivacion,
             'estado' => $estado,
             'estatus' => $pedido->estatus,
@@ -94,14 +98,16 @@ final class TransferenciaTiendaService
             'historial' => $operacion['historial'] ?? [],
             'gestiones' => $operacion['gestiones'] ?? [],
             'puede_gestionar' => (int) $pedido->vendedor_id === (int) $actor->id && $actor->can('control_pedidos.crear') && $estado !== 'entregada' && ! $pedido->cancelado_at,
+            'puede_continuar_posterior' => $md !== null && (int) $pedido->vendedor_id === (int) $actor->id
+                && $actor->can('control_pedidos.crear') && ! $pedido->cancelado_at && ! $resguardo && in_array($estado, ['pendiente_preparacion', 'preparada'], true),
             'resguardo_id' => $resguardo?->id,
             'bultos' => $pedido->bultosEmpaque()->with('documentos')->get(),
             'limite_recoleccion' => $limite?->toIso8601String(),
             'pendiente_gestion' => $estado !== 'entregada' && $limite && now()->gte($limite),
             'bloqueo' => $pedido->motivoBloqueoEntregaTienda(),
-            'puede_preparar' => $listo && $pedido->puedeMarcarEmpacado() && $estado === 'pendiente_preparacion' && $this->puedeOrigen($pedido, $actor)
+            'puede_preparar' => $listo && (! $md || $md['puede_preparar_md']) && $pedido->puedeMarcarEmpacado() && $estado === 'pendiente_preparacion' && $this->puedeOrigen($pedido, $actor)
                 && (($json['area_revision'] ?? '') !== 'control_pedidos' || $actor->can('control_pedidos.cedis.empacar')),
-            'puede_salida' => $listo && $estado === 'preparada' && $this->puedeOrigen($pedido, $actor)
+            'puede_salida' => $listo && (! $md || $md['puede_preparar_md']) && $estado === 'preparada' && $this->puedeOrigen($pedido, $actor)
                 && (($json['area_revision'] ?? '') !== 'control_pedidos' || $actor->can('control_pedidos.cedis.enviar')),
             'puede_recibir' => $listo && $estado === 'en_traslado' && $this->puedeDestino($pedido, $actor),
             'puede_custodia' => $listo && $estado === 'recibida' && $this->puedeDestino($pedido, $actor),
@@ -116,8 +122,8 @@ final class TransferenciaTiendaService
         return DB::transaction(function () use ($pedido, $actor, $accion, $datos) {
             $pedido = PedidoBma::query()->lockForUpdate()->findOrFail($pedido->id);
             $this->assertVisible($pedido, $actor);
-            if (! TransferenciaT02::aplica($pedido)) {
-                throw ValidationException::withMessages(['modalidad' => 'Esta operación corresponde a transferencia ordinaria para recoger posteriormente.']);
+            if (! TransferenciaT02::documental($pedido)) {
+                throw ValidationException::withMessages(['modalidad' => 'Esta operación corresponde a transferencia documental de Tienda, ordinaria o TIENDA MD.']);
             }
             $json = $pedido->solicitud_preparacion_json ?? [];
             $operacion = $json['transferencia_tienda'] ?? [];
@@ -129,7 +135,7 @@ final class TransferenciaTiendaService
                 throw ValidationException::withMessages(['version' => 'El pedido cambió. Actualice antes de continuar.']);
             }
             $resumen = $this->resumen($pedido, $actor);
-            $clave = ['preparar' => 'puede_preparar', 'salida' => 'puede_salida', 'recibir' => 'puede_recibir', 'custodia' => 'puede_custodia', 'entregar' => 'puede_entregar', 'gestionar' => 'puede_gestionar'][$accion] ?? '';
+            $clave = ['preparar' => 'puede_preparar', 'salida' => 'puede_salida', 'recibir' => 'puede_recibir', 'custodia' => 'puede_custodia', 'entregar' => 'puede_entregar', 'gestionar' => 'puede_gestionar', 'continuar_posterior' => 'puede_continuar_posterior'][$accion] ?? '';
             if (! ($resumen[$clave] ?? false)) {
                 throw ValidationException::withMessages(['operacion' => 'La acción espera la etapa anterior, el pago verificado, la remisión y el responsable autorizado de origen o destino.']);
             }
@@ -139,7 +145,15 @@ final class TransferenciaTiendaService
                 \App\Support\ControlPedidos\InstruccionEntrega::assertEjecutable($pedido->instruccionEntregaVigente);
             }
             app(ValidarSucursalDestinoPedidoBma::class)->ejecutar($pedido, (int) $pedido->sucursal_destino_id, exigirSiAplica: true);
-            if ($accion === 'gestionar') {
+            if ($accion === 'continuar_posterior') {
+                $motivo = trim($datos['observaciones'] ?? '');
+                if ($motivo === '') throw ValidationException::withMessages(['observaciones' => 'Registre el acuerdo con el cliente para continuar con recolección posterior.']);
+                $json['tienda_md_continuacion'] = ['destino' => 'T-02', 'acuerdo' => $motivo, 'por_id' => $actor->id, 'por' => $actor->name,
+                    'fecha' => now()->toIso8601String(), 'reporte_original' => $json['tienda_md_reporte'] ?? null];
+                $json['atencion_tienda'] = 'no';
+                $json['caso_tienda'] = ($json['area_revision'] ?? '') === 'control_pedidos' ? 'consultar_cedis' : 'revisar_apartar';
+                $pedido->update(['solicitud_preparacion_json' => $json, 'prioridad_md' => false]);
+            } elseif ($accion === 'gestionar') {
                 if (trim($datos['observaciones'] ?? '') === '') throw ValidationException::withMessages(['observaciones' => 'Describa el seguimiento con el cliente.']);
                 $operacion['gestiones'][] = ['nota' => trim($datos['observaciones']), 'por_id' => $actor->id, 'por' => $actor->name, 'fecha' => now()->toIso8601String()];
             } elseif ($accion === 'preparar') {
@@ -213,6 +227,7 @@ final class TransferenciaTiendaService
                     'salida' => 'Mercancía enviada a la sucursal de recolección. Falta verificar la recepción.',
                     'recibir' => 'Bolsas verificadas en la sucursal. Falta identificar su custodia.',
                     'custodia' => 'Pedido en custodia identificada, listo para que el cliente lo recoja.',
+                    'continuar_posterior' => 'Ventas registró el acuerdo para continuar como T-02. Se conservan los pagos, la remisión y el reporte original de TIENDA MD.',
                     default => 'Pedido entregado al cliente desde custodia, con fotografía.',
                 }, [], $actor->id, true);
 

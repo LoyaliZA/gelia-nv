@@ -133,11 +133,9 @@ class PreparacionTiendaConfig
 
     public function facultadMismoDia(User $usuario, ?int $departamentoId): bool
     {
-        if ($usuario->hasRole('Super Admin') || $usuario->can(\App\Support\ControlPedidos\RegistrarPedidos\PoliticaAccionesRegistrarPedidos::PERMISO_MD)) {
-            return true;
-        }
-
-        return $departamentoId !== null && in_array((int) $departamentoId, $this->departamentosMismoDia(), true);
+        // Decisión del usuario, 4/11/2026: MD sin filtro especial de usuario/departamento.
+        // Las facultades normales de creación, revisión, traslado y entrega se conservan.
+        return true;
     }
 
     public function modalidadPermitida(string $codigo): bool

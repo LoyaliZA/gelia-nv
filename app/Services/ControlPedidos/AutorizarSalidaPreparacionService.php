@@ -156,7 +156,7 @@ class AutorizarSalidaPreparacionService
             );
 
             if ($politica->abreResguardo()) {
-                if (! \App\Support\ControlPedidos\TransferenciaT02::aplica($tarea->pedido)) {
+                if (! \App\Support\ControlPedidos\TransferenciaT02::documental($tarea->pedido)) {
                     $this->custodia->ejecutar($tarea, $cumplimiento, $usuario);
                 }
             }

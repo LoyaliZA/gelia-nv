@@ -240,6 +240,19 @@ class ImportesPagoTiendaTest extends TestCase
         $this->assertEquals(30, $primero->fresh()->monto);
     }
 
+    public function test_md_no_se_reprograma_si_el_primer_pago_llega_otro_dia_aunque_sea_antes_del_corte(): void
+    {
+        $pedido = $this->pedido(['solicitud_preparacion_json' => ['modalidad_entrega' => 'tienda', 'atencion_tienda' => 'prevista',
+            'cobertura_tienda' => ['tipo' => 'transferencia'], 'tienda_md_solicitud' => ['fecha' => '2026-11-04']]]);
+        $pago = new PedidoBmaPago;
+        $pago->forceFill(['id' => 999, 'forma_pago' => 'transferencia', 'created_at' => \Carbon\Carbon::parse('2026-11-05T12:00:00-06:00')]);
+        app(\App\Services\ControlPedidos\AplicarCorteMismoDiaTienda::class)->aplicar($pedido, $pago);
+        $reporte = $pedido->fresh()->solicitud_preparacion_json['tienda_md_reporte'];
+        $this->assertSame('tardio', $reporte['estado']);
+        $this->assertFalse($reporte['oportuno']);
+        $this->assertFalse($pedido->fresh()->prioridad_md);
+    }
+
     public function test_el_credito_no_crea_exhibicion_de_caja_ni_etiqueta_md(): void
     {
         $this->caja();

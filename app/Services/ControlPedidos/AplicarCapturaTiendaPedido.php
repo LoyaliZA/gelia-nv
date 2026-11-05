@@ -32,7 +32,7 @@ final class AplicarCapturaTiendaPedido
                     $usuario,
                     $pedido->departamento_operacion_id
                 ),
-                'sabado' => now()->isSaturday(),
+                'sabado' => now(app(PreparacionTiendaConfig::class)->zonaHoraria())->isWeekend(),
             ]);
             if ($atencion['motivo']) {
                 throw ValidationException::withMessages([

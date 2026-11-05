@@ -12,6 +12,11 @@ let root,container;
 const callbacks={onTotalMercancia:vi.fn(),onAplicaSaf:vi.fn(),onSaldoFavor:vi.fn(),onSafAplicaciones:vi.fn()};
 const props={pedidoId:9,clienteId:8,solicitud:{cobertura_tienda:{tipo:'transferencia'}},editable:true,totalMercancia:8999,aplicaSaf:true,saldoFavor:500,safAplicaciones:[{saf_credito_id:1,monto:500}],importesListos:true,...callbacks};
 const render=(extra={})=>act(async()=>{ root.render(<ImportesPagoTienda {...props} {...extra}/>); await Promise.resolve(); });
+it('permite solicitar TIENDA MD sin facultad especial de departamento', async () => {
+ await render({facultadMd:false});
+ const check=[...container.querySelectorAll('input[type="checkbox"]')].find(input=>input.closest('label')?.textContent.includes('Solicitar TIENDA MD'));
+ expect(check).toBeTruthy();expect(check.disabled).toBe(false);
+});
 beforeEach(()=>{globalThis.IS_REACT_ACT_ENVIRONMENT=true;globalThis.route=(name,id)=>`${name}/${id}`;get.mockResolvedValue({data:{disponible:0,creditos_usables:[]}});post.mockReset();Object.values(callbacks).forEach(fn=>fn.mockReset());container=document.createElement('div');document.body.append(container);root=createRoot(container);});
 afterEach(async()=>{await act(()=>root.unmount());container.remove();});
 it('muestra desglose y pendiente antes de la captura de pago y vincula la etiqueta al importe',async()=>{

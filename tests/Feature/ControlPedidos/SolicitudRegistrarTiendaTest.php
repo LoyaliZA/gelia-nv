@@ -191,7 +191,7 @@ class SolicitudRegistrarTiendaTest extends TestCase
         ]))->assertStatus(422);
     }
 
-    public function test_mismo_dia_no_se_envia_como_apartado_ni_consulta(): void
+    public function test_mismo_dia_no_se_clasifica_automaticamente_como_apartado_en_pdv(): void
     {
         $pedido = $this->pedido();
         $this->documento($pedido);
@@ -212,6 +212,24 @@ class SolicitudRegistrarTiendaTest extends TestCase
         $fresco = $pedido->fresh();
         $this->assertSame('mismo_dia_pdv', $fresco->solicitud_preparacion_json['caso_tienda']);
         $this->assertFalse((bool) $fresco->prioridad_md);
+        $this->assertSame(0, PedidoBmaTareaPreparacion::query()->count());
+    }
+
+    public function test_tienda_md_se_identifica_desde_la_solicitud_a_cedis_con_sucursal_sin_permiso_especial_md(): void
+    {
+        \Carbon\Carbon::setTestNow(\Carbon\Carbon::parse('2026-11-04 11:00:00', 'America/Mexico_City'));
+        $this->beforeApplicationDestroyed(fn () => \Carbon\Carbon::setTestNow());
+        CatalogoModalidadPreparacionPedido::query()->firstOrCreate(['codigo' => 'RECOGE_TIENDA_TRANSFERENCIA'], ['nombre' => 'Transferencia', 'activo' => true]);
+        $pedido = $this->pedido(); $this->documento($pedido);
+        $this->actingAs($this->usuario)->postJson('/control-pedidos/autoguardar', $this->captura($pedido, [
+            'sucursal_destino_id' => $pedido->sucursal_destino_id,
+            'solicitud_preparacion' => ['modalidad_entrega' => 'tienda', 'caso_tienda' => 'mismo_dia_pdv', 'area_revision' => 'control_pedidos',
+                'codigo_modalidad' => 'RECOGE_TIENDA_TRANSFERENCIA', 'atencion_tienda' => 'prevista'],
+        ]))->assertOk();
+        $this->actingAs($this->usuario)->postJson("/control-pedidos/{$pedido->id}/solicitud-tienda", $this->solicitud($pedido->fresh(), 'control_pedidos'))->assertOk();
+        $this->assertSame('prevista', $pedido->fresh()->solicitud_preparacion_json['atencion_tienda']);
+        $this->assertSame('2026-11-04', $pedido->fresh()->solicitud_preparacion_json['tienda_md_solicitud']['fecha']);
+        $this->assertFalse($pedido->fresh()->prioridad_md);
         $this->assertSame(0, PedidoBmaTareaPreparacion::query()->count());
     }
 

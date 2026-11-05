@@ -62,6 +62,10 @@ final class RegistrarCoberturaTiendaService
                     'cobertura' => 'Ya hay remisión. La cobertura no se edita de forma informal.',
                 ]);
             }
+            $eraMd = ($json['atencion_tienda'] ?? '') === 'prevista';
+            if ($eraMd !== $mismoDia && ($pedido->pago_validado_at || $pedido->pagosExhibicion()->activosParaCobertura()->exists())) {
+                throw ValidationException::withMessages(['atencion_tienda' => 'Ya hay un reporte de pago. Registre el acuerdo de continuación; no cambie la intención ni reinicie el corte desde la cobertura.']);
+            }
 
             $atencion = 'no';
             if ($mismoDia) {
@@ -81,6 +85,9 @@ final class RegistrarCoberturaTiendaService
 
             $json['codigo_modalidad'] = $codigo;
             $json['atencion_tienda'] = $mismoDia ? $atencion : 'no';
+            if ($mismoDia && ! isset($json['tienda_md_solicitud'])) {
+                $json['tienda_md_solicitud'] = ['fecha' => now($this->config->zonaHoraria())->toDateString(), 'registrada_at' => now()->toIso8601String(), 'por_id' => $usuario->id];
+            }
             $anterior = $json['cobertura_tienda'] ?? [];
             $registradaAt = ($anterior['tipo'] ?? '') === $cobertura ? ($anterior['registrada_at'] ?? now()->toIso8601String()) : now()->toIso8601String();
             $json['cobertura_tienda'] = [
@@ -107,7 +114,7 @@ final class RegistrarCoberturaTiendaService
             }
             $pedido->update([
                 'solicitud_preparacion_json' => $json,
-                'prioridad_md' => false,
+                'prioridad_md' => $mismoDia && ($json['tienda_md_reporte']['oportuno'] ?? false),
             ]);
 
             $abierta = InstruccionEntrega::abiertas((int) $pedido->id)->first();

@@ -93,6 +93,7 @@ class MarcarEmpacadoPedidoBmaService
 
     private function assertPuedeEmpacar(PedidoBma $pedido): void
     {
+        \App\Support\ControlPedidos\AtencionMismoDiaTienda::assertSalida($pedido);
         if (!$pedido->esGestionablePorCedis()) {
             throw new \RuntimeException("El pedido {$pedido->folio} no está en la bandeja de CEDIS.");
         }
