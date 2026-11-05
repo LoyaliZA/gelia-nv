@@ -1,0 +1,10 @@
+# Local a este servidor. No versionar: apunta a la imagen Sail reconstruida aquí.
+services:
+  laravel.test:
+    image: gelianv-sail:php-8.4.27-node-26.13.0
+  reverb:
+    image: gelianv-sail:php-8.4.27-node-26.13.0
+  queue:
+    image: gelianv-sail:php-8.4.27-node-26.13.0
+  scheduler:
+    image: gelianv-sail:php-8.4.27-node-26.13.0
