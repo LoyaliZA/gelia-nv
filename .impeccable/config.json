@@ -64,5 +64,8 @@
         "reason": "The prototype picker is copied verbatim from prototype/PICKER.md, whose 4px padding and 0 12px item padding keep the highlight aligned. The finding named no value. Product controls in this file use at least 8px padding."
       }
     ]
+  },
+  "hook": {
+    "enabled": false
   }
 }

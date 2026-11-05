@@ -5,6 +5,6 @@ alwaysApply: true
 
 Para analizar o modificar interfaz, seguir `AGENTS.md` y `GUIA_DISENO_GELIA.md`; inspeccionar la referencia existente pertinente y sus estilos efectivos. Reutilizar controles y capacidades antes de añadir otra superficie. Conservar la personalización de tema, fuente y acento.
 
-Las skills apoyan una necesidad concreta; no activarlas en cadena ni iniciar exploración, prototipo o renovación por una corrección local. La regla `visual-refresh-router` es manual y solo se usa si el usuario la menciona o pide expresamente ese flujo de renovación.
+Las skills apoyan una necesidad concreta; no activarlas en cadena ni iniciar exploración, prototipo o renovación por una corrección local. La suite local `visual-refresh`, `visual-discovery` y `visual-implementation` fue retirada; no buscarla ni reconstruir su cadena. Resolver el encargo directamente con la guía común y las referencias existentes.
 
 Las decisiones actuales del usuario y el flujo operativo gobiernan la implementación. Un cambio de backend no inicia un rediseño. Verificar la composición y el comportamiento afectados en la aplicación; usar tokens no demuestra por sí solo integración o coherencia visual.

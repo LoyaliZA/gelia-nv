@@ -34,7 +34,7 @@ Antes de analizar, crear o modificar una interfaz, leer [GUIA_DISENO_GELIA.md](G
 
 - Partir del lenguaje visual de GELIA y de las decisiones vigentes del usuario. Las skills aportan técnicas; no deciden por su cuenta la personalidad del producto.
 - Inspeccionar una referencia existente del mismo tipo de tarea y sus estilos efectivos antes de elegir una skill. La guía contiene las rutas de referencia y los pasos de trabajo.
-- Elegir únicamente las skills necesarias para un problema identificado. Impeccable es opcional; no activar una cadena de diseño o movimiento por defecto.
+- Elegir únicamente las skills necesarias para un problema identificado. Impeccable es opcional y su hook automático está desactivado por decisión del 5 de noviembre; no reactivarlo por rutina. La suite local visual-refresh/visual-discovery/visual-implementation fue retirada. Seguir la adaptación de skills de `GUIA_DISENO_GELIA.md`, sin activar cadenas de diseño o movimiento por defecto.
 - Evaluar el conjunto: composición, jerarquía, densidad, tipografía, cliente, estados y acciones. Usar tokens correctos o corregir un desbordamiento no demuestra por sí solo que el diseño encaje en GELIA.
 - Reutilizar tokens, primitivas, constantes y componentes existentes. Conservar la personalización de tema, fuente y acento.
 - Verificar el resultado renderizado a los tamaños pertinentes; informar qué se comprobó y qué sigue pendiente. Una revisión aislada no acredita integración ni funcionamiento de negocio.

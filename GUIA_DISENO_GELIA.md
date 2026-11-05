@@ -86,6 +86,16 @@ Leer las instrucciones reales de la skill elegida. Si no está disponible, busca
 
 Cuando una recomendación choque con una decisión vigente del usuario o con la identidad acordada, adaptar la recomendación y seguir la precedencia de instrucciones del entorno. No modificar paquetes de skills para resolver una preferencia específica de GELIA: documentar esa preferencia aquí y en sus puntos de entrada.
 
+### Adaptación de skills a GELIA
+
+Ajuste del 5 de noviembre de 2026:
+
+- Se retiraron las skills locales `visual-refresh`, `visual-discovery` y `visual-implementation`, junto con su regla de entrada. No recuperarlas por referencias históricas ni sustituirlas por otra cadena automática. Las propuestas visuales siguen siendo posibles cuando el usuario las solicite.
+- Al usar `frontend-design`, interpretar su plan de color y tipografía como un mapa de los tokens y la fuente configurada existentes. No crear una paleta, elegir otra familia ni añadir un hero por seguir su receta. Su búsqueda de carácter se aplica a la composición del encargo dentro de GELIA.
+- Las categorías SaaS/ERP o ecommerce describen tareas; no fijan la apariencia. Las referencias GELIA y el encargo vigente gobiernan la composición.
+- El cambio mínimo debe resolver el problema visual completo solicitado. Una crítica a la composición requiere revisar jerarquía, agrupación, densidad y acciones del conjunto afectado.
+- Impeccable queda disponible para revisión manual cuando exista una necesidad concreta. Su hook automático se desactiva en la configuración compartida del proyecto; no reactivarlo como efecto secundario. Sus hallazgos se evalúan contra el encargo y las referencias, sin convertir preferencias genéricas en obligaciones.
+
 ### 4. Definir la composición y realizar el cambio
 
 Para una recomposición, expresar antes de editar una dirección breve: referencia elegida, qué se reutiliza, qué se reorganiza y por qué. Esto informa al usuario; no añade una solicitud de aprobación cuando el trabajo ya está autorizado.
@@ -114,7 +124,7 @@ Comprobar, de forma proporcional al cambio:
 - Foco, teclado, etiquetas y errores; acciones accesibles aunque el cuerpo tenga desplazamiento.
 - Ausencia de texto letra por letra, desbordamientos, solapamientos y saltos de tamaño en controles.
 
-Usar el servidor de desarrollo existente si está disponible; iniciar uno solo si hace falta. No ejecutar una compilación de producción únicamente para revisar estilos. Ejecutar verificaciones de estilo y pruebas pertinentes al alcance; no crear pruebas que solo repitan el CSS.
+Este servidor sirve los assets de `public/build`, conforme a `AGENTS.md`. No iniciar Vite ni dejar `public/hot`. Agrupar los cambios y ejecutar `./vendor/bin/sail npm run build` cuando sea necesario verlos en la aplicación; comprobar que la página consume ese build antes de evaluar el resultado. No compilar después de cada edición. Ejecutar verificaciones de estilo y pruebas pertinentes al alcance; no crear pruebas que solo repitan el CSS.
 
 Si falta un archivo de referencia de los verificadores, informar la limitación y revisar los archivos tocados con las herramientas disponibles. No regenerar listas de excepciones para ocultar una comprobación fallida.
 
