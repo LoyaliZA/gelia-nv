@@ -1,11 +1,12 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Mensajeria\AdjuntoMensajeController;
 use App\Http\Controllers\Mensajeria\BuscarMensajeriaController;
 use App\Http\Controllers\Mensajeria\ConversacionController;
 use App\Http\Controllers\Mensajeria\MensajeController;
 use App\Http\Controllers\Mensajeria\PresenciaController;
+use App\Http\Controllers\Mensajeria\StickerController;
+use Illuminate\Support\Facades\Route;
 
 Route::prefix('mensajeria')->name('mensajeria.')->group(function () {
     Route::get('/', [ConversacionController::class, 'index'])->name('index');
@@ -22,6 +23,10 @@ Route::prefix('mensajeria')->name('mensajeria.')->group(function () {
     Route::post('/presencia/heartbeat', [PresenciaController::class, 'heartbeat'])->name('presencia.heartbeat');
     Route::get('/buscar', [BuscarMensajeriaController::class, 'buscar'])->name('buscar');
     Route::get('/conversaciones/{conversacion}/contexto', [BuscarMensajeriaController::class, 'contexto'])->name('conversaciones.contexto');
+    Route::get('/stickers', [StickerController::class, 'index'])->name('stickers.index');
+    Route::post('/stickers', [StickerController::class, 'store'])->name('stickers.store');
+    Route::delete('/stickers/{sticker}', [StickerController::class, 'destroy'])->name('stickers.destroy');
+    Route::post('/conversaciones/{conversacion}/stickers', [StickerController::class, 'enviar'])->name('stickers.enviar');
     Route::post('/conversaciones/{conversacion}/adjuntos', [AdjuntoMensajeController::class, 'store'])->name('adjuntos.store');
     Route::get('/adjuntos/{adjunto}', [AdjuntoMensajeController::class, 'show'])->name('adjuntos.show');
 });

@@ -1,3 +1,5 @@
+import { etiquetaTipoMensaje } from '@/utils/mensajeriaRespuesta';
+
 export function esMismoUsuario(a, b) {
     if (a == null || b == null) return false;
     return Number(a) === Number(b);
@@ -54,7 +56,9 @@ export function conversacionConMensajeNuevo(conversacion, mensaje, chatAbierto) 
 
     return {
         ...conversacion,
-        ultimo_mensaje_preview: mensaje.contenido || `[${mensaje.tipo}]`,
+        ultimo_mensaje_preview: mensaje.contenido?.trim()
+            ? mensaje.contenido
+            : etiquetaTipoMensaje(mensaje.tipo),
         ultimo_mensaje_at: mensaje.created_at || conversacion.ultimo_mensaje_at,
         unread_count: chatAbierto
             ? 0

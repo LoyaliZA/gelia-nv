@@ -3,7 +3,6 @@
 namespace App\Services\Mensajeria;
 
 use App\Models\Conversacion;
-use App\Models\ConversacionParticipante;
 use App\Models\Mensaje;
 use App\Models\User;
 
@@ -78,7 +77,11 @@ class FormatearMensajeService
         if ($mensaje->tipo === Mensaje::TIPO_TEXTO && $mensaje->contenido) {
             $texto = trim($mensaje->contenido);
 
-            return mb_strlen($texto) > 120 ? mb_substr($texto, 0, 120) . '…' : $texto;
+            return mb_strlen($texto) > 120 ? mb_substr($texto, 0, 120).'…' : $texto;
+        }
+
+        if ($mensaje->tipo === Mensaje::TIPO_STICKER) {
+            return 'Sticker';
         }
 
         if ($adjunto?->nombre_original) {
@@ -88,16 +91,10 @@ class FormatearMensajeService
         if ($mensaje->contenido) {
             $texto = trim($mensaje->contenido);
 
-            return mb_strlen($texto) > 100 ? mb_substr($texto, 0, 100) . '…' : $texto;
+            return mb_strlen($texto) > 100 ? mb_substr($texto, 0, 100).'…' : $texto;
         }
 
-        return match ($mensaje->tipo) {
-            Mensaje::TIPO_IMAGEN => '📷 Imagen',
-            Mensaje::TIPO_VIDEO => '🎬 Video',
-            Mensaje::TIPO_AUDIO => '🎤 Audio',
-            Mensaje::TIPO_ARCHIVO => '📎 Archivo',
-            default => '[mensaje]',
-        };
+        return Mensaje::etiquetaTipo($mensaje->tipo);
     }
 
     /** Payload para broadcast: sin campos que dependen del usuario que ve el chat. */

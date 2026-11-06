@@ -1,4 +1,4 @@
-import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import React, { Fragment, forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, FolderOpen, Loader2, Users } from 'lucide-react';
 import BuscadorInteligente from './BuscadorInteligente';
 import { usePage } from '@inertiajs/react';
@@ -8,11 +8,24 @@ import AvatarUsuario from './AvatarUsuario';
 import ParticipantesGrupoPanel from './ParticipantesGrupoPanel';
 import ChatDrivePanel from './ChatDrivePanel';
 import MensajeriaNavMenuButton from './MensajeriaNavMenuButton';
-import SelectorEstadoPresencia from './SelectorEstadoPresencia';
+import BotonIconoMensajeria from './BotonIconoMensajeria';
 import EstadoPresenciaTexto from './EstadoPresenciaTexto';
 import ZonaDropAdjuntoChat from './ZonaDropAdjuntoChat';
 import useChatScroll from '@/hooks/useChatScroll';
 import { prepararMensajesGrupo } from '@/utils/mensajeriaGrupo';
+import { animarEntrada, animarPop } from '@/utils/animarMensajeria';
+
+function etiquetaDia(fecha) {
+    if (!fecha) return '';
+    const dia = new Date(fecha);
+    if (Number.isNaN(dia.getTime())) return '';
+    const hoy = new Date();
+    const ayer = new Date();
+    ayer.setDate(hoy.getDate() - 1);
+    if (dia.toDateString() === hoy.toDateString()) return 'Hoy';
+    if (dia.toDateString() === ayer.toDateString()) return 'Ayer';
+    return dia.toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' });
+}
 
 const ChatPanel = forwardRef(function ChatPanel({
     conversacion,
@@ -22,6 +35,7 @@ const ChatPanel = forwardRef(function ChatPanel({
     enviando,
     onEnviarTexto,
     onEnviarAdjunto,
+    onEnviarSticker,
     onCargarMas,
     onVolver,
     mostrarVolver = false,
@@ -34,6 +48,7 @@ const ChatPanel = forwardRef(function ChatPanel({
     const [participantesAbierto, setParticipantesAbierto] = useState(false);
     const [driveAbierto, setDriveAbierto] = useState(false);
     const [respondiendoA, setRespondiendoA] = useState(null);
+    const ultimoAnimado = useRef(null);
 
     const { scrollRef, forceScrollToBottom } = useChatScroll(mensajes, conversacion?.id);
 
@@ -71,7 +86,22 @@ const ChatPanel = forwardRef(function ChatPanel({
         setDriveAbierto(false);
         setParticipantesAbierto(false);
         setRespondiendoA(null);
+        ultimoAnimado.current = null;
     }, [conversacion?.id]);
+
+    useEffect(() => {
+        const ultimo = mensajes[mensajes.length - 1];
+        if (!ultimo?.id) return;
+        if (ultimoAnimado.current === null) {
+            ultimoAnimado.current = ultimo.id;
+            return;
+        }
+        if (ultimoAnimado.current === ultimo.id) return;
+        ultimoAnimado.current = ultimo.id;
+        const el = document.getElementById(`mensaje-${ultimo.id}`);
+        if (ultimo.tipo === 'sticker') animarPop(el);
+        else animarEntrada(el, { eje: 'y', distancia: 10, duration: 260 });
+    }, [mensajes]);
 
     const scrollAMensaje = useCallback((mensajeId) => {
         requestAnimationFrame(() => {
@@ -107,6 +137,11 @@ const ChatPanel = forwardRef(function ChatPanel({
         setRespondiendoA(null);
     }, [onEnviarAdjunto, respondiendoA?.id]);
 
+    const handleEnviarSticker = useCallback(async (stickerId) => {
+        await onEnviarSticker?.(stickerId, respondiendoA?.id ?? null);
+        setRespondiendoA(null);
+    }, [onEnviarSticker, respondiendoA?.id]);
+
     const esGrupo = conversacion?.tipo === 'grupo';
     const mensajesRender = useMemo(
         () => prepararMensajesGrupo(mensajes, esGrupo),
@@ -119,8 +154,8 @@ const ChatPanel = forwardRef(function ChatPanel({
                 <div className="p-5 rounded-[2rem] theme-element border theme-border">
                     <AvatarUsuario className="w-16 h-16" iconClassName="w-8 h-8" />
                 </div>
-                <p className="text-sm font-black uppercase italic theme-text-main mt-5 m-0">Selecciona un chat_</p>
-                <p className="text-[11px] font-bold mt-2 m-0 theme-text-muted uppercase tracking-widest">O inicia una nueva conversación</p>
+                <p className="text-base font-semibold theme-text-main mt-5 m-0">Elige una conversación</p>
+                <p className="text-sm mt-2 m-0 theme-text-muted">O inicia un chat nuevo.</p>
             </div>
         );
     }
@@ -139,21 +174,25 @@ const ChatPanel = forwardRef(function ChatPanel({
                 <div className="flex items-center gap-3 px-4 py-3 sm:px-5">
                 <MensajeriaNavMenuButton className="!p-1.5" />
                 {mostrarVolver && (
-                    <button type="button" onClick={onVolver} className={`p-1.5 rounded-full theme-element theme-text-main ${volverBreakpoint === 'md' ? 'md:hidden' : 'sm:hidden'}`}>
-                        <ArrowLeft className="w-5 h-5" />
-                    </button>
+                    <BotonIconoMensajeria
+                        icon={ArrowLeft}
+                        label="Volver a los mensajes"
+                        onClick={onVolver}
+                        className={`rounded-full theme-element theme-text-main ${volverBreakpoint === 'md' ? 'md:hidden' : 'sm:hidden'}`}
+                    />
                 )}
 
                 <AvatarUsuario
                     foto={conversacion.foto}
                     nombre={conversacion.nombre}
                     esGrupo={esGrupo}
+                    enLinea={!esGrupo && conversacion.presencia_otro?.en_linea === true}
                     className="w-10 h-10 shrink-0"
                     iconClassName="w-5 h-5"
                 />
 
                 <div className="min-w-0 flex-1 sm:max-w-[16rem] lg:max-w-xs">
-                    <p className="text-sm font-black truncate theme-text-main m-0">{conversacion.nombre}</p>
+                    <p className="text-sm font-semibold truncate theme-text-main m-0">{conversacion.nombre}</p>
                     {!esGrupo && conversacion.presencia_otro && (
                         <EstadoPresenciaTexto presencia={conversacion.presencia_otro} compact className="mt-0.5" />
                     )}
@@ -169,10 +208,6 @@ const ChatPanel = forwardRef(function ChatPanel({
                     )}
                 </div>
 
-                <div className="hidden sm:block shrink-0">
-                    <SelectorEstadoPresencia compact />
-                </div>
-
                 <div className="hidden md:block flex-1 min-w-0 max-w-xl mx-1">
                     <BuscadorInteligente
                         conversacionId={conversacion.id}
@@ -182,37 +217,29 @@ const ChatPanel = forwardRef(function ChatPanel({
                     />
                 </div>
 
-                <button
-                    type="button"
+                <BotonIconoMensajeria
+                    icon={FolderOpen}
+                    label="Ver archivos compartidos"
+                    pressed={driveAbierto}
                     onClick={() => {
                         setDriveAbierto((v) => !v);
                         setParticipantesAbierto(false);
                     }}
-                    className={`p-2.5 rounded-full theme-element border theme-border transition-all outline-none shrink-0 ${
-                        driveAbierto
-                            ? 'border-[var(--color-primario)] theme-text-main'
-                            : 'theme-text-muted hover:border-[var(--color-primario)] hover:theme-text-main'
+                    className={`rounded-full theme-element border theme-border shrink-0 ${
+                        driveAbierto ? 'border-[var(--color-primario)] theme-text-main' : 'theme-text-muted'
                     }`}
-                    title="Archivos del chat"
-                    aria-label="Ver archivos compartidos"
-                    aria-pressed={driveAbierto}
-                >
-                    <FolderOpen className="w-5 h-5" />
-                </button>
+                />
 
                 {esGrupo && (
-                    <button
-                        type="button"
+                    <BotonIconoMensajeria
+                        icon={Users}
+                        label="Ver participantes del grupo"
                         onClick={() => {
                             setParticipantesAbierto(true);
                             setDriveAbierto(false);
                         }}
-                        className="p-2.5 rounded-full theme-element border theme-border theme-text-muted hover:border-[var(--color-primario)] hover:theme-text-main transition-all outline-none shrink-0"
-                        title="Ver participantes"
-                        aria-label="Ver participantes del grupo"
-                    >
-                        <Users className="w-5 h-5" />
-                    </button>
+                        className="rounded-full theme-element border theme-border theme-text-muted shrink-0"
+                    />
                 )}
                 </div>
 
@@ -236,7 +263,7 @@ const ChatPanel = forwardRef(function ChatPanel({
             <div className="relative flex-1 min-h-0 min-w-0 overflow-hidden">
                 <div
                     ref={scrollRef}
-                    className="gelia-mensajeria-mensajes-scroll absolute inset-0 py-4 bg-black/[0.02] dark:bg-white/[0.02]"
+                    className="gelia-mensajeria-mensajes-scroll absolute inset-0 py-4"
                 >
                     <div ref={topSentinelRef} className="h-1" />
 
@@ -252,23 +279,32 @@ const ChatPanel = forwardRef(function ChatPanel({
                         </div>
                     )}
 
-                    {mensajesRender.map(({ mensaje, mostrarRemitente }) => (
-                        <MensajeBurbuja
-                            key={mensaje.id}
-                            mensaje={mensaje}
-                            esGrupo={esGrupo}
-                            mostrarRemitente={mostrarRemitente}
-                            participantesGrupo={esGrupo ? conversacion.participantes || [] : []}
-                            onResponder={handleResponder}
-                            onIrAMensaje={handleIrACitacion}
-                        />
-                    ))}
+                    {mensajesRender.map(({ mensaje, mostrarRemitente }, indice) => {
+                        const dia = etiquetaDia(mensaje.created_at);
+                        const anterior = indice > 0 ? etiquetaDia(mensajesRender[indice - 1].mensaje.created_at) : '';
+                        return (
+                            <Fragment key={mensaje.id}>
+                                {dia && dia !== anterior && (
+                                    <div className="gelia-mensaje-dia">{dia}</div>
+                                )}
+                                <MensajeBurbuja
+                                    mensaje={mensaje}
+                                    esGrupo={esGrupo}
+                                    mostrarRemitente={mostrarRemitente}
+                                    participantesGrupo={esGrupo ? conversacion.participantes || [] : []}
+                                    onResponder={handleResponder}
+                                    onIrAMensaje={handleIrACitacion}
+                                />
+                            </Fragment>
+                        );
+                    })}
                 </div>
             </div>
 
             <MensajeInput
                 onEnviarTexto={handleEnviarTextoConRespuesta}
                 onEnviarAdjunto={handleEnviarAdjuntoConRespuesta}
+                onEnviarSticker={handleEnviarSticker}
                 onPrepararAdjunto={prepararAdjunto}
                 respondiendoA={respondiendoA}
                 onCancelarRespuesta={() => setRespondiendoA(null)}

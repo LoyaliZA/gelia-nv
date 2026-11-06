@@ -1,13 +1,34 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Send, Paperclip, Image, Film, FileUp } from 'lucide-react';
+import { FileUp, Film, Image, Paperclip, Send, Sticker } from 'lucide-react';
 import GrabadorAudio from './GrabadorAudio';
 import BarraRespuestaMensaje from './BarraRespuestaMensaje';
+import BandejaStickers from './BandejaStickers';
+import BotonIconoMensajeria from './BotonIconoMensajeria';
 import { detectarTipoArchivo } from '@/utils/mensajeriaArchivoLocal';
 import { archivosImagenDesdePortapapeles } from '@/utils/mensajeriaPortapapeles';
+import { animarEntrada } from '@/utils/animarMensajeria';
+import useIconoHover from '@/hooks/useIconoHover';
+
+function OpcionAdjunto({ icon, children, onClick }) {
+    const { nodo, triggerProps } = useIconoHover(icon, { size: 16, className: 'w-4 h-4' });
+
+    return (
+        <button
+            type="button"
+            className="gelia-toque flex items-center gap-2 px-3 text-sm rounded-xl theme-text-main hover:theme-element"
+            {...triggerProps}
+            onClick={onClick}
+        >
+            {nodo}
+            {children}
+        </button>
+    );
+}
 
 export default function MensajeInput({
     onEnviarTexto,
     onEnviarAdjunto,
+    onEnviarSticker,
     onPrepararAdjunto,
     respondiendoA = null,
     onCancelarRespuesta,
@@ -16,10 +37,12 @@ export default function MensajeInput({
 }) {
     const [texto, setTexto] = useState('');
     const [mostrarAdjuntos, setMostrarAdjuntos] = useState(false);
+    const [mostrarStickers, setMostrarStickers] = useState(false);
     const inputImagen = useRef(null);
     const inputVideo = useRef(null);
     const inputArchivo = useRef(null);
     const textareaRef = useRef(null);
+    const menuAdjuntos = useRef(null);
 
     const preparar = onPrepararAdjunto || ((file) => {
         const tipo = detectarTipoArchivo(file);
@@ -45,6 +68,12 @@ export default function MensajeInput({
             restaurarFocoInput();
         }
     }, [respondiendoA?.id, restaurarFocoInput]);
+
+    useEffect(() => {
+        if (!mostrarAdjuntos) return undefined;
+        animarEntrada(menuAdjuntos.current, { eje: 'y', distancia: 8, duration: 220 });
+        return undefined;
+    }, [mostrarAdjuntos]);
 
     const handleEnviar = async (e) => {
         e?.preventDefault();
@@ -95,33 +124,44 @@ export default function MensajeInput({
         }
     };
 
-    return (
-        <div className={`gelia-mensajeria-input-bar border-t theme-border ${compact ? 'p-2' : 'p-3'} theme-surface shrink-0`}>
-            <BarraRespuestaMensaje mensaje={respondiendoA} onCancelar={onCancelarRespuesta} />
+    const enviarSticker = async (stickerId) => {
+        try {
+            await onEnviarSticker?.(stickerId);
+            setMostrarStickers(false);
+        } finally {
+            restaurarFocoInput();
+        }
+    };
 
-            <form onSubmit={handleEnviar} className="flex items-end gap-2">
+    return (
+        <div className={`gelia-mensajeria-input-bar ${compact ? 'px-2 pb-2' : 'px-3 pb-3'} theme-surface shrink-0`}>
+            <BarraRespuestaMensaje mensaje={respondiendoA} onCancelar={onCancelarRespuesta} />
+            <BandejaStickers
+                abierto={mostrarStickers}
+                enviando={enviando}
+                onCerrar={() => setMostrarStickers(false)}
+                onEnviar={enviarSticker}
+            />
+
+            <form onSubmit={handleEnviar} className="gelia-mensajeria-composer">
                 <div className="relative">
-                    <button
-                        type="button"
-                        onClick={() => setMostrarAdjuntos((v) => !v)}
-                        className="p-2 rounded-full theme-element theme-text-main hover:border-[var(--color-primario)] border theme-border transition-colors"
+                    <BotonIconoMensajeria
+                        icon={Paperclip}
+                        label="Adjuntar archivo"
+                        onClick={() => {
+                            setMostrarAdjuntos((v) => !v);
+                            setMostrarStickers(false);
+                        }}
+                        pressed={mostrarAdjuntos}
                         disabled={enviando}
-                        title="Adjuntar archivo"
-                    >
-                        <Paperclip className="w-5 h-5" />
-                    </button>
+                        className="rounded-full theme-text-main"
+                    />
 
                     {mostrarAdjuntos && (
-                        <div className="absolute bottom-full left-0 mb-2 flex flex-col gap-1 p-2 rounded-xl theme-surface border theme-border shadow-lg z-10">
-                            <button type="button" onClick={() => inputImagen.current?.click()} className="flex items-center gap-2 px-3 py-2 text-xs rounded-lg theme-text-main hover:theme-element">
-                                <Image className="w-4 h-4" /> Imagen
-                            </button>
-                            <button type="button" onClick={() => inputVideo.current?.click()} className="flex items-center gap-2 px-3 py-2 text-xs rounded-lg theme-text-main hover:theme-element">
-                                <Film className="w-4 h-4" /> Video
-                            </button>
-                            <button type="button" onClick={() => inputArchivo.current?.click()} className="flex items-center gap-2 px-3 py-2 text-xs rounded-lg theme-text-main hover:theme-element">
-                                <FileUp className="w-4 h-4" /> Archivo
-                            </button>
+                        <div ref={menuAdjuntos} className="gelia-menu-adjuntos absolute bottom-full left-0 mb-2 flex flex-col gap-1 p-2 rounded-2xl theme-surface border theme-border shadow-lg z-10 min-w-[9.5rem]">
+                            <OpcionAdjunto icon={Image} onClick={() => inputImagen.current?.click()}>Imagen</OpcionAdjunto>
+                            <OpcionAdjunto icon={Film} onClick={() => inputVideo.current?.click()}>Video</OpcionAdjunto>
+                            <OpcionAdjunto icon={FileUp} onClick={() => inputArchivo.current?.click()}>Archivo</OpcionAdjunto>
                         </div>
                     )}
 
@@ -136,6 +176,18 @@ export default function MensajeInput({
                     />
                 </div>
 
+                <BotonIconoMensajeria
+                    icon={Sticker}
+                    label="Stickers"
+                    pressed={mostrarStickers}
+                    disabled={enviando}
+                    onClick={() => {
+                        setMostrarStickers((v) => !v);
+                        setMostrarAdjuntos(false);
+                    }}
+                    className="rounded-full theme-text-main"
+                />
+
                 <GrabadorAudio onGrabado={handleAudio} disabled={enviando} />
 
                 <textarea
@@ -144,20 +196,19 @@ export default function MensajeInput({
                     onChange={(e) => setTexto(e.target.value)}
                     onKeyDown={handleKeyDown}
                     onPaste={handlePaste}
-                    placeholder={respondiendoA ? 'Escribe tu respuesta…' : 'Escribe un mensaje…'}
+                    placeholder={respondiendoA ? 'Escribe una respuesta…' : 'Escribe un mensaje…'}
                     rows={1}
                     aria-busy={enviando}
-                    className={`flex-1 resize-none rounded-2xl px-4 py-2.5 text-sm theme-element theme-text-main border theme-border focus:border-[var(--color-primario)] outline-none max-h-32 ${compact ? 'text-xs' : ''}`}
+                    className={`flex-1 resize-none bg-transparent border-0 px-1 py-2.5 text-sm theme-text-main outline-none max-h-32 ${compact ? 'text-xs' : ''}`}
                 />
 
-                <button
+                <BotonIconoMensajeria
+                    icon={Send}
+                    label="Enviar mensaje"
                     type="submit"
                     disabled={enviando || !texto.trim()}
-                    className="p-2.5 rounded-full bg-[var(--color-primario)] text-white disabled:opacity-40 transition-opacity shrink-0"
-                    title="Enviar mensaje"
-                >
-                    <Send className="w-5 h-5" />
-                </button>
+                    className="rounded-full bg-[var(--color-primario)] text-white disabled:opacity-40"
+                />
             </form>
         </div>
     );

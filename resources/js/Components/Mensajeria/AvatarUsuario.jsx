@@ -6,6 +6,7 @@ export default function AvatarUsuario({
     foto,
     nombre = '',
     esGrupo = false,
+    enLinea = false,
     className = 'w-11 h-11',
     iconClassName = 'w-5 h-5',
 }) {
@@ -18,20 +19,28 @@ export default function AvatarUsuario({
 
     const Icon = esGrupo ? Users : User;
 
+    const marca = enLinea ? <span className="gelia-presencia-punto" aria-hidden /> : null;
+
     if (url && !falloCarga) {
         return (
-            <img
-                src={url}
-                alt={nombre ? `Foto de ${nombre}` : 'Avatar'}
-                className={`${className} rounded-full object-cover shrink-0 border theme-border`}
-                onError={() => setFalloCarga(true)}
-            />
+            <span className="gelia-avatar-marco">
+                <img
+                    src={url}
+                    alt={nombre ? `Foto de ${nombre}` : 'Avatar'}
+                    className={`${className} rounded-full object-cover shrink-0 border theme-border`}
+                    onError={() => setFalloCarga(true)}
+                />
+                {marca}
+            </span>
         );
     }
 
     return (
-        <div className={`${className} rounded-full theme-element flex items-center justify-center shrink-0 border theme-border`}>
-            <Icon className={`${iconClassName} theme-text-muted`} />
-        </div>
+        <span className="gelia-avatar-marco">
+            <div className={`${className} rounded-full theme-element flex items-center justify-center shrink-0 border theme-border`}>
+                <Icon className={`${iconClassName} theme-text-muted`} />
+            </div>
+            {marca}
+        </span>
     );
 }
