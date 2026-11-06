@@ -9,6 +9,7 @@ export default function BotonIconoMensajeria({
     type = 'button',
     pressed,
     size = 20,
+    plano = false,
 }) {
     const { nodo, triggerProps } = useIconoHover(icon, {
         size,
@@ -18,7 +19,7 @@ export default function BotonIconoMensajeria({
     return (
         <button
             type={type}
-            className={`gelia-toque inline-flex items-center justify-center ${className}`}
+            className={`gelia-toque inline-flex items-center justify-center ${plano ? 'gelia-mensajeria-accion' : ''} ${className}`}
             disabled={disabled}
             title={label}
             aria-label={label}
