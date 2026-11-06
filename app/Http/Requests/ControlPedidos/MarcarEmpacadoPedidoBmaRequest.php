@@ -3,7 +3,9 @@
 namespace App\Http\Requests\ControlPedidos;
 
 use App\Models\ControlPedidos\PedidoBma;
+use App\Support\ControlPedidos\CustodiaDocumentalTienda;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Validation\Validator;
 
 class MarcarEmpacadoPedidoBmaRequest extends FormRequest
@@ -19,7 +21,7 @@ class MarcarEmpacadoPedidoBmaRequest extends FormRequest
             'bultos_por_pedido' => ['nullable', 'array'],
             'bultos_por_pedido.*' => ['required', 'array', 'min:1', 'max:50'],
             'bultos_por_pedido.*.*.foto_bulto' => ['required', 'file', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
-            'bultos_por_pedido.*.*.foto_ticket' => ['required', 'file', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+            'bultos_por_pedido.*.*.foto_ticket' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
         ];
     }
 
@@ -75,6 +77,12 @@ class MarcarEmpacadoPedidoBmaRequest extends FormRequest
                         "bultos_por_pedido.{$key}",
                         "Registre al menos un bulto con fotos para el pedido {$folio}."
                     );
+                } elseif (! CustodiaDocumentalTienda::aplica($miembro)) {
+                    foreach ($bultos as $indice => $fila) {
+                        if (empty($fila['foto_ticket'])) {
+                            $validator->errors()->add("bultos_por_pedido.{$key}.{$indice}.foto_ticket", 'Cada bulto debe incluir foto del ticket.');
+                        }
+                    }
                 }
             }
         });
@@ -94,7 +102,7 @@ class MarcarEmpacadoPedidoBmaRequest extends FormRequest
     }
 
     /**
-     * @return array<int, list<array{foto_bulto: \Illuminate\Http\UploadedFile, foto_ticket: \Illuminate\Http\UploadedFile}>>
+     * @return array<int, list<array{foto_bulto: UploadedFile, foto_ticket: UploadedFile|null}>>
      */
     public function bultosPorPedidoNormalizados(): array
     {

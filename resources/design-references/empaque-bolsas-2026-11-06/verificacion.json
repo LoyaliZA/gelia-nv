@@ -1,0 +1,146 @@
+[
+  {
+    "width": 390,
+    "height": 844,
+    "tema": "dark",
+    "caso": "vacio",
+    "desborde": false,
+    "errores": [],
+    "pieFuera": false,
+    "rotas": 0,
+    "ticket": false
+  },
+  {
+    "width": 390,
+    "height": 844,
+    "tema": "dark",
+    "caso": "foto",
+    "desborde": false,
+    "errores": [],
+    "pieFuera": false,
+    "rotas": 0,
+    "ticket": false
+  },
+  {
+    "width": 390,
+    "height": 844,
+    "tema": "dark",
+    "caso": "envio-solo-bolsa",
+    "enviado": {
+      "campos": [
+        "bultos_por_pedido[999999][0][foto_bulto]"
+      ],
+      "fotos": [
+        "bolsa-ejemplo.jpg"
+      ]
+    }
+  },
+  {
+    "width": 390,
+    "height": 844,
+    "tema": "light",
+    "caso": "vacio",
+    "desborde": false,
+    "errores": [],
+    "pieFuera": false,
+    "rotas": 0,
+    "ticket": false
+  },
+  {
+    "width": 390,
+    "height": 844,
+    "tema": "light",
+    "caso": "foto",
+    "desborde": false,
+    "errores": [],
+    "pieFuera": false,
+    "rotas": 0,
+    "ticket": false
+  },
+  {
+    "width": 390,
+    "height": 844,
+    "tema": "light",
+    "caso": "envio-solo-bolsa",
+    "enviado": {
+      "campos": [
+        "bultos_por_pedido[999999][0][foto_bulto]"
+      ],
+      "fotos": [
+        "bolsa-ejemplo.jpg"
+      ]
+    }
+  },
+  {
+    "width": 390,
+    "height": 640,
+    "tema": "dark",
+    "caso": "vacio",
+    "desborde": false,
+    "errores": [],
+    "pieFuera": false,
+    "rotas": 0,
+    "ticket": false
+  },
+  {
+    "width": 390,
+    "height": 640,
+    "tema": "dark",
+    "caso": "foto",
+    "desborde": false,
+    "errores": [],
+    "pieFuera": false,
+    "rotas": 0,
+    "ticket": false
+  },
+  {
+    "width": 390,
+    "height": 640,
+    "tema": "dark",
+    "caso": "envio-solo-bolsa",
+    "enviado": {
+      "campos": [
+        "bultos_por_pedido[999999][0][foto_bulto]"
+      ],
+      "fotos": [
+        "bolsa-ejemplo.jpg"
+      ]
+    }
+  },
+  {
+    "width": 1311,
+    "height": 932,
+    "tema": "dark",
+    "caso": "vacio",
+    "desborde": false,
+    "errores": [],
+    "pieFuera": false,
+    "rotas": 0,
+    "ticket": false
+  },
+  {
+    "width": 1311,
+    "height": 932,
+    "tema": "dark",
+    "caso": "foto",
+    "desborde": false,
+    "errores": [],
+    "pieFuera": false,
+    "rotas": 0,
+    "ticket": false
+  },
+  {
+    "width": 1311,
+    "height": 932,
+    "tema": "dark",
+    "caso": "envio-solo-bolsa",
+    "enviado": {
+      "campos": [
+        "bultos_por_pedido[999999][0][foto_bulto]"
+      ],
+      "fotos": [
+        "bolsa-ejemplo.jpg"
+      ]
+    }
+  }
+]

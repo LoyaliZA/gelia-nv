@@ -164,6 +164,45 @@ class EmpaqueBultosCedisTest extends TestCase
         $this->assertSame(2, PedidoBmaBultoEmpaque::query()->where('pedido_bma_id', $complemento->id)->count());
     }
 
+    public function test_http_tienda_transferencia_y_credito_empacan_solo_con_foto_de_bolsa(): void
+    {
+        $this->withoutMiddleware([ValidateCsrfToken::class, PreventRequestForgery::class]);
+        foreach (['transferencia', 'credito'] as $tipo) {
+            $pedido = $this->crearPedidoMostradorEnCedis([
+                'solicitud_preparacion_json' => ['modalidad_entrega' => 'tienda', 'cobertura_tienda' => ['tipo' => $tipo]],
+            ]);
+            $this->actingAs($this->usuario)->post(route('control_pedidos.cedis.marcar_empacado', $pedido->id), [
+                'bultos_por_pedido' => [$pedido->id => [['foto_bulto' => UploadedFile::fake()->image('bolsa.jpg')]]],
+            ])->assertRedirect()->assertSessionHasNoErrors();
+
+            $pedido = $pedido->fresh(['bultosEmpaque.documentos']);
+            $this->assertNotNull($pedido->empacado_at);
+            $this->assertCount(1, $pedido->bultosEmpaque);
+            $documentos = $pedido->bultosEmpaque->first()->documentos;
+            $this->assertCount(1, $documentos);
+            $this->assertSame(PedidoBmaDocumento::TIPO_EVIDENCIA_BULTO_EMPAQUE, $documentos->first()->tipo);
+            Storage::disk('public')->assertExists($documentos->first()->ruta_archivo);
+        }
+    }
+
+    public function test_http_foto_obligatoria_y_ticket_legado_conservan_sus_validaciones(): void
+    {
+        $this->withoutMiddleware([ValidateCsrfToken::class, PreventRequestForgery::class]);
+        $tienda = $this->crearPedidoMostradorEnCedis([
+            'solicitud_preparacion_json' => ['modalidad_entrega' => 'tienda', 'cobertura_tienda' => ['tipo' => 'transferencia']],
+        ]);
+        $this->actingAs($this->usuario)->post(route('control_pedidos.cedis.marcar_empacado', $tienda->id), [
+            'bultos_por_pedido' => [$tienda->id => [['foto_ticket' => UploadedFile::fake()->image('ticket.jpg')]]],
+        ])->assertSessionHasErrors("bultos_por_pedido.{$tienda->id}.0.foto_bulto");
+        $this->assertNull($tienda->fresh()->empacado_at);
+
+        $legado = $this->crearPedidoMostradorEnCedis();
+        $this->actingAs($this->usuario)->post(route('control_pedidos.cedis.marcar_empacado', $legado->id), [
+            'bultos_por_pedido' => [$legado->id => [['foto_bulto' => UploadedFile::fake()->image('bulto.jpg')]]],
+        ])->assertSessionHasErrors("bultos_por_pedido.{$legado->id}.0.foto_ticket");
+        $this->assertNull($legado->fresh()->empacado_at);
+    }
+
     public function test_resguardo_por_recibir_incluye_bultos_empaque_cedis(): void
     {
         $this->activarModuloPdv();

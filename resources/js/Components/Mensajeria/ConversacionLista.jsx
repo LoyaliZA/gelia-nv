@@ -16,7 +16,7 @@ const FILTROS = [
 function EnlaceIcono({ href, icon, label, className }) {
     const { nodo, triggerProps } = useIconoHover(icon, { size: 20, className: 'w-5 h-5' });
     return (
-        <Link href={href} className={className} title={label} aria-label={label} {...triggerProps}>
+        <Link href={href} className={`inline-flex items-center justify-center ${className}`} title={label} aria-label={label} {...triggerProps}>
             {nodo}
         </Link>
     );

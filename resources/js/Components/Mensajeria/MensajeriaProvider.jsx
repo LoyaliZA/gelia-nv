@@ -40,6 +40,9 @@ export default function MensajeriaProvider({ children }) {
     } = api;
 
     const [widgetAbierto, setWidgetAbierto] = useState(false);
+    const [portalVisible, setPortalVisible] = useState(false);
+    const [drawerActivo, setDrawerActivo] = useState(false);
+    const drawerActivoRef = useRef(false);
 
     usePresenciaHeartbeat(Boolean(userId));
     usePresenciaContactos(setConversaciones, setConversacionActiva);
@@ -60,14 +63,44 @@ export default function MensajeriaProvider({ children }) {
         setMensajeriaWidgetAbierto(widgetAbierto && !enPaginaMensajeria);
     }, [enPaginaMensajeria, widgetAbierto, conversacionActiva?.id]);
 
+    const drawerSolicitado = widgetAbierto && !enPaginaMensajeria;
+
     useEffect(() => {
-        if (!widgetAbierto) return undefined;
+        if (drawerSolicitado) setPortalVisible(true);
+    }, [drawerSolicitado]);
+
+    useEffect(() => {
+        if (!portalVisible || !drawerSolicitado) return undefined;
+        const id = requestAnimationFrame(() => {
+            drawerActivoRef.current = true;
+            setDrawerActivo(true);
+        });
+        return () => cancelAnimationFrame(id);
+    }, [portalVisible, drawerSolicitado]);
+
+    useEffect(() => {
+        if (drawerSolicitado || !portalVisible) return undefined;
+        drawerActivoRef.current = false;
+        setDrawerActivo(false);
+        const respaldo = window.setTimeout(() => setPortalVisible(false), 520);
+        return () => window.clearTimeout(respaldo);
+    }, [drawerSolicitado, portalVisible]);
+
+    const alTerminarTransicionDrawer = useCallback((event) => {
+        if (event.target !== event.currentTarget) return;
+        if (event.propertyName !== 'transform' && event.propertyName !== 'opacity') return;
+        if (drawerActivoRef.current) return;
+        setPortalVisible(false);
+    }, []);
+
+    useEffect(() => {
+        if (!portalVisible) return undefined;
         const previo = document.body.style.overflow;
         document.body.style.overflow = 'hidden';
         return () => {
             document.body.style.overflow = previo;
         };
-    }, [widgetAbierto]);
+    }, [portalVisible]);
 
     const handleMensajeEnviado = useCallback((mensaje) => {
         if (!mensaje || Number(mensaje.user?.id) === Number(userId)) return;
@@ -131,15 +164,21 @@ export default function MensajeriaProvider({ children }) {
             enPaginaMensajeria,
         }}>
             {children}
-            {widgetAbierto && !enPaginaMensajeria && typeof document !== 'undefined' && createPortal(
-                <div className="gelia-mensajeria-portal fixed inset-0 z-[9999] flex justify-end">
+            {portalVisible && typeof document !== 'undefined' && createPortal(
+                <div
+                    className="gelia-mensajeria-portal fixed inset-0 z-[9999] flex justify-end overflow-hidden"
+                    data-open={drawerActivo ? 'true' : 'false'}
+                >
                     <button
                         type="button"
-                        className="absolute inset-0 bg-black/50 backdrop-blur-sm border-0 p-0 cursor-default"
+                        className="gelia-mensajeria-drawer-backdrop absolute inset-0 bg-black/50 backdrop-blur-sm border-0 p-0 cursor-default"
                         aria-label="Cerrar mensajería"
                         onClick={cerrarWidget}
                     />
-                    <div className="gelia-mensajeria-drawer-panel relative h-full theme-surface theme-text-main border-l theme-border shadow-2xl flex flex-col">
+                    <div
+                        className="gelia-mensajeria-drawer-panel relative h-full theme-surface theme-text-main border-l theme-border shadow-2xl flex flex-col"
+                        onTransitionEnd={alTerminarTransicionDrawer}
+                    >
                         <MensajeriaShell variant="drawer" onCerrar={cerrarWidget} />
                     </div>
                 </div>,
