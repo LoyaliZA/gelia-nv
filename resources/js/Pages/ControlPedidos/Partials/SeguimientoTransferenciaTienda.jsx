@@ -17,7 +17,7 @@ export function esTransferenciaT02(pedido) {
 
 export function esTransferenciaDocumental(pedido) {
     const solicitud = pedido?.solicitud_preparacion || pedido?.solicitud_preparacion_json || {};
-    return Boolean(pedido?.es_t02_documental || (solicitud.modalidad_entrega === 'tienda' && solicitud.cobertura_tienda?.tipo === 'transferencia'));
+    return Boolean(pedido?.es_custodia_documental || pedido?.es_t02_documental || (solicitud.modalidad_entrega === 'tienda' && ['transferencia', 'credito'].includes(solicitud.cobertura_tienda?.tipo)));
 }
 const fechaHoraMexico = valor => valor ? new Intl.DateTimeFormat('es-MX', { timeZone: 'America/Mexico_City', dateStyle: 'short', timeStyle: 'medium' }).format(new Date(valor)) : 'Pendiente';
 
@@ -90,16 +90,18 @@ export default function SeguimientoTransferenciaTienda({ pedido, sucursales = []
     };
     const estado = datos?.estado;
     const md = datos?.atencion_md;
+    const credito = datos?.cobertura === 'credito';
     const enDestino = ['en_traslado', 'recibida', 'en_custodia', 'entregada'].includes(estado);
     const requiereFoto = datos?.puede_preparar || datos?.puede_entregar;
     const tono = datos?.pendiente_gestion ? 'var(--color-aviso)' : ['en_custodia', 'entregada'].includes(estado) ? 'var(--color-exito)' : 'var(--color-primario)';
     const siguiente = datos?.bloqueo || !datos?.consulta_cerrada ? 'Resolver la consulta de disponibilidad'
-        : !datos?.pago_validado ? 'El auxiliar debe verificar el ingreso'
+        : credito && datos?.credito_wizerp?.resultado !== 'aprobado' ? 'El auxiliar debe registrar la aprobación del crédito en Wizerp'
+        : !datos?.pago_validado ? (credito ? 'El auxiliar debe validar la cobertura de crédito' : 'El auxiliar debe verificar el ingreso')
         : !datos?.numero_remision || !datos?.remision_adjunta ? 'El auxiliar debe registrar la remisión'
         : ESTADOS[estado] || 'Consultar seguimiento';
     return <section className="registrar-tienda-panel space-y-4 min-w-0 tienda-transferencia" aria-label="Transferencia y custodia en tienda">
         <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="registrar-tienda-seccion-titulo"><Archive size={20} aria-hidden="true" /><h3>{md ? 'Tienda · Recolección el mismo día' : 'Transferencia · Recoger posteriormente'}</h3></div>
+            <div className="registrar-tienda-seccion-titulo"><Archive size={20} aria-hidden="true" /><h3>{credito ? 'Crédito · Recoger en tienda' : md ? 'Tienda · Recolección el mismo día' : 'Transferencia · Recoger posteriormente'}</h3></div>
             <button type="button" className={GELIA_BTN_OUTLINE} disabled={ocupado} onClick={cargar}><RefreshCw size={16} />Actualizar seguimiento</button>
         </div>
         {error && <div role="alert" className="tienda-alerta-disponibilidad rounded-xl border p-3 text-sm">{error}</div>}
@@ -108,7 +110,7 @@ export default function SeguimientoTransferenciaTienda({ pedido, sucursales = []
             <div className="rounded-xl border theme-border theme-element p-4 grid gap-2" role="status">
                 <span className="text-xs theme-text-muted">{datos.pendiente_gestion ? 'Pendiente de gestión' : ESTADOS[estado]}</span>
                 <strong className="text-base theme-text-main">{siguiente}</strong>
-                <span className="text-sm theme-text-main"><MapPin size={16} className="inline mr-1" />{datos.sucursal || 'Sucursal de recolección pendiente'}{md?.fecha_objetivo ? ` · ${md.fecha_objetivo}` : ''}</span>
+                <span className="text-sm theme-text-main"><MapPin size={16} className="inline mr-1" />{datos.sucursal || 'Sucursal de destino pendiente'}{md?.fecha_objetivo ? ` · ${md.fecha_objetivo}` : ''}</span>
             </div>
             {md && !enDestino && <AvisoOperativoPedido label={md.pendiente_acuerdo ? 'Mismo día · Pendiente de acuerdo' : 'Solicitud para el mismo día'} tono={md.pendiente_acuerdo ? 'warning' : 'info'} icon={CalendarClock}>{md.motivo}</AvisoOperativoPedido>}
             {datos.bloqueo && <div role="alert" className="tienda-alerta-disponibilidad border rounded-xl p-4 text-sm"><strong>Revisión de disponibilidad pendiente</strong><p className="m-0 mt-1">{datos.bloqueo}</p></div>}
@@ -117,7 +119,7 @@ export default function SeguimientoTransferenciaTienda({ pedido, sucursales = []
                 <summary className="text-sm font-semibold theme-text-main cursor-pointer">Datos y documentos del recorrido</summary>
                 <div className="grid sm:grid-cols-2 gap-3 mt-3 text-sm theme-text-main">
                     <p className="m-0"><span className="theme-text-muted">Procedencia</span><br /><strong>{datos.origen || 'Pendiente de definir'}</strong></p>
-                    <p className="m-0"><span className="theme-text-muted">Transferencia</span><br /><strong>{datos.pago_validado ? 'Ingreso verificado por auxiliar' : 'Pendiente de verificar ingreso'}</strong></p>
+                    <p className="m-0"><span className="theme-text-muted">{credito ? 'Crédito Wizerp' : 'Transferencia'}</span><br /><strong>{credito ? (datos.credito_wizerp?.resultado || 'Pendiente de consultar Wizerp') : datos.pago_validado ? 'Ingreso verificado por auxiliar' : 'Pendiente de verificar ingreso'}</strong></p>
                     <p className="m-0"><span className="theme-text-muted">Remisión Wizerp</span><br /><strong>{datos.numero_remision || 'Pendiente'}{datos.remision_adjunta ? ' · Adjunta' : ' · Sin documento'}</strong></p>
                     {md && <p className="m-0"><span className="theme-text-muted">Primer reporte aceptado</span><br /><strong>{fechaHoraMexico(md.primer_pago_at)}</strong></p>}
                 </div>
@@ -144,7 +146,7 @@ export default function SeguimientoTransferenciaTienda({ pedido, sucursales = []
                 {['en_custodia','pendiente_salida_sucursal'].includes(estado) && <button type="button" className={GELIA_BTN_OUTLINE} disabled={ocupado} onClick={() => setMovimiento('traslado')}><ArrowRightLeft size={16} />Traslado entre sucursales</button>}
                 {estado === 'en_custodia' && <button type="button" className={GELIA_BTN_OUTLINE} disabled={ocupado} onClick={() => setMovimiento('modalidad')}><Truck size={16} />Cambiar modalidad</button>}
             </div>}
-            {!soloLectura && herramienta === 'destino' && <div className="grid gap-3"><label className={THEME_LABEL}>Sucursal de recolección<select className={`${THEME_SELECT} w-full mt-1`} value={sucursal || String(datos.sucursal_destino_id || '')} onChange={e => setSucursal(e.target.value)} disabled={ocupado}><option value="">Elegir sucursal</option>{sucursales.map(a => <option key={a.id} value={a.id}>{a.nombre}</option>)}</select></label><button type="button" className={`${GELIA_BTN_OUTLINE} justify-self-start`} disabled={ocupado || !sucursal} onClick={guardarDestino}><Save size={16} />Guardar destino</button></div>}
+            {!soloLectura && herramienta === 'destino' && <div className="grid gap-3"><label className={THEME_LABEL}>Sucursal de destino<select className={`${THEME_SELECT} w-full mt-1`} value={sucursal || String(datos.sucursal_destino_id || '')} onChange={e => setSucursal(e.target.value)} disabled={ocupado}><option value="">Elegir sucursal</option>{sucursales.map(a => <option key={a.id} value={a.id}>{a.nombre}</option>)}</select></label><button type="button" className={`${GELIA_BTN_OUTLINE} justify-self-start`} disabled={ocupado || !sucursal} onClick={guardarDestino}><Save size={16} />Guardar destino</button></div>}
             {!soloLectura && herramienta === 'seguimiento' && <div className="grid gap-3"><label className={THEME_LABEL}>Seguimiento con el cliente<textarea className={`${THEME_TEXTAREA} w-full mt-1`} maxLength={2000} value={observaciones} onChange={e => setObservaciones(e.target.value)} /></label><button type="button" className={`${GELIA_BTN_OUTLINE} justify-self-start`} disabled={ocupado || !observaciones.trim()} onClick={() => enviar('gestionar')}><Send size={16} />Registrar seguimiento</button></div>}
             {!soloLectura && continuar && <div className="border theme-border rounded-xl p-3 grid gap-3"><label className={THEME_LABEL}>Acuerdo con el cliente<textarea className={`${THEME_TEXTAREA} w-full mt-1`} maxLength={2000} value={acuerdo} onChange={e => setAcuerdo(e.target.value)} /></label><p className="text-sm theme-text-muted m-0">Se conservan los pagos, la remisión y la hora original del reporte.</p><button type="button" className={THEME_BTN_PRIMARY} disabled={ocupado} onClick={() => enviar('continuar_posterior')}><CheckCircle2 size={18} />Confirmar recolección y resguardo en tienda</button></div>}
             {(Object.keys(datos.historial || {}).length > 0 || datos.gestiones?.length > 0) && <details><summary className="text-sm font-semibold theme-text-main cursor-pointer">Historial y seguimiento</summary><ul className="pl-4 text-sm theme-text-muted space-y-1">{Object.entries(datos.historial || {}).map(([a,e]) => <li key={a}>{ACCIONES[a] || 'Seguimiento'} · {e.por} · {formatearFechaNegocio(e.fecha)}</li>)}{(datos.gestiones || []).map((g,i) => <li key={`gestion-${i}`}>{g.nota} · {g.por} · {formatearFechaNegocio(g.fecha)}</li>)}</ul></details>}

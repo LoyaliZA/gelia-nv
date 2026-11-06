@@ -1,0 +1,50 @@
+[
+  {
+    "nombre": "escritorio-dark",
+    "width": 1440,
+    "height": 1000,
+    "tema": "dark",
+    "fondoLista": {
+      "alfa": 255,
+      "blur": "none",
+      "color": "rgb(18, 18, 18)",
+      "cristal": true
+    }
+  },
+  {
+    "nombre": "modal-dark",
+    "width": 544,
+    "height": 932,
+    "tema": "dark",
+    "fondoLista": {
+      "alfa": 255,
+      "blur": "none",
+      "color": "rgb(18, 18, 18)",
+      "cristal": true
+    }
+  },
+  {
+    "nombre": "movil-light",
+    "width": 390,
+    "height": 844,
+    "tema": "light",
+    "fondoLista": {
+      "alfa": 255,
+      "blur": "none",
+      "color": "rgb(255, 255, 255)",
+      "cristal": true
+    }
+  },
+  {
+    "nombre": "movil-dark",
+    "width": 390,
+    "height": 844,
+    "tema": "dark",
+    "fondoLista": {
+      "alfa": 255,
+      "blur": "none",
+      "color": "rgb(18, 18, 18)",
+      "cristal": true
+    }
+  }
+]

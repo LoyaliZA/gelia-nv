@@ -306,6 +306,7 @@ class FusionarSolicitudPreparacionPedido
             'acciones_disponibilidad', 'reapertura_disponibilidad', 'solicitudes_ajuste_ids', 'cobertura_tienda',
             'segundo_traslado', 'historial_traslados_tienda', 'movimientos_tienda_version', 'cambio_modalidad_tienda',
             'credito_wizerp',
+            'ruta_almacenes_tienda',
             'tienda_md_reporte',
             'tienda_md',
             'tienda_md_solicitud',

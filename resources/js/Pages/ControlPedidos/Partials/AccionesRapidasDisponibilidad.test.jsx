@@ -50,3 +50,44 @@ it('genera la clave contra duplicados cuando el acceso HTTP no ofrece randomUUID
     try { expect(uuidSolicitud()).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/); }
     finally { vi.unstubAllGlobals(); }
 });
+
+it('el menú compacto conserva el ID de la segunda unidad con SKU repetido y adopta el bloqueo actualizado', async () => {
+ const primera={...faltante,estado_fisico:'regular',id:8};const segunda={...faltante,id:9};
+ const pedido={id:1,solicitud_preparacion:{area_revision:'control_pedidos',revision_disponibilidad:{estado:'excepciones_pendientes'}},revisiones_producto:[primera,segunda],motivo_bloqueo_cierre:'Resolver el faltante original'};
+ await act(()=>root.render(<SeguimientoSolicitudTienda pedidoId={1} pedido={pedido} revisiones={[primera,segunda]} area="control_pedidos"/>));
+ const filas=container.querySelectorAll('.tienda-respuesta-fila');expect(filas).toHaveLength(2);
+ await act(()=>filas[1].querySelector('summary').click());
+ expect(filas[1].querySelector('details').open).toBe(true);
+ expect(filas[1].textContent).not.toContain('Confirmar estado');
+ await act(()=>[...filas[1].querySelectorAll('button')].find(b=>b.textContent==='Retirar').click());
+ expect(axios.post).not.toHaveBeenCalled();
+ axios.post.mockResolvedValue({data:{...pedido,revisiones_producto:[primera,{...segunda,resolucion:'retirar'}],motivo_bloqueo_cierre:'Confirma el estado de la primera unidad'}});
+ await act(()=>boton('Confirmar retiro').click());
+ expect(axios.post.mock.lastCall[1].get('revision_id')).toBe('9');
+ expect(container.textContent).toContain('Retiro registrado');
+ expect(container.textContent).toContain('Confirma el estado de la primera unidad');
+ expect(container.textContent).not.toContain('Resolver el faltante original');
+});
+
+it('un agregado nuevo conserva el historial y bloquea el cierre anterior hasta recibir respuesta', async () => {
+ const pedido={id:1,puede_cerrar_consulta:true,solicitud_preparacion:{area_revision:'control_pedidos',revision_disponibilidad:{estado:'sin_excepciones'}}};
+ vi.spyOn(URL,'createObjectURL').mockReturnValue('blob:ajuste');vi.spyOn(URL,'revokeObjectURL').mockImplementation(()=>{});
+ await act(()=>root.render(<SeguimientoSolicitudTienda pedidoId={1} pedido={pedido} area="control_pedidos"/>));
+ expect(boton('Cerrar consulta')).toBeDefined();await act(()=>boton('Modificar pedido').click());
+ const input=container.querySelector('input[aria-label="Adjuntar: Piezas a agregar"]');
+ Object.defineProperty(input,'files',{configurable:true,value:[new File(['foto'],'anexo.png',{type:'image/png'})]});
+ await act(()=>input.dispatchEvent(new Event('change',{bubbles:true})));
+ axios.post.mockResolvedValue({data:{solicitud_preparacion:{...pedido.solicitud_preparacion,revision_disponibilidad:{estado:'sin_excepciones',aceptacion_vigente:false},anexo_sin_remision:[{descripcion:'Agregado nuevo',entrada:'documento'}]}}});
+ await act(()=>boton('Solicitar agregado').click());
+ expect(boton('Cerrar consulta')).toBeUndefined();expect(container.textContent).toContain('Agregado nuevo');
+ expect(container.textContent).toContain('Hay un ajuste pendiente');
+ vi.restoreAllMocks();
+});
+
+it('Escape cierra el menú compacto y devuelve foco sin propagar el cierre al modal', async () => {
+ await act(()=>root.render(<AccionesRapidasDisponibilidad pedidoId={1} pieza={faltante} compacta/>));
+ const summary=container.querySelector('summary');await act(()=>summary.click());expect(container.querySelector('details').open).toBe(true);
+ const modalEscape=vi.fn();document.addEventListener('keydown',modalEscape,true);
+ try {await act(()=>summary.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true})));expect(container.querySelector('details').open).toBe(false);expect(document.activeElement).toBe(summary);expect(modalEscape).not.toHaveBeenCalled();}
+ finally {document.removeEventListener('keydown',modalEscape,true);}
+});

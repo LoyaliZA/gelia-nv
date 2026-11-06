@@ -1,4 +1,4 @@
-import React, { useId, useRef, useState } from 'react';
+import React, { useId, useImperativeHandle, useRef, useState } from 'react';
 import { Camera, ImagePlus, FileText, Trash2, CheckCircle2 } from 'lucide-react';
 import { BTN_SECONDARY } from './pedidosBmaStyles';
 import { archivosImagenDesdeClipboard } from './archivosDesdeClipboard';
@@ -6,13 +6,14 @@ import { esDispositivoCampo } from '../../Activos/Partials/useDispositivoCampo';
 import ModalConfirmarAccion from './ModalConfirmarAccion';
 
 export default function GaleriaEvidenciasPedido({
-    archivos = [], previews = [], onChange, onVer, label = 'Evidencias', obligatorio = false,
-    id, error, compacto = false, soloImagenes = false, maxArchivos = Infinity, maxMb = 10, disabled = false,
+    archivos = [], previews = [], onChange, onVer, label = 'Evidencias', etiquetaAdjuntar = null, obligatorio = false,
+    id, error, compacto = false, accionesCamara = false, capturaExterna = false, controlRef = null, soloImagenes = false, maxArchivos = Infinity, maxMb = 10, disabled = false,
 }) {
     const uid = useId();
     const controlId = id || `evidencias-${uid}`;
     const camaraRef = useRef(null);
     const adjuntosRef = useRef(null);
+    useImperativeHandle(controlRef, () => ({ tomarFoto: () => camaraRef.current?.click(), abrirGaleria: () => adjuntosRef.current?.click() }), []);
     const [quitarIdx, setQuitarIdx] = useState(null);
     const [errorArchivo, setErrorArchivo] = useState('');
     const [arrastrando, setArrastrando] = useState(false);
@@ -56,22 +57,22 @@ export default function GaleriaEvidenciasPedido({
         }} onDragOver={(event) => { if (!disabled && event.dataTransfer.types.includes('Files')) { event.preventDefault(); setArrastrando(true); } }}
             onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setArrastrando(false); }}
             onDrop={(event) => { event.preventDefault(); if (disabled) return; setArrastrando(false); agregar(event.dataTransfer.files); }}>
-            <div className="flex items-start justify-between gap-2">
+            {(!capturaExterna || previews.length > 0) && <div className="flex items-start justify-between gap-2">
                 <p id={`${controlId}-label`} className="text-sm font-semibold theme-text-main m-0">{label}{obligatorio ? ' *' : ''}</p>
                 <span className={`inline-flex items-center gap-1 text-xs font-medium shrink-0 ${previews.length ? 'theme-text-exito' : 'theme-text-muted'}`}>
                     {previews.length > 0 && <CheckCircle2 className="w-3.5 h-3.5" aria-hidden="true" />}
                     {previews.length} {previews.length === 1 ? 'archivo' : 'archivos'}
                 </span>
-            </div>
-            <div className="gelia-pedidos-adjuntos-control" data-dragging={arrastrando}>
+            </div>}
+            <div className={capturaExterna ? 'hidden' : 'gelia-pedidos-adjuntos-control'} data-dragging={arrastrando}>
                 <div className="flex flex-wrap gap-2">
-                    {esMovil && <button type="button" disabled={disabled} onClick={() => camaraRef.current?.click()} className={`${BTN_SECONDARY} inline-flex items-center justify-center gap-2 flex-1`}>
+                    {(esMovil || accionesCamara) && <button type="button" disabled={disabled} onClick={() => camaraRef.current?.click()} className={`${BTN_SECONDARY} inline-flex items-center justify-center gap-2 flex-1`}>
                         <Camera className="w-4 h-4" aria-hidden="true" /> Tomar foto
                     </button>}
                     <button id={controlId} type="button" disabled={disabled} onClick={() => adjuntosRef.current?.click()}
                         aria-labelledby={`${controlId}-label ${controlId}-accion`} aria-invalid={Boolean(mensaje)} aria-describedby={`${controlId}-ayuda${mensaje ? ` ${controlId}-error` : ''}`}
                         className={`${BTN_SECONDARY} inline-flex items-center justify-center gap-2 ${esMovil ? 'flex-1' : ''}`}>
-                        <ImagePlus className="w-4 h-4" aria-hidden="true" /><span id={`${controlId}-accion`}>{esMovil ? 'Galería' : (compacto ? 'Adjuntar' : soloImagenes ? 'Adjuntar fotos' : 'Adjuntar fotos o PDF')}</span>
+                        <ImagePlus className="w-4 h-4" aria-hidden="true" /><span id={`${controlId}-accion`}>{etiquetaAdjuntar || ((esMovil || accionesCamara) ? 'Galería' : (compacto ? 'Adjuntar' : soloImagenes ? 'Adjuntar fotos' : 'Adjuntar fotos o PDF'))}</span>
                     </button>
                 </div>
                 <input ref={camaraRef} type="file" accept="image/*" capture="environment" className="hidden" aria-label={`Tomar foto: ${label}`} disabled={disabled}

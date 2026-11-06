@@ -19,7 +19,7 @@ export default function BotonIconoMensajeria({
     return (
         <button
             type={type}
-            className={`gelia-toque inline-flex items-center justify-center ${plano ? 'gelia-mensajeria-accion' : ''} ${className}`}
+            className={`gelia-toque gelia-mensajeria-icon-button inline-flex items-center justify-center ${plano ? 'gelia-mensajeria-accion' : ''} ${className}`}
             disabled={disabled}
             title={label}
             aria-label={label}

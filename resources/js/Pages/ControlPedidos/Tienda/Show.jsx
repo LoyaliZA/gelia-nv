@@ -223,7 +223,7 @@ export default function Show({
     const progresoCaratula = tarea.progreso_caratula || [];
     const tieneRespuesta = Boolean(tarea.atendida_at) || ['RESPONDIDA', 'LISTA_PARA_TRASLADO', 'LISTA_PARA_CARATULA', 'EN_TRASLADO', 'RECIBIDA_CEDIS', 'LIBERACION_SOLICITADA', 'LIBERADA'].includes(tarea.estado);
 
-    if (tarea.pedido?.es_t02_documental && tarea.pedido?.consulta_cerrada) {
+    if ((tarea.pedido?.es_custodia_documental || tarea.pedido?.es_t02_documental) && tarea.pedido?.consulta_cerrada) {
         return <Layout {...(!embedded ? { auth } : {})}>
             {!embedded && <Head title={`Transferencia y custodia — ${folio}`} />}
             <GeliaPageShell className="gelia-tienda-op space-y-4">

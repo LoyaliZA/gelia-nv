@@ -1,0 +1,63 @@
+[
+  {
+    "nombre": "escritorio-dark",
+    "width": 1440,
+    "height": 1000,
+    "tema": "dark",
+    "desbordes": [],
+    "errores": [],
+    "rotas": 0,
+    "cedis": true,
+    "idUnidad": "902",
+    "destinoGuardado": true,
+    "formularios": 4
+  },
+  {
+    "nombre": "modal-dark",
+    "width": 544,
+    "height": 932,
+    "tema": "dark",
+    "desbordes": [],
+    "errores": [],
+    "rotas": 0,
+    "cedis": true,
+    "idUnidad": "902",
+    "destinoGuardado": true,
+    "formularios": 4
+  },
+  {
+    "nombre": "movil-light",
+    "width": 390,
+    "height": 844,
+    "tema": "light",
+    "desbordes": [],
+    "errores": [],
+    "rotas": 0,
+    "cedis": true,
+    "idUnidad": "902",
+    "destinoGuardado": true,
+    "formularios": 4
+  },
+  {
+    "nombre": "escritorio-dark",
+    "width": 1440,
+    "height": 1000,
+    "tema": "dark",
+    "tienda": true,
+    "desbordes": [],
+    "errores": [],
+    "rotas": 0,
+    "rutaCedis": false
+  },
+  {
+    "nombre": "movil-light",
+    "width": 390,
+    "height": 844,
+    "tema": "light",
+    "tienda": true,
+    "desbordes": [],
+    "errores": [],
+    "rotas": 0,
+    "rutaCedis": false
+  }
+]

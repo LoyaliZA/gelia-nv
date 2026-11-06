@@ -1,0 +1,78 @@
+[
+  {
+    "nombre": "escritorio-dark",
+    "width": 1440,
+    "height": 1000,
+    "tema": "dark",
+    "desbordes": [],
+    "errores": [],
+    "imagenesRotas": 0,
+    "pedidoInline": false,
+    "volver": false,
+    "fondoLista": "rgb(18, 18, 18)",
+    "productos": 4,
+    "fichasPlegadas": true,
+    "fotosSeparadas": true,
+    "pie": {
+      "altoAviso": 42,
+      "visible": true
+    }
+  },
+  {
+    "nombre": "modal-dark",
+    "width": 544,
+    "height": 932,
+    "tema": "dark",
+    "desbordes": [],
+    "errores": [],
+    "imagenesRotas": 0,
+    "pedidoInline": false,
+    "volver": false,
+    "fondoLista": "rgb(18, 18, 18)",
+    "productos": 4,
+    "fichasPlegadas": true,
+    "fotosSeparadas": true,
+    "pie": {
+      "altoAviso": 62,
+      "visible": true
+    }
+  },
+  {
+    "nombre": "movil-light",
+    "width": 390,
+    "height": 844,
+    "tema": "light",
+    "desbordes": [],
+    "errores": [],
+    "imagenesRotas": 0,
+    "pedidoInline": false,
+    "volver": false,
+    "fondoLista": "rgb(255, 255, 255)",
+    "productos": 4,
+    "fichasPlegadas": true,
+    "fotosSeparadas": true,
+    "pie": {
+      "altoAviso": 62,
+      "visible": true
+    }
+  },
+  {
+    "nombre": "movil-dark",
+    "width": 390,
+    "height": 844,
+    "tema": "dark",
+    "desbordes": [],
+    "errores": [],
+    "imagenesRotas": 0,
+    "pedidoInline": false,
+    "volver": false,
+    "fondoLista": "rgb(18, 18, 18)",
+    "productos": 4,
+    "fichasPlegadas": true,
+    "fotosSeparadas": true,
+    "pie": {
+      "altoAviso": 62,
+      "visible": true
+    }
+  }
+]

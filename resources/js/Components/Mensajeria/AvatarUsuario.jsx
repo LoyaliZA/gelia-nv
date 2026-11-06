@@ -37,8 +37,8 @@ export default function AvatarUsuario({
 
     return (
         <span className="gelia-avatar-marco">
-            <div className={`${className} rounded-full theme-element flex items-center justify-center shrink-0 border theme-border`}>
-                <Icon className={`${iconClassName} theme-text-muted`} />
+            <div className={`${className} rounded-full gelia-mensajeria-avatar flex items-center justify-center shrink-0 border theme-border`}>
+                {!esGrupo && nombre.trim() ? <span aria-hidden className="font-semibold text-sm">{nombre.trim().split(/\s+/).slice(0, 2).map((parte) => parte[0]).join('').toLocaleUpperCase('es')}</span> : <Icon className={iconClassName} />}
             </div>
             {marca}
         </span>

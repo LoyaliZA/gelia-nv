@@ -1,3 +1,4 @@
+import AccionPrincipalTienda from './AccionPrincipalTienda';
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { Banknote, Wallet } from 'lucide-react';
@@ -58,6 +59,7 @@ function repartirSaf(creditos, montoDeseado) {
 export default function ImportesPagoTienda({
     notaMismoDia = 'Mismo día: consulta el horario operativo vigente.',
     pedidoId,
+    destinoAccion,
     clienteId,
     solicitud: solicitudInicial = SOLICITUD_VACIA,
     onSolicitud,
@@ -335,7 +337,7 @@ export default function ImportesPagoTienda({
                             <h4 className="text-sm font-semibold theme-text-main m-0">Confirmación del pedido</h4>
                             {confirmacionEnviada ? <span className="gelia-estado-vivo gelia-estado-vivo--compacto gelia-estado-vivo--exito justify-self-start">Enviada a tienda</span> : <>
                                 {bloqueoConfirmacion && <p className="text-sm theme-text-muted m-0" role="status">{bloqueoConfirmacion}</p>}
-                                {editable && <button type="button" className={`${THEME_BTN_PRIMARY} min-h-[44px] justify-self-start`} disabled={ocupado || Boolean(bloqueoConfirmacion) || cobertura !== tipoGuardado} onClick={confirmarPedido}>Enviar confirmación a tienda</button>}
+                                {editable && <AccionPrincipalTienda destino={destinoAccion}><button type="button" className={`${THEME_BTN_PRIMARY} min-h-[44px] justify-self-start`} disabled={ocupado || Boolean(bloqueoConfirmacion) || cobertura !== tipoGuardado} onClick={confirmarPedido}>{ocupado ? 'Enviando…' : 'Enviar confirmación a tienda'}</button></AccionPrincipalTienda>}
                             </>}
                         </div>
                     )}

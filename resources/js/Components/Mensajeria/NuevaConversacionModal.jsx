@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, MessageSquarePlus } from 'lucide-react';
 import SelectorUsuarios from './SelectorUsuarios';
@@ -7,6 +7,14 @@ export default function NuevaConversacionModal({ isOpen, onClose, onCrear }) {
     const [seleccionado, setSeleccionado] = useState(null);
     const [enviando, setEnviando] = useState(false);
 
+    const [error, setError] = useState('');
+    useEffect(() => {
+        if (!isOpen) return undefined;
+        setError('');
+        const cerrar = (evento) => { if (evento.key === 'Escape') onClose(); };
+        document.addEventListener('keydown', cerrar);
+        return () => document.removeEventListener('keydown', cerrar);
+    }, [isOpen, onClose]);
     if (!isOpen) return null;
 
     const toggleUsuario = (usuario) => {
@@ -16,6 +24,7 @@ export default function NuevaConversacionModal({ isOpen, onClose, onCrear }) {
     const handleCrear = async () => {
         if (!seleccionado) return;
         setEnviando(true);
+        setError('');
         try {
             await onCrear({
                 tipo: 'directo',
@@ -23,6 +32,8 @@ export default function NuevaConversacionModal({ isOpen, onClose, onCrear }) {
             });
             setSeleccionado(null);
             onClose();
+        } catch (e) {
+            setError(e.response?.data?.message || 'No se pudo completar la operación. Inténtalo de nuevo.');
         } finally {
             setEnviando(false);
         }
@@ -59,6 +70,7 @@ export default function NuevaConversacionModal({ isOpen, onClose, onCrear }) {
                 </div>
 
                 <div className="gelia-modal-body p-5">
+                    {error && <p role="alert" className="gelia-mensajeria-error">{error}</p>}
                     <SelectorUsuarios
                         seleccionados={seleccionado ? [seleccionado] : []}
                         onToggle={toggleUsuario}

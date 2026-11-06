@@ -71,7 +71,14 @@ class ResponderDisponibilidadInicialService
                 return $this->resultado((string) $guardada['estado'], $area, true);
             }
 
-            $excepciones = $this->excepciones($datos['excepciones'] ?? []);
+            $excepciones = $this->excepciones($datos['excepciones'] ?? [], $tarea === null);
+            if ($tarea === null) {
+                foreach ($excepciones as $indice => $excepcion) {
+                    if ($excepcion['condicion'] === 'detalle' && $excepcion['evidencias'] === []) {
+                        throw ValidationException::withMessages(["excepciones.{$indice}.evidencias" => 'Adjunte una foto del producto con detalle.']);
+                    }
+                }
+            }
             $confirmada = (bool) ($datos['confirmacion_explicita'] ?? false);
             $archivos = array_values(array_filter($evidencias, fn ($archivo) => $archivo instanceof UploadedFile));
             $imagenesNuevas = array_values(array_filter(
@@ -97,7 +104,7 @@ class ResponderDisponibilidadInicialService
             }
 
             $estado = $excepciones === [] ? 'sin_excepciones' : 'excepciones_pendientes';
-            $comentario = $estado === 'sin_excepciones' ? 'Evidencia del pedido completo' : 'Evidencia de la excepción';
+            $comentario = $tarea === null ? 'Captura del pedido' : ($estado === 'sin_excepciones' ? 'Evidencia del pedido completo' : 'Evidencia de la excepción');
             foreach ($archivos as $orden => $archivo) {
                 $ruta = $archivo->store('pedidos_bma/'.$pedido->id.'/disponibilidad', 'public');
                 $pedido->documentos()->create([
@@ -140,7 +147,7 @@ class ResponderDisponibilidadInicialService
             }
 
             foreach ($excepciones as $orden => $excepcion) {
-                $pedido->revisionesProducto()->create([
+                $revision = $pedido->revisionesProducto()->create([
                     'orden' => $orden + 1,
                     'descripcion_producto' => $excepcion['descripcion'],
                     'sku' => $excepcion['sku'],
@@ -150,8 +157,25 @@ class ResponderDisponibilidadInicialService
                         ? PedidoBmaRevisionProducto::ESTADO_SIN_EXISTENCIA
                         : PedidoBmaRevisionProducto::ESTADO_REGULAR,
                     'comentario' => $excepcion['detalle'],
+                    'unica_pieza' => $excepcion['unica_pieza'],
+                    'mejor_ejemplar' => $excepcion['mejor_ejemplar'],
                     'resolucion' => null,
                 ]);
+                foreach ($excepcion['evidencias'] as $indice => $archivo) {
+                    $ruta = $archivo->store('pedidos_bma/'.$pedido->id.'/disponibilidad', 'public');
+                    $pedido->documentos()->create([
+                        'tipo' => PedidoBmaDocumento::TIPO_EVIDENCIA_CONDICION,
+                        'ruta_archivo' => $ruta,
+                        'nombre_original' => $archivo->getClientOriginalName(),
+                        'mime_type' => $archivo->getMimeType(),
+                        'tamano_bytes' => $archivo->getSize(),
+                        'orden' => $indice + 1,
+                        'comentario' => 'Foto del defecto: '.$excepcion['descripcion'],
+                        'relacion_tipo' => PedidoBmaDocumento::RELACION_REVISION_PRODUCTO,
+                        'relacion_id' => $revision->id,
+                        'activo' => true,
+                    ]);
+                }
             }
 
             $json['revision_disponibilidad'] = [
@@ -249,23 +273,41 @@ class ResponderDisponibilidadInicialService
 
     /**
      * @param  list<array<string, mixed>>  $entrada
-     * @return list<array{descripcion: string, cantidad: int, condicion: string, detalle: string, sku: ?string}>
+     * @return list<array{descripcion: string, cantidad: int, condicion: string, detalle: string, sku: ?string, evidencias: list<UploadedFile>, unica_pieza: bool, mejor_ejemplar: bool}>
      */
-    private function excepciones(array $entrada): array
+    private function excepciones(array $entrada, bool $cedis = false): array
     {
         $salida = [];
-        foreach ($entrada as $fila) {
+        foreach ($entrada as $indice => $fila) {
             if (! is_array($fila)) {
                 continue;
             }
             $descripcion = trim((string) ($fila['descripcion'] ?? ''));
             $detalle = trim((string) ($fila['detalle'] ?? ''));
             $condicion = (string) ($fila['condicion'] ?? '');
-            $cantidad = (int) ($fila['cantidad'] ?? 0);
-            if ($descripcion === '' || $detalle === '' || $cantidad < 1 || ! in_array($condicion, ['detalle', 'faltante'], true)) {
+            $cantidad = (int) ($fila['cantidad'] ?? ($cedis ? 1 : 0));
+            $unica = (bool) ($fila['unica_pieza'] ?? false);
+            $mejor = (bool) ($fila['mejor_ejemplar'] ?? false);
+            if ($descripcion === '' || $cantidad < 1 || ! in_array($condicion, ['detalle', 'faltante'], true)) {
                 throw ValidationException::withMessages([
-                    'excepciones' => 'Cada excepción necesita la pieza, la cantidad afectada y el detalle o faltante.',
+                    'excepciones' => 'Cada excepción necesita un producto identificado, una cantidad válida y su estado.',
                 ]);
+            }
+            if ($cedis && $condicion === 'faltante' && $detalle === '') {
+                $detalle = 'Sin existencias';
+            }
+            if ($detalle === '' && (! $cedis || (! $unica && ! $mejor))) {
+                throw ValidationException::withMessages(["excepciones.{$indice}.detalle" => 'Describa el defecto de la unidad reportada.']);
+            }
+            $fotos = array_values(array_filter($fila['evidencias'] ?? [], fn ($archivo) => $archivo instanceof UploadedFile));
+            if ($condicion === 'faltante' && $fotos !== []) {
+                throw ValidationException::withMessages(["excepciones.{$indice}.evidencias" => 'Una pieza sin existencias no admite fotos del defecto.']);
+            }
+            if (count($fotos) > 5) {
+                throw ValidationException::withMessages(["excepciones.{$indice}.evidencias" => 'Adjunte hasta 5 fotos por producto.']);
+            }
+            if ($condicion === 'faltante' && ($unica || $mejor)) {
+                throw ValidationException::withMessages(["excepciones.{$indice}.condicion" => 'Sin existencias no admite atributos de una pieza disponible.']);
             }
             $sku = trim((string) ($fila['sku'] ?? ''));
             $salida[] = [
@@ -274,6 +316,9 @@ class ResponderDisponibilidadInicialService
                 'condicion' => $condicion,
                 'detalle' => $detalle,
                 'sku' => $sku !== '' ? $sku : null,
+                'evidencias' => $fotos,
+                'unica_pieza' => $unica,
+                'mejor_ejemplar' => $mejor,
             ];
         }
 

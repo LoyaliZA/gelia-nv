@@ -11,6 +11,7 @@ export default function BandejaStickers({ abierto, onCerrar, onEnviar, enviando 
     const [cargando, setCargando] = useState(false);
     const [creando, setCreando] = useState(false);
     const [error, setError] = useState('');
+    const [intento, setIntento] = useState(0);
 
     useEffect(() => {
         if (!abierto) return undefined;
@@ -22,6 +23,7 @@ export default function BandejaStickers({ abierto, onCerrar, onEnviar, enviando 
         if (!abierto) return undefined;
         let vivo = true;
         setCargando(true);
+        setError('');
         MensajeriaService.listarStickers()
             .then((lista) => {
                 if (vivo) setStickers(lista);
@@ -35,7 +37,7 @@ export default function BandejaStickers({ abierto, onCerrar, onEnviar, enviando 
         return () => {
             vivo = false;
         };
-    }, [abierto]);
+    }, [abierto, intento]);
 
     if (!abierto) return null;
 
@@ -91,9 +93,9 @@ export default function BandejaStickers({ abierto, onCerrar, onEnviar, enviando 
             )}
 
             {cargando && <p className="m-0 text-xs theme-text-muted">Cargando stickers…</p>}
-            {error && <p className="m-0 text-xs theme-text-peligro">{error}</p>}
+            {error && <div role="alert" className="gelia-mensajeria-error"><p className="m-0">{error}</p><button type="button" className="gelia-sticker-accion mt-2" onClick={() => setIntento((v) => v + 1)}>Volver a cargar</button></div>}
 
-            {!creando && !cargando && stickers.length === 0 && (
+            {!creando && !cargando && !error && stickers.length === 0 && (
                 <p className="m-0 text-xs theme-text-muted">Todavía no hay stickers. Crea uno aquí.</p>
             )}
 
@@ -104,7 +106,7 @@ export default function BandejaStickers({ abierto, onCerrar, onEnviar, enviando 
                             type="button"
                             className="gelia-sticker-enviar"
                             disabled={enviando}
-                            onClick={() => onEnviar?.(sticker.id)}
+                            onClick={async () => { try { await onEnviar?.(sticker.id); } catch { setError('No se pudo enviar el sticker. Inténtalo de nuevo.'); } }}
                             aria-label="Enviar sticker"
                         >
                             <img src={sticker.url} alt="" />

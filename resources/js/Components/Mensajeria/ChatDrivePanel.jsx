@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     X,
     FileText,
@@ -51,6 +51,7 @@ export default function ChatDrivePanel({
     conversacionId,
     participantes = [],
 }) {
+    const peticion = useRef(0);
     const [categoria, setCategoria] = useState('documentos');
     const [userId, setUserId] = useState('');
     const [desde, setDesde] = useState('');
@@ -78,7 +79,9 @@ export default function ChatDrivePanel({
     const cargar = useCallback(async () => {
         if (!conversacionId || !isOpen) return;
 
+        const actual = ++peticion.current;
         setCargando(true);
+        setItems([]);
         setError(null);
         try {
             const data = await MensajeriaService.listarMedios(conversacionId, {
@@ -87,18 +90,21 @@ export default function ChatDrivePanel({
                 desde: desde || undefined,
                 hasta: hasta || undefined,
             });
+            if (actual !== peticion.current) return;
             setItems(data.items || []);
             setRemitentes(data.remitentes || []);
         } catch {
+            if (actual !== peticion.current) return;
             setError('No se pudo cargar el contenido compartido.');
             setItems([]);
         } finally {
-            setCargando(false);
+            if (actual === peticion.current) setCargando(false);
         }
     }, [conversacionId, isOpen, categoria, userId, desde, hasta]);
 
     useEffect(() => {
         if (isOpen) cargar();
+        return () => { peticion.current += 1; };
     }, [cargar, isOpen]);
 
     useEffect(() => {
@@ -112,6 +118,7 @@ export default function ChatDrivePanel({
         }
     }, [isOpen]);
 
+    const IconoCategoria = TABS.find((t) => t.id === categoria)?.icon || FileText;
     if (!isOpen) return null;
 
     return (
@@ -121,7 +128,7 @@ export default function ChatDrivePanel({
         >
             <div className="flex items-center gap-1 px-1 py-1 border-b theme-border shrink-0">
                 <h2 className="text-base font-semibold theme-text-main m-0 truncate flex-1 min-w-0 px-3">
-                    Archivos, enlaces y docs.
+                    Contenido compartido
                 </h2>
                 <BotonIconoMensajeria
                     icon={X}
@@ -132,7 +139,7 @@ export default function ChatDrivePanel({
             </div>
 
             <div className="gelia-mensajeria-pestanas" role="tablist">
-                {TABS.map(({ id, label }) => (
+                {TABS.map(({ id, label, icon: Icono }) => (
                     <button
                         key={id}
                         type="button"
@@ -140,7 +147,7 @@ export default function ChatDrivePanel({
                         aria-selected={categoria === id}
                         onClick={() => setCategoria(id)}
                     >
-                        {label}
+                        <Icono size={16} aria-hidden />{label}
                     </button>
                 ))}
             </div>
@@ -188,13 +195,11 @@ export default function ChatDrivePanel({
                 )}
 
                 {!cargando && error && (
-                    <p className="text-sm theme-text-muted text-center py-8 px-4 m-0">{error}</p>
+                    <div role="alert" className="gelia-mensajeria-vacio"><FileText size={32} aria-hidden /><p>{error}</p><button type="button" className="gelia-sticker-accion" onClick={cargar}>Volver a intentar</button></div>
                 )}
 
                 {!cargando && !error && items.length === 0 && (
-                    <p className="text-sm theme-text-muted text-center py-8 px-4 m-0">
-                        No hay {TABS.find((t) => t.id === categoria)?.label?.toLowerCase()} en este chat.
-                    </p>
+                    <div className="gelia-mensajeria-vacio"><IconoCategoria size={36} strokeWidth={1.5} aria-hidden /><p className="font-semibold">Sin {TABS.find((t) => t.id === categoria)?.label?.toLowerCase()} por aquí</p><p className="text-xs">Lo que compartan en este chat aparecerá aquí. Si aplicaste filtros, prueba ajustarlos.</p></div>
                 )}
 
                 {!cargando && !error && items.length > 0 && categoria === 'imagenes' && (

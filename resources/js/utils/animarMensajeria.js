@@ -11,9 +11,8 @@ export function animarEntrada(el, { eje = 'y', distancia = 16, duration = 320 } 
     animate(el, {
         opacity: [0, 1],
         [propiedad]: [distancia, 0],
-    }, {
         duration,
-        easing: 'easeOutExpo',
+        ease: 'outExpo',
     });
 }
 
@@ -22,8 +21,7 @@ export function animarPop(el) {
     animate(el, {
         opacity: [0, 1],
         scale: [0.86, 1],
-    }, {
         duration: 280,
-        easing: 'easeOutExpo',
+        ease: 'outExpo',
     });
 }

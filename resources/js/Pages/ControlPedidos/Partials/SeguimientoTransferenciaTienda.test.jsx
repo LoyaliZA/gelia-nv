@@ -41,3 +41,13 @@ it('TIENDA MD participa en el recorrido y el acuerdo posterior exige confirmaci�
     expect(axios.post).not.toHaveBeenCalled();
     expect(container.textContent).toContain('Describa el acuerdo');
 });
+
+it('crédito comparte bolsas y custodia sin presentarlo como transferencia', async () => {
+    const credito = { ...pedido, solicitud_preparacion: { modalidad_entrega: 'tienda', cobertura_tienda: { tipo: 'credito' } } };
+    expect(esTransferenciaDocumental(credito)).toBe(true);
+    expect(esTransferenciaT02(credito)).toBe(false);
+    axios.get.mockResolvedValue({ data: { ...respuesta, cobertura: 'credito', credito_wizerp: { resultado: 'aprobado' } } });
+    await act(() => root.render(<SeguimientoTransferenciaTienda pedido={credito} />));
+    expect(container.textContent).toContain('Crédito · Recoger en tienda');
+    expect(container.textContent).not.toContain('El auxiliar debe verificar el ingreso');
+});

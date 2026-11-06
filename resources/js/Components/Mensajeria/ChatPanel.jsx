@@ -1,5 +1,5 @@
 import React, { Fragment, forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, FolderOpen, Loader2, MoreVertical, Search } from 'lucide-react';
+import { ArrowLeft, FolderOpen, Loader2, MoreVertical, Search, MessagesSquare } from 'lucide-react';
 import BuscadorInteligente from './BuscadorInteligente';
 import { usePage } from '@inertiajs/react';
 import MensajeBurbuja from './MensajeBurbuja';
@@ -51,6 +51,14 @@ const ChatPanel = forwardRef(function ChatPanel({
     const [respondiendoA, setRespondiendoA] = useState(null);
     const ultimoAnimado = useRef(null);
     const menuRef = useRef(null);
+    const layoutRef = useRef(null);
+    const [archivosSuperpuestos, setArchivosSuperpuestos] = useState(true);
+    useEffect(() => {
+        if (!layoutRef.current) return undefined;
+        const observer = new ResizeObserver(([entrada]) => setArchivosSuperpuestos(entrada.contentRect.width < 760));
+        observer.observe(layoutRef.current);
+        return () => observer.disconnect();
+    }, [conversacion?.id]);
 
     const { scrollRef, forceScrollToBottom } = useChatScroll(mensajes, conversacion?.id);
 
@@ -170,23 +178,21 @@ const ChatPanel = forwardRef(function ChatPanel({
 
     if (!conversacion) {
         return (
-            <div className="gelia-mensajeria-chat-pane flex-1 flex flex-col items-center justify-center theme-text-main px-6 text-center">
-                <div className="p-5 rounded-[2rem] theme-element border theme-border">
-                    <AvatarUsuario className="w-16 h-16" iconClassName="w-8 h-8" />
-                </div>
-                <p className="text-base font-semibold theme-text-main mt-5 m-0">Elige una conversación</p>
-                <p className="text-sm mt-2 m-0 theme-text-muted">O inicia un chat nuevo.</p>
+            <div className="gelia-mensajeria-chat-pane gelia-mensajeria-bienvenida flex-1 flex flex-col items-center justify-center theme-text-main px-6 text-center">
+                <div className="gelia-mensajeria-bienvenida-icono"><MessagesSquare size={42} strokeWidth={1.5} aria-hidden /></div>
+                <p className="text-base font-semibold theme-text-main mt-5 m-0">Tu espacio para conversar</p>
+                <p className="text-sm mt-2 m-0 theme-text-muted">Elige un chat o inicia una conversación con tu equipo.</p>
             </div>
         );
     }
 
     return (
         <div className="gelia-mensajeria-chat-pane flex-1 flex flex-col min-w-0 h-full theme-text-main">
-            <div className="gelia-mensajeria-chat-layout relative flex flex-1 min-h-0 min-w-0 overflow-hidden">
+            <div ref={layoutRef} className={`gelia-mensajeria-chat-layout relative flex flex-1 min-h-0 min-w-0 overflow-hidden ${archivosSuperpuestos ? 'gelia-mensajeria-chat-layout--estrecho' : ''}`}>
             <ZonaDropAdjuntoChat
                 onEnviarAdjunto={handleEnviarAdjuntoConRespuesta}
                 enviando={enviando}
-                className={`gelia-mensajeria-chat-column flex flex-1 flex-col min-w-0 min-h-0 ${driveAbierto ? 'hidden sm:flex' : 'flex'}`}
+                className={`gelia-mensajeria-chat-column flex flex-1 flex-col min-w-0 min-h-0 ${driveAbierto && archivosSuperpuestos ? 'invisible' : ''}`}
             >
             {({ prepararAdjunto }) => (
             <>
@@ -353,7 +359,7 @@ const ChatPanel = forwardRef(function ChatPanel({
                 </div>
             </div>
 
-            <MensajeInput
+            <MensajeInput key={conversacion.id}
                 onEnviarTexto={handleEnviarTextoConRespuesta}
                 onEnviarAdjunto={handleEnviarAdjuntoConRespuesta}
                 onEnviarSticker={handleEnviarSticker}

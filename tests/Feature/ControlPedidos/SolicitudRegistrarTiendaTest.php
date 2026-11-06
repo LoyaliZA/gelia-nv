@@ -338,6 +338,132 @@ class SolicitudRegistrarTiendaTest extends TestCase
         $this->assertSame(1, PedidoBmaTareaPreparacion::query()->count());
     }
 
+    public function test_cedis_separa_captura_y_fotos_del_defecto_con_reintento_idempotente(): void
+    {
+        Storage::fake('public');
+        Notification::fake();
+        $pedido = $this->pedido();
+        $this->documento($pedido);
+        $this->actingAs($this->usuario)->postJson('/control-pedidos/'.$pedido->id.'/solicitud-tienda', $this->solicitud($pedido, 'control_pedidos'))->assertOk();
+        $url = '/control-pedidos/cedis/'.$pedido->id.'/disponibilidad';
+        $datos = [
+            'confirmacion_explicita' => 0,
+            'excepciones' => [['descripcion' => 'Perfume con defecto', 'sku' => 'PRUEBA', 'cantidad' => 1, 'condicion' => 'detalle', 'detalle' => 'Caja rota']],
+            'evidencias' => [UploadedFile::fake()->image('captura.jpg')],
+        ];
+        $this->post($url, $datos, ['Accept' => 'application/json'])->assertUnprocessable()->assertJsonValidationErrors('excepciones.0.evidencias');
+        $this->assertSame(0, $pedido->revisionesProducto()->count());
+        $datos['excepciones'][0]['evidencias'] = [UploadedFile::fake()->create('invalido.pdf', 10, 'application/pdf')];
+        $this->post($url, $datos, ['Accept' => 'application/json'])->assertUnprocessable()->assertJsonValidationErrors('excepciones.0.evidencias.0');
+        $datos['excepciones'][0]['evidencias'] = [UploadedFile::fake()->image('defecto.jpg')];
+        $this->post($url, $datos, ['Accept' => 'application/json'])->assertOk()->assertJsonPath('estado', 'excepciones_pendientes');
+        $this->post($url, $datos, ['Accept' => 'application/json'])->assertOk()->assertJsonPath('idempotente', true);
+        $pieza = $pedido->revisionesProducto()->sole();
+        $this->assertSame('defecto.jpg', $pieza->evidencias()->sole()->nombre_original);
+        Storage::disk('public')->assertExists($pieza->evidencias()->sole()->ruta_archivo);
+        $this->assertSame(1, $pedido->documentos()->where('relacion_tipo', PedidoBmaDocumento::RELACION_REVISION_GENERAL)->count());
+        $this->assertSame(1, $pedido->documentos()->where('relacion_tipo', PedidoBmaDocumento::RELACION_REVISION_PRODUCTO)->count());
+        $this->getJson('/control-pedidos/'.$pedido->id.'/disponibilidad-tienda')->assertOk()->assertJsonFragment(['nombre_original' => 'defecto.jpg']);
+        $this->assertSame(0, $pedido->tareasPreparacion()->count());
+    }
+
+    public function test_cedis_conserva_unidades_repetidas_atributos_y_hasta_cinco_fotos(): void
+    {
+        Storage::fake('public');
+        Notification::fake();
+        $pedido = $this->pedido();
+        $this->documento($pedido);
+        $this->actingAs($this->usuario)->postJson('/control-pedidos/'.$pedido->id.'/solicitud-tienda', $this->solicitud($pedido, 'control_pedidos'))->assertOk();
+        $fotos = fn (int $cantidad) => array_map(fn ($i) => UploadedFile::fake()->image("defecto-{$i}.jpg"), range(1, $cantidad));
+        $datos = [
+            'confirmacion_explicita' => 0,
+            'excepciones' => [
+                ['descripcion' => 'Perfume', 'sku' => 'MISMO-SKU', 'cantidad' => 1, 'condicion' => 'detalle', 'detalle' => 'Caja rota', 'unica_pieza' => 1, 'mejor_ejemplar' => 1, 'evidencias' => $fotos(6)],
+                ['descripcion' => 'Perfume', 'sku' => 'MISMO-SKU', 'cantidad' => 1, 'condicion' => 'faltante', 'detalle' => 'Sin existencias', 'unica_pieza' => 0, 'mejor_ejemplar' => 0],
+            ],
+            'evidencias' => [UploadedFile::fake()->image('captura.jpg')],
+        ];
+        $url = '/control-pedidos/cedis/'.$pedido->id.'/disponibilidad';
+        $this->post($url, $datos, ['Accept' => 'application/json'])->assertUnprocessable()->assertJsonValidationErrors('excepciones.0.evidencias');
+        $this->assertSame(0, $pedido->revisionesProducto()->count());
+        $datos['excepciones'][0]['evidencias'] = $fotos(5);
+        $datos['excepciones'][1]['unica_pieza'] = 1;
+        $this->post($url, $datos, ['Accept' => 'application/json'])->assertUnprocessable()->assertJsonValidationErrors('excepciones.1.condicion');
+        $datos['excepciones'][1]['unica_pieza'] = 0;
+        $this->post($url, $datos, ['Accept' => 'application/json'])->assertOk();
+        $this->post($url, $datos, ['Accept' => 'application/json'])->assertOk()->assertJsonPath('idempotente', true);
+        $piezas = $pedido->revisionesProducto()->orderBy('orden')->get();
+        $this->assertCount(2, $piezas);
+        $this->assertSame([1, 1], $piezas->pluck('cantidad_solicitada')->all());
+        $this->assertTrue($piezas[0]->unica_pieza);
+        $this->assertTrue($piezas[0]->mejor_ejemplar);
+        $this->assertFalse($piezas[1]->unica_pieza);
+        $this->assertFalse($piezas[1]->mejor_ejemplar);
+        $this->assertSame(5, $piezas[0]->evidencias()->count());
+        $this->assertSame(0, $piezas[1]->evidencias()->count());
+        $this->getJson('/control-pedidos/'.$pedido->id.'/disponibilidad-tienda')->assertOk()->assertJsonPath('revisiones_producto.0.unica_pieza', true)->assertJsonPath('revisiones_producto.0.mejor_ejemplar', true);
+    }
+
+    public function test_cedis_admite_atributos_sin_comentario_y_cantidad_interna_por_unidad(): void
+    {
+        Storage::fake('public');
+        Notification::fake();
+        foreach ([[1, 0], [0, 1], [1, 1]] as [$unica, $mejor]) {
+            $pedido = $this->pedido();
+            $this->documento($pedido);
+            $this->actingAs($this->usuario)->postJson('/control-pedidos/'.$pedido->id.'/solicitud-tienda', $this->solicitud($pedido, 'control_pedidos'))->assertOk();
+            $datos = [
+                'confirmacion_explicita' => 0,
+                'excepciones' => [['descripcion' => 'Perfume', 'sku' => 'ATRIBUTO', 'condicion' => 'detalle', 'detalle' => '', 'unica_pieza' => $unica, 'mejor_ejemplar' => $mejor, 'evidencias' => [UploadedFile::fake()->image('unidad.jpg')]]],
+                'evidencias' => [UploadedFile::fake()->image('captura.jpg')],
+            ];
+            $url = '/control-pedidos/cedis/'.$pedido->id.'/disponibilidad';
+            $this->post($url, $datos, ['Accept' => 'application/json'])->assertOk();
+            $this->post($url, $datos, ['Accept' => 'application/json'])->assertOk()->assertJsonPath('idempotente', true);
+            $pieza = $pedido->revisionesProducto()->sole();
+            $this->assertSame(1, $pieza->cantidad_solicitada);
+            $this->assertSame('', $pieza->comentario);
+            $this->assertSame((bool) $unica, $pieza->unica_pieza);
+            $this->assertSame((bool) $mejor, $pieza->mejor_ejemplar);
+            $this->assertSame(1, $pieza->evidencias()->count());
+        }
+    }
+
+    public function test_cedis_defecto_sin_atributos_requiere_descripcion(): void
+    {
+        Storage::fake('public');
+        $pedido = $this->pedido();
+        $this->documento($pedido);
+        $this->actingAs($this->usuario)->postJson('/control-pedidos/'.$pedido->id.'/solicitud-tienda', $this->solicitud($pedido, 'control_pedidos'))->assertOk();
+        $this->post('/control-pedidos/cedis/'.$pedido->id.'/disponibilidad', [
+            'excepciones' => [['descripcion' => 'Perfume', 'condicion' => 'detalle', 'evidencias' => [UploadedFile::fake()->image('unidad.jpg')]]],
+            'evidencias' => [UploadedFile::fake()->image('captura.jpg')],
+        ], ['Accept' => 'application/json'])->assertUnprocessable()->assertJsonValidationErrors('excepciones.0.detalle');
+        $this->assertSame(0, $pedido->revisionesProducto()->count());
+    }
+
+    public function test_cedis_sin_existencias_no_exige_ni_admite_fotos_del_producto(): void
+    {
+        Storage::fake('public');
+        Notification::fake();
+        $pedido = $this->pedido();
+        $this->documento($pedido);
+        $this->actingAs($this->usuario)->postJson('/control-pedidos/'.$pedido->id.'/solicitud-tienda', $this->solicitud($pedido, 'control_pedidos'))->assertOk();
+        $datos = [
+            'confirmacion_explicita' => 0,
+            'excepciones' => [['descripcion' => 'Agotado', 'condicion' => 'faltante', 'evidencias' => [UploadedFile::fake()->image('no-aplica.jpg')]]],
+            'evidencias' => [UploadedFile::fake()->image('captura.jpg')],
+        ];
+        $url = '/control-pedidos/cedis/'.$pedido->id.'/disponibilidad';
+        $this->post($url, $datos, ['Accept' => 'application/json'])->assertUnprocessable()->assertJsonValidationErrors('excepciones.0.evidencias');
+        unset($datos['excepciones'][0]['evidencias']);
+        $this->post($url, $datos, ['Accept' => 'application/json'])->assertOk();
+        $this->assertSame(1, $pedido->revisionesProducto()->sole()->cantidad_solicitada);
+        $this->assertSame('Sin existencias', $pedido->revisionesProducto()->sole()->comentario);
+        $this->assertSame(0, $pedido->revisionesProducto()->sole()->evidencias()->count());
+        $this->assertSame(1, $pedido->documentos()->where('relacion_tipo', PedidoBmaDocumento::RELACION_REVISION_GENERAL)->count());
+    }
+
     public function test_la_consulta_cedis_devuelve_disponibilidad_sin_traslado(): void
     {
         Storage::fake('public');
@@ -1280,7 +1406,7 @@ class SolicitudRegistrarTiendaTest extends TestCase
         $pedido = $this->pedido(); $this->documento($pedido);
         $this->actingAs($this->usuario)->postJson('/control-pedidos/'.$pedido->id.'/solicitud-tienda', $this->solicitud($pedido, 'control_pedidos'))->assertOk();
         $this->post('/control-pedidos/cedis/'.$pedido->id.'/disponibilidad', [
-            'confirmacion_explicita' => 0, 'excepciones' => [['descripcion' => 'Aroma de prueba', 'sku' => 'SKU-ANTERIOR', 'cantidad' => 1, 'condicion' => $condicion, 'detalle' => 'Resultado para revisar con cliente']],
+            'confirmacion_explicita' => 0, 'excepciones' => [['descripcion' => 'Aroma de prueba', 'sku' => 'SKU-ANTERIOR', 'cantidad' => 1, 'condicion' => $condicion, 'detalle' => 'Resultado para revisar con cliente', 'evidencias' => $condicion === 'detalle' ? [UploadedFile::fake()->image('defecto.jpg')] : []]],
             'evidencias' => [UploadedFile::fake()->image('respuesta.jpg')],
         ], ['Accept' => 'application/json'])->assertOk();
         return $pedido->fresh();

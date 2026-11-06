@@ -65,7 +65,7 @@ export default function ConversacionLista({
         <div className="gelia-mensajeria-list-pane flex flex-col h-full theme-text-main border-r theme-border">
             <div className="gelia-mensajeria-list-header border-b theme-border shrink-0">
                 <div className="flex items-center min-w-0 px-1 pt-1">
-                    <MensajeriaNavMenuButton plano />
+                    {onCerrar && <MensajeriaNavMenuButton plano />}
                     {onCerrar ? (
                         <BotonIconoMensajeria
                             icon={X}
@@ -81,7 +81,7 @@ export default function ConversacionLista({
                             className="gelia-toque gelia-mensajeria-accion hidden md:inline-flex"
                         />
                     )}
-                    <h2 className="text-xl font-semibold theme-text-main flex-1 truncate m-0 px-1">Mensajes</h2>
+                    <div className="flex-1 min-w-0 px-2"><h2 className="text-xl font-semibold theme-text-main truncate m-0">Mensajes</h2><p className="gelia-mensajeria-subtitulo">Tu equipo, en una conversación</p></div>
                     <BotonIconoMensajeria
                         icon={MessageSquarePlus}
                         label="Nuevo chat"
@@ -106,7 +106,7 @@ export default function ConversacionLista({
 
                 <div className="px-3 pt-1 pb-2">
                     <BuscadorInteligente
-                        placeholder="Buscar"
+                        placeholder="Buscar personas y mensajes"
                         onSeleccionarConversacion={onSeleccionarConversacion}
                         onIrAMensaje={onIrAMensaje}
                     />

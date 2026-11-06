@@ -1,0 +1,26 @@
+[
+  {
+    "nombre": "modal-dark",
+    "width": 544,
+    "height": 932,
+    "tema": "dark",
+    "observaciones": "",
+    "unicaPieza": true,
+    "mejorEjemplar": true,
+    "filaContraidaAlEnviar": true,
+    "envioSimuladoAceptado": true,
+    "errores": []
+  },
+  {
+    "nombre": "movil-light",
+    "width": 390,
+    "height": 844,
+    "tema": "light",
+    "observaciones": "",
+    "unicaPieza": true,
+    "mejorEjemplar": true,
+    "filaContraidaAlEnviar": true,
+    "envioSimuladoAceptado": true,
+    "errores": []
+  }
+]

@@ -264,7 +264,7 @@ export default function Index({
                 onClose={() => setDisponibilidad({ abierto: false, pedido: null })}
                 documentos={(disponibilidad.pedido?.documentos || []).filter((documento) => ['pdf_pedido', 'cotizacion', 'anexo'].includes(documento.tipo))}
                 revision={disponibilidad.pedido?.solicitud_preparacion?.revision_disponibilidad}
-                piezas={(disponibilidad.pedido?.revisiones_producto || []).filter((pieza) => !pieza.resolucion && ['regular', 'malo', 'danado', 'sin_existencia'].includes(pieza.estado_fisico)).map((pieza) => ({ id: pieza.id, descripcion: pieza.descripcion_producto, cantidad: pieza.cantidad_solicitada, detalle: pieza.comentario }))}
+                piezas={(disponibilidad.pedido?.revisiones_producto || []).filter((pieza) => !pieza.resolucion && ['regular', 'malo', 'danado', 'sin_existencia'].includes(pieza.estado_fisico)).map((pieza) => ({ id: pieza.id, descripcion: pieza.descripcion_producto, sku: pieza.sku, condicion: pieza.estado_fisico === 'sin_existencia' ? 'faltante' : 'detalle', unica_pieza: pieza.unica_pieza, mejor_ejemplar: pieza.mejor_ejemplar, cantidad: pieza.cantidad_solicitada, detalle: pieza.comentario }))}
                 puedeResponder
                 tomada
                 onEnviar={async (form) => {

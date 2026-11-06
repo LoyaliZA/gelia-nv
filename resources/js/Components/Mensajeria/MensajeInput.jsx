@@ -36,6 +36,8 @@ export default function MensajeInput({
     compact = false,
 }) {
     const [texto, setTexto] = useState('');
+    const [error, setError] = useState('');
+    const envioEnCurso = useRef(false);
     const [mostrarAdjuntos, setMostrarAdjuntos] = useState(false);
     const [mostrarStickers, setMostrarStickers] = useState(false);
     const inputImagen = useRef(null);
@@ -75,16 +77,38 @@ export default function MensajeInput({
         return undefined;
     }, [mostrarAdjuntos]);
 
+    useEffect(() => {
+        const el = textareaRef.current;
+        if (el) { el.style.height = 'auto'; el.style.height = `${Math.min(el.scrollHeight, 128)}px`; }
+    }, [texto]);
+
+    useEffect(() => {
+        if (!mostrarAdjuntos && !mostrarStickers) return undefined;
+        const cerrar = (e) => {
+            if (e.key === 'Escape') { setMostrarAdjuntos(false); setMostrarStickers(false); }
+        };
+        const fuera = (e) => {
+            if (mostrarAdjuntos && !e.target.closest('.gelia-mensajeria-composer')) setMostrarAdjuntos(false);
+        };
+        document.addEventListener('keydown', cerrar);
+        document.addEventListener('pointerdown', fuera);
+        return () => { document.removeEventListener('keydown', cerrar); document.removeEventListener('pointerdown', fuera); };
+    }, [mostrarAdjuntos, mostrarStickers]);
+
     const handleEnviar = async (e) => {
         e?.preventDefault();
-        if (enviando || !texto.trim()) return;
+        if (enviando || envioEnCurso.current || !texto.trim()) return;
 
         const contenido = texto.trim();
-        setTexto('');
-
+        envioEnCurso.current = true;
+        setError('');
         try {
             await onEnviarTexto?.(contenido);
+            setTexto((actual) => actual.trim() === contenido ? '' : actual);
+        } catch {
+            setError('No se pudo enviar. Tu mensaje sigue aquí para volver a intentarlo.');
         } finally {
+            envioEnCurso.current = false;
             restaurarFocoInput();
         }
     };
@@ -98,7 +122,7 @@ export default function MensajeInput({
     };
 
     const handleKeyDown = (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
+        if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
             e.preventDefault();
             handleEnviar(e);
         }
@@ -119,6 +143,8 @@ export default function MensajeInput({
     const handleAudio = async (file) => {
         try {
             await onEnviarAdjunto?.(file, 'audio', null);
+        } catch {
+            setError('No se pudo enviar el audio. Inténtalo de nuevo.');
         } finally {
             restaurarFocoInput();
         }
@@ -135,6 +161,7 @@ export default function MensajeInput({
 
     return (
         <div className={`gelia-mensajeria-input-bar ${compact ? 'px-2 pb-2' : 'px-3 pb-3'} theme-surface shrink-0`}>
+            {error && <p role="alert" className="gelia-mensajeria-error">{error}</p>}
             <BarraRespuestaMensaje mensaje={respondiendoA} onCancelar={onCancelarRespuesta} />
             <BandejaStickers
                 abierto={mostrarStickers}
@@ -188,11 +215,12 @@ export default function MensajeInput({
                     className="rounded-full theme-text-main"
                 />
 
-                <GrabadorAudio onGrabado={handleAudio} disabled={enviando} />
+                <GrabadorAudio onError={setError} onGrabado={handleAudio} disabled={enviando} />
 
                 <textarea
                     ref={textareaRef}
                     value={texto}
+                    aria-label="Mensaje"
                     onChange={(e) => setTexto(e.target.value)}
                     onKeyDown={handleKeyDown}
                     onPaste={handlePaste}
@@ -207,7 +235,7 @@ export default function MensajeInput({
                     label="Enviar mensaje"
                     type="submit"
                     disabled={enviando || !texto.trim()}
-                    className="rounded-full bg-[var(--color-primario)] text-white disabled:opacity-40"
+                    className="gelia-mensajeria-enviar rounded-full bg-[var(--color-primario)] text-white disabled:opacity-40"
                 />
             </form>
         </div>

@@ -36,8 +36,8 @@ export default function ContenidoDetalleResguardo({
     }
 
     const titulo = resguardo.snapshot_folio || `Resguardo #${resguardo.id}`;
-    if (resguardo.es_t02_documental) {
-        return <div className="space-y-4"><PanelPedidoRevisionResguardo resguardo={resguardo} /><SeguimientoTransferenciaTienda pedido={{ id: resguardo.pedido_bma_id, es_t02_documental: true }} soloLectura={modoAuditoria} onActualizar={onAccionExito} /></div>;
+    if (resguardo.es_custodia_documental || resguardo.es_t02_documental) {
+        return <div className="space-y-4"><PanelPedidoRevisionResguardo resguardo={resguardo} /><SeguimientoTransferenciaTienda pedido={{ id: resguardo.pedido_bma_id, es_custodia_documental: true }} soloLectura={modoAuditoria} onActualizar={onAccionExito} /></div>;
     }
     const plazos = plazosOperativosResguardo(resguardo);
     const clasificacionesActivas = Object.entries(resguardo.clasificaciones || {})

@@ -40,7 +40,7 @@ class SincronizarCumplimientoDesdeResguardoPdvService
 
             if ($cumplimiento->estado !== PedidoBmaCumplimientoFisico::ESTADO_LISTA_PARA_SALIDA
                 && ! ($cumplimiento->estado === PedidoBmaCumplimientoFisico::ESTADO_APARTADO_CONFIRMADO
-                    && \App\Support\ControlPedidos\TransferenciaT02::documental($cumplimiento->tarea?->pedido))) {
+                    && \App\Support\ControlPedidos\CustodiaDocumentalTienda::aplica($cumplimiento->tarea?->pedido))) {
                 return;
             }
 

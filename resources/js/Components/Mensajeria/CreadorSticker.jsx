@@ -15,7 +15,7 @@ function coloresTema() {
         leer('--color-peligro'),
         leer('--color-info'),
     ].filter(Boolean);
-    return colores.length ? colores : ['currentColor'];
+    return colores.length ? [...new Set(colores)] : ['currentColor'];
 }
 
 function archivoDesdeCanvas(canvas) {
@@ -67,11 +67,12 @@ export default function CreadorSticker({ onGuardar, onCancelar, enviando = false
     const canvasRef = useRef(null);
     const dibujando = useRef(false);
     const ultimo = useRef(null);
-    const [modo, setModo] = useState('dibujar');
     const [color, setColor] = useState('');
     const [colores, setColores] = useState([]);
     const [goma, setGoma] = useState(false);
     const [error, setError] = useState('');
+    const [guardando, setGuardando] = useState(false);
+    const guardandoRef = useRef(false);
 
     useEffect(() => {
         const lista = coloresTema();
@@ -84,7 +85,7 @@ export default function CreadorSticker({ onGuardar, onCancelar, enviando = false
         if (!canvas) return;
         const ctx = canvas.getContext('2d');
         ctx.clearRect(0, 0, LADO, LADO);
-    }, [modo]);
+    }, []);
 
     const punto = (event) => {
         const canvas = canvasRef.current;
@@ -114,6 +115,8 @@ export default function CreadorSticker({ onGuardar, onCancelar, enviando = false
     };
 
     const iniciarTrazo = (event) => {
+        if (guardandoRef.current || enviando) return;
+        event.currentTarget.setPointerCapture?.(event.pointerId);
         dibujando.current = true;
         ultimo.current = punto(event);
     };
@@ -136,7 +139,7 @@ export default function CreadorSticker({ onGuardar, onCancelar, enviando = false
                 ctx.clearRect(0, 0, LADO, LADO);
                 ctx.drawImage(imagen, 0, 0, LADO, LADO);
                 URL.revokeObjectURL(url);
-                setModo('dibujar');
+
             };
             imagen.src = url;
         } catch (e) {
@@ -145,12 +148,24 @@ export default function CreadorSticker({ onGuardar, onCancelar, enviando = false
     };
 
     const guardar = async (enviar) => {
+        if (guardandoRef.current || enviando) return;
+        const canvas = canvasRef.current;
+        const pixeles = canvas.getContext('2d').getImageData(0, 0, LADO, LADO).data;
+        if (!pixeles.some((valor, indice) => indice % 4 === 3 && valor > 0)) {
+            setError('Dibuja o sube una imagen para crear tu sticker.');
+            return;
+        }
+        guardandoRef.current = true;
+        setGuardando(true);
         setError('');
         try {
             const archivo = await archivoDesdeCanvas(canvasRef.current);
             await onGuardar?.(archivo, enviar);
         } catch (e) {
-            setError(e.message || 'No se pudo guardar el sticker.');
+            setError(e.response?.data?.message || 'No se pudo guardar el sticker. Inténtalo de nuevo.');
+        } finally {
+            guardandoRef.current = false;
+            setGuardando(false);
         }
     };
 
@@ -161,6 +176,7 @@ export default function CreadorSticker({ onGuardar, onCancelar, enviando = false
                 <BotonIconoMensajeria icon={X} label="Cerrar creador" onClick={onCancelar} className="rounded-full theme-text-muted" size={16} />
             </div>
 
+            <p className="text-xs theme-text-muted mt-0 mb-3">Dibuja o sube una imagen. El fondo es transparente.</p>
             <canvas
                 ref={canvasRef}
                 width={LADO}
@@ -169,7 +185,8 @@ export default function CreadorSticker({ onGuardar, onCancelar, enviando = false
                 onPointerDown={iniciarTrazo}
                 onPointerMove={trazar}
                 onPointerUp={soltar}
-                onPointerLeave={soltar}
+                onPointerCancel={soltar}
+                aria-label="Dibuja tu sticker"
             />
 
             <div className="flex flex-wrap items-center gap-2 mt-3">
@@ -179,7 +196,8 @@ export default function CreadorSticker({ onGuardar, onCancelar, enviando = false
                         type="button"
                         className={`gelia-sticker-color ${color === item && !goma ? 'gelia-sticker-color--activo' : ''}`}
                         style={{ background: item }}
-                        aria-label="Elegir color"
+                        aria-label={`Elegir color ${item}`}
+                        aria-pressed={color === item && !goma}
                         onClick={() => {
                             setColor(item);
                             setGoma(false);
@@ -189,6 +207,7 @@ export default function CreadorSticker({ onGuardar, onCancelar, enviando = false
                 <button
                     type="button"
                     className={`gelia-toque inline-flex items-center gap-1 rounded-full px-3 text-xs theme-element border theme-border ${goma ? 'border-[var(--color-primario)]' : ''}`}
+                    aria-pressed={goma}
                     onClick={() => setGoma((v) => !v)}
                 >
                     <Eraser className="w-3.5 h-3.5" aria-hidden />
@@ -209,10 +228,10 @@ export default function CreadorSticker({ onGuardar, onCancelar, enviando = false
             {error && <p className="m-0 mt-2 text-xs theme-text-peligro">{error}</p>}
 
             <div className="flex flex-wrap gap-2 mt-3">
-                <button type="button" className="gelia-sticker-accion" disabled={enviando} onClick={() => guardar(false)}>
+                <button type="button" className="gelia-sticker-accion" disabled={enviando || guardando} onClick={() => guardar(false)}>
                     Guardar
                 </button>
-                <button type="button" className="gelia-sticker-accion gelia-sticker-accion--principal" disabled={enviando} onClick={() => guardar(true)}>
+                <button type="button" className="gelia-sticker-accion gelia-sticker-accion--principal" disabled={enviando || guardando} onClick={() => guardar(true)}>
                     Guardar y enviar
                 </button>
             </div>

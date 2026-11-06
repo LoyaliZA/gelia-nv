@@ -131,6 +131,7 @@ export default function useSidebarState({
     }, [clearAnimListeners]);
 
     const openDrawer = useCallback(() => {
+        drawerTriggerRef.current = document.activeElement;
         setDrawerOpen(true);
         setUserMenuOpen(false);
     }, []);

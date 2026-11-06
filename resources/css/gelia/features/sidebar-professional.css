@@ -1038,7 +1038,7 @@
 .gelia-pro-sidebar-backdrop {
     position: fixed;
     inset: 0;
-    z-index: calc(var(--gelia-z-sidebar) + 7);
+    z-index: calc(var(--gelia-z-sidebar) + 11);
     background: var(--theme-modal-overlay-bg);
     opacity: 0;
     pointer-events: none;
@@ -1055,7 +1055,7 @@
 }
 
 .gelia-pro-sidebar--drawer {
-    z-index: calc(var(--gelia-z-sidebar) + 8);
+    z-index: calc(var(--gelia-z-sidebar) + 12);
     transform: translateX(calc(-100% - 0.75rem));
     transition:
         transform 0.34s var(--gelia-pro-ease),
