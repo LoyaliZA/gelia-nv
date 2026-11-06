@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { FileText, Image as ImageIcon, Loader2, MessageSquare, Music, Search, User, Video, X } from 'lucide-react';
 import MensajeriaService from '@/Services/MensajeriaService';
 import { resaltarTexto } from '@/utils/resaltarBusqueda';
+import useIconoHover from '@/hooks/useIconoHover';
 
 const MIN_CHARS = 2;
 const DEBOUNCE_MS = 280;
@@ -27,6 +28,8 @@ export default function BuscadorInteligente({
     const [abierto, setAbierto] = useState(false);
     const inputRef = useRef(null);
     const panelRef = useRef(null);
+    const buscar = useIconoHover(Search, { size: 16, className: 'w-4 h-4' });
+    const cerrar = useIconoHover(X, { size: 14, className: 'w-3.5 h-3.5' });
 
     useEffect(() => {
         const t = setTimeout(() => setDebounced(q.trim()), DEBOUNCE_MS);
@@ -89,8 +92,10 @@ export default function BuscadorInteligente({
             ref={panelRef}
             className={`gelia-buscador-mensajeria relative ${mostrarPanel ? 'gelia-buscador-mensajeria--activo' : ''} ${className}`}
         >
-            <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 opacity-40 pointer-events-none" />
+            <div className="relative" {...buscar.triggerProps}>
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 opacity-40 pointer-events-none" aria-hidden>
+                    {buscar.nodo}
+                </span>
                 <input
                     ref={inputRef}
                     type="search"
@@ -103,7 +108,7 @@ export default function BuscadorInteligente({
                         if (debounced.length >= MIN_CHARS) setAbierto(true);
                     }}
                     placeholder={placeholder}
-                    className="w-full pl-10 pr-9 py-2 rounded-xl text-xs theme-element theme-text-main border theme-border outline-none focus:border-[var(--color-primario)] placeholder:theme-text-muted"
+                    className="w-full pl-10 pr-9 py-2.5 rounded-full text-sm theme-element theme-text-main border theme-border outline-none focus:border-[var(--color-primario)] placeholder:theme-text-muted"
                     enterKeyHint="search"
                     autoComplete="off"
                     aria-label="Búsqueda inteligente"
@@ -115,8 +120,9 @@ export default function BuscadorInteligente({
                         onClick={limpiar}
                         className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full theme-text-muted hover:theme-text-main"
                         aria-label="Limpiar búsqueda"
+                        {...cerrar.triggerProps}
                     >
-                        <X className="w-3.5 h-3.5" />
+                        {cerrar.nodo}
                     </button>
                 )}
             </div>

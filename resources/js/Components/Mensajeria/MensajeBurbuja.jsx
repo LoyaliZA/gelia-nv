@@ -69,6 +69,7 @@ export default function MensajeBurbuja({
 }) {
     const esPropio = mensaje.es_propio;
     const adjunto = mensaje.adjuntos?.[0];
+    const esSticker = mensaje.tipo === 'sticker' && adjunto && !mensaje.reply_to && !mensaje.contenido;
     const esGrupoAjeno = esGrupo && !esPropio;
     const mostrarCabecera = esGrupoAjeno && mostrarRemitente;
     const colorRemitente = colorRemitenteGrupo(mensaje.user?.id);
@@ -151,12 +152,16 @@ export default function MensajeBurbuja({
             </button>
 
             <div
-                className={`gelia-mensaje-burbuja rounded-2xl px-3 py-2 shadow-sm ${
+                className={`gelia-mensaje-burbuja rounded-2xl px-3 py-2 ${
+                    esSticker ? 'gelia-mensaje-sticker' : 'shadow-sm'
+                } ${
                     esPropio ? 'gelia-mensaje-burbuja--propio' : ''
                 } ${mensaje.reply_to ? 'gelia-mensaje-burbuja--con-cita' : ''} ${
-                    esPropio
-                        ? 'rounded-br-sm bg-[var(--color-primario)] text-white'
-                        : 'rounded-bl-sm theme-element theme-text-main border theme-border'
+                    esSticker
+                        ? ''
+                        : esPropio
+                            ? 'rounded-br-sm bg-[var(--color-primario)] text-white'
+                            : 'rounded-bl-sm theme-element theme-text-main border theme-border'
                 } ${mostrarCabecera ? 'rounded-tl-sm' : ''}`}
             >
                 {mensaje.reply_to && (
@@ -172,12 +177,19 @@ export default function MensajeBurbuja({
                     <p className="gelia-mensaje-burbuja__texto text-sm">{mensaje.contenido}</p>
                 )}
 
+                {mensaje.tipo === 'sticker' && adjunto && (
+                    <img
+                        src={adjunto.url || adjunto.thumbnail_url}
+                        alt="Sticker"
+                        className="gelia-mensaje-sticker__img"
+                    />
+                )}
                 {mensaje.tipo === 'imagen' && adjunto && <MensajeImagen adjunto={adjunto} />}
                 {mensaje.tipo === 'video' && adjunto && <MensajeVideo adjunto={adjunto} />}
                 {mensaje.tipo === 'audio' && adjunto && <MensajeAudio adjunto={adjunto} />}
                 {mensaje.tipo === 'archivo' && adjunto && <MensajeArchivo adjunto={adjunto} />}
 
-                {mensaje.contenido && mensaje.tipo !== 'texto' && (
+                {mensaje.contenido && mensaje.tipo !== 'texto' && mensaje.tipo !== 'sticker' && (
                     <p className="gelia-mensaje-burbuja__texto text-sm mt-1">{mensaje.contenido}</p>
                 )}
 
@@ -193,7 +205,7 @@ export default function MensajeBurbuja({
                 anchor={menuAnchor}
                 onCerrar={() => setMenuAnchor(null)}
                 onResponder={() => onResponder?.(mensaje)}
-                onCopiarImagen={mensaje.tipo === 'imagen' && adjunto
+                onCopiarImagen={(mensaje.tipo === 'imagen' || mensaje.tipo === 'sticker') && adjunto
                     ? () => copiarImagenMensaje(adjunto)
                     : null}
             />

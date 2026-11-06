@@ -85,6 +85,19 @@ describe('mensaje nuevo en la bandeja', () => {
         expect(actualizada.unread_count).toBe(3);
         expect(actualizada.ultimo_mensaje_preview).toBe('Hola');
     });
+
+    it('etiqueta un sticker sin texto como Sticker', () => {
+        const actualizada = conversacionConMensajeNuevo({
+            id: 1,
+            unread_count: 0,
+        }, {
+            tipo: 'sticker',
+            contenido: null,
+            created_at: '2026-11-02T18:00:00Z',
+        }, true);
+
+        expect(actualizada.ultimo_mensaje_preview).toBe('Sticker');
+    });
 });
 
 describe('fusionarMensajesHilo', () => {

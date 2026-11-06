@@ -4,6 +4,7 @@ import ChatPanel from '@/Components/Mensajeria/ChatPanel';
 import NuevaConversacionModal from '@/Components/Mensajeria/NuevaConversacionModal';
 import CrearGrupoModal from '@/Components/Mensajeria/CrearGrupoModal';
 import { useMensajeriaContext } from '@/Components/Mensajeria/MensajeriaContext';
+import { animarEntrada } from '@/utils/animarMensajeria';
 
 function leerConversacionDesdeUrl() {
     if (typeof window === 'undefined') return null;
@@ -32,6 +33,7 @@ export default function MensajeriaShell({ variant = 'page', onCerrar }) {
         cargarMasMensajes,
         enviarTexto,
         enviarAdjunto,
+        enviarSticker,
         crearConversacion,
         refrescarConversaciones,
         irAMensaje,
@@ -39,6 +41,7 @@ export default function MensajeriaShell({ variant = 'page', onCerrar }) {
     } = useMensajeriaContext();
 
     const chatPanelRef = useRef(null);
+    const paneChatRef = useRef(null);
     const [modalNuevoChat, setModalNuevoChat] = useState(false);
     const [modalGrupo, setModalGrupo] = useState(false);
     const [vistaMobile, setVistaMobile] = useState('lista');
@@ -88,6 +91,14 @@ export default function MensajeriaShell({ variant = 'page', onCerrar }) {
         window.addEventListener('mensajeria-abrir-conversacion', handler);
         return () => window.removeEventListener('mensajeria-abrir-conversacion', handler);
     }, [variant, abrirConversacionPorId]);
+
+    useEffect(() => {
+        if (vistaMobile !== 'chat') return undefined;
+        const escritorio = window.matchMedia(enDrawer ? '(min-width: 768px)' : '(min-width: 640px)').matches;
+        if (escritorio) return undefined;
+        animarEntrada(paneChatRef.current, { eje: 'x', distancia: 28, duration: 340 });
+        return undefined;
+    }, [vistaMobile, enDrawer, conversacionActiva?.id]);
 
     const handleSeleccionar = async (conversacion) => {
         await seleccionarConversacion(conversacion);
@@ -146,7 +157,7 @@ export default function MensajeriaShell({ variant = 'page', onCerrar }) {
                     />
                 </div>
 
-                <div className={`gelia-mensajeria-chat-pane ${vistaMobile === 'chat' ? 'flex' : 'hidden'} ${enDrawer ? 'md:flex' : 'sm:flex'} flex-1 h-full min-h-0 min-w-0 w-full`}>
+                <div ref={paneChatRef} className={`gelia-mensajeria-chat-pane ${vistaMobile === 'chat' ? 'flex' : 'hidden'} ${enDrawer ? 'md:flex' : 'sm:flex'} flex-1 h-full min-h-0 min-w-0 w-full`}>
                     <ChatPanel
                         ref={chatPanelRef}
                         conversacion={conversacionActiva}
@@ -156,6 +167,7 @@ export default function MensajeriaShell({ variant = 'page', onCerrar }) {
                         enviando={enviando}
                         onEnviarTexto={enviarTexto}
                         onEnviarAdjunto={enviarAdjunto}
+                        onEnviarSticker={enviarSticker}
                         onCargarMas={cargarMasMensajes}
                         onVolver={handleVolver}
                         mostrarVolver

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import MensajeriaService from '@/Services/MensajeriaService';
+import { etiquetaTipoMensaje } from '@/utils/mensajeriaRespuesta';
 import {
     normalizarMensajeParaViewer,
     aplicarActualizacionLectura,
@@ -134,7 +135,29 @@ export default function useMensajeria(conversacionesIniciales = [], viewerUserId
             recordarMensaje(mensaje?.id);
             setMensajes((prev) => [...prev, mensaje]);
             actualizarConversacionEnLista(conversacionActiva.id, {
-                ultimo_mensaje_preview: mensaje.contenido || `[${tipo}]`,
+                ultimo_mensaje_preview: mensaje.contenido?.trim() || etiquetaTipoMensaje(tipo),
+                ultimo_mensaje_at: mensaje.created_at,
+            });
+            return mensaje;
+        } finally {
+            setEnviando(false);
+        }
+    }, [conversacionActiva, actualizarConversacionEnLista, recordarMensaje]);
+
+    const enviarSticker = useCallback(async (stickerId, replyToId = null) => {
+        if (!conversacionActiva || !stickerId) return null;
+
+        setEnviando(true);
+        try {
+            const mensaje = await MensajeriaService.enviarSticker(
+                conversacionActiva.id,
+                stickerId,
+                replyToId
+            );
+            recordarMensaje(mensaje?.id);
+            setMensajes((prev) => [...prev, mensaje]);
+            actualizarConversacionEnLista(conversacionActiva.id, {
+                ultimo_mensaje_preview: 'Sticker',
                 ultimo_mensaje_at: mensaje.created_at,
             });
             return mensaje;
@@ -348,6 +371,7 @@ export default function useMensajeria(conversacionesIniciales = [], viewerUserId
         cargarMasMensajes,
         enviarTexto,
         enviarAdjunto,
+        enviarSticker,
         recibirMensaje,
         actualizarMensaje,
         actualizarAdjunto,

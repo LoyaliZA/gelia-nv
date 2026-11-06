@@ -44,18 +44,12 @@ export function textoPresencia(presencia, ahora = new Date()) {
     if (presencia.en_linea === false) {
         return textoVistoPorUltimaVez(presencia.ultima_actividad_at, ahora);
     }
-    const base = presencia.etiqueta || presencia.estado || '';
-    if (!base) return null;
-    if (presencia.mensaje?.trim()) {
-        return `${base} · ${presencia.mensaje.trim()}`;
-    }
-    return base;
+    return 'En línea';
 }
 
 export function clasePresencia(presencia) {
     if (presencia?.en_linea === false) return 'gelia-presencia--ausente';
-    if (!presencia?.estado) return 'gelia-presencia--disponible';
-    return `gelia-presencia--${presencia.estado}`;
+    return 'gelia-presencia--en-linea';
 }
 
 export function actualizarPresenciaEnConversacion(conversacion, userId, presencia) {

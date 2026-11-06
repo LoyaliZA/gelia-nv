@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Mic, Square, Trash2 } from 'lucide-react';
+import useIconoHover from '@/hooks/useIconoHover';
 
 export default function GrabadorAudio({ onGrabado, onCancelar, disabled = false }) {
     const [grabando, setGrabando] = useState(false);
@@ -8,6 +9,9 @@ export default function GrabadorAudio({ onGrabado, onCancelar, disabled = false 
     const chunksRef = useRef([]);
     const timerRef = useRef(null);
     const streamRef = useRef(null);
+    const mic = useIconoHover(Mic, { size: 20, className: 'w-5 h-5' });
+    const detenerIcono = useIconoHover(Square, { size: 16, className: 'w-4 h-4' });
+    const borrarIcono = useIconoHover(Trash2, { size: 16, className: 'w-4 h-4' });
 
     useEffect(() => () => {
         clearInterval(timerRef.current);
@@ -72,23 +76,25 @@ export default function GrabadorAudio({ onGrabado, onCancelar, disabled = false 
                 type="button"
                 onClick={iniciar}
                 disabled={disabled}
-                className="p-2 rounded-full theme-element hover:bg-[var(--color-primario)] hover:text-white transition-colors disabled:opacity-40"
+                className="gelia-toque inline-flex items-center justify-center rounded-full theme-text-main disabled:opacity-40"
                 title="Grabar audio"
+                aria-label="Grabar audio"
+                {...mic.triggerProps}
             >
-                <Mic className="w-5 h-5" />
+                {mic.nodo}
             </button>
         );
     }
 
     return (
         <div className="flex items-center gap-2 px-3 py-2 rounded-2xl theme-element border theme-border">
-            <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+            <span className="gelia-grabacion-punto" />
             <span className="text-xs font-mono">{segundos}s</span>
-            <button type="button" onClick={detener} className="p-1.5 rounded-full bg-[var(--color-primario)] text-white">
-                <Square className="w-4 h-4" />
+            <button type="button" onClick={detener} className="gelia-toque inline-flex items-center justify-center rounded-full bg-[var(--color-primario)] text-white" aria-label="Detener grabación" {...detenerIcono.triggerProps}>
+                {detenerIcono.nodo}
             </button>
-            <button type="button" onClick={cancelar} className="p-1.5 rounded-full opacity-60 hover:opacity-100">
-                <Trash2 className="w-4 h-4" />
+            <button type="button" onClick={cancelar} className="gelia-toque inline-flex items-center justify-center rounded-full opacity-60 hover:opacity-100" aria-label="Cancelar grabación" {...borrarIcono.triggerProps}>
+                {borrarIcono.nodo}
             </button>
         </div>
     );
