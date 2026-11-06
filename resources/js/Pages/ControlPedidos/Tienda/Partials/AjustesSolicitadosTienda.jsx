@@ -1,6 +1,8 @@
 import ResumenCambiosDisponibilidad from '../../Partials/ResumenCambiosDisponibilidad';
+import PanelRespuestaDisponibilidad from '../../Partials/PanelRespuestaDisponibilidad';
 import React, { useEffect, useState } from 'react';
 import { router } from '@inertiajs/react';
+import axios from 'axios';
 import { PackageMinus, PackagePlus } from 'lucide-react';
 import SelectorProducto from '../../../../Components/Almacenes/SelectorProducto';
 import { THEME_INPUT, THEME_LABEL, THEME_SELECT, THEME_TEXTAREA } from '../../../../utils/geliaTheme';
@@ -119,17 +121,19 @@ export default function AjustesSolicitadosTienda({ tarea, auth, ocupado = false,
     const [capturas, setCapturas] = useState({});
     const retirosPendientes = (tarea.pedido?.retiros || []).filter((retiro) => (retiro.estado || 'pendiente') === 'pendiente');
     const anexoPendienteDirty = (tarea.pedido?.anexos_pendientes || []).some((anexo) => capturas[`anexo-${anexo.indice}`]);
-    const capturaPendiente = Boolean((retirosPendientes.length && capturas.retiro) || anexoPendienteDirty);
+    const capturaPendiente = Boolean((retirosPendientes.length && capturas.retiro) || anexoPendienteDirty || capturas.consulta);
     useEffect(() => { onDirtyChange?.(capturaPendiente); }, [capturaPendiente, onDirtyChange]);
     const marcar = (clave, valor) => setCapturas((actual) => actual[clave] === valor ? actual : { ...actual, [clave]: valor });
     const permisos = auth?.user?.permissions || [];
     const autorizado = (tarea.puede_preparar || tarea.puede_responder)
         ?? (Number(tarea.responsable?.id) === Number(auth?.user?.id) && (auth?.user?.roles?.includes('Super Admin') || permisos.includes('control_pedidos.tienda.responder') || permisos.includes('control_pedidos.tienda.apartado.separar')));
+    const consulta = tarea.pedido?.area_revision === 'preparacion_tienda';
+    const actualizacion = consulta && Boolean(tarea.pedido?.revision_disponibilidad?.actualizacion_pendiente || tarea.pedido?.anexos_pendientes?.length);
     const resumen = <ResumenCambiosDisponibilidad solicitud={tarea.pedido || {}} documentos={tarea.pedido?.documentos || []} />;
     if (!autorizado || !['EN_ATENCION', 'RESPONDIDA'].includes(tarea.estado)) return resumen;
     return <div className="gelia-preparacion-ajustes grid gap-4">
-        {resumen}
-        <AtencionRetiro key={retirosPendientes.map((retiro) => retiro.version).join('-')} tarea={tarea} ocupado={ocupado} onEnviar={onEnviar} onDirtyChange={(valor) => marcar('retiro', valor)} />
+        {!actualizacion && resumen}
+        {(!consulta || tarea.pedido?.retiros_requieren_atencion_fisica) && <AtencionRetiro key={retirosPendientes.map((retiro) => retiro.version).join('-')} tarea={tarea} ocupado={ocupado} onEnviar={onEnviar} onDirtyChange={(valor) => marcar('retiro', valor)} />}
         {(tarea.pedido?.anexos_por_separar || []).map((anexo) => <section key={`separar-${anexo.indice}`} className="registrar-tienda-panel grid gap-3">
             <div className="registrar-tienda-seccion-titulo"><PackagePlus size={18} aria-hidden="true" /><h3>Separación del anexo</h3></div>
             <ul className="m-0 pl-4">{(anexo.piezas_respuesta || []).map((pieza, i) => <li key={i} className="text-sm theme-text-main">{pieza.descripcion} · {pieza.cantidad}</li>)}</ul>
@@ -139,6 +143,19 @@ export default function AjustesSolicitadosTienda({ tarea, auth, ocupado = false,
                 if (onEnviar) onEnviar(url, datos); else router.post(url, datos, { preserveScroll: true });
             }}>Confirmar separación del anexo</button> : <p role="status" className="text-sm theme-text-muted m-0">Disponibilidad enviada. Espere a que Ventas cierre la consulta para separar el anexo.</p>}
         </section>)}
-        {(tarea.pedido?.anexos_pendientes || []).map((anexo) => <AtencionAnexo key={anexo.indice} tarea={tarea} anexo={anexo} ocupado={ocupado} onEnviar={onEnviar} onDirtyChange={(valor) => marcar(`anexo-${anexo.indice}`, valor)} />)}
+        {actualizacion && <PanelRespuestaDisponibilidad
+            key={tarea.pedido?.revision_disponibilidad?.actualizacion_id || 'actualizacion'}
+            origen="Tienda" mostrarCambios={false} tomada puedeResponder={!ocupado}
+            pedido={{ ...tarea.pedido, almacen: tarea.almacen, solicitud_preparacion: tarea.pedido }}
+            documentos={tarea.pedido?.documentos || []} revision={tarea.pedido?.revision_disponibilidad}
+            onDirtyChange={valor => marcar('consulta', valor)}
+            onEnviar={form => new Promise((resolve, reject) => {
+                const url = route('control_pedidos.tienda.disponibilidad', tarea.id);
+                const opciones = { preserveScroll: true, onSuccess: resolve, onError: errores => reject({ response: { data: { errors: errores } } }) };
+                if (onEnviar) onEnviar(url, form, { ...opciones, onFinish: () => reject(new Error('No se pudo enviar la respuesta.')) });
+                else axios.post(url, form, { headers: { Accept: 'application/json' } }).then(() => router.reload({ ...opciones, onFinish: resolve }), reject);
+            })}
+        />}
+        {!consulta && (tarea.pedido?.anexos_pendientes || []).map((anexo) => <AtencionAnexo key={anexo.indice} tarea={tarea} anexo={anexo} ocupado={ocupado} onEnviar={onEnviar} onDirtyChange={(valor) => marcar(`anexo-${anexo.indice}`, valor)} />)}
     </div>;
 }

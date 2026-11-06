@@ -7,7 +7,7 @@ function etiquetaProducto(p) {
     return `${p.sku} - ${p.descripcion}`;
 }
 
-export default function SelectorProducto({ value, onChange, productoInicial, disabled = false, required = false, almacenId = null, incluirSinInventario = false, inputId, onEscanear = null }) {
+export default function SelectorProducto({ value, onChange, productoInicial, disabled = false, required = false, almacenId = null, incluirSinInventario = false, inputId, onEscanear = null, zIndexEscaner = undefined }) {
     const [texto, setTexto] = useState('');
     const [abierto, setAbierto] = useState(false);
     const [productos, setProductos] = useState([]);
@@ -168,7 +168,7 @@ export default function SelectorProducto({ value, onChange, productoInicial, dis
             <div className="theme-field-with-icon">
                 <Search className="theme-field-icon" aria-hidden="true" />
                 {onEscanear
-                    ? <InputConEscanner label="producto" value={texto} onChange={cambiarTexto} alEscanear={escanear} escaneoContinuo mostrarBotonCamara={!disabled} inputProps={inputProps} />
+                    ? <InputConEscanner zIndexModal={zIndexEscaner} label="producto" value={texto} onChange={cambiarTexto} alEscanear={escanear} escaneoContinuo mostrarBotonCamara={!disabled} inputProps={inputProps} />
                     : <input {...inputProps} value={texto} onChange={cambiarTexto} />}
                 {cargando && <Loader2 className={`absolute ${onEscanear ? 'right-16' : 'right-3'} top-1/2 -translate-y-1/2 w-4 h-4 animate-spin theme-text-muted`} />}
             </div>

@@ -14,6 +14,7 @@ export default function InputConEscanner({
     escaneoContinuo = false,
     mostrarBotonCamara = true,
     alEscanear = null,
+    zIndexModal = undefined,
 }) {
     const [modalAbierto, setModalAbierto] = useState(false);
 
@@ -52,6 +53,7 @@ export default function InputConEscanner({
 
             <ModalEscanearCodigo
                 abierto={modalAbierto}
+                zIndex={zIndexModal}
                 onCerrar={() => setModalAbierto(false)}
                 continuo={escaneoContinuo}
                 titulo={label ? `Escanear ${label}` : 'Escanear código'}

@@ -3,7 +3,7 @@ import VisorImagenMensaje from './VisorImagenMensaje';
 
 export default function MensajeImagen({ adjunto }) {
     const [visorAbierto, setVisorAbierto] = useState(false);
-    const src = adjunto.url || adjunto.thumbnail_url;
+    const src = adjunto.thumbnail_url || adjunto.url;
     if (!src) return null;
 
     return (
@@ -18,6 +18,7 @@ export default function MensajeImagen({ adjunto }) {
                     src={src}
                     alt={adjunto.nombre_original || 'Imagen'}
                     className="max-w-full max-h-64 rounded-xl object-cover hover:opacity-90 transition-opacity"
+                    decoding="async"
                     loading="lazy"
                 />
             </button>

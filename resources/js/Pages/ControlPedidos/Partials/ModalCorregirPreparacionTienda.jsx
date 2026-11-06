@@ -89,7 +89,7 @@ export default function ModalCorregirPreparacionTienda({
                     <div className="p-4 rounded-xl gelia-callout-aviso mb-4 flex gap-3">
                         <AlertTriangle className="w-5 h-5 theme-text-aviso shrink-0 mt-0.5" />
                         <div>
-                            <p className="text-sm font-black theme-text-main m-0">Incidencia reportada por Tienda</p>
+                            <p className="text-sm font-black theme-text-main m-0">Error reportado por Tienda</p>
                             {inc.tipo_incidencia && (
                                 <p className="text-xs font-bold theme-text-muted m-0 mt-1">Tipo: {inc.tipo_incidencia.replace(/_/g, ' ')}</p>
                             )}

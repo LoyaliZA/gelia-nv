@@ -329,7 +329,7 @@ class PedidoBmaTiendaController extends Controller
         }
 
         return redirect()->route('control_pedidos.tienda.index', ['tab' => 'CON_INCIDENCIA'])
-            ->with('success', 'Incidencia reportada. Ventas fue notificada.');
+            ->with('success', 'Error reportado. Ventas fue notificada.');
     }
 
     public function corregir(PedidoBmaTareaPreparacion $tarea, CorregirTareaPreparacionRequest $request, CorregirTareaPreparacionService $service): RedirectResponse
@@ -765,7 +765,7 @@ class PedidoBmaTiendaController extends Controller
     ): JsonResponse {
         $tarea->loadMissing(['pedido', 'modalidad', 'cumplimientoFisico']);
         if (isset($tarea->pedido->solicitud_preparacion_json['revision_disponibilidad']['estado'])) {
-            return response()->json($service->ejecutar($tarea->pedido, Auth::user(), $request->validated(), [], $tarea));
+            return response()->json($service->ejecutar($tarea->pedido, Auth::user(), $request->validated(), $request->file('evidencias', []) ?: [], $tarea));
         }
         $lineas = $request->all()['lineas'] ?? null;
         if (is_array($lineas) && $lineas !== []
@@ -796,7 +796,7 @@ class PedidoBmaTiendaController extends Controller
         $service->ejecutar($tarea, Auth::user(), $datos);
 
         $mensaje = ! empty($datos['motivo_incidencia'])
-            ? 'Incidencia enviada a Ventas. Las piezas registradas se conservaron.' : 'Preparación guardada. Puede continuar antes de confirmar.';
+            ? 'Error reportado a Ventas. Las piezas registradas se conservaron.' : 'Preparación guardada. Puede continuar antes de confirmar.';
 
         return $request->wantsJson() ? response()->json(['message' => $mensaje]) : redirect()->back()->with('success', $mensaje);
     }

@@ -3728,7 +3728,7 @@ export default function ModalFormPedidoLegado({
                             </AvisoOperativoPedido>
                         )}
                         {tareaConIncidencia && (
-                            <AvisoOperativoPedido label="Incidencia en Tienda" tono="warning" icon={AlertTriangle} className="mb-4">
+                            <AvisoOperativoPedido label="Error reportado en Tienda" tono="warning" icon={AlertTriangle} className="mb-4">
                                 Tienda reportó un problema con la solicitud.
                                 {tareaPreparacion?.incidencia?.motivo && (
                                     <span className="block mt-1">{tareaPreparacion.incidencia.motivo}</span>

@@ -35,7 +35,7 @@ class ReportarIncidenciaPreparacionService
         ?int $versionEsperada = null,
     ): PedidoBmaTareaPreparacion {
         if (! $usuario->can('control_pedidos.tienda.reportar_error')) {
-            throw new \RuntimeException('No tiene permiso para reportar incidencias.');
+            throw new \RuntimeException('No tiene permiso para reportar errores.');
         }
 
         if (trim($motivo) === '') {
@@ -53,7 +53,7 @@ class ReportarIncidenciaPreparacionService
                 PedidoBmaTareaPreparacion::ESTADO_PENDIENTE,
             ], true)) {
                 throw ValidationException::withMessages([
-                    'estado' => 'No se puede reportar incidencia en el estado actual.',
+                    'estado' => 'No se puede reportar un error en el estado actual.',
                 ]);
             }
 
@@ -87,7 +87,7 @@ class ReportarIncidenciaPreparacionService
                 PedidoBmaTareaPreparacion::ESTADO_CON_INCIDENCIA,
                 $usuario->id,
                 'incidencia',
-                "Incidencia: {$motivo}",
+                "Error reportado: {$motivo}",
                 $meta,
                 $versionEsperada
             );
@@ -100,14 +100,14 @@ class ReportarIncidenciaPreparacionService
                 $usuario->id,
                 $pedido->estatus->id,
                 $pedido->estatus->id,
-                "Tienda reportó incidencia: {$motivo}",
+                "Tienda reportó un error: {$motivo}",
                 AccionesHistorialPedidoBma::INCIDENCIA_PREPARACION_TIENDA
             );
 
             $this->notificarService->ejecutar(
                 $pedido,
                 'pedido_preparacion_tienda_incidencia',
-                "Tienda reportó una incidencia en la preparación: {$motivo}",
+                "Tienda reportó un error en la preparación: {$motivo}",
                 [],
                 $usuario->id,
                 true,

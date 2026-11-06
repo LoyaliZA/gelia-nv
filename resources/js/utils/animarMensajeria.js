@@ -5,8 +5,13 @@ export function movimientoReducido() {
         && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
+function punteroGrueso() {
+    return typeof window !== 'undefined'
+        && window.matchMedia('(pointer: coarse)').matches;
+}
+
 export function animarEntrada(el, { eje = 'y', distancia = 16, duration = 320 } = {}) {
-    if (!el || movimientoReducido()) return;
+    if (!el || movimientoReducido() || punteroGrueso()) return;
     const propiedad = eje === 'x' ? 'translateX' : 'translateY';
     animate(el, {
         opacity: [0, 1],
@@ -17,7 +22,7 @@ export function animarEntrada(el, { eje = 'y', distancia = 16, duration = 320 } 
 }
 
 export function animarPop(el) {
-    if (!el || movimientoReducido()) return;
+    if (!el || movimientoReducido() || punteroGrueso()) return;
     animate(el, {
         opacity: [0, 1],
         scale: [0.86, 1],

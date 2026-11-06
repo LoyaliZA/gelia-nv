@@ -4,6 +4,7 @@ namespace App\Services\Mensajeria;
 
 use App\Events\MensajeEnviado;
 use App\Events\MensajeRecibidoUsuario;
+use App\Jobs\Mensajeria\NotificarMensajeEnviadoJob;
 use App\Models\Conversacion;
 use App\Models\ConversacionParticipante;
 use App\Models\Mensaje;
@@ -17,6 +18,15 @@ class NotificarMensajeEnviadoService
     ) {}
 
     public function ejecutar(Conversacion $conversacion, User $remitente, array $mensajeFormateado): void
+    {
+        NotificarMensajeEnviadoJob::dispatch(
+            $conversacion->id,
+            $remitente->id,
+            $mensajeFormateado,
+        )->afterResponse();
+    }
+
+    public function difundir(Conversacion $conversacion, User $remitente, array $mensajeFormateado): void
     {
         broadcast(new MensajeEnviado($conversacion->id, $mensajeFormateado))->toOthers();
 

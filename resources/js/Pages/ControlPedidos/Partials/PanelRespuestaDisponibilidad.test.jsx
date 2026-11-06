@@ -123,3 +123,106 @@ it('un defecto sin atributos sigue exigiendo descripción aunque tenga fotos', a
  await montar();await estado(1);await click('Elegir perfume');await foto('Fotos del producto');await foto();await click('Enviar respuesta');
  expect(onEnviar).not.toHaveBeenCalled();expect(container.textContent).toContain('Describe el defecto');
 });
+it('una actualización por captura reutiliza la respuesta por conjunto y exige evidencia nueva', async () => {
+ const revision={estado:'sin_excepciones',actualizacion_pendiente:true,actualizacion_id:'123e4567-e89b-42d3-a456-426614174000'};
+ await montar({revision,pedido:{documentos:[{id:1,tipo:'evidencia_condicion',relacion_tipo:'revision_general',url:'/anterior.jpg'}],solicitud_preparacion:{anexo_sin_remision:[{entrada:'documento',documento_id:2}]}}});
+ expect(container.textContent).toContain('Actualización de consulta');
+ expect(container.textContent).not.toContain('Confirmar disponibilidad');
+ expect(container.querySelector('img[src="/anterior.jpg"]')).toBeNull();
+ expect(container.querySelector('input[type=radio]')).toBeNull();
+ await click('Enviar respuesta');expect(onEnviar).not.toHaveBeenCalled();
+ await click('Todo OK');
+ await foto();await click('Enviar respuesta');
+ expect(onEnviar.mock.lastCall[0].get('actualizacion_id')).toBe(revision.actualizacion_id);
+ expect(onEnviar.mock.lastCall[0].get('evidencias[]').name).toBe('evidencia-0.png');
+ expect([...onEnviar.mock.lastCall[0].keys()].some(k=>k.startsWith('excepciones'))).toBe(false);
+});
+it('Tienda responde una actualización con faltantes manuales usando la misma captura', async () => {
+ await montar({origen:'Tienda',revision:{estado:'sin_excepciones',actualizacion_pendiente:true},pedido:{solicitud_preparacion:{anexo_sin_remision:[{entrada:'documento',descripcion:'Piezas en captura'}]}}});
+ expect(container.textContent).toContain('Actualización de consulta · Tienda');
+ await click('Registrar detalle');
+ const modal=document.querySelector('[aria-label="Registrar detalle de productos"]');
+ await act(()=>[...modal.querySelectorAll('button')].find(b=>b.textContent==='Sin catálogo').click());
+ const input=modal.querySelector('input[maxlength="255"]');
+ await act(()=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'Pieza sin catálogo');input.dispatchEvent(new Event('input',{bubbles:true}));});
+ await act(()=>[...modal.querySelectorAll('button')].find(b=>b.textContent==='Agregar pieza').click());
+ await act(()=>[...modal.querySelectorAll('button')].find(b=>b.textContent==='Agregar al pedido (1)').click());
+ expect(document.querySelector('[aria-label="Registrar detalle de productos"]')).toBeNull();
+ await interruptor('Sin existencias');await foto();await click('Enviar respuesta');
+ expect(onEnviar.mock.lastCall[0].get('excepciones[0][descripcion]')).toBe('Pieza sin catálogo');
+ expect(onEnviar.mock.lastCall[0].get('excepciones[0][condicion]')).toBe('faltante');
+});
+it('precarga SKU repetidos como solicitudes distintas y reporta el faltante sin buscarlos otra vez', async () => {
+ await montar({revision:{estado:'sin_excepciones',actualizacion_pendiente:true},pedido:{solicitud_preparacion:{anexo_sin_remision:[
+  {entrada:'catalogo',sku:'SKU-A',descripcion:'Aroma nuevo',cantidad:2},
+  {entrada:'catalogo',sku:'SKU-A',descripcion:'Aroma nuevo',cantidad:1},
+ ]}}});
+ expect(container.querySelector('input[type=radio]')).toBeNull();
+ expect(container.querySelectorAll('[data-cambio^="anexo-"]')).toHaveLength(2);
+ await act(()=>[...container.querySelector('[data-cambio="anexo-0"]').querySelectorAll('button')].find(b=>b.textContent==='Sin existencias').click());
+ await foto();await click('Enviar respuesta');
+ const form=onEnviar.mock.lastCall[0];
+ expect(form.get('excepciones[0][sku]')).toBe('SKU-A');
+ expect(form.get('excepciones[0][cantidad]')).toBe('2');
+ expect(form.get('cambios_revisados[0][resultado]')).toBe('incidencia');
+ expect(form.get('cambios_revisados[1][resultado]')).toBe('correcto');
+});
+it('permite marcar Todo OK desde la captura abierta y exige revisar cada documento pendiente', async () => {
+ await montar({revision:{estado:'sin_excepciones',actualizacion_pendiente:true},pedido:{documentos:[{id:21,url:'/captura.png',mime_type:'image/png',nombre_original:'captura.png'}],solicitud_preparacion:{anexo_sin_remision:[{entrada:'documento',documento_id:21}]}}});
+ await foto();await click('Enviar respuesta');expect(onEnviar).not.toHaveBeenCalled();
+ await click('Abrir captura');
+ expect(document.querySelector('[aria-label="Visor de evidencia"]')).not.toBeNull();
+ await act(()=>[...document.querySelector('[aria-label="Visor de evidencia"]').querySelectorAll('button')].find(b=>b.textContent==='Todo OK').click());
+ expect(document.querySelector('[aria-label="Visor de evidencia"]')).toBeNull();
+ await click('Enviar respuesta');expect(onEnviar).toHaveBeenCalledOnce();
+ expect(onEnviar.mock.lastCall[0].get('cambios_revisados[0][resultado]')).toBe('correcto');
+});
+it('volver a Todo OK retira solo las incidencias de esa solicitud', async () => {
+ await montar({revision:{estado:'sin_excepciones',actualizacion_pendiente:true},pedido:{solicitud_preparacion:{anexo_sin_remision:[{entrada:'catalogo',sku:'A',descripcion:'Aroma',cantidad:1},{entrada:'catalogo',sku:'B',descripcion:'Crema',cantidad:1}]}}});
+ const pulsar=(clave,texto)=>act(()=>[...container.querySelector(`[data-cambio="${clave}"]`).querySelectorAll('button')].find(b=>b.textContent===texto).click());
+ await pulsar('anexo-0','Sin existencias');await pulsar('anexo-1','Sin existencias');await pulsar('anexo-0','Todo OK');
+ await foto();await click('Enviar respuesta');
+ expect(onEnviar.mock.lastCall[0].get('excepciones[0][sku]')).toBe('B');
+ expect(onEnviar.mock.lastCall[0].get('excepciones[1][sku]')).toBeNull();
+});
+it('selecciona varias piezas en una ventana rápida y las incorpora juntas para completar detalle y fotos', async () => {
+ await montar({revision:{estado:'sin_excepciones',actualizacion_pendiente:true},pedido:{solicitud_preparacion:{anexo_sin_remision:[{entrada:'documento'}]}}});
+ await click('Registrar detalle');
+ const modal=document.querySelector('[aria-label="Registrar detalle de productos"]');
+ const elegir=()=>act(()=>[...modal.querySelectorAll('button')].find(b=>b.textContent==='Elegir perfume').click());
+ await elegir();await elegir();
+ expect(container.querySelectorAll('.gelia-cedis-producto')).toHaveLength(0);
+ expect(modal.querySelectorAll('[aria-label="Piezas seleccionadas"] li')).toHaveLength(2);
+ await act(()=>[...modal.querySelectorAll('button')].find(b=>b.textContent==='Agregar al pedido (2)').click());
+ expect(container.querySelectorAll('.gelia-cedis-producto')).toHaveLength(2);
+ expect(container.querySelectorAll('textarea')).toHaveLength(2);
+ expect(container.querySelectorAll('input[aria-label="Adjuntar: Fotos del producto"]')).toHaveLength(2);
+ expect(container.textContent.toLowerCase()).not.toMatch(/\bincidencias?\b/);
+ await foto();await click('Enviar respuesta');
+ expect(onEnviar).not.toHaveBeenCalled();expect(container.textContent).toContain('Describe el defecto');
+ await interruptor('Sin existencias',0);await interruptor('Sin existencias',1);await click('Enviar respuesta');
+ expect(onEnviar).toHaveBeenCalledOnce();
+ expect(onEnviar.mock.lastCall[0].get('excepciones[0][sku]')).toBe('SKU-7');
+ expect(onEnviar.mock.lastCall[0].get('excepciones[1][sku]')).toBe('SKU-7');
+ expect(onEnviar.mock.lastCall[0].get('cambios_revisados[0][resultado]')).toBe('incidencia');
+});
+it('cancelar la selección rápida conserva el pedido sin piezas agregadas ni respuesta a la captura', async () => {
+ const onDirtyChange=vi.fn();
+ await montar({onDirtyChange,revision:{estado:'sin_excepciones',actualizacion_pendiente:true},pedido:{solicitud_preparacion:{anexo_sin_remision:[{entrada:'documento'}]}}});
+ await click('Registrar detalle');
+ const modal=document.querySelector('[aria-label="Registrar detalle de productos"]');
+ await act(()=>[...modal.querySelectorAll('button')].find(b=>b.textContent==='Elegir perfume').click());
+ expect(onDirtyChange).toHaveBeenLastCalledWith(true);
+ await act(()=>[...modal.querySelectorAll('button')].find(b=>b.textContent==='Cancelar').click());
+ expect(container.querySelectorAll('.gelia-cedis-producto')).toHaveLength(0);
+ expect(onDirtyChange).toHaveBeenLastCalledWith(false);
+ await foto();await click('Enviar respuesta');
+ expect(onEnviar).not.toHaveBeenCalled();expect(container.textContent).toContain('Revise cada captura');
+});
+it('los cambios respondidos se muestran con Mostrar todos los cambios y la primera consulta no usa incidencia', async () => {
+ await montar({revision:{estado:'sin_excepciones',actualizacion_pendiente:true},pedido:{solicitud_preparacion:{anexo_sin_remision:[{entrada:'catalogo',sku:'ANT',descripcion:'Pieza anterior',respondida_at:'2026-11-06T10:00:00Z'}]}}});
+ expect(container.querySelector('summary').textContent).toBe('Mostrar todos los cambios (1)');
+ await montar({revision:null,pedido:{}});
+ expect(container.textContent).toContain('Todo OK');
+ expect(container.textContent.toLowerCase()).not.toMatch(/\bincidencias?\b/);
+});

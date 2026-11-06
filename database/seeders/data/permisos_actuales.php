@@ -79,6 +79,7 @@ return [
     'control_pedidos.cancelacion_operativa.solicitar',
     'control_pedidos.cancelar',
     'control_pedidos.cedis',
+    'control_pedidos.cedis.bitacora',
     'control_pedidos.cedis.enviar',
     'control_pedidos.cedis.liberar',
     'control_pedidos.cedis.ver_todos',

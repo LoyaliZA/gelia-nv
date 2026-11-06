@@ -102,10 +102,11 @@ export default function MensajeInput({
         const contenido = texto.trim();
         envioEnCurso.current = true;
         setError('');
+        setTexto((actual) => (actual.trim() === contenido ? '' : actual));
         try {
             await onEnviarTexto?.(contenido);
-            setTexto((actual) => actual.trim() === contenido ? '' : actual);
         } catch {
+            setTexto((actual) => (actual.trim() ? actual : contenido));
             setError('No se pudo enviar. Tu mensaje sigue aquí para volver a intentarlo.');
         } finally {
             envioEnCurso.current = false;

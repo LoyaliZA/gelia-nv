@@ -18,7 +18,7 @@ class ReportarIncidenciaEmpaqueService
     public function ejecutar(PedidoBma $pedido, int $usuarioId, string $detalle): PedidoBma
     {
         if (!$pedido->puedeReportarIncidencia()) {
-            throw new \RuntimeException('Solo se puede reportar incidencia en pedidos pendientes de empaque.');
+            throw new \RuntimeException('Solo se puede reportar un error en pedidos pendientes de empaque.');
         }
 
         return DB::transaction(function () use ($pedido, $usuarioId, $detalle) {
@@ -46,7 +46,7 @@ class ReportarIncidenciaEmpaqueService
                 $usuarioId,
                 $estatusAnterior,
                 $estatusNuevo,
-                "Incidencia de empaque: {$detalle}",
+                "Error de empaque: {$detalle}",
                 AccionesHistorialPedidoBma::INCIDENCIA
             );
 
@@ -59,7 +59,7 @@ class ReportarIncidenciaEmpaqueService
             $this->notificarService->ejecutar(
                 $pedido,
                 'pedido_incidencia_cedis',
-                'Incidencia de empaque: '.$detalle,
+                'Error de empaque: '.$detalle,
                 ['control_pedidos.auditar'],
                 $usuarioId,
                 true,

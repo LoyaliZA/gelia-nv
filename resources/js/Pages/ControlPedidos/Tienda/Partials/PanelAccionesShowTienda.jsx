@@ -101,7 +101,7 @@ export default function PanelAccionesShowTienda({
                             className={`${BTN_SECONDARY} w-full min-h-[44px]`}
                             onClick={onToggleIncidencia}
                         >
-                            {modoIncidencia ? 'Ocultar incidencia' : 'Reportar incidencia'}
+                            {modoIncidencia ? 'Ocultar reporte de error' : 'Reportar error'}
                         </button>
                     </>
                 )}

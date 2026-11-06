@@ -634,7 +634,7 @@ export const placeholderBusquedaDelegado = (campo) => (
 export const TABS_TIENDA_COLA = [
     { id: 'PENDIENTES', label: 'Pendientes' },
     { id: 'EN_ATENCION', label: 'En atención' },
-    { id: 'CON_INCIDENCIA', label: 'Con incidencia' },
+    { id: 'CON_INCIDENCIA', label: 'Con error reportado' },
 ];
 
 export const TABS_TIENDA_TRASLADO = [

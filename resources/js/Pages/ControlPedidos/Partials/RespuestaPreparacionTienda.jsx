@@ -33,10 +33,10 @@ export default function RespuestaPreparacionTienda({ tarea, onVerDocumentos, acc
     if (respuesta.revision?.estado) {
         const filas = [
             ...(respuesta.productos || []).map(p => ({ ...p, clave: `producto-${p.id}`, documentos: fotosDe(p.id), original: p })),
-            ...excepcionesSueltas.map(p => ({ ...p, clave: `revision-${p.id}`, cantidad: p.estado_fisico === 'sin_existencia' ? 0 : p.cantidad, observacion: p.detalle, documentos: [], original: { ...p, revision_id: p.id } })),
+            ...excepcionesSueltas.map(p => ({ ...p, clave: `revision-${p.id}`, cantidad: p.estado_fisico === 'sin_existencia' ? 0 : p.cantidad, observacion: p.detalle, documentos: p.documentos || [], original: { ...p, revision_id: p.id } })),
         ];
         return <RespuestaDisponibilidadPedido titulo={titulo} origen="Tienda" ariaLabel="Respuesta de preparación" responsable={respuesta.responsable} fecha={respuesta.respondida_at} estado={respuesta.revision.estado} aceptacionVigente={respuesta.revision.aceptacion_vigente !== false}
-            filas={filas} generales={generales} cantidad={respuesta.productos?.length || respuesta.piezas_afectadas ? respuesta.cantidad : null}
+            filas={filas} generales={generales.filter(d => !d.anterior)} anteriores={generales.filter(d => d.anterior)} cantidad={respuesta.productos?.length || respuesta.piezas_afectadas ? respuesta.cantidad : null}
             labelCantidad={respuesta.piezas_afectadas ? 'Piezas afectadas' : 'Total preparado'} columnaCantidad={respuesta.apartado_confirmado ? 'Preparadas' : 'Revisadas'} onVer={ver} accionesDePieza={accionesDePieza}>
             {respuesta.documental && respuesta.apartado_confirmado && <p>Pedido completo separado conforme a la consulta aprobada.</p>}
             {respuesta.ubicacion && <p>Ubicación: {respuesta.ubicacion}</p>}
@@ -58,7 +58,7 @@ export default function RespuestaPreparacionTienda({ tarea, onVerDocumentos, acc
             })}</tbody>
         </table></div>}
         {respuesta.revision?.estado && <div className="flex flex-wrap gap-2 items-center text-xs">
-            <span className={`gelia-estado-vivo gelia-estado-vivo--compacto ${respuesta.revision.estado === 'excepciones_pendientes' ? 'gelia-estado-vivo--aviso' : 'gelia-estado-vivo--exito'}`}>{respuesta.revision.estado === 'excepciones_pendientes' ? 'Con incidencias' : respuesta.revision.estado === 'sin_excepciones' ? 'Sin incidencias' : 'Revisión registrada'}</span>
+            <span className={`gelia-estado-vivo gelia-estado-vivo--compacto ${respuesta.revision.estado === 'excepciones_pendientes' ? 'gelia-estado-vivo--aviso' : 'gelia-estado-vivo--exito'}`}>{respuesta.revision.estado === 'excepciones_pendientes' ? 'Con detalles o faltantes' : respuesta.revision.estado === 'sin_excepciones' ? 'Todo OK' : 'Revisión registrada'}</span>
             {respuesta.revision.aceptacion_vigente === false && <span className="gelia-pedidos-atributo">Ajuste pendiente</span>}
         </div>}
         {excepcionesSueltas.length > 0 && <ul className="m-0 pl-4 grid gap-1">{excepcionesSueltas.map((pieza) => <li key={pieza.id || pieza.descripcion} className="text-sm theme-text-main">{pieza.descripcion} · piezas afectadas: {pieza.cantidad}{pieza.detalle ? ` · ${pieza.detalle}` : ''}</li>)}</ul>}

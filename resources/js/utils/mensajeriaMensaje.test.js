@@ -54,6 +54,32 @@ describe('cursor de lectura', () => {
 
         expect(resultado.mensajes[0].estado_lectura).toBe('leido');
     });
+
+    it('marca leídos los mensajes propios hasta el cursor', () => {
+        const resultado = aplicarCursorLectura({
+            conversaciones: [],
+            mensajes: [
+                { id: 4, es_propio: true, estado_lectura: 'enviado' },
+                { id: 8, es_propio: true, estado_lectura: 'enviado' },
+                { id: 9, es_propio: false, estado_lectura: 'enviado' },
+                { id: -1, es_propio: true, pendiente: true, estado_lectura: 'enviado' },
+            ],
+            conversacionActivaId: 4,
+            detalle: {
+                alcance: 'autor',
+                conversacion_id: 4,
+                leido_hasta_id: 8,
+                estado_lectura: 'leido',
+            },
+        });
+
+        expect(resultado.mensajes.map((m) => m.estado_lectura)).toEqual([
+            'leido',
+            'leido',
+            'enviado',
+            'enviado',
+        ]);
+    });
 });
 
 describe('mensaje nuevo en la bandeja', () => {

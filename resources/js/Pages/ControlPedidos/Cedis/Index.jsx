@@ -40,6 +40,7 @@ export default function Index({
     can: canProps = {},
 }) {
     const { flash } = usePage().props;
+    const puedeVerBitacora = canProps.bitacora ?? ((auth?.user?.permissions || []).includes('control_pedidos.cedis.bitacora') || auth?.user?.roles?.includes('Super Admin'));
     const {
         pedidos: pedidosVista,
         metricas: metricasVista,
@@ -133,7 +134,7 @@ export default function Index({
     };
     const abrirErrorDatos = (pedido) => setModalErrorDatos({ abierto: true, pedido });
     const abrirApartado = (pedido) => setModalApartado({ abierto: true, pedido });
-    const abrirBitacora = (pedido) => setModalBitacora({ abierto: true, pedido });
+    const abrirBitacora = (pedido) => { if (puedeVerBitacora && pedido.puede_ver_bitacora !== false) setModalBitacora({ abierto: true, pedido }); };
 
     return (
         <AppLayout auth={auth}>
@@ -231,7 +232,7 @@ export default function Index({
                             onResponderPesaje={abrirPesaje}
                             onReportarErrorDatos={abrirErrorDatos}
                             onMarcarApartado={abrirApartado}
-                            onBitacora={abrirBitacora}
+                            onBitacora={puedeVerBitacora ? abrirBitacora : undefined}
                         />
                     )}
                     <GeliaPaginacion paginator={tabActiva === 'LIBERACIONES' ? liberaciones : pedidosVista} onIrAPagina={onIrAPagina} embedded />
@@ -252,7 +253,7 @@ export default function Index({
                 onMarcarApartado={abrirApartado}
             />
             <ModalBitacoraPedido
-                abierto={modalBitacora.abierto}
+                abierto={Boolean(puedeVerBitacora && modalBitacora.abierto)}
                 pedido={modalBitacora.pedido}
                 onClose={() => setModalBitacora({ abierto: false, pedido: null })}
             />
@@ -262,7 +263,7 @@ export default function Index({
                 modo="dialogo"
                 abierto={disponibilidad.abierto}
                 onClose={() => setDisponibilidad({ abierto: false, pedido: null })}
-                documentos={(disponibilidad.pedido?.documentos || []).filter((documento) => ['pdf_pedido', 'cotizacion', 'anexo'].includes(documento.tipo))}
+                documentos={(disponibilidad.pedido?.documentos || []).filter((documento) => ['pdf_pedido', 'cotizacion', 'anexo', 'anexo_piezas'].includes(documento.tipo))}
                 revision={disponibilidad.pedido?.solicitud_preparacion?.revision_disponibilidad}
                 piezas={(disponibilidad.pedido?.revisiones_producto || []).filter((pieza) => !pieza.resolucion && ['regular', 'malo', 'danado', 'sin_existencia'].includes(pieza.estado_fisico)).map((pieza) => ({ id: pieza.id, descripcion: pieza.descripcion_producto, sku: pieza.sku, condicion: pieza.estado_fisico === 'sin_existencia' ? 'faltante' : 'detalle', unica_pieza: pieza.unica_pieza, mejor_ejemplar: pieza.mejor_ejemplar, cantidad: pieza.cantidad_solicitada, detalle: pieza.comentario }))}
                 puedeResponder
@@ -276,6 +277,7 @@ export default function Index({
                             solicitud_preparacion: {
                                 ...(previo.pedido?.solicitud_preparacion || {}),
                                 revision_disponibilidad: { estado: respuesta.data.estado },
+                                anexo_sin_remision: (previo.pedido?.solicitud_preparacion?.anexo_sin_remision || []).map(a => ({ ...a, respondida_at: a.respondida_at || new Date().toISOString() })),
                             },
                         },
                     }));

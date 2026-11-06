@@ -77,6 +77,7 @@ export default function ModalEscanearCodigo({
     titulo = 'Escanear código',
     descripcion = 'Apunta la cámara al código QR o de barras del producto.',
     continuo = false,
+    zIndex = undefined,
 }) {
     const hostRef = useRef(null);
     const escanerRef = useRef(null);
@@ -241,7 +242,7 @@ export default function ModalEscanearCodigo({
     if (!abierto) return null;
 
     return createPortal(
-        <div className={THEME_MODAL_OVERLAY} onClick={onCerrar}>
+        <div className={`${THEME_MODAL_OVERLAY} gelia-escaner-overlay`} style={{ zIndex }} onClick={onCerrar}>
             <div className={`${THEME_MODAL_SHELL} max-w-lg w-full modal-pop`} onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-center justify-between gap-3 p-5 border-b theme-border">
                     <h2 className="text-lg font-black italic uppercase theme-text-main m-0">{titulo}</h2>

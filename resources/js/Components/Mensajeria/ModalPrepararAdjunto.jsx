@@ -55,13 +55,19 @@ function VistaPreviaLocal({ pendiente }) {
 
     const tipoDoc = tipoPreviewArchivoLocal(file);
     const excede = (file?.size || 0) > MAX_PREVIEW_LOCAL_BYTES;
+    const [pedirDocumento, setPedirDocumento] = useState(false);
 
     useEffect(() => {
         setHtmlPreview('');
         setError(null);
         setCargando(false);
+        setPedirDocumento(false);
+    }, [file]);
 
-        if (!file || excede || !tipoDoc || tipoDoc === 'pdf') return;
+    useEffect(() => {
+        if (!pedirDocumento) return undefined;
+
+        if (!file || excede || !tipoDoc || tipoDoc === 'pdf') return undefined;
 
         let cancelado = false;
         setCargando(true);
@@ -96,7 +102,7 @@ function VistaPreviaLocal({ pendiente }) {
         reader.readAsArrayBuffer(file);
 
         return () => { cancelado = true; };
-    }, [file, tipoDoc, excede]);
+    }, [pedirDocumento, file, tipoDoc, excede]);
 
     if (excede) {
         return (
@@ -170,6 +176,15 @@ function VistaPreviaLocal({ pendiente }) {
             {tipo === 'imagen' ? <ImageIcon className="w-10 h-10 opacity-40" /> : <FileText className="w-10 h-10 opacity-40" />}
             <p className="text-sm font-bold m-0 mt-3 truncate max-w-full px-4">{file.name}</p>
             <p className="text-[11px] theme-text-muted m-0 mt-1">{formatearTamanoArchivo(file.size)}</p>
+            {(tipoDoc === 'excel' || tipoDoc === 'word') && (
+                <button
+                    type="button"
+                    className="mt-3 px-3 py-2 rounded-xl text-xs font-bold theme-element border theme-border"
+                    onClick={() => setPedirDocumento(true)}
+                >
+                    Ver contenido
+                </button>
+            )}
         </div>
     );
 }

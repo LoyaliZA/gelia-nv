@@ -1,18 +1,46 @@
 import React from 'react';
-import { CheckCircle2, ArrowRightLeft, PackageMinus, ClipboardList, Image } from 'lucide-react';
+import { CheckCircle2, ArrowRightLeft, PackageMinus, PackagePlus, ClipboardList, Eye, AlertTriangle, PackageX } from 'lucide-react';
 import { GELIA_BTN_OUTLINE } from '../../../utils/geliaTheme';
+import { MiniaturaDocumento } from './ModalVistaPreviaDocumento';
+import { cambiosDisponibilidad } from './cambiosDisponibilidad';
 
-export default function ResumenCambiosDisponibilidad({ solicitud = {}, documentos = [], onVer }) {
-    const decisiones = Object.values(solicitud.acciones_disponibilidad || {});
-    const retiros = solicitud.retiro_piezas || [];
-    const anexos = solicitud.anexo_sin_remision || [];
-    if (!decisiones.length && !retiros.length && !anexos.length && !solicitud.reapertura_disponibilidad) return null;
-    const iconos = { confirmar: CheckCircle2, retirar: PackageMinus, sustituir: ArrowRightLeft };
-    return <section className="registrar-tienda-panel grid gap-3" aria-label="Cambios guardados del pedido">
-        <div className="registrar-tienda-seccion-titulo"><ClipboardList size={18} /><h3>Cambios guardados del pedido</h3></div>
-        {solicitud.reapertura_disponibilidad && <p className="text-sm theme-text-main m-0">Consulta reabierta por {solicitud.reapertura_disponibilidad.por}. Se conserva la respuesta original para revisar los cambios.</p>}
-        {decisiones.map(d => { const Icono = iconos[d.accion] || ClipboardList; return <div key={d.revision_id} className="flex items-start gap-3 border theme-border rounded-xl p-3 theme-element"><Icono size={20} className="shrink-0" /><div className="min-w-0 text-sm theme-text-main"><strong>{d.accion === 'confirmar' ? 'Estado confirmado' : d.accion === 'retirar' ? 'Retirar' : 'Sustituir'}</strong><p className="m-0 break-words">{d.descripcion}{d.sku ? ` · ${d.sku}` : ''}</p>{d.alternativa && <p className="m-0 font-semibold">Nueva pieza: {d.alternativa.descripcion}{d.alternativa.sku ? ` · ${d.alternativa.sku}` : ''} · {anexos.find(a => Number(a.sustituye_revision_id) === Number(d.revision_id))?.respondida_at ? 'Respuesta registrada' : 'Pendiente de respuesta'}</p>}<span className="text-xs theme-text-muted">{d.por}</span></div></div>; })}
-        {retiros.map((r,i) => { const ids = [...(r.documentos_piezas || []), ...(r.documentos_peticion || [])].map(d => Number(d.id)); const docs = documentos.filter(d => ids.includes(Number(d.id))); return <div key={`retiro-${i}`} className="grid gap-2"><p className="text-sm theme-text-main m-0"><PackageMinus className="inline mr-2" size={16} />Retiro {r.estado === 'aplicada' ? 'aplicado' : 'pendiente del auxiliar'}: {(r.piezas_solicitadas || r.piezas || []).map(p => p.descripcion).join(', ') || 'Piezas en documento'}</p><details className="text-xs theme-text-muted"><summary className="cursor-pointer">Ver solicitud enviada</summary><p>{r.motivo} · {r.solicitado_por}{r.resultado ? ` · ${r.resultado}` : ''}</p>{docs.length > 0 && onVer && <button type="button" className={GELIA_BTN_OUTLINE} onClick={() => onVer(docs,0)}><Image size={16} />Ver evidencias enviadas ({docs.length})</button>}</details></div>; })}
-        {anexos.map((a,i) => { const doc = documentos.find(d => Number(d.id) === Number(a.documento_id)); return <div key={`anexo-${i}`} className="grid gap-2 text-sm theme-text-main"><p className="m-0"><ArrowRightLeft className="inline mr-2" size={16} />{a.sustituye_revision_id ? 'Alternativa' : 'Anexo'}: {a.descripcion || 'Piezas en documento'} · {a.respondida_at ? (a.resultado || 'Respuesta registrada') : 'Pendiente de revisión'}</p>{doc && onVer && <button type="button" className={`${GELIA_BTN_OUTLINE} justify-self-start`} onClick={() => onVer([doc],0)}><Image size={16} />Ver captura enviada</button>}</div>; })}
+export default function ResumenCambiosDisponibilidad({ solicitud = {}, documentos = [], onVer, interactivo = false, respuestas = {}, onResponder, onIncidencia, disabled = false }) {
+    const cambios = cambiosDisponibilidad(solicitud, documentos);
+    if (!cambios.length && !solicitud.reapertura_disponibilidad) return null;
+    const pendientes = cambios.filter(c => c.pendiente);
+    const anteriores = cambios.filter(c => !c.pendiente);
+    const ficha = cambio => {
+        const retiro = cambio.tipo === 'retiro';
+        const confirmacion = cambio.tipo === 'confirmacion';
+        const estado = respuestas[cambio.clave] || (!cambio.esDocumento && !retiro ? 'correcto' : 'pendiente');
+        const revisar = interactivo && cambio.pendiente && !confirmacion;
+        return <article key={cambio.clave} className="consulta-cambio" data-tipo={retiro ? 'retiro' : confirmacion ? 'confirmacion' : 'anexo'} data-cambio={cambio.clave}>
+            {cambio.retirada && <div className="consulta-cambio-retirada"><PackageMinus size={17} aria-hidden /><div><strong>Pieza retirada</strong><p>{cambio.retirada.descripcion}</p><span>{cambio.retirada.sku}</span></div></div>}
+            <div className="consulta-cambio-cuerpo">
+                <header className="consulta-cambio-titulo">
+                    {retiro ? <PackageMinus size={19} aria-hidden /> : confirmacion ? <CheckCircle2 size={19} aria-hidden /> : cambio.retirada ? <ArrowRightLeft size={19} aria-hidden /> : <PackagePlus size={19} aria-hidden />}
+                    <strong>{retiro ? 'Retiro solicitado' : confirmacion ? 'Estado confirmado' : cambio.retirada ? 'Nueva pieza solicitada' : 'Anexo solicitado'}</strong>
+                    <span className="consulta-cambio-formato">{cambio.esDocumento ? 'Captura / PDF' : cambio.sku ? 'SKU' : 'Piezas'}</span>
+                </header>
+                {(!cambio.esDocumento || !cambio.documentos.length) && <div className="consulta-cambio-identidad"><strong>{cambio.descripcion || 'Piezas en captura'}</strong>{cambio.sku && <span>{cambio.sku}{cambio.cantidad ? ` · ${cambio.cantidad} pza(s)` : ''}</span>}</div>}
+                {cambio.documentos.length > 0 && <div className="consulta-cambio-documentos">{cambio.documentos.map((d, i) => <div key={d.id || i} className="consulta-cambio-documento">
+                    <MiniaturaDocumento documento={d} onVer={() => onVer?.(cambio.documentos, i)} className="consulta-cambio-miniatura" />
+                    <button type="button" className={GELIA_BTN_OUTLINE} disabled={!onVer} onClick={() => onVer?.(cambio.documentos, i)}><Eye size={16} aria-hidden />Abrir captura</button>
+                </div>)}</div>}
+                {revisar ? <>
+                    <div className="consulta-cambio-acciones">
+                        <button type="button" className={GELIA_BTN_OUTLINE} aria-pressed={estado === 'correcto'} disabled={disabled} onClick={() => onResponder?.(cambio, 'correcto')}><CheckCircle2 size={16} aria-hidden />{retiro ? 'Retiro revisado' : 'Todo OK'}</button>
+                        {!retiro && <button type="button" className={GELIA_BTN_OUTLINE} disabled={disabled} onClick={() => onIncidencia?.(cambio, 'detalle')}><AlertTriangle size={16} aria-hidden />{cambio.esDocumento ? 'Registrar detalle' : 'Con detalle'}</button>}
+                        {!retiro && !cambio.esDocumento && <button type="button" className={GELIA_BTN_OUTLINE} disabled={disabled} onClick={() => onIncidencia?.(cambio, 'faltante')}><PackageX size={16} aria-hidden />Sin existencias</button>}
+                    </div>
+                    <p className="consulta-cambio-estado" role="status">{estado === 'incidencia' ? 'Con piezas reportadas' : estado === 'correcto' ? retiro ? 'Retiro revisado' : 'Todo OK' : 'Pendiente de revisar'}</p>
+                </> : <p className="consulta-cambio-estado">{cambio.respuesta_cambio === 'correcto' ? 'Todo OK' : cambio.respuesta_cambio === 'incidencia' ? 'Con piezas reportadas' : cambio.respondida_at || cambio.estado === 'aplicada' ? 'Respuesta registrada' : 'Pendiente de revisión'}{cambio.resultado && !cambio.respuesta_cambio ? ` · ${cambio.resultado}` : ''}</p>}
+            </div>
+        </article>;
+    };
+    return <section className="registrar-tienda-panel consulta-cambios" aria-label={interactivo ? 'Cambios por revisar' : 'Cambios guardados del pedido'}>
+        <div className="registrar-tienda-seccion-titulo"><ClipboardList size={18} aria-hidden /><h3>{interactivo ? 'Cambios por revisar' : 'Cambios guardados del pedido'}</h3>{interactivo && <span className="text-xs theme-text-muted">{pendientes.length}</span>}</div>
+        {solicitud.reapertura_disponibilidad && <p className="text-xs theme-text-muted m-0">Consulta reabierta por {solicitud.reapertura_disponibilidad.por}.</p>}
+        {interactivo ? <>{pendientes.map(ficha)}{anteriores.length > 0 && <details className="consulta-cambios-historial"><summary>Mostrar todos los cambios ({cambios.length})</summary><div className="grid gap-3 mt-3">{anteriores.map(ficha)}</div></details>}</> : cambios.map(ficha)}
     </section>;
 }

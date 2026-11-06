@@ -39,18 +39,11 @@ export default function usePrepararAdjuntoDrop({ onEnviarAdjunto }) {
         });
     }, [onEnviarAdjunto]);
 
-    const confirmarEnvio = useCallback(async (fileRenombrado, tipo, comentario) => {
+    const confirmarEnvio = useCallback((fileRenombrado, tipo, comentario) => {
         setErrorEnvio(null);
-        try {
-            await onEnviarAdjunto?.(fileRenombrado, tipo, comentario || null);
-            cerrarPendiente();
-        } catch (err) {
-            const msg = err?.response?.data?.message
-                || err?.response?.data?.errors?.archivo?.[0]
-                || err?.message
-                || 'No se pudo enviar el archivo.';
-            setErrorEnvio(msg);
-        }
+        const envio = onEnviarAdjunto?.(fileRenombrado, tipo, comentario || null);
+        cerrarPendiente();
+        return Promise.resolve(envio).catch(() => {});
     }, [onEnviarAdjunto, cerrarPendiente]);
 
     const onDragEnter = useCallback((e) => {

@@ -67,6 +67,7 @@ class PedidoBmaCedisController extends Controller
                 ->get(['id', 'codigo', 'nombre']),
             'can' => [
                 'liberar' => Auth::user()?->can('control_pedidos.cedis.liberar') ?? false,
+                'bitacora' => \App\Support\ControlPedidos\BitacoraCedis::puedeVer(Auth::user()),
             ],
         ]);
     }

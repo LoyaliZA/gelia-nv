@@ -2,6 +2,7 @@ import { textoProcesoTienda } from '../Partials/textoProcesoTienda';
 import AjustesSolicitadosTienda from './Partials/AjustesSolicitadosTienda';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Head, Link, router, usePage } from '@inertiajs/react';
+import axios from 'axios';
 import {
     ArrowLeft, Camera, CheckCircle2, AlertTriangle, Store, Package, Truck, FileText, Printer,
 } from 'lucide-react';
@@ -97,11 +98,20 @@ export default function Show({
         window.addEventListener('beforeunload', prevenir);
         return () => window.removeEventListener('beforeunload', prevenir);
     }, [capturaDirty]);
-    const enviarCaptura = (url, datos, opciones = {}) => postOperacion(url, datos, { ...opciones, onSuccess: (...args) => {
-        setCapturaVersion((v) => v + 1);
-        setCapturaDirty(false);
-        opciones.onSuccess?.(...args);
-    } });
+    const enviarCaptura = (url, datos, opciones = {}) => {
+        const terminado = (...args) => {
+            setCapturaVersion(v => v + 1);
+            setCapturaDirty(false);
+            opciones.onSuccess?.(...args);
+        };
+        if (!onEnviar && url.includes('/disponibilidad')) {
+            return axios.post(url, datos, { headers: { Accept: 'application/json' } })
+                .then(() => { terminado(); router.reload(); })
+                .catch(e => opciones.onError?.(e.response?.data?.errors || { consulta: e.response?.data?.message || 'No se pudo enviar la respuesta.' }))
+                .finally(() => opciones.onFinish?.());
+        }
+        return postOperacion(url, datos, { ...opciones, onSuccess: terminado });
+    };
 
     const puedeTomar = permisos.includes('control_pedidos.tienda.tomar');
     const puedeResponder = permisos.includes('control_pedidos.tienda.responder');
@@ -248,7 +258,7 @@ export default function Show({
     const avisoPrincipal = () => {
         if (tarea.estado === 'RECHAZADA_CEDIS' || tarea.estado === 'CON_INCIDENCIA') {
             return {
-                label: tarea.estado === 'RECHAZADA_CEDIS' ? 'Rechazo CEDIS' : 'Incidencia',
+                label: tarea.estado === 'RECHAZADA_CEDIS' ? 'Rechazo CEDIS' : 'Error reportado',
                 tono: 'danger',
                 icon: AlertTriangle,
                 texto: tarea.motivo_rechazo_cedis || 'Revise el motivo y continúe según indique Ventas.',
@@ -625,7 +635,7 @@ export default function Show({
                         {modoIncidencia && puedeIncidencia && (
                             <section className={`${geliaCardClass()} p-4 space-y-3 theme-element border theme-border`}>
                                 <h3 className="font-black text-sm flex items-center gap-2 m-0">
-                                    <AlertTriangle className="w-4 h-4" /> Reportar incidencia
+                                    <AlertTriangle className="w-4 h-4" /> Reportar error
                                 </h3>
                                 <select
                                     className={THEME_SELECT}
@@ -656,7 +666,7 @@ export default function Show({
                                         </select>
                                     </div>
                                 )}
-                                <button type="button" className={BTN_PRIMARY} onClick={reportarIncidencia}>Enviar incidencia a Ventas</button>
+                                <button type="button" className={BTN_PRIMARY} onClick={reportarIncidencia}>Reportar error a Ventas</button>
                             </section>
                         )}
 

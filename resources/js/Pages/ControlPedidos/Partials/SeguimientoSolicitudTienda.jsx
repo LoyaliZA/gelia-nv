@@ -117,7 +117,9 @@ function ResultadoDisponibilidad({ area, pedido, revisiones, onVer, accionesDePi
     const revision = pedido?.solicitud_preparacion?.revision_disponibilidad;
     if (!revision?.estado || preparacionVisible(pedido?.tarea_preparacion)) return null;
     const documentos = (pedido.documentos || []).filter(d => d.tipo === 'evidencia_condicion' && d.url && d.activo !== false && !String(d.comentario || '').startsWith('Evidencia petición'));
-    const generales = documentos.filter(d => !d.relacion_tipo || d.relacion_tipo === 'revision_general');
+    const capturas = documentos.filter(d => !d.relacion_tipo || d.relacion_tipo === 'revision_general');
+    const generales = capturas.filter(d => !revision.evidencia_actual_ids || revision.evidencia_actual_ids.includes(d.id));
+    const anteriores = capturas.filter(d => revision.evidencia_actual_ids && !revision.evidencia_actual_ids.includes(d.id));
     const piezas = (revisiones || []).filter(p => ['regular', 'malo', 'danado', 'sin_existencia'].includes(p.estado_fisico));
     const filas = piezas.map(p => ({
         id: p.id, descripcion: p.descripcion_producto || p.descripcion, sku: p.sku,
@@ -130,7 +132,7 @@ function ResultadoDisponibilidad({ area, pedido, revisiones, onVer, accionesDePi
         titulo="Respuesta de disponibilidad" origen={area === 'preparacion_tienda' ? 'Tienda' : 'CEDIS'} ariaLabel={area === 'preparacion_tienda' ? 'Resultado de la revisión en tienda' : 'Resultado de la consulta en CEDIS'}
         responsable={pedido.pesaje_respondido_por?.name || pedido.pesajeRespondidoPor?.name || revision.respondida_por_nombre || (pedido.historial || []).find(h => Number(h.usuario?.id) === Number(revision.respondida_por_id))?.usuario?.name}
         fecha={revision.respondida_at} estado={revision.estado} aceptacionVigente={revision.aceptacion_vigente !== false}
-        filas={filas} generales={generales} cantidad={piezas.length ? piezas.reduce((s,p) => s + Number(p.cantidad_solicitada || 0), 0) : null}
+        filas={filas} generales={generales} anteriores={anteriores} cantidad={piezas.length ? piezas.reduce((s,p) => s + Number(p.cantidad_solicitada || 0), 0) : null}
         onVer={onVer} accionesDePieza={accionesDePieza}
     />;
 }

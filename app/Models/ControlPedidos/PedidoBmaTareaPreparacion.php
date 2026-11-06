@@ -66,7 +66,7 @@ class PedidoBmaTareaPreparacion extends Model
         self::ESTADO_EN_TRASLADO => 'En traslado',
         self::ESTADO_RECIBIDA_CEDIS => 'Recibida en CEDIS',
         self::ESTADO_RECHAZADA_CEDIS => 'Rechazada por CEDIS',
-        self::ESTADO_CON_INCIDENCIA => 'Con incidencia',
+        self::ESTADO_CON_INCIDENCIA => 'Con error reportado',
         self::ESTADO_LIBERACION_SOLICITADA => 'Liberación solicitada',
         self::ESTADO_LIBERADA => 'Liberada',
         self::ESTADO_CANCELADA => 'Cancelada',

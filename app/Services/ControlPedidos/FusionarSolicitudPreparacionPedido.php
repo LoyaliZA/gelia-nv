@@ -270,6 +270,7 @@ class FusionarSolicitudPreparacionPedido
             return null;
         }
 
+        $metadata = array_intersect_key($valor, array_flip(['actualizacion_pendiente', 'actualizacion_id', 'evidencia_actual_ids', 'historial_respuestas', 'respuesta_id', 'cambios_revisados']));
         $respondida = $valor['respondida_at'] ?? null;
         $decision = $valor['decision_at'] ?? null;
 
@@ -281,6 +282,7 @@ class FusionarSolicitudPreparacionPedido
             'decision_at' => is_string($decision) ? $decision : null,
             'decision_por_id' => $this->identificador($valor['decision_por_id'] ?? null),
         ];
+        $salida = array_merge($salida, $metadata);
         if (array_key_exists('aceptacion_vigente', $valor)) {
             $salida['aceptacion_vigente'] = (bool) $valor['aceptacion_vigente'];
         }

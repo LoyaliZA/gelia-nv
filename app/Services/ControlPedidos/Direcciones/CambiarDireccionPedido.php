@@ -38,7 +38,7 @@ class CambiarDireccionPedido
         }
 
         if ($fase === CatalogoEstatusPedido::FASE_ENVIADO || $fase === CatalogoEstatusPedido::FASE_ENTREGADO) {
-            throw new \RuntimeException('No se puede cambiar la dirección de un pedido enviado. Cree una incidencia.');
+            throw new \RuntimeException('No se puede cambiar la dirección de un pedido enviado. Reporte el error de dirección.');
         }
 
         return DB::transaction(function () use ($pedido, $contexto, $fase) {

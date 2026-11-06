@@ -6,6 +6,7 @@ use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Models\User;
 use App\Support\ControlPedidos\VisibilidadPedidoBma;
+use App\Support\ControlPedidos\BitacoraCedis;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
@@ -39,14 +40,14 @@ class ListarPedidosCedisService
         $this->aplicarFiltros($query, $filtros);
 
         $resultado = $paginar ? $query->paginate(15)->withQueryString() : $query->get();
-        $marcar = function (PedidoBma $pedido): PedidoBma {
+        $marcar = function (PedidoBma $pedido) use ($usuario): PedidoBma {
             $pedido->setAttribute('es_consulta_mercancia', $pedido->esConsultaMercancia());
             $pedido->setAttribute(
                 'consulta_cedis_modo_revision_mercancia',
                 $pedido->consultaCedisModoRevisionMercancia()
             );
 
-            return $pedido;
+            return BitacoraCedis::presentar($pedido, $usuario);
         };
 
         if ($resultado instanceof LengthAwarePaginator) {

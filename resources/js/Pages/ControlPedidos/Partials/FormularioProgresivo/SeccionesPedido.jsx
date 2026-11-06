@@ -57,7 +57,7 @@ export function SeccionRespuestaPreparacionPedido({ children, soloHijos = false,
     return (
         <MarcoSeccion
             titulo="Respuesta de CEDIS"
-            descripcion="Revise disponibilidad, pesos, evidencia e incidencias."
+            descripcion="Revise disponibilidad, pesos, evidencia y detalles."
             soloHijos={soloHijos}
             {...rest}
         >
