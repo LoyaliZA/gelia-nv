@@ -1,15 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     X,
-    FolderOpen,
     FileText,
     Image as ImageIcon,
     Link2,
     Download,
     ExternalLink,
     Loader2,
-    Filter,
 } from 'lucide-react';
+import BotonIconoMensajeria from './BotonIconoMensajeria';
 import MensajeriaService from '@/Services/MensajeriaService';
 import { nombreRemitenteGrupo } from '@/utils/mensajeriaGrupo';
 import VisorDocumentoMensaje from './VisorDocumentoMensaje';
@@ -120,85 +119,68 @@ export default function ChatDrivePanel({
             className="gelia-mensajeria-drive-panel flex flex-col h-full min-h-0 w-full sm:w-80 lg:w-96 shrink-0 border-l theme-border theme-surface"
             aria-label="Archivos del chat"
         >
-            <div className="flex items-center gap-2 p-4 border-b theme-border shrink-0">
-                <div
-                    className="p-2 rounded-xl shrink-0"
-                    style={{ backgroundColor: 'color-mix(in srgb, var(--color-primario) 15%, transparent)' }}
-                >
-                    <FolderOpen className="w-5 h-5" style={{ color: 'var(--color-primario)' }} />
-                </div>
-                <div className="min-w-0 flex-1">
-                    <h2 className="text-sm font-black uppercase italic theme-text-main m-0 truncate">
-                        Archivos_
-                    </h2>
-                    <p className="text-[10px] font-bold theme-text-muted uppercase tracking-widest mt-0.5 m-0">
-                        Contenido compartido
-                    </p>
-                </div>
-                <button
-                    type="button"
+            <div className="flex items-center gap-1 px-1 py-1 border-b theme-border shrink-0">
+                <h2 className="text-base font-semibold theme-text-main m-0 truncate flex-1 min-w-0 px-3">
+                    Archivos, enlaces y docs.
+                </h2>
+                <BotonIconoMensajeria
+                    icon={X}
+                    label="Cerrar archivos"
                     onClick={onClose}
-                    className="p-2 rounded-full theme-element border theme-border theme-text-muted hover:theme-text-main outline-none shrink-0"
-                    aria-label="Cerrar archivos"
-                >
-                    <X className="w-5 h-5" />
-                </button>
+                    plano
+                />
             </div>
 
-            <div className="flex gap-1 p-2 border-b theme-border shrink-0 overflow-x-auto">
-                {TABS.map(({ id, label, icon: Icon }) => (
+            <div className="gelia-mensajeria-pestanas" role="tablist">
+                {TABS.map(({ id, label }) => (
                     <button
                         key={id}
                         type="button"
+                        role="tab"
+                        aria-selected={categoria === id}
                         onClick={() => setCategoria(id)}
-                        className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider whitespace-nowrap transition-all outline-none border ${
-                            categoria === id
-                                ? 'bg-[var(--color-primario)] text-white border-transparent'
-                                : 'theme-element theme-text-muted border theme-border hover:border-[var(--color-primario)]'
-                        }`}
                     >
-                        <Icon className="w-3.5 h-3.5 shrink-0" />
                         {label}
                     </button>
                 ))}
             </div>
 
-            <div className="p-3 border-b theme-border shrink-0 space-y-2">
-                <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest theme-text-muted">
-                    <Filter className="w-3 h-3" />
-                    Filtros
+            <details className="gelia-mensajeria-filtros">
+                <summary>Filtros</summary>
+                <div className="gelia-mensajeria-filtros__cuerpo">
+                    <select
+                        value={userId}
+                        onChange={(e) => setUserId(e.target.value)}
+                        className="w-full text-xs rounded-xl px-3 py-2 theme-element theme-text-main border theme-border outline-none focus:border-[var(--color-primario)]"
+                        aria-label="Remitente"
+                    >
+                        <option value="">Todos los remitentes</option>
+                        {opcionesRemitentes.map((u) => (
+                            <option key={u.id} value={u.id}>
+                                {nombreRemitenteGrupo(u)}
+                            </option>
+                        ))}
+                    </select>
+                    <div className="grid grid-cols-2 gap-2">
+                        <input
+                            type="date"
+                            value={desde}
+                            onChange={(e) => setDesde(e.target.value)}
+                            className="w-full text-xs rounded-xl px-2 py-2 theme-element theme-text-main border theme-border outline-none focus:border-[var(--color-primario)]"
+                            aria-label="Desde"
+                        />
+                        <input
+                            type="date"
+                            value={hasta}
+                            onChange={(e) => setHasta(e.target.value)}
+                            className="w-full text-xs rounded-xl px-2 py-2 theme-element theme-text-main border theme-border outline-none focus:border-[var(--color-primario)]"
+                            aria-label="Hasta"
+                        />
+                    </div>
                 </div>
-                <select
-                    value={userId}
-                    onChange={(e) => setUserId(e.target.value)}
-                    className="w-full text-xs rounded-xl px-3 py-2 theme-element theme-text-main border theme-border outline-none focus:border-[var(--color-primario)]"
-                >
-                    <option value="">Todos los remitentes</option>
-                    {opcionesRemitentes.map((u) => (
-                        <option key={u.id} value={u.id}>
-                            {nombreRemitenteGrupo(u)}
-                        </option>
-                    ))}
-                </select>
-                <div className="grid grid-cols-2 gap-2">
-                    <input
-                        type="date"
-                        value={desde}
-                        onChange={(e) => setDesde(e.target.value)}
-                        className="w-full text-xs rounded-xl px-2 py-2 theme-element theme-text-main border theme-border outline-none focus:border-[var(--color-primario)]"
-                        aria-label="Desde"
-                    />
-                    <input
-                        type="date"
-                        value={hasta}
-                        onChange={(e) => setHasta(e.target.value)}
-                        className="w-full text-xs rounded-xl px-2 py-2 theme-element theme-text-main border theme-border outline-none focus:border-[var(--color-primario)]"
-                        aria-label="Hasta"
-                    />
-                </div>
-            </div>
+            </details>
 
-            <div className="flex-1 overflow-y-auto custom-scrollbar p-3 min-h-0">
+            <div className="flex-1 overflow-y-auto custom-scrollbar min-h-0">
                 {cargando && (
                     <div className="flex justify-center py-12">
                         <Loader2 className="w-6 h-6 animate-spin opacity-50" />
@@ -206,24 +188,51 @@ export default function ChatDrivePanel({
                 )}
 
                 {!cargando && error && (
-                    <p className="text-xs theme-text-muted text-center py-8">{error}</p>
+                    <p className="text-sm theme-text-muted text-center py-8 px-4 m-0">{error}</p>
                 )}
 
                 {!cargando && !error && items.length === 0 && (
-                    <p className="text-xs theme-text-muted text-center py-8">
+                    <p className="text-sm theme-text-muted text-center py-8 px-4 m-0">
                         No hay {TABS.find((t) => t.id === categoria)?.label?.toLowerCase()} en este chat.
                     </p>
                 )}
 
-                {!cargando && !error && items.length > 0 && (
-                    <ul className="space-y-2 m-0 p-0 list-none">
+                {!cargando && !error && items.length > 0 && categoria === 'imagenes' && (
+                    <div className="gelia-mensajeria-mosaico">
+                        {items.map((item) => {
+                            const url = item.adjunto?.thumbnail_url || item.adjunto?.url;
+                            const esPdf = item.adjunto && puedePrevisualizarAdjunto(item.adjunto) && item.adjunto.mime?.includes('pdf');
+                            return (
+                                <button
+                                    key={item.id}
+                                    type="button"
+                                    className="gelia-mensajeria-mosaico__celda"
+                                    aria-label={item.adjunto?.nombre_original || 'Imagen'}
+                                    onClick={() => {
+                                        if (!item.adjunto) return;
+                                        if (esPdf) setAdjuntoDocumentoPreview(item.adjunto);
+                                        else setAdjuntoImagenPreview(item.adjunto);
+                                    }}
+                                >
+                                    {url ? (
+                                        <img src={url} alt="" />
+                                    ) : (
+                                        <ImageIcon className="w-6 h-6 theme-text-muted" />
+                                    )}
+                                </button>
+                            );
+                        })}
+                    </div>
+                )}
+
+                {!cargando && !error && items.length > 0 && categoria !== 'imagenes' && (
+                    <ul className="m-0 p-0 list-none">
                         {items.map((item) => (
                             <li key={item.id}>
                                 <DriveItem
                                     item={item}
                                     categoria={categoria}
                                     onPrevisualizarDocumento={setAdjuntoDocumentoPreview}
-                                    onPrevisualizarImagen={setAdjuntoImagenPreview}
                                 />
                             </li>
                         ))}
@@ -257,7 +266,7 @@ function descargarAdjunto(adjunto) {
     enlace.remove();
 }
 
-function DriveItem({ item, categoria, onPrevisualizarDocumento, onPrevisualizarImagen }) {
+function DriveItem({ item, categoria, onPrevisualizarDocumento }) {
     const nombre = nombreRemitenteGrupo(item.user);
     const fecha = formatearFecha(item.created_at);
 
@@ -267,7 +276,7 @@ function DriveItem({ item, categoria, onPrevisualizarDocumento, onPrevisualizarI
                 href={item.enlace.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex gap-3 p-3 rounded-2xl theme-element border theme-border hover:border-[var(--color-primario)] transition-colors"
+                className="gelia-mensajeria-archivo-fila"
             >
                 <div className="w-10 h-10 rounded-xl theme-surface border theme-border flex items-center justify-center shrink-0">
                     <Link2 className="w-5 h-5 theme-text-muted" />
@@ -281,59 +290,6 @@ function DriveItem({ item, categoria, onPrevisualizarDocumento, onPrevisualizarI
                 </div>
                 <ExternalLink className="w-4 h-4 shrink-0 theme-text-muted" />
             </a>
-        );
-    }
-
-    if (categoria === 'imagenes' && item.adjunto) {
-        const url = item.adjunto.thumbnail_url || item.adjunto.url;
-        const esPdf = puedePrevisualizarAdjunto(item.adjunto) && item.adjunto.mime?.includes('pdf');
-
-        return (
-            <div className="flex gap-1 items-stretch">
-                <button
-                    type="button"
-                    onClick={(e) => {
-                        manejarClickPrevisualizar(e, () => {
-                            if (esPdf) {
-                                onPrevisualizarDocumento?.(item.adjunto);
-                            } else {
-                                onPrevisualizarImagen?.(item.adjunto);
-                            }
-                        });
-                    }}
-                    className="flex-1 p-2 rounded-2xl theme-element border theme-border hover:border-[var(--color-primario)] transition-colors text-left outline-none min-w-0"
-                >
-                    <div className="aspect-video rounded-xl overflow-hidden bg-black/5 mb-2 pointer-events-none">
-                        {url ? (
-                            <img
-                                src={url}
-                                alt={item.adjunto.nombre_original || 'Imagen'}
-                                className="w-full h-full object-cover"
-                            />
-                        ) : (
-                            <div className="w-full h-full flex items-center justify-center">
-                                <ImageIcon className="w-8 h-8 theme-text-muted" />
-                            </div>
-                        )}
-                    </div>
-                    <p className="text-[10px] theme-text-muted m-0 px-1 pointer-events-none">
-                        {nombre} · {fecha}
-                    </p>
-                </button>
-                <button
-                    type="button"
-                    onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        descargarAdjunto(item.adjunto);
-                    }}
-                    className="flex items-center justify-center p-3 rounded-2xl theme-element border theme-border theme-text-muted hover:border-[var(--color-primario)] shrink-0 outline-none"
-                    title="Descargar"
-                    aria-label="Descargar"
-                >
-                    <Download className="w-4 h-4" />
-                </button>
-            </div>
         );
     }
 
@@ -371,7 +327,7 @@ function DriveItem({ item, categoria, onPrevisualizarDocumento, onPrevisualizarI
                     <button
                         type="button"
                         onClick={(e) => manejarClickPrevisualizar(e, () => onPrevisualizarDocumento?.(item.adjunto))}
-                        className="flex flex-1 gap-3 p-3 rounded-2xl theme-element border theme-border hover:border-[var(--color-primario)] transition-colors text-left outline-none"
+                        className="gelia-mensajeria-archivo-fila flex-1 text-left"
                     >
                         {contenido}
                     </button>
@@ -382,7 +338,7 @@ function DriveItem({ item, categoria, onPrevisualizarDocumento, onPrevisualizarI
                             e.stopPropagation();
                             descargarAdjunto(item.adjunto);
                         }}
-                        className="flex items-center justify-center p-3 rounded-2xl theme-element border theme-border theme-text-muted hover:border-[var(--color-primario)] shrink-0 outline-none"
+                        className="gelia-mensajeria-accion theme-text-muted shrink-0"
                         title="Descargar"
                         aria-label="Descargar"
                     >
@@ -401,7 +357,7 @@ function DriveItem({ item, categoria, onPrevisualizarDocumento, onPrevisualizarI
                         e.stopPropagation();
                         descargarAdjunto(item.adjunto);
                     }}
-                    className="flex flex-1 gap-3 p-3 rounded-2xl theme-element border theme-border hover:border-[var(--color-primario)] transition-colors text-left outline-none"
+                    className="gelia-mensajeria-archivo-fila flex-1 text-left"
                 >
                     {contenido}
                     <Download className="w-4 h-4 shrink-0 theme-text-muted self-center pointer-events-none" />
