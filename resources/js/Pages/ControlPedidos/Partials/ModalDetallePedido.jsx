@@ -169,7 +169,7 @@ export default function ModalDetallePedido({ abierto, onClose, pedido }) {
                             <h3 className="gelia-pedidos-seccion-titulo">Recolección en tienda</h3>
                             <dl className="grid grid-cols-2 gap-4">
                                 <Campo label="Consulta" value={respondeTienda ? 'Tienda' : 'CEDIS'} />
-                                <Campo label="Sucursal de recolección" value={pedido.sucursal_destino?.nombre || pedido.sucursal_destino_nombre || 'Por confirmar'} />
+                                <Campo label="Sucursal de destino" value={pedido.sucursal_destino?.nombre || pedido.sucursal_destino_nombre || 'Por confirmar'} />
                                 {pedido.almacen?.nombre && <Campo label="Procedencia" value={pedido.almacen.nombre} />}
                                 <Campo label="Pago" value={({apartado: 'Al recoger', transferencia: 'Transferencia', credito: 'Crédito'})[pedido.solicitud_preparacion?.cobertura_tienda?.tipo] || 'Por definir'} />
                                 {pedido.numero_remision && <Campo label="Remisión" value={pedido.numero_remision} />}

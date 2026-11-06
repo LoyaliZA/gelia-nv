@@ -52,6 +52,7 @@ const base = {
 };
 
 beforeEach(() => {
+    globalThis.localStorage = { getItem: () => null, setItem: () => {} };
     globalThis.route = (name, params) => `${name}${params ? `:${JSON.stringify(params)}` : ''}`;
     globalThis.IS_REACT_ACT_ENVIRONMENT = true;
     container = document.createElement('div');
@@ -64,7 +65,7 @@ afterEach(async () => {
     container.remove();
 });
 
-it('rotula Carga completa y la ubicación de inventario cuando el caso está permitido', async () => {
+it('rotula Importar existencias y la ubicación de inventario cuando el caso está permitido', async () => {
     await act(async () => root.render(
         <Index
             auth={{ user: { permissions: ['almacenes.inventarios.gestionar'], roles: [] } }}
@@ -73,15 +74,15 @@ it('rotula Carga completa y la ubicación de inventario cuando el caso está per
         />,
     ));
 
-    expect(container.textContent).toContain('Carga completa');
-    expect(container.textContent).toContain('puede incluir ficha, asignación, costos, precios y existencias');
+    expect(container.textContent).toContain('Importar existencias');
+    expect(container.textContent).toContain('No crea el producto ni escribe costos');
     expect(container.textContent).toContain('Ubicación de inventario');
-    expect(container.querySelector('a')?.getAttribute('href')).toContain('preset":"inventario"');
+    expect(container.querySelector('a')?.getAttribute('href')).toContain('preset":"existencias"');
     expect(container.querySelector('[aria-label="Editar inventario"]')).not.toBeNull();
     expect(container.querySelector('[aria-label="Eliminar inventario"]')).not.toBeNull();
 });
 
-it('oculta Carga completa y la edición cuando solo se puede borrar por catálogos', async () => {
+it('oculta Importar existencias y la edición cuando solo se puede borrar por catálogos', async () => {
     await act(async () => root.render(
         <Index
             auth={{ user: { permissions: ['catalogos.gestionar'], roles: [] } }}
@@ -90,7 +91,7 @@ it('oculta Carga completa y la edición cuando solo se puede borrar por catálog
         />,
     ));
 
-    expect(container.textContent).not.toContain('Carga completa');
+    expect(container.textContent).not.toContain('Importar existencias');
     expect(container.querySelector('[aria-label="Editar inventario"]')).toBeNull();
     expect(container.querySelector('[aria-label="Eliminar inventario"]')).not.toBeNull();
 });

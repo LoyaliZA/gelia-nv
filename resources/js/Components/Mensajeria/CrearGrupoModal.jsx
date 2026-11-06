@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Users } from 'lucide-react';
 import SelectorUsuarios from './SelectorUsuarios';
@@ -8,6 +8,14 @@ export default function CrearGrupoModal({ isOpen, onClose, onCrear }) {
     const [seleccionados, setSeleccionados] = useState([]);
     const [enviando, setEnviando] = useState(false);
 
+    const [error, setError] = useState('');
+    useEffect(() => {
+        if (!isOpen) return undefined;
+        setError('');
+        const cerrar = (evento) => { if (evento.key === 'Escape') onClose(); };
+        document.addEventListener('keydown', cerrar);
+        return () => document.removeEventListener('keydown', cerrar);
+    }, [isOpen, onClose]);
     if (!isOpen) return null;
 
     const toggleUsuario = (usuario) => {
@@ -21,6 +29,7 @@ export default function CrearGrupoModal({ isOpen, onClose, onCrear }) {
     const handleCrear = async () => {
         if (!nombre.trim() || seleccionados.length === 0) return;
         setEnviando(true);
+        setError('');
         try {
             await onCrear({
                 tipo: 'grupo',
@@ -30,6 +39,8 @@ export default function CrearGrupoModal({ isOpen, onClose, onCrear }) {
             setNombre('');
             setSeleccionados([]);
             onClose();
+        } catch (e) {
+            setError(e.response?.data?.message || 'No se pudo completar la operación. Inténtalo de nuevo.');
         } finally {
             setEnviando(false);
         }

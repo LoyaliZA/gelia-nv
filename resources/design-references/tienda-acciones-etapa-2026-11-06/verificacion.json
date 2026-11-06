@@ -1,0 +1,156 @@
+[
+  {
+    "vista": "escritorio-oscuro",
+    "caso": "inicial",
+    "acciones": [
+      "Consultar disponibilidad en CEDIS"
+    ],
+    "fuera": 0,
+    "fueraDePantalla": false,
+    "desbordes": [],
+    "errores": [],
+    "rotas": 0
+  },
+  {
+    "vista": "escritorio-oscuro",
+    "caso": "cerrar",
+    "acciones": [
+      "Confirmar mercancía y cerrar consulta"
+    ],
+    "fuera": 0,
+    "fueraDePantalla": false,
+    "desbordes": [],
+    "errores": [],
+    "rotas": 0
+  },
+  {
+    "vista": "escritorio-oscuro",
+    "caso": "cerrar-tienda",
+    "acciones": [
+      "Confirmar separación de pedido en Tienda"
+    ],
+    "fuera": 0,
+    "fueraDePantalla": false,
+    "desbordes": [],
+    "errores": [],
+    "rotas": 0
+  },
+  {
+    "vista": "escritorio-oscuro",
+    "caso": "confirmar",
+    "acciones": [
+      "Confirmar pedido y enviar a revisión"
+    ],
+    "fuera": 0,
+    "fueraDePantalla": false,
+    "desbordes": [],
+    "errores": [],
+    "rotas": 0
+  },
+  {
+    "vista": "escritorio-oscuro",
+    "caso": "confirmado",
+    "desbordes": [],
+    "errores": [],
+    "rotas": 0
+  },
+  {
+    "vista": "escritorio-oscuro",
+    "caso": "apartado",
+    "acciones": [
+      "Enviar confirmación a tienda"
+    ],
+    "fuera": 0,
+    "fueraDePantalla": false,
+    "desbordes": [],
+    "errores": [],
+    "rotas": 0
+  },
+  {
+    "vista": "escritorio-oscuro",
+    "caso": "revision",
+    "acciones": [],
+    "fuera": 0,
+    "fueraDePantalla": false,
+    "desbordes": [],
+    "errores": [],
+    "rotas": 0
+  },
+  {
+    "vista": "movil-claro",
+    "caso": "inicial",
+    "acciones": [
+      "Consultar disponibilidad en CEDIS"
+    ],
+    "fuera": 0,
+    "fueraDePantalla": false,
+    "desbordes": [],
+    "errores": [],
+    "rotas": 0
+  },
+  {
+    "vista": "movil-claro",
+    "caso": "cerrar",
+    "acciones": [
+      "Confirmar mercancía y cerrar consulta"
+    ],
+    "fuera": 0,
+    "fueraDePantalla": false,
+    "desbordes": [],
+    "errores": [],
+    "rotas": 0
+  },
+  {
+    "vista": "movil-claro",
+    "caso": "cerrar-tienda",
+    "acciones": [
+      "Confirmar separación de pedido en Tienda"
+    ],
+    "fuera": 0,
+    "fueraDePantalla": false,
+    "desbordes": [],
+    "errores": [],
+    "rotas": 0
+  },
+  {
+    "vista": "movil-claro",
+    "caso": "confirmar",
+    "acciones": [
+      "Confirmar pedido y enviar a revisión"
+    ],
+    "fuera": 0,
+    "fueraDePantalla": false,
+    "desbordes": [],
+    "errores": [],
+    "rotas": 0
+  },
+  {
+    "vista": "movil-claro",
+    "caso": "confirmado",
+    "desbordes": [],
+    "errores": [],
+    "rotas": 0
+  },
+  {
+    "vista": "movil-claro",
+    "caso": "apartado",
+    "acciones": [
+      "Enviar confirmación a tienda"
+    ],
+    "fuera": 0,
+    "fueraDePantalla": false,
+    "desbordes": [],
+    "errores": [],
+    "rotas": 0
+  },
+  {
+    "vista": "movil-claro",
+    "caso": "revision",
+    "acciones": [],
+    "fuera": 0,
+    "fueraDePantalla": false,
+    "desbordes": [],
+    "errores": [],
+    "rotas": 0
+  }
+]

@@ -90,6 +90,134 @@ class TransferenciaTiendaTest extends TestCase
         $this->pedido->documentos()->create(['tipo' => PedidoBmaDocumento::TIPO_REMISION, 'ruta_archivo' => 'remision.pdf', 'nombre_original' => 'remision.pdf', 'mime_type' => 'application/pdf', 'tamano_bytes' => 100, 'orden' => 1, 'activo' => true]);
     }
 
+    private function iniciarConfirmacion(string $cobertura): void
+    {
+        config(['control_pedidos.direcciones_normalizadas' => true]);
+        CatalogoEstatusPedido::query()->firstOrCreate(['fase_ciclo' => 'PESAJE_RESPONDIDO'], ['codigo_interno' => 'PESAJE_RESPONDIDO', 'nombre_visual' => 'Consulta cerrada', 'color_hex' => '#999999', 'orden' => 1, 'activo' => true]);
+        $this->pedido->documentos()->delete();
+        $json = $this->pedido->solicitud_preparacion_json;
+        $json['cobertura_tienda'] = ['tipo' => $cobertura];
+        $json['codigo_modalidad'] = $cobertura === 'credito' ? 'RECOGE_TIENDA_CREDITO' : 'RECOGE_TIENDA_TRANSFERENCIA';
+        $json['revision_disponibilidad'] = ['estado' => 'sin_excepciones'];
+        $this->pedido->update(['catalogo_estatus_pedido_id' => CatalogoEstatusPedido::porFase('PESAJE_RESPONDIDO')->id,
+            'folio_remision' => 'PED-PRUEBA', 'numero_remision' => null, 'pago_validado_at' => null, 'solicitud_preparacion_json' => $json]);
+        $this->pedido->origen->update(['requiere_logistica' => true]);
+        $this->pedido->documentos()->create(['tipo' => PedidoBmaDocumento::TIPO_PDF_PEDIDO, 'ruta_archivo' => 'pedido.pdf', 'nombre_original' => 'pedido.pdf', 'mime_type' => 'application/pdf', 'tamano_bytes' => 100, 'orden' => 0, 'activo' => true]);
+        $this->auxiliar->givePermissionTo(Permission::findOrCreate('control_pedidos.auditar', 'web'));
+        $this->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\PreventRequestForgery::class, \Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class]);
+    }
+
+    public function test_confirmar_consulta_cedis_resuelve_almacenes_sin_simular_recepcion(): void
+    {
+        $this->iniciarConfirmacion('credito');
+        $origen = $this->pedido->almacen;
+        $tipo = CatalogoTipoAlmacen::query()->firstOrCreate(['nombre' => 'CEDIS'], ['activo' => true]);
+        $origen->update(['tipo_almacen_id' => $tipo->id, 'permite_salida_pedidos' => true]);
+        $this->pedido->update(['almacen_id' => null]);
+        $this->destino->update(['permite_salida_pedidos' => false]);
+
+        $this->actingAs($this->vendedora)->putJson(route('control_pedidos.enviar', $this->pedido))
+            ->assertOk()->assertJsonPath('estatus.fase_ciclo', 'PENDIENTE_AUXILIAR');
+        $fresco = $this->pedido->fresh();
+        $this->assertSame($origen->id, $fresco->almacen_id);
+        $this->assertSame($this->destino->id, $fresco->solicitud_preparacion_json['ruta_almacenes_tienda']['almacen_destino_id']);
+        $this->assertNull($fresco->pago_validado_at);
+        $this->assertSame(0, $fresco->resguardosPdv()->count());
+        $fusion = app(\App\Services\ControlPedidos\FusionarSolicitudPreparacionPedido::class)->ejecutar($fresco->solicitud_preparacion_json, ['modalidad_entrega' => 'tienda']);
+        $this->assertSame($fresco->solicitud_preparacion_json['ruta_almacenes_tienda'], $fusion['ruta_almacenes_tienda']);
+    }
+
+    public function test_confirmar_sin_cedis_configurado_no_adivina_origen_ni_avanza(): void
+    {
+        $this->iniciarConfirmacion('credito');
+        $this->pedido->update(['almacen_id' => null]);
+        $this->actingAs($this->vendedora)->putJson(route('control_pedidos.enviar', $this->pedido))
+            ->assertUnprocessable()->assertJsonValidationErrors('almacen_id');
+        $this->assertNull($this->pedido->fresh()->almacen_id);
+        $this->assertSame('PESAJE_RESPONDIDO', $this->pedido->fresh()->estatus->fase_ciclo);
+    }
+
+    public function test_resolucion_cedis_no_modifica_captura_de_envios(): void
+    {
+        $json = $this->pedido->solicitud_preparacion_json;
+        $json['modalidad_entrega'] = 'nacional';
+        $this->pedido->update(['almacen_id' => null, 'solicitud_preparacion_json' => $json]);
+        app(\App\Services\ControlPedidos\ResolverAlmacenesConsultaCedisService::class)->ejecutar($this->pedido);
+        $this->assertNull($this->pedido->fresh()->almacen_id);
+        $this->assertArrayNotHasKey('ruta_almacenes_tienda', $this->pedido->fresh()->solicitud_preparacion_json);
+    }
+
+    public function test_autoguardar_destino_de_consulta_cedis_conserva_origen_y_no_crea_custodia(): void
+    {
+        $this->iniciarConfirmacion('transferencia');
+        $json = $this->pedido->solicitud_preparacion_json;
+        unset($json['cobertura_tienda'], $json['codigo_modalidad']);
+        $this->pedido->update(['solicitud_preparacion_json' => $json, 'consulta_cerrada_at' => null]);
+        $origenId = $this->pedido->almacen_id;
+        $otra = Sucursal::factory()->create(['activo' => true]);
+        $this->actingAs($this->vendedora)->postJson('/control-pedidos/autoguardar', [
+            'pedido_id' => $this->pedido->id,
+            'revision_esperada' => (int) $this->pedido->revision_registro,
+            'base_captura' => \App\Support\ControlPedidos\RevisionCapturaPedido::base($this->pedido->fresh()),
+            'sucursal_destino_id' => $otra->id,
+        ])->assertOk()->assertJsonPath('sucursal_destino_id', $otra->id);
+        $this->assertSame($origenId, $this->pedido->fresh()->almacen_id);
+        $this->assertSame(0, $this->pedido->resguardosPdv()->count());
+    }
+
+    public function test_confirmar_transferencia_exige_pago_y_destino_y_llega_a_auditoria_sin_pedir_logistica(): void
+    {
+        $this->iniciarConfirmacion('transferencia');
+        $this->actingAs($this->vendedora)->putJson(route('control_pedidos.enviar', $this->pedido))->assertStatus(422);
+        app(\App\Services\SaldosAFavor\RegistrarPagoPedidoBmaService::class)->handle($this->pedido->fresh(), [
+            'monto' => 100, 'forma_pago' => 'transferencia', 'catalogo_banco_id' => \App\Models\CatalogoBanco::query()->create(['nombre' => 'Banco prueba', 'activo' => true, 'compartido' => true])->id, 'idempotency_key' => 'pago-confirmacion',
+        ], UploadedFile::fake()->create('transferencia.pdf', 10, 'application/pdf'), $this->vendedora->id);
+        $destinoId = $this->pedido->sucursal_destino_id;
+        $this->pedido->update(['sucursal_destino_id' => null]);
+        $this->actingAs($this->vendedora)->putJson(route('control_pedidos.enviar', $this->pedido))->assertStatus(422);
+        $this->actingAs($this->vendedora)->postJson(route('control_pedidos.sucursal_destino', $this->pedido), ['sucursal_destino_id' => $destinoId])
+            ->assertOk()->assertJsonPath('sucursal_destino_id', $destinoId);
+        $this->actingAs($this->vendedora)->putJson(route('control_pedidos.enviar', $this->pedido))
+            ->assertOk()->assertJsonPath('estatus.fase_ciclo', 'PENDIENTE_AUXILIAR');
+        $this->assertNull($this->pedido->fresh()->pago_validado_at);
+        $this->assertSame(0, $this->pedido->resguardosPdv()->count());
+        app(\App\Services\ControlPedidos\ValidarPagoPedidoBmaService::class)->ejecutar($this->pedido->fresh(), $this->auxiliar->id);
+        app(GestionarRemisionPedidoBmaService::class)->actualizarNumeroRemision($this->pedido->fresh(), 'REM-CONFIRMADA', $this->auxiliar->id);
+        app(GestionarRemisionPedidoBmaService::class)->subir($this->pedido->fresh(), UploadedFile::fake()->create('remision.pdf', 10, 'application/pdf'), $this->auxiliar->id, now()->toDateString());
+        app(\App\Services\ControlPedidos\AprobarPedidoBmaService::class)->ejecutar($this->pedido->fresh(), $this->auxiliar->id);
+        $this->preparar();
+        $this->operar('salida', $this->cedis);
+        $this->assertSame(ResguardoPdv::ESTADO_PENDIENTE_RECEPCION, $this->pedido->resguardosPdv()->firstOrFail()->estado);
+    }
+
+    public function test_credito_cedis_va_a_revision_sin_transferencia_y_completa_custodia_y_entrega(): void
+    {
+        $this->iniciarConfirmacion('credito');
+        $this->actingAs($this->vendedora)->putJson(route('control_pedidos.enviar', $this->pedido))
+            ->assertOk()->assertJsonPath('estatus.fase_ciclo', 'PENDIENTE_AUXILIAR');
+        $this->assertSame(0, $this->pedido->pagosExhibicion()->count());
+        app(\App\Services\ControlPedidos\RegistrarResultadoCreditoTiendaService::class)->ejecutar($this->pedido->fresh(), $this->auxiliar, 'bloqueado', 'Regularizar en Wizerp');
+        $this->assertFalse(app(TransferenciaTiendaService::class)->resumen($this->pedido->fresh(), $this->cedis)['puede_preparar']);
+        try {
+            app(\App\Services\ControlPedidos\ValidarPagoPedidoBmaService::class)->ejecutar($this->pedido->fresh(), $this->auxiliar->id);
+            $this->fail('El crédito bloqueado no se valida.');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('Wizerp', $e->getMessage());
+        }
+        app(\App\Services\ControlPedidos\RegistrarResultadoCreditoTiendaService::class)->ejecutar($this->pedido->fresh(), $this->auxiliar, 'aprobado');
+        app(\App\Services\ControlPedidos\ValidarPagoPedidoBmaService::class)->ejecutar($this->pedido->fresh(), $this->auxiliar->id);
+        app(GestionarRemisionPedidoBmaService::class)->actualizarNumeroRemision($this->pedido->fresh(), 'REM-CREDITO', $this->auxiliar->id);
+        app(GestionarRemisionPedidoBmaService::class)->subir($this->pedido->fresh(), UploadedFile::fake()->create('credito.pdf', 10, 'application/pdf'), $this->auxiliar->id);
+        app(\App\Services\ControlPedidos\AprobarPedidoBmaService::class)->ejecutar($this->pedido->fresh(), $this->auxiliar->id);
+        $this->assertSame('T-09', $this->preparar()['flujo']);
+        $this->operar('salida', $this->cedis);
+        $this->assertSame(ResguardoPdv::ESTADO_PENDIENTE_RECEPCION, $this->pedido->resguardosPdv()->firstOrFail()->estado);
+        $this->operar('recibir', $this->auxiliar, ['bolsas_verificadas' => true]);
+        $this->operar('custodia', $this->auxiliar, ['almacen_id' => $this->destino->id, 'ubicacion' => 'Anaquel crédito']);
+        $this->assertSame('entregada', $this->operar('entregar', $this->auxiliar, ['receptor' => 'Cliente crédito', 'foto' => UploadedFile::fake()->image('entrega-credito.jpg')])['estado']);
+        $this->assertSame(['credito'], $this->pedido->pagosExhibicion()->pluck('forma_pago')->all());
+    }
+
     private function operar(string $accion, User $actor, array $datos = []): array
     {
         $version = $this->pedido->fresh()->solicitud_preparacion_json['transferencia_tienda']['version'] ?? 0;

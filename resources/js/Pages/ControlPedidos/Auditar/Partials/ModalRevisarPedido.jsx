@@ -48,8 +48,9 @@ import ResumenCoberturaPedido from './ResumenCoberturaPedido';
 import DatosGeneralesAuditoria from './DatosGeneralesAuditoria';
 import TotalesEnviosAuditoria from './TotalesEnviosAuditoria';
 import BarraAccionesRevision from './BarraAccionesRevision';
-import { prepararAdjuntoRemision, remisionVigenteDe } from './remisionVigente';
+import { fechaInicialRemision, prepararAdjuntoRemision, remisionVigenteDe } from './remisionVigente';
 import { THEME_INPUT } from '../../../../utils/geliaTheme';
+import SelectorFecha from '../../../../Components/Calendario/SelectorFecha';
 
 const SECCION_WRAP = 'gelia-pedidos-seccion space-y-4';
 
@@ -129,7 +130,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
         if (abierto && pedidoInicial) {
             setPedido(pedidoInicial);
             setNumeroRemision(pedidoInicial.numero_remision || '');
-            setFechaEmisionRemision(pedidoInicial.solicitud_preparacion?.remision_tienda?.emitida_at?.slice(0, 10) || '');
+            setFechaEmisionRemision(fechaInicialRemision(pedidoInicial));
             setProcesando(false);
             setAlerta({ abierto: false, tipo: 'success', titulo: '', mensaje: '' });
             setConfirmacion(null);
@@ -287,12 +288,13 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
         setProcesando(true);
         const formData = new FormData();
         formData.append('remision', archivo);
-        if (fechaEmisionRemision) formData.append('fecha_emision', fechaEmisionRemision);
+        const fechaEmision = pedido.solicitud_preparacion?.remision_tienda?.emitida_at?.slice(0, 10) || fechaEmisionRemision;
+        if (fechaEmision) formData.append('fecha_emision', fechaEmision);
         router.post(route('control_pedidos.auditar.remision.store', pedido.id), formData, {
             preserveScroll: true,
             forceFormData: true,
             onSuccess: (page) => recargarPedido('Remisión adjuntada correctamente.', page),
-            onError: (errors) => setAlerta({ abierto: true, tipo: 'error', titulo: 'Error', mensaje: errors?.remision || 'No se pudo adjuntar la remisión.' }),
+            onError: (errors) => setAlerta({ abierto: true, tipo: 'error', titulo: 'Error', mensaje: errors?.fecha_emision || errors?.remision || 'No se pudo adjuntar la remisión.' }),
             onFinish: () => setProcesando(false),
         });
     };
@@ -826,7 +828,11 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                 )}
                                 <section id="auditoria-remision" tabIndex={-1} className={SECCION_WRAP}>
                                     <h3 className="gelia-pedidos-seccion-titulo">{fichaTienda ? 'Archivo de tienda' : 'Remisión'}</h3>
-                                    {pedido.solicitud_preparacion?.cobertura_tienda?.tipo === 'transferencia' && esPendiente && <label className="block text-xs theme-text-muted mb-3">Fecha de emisión de remisión Wizerp<input type="date" className={`${THEME_INPUT} w-full mt-1`} value={fechaEmisionRemision || pedido.solicitud_preparacion?.remision_tienda?.emitida_at?.slice(0, 10) || ''} onChange={e => setFechaEmisionRemision(e.target.value)} disabled={procesando || Boolean(pedido.solicitud_preparacion?.remision_tienda?.emitida_at)} /><span className="block mt-1">Los 20 días naturales parten de esta emisión; reemplazar el PDF no reinicia el plazo.</span></label>}
+                                    {pedido.solicitud_preparacion?.cobertura_tienda?.tipo === 'transferencia' && esPendiente && <div className="mb-3">
+                                        <label htmlFor="auditoria-fecha-emision" className="block text-xs theme-text-muted mb-1">Fecha de emisión de remisión Wizerp</label>
+                                        <SelectorFecha id="auditoria-fecha-emision" aria-label="Fecha de emisión de remisión Wizerp" aria-describedby="auditoria-fecha-emision-ayuda" value={pedido.solicitud_preparacion?.remision_tienda?.emitida_at?.slice(0, 10) || fechaEmisionRemision} onChange={setFechaEmisionRemision} disabled={procesando || Boolean(pedido.solicitud_preparacion?.remision_tienda?.emitida_at)} />
+                                        <p id="auditoria-fecha-emision-ayuda" className="text-xs theme-text-muted mt-1 mb-0">Los 20 días naturales parten de esta emisión; reemplazar el PDF no reinicia el plazo.</p>
+                                    </div>}
                                     {esPendiente && !recogeTienda && (
                                         <div className="mb-4">
                                             <label htmlFor="auditoria-numero-remision" className="text-xs theme-text-muted">Número de remisión</label>

@@ -20,17 +20,10 @@ class ListarInventariosService
     {
         $query = Inventario::query()
             ->select('inventarios.*')
-            ->leftJoin('producto_costos', function ($join) {
-                $join->on('producto_costos.producto_id', '=', 'inventarios.producto_id')
-                    ->on('producto_costos.almacen_id', '=', 'inventarios.almacen_id');
-            })
-            ->addSelect([
-                'producto_costos.costo as costo_valor',
-                'producto_costos.precio_venta as precio_venta_valor',
-            ])
             ->with([
                 'producto.marca',
                 'producto.categoria',
+                'producto.costos',
                 'almacen.sucursal',
                 'almacen.tipoAlmacen',
             ]);

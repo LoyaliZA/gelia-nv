@@ -64,9 +64,4 @@ class Almacen extends Model
     {
         return $this->hasMany(Inventario::class);
     }
-
-    public function costos(): HasMany
-    {
-        return $this->hasMany(ProductoCosto::class);
-    }
 }

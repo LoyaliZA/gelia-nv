@@ -154,7 +154,6 @@ class CoberturaConsultaTest extends TestCase
             'almacenes.cobertura.index',
             'almacenes.catalogo.index',
             'almacenes.inventarios.index',
-            'almacenes.costos.index',
         ];
 
         foreach ($rutas as $ruta) {

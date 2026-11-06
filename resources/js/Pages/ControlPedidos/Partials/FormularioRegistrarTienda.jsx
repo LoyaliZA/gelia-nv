@@ -42,6 +42,7 @@ import { archivosImagenDesdeClipboard } from './archivosDesdeClipboard';
 import { claseEtiquetaLista } from '../../Solicitudes/Partials/solicitudesStyles';
 import { GELIA_ESTADO_VIVO_TONO } from '../../../utils/geliaTheme';
 import ContinuidadTienda from './ContinuidadTienda';
+import ConfirmacionRevisionTienda from './ConfirmacionRevisionTienda';
 import SeguimientoTransferenciaTienda from './SeguimientoTransferenciaTienda';
 import { badgesListaPedido } from './pedidosListadoUi';
 import useActualizacionesPedidos from './useActualizacionesPedidos';
@@ -333,6 +334,8 @@ export default function FormularioRegistrarTienda({
     const [errorCampo, setErrorCampo] = useState('');
     const [guardando, setGuardando] = useState(false);
     const [enviando, setEnviando] = useState(false);
+    const [destinoAccion, setDestinoAccion] = useState(null);
+    const [avisoConfirmacion, setAvisoConfirmacion] = useState('');
     const [borradorConfirmado, setBorradorConfirmado] = useState(false);
     const [estadoGuardado, setEstadoGuardado] = useState(null);
     const clave = useRef(globalThis.crypto?.randomUUID?.() || `tienda-${Date.now()}`);
@@ -349,7 +352,7 @@ export default function FormularioRegistrarTienda({
                 tieneArchivo: Boolean(documento?.id && documento?.url),
                 receptor,
                 enviada,
-            }) || (caso === 'mismo_dia_pdv' && !sucursalMd ? 'Elige la sucursal de recolección de TIENDA MD.' : ''),
+            }) || (caso === 'mismo_dia_pdv' && !sucursalMd ? 'Elige la sucursal de destino para Mismo día.' : ''),
         [modalidad, clienteId, departamentoId, folio, documento, receptor, enviada, caso, sucursalMd],
     );
 
@@ -431,7 +434,7 @@ export default function FormularioRegistrarTienda({
             ...baseRef.current,
         };
         const mercancia = datos.totalMercancia;
-        if (!enviada && datos.modalidad === 'tienda' && datos.caso === 'mismo_dia_pdv') cuerpo.sucursal_destino_id = datos.sucursalMd ? Number(datos.sucursalMd) : null;
+        if (!enviada && datos.modalidad === 'tienda') cuerpo.sucursal_destino_id = datos.sucursalMd ? Number(datos.sucursalMd) : null;
         if (mercancia !== '' && mercancia !== null && mercancia !== undefined) {
             cuerpo.total_mercancia = mercancia;
         }
@@ -471,6 +474,7 @@ export default function FormularioRegistrarTienda({
                 ...(respuesta.revision_registro != null ? { revision_registro: respuesta.revision_registro } : {}),
             }));
         }
+        setPedido(actual => ({ ...actual, ...respuesta }));
         if (respuesta.solicitud_preparacion) setSolicitudViva(respuesta.solicitud_preparacion);
         if (respuesta.soporte_pedido?.url) setDocumento(respuesta.soporte_pedido);
         if (respuesta.id) onPedidoCreado?.({ id: respuesta.id, folio: respuesta.folio });
@@ -826,6 +830,9 @@ export default function FormularioRegistrarTienda({
         if (pendientes) setConsultaCerrada(false);
         refrescarRef.current?.();
     };
+    const revisionSolicitada = enviada || avanzado || respuestaDeTiendaEmitida(pedido)
+        || Boolean(pedido?.estatus?.fase_ciclo && !['BORRADOR', 'RECHAZADO_VENDEDORA'].includes(pedido.estatus.fase_ciclo));
+    const enRevisionAuxiliar = pedido?.estatus?.fase_ciclo === 'PENDIENTE_AUXILIAR';
     const campo = `${THEME_INPUT} w-full min-h-[44px] text-base`;
     const opcionesDepartamento = [...departamentos];
     if (
@@ -862,6 +869,7 @@ export default function FormularioRegistrarTienda({
                         {pedido?.estatus && <div className="flex flex-wrap gap-1.5 mt-2" aria-label="Estado del pedido" aria-live="polite">
                             {badgesListaPedido(pedido).slice(0, 2).map((badge) => <span key={badge.key} className={badge.className} style={badge.style}>{badge.label}</span>)}
                         </div>}
+                        {(enRevisionAuxiliar || avisoConfirmacion) && <p className="text-sm theme-text-main mt-2 mb-0" role="status">{enRevisionAuxiliar ? 'Pedido enviado a revisión del auxiliar.' : avisoConfirmacion}</p>}
                     </div>
                     <button
                         type="button"
@@ -1064,7 +1072,7 @@ export default function FormularioRegistrarTienda({
                                         </button>
                                     ))}
                                 </div>
-                                {caso === 'mismo_dia_pdv' && <label className={`${THEME_LABEL} block mt-3`} htmlFor="sucursal-md-inicial">Sucursal de recolección hoy<select id="sucursal-md-inicial" className={`${THEME_SELECT} w-full mt-1`} value={sucursalMd} disabled={enviada || avanzado || enviando || guardando} onChange={evento => setSucursalMd(evento.target.value)}><option value="">Elegir sucursal</option>{(catalogos.sucursales || []).map(sucursal => <option key={sucursal.id} value={String(sucursal.id)}>{sucursal.nombre}</option>)}</select></label>}
+                                {modalidad === 'tienda' && area === 'control_pedidos' && !enviada && <label className={`${THEME_LABEL} block mt-3`} htmlFor="sucursal-md-inicial">Sucursal de destino<select id="sucursal-md-inicial" className={`${THEME_SELECT} w-full mt-1`} value={sucursalMd} disabled={enviada || avanzado || enviando || guardando} onChange={evento => setSucursalMd(evento.target.value)}><option value="">Elegir sucursal</option>{(catalogos.sucursales || []).map(sucursal => <option key={sucursal.id} value={String(sucursal.id)}>{sucursal.nombre}</option>)}</select></label>}
                                 {area === 'preparacion_tienda' && almacenes.length > 0 && (
                                     <div className="mt-2">
                                         <label className={THEME_LABEL} htmlFor="almacen-tienda">
@@ -1195,6 +1203,7 @@ export default function FormularioRegistrarTienda({
                         <>
                             {!lecturaOperativaLista && <div className="flex flex-wrap items-center gap-2 text-sm theme-text-muted" role="status"><span>Consultando los cambios guardados antes de habilitar ajustes.</span><button type="button" className={GELIA_BTN_OUTLINE} onClick={() => setRevisionLecturaOperativa(n => n + 1)}>Actualizar cambios guardados</button></div>}
                             <SeguimientoSolicitudTienda
+                                destinoAccion={destinoAccion}
                                 soloLectura={!lecturaOperativaLista}
                                 pedidoId={pedidoId}
                                 pedido={{ ...pedido, solicitud_preparacion: solicitudViva }}
@@ -1219,6 +1228,7 @@ export default function FormularioRegistrarTienda({
                                 mostrarCustodia={false}
                                 consultaCerrada={consultaCerrada}
                                 importes={{
+                                    destinoAccion: consultaCerrada ? destinoAccion : null,
                                     clienteId,
                                     totalMercancia,
                                     onTotalMercancia: setTotalMercancia,
@@ -1245,6 +1255,7 @@ export default function FormularioRegistrarTienda({
                                     onSolicitud: actualizarSolicitud,
                                 }}
                             />
+                            <ConfirmacionRevisionTienda destinoAccion={consultaCerrada ? destinoAccion : null} onAviso={setAvisoConfirmacion} pedido={{ ...pedido, id: pedidoId, solicitud_preparacion: solicitudViva }} sucursales={catalogos.sucursales || []} consultaCerrada={consultaCerrada} importesListos={importesListos} onLectura={adoptarLectura} />
                         </>
                     )}
                     {borradorConfirmado && !enviada && (
@@ -1273,7 +1284,7 @@ export default function FormularioRegistrarTienda({
                                 }
                             </span>
                         )}
-                        {modalidad === 'tienda' && !enviada && motivo && (
+                        {modalidad === 'tienda' && !revisionSolicitada && motivo && (
                             <p id="registrar-tienda-motivo" className="text-xs theme-text-muted m-0">
                                 {motivo}
                             </p>
@@ -1283,10 +1294,10 @@ export default function FormularioRegistrarTienda({
                         <BotonBorrador
                             guardando={guardando}
                             confirmado={borradorConfirmado}
-                            deshabilitado={enviada || enviando}
+                            deshabilitado={revisionSolicitada || enviando}
                             onClick={() => guardar()}
                         />
-                        {modalidad === 'tienda' && !enviada && (
+                        {modalidad === 'tienda' && !revisionSolicitada && (
                             <button
                                 type="button"
                                 className={THEME_BTN_PRIMARY}
@@ -1298,6 +1309,7 @@ export default function FormularioRegistrarTienda({
                                 <ArrowRight size={16} aria-hidden="true" />
                             </button>
                         )}
+                        <div ref={setDestinoAccion} className="registrar-tienda-accion-principal" />
                     </div>
                 </footer>
             </div>

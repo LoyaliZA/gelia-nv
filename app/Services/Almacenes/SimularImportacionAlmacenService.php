@@ -192,6 +192,13 @@ class SimularImportacionAlmacenService
         $inventarios = [];
         $costos = [];
         $asignaciones = [];
+        if ($ids !== [] && in_array(OperacionesImportacionAlmacen::COSTOS_PRECIOS, $operaciones, true)) {
+            $costos = ProductoCosto::query()
+                ->whereIn('producto_id', $ids)
+                ->pluck('producto_id', 'producto_id')
+                ->map(fn () => true)
+                ->all();
+        }
         if ($almacenId && $ids !== []) {
             if (in_array(OperacionesImportacionAlmacen::CANTIDADES_REFERENCIA, $operaciones, true)) {
                 $inventarios = Inventario::query()
@@ -199,14 +206,6 @@ class SimularImportacionAlmacenService
                     ->whereIn('producto_id', $ids)
                     ->pluck('existencia', 'producto_id')
                     ->map(fn ($v) => (float) $v)
-                    ->all();
-            }
-            if (in_array(OperacionesImportacionAlmacen::COSTOS_PRECIOS, $operaciones, true)) {
-                $costos = ProductoCosto::query()
-                    ->where('almacen_id', $almacenId)
-                    ->whereIn('producto_id', $ids)
-                    ->pluck('producto_id', 'producto_id')
-                    ->map(fn () => true)
                     ->all();
             }
             if (in_array(OperacionesImportacionAlmacen::ASIGNACION_ALMACEN, $operaciones, true)) {
@@ -302,7 +301,7 @@ class SimularImportacionAlmacenService
             }
         }
 
-        if ($almacenId && in_array(OperacionesImportacionAlmacen::COSTOS_PRECIOS, $operaciones, true)) {
+        if (in_array(OperacionesImportacionAlmacen::COSTOS_PRECIOS, $operaciones, true)) {
             if ($this->filaTieneDatosDeCosto($row, $mapping)) {
                 if (! $producto && ! $creadoEnFila) {
                     $producto = $this->productoPorFolioEnContexto($folio, $contexto);
@@ -316,16 +315,14 @@ class SimularImportacionAlmacenService
                 $hubioCambio = true;
                 $acciones[] = 'Costo';
             } elseif ($operaciones === [OperacionesImportacionAlmacen::COSTOS_PRECIOS]) {
-                throw new \RuntimeException('Debe indicar al menos costo, costo de reposición o precio de venta.');
+                throw new \RuntimeException('Debe indicar al menos costo promedio o costo de reposición.');
             }
         }
 
         if ($almacenId && in_array(OperacionesImportacionAlmacen::CANTIDADES_REFERENCIA, $operaciones, true) && ! empty($mapping['existencia'])) {
             $valorExistencia = trim((string) ($row[$mapping['existencia']] ?? ''));
             if ($valorExistencia === '') {
-                if ($operaciones === [OperacionesImportacionAlmacen::CANTIDADES_REFERENCIA]) {
-                    throw new \RuntimeException('Existencia obligatoria para cantidades de referencia.');
-                }
+                throw new \RuntimeException('Existencia obligatoria para cantidades de referencia.');
             } else {
                 if (! $producto && ! $creadoEnFila) {
                     $producto = $this->productoPorFolioEnContexto($folio, $contexto);
@@ -462,7 +459,7 @@ class SimularImportacionAlmacenService
      */
     private function filaTieneDatosDeCosto(array $row, array $mapping): bool
     {
-        foreach (['costo', 'costo_reposicion', 'precio_venta'] as $campo) {
+        foreach (['costo', 'costo_reposicion'] as $campo) {
             if (! empty($mapping[$campo]) && isset($row[$mapping[$campo]]) && $row[$mapping[$campo]] !== '') {
                 return true;
             }
@@ -480,9 +477,8 @@ class SimularImportacionAlmacenService
             'productos' => [OperacionesImportacionAlmacen::FICHA_PRODUCTO],
             'costos' => [OperacionesImportacionAlmacen::COSTOS_PRECIOS],
             'inventarios' => [
-                OperacionesImportacionAlmacen::FICHA_PRODUCTO,
                 OperacionesImportacionAlmacen::CANTIDADES_REFERENCIA,
-                OperacionesImportacionAlmacen::COSTOS_PRECIOS,
+                OperacionesImportacionAlmacen::ASIGNACION_ALMACEN,
             ],
             default => [],
         };

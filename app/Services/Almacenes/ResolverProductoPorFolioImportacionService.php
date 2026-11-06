@@ -31,18 +31,44 @@ class ResolverProductoPorFolioImportacionService
      * @param  array<string, mixed>  $row
      * @param  array<string, mixed>  $mapping
      */
+    private function skuDesdeFila(array $row, array $mapping): string
+    {
+        $columna = $mapping['sku'] ?? null;
+        if (! is_string($columna) || $columna === '' || ! array_key_exists($columna, $row)) {
+            return '';
+        }
+
+        $valor = trim((string) $row[$columna]);
+
+        return $valor === '' ? '' : Producto::normalizarSku($valor);
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     * @param  array<string, mixed>  $mapping
+     */
     public function exigirExistente(array $row, array $mapping): Producto
     {
         $folio = $this->desdeFila($row, $mapping);
-        if ($folio === null) {
-            throw new \RuntimeException('Folio obligatorio. Este caso no crea productos.');
+        if ($folio !== null) {
+            $producto = Producto::query()->where('folio', $folio)->first();
+            if (! $producto) {
+                throw new \RuntimeException("El folio {$folio} no existe. Este caso no crea productos.");
+            }
+
+            return $producto;
         }
 
-        $producto = Producto::query()->where('folio', $folio)->first();
-        if (! $producto) {
-            throw new \RuntimeException("El folio {$folio} no existe. Este caso no crea productos.");
+        $sku = $this->skuDesdeFila($row, $mapping);
+        if ($sku !== '') {
+            $producto = Producto::query()->where('sku', $sku)->first();
+            if (! $producto) {
+                throw new \RuntimeException("El SKU {$sku} no existe. Este caso no crea productos.");
+            }
+
+            return $producto;
         }
 
-        return $producto;
+        throw new \RuntimeException('Folio o SKU obligatorio. Este caso no crea productos.');
     }
 }

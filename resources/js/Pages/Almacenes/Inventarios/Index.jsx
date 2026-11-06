@@ -153,20 +153,20 @@ export default function Index({ auth, inventarios, sucursales, almacenes, filtro
                                 Inventarios de referencia
                             </h1>
                             <p className="text-[11px] font-bold theme-text-muted mt-2 max-w-2xl">
-                                Cantidades de referencia: GELIA-NV no las descuenta automáticamente por venta ni las publica como stock confirmado.
-                                Los costos mostrados aquí son solo referencia del almacén; la gestión detallada está en Costos y precios.
-                                La ubicación de esta pantalla es la de inventario y es independiente de la ubicación de asignación.
+                                Solo existencias y ubicación de inventario. Folio, SKU, descripción, marca, código de barras y peso se leen del catálogo y no se editan aquí.
+                                GELIA-NV no descuenta estas cantidades por venta ni las publica como stock confirmado.
+                                La ubicación de esta pantalla es independiente de la ubicación de asignación.
                             </p>
                             {puede_carga_completa && (
                                 <p className="text-[11px] font-bold theme-text-muted mt-2 max-w-2xl">
-                                    Carga completa puede incluir ficha, asignación, costos, precios y existencias. Simular no aplica cambios al catálogo.
+                                    Importar existencias pide almacén, ubicación y existencia. No crea el producto ni escribe costos. Simular no aplica cambios al catálogo.
                                 </p>
                             )}
                         </div>
                         <div className="flex gap-2">
                             {puede_carga_completa && (
-                                <Link href={route('almacenes.importaciones.index', { preset: 'inventario' })} className={`${THEME_BTN_PRIMARY} theme-btn-primary--compact inline-flex items-center gap-2`}>
-                                    <Upload className="w-4 h-4" /> Carga completa
+                                <Link href={route('almacenes.importaciones.index', { preset: 'existencias' })} className={`${THEME_BTN_PRIMARY} theme-btn-primary--compact inline-flex items-center gap-2`}>
+                                    <Upload className="w-4 h-4" /> Importar existencias
                                 </Link>
                             )}
                             {puedeGestionar && (
@@ -206,17 +206,22 @@ export default function Index({ auth, inventarios, sucursales, almacenes, filtro
                 {!sin_sucursales_operables && (
                 <div className={geliaCardClass('overflow-hidden')}>
                     <div className="overflow-x-auto">
-                        <table className="w-full text-left min-w-[1100px]">
+                        <table className="w-full text-left min-w-[1600px]">
                             <thead>
                                 <tr className="border-b theme-border text-[10px] font-black uppercase tracking-widest theme-text-muted">
-                                    <EncabezadoOrdenable columna="producto" etiqueta="Producto" sortActual={filtros?.sort} dirActual={filtros?.dir} onOrdenar={handleOrdenar} />
+                                    <th className="px-4 py-4">Sucursal</th>
                                     <EncabezadoOrdenable columna="almacen" etiqueta="Almacén" sortActual={filtros?.sort} dirActual={filtros?.dir} onOrdenar={handleOrdenar} />
+                                    <th className="px-4 py-4">Tipo</th>
+                                    <th className="px-4 py-4">Folio</th>
+                                    <th className="px-4 py-4">SKU</th>
+                                    <EncabezadoOrdenable columna="producto" etiqueta="Descripción" sortActual={filtros?.sort} dirActual={filtros?.dir} onOrdenar={handleOrdenar} />
+                                    <th className="px-4 py-4">Marca</th>
+                                    <th className="px-4 py-4">Cód. barras</th>
                                     <EncabezadoOrdenable columna="ubicacion" etiqueta="Ubicación de inventario" sortActual={filtros?.sort} dirActual={filtros?.dir} onOrdenar={handleOrdenar} />
+                                    <th className="px-4 py-4 text-right">Peso</th>
                                     <EncabezadoOrdenable columna="existencia" etiqueta="Existencia" sortActual={filtros?.sort} dirActual={filtros?.dir} onOrdenar={handleOrdenar} alineacion="right" />
                                     <EncabezadoOrdenable columna="apartado" etiqueta="Apartado" sortActual={filtros?.sort} dirActual={filtros?.dir} onOrdenar={handleOrdenar} alineacion="right" />
                                     <EncabezadoOrdenable columna="disponible" etiqueta="Disponible" sortActual={filtros?.sort} dirActual={filtros?.dir} onOrdenar={handleOrdenar} alineacion="right" />
-                                    <th className="px-4 py-4 text-right text-[10px] font-black uppercase tracking-widest theme-text-muted">Costo</th>
-                                    <th className="px-4 py-4 text-right text-[10px] font-black uppercase tracking-widest theme-text-muted">P. Venta</th>
                                     <EncabezadoOrdenable columna="transito_oc" etiqueta="Tráns. OC" sortActual={filtros?.sort} dirActual={filtros?.dir} onOrdenar={handleOrdenar} alineacion="right" />
                                     <EncabezadoOrdenable columna="transito_ot" etiqueta="Tráns. OT" sortActual={filtros?.sort} dirActual={filtros?.dir} onOrdenar={handleOrdenar} alineacion="right" />
                                     {puedeBorrar && <th className="px-4 py-4 text-right">Acciones</th>}
@@ -224,20 +229,22 @@ export default function Index({ auth, inventarios, sucursales, almacenes, filtro
                             </thead>
                             <tbody>
                                 {lista.length === 0 ? (
-                                    <tr><td colSpan={puedeBorrar ? 11 : 10} className="px-4 py-16 text-center theme-text-muted text-sm font-bold uppercase">Sin registros de inventario</td></tr>
+                                    <tr><td colSpan={puedeBorrar ? 16 : 15} className="px-4 py-16 text-center theme-text-muted text-sm font-bold uppercase">Sin registros de inventario</td></tr>
                                 ) : lista.map((inv) => (
                                     <tr key={inv.id} className="border-b theme-border hover:bg-black/5 dark:hover:bg-white/5">
-                                        <td className="px-4 py-3">
-                                            <span className="font-black text-sm block">{inv.producto?.descripcion}</span>
-                                            <span className="text-[10px] font-bold theme-text-muted">#{inv.producto?.folio} · SKU {inv.producto?.sku}</span>
-                                        </td>
+                                        <td className="px-4 py-3 text-[11px] font-bold">{inv.almacen?.sucursal?.nombre || '—'}</td>
                                         <td className="px-4 py-3 text-[11px] font-bold uppercase">{inv.almacen?.nombre}</td>
+                                        <td className="px-4 py-3 text-[11px] font-bold">{inv.almacen?.tipo_almacen?.nombre || '—'}</td>
+                                        <td className="px-4 py-3 text-[11px] font-bold theme-text-muted">#{inv.producto?.folio}</td>
+                                        <td className="px-4 py-3 text-[11px] font-bold">{inv.producto?.sku}</td>
+                                        <td className="px-4 py-3 font-black text-sm">{inv.producto?.descripcion}</td>
+                                        <td className="px-4 py-3 text-[11px] font-bold">{inv.producto?.marca?.nombre || '—'}</td>
+                                        <td className="px-4 py-3 text-[11px] font-bold">{inv.producto?.codigo_barras || '—'}</td>
                                         <td className="px-4 py-3 text-[11px] font-bold">{inv.ubicacion || '—'}</td>
+                                        <td className="px-4 py-3 text-right text-[11px] font-bold">{inv.producto?.peso ? `${inv.producto.peso} kg` : '—'}</td>
                                         <td className="px-4 py-3 text-right font-bold">{mostrarCantidad(inv.existencia)}</td>
                                         <td className="px-4 py-3 text-right font-bold">{mostrarCantidad(inv.apartado)}</td>
                                         <td className="px-4 py-3 text-right font-bold theme-text-exito">{mostrarCantidad(inv.disponible)}</td>
-                                        <td className="px-4 py-3 text-right font-bold theme-text-peligro">{inv.costo_valor != null && inv.costo_valor !== '' ? Number(inv.costo_valor).toFixed(2) : '—'}</td>
-                                        <td className="px-4 py-3 text-right font-bold theme-text-exito">{inv.precio_venta_valor != null && inv.precio_venta_valor !== '' ? Number(inv.precio_venta_valor).toFixed(2) : '—'}</td>
                                         <td className="px-4 py-3 text-right text-[11px]">{mostrarCantidad(inv.transito_oc)}</td>
                                         <td className="px-4 py-3 text-right text-[11px]">{mostrarCantidad(inv.transito_ot)}</td>
                                         {puedeBorrar && (

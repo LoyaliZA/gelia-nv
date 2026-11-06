@@ -55,7 +55,7 @@ try {
                 ctx.fillStyle = '#34495e'; ctx.fillRect(200, 100, 100, 210);ctx.fillStyle = '#243342';ctx.font = '24px sans-serif';ctx.fillText('Evidencia de ejemplo', 180, 60);
                 return canvas.toDataURL('image/png').split(',')[1];
             });
-            await page.locator('input[type=file][multiple]').setInputFiles({ name: 'evidencia.png', mimeType: 'image/png', buffer: Buffer.from(imagen, 'base64') });
+            await page.getByLabel('Adjuntar: Captura del pedido', { exact: true }).setInputFiles({ name: 'evidencia.png', mimeType: 'image/png', buffer: Buffer.from(imagen, 'base64') });
             await page.locator('img[alt="evidencia.png"]').waitFor();
             const desborde = await page.evaluate(() => [...document.querySelectorAll('[role=dialog], .gelia-preparacion-captura')].filter(el => el.scrollWidth > el.clientWidth + 1).map(el => el.className));
             if (errores.length || desborde.length) throw new Error(JSON.stringify({ errores, desborde }));
@@ -65,7 +65,6 @@ try {
                 await enviar.scrollIntoViewIfNeeded();
                 if (!await enviar.isVisible()) throw new Error('Acción inaccesible en móvil');
                 await page.getByRole('button', { name: 'Ver pedido', exact: true }).click();
-                await page.getByRole('button', { name: 'Ampliar pedido', exact: true }).click();
             } else await page.getByRole('button', { name: 'Ver evidencia 1: evidencia.png', exact: true }).click();
             await page.evaluate(() => Promise.all(document.getAnimations().filter(a => Number.isFinite(a.effect?.getComputedTiming().endTime)).map(a => a.finished.catch(() => {}))));
             await page.screenshot({ path: `${destino}/visor-${size.nombre}-${tema}.png`, fullPage: true });

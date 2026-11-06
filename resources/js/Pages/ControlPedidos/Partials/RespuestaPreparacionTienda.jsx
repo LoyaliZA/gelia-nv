@@ -1,4 +1,5 @@
 import React from 'react';
+import RespuestaDisponibilidadPedido from './RespuestaDisponibilidadPedido';
 import { ClipboardCheck } from 'lucide-react';
 import { formatearFechaNegocio } from './pedidosBmaStyles';
 import { esPdf, MiniaturaDocumento } from './ModalVistaPreviaDocumento';
@@ -29,6 +30,21 @@ export default function RespuestaPreparacionTienda({ tarea, onVerDocumentos, acc
     const excepciones = Array.isArray(respuesta.excepciones) ? respuesta.excepciones : [];
     const skusEnTabla = new Set((respuesta.productos || []).map((producto) => String(producto.sku || '')));
     const excepcionesSueltas = excepciones.filter((pieza) => !skusEnTabla.has(String(pieza.sku || '')) || !pieza.sku);
+    if (respuesta.revision?.estado) {
+        const filas = [
+            ...(respuesta.productos || []).map(p => ({ ...p, clave: `producto-${p.id}`, documentos: fotosDe(p.id), original: p })),
+            ...excepcionesSueltas.map(p => ({ ...p, clave: `revision-${p.id}`, cantidad: p.estado_fisico === 'sin_existencia' ? 0 : p.cantidad, observacion: p.detalle, documentos: [], original: { ...p, revision_id: p.id } })),
+        ];
+        return <RespuestaDisponibilidadPedido titulo={titulo} origen="Tienda" ariaLabel="Respuesta de preparación" responsable={respuesta.responsable} fecha={respuesta.respondida_at} estado={respuesta.revision.estado} aceptacionVigente={respuesta.revision.aceptacion_vigente !== false}
+            filas={filas} generales={generales} cantidad={respuesta.productos?.length || respuesta.piezas_afectadas ? respuesta.cantidad : null}
+            labelCantidad={respuesta.piezas_afectadas ? 'Piezas afectadas' : 'Total preparado'} columnaCantidad={respuesta.apartado_confirmado ? 'Preparadas' : 'Revisadas'} onVer={ver} accionesDePieza={accionesDePieza}>
+            {respuesta.documental && respuesta.apartado_confirmado && <p>Pedido completo separado conforme a la consulta aprobada.</p>}
+            {respuesta.ubicacion && <p>Ubicación: {respuesta.ubicacion}</p>}
+            {respuesta.apartado_confirmado && <p>Apartado confirmado. {respuesta.pago_presencial === 'confirmado' ? 'Pago presencial confirmado.' : 'Pago presencial pendiente.'} {respuesta.entrega === 'registrada' ? 'Entrega registrada.' : 'Entrega pendiente.'}</p>}
+            {respuesta.observaciones && !notasAutomaticas.includes(respuesta.observaciones.trim()) && <p>{respuesta.observaciones}</p>}
+            {tarea.incidencia?.motivo && <p role="alert">{tarea.incidencia.motivo}</p>}
+        </RespuestaDisponibilidadPedido>;
+    }
     return <section className="registrar-tienda-panel space-y-3 theme-text-main" aria-label="Respuesta de preparación">
         <div className="registrar-tienda-seccion-titulo">
             <ClipboardCheck size={18} aria-hidden="true" />

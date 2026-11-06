@@ -398,7 +398,7 @@ class ApiDocumentacionService
             ['GET', '/mobile/rh/banco-tiempo', 'Banco de tiempo. Permisos rh.ver y rh.banco_tiempo.ver. Query: q, rh_colaborador_id, departamento_id, estado.'],
             ['GET', '/mobile/almacenes', 'Almacenes de las sucursales operables. Permiso de consulta del módulo de almacenes. Query: q, sucursal_id, activo, page, per_page. Incluye sucursales operables.'],
             ['GET', '/mobile/almacenes/{id}', 'Detalle de un almacén operable. Fuera de alcance responde 404.'],
-            ['GET', '/mobile/inventarios', 'Existencias por producto y almacén, con el alcance de sucursal del escritorio. Permiso almacenes.inventarios.ver o catalogos.gestionar. Query: q, sucursal_id, almacen_id, sort, dir, page, per_page. costo y precio_venta viajan igual que en el listado web.'],
+            ['GET', '/mobile/inventarios', 'Existencias por producto y almacén, con el alcance de sucursal del escritorio. Permiso almacenes.inventarios.ver o catalogos.gestionar. Query: q, sucursal_id, almacen_id, sort, dir, page, per_page. costo y precio_venta son los de la empresa y se repiten en cada almacén.'],
             ['GET', '/mobile/inventarios/{id}', 'Detalle de una fila de inventario dentro del alcance.'],
             ['GET', '/mobile/activos', 'Activos del departamento de quien consulta, o todos si tiene activos.ver_todos. Permiso activos.ver. Query: q, estado, mis_activos, sin_asignar, en_mantenimiento, pendientes_firma, departamento_id.'],
             ['GET', '/mobile/activos/{id}', 'Detalle del activo, asignación activa y consulta_token. Fuera del departamento responde 404.'],

@@ -60,7 +60,7 @@ class EnviarMensajeService
 
     private function validarReplyToId(Conversacion $conversacion, ?int $replyToId): ?int
     {
-        if (!$replyToId) {
+        if (! $replyToId) {
             return null;
         }
 
@@ -69,7 +69,7 @@ class EnviarMensajeService
             ->where('conversacion_id', $conversacion->id)
             ->exists();
 
-        if (!$existe) {
+        if (! $existe) {
             throw ValidationException::withMessages([
                 'reply_to_id' => 'El mensaje al que respondes no pertenece a esta conversación.',
             ]);
@@ -80,12 +80,10 @@ class EnviarMensajeService
 
     private function construirPreview(Mensaje $mensaje): string
     {
-        return match ($mensaje->tipo) {
-            Mensaje::TIPO_IMAGEN => '📷 Imagen',
-            Mensaje::TIPO_VIDEO => '🎬 Video',
-            Mensaje::TIPO_AUDIO => '🎤 Audio',
-            Mensaje::TIPO_ARCHIVO => '📎 Archivo',
-            default => mb_substr($mensaje->contenido ?? '', 0, 200),
-        };
+        if ($mensaje->tipo === Mensaje::TIPO_TEXTO) {
+            return mb_substr($mensaje->contenido ?? '', 0, 200);
+        }
+
+        return Mensaje::etiquetaTipo($mensaje->tipo);
     }
 }

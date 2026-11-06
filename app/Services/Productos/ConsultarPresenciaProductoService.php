@@ -21,13 +21,14 @@ class ConsultarPresenciaProductoService
     ) {}
 
     /**
-     * @return array{filas: LengthAwarePaginator, incluye_costos: bool, incluye_ventas: bool}
+     * @return array{filas: LengthAwarePaginator, incluye_costos: bool, incluye_ventas: bool, costo_empresa: array<string, mixed>|null}
      */
     public function consultar(User $user, Producto $producto, int $page, int $perPage): array
     {
         $incluyeCostos = $user->can('almacenes.costos.ver');
         $incluyeVentas = $user->can('reportes.ventas.ver');
         $porPagina = min(max($perPage, 1), 50);
+        $costoEmpresa = $this->costoEmpresa($producto, $incluyeCostos);
 
         $operables = $this->alcance->almacenesOperables($user)->keyBy(fn (Almacen $almacen) => (int) $almacen->id);
         $ids = $operables->keys()->map(fn ($id) => (int) $id)->all();
@@ -37,6 +38,7 @@ class ConsultarPresenciaProductoService
                 'filas' => $this->paginar(collect(), $page, $porPagina),
                 'incluye_costos' => $incluyeCostos,
                 'incluye_ventas' => $incluyeVentas,
+                'costo_empresa' => $costoEmpresa,
             ];
         }
 
@@ -50,15 +52,8 @@ class ConsultarPresenciaProductoService
             ->whereIn('almacen_id', $ids)
             ->get()
             ->keyBy('almacen_id');
-        $costos = ProductoCosto::query()
-            ->where('producto_id', $producto->id)
-            ->whereIn('almacen_id', $ids)
-            ->get()
-            ->keyBy('almacen_id');
-
         $almacenIds = $asignaciones->keys()
             ->merge($inventarios->keys())
-            ->merge($costos->keys())
             ->map(fn ($id) => (int) $id)
             ->unique()
             ->sortBy(fn (int $id) => sprintf('%s-%010d', (string) ($operables->get($id)?->codigo ?? ''), $id))
@@ -68,7 +63,7 @@ class ConsultarPresenciaProductoService
         $idsPagina = collect($pagina->items())->map(fn ($id) => (int) $id)->all();
         $ventas = $incluyeVentas ? $this->ventas($producto->id, $idsPagina) : collect();
 
-        $filas = collect($idsPagina)->map(function (int $almacenId) use ($operables, $asignaciones, $inventarios, $costos, $incluyeCostos, $incluyeVentas, $ventas) {
+        $filas = collect($idsPagina)->map(function (int $almacenId) use ($operables, $asignaciones, $inventarios, $incluyeVentas, $ventas) {
             /** @var Almacen|null $almacen */
             $almacen = $operables->get($almacenId);
             $fila = [
@@ -79,14 +74,6 @@ class ConsultarPresenciaProductoService
                 'asignado' => $asignaciones->has($almacenId),
             ];
             $fila = array_merge($fila, $this->existencia($inventarios->get($almacenId)));
-            $fila['tiene_costo'] = $costos->has($almacenId);
-            if ($incluyeCostos) {
-                /** @var ProductoCosto|null $costo */
-                $costo = $costos->get($almacenId);
-                $fila['costo'] = $costo?->costo;
-                $fila['costo_reposicion'] = $costo?->costo_reposicion;
-                $fila['precio_venta'] = $costo?->precio_venta;
-            }
             if ($incluyeVentas) {
                 $fila['ventas'] = $ventas->get($almacenId, collect())->values()->all();
             }
@@ -100,6 +87,26 @@ class ConsultarPresenciaProductoService
             'filas' => $pagina,
             'incluye_costos' => $incluyeCostos,
             'incluye_ventas' => $incluyeVentas,
+            'costo_empresa' => $costoEmpresa,
+        ];
+    }
+
+    /**
+     * @return array{costo: mixed, costo_reposicion: mixed, precio_publico: mixed, margen: mixed}|null
+     */
+    private function costoEmpresa(Producto $producto, bool $incluyeCostos): ?array
+    {
+        if (! $incluyeCostos) {
+            return null;
+        }
+
+        $costo = ProductoCosto::query()->where('producto_id', $producto->id)->first();
+
+        return [
+            'costo' => $costo?->costo,
+            'costo_reposicion' => $costo?->costo_reposicion,
+            'precio_publico' => $producto->precio_publico,
+            'margen' => $producto->margen,
         ];
     }
 

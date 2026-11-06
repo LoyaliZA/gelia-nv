@@ -33,7 +33,7 @@ final class OperacionesImportacionAlmacen
     public static function requiereAlmacen(array $operaciones): bool
     {
         foreach ($operaciones as $op) {
-            if (in_array($op, [self::ASIGNACION_ALMACEN, self::COSTOS_PRECIOS, self::CANTIDADES_REFERENCIA], true)) {
+            if (in_array($op, [self::ASIGNACION_ALMACEN, self::CANTIDADES_REFERENCIA], true)) {
                 return true;
             }
         }
@@ -97,10 +97,10 @@ final class OperacionesImportacionAlmacen
     public static function descripcionCorta(string $operacion): string
     {
         return match ($operacion) {
-            self::FICHA_PRODUCTO => 'Nombre, marca, categoría, código de barras y demás datos del catálogo. No modifica existencias ni costos.',
+            self::FICHA_PRODUCTO => 'Nombre, marca, categoría, margen, medidas y demás datos del catálogo. No asigna almacén ni modifica existencias ni costos.',
             self::ASIGNACION_ALMACEN => 'Vincula el folio al almacén elegido y puede guardar la ubicación de asignación. No modifica existencias ni costos.',
-            self::COSTOS_PRECIOS => 'Costo, costo de reposición y precio de referencia del almacén. No modifica existencias ni datos del producto.',
-            self::CANTIDADES_REFERENCIA => 'Existencias manuales de referencia en el almacén. No activa el producto ni cambia costos por sí sola.',
+            self::COSTOS_PRECIOS => 'Costo promedio y costo de reposición del producto, uno para toda la empresa. No modifica existencias ni el margen. El precio de Público General se recalcula.',
+            self::CANTIDADES_REFERENCIA => 'Existencia y ubicación en el almacén, y la asignación si aún no existe. No crea el producto ni cambia costos.',
             default => '',
         };
     }
@@ -139,31 +139,24 @@ final class OperacionesImportacionAlmacen
         return [
             'productos' => [
                 'titulo' => 'Productos',
-                'frase' => 'El archivo identifica el producto por folio. Puede crear un folio nuevo o actualizar la ficha y la ubicación de asignación en el almacén elegido. Conserva costos, precios y existencias. Una celda vacía no borra el dato guardado.',
-                'columnas' => 'Folio, SKU, descripción, marca, categoría, código de barras, peso, activo y ubicación',
-                'operaciones' => [self::FICHA_PRODUCTO, self::ASIGNACION_ALMACEN],
+                'frase' => 'El archivo identifica el producto por folio. Puede crear un folio nuevo o actualizar la ficha del catálogo, incluido el margen y las medidas. No asigna sucursal ni almacén. Conserva costos y existencias. Una celda vacía no borra el dato guardado. El precio de Público General se calcula y no se importa.',
+                'columnas' => 'Folio, SKU, descripción, marca, categoría, código de barras, peso, margen, largo, ancho, altura y activo',
+                'operaciones' => [self::FICHA_PRODUCTO],
                 'plantilla' => 'productos',
             ],
             'costos' => [
-                'titulo' => 'Costos y precios',
-                'frase' => 'El archivo identifica el producto por folio y el folio tiene que existir. Puede modificar el costo, el costo de reposición y el precio de referencia de ese almacén. Conserva la ficha, la asignación y la existencia.',
-                'columnas' => 'Folio, costo, costo de reposición y precio de referencia',
+                'titulo' => 'Costos',
+                'frase' => 'El archivo identifica el producto por folio o SKU y el producto tiene que existir. Asigna el costo promedio y el costo de reposición de la empresa. No pide almacén, no modifica existencias y no captura el precio: el precio de Público General se recalcula con el margen.',
+                'columnas' => 'Folio, costo promedio y costo de reposición',
                 'operaciones' => [self::COSTOS_PRECIOS],
                 'plantilla' => 'costos',
             ],
             'existencias' => [
                 'titulo' => 'Existencias',
-                'frase' => 'El archivo identifica el producto por folio y el folio tiene que existir. Solo puede modificar la existencia de referencia de ese almacén. Conserva la ficha, la asignación, los costos, los precios y el resto del inventario.',
-                'columnas' => 'Folio y existencia',
-                'operaciones' => [self::CANTIDADES_REFERENCIA],
+                'frase' => 'El archivo identifica el producto por folio o SKU y el producto tiene que existir. Modifica la existencia y la ubicación de ese almacén, y crea la asignación si falta. No crea el producto ni escribe costos.',
+                'columnas' => 'Folio, ubicación y existencia',
+                'operaciones' => [self::CANTIDADES_REFERENCIA, self::ASIGNACION_ALMACEN],
                 'plantilla' => 'existencias',
-            ],
-            'completa' => [
-                'titulo' => 'Carga completa',
-                'frase' => 'El archivo identifica el producto por folio. Puede incluir ficha, asignación, costos, precios y existencias. Conserva el dato guardado cuando la celda viene vacía.',
-                'columnas' => 'Folio, SKU, descripción, marca, categoría, código de barras, peso, activo, ubicación, existencia, costo, costo de reposición y precio de referencia',
-                'operaciones' => self::todas(),
-                'plantilla' => 'completa',
             ],
         ];
     }
@@ -205,10 +198,10 @@ final class OperacionesImportacionAlmacen
     public static function operacionesDesdePreset(string $preset): array
     {
         $caso = match ($preset) {
-            'productos', 'asignacion' => 'productos',
+            'productos' => 'productos',
+            'asignacion' => 'existencias',
             'costos' => 'costos',
-            'existencias' => 'existencias',
-            'inventario', 'completa' => 'completa',
+            'existencias', 'inventario', 'completa' => 'existencias',
             default => null,
         };
 

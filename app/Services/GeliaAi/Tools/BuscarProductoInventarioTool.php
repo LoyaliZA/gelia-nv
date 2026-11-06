@@ -158,7 +158,7 @@ class BuscarProductoInventarioTool implements HerramientaGeliaAi
         if (! empty($args['con_precios']) && ! $conPrecios) {
             $payload['aviso_precios'] = 'Sin permiso para ver costos/precios (almacenes.costos.ver).';
         } elseif ($conPrecios && $n > 0 && ! collect($items)->contains(fn (array $it) => ($it['p'] ?? []) !== [])) {
-            $payload['aviso_precios'] = 'Sin registros en Almacenes → Costos para estos productos en tus almacenes.';
+            $payload['aviso_precios'] = 'Sin costo de empresa para estos productos.';
         }
 
         return $this->sanitizer->limpiar($payload);
@@ -213,17 +213,12 @@ class BuscarProductoInventarioTool implements HerramientaGeliaAi
         }
 
         if ($conPrecios) {
-            $item['p'] = ProductoCosto::query()
-                ->with(['almacen:id,codigo,nombre'])
-                ->where('producto_id', $producto->id)
-                ->whereIn('almacen_id', $alcance === [] ? [0] : $alcance)
-                ->limit(5)
-                ->get()
-                ->map(fn (ProductoCosto $c) => [
-                    'a' => $c->almacen?->codigo ?: $c->almacen?->nombre,
-                    'co' => (float) $c->costo,
-                    'pv' => $c->precio_venta !== null ? (float) $c->precio_venta : null,
-                ])->values()->all();
+            $costo = ProductoCosto::query()->where('producto_id', $producto->id)->first();
+            $item['p'] = $costo ? [[
+                'co' => (float) $costo->costo,
+                'cr' => $costo->costo_reposicion !== null ? (float) $costo->costo_reposicion : null,
+                'pv' => $producto->precio_publico !== null ? (float) $producto->precio_publico : null,
+            ]] : [];
         }
 
         return $item;

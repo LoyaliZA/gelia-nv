@@ -211,7 +211,7 @@ final class VisibilidadPedidoBma
             && $usuario->idsSucursalesOperables()->contains((int) ($traslado['sucursal_origen_id'] ?? 0))) {
             return true;
         }
-        if (TransferenciaT02::documental($pedido)) {
+        if (CustodiaDocumentalTienda::aplica($pedido)) {
             $enDestino = $usuario->idsSucursalesOperables()->contains((int) $pedido->sucursal_destino_id)
                 && ($usuario->can('control_pedidos.tienda.ver') || $usuario->can('pdv.resguardos.ver') || $usuario->can('pdv.resguardos.entregar'));
             $asignado = $usuario->can('control_pedidos.tienda.ver')

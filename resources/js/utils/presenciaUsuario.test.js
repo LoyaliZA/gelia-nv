@@ -4,12 +4,13 @@ import { clasePresencia, textoPresencia, textoVistoPorUltimaVez } from './presen
 describe('textoPresencia', () => {
     const ahora = new Date('2026-11-02T22:00:00Z');
 
-    it('muestra el estado de trabajo cuando está en línea', () => {
+    it('muestra En línea y omite estados de trabajo', () => {
         expect(textoPresencia({
             en_linea: true,
             etiqueta: 'En junta',
             mensaje: 'Cierre semanal',
-        }, ahora)).toBe('En junta · Cierre semanal');
+        }, ahora)).toBe('En línea');
+        expect(clasePresencia({ en_linea: true, estado: 'disponible' })).toBe('gelia-presencia--en-linea');
     });
 
     it('cambia a visto por última vez al salir de línea', () => {

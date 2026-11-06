@@ -13,17 +13,16 @@ class FormatearPresenciaService
     public function ejecutar(array $prefs): array
     {
         $estado = $this->resolver->estadoEfectivo($prefs);
-        $meta = PresenciaCatalogo::meta($estado) ?? PresenciaCatalogo::meta('disponible') ?? [];
 
         return [
             'estado' => $estado,
-            'etiqueta' => $meta['etiqueta'] ?? 'Disponible',
-            'emoji' => $meta['emoji'] ?? '🟢',
-            'color' => $meta['color'] ?? '#22c55e',
-            'mensaje' => $prefs['mensaje'] ?? null,
-            'modo' => $prefs['modo'] ?? 'automatico',
-            'automatizar' => (bool) ($prefs['automatizar'] ?? true),
-            'expira_at' => $prefs['expira_at'] ?? null,
+            'etiqueta' => 'En línea',
+            'emoji' => null,
+            'color' => null,
+            'mensaje' => null,
+            'modo' => 'automatico',
+            'automatizar' => true,
+            'expira_at' => null,
             'en_linea' => PresenciaCatalogo::enLinea($prefs),
             'ultima_actividad_at' => $prefs['ultima_actividad_at'] ?? null,
         ];

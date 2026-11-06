@@ -1,0 +1,57 @@
+[
+  {
+    "nombre": "escritorio-dark",
+    "width": 1440,
+    "height": 1000,
+    "tema": "dark",
+    "compositorVisible": true,
+    "desborde": false,
+    "errores": [],
+    "scrollVertical": false,
+    "menuAbierto": false
+  },
+  {
+    "nombre": "movil-dark",
+    "width": 430,
+    "height": 932,
+    "tema": "dark",
+    "compositorVisible": true,
+    "desborde": false,
+    "errores": [],
+    "scrollVertical": false,
+    "menuAbierto": true
+  },
+  {
+    "nombre": "movil-light",
+    "width": 390,
+    "height": 844,
+    "tema": "light",
+    "compositorVisible": true,
+    "desborde": false,
+    "errores": [],
+    "scrollVertical": false,
+    "menuAbierto": true
+  },
+  {
+    "nombre": "tablet-dark",
+    "width": 820,
+    "height": 900,
+    "tema": "dark",
+    "compositorVisible": true,
+    "desborde": false,
+    "errores": [],
+    "scrollVertical": false,
+    "menuAbierto": false
+  },
+  {
+    "nombre": "horizontal-dark",
+    "width": 844,
+    "height": 430,
+    "tema": "dark",
+    "compositorVisible": true,
+    "desborde": false,
+    "errores": [],
+    "scrollVertical": false,
+    "menuAbierto": false
+  }
+]

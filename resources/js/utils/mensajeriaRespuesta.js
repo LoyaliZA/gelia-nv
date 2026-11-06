@@ -1,10 +1,15 @@
 const ETIQUETAS_TIPO = {
-    imagen: '📷 Imagen',
-    video: '🎬 Video',
-    audio: '🎤 Audio',
-    archivo: '📎 Archivo',
+    imagen: 'Imagen',
+    video: 'Video',
+    audio: 'Audio',
+    archivo: 'Archivo',
+    sticker: 'Sticker',
     texto: '',
 };
+
+export function etiquetaTipoMensaje(tipo) {
+    return ETIQUETAS_TIPO[tipo] || 'Mensaje';
+}
 
 export function fragmentoRespuesta(mensaje) {
     if (!mensaje) return '';
@@ -12,6 +17,7 @@ export function fragmentoRespuesta(mensaje) {
     if (mensaje.preview) return mensaje.preview;
 
     const tipo = mensaje.tipo || 'texto';
+    if (tipo === 'sticker') return 'Sticker';
     if (tipo === 'texto' && mensaje.contenido) {
         const t = mensaje.contenido.trim();
         return t.length > 120 ? `${t.slice(0, 120)}…` : t;

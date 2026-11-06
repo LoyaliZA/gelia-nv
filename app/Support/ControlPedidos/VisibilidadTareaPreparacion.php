@@ -101,6 +101,7 @@ final class VisibilidadTareaPreparacion
                 'vendedora_nombre' => $pedido->vendedor?->name,
                 'es_t01_documental' => \App\Support\ControlPedidos\ApartadoT01::aplica($tarea->pedido),
                 'es_t02_documental' => \App\Support\ControlPedidos\TransferenciaT02::documental($pedido),
+                'es_custodia_documental' => \App\Support\ControlPedidos\CustodiaDocumentalTienda::aplica($pedido),
                 'cliente_nombre' => $pedido->cliente?->nombre_comercial ?: $pedido->cliente?->nombre ?: $pedido->contacto_nombre_snapshot,
                 'cantidad_piezas' => $pedido->cantidad_piezas,
                 'area_revision' => ($pedido->solicitud_preparacion ?? [])['area_revision'] ?? null,

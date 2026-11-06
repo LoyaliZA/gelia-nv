@@ -32,7 +32,7 @@ export default function Index({
             setError('Elige un caso y un archivo.');
             return;
         }
-        if (!sucursalId || !almacenId) {
+        if (caso.requiere_almacen && (!sucursalId || !almacenId)) {
             setError('Selecciona sucursal y almacén.');
             return;
         }
@@ -41,8 +41,10 @@ export default function Index({
         const form = new FormData();
         form.append('archivo', archivo);
         caso.operaciones.forEach((op) => form.append('operaciones[]', op));
-        form.append('almacen_id', almacenId);
-        form.append('sucursal_id', sucursalId);
+        if (caso.requiere_almacen) {
+            form.append('almacen_id', almacenId);
+            form.append('sucursal_id', sucursalId);
+        }
         try {
             const { data } = await axios.post(route('almacenes.importaciones.analizar'), form);
             router.visit(data.redirect);
@@ -74,15 +76,11 @@ export default function Index({
                 <header className={geliaCardClass('p-6')}>
                     <h1 className="text-2xl font-semibold theme-text-main">Importaciones</h1>
                     <p className="text-sm theme-text-muted mt-2 max-w-2xl">
-                        Cada caso indica qué identificador usa el archivo, qué datos puede modificar y qué datos conserva. Simular no aplica cambios al catálogo. El almacén elegido aplica a todo el archivo.
+                        Cada caso indica qué identificador usa el archivo, qué datos puede modificar y qué datos conserva. Productos y costos son del catálogo de la empresa. Existencias sí piden sucursal y almacén. Simular no aplica cambios al catálogo.
                     </p>
                 </header>
 
-                {sin_sucursales_operables ? (
-                    <div className={geliaCardClass('p-6')}>
-                        <p className="text-sm theme-text-muted">Sin sucursales operables. No se puede importar a un almacén hasta tener una sucursal asignada.</p>
-                    </div>
-                ) : casos.length === 0 ? (
+                {casos.length === 0 ? (
                     <div className={geliaCardClass('p-6')}>
                         <p className="text-sm theme-text-muted">No hay casos de importación disponibles con los permisos actuales.</p>
                     </div>
@@ -112,6 +110,11 @@ export default function Index({
                             <p className="text-sm theme-text-muted">Columnas de la plantilla: {caso.columnas}.</p>
                         )}
 
+                        {caso?.requiere_almacen && sin_sucursales_operables && (
+                            <p className="text-sm theme-text-muted">Sin sucursales operables. No se puede importar existencias hasta tener una sucursal asignada.</p>
+                        )}
+
+                        {caso?.requiere_almacen && !sin_sucursales_operables && (
                         <SelectorSucursalAlmacen
                             sucursales={sucursales}
                             almacenes={almacenes}
@@ -123,6 +126,7 @@ export default function Index({
                             requiereSucursal
                             className="theme-input w-full px-3 py-2 text-sm"
                         />
+                        )}
 
                         {caso?.plantilla && (
                             <a href={caso.plantilla} className="inline-flex items-center gap-2 text-sm font-semibold theme-text-primario hover:underline">

@@ -54,6 +54,7 @@ class ListarMediosConversacionService
         $query = MensajeAdjunto::query()
             ->whereHas('mensaje', function ($q) use ($conversacionId, $userId, $desde, $hasta) {
                 $q->where('conversacion_id', $conversacionId)
+                    ->where('tipo', '!=', Mensaje::TIPO_STICKER)
                     ->when($userId, fn ($q2) => $q2->where('user_id', $userId))
                     ->when($desde, fn ($q2) => $q2->where('created_at', '>=', $desde))
                     ->when($hasta, fn ($q2) => $q2->where('created_at', '<=', $hasta));
@@ -64,7 +65,7 @@ class ListarMediosConversacionService
             $mensaje = $adjunto->mensaje;
 
             return [
-                'id' => 'adjunto-' . $adjunto->id,
+                'id' => 'adjunto-'.$adjunto->id,
                 'tipo_item' => 'adjunto',
                 'categoria' => $this->categorizarAdjunto($adjunto, $mensaje->tipo),
                 'mensaje_id' => $mensaje->id,
@@ -100,7 +101,7 @@ class ListarMediosConversacionService
         foreach ($query->get() as $mensaje) {
             foreach ($this->extraerEnlaces($mensaje->contenido) as $index => $url) {
                 $items->push([
-                    'id' => 'enlace-' . $mensaje->id . '-' . $index,
+                    'id' => 'enlace-'.$mensaje->id.'-'.$index,
                     'tipo_item' => 'enlace',
                     'categoria' => 'enlaces',
                     'mensaje_id' => $mensaje->id,
@@ -132,7 +133,7 @@ class ListarMediosConversacionService
 
     private function extraerEnlaces(string $texto): array
     {
-        if (!preg_match_all('#https?://[^\s<>"{}|\\^`\[\]]+#iu', $texto, $matches)) {
+        if (! preg_match_all('#https?://[^\s<>"{}|\\^`\[\]]+#iu', $texto, $matches)) {
             return [];
         }
 
@@ -148,7 +149,7 @@ class ListarMediosConversacionService
 
     private function formatearUser($user): ?array
     {
-        if (!$user) {
+        if (! $user) {
             return null;
         }
 
@@ -162,7 +163,7 @@ class ListarMediosConversacionService
 
     private function parseFecha(?string $fecha, bool $inicioDia): ?Carbon
     {
-        if (!$fecha) {
+        if (! $fecha) {
             return null;
         }
 

@@ -58,7 +58,7 @@ class ImportacionLoteController extends Controller
             'archivo' => 'required|file|mimes:csv,xlsx,xls',
             'operaciones' => 'required|array|min:1',
             'operaciones.*' => 'string|in:'.implode(',', OperacionesImportacionAlmacen::todas()),
-            'almacen_id' => 'required|exists:almacenes,id',
+            'almacen_id' => 'nullable|exists:almacenes,id',
             'sucursal_id' => 'nullable|integer|exists:sucursales,id',
         ]);
 
@@ -66,6 +66,12 @@ class ImportacionLoteController extends Controller
             if (! $this->puedeOperacion($user, $operacion)) {
                 abort(403);
             }
+        }
+
+        if (OperacionesImportacionAlmacen::requiereAlmacen($validated['operaciones']) && empty($validated['almacen_id'])) {
+            throw ValidationException::withMessages([
+                'almacen_id' => 'Selecciona un almacén para las operaciones elegidas.',
+            ]);
         }
 
         if (isset($validated['almacen_id'])) {
@@ -194,6 +200,7 @@ class ImportacionLoteController extends Controller
                 'frase' => $caso['frase'],
                 'columnas' => $caso['columnas'],
                 'operaciones' => $caso['operaciones'],
+                'requiere_almacen' => OperacionesImportacionAlmacen::requiereAlmacen($caso['operaciones']),
                 'plantilla' => route('almacenes.importaciones.plantilla', ['caso' => $id]),
             ];
         }
@@ -207,10 +214,9 @@ class ImportacionLoteController extends Controller
     private function casoInicial(mixed $preset, array $casos): ?string
     {
         $id = match ((string) $preset) {
-            'productos', 'asignacion' => 'productos',
+            'productos' => 'productos',
             'costos' => 'costos',
-            'existencias' => 'existencias',
-            'inventario', 'completa' => 'completa',
+            'existencias', 'inventario', 'completa', 'asignacion' => 'existencias',
             default => null,
         };
         $ids = array_column($casos, 'id');
@@ -254,10 +260,10 @@ class ImportacionLoteController extends Controller
             ]);
         }
         if (in_array(OperacionesImportacionAlmacen::COSTOS_PRECIOS, $operaciones, true)) {
-            $tieneCosto = ! empty($mapping['costo']) || ! empty($mapping['costo_reposicion']) || ! empty($mapping['precio_venta']);
+            $tieneCosto = ! empty($mapping['costo']) || ! empty($mapping['costo_reposicion']);
             if (! $tieneCosto) {
                 throw ValidationException::withMessages([
-                    'mapping' => 'Mapea al menos costo, costo de reposición o precio de referencia.',
+                    'mapping' => 'Mapea al menos costo promedio o costo de reposición.',
                 ]);
             }
         }

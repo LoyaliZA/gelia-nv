@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Head, Link, router, useForm } from '@inertiajs/react';
-import { Package, Plus, Edit2, Trash2, X, Save, Search, Upload } from 'lucide-react';
+import { Package, Plus, Edit2, Trash2, X, Save, Search, Upload, Download } from 'lucide-react';
 import AppLayout from '@/Layouts/AppLayout';
 import GeliaPaginacion from '@/Components/GeliaPaginacion';
 import GeliaLoader from '@/Components/GeliaLoader';
@@ -14,6 +14,11 @@ import { geliaCardClass, THEME_BTN_PRIMARY, THEME_MODAL_OVERLAY, THEME_MODAL_SHE
 function normalizarSku(valor) {
     const limpio = String(valor || '').trim().replace(/^0+/, '');
     return limpio || '0';
+}
+
+function dinero(valor) {
+    if (valor == null || valor === '') return '—';
+    return `$${Number(valor).toFixed(2)}`;
 }
 
 export default function Index({ auth, productos, marcas, categorias, tipos = [], atributos = [], atributos_por_categoria = {}, extensiones_por_categoria = {}, unidades = [], fases_olfativas = [], notas_olfativas = [], canales = [], filtros }) {
@@ -40,6 +45,10 @@ export default function Index({ auth, productos, marcas, categorias, tipos = [],
         tipo_producto_id: '',
         codigo_barras: '',
         peso: '',
+        margen: '',
+        largo: '',
+        ancho: '',
+        altura: '',
         activo: true,
         atributos: {},
         extensiones: { perfumeria: vacioPerfumeria() },
@@ -67,6 +76,10 @@ export default function Index({ auth, productos, marcas, categorias, tipos = [],
         tipo_producto_id: '',
         codigo_barras: '',
         peso: '',
+        margen: '',
+        largo: '',
+        ancho: '',
+        altura: '',
         activo: true,
         atributos: {},
         extensiones: { perfumeria: vacioPerfumeria() },
@@ -95,6 +108,10 @@ export default function Index({ auth, productos, marcas, categorias, tipos = [],
             tipo_producto_id: item.tipo_producto_id || '',
             codigo_barras: item.codigo_barras || '',
             peso: item.peso || '',
+            margen: item.margen ?? '',
+            largo: item.largo ?? '',
+            ancho: item.ancho ?? '',
+            altura: item.altura ?? '',
             activo: item.activo,
         });
         setModalAbierto(true);
@@ -144,6 +161,10 @@ export default function Index({ auth, productos, marcas, categorias, tipos = [],
                 tipo_producto_id: item.tipo_producto_id || '',
                 codigo_barras: item.codigo_barras || '',
                 peso: item.peso || '',
+                margen: item.margen ?? '',
+                largo: item.largo ?? '',
+                ancho: item.ancho ?? '',
+                altura: item.altura ?? '',
                 activo: item.activo,
                 atributos: attrs,
                 extensiones: { perfumeria: notas },
@@ -307,16 +328,21 @@ export default function Index({ auth, productos, marcas, categorias, tipos = [],
                                 Catálogo de Productos
                             </h1>
                         </div>
-                        {puedeGestionar && (
-                            <div className="flex gap-2">
+                        <div className="flex gap-2">
+                            <a href={route('gestion_interna.productos.lista_precios')} className="theme-element border theme-border theme-btn-primary--compact px-4 py-2 rounded-xl font-black uppercase text-xs flex items-center gap-2 theme-text-main">
+                                <Download className="w-4 h-4" /> Lista de precios
+                            </a>
+                            {puedeGestionar && (
                                 <Link href={route('almacenes.importaciones.index', { preset: 'productos' })} className="theme-element border theme-border theme-btn-primary--compact px-4 py-2 rounded-xl font-black uppercase text-xs flex items-center gap-2 theme-text-main">
                                     <Upload className="w-4 h-4" /> Importar
                                 </Link>
+                            )}
+                            {puedeGestionar && (
                                 <button onClick={abrirNuevo} className={`${THEME_BTN_PRIMARY} theme-btn-primary--compact`}>
                                     <Plus className="w-4 h-4" /> Nuevo Producto
                                 </button>
-                            </div>
-                        )}
+                            )}
+                        </div>
                     </div>
                     <form onSubmit={buscar} className="flex gap-2 max-w-md">
                         <div className="relative flex-1">
@@ -342,12 +368,14 @@ export default function Index({ auth, productos, marcas, categorias, tipos = [],
                                     <EncabezadoOrdenable columna="categoria" etiqueta="Categoría" sortActual={filtros?.sort} dirActual={filtros?.dir} onOrdenar={handleOrdenar} />
                                     <EncabezadoOrdenable columna="codigo_barras" etiqueta="Cód. Barras" sortActual={filtros?.sort} dirActual={filtros?.dir} onOrdenar={handleOrdenar} />
                                     <EncabezadoOrdenable columna="peso" etiqueta="Peso" sortActual={filtros?.sort} dirActual={filtros?.dir} onOrdenar={handleOrdenar} alineacion="right" />
+                                    <EncabezadoOrdenable columna="margen" etiqueta="Margen" sortActual={filtros?.sort} dirActual={filtros?.dir} onOrdenar={handleOrdenar} alineacion="right" />
+                                    <EncabezadoOrdenable columna="precio_publico" etiqueta="Público general" sortActual={filtros?.sort} dirActual={filtros?.dir} onOrdenar={handleOrdenar} alineacion="right" />
                                     {puedeGestionar && <th className="px-4 py-4 text-right">Acciones</th>}
                                 </tr>
                             </thead>
                             <tbody>
                                 {lista.length === 0 ? (
-                                    <tr><td colSpan={puedeGestionar ? 8 : 7} className="px-4 py-16 text-center theme-text-muted text-sm font-bold uppercase">Sin productos registrados</td></tr>
+                                    <tr><td colSpan={puedeGestionar ? 10 : 9} className="px-4 py-16 text-center theme-text-muted text-sm font-bold uppercase">Sin productos registrados</td></tr>
                                 ) : lista.map((p) => (
                                     <tr key={p.id} className={`border-b theme-border hover:bg-black/5 dark:hover:bg-white/5 ${!p.activo ? 'opacity-50' : ''}`}>
                                         <td className="px-4 py-3">
@@ -368,6 +396,8 @@ export default function Index({ auth, productos, marcas, categorias, tipos = [],
                                         <td className="px-4 py-3 text-[11px] font-bold theme-text-main">{p.categoria?.nombre || '—'}</td>
                                         <td className="px-4 py-3 text-[11px] font-bold theme-text-main">{p.codigo_barras || '—'}</td>
                                         <td className="px-4 py-3 text-right text-[11px] font-bold theme-text-main">{p.peso ? `${p.peso} kg` : '—'}</td>
+                                        <td className="px-4 py-3 text-right text-[11px] font-bold theme-text-main">{p.margen != null && p.margen !== '' ? `${p.margen}%` : '—'}</td>
+                                        <td className="px-4 py-3 text-right text-[11px] font-bold theme-text-main">{dinero(p.precio_publico)}</td>
                                         {puedeGestionar && (
                                             <td className="px-4 py-3 text-right">
                                                 <div className="flex justify-end gap-2">
@@ -455,6 +485,35 @@ export default function Index({ auth, productos, marcas, categorias, tipos = [],
                                 <div>
                                     <label className="text-[10px] font-black uppercase theme-text-muted">Peso (kg)</label>
                                     <input type="number" step="0.001" min="0" value={data.peso} onChange={(e) => setData('peso', e.target.value)} className="theme-input w-full mt-1 px-4 py-3 text-sm font-bold" />
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-3 gap-4">
+                                <div>
+                                    <label className="text-[10px] font-black uppercase theme-text-muted">Largo (cm)</label>
+                                    <input type="number" step="0.01" min="0" value={data.largo} onChange={(e) => setData('largo', e.target.value)} className="theme-input w-full mt-1 px-4 py-3 text-sm font-bold" />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-black uppercase theme-text-muted">Ancho (cm)</label>
+                                    <input type="number" step="0.01" min="0" value={data.ancho} onChange={(e) => setData('ancho', e.target.value)} className="theme-input w-full mt-1 px-4 py-3 text-sm font-bold" />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-black uppercase theme-text-muted">Altura (cm)</label>
+                                    <input type="number" step="0.01" min="0" value={data.altura} onChange={(e) => setData('altura', e.target.value)} className="theme-input w-full mt-1 px-4 py-3 text-sm font-bold" />
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-3 gap-4">
+                                <div>
+                                    <label className="text-[10px] font-black uppercase theme-text-muted">Margen (%)</label>
+                                    <input type="number" step="0.01" min="0" max="100" value={data.margen} onChange={(e) => setData('margen', e.target.value)} className="theme-input w-full mt-1 px-4 py-3 text-sm font-bold" />
+                                    {errors.margen && <p className="text-xs text-red-500 dark:text-red-400">{errors.margen}</p>}
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-black uppercase theme-text-muted">Costo promedio</label>
+                                    <input readOnly value={itemActual?.costos?.costo != null ? Number(itemActual.costos.costo).toFixed(2) : ''} placeholder="Se edita en Costos" className="theme-input w-full mt-1 px-4 py-3 text-sm font-bold opacity-80" />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-black uppercase theme-text-muted">Público general</label>
+                                    <input readOnly value={itemActual?.precio_publico != null ? Number(itemActual.precio_publico).toFixed(2) : ''} placeholder="Se calcula con costo y margen" className="theme-input w-full mt-1 px-4 py-3 text-sm font-bold opacity-80" />
                                 </div>
                             </div>
 

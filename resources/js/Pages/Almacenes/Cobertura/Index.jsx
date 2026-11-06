@@ -85,7 +85,7 @@ export default function Index({ auth, filas, sucursales, almacenes, filtros, sin
                         <Layers className="w-7 h-7" style={{ color: 'var(--color-primario)' }} />
                         Productos por almacén
                     </h1>
-                    <p className="text-[11px] font-bold theme-text-muted">Cruce de productos con asignación, costos y cantidades de referencia. Elige un almacén para ver faltantes.</p>
+                    <p className="text-[11px] font-bold theme-text-muted">Cruce de productos con asignación y existencias. El costo y el precio de Público General son de la empresa. Elige un almacén para ver faltantes de asignación o existencia.</p>
                     {!sin_sucursales_operables && (
                         <EnlacesContextoAlmacen
                             auth={auth}
@@ -119,7 +119,7 @@ export default function Index({ auth, filas, sucursales, almacenes, filtros, sin
                                 <button type="button" onClick={() => consultar(paramsActuales({ costo: 'sin', page: 1 }))} className="px-3 py-2 text-[10px] font-black uppercase theme-element border theme-border rounded-xl">Sin costo</button>
                             </div>
                             {!almacenId && (
-                                <p className="text-[11px] font-bold theme-text-muted">Elige un almacén para evaluar asignación, costo y existencia. Sin esa elección, los indicadores no corresponden a un almacén.</p>
+                                <p className="text-[11px] font-bold theme-text-muted">El costo se muestra para la empresa. Elige un almacén para evaluar asignación y existencia.</p>
                             )}
                             {almacenId && (
                                 <p className="text-[11px] font-bold theme-text-muted">La ubicación de asignación que se muestra aquí es independiente de la ubicación de inventario. Esta pantalla no la edita.</p>
@@ -137,6 +137,7 @@ export default function Index({ auth, filas, sucursales, almacenes, filtros, sin
                                     <th className="px-4 py-3">Producto</th>
                                     <th className="px-4 py-3">Asignación</th>
                                     <th className="px-4 py-3">Costo</th>
+                                    <th className="px-4 py-3">Público general</th>
                                     <th className="px-4 py-3">Cantidad ref.</th>
                                 </tr>
                             </thead>
@@ -171,7 +172,8 @@ export default function Index({ auth, filas, sucursales, almacenes, filtros, sin
                                             <span className="text-[10px] theme-text-muted">SKU {f.sku}</span>
                                         </td>
                                         <td className="px-4 py-2">{almacenId ? (f.asignado ? `Asignado${f.ubicacion ? ` · Ubicación de asignación ${f.ubicacion}` : ''}` : 'Sin asignar') : '—'}</td>
-                                        <td className="px-4 py-2">{almacenId && f.costo != null ? Number(f.costo).toFixed(2) : (almacenId ? 'Sin costo' : '—')}</td>
+                                        <td className="px-4 py-2">{f.costo != null ? Number(f.costo).toFixed(2) : 'Sin costo'}</td>
+                                        <td className="px-4 py-2">{f.precio_publico != null ? Number(f.precio_publico).toFixed(2) : '—'}</td>
                                         <td className="px-4 py-2">{almacenId ? textoCantidad(f) : '—'}</td>
                                     </tr>
                                 ))}

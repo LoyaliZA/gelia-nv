@@ -17,6 +17,7 @@ export default function Index({
     maestro,
     presencia,
     incluye_costos: incluyeCostos,
+    costo_empresa: costoEmpresa,
     incluye_ventas: incluyeVentas,
     galeria,
     puede_gestionar_imagenes: puedeGestionar,
@@ -55,10 +56,22 @@ export default function Index({
                     {maestro.descripcion_corta && <p className="text-sm theme-text-main">{maestro.descripcion_corta}</p>}
                 </header>
 
+                {incluyeCostos && (
+                    <section className={geliaCardClass('p-4 space-y-2')}>
+                        <h2 className="text-sm font-black uppercase theme-text-main">Costo de la empresa</h2>
+                        <p className="text-[11px] font-bold theme-text-muted">
+                            Costo promedio {costoEmpresa?.costo != null ? costoEmpresa.costo : 'sin costo'}
+                            {' · '}Reposición {costoEmpresa?.costo_reposicion != null ? costoEmpresa.costo_reposicion : '—'}
+                            {' · '}Margen {costoEmpresa?.margen != null ? `${costoEmpresa.margen}%` : '—'}
+                            {' · '}Público general {costoEmpresa?.precio_publico != null ? costoEmpresa.precio_publico : '—'}
+                        </p>
+                    </section>
+                )}
+
                 <section className={geliaCardClass('p-4 space-y-3')}>
                     <h2 className="text-sm font-black uppercase theme-text-main">Presencia por almacén</h2>
                     {filas.length === 0 ? (
-                        <p className="text-[11px] font-bold theme-text-muted">No hay asignación, inventario ni costo en los almacenes operables.</p>
+                        <p className="text-[11px] font-bold theme-text-muted">No hay asignación ni inventario en los almacenes operables.</p>
                     ) : (
                         <div className="overflow-x-auto">
                             <table className="w-full text-left min-w-[760px]">
@@ -67,8 +80,6 @@ export default function Index({
                                         <th className="px-3 py-2">Almacén</th>
                                         <th className="px-3 py-2">Asignación</th>
                                         <th className="px-3 py-2">Inventario</th>
-                                        {incluyeCostos && <th className="px-3 py-2">Costo</th>}
-                                        {incluyeCostos && <th className="px-3 py-2">Precio</th>}
                                         {incluyeVentas && <th className="px-3 py-2">Ventas</th>}
                                     </tr>
                                 </thead>
@@ -81,8 +92,6 @@ export default function Index({
                                             </td>
                                             <td className="px-3 py-2">{fila.asignado ? 'Asignado' : 'Sin asignar'}</td>
                                             <td className="px-3 py-2">{textoExistencia(fila)}</td>
-                                            {incluyeCostos && <td className="px-3 py-2">{fila.tiene_costo ? fila.costo : 'Sin costo'}</td>}
-                                            {incluyeCostos && <td className="px-3 py-2">{fila.tiene_costo && fila.precio_venta != null ? fila.precio_venta : '—'}</td>}
                                             {incluyeVentas && (
                                                 <td className="px-3 py-2">
                                                     {(fila.ventas || []).length === 0 ? '—' : fila.ventas.map((venta) => (

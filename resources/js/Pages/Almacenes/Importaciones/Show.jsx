@@ -41,11 +41,11 @@ export default function Show({ auth, lote, operacionesLabels }) {
         const ops = lote.operaciones || [];
         const keys = new Set(['folio']);
         if (ops.includes('ficha_producto')) {
-            ['sku', 'descripcion', 'marca', 'categoria', 'codigo_barras', 'peso', 'activo'].forEach((k) => keys.add(k));
+            ['sku', 'descripcion', 'marca', 'categoria', 'codigo_barras', 'peso', 'margen', 'largo', 'ancho', 'altura', 'activo'].forEach((k) => keys.add(k));
         }
-        if (ops.includes('asignacion_almacen')) keys.add('ubicacion');
+        if (ops.includes('asignacion_almacen') || ops.includes('cantidades_referencia')) keys.add('ubicacion');
         if (ops.includes('cantidades_referencia')) keys.add('existencia');
-        if (ops.includes('costos_precios')) ['costo', 'costo_reposicion', 'precio_venta'].forEach((k) => keys.add(k));
+        if (ops.includes('costos_precios')) ['costo', 'costo_reposicion'].forEach((k) => keys.add(k));
         return [...keys];
     }, [lote.operaciones]);
 
@@ -61,8 +61,8 @@ export default function Show({ auth, lote, operacionesLabels }) {
             setError(`Mapea las columnas obligatorias: ${faltantes.map((k) => MAPPING_HUB_LABELS[k] || k).join(', ')}.`);
             return false;
         }
-        if (operacionesLote.includes('costos_precios') && !mapping.costo && !mapping.costo_reposicion && !mapping.precio_venta) {
-            setError('Mapea al menos costo, costo de reposición o precio de referencia.');
+        if (operacionesLote.includes('costos_precios') && !mapping.costo && !mapping.costo_reposicion) {
+            setError('Mapea al menos costo promedio o costo de reposición.');
             return false;
         }
         return true;

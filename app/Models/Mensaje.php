@@ -14,10 +14,28 @@ class Mensaje extends Model
     use BelongsToUsuario, SoftDeletes;
 
     public const TIPO_TEXTO = 'texto';
+
     public const TIPO_IMAGEN = 'imagen';
+
     public const TIPO_VIDEO = 'video';
+
     public const TIPO_AUDIO = 'audio';
+
     public const TIPO_ARCHIVO = 'archivo';
+
+    public const TIPO_STICKER = 'sticker';
+
+    public static function etiquetaTipo(string $tipo): string
+    {
+        return match ($tipo) {
+            self::TIPO_IMAGEN => 'Imagen',
+            self::TIPO_VIDEO => 'Video',
+            self::TIPO_AUDIO => 'Audio',
+            self::TIPO_ARCHIVO => 'Archivo',
+            self::TIPO_STICKER => 'Sticker',
+            default => 'Mensaje',
+        };
+    }
 
     protected $table = 'mensajes';
 

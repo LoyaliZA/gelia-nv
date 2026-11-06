@@ -26,6 +26,11 @@ class Producto extends Model
         'descripcion_corta',
         'codigo_barras',
         'peso',
+        'margen',
+        'largo',
+        'ancho',
+        'altura',
+        'precio_publico',
         'imagen_path',
         'activo',
         'es_demo',
@@ -36,6 +41,11 @@ class Producto extends Model
         return [
             'folio' => 'integer',
             'peso' => 'decimal:3',
+            'margen' => 'decimal:2',
+            'largo' => 'decimal:2',
+            'ancho' => 'decimal:2',
+            'altura' => 'decimal:2',
+            'precio_publico' => 'decimal:2',
             'activo' => 'boolean',
             'es_demo' => 'boolean',
         ];
@@ -95,9 +105,9 @@ class Producto extends Model
         return $this->hasMany(Inventario::class);
     }
 
-    public function costos(): HasMany
+    public function costos(): HasOne
     {
-        return $this->hasMany(ProductoCosto::class);
+        return $this->hasOne(ProductoCosto::class);
     }
 
     public function asignacionesAlmacen(): HasMany
@@ -119,7 +129,7 @@ class Producto extends Model
     public function getCostoAttribute(): float
     {
         $costo = $this->relationLoaded('costos')
-            ? $this->costos->first()
+            ? $this->getRelation('costos')
             : $this->costos()->first();
 
         return (float) ($costo?->costo ?? 0);
@@ -127,11 +137,7 @@ class Producto extends Model
 
     public function getPrecioVentaAttribute(): ?float
     {
-        $costo = $this->relationLoaded('costos')
-            ? $this->costos->first()
-            : $this->costos()->first();
-
-        return $costo?->precio_venta !== null ? (float) $costo->precio_venta : null;
+        return $this->precio_publico !== null ? (float) $this->precio_publico : null;
     }
 
     public static function normalizarSku(string $sku): string

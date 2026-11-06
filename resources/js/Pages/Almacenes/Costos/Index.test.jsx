@@ -24,6 +24,7 @@ let root;
 let container;
 
 beforeEach(() => {
+    globalThis.localStorage = { getItem: () => null, setItem: () => {} };
     globalThis.route = (name) => name;
     globalThis.IS_REACT_ACT_ENVIRONMENT = true;
     container = document.createElement('div');

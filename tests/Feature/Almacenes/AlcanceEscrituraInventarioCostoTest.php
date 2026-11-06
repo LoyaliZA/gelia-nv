@@ -231,57 +231,46 @@ class AlcanceEscrituraInventarioCostoTest extends TestCase
         $this->assertSame(0, AuditoriaConfiguracion::count());
     }
 
-    public function test_editar_costo_ajeno_hacia_almacen_propio_no_cambia_ni_audita(): void
+    public function test_editar_costo_de_empresa_no_exige_almacen(): void
     {
-        [$user, $propio, $ajeno] = $this->operadorCostos();
+        [$user] = $this->operadorCostos();
         $producto = $this->producto();
+        $producto->update(['margen' => 30]);
         $costo = ProductoCosto::create([
             'producto_id' => $producto->id,
-            'almacen_id' => $ajeno->id,
             'costo' => 4,
-            'precio_venta' => 9,
         ]);
 
         $this->actingAs($user)
             ->put(route('almacenes.costos.update', $costo), [
                 'producto_id' => $producto->id,
-                'almacen_id' => $propio->id,
                 'costo' => 15,
-                'precio_venta' => 30,
             ])
-            ->assertSessionHasErrors('almacen_id');
+            ->assertRedirect();
 
         $costo->refresh();
-        $this->assertSame($ajeno->id, $costo->almacen_id);
-        $this->assertSame('4.00', $costo->costo);
-        $this->assertSame('9.00', $costo->precio_venta);
-        $this->assertSame(0, AuditoriaConfiguracion::count());
+        $this->assertSame('15.00', $costo->costo);
+        $this->assertSame('19.50', $producto->fresh()->precio_publico);
+        $this->assertSame(1, AuditoriaConfiguracion::where('accion', 'Costo modificado')->count());
     }
 
-    public function test_borrar_costo_fuera_de_alcance_conserva_el_registro_y_dentro_audita(): void
+    public function test_borrar_costo_de_empresa_audita_y_conserva_el_otro(): void
     {
-        [$user, $propio, $ajeno] = $this->operadorCostos();
+        [$user] = $this->operadorCostos();
         $fuera = ProductoCosto::create([
             'producto_id' => $this->producto()->id,
-            'almacen_id' => $ajeno->id,
             'costo' => 2,
         ]);
         $dentro = ProductoCosto::create([
             'producto_id' => $this->producto()->id,
-            'almacen_id' => $propio->id,
             'costo' => 3,
         ]);
-
-        $this->actingAs($user)
-            ->delete(route('almacenes.costos.destroy', $fuera))
-            ->assertForbidden();
-        $this->assertNotNull(ProductoCosto::find($fuera->id));
-        $this->assertSame(0, AuditoriaConfiguracion::count());
 
         $this->actingAs($user)
             ->delete(route('almacenes.costos.destroy', $dentro))
             ->assertRedirect();
         $this->assertNull(ProductoCosto::find($dentro->id));
+        $this->assertNotNull(ProductoCosto::find($fuera->id));
         $this->assertSame(1, AuditoriaConfiguracion::where('accion', 'Costo eliminado')->count());
     }
 
