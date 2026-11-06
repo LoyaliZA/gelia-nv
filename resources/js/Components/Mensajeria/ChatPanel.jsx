@@ -215,7 +215,7 @@ const ChatPanel = forwardRef(function ChatPanel({
                                 label="Volver a los mensajes"
                                 onClick={onVolver}
                                 plano
-                                className={volverBreakpoint === 'md' ? 'md:hidden' : 'sm:hidden'}
+                                className={volverBreakpoint === 'siempre' ? '' : volverBreakpoint === 'md' ? 'md:hidden' : 'sm:hidden'}
                             />
                         )}
 

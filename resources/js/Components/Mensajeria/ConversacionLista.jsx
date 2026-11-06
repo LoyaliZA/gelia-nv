@@ -51,14 +51,9 @@ export default function ConversacionLista({
     onNuevoGrupo,
     onSeleccionarConversacion,
     onIrAMensaje,
-    compact = false,
-    compacta = false,
     onCerrar,
 }) {
     const [filtro, setFiltro] = useState('todos');
-    const ancho = compact || compacta
-        ? 'w-full md:w-[22rem] shrink-0'
-        : 'w-full sm:w-[22rem] lg:w-96 shrink-0';
 
     const visibles = conversaciones.filter((c) => {
         if (filtro === 'no-leidos') return c.unread_count > 0;
@@ -67,7 +62,7 @@ export default function ConversacionLista({
     });
 
     return (
-        <div className={`gelia-mensajeria-list-pane flex flex-col h-full theme-text-main border-r theme-border ${ancho}`}>
+        <div className="gelia-mensajeria-list-pane flex flex-col h-full theme-text-main border-r theme-border">
             <div className="gelia-mensajeria-list-header border-b theme-border shrink-0">
                 <div className="flex items-center min-w-0 px-1 pt-1">
                     <MensajeriaNavMenuButton plano />
@@ -142,40 +137,38 @@ export default function ConversacionLista({
 
                 {visibles.map((c) => {
                     const activa = conversacionActiva?.id === c.id;
+                    const sinLeer = c.unread_count > 0;
                     const enLinea = c.tipo !== 'grupo' && c.presencia_otro?.en_linea === true;
                     return (
                         <button
                             key={c.id}
                             type="button"
                             onClick={() => onSeleccionar(c)}
-                            className={`gelia-chat-fila w-full flex items-center gap-3 px-4 py-3 text-left border-b theme-border/40 ${
-                                activa ? 'gelia-chat-fila--activa' : ''
-                            }`}
+                            aria-current={activa ? 'true' : undefined}
+                            className={`gelia-chat-fila ${activa ? 'gelia-chat-fila--activa' : ''} ${sinLeer ? 'gelia-chat-fila--sin-leer' : ''}`}
                         >
                             <AvatarUsuario
                                 foto={c.foto}
                                 nombre={c.nombre}
                                 esGrupo={c.tipo === 'grupo'}
                                 enLinea={enLinea}
+                                className="w-12 h-12"
+                                iconClassName="w-6 h-6"
                             />
-                            <div className="flex-1 min-w-0">
-                                <div className="flex items-baseline justify-between gap-2">
-                                    <p className="text-sm font-semibold theme-text-main truncate m-0">{c.nombre}</p>
-                                    <span className="text-[11px] theme-text-muted shrink-0">
-                                        {formatearFecha(c.ultimo_mensaje_at)}
-                                    </span>
-                                </div>
-                                <div className="flex items-center justify-between gap-2 mt-0.5">
-                                    <p className="text-[13px] theme-text-muted truncate m-0">
-                                        {c.ultimo_mensaje_preview || 'Sin mensajes'}
-                                    </p>
-                                    {c.unread_count > 0 && (
+                            <span className="gelia-chat-fila__cuerpo">
+                                <span className="gelia-chat-fila__tope">
+                                    <span className="gelia-chat-fila__nombre">{c.nombre}</span>
+                                    <span className="gelia-chat-fila__hora">{formatearFecha(c.ultimo_mensaje_at)}</span>
+                                </span>
+                                <span className="gelia-chat-fila__base">
+                                    <span className="gelia-chat-fila__preview">{c.ultimo_mensaje_preview || 'Sin mensajes'}</span>
+                                    {sinLeer && (
                                         <span className="gelia-chat-no-leidos">
                                             {c.unread_count > 9 ? '9+' : c.unread_count}
                                         </span>
                                     )}
-                                </div>
-                            </div>
+                                </span>
+                            </span>
                         </button>
                     );
                 })}

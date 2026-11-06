@@ -47,7 +47,20 @@
 }
 
 .gelia-mensajeria-list-pane {
-    background-color: color-mix(in srgb, var(--theme-element-bg) 55%, var(--theme-surface-bg));
+    width: 100%;
+    min-width: 0;
+    background-color: var(--theme-surface-bg);
+}
+
+.gelia-mensajeria-list-wrap {
+    flex: 0 0 24rem;
+    width: 24rem;
+    max-width: 100%;
+}
+
+.gelia-mensajeria-list-wrap .gelia-mensajeria-list-pane {
+    width: 100%;
+    max-width: none;
 }
 
 .gelia-mensajeria-chat-pane {
@@ -733,14 +746,105 @@ html.glass-active .gelia-buscador-mensajeria-panel.theme-no-blur {
 }
 
 .gelia-chat-fila {
-    min-height: 4.5rem;
+    position: relative;
+    display: flex;
+    align-items: stretch;
+    gap: 0.85rem;
+    width: 100%;
+    min-height: 4.75rem;
+    margin: 0;
+    padding: 0.55rem 0.85rem 0 1rem;
+    border: 0;
     background: transparent;
-    transition: background-color 0.18s ease;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
 }
 
-.gelia-chat-fila:hover,
+.gelia-chat-fila__cuerpo {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.2rem;
+    padding-bottom: 0.7rem;
+    border-bottom: 1px solid color-mix(in srgb, var(--theme-border) 80%, transparent);
+}
+
+.gelia-chat-fila:last-child .gelia-chat-fila__cuerpo {
+    border-bottom-color: transparent;
+}
+
+.gelia-chat-fila__tope,
+.gelia-chat-fila__base {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    min-width: 0;
+}
+
+.gelia-mensajeria-module .gelia-chat-fila__nombre,
+.gelia-chat-fila__nombre {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--theme-text-main);
+}
+
+.gelia-chat-fila--sin-leer .gelia-chat-fila__nombre {
+    font-weight: 700;
+}
+
+.gelia-chat-fila__hora,
+.gelia-chat-fila__preview {
+    color: var(--theme-text-muted);
+}
+
+.gelia-chat-fila__hora {
+    flex-shrink: 0;
+    font-size: 0.75rem;
+}
+
+.gelia-mensajeria-module .gelia-chat-fila--sin-leer .gelia-chat-fila__hora {
+    color: var(--color-primario);
+    font-weight: 600;
+}
+
+.gelia-chat-fila__preview {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.8125rem;
+}
+
+.gelia-chat-fila .gelia-avatar-marco {
+    align-self: center;
+    margin-bottom: 0.7rem;
+}
+
+.gelia-chat-fila:hover {
+    background: color-mix(in srgb, var(--theme-text-main) 4%, transparent);
+}
+
 .gelia-chat-fila--activa {
-    background: color-mix(in srgb, var(--color-primario) 12%, transparent);
+    background: color-mix(in srgb, var(--color-primario) 10%, transparent);
+}
+
+.gelia-chat-fila--activa::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0.55rem;
+    bottom: 0.55rem;
+    width: 3px;
+    border-radius: 0 3px 3px 0;
+    background: var(--color-primario);
 }
 
 .gelia-chat-no-leidos {
