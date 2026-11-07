@@ -17,7 +17,7 @@ use App\Support\ControlPedidos\AtencionMismoDiaTienda;
 use App\Support\ControlPedidos\EstatusSucursalPedidoBma;
 use App\Support\ControlPedidos\InstruccionEntrega;
 use App\Support\ControlPedidos\MaquinaEstadosCumplimientoFisico;
-use App\Support\ControlPedidos\TransferenciaT02;
+use App\Support\ControlPedidos\CustodiaDocumentalTienda;
 use App\Support\ControlPedidos\VisibilidadPedidoBma;
 use App\Support\PuntoVenta\Resguardos\GeneradorCodigoEtiquetaResguardoPdv;
 use Carbon\Carbon;
@@ -60,10 +60,11 @@ final class TransferenciaTiendaService
         $json = $pedido->solicitud_preparacion_json ?? [];
         $operacion = $json['transferencia_tienda'] ?? [];
         $md = AtencionMismoDiaTienda::datos($pedido);
+        $credito = CustodiaDocumentalTienda::credito($pedido);
         $resguardo = $this->resguardo($pedido);
         $remision = $pedido->documentos()->where('tipo', PedidoBmaDocumento::TIPO_REMISION)->where('activo', true)->oldest()->first();
         $desde = isset($json['remision_tienda']['emitida_at']) ? Carbon::parse($json['remision_tienda']['emitida_at']) : $remision?->created_at;
-        $limite = $md ? null : $desde?->copy()->addDays(app(ConfiguracionOperativaTienda::class)->diasRecoleccion($pedido));
+        $limite = ($md || $credito) ? null : $desde?->copy()->addDays(app(ConfiguracionOperativaTienda::class)->diasRecoleccion($pedido));
         $estado = match ($resguardo?->estado) {
             ResguardoPdv::ESTADO_ENTREGADO => 'entregada',
             ResguardoPdv::ESTADO_EN_CUSTODIA => 'en_custodia',
@@ -77,7 +78,7 @@ final class TransferenciaTiendaService
         }
         $custodiaDestino = app(MovimientosTiendaService::class)->tieneCustodiaDestino((int) $pedido->sucursal_destino_id);
         $derivacion = preg_match('/city[\s-]*center/iu', $pedido->sucursalDestino?->nombre ?? '') ? 'T-03' : null;
-        $listo = ! $pedido->tieneSinExistenciaAbierta() && $pedido->consultaCerrada() && $pedido->tienePagoValidado() && $pedido->tieneRemision()
+        $listo = (! $credito || ($json['credito_wizerp']['resultado'] ?? '') === 'aprobado') && ! $pedido->tieneSinExistenciaAbierta() && $pedido->consultaCerrada() && $pedido->tienePagoValidado() && $pedido->tieneRemision()
             && filled($pedido->numero_remision) && (int) $pedido->sucursal_destino_id > 0
             && ! $pedido->motivoBloqueoEntregaTienda() && ! $pedido->cancelado_at
             && ! $pedido->consulta_actualizacion_pendiente && ! $resguardo?->entrega_bloqueada
@@ -85,8 +86,10 @@ final class TransferenciaTiendaService
             && ! (($json['segundo_traslado']['estado'] ?? '') === 'autorizada' && ! ($json['segundo_traslado']['recepcion_confirmada'] ?? false));
 
         return [
-            'aplica' => TransferenciaT02::documental($pedido),
-            'flujo' => $md ? 'T-02.1' : 'T-02',
+            'aplica' => CustodiaDocumentalTienda::aplica($pedido),
+            'flujo' => $credito ? 'T-09' : ($md ? 'T-02.1' : 'T-02'),
+            'cobertura' => $json['cobertura_tienda']['tipo'] ?? null,
+            'credito_wizerp' => $json['credito_wizerp'] ?? null,
             'atencion_md' => $md,
             'solicitud_preparacion' => $pedido->solicitud_preparacion,
             'derivacion' => $derivacion,
@@ -136,8 +139,8 @@ final class TransferenciaTiendaService
         return DB::transaction(function () use ($pedido, $actor, $accion, $datos) {
             $pedido = PedidoBma::query()->lockForUpdate()->findOrFail($pedido->id);
             $this->assertVisible($pedido, $actor);
-            if (! TransferenciaT02::documental($pedido)) {
-                throw ValidationException::withMessages(['modalidad' => 'Esta operación corresponde a transferencia documental de Tienda, ordinaria o TIENDA MD.']);
+            if (! CustodiaDocumentalTienda::aplica($pedido)) {
+                throw ValidationException::withMessages(['modalidad' => 'Esta operación corresponde a pedidos de Tienda con transferencia o crédito.']);
             }
             $json = $pedido->solicitud_preparacion_json ?? [];
             $operacion = $json['transferencia_tienda'] ?? [];

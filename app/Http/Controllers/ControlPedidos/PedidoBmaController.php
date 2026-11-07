@@ -388,7 +388,7 @@ class PedidoBmaController extends Controller
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
-        return response()->json(array_merge(['ok' => true], $this->contextoRegistrarTienda($pedido)));
+        return response()->json(array_merge(['ok' => true], \App\Support\ControlPedidos\LecturaFinancieraPedido::de($pedido), $this->contextoRegistrarTienda($pedido)));
     }
 
     public function resolverSegundoTraslado(
@@ -573,19 +573,22 @@ class PedidoBmaController extends Controller
     }
 
     public function enviar(
+        Request $request,
         PedidoBma $pedidoBma,
         ListarPedidosBmaService $listarService,
         EnviarPedidoBmaService $enviarService
-    ): RedirectResponse {
+    ): RedirectResponse|JsonResponse {
         Gate::authorize('control_pedidos.crear');
         $listarService->asegurarAcceso($pedidoBma, Auth::user());
 
         try {
-            $enviarService->ejecutar($pedidoBma, Auth::id());
+            $pedido = $enviarService->ejecutar($pedidoBma, Auth::id());
         } catch (\InvalidArgumentException|\RuntimeException $e) {
+            if ($request->expectsJson()) return response()->json(['message' => $e->getMessage()], 422);
             return redirect()->back()->with('error', $e->getMessage());
         }
 
+        if ($request->expectsJson()) return response()->json(array_merge(\App\Support\ControlPedidos\LecturaFinancieraPedido::de($pedido), $this->contextoRegistrarTienda($pedido)));
         return redirect()->back()->with('success', 'Pedido enviado al auxiliar.');
     }
 

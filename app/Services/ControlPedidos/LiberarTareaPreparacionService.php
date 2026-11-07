@@ -150,7 +150,7 @@ class LiberarTareaPreparacionService
                     $pedido->estatus->id,
                     $pedido->estatus->id,
                     $incidencia !== ''
-                        ? 'Liberación con incidencia: '.$incidencia
+                        ? 'Liberación con detalle de producto: '.$incidencia
                         : 'Mercancía liberada por cancelación operativa.',
                     $accionHist
                 );

@@ -1,10 +1,11 @@
 import { uuidSolicitud } from '../../../utils/uuidSolicitud';
+import AccionPrincipalTienda from './AccionPrincipalTienda';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
-import { AlertTriangle, RotateCcw, Pencil, ChevronDown, CheckCircle2, ClipboardCheck, Clock, PackageMinus, PackagePlus, FileImage, Search } from 'lucide-react';
+import { AlertTriangle, RotateCcw, ChevronDown, CheckCircle2, ClipboardCheck, Clock, PackageMinus, PackagePlus, FileImage, Search, Send, Package } from 'lucide-react';
 import {
     GELIA_BTN_OUTLINE,
-    GELIA_SEGMENT_TABS_TRACK_COMPACT,
+    GELIA_ICON_BOX,
     THEME_BTN_PRIMARY,
     THEME_BTN_SECONDARY,
     THEME_INPUT,
@@ -15,11 +16,12 @@ import {
 import SelectorProducto from '../../../Components/Almacenes/SelectorProducto';
 import GaleriaEvidenciasPedido from './GaleriaEvidenciasPedido';
 import AvisoOperativoPedido from './AvisoOperativoPedido';
-import ModalVistaPreviaDocumento, { MiniaturaDocumento } from './ModalVistaPreviaDocumento';
+import ModalVistaPreviaDocumento from './ModalVistaPreviaDocumento';
 import { formatearFechaNegocio } from './pedidosBmaStyles';
 import AccionesRapidasDisponibilidad from './AccionesRapidasDisponibilidad';
 import ResumenCambiosDisponibilidad from './ResumenCambiosDisponibilidad';
 import RespuestaPreparacionTienda from './RespuestaPreparacionTienda';
+import RespuestaDisponibilidadPedido from './RespuestaDisponibilidadPedido';
 
 const ESTADOS_REVISION = ['sin_excepciones', 'excepciones_pendientes', 'decision_registrada'];
 const MOTIVOS_RETIRO = [
@@ -75,22 +77,6 @@ function piezasRespuesta(tarea, revisiones = []) {
 }
 
 
-function detalleRevision(area, estado) {
-    if (estado === 'excepciones_pendientes') {
-        return 'Con incidencias';
-    }
-    if (estado === 'sin_excepciones' && area === 'preparacion_tienda') {
-        return 'Sin incidencias';
-    }
-    if (estado === 'sin_excepciones') {
-        return 'Sin incidencias';
-    }
-    if (estado === 'decision_registrada') {
-        return 'Revisión registrada';
-    }
-    return '';
-}
-
 function PanelEspera({ label, icon: Icono, children }) {
     return (
         <div
@@ -101,7 +87,7 @@ function PanelEspera({ label, icon: Icono, children }) {
                 backgroundColor: 'color-mix(in srgb, var(--color-aviso) 14%, var(--theme-surface-solid))',
             }}
         >
-            <p className="text-xs font-bold m-0" style={{ color: 'var(--color-aviso)' }}>{label}</p>
+            <p className="text-xs font-bold m-0" style={{ color: 'var(--theme-text-main)' }}>{label}</p>
             <div className="flex items-start gap-2 text-sm theme-text-main">
                 {Icono && <Icono className="w-4 h-4 shrink-0 mt-0.5" style={{ color: 'var(--color-aviso)' }} aria-hidden="true" />}
                 <div className="min-w-0">{children}</div>
@@ -130,61 +116,28 @@ function EsperaRevision({ area, nombreAlmacen }) {
 function ResultadoDisponibilidad({ area, pedido, revisiones, onVer, accionesDePieza }) {
     const revision = pedido?.solicitud_preparacion?.revision_disponibilidad;
     if (!revision?.estado || preparacionVisible(pedido?.tarea_preparacion)) return null;
-    const preparacion = preparacionVisible(pedido?.tarea_preparacion);
-    const evidencias = (pedido?.documentos || []).filter((documento) => {
-        if (documento?.tipo !== 'evidencia_condicion' || !documento?.url || documento?.activo === false) return false;
-        if (documento.relacion_tipo === 'retiro_piezas' || documento.relacion_tipo === 'retiro_peticion_cliente') return false;
-        if (String(documento.comentario || '').startsWith('Evidencia petición')) return false;
-        return !documento.relacion_tipo || documento.relacion_tipo === 'revision_general';
-    });
-    const responsable = pedido?.pesaje_respondido_por?.name || pedido?.pesajeRespondidoPor?.name || '';
-    const titulo = area === 'preparacion_tienda' ? 'Resultado de la revisión en tienda' : 'Resultado de la consulta en CEDIS';
-    const piezas = (revisiones || []).filter((pieza) =>
-        ['regular', 'malo', 'danado', 'sin_existencia'].includes(pieza?.estado_fisico),
-    );
-
-    return (
-        <section className="registrar-tienda-panel space-y-3" aria-label={titulo}>
-            <div className="registrar-tienda-seccion-titulo">
-                <ClipboardCheck size={18} aria-hidden="true" />
-                <h3>{titulo}</h3>
-            </div>
-            <p className="text-sm theme-text-muted m-0">
-                {responsable ? `Respondió ${responsable}` : 'Respuesta registrada'}
-                {revision.respondida_at ? ` · ${formatearFechaNegocio(revision.respondida_at)}` : ''}
-            </p>
-            <p className="text-sm theme-text-main m-0">{detalleRevision(area, revision.estado)}</p>
-            {!preparacion && piezas.length > 0 && (
-                <ul className="m-0 pl-4 grid gap-1">
-                    {piezas.map((pieza) => (
-                        <li key={pieza.id || `${pieza.descripcion_producto}-${pieza.sku}`} className="text-sm theme-text-main">
-                            {pieza.descripcion_producto || pieza.descripcion}
-                            {pieza.cantidad_solicitada ? ` · ${pieza.cantidad_solicitada}` : ''}
-                            {pieza.comentario ? ` · ${pieza.comentario}` : ''}
-                            {accionesDePieza?.(pieza)}
-                        </li>
-                    ))}
-                </ul>
-            )}
-            {!preparacion && evidencias.length > 0 && (
-                <div className="grid gap-2">
-                    <p className="text-sm font-semibold theme-text-main m-0">Evidencia de la revisión</p>
-                    <div className="flex flex-wrap gap-2">
-                        {evidencias.map((documento, indice) => (
-                            <MiniaturaDocumento
-                                key={documento.id || indice}
-                                documento={documento}
-                                onVer={() => onVer(evidencias, indice)}
-                            />
-                        ))}
-                    </div>
-                </div>
-            )}
-        </section>
-    );
+    const documentos = (pedido.documentos || []).filter(d => d.tipo === 'evidencia_condicion' && d.url && d.activo !== false && !String(d.comentario || '').startsWith('Evidencia petición'));
+    const capturas = documentos.filter(d => !d.relacion_tipo || d.relacion_tipo === 'revision_general');
+    const generales = capturas.filter(d => !revision.evidencia_actual_ids || revision.evidencia_actual_ids.includes(d.id));
+    const anteriores = capturas.filter(d => revision.evidencia_actual_ids && !revision.evidencia_actual_ids.includes(d.id));
+    const piezas = (revisiones || []).filter(p => ['regular', 'malo', 'danado', 'sin_existencia'].includes(p.estado_fisico));
+    const filas = piezas.map(p => ({
+        id: p.id, descripcion: p.descripcion_producto || p.descripcion, sku: p.sku,
+        cantidad: p.cantidad_encontrada ?? (p.estado_fisico === 'sin_existencia' ? 0 : p.cantidad_solicitada),
+        estado_fisico: p.estado_fisico, unica_pieza: p.unica_pieza, mejor_ejemplar: p.mejor_ejemplar,
+        observacion: p.comentario, original: p,
+        documentos: documentos.filter(d => d.relacion_tipo === 'revision_producto' && Number(d.relacion_id) === Number(p.id)),
+    }));
+    return <RespuestaDisponibilidadPedido
+        titulo="Respuesta de disponibilidad" origen={area === 'preparacion_tienda' ? 'Tienda' : 'CEDIS'} ariaLabel={area === 'preparacion_tienda' ? 'Resultado de la revisión en tienda' : 'Resultado de la consulta en CEDIS'}
+        responsable={pedido.pesaje_respondido_por?.name || pedido.pesajeRespondidoPor?.name || revision.respondida_por_nombre || (pedido.historial || []).find(h => Number(h.usuario?.id) === Number(revision.respondida_por_id))?.usuario?.name}
+        fecha={revision.respondida_at} estado={revision.estado} aceptacionVigente={revision.aceptacion_vigente !== false}
+        filas={filas} generales={generales} anteriores={anteriores} cantidad={piezas.length ? piezas.reduce((s,p) => s + Number(p.cantidad_solicitada || 0), 0) : null}
+        onVer={onVer} accionesDePieza={accionesDePieza}
+    />;
 }
 
-function ConfirmacionSolicitud({ pedidoId, visible, cerrada, onCerrada, faltante, onReabrir, soloLectura }) {
+function ConfirmacionSolicitud({ pedidoId, visible, cerrada, onCerrada, faltante, onReabrir, soloLectura, destinoAccion, area }) {
     const [ocupado, setOcupado] = useState(false);
     const [error, setError] = useState('');
     if (!visible && !cerrada) return null;
@@ -220,15 +173,15 @@ function ConfirmacionSolicitud({ pedidoId, visible, cerrada, onCerrada, faltante
                     {error}
                 </p>
             )}
-            <button
+            <AccionPrincipalTienda destino={destinoAccion}><button
                 type="button"
-                className={`${THEME_BTN_PRIMARY} mt-3 min-h-[44px] w-full sm:w-auto`}
+                className={`${THEME_BTN_PRIMARY} ${destinoAccion === undefined ? 'mt-3' : ''} min-h-[44px] w-full sm:w-auto`}
                 disabled={ocupado}
                 onClick={cerrar}
             >
                 <CheckCircle2 className="w-4 h-4" aria-hidden="true" />
-                {ocupado ? 'Confirmando…' : 'Cerrar consulta'}
-            </button>
+                {ocupado ? 'Confirmando…' : destinoAccion === undefined ? 'Cerrar consulta' : area === 'preparacion_tienda' ? 'Confirmar separación de pedido en Tienda' : 'Confirmar mercancía y cerrar consulta'}
+            </button></AccionPrincipalTienda>
         </PanelEspera>
     );
 }
@@ -448,33 +401,25 @@ export function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso
     };
 
     return (
-        <section className="registrar-tienda-panel" aria-label="Ajuste de piezas">
+        <section className="registrar-tienda-panel tienda-ajustes" aria-label="Ajuste de piezas">
             <div className="registrar-tienda-seccion-titulo">
                 <PackageMinus size={18} aria-hidden="true" />
                 <h3>Ajuste de piezas</h3>
             </div>
-            <div className="grid gap-3">
-            <p className="text-sm theme-text-muted m-0">
-                Solicita un cambio al auxiliar.
-            </p>
-            <div className={`gelia-segment ${GELIA_SEGMENT_TABS_TRACK_COMPACT}`} role="tablist" aria-label="Tipo de ajuste">
-                <button type="button" role="tab" className="gelia-segment-btn min-h-[44px]" aria-selected={modo === 'anexo'} data-active={modo === 'anexo'} onClick={() => setModo('anexo')}>
-                    <PackagePlus size={16} aria-hidden="true" /> Agregar piezas
-                </button>
-                <button type="button" role="tab" className="gelia-segment-btn min-h-[44px]" aria-selected={modo === 'retiro'} data-active={modo === 'retiro'} onClick={() => setModo('retiro')}>
-                    <PackageMinus size={16} aria-hidden="true" /> Retirar piezas
-                </button>
-            </div>
+            <p className="text-sm theme-text-muted m-0">Solicita un cambio a quien revisó el pedido.</p>
+            <div className="tienda-ajustes-layout">
+                <aside className="tienda-ajustes-opciones">
+                    <fieldset><legend><Package size={16} aria-hidden />1. Tipo de ajuste</legend>
+                        {[['anexo', 'Agregar piezas', PackagePlus], ['retiro', 'Retirar piezas', PackageMinus]].map(([valor, texto, Icono]) => <button key={valor} type="button" className="tienda-ajustes-opcion" aria-pressed={modo === valor} disabled={ocupado} onClick={() => setModo(valor)}><Icono size={20} aria-hidden /><span>{texto}</span>{modo === valor && <CheckCircle2 size={16} aria-hidden />}</button>)}
+                    </fieldset>
+                    <fieldset><legend><FileImage size={16} aria-hidden />2. Identificación de piezas</legend>
+                        {[['documento', 'PDF / imágenes', FileImage], ['catalogo', 'SKU / nombre', Search]].map(([valor, texto, Icono]) => <button key={valor} type="button" className="tienda-ajustes-opcion" aria-pressed={(modo === 'anexo' ? entrada : entradaRetiro) === valor} disabled={ocupado} onClick={() => modo === 'anexo' ? setEntrada(valor) : setEntradaRetiro(valor)}><Icono size={20} aria-hidden /><span>{texto}</span>{(modo === 'anexo' ? entrada : entradaRetiro) === valor && <CheckCircle2 size={16} aria-hidden />}</button>)}
+                    </fieldset>
+                </aside>
+                <div className="tienda-ajustes-captura">
+                    <div className="tienda-ajustes-captura-titulo">{modo === 'anexo' ? <PackagePlus size={20} aria-hidden /> : <PackageMinus size={20} aria-hidden />}<h4>{modo === 'anexo' ? 'Agregar piezas' : 'Retirar piezas'} · {(modo === 'anexo' ? entrada : entradaRetiro) === 'documento' ? 'PDF / imágenes' : 'SKU / nombre'}</h4></div>
             {modo === 'anexo' ? (
                 <div className="grid gap-3">
-                    <div className={`gelia-segment ${GELIA_SEGMENT_TABS_TRACK_COMPACT}`} role="tablist" aria-label="Forma del anexo">
-                        <button type="button" role="tab" className="gelia-segment-btn min-h-[44px]" aria-selected={entrada === 'documento'} data-active={entrada === 'documento'} onClick={() => setEntrada('documento')}>
-                            <FileImage size={16} aria-hidden="true" /> PDF / imágenes
-                        </button>
-                        <button type="button" role="tab" className="gelia-segment-btn min-h-[44px]" aria-selected={entrada === 'catalogo'} data-active={entrada === 'catalogo'} onClick={() => setEntrada('catalogo')}>
-                            <Search size={16} aria-hidden="true" /> SKU / nombre
-                        </button>
-                    </div>
                     {entrada === 'documento' ? (
                         <p className="text-sm theme-text-muted m-0">
                             Adjunta las piezas a agregar.
@@ -482,7 +427,7 @@ export function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso
                     ) : (
                         <div className="grid gap-3">
                             <p className="text-sm theme-text-muted m-0">Busca en el catálogo e indica la cantidad.</p>
-                            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_6rem_auto] sm:items-end">
+                            <div className="tienda-ajustes-producto-campos">
                                 <div className="min-w-0">
                                     <label className={THEME_LABEL} htmlFor="ajuste-buscar-producto">Producto</label>
                                     <SelectorProducto
@@ -517,31 +462,23 @@ export function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso
                         <label className={THEME_LABEL} htmlFor="ajuste-nota">Nota (opcional)</label>
                         <input id="ajuste-nota" className={campo} value={nota} onChange={(evento) => setNota(evento.target.value)} />
                     </div>
-                    <GaleriaEvidenciasPedido compacto id="ajuste-evidencia" label={entrada === 'documento' ? 'Piezas a agregar' : 'Soporte del agregado'}
+                    <GaleriaEvidenciasPedido compacto etiquetaAdjuntar="Adjuntar archivos" id="ajuste-evidencia" label={entrada === 'documento' ? 'Piezas a agregar' : 'Soporte del agregado'}
                         obligatorio maxArchivos={1} archivos={evidenciaAnexo ? [evidenciaAnexo] : []}
                         previews={previewAnexo} disabled={ocupado}
                         onChange={archivos => setEvidenciaAnexo(archivos[0] || null)} onVer={onVer} />
                     <button type="button" className={`${THEME_BTN_PRIMARY} min-h-[44px] justify-self-start`} disabled={ocupado} onClick={solicitarAnexo}>
-                        {ocupado ? 'Enviando…' : 'Solicitar agregado'}
+                        <Send size={16} aria-hidden />{ocupado ? 'Enviando…' : 'Solicitar agregado'}
                     </button>
                 </div>
             ) : (
                 <div className="grid gap-3">
-                    <div className={`gelia-segment ${GELIA_SEGMENT_TABS_TRACK_COMPACT}`} role="tablist" aria-label="Forma del retiro">
-                        <button type="button" role="tab" className="gelia-segment-btn min-h-[44px]" aria-selected={entradaRetiro === 'documento'} data-active={entradaRetiro === 'documento'} onClick={() => setEntradaRetiro('documento')}>
-                            <FileImage size={16} aria-hidden="true" /> PDF / imágenes
-                        </button>
-                        <button type="button" role="tab" className="gelia-segment-btn min-h-[44px]" aria-selected={entradaRetiro === 'catalogo'} data-active={entradaRetiro === 'catalogo'} onClick={() => setEntradaRetiro('catalogo')}>
-                            <Search size={16} aria-hidden="true" /> SKU / nombre
-                        </button>
-                    </div>
                     <p className="text-sm theme-text-muted m-0">
                         {entradaRetiro === 'documento'
                             ? 'Adjunta las piezas a retirar.'
                             : 'Selecciona las piezas a retirar o búscalas en el catálogo.'}
                     </p>
                     {entradaRetiro === 'documento' && (
-                        <GaleriaEvidenciasPedido compacto
+                        <GaleriaEvidenciasPedido compacto etiquetaAdjuntar="Adjuntar archivos"
                             id="retiro-piezas-documento"
                             label="Piezas a retirar"
                             obligatorio
@@ -586,7 +523,7 @@ export function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso
                     )}
                     {entradaRetiro === 'catalogo' && mostrarBusqueda && (
                         <div className="grid gap-3">
-                            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_6rem_auto] sm:items-end">
+                            <div className="tienda-ajustes-producto-campos">
                                 <div className="min-w-0">
                                     <label className={THEME_LABEL} htmlFor="retiro-buscar-producto">Producto</label>
                                     <SelectorProducto
@@ -644,7 +581,7 @@ export function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso
                             <textarea id="retiro-motivo-libre" className={`${THEME_TEXTAREA} w-full text-base`} rows={2} value={motivoLibre} onChange={(evento) => setMotivoLibre(evento.target.value)} />
                         </div>
                     )}
-                    <GaleriaEvidenciasPedido compacto
+                    <GaleriaEvidenciasPedido compacto etiquetaAdjuntar="Adjuntar archivos"
                         id="retiro-evidencia"
                         label="Evidencia petición cliente"
                         archivos={evidenciasRetiro}
@@ -667,6 +604,7 @@ export function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso
                 </p>
             )}
             </div>
+            </div>
         </section>
     );
 }
@@ -683,6 +621,7 @@ export default function SeguimientoSolicitudTienda({
     onPedidoActualizado,
     onConsultaReabierta,
     soloLectura = false,
+    destinoAccion,
 }) {
     const [solicitud, setSolicitud] = useState(pedido?.solicitud_preparacion || {});
     const [lectura, setLectura] = useState(null);
@@ -699,8 +638,10 @@ export default function SeguimientoSolicitudTienda({
         catch (e) { setAviso(mensajeDe(e, 'No se pudo reabrir la consulta.')); } finally { setReabriendo(false); }
     };
     const accionesDePieza = pieza => {
-        const revision = filas.find(r => (pieza.descripcion_producto && Number(r.id) === Number(pieza.id)) || (r.sku && r.sku === pieza.sku) || (!r.sku && r.descripcion_producto === (pieza.descripcion || pieza.descripcion_producto)));
-        return revision ? <AccionesRapidasDisponibilidad key={revision.id} pedidoId={pedidoId} pieza={revision} almacenId={visto?.almacen_id || visto?.tarea_preparacion?.almacen?.id} soloLectura={soloLectura || cerrada} onActualizar={aplicar} onVer={(documentos, indice) => setVista({ documentos, indice })} /> : null;
+        const idRevision = pieza.revision_id || (pieza.descripcion_producto ? pieza.id : null);
+        const coincidencias = filas.filter(r => pieza.sku ? r.sku === pieza.sku : r.descripcion_producto === (pieza.descripcion || pieza.descripcion_producto));
+        const revision = idRevision ? filas.find(r => Number(r.id) === Number(idRevision)) : coincidencias.length === 1 ? coincidencias[0] : null;
+        return revision ? <AccionesRapidasDisponibilidad key={revision.id} compacta pedidoId={pedidoId} pieza={revision} almacenId={visto?.almacen_id || visto?.tarea_preparacion?.almacen?.id} soloLectura={soloLectura || cerrada} onActualizar={aplicar} onVer={(documentos, indice) => setVista({ documentos, indice })} /> : null;
     };
     const faltante = filas.some(p => p.estado_fisico === 'sin_existencia' && !p.resolucion);
 
@@ -717,8 +658,9 @@ export default function SeguimientoSolicitudTienda({
     }, [pedido, marcaRespuesta]);
     const emitida = respuestaDeTiendaEmitida({ ...pedido, solicitud_preparacion: solicitud });
     const estado = solicitud?.revision_disponibilidad?.estado;
-    const puedeConfirmar = !soloLectura && emitida && !cerrada && Boolean(visto?.puede_cerrar_consulta) && !faltante;
-    const causaCierre = pedido?.motivo_bloqueo_cierre
+    const ajustePendiente = solicitud?.revision_disponibilidad?.aceptacion_vigente === false || (solicitud?.retiro_piezas || []).some(r => (r.estado || 'pendiente') === 'pendiente');
+    const puedeConfirmar = !ajustePendiente && !soloLectura && emitida && !cerrada && Boolean(visto?.puede_cerrar_consulta) && !faltante;
+    const causaCierre = visto?.motivo_bloqueo_cierre
         || (solicitud?.revision_disponibilidad?.aceptacion_vigente === false ? 'Hay un ajuste pendiente. La aceptación de esta versión no sigue vigente.' : '')
         || ((solicitud?.retiro_piezas || []).some((retiro) => (retiro?.estado || 'pendiente') === 'pendiente') ? 'Hay un retiro pendiente de atención por el auxiliar.' : '');
 
@@ -728,7 +670,7 @@ export default function SeguimientoSolicitudTienda({
     }
 
     return (
-        <div className="mt-4 grid gap-4 theme-text-main">
+        <div className="tienda-seguimiento mt-4 grid gap-4 theme-text-main">
             {aviso && (
                 <p className="text-sm theme-text-main m-0 break-words" role="status">
                     {aviso}
@@ -748,11 +690,11 @@ export default function SeguimientoSolicitudTienda({
                 onVer={(documentos, indice) => setVista({ documentos, indice })}
             />
             <ResumenCambiosDisponibilidad solicitud={solicitud} documentos={visto?.documentos || []} onVer={(documentos, indice) => setVista({ documentos, indice })} />
-            {!soloLectura && !cerrada && <button type="button" className={`${GELIA_BTN_OUTLINE} justify-self-start`} aria-expanded={modificar} onClick={() => setModificar(!modificar)}><Pencil size={16} />Modificar pedido<ChevronDown size={16} /></button>}
+            {!soloLectura && !cerrada && <button type="button" className="tienda-ajustes-desplegar" aria-expanded={modificar} onClick={() => setModificar(!modificar)}><span className={GELIA_ICON_BOX}><PackagePlus size={20} aria-hidden /></span><span>Modificar pedido</span><ChevronDown size={18} aria-hidden /></button>}
             {!soloLectura && !cerrada && modificar && (
                 <AjustePiezas
                     pedidoId={pedidoId}
-                    pedido={pedido}
+                    pedido={visto}
                     solicitud={solicitud}
                     onSolicitud={(siguiente) => { setSolicitud(siguiente); onSolicitud?.(siguiente); }}
                     onAviso={setAviso}
@@ -766,6 +708,8 @@ export default function SeguimientoSolicitudTienda({
             )}
             {!cerrada && <ConfirmacionSolicitud
                 pedidoId={pedidoId}
+                destinoAccion={destinoAccion}
+                area={area}
                 visible={puedeConfirmar}
                 cerrada={cerrada}
                 faltante={faltante}

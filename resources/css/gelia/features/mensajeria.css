@@ -47,7 +47,20 @@
 }
 
 .gelia-mensajeria-list-pane {
-    background-color: color-mix(in srgb, var(--theme-element-bg) 55%, var(--theme-surface-bg));
+    width: 100%;
+    min-width: 0;
+    background-color: var(--theme-surface-bg);
+}
+
+.gelia-mensajeria-list-wrap {
+    flex: 0 0 24rem;
+    width: 24rem;
+    max-width: 100%;
+}
+
+.gelia-mensajeria-list-wrap .gelia-mensajeria-list-pane {
+    width: 100%;
+    max-width: none;
 }
 
 .gelia-mensajeria-chat-pane {
@@ -87,6 +100,12 @@
     min-width: 0;
     box-sizing: border-box;
     overflow: hidden;
+    content-visibility: auto;
+    contain-intrinsic-size: auto 4.5rem;
+}
+
+.gelia-mensaje-fila--pendiente {
+    opacity: 0.72;
 }
 
 .gelia-mensaje-fila--propio {
@@ -313,8 +332,7 @@
     align-items: center;
     justify-content: center;
     padding: 1rem;
-    background: rgba(0, 0, 0, 0.55);
-    backdrop-filter: blur(4px);
+    background: rgba(0, 0, 0, 0.72);
 }
 
 .gelia-preparar-adjunto-modal {
@@ -533,6 +551,10 @@ html.glass-active .gelia-buscador-mensajeria-panel.theme-no-blur {
     transition: transform 0.12s ease-out;
 }
 
+.gelia-mensaje-burbuja-wrap--arrastre {
+    transition: none;
+}
+
 .gelia-mensaje-burbuja-wrap:not(.gelia-mensaje-burbuja-wrap--propio) {
     align-items: flex-start;
 }
@@ -548,9 +570,8 @@ html.glass-active .gelia-buscador-mensajeria-panel.theme-no-blur {
     position: relative;
     z-index: 40;
     overflow: visible;
-    background-color: color-mix(in srgb, var(--theme-surface-bg) 88%, var(--theme-element-bg));
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    background-color: var(--theme-surface-solid);
+
 }
 
 .gelia-mensajeria-list-pane > .flex-1.overflow-y-auto {
@@ -558,9 +579,24 @@ html.glass-active .gelia-buscador-mensajeria-panel.theme-no-blur {
     z-index: 1;
 }
 
+.gelia-mensajeria-drawer-backdrop {
+    opacity: 0;
+    transition: opacity 320ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.gelia-mensajeria-portal[data-open='true'] .gelia-mensajeria-drawer-backdrop {
+    opacity: 1;
+}
+
 .gelia-mensajeria-drawer-panel {
     width: 100%;
     max-width: 100%;
+    transform: translateX(100%);
+    transition: transform 320ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.gelia-mensajeria-portal[data-open='true'] .gelia-mensajeria-drawer-panel {
+    transform: translateX(0);
 }
 
 @media (min-width: 768px) {
@@ -635,9 +671,8 @@ html.glass-active .gelia-buscador-mensajeria-panel.theme-no-blur {
     gap: 0.375rem;
     padding: 0.5rem 1rem;
     font-size: 0.75rem;
-    font-weight: 800;
-    text-transform: uppercase;
-    letter-spacing: 0.025em;
+    font-weight: 600;
+    letter-spacing: 0;
     color: #fff;
     background-color: var(--color-primario);
     border: none;
@@ -701,12 +736,8 @@ html.glass-active .gelia-buscador-mensajeria-panel.theme-no-blur {
     color: var(--theme-text-muted, #64748b);
 }
 
-.gelia-presencia--disponible { color: #22c55e; }
-.gelia-presencia--en_junta { color: #8b5cf6; }
-.gelia-presencia--comiendo { color: #f59e0b; }
-.gelia-presencia--en_ruta_venta { color: #3b82f6; }
-.gelia-presencia--ocupado { color: #ef4444; }
-.gelia-presencia--ausente { color: #94a3b8; }
+.gelia-presencia--en-linea { color: var(--color-exito); }
+.gelia-presencia--ausente { color: var(--theme-text-muted); }
 
 .gelia-presencia-selector-btn {
     max-width: 100%;
@@ -715,3 +746,653 @@ html.glass-active .gelia-buscador-mensajeria-panel.theme-no-blur {
 .gelia-presencia-menu {
     animation: gelia-presencia-in 0.15s ease-out;
 }
+
+.gelia-mensajeria-mensajes-scroll {
+    background-color: color-mix(in srgb, var(--theme-element-bg) 90%, var(--color-primario) 10%);
+    background-image: radial-gradient(color-mix(in srgb, var(--theme-text-muted) 10%, transparent) 0.7px, transparent 0.7px);
+    background-size: 18px 18px;
+}
+
+.gelia-mensajeria-composer {
+    display: flex;
+    align-items: flex-end;
+    gap: 0.25rem;
+    margin-top: 0.35rem;
+    padding: 0.3rem 0.4rem;
+    border-radius: 1.25rem;
+    border: 1px solid var(--theme-border);
+    background: var(--theme-surface-solid);
+    box-shadow: 0 2px 10px color-mix(in srgb, var(--theme-text-main) 5%, transparent);
+}
+
+.gelia-mensajeria-composer textarea {
+    min-height: 2.75rem;
+}
+
+.gelia-chat-fila {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    width: calc(100% - 1rem);
+    min-height: 4.75rem;
+    margin: 0.25rem 0.5rem;
+    border-radius: 1rem;
+    padding: 0.75rem;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.gelia-chat-fila__cuerpo {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.2rem;
+    padding-bottom: 0;
+}
+
+.gelia-chat-fila:last-child .gelia-chat-fila__cuerpo {
+    border-bottom-color: transparent;
+}
+
+.gelia-chat-fila__tope,
+.gelia-chat-fila__base {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    min-width: 0;
+}
+
+.gelia-mensajeria-module .gelia-chat-fila__nombre,
+.gelia-chat-fila__nombre {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--theme-text-main);
+}
+
+.gelia-chat-fila--sin-leer .gelia-chat-fila__nombre {
+    font-weight: 700;
+}
+
+.gelia-chat-fila__hora,
+.gelia-chat-fila__preview {
+    color: var(--theme-text-muted);
+}
+
+.gelia-chat-fila__hora {
+    flex-shrink: 0;
+    font-size: 0.75rem;
+}
+
+.gelia-mensajeria-module .gelia-chat-fila--sin-leer .gelia-chat-fila__hora {
+    color: var(--color-primario);
+    font-weight: 600;
+}
+
+.gelia-chat-fila__preview {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.8125rem;
+}
+
+.gelia-chat-fila .gelia-avatar-marco {
+    align-self: center;
+    margin-bottom: 0;
+}
+
+.gelia-chat-fila:hover {
+    background: color-mix(in srgb, var(--theme-text-main) 4%, transparent);
+}
+
+.gelia-chat-fila--activa {
+    background: color-mix(in srgb, var(--color-primario) 16%, var(--theme-surface-solid));
+}
+
+.gelia-chat-fila--activa::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0.55rem;
+    bottom: 0.55rem;
+    width: 3px;
+    border-radius: 0 3px 3px 0;
+    background: var(--color-primario);
+}
+
+.gelia-chat-no-leidos {
+    flex-shrink: 0;
+    min-width: 1.25rem;
+    height: 1.25rem;
+    padding: 0 0.35rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: var(--color-primario);
+    color: var(--theme-surface-bg);
+    font-size: 0.6875rem;
+    font-weight: 700;
+}
+
+.gelia-avatar-marco {
+    position: relative;
+    display: inline-flex;
+    flex-shrink: 0;
+}
+
+.gelia-presencia-punto {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    width: 0.72rem;
+    height: 0.72rem;
+    border-radius: 999px;
+    background: var(--color-exito);
+    box-shadow: 0 0 0 2px var(--theme-surface-bg);
+}
+
+.gelia-mensaje-dia {
+    display: table;
+    margin: 0.85rem auto 0.45rem;
+    padding: 0.2rem 0.7rem;
+    border-radius: 999px;
+    border: 1px solid var(--theme-border);
+    background: color-mix(in srgb, var(--theme-surface-bg) 88%, transparent);
+    color: var(--theme-text-muted);
+    font-size: 0.75rem;
+}
+
+.gelia-mensaje-sticker {
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    padding: 0.15rem 0.15rem 0;
+}
+
+.gelia-mensaje-sticker__img {
+    width: 8.5rem;
+    height: 8.5rem;
+    object-fit: contain;
+    display: block;
+}
+
+.gelia-mensaje-sticker .gelia-mensaje-meta--propio,
+.gelia-mensaje-sticker .gelia-mensaje-meta--propio .gelia-mensaje-meta__hora {
+    background: transparent;
+    color: var(--theme-text-muted);
+}
+
+.gelia-sticker-bandeja,
+.gelia-sticker-creador {
+    margin-bottom: 0.45rem;
+    padding: 0.75rem;
+    border-radius: 1.25rem;
+    border: 1px solid var(--theme-border);
+    background: color-mix(in srgb, var(--theme-element-bg) 55%, var(--theme-surface-bg));
+}
+
+.gelia-sticker-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(4.5rem, 1fr));
+    gap: 0.5rem;
+    max-height: 14rem;
+    overflow: auto;
+}
+
+.gelia-sticker-item {
+    position: relative;
+}
+
+.gelia-sticker-enviar {
+    width: 100%;
+    aspect-ratio: 1;
+    border: 0;
+    border-radius: 0.9rem;
+    background: transparent;
+    padding: 0.25rem;
+    cursor: pointer;
+}
+
+.gelia-sticker-enviar img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.gelia-sticker-borrar {
+    position: absolute;
+    top: 0.15rem;
+    right: 0.15rem;
+    width: 1.4rem;
+    height: 1.4rem;
+    border: 0;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: color-mix(in srgb, var(--theme-surface-bg) 90%, transparent);
+    color: var(--theme-text-muted);
+    cursor: pointer;
+}
+
+.gelia-sticker-lienzo {
+    width: min(100%, 16rem);
+    height: auto;
+    aspect-ratio: 1;
+    display: block;
+    margin-inline: auto;
+    border-radius: 1rem;
+    border: 1px dashed var(--theme-border);
+    background-color: var(--theme-surface-solid);
+    background-image: conic-gradient(var(--theme-element-bg) 25%, transparent 0 50%, var(--theme-element-bg) 0 75%, transparent 0);
+    background-size: 20px 20px;
+    touch-action: none;
+    cursor: crosshair;
+}
+
+.gelia-sticker-color {
+    width: 1.35rem;
+    height: 1.35rem;
+    border-radius: 999px;
+    border: 2px solid transparent;
+    cursor: pointer;
+}
+
+.gelia-sticker-color--activo {
+    box-shadow: 0 0 0 2px var(--theme-surface-bg), 0 0 0 4px var(--color-primario);
+}
+
+.gelia-sticker-accion {
+    min-height: 2.5rem;
+    padding: 0 0.9rem;
+    border-radius: 999px;
+    border: 1px solid var(--theme-border);
+    background: var(--theme-element-bg);
+    color: var(--theme-text-main);
+    font-size: 0.8125rem;
+    cursor: pointer;
+}
+
+.gelia-sticker-accion--principal {
+    border-color: transparent;
+    background: var(--color-primario);
+    color: var(--theme-surface-bg);
+}
+
+.gelia-grabacion-punto {
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 999px;
+    background: var(--color-peligro);
+    animation: gelia-grabacion-pulso 1.1s ease-in-out infinite;
+}
+
+@keyframes gelia-grabacion-pulso {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+}
+
+.gelia-mensajeria-accion {
+    width: 2.75rem;
+    height: 2.75rem;
+    padding: 0;
+    border: 0;
+    border-radius: 0.85rem;
+    background: transparent;
+    flex-shrink: 0;
+}
+
+.gelia-mensajeria-module button.gelia-mensajeria-accion,
+.gelia-mensajeria-module a.gelia-mensajeria-accion,
+.gelia-mensajeria-modal button.gelia-mensajeria-accion {
+    color: var(--theme-text-main);
+}
+
+.gelia-mensajeria-module button.gelia-mensajeria-accion:hover,
+.gelia-mensajeria-module button.gelia-mensajeria-accion:focus-visible,
+.gelia-mensajeria-module button.gelia-mensajeria-accion[aria-pressed='true'],
+.gelia-mensajeria-module a.gelia-mensajeria-accion:hover,
+.gelia-mensajeria-module a.gelia-mensajeria-accion:focus-visible,
+.gelia-mensajeria-modal button.gelia-mensajeria-accion:hover,
+.gelia-mensajeria-modal button.gelia-mensajeria-accion:focus-visible {
+    color: var(--color-primario);
+}
+
+.gelia-mensajeria-identidad {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+    padding: 0.25rem 0.35rem;
+    border: 0;
+    background: transparent;
+    text-align: left;
+    color: inherit;
+    cursor: pointer;
+}
+
+.gelia-mensajeria-menu {
+    position: absolute;
+    top: calc(100% - 0.15rem);
+    right: 0.15rem;
+    z-index: 50;
+    min-width: 14.5rem;
+    padding: 0.35rem 0;
+    border-radius: var(--theme-radius-input);
+    border: 1px solid var(--theme-border);
+    background: var(--theme-surface-solid);
+    box-shadow: var(--theme-shadow-card);
+}
+
+.gelia-mensajeria-menu button {
+    display: block;
+    width: 100%;
+    margin: 0;
+    padding: 0.7rem 1rem;
+    border: 0;
+    background: transparent;
+    color: var(--theme-text-main);
+    font-size: 0.875rem;
+    text-align: left;
+    cursor: pointer;
+}
+
+.gelia-mensajeria-menu button:hover,
+.gelia-mensajeria-menu button:focus-visible {
+    background: color-mix(in srgb, var(--color-primario) 12%, transparent);
+}
+
+.gelia-mensajeria-chips {
+    display: flex;
+    gap: 0.4rem;
+    padding: 0 0.75rem 0.75rem;
+    overflow-x: auto;
+}
+
+.gelia-mensajeria-chip {
+    border-radius: 999px;
+    border: 1px solid var(--theme-border);
+    background: transparent;
+    color: var(--theme-text-main);
+    padding: 0.3rem 0.8rem;
+    font-size: 0.8125rem;
+    line-height: 1.2;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.gelia-mensajeria-module button.gelia-mensajeria-chip--activo {
+    background: var(--color-primario);
+    border-color: transparent;
+    color: var(--theme-surface-bg);
+}
+
+.gelia-mensajeria-pestanas {
+    display: flex;
+    border-bottom: 1px solid var(--theme-border);
+    flex-shrink: 0;
+}
+
+.gelia-mensajeria-pestanas button {
+    flex: 1;
+    margin: 0;
+    padding: 0.75rem 0.5rem;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    background: transparent;
+    font-size: 0.875rem;
+    cursor: pointer;
+}
+
+.gelia-mensajeria-module .gelia-mensajeria-pestanas button,
+.gelia-mensajeria-modal .gelia-mensajeria-pestanas button {
+    color: var(--theme-text-muted);
+}
+
+.gelia-mensajeria-module .gelia-mensajeria-pestanas button[aria-selected='true'],
+.gelia-mensajeria-modal .gelia-mensajeria-pestanas button[aria-selected='true'] {
+    color: var(--color-primario);
+    border-bottom-color: var(--color-primario);
+}
+
+.gelia-mensajeria-fila-perfil,
+.gelia-mensajeria-archivo-fila,
+.gelia-mensajeria-integrante {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-width: 0;
+    width: 100%;
+    margin: 0;
+    padding: 0.85rem 1rem;
+    border: 0;
+    border-bottom: 1px solid var(--theme-border);
+    background: transparent;
+    color: var(--theme-text-main);
+    text-align: left;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.gelia-mensajeria-archivo-fila.flex-1 {
+    width: auto;
+    flex: 1 1 auto;
+}
+
+.gelia-mensajeria-fila-perfil:hover,
+.gelia-mensajeria-archivo-fila:hover,
+.gelia-mensajeria-integrante:hover {
+    background: color-mix(in srgb, var(--color-primario) 8%, transparent);
+}
+
+.gelia-mensajeria-filtros {
+    border-bottom: 1px solid var(--theme-border);
+    flex-shrink: 0;
+}
+
+.gelia-mensajeria-filtros summary {
+    padding: 0.65rem 1rem;
+    color: var(--theme-text-muted);
+    font-size: 0.8125rem;
+    cursor: pointer;
+}
+
+.gelia-mensajeria-filtros__cuerpo {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0 1rem 0.75rem;
+}
+
+.gelia-mensajeria-mosaico {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 2px;
+}
+
+.gelia-mensajeria-mosaico__celda {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    aspect-ratio: 1;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: var(--theme-element-bg);
+    cursor: pointer;
+    overflow: hidden;
+}
+
+.gelia-mensajeria-mosaico__celda img,
+.gelia-mensajeria-tira__item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.gelia-mensajeria-tira {
+    display: flex;
+    gap: 0.35rem;
+    overflow-x: auto;
+    padding: 0.75rem 1rem 0.35rem;
+}
+
+.gelia-mensajeria-tira__item {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 6.5rem;
+    height: 6.5rem;
+    flex-shrink: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0.35rem;
+    overflow: hidden;
+    background: var(--theme-element-bg);
+    cursor: pointer;
+}
+
+@media (max-width: 767px) {
+    .gelia-mensajeria-module .gelia-toque:not(.gelia-mensajeria-accion) {
+        min-width: 2.75rem;
+        min-height: 2.75rem;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .gelia-chat-fila,
+    .gelia-grabacion-punto,
+    .gelia-mensaje-burbuja-wrap {
+        transition: none;
+        animation: none;
+    }
+
+    .gelia-mensajeria-drawer-panel,
+    .gelia-mensajeria-drawer-backdrop {
+        transform: none;
+        transition: opacity 180ms cubic-bezier(0.23, 1, 0.32, 1);
+    }
+
+    .gelia-mensajeria-drawer-panel {
+        opacity: 0;
+    }
+
+    .gelia-mensajeria-portal[data-open='true'] .gelia-mensajeria-drawer-panel {
+        transform: none;
+        opacity: 1;
+    }
+}
+
+/* Mensajería: lista, conversación y herramientas con superficies diferenciadas. */
+.gelia-mensajeria-subtitulo {
+    margin: 0.15rem 0 0;
+    color: var(--theme-text-muted);
+    font-size: 0.6875rem;
+    font-weight: 400;
+}
+
+.gelia-mensajeria-list-header { padding: 0.75rem 0.25rem 0.25rem; }
+.gelia-mensajeria-list-pane > .overflow-y-auto { padding-top: 0.35rem; }
+.gelia-mensajeria-avatar {
+    background: color-mix(in srgb, var(--color-primario) 15%, var(--theme-element-bg));
+    color: var(--theme-text-main);
+}
+
+.gelia-mensajeria-module .gelia-mensajeria-input-bar {
+    padding-top: 0.5rem;
+    background: color-mix(in srgb, var(--theme-element-bg) 90%, var(--color-primario) 10%);
+}
+
+.gelia-mensajeria-module .gelia-mensajeria-enviar {
+    color: white;
+    background: var(--color-primario);
+}
+
+.gelia-mensajeria-module .gelia-mensajeria-composer textarea { min-width: 0; background: transparent; }
+.gelia-mensajeria-composer:focus-within { border-color: var(--color-primario); }
+.gelia-mensajeria-module .gelia-mensajeria-accion:hover,
+.gelia-mensajeria-module .gelia-mensajeria-accion[aria-pressed='true'] {
+    background: color-mix(in srgb, var(--color-primario) 12%, var(--theme-element-bg));
+}
+
+.gelia-mensajeria-chat-layout--estrecho .gelia-mensajeria-drive-panel {
+    position: absolute;
+    inset: 0;
+    z-index: 50;
+    width: 100%;
+    max-width: none;
+}
+
+.gelia-mensajeria-drive-panel > div:first-child { min-height: 4.5rem; }
+.gelia-mensajeria-pestanas button { display: flex; align-items: center; justify-content: center; gap: 0.4rem; }
+.gelia-mensajeria-module .gelia-mensajeria-drive-panel,
+.gelia-mensajeria-module .gelia-menu-adjuntos,
+.gelia-mensajeria-module .gelia-mensajeria-menu { background: var(--theme-surface-solid); }
+.gelia-mensajeria-vacio {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    color: var(--theme-text-muted);
+    padding: 3rem 1.5rem;
+    gap: 0.75rem;
+}
+.gelia-mensajeria-vacio p { margin: 0; line-height: 1.6; }
+.gelia-mensajeria-vacio > svg { color: var(--color-primario); margin-bottom: 0.5rem; }
+.gelia-mensajeria-bienvenida {
+    background: radial-gradient(ellipse at center, color-mix(in srgb, var(--color-primario) 12%, var(--theme-element-bg)), var(--theme-element-bg));
+}
+.gelia-mensajeria-bienvenida-icono {
+    padding: 1.75rem;
+    border: 1px solid color-mix(in srgb, var(--color-primario) 20%, var(--theme-border));
+    border-radius: 2rem;
+    color: var(--color-primario);
+    background: var(--theme-surface-solid);
+}
+.gelia-sticker-bandeja {
+    max-height: min(60dvh, calc(100dvh - 14rem), 38rem);
+    overflow: auto;
+    overscroll-behavior: contain;
+    box-shadow: var(--theme-shadow-card);
+}
+.gelia-sticker-accion:disabled { opacity: 0.45; cursor: default; }
+.gelia-mensajeria-error {
+    margin: 0 0 0.5rem;
+    padding: 0.65rem 0.85rem;
+    border: 1px solid color-mix(in srgb, var(--color-peligro) 45%, var(--theme-border));
+    border-radius: 0.75rem;
+    background: color-mix(in srgb, var(--color-peligro) 10%, var(--theme-surface-solid));
+    color: var(--theme-text-main);
+    font-size: 0.75rem;
+}
+
+.gelia-mensajeria-icon-button {
+    width: 2.75rem;
+    height: 2.75rem;
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+    flex-shrink: 0;
+    cursor: pointer;
+}
+.gelia-mensajeria-icon-button:disabled { cursor: default; opacity: 0.4; }
+.gelia-mensajeria-module :is(button, a, textarea):focus-visible {
+    outline: 2px solid var(--color-primario);
+    outline-offset: 2px;
+}
+.gelia-mensajeria-chat-column { --gelia-burbuja-max-pct: min(78%, 38rem); }

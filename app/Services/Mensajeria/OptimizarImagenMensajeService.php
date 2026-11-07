@@ -71,6 +71,70 @@ class OptimizarImagenMensajeService
         ];
     }
 
+    /** Convierte una imagen ya guardada. Null si el formato no se puede leer. */
+    public function ejecutarDesdeAlmacen(string $rutaRelativa, int $conversacionId): ?array
+    {
+        $disk = Storage::disk('public');
+        if (! $disk->exists($rutaRelativa) || ! function_exists('imagewebp')) {
+            return null;
+        }
+
+        $loaded = $this->createImageResource($disk->path($rutaRelativa), $disk->mimeType($rutaRelativa));
+        if (! $loaded) {
+            return null;
+        }
+
+        [$width, $height, $resource] = $loaded;
+        [$main, $mainW, $mainH] = $this->escalar($resource, $width, $height, self::MAX_SIDE);
+        if ($main !== $resource) {
+            imagedestroy($resource);
+        }
+
+        $directory = "mensajeria/{$conversacionId}";
+        $relativePath = "{$directory}/".Str::uuid().'.webp';
+        $fullPath = $disk->path($relativePath);
+        if (! is_dir(dirname($fullPath))) {
+            mkdir(dirname($fullPath), 0755, true);
+        }
+        imagewebp($main, $fullPath, self::WEBP_QUALITY);
+
+        $thumbnail = $relativePath;
+        if ($mainW > 480 || $mainH > 480) {
+            [$thumb] = $this->escalar($main, $mainW, $mainH, 480);
+            $thumbnail = "{$directory}/".Str::uuid().'.webp';
+            imagewebp($thumb, $disk->path($thumbnail), 76);
+            if ($thumb !== $main) {
+                imagedestroy($thumb);
+            }
+        }
+        imagedestroy($main);
+
+        return [
+            'ruta' => $relativePath,
+            'thumbnail_ruta' => $thumbnail,
+            'tamano' => filesize($fullPath) ?: 0,
+            'mime' => 'image/webp',
+        ];
+    }
+
+    /** @return array{0: \GdImage, 1: int, 2: int} */
+    private function escalar($resource, int $width, int $height, int $maxSide): array
+    {
+        if ($width <= $maxSide && $height <= $maxSide) {
+            return [$resource, $width, $height];
+        }
+
+        $ratio = min($maxSide / $width, $maxSide / $height);
+        $newW = max(1, (int) round($width * $ratio));
+        $newH = max(1, (int) round($height * $ratio));
+        $resized = imagecreatetruecolor($newW, $newH);
+        imagealphablending($resized, false);
+        imagesavealpha($resized, true);
+        imagecopyresampled($resized, $resource, 0, 0, 0, 0, $newW, $newH, $width, $height);
+
+        return [$resized, $newW, $newH];
+    }
+
     private function createImageResource(string $path, ?string $mime): ?array
     {
         $resource = match ($mime) {

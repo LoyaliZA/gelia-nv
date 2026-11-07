@@ -7,6 +7,7 @@ use App\Models\ControlPedidos\PedidoBma;
 use App\Models\ControlPedidos\PedidoBmaDocumento;
 use App\Models\User;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
+use App\Support\ControlPedidos\ActualizacionConsulta;
 use App\Support\ControlPedidos\RegistrarPedidos\DestinoRevisionRegistrarPedidos;
 use App\Support\ControlPedidos\VisibilidadPedidoBma;
 use Illuminate\Http\UploadedFile;
@@ -72,6 +73,7 @@ final class RegistrarAnexoTiendaService
                 $lineas
             ));
             $json['anexo_integrado'] = false;
+            ActualizacionConsulta::solicitar($json);
             $pedido->update(['solicitud_preparacion_json' => $json, 'consulta_cerrada_at' => null, 'consulta_cerrada_por_id' => null,
                 'estatus_envio' => ($json['area_revision'] ?? '') === 'control_pedidos' ? PedidoBma::ESTATUS_ENVIO_PENDIENTE_PESAJE : $pedido->estatus_envio]);
             $this->nota($pedido, $usuario->id, $this->textoDe($lineas, false));
@@ -231,11 +233,12 @@ final class RegistrarAnexoTiendaService
             : 'control_pedidos.tienda.ver';
         $this->notificar->ejecutar(
             $pedido,
-            'pedido_anexo_solicitado',
-            $this->textoDe($lineas, false),
+            'pedido_consulta_actualizada',
+            'Actualización de consulta: revise las piezas anexadas y envíe una nueva captura del pedido.',
             [$permiso],
             $usuario->id,
-            false
+            false,
+            ['url' => $area === 'control_pedidos' ? '/control-pedidos/cedis?q='.rawurlencode($pedido->folio) : '/control-pedidos/tienda?tarea='.$pedido->instruccionEntregaVigente?->id]
         );
     }
 

@@ -4,6 +4,7 @@ import ChatPanel from '@/Components/Mensajeria/ChatPanel';
 import NuevaConversacionModal from '@/Components/Mensajeria/NuevaConversacionModal';
 import CrearGrupoModal from '@/Components/Mensajeria/CrearGrupoModal';
 import { useMensajeriaContext } from '@/Components/Mensajeria/MensajeriaContext';
+import { animarEntrada } from '@/utils/animarMensajeria';
 
 function leerConversacionDesdeUrl() {
     if (typeof window === 'undefined') return null;
@@ -32,6 +33,7 @@ export default function MensajeriaShell({ variant = 'page', onCerrar }) {
         cargarMasMensajes,
         enviarTexto,
         enviarAdjunto,
+        enviarSticker,
         crearConversacion,
         refrescarConversaciones,
         irAMensaje,
@@ -39,10 +41,25 @@ export default function MensajeriaShell({ variant = 'page', onCerrar }) {
     } = useMensajeriaContext();
 
     const chatPanelRef = useRef(null);
+    const paneChatRef = useRef(null);
     const [modalNuevoChat, setModalNuevoChat] = useState(false);
     const [modalGrupo, setModalGrupo] = useState(false);
     const [vistaMobile, setVistaMobile] = useState('lista');
     const enDrawer = variant === 'drawer';
+    const moduloRef = useRef(null);
+    const [apilado, setApilado] = useState(() => (
+        typeof window === 'undefined' ? true : window.innerWidth < 900
+    ));
+
+    useEffect(() => {
+        const el = moduloRef.current;
+        if (!el || typeof ResizeObserver === 'undefined') return undefined;
+        const medir = (ancho) => setApilado(ancho < 900);
+        medir(el.getBoundingClientRect().width);
+        const obs = new ResizeObserver((entries) => medir(entries[0].contentRect.width));
+        obs.observe(el);
+        return () => obs.disconnect();
+    }, []);
 
     const abrirConversacionPorId = useCallback(async (conversacionId, scrollToBottom = false) => {
         let conversacion = conversaciones.find((c) => c.id === conversacionId);
@@ -89,6 +106,12 @@ export default function MensajeriaShell({ variant = 'page', onCerrar }) {
         return () => window.removeEventListener('mensajeria-abrir-conversacion', handler);
     }, [variant, abrirConversacionPorId]);
 
+    useEffect(() => {
+        if (vistaMobile !== 'chat' || !apilado) return undefined;
+        animarEntrada(paneChatRef.current, { eje: 'x', distancia: 28, duration: 340 });
+        return undefined;
+    }, [vistaMobile, apilado, conversacionActiva?.id]);
+
     const handleSeleccionar = async (conversacion) => {
         await seleccionarConversacion(conversacion);
         setVistaMobile('chat');
@@ -131,8 +154,11 @@ export default function MensajeriaShell({ variant = 'page', onCerrar }) {
 
     return (
         <>
-            <div className={`gelia-mensajeria-module w-full h-full min-h-0 ${enDrawer ? 'gelia-mensajeria-module--drawer' : ''}`}>
-                <div className={`${vistaMobile === 'lista' ? 'flex' : 'hidden'} ${enDrawer ? 'md:flex w-full md:w-auto' : 'sm:flex w-full sm:w-auto'} h-full min-h-0 shrink-0`}>
+            <div
+                ref={moduloRef}
+                className={`gelia-mensajeria-module w-full h-full min-h-0 ${apilado ? 'gelia-mensajeria-module--apilado' : ''} ${enDrawer ? 'gelia-mensajeria-module--drawer' : ''}`}
+            >
+                <div className={`${apilado && vistaMobile !== 'lista' ? 'hidden' : 'flex'} h-full min-h-0 min-w-0 ${apilado ? 'w-full' : 'gelia-mensajeria-list-wrap'}`}>
                     <ConversacionLista
                         conversaciones={conversaciones}
                         conversacionActiva={conversacionActiva}
@@ -146,7 +172,7 @@ export default function MensajeriaShell({ variant = 'page', onCerrar }) {
                     />
                 </div>
 
-                <div className={`gelia-mensajeria-chat-pane ${vistaMobile === 'chat' ? 'flex' : 'hidden'} ${enDrawer ? 'md:flex' : 'sm:flex'} flex-1 h-full min-h-0 min-w-0 w-full`}>
+                <div ref={paneChatRef} className={`gelia-mensajeria-chat-pane ${apilado && vistaMobile !== 'chat' ? 'hidden' : 'flex'} flex-1 h-full min-h-0 min-w-0`}>
                     <ChatPanel
                         ref={chatPanelRef}
                         conversacion={conversacionActiva}
@@ -156,10 +182,11 @@ export default function MensajeriaShell({ variant = 'page', onCerrar }) {
                         enviando={enviando}
                         onEnviarTexto={enviarTexto}
                         onEnviarAdjunto={enviarAdjunto}
+                        onEnviarSticker={enviarSticker}
                         onCargarMas={cargarMasMensajes}
                         onVolver={handleVolver}
                         mostrarVolver
-                        volverBreakpoint={enDrawer ? 'md' : 'sm'}
+                        volverBreakpoint={apilado ? 'siempre' : (enDrawer ? 'md' : 'sm')}
                         onIrAMensaje={handleIrAMensajeEnChat}
                     />
                 </div>

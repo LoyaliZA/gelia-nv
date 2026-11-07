@@ -86,7 +86,7 @@ class GuardarApartadoRecogeHoyService
                 }
                 if ($confirmar) {
                     if ($motivo !== '') {
-                        throw ValidationException::withMessages(['estado' => 'Resuelva la incidencia antes de confirmar el apartado.']);
+                        throw ValidationException::withMessages(['estado' => 'Resuelva el error reportado antes de confirmar el apartado.']);
                     }
 
                     return $this->confirmar->ejecutar($tarea->fresh(), $usuario, (int) $apartado->version);

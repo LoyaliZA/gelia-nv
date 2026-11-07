@@ -59,6 +59,43 @@ export default {
         return data.mensaje;
     },
 
+    urlStickers() {
+        if (tieneRuta('mensajeria.stickers.index')) {
+            return route('mensajeria.stickers.index');
+        }
+        return '/mensajeria/stickers';
+    },
+
+    async listarStickers() {
+        const { data } = await axios.get(this.urlStickers());
+        return data.stickers || [];
+    },
+
+    async crearSticker(file) {
+        const form = new FormData();
+        form.append('archivo', file);
+        const { data } = await axios.post(this.urlStickers(), form);
+        return data.sticker;
+    },
+
+    async eliminarSticker(stickerId) {
+        const url = tieneRuta('mensajeria.stickers.destroy')
+            ? route('mensajeria.stickers.destroy', stickerId)
+            : `/mensajeria/stickers/${stickerId}`;
+        await axios.delete(url);
+    },
+
+    async enviarSticker(conversacionId, stickerId, replyToId = null) {
+        const url = tieneRuta('mensajeria.stickers.enviar')
+            ? route('mensajeria.stickers.enviar', conversacionId)
+            : `/mensajeria/conversaciones/${conversacionId}/stickers`;
+        const { data } = await axios.post(url, {
+            sticker_id: stickerId,
+            reply_to_id: replyToId,
+        });
+        return data.mensaje;
+    },
+
     async marcarLeida(conversacionId) {
         try {
             await axios.put(route('mensajeria.conversaciones.leer', conversacionId));

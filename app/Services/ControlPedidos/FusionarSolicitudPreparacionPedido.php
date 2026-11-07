@@ -270,6 +270,7 @@ class FusionarSolicitudPreparacionPedido
             return null;
         }
 
+        $metadata = array_intersect_key($valor, array_flip(['actualizacion_pendiente', 'actualizacion_id', 'evidencia_actual_ids', 'historial_respuestas', 'respuesta_id', 'cambios_revisados']));
         $respondida = $valor['respondida_at'] ?? null;
         $decision = $valor['decision_at'] ?? null;
 
@@ -281,6 +282,7 @@ class FusionarSolicitudPreparacionPedido
             'decision_at' => is_string($decision) ? $decision : null,
             'decision_por_id' => $this->identificador($valor['decision_por_id'] ?? null),
         ];
+        $salida = array_merge($salida, $metadata);
         if (array_key_exists('aceptacion_vigente', $valor)) {
             $salida['aceptacion_vigente'] = (bool) $valor['aceptacion_vigente'];
         }
@@ -306,6 +308,7 @@ class FusionarSolicitudPreparacionPedido
             'acciones_disponibilidad', 'reapertura_disponibilidad', 'solicitudes_ajuste_ids', 'cobertura_tienda',
             'segundo_traslado', 'historial_traslados_tienda', 'movimientos_tienda_version', 'cambio_modalidad_tienda',
             'credito_wizerp',
+            'ruta_almacenes_tienda',
             'tienda_md_reporte',
             'tienda_md',
             'tienda_md_solicitud',

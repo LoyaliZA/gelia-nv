@@ -1,12 +1,13 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Loader2, Search } from 'lucide-react';
+import InputConEscanner from '../Escanner/InputConEscanner';
 
 function etiquetaProducto(p) {
     if (!p) return '';
     return `${p.sku} - ${p.descripcion}`;
 }
 
-export default function SelectorProducto({ value, onChange, productoInicial, disabled = false, required = false, almacenId = null, incluirSinInventario = false, inputId }) {
+export default function SelectorProducto({ value, onChange, productoInicial, disabled = false, required = false, almacenId = null, incluirSinInventario = false, inputId, onEscanear = null, zIndexEscaner = undefined }) {
     const [texto, setTexto] = useState('');
     const [abierto, setAbierto] = useState(false);
     const [productos, setProductos] = useState([]);
@@ -133,41 +134,50 @@ export default function SelectorProducto({ value, onChange, productoInicial, dis
         abortRef.current?.abort();
     }, []);
 
+    const cambiarTexto = (e) => {
+        const val = e.target.value;
+        setTexto(val);
+        setAbierto(true);
+        if (seleccionado && val !== etiquetaProducto(seleccionado)) {
+            setSeleccionado(null);
+            onChange('', null);
+        }
+        programarBusqueda(val);
+    };
+    const escanear = (codigo) => {
+        if (disabled || !String(codigo || '').trim()) return;
+        clearTimeout(debounceRef.current);
+        abortRef.current?.abort();
+        setAbierto(false);
+        setTexto('');
+        setSeleccionado(null);
+        onEscanear?.(codigo);
+    };
+    const inputProps = {
+        id: inputId,
+        'aria-label': onEscanear ? 'Buscar o escanear producto' : 'Buscar producto por nombre o código',
+        type: 'text', required: required && !value, disabled,
+        placeholder: onEscanear ? 'Nombre, SKU o código de barras…' : 'SKU o nombre…',
+        className: 'theme-input w-full mt-1 pl-10 pr-3 py-3 text-sm font-bold',
+        onFocus: abrirLista,
+        ...(onEscanear ? { onKeyDown: e => { if (e.key === 'Enter') { e.preventDefault(); escanear(e.currentTarget.value); } } } : {}),
+    };
+
     return (
         <div ref={contenedorRef} className="relative">
             <div className="theme-field-with-icon">
                 <Search className="theme-field-icon" aria-hidden="true" />
-                <input
-                    id={inputId}
-                    aria-label="Buscar producto por nombre o código"
-                    type="text"
-                    value={texto}
-                    required={required && !value}
-                    disabled={disabled}
-                    placeholder="SKU o nombre…"
-                    className="theme-input w-full mt-1 pl-10 pr-3 py-3 text-sm font-bold"
-                    onFocus={abrirLista}
-                    onChange={(e) => {
-                        const val = e.target.value;
-                        setTexto(val);
-                        setAbierto(true);
-                        if (seleccionado && val !== etiquetaProducto(seleccionado)) {
-                            setSeleccionado(null);
-                            onChange('', null);
-                        }
-                        programarBusqueda(val);
-                    }}
-                />
-                {cargando && (
-                    <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin theme-text-muted" />
-                )}
+                {onEscanear
+                    ? <InputConEscanner zIndexModal={zIndexEscaner} label="producto" value={texto} onChange={cambiarTexto} alEscanear={escanear} escaneoContinuo mostrarBotonCamara={!disabled} inputProps={inputProps} />
+                    : <input {...inputProps} value={texto} onChange={cambiarTexto} />}
+                {cargando && <Loader2 className={`absolute ${onEscanear ? 'right-16' : 'right-3'} top-1/2 -translate-y-1/2 w-4 h-4 animate-spin theme-text-muted`} />}
             </div>
 
             {abierto && !disabled && (
                 <div
                     ref={listaRef}
                     onScroll={handleScroll}
-                    className="absolute z-20 w-full mt-1 theme-surface border theme-border rounded-2xl shadow-xl max-h-48 overflow-y-auto"
+                    className="selector-productos-lista absolute z-20 w-full mt-1 theme-surface-solid theme-no-blur border theme-border rounded-2xl shadow-xl max-h-48 overflow-y-auto"
                 >
                     {productos.length === 0 && !cargando && (
                         <p className="px-4 py-3 text-xs font-bold theme-text-muted uppercase">

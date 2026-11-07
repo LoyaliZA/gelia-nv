@@ -229,7 +229,7 @@ class SolicitarRevisionRegistrarPedidosService
         );
         $this->notificar->ejecutar(
             $pedido->fresh(['cliente', 'vendedor']),
-            'pedido_preparacion_tienda_nueva',
+            'pedido_consulta_nueva',
             'Nueva solicitud de apartado en Tienda, pendiente de revisión.',
             ['control_pedidos.tienda.ver'],
             $usuario->id,
@@ -277,7 +277,7 @@ class SolicitarRevisionRegistrarPedidosService
         );
         $this->notificar->ejecutar(
             $pedido->fresh(['cliente', 'vendedor']),
-            'pedido_consulta_pesaje',
+            'pedido_consulta_nueva',
             'Nueva consulta de disponibilidad en CEDIS, pendiente de revisión.',
             ['control_pedidos.cedis'],
             $usuario->id,

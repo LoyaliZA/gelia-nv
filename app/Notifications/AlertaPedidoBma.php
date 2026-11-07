@@ -10,7 +10,7 @@ use Illuminate\Notifications\Messages\BroadcastMessage;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
-class AlertaPedidoBma extends Notification implements ShouldQueue, ShouldBroadcast
+class AlertaPedidoBma extends Notification implements ShouldBroadcast, ShouldQueue
 {
     use Queueable;
 
@@ -36,6 +36,9 @@ class AlertaPedidoBma extends Notification implements ShouldQueue, ShouldBroadca
     ];
 
     private const ETIQUETAS_TIPO = [
+        'pedido_consulta_nueva' => 'Nueva consulta',
+        'pedido_consulta_actualizada' => 'Actualización de consulta',
+        'pedido_disponibilidad_respondida' => 'Consulta respondida',
         'pedido_error_datos' => 'Error de datos en pedido',
         'pedido_error_remision' => 'Error de remisión en pedido',
         'pedido_error_guia' => 'Error de guía en pedido',
@@ -67,7 +70,7 @@ class AlertaPedidoBma extends Notification implements ShouldQueue, ShouldBroadca
         'pedido_custodia_20_dias' => 'Recolección pendiente de gestión',
         'pedido_preparacion_tienda_nueva' => 'Nueva preparación en Tienda',
         'pedido_preparacion_tienda_respondida' => 'Preparación en Tienda respondida',
-        'pedido_preparacion_tienda_incidencia' => 'Incidencia en preparación Tienda',
+        'pedido_preparacion_tienda_incidencia' => 'Error en preparación Tienda',
         'pedido_preparacion_tienda_corregida' => 'Preparación Tienda corregida',
         'pedido_preparacion_tienda_liberada' => 'Mercancía liberada en Tienda',
         'pedido_preparacion_tienda_vencimiento' => 'Vencimiento de resguardo en Tienda',
@@ -203,6 +206,9 @@ class AlertaPedidoBma extends Notification implements ShouldQueue, ShouldBroadca
         $actor = $this->nombreActorCedis();
 
         return match ($this->tipoAlerta) {
+            'pedido_consulta_nueva' => "{$nombre}, hay una nueva consulta para el pedido {$folio}.",
+            'pedido_consulta_actualizada' => "{$nombre}, hay una actualización de consulta para el pedido {$folio}. Revisa los cambios solicitados.",
+            'pedido_disponibilidad_respondida' => "{$nombre}, la consulta del pedido {$folio} tiene una nueva respuesta. Revisa los detalles y la captura actualizada.",
             'pedido_error_datos' => "Atención {$nombre}, se reportó un error de datos en el pedido {$folio}. Corrígelo y reenvía.",
             'pedido_error_remision' => "Atención {$nombre}, hay un error de remisión en el pedido {$folio}. Corrígelo antes de aprobar.",
             'pedido_error_guia' => "Atención {$nombre}, hay un error grave de guía en el pedido {$folio}. No enviar hasta corregir.",

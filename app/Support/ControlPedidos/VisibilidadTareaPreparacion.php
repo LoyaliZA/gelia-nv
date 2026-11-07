@@ -3,11 +3,13 @@
 namespace App\Support\ControlPedidos;
 
 use App\Models\ControlPedidos\PedidoBma;
-use App\Models\ControlPedidos\PedidoBmaCumplimientoFisico;
 use App\Models\ControlPedidos\PedidoBmaCaratula;
+use App\Models\ControlPedidos\PedidoBmaCumplimientoFisico;
+use App\Models\ControlPedidos\PedidoBmaReferencia;
 use App\Models\ControlPedidos\PedidoBmaTareaPreparacion;
 use App\Models\User;
 use App\Services\ControlPedidos\PreparacionTiendaConfig;
+use App\Services\Traspasos\AbastecerPreparacionService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Schema;
 
@@ -92,15 +94,16 @@ final class VisibilidadTareaPreparacion
                 'id' => $pedido->id,
                 'folio' => $pedido->folio,
                 'folio_remision' => $pedido->folio_remision,
-                'folio_visible' => \App\Models\ControlPedidos\PedidoBmaReferencia::visible($pedido)['folio'],
-                'folio_etiqueta' => \App\Models\ControlPedidos\PedidoBmaReferencia::visible($pedido)['etiqueta'],
+                'folio_visible' => PedidoBmaReferencia::visible($pedido)['folio'],
+                'folio_etiqueta' => PedidoBmaReferencia::visible($pedido)['etiqueta'],
                 'contacto_nombre' => $pedido->contacto_nombre_snapshot,
                 'prioridad_md' => (bool) $pedido->prioridad_md,
                 'origen_solicitud' => $pedido->origen_solicitud,
                 'requiere_logistica' => (bool) ($pedido->origen?->requiere_logistica ?? false),
                 'vendedora_nombre' => $pedido->vendedor?->name,
-                'es_t01_documental' => \App\Support\ControlPedidos\ApartadoT01::aplica($tarea->pedido),
-                'es_t02_documental' => \App\Support\ControlPedidos\TransferenciaT02::documental($pedido),
+                'es_t01_documental' => ApartadoT01::aplica($tarea->pedido),
+                'es_t02_documental' => TransferenciaT02::documental($pedido),
+                'es_custodia_documental' => CustodiaDocumentalTienda::aplica($pedido),
                 'cliente_nombre' => $pedido->cliente?->nombre_comercial ?: $pedido->cliente?->nombre ?: $pedido->contacto_nombre_snapshot,
                 'cantidad_piezas' => $pedido->cantidad_piezas,
                 'area_revision' => ($pedido->solicitud_preparacion ?? [])['area_revision'] ?? null,
@@ -113,17 +116,23 @@ final class VisibilidadTareaPreparacion
                 'anexo_sin_remision' => $pedido->solicitud_preparacion_json['anexo_sin_remision'] ?? [],
                 'retiro_piezas' => $pedido->solicitud_preparacion_json['retiro_piezas'] ?? [],
                 'retiros' => self::retirosVisibles($pedido),
+                'retiros_requieren_atencion_fisica' => collect($pedido->solicitud_preparacion_json['compromisos_inventario'] ?? [])->contains(fn ($c) => $c['activo'] ?? false)
+                    || in_array($tarea->cumplimientoFisico?->estado, ['SEPARADA', 'APARTADO_CONFIRMADO', 'LISTA_PARA_SALIDA', 'DESPACHADA', 'ENTREGADA'], true),
+                'documentos' => $pedido->documentos->where('activo', true)->map(fn ($d) => ['id' => $d->id, 'tipo' => $d->tipo, 'url' => $d->url, 'nombre_original' => $d->nombre_original, 'mime_type' => $d->mime_type, 'relacion_tipo' => $d->relacion_tipo])->values()->all(),
                 'anexos_pendientes' => collect(($pedido->solicitud_preparacion ?? [])['anexo_sin_remision'] ?? [])
                     ->map(function ($linea, $indice) use ($pedido) {
-                        if (! is_array($linea)) return null;
+                        if (! is_array($linea)) {
+                            return null;
+                        }
                         $documento = isset($linea['documento_id']) ? $pedido->documentos()->whereKey($linea['documento_id'])->first() : null;
+
                         return array_merge($linea, ['indice' => $indice, 'documento' => $documento]);
                     })
                     ->filter(fn ($linea) => is_array($linea) && ! isset($linea['respondida_at']))
                     ->values()->all(),
                 'anexos_por_separar' => collect(($pedido->solicitud_preparacion ?? [])['anexo_sin_remision'] ?? [])
                     ->map(fn ($linea, $indice) => is_array($linea) ? array_merge($linea, ['indice' => $indice]) : null)
-                    ->filter(fn ($linea) => is_array($linea) && ($linea['estado'] ?? null) === 'disponible' && ! isset($linea['separada_at']))
+                    ->filter(fn ($linea) => is_array($linea) && in_array($linea['estado'] ?? null, ['disponible', 'revisado_conjunto'], true) && ! isset($linea['separada_at']))
                     ->values()->all(),
                 'excepciones' => $pedido->relationLoaded('revisionesProducto')
                     ? $pedido->revisionesProducto
@@ -472,7 +481,7 @@ final class VisibilidadTareaPreparacion
             ];
         }
 
-        $pendiente = collect(app(\App\Services\Traspasos\AbastecerPreparacionService::class)->pendientes($tarea))
+        $pendiente = collect(app(AbastecerPreparacionService::class)->pendientes($tarea))
             ->contains(fn ($p) => $p['comprometidas'] > 0);
 
         return [

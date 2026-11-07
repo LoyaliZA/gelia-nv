@@ -11,7 +11,8 @@ const pedido = { id: 1, puede_cerrar_consulta: true, solicitud_preparacion: { mo
 describe('Respuesta actual en las vistas de consulta', () => {
     it('muestra la respuesta sin habilitar cierre ni ajustes aunque el usuario tenga permiso', async () => {
         await act(() => root.render(<ConsultaSolicitudTienda pedido={pedido} />));
-        expect(container.textContent).toContain('Resultado de la revisión en tienda');
+        expect(container.querySelector('[aria-label="Resultado de la revisión en tienda"]')).not.toBeNull();
+        expect(container.textContent).toContain('Respuesta de disponibilidad');
         expect(container.textContent).toContain('Sin incidencias');
         expect(container.querySelectorAll('button,input,select,textarea')).toHaveLength(0);
     });

@@ -1,17 +1,16 @@
-import React from 'react';
 import { Menu } from 'lucide-react';
+import BotonIconoMensajeria from './BotonIconoMensajeria';
 
-/** Abre/cierra el menú de navegación global (Sidebar) desde la vista de mensajería en móvil. */
-export default function MensajeriaNavMenuButton({ className = '' }) {
+/** Abre o cierra el menú de navegación global desde la mensajería en móvil. */
+export default function MensajeriaNavMenuButton({ className = '', plano = false }) {
     return (
-        <button
-            type="button"
+        <BotonIconoMensajeria
+            icon={Menu}
+            label="Abrir menú de navegación"
             onClick={() => window.dispatchEvent(new CustomEvent('gelia-sidebar-toggle-menu'))}
-            className={`p-2 rounded-full theme-element theme-text-main hover:border-[var(--color-primario)] border theme-border transition-colors shrink-0 md:hidden ${className}`}
-            title="Menú de navegación"
-            aria-label="Abrir menú de navegación"
-        >
-            <Menu className="w-4 h-4" />
-        </button>
+            plano={plano}
+            className={`${plano ? '' : 'rounded-full theme-element theme-text-main border theme-border'} md:hidden ${className}`}
+            size={18}
+        />
     );
 }

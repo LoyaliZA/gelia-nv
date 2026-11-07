@@ -1,0 +1,141 @@
+.gelia-selector-fecha {
+    min-width: 0;
+}
+
+.gelia-selector-fecha-controles {
+    display: flex;
+    gap: 0.5rem;
+    align-items: stretch;
+}
+
+.gelia-selector-fecha-campo.theme-input {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+    min-width: 0;
+    text-align: left;
+    cursor: pointer;
+}
+
+.gelia-selector-fecha-campo > span {
+    flex: 1;
+}
+
+.gelia-selector-fecha-campo > svg {
+    flex-shrink: 0;
+    color: var(--theme-text-main);
+}
+
+.gelia-selector-fecha-hoy {
+    flex-shrink: 0;
+    white-space: nowrap;
+    padding: 0.625rem 1rem;
+    border: 1px solid var(--theme-border);
+    border-radius: var(--theme-radius-input);
+    background: var(--theme-element-bg);
+    color: var(--theme-text-main);
+    font-size: 0.875rem;
+    font-weight: 700;
+}
+
+.gelia-calendario {
+    width: min(100%, 23rem);
+    margin-top: 0.75rem;
+    padding: 1rem;
+    border: 1px solid var(--theme-border);
+    border-radius: 1rem;
+    background: var(--theme-surface-solid);
+    color: var(--theme-text-main);
+    box-shadow: var(--theme-shadow-card);
+}
+
+.gelia-calendario-cabecera {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    margin-bottom: 0.75rem;
+}
+
+.gelia-calendario-cabecera strong {
+    flex: 1;
+    text-align: center;
+    text-transform: capitalize;
+    font-size: 0.9375rem;
+}
+
+.gelia-calendario-cabecera strong span {
+    color: var(--theme-text-muted);
+}
+
+.gelia-calendario-cabecera button {
+    display: grid;
+    place-items: center;
+    min-width: 2.25rem;
+    min-height: 2.5rem;
+    border-radius: 0.625rem;
+}
+
+.gelia-calendario-semana {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 0.25rem;
+}
+
+.gelia-calendario-semana [role='columnheader'] {
+    padding-block: 0.5rem;
+    text-align: center;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--theme-text-muted);
+}
+
+.gelia-calendario-dia {
+    position: relative;
+    width: 100%;
+    min-height: 2.5rem;
+    margin-block: 0.125rem;
+    border: 1px solid transparent;
+    border-radius: 0.625rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.gelia-calendario-dia[aria-current='date'] {
+    border-color: var(--color-primario);
+}
+
+.gelia-calendario-dia[data-seleccionado='true'] {
+    background: var(--theme-text-main);
+    color: var(--theme-surface-solid);
+}
+
+.gelia-calendario-dia > svg {
+    position: absolute;
+    right: 0.125rem;
+    bottom: 0.125rem;
+}
+
+.gelia-selector-fecha button:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.gelia-selector-fecha button:focus-visible {
+    outline: 2px solid var(--color-primario);
+    outline-offset: 2px;
+}
+
+.gelia-calendario button:hover:not([data-seleccionado='true']), .gelia-selector-fecha-hoy:hover:not(:disabled) {
+    background: var(--theme-element-bg);
+    box-shadow: inset 0 0 0 1px var(--color-primario);
+}
+
+.gelia-calendario-pie {
+    margin: 0.75rem 0 0;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--theme-border);
+    color: var(--theme-text-muted);
+    font-size: 0.75rem;
+    line-height: 1.5;
+}

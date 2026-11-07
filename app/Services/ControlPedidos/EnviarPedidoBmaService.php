@@ -39,7 +39,7 @@ class EnviarPedidoBmaService
 
     private function enviar(PedidoBma $pedido, int $usuarioId): PedidoBma
     {
-        if ($pedido->esRecogeTiendaApartado()) {
+        if ($pedido->esRecogeTiendaApartado() && ! \App\Support\ControlPedidos\CustodiaDocumentalTienda::aplica($pedido)) {
             throw new \RuntimeException('Recoge en tienda termina al confirmar el apartado. No se envía a pago ni a auditoría.');
         }
 
@@ -54,8 +54,20 @@ class EnviarPedidoBmaService
 
         $pedido->assertSinExistenciaAtendida();
         AssertPedidoNoBloqueadoFase7::assert($pedido);
+        if (\App\Support\ControlPedidos\CustodiaDocumentalTienda::aplica($pedido)) {
+            $bloqueo = $pedido->motivoBloqueoCierreConsultaTienda();
+            if (! $pedido->consultaCerrada() || $bloqueo || $pedido->consulta_actualizacion_pendiente) {
+                throw new \InvalidArgumentException($bloqueo ?: 'Cierre la consulta vigente antes de confirmar el pedido.');
+            }
+        }
+        app(ResolverAlmacenesConsultaCedisService::class)->ejecutar($pedido);
         $this->validarCamposRequeridos($pedido);
-        if (! $pedido->esEnvioSoloResguardos()) {
+        $creditoTienda = \App\Support\ControlPedidos\CustodiaDocumentalTienda::credito($pedido);
+        if ($creditoTienda && $pedido->pagosExhibicion()->activosParaCobertura()->where('forma_pago', '!=', 'credito')->exists()) {
+            throw new \InvalidArgumentException('El crédito no se combina con otros métodos de pago.');
+        }
+        // El resultado de Wizerp lo registra el auxiliar después de recibir la solicitud.
+        if (! $pedido->esEnvioSoloResguardos() && ! $creditoTienda) {
             $this->pagosService->assertCubiertoParaEnviar($pedido);
             $this->pagosService->generarExcedenteSiAplica($pedido, $usuarioId);
         }
@@ -66,6 +78,7 @@ class EnviarPedidoBmaService
                 ! $pedido->esResguardoAbierto()
                 && $pedido->origen?->requiere_logistica
                 && ! $pedido->esTrasladoInternoAPdv()
+                && ! \App\Support\ControlPedidos\CustodiaDocumentalTienda::aplica($pedido)
                 && ! $pedido->cliente_proporciona_guia
                 && ! $pedido->cliente_direccion_id
                 && ! CrearSnapshotDireccionPedido::manualEstaCompleta($pedido->direccionVigente)
@@ -89,7 +102,7 @@ class EnviarPedidoBmaService
                 throw new \RuntimeException('No se encontró el estatus PENDIENTE_AUXILIAR.');
             }
 
-            if (config('control_pedidos.direcciones_normalizadas') || $pedido->cliente_direccion_id) {
+            if ((config('control_pedidos.direcciones_normalizadas') || $pedido->cliente_direccion_id) && ! \App\Support\ControlPedidos\CustodiaDocumentalTienda::aplica($pedido)) {
                 $this->crearSnapshot->ejecutar($pedido, $usuarioId);
                 $pedido->refresh();
             }

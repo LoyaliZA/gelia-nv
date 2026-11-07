@@ -117,7 +117,7 @@ export default function ModalLiberarMercancia({
                         <input type="number" min="0" className={`${THEME_INPUT} w-full py-3`} value={cantidad} onChange={(e) => setCantidad(e.target.value)} />
                     </div>
                     <div>
-                        <label className={SECCION}>Incidencia (faltante/daño, opcional)</label>
+                        <label className={SECCION}>Detalle del producto (faltante o daño, opcional)</label>
                         <textarea className={`${THEME_TEXTAREA} w-full py-3 min-h-[72px]`} value={incidencia} onChange={(e) => setIncidencia(e.target.value)} placeholder="Si aplica…" />
                     </div>
                     <label className="flex items-start gap-3 text-sm font-bold theme-text-main cursor-pointer">

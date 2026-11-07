@@ -3,15 +3,17 @@
 namespace App\Services\Mensajeria;
 
 use App\Models\Conversacion;
-use App\Models\ConversacionParticipante;
 use App\Models\Mensaje;
 use App\Models\User;
 
 class FormatearMensajeService
 {
+    /** @var array<int, int> */
+    private array $participantesPorConversacion = [];
+
     public function ejecutar(Mensaje $mensaje, User $viewer, Conversacion $conversacion): array
     {
-        $totalParticipantes = $conversacion->participantes()->count();
+        $totalParticipantes = $this->totalParticipantes($conversacion);
         $otrosParticipantes = max(0, $totalParticipantes - 1);
         $lecturasOtros = $mensaje->lecturas
             ->filter(fn ($l) => $l->user_id !== $mensaje->user_id)
@@ -78,7 +80,11 @@ class FormatearMensajeService
         if ($mensaje->tipo === Mensaje::TIPO_TEXTO && $mensaje->contenido) {
             $texto = trim($mensaje->contenido);
 
-            return mb_strlen($texto) > 120 ? mb_substr($texto, 0, 120) . '…' : $texto;
+            return mb_strlen($texto) > 120 ? mb_substr($texto, 0, 120).'…' : $texto;
+        }
+
+        if ($mensaje->tipo === Mensaje::TIPO_STICKER) {
+            return 'Sticker';
         }
 
         if ($adjunto?->nombre_original) {
@@ -88,16 +94,22 @@ class FormatearMensajeService
         if ($mensaje->contenido) {
             $texto = trim($mensaje->contenido);
 
-            return mb_strlen($texto) > 100 ? mb_substr($texto, 0, 100) . '…' : $texto;
+            return mb_strlen($texto) > 100 ? mb_substr($texto, 0, 100).'…' : $texto;
         }
 
-        return match ($mensaje->tipo) {
-            Mensaje::TIPO_IMAGEN => '📷 Imagen',
-            Mensaje::TIPO_VIDEO => '🎬 Video',
-            Mensaje::TIPO_AUDIO => '🎤 Audio',
-            Mensaje::TIPO_ARCHIVO => '📎 Archivo',
-            default => '[mensaje]',
-        };
+        return Mensaje::etiquetaTipo($mensaje->tipo);
+    }
+
+    private function totalParticipantes(Conversacion $conversacion): int
+    {
+        $id = $conversacion->id;
+        if (! array_key_exists($id, $this->participantesPorConversacion)) {
+            $this->participantesPorConversacion[$id] = $conversacion->relationLoaded('participantes')
+                ? $conversacion->participantes->count()
+                : $conversacion->participantes()->count();
+        }
+
+        return $this->participantesPorConversacion[$id];
     }
 
     /** Payload para broadcast: sin campos que dependen del usuario que ve el chat. */

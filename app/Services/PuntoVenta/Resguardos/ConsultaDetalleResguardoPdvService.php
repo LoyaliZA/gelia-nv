@@ -135,6 +135,7 @@ class ConsultaDetalleResguardoPdvService
             'estado_etiqueta' => EtiquetasResguardoPdv::etiquetaEstado($resguardo->estado),
             'pedido_bma_id' => $resguardo->pedido_bma_id,
             'es_t02_documental' => \App\Support\ControlPedidos\TransferenciaT02::documental($resguardo->pedido),
+            'es_custodia_documental' => \App\Support\ControlPedidos\CustodiaDocumentalTienda::aplica($resguardo->pedido),
             'snapshot_folio' => $resguardo->snapshot_folio,
             'snapshot_cliente_nombre' => $resguardo->snapshot_cliente_nombre,
             'envia_a_otra_persona' => $retiro['envia_a_otra_persona'],

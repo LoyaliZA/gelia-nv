@@ -1,0 +1,206 @@
+[
+  {
+    "nombre": "escritorio",
+    "width": 1440,
+    "height": 1000,
+    "tema": "dark",
+    "gerencia": false,
+    "datos": [
+      {
+        "aviso": "Actualización de consulta solicitada",
+        "bitacora": false,
+        "centrado": true,
+        "desborde": false
+      },
+      {
+        "aviso": "Consulta respondida",
+        "bitacora": false,
+        "centrado": true,
+        "desborde": false
+      },
+      {
+        "aviso": "Nueva consulta solicitada",
+        "bitacora": false,
+        "centrado": true,
+        "desborde": false
+      },
+      {
+        "aviso": "Consulta de pesaje solicitada",
+        "bitacora": false,
+        "centrado": true,
+        "desborde": false
+      }
+    ],
+    "errores": []
+  },
+  {
+    "nombre": "escritorio",
+    "width": 1440,
+    "height": 1000,
+    "tema": "dark",
+    "gerencia": true,
+    "datos": [
+      {
+        "aviso": "Actualización de consulta solicitada",
+        "bitacora": true,
+        "centrado": true,
+        "desborde": false
+      },
+      {
+        "aviso": "Consulta respondida",
+        "bitacora": true,
+        "centrado": true,
+        "desborde": false
+      },
+      {
+        "aviso": "Nueva consulta solicitada",
+        "bitacora": true,
+        "centrado": true,
+        "desborde": false
+      },
+      {
+        "aviso": "Consulta de pesaje solicitada",
+        "bitacora": true,
+        "centrado": true,
+        "desborde": false
+      }
+    ],
+    "errores": []
+  },
+  {
+    "nombre": "usuario",
+    "width": 475,
+    "height": 932,
+    "tema": "dark",
+    "gerencia": false,
+    "datos": [
+      {
+        "aviso": "Actualización de consulta solicitada",
+        "bitacora": false,
+        "centrado": true,
+        "desborde": false
+      },
+      {
+        "aviso": "Consulta respondida",
+        "bitacora": false,
+        "centrado": true,
+        "desborde": false
+      },
+      {
+        "aviso": "Nueva consulta solicitada",
+        "bitacora": false,
+        "centrado": true,
+        "desborde": false
+      },
+      {
+        "aviso": "Consulta de pesaje solicitada",
+        "bitacora": false,
+        "centrado": true,
+        "desborde": false
+      }
+    ],
+    "errores": []
+  },
+  {
+    "nombre": "usuario",
+    "width": 475,
+    "height": 932,
+    "tema": "dark",
+    "gerencia": true,
+    "datos": [
+      {
+        "aviso": "Actualización de consulta solicitada",
+        "bitacora": true,
+        "centrado": true,
+        "desborde": false
+      },
+      {
+        "aviso": "Consulta respondida",
+        "bitacora": true,
+        "centrado": true,
+        "desborde": false
+      },
+      {
+        "aviso": "Nueva consulta solicitada",
+        "bitacora": true,
+        "centrado": true,
+        "desborde": false
+      },
+      {
+        "aviso": "Consulta de pesaje solicitada",
+        "bitacora": true,
+        "centrado": true,
+        "desborde": false
+      }
+    ],
+    "errores": []
+  },
+  {
+    "nombre": "movil",
+    "width": 390,
+    "height": 844,
+    "tema": "light",
+    "gerencia": false,
+    "datos": [
+      {
+        "aviso": "Actualización de consulta solicitada",
+        "bitacora": false,
+        "centrado": true,
+        "desborde": false
+      },
+      {
+        "aviso": "Consulta respondida",
+        "bitacora": false,
+        "centrado": true,
+        "desborde": false
+      },
+      {
+        "aviso": "Nueva consulta solicitada",
+        "bitacora": false,
+        "centrado": true,
+        "desborde": false
+      },
+      {
+        "aviso": "Consulta de pesaje solicitada",
+        "bitacora": false,
+        "centrado": true,
+        "desborde": false
+      }
+    ],
+    "errores": []
+  },
+  {
+    "nombre": "movil",
+    "width": 390,
+    "height": 844,
+    "tema": "light",
+    "gerencia": true,
+    "datos": [
+      {
+        "aviso": "Actualización de consulta solicitada",
+        "bitacora": true,
+        "centrado": true,
+        "desborde": false
+      },
+      {
+        "aviso": "Consulta respondida",
+        "bitacora": true,
+        "centrado": true,
+        "desborde": false
+      },
+      {
+        "aviso": "Nueva consulta solicitada",
+        "bitacora": true,
+        "centrado": true,
+        "desborde": false
+      },
+      {
+        "aviso": "Consulta de pesaje solicitada",
+        "bitacora": true,
+        "centrado": true,
+        "desborde": false
+      }
+    ],
+    "errores": []
+  }
+]

@@ -1,0 +1,24 @@
+[
+  {
+    "nombre": "escritorio",
+    "width": 1440,
+    "height": 1000,
+    "tema": "dark",
+    "cobertura": "transferencia",
+    "ancho": 1440,
+    "desborde": false,
+    "errores": [],
+    "confirmacionEnviada": true
+  },
+  {
+    "nombre": "movil",
+    "width": 390,
+    "height": 844,
+    "tema": "light",
+    "cobertura": "credito",
+    "ancho": 390,
+    "desborde": false,
+    "errores": [],
+    "confirmacionEnviada": true
+  }
+]

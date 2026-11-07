@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 
 // Las lecturas se resuelven en orden; una consulta lenta no descarta la siguiente.
-export default function useEscaneoPreparacion({ almacenId, onProducto }) {
+export default function useEscaneoPreparacion({ almacenId, onProducto, permitirSinAlmacen = false }) {
     const cola = useRef(Promise.resolve());
     const sesion = useRef(null);
     const agregar = useRef(onProducto);
@@ -24,13 +24,13 @@ export default function useEscaneoPreparacion({ almacenId, onProducto }) {
     const encolar = (valor) => {
         const codigo = String(valor || '').trim();
         const controller = sesion.current;
-        if (!codigo || !almacenId || !controller || controller.signal.aborted) return;
+        if (!codigo || (!almacenId && !permitirSinAlmacen) || !controller || controller.signal.aborted) return;
         setPendientes((n) => n + 1);
         cola.current = cola.current.then(async () => {
             if (controller.signal.aborted) return;
             try {
                 const { data } = await axios.get(route('gestion_interna.productos.buscar'), {
-                    params: { q: codigo, almacen_id: almacenId, per_page: 25, incluir_sin_inventario: 1 }, signal: controller.signal,
+                    params: { q: codigo, ...(almacenId ? { almacen_id: almacenId } : {}), per_page: 25, incluir_sin_inventario: 1 }, signal: controller.signal,
                 });
                 if (controller.signal.aborted) return;
                 const encontrados = data.data || [];

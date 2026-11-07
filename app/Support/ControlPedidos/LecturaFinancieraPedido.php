@@ -14,6 +14,13 @@ final class LecturaFinancieraPedido
         $pedido->refresh();
 
         return [
+            'estatus' => $pedido->estatus,
+            'catalogo_estatus_pedido_id' => $pedido->catalogo_estatus_pedido_id,
+            'sucursal_destino_id' => $pedido->sucursal_destino_id,
+            'sucursal_destino' => $pedido->sucursalDestino,
+            'pago_validado_at' => $pedido->pago_validado_at?->toIso8601String(),
+            'numero_remision' => $pedido->numero_remision,
+            'empacado_at' => $pedido->empacado_at?->toIso8601String(),
             'consulta_cerrada' => $pedido->consultaCerrada(),
             'consulta_cerrada_at' => $pedido->consulta_cerrada_at?->toIso8601String(),
             'revisiones_producto' => $pedido->revisionesProducto()->orderBy('orden')->get(),

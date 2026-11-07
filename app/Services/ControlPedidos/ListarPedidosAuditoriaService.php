@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Support\ControlPedidos\MaquinaEstadosPedidoBma;
 use App\Support\ControlPedidos\RevisionEnCursoPedidoBma;
 use App\Support\ControlPedidos\VisibilidadPedidoBma;
+use App\Support\ControlPedidos\BitacoraCedis;
 use Illuminate\Database\Eloquent\Builder;
 
 class ListarPedidosAuditoriaService
@@ -33,20 +34,20 @@ class ListarPedidosAuditoriaService
         $this->aplicarOrden($query, $filtros);
 
         if (! $paginar) {
-            return $query->get()->each(fn (PedidoBma $p) => $this->anexarFlagsVista($p));
+            return $query->get()->each(fn (PedidoBma $p) => $this->anexarFlagsVista($p, $usuario));
         }
 
         return $query->paginate(15)->withQueryString()->through(
-            fn (PedidoBma $p) => $this->anexarFlagsVista($p)
+            fn (PedidoBma $p) => $this->anexarFlagsVista($p, $usuario)
         );
     }
 
     public function detalle(int $pedidoId, User $usuario): PedidoBma
     {
-        return $this->anexarFlagsVista($this->queryBase($usuario)->findOrFail($pedidoId));
+        return $this->anexarFlagsVista($this->queryBase($usuario)->findOrFail($pedidoId), $usuario);
     }
 
-    private function anexarFlagsVista(PedidoBma $pedido): PedidoBma
+    private function anexarFlagsVista(PedidoBma $pedido, ?User $usuario): PedidoBma
     {
         $hito = MaquinaEstadosPedidoBma::hitoAuditoria($pedido);
         $pedido->setAttribute('pendiente_re_revision', MaquinaEstadosPedidoBma::esPendienteReRevision($pedido));
@@ -81,7 +82,7 @@ class ListarPedidosAuditoriaService
         $pedido->setAttribute('es_recoge_tienda_apartado', $pedido->esRecogeTiendaApartado());
         $pedido->setAttribute('es_recoleccion_tienda', $pedido->esRecoleccionTienda());
 
-        return $pedido;
+        return BitacoraCedis::presentar($pedido, $usuario);
     }
 
     public function metricas(?User $usuario = null): array

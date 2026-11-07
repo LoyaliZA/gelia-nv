@@ -38,7 +38,7 @@ class RegistrarBultosEmpaquePedidoBmaService
                 throw new \InvalidArgumentException('Cada bulto debe incluir foto del bulto.');
             }
 
-            if ((! $fotoTicket instanceof UploadedFile || ! $fotoTicket->isValid()) && ! \App\Support\ControlPedidos\TransferenciaT02::documental($pedido)) {
+            if ((! $fotoTicket instanceof UploadedFile || ! $fotoTicket->isValid()) && ! \App\Support\ControlPedidos\CustodiaDocumentalTienda::aplica($pedido)) {
                 throw new \InvalidArgumentException('Cada bulto debe incluir foto del ticket.');
             }
 

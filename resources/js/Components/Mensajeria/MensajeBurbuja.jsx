@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { memo, useRef, useState } from 'react';
 import { CornerDownRight } from 'lucide-react';
 import EstadoLectura from './EstadoLectura';
 import MensajeImagen from './MensajeImagen';
@@ -59,7 +59,7 @@ function CitacionMensaje({ replyTo, esPropio, colorRemitente, onIrAMensaje }) {
     );
 }
 
-export default function MensajeBurbuja({
+function MensajeBurbuja({
     mensaje,
     esGrupo = false,
     mostrarRemitente = true,
@@ -69,6 +69,7 @@ export default function MensajeBurbuja({
 }) {
     const esPropio = mensaje.es_propio;
     const adjunto = mensaje.adjuntos?.[0];
+    const esSticker = mensaje.tipo === 'sticker' && adjunto && !mensaje.reply_to && !mensaje.contenido;
     const esGrupoAjeno = esGrupo && !esPropio;
     const mostrarCabecera = esGrupoAjeno && mostrarRemitente;
     const colorRemitente = colorRemitenteGrupo(mensaje.user?.id);
@@ -76,8 +77,18 @@ export default function MensajeBurbuja({
     const subtituloRemitente = subtituloRemitenteGrupo(mensaje.user, participantesGrupo);
 
     const [menuAnchor, setMenuAnchor] = useState(null);
-    const [deslizamiento, setDeslizamiento] = useState(0);
+    const wrapRef = useRef(null);
+    const iconoRef = useRef(null);
     const touchInicio = useRef(null);
+    const deslizamiento = useRef(0);
+
+    const pintarDeslizamiento = (px, arrastrando) => {
+        const el = wrapRef.current;
+        if (!el) return;
+        el.style.transform = px ? `translateX(${px}px)` : '';
+        el.classList.toggle('gelia-mensaje-burbuja-wrap--arrastre', arrastrando);
+        if (iconoRef.current) iconoRef.current.hidden = px <= 20;
+    };
 
     const abrirMenu = (clientX, clientY) => {
         setMenuAnchor({ x: clientX, y: clientY });
@@ -93,7 +104,8 @@ export default function MensajeBurbuja({
             x: e.touches[0].clientX,
             y: e.touches[0].clientY,
         };
-        setDeslizamiento(0);
+        deslizamiento.current = 0;
+        pintarDeslizamiento(0, true);
     };
 
     const handleTouchMove = (e) => {
@@ -102,41 +114,44 @@ export default function MensajeBurbuja({
         const dy = Math.abs(e.touches[0].clientY - touchInicio.current.y);
         if (dy > 40) {
             touchInicio.current = null;
-            setDeslizamiento(0);
+            deslizamiento.current = 0;
+            pintarDeslizamiento(0, false);
             return;
         }
         if (dx > 0) {
-            setDeslizamiento(Math.min(dx, 72));
+            deslizamiento.current = Math.min(dx, 72);
+            pintarDeslizamiento(deslizamiento.current, true);
         }
     };
 
     const handleTouchEnd = () => {
-        if (deslizamiento >= SWIPE_UMBRAL) {
+        if (deslizamiento.current >= SWIPE_UMBRAL) {
             onResponder?.(mensaje);
         }
         touchInicio.current = null;
-        setDeslizamiento(0);
+        deslizamiento.current = 0;
+        pintarDeslizamiento(0, false);
     };
 
     const burbuja = (
         <div
+            ref={wrapRef}
             className={`gelia-mensaje-burbuja-wrap relative group ${esPropio ? 'gelia-mensaje-burbuja-wrap--propio' : ''}`}
-            style={{ transform: deslizamiento ? `translateX(${deslizamiento}px)` : undefined }}
             onContextMenu={handleContextMenu}
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
         >
-            {deslizamiento > 20 && (
-                <span
-                    className={`absolute top-1/2 -translate-y-1/2 opacity-60 pointer-events-none ${
-                        esPropio ? 'right-full mr-1' : 'left-full ml-1'
-                    }`}
-                    aria-hidden
-                >
-                    <CornerDownRight className="w-4 h-4 text-[var(--color-primario)]" />
-                </span>
-            )}
+            <span
+                ref={iconoRef}
+                hidden
+                className={`absolute top-1/2 -translate-y-1/2 opacity-60 pointer-events-none ${
+                    esPropio ? 'right-full mr-1' : 'left-full ml-1'
+                }`}
+                aria-hidden
+            >
+                <CornerDownRight className="w-4 h-4 text-[var(--color-primario)]" />
+            </span>
 
             <button
                 type="button"
@@ -151,12 +166,16 @@ export default function MensajeBurbuja({
             </button>
 
             <div
-                className={`gelia-mensaje-burbuja rounded-2xl px-3 py-2 shadow-sm ${
+                className={`gelia-mensaje-burbuja rounded-2xl px-3 py-2 ${
+                    esSticker ? 'gelia-mensaje-sticker' : 'shadow-sm'
+                } ${
                     esPropio ? 'gelia-mensaje-burbuja--propio' : ''
                 } ${mensaje.reply_to ? 'gelia-mensaje-burbuja--con-cita' : ''} ${
-                    esPropio
-                        ? 'rounded-br-sm bg-[var(--color-primario)] text-white'
-                        : 'rounded-bl-sm theme-element theme-text-main border theme-border'
+                    esSticker
+                        ? ''
+                        : esPropio
+                            ? 'rounded-br-sm bg-[var(--color-primario)] text-white'
+                            : 'rounded-bl-sm theme-element theme-text-main border theme-border'
                 } ${mostrarCabecera ? 'rounded-tl-sm' : ''}`}
             >
                 {mensaje.reply_to && (
@@ -172,18 +191,27 @@ export default function MensajeBurbuja({
                     <p className="gelia-mensaje-burbuja__texto text-sm">{mensaje.contenido}</p>
                 )}
 
+                {mensaje.tipo === 'sticker' && adjunto && (
+                    <img
+                        src={adjunto.url || adjunto.thumbnail_url}
+                        alt="Sticker"
+                        className="gelia-mensaje-sticker__img"
+                        decoding="async"
+                        loading="lazy"
+                    />
+                )}
                 {mensaje.tipo === 'imagen' && adjunto && <MensajeImagen adjunto={adjunto} />}
                 {mensaje.tipo === 'video' && adjunto && <MensajeVideo adjunto={adjunto} />}
                 {mensaje.tipo === 'audio' && adjunto && <MensajeAudio adjunto={adjunto} />}
                 {mensaje.tipo === 'archivo' && adjunto && <MensajeArchivo adjunto={adjunto} />}
 
-                {mensaje.contenido && mensaje.tipo !== 'texto' && (
+                {mensaje.contenido && mensaje.tipo !== 'texto' && mensaje.tipo !== 'sticker' && (
                     <p className="gelia-mensaje-burbuja__texto text-sm mt-1">{mensaje.contenido}</p>
                 )}
 
                 <div className={`gelia-mensaje-meta ${esPropio ? 'gelia-mensaje-meta--propio' : ''}`}>
                     <span className={`gelia-mensaje-meta__hora text-[10px] ${esPropio ? '' : 'opacity-50'}`}>
-                        {formatearHora(mensaje.created_at)}
+                        {mensaje.fallo ? 'No se envió' : formatearHora(mensaje.created_at)}
                     </span>
                     <EstadoLectura estado={mensaje.estado_lectura} esPropio={esPropio} />
                 </div>
@@ -193,7 +221,7 @@ export default function MensajeBurbuja({
                 anchor={menuAnchor}
                 onCerrar={() => setMenuAnchor(null)}
                 onResponder={() => onResponder?.(mensaje)}
-                onCopiarImagen={mensaje.tipo === 'imagen' && adjunto
+                onCopiarImagen={(mensaje.tipo === 'imagen' || mensaje.tipo === 'sticker') && adjunto
                     ? () => copiarImagenMensaje(adjunto)
                     : null}
             />
@@ -204,7 +232,7 @@ export default function MensajeBurbuja({
         return (
             <div
                 id={`mensaje-${mensaje.id}`}
-                className={`gelia-mensaje-fila gelia-mensaje-grupo-fila flex justify-start gap-2 mb-0.5 px-3 ${mostrarCabecera ? 'mt-3' : 'mt-0.5'}`}
+                className={`gelia-mensaje-fila gelia-mensaje-grupo-fila flex justify-start gap-2 mb-0.5 px-3 ${mostrarCabecera ? 'mt-3' : 'mt-0.5'}${mensaje.pendiente ? ' gelia-mensaje-fila--pendiente' : ''}`}
             >
                 <div className="w-8 shrink-0 flex justify-center">
                     {mostrarCabecera ? (
@@ -246,9 +274,11 @@ export default function MensajeBurbuja({
     return (
         <div
             id={`mensaje-${mensaje.id}`}
-            className={`gelia-mensaje-fila ${esPropio ? 'gelia-mensaje-fila--propio' : ''} mb-2 px-3`}
+            className={`gelia-mensaje-fila ${esPropio ? 'gelia-mensaje-fila--propio' : ''} mb-2 px-3${mensaje.pendiente ? ' gelia-mensaje-fila--pendiente' : ''}`}
         >
             {burbuja}
         </div>
     );
 }
+
+export default memo(MensajeBurbuja);

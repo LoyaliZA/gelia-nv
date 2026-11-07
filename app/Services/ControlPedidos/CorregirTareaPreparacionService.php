@@ -46,7 +46,7 @@ class CorregirTareaPreparacionService
 
         if ($tareaAnterior->estado !== PedidoBmaTareaPreparacion::ESTADO_CON_INCIDENCIA) {
             throw ValidationException::withMessages([
-                'estado' => 'Solo puede corregir tareas con incidencia.',
+                'estado' => 'Solo puede corregir tareas con un error reportado.',
             ]);
         }
 

@@ -1,3 +1,11 @@
+import { fechaCalendario } from '../../../../utils/fechaCalendario';
+
+export function fechaInicialRemision(pedido) {
+    return pedido?.solicitud_preparacion?.remision_tienda?.emitida_at?.slice(0, 10)
+        || pedido?.fecha?.slice(0, 10)
+        || fechaCalendario(pedido?.created_at);
+}
+
 /** El PDF de remisión se adjunta junto con el número escrito en la ficha. */
 export function prepararAdjuntoRemision(numeroEscrito, numeroGuardado) {
     const numero = String(numeroEscrito || '').trim();

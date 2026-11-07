@@ -348,7 +348,7 @@ class RegistrarEntregaResguardoPdvService
     private function assertMetodoValidacion(string $metodoValidacion, ResguardoPdv $resguardo): void
     {
         if ($metodoValidacion === self::METODO_VALIDACION_FOTOGRAFIA_T02
-            && \App\Support\ControlPedidos\TransferenciaT02::documental($resguardo->pedido)) return;
+            && \App\Support\ControlPedidos\CustodiaDocumentalTienda::aplica($resguardo->pedido)) return;
         if ($metodoValidacion !== self::METODO_VALIDACION_FIRMA) {
             throw ValidationException::withMessages([
                 'metodo_validacion' => 'El método de validación no es válido.',

@@ -6,6 +6,8 @@ use App\Models\ControlPedidos\PedidoBma;
 use App\Models\ControlPedidos\PedidoBmaDocumento;
 use App\Models\Producto;
 use App\Models\User;
+use App\Support\ControlPedidos\ActualizacionConsulta;
+use App\Support\ControlPedidos\InstruccionEntrega;
 use App\Support\ControlPedidos\VisibilidadPedidoBma;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -19,7 +21,7 @@ final class AccionesDisponibilidadTiendaService
             $pedido = PedidoBma::query()->lockForUpdate()->findOrFail($pedido->id);
             abort_unless($actor->can('control_pedidos.crear') && (int) $pedido->vendedor_id === (int) $actor->id, 403);
             $json = $pedido->solicitud_preparacion_json ?? [];
-            if (($json['modalidad_entrega'] ?? '') !== 'tienda' || $pedido->cancelado_at || $pedido->empacado_at || $pedido->consultaCerrada() || \App\Support\ControlPedidos\InstruccionEntrega::mercanciaYaSalio($pedido)) {
+            if (($json['modalidad_entrega'] ?? '') !== 'tienda' || $pedido->cancelado_at || $pedido->empacado_at || $pedido->consultaCerrada() || InstruccionEntrega::mercanciaYaSalio($pedido)) {
                 throw ValidationException::withMessages(['consulta' => 'Abra la consulta antes de ajustar la disponibilidad. No se modifican pedidos preparados o cancelados.']);
             }
             if (! in_array($json['revision_disponibilidad']['estado'] ?? '', ['sin_excepciones', 'excepciones_pendientes', 'decision_registrada'], true)) {
@@ -87,8 +89,12 @@ final class AccionesDisponibilidadTiendaService
                 $evento['alternativa'] = $nueva;
                 $json['revision_disponibilidad']['aceptacion_vigente'] = false;
             }
+            if ($accion !== 'confirmar') {
+                ActualizacionConsulta::solicitar($json);
+            }
             $json['acciones_disponibilidad'][(string) $revision->id] = $evento;
-            $pedido->update(['solicitud_preparacion_json' => $json]);
+            $pedido->update(['solicitud_preparacion_json' => $json,
+                'estatus_envio' => ($json['area_revision'] ?? '') === 'control_pedidos' && ActualizacionConsulta::pendiente($json) ? PedidoBma::ESTATUS_ENVIO_PENDIENTE_PESAJE : $pedido->estatus_envio]);
             app(RegistrarHistorialPedidoService::class)->ejecutar($pedido->id, $actor->id, $pedido->catalogo_estatus_pedido_id,
                 $pedido->catalogo_estatus_pedido_id, match ($accion) {
                     'confirmar' => 'Cliente confirma el estado reportado de ', 'retirar' => 'Ventas retira de la consulta ', default => 'Ventas solicita sustituir '
@@ -104,7 +110,7 @@ final class AccionesDisponibilidadTiendaService
     {
         $cedis = ($pedido->solicitud_preparacion_json['area_revision'] ?? '') === 'control_pedidos';
         $tarea = $pedido->instruccionEntregaVigente;
-        app(NotificarPedidoBmaService::class)->ejecutar($pedido, 'pedido_disponibilidad_ajustada', $texto,
+        app(NotificarPedidoBmaService::class)->ejecutar($pedido, 'pedido_consulta_actualizada', $texto,
             [$cedis ? 'control_pedidos.cedis' : 'control_pedidos.tienda.ver'], $actor->id, true,
             ['url' => $cedis ? '/control-pedidos/cedis?q='.$pedido->folio : '/control-pedidos/tienda'.($tarea ? '?tarea='.$tarea->id : '')]);
     }
@@ -144,7 +150,8 @@ final class AccionesDisponibilidadTiendaService
             $anexo['revision_respuesta_id'] = $rev->id;
             $json['anexo_sin_remision'][$indice] = $anexo;
             $json['revision_disponibilidad']['aceptacion_vigente'] = ! collect($json['anexo_sin_remision'])->contains(fn ($a) => empty($a['respondida_at']));
-            $pedido->update(['solicitud_preparacion_json' => $json]);
+            $pedido->update(['solicitud_preparacion_json' => $json,
+                'estatus_envio' => ($json['area_revision'] ?? '') === 'control_pedidos' && ActualizacionConsulta::pendiente($json) ? PedidoBma::ESTATUS_ENVIO_PENDIENTE_PESAJE : $pedido->estatus_envio]);
             app(RegistrarHistorialPedidoService::class)->ejecutar($pedido->id, $actor->id, $pedido->catalogo_estatus_pedido_id, $pedido->catalogo_estatus_pedido_id,
                 'CEDIS respondió la alternativa solicitada: '.$rev->descripcion_producto.'. '.$anexo['resultado'], 'respuesta_alternativa_tienda');
             $this->notificar($pedido, $actor, 'CEDIS respondió la alternativa. Ventas debe confirmar la consulta con el cliente.');

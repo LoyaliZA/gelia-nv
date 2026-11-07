@@ -54,6 +54,17 @@ final class RespuestaPreparacionTienda
                 'url' => $documento->url,
             ]);
         }
+        if (isset($revision['evidencia_actual_ids'])) {
+            $documentos = $documentos->filter(fn ($d) => $d['producto_id'] !== null)->values();
+            foreach ($pedido->documentos as $documento) {
+                if (! $documento->activo || $documento->relacion_tipo !== PedidoBmaDocumento::RELACION_REVISION_GENERAL) {
+                    continue;
+                }
+                $documentos->push(['id' => $documento->id, 'producto_id' => null, 'tipo' => 'evidencia_general',
+                    'nombre_original' => $documento->nombre_original, 'mime_type' => $documento->mime_type, 'url' => $documento->url,
+                    'anterior' => ! in_array($documento->id, $revision['evidencia_actual_ids'], true)]);
+            }
+        }
         $responsableId = $revision['respondida_por_id'] ?? null;
         $responsableRevision = $responsableId ? User::query()->whereKey($responsableId)->value('name') : null;
         $apartado = $tarea->cumplimientoFisico?->estado === PedidoBmaCumplimientoFisico::ESTADO_APARTADO_CONFIRMADO;
@@ -62,8 +73,8 @@ final class RespuestaPreparacionTienda
             'documental' => ApartadoT01::aplica($pedido),
             'estado' => $tarea->estado,
             'respondida' => $tarea->atendida_at !== null,
-            'respondida_at' => $tarea->atendida_at?->toIso8601String() ?: ($revision['respondida_at'] ?? null),
-            'responsable' => $tarea->atendidaPor?->name ?: $responsableRevision,
+            'respondida_at' => $revision['respondida_at'] ?? $tarea->atendida_at?->toIso8601String(),
+            'responsable' => $responsableRevision ?: $tarea->atendidaPor?->name,
             'ubicacion' => $tarea->cumplimientoFisico?->ubicacion,
             'cantidad' => $cantidad,
             'piezas_afectadas' => $piezasAfectadas,
@@ -84,10 +95,11 @@ final class RespuestaPreparacionTienda
                 'cantidad' => $revisionProducto->cantidad_solicitada,
                 'estado_fisico' => $revisionProducto->estado_fisico,
                 'detalle' => $revisionProducto->comentario,
-                'unica_pieza' => false,
-                'mejor_ejemplar' => false,
+                'unica_pieza' => (bool) $revisionProducto->unica_pieza,
+                'mejor_ejemplar' => (bool) $revisionProducto->mejor_ejemplar,
+                'documentos' => $pedido->documentos->filter(fn ($d) => $d->activo && $d->relacion_tipo === PedidoBmaDocumento::RELACION_REVISION_PRODUCTO && (int) $d->relacion_id === (int) $revisionProducto->id)->map(fn ($d) => ['id' => $d->id, 'url' => $d->url, 'mime_type' => $d->mime_type, 'nombre_original' => $d->nombre_original])->values()->all(),
             ])->values()->all(),
-            'productos' => $tarea->productos->map(fn ($p) => [
+            'productos' => (count($revision['historial_respuestas'] ?? []) > 0 ? collect() : $tarea->productos)->map(fn ($p) => [
                 'id' => $p->id, 'sku' => $p->sku, 'descripcion' => $p->descripcion_snapshot,
                 'cantidad' => $p->cantidad_encontrada, 'estado_fisico' => $p->estado_fisico, 'observacion' => $p->observacion,
                 'unica_pieza' => $p->estado_fisico !== 'sin_existencia' && (bool) $p->unica_pieza, 'mejor_ejemplar' => $p->estado_fisico !== 'sin_existencia' && (bool) $p->mejor_ejemplar,

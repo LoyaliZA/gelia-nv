@@ -65,7 +65,34 @@ class PresenciaEnLineaTest extends TestCase
         $this->assertFalse($payload['en_linea']);
         $this->assertSame($ultima, $payload['ultima_actividad_at']);
         $this->assertSame('disponible', $payload['estado']);
+        $this->assertSame('En línea', $payload['etiqueta']);
+        $this->assertNull($payload['emoji']);
         $this->assertArrayNotHasKey('pestanas', $payload);
+    }
+
+    public function test_los_horarios_y_el_estado_manual_no_cambian_la_etiqueta(): void
+    {
+        Carbon::setTestNow('2026-11-02 18:00:00');
+        $servicio = new FormatearPresenciaService(new ResolverEstadoPresenciaService);
+
+        $payload = $servicio->ejecutar([
+            'estado' => 'en_junta',
+            'modo' => 'manual',
+            'mensaje' => 'Cierre semanal',
+            'automatizar' => true,
+            'horarios' => [[
+                'estado' => 'comiendo',
+                'dias' => [1, 2, 3, 4, 5, 6, 7],
+                'inicio' => '00:00',
+                'fin' => '23:59',
+            ]],
+            'pestanas' => ['abc' => now()->addMinute()->toIso8601String()],
+        ]);
+
+        $this->assertSame('disponible', $payload['estado']);
+        $this->assertSame('En línea', $payload['etiqueta']);
+        $this->assertNull($payload['mensaje']);
+        $this->assertTrue($payload['en_linea']);
     }
 
     public function test_solo_marca_fuera_de_linea_si_antes_se_aviso_en_linea(): void

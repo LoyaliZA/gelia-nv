@@ -1,11 +1,26 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from '@inertiajs/react';
-import { MessageSquarePlus, Users, ArrowLeft, X, ExternalLink } from 'lucide-react';
+import { ArrowLeft, ExternalLink, MessageSquarePlus, Users, X } from 'lucide-react';
 import BuscadorInteligente from './BuscadorInteligente';
 import AvatarUsuario from './AvatarUsuario';
-import SelectorEstadoPresencia from './SelectorEstadoPresencia';
-import EstadoPresenciaTexto from './EstadoPresenciaTexto';
 import MensajeriaNavMenuButton from './MensajeriaNavMenuButton';
+import BotonIconoMensajeria from './BotonIconoMensajeria';
+import useIconoHover from '@/hooks/useIconoHover';
+
+const FILTROS = [
+    { id: 'todos', label: 'Todos' },
+    { id: 'no-leidos', label: 'No leídos' },
+    { id: 'grupos', label: 'Grupos' },
+];
+
+function EnlaceIcono({ href, icon, label, className }) {
+    const { nodo, triggerProps } = useIconoHover(icon, { size: 20, className: 'w-5 h-5' });
+    return (
+        <Link href={href} className={`inline-flex items-center justify-center ${className}`} title={label} aria-label={label} {...triggerProps}>
+            {nodo}
+        </Link>
+    );
+}
 
 const formatearFecha = (fecha) => {
     if (!fecha) return '';
@@ -21,6 +36,13 @@ const formatearFecha = (fecha) => {
     }
 };
 
+function textoVacio(filtro, hayConversaciones) {
+    if (!hayConversaciones) return 'Todavía no hay conversaciones.';
+    if (filtro === 'no-leidos') return 'No hay mensajes sin leer.';
+    if (filtro === 'grupos') return 'No hay grupos.';
+    return 'Todavía no hay conversaciones.';
+}
+
 export default function ConversacionLista({
     conversaciones,
     conversacionActiva,
@@ -29,129 +51,124 @@ export default function ConversacionLista({
     onNuevoGrupo,
     onSeleccionarConversacion,
     onIrAMensaje,
-    compact = false,
-    compacta = false,
     onCerrar,
 }) {
+    const [filtro, setFiltro] = useState('todos');
 
-    const ancho = compact || compacta
-        ? 'w-full md:w-72 lg:w-80 shrink-0'
-        : 'w-full sm:w-80 lg:w-96 shrink-0';
+    const visibles = conversaciones.filter((c) => {
+        if (filtro === 'no-leidos') return c.unread_count > 0;
+        if (filtro === 'grupos') return c.tipo === 'grupo';
+        return true;
+    });
 
     return (
-        <div className={`gelia-mensajeria-list-pane flex flex-col h-full theme-text-main border-r theme-border ${ancho}`}>
-            <div className="gelia-mensajeria-list-header p-3 sm:p-4 border-b theme-border shrink-0">
-                <div className="flex items-center gap-2 mb-3 min-w-0">
-                    <MensajeriaNavMenuButton />
+        <div className="gelia-mensajeria-list-pane flex flex-col h-full theme-text-main border-r theme-border">
+            <div className="gelia-mensajeria-list-header border-b theme-border shrink-0">
+                <div className="flex items-center min-w-0 px-1 pt-1">
+                    {onCerrar && <MensajeriaNavMenuButton plano />}
                     {onCerrar ? (
-                        <button
-                            type="button"
+                        <BotonIconoMensajeria
+                            icon={X}
+                            label="Cerrar mensajería"
                             onClick={onCerrar}
-                            className="flex p-2 rounded-full theme-element theme-text-main hover:border-[var(--color-primario)] border theme-border transition-colors shrink-0"
-                            title="Cerrar mensajería"
-                            aria-label="Cerrar mensajería"
-                        >
-                            <X className="w-4 h-4" />
-                        </button>
+                            plano
+                        />
                     ) : (
-                        <Link
+                        <EnlaceIcono
                             href={route('dashboard')}
-                            className="hidden md:flex p-2 rounded-full theme-element theme-text-main hover:border-[var(--color-primario)] border theme-border transition-colors shrink-0"
-                            title="Volver al dashboard"
-                        >
-                            <ArrowLeft className="w-4 h-4" />
-                        </Link>
+                            icon={ArrowLeft}
+                            label="Volver al inicio"
+                            className="gelia-toque gelia-mensajeria-accion hidden md:inline-flex"
+                        />
                     )}
-                    <h2 className="text-sm font-black uppercase italic tracking-tighter theme-text-main flex-1 truncate">Chats_</h2>
-                    <div className="flex gap-1 shrink-0">
-                        <button
-                            type="button"
-                            onClick={onNuevoChat}
-                            className="p-2 rounded-full theme-element hover:border-[var(--color-primario)] border theme-border transition-colors"
-                            title="Nuevo chat"
-                        >
-                            <MessageSquarePlus className="w-4 h-4" />
-                        </button>
-                        <button
-                            type="button"
-                            onClick={onNuevoGrupo}
-                            className="p-2 rounded-full theme-element hover:border-[var(--color-primario)] border theme-border transition-colors"
-                            title="Nuevo grupo"
-                        >
-                            <Users className="w-4 h-4" />
-                        </button>
-                        {onCerrar && (
-                            <Link
-                                href={route('mensajeria.index')}
-                                className="p-2 rounded-full theme-element hover:border-[var(--color-primario)] border theme-border transition-colors"
-                                title="Abrir mensajería"
-                                aria-label="Abrir mensajería en página"
-                            >
-                                <ExternalLink className="w-4 h-4" />
-                            </Link>
-                        )}
-                    </div>
+                    <div className="flex-1 min-w-0 px-2"><h2 className="text-xl font-semibold theme-text-main truncate m-0">Mensajes</h2><p className="gelia-mensajeria-subtitulo">Tu equipo, en una conversación</p></div>
+                    <BotonIconoMensajeria
+                        icon={MessageSquarePlus}
+                        label="Nuevo chat"
+                        onClick={onNuevoChat}
+                        plano
+                    />
+                    <BotonIconoMensajeria
+                        icon={Users}
+                        label="Nuevo grupo"
+                        onClick={onNuevoGrupo}
+                        plano
+                    />
+                    {onCerrar && (
+                        <EnlaceIcono
+                            href={route('mensajeria.index')}
+                            icon={ExternalLink}
+                            label="Abrir mensajería en página"
+                            className="gelia-toque gelia-mensajeria-accion inline-flex"
+                        />
+                    )}
                 </div>
 
-                <BuscadorInteligente
-                    placeholder="Buscar chats, mensajes, PDFs, Excel…"
-                    onSeleccionarConversacion={onSeleccionarConversacion}
-                    onIrAMensaje={onIrAMensaje}
-                />
+                <div className="px-3 pt-1 pb-2">
+                    <BuscadorInteligente
+                        placeholder="Buscar personas y mensajes"
+                        onSeleccionarConversacion={onSeleccionarConversacion}
+                        onIrAMensaje={onIrAMensaje}
+                    />
+                </div>
 
-                <div className="mt-3 flex items-center justify-between gap-2 flex-wrap">
-                    <span className="text-[10px] font-black uppercase tracking-widest theme-text-muted shrink-0">
-                        Mi estado
-                    </span>
-                    <SelectorEstadoPresencia compact />
+                <div className="gelia-mensajeria-chips" role="tablist" aria-label="Filtrar conversaciones">
+                    {FILTROS.map((item) => (
+                        <button
+                            key={item.id}
+                            type="button"
+                            role="tab"
+                            aria-selected={filtro === item.id}
+                            className={`gelia-mensajeria-chip ${filtro === item.id ? 'gelia-mensajeria-chip--activo' : ''}`}
+                            onClick={() => setFiltro(item.id)}
+                        >
+                            {item.label}
+                        </button>
+                    ))}
                 </div>
             </div>
 
             <div className="flex-1 overflow-y-auto">
-                {conversaciones.length === 0 && (
-                    <p className="text-xs theme-text-muted text-center py-8">No hay conversaciones</p>
+                {visibles.length === 0 && (
+                    <p className="text-sm theme-text-muted text-center py-10 px-6 m-0">
+                        {textoVacio(filtro, conversaciones.length > 0)}
+                    </p>
                 )}
 
-                {conversaciones.map((c) => {
+                {visibles.map((c) => {
                     const activa = conversacionActiva?.id === c.id;
+                    const sinLeer = c.unread_count > 0;
+                    const enLinea = c.tipo !== 'grupo' && c.presencia_otro?.en_linea === true;
                     return (
                         <button
                             key={c.id}
                             type="button"
                             onClick={() => onSeleccionar(c)}
-                            className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors border-b theme-border/50 ${
-                                activa ? 'bg-[var(--color-primario)]/10' : 'hover:theme-element'
-                            }`}
+                            aria-current={activa ? 'true' : undefined}
+                            className={`gelia-chat-fila ${activa ? 'gelia-chat-fila--activa' : ''} ${sinLeer ? 'gelia-chat-fila--sin-leer' : ''}`}
                         >
                             <AvatarUsuario
                                 foto={c.foto}
                                 nombre={c.nombre}
                                 esGrupo={c.tipo === 'grupo'}
+                                enLinea={enLinea}
+                                className="w-12 h-12"
+                                iconClassName="w-6 h-6"
                             />
-                            <div className="flex-1 min-w-0">
-                                <div className="flex items-center justify-between gap-2">
-                                    <p className="text-sm font-bold theme-text-main truncate">{c.nombre}</p>
-                                    <span className="text-[10px] theme-text-muted shrink-0">
-                                        {formatearFecha(c.ultimo_mensaje_at)}
-                                    </span>
-                                </div>
-                                <div className="flex items-center justify-between gap-2">
-                                    <div className="min-w-0 flex-1">
-                                        {c.tipo !== 'grupo' && c.presencia_otro && (
-                                            <EstadoPresenciaTexto presencia={c.presencia_otro} compact className="mb-0.5" />
-                                        )}
-                                        <p className="text-xs theme-text-muted truncate m-0">{c.ultimo_mensaje_preview || 'Sin mensajes'}</p>
-                                    </div>
-                                    {c.unread_count > 0 && (
-                                        <span
-                                            className="shrink-0 min-w-[1.125rem] h-[1.125rem] px-1 flex items-center justify-center text-[9px] font-black text-white rounded-full"
-                                            style={{ backgroundColor: 'var(--color-primario)' }}
-                                        >
+                            <span className="gelia-chat-fila__cuerpo">
+                                <span className="gelia-chat-fila__tope">
+                                    <span className="gelia-chat-fila__nombre">{c.nombre}</span>
+                                    <span className="gelia-chat-fila__hora">{formatearFecha(c.ultimo_mensaje_at)}</span>
+                                </span>
+                                <span className="gelia-chat-fila__base">
+                                    <span className="gelia-chat-fila__preview">{c.ultimo_mensaje_preview || 'Sin mensajes'}</span>
+                                    {sinLeer && (
+                                        <span className="gelia-chat-no-leidos">
                                             {c.unread_count > 9 ? '9+' : c.unread_count}
                                         </span>
                                     )}
-                                </div>
-                            </div>
+                                </span>
+                            </span>
                         </button>
                     );
                 })}

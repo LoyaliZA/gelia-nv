@@ -7,6 +7,7 @@ use App\Models\ControlPedidos\PedidoBmaDocumento;
 use App\Models\ControlPedidos\PedidoBmaTareaPreparacion;
 use App\Models\User;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
+use App\Support\ControlPedidos\ActualizacionConsulta;
 use App\Support\ControlPedidos\RegistrarPedidos\DestinoRevisionRegistrarPedidos;
 use App\Support\ControlPedidos\VisibilidadPedidoBma;
 use Illuminate\Http\UploadedFile;
@@ -100,7 +101,9 @@ final class RegistrarRetiroPiezasTiendaService
                 $pedido->solicitud_preparacion_json = $json;
                 $json['revision_disponibilidad']['aceptacion_vigente'] = $retiradas !== [] && ! $pedido->tieneAjusteTiendaPendiente();
             }
-            $pedido->update(['solicitud_preparacion_json' => $json, 'consulta_cerrada_at' => null, 'consulta_cerrada_por_id' => null]);
+            ActualizacionConsulta::solicitar($json);
+            $pedido->update(['solicitud_preparacion_json' => $json, 'consulta_cerrada_at' => null, 'consulta_cerrada_por_id' => null,
+                'estatus_envio' => ($json['area_revision'] ?? '') === 'control_pedidos' ? PedidoBma::ESTATUS_ENVIO_PENDIENTE_PESAJE : $pedido->estatus_envio]);
 
             $area = (string) ($json['area_revision'] ?? '');
             $estatusId = $pedido->catalogo_estatus_pedido_id;
@@ -125,7 +128,7 @@ final class RegistrarRetiroPiezasTiendaService
                 : '/control-pedidos/tienda'.($tareaId ? '?tarea='.$tareaId : '');
             $this->notificar->ejecutar(
                 $pedido->fresh(['cliente', 'vendedor']),
-                'pedido_decision_cliente',
+                'pedido_consulta_actualizada',
                 $soloFaltantes ? 'Ventas retiró las piezas sin existencias del pedido.' : 'Se solicitó el retiro de piezas. Continúe solo con las que siguen en el pedido.',
                 [$permiso],
                 $usuario->id,
@@ -149,9 +152,13 @@ final class RegistrarRetiroPiezasTiendaService
         $encontradas = collect();
         $pendientes = [];
         foreach ($piezas as $pieza) {
-            if (!empty($pieza['revision_id'])) {
+            if (! empty($pieza['revision_id'])) {
                 $revision = $pedido->revisionesProducto()->find($pieza['revision_id']);
-                if ($revision && $revision->estado_fisico !== 'sin_existencia') { $pendientes[] = $pieza; continue; }
+                if ($revision && $revision->estado_fisico !== 'sin_existencia') {
+                    $pendientes[] = $pieza;
+
+                    continue;
+                }
             }
             $query = $pedido->revisionesProducto()->where('estado_fisico', 'sin_existencia')->whereNull('resolucion');
             if (! empty($pieza['revision_id'])) {

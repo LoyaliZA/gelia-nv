@@ -144,7 +144,7 @@ class SincronizarTareaDesdeTraspasoService
                     PedidoBmaTareaPreparacion::ESTADO_CON_INCIDENCIA,
                     $usuario->id,
                     'incidencia_por_rechazo_cedis',
-                    'Rechazo CEDIS convertido en incidencia para Ventas.',
+                    'Rechazo CEDIS reportado como error a Ventas.',
                     null,
                     null,
                     $usuario,
@@ -171,7 +171,7 @@ class SincronizarTareaDesdeTraspasoService
                 $recibida ? 'pedido_preparacion_tienda_recibida_cedis' : 'pedido_preparacion_tienda_rechazada_cedis',
                 $recibida
                     ? 'CEDIS recibió la mercancía de Tienda. Puede cerrar la consulta.'
-                    : ('CEDIS rechazó el traslado: '.($motivo ?: 'revise la incidencia')),
+                    : ('CEDIS rechazó el traslado: '.($motivo ?: 'revise el error reportado')),
                 $recibida ? [] : ['control_pedidos.tienda.ver'],
                 $usuario->id,
                 true,
