@@ -71,14 +71,30 @@ describe('operacionUtils', () => {
 
         const equipo = [
             { id: 1, nombre: 'Zeta', estado_vendedor: 'no_activado' },
-            { id: 2, nombre: 'Ana', estado_vendedor: 'disponible' },
-            { id: 3, nombre: 'Bruno', estado_vendedor: 'atendiendo' },
+            { id: 2, nombre: 'Ana', estado_vendedor: 'disponible', jornada: { apertura_at: '2026-11-07T10:02:00Z' } },
+            { id: 3, nombre: 'Bruno', estado_vendedor: 'atendiendo', jornada: { apertura_at: '2026-11-07T10:01:00Z' } },
             { id: 4, nombre: 'Carla', estado_vendedor: 'jornada_cerrada' },
         ];
 
         const { activos, inactivos } = particionarEquipoGerencia(equipo);
         expect(activos.map((p) => p.id)).toEqual([3, 2]);
         expect(inactivos.map((p) => p.id)).toEqual([1, 4]);
+    });
+
+    it('conserva el orden de activación al cambiar estados y al refrescar el equipo', () => {
+        const equipo = [
+            { id: 9, nombre: 'Ana', estado_vendedor: 'atendiendo', jornada: { id: 11, apertura_at: '2026-11-07T10:01:00Z' } },
+            { id: 3, nombre: 'Zeta', estado_vendedor: 'en_retencion', jornada: { apertura_at: '2026-11-07T10:00:00Z' } },
+            { id: 7, nombre: 'Bruno', estado_vendedor: 'disponible', jornada: { id: 12, apertura_at: '2026-11-07T10:01:00Z' } },
+        ];
+        expect(particionarEquipoGerencia(equipo).activos.map((p) => p.id)).toEqual([3, 9, 7]);
+        const cambios = ['en_espera', 'atendiendo', 'cierre_pendiente'];
+        const refrescado = equipo.map((p, i) => ({ ...p, estado_vendedor: cambios[i] })).reverse();
+        expect(particionarEquipoGerencia(refrescado).activos.map((p) => p.id)).toEqual([3, 9, 7]);
+        expect(equipo.map((p) => p.id)).toEqual([9, 3, 7]);
+        expect(particionarEquipoGerencia([
+            { id: 1, jornada: { apertura_at: 'inválida' } }, ...equipo,
+        ]).activos.map((p) => p.id)).toEqual([3, 9, 7, 1]);
     });
 
     it('contrae inactivos cuando ya hay activos y los mantiene abiertos si nadie está activo', () => {

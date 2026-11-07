@@ -55,16 +55,16 @@ class AplicarEsperaDisponibilidadPdvService
             'ocurrido_at' => $ahora,
         ]);
 
-        if ($disponibleDesde === null) {
-            return;
-        }
-
         $job = new EjecutarMatchmakerTurnosPdvJob(
             $sucursalId,
             'cooldown',
-            'cooldown:'.$userId.':'.$disponibleDesde->getTimestamp(),
+            'cooldown:'.$userId.':'.($disponibleDesde ?? $ahora)->getTimestamp(),
         );
-        $job->delay($disponibleDesde);
+        // Publicar solo al confirmar la operación que libera a la persona.
+        $job->afterCommit();
+        if ($disponibleDesde !== null) {
+            $job->delay($disponibleDesde);
+        }
         Bus::dispatch($job);
     }
 }

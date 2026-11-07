@@ -1,0 +1,40 @@
+[
+  {
+    "nombre": "escritorio",
+    "width": 1440,
+    "height": 1000,
+    "tema": "dark",
+    "antes": [
+      "Zeta Ejemplo",
+      "Ana Ejemplo",
+      "Bruno Ejemplo"
+    ],
+    "despues": [
+      "Zeta Ejemplo",
+      "Ana Ejemplo",
+      "Bruno Ejemplo"
+    ],
+    "cuenta": true,
+    "desborde": false,
+    "errores": []
+  },
+  {
+    "nombre": "movil",
+    "width": 390,
+    "height": 844,
+    "tema": "light",
+    "antes": [
+      "Zeta Ejemplo",
+      "Ana Ejemplo",
+      "Bruno Ejemplo"
+    ],
+    "despues": [
+      "Zeta Ejemplo",
+      "Ana Ejemplo",
+      "Bruno Ejemplo"
+    ],
+    "cuenta": true,
+    "desborde": false,
+    "errores": []
+  }
+]

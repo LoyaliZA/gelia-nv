@@ -346,8 +346,11 @@ class MatchmakerTurnosPdvTest extends TestCase
         });
     }
 
-    public function test_finalizar_pausa_dispara_job_matchmaker(): void
+    public function test_finalizar_pausa_programa_solo_reparto_al_vencer_espera(): void
     {
+        $this->travelTo(now()->startOfSecond());
+        $plazos = app(PlazosTurnosPdvConfig::class);
+        $plazos->persistir(array_merge($plazos->configuracionInicialAprobada(), ['cooldown_segundos' => 20]));
         $ventas = $this->crearVendedorOperacion('Vendedor Pausa Job');
         app(AbrirJornadaPdvService::class)->ejecutar($ventas, now());
         app(IniciarPausaPdvService::class)->ejecutar($ventas, now());
@@ -356,9 +359,12 @@ class MatchmakerTurnosPdvTest extends TestCase
 
         app(FinalizarPausaPdvService::class)->ejecutar($ventas, now());
 
+        Queue::assertPushed(EjecutarMatchmakerTurnosPdvJob::class, 1);
         Queue::assertPushed(EjecutarMatchmakerTurnosPdvJob::class, function (EjecutarMatchmakerTurnosPdvJob $job): bool {
             return $job->sucursalId === $this->sucursal->id
-                && $job->origenDisparador === 'pausa.finalizada';
+                && $job->origenDisparador === 'cooldown'
+                && $job->afterCommit === true
+                && $job->delay->equalTo(now()->addSeconds(20));
         });
     }
 
