@@ -639,7 +639,7 @@ export const SUBMODULOS_UI_POR_MODULO = {
         },
         {
             id: 'plazos',
-            label: 'Plazos de retraso',
+            label: 'Configurar Operación',
             descripcion: 'Umbrales de empaque, recolección y alertas en paneles',
             permisos: ['control_pedidos.configurar_plazos'],
         },

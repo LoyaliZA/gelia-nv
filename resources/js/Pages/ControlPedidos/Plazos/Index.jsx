@@ -58,7 +58,7 @@ export default function Index({ auth, plazos }) {
 
     return (
         <AppLayout auth={auth}>
-            <Head title="Plazos de retraso | GELIANV" />
+            <Head title="Configurar Operación | GELIANV" />
             <GeliaPageShell className="space-y-3 md:space-y-6">
                 <header className={`${geliaCardClass()} p-3 md:p-8`}>
                     <div className="flex items-center gap-2 mb-0.5 md:mb-2">
@@ -66,7 +66,7 @@ export default function Index({ auth, plazos }) {
                         <span className="text-[10px] font-black uppercase tracking-widest theme-text-muted">Gestión de pedidos_</span>
                     </div>
                     <h1 className="text-xl md:text-3xl font-black italic uppercase tracking-tighter theme-text-main m-0">
-                        Plazos de <span style={{ color: 'var(--color-primario)' }}>retraso</span>
+                        Configurar <span style={{ color: 'var(--color-primario)' }}>operación</span>
                     </h1>
                     <p className="hidden md:block text-sm theme-text-muted font-bold mt-2 m-0">
                         Empaque vs recolección — configurable sin hardcode. No se revelan al cliente.
