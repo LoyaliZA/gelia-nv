@@ -4,7 +4,10 @@ namespace Tests\Feature\PuntoVenta;
 
 use App\Events\PuntoVenta\TurnoAsignado;
 use App\Events\PuntoVenta\TurnoReatencion;
+use App\Jobs\PuntoVenta\Turnos\EjecutarMatchmakerTurnosPdvJob;
 use App\Models\ConfiguracionSistema;
+use App\Models\PuntoVenta\EsperaDisponibilidadPdv;
+use App\Models\PuntoVenta\JornadaPdv;
 use App\Models\PuntoVenta\MotivoPausaPdv;
 use App\Models\PuntoVenta\SucursalDiaOperacionPdv;
 use App\Models\PuntoVenta\TurnoPdv;
@@ -23,6 +26,8 @@ use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Queue;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Tests\Support\RefreshDatabaseSafe;
@@ -526,6 +531,100 @@ class ReatencionGerencialPdvTest extends TestCase
             ->assertJsonPath('atencion.user_id', $this->vendedorAnterior->id);
 
         Event::assertDispatched(TurnoReatencion::class, 1);
+    }
+
+    public static function casosEsperaTransferencia(): array
+    {
+        return [
+            'destino disponible' => [20, false, false],
+            'destino en pausa con fila' => [20, true, false],
+            'origen pausado antes del vencimiento' => [7, true, true],
+            'sin espera configurada' => [0, false, false],
+        ];
+    }
+
+    #[DataProvider('casosEsperaTransferencia')]
+    public function test_transferencia_respeta_espera_propia_fila_y_pausa(
+        int $segundos, bool $destinoPausado, bool $pausarOrigen,
+    ): void {
+        $this->travelTo(now()->startOfSecond());
+        $this->fijarCooldown($segundos);
+        $this->gerente->givePermissionTo(PuntoVentaModulo::PERMISO_TURNOS_TRANSFERIR);
+        $this->activarVendedor($this->vendedorAnterior);
+        $this->activarVendedor($this->vendedorDestino);
+        $equipo = app(GestionarEquipoOperativoPdvService::class);
+        $motivo = MotivoPausaPdv::query()->where('slug', 'comida')->firstOrFail();
+        if ($destinoPausado) {
+            $equipo->iniciarPausa($this->gerente, $this->vendedorDestino, $motivo->id, null, now(), 'pausa-destino');
+        }
+        $contexto = $this->crearTurnoAsignado($this->vendedorAnterior);
+        $fila = TurnoPdv::factory()->create([
+            'sucursal_id' => $this->sucursal->id,
+            'estado' => TurnoPdv::ESTADO_EN_COLA,
+            'atencion_actual_id' => null,
+        ]);
+        Queue::fake();
+        $limite = now()->addSeconds($segundos);
+        $datos = [
+            'version' => $contexto['turno']->version,
+            'destino_user_id' => $this->vendedorDestino->id,
+            'idempotency_key' => 'transferencia-espera',
+        ];
+        $this->actingAs($this->gerente)->postJson(route('punto_venta.turnos.transferir', $contexto['turno']), $datos)
+            ->assertOk()->assertJsonPath('atencion_nueva.user_id', $this->vendedorDestino->id);
+        $this->postJson(route('punto_venta.turnos.transferir', $contexto['turno']), $datos)->assertOk();
+        $espera = EsperaDisponibilidadPdv::query()->where('origen', EsperaDisponibilidadPdv::ORIGEN_TRANSFERENCIA)->sole();
+        $this->assertSame($this->vendedorAnterior->id, $espera->user_id);
+        $this->assertSame($contexto['atencion']->id, $espera->atencion_id);
+        $this->assertSame($segundos, $espera->cooldown_segundos);
+        $this->assertSame($this->gerente->id, $espera->actor_id);
+        Queue::assertPushed(EjecutarMatchmakerTurnosPdvJob::class, $destinoPausado ? 2 : 1);
+        Queue::assertPushed(EjecutarMatchmakerTurnosPdvJob::class, fn ($job) => $job->afterCommit === true && ($segundos === 0 ? $job->delay === null : $job->delay->equalTo($limite)));
+        $disponibilidad = app(ConsultaPersonaDisponiblePdvService::class);
+        $matchmaker = app(MatchmakerTurnosPdvService::class);
+        if ($segundos > 0) {
+            $this->assertTrue(JornadaPdv::query()->where('user_id', $this->vendedorAnterior->id)->sole()->disponible_desde->equalTo($limite));
+            $this->assertFalse($disponibilidad->esDisponible($this->vendedorAnterior, $this->sucursal->id));
+            $this->assertTrue($disponibilidad->esDestinoReatencionManual($this->vendedorAnterior, $this->sucursal->id));
+            $this->assertSame(0, $matchmaker->ejecutar($this->sucursal->id, 'pausa.finalizada'));
+            $this->travel($segundos - 1)->seconds();
+            $this->assertSame(0, $matchmaker->ejecutar($this->sucursal->id, 'cooldown'));
+            $this->assertSame(TurnoPdv::ESTADO_EN_COLA, $fila->fresh()->estado);
+            if ($pausarOrigen) {
+                $equipo->iniciarPausa($this->gerente, $this->vendedorAnterior, $motivo->id, null, now(), 'pausa-origen');
+            }
+            $this->travel(1)->seconds();
+        }
+        $this->assertSame($pausarOrigen ? 0 : 1, $matchmaker->ejecutar($this->sucursal->id, 'cooldown'));
+        if ($pausarOrigen) {
+            $this->assertSame(TurnoPdv::ESTADO_EN_COLA, $fila->fresh()->estado);
+            $this->assertFalse($disponibilidad->esDisponible($this->vendedorAnterior, $this->sucursal->id));
+        } else {
+            $this->assertSame($this->vendedorAnterior->id, $fila->fresh()->atencionActual->user_id);
+        }
+        $this->assertSame($this->vendedorDestino->id, $contexto['turno']->fresh()->atencionActual->user_id);
+    }
+
+    public function test_transferencia_no_bloquea_fila_para_otra_persona_disponible(): void
+    {
+        $this->fijarCooldown(20);
+        $this->gerente->givePermissionTo(PuntoVentaModulo::PERMISO_TURNOS_TRANSFERIR);
+        $tercero = $this->crearVendedor('Otra persona disponible');
+        foreach ([$this->vendedorAnterior, $this->vendedorDestino, $tercero] as $vendedor) {
+            $this->activarVendedor($vendedor);
+        }
+        $contexto = $this->crearTurnoAsignado($this->vendedorAnterior);
+        $fila = TurnoPdv::factory()->create([
+            'sucursal_id' => $this->sucursal->id, 'estado' => TurnoPdv::ESTADO_EN_COLA, 'atencion_actual_id' => null,
+        ]);
+        Queue::fake();
+        $this->actingAs($this->gerente)->postJson(route('punto_venta.turnos.transferir', $contexto['turno']), [
+            'version' => $contexto['turno']->version,
+            'destino_user_id' => $this->vendedorDestino->id,
+            'idempotency_key' => 'transferencia-otro-disponible',
+        ])->assertOk();
+        $this->assertSame(1, app(MatchmakerTurnosPdvService::class)->ejecutar($this->sucursal->id, 'turno.creado'));
+        $this->assertSame($tercero->id, $fila->fresh()->atencionActual->user_id);
     }
 
     private function assertCierreYReasignacionDesdeOperacionGeneral(): void

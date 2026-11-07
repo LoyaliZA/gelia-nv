@@ -4,10 +4,12 @@ namespace App\Services\PuntoVenta\Turnos;
 
 use App\Contracts\PuntoVenta\ResuelveAlcancePdv;
 use App\Events\PuntoVenta\TurnoTransferido;
+use App\Models\PuntoVenta\EsperaDisponibilidadPdv;
 use App\Models\PuntoVenta\TurnoPdv;
 use App\Models\PuntoVenta\TurnoPdvAtencion;
 use App\Models\PuntoVenta\TurnoPdvEvento;
 use App\Models\User;
+use App\Services\PuntoVenta\Operacion\AplicarEsperaDisponibilidadPdvService;
 use App\Services\PuntoVenta\Operacion\ConsultaPersonaDisponiblePdvService;
 use App\Services\PuntoVenta\PuntoVentaModulo;
 use App\Support\PuntoVenta\Turnos\MotivosCierreAtencionTurnoPdv;
@@ -25,6 +27,7 @@ class TransferirTurnoPdvService
         private readonly AplicarPlazosAtencionNuevaTurnoPdvService $aplicarPlazos,
         private readonly ConsultaPersonaDisponiblePdvService $disponibilidad,
         private readonly PrepararDestinoAsignacionManualPdvService $prepararDestino,
+        private readonly AplicarEsperaDisponibilidadPdvService $espera,
     ) {}
 
     /**
@@ -214,6 +217,15 @@ class TransferirTurnoPdvService
 
                 throw $exception;
             }
+
+            $this->espera->ejecutar(
+                (int) $atencionAnterior->user_id,
+                $sucursalId,
+                $ahora,
+                EsperaDisponibilidadPdv::ORIGEN_TRANSFERENCIA,
+                (int) $actor->id,
+                (int) $atencionAnterior->id,
+            );
 
             $turnoActualizado = $turnoBloqueado->fresh(['cliente', 'sucursal', 'atencionActual']);
 
