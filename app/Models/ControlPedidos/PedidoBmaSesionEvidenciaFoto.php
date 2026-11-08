@@ -34,6 +34,11 @@ class PedidoBmaSesionEvidenciaFoto extends Model
         'subido_en' => 'datetime',
     ];
 
+    public function getNombreOriginalAttribute(?string $value): string
+    {
+        return \App\Support\ControlPedidos\NombreArchivoPedido::mostrar($value, 'evidencia', $this->sesion_id, $this->id);
+    }
+
     public function sesion(): BelongsTo
     {
         return $this->belongsTo(PedidoBmaSesionEvidencia::class, 'sesion_id');

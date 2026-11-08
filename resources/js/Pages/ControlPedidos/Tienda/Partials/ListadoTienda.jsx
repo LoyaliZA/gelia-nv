@@ -158,6 +158,7 @@ function TablaTareas({ items, puedeTomar, onAbrir }) {
                                 </td>
                                 <td className="text-right whitespace-nowrap">
                                     <CtaTabla t={t} puedeTomar={puedeTomar} showUrl={showUrl} onAbrir={onAbrir} />
+                                    {t.pedido?.es_t01_documental && t.pedido?.seguimiento_entrega_pdv_habilitado && t.apartado?.estado === 'APARTADO_CONFIRMADO' && <Link href={showUrl} className="inline-flex items-center gap-2 text-sm font-semibold theme-text-primario underline min-h-[44px]">Pago y entrega</Link>}
                                 </td>
                             </tr>
                         );
@@ -184,7 +185,7 @@ export default function ListadoTienda({
     const items = tareas?.data || [];
     const total = tareas?.total ?? items.length;
 
-    const [vista, setVista] = useState('tabla');
+    const [vista, setVista] = useState('tarjetas');
 
     useEffect(() => {
         try {
@@ -218,7 +219,7 @@ export default function ListadoTienda({
     const usarTabla = vista === 'tabla';
 
     return (
-        <div className={`${geliaCardClass()} gelia-tienda-op-workspace p-4 md:p-5 space-y-4`}>
+        <div className={`${geliaCardClass()} gelia-tienda-op-workspace p-3 sm:p-5 space-y-4`}>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="min-w-0">
                     <p className="text-sm font-bold theme-text-main m-0 tabular-nums">
@@ -231,7 +232,7 @@ export default function ListadoTienda({
                         </p>
                     )}
                 </div>
-                <div className="flex items-center gap-1 shrink-0" role="group" aria-label="Vista del listado">
+                <div className="hidden md:flex items-center gap-1 shrink-0" role="group" aria-label="Vista del listado">
                     <button
                         type="button"
                         className={geliaToggleBtnClass(usarTabla)}

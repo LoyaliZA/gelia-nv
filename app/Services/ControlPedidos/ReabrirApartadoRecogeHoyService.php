@@ -42,7 +42,7 @@ class ReabrirApartadoRecogeHoyService
             if ($esRecogeHoy && ! in_array($tarea->estado, [PedidoBmaTareaPreparacion::ESTADO_RESPONDIDA, PedidoBmaTareaPreparacion::ESTADO_CON_INCIDENCIA], true)) {
                 throw ValidationException::withMessages(['estado' => 'El apartado cambió o no admite reapertura. Actualice la página.']);
             }
-            if ($esRecogeHoy && (! $tarea->fecha_limite || now()->greaterThanOrEqualTo($tarea->fecha_limite))) {
+            if ($esRecogeHoy && app(ConfiguracionOperativaTienda::class)->horariosActivos() && (! $tarea->fecha_limite || now()->greaterThanOrEqualTo($tarea->fecha_limite))) {
                 throw ValidationException::withMessages(['estado' => 'El apartado corresponde a un día anterior o ya venció. Registre una nueva solicitud.']);
             }
             if ($esTransferencia && ($tarea->estado !== PedidoBmaTareaPreparacion::ESTADO_RESPONDIDA

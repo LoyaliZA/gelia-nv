@@ -255,8 +255,18 @@ class PedidoBma extends Model
 
     public function getSolicitudPreparacionAttribute(): ?array
     {
-        return app(FusionarSolicitudPreparacionPedido::class)
-            ->normalizar($this->solicitud_preparacion_json);
+        $solicitud = app(FusionarSolicitudPreparacionPedido::class)->normalizar($this->solicitud_preparacion_json);
+        if (($solicitud['modalidad_entrega'] ?? null) === 'tienda') {
+            $config = app(\App\Services\ControlPedidos\ConfiguracionOperativaTienda::class);
+            $solicitud['horarios_operativos'] = ['activos' => $config->horariosActivos(), 'detalle_apartado' => $config->detalleHorarioApartado()];
+            if (($solicitud['cobertura_tienda']['tipo'] ?? null) === 'apartado') {
+                $vence = $solicitud['cobertura_tienda']['vence_at'] ?? null;
+                $evaluacion = app(\App\Support\ControlPedidos\PlazoApartadoTienda::class)->evaluarConfirmacion(now(), $vence ? \Carbon\Carbon::parse($vence) : null);
+                $solicitud['cobertura_tienda']['motivo_vigencia'] = $evaluacion['permite'] ? null : $evaluacion['mensaje'];
+            }
+        }
+
+        return $solicitud;
     }
 
     public function vendedor(): BelongsTo

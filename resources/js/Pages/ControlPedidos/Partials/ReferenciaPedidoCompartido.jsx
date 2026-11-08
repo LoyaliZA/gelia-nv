@@ -1,3 +1,4 @@
+import { vistaArchivoPedido } from './vistasArchivoPedido';
 import React from 'react';
 import { FileText } from 'lucide-react';
 import { BTN_SECONDARY, soportePedidoDe } from './pedidosBmaStyles';
@@ -21,7 +22,7 @@ export default function ReferenciaPedidoCompartido({ pedido, onVerGaleria, id, d
             </div>
             <p className="text-xs theme-text-muted m-0">{descripcion}</p>
             {principal?.url ? (
-                esImagen ? <button type="button" onClick={() => ver(principal)} aria-label="Ampliar foto del pedido" className="w-full rounded-xl overflow-hidden border theme-border theme-element bg-white"><img src={principal.url} alt={principal.nombre_original || 'Pedido compartido'} width="480" height="640" className="w-full max-h-[55dvh] object-contain" /></button>
+                esImagen ? <button type="button" onClick={() => ver(principal)} aria-label="Ampliar foto del pedido" className="w-full rounded-xl overflow-hidden border theme-border theme-element bg-white"><img src={vistaArchivoPedido(principal.url)} alt={principal.nombre_original || 'Pedido compartido'} width="480" height="640" className="w-full max-h-[55dvh] object-contain" /></button>
                     : <VisorPdfPaginas url={principal.url} titulo={principal.nombre_original || 'Pedido compartido'} maxHeight="min(55dvh, 520px)" className="rounded-xl border theme-border overflow-hidden" />
             ) : <p className="text-sm theme-text-muted m-0 p-4 rounded-xl border theme-border theme-element">El pedido no tiene PDF ni foto adjuntos.</p>}
             {documentos.filter((doc) => doc !== principal).length > 0 && <div className="space-y-2"><p className="text-xs theme-text-muted m-0">Piezas adicionales</p><div className="flex flex-wrap gap-2">{documentos.filter((doc) => doc !== principal).map((doc, index) => <MiniaturaDocumento key={doc.id || index} documento={doc} onVer={ver} />)}</div></div>}

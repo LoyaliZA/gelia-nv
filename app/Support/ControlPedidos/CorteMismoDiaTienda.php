@@ -35,6 +35,10 @@ final class CorteMismoDiaTienda
 
         $local = $aceptadoEn->copy()->timezone($zona);
         $config = app(\App\Services\ControlPedidos\ConfiguracionOperativaTienda::class)->obtener();
+        if (! $config['horarios_activos']) {
+            return ['estado' => self::OPORTUNO, 'oportuno' => true, 'confirmada' => false,
+                'motivo' => 'Horarios desactivados para pruebas. Falta verificar ingreso y remisión.', 'corte' => null];
+        }
         $hora = $config['md_corte'];
         [$h, $m] = array_map('intval', explode(':', $hora));
         $corte = $local->copy()->setTime($h, $m, 0);

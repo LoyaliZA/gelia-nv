@@ -1,8 +1,9 @@
+import CambioModalidadPagoTienda from './CambioModalidadPagoTienda';
 import AccionPrincipalTienda from './AccionPrincipalTienda';
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
-import { Banknote, Wallet } from 'lucide-react';
-import { THEME_BTN_PRIMARY, THEME_BTN_SECONDARY, THEME_LABEL, THEME_SELECT } from '../../../utils/geliaTheme';
+import { Banknote, Wallet, TriangleAlert, Save, Info } from 'lucide-react';
+import { THEME_BTN_PRIMARY, GELIA_BTN_OUTLINE, THEME_LABEL, THEME_SELECT } from '../../../utils/geliaTheme';
 import InputMoneda from './InputMoneda';
 import VigenciaApartadoTienda from './VigenciaApartadoTienda';
 import SeccionPagosExhibicion from './SeccionPagosExhibicion';
@@ -79,12 +80,14 @@ export default function ImportesPagoTienda({
     totalMercanciaConfirmado = null,
     saldoAFavorConfirmado = null,
     onLectura,
+    onEstadoConfirmacion,
 }) {
     const [solicitud, setSolicitud] = useState(solicitudInicial);
     useEffect(() => setSolicitud(solicitudInicial), [solicitudInicial]);
     const tipoGuardado = solicitud?.cobertura_tienda?.tipo || '';
     const [cobertura, setCobertura] = useState(tipoGuardado || (solicitud?.atencion_tienda === 'prevista' ? 'transferencia' : ''));
     const [mismoDia, setMismoDia] = useState(solicitud?.atencion_tienda === 'prevista' && ['', 'transferencia'].includes(tipoGuardado));
+    const [cambioEnCaptura, setCambioEnCaptura] = useState(false);
     const [aviso, setAviso] = useState('');
     const [ocupado, setOcupado] = useState(false);
     const [safCuenta, setSafCuenta] = useState(null);
@@ -180,8 +183,15 @@ export default function ImportesPagoTienda({
     };
     const confirmacionEnviada = Boolean(solicitud.cobertura_tienda?.confirmacion_enviada_at);
     const venceApartado = solicitud.cobertura_tienda?.vence_at;
-    const bloqueoConfirmacion = solicitud.cobertura_tienda?.motivo_vigencia
+    const horariosActivos = solicitud.horarios_operativos?.activos !== false;
+    const bloqueoConfirmacion = !horariosActivos ? '' : solicitud.cobertura_tienda?.motivo_vigencia
         || (!venceApartado ? 'Guarda la modalidad para calcular la vigencia.' : Date.parse(venceApartado) <= Date.now() ? 'La vigencia terminó. Revisa los horarios de Tienda.' : '');
+
+    const modalidadPendiente = cobertura !== tipoGuardado
+        || (cobertura === 'transferencia' && mismoDia !== (solicitud?.atencion_tienda === 'prevista'));
+    const procesosListos = editable && importesListos && !ocupado && !cambioEnCaptura && !modalidadPendiente && Boolean(tipoGuardado)
+        && (tipoGuardado !== 'transferencia' || (resumenServidor?.cubierto === true && !(resumenServidor.bloqueos || []).length));
+    useEffect(() => { onEstadoConfirmacion?.(procesosListos); }, [onEstadoConfirmacion, procesosListos]);
 
     const cambiarCobertura = (valor) => {
         setCobertura(valor);
@@ -212,6 +222,62 @@ export default function ImportesPagoTienda({
 
     return (
         <>
+            <section className="registrar-tienda-panel" aria-labelledby="registrar-tienda-pago">
+                <div className="registrar-tienda-seccion-titulo">
+                    <Banknote size={18} aria-hidden="true" />
+                    <h3 id="registrar-tienda-pago">Modalidad de pago</h3>
+                </div>
+                <div className="grid gap-3">
+                    <p className="text-sm theme-text-muted m-0">
+                        La modalidad no confirma el pago, la remisión ni la entrega.
+                    </p>
+                    <label className={THEME_LABEL} htmlFor="modalidad-cobertura-tienda">Modalidad de cobertura</label>
+                    <select
+                        id="modalidad-cobertura-tienda"
+                        className={THEME_SELECT}
+                        value={cobertura}
+                        disabled={!editable || ocupado || Boolean(tipoGuardado)}
+                        onChange={(evento) => cambiarCobertura(evento.target.value)}
+                    >
+                        <option value="">Elegir</option>
+                        <option value="apartado">Pago al recoger</option>
+                        <option value="transferencia">Transferencia</option>
+                        <option value="credito">Crédito</option>
+                    </select>
+                    {cobertura === 'transferencia' && (
+                        <label className="flex items-start gap-2 text-sm theme-text-main">
+                            <input
+                                type="checkbox"
+                                className="gelia-checkbox mt-1"
+                                checked={mismoDia}
+                                disabled={!editable || ocupado || Boolean(tipoGuardado)}
+                                onChange={(evento) => setMismoDia(evento.target.checked)}
+                            />
+                            <span>
+                                {notaMismoDia}
+                            </span>
+                        </label>
+                    )}
+                    {editable && !tipoGuardado && (
+                        <button
+                            type="button"
+                            className={`${GELIA_BTN_OUTLINE} registrar-tienda-guardar-modalidad min-h-[44px] justify-self-start`}
+                            disabled={ocupado || !cobertura}
+                            onClick={() => guardarModalidad(cobertura, mismoDia)}
+                        >
+                            <Save size={16} aria-hidden="true" />
+                            Guardar modalidad
+                        </button>
+                    )}
+                    {tipoGuardado && <CambioModalidadPagoTienda pedidoId={pedidoId} solicitud={solicitud} onSolicitud={siguiente => { setSolicitud(siguiente); onSolicitud?.(siguiente); }} onPendiente={setCambioEnCaptura} />}
+                    {aviso && <p className="text-sm theme-text-main m-0 break-words" role="status">{aviso}</p>}
+                    {pagoEnPdv && <div role="note" aria-label="Pago y remisión en PDV" className="flex items-start gap-3 rounded-xl border border-[color-mix(in_srgb,var(--color-aviso)_40%,transparent)] bg-[color-mix(in_srgb,var(--color-aviso)_10%,transparent)] p-4">
+                        <Info size={20} className="shrink-0 theme-text-aviso mt-0.5" aria-hidden="true" />
+                        <div className="min-w-0 text-sm theme-text-main"><p className="font-semibold m-0">Pago y remisión en PDV</p><p className="mt-1 mb-0">Aquí no se registra el cobro ni se solicita comprobante. El auxiliar registra la entrega con número de remisión y fotografía.</p></div>
+                    </div>}
+                    {tipoGuardado === 'apartado' && horariosActivos && <VigenciaApartadoTienda venceAt={solicitud.cobertura_tienda?.vence_at} />}
+                </div>
+            </section>
             <section className="registrar-tienda-panel" aria-labelledby="registrar-tienda-importes">
                 <div className="registrar-tienda-seccion-titulo">
                     <Wallet size={18} aria-hidden="true" />
@@ -283,64 +349,8 @@ export default function ImportesPagoTienda({
                     <div className="registrar-tienda-importes-pendiente"><dt>{pagoEnPdv ? 'Pago al recoger' : 'Importe pendiente por pagar'}</dt><dd>{pagoEnPdv ? 'Se paga en tienda' : formatearMoneda(pendiente)}</dd></div>
                 </dl>
             </section>
-            <section className="registrar-tienda-panel" aria-labelledby="registrar-tienda-pago">
-                <div className="registrar-tienda-seccion-titulo">
-                    <Banknote size={18} aria-hidden="true" />
-                    <h3 id="registrar-tienda-pago">Pago</h3>
-                </div>
+            <section className="registrar-tienda-panel" aria-label="Pagos y confirmación">
                 <div className="grid gap-3">
-                    <p className="text-sm theme-text-muted m-0">
-                        La modalidad no confirma el pago, la remisión ni la entrega.
-                    </p>
-                    <label className={THEME_LABEL} htmlFor="modalidad-cobertura-tienda">Modalidad de cobertura</label>
-                    <select
-                        id="modalidad-cobertura-tienda"
-                        className={THEME_SELECT}
-                        value={cobertura}
-                        disabled={!editable || ocupado}
-                        onChange={(evento) => cambiarCobertura(evento.target.value)}
-                    >
-                        <option value="">Elegir</option>
-                        <option value="apartado">Pago al recoger</option>
-                        <option value="transferencia">Transferencia</option>
-                        <option value="credito">Crédito</option>
-                    </select>
-                    {cobertura === 'transferencia' && (
-                        <label className="flex items-start gap-2 text-sm theme-text-main">
-                            <input
-                                type="checkbox"
-                                className="gelia-checkbox mt-1"
-                                checked={mismoDia}
-                                disabled={!editable || ocupado}
-                                onChange={(evento) => setMismoDia(evento.target.checked)}
-                            />
-                            <span>
-                                {notaMismoDia}
-                            </span>
-                        </label>
-                    )}
-                    {editable && (
-                        <button
-                            type="button"
-                            className={`${THEME_BTN_SECONDARY} min-h-[44px]`}
-                            disabled={ocupado || !cobertura}
-                            onClick={() => guardarModalidad(cobertura, mismoDia)}
-                        >
-                            Guardar modalidad
-                        </button>
-                    )}
-                    {aviso && <p className="text-sm theme-text-main m-0 break-words" role="status">{aviso}</p>}
-                    {pagoEnPdv && <p className="text-sm theme-text-main m-0">El cliente paga y recibe su remisión en PDV. Aquí no se registra el cobro ni se solicita comprobante. El auxiliar registra la entrega con número de remisión y fotografía.</p>}
-                    {tipoGuardado === 'apartado' && <VigenciaApartadoTienda venceAt={solicitud.cobertura_tienda?.vence_at} />}
-                    {tipoGuardado === 'apartado' && solicitud.area_revision === 'preparacion_tienda' && (
-                        <div className="border-t theme-border pt-3 grid gap-2">
-                            <h4 className="text-sm font-semibold theme-text-main m-0">Confirmación del pedido</h4>
-                            {confirmacionEnviada ? <span className="gelia-estado-vivo gelia-estado-vivo--compacto gelia-estado-vivo--exito justify-self-start">Enviada a tienda</span> : <>
-                                {bloqueoConfirmacion && <p className="text-sm theme-text-muted m-0" role="status">{bloqueoConfirmacion}</p>}
-                                {editable && <AccionPrincipalTienda destino={destinoAccion}><button type="button" className={`${THEME_BTN_PRIMARY} min-h-[44px] justify-self-start`} disabled={ocupado || Boolean(bloqueoConfirmacion) || cobertura !== tipoGuardado} onClick={confirmarPedido}>{ocupado ? 'Enviando…' : 'Enviar confirmación a tienda'}</button></AccionPrincipalTienda>}
-                            </>}
-                        </div>
-                    )}
                     {tipoGuardado === 'credito' && (
                         <p className="text-sm theme-text-main m-0">
                             Crédito{solicitud?.credito_wizerp?.resultado ? `: ${solicitud.credito_wizerp.resultado}` : ''}.
@@ -388,6 +398,20 @@ export default function ImportesPagoTienda({
                             }}
                             onResumenChange={(resumen) => setResumenServidor(resumen)}
                         />
+                    )}
+                    {tipoGuardado === 'apartado' && solicitud.area_revision === 'preparacion_tienda' && (
+                        <div className="border-t theme-border pt-3 grid gap-2">
+                            <h4 className="text-sm font-semibold theme-text-main m-0">Confirmación del pedido</h4>
+                            {confirmacionEnviada ? <span className="gelia-estado-vivo gelia-estado-vivo--compacto gelia-estado-vivo--exito justify-self-start">Enviada a tienda</span> : <>
+                                {horariosActivos && (bloqueoConfirmacion || solicitud.horarios_operativos?.detalle_apartado) && <div role="alert" className="flex items-start gap-3 rounded-xl border border-[color-mix(in_srgb,var(--color-aviso)_40%,transparent)] bg-[color-mix(in_srgb,var(--color-aviso)_10%,transparent)] p-4">
+                                    <TriangleAlert size={20} className="shrink-0 theme-text-aviso mt-0.5" aria-hidden="true" />
+                                    <div className="min-w-0 text-sm theme-text-main"><p className="font-semibold m-0">{bloqueoConfirmacion ? 'Confirmación fuera de horario' : 'Horario de confirmación'}</p>
+                                        <p className="mt-1 mb-0 break-words">{bloqueoConfirmacion || solicitud.horarios_operativos.detalle_apartado}</p>
+                                    </div>
+                                </div>}
+                                <AccionPrincipalTienda destino={destinoAccion}><button type="button" className={`${THEME_BTN_PRIMARY} min-h-[44px] justify-self-start`} disabled={!procesosListos || Boolean(bloqueoConfirmacion)} onClick={confirmarPedido}>{ocupado ? 'Enviando…' : 'Enviar confirmación a tienda'}</button></AccionPrincipalTienda>
+                            </>}
+                        </div>
                     )}
                 </div>
             </section>

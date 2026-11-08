@@ -13,13 +13,21 @@ use Illuminate\Database\Eloquent\Builder;
 
 class ListarTareasTiendaService
 {
+    private const ESTADOS_ATENDIDOS = [
+        PedidoBmaTareaPreparacion::ESTADO_RESPONDIDA,
+        PedidoBmaTareaPreparacion::ESTADO_RECIBIDA_CEDIS,
+        PedidoBmaTareaPreparacion::ESTADO_LIBERADA,
+        PedidoBmaTareaPreparacion::ESTADO_CANCELADA,
+        PedidoBmaTareaPreparacion::ESTADO_SUSTITUIDA,
+    ];
+
     public function __construct(
         private PreparacionTiendaConfig $config,
     ) {}
 
     public function ejecutar(User $usuario, array $filtros = []): LengthAwarePaginator
     {
-        $tab = strtoupper($filtros['tab'] ?? 'PENDIENTES');
+        $tab = strtoupper($filtros['tab'] ?? 'TODOS');
         $query = PedidoBmaTareaPreparacion::query()
             ->with([
                 'pedido.cliente',
@@ -38,7 +46,9 @@ class ListarTareasTiendaService
         VisibilidadTareaPreparacion::filtrarTienda($query, $usuario, $this->config);
 
         $query = match ($tab) {
-            'EN_ATENCION' => $query->where('estado', PedidoBmaTareaPreparacion::ESTADO_EN_ATENCION),
+            'TODOS' => $query,
+            'ATENDIDOS' => $query->whereIn('estado', self::ESTADOS_ATENDIDOS),
+            'EN_ATENCION' => $query->whereNotIn('estado', [...self::ESTADOS_ATENDIDOS, PedidoBmaTareaPreparacion::ESTADO_PENDIENTE]),
             'CON_INCIDENCIA' => $query->where('estado', PedidoBmaTareaPreparacion::ESTADO_CON_INCIDENCIA),
             'RESPONDIDAS_HOY' => $query->whereIn('estado', [
                 PedidoBmaTareaPreparacion::ESTADO_RESPONDIDA,
@@ -84,18 +94,22 @@ class ListarTareasTiendaService
 
         $this->aplicarFiltros($query, $filtros);
 
-        $query->orderByRaw('CASE WHEN fecha_limite IS NOT NULL AND fecha_limite < ? THEN 0 ELSE 1 END', [now()])
-            ->orderBy('solicitada_at');
+        app(PrioridadAtencionPedidosConfig::class)->ordenar($query, true, (string) ($filtros['orden'] ?? 'antiguos'));
 
         return $query->paginate(15)->withQueryString();
     }
 
-    public function metricas(User $usuario): array
+    public function metricas(User $usuario, array $filtros = []): array
     {
         $base = PedidoBmaTareaPreparacion::query();
         VisibilidadTareaPreparacion::filtrarTienda($base, $usuario, $this->config);
 
+        $this->aplicarFiltros($base, $filtros);
+
         return [
+            'todos' => (clone $base)->count(),
+            'atendidos' => (clone $base)->whereIn('estado', self::ESTADOS_ATENDIDOS)->count(),
+            'en_atencion_operativa' => (clone $base)->whereNotIn('estado', [...self::ESTADOS_ATENDIDOS, PedidoBmaTareaPreparacion::ESTADO_PENDIENTE])->count(),
             'pendientes' => (clone $base)->where('estado', PedidoBmaTareaPreparacion::ESTADO_PENDIENTE)->count(),
             'en_atencion' => (clone $base)->where('estado', PedidoBmaTareaPreparacion::ESTADO_EN_ATENCION)->count(),
             'con_incidencia' => (clone $base)->where('estado', PedidoBmaTareaPreparacion::ESTADO_CON_INCIDENCIA)->count(),
@@ -175,6 +189,8 @@ class ListarTareasTiendaService
 
     private function aplicarFiltros(Builder $query, array $filtros): void
     {
+        FiltrosBandejaOperativa::aplicar($query, $filtros, true);
+
         if (! empty($filtros['q'])) {
             $q = trim((string) $filtros['q']);
             $query->whereHas('pedido', function ($p) use ($q) {

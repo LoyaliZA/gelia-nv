@@ -7,6 +7,7 @@ use App\Models\ControlPedidos\PedidoBmaDocumento;
 use App\Models\ControlPedidos\PedidoBmaTareaPreparacion;
 use App\Models\Producto;
 use App\Models\User;
+use App\Support\ControlPedidos\ApartadoT01;
 use App\Support\ControlPedidos\InstruccionEntrega;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -113,6 +114,11 @@ final class AtenderAnexoTiendaService
     {
         $json = $pedido->solicitud_preparacion_json ?? [];
         $anexo = $json['anexo_sin_remision'][$indice] ?? null;
+        $cobertura = $json['cobertura_tienda'] ?? [];
+        if (ApartadoT01::aplica($pedido)
+            && ($cobertura['requiere_confirmacion_pedido'] ?? false) && empty($cobertura['confirmacion_enviada_at'])) {
+            throw ValidationException::withMessages(['anexo' => 'Ventas debe confirmar la modalidad y enviar el pedido antes de separar el anexo.']);
+        }
         if (($anexo['estado'] ?? null) === 'revisado_conjunto') {
             if (isset($anexo['separada_at'])) {
                 return $pedido;

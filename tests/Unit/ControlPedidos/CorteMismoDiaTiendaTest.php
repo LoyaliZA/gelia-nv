@@ -12,6 +12,7 @@ class CorteMismoDiaTiendaTest extends TestCase
     use \Illuminate\Foundation\Testing\RefreshDatabase;
     public function test_el_corte_usa_el_instante_aceptado_y_no_confirma(): void
     {
+        \App\Models\ConfiguracionSistema::updateOrCreate(['clave' => \App\Services\ControlPedidos\ConfiguracionOperativaTienda::CLAVE], ['valor' => json_encode(['horarios_activos' => true]), 'tipo' => 'json']);
         $corte = new CorteMismoDiaTienda;
         $zona = 'America/Mexico_City';
 

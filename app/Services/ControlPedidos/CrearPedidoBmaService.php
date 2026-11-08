@@ -92,6 +92,8 @@ class CrearPedidoBmaService
                 ]
             ));
 
+            app(BancosGestionPedidosConfig::class)->validar($pedido, $pedido->catalogo_banco_id);
+
             $this->guardarDocumentos($pedido, $datos['comprobantes'] ?? []);
 
             if (array_key_exists('saf_aplicaciones', $datos)) {

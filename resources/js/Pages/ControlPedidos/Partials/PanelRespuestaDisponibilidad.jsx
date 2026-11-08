@@ -27,7 +27,7 @@ function formDataDe({ confirmacion, excepciones, archivos }) {
     return form;
 }
 
-export default function PanelRespuestaDisponibilidad({ modo = 'seccion', abierto = true, onClose, pedido = {}, documentos = [], revision = null, piezas = [], puedeResponder = false, tomada = false, origen = 'CEDIS', mostrarCambios = true, onDirtyChange, onEnviar }) {
+export default function PanelRespuestaDisponibilidad({ modo = 'seccion', abierto = true, onClose, pedido = {}, documentos = [], revision = null, piezas = [], puedeResponder = false, tomada = false, origen = 'CEDIS', mostrarCambios = true, evidenciasGuardadas = [], onDirtyChange, onEnviar }) {
     const solicitud = pedido.solicitud_preparacion || pedido.solicitud_preparacion_json || {};
     const actualizacion = Boolean(revision?.actualizacion_pendiente || (solicitud.anexo_sin_remision || []).some(a => !a.respondida_at));
     const cambios = cambiosDisponibilidad(solicitud, pedido.documentos || documentos);
@@ -38,7 +38,7 @@ export default function PanelRespuestaDisponibilidad({ modo = 'seccion', abierto
     const [excepciones, setExcepciones] = useState([]);
     const [manual, setManual] = useState(false);
     const [archivos, setArchivos] = useState([]);
-    const [previews, setPreviews] = useState(() => actualizacion ? [] : (pedido.documentos || []).filter(d => d.tipo === 'evidencia_condicion' && d.url && d.activo !== false && (!d.relacion_tipo || d.relacion_tipo === 'revision_general')).map(d => ({ url: d.url, name: d.nombre_original, mime: d.mime_type, remoto: true })));
+    const [previews, setPreviews] = useState(() => actualizacion ? [] : [...evidenciasGuardadas.map(d => ({ url: d.url, name: d.nombre_original, mime: d.mime_type, remoto: true })), ...(pedido.documentos || []).filter(d => d.tipo === 'evidencia_condicion' && d.url && d.activo !== false && (!d.relacion_tipo || d.relacion_tipo === 'revision_general')).map(d => ({ url: d.url, name: d.nombre_original, mime: d.mime_type, remoto: true }))]);
     const [vista, setVista] = useState(null);
     const secuencia = useRef(0);
     const incidenciasRef = useRef(null);
@@ -127,10 +127,11 @@ export default function PanelRespuestaDisponibilidad({ modo = 'seccion', abierto
         if (afectadas.some(p => !p.descripcion.trim())) return setError('Identifica el producto de cada unidad reportada.');
         if (afectadas.some(p => p.condicion === 'detalle' && !p.unica_pieza && !p.mejor_ejemplar && !p.detalle.trim())) return setError('Describe el defecto de la unidad reportada.');
         if (afectadas.some(p => p.condicion === 'detalle' && !p.archivos?.length)) return setError('Adjunta una foto de cada producto con detalle.');
-        if (!archivos.length) return setError('Adjunta evidencia en Captura del pedido.');
+        if (!archivos.length && (actualizacion || !evidenciasGuardadas.length)) return setError('Adjunta evidencia en Captura del pedido.');
         setOcupado(true);
         try {
             const form = formDataDe({ confirmacion: actualizacion ? afectadas.length === 0 : estado === 'correcto', excepciones: afectadas, archivos });
+            if (!actualizacion) evidenciasGuardadas.forEach(d => form.append('evidencias_guardadas[]', String(d.id)));
             if (actualizacion) cambios.filter(c => c.pendiente && c.indice !== undefined).forEach((c, i) => {
                 form.append(`cambios_revisados[${i}][tipo]`, c.tipo);
                 form.append(`cambios_revisados[${i}][indice]`, String(c.indice));
@@ -151,7 +152,7 @@ export default function PanelRespuestaDisponibilidad({ modo = 'seccion', abierto
             <div className="min-w-0">
                 <div className="registrar-tienda-seccion-titulo"><ClipboardCheck size={18} aria-hidden /><h3>{actualizacion ? 'Actualización de consulta' : 'Disponibilidad'} · {origen}</h3></div>
                 <dl className="gelia-preparacion-meta">
-                    {pedido.cliente?.nombre && <div><dt>Cliente</dt><dd>{pedido.cliente.nombre}</dd></div>}
+                    {pedido.cliente?.nombre && <div><dt className="shrink-0">Cliente</dt><dd>{pedido.cliente.nombre}</dd></div>}
 
                 </dl>
             </div>

@@ -5,6 +5,7 @@ namespace Tests\Feature\ControlPedidos;
 use App\Models\Almacen;
 use App\Models\CatalogoTipoAlmacen;
 use App\Models\Cliente;
+use App\Models\ConfiguracionSistema;
 use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\CatalogoModalidadPreparacionPedido;
 use App\Models\ControlPedidos\CatalogoOrigenPedido;
@@ -1186,6 +1187,7 @@ class SolicitudRegistrarTiendaTest extends TestCase
 
     public function test_el_anexo_disponible_se_separa_solo_despues_del_cierre_y_una_sola_vez(): void
     {
+        $this->travelTo(Carbon::parse('2026-11-04 10:00:00', 'America/Mexico_City'));
         Storage::fake('public');
         $this->permitirRevision();
         $tarea = $this->solicitarTienda();
@@ -1205,6 +1207,9 @@ class SolicitudRegistrarTiendaTest extends TestCase
         $this->postJson($url, ['indice' => 0, 'decision' => 'separar'])->assertUnprocessable();
         $this->responderActualizacion($pedido);
         $this->postJson('/control-pedidos/'.$pedido->id.'/cerrar-consulta')->assertOk();
+        $this->postJson($url, ['indice' => 0, 'decision' => 'separar'])->assertUnprocessable();
+        $this->postJson('/control-pedidos/'.$pedido->id.'/cobertura-tienda', ['cobertura' => 'apartado'])->assertOk();
+        $this->postJson('/control-pedidos/'.$pedido->id.'/confirmar-pedido-tienda')->assertOk();
         $this->postJson($url, ['indice' => 0, 'decision' => 'separar'])->assertOk();
         $this->postJson($url, ['indice' => 0, 'decision' => 'separar'])->assertOk();
         $this->assertSame(1, $tarea->productos()->count());
@@ -1272,6 +1277,7 @@ class SolicitudRegistrarTiendaTest extends TestCase
 
     public function test_t01_la_modalidad_inicia_vigencia_sin_reiniciarla_al_guardar(): void
     {
+        ConfiguracionSistema::updateOrCreate(['clave' => \App\Services\ControlPedidos\ConfiguracionOperativaTienda::CLAVE], ['valor' => json_encode(['horarios_activos' => true]), 'tipo' => 'json']);
         $tarea = $this->t01Cerrado();
         $pedido = $tarea->pedido;
         $primera = $pedido->fresh()->solicitud_preparacion_json['cobertura_tienda'];
@@ -1286,6 +1292,7 @@ class SolicitudRegistrarTiendaTest extends TestCase
 
     public function test_t01_entrega_con_pago_externo_remision_y_foto_sin_exhibicion(): void
     {
+        ConfiguracionSistema::updateOrCreate(['clave' => \App\Services\ControlPedidos\ConfiguracionOperativaTienda::CLAVE], ['valor' => json_encode(['seguimiento_entrega_pdv' => true]), 'tipo' => 'json']);
         $tarea = $this->t01Cerrado(true);
         CatalogoEstatusPedido::query()->firstOrCreate(['fase_ciclo' => CatalogoEstatusPedido::FASE_ENTREGADO], ['codigo_interno' => 'ENTREGADO', 'nombre_visual' => 'Entregado', 'color_hex' => '#999999', 'orden' => 20, 'activo' => true]);
         $url = '/control-pedidos/tienda/tareas/'.$tarea->id.'/apartado/entregar-pdv';
@@ -1337,6 +1344,7 @@ class SolicitudRegistrarTiendaTest extends TestCase
 
     public function test_t01_entregar_aplica_saf_reservado_una_vez_sin_crear_cobro(): void
     {
+        ConfiguracionSistema::updateOrCreate(['clave' => \App\Services\ControlPedidos\ConfiguracionOperativaTienda::CLAVE], ['valor' => json_encode(['seguimiento_entrega_pdv' => true]), 'tipo' => 'json']);
         $tarea = $this->t01Cerrado(true);
         $credito = $this->reservarSafT01($tarea->pedido);
         $url = '/control-pedidos/tienda/tareas/'.$tarea->id.'/apartado/entregar-pdv';
@@ -1655,6 +1663,7 @@ class SolicitudRegistrarTiendaTest extends TestCase
 
     public function test_t01_fuera_de_horario_guarda_la_modalidad_pero_no_confirma_una_vigencia_vencida(): void
     {
+        ConfiguracionSistema::updateOrCreate(['clave' => \App\Services\ControlPedidos\ConfiguracionOperativaTienda::CLAVE], ['valor' => json_encode(['horarios_activos' => true]), 'tipo' => 'json']);
         $tarea = $this->t01Cerrado(false, false);
         $pedido = $tarea->pedido;
         $json = $pedido->solicitud_preparacion_json;
@@ -1668,6 +1677,28 @@ class SolicitudRegistrarTiendaTest extends TestCase
         $this->assertSame('17:00', Carbon::parse($guardada['vence_at'])->format('H:i'));
         $this->postJson('/control-pedidos/'.$pedido->id.'/confirmar-pedido-tienda')->assertUnprocessable();
         $this->assertArrayNotHasKey('confirmacion_enviada_at', $pedido->fresh()->solicitud_preparacion_json['cobertura_tienda']);
+    }
+
+    public function test_horarios_desactivados_permiten_confirmar_y_separar_en_domingo_sin_borrar_el_limite_anterior(): void
+    {
+        Notification::fake();
+        $tarea = $this->t01Cerrado(false, false);
+        $pedido = $tarea->pedido;
+        $json = $pedido->solicitud_preparacion_json;
+        $vence = '2026-11-04T17:00:00-06:00';
+        $json['cobertura_tienda']['vence_at'] = $vence;
+        $json['cobertura_tienda']['motivo_vigencia'] = 'Bloqueo anterior';
+        $pedido->update(['solicitud_preparacion_json' => $json]);
+        $tarea->update(['fecha_limite' => Carbon::parse($vence)]);
+        $this->travelTo(Carbon::parse('2026-11-08 23:00', 'America/Mexico_City'));
+        $this->assertFalse($pedido->fresh()->solicitud_preparacion['horarios_operativos']['activos']);
+        $this->assertNull($pedido->fresh()->solicitud_preparacion['cobertura_tienda']['motivo_vigencia']);
+        $this->postJson('/control-pedidos/'.$pedido->id.'/confirmar-pedido-tienda')->assertOk();
+        $this->assertSame($vence, $pedido->fresh()->solicitud_preparacion_json['cobertura_tienda']['vence_at']);
+        $this->postJson('/control-pedidos/tienda/tareas/'.$tarea->id.'/apartado/confirmar', ['version' => $tarea->cumplimientoFisico->version])->assertOk();
+        $this->assertSame('APARTADO_CONFIRMADO', $tarea->fresh()->cumplimientoFisico->estado);
+        app(\App\Services\ControlPedidos\EvaluarVencimientoApartadoFisicoService::class)->ejecutar();
+        Notification::assertNotSentTo($this->usuario, AlertaPedidoBma::class, fn ($alerta) => $alerta->tipoAlerta === 'pedido_apartado_vencido');
     }
 
     private function t01Cerrado(bool $separar = false, bool $confirmar = true): PedidoBmaTareaPreparacion
@@ -1696,6 +1727,94 @@ class SolicitudRegistrarTiendaTest extends TestCase
         return $tarea->fresh(['cumplimientoFisico', 'pedido']);
     }
 
+    public function test_confirmar_el_conjunto_incluye_anexos_revisados_sin_confirmaciones_duplicadas(): void
+    {
+        $tarea = $this->t01Cerrado(false, false);
+        $pedido = $tarea->pedido;
+        $this->postJson('/control-pedidos/tienda/tareas/'.$tarea->id.'/apartado/separar', ['cantidad' => 1])->assertUnprocessable()->assertJsonPath('message', 'Este pedido se separa con Confirmar pedido separado, después del cierre y la confirmación de Ventas.');
+        $this->assertSame('POR_SEPARAR', $tarea->fresh()->cumplimientoFisico->estado);
+        $producto = Producto::create(['folio' => 99881, 'sku' => 'ANEXO-CONJUNTO', 'descripcion' => 'Anexo disponible', 'activo' => true]);
+        $inventario = Inventario::create(['producto_id' => $producto->id, 'almacen_id' => $tarea->almacen_id, 'existencia' => 10, 'apartado' => 0]);
+        $json = $pedido->solicitud_preparacion_json;
+        $json['anexo_sin_remision'] = [
+            ['entrada' => 'documento', 'descripcion' => 'Anexo aprobado', 'estado' => 'revisado_conjunto', 'respondida_at' => now()->toIso8601String()],
+            ['entrada' => 'catalogo', 'estado' => 'disponible', 'respondida_at' => now()->toIso8601String(), 'piezas_respuesta' => [['producto_id' => $producto->id, 'sku' => $producto->sku, 'descripcion' => $producto->descripcion, 'cantidad' => 2]]],
+            ['entrada' => 'catalogo', 'descripcion' => 'Anexo agotado', 'estado' => 'sin_existencia', 'respondida_at' => now()->toIso8601String()],
+        ];
+        $pedido->update(['solicitud_preparacion_json' => $json]);
+        $url = '/control-pedidos/tienda/tareas/'.$tarea->id.'/apartado/confirmar';
+        $datos = ['version' => $tarea->cumplimientoFisico->version, 'lineas' => []];
+        $this->postJson($url, $datos)->assertUnprocessable();
+        $this->assertArrayNotHasKey('separada_at', $pedido->fresh()->solicitud_preparacion_json['anexo_sin_remision'][0]);
+        $this->postJson('/control-pedidos/'.$pedido->id.'/confirmar-pedido-tienda')->assertOk();
+        $this->postJson($url, $datos)->assertOk();
+        $this->assertSame('APARTADO_CONFIRMADO', $tarea->fresh()->cumplimientoFisico->estado);
+        $anexos = $pedido->fresh()->solicitud_preparacion_json['anexo_sin_remision'];
+        $this->assertNotEmpty($anexos[0]['separada_at']);
+        $this->assertSame($this->usuario->id, $anexos[0]['separada_por_id']);
+        $this->assertNotEmpty($anexos[1]['separada_at']);
+        $this->assertEquals(2, $inventario->fresh()->apartado);
+        $this->assertArrayNotHasKey('separada_at', $anexos[2]);
+        $eventos = $tarea->fresh()->cumplimientoFisico->eventos()->count();
+        $this->postJson($url, $datos)->assertOk();
+        $this->assertSame($anexos, $pedido->fresh()->solicitud_preparacion_json['anexo_sin_remision']);
+        $this->assertEquals(2, $inventario->fresh()->apartado);
+        $this->assertSame($eventos, $tarea->fresh()->cumplimientoFisico->eventos()->count());
+        $this->getJson('/control-pedidos/tienda/tareas/'.$tarea->id)->assertOk()
+            ->assertJsonCount(0, 'tarea.pedido.anexos_por_separar')
+            ->assertJsonPath('tarea.respuesta.apartado_confirmado', true);
+        $this->assertNull($pedido->fresh()->motivoBloqueoEntregaTienda());
+    }
+
+    public function test_tienda_reporta_error_en_json_mientras_espera_a_ventas(): void
+    {
+        $tarea = $this->t01Cerrado(false, false);
+        $this->usuario->givePermissionTo(Permission::findOrCreate('control_pedidos.tienda.reportar_error', 'web'));
+        $this->postJson('/control-pedidos/tienda/tareas/'.$tarea->id.'/reportar-incidencia', [
+            'version' => $tarea->version, 'tipo_incidencia' => 'datos_incorrectos',
+            'motivo' => 'Revisar los datos de la solicitud', 'almacen_solicitado_id' => $tarea->almacen_id,
+        ])->assertOk()->assertJsonPath('message', 'Error reportado. Ventas fue notificada.');
+        $this->assertSame('CON_INCIDENCIA', $tarea->fresh()->estado);
+        $this->assertSame('POR_SEPARAR', $tarea->fresh()->cumplimientoFisico->estado);
+    }
+
+    public function test_tienda_recibe_unidades_con_atributos_sin_observacion_como_cedis(): void
+    {
+        Storage::fake('public');
+        $this->permitirRevision();
+        $tarea = $this->solicitarTienda();
+        $this->postJson('/control-pedidos/tienda/tareas/'.$tarea->id.'/tomar', ['version' => $tarea->version])->assertOk();
+        $url = '/control-pedidos/tienda/tareas/'.$tarea->id.'/disponibilidad';
+        $this->post($url, ['confirmacion_explicita' => 0, 'excepciones' => [
+            ['descripcion' => 'Unidad de ejemplo', 'sku' => 'MISMO-SKU', 'cantidad' => 1, 'condicion' => 'detalle', 'unica_pieza' => 1, 'evidencias' => [UploadedFile::fake()->image('unidad.jpg')]],
+            ['descripcion' => 'Unidad de ejemplo', 'sku' => 'MISMO-SKU', 'cantidad' => 1, 'condicion' => 'faltante'],
+        ], 'evidencias' => [UploadedFile::fake()->image('conjunto.jpg')]], ['Accept' => 'application/json'])->assertOk();
+        $this->assertSame(2, $tarea->pedido->revisionesProducto()->count());
+        $this->assertSame('POR_SEPARAR', $tarea->fresh()->cumplimientoFisico->estado);
+        $this->getJson('/control-pedidos/tienda/tareas/'.$tarea->id)->assertOk()
+            ->assertJsonCount(2, 'tarea.respuesta.excepciones')
+            ->assertJsonPath('tarea.respuesta.excepciones.0.unica_pieza', true)
+            ->assertJsonCount(1, 'tarea.respuesta.excepciones.0.documentos')
+            ->assertJsonPath('tarea.respuesta.excepciones.1.estado_fisico', 'sin_existencia');
+    }
+
+    public function test_el_paso_posterior_apagado_no_bloquea_confirmar_apartado_y_rechaza_nuevas_entregas(): void
+    {
+        $tarea = $this->t01Cerrado(true);
+        $this->getJson('/control-pedidos/tienda/tareas/'.$tarea->id)->assertOk()
+            ->assertJsonPath('tarea.pedido.seguimiento_entrega_pdv_habilitado', false)
+            ->assertJsonPath('tarea.respuesta.seguimiento_entrega_pdv_habilitado', false)
+            ->assertJsonPath('tarea.respuesta.apartado_confirmado', true);
+        $this->post('/control-pedidos/tienda/tareas/'.$tarea->id.'/apartado/entregar-pdv', [
+            'version' => $tarea->cumplimientoFisico->version, 'pago_confirmado' => 1, 'numero_remision' => 'PDV-OPCIONAL',
+            'receptor' => 'Cliente ficticio', 'foto' => UploadedFile::fake()->image('foto.jpg'),
+        ], ['Accept' => 'application/json'])->assertUnprocessable()->assertJsonValidationErrors('operacion');
+        $this->assertSame('APARTADO_CONFIRMADO', $tarea->fresh()->cumplimientoFisico->estado);
+        $this->assertNull($tarea->fresh()->cumplimientoFisico->pago_confirmado_at);
+        $this->assertNull($tarea->pedido->fresh()->numero_remision);
+        $this->assertSame(0, $tarea->documentos()->where('tipo_evidencia', PedidoBmaTareaDocumento::TIPO_EVIDENCIA_ENTREGA)->count());
+    }
+
     private function permitirRevision(): void
     {
         foreach ([
@@ -1704,6 +1823,191 @@ class SolicitudRegistrarTiendaTest extends TestCase
         ] as $permiso) {
             $this->usuario->givePermissionTo(Permission::findOrCreate($permiso, 'web'));
         }
+    }
+
+    private function pedidoConModalidadConfirmada(): PedidoBma
+    {
+        return $this->pedido([
+            'catalogo_estatus_pedido_id' => CatalogoEstatusPedido::porFase(CatalogoEstatusPedido::FASE_PESAJE_RESPONDIDO)->id,
+            'consulta_cerrada_at' => now(),
+            'solicitud_preparacion_json' => [
+                'modalidad_entrega' => 'tienda', 'area_revision' => 'preparacion_tienda',
+                'caso_tienda' => 'revisar_apartar', 'codigo_modalidad' => 'RECOGE_TIENDA', 'atencion_tienda' => 'no',
+                'revision_disponibilidad' => ['estado' => 'sin_excepciones'],
+                'cobertura_tienda' => ['tipo' => 'apartado', 'registrada_at' => now()->toIso8601String(), 'registrada_por_id' => $this->usuario->id, 'confirmacion_enviada_at' => now()->toIso8601String(), 'vence_at' => now()->addHour()->toIso8601String()],
+            ],
+        ]);
+    }
+
+    private function solicitarCambioCobertura(PedidoBma $pedido, string $cobertura = 'credito'): string
+    {
+        $id = (string) Str::uuid();
+        $version = $this->actingAs($this->usuario)->getJson("/control-pedidos/{$pedido->id}/cambio-cobertura-tienda")->assertOk()->json('version');
+        $this->postJson("/control-pedidos/{$pedido->id}/cambio-cobertura-tienda", ['accion' => 'solicitar', 'solicitud_id' => $id, 'version' => $version, 'cobertura' => $cobertura, 'motivo' => 'Corrección solicitada por el cliente'])->assertOk()->assertJsonPath('estado_cobertura.solicitud.estado', 'pendiente');
+        return $id;
+    }
+
+    private function autorizadorCobertura(): User
+    {
+        $actor = User::factory()->create(['departamento_id' => $this->departamento->id]);
+        $actor->assignRole(\Spatie\Permission\Models\Role::findOrCreate('Gerente', 'web'));
+        $actor->givePermissionTo(Permission::findOrCreate(\App\Support\ControlPedidos\CambioCoberturaTienda::PERMISO, 'web'));
+        return $actor;
+    }
+
+    public function test_cobertura_guardada_no_se_sustituye_y_reintento_conserva_confirmacion_y_vigencia(): void
+    {
+        $pedido = $this->pedidoConModalidadConfirmada();
+        $antes = $pedido->solicitud_preparacion_json;
+        $url = "/control-pedidos/{$pedido->id}/cobertura-tienda";
+        $this->actingAs($this->usuario)->postJson($url, ['cobertura' => 'transferencia'])->assertUnprocessable();
+        $this->postJson($url, ['cobertura' => 'apartado'])->assertOk();
+        $this->assertSame($antes, $pedido->fresh()->solicitud_preparacion_json);
+        $this->assertSame(0, $pedido->historial()->count());
+        $this->postJson($url, ['cobertura' => 'apartado', 'mismo_dia' => true])->assertUnprocessable();
+    }
+
+    public function test_cambio_cobertura_exige_otro_autorizador_y_aplica_una_sola_vez(): void
+    {
+        Notification::fake();
+        $pedido = $this->pedidoConModalidadConfirmada();
+        $anterior = $pedido->solicitud_preparacion_json['cobertura_tienda'];
+        $id = $this->solicitarCambioCobertura($pedido);
+        $url = "/control-pedidos/{$pedido->id}/cambio-cobertura-tienda";
+        $this->assertSame('apartado', $pedido->fresh()->solicitud_preparacion_json['cobertura_tienda']['tipo']);
+        $decision = ['accion' => 'autorizar', 'solicitud_id' => $id, 'motivo' => 'Revisado sin movimientos ni pagos'];
+        $this->postJson($url, $decision)->assertForbidden();
+        $this->usuario->givePermissionTo(Permission::findOrCreate(\App\Support\ControlPedidos\CambioCoberturaTienda::PERMISO, 'web'));
+        $this->postJson($url, $decision)->assertUnprocessable();
+        $gerente = $this->autorizadorCobertura();
+        $this->actingAs($gerente)->postJson($url, $decision)->assertOk()->assertJsonPath('solicitud_preparacion.cobertura_tienda.tipo', 'credito')->assertJsonPath('estado_cobertura.solicitud.estado', 'aplicada');
+        $this->postJson($url, $decision)->assertOk();
+        $json = $pedido->fresh()->solicitud_preparacion_json;
+        $this->assertCount(1, $json['historial_cambios_cobertura']);
+        $this->assertSame($anterior, $json['historial_cambios_cobertura'][0]['anterior']);
+        $this->assertSame($gerente->id, $json['cambio_cobertura_tienda']['resuelta_por_id']);
+        $this->assertArrayNotHasKey('confirmacion_enviada_at', $json['cobertura_tienda']);
+        $this->assertSame(2, $pedido->historial()->count());
+    }
+
+    public function test_cambio_cobertura_obsoleto_no_se_aplica_y_el_rechazo_conserva_modalidad(): void
+    {
+        Notification::fake();
+        $pedido = $this->pedidoConModalidadConfirmada();
+        $id = $this->solicitarCambioCobertura($pedido);
+        $pedido->update(['total_mercancia' => 120]);
+        $url = "/control-pedidos/{$pedido->id}/cambio-cobertura-tienda";
+        $gerente = $this->autorizadorCobertura();
+        $this->actingAs($gerente)->postJson($url, ['accion' => 'autorizar', 'solicitud_id' => $id, 'motivo' => 'Se revisó la solicitud'])->assertUnprocessable();
+        $this->postJson($url, ['accion' => 'rechazar', 'solicitud_id' => $id, 'motivo' => 'Se requiere una solicitud actualizada'])->assertOk();
+        $this->assertSame('apartado', $pedido->fresh()->solicitud_preparacion_json['cobertura_tienda']['tipo']);
+        $this->assertSame('rechazada', $pedido->fresh()->solicitud_preparacion_json['cambio_cobertura_tienda']['estado']);
+    }
+
+    public function test_cambio_cobertura_no_borra_remision_ni_apartado_fisico(): void
+    {
+        Notification::fake();
+        $pedido = $this->pedidoConModalidadConfirmada();
+        $pedido->update(['numero_remision' => 'REM-PROTEGIDA']);
+        $id = $this->solicitarCambioCobertura($pedido);
+        $gerente = $this->autorizadorCobertura();
+        $this->actingAs($gerente)->postJson("/control-pedidos/{$pedido->id}/cambio-cobertura-tienda", ['accion' => 'autorizar', 'solicitud_id' => $id, 'motivo' => 'Solicitan otra forma de pago'])->assertUnprocessable();
+        $this->assertSame('REM-PROTEGIDA', $pedido->fresh()->numero_remision);
+        $this->assertSame('apartado', $pedido->fresh()->solicitud_preparacion_json['cobertura_tienda']['tipo']);
+        $tarea = $this->t01Cerrado();
+        $this->postJson('/control-pedidos/tienda/tareas/'.$tarea->id.'/apartado/confirmar', ['version' => $tarea->cumplimientoFisico->version])->assertOk();
+        $pedido = $tarea->pedido->fresh();
+        $id = $this->solicitarCambioCobertura($pedido);
+        $this->actingAs($gerente)->postJson("/control-pedidos/{$pedido->id}/cambio-cobertura-tienda", ['accion' => 'autorizar', 'solicitud_id' => $id, 'motivo' => 'Revisar cambio después del apartado'])->assertUnprocessable();
+        $this->assertSame('APARTADO_CONFIRMADO', $tarea->cumplimientoFisico()->first()->estado);
+    }
+
+    public function test_cambio_cobertura_conserva_metadatos_al_autoguardar_y_no_admite_solicitudes_simultaneas(): void
+    {
+        Notification::fake();
+        $pedido = $this->pedidoConModalidadConfirmada();
+        $id = $this->solicitarCambioCobertura($pedido);
+        $json = $pedido->fresh()->solicitud_preparacion_json;
+        $version = \App\Support\ControlPedidos\CambioCoberturaTienda::version($pedido->fresh());
+        $datos = ['accion' => 'solicitar', 'solicitud_id' => $id, 'version' => $version, 'cobertura' => 'credito', 'motivo' => 'Corrección solicitada por el cliente'];
+        $url = "/control-pedidos/{$pedido->id}/cambio-cobertura-tienda";
+        $this->postJson($url, $datos)->assertOk();
+        $datos['solicitud_id'] = (string) Str::uuid();
+        $this->postJson($url, $datos)->assertUnprocessable();
+        $fusion = app(\App\Services\ControlPedidos\FusionarSolicitudPreparacionPedido::class);
+        $alterada = $fusion->ejecutar($json, ['atencion_tienda' => 'prevista', 'codigo_modalidad' => 'RECOGE_TIENDA_CREDITO', 'cobertura_tienda' => ['tipo' => 'credito'], 'cambio_cobertura_tienda' => ['estado' => 'aplicada']]);
+        $this->assertSame($json['cambio_cobertura_tienda'], $alterada['cambio_cobertura_tienda']);
+        $this->assertSame($json['cobertura_tienda'], $alterada['cobertura_tienda']);
+        $this->assertNotSame('prevista', $alterada['atencion_tienda']);
+        $this->assertSame('RECOGE_TIENDA', $alterada['codigo_modalidad']);
+        $this->assertSame($json['cobertura_tienda'], $fusion->ejecutar($json, null)['cobertura_tienda']);
+    }
+
+    public function test_cambio_cobertura_no_convierte_pagos_existentes_y_conserva_reporte_md(): void
+    {
+        Notification::fake();
+        $pedido = $this->pedidoConModalidadConfirmada();
+        $json = $pedido->solicitud_preparacion_json;
+        $json['cobertura_tienda']['tipo'] = 'transferencia';
+        $json['codigo_modalidad'] = 'RECOGE_TIENDA_TRANSFERENCIA';
+        $json['atencion_tienda'] = 'prevista';
+        $json['tienda_md_reporte'] = ['primer_pago_at' => now()->toIso8601String(), 'estado' => 'oportuno'];
+        $pedido->update(['solicitud_preparacion_json' => $json]);
+        $pago = $pedido->pagosExhibicion()->create(['monto' => 100, 'forma_pago' => 'transferencia', 'fecha_pago' => now(), 'registrado_por_id' => $this->usuario->id, 'activo_para_cobertura' => true, 'estado_revision' => 'pendiente', 'ruta_archivo' => 'comprobante-conservado.jpg']);
+        $this->actingAs($this->usuario)->postJson("/control-pedidos/{$pedido->id}/cobertura-tienda", ['cobertura' => 'transferencia', 'mismo_dia' => false])->assertUnprocessable();
+        $id = $this->solicitarCambioCobertura($pedido);
+        $this->actingAs($this->autorizadorCobertura())->postJson("/control-pedidos/{$pedido->id}/cambio-cobertura-tienda", ['accion' => 'autorizar', 'solicitud_id' => $id, 'motivo' => 'El cliente solicita crédito'])->assertUnprocessable();
+        $this->assertSame('transferencia', $pedido->fresh()->solicitud_preparacion_json['cobertura_tienda']['tipo']);
+        $this->assertSame($json['tienda_md_reporte'], $pedido->fresh()->solicitud_preparacion_json['tienda_md_reporte']);
+        $this->assertSame('comprobante-conservado.jpg', $pago->fresh()->ruta_archivo);
+        $this->assertSame(1, $pedido->pagosExhibicion()->count());
+    }
+
+    public function test_cambio_cobertura_de_regreso_al_apartado_conserva_el_primer_limite(): void
+    {
+        Notification::fake();
+        $pedido = $this->pedidoConModalidadConfirmada();
+        $limite = $pedido->solicitud_preparacion_json['cobertura_tienda']['vence_at'];
+        $gerente = $this->autorizadorCobertura();
+        foreach (['credito', 'apartado'] as $tipo) {
+            $id = $this->solicitarCambioCobertura($pedido->fresh(), $tipo);
+            $this->actingAs($gerente)->postJson("/control-pedidos/{$pedido->id}/cambio-cobertura-tienda", ['accion' => 'autorizar', 'solicitud_id' => $id, 'motivo' => 'Corregir modalidad sin alterar documentos'])->assertOk();
+        }
+        $json = $pedido->fresh()->solicitud_preparacion_json;
+        $this->assertCount(2, $json['historial_cambios_cobertura']);
+        $this->assertSame($limite, $json['cobertura_tienda']['vence_at']);
+        $this->assertArrayNotHasKey('confirmacion_enviada_at', $json['cobertura_tienda']);
+    }
+
+    public function test_cambio_cobertura_sin_compromiso_actualiza_la_instruccion_real_y_conserva_consulta(): void
+    {
+        Notification::fake();
+        $tarea = $this->t01Cerrado();
+        $pedido = $tarea->pedido->fresh();
+        $consulta = $pedido->consulta_cerrada_at->toIso8601String();
+        $versionTarea = $tarea->version;
+        $versionFisica = $tarea->cumplimientoFisico->version;
+        $modalidad = CatalogoModalidadPreparacionPedido::query()->firstOrCreate(['codigo' => 'RECOGE_TIENDA_CREDITO'], ['nombre' => 'Recoge con crédito', 'activo' => true]);
+        $id = $this->solicitarCambioCobertura($pedido);
+        $this->actingAs($this->autorizadorCobertura())->postJson("/control-pedidos/{$pedido->id}/cambio-cobertura-tienda", ['accion' => 'autorizar', 'solicitud_id' => $id, 'motivo' => 'Corregir antes de separar físicamente'])->assertOk();
+        $this->assertSame($modalidad->id, $tarea->fresh()->catalogo_modalidad_preparacion_id);
+        $this->assertSame($versionTarea + 1, $tarea->fresh()->version);
+        $this->assertSame($versionFisica + 1, $tarea->cumplimientoFisico()->first()->version);
+        $this->assertNull($tarea->fresh()->fecha_limite);
+        $this->assertNull($tarea->cumplimientoFisico()->first()->vence_at);
+        $this->assertSame('POR_SEPARAR', $tarea->cumplimientoFisico()->first()->estado);
+        $this->assertSame($consulta, $pedido->fresh()->consulta_cerrada_at->toIso8601String());
+    }
+
+    public function test_primera_cobertura_admite_saf_sin_sobrescribir_modalidad_ya_guardada(): void
+    {
+        $pedido = $this->pedidoConModalidadConfirmada();
+        $json = $pedido->solicitud_preparacion_json;
+        unset($json['cobertura_tienda'], $json['codigo_modalidad']);
+        $pedido->update(['solicitud_preparacion_json' => $json, 'saldo_a_favor' => 20]);
+        $this->actingAs($this->usuario)->postJson("/control-pedidos/{$pedido->id}/cobertura-tienda", ['cobertura' => 'transferencia'])->assertOk();
+        $this->assertEquals(20, $pedido->fresh()->saldo_a_favor);
+        $this->assertSame('transferencia', $pedido->fresh()->solicitud_preparacion_json['cobertura_tienda']['tipo']);
     }
 
     private function estatusRespondido(): void

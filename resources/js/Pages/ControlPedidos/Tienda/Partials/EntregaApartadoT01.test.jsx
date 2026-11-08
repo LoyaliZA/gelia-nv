@@ -6,7 +6,7 @@ import EntregaApartadoT01 from './EntregaApartadoT01';
 vi.mock('@inertiajs/react', () => ({ router: { post: vi.fn() } }));
 let container, root;
 const enviar = vi.fn();
-const tarea = { id: 1, responsable: { id: 10 }, apartado: { version: 3, estado: 'APARTADO_CONFIRMADO' }, pedido: { es_t01_documental: true, cobertura_tienda: { tipo: 'apartado' } } };
+const tarea = { id: 1, responsable: { id: 10 }, apartado: { version: 3, estado: 'APARTADO_CONFIRMADO' }, pedido: { es_t01_documental: true, seguimiento_entrega_pdv_habilitado: true, cobertura_tienda: { tipo: 'apartado' } } };
 const auth = { user: { id: 10, permissions: ['control_pedidos.tienda.responder'] } };
 const mount = (extra={}) => act(() => root.render(<EntregaApartadoT01 tarea={tarea} auth={auth} onEnviar={enviar} {...extra} />));
 const button = text => [...container.querySelectorAll('button')].find(b => b.textContent === text);
@@ -37,4 +37,16 @@ it('la liberación requiere motivo y no ocurre automáticamente', async () => {
 it('otra persona y un apartado finalizado no ofrecen acciones operativas', async () => {
  await mount({auth:{user:{id:11,roles:['Super Admin']}}});expect(container.querySelector('button')).toBeNull();
  await mount({tarea:{...tarea,apartado:{...tarea.apartado,estado:'DEVUELTA_ANAQUEL'}}});expect(container.querySelector('button')).toBeNull();expect(container.textContent).toContain('Apartado liberado');
+});
+
+it('el paso apagado no muestra controles ni exige capturar pago o remisión', async () => {
+ await mount({ tarea: { ...tarea, pedido: { ...tarea.pedido, seguimiento_entrega_pdv_habilitado: false } } });
+ expect(container.textContent).toBe('');
+ expect(container.querySelector('input,button')).toBeNull();
+ expect(enviar).not.toHaveBeenCalled();
+});
+it('habilitar el paso no lo adelanta antes de confirmar el apartado', async () => {
+ await mount({ tarea: { ...tarea, apartado: { ...tarea.apartado, estado: 'POR_SEPARAR' } } });
+ expect(container.textContent).toBe('');
+ expect(enviar).not.toHaveBeenCalled();
 });

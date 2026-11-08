@@ -4,9 +4,10 @@ import { ClipboardCheck } from 'lucide-react';
 import { formatearFechaNegocio } from './pedidosBmaStyles';
 import { esPdf, MiniaturaDocumento } from './ModalVistaPreviaDocumento';
 
-export default function RespuestaPreparacionTienda({ tarea, onVerDocumentos, accionesDePieza }) {
+export default function RespuestaPreparacionTienda({ tarea, onVerDocumentos, accionesDePieza, mostrarSeguimientoEntrega = true }) {
     const respuesta = tarea?.respuesta;
     const documentos = respuesta?.documentos || [];
+    const mostrarSeguimiento = mostrarSeguimientoEntrega && (!respuesta?.documental || respuesta?.seguimiento_entrega_pdv_habilitado === true);
     const hayFotos = documentos.some((d) => d?.url);
     const visible = Boolean(respuesta) && (respuesta.respondida || tarea.estado === 'CON_INCIDENCIA' || hayFotos);
     if (!visible) return null;
@@ -40,7 +41,7 @@ export default function RespuestaPreparacionTienda({ tarea, onVerDocumentos, acc
             labelCantidad={respuesta.piezas_afectadas ? 'Piezas afectadas' : 'Total preparado'} columnaCantidad={respuesta.apartado_confirmado ? 'Preparadas' : 'Revisadas'} onVer={ver} accionesDePieza={accionesDePieza}>
             {respuesta.documental && respuesta.apartado_confirmado && <p>Pedido completo separado conforme a la consulta aprobada.</p>}
             {respuesta.ubicacion && <p>Ubicación: {respuesta.ubicacion}</p>}
-            {respuesta.apartado_confirmado && <p>Apartado confirmado. {respuesta.pago_presencial === 'confirmado' ? 'Pago presencial confirmado.' : 'Pago presencial pendiente.'} {respuesta.entrega === 'registrada' ? 'Entrega registrada.' : 'Entrega pendiente.'}</p>}
+            {respuesta.apartado_confirmado && <p>Apartado confirmado. {mostrarSeguimiento && <>{respuesta.pago_presencial === 'confirmado' ? 'Pago presencial confirmado.' : 'Pago presencial pendiente.'} {respuesta.entrega === 'registrada' ? 'Entrega registrada.' : 'Entrega pendiente.'}</>}</p>}
             {respuesta.observaciones && !notasAutomaticas.includes(respuesta.observaciones.trim()) && <p>{respuesta.observaciones}</p>}
             {tarea.incidencia?.motivo && <p role="alert">{tarea.incidencia.motivo}</p>}
         </RespuestaDisponibilidadPedido>;
@@ -64,7 +65,7 @@ export default function RespuestaPreparacionTienda({ tarea, onVerDocumentos, acc
         {excepcionesSueltas.length > 0 && <ul className="m-0 pl-4 grid gap-1">{excepcionesSueltas.map((pieza) => <li key={pieza.id || pieza.descripcion} className="text-sm theme-text-main">{pieza.descripcion} · piezas afectadas: {pieza.cantidad}{pieza.detalle ? ` · ${pieza.detalle}` : ''}</li>)}</ul>}
         {respuesta.documental && respuesta.apartado_confirmado && <p className="text-sm font-bold m-0">Pedido completo separado conforme a la consulta aprobada.</p>}
         {!(respuesta.documental && respuesta.apartado_confirmado) && (respuesta.productos?.length > 0 || respuesta.piezas_afectadas) && <p className="text-sm font-bold m-0">{respuesta.piezas_afectadas ? `Piezas afectadas: ${respuesta.cantidad}` : `Total preparado: ${respuesta.cantidad} piezas`}{respuesta.ubicacion ? ` · Ubicación: ${respuesta.ubicacion}` : ''}</p>}
-        {respuesta.apartado_confirmado && <p className="text-sm theme-text-main m-0">Apartado confirmado. {respuesta.pago_presencial === 'confirmado' ? 'Pago presencial confirmado.' : 'Pago presencial pendiente.'} {respuesta.entrega === 'registrada' ? 'Entrega registrada.' : 'Entrega pendiente.'}</p>}
+        {respuesta.apartado_confirmado && <p className="text-sm theme-text-main m-0">Apartado confirmado. {mostrarSeguimiento && <>{respuesta.pago_presencial === 'confirmado' ? 'Pago presencial confirmado.' : 'Pago presencial pendiente.'} {respuesta.entrega === 'registrada' ? 'Entrega registrada.' : 'Entrega pendiente.'}</>}</p>}
         {respuesta.observaciones && !notasAutomaticas.includes(respuesta.observaciones.trim()) && <p className="text-sm m-0">{respuesta.observaciones}</p>}
         {tarea.incidencia?.motivo && <p role="alert" className="text-sm m-0">{tarea.incidencia.motivo}</p>}
         {fotosGenerales.length > 0 && (

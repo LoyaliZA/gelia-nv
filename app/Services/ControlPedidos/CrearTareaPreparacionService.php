@@ -190,11 +190,11 @@ class CrearTareaPreparacionService
             $prioridadMd = (bool) ($meta['prioridad_md'] ?? false);
             if ($modalidad->codigo === CatalogoModalidadPreparacionPedido::CODIGO_RECOGE_TIENDA) {
                 $prioridadMd = true;
-                $fechaLimite = \App\Support\ControlPedidos\PlazosApartadoFisico::cierreOperativo(
-                    now(), $this->config->zonaHoraria(), $this->config->cierreOperativoHora()
-                );
+                $fechaLimite = app(ConfiguracionOperativaTienda::class)->horariosActivos()
+                    ? \App\Support\ControlPedidos\PlazosApartadoFisico::cierreOperativo(now(), $this->config->zonaHoraria(), $this->config->cierreOperativoHora())
+                    : null;
             }
-            if ($prioridadMd) {
+            if ($prioridadMd && app(ConfiguracionOperativaTienda::class)->horariosActivos()) {
                 $cierre = now()->endOfDay();
                 if ($fechaLimite === null || $fechaLimite->greaterThan($cierre)) {
                     $fechaLimite = $cierre;

@@ -1,3 +1,4 @@
+import { vistaArchivoPedido } from '../../Partials/vistasArchivoPedido';
 import React, { useState } from 'react';
 import VisorPdfPaginas from '../../Partials/VisorPdfPaginas';
 import { THEME_LABEL, THEME_SELECT } from '../../../../utils/geliaTheme';
@@ -22,7 +23,7 @@ export default function DocumentoSolicitudTienda({ tareaId, documentos = [] }) {
             </select>
         </label> : <p className="text-xs theme-text-muted m-0">{documento.nombre_original}</p>}
         <div className="gelia-preparacion-documento-acciones"><button type="button" className={BTN_SECONDARY} onClick={() => setAmpliado(true)}><Expand className="w-4 h-4" aria-hidden="true" />Ampliar pedido</button></div>
-        {imagen ? <img src={url} alt={documento.nombre_original || 'Pedido de referencia'} width="800" height="1100" className="w-full h-auto object-contain" />
+        {imagen ? <img src={vistaArchivoPedido(url)} alt={documento.nombre_original || 'Pedido de referencia'} width="800" height="1100" className="w-full h-auto object-contain" />
             : <VisorPdfPaginas key={documento.id} url={url} titulo={documento.nombre_original || 'Pedido'} maxHeight="none" />}
         <ModalVistaPreviaDocumento abierto={ampliado} documento={{ ...documento, url }} onClose={() => setAmpliado(false)} />
     </section>;

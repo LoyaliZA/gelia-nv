@@ -243,13 +243,15 @@ export default function Show({
             </GeliaPageShell>
         </Layout>;
     }
-    if (tarea.estado === 'EN_ATENCION') {
+    if (tarea.estado === 'EN_ATENCION' || (esRecogeHoy && tarea.pedido?.es_t01_documental && tarea.estado === 'RESPONDIDA')) {
         return <Layout {...(!embedded ? { auth } : {})}>
             {!embedded && <Head title={`Preparación Tienda — ${folio}`} />}
             <GeliaPageShell className="gelia-tienda-op space-y-4">
                 {!embedded && <div className="flex items-center justify-between gap-3"><h1 className="text-lg font-bold">{folio}</h1><Link href={route('control_pedidos.tienda.index')} className={BTN_SECONDARY} onClick={(e) => { if (capturaDirty && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey && e.button === 0) { e.preventDefault(); setConfirmarVolver(true); } }}>Volver al listado</Link></div>}
                 <AvisoResultadoTienda flash={flash} />
-                <PrepararApartadoRecoge key={`${tarea.id}-${capturaVersion}`} tarea={tarea} auth={auth} documentos={documentos_solicitud} documentosTarea={documentos} requisitos={requisitos} tiposCaja={tipos_caja} onEnviar={enviarCaptura} onDirtyChange={setCapturaDirty} onRefrescarDocumentos={() => router.reload({ only: ['documentos'], preserveScroll: true })} />
+                <PrepararApartadoRecoge key={`${tarea.id}-${capturaVersion}`} tarea={tarea} auth={auth} documentos={documentos_solicitud} documentosTarea={documentos} requisitos={requisitos} tiposCaja={tipos_caja} onEnviar={enviarCaptura} onDirtyChange={embedded ? onDirtyChange : setCapturaDirty} onRefrescarDocumentos={() => router.reload({ only: ['documentos'], preserveScroll: true })} />
+                {!embedded && esRecogeHoy && tarea.pedido?.es_t01_documental && tarea.pedido?.seguimiento_entrega_pdv_habilitado && ['APARTADO_CONFIRMADO', 'ENTREGADA', 'DEVUELTA_ANAQUEL'].includes(tarea.apartado?.estado) && <ApartadoFisicoTienda soloSalida tarea={tarea} auth={auth} config={config} requisitos={requisitos} eventos={eventos_apartado} onEnviar={enviarCaptura} onDirtyChange={embedded ? onDirtyChange : setCapturaDirty} />}
+                {!embedded && documentos.filter(d => d.tipo_evidencia === 'caratula_recoge_tienda').sort((a, b) => b.id - a.id).slice(0, 1).map(d => <a key={d.id} className="inline-block underline text-sm font-bold theme-text-primario" href={route('control_pedidos.tienda.evidencia.descargar', [tarea.id, d.id])}>Descargar carátula del apartado</a>)}
             </GeliaPageShell>
             <ModalConfirmarAccion abierto={confirmarVolver} titulo="Hay cambios sin guardar" mensaje="Puede continuar la preparación o volver al listado y descartar la captura pendiente." etiquetaConfirmar="Volver sin guardar" onClose={() => setConfirmarVolver(false)} onConfirm={() => { setCapturaDirty(false); router.visit(route('control_pedidos.tienda.index')); }} />
         </Layout>;
@@ -373,7 +375,7 @@ export default function Show({
                             onConfirmarApartado={null}
                         />}
 
-                        {esRecogeHoy && (tarea.apartado?.estado === 'APARTADO_CONFIRMADO' || (tarea.pedido?.es_t01_documental && ['ENTREGADA', 'DEVUELTA_ANAQUEL'].includes(tarea.apartado?.estado))) && <ApartadoFisicoTienda soloSalida onDirtyChange={embedded ? onDirtyChange : setCapturaDirty} tarea={tarea} auth={auth} config={config} requisitos={requisitos} eventos={eventos_apartado} onEnviar={onEnviar} />}
+                        {esRecogeHoy && (!tarea.pedido?.es_t01_documental || !embedded && tarea.pedido?.seguimiento_entrega_pdv_habilitado) && (tarea.apartado?.estado === 'APARTADO_CONFIRMADO' || (tarea.pedido?.es_t01_documental && ['ENTREGADA', 'DEVUELTA_ANAQUEL'].includes(tarea.apartado?.estado))) && <ApartadoFisicoTienda soloSalida onDirtyChange={embedded ? onDirtyChange : setCapturaDirty} tarea={tarea} auth={auth} config={config} requisitos={requisitos} eventos={eventos_apartado} onEnviar={onEnviar} />}
 
                         {esRecogeHoy && documentos.some((d) => d.tipo_evidencia === 'caratula_recoge_tienda') && (
                             <section className={`${geliaCardClass()} p-4 space-y-2`}>

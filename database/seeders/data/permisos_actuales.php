@@ -121,6 +121,7 @@ return [
     'control_pedidos.tienda.apartado.separar',
     'control_pedidos.tienda.apartado.ver',
     'control_pedidos.tienda.autorizar_segundo_traslado',
+    'control_pedidos.tienda.autorizar_cambio_cobertura',
     'control_pedidos.tienda.cargar_identificacion',
     'control_pedidos.tienda.confirmar_caratula',
     'control_pedidos.tienda.despachar_municipio',

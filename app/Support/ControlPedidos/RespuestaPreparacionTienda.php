@@ -71,6 +71,7 @@ final class RespuestaPreparacionTienda
 
         return [
             'documental' => ApartadoT01::aplica($pedido),
+            'seguimiento_entrega_pdv_habilitado' => app(\App\Services\ControlPedidos\ConfiguracionOperativaTienda::class)->seguimientoEntregaPdvHabilitado(),
             'estado' => $tarea->estado,
             'respondida' => $tarea->atendida_at !== null,
             'respondida_at' => $revision['respondida_at'] ?? $tarea->atendida_at?->toIso8601String(),

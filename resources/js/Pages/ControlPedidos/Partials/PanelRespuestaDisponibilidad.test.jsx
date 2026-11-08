@@ -226,3 +226,15 @@ it('los cambios respondidos se muestran con Mostrar todos los cambios y la prime
  expect(container.textContent).toContain('Todo OK');
  expect(container.textContent.toLowerCase()).not.toMatch(/\bincidencias?\b/);
 });
+
+it('reutiliza fotos guardadas de la revisión inicial de tienda y exige captura nueva al actualizar', async () => {
+ const guardadas = [{ id: 50, url: '/conjunto.jpg', mime_type: 'image/jpeg', nombre_original: 'conjunto.jpg' }];
+ await montar({ origen: 'Tienda', evidenciasGuardadas: guardadas });
+ await estado(0); await click('Enviar respuesta');
+ expect(onEnviar.mock.lastCall[0].getAll('evidencias_guardadas[]')).toEqual(['50']);
+ await act(() => root.unmount()); root = createRoot(container); onEnviar.mockClear();
+ await montar({ origen: 'Tienda', evidenciasGuardadas: guardadas, revision: { estado: 'sin_excepciones', actualizacion_pendiente: true } });
+ await click('Enviar respuesta');
+ expect(onEnviar).not.toHaveBeenCalled();
+ expect(container.textContent).toContain('Adjunta evidencia en Captura del pedido');
+});

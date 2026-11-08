@@ -1,0 +1,21 @@
+<?php
+
+use App\Services\Permisos\PermisoCatalogoMigracion;
+use App\Support\ControlPedidos\CambioCoberturaTienda;
+use Illuminate\Database\Migrations\Migration;
+use Spatie\Permission\Models\Permission;
+use Spatie\Permission\PermissionRegistrar;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        PermisoCatalogoMigracion::registrar(CambioCoberturaTienda::PERMISO);
+    }
+
+    public function down(): void
+    {
+        Permission::query()->where('name', CambioCoberturaTienda::PERMISO)->where('guard_name', 'web')->delete();
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
+    }
+};

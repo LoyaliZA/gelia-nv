@@ -209,23 +209,27 @@ class CoberturaPagoPedidoBmaService
     }
 
     /**
-     * Valida banco permitido para el departamento del vendedor del pedido.
-     * Sin filas en pivote: mantiene experiencia anterior (cualquier banco activo).
+     * Valida la política de pedidos con el departamento de operación conservado.
      */
     public static function assertBancoPermitido(PedidoBma $pedido, ?int $bancoId): void
     {
         if (!$bancoId) return;
-        // Legacy databases remain compatible until the additive migration is applied.
-        if (\Illuminate\Support\Facades\Schema::hasColumn('catalogo_bancos', 'compartido')) {
-            app(\App\Services\ControlPedidos\BancosDepartamentoService::class)->validar($pedido, $bancoId);
+        // El cobro posterior de apartado tiene un destino fijo resuelto por el servidor.
+        if (($pedido->solicitud_preparacion_json['cobertura_tienda']['tipo'] ?? null) === 'apartado'
+            && (int) (app(ResolverBancoCajaPdv::class)->estado($pedido)['id'] ?? 0) === $bancoId) {
             return;
         }
-        $pedido->loadMissing(['vendedor.departamento', 'vendedor.departamentos']);
-        $id = $pedido->vendedor?->departamento_id;
-        if (!$id) return;
-        $mapeos = CatalogoBancoDepartamento::where('departamento_id', $id)->where('activo', true);
-        if ((clone $mapeos)->exists() && !(clone $mapeos)->where('catalogo_banco_id', $bancoId)->exists()) {
-            throw new InvalidArgumentException('El banco seleccionado no está permitido para el departamento del pedido.');
+        $politica = app(\App\Services\ControlPedidos\BancosGestionPedidosConfig::class);
+        if ($politica->obtener() === null && ! \Illuminate\Support\Facades\Schema::hasColumn('catalogo_bancos', 'compartido')) {
+            $pedido->loadMissing(['vendedor.departamento', 'vendedor.departamentos']);
+            $id = $pedido->vendedor?->departamento_id;
+            if (! $id) return;
+            $mapeos = CatalogoBancoDepartamento::where('departamento_id', $id)->where('activo', true);
+            if ((clone $mapeos)->exists() && ! (clone $mapeos)->where('catalogo_banco_id', $bancoId)->exists()) {
+                throw new InvalidArgumentException('El banco seleccionado no está permitido para el departamento del pedido.');
+            }
+            return;
         }
+        $politica->validar($pedido, $bancoId);
     }
 }

@@ -92,6 +92,7 @@ class LiberarResguardoPedidoBmaService
         if (empty($captura['catalogo_banco_id'])) {
             throw new \InvalidArgumentException('El banco del pago de envío es obligatorio.');
         }
+        app(BancosGestionPedidosConfig::class)->validar($pedido, (int) $captura['catalogo_banco_id']);
         if (empty($captura['cliente_direccion_id'])) {
             throw new \InvalidArgumentException('Debe seleccionar la dirección de envío.');
         }

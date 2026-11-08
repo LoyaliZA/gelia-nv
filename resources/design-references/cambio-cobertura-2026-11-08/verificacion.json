@@ -1,0 +1,146 @@
+[
+  {
+    "vista": "escritorio-oscuro",
+    "perfil": "ventas",
+    "estado": "guardada",
+    "desbordes": [],
+    "errores": [],
+    "rotas": 0
+  },
+  {
+    "vista": "escritorio-oscuro",
+    "perfil": "ventas",
+    "estado": "captura",
+    "desbordes": [],
+    "errores": [],
+    "rotas": 0
+  },
+  {
+    "vista": "escritorio-oscuro",
+    "perfil": "ventas",
+    "estado": "pendiente",
+    "desbordes": [],
+    "errores": [],
+    "rotas": 0
+  },
+  {
+    "vista": "escritorio-oscuro",
+    "perfil": "gerencia",
+    "estado": "guardada",
+    "desbordes": [],
+    "errores": [],
+    "rotas": 0
+  },
+  {
+    "vista": "escritorio-oscuro",
+    "perfil": "gerencia",
+    "estado": "resolucion",
+    "desbordes": [],
+    "errores": [],
+    "rotas": 0
+  },
+  {
+    "vista": "escritorio-oscuro",
+    "perfil": "gerencia",
+    "estado": "credito",
+    "desbordes": [],
+    "errores": [],
+    "rotas": 0
+  },
+  {
+    "vista": "escritorio-oscuro",
+    "perfil": "bloqueado",
+    "estado": "guardada",
+    "desbordes": [],
+    "errores": [],
+    "rotas": 0
+  },
+  {
+    "vista": "escritorio-oscuro",
+    "perfil": "bloqueado",
+    "estado": "resolucion",
+    "desbordes": [],
+    "errores": [],
+    "rotas": 0
+  },
+  {
+    "vista": "escritorio-oscuro",
+    "perfil": "bloqueado",
+    "estado": "apartado",
+    "desbordes": [],
+    "errores": [],
+    "rotas": 0
+  },
+  {
+    "vista": "movil-claro",
+    "perfil": "ventas",
+    "estado": "guardada",
+    "desbordes": [],
+    "errores": [],
+    "rotas": 0
+  },
+  {
+    "vista": "movil-claro",
+    "perfil": "ventas",
+    "estado": "captura",
+    "desbordes": [],
+    "errores": [],
+    "rotas": 0
+  },
+  {
+    "vista": "movil-claro",
+    "perfil": "ventas",
+    "estado": "pendiente",
+    "desbordes": [],
+    "errores": [],
+    "rotas": 0
+  },
+  {
+    "vista": "movil-claro",
+    "perfil": "gerencia",
+    "estado": "guardada",
+    "desbordes": [],
+    "errores": [],
+    "rotas": 0
+  },
+  {
+    "vista": "movil-claro",
+    "perfil": "gerencia",
+    "estado": "resolucion",
+    "desbordes": [],
+    "errores": [],
+    "rotas": 0
+  },
+  {
+    "vista": "movil-claro",
+    "perfil": "gerencia",
+    "estado": "credito",
+    "desbordes": [],
+    "errores": [],
+    "rotas": 0
+  },
+  {
+    "vista": "movil-claro",
+    "perfil": "bloqueado",
+    "estado": "guardada",
+    "desbordes": [],
+    "errores": [],
+    "rotas": 0
+  },
+  {
+    "vista": "movil-claro",
+    "perfil": "bloqueado",
+    "estado": "resolucion",
+    "desbordes": [],
+    "errores": [],
+    "rotas": 0
+  },
+  {
+    "vista": "movil-claro",
+    "perfil": "bloqueado",
+    "estado": "apartado",
+    "desbordes": [],
+    "errores": [],
+    "rotas": 0
+  }
+]

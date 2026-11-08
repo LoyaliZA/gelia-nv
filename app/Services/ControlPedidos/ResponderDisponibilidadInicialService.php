@@ -81,7 +81,7 @@ class ResponderDisponibilidadInicialService
             }
 
             // Una actualización revisa el conjunto: solo se recapturan sus nuevas excepciones.
-            $excepciones = $this->excepciones($datos['excepciones'] ?? [], $tarea === null || $actualizacion);
+            $excepciones = $this->excepciones($datos['excepciones'] ?? [], true);
             if ($actualizacion) {
                 $fisica = collect($json['compromisos_inventario'] ?? [])->contains(fn ($c) => $c['activo'] ?? false)
                     || in_array($tarea?->cumplimientoFisico?->estado, ['SEPARADA', 'APARTADO_CONFIRMADO', 'LISTA_PARA_SALIDA', 'DESPACHADA', 'ENTREGADA'], true);

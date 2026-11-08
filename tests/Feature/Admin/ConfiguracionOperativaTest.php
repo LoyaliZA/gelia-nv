@@ -66,6 +66,7 @@ class ConfiguracionOperativaTest extends TestCase
         app(PreparacionTiendaConfig::class)->zonaHoraria();
         app(PlazosRetrasoPedidoBmaConfig::class)->obtener();
         $datos = $this->datos();
+        $datos['tienda']['horarios_activos'] = true;
         $datos['tienda']['md_dias'] = [6];
         $datos['tienda']['md_corte'] = '12:15';
         $datos['tienda']['sabado_apertura'] = '10:00';
@@ -87,6 +88,40 @@ class ConfiguracionOperativaTest extends TestCase
         $this->assertDatabaseHas('auditorias_configuraciones', ['modulo' => 'Configuración operativa']);
     }
 
+    public function test_horarios_apagados_por_defecto_permiten_jornadas_y_se_activan_sin_perder_fechas(): void
+    {
+        $config = app(ConfiguracionOperativaTienda::class);
+        $this->assertFalse($config->horariosActivos());
+        $zona = 'America/Mexico_City';
+        $domingo = Carbon::parse('2026-11-08 23:00', $zona);
+        $vence = $domingo->copy()->subDays(2);
+        $plazo = app(PlazoApartadoTienda::class);
+        $this->assertTrue($plazo->evaluarConfirmacion($domingo, null)['permite']);
+        $this->assertNull($plazo->evaluarConfirmacion($domingo, null)['vence_at']);
+        $this->assertTrue($plazo->evaluarConfirmacion($domingo, $vence)['vence_at']->equalTo($vence));
+        $this->assertTrue($config->diaMd($domingo));
+        $this->assertTrue(app(CorteMismoDiaTienda::class)->evaluar($domingo, $zona, true)['oportuno']);
+        $this->actingAs($this->administrador());
+        $datos = $this->datos();
+        $datos['tienda']['horarios_activos'] = true;
+        $this->put('/admin/configuracion-operativa', $datos)->assertSessionHasNoErrors();
+        $this->assertTrue($config->horariosActivos());
+        $rechazo = $plazo->evaluarConfirmacion($domingo, $vence);
+        $this->assertFalse($rechazo['permite']);
+        $this->assertStringContainsString('17:00', $rechazo['mensaje']);
+        $this->assertStringContainsString($zona, $rechazo['mensaje']);
+        $this->assertFalse($config->diaMd($domingo));
+        unset($datos['tienda']['horarios_activos']);
+        $this->put('/admin/configuracion-operativa', $datos)->assertSessionHasNoErrors();
+        $this->assertTrue($config->horariosActivos());
+        $datos['tienda']['horarios_activos'] = 'inválido';
+        $this->put('/admin/configuracion-operativa', $datos)->assertSessionHasErrors('tienda.horarios_activos');
+        $this->assertTrue($config->horariosActivos());
+        $datos['tienda']['horarios_activos'] = false;
+        $this->put('/admin/configuracion-operativa', $datos)->assertSessionHasNoErrors();
+        $this->assertFalse($config->horariosActivos());
+    }
+
     public function test_rechaza_configuracion_invalida_sin_guardar_parcialmente(): void
     {
         $this->actingAs($this->administrador());
@@ -98,6 +133,72 @@ class ConfiguracionOperativaTest extends TestCase
         $datos['plazos']['hora_corte'] = '99:00';
         $this->put('/admin/configuracion-operativa', $datos)->assertSessionHasErrors(['tienda.md_corte', 'tienda.md_dias', 'tienda.sabado_cierre', 'general.zona_horaria', 'plazos.hora_corte']);
         $this->assertDatabaseMissing('configuraciones_sistema', ['clave' => ConfiguracionOperativaTienda::CLAVE]);
+    }
+
+    public function test_el_seguimiento_posterior_es_opcional_apagado_por_defecto_y_persistente(): void
+    {
+        $config = app(ConfiguracionOperativaTienda::class);
+        $this->assertFalse($config->seguimientoEntregaPdvHabilitado());
+        $this->actingAs($this->administrador());
+        $datos = $this->datos();
+        $datos['tienda']['seguimiento_entrega_pdv'] = true;
+        $this->put('/admin/configuracion-operativa', $datos)->assertSessionHasNoErrors();
+        $this->assertTrue($config->seguimientoEntregaPdvHabilitado());
+        unset($datos['tienda']['seguimiento_entrega_pdv']);
+        $this->put('/admin/configuracion-operativa', $datos)->assertSessionHasNoErrors();
+        $this->assertTrue($config->seguimientoEntregaPdvHabilitado());
+        $datos['tienda']['seguimiento_entrega_pdv'] = 'invalido';
+        $this->put('/admin/configuracion-operativa', $datos)->assertSessionHasErrors('tienda.seguimiento_entrega_pdv');
+        $this->assertTrue($config->seguimientoEntregaPdvHabilitado());
+        $datos['tienda']['seguimiento_entrega_pdv'] = false;
+        $this->put('/admin/configuracion-operativa', $datos)->assertSessionHasNoErrors();
+        $this->assertFalse($config->seguimientoEntregaPdvHabilitado());
+    }
+
+    public function test_bancos_y_prioridades_se_guardan_con_auditoria_y_se_conservan_si_se_omiten(): void
+    {
+        $this->actingAs($this->administrador());
+        $banco = \App\Models\CatalogoBanco::create(['nombre' => 'Banco configurable', 'activo' => true, 'compartido' => true]);
+        $datos = $this->datos();
+        $datos['bancos'] = [['id' => $banco->id, 'habilitado' => true, 'compartido' => true, 'departamento_ids' => []]];
+        $datos['prioridades'] = ['municipal', 'mismo_dia', 'tienda', 'resguardo', 'nacional'];
+        $this->put('/admin/configuracion-operativa', $datos)->assertSessionHasNoErrors();
+        $this->assertSame($datos['prioridades'], app(\App\Services\ControlPedidos\PrioridadAtencionPedidosConfig::class)->obtener());
+        $this->assertSame($datos['bancos'], app(\App\Services\ControlPedidos\BancosGestionPedidosConfig::class)->obtener());
+        $this->put('/admin/configuracion-operativa', $this->datos())->assertSessionHasNoErrors();
+        $this->assertSame($datos['bancos'], app(\App\Services\ControlPedidos\BancosGestionPedidosConfig::class)->obtener());
+        $this->assertDatabaseHas('auditorias_configuraciones', ['modulo' => 'Configuración operativa']);
+        $datos['bancos'][0]['compartido'] = false;
+        $datos['prioridades'][1] = 'municipal';
+        $this->put('/admin/configuracion-operativa', $datos)->assertSessionHasErrors(['bancos.0.departamento_ids', 'prioridades.0']);
+    }
+
+    public function test_un_departamento_puede_usar_varios_bancos_y_no_se_duplican_asignaciones(): void
+    {
+        $this->actingAs($this->administrador());
+        $depto = \App\Models\Departamento::create(['nombre' => 'Departamento compartido', 'codigo' => 'DC', 'activo' => true]);
+        $a = \App\Models\CatalogoBanco::create(['nombre' => 'Cuenta uno', 'activo' => true]);
+        $b = \App\Models\CatalogoBanco::create(['nombre' => 'Cuenta dos', 'activo' => true]);
+        $datos = $this->datos();
+        $datos['bancos'] = array_map(fn ($id) => ['id' => $id, 'habilitado' => true, 'compartido' => false, 'departamento_ids' => [$depto->id]], [$a->id, $b->id]);
+        $this->put('/admin/configuracion-operativa', $datos)->assertSessionHasNoErrors();
+        $this->assertEqualsCanonicalizing([$a->id, $b->id], app(\App\Services\ControlPedidos\BancosGestionPedidosConfig::class)->catalogo([$depto->id])->pluck('id')->all());
+        $datos['bancos'][0]['departamento_ids'][] = $depto->id;
+        $this->put('/admin/configuracion-operativa', $datos)->assertSessionHasErrors('bancos.0.departamento_ids');
+    }
+
+    public function test_banco_restringido_sin_departamentos_y_ids_inexistentes_no_guardan_nada(): void
+    {
+        $this->actingAs($this->administrador());
+        $banco = \App\Models\CatalogoBanco::create(['nombre' => 'Banco configurable', 'activo' => true]);
+        $datos = $this->datos();
+        $datos['bancos'] = [['id' => $banco->id, 'habilitado' => true, 'compartido' => false, 'departamento_ids' => []]];
+        $this->put('/admin/configuracion-operativa', $datos)->assertSessionHasErrors('bancos.0.departamento_ids');
+        $this->assertDatabaseMissing('configuraciones_sistema', ['clave' => \App\Services\ControlPedidos\BancosGestionPedidosConfig::CLAVE]);
+        $datos['bancos'][0]['departamento_ids'] = [999999];
+        $this->put('/admin/configuracion-operativa', $datos)->assertSessionHasErrors('bancos.0.departamento_ids.0');
+        $datos['bancos'][0]['id'] = 999999;
+        $this->put('/admin/configuracion-operativa', $datos)->assertSessionHasErrors('bancos.0.id');
     }
 
     public function test_las_sucursales_candidatas_dependen_del_catalogo_y_sus_capacidades(): void

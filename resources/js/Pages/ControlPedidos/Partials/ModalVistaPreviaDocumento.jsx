@@ -1,3 +1,4 @@
+import { nombreVisibleArchivoPedido, vistaArchivoPedido } from './vistasArchivoPedido';
 import usePedidoDialog from './usePedidoDialog';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -90,7 +91,7 @@ export default function ModalVistaPreviaDocumento({
     const actual = lista[Math.min(idx, lista.length - 1)];
     const pdf = esPdf(actual);
     const imagen = esImagen(actual);
-    const titulo = actual.nombre_original || actual.tipo || 'Vista previa';
+    const titulo = nombreVisibleArchivoPedido(actual.nombre_original, idx);
 
     const cerrar = (e) => {
         e?.stopPropagation?.();
@@ -165,7 +166,7 @@ export default function ModalVistaPreviaDocumento({
                         <VisorPdfPaginas url={actual.url} titulo={titulo} className="w-full self-stretch" maxHeight="min(82dvh, calc(100dvh - 8rem))" />
                     ) : imagen ? (
                         <img
-                            src={actual.url}
+                            src={vistaArchivoPedido(actual.url)}
                             alt={titulo}
                             className="max-w-full object-contain p-4 transition-transform origin-center"
                             style={{
@@ -180,7 +181,7 @@ export default function ModalVistaPreviaDocumento({
                             </p>
                             <a
                                 href={actual.url}
-                                download={actual.nombre_original || undefined}
+                                download={titulo}
                                 className={`${BTN_PRIMARY} inline-flex items-center gap-2 min-h-[44px]`}
                             >
                                 <Download className="w-4 h-4" />
@@ -205,11 +206,11 @@ export default function ModalVistaPreviaDocumento({
                         </div>
                     )}
                     {accionesDocumento ? <>
-                        <a href={actual.url} download={actual.nombre_original || undefined} className={`${BTN_SECONDARY} min-h-[44px] px-3`} aria-label="Descargar captura"><Download size={16} aria-hidden /></a>
+                        <a href={actual.url} download={titulo} className={`${BTN_SECONDARY} min-h-[44px] px-3`} aria-label="Descargar captura"><Download size={16} aria-hidden /></a>
                         <button type="button" onClick={cerrar} className={`${BTN_SECONDARY} min-h-[44px] px-3`}>Cerrar</button>
                     </> : <><a
                         href={actual.url}
-                        download={actual.nombre_original || undefined}
+                        download={titulo}
                         className={`${BTN_PRIMARY} w-full sm:w-auto min-h-[44px] inline-flex items-center justify-center gap-2`}
                     >
                         <Download className="w-4 h-4 shrink-0" />
@@ -251,7 +252,7 @@ export function MiniaturaDocumento({ documento, onVer, className = 'block w-20 h
                 </div>
             ) : (
                 <img
-                    src={documento.url}
+                    src={vistaArchivoPedido(documento.url, 'miniatura')}
                     alt={documento.nombre_original || 'Evidencia del pedido'}
                     width="80" height="80" loading="lazy"
                     className="w-full h-full object-cover group-hover:opacity-90 transition-opacity duration-150"

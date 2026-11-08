@@ -120,10 +120,6 @@ class ObtenerCatalogosPedidoBmaService
      */
     private function bancosParaDepartamentos(?array $departamentoIds)
     {
-        return CatalogoBanco::query()->where('activo', true)->with('departamentos')->orderBy('nombre')->get()->filter(fn ($banco) => $departamentoIds === null || ($banco->compartido ?? true) || $banco->departamentos->where('activo', true)->whereIn('departamento_id', $departamentoIds)->isNotEmpty())->values()->map(fn ($banco) => [
-            'id' => $banco->id, 'nombre' => $banco->nombre,
-            'compartido' => $banco->compartido ?? true,
-            'departamento_ids' => $banco->departamentos->where('activo', true)->pluck('departamento_id')->values()->all(),
-        ]);
+        return app(BancosGestionPedidosConfig::class)->catalogo($departamentoIds);
     }
 }

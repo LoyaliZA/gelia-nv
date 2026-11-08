@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { router } from '@inertiajs/react';
 import axios from 'axios';
 import { AlertTriangle, CheckCircle2, ClipboardCheck, FileText, ImagePlus, PackageMinus, ScanLine, Smartphone, Trash2 } from 'lucide-react';
+import ConsultaPreparacionTienda from './ConsultaPreparacionTienda';
 import useEscaneoPreparacion from './useEscaneoPreparacion';
 import AjustesSolicitadosTienda from './AjustesSolicitadosTienda';
 import VigenciaApartadoTienda from '../../Partials/VigenciaApartadoTienda';
@@ -44,7 +45,7 @@ function formData(datos) {
 }
 
 
-export default function PrepararApartadoRecoge({ tarea, auth, documentos = [], documentosTarea = [], requisitos = {}, tiposCaja = [], onEnviar = null, bloqueado = false, onDirtyChange = null, onRefrescarDocumentos = null }) {
+function PrepararApartadoLegado({ tarea, auth, documentos = [], documentosTarea = [], requisitos = {}, tiposCaja = [], onEnviar = null, bloqueado = false, onDirtyChange = null, onRefrescarDocumentos = null }) {
     const esRecoge = tarea.modalidad?.codigo === 'RECOGE_TIENDA' || !tarea.modalidad;
     const capturaEstadoPieza = esRecoge || tarea.modalidad?.codigo === 'RECOGE_TIENDA_TRANSFERENCIA';
     const permisos = auth?.user?.permissions || [];
@@ -82,7 +83,8 @@ export default function PrepararApartadoRecoge({ tarea, auth, documentos = [], d
     const buscarSugerenciasRef = useRef(null);
     const ocupado = procesando || bloqueado;
     const vence = tarea.fecha_limite || tarea.apartado?.vence_at;
-    const vencida = esRecoge && Boolean(vence && new Date(vence).getTime() <= Date.now());
+    const horariosActivos = tarea.pedido?.horarios_activos !== false;
+    const vencida = horariosActivos && esRecoge && Boolean(vence && new Date(vence).getTime() <= Date.now());
     const formRef = useRef(null);
     const previewsRef = useRef([]);
     previewsRef.current = [...lineas.flatMap((l) => l.previews), ...evidencias.previews];
@@ -328,7 +330,7 @@ export default function PrepararApartadoRecoge({ tarea, auth, documentos = [], d
                 </button>
             </div>
         </header>
-        {tarea.pedido?.es_t01_documental && !apartadoConfirmado && tarea.pedido?.cobertura_tienda?.tipo === 'apartado' && <div className="px-4 py-2"><VigenciaApartadoTienda venceAt={vence} finalizado={['ENTREGADA', 'DEVUELTA_ANAQUEL'].includes(tarea.apartado?.estado)} /></div>}
+        {horariosActivos && tarea.pedido?.es_t01_documental && !apartadoConfirmado && tarea.pedido?.cobertura_tienda?.tipo === 'apartado' && <div className="px-4 py-2"><VigenciaApartadoTienda venceAt={vence} finalizado={['ENTREGADA', 'DEVUELTA_ANAQUEL'].includes(tarea.apartado?.estado)} /></div>}
         {vencida && <div role="alert" className="gelia-preparacion-aviso"><AlertTriangle className="w-4 h-4 shrink-0" aria-hidden="true" /><div><strong>Solicitud vencida · {formatearFechaNegocio(vence)}</strong><p className="m-0">Puede guardar su avance. Reporte a Ventas para solicitar una nueva preparación del día.</p></div></div>}
         {error && <p role="alert" className="gelia-preparacion-aviso">{error}</p>}
         <div className="gelia-preparacion-workspace" data-pedido-visible={mostrarPedido}>
@@ -523,4 +525,12 @@ export default function PrepararApartadoRecoge({ tarea, auth, documentos = [], d
         <ModalVistaPreviaDocumento {...galeria} onClose={() => setGaleria({ abierto: false, documentos: [], indice: 0 })} />
         <ModalSesionEvidenciaTienda abierto={modalQr} tareaId={tarea.id} onCerrar={() => setModalQr(false)} onImportado={onRefrescarDocumentos} />
     </section>;
+}
+
+export default function PrepararApartadoRecoge(props) {
+    if (props.tarea.pedido?.area_revision === 'preparacion_tienda'
+        && (!props.tarea.modalidad || props.tarea.modalidad.codigo === 'RECOGE_TIENDA')) {
+        return <ConsultaPreparacionTienda {...props} />;
+    }
+    return <PrepararApartadoLegado {...props} />;
 }

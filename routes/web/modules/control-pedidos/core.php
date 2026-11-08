@@ -7,6 +7,8 @@ use App\Http\Controllers\ControlPedidos\PedidoBmaSaldosPagosController;
 use App\Http\Controllers\ControlPedidos\PlazosRetrasoPedidoBmaController;
 
 Route::prefix('control-pedidos')->name('control_pedidos.')->group(function () {
+    Route::get('/{pedidoBma}/cambio-cobertura-tienda', [\App\Http\Controllers\ControlPedidos\CambioCoberturaTiendaController::class, 'show'])->name('cambio_cobertura_tienda.show');
+    Route::post('/{pedidoBma}/cambio-cobertura-tienda', [\App\Http\Controllers\ControlPedidos\CambioCoberturaTiendaController::class, 'update'])->name('cambio_cobertura_tienda.update');
     Route::get('/{pedidoBma}/disponibilidad-tienda', [\App\Http\Controllers\ControlPedidos\DisponibilidadTiendaController::class, 'show'])->name('disponibilidad_tienda.show');
     Route::post('/{pedidoBma}/disponibilidad-tienda', [\App\Http\Controllers\ControlPedidos\DisponibilidadTiendaController::class, 'update'])->name('disponibilidad_tienda.update');
     Route::post('/{pedidoBma}/disponibilidad-tienda/alternativa', [\App\Http\Controllers\ControlPedidos\DisponibilidadTiendaController::class, 'alternativa'])->name('disponibilidad_tienda.alternativa');

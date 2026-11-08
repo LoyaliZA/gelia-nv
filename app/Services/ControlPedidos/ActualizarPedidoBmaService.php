@@ -157,6 +157,8 @@ class ActualizarPedidoBmaService
                 }
             }
 
+            $bancoAnterior = $pedido->catalogo_banco_id;
+            $departamentoAnterior = $pedido->departamento_operacion_id;
             // La cola de errores se avanza al reenviar (EnviarPedidoBmaService), no al editar.
             $pedido->update(array_merge(
                 $attrs,
@@ -165,6 +167,10 @@ class ActualizarPedidoBmaService
                     'motivo_rechazo' => $eraRechazado ? null : $pedido->motivo_rechazo,
                 ]
             ));
+
+            if ($bancoAnterior != $pedido->catalogo_banco_id || $departamentoAnterior != $pedido->departamento_operacion_id) {
+                app(BancosGestionPedidosConfig::class)->validar($pedido, $pedido->catalogo_banco_id);
+            }
 
             if (array_key_exists('sucursal_destino_id', $datos)) {
                 $actor = User::query()->find($usuarioId);

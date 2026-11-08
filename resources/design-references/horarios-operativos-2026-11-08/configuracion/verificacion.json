@@ -1,0 +1,42 @@
+[
+  {
+    "nombre": "escritorio",
+    "width": 1440,
+    "height": 1000,
+    "tema": "light",
+    "desborde": false,
+    "errores": [],
+    "secciones": 0,
+    "envio_ficticio_verificado": true
+  },
+  {
+    "nombre": "escritorio",
+    "width": 1440,
+    "height": 1000,
+    "tema": "dark",
+    "desborde": false,
+    "errores": [],
+    "secciones": 0,
+    "envio_ficticio_verificado": true
+  },
+  {
+    "nombre": "movil",
+    "width": 390,
+    "height": 844,
+    "tema": "light",
+    "desborde": false,
+    "errores": [],
+    "secciones": 0,
+    "envio_ficticio_verificado": true
+  },
+  {
+    "nombre": "movil",
+    "width": 390,
+    "height": 844,
+    "tema": "dark",
+    "desborde": false,
+    "errores": [],
+    "secciones": 0,
+    "envio_ficticio_verificado": true
+  }
+]

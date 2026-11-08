@@ -90,6 +90,9 @@ class CambiarModalidadPreparacionService
         return DB::transaction(function () use ($tarea, $usuario, $modalidad, $motivo, $versionEsperada, $evidencia) {
             $pedido = PedidoBma::query()->lockForUpdate()->findOrFail($tarea->pedido_bma_id);
             $pedido->loadMissing('estatus');
+            if (! empty($pedido->solicitud_preparacion_json['cobertura_tienda']['tipo'])) {
+                throw ValidationException::withMessages(['modalidad' => 'La modalidad de pago ya está guardada. Solicite su cambio autorizado desde Registrar pedidos.']);
+            }
             $tarea = PedidoBmaTareaPreparacion::query()->lockForUpdate()->findOrFail($tarea->id);
             $tarea->load(['modalidad', 'productos', 'cumplimientoFisico']);
 

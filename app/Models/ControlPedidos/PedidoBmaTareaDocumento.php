@@ -59,6 +59,11 @@ class PedidoBmaTareaDocumento extends Model
         ];
     }
 
+    public function getNombreOriginalAttribute(?string $value): string
+    {
+        return \App\Support\ControlPedidos\NombreArchivoPedido::mostrar($value, $this->tipo_evidencia ?? '', $this->pedido_bma_tarea_preparacion_id, $this->id);
+    }
+
     public function tarea(): BelongsTo
     {
         return $this->belongsTo(PedidoBmaTareaPreparacion::class, 'pedido_bma_tarea_preparacion_id');

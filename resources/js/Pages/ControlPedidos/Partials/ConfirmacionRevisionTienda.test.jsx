@@ -82,3 +82,13 @@ it('ubica la acción en el pie compartido y comunica el resultado al encabezado 
         expect(container.textContent).not.toContain('Pedido en revisión del auxiliar');
     } finally { pie.remove(); }
 });
+
+it('mantiene deshabilitada la acción del pie mientras los procesos no estén listos', async () => {
+ const pie=document.createElement('footer');document.body.append(pie);
+ try {
+  await act(()=>root.render(<ConfirmacionRevisionTienda {...props} pedido={{...pedido,sucursal_destino_id:2}} destinoAccion={pie} procesosListos={false}/>));
+  expect(pie.querySelector('button').disabled).toBe(true);
+  await act(()=>pie.querySelector('button').click());
+  expect(axios.put).not.toHaveBeenCalled();
+ } finally { await act(()=>root.unmount());root=createRoot(container);pie.remove(); }
+});

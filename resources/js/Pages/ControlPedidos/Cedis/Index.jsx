@@ -2,11 +2,13 @@ import useActualizacionesPedidos from '../Partials/useActualizacionesPedidos';
 import React, { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import { Head, router, usePage } from '@inertiajs/react';
-import { Warehouse, Clock, CheckCircle2, Package, Scale, Loader2, PackageOpen, AlertTriangle } from 'lucide-react';
+import { Warehouse, Clock, Package, Loader2, PackageOpen, Store, Truck } from 'lucide-react';
 import AppLayout from '../../../Layouts/AppLayout';
 import GeliaPageShell from '../../../Components/GeliaPageShell';
 import GeliaPaginacion from '../../../Components/GeliaPaginacion';
 import { geliaCardClass } from '../../../utils/geliaTheme';
+import useFiltrosOperacion from '../Partials/useFiltrosOperacion';
+import { IndicadoresOperacion } from '../Partials/FiltrosBandejaOperativa';
 import FiltrosCedis from './Partials/FiltrosCedis';
 import TarjetasCedis from './Partials/TarjetasCedis';
 import ModalDetalleCedis from './Partials/ModalDetalleCedis';
@@ -20,13 +22,11 @@ import PanelRespuestaDisponibilidad from '../Partials/PanelRespuestaDisponibilid
 import useListadoDiscreto from '../Partials/useListadoDiscreto';
 
 const KPI_CONFIG = [
-    { key: 'pendientes_pesaje', label: 'Consultas pendientes', tab: 'PENDIENTES_PESAJE', icon: Scale, color: 'var(--color-aviso)' },
-    { key: 'empacados', label: 'Pendiente de empaque', tab: 'EMPACADOS', icon: Clock, color: 'var(--color-aviso)' },
-    { key: 'pendientes_guia', label: 'Pendientes de guía', tab: 'PENDIENTES_GUIA', icon: Package, color: 'var(--color-primario)' },
-    { key: 'pendientes_envio', label: 'Pendiente de recolección', tab: 'PENDIENTES_ENVIO', icon: Package, color: 'var(--color-info)' },
-    { key: 'enviados', label: 'Enviados', tab: 'ENVIADOS', icon: CheckCircle2, color: 'var(--color-exito)' },
-    { key: 'incorrectas', label: 'Errores CEDIS', tab: 'INCORRECTAS', icon: AlertTriangle, color: 'var(--color-aviso)' },
-    { key: 'liberaciones_pendientes', label: 'Liberaciones pendientes', tab: 'LIBERACIONES', icon: PackageOpen, color: 'var(--color-aviso)' },
+    { id: '', label: 'Todos', icon: Package },
+    { id: 'tienda', label: 'Para tienda', icon: Store },
+    { id: 'mismo_dia', label: 'Mismo día', icon: Clock },
+    { id: 'municipal', label: 'Municipales', icon: Truck },
+    { id: 'nacional', label: 'Nacionales', icon: PackageOpen },
 ];
 
 export default function Index({
@@ -35,6 +35,7 @@ export default function Index({
     liberaciones = null,
     metricas = {},
     filtros = {},
+    fecha_hoy,
     tipos_caja = [],
     almacenes_busqueda = [],
     can: canProps = {},
@@ -45,6 +46,7 @@ export default function Index({
         pedidos: pedidosVista,
         metricas: metricasVista,
         cargando,
+        errorListado,
         cargar,
     } = useListadoDiscreto({
         listadoRoute: 'control_pedidos.cedis.listado',
@@ -53,8 +55,9 @@ export default function Index({
         metricas,
     });
 
-    const [tabActiva, setTabActiva] = useState(filtros.tab || 'TODOS');
-    const [busqueda, setBusqueda] = useState(filtros.q || '');
+    const { valores, params, cambiar, limpiar } = useFiltrosOperacion(filtros, cargar, { tipo: '' });
+    const tabActiva = valores.tab;
+    const busqueda = valores.q;
     const [modalDetalle, setModalDetalle] = useState({ abierto: false, pedido: null });
     const [modalPesaje, setModalPesaje] = useState({ abierto: false, pedido: null });
     const [modalErrorDatos, setModalErrorDatos] = useState({ abierto: false, pedido: null });
@@ -63,21 +66,7 @@ export default function Index({
     const [alerta, setAlerta] = useState({ abierto: false, tipo: 'success', titulo: '', mensaje: '' });
     const [modalLiberar, setModalLiberar] = useState({ abierto: false, tarea: null });
     const [disponibilidad, setDisponibilidad] = useState({ abierto: false, pedido: null });
-    const debounceBusqueda = useRef(null);
     const modalAbiertoRef = useRef(false);
-
-    useEffect(() => () => clearTimeout(debounceBusqueda.current), []);
-
-    const onTabChange = (tab) => {
-        clearTimeout(debounceBusqueda.current);
-        setTabActiva(tab);
-        if (tab === 'LIBERACIONES') {
-            router.get(route('control_pedidos.cedis.index'), { tab, q: busqueda || undefined }, { preserveState: true, preserveScroll: true });
-            return;
-        }
-        cargar({ tab, q: busqueda || undefined, page: 1 });
-    };
-
     useEffect(() => {
         if (flash?.success) {
             setAlerta({ abierto: true, tipo: 'success', titulo: 'Operación exitosa', mensaje: flash.success });
@@ -90,35 +79,22 @@ export default function Index({
         modalAbiertoRef.current = modalDetalle.abierto || modalPesaje.abierto || modalErrorDatos.abierto || modalApartado.abierto || modalBitacora.abierto || modalLiberar.abierto || disponibilidad.abierto;
     }, [modalDetalle.abierto, modalPesaje.abierto, modalErrorDatos.abierto, modalApartado.abierto, modalBitacora.abierto, modalLiberar.abierto, disponibilidad.abierto]);
 
-    useActualizacionesPedidos({ onActualizar: () => tabActiva === 'LIBERACIONES' ? router.reload({ only: ['liberaciones', 'metricas'] }) : cargar({ tab: tabActiva, q: busqueda || undefined, page: pedidosVista?.current_page || 1 }, { silencioso: true }), pausado: () => modalAbiertoRef.current || cargando });
+    useActualizacionesPedidos({ onActualizar: () => tabActiva === 'LIBERACIONES' ? router.reload({ only: ['liberaciones', 'metricas'] }) : cargar(params({ page: pedidosVista?.current_page || 1 }), { silencioso: true }), pausado: () => modalAbiertoRef.current || cargando });
 
-
-    const onBuscar = (valor) => {
-        setBusqueda(valor);
-        if (debounceBusqueda.current) clearTimeout(debounceBusqueda.current);
-        debounceBusqueda.current = setTimeout(() => {
-            if (tabActiva === 'LIBERACIONES') {
-                router.get(route('control_pedidos.cedis.index'), { tab: tabActiva, q: valor || undefined }, { preserveState: true, preserveScroll: true });
-            } else {
-                cargar({ tab: tabActiva, q: valor || undefined, page: 1 });
-            }
-        }, 400);
-    };
 
     const onActualizar = () => {
         if (tabActiva === 'LIBERACIONES') {
-            onIrAPagina(liberaciones?.current_page || 1);
+            router.reload({ only: ['liberaciones', 'metricas'] });
             return;
         }
-        cargar({ tab: tabActiva, q: busqueda || undefined, page: pedidosVista?.current_page || 1 });
+        cargar(params({ page: pedidosVista?.current_page || 1 }));
     };
-
     const onIrAPagina = (page) => {
         if (tabActiva === 'LIBERACIONES') {
-            router.get(route('control_pedidos.cedis.index'), { tab: tabActiva, q: busqueda || undefined, page }, { preserveState: true, preserveScroll: true });
+            router.get(route('control_pedidos.cedis.index'), params({ page }), { preserveState: true, preserveScroll: true });
             return;
         }
-        cargar({ tab: tabActiva, q: busqueda || undefined, page });
+        cargar(params({ page }));
     };
 
     const abrirDetalle = (pedido) => setModalDetalle({ abierto: true, pedido });
@@ -151,35 +127,15 @@ export default function Index({
                     </div>
                 </header>
 
-                <div className="gelia-pedidos-kpis grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-7 gap-2 md:gap-3" role="group" aria-label="Filtrar por estado del pedido">
-                    {KPI_CONFIG.map(({ key, label, tab, icon: Icon, color }) => {
-                        const activo = tabActiva === tab;
-                        return (
-                            <button key={key} type="button" onClick={() => onTabChange(tab)} aria-pressed={activo}
-                                className={`${geliaCardClass()} gelia-pedidos-kpi min-w-0 p-3 md:p-4 text-left ${activo ? 'border-[var(--color-primario)]' : ''}`}>
-                                <div className="flex items-start gap-1.5 mb-2 min-w-0">
-                                    <Icon className="w-4 h-4 shrink-0 mt-0.5" style={{ color }} aria-hidden="true" />
-                                    <span className="text-xs font-semibold theme-text-muted leading-snug">{label}</span>
-                                </div>
-                                <p className="text-2xl font-semibold theme-text-main m-0 tabular-nums">{new Intl.NumberFormat('es-MX').format(metricasVista[key] ?? 0)}</p>
-                            </button>
-                        );
-                    })}
+                <div className={`${geliaCardClass()} p-3 sm:p-5 space-y-4`}>
+                    <IndicadoresOperacion label="Tipo de pedido" activo={valores.tipo || ''}
+                        opciones={KPI_CONFIG.map(opcion => ({ ...opcion, valor: opcion.id ? metricasVista.tipos?.[opcion.id] : metricasVista.todos }))}
+                        onCambiar={tipo => cambiar({ tipo, tab: 'TODOS' })} />
+                    {tabActiva !== 'LIBERACIONES' && <FiltrosCedis fechaHoy={fecha_hoy} valores={valores} onCambiar={cambiar} onLimpiar={limpiar} onActualizar={onActualizar} buscando={cargando} />}
+                    {errorListado && <p role="alert" className="text-sm theme-text-peligro">{errorListado}</p>}
                 </div>
 
-                <div className={`${geliaCardClass()} p-4 md:p-5`}>
-                    <FiltrosCedis
-                        filtros={filtros}
-                        tabActiva={tabActiva}
-                        busqueda={busqueda}
-                        onTabChange={onTabChange}
-                        onBuscar={onBuscar}
-                        onActualizar={onActualizar}
-                        metricas={metricasVista}
-                        buscando={cargando}
-                    />
-                </div>
-
+                {(canProps.liberar || metricasVista.liberaciones_pendientes > 0 || tabActiva === 'LIBERACIONES') && <a className="inline-flex items-center gap-2 min-h-[44px] text-sm font-semibold theme-text-primario underline" href={route('control_pedidos.cedis.index', { tab: tabActiva === 'LIBERACIONES' ? 'TODOS' : 'LIBERACIONES' })}>{tabActiva === 'LIBERACIONES' ? 'Volver a todos los pedidos' : `Liberaciones pendientes${metricasVista.liberaciones_pendientes ? ` · ${metricasVista.liberaciones_pendientes}` : ''}`}</a>}
                 <div className="relative min-h-[12rem] space-y-3" aria-busy={cargando}>
                     <div className="flex flex-wrap justify-between items-center gap-2 px-1">
                         <h2 className="text-sm font-semibold theme-text-main m-0">{tabActiva === 'LIBERACIONES' ? 'Liberaciones' : 'Pedidos'}</h2>

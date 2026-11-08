@@ -174,7 +174,10 @@ class Fase1IntegridadPagosPedidoBmaTest extends TestCase
         $pedido = $this->crearPedido($vendedor, $estatus);
         $pedido->setRelation('vendedor', $vendedor);
 
-        $this->expectException(\InvalidArgumentException::class);
+        app(\App\Services\ControlPedidos\BancosGestionPedidosConfig::class)->guardar([
+            ['id' => $bancoOk->id, 'habilitado' => true, 'compartido' => false, 'departamento_ids' => [$depto->id]],
+        ]);
+        $this->expectException(\Illuminate\Validation\ValidationException::class);
         CoberturaPagoPedidoBmaService::assertBancoPermitido($pedido, $bancoNo->id);
     }
 

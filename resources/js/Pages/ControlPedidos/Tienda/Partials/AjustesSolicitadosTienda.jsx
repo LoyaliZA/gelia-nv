@@ -117,7 +117,7 @@ function AtencionAnexo({ tarea, anexo, ocupado, onEnviar, onDirtyChange }) {
     </section>;
 }
 
-export default function AjustesSolicitadosTienda({ tarea, auth, ocupado = false, onEnviar, onDirtyChange }) {
+export default function AjustesSolicitadosTienda({ tarea, auth, ocupado = false, onEnviar, onDirtyChange, confirmarConjunto = false }) {
     const [capturas, setCapturas] = useState({});
     const retirosPendientes = (tarea.pedido?.retiros || []).filter((retiro) => (retiro.estado || 'pendiente') === 'pendiente');
     const anexoPendienteDirty = (tarea.pedido?.anexos_pendientes || []).some((anexo) => capturas[`anexo-${anexo.indice}`]);
@@ -134,10 +134,10 @@ export default function AjustesSolicitadosTienda({ tarea, auth, ocupado = false,
     return <div className="gelia-preparacion-ajustes grid gap-4">
         {!actualizacion && resumen}
         {(!consulta || tarea.pedido?.retiros_requieren_atencion_fisica) && <AtencionRetiro key={retirosPendientes.map((retiro) => retiro.version).join('-')} tarea={tarea} ocupado={ocupado} onEnviar={onEnviar} onDirtyChange={(valor) => marcar('retiro', valor)} />}
-        {(tarea.pedido?.anexos_por_separar || []).map((anexo) => <section key={`separar-${anexo.indice}`} className="registrar-tienda-panel grid gap-3">
+        {!confirmarConjunto && (tarea.pedido?.anexos_por_separar || []).map((anexo) => <section key={`separar-${anexo.indice}`} className="registrar-tienda-panel grid gap-3">
             <div className="registrar-tienda-seccion-titulo"><PackagePlus size={18} aria-hidden="true" /><h3>Separación del anexo</h3></div>
             <ul className="m-0 pl-4">{(anexo.piezas_respuesta || []).map((pieza, i) => <li key={i} className="text-sm theme-text-main">{pieza.descripcion} · {pieza.cantidad}</li>)}</ul>
-            {tarea.pedido?.consulta_cerrada ? <button type="button" className={BTN_PRIMARY} disabled={ocupado} onClick={() => {
+            {tarea.pedido?.consulta_cerrada && !(tarea.pedido?.cobertura_tienda?.requiere_confirmacion_pedido && !tarea.pedido?.cobertura_tienda?.confirmacion_enviada_at) ? <button type="button" className={BTN_PRIMARY} disabled={ocupado} onClick={() => {
                 const url = route('control_pedidos.tienda.anexo.atender', tarea.id);
                 const datos = { indice: anexo.indice, decision: 'separar' };
                 if (onEnviar) onEnviar(url, datos); else router.post(url, datos, { preserveScroll: true });
@@ -146,7 +146,7 @@ export default function AjustesSolicitadosTienda({ tarea, auth, ocupado = false,
         {actualizacion && <PanelRespuestaDisponibilidad
             key={tarea.pedido?.revision_disponibilidad?.actualizacion_id || 'actualizacion'}
             origen="Tienda" mostrarCambios={false} tomada puedeResponder={!ocupado}
-            pedido={{ ...tarea.pedido, almacen: tarea.almacen, solicitud_preparacion: tarea.pedido }}
+            pedido={{ ...tarea.pedido, cliente: { nombre: tarea.pedido?.cliente_nombre }, almacen: tarea.almacen, solicitud_preparacion: tarea.pedido }}
             documentos={tarea.pedido?.documentos || []} revision={tarea.pedido?.revision_disponibilidad}
             onDirtyChange={valor => marcar('consulta', valor)}
             onEnviar={form => new Promise((resolve, reject) => {
