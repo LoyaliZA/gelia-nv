@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\ApiCampoRecurso;
 use App\Models\ApiRecurso;
+use App\Services\ApiExterna\ApiPermisoService;
 use Illuminate\Database\Seeder;
 
 class ApiExternaSeeder extends Seeder
@@ -52,5 +53,7 @@ class ApiExternaSeeder extends Seeder
                 ]
             );
         }
+
+        app(ApiPermisoService::class)->sincronizarCatalogoEnTodas();
     }
 }

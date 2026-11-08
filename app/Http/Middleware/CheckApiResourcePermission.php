@@ -22,6 +22,8 @@ class CheckApiResourcePermission
             return response()->json(['message' => 'No autorizado.'], 401);
         }
 
+        $this->permisoService->sincronizarCatalogo($aplicacion);
+
         $recurso = $this->permisoService->recursoPorSlug($recursoSlug);
 
         if (!$recurso) {

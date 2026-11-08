@@ -8,6 +8,8 @@ use App\Models\ApiAplicacionPermiso;
 use App\Models\ApiCampoRecurso;
 use App\Models\ApiRecurso;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 
 class ApiPermisoService
 {
@@ -101,5 +103,47 @@ class ApiPermisoService
                 );
             }
         }
+    }
+
+    public function sincronizarCatalogo(ApiAplicacion $aplicacion): void
+    {
+        $firma = $this->firmaCatalogo();
+        $clave = $this->claveCacheCatalogo($aplicacion);
+
+        if (Cache::get($clave) === $firma) {
+            return;
+        }
+
+        $this->sincronizarPermisosAplicacion($aplicacion);
+        Cache::forever($clave, $firma);
+    }
+
+    public function sincronizarCatalogoEnTodas(): void
+    {
+        ApiAplicacion::query()->orderBy('id')->each(function (ApiAplicacion $aplicacion): void {
+            $this->sincronizarCatalogo($aplicacion);
+        });
+    }
+
+    private function firmaCatalogo(): string
+    {
+        $recursos = DB::table('api_recursos')
+            ->selectRaw('COUNT(*) as total, MAX(updated_at) as actualizado')
+            ->first();
+        $campos = DB::table('api_campos_recurso')
+            ->selectRaw('COUNT(*) as total, MAX(updated_at) as actualizado')
+            ->first();
+
+        return implode('|', [
+            (int) ($recursos->total ?? 0),
+            (string) ($recursos->actualizado ?? ''),
+            (int) ($campos->total ?? 0),
+            (string) ($campos->actualizado ?? ''),
+        ]);
+    }
+
+    private function claveCacheCatalogo(ApiAplicacion $aplicacion): string
+    {
+        return 'api-externa:catalogo:'.$aplicacion->id;
     }
 }

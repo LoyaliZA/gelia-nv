@@ -28,7 +28,7 @@ class ApiAplicacionService
             'creado_por' => $creadoPor,
         ]);
 
-        $this->permisoService->sincronizarPermisosAplicacion($aplicacion);
+        $this->permisoService->sincronizarCatalogo($aplicacion);
 
         return [
             'aplicacion' => $aplicacion,
