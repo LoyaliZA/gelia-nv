@@ -19,6 +19,6 @@ class DocumentoPreparacionController extends Controller
         $disk = Storage::disk('local')->exists($documento->ruta_interna) ? 'local' : 'public';
         abort_unless(Storage::disk($disk)->exists($documento->ruta_interna), 404);
 
-        return Storage::disk($disk)->response($documento->ruta_interna, $documento->nombre_original, ['Content-Type' => $documento->mime_type ?: 'application/octet-stream']);
+        return app(\App\Services\ControlPedidos\ServirArchivoPedidoService::class)->responder(request(), $disk, $documento->ruta_interna, $documento->nombre_original, $documento->mime_type);
     }
 }

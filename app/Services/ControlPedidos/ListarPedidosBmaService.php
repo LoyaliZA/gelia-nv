@@ -12,6 +12,7 @@ use App\Support\ControlPedidos\MaquinaEstadosPedidoBma;
 use App\Support\ControlPedidos\RespuestaPreparacionTienda;
 use App\Support\ControlPedidos\RevisionEnCursoPedidoBma;
 use App\Support\ControlPedidos\VisibilidadPedidoBma;
+use App\Support\ControlPedidos\BitacoraCedis;
 use App\Support\ControlPedidos\VisibilidadTareaPreparacion;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -211,7 +212,7 @@ class ListarPedidosBmaService
             ])->values()->all(),
         ] : null);
 
-        return $pedido;
+        return BitacoraCedis::presentar($pedido, $usuario);
     }
 
     /**

@@ -37,6 +37,11 @@ final class PlazoApartadoTienda
      */
     public function evaluarConfirmacion(Carbon $momento, ?Carbon $fechaLimite): array
     {
+        $operacion = app(\App\Services\ControlPedidos\ConfiguracionOperativaTienda::class);
+        // Pausa de pruebas: conserva fechas existentes sin imponer una vigencia nueva.
+        if (! $operacion->horariosActivos()) {
+            return ['permite' => true, 'motivo' => 'horarios_desactivados', 'mensaje' => '', 'vence_at' => $fechaLimite?->copy()];
+        }
         $zona = $this->zonaValida();
         if ($zona === null) {
             return $this->rechazo(self::MOTIVO_CONFIGURACION, self::MENSAJE_CONFIGURACION, null);
@@ -52,7 +57,10 @@ final class PlazoApartadoTienda
             return $this->rechazo(self::MOTIVO_CIERRE, 'El horario sabatino comienza a las '.$reglas['sabado_apertura'].'.', null);
         }
         $corte = $this->corteDelDia($local);
-        if ($corte === null || $momento->greaterThanOrEqualTo($corte)) {
+        if ($corte === null) {
+            return $this->rechazo(self::MOTIVO_CIERRE, 'Hoy no es una jornada habilitada para confirmar apartados.', null);
+        }
+        if ($momento->greaterThanOrEqualTo($corte)) {
             return $this->rechazo(self::MOTIVO_CIERRE, self::MENSAJE_CIERRE, $corte);
         }
 
@@ -100,7 +108,8 @@ final class PlazoApartadoTienda
         return [
             'permite' => false,
             'motivo' => $motivo,
-            'mensaje' => $mensaje,
+            'mensaje' => $mensaje.' '.app(\App\Services\ControlPedidos\ConfiguracionOperativaTienda::class)->detalleHorarioApartado()
+                .($vence ? ' Vigencia registrada: '.$vence->copy()->timezone($this->config->zonaHoraria())->format('d/m/Y H:i').'.' : ''),
             'vence_at' => $vence,
         ];
     }

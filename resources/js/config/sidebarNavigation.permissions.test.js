@@ -266,6 +266,19 @@ describe('buildSidebarNavigation permissions', () => {
         const gestion = tree.find((n) => n?.id === 'gestion_interna');
         expect(gestion.children.find((n) => n.id === 'gestion_productos')?.href()).toBe('/gestion-interna/productos');
 
+        const logistica = tree.find((n) => n?.id === 'logistica');
+        const pedidos = logistica.children.find((n) => n?.id === 'gestion_pedidos');
+        expect(pedidos.children.map((n) => n.id)).toEqual([
+            'control_pedidos_registrar',
+            'control_pedidos_auditar',
+            'control_pedidos_cedis',
+            'control_pedidos_tienda',
+            'control_pedidos_delegado',
+            'control_pedidos_direcciones',
+            'control_pedidos_plazos',
+        ]);
+        expect(pedidos.children.find((n) => n.id === 'control_pedidos_plazos')?.label).toBe('Configurar Operación');
+
         const sistema = tree.find((n) => n?.id === 'sistema');
         const labels = sistema.children.map((n) => n.label);
         const sorted = [...labels].sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base', numeric: true }));

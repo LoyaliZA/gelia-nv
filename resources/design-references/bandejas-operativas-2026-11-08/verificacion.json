@@ -1,0 +1,274 @@
+[
+  {
+    "vista": "Cedis",
+    "nombre": "movil",
+    "width": 390,
+    "height": 844,
+    "tema": "light",
+    "desborde": false,
+    "errores": [],
+    "indicadores": [
+      {
+        "activo": "true",
+        "texto": "4Todos"
+      },
+      {
+        "activo": "false",
+        "texto": "2Para tienda"
+      },
+      {
+        "activo": "false",
+        "texto": "0Mismo día"
+      },
+      {
+        "activo": "false",
+        "texto": "1Municipales"
+      },
+      {
+        "activo": "false",
+        "texto": "1Nacionales"
+      }
+    ],
+    "solicitudes": [
+      "/control-pedidos/cedis/listado?tab=TODOS&desde=2026-11-08&hasta=2026-11-08&orden=antiguos&page=1",
+      "/control-pedidos/cedis/listado?tab=TODOS&orden=antiguos&page=1",
+      "/control-pedidos/cedis/listado?tab=TODOS&orden=antiguos&tipo=tienda&page=1"
+    ]
+  },
+  {
+    "vista": "Cedis",
+    "nombre": "movil",
+    "width": 390,
+    "height": 844,
+    "tema": "dark",
+    "desborde": false,
+    "errores": [],
+    "indicadores": [
+      {
+        "activo": "true",
+        "texto": "4Todos"
+      },
+      {
+        "activo": "false",
+        "texto": "2Para tienda"
+      },
+      {
+        "activo": "false",
+        "texto": "0Mismo día"
+      },
+      {
+        "activo": "false",
+        "texto": "1Municipales"
+      },
+      {
+        "activo": "false",
+        "texto": "1Nacionales"
+      }
+    ],
+    "solicitudes": [
+      "/control-pedidos/cedis/listado?tab=TODOS&desde=2026-11-08&hasta=2026-11-08&orden=antiguos&page=1",
+      "/control-pedidos/cedis/listado?tab=TODOS&orden=antiguos&page=1",
+      "/control-pedidos/cedis/listado?tab=TODOS&orden=antiguos&tipo=tienda&page=1"
+    ]
+  },
+  {
+    "vista": "Cedis",
+    "nombre": "escritorio",
+    "width": 1440,
+    "height": 1000,
+    "tema": "light",
+    "desborde": false,
+    "errores": [],
+    "indicadores": [
+      {
+        "activo": "true",
+        "texto": "4Todos"
+      },
+      {
+        "activo": "false",
+        "texto": "2Para tienda"
+      },
+      {
+        "activo": "false",
+        "texto": "0Mismo día"
+      },
+      {
+        "activo": "false",
+        "texto": "1Municipales"
+      },
+      {
+        "activo": "false",
+        "texto": "1Nacionales"
+      }
+    ],
+    "solicitudes": [
+      "/control-pedidos/cedis/listado?tab=TODOS&desde=2026-11-08&hasta=2026-11-08&orden=antiguos&page=1",
+      "/control-pedidos/cedis/listado?tab=TODOS&orden=antiguos&page=1",
+      "/control-pedidos/cedis/listado?tab=TODOS&orden=antiguos&tipo=tienda&page=1"
+    ]
+  },
+  {
+    "vista": "Cedis",
+    "nombre": "escritorio",
+    "width": 1440,
+    "height": 1000,
+    "tema": "dark",
+    "desborde": false,
+    "errores": [],
+    "indicadores": [
+      {
+        "activo": "true",
+        "texto": "4Todos"
+      },
+      {
+        "activo": "false",
+        "texto": "2Para tienda"
+      },
+      {
+        "activo": "false",
+        "texto": "0Mismo día"
+      },
+      {
+        "activo": "false",
+        "texto": "1Municipales"
+      },
+      {
+        "activo": "false",
+        "texto": "1Nacionales"
+      }
+    ],
+    "solicitudes": [
+      "/control-pedidos/cedis/listado?tab=TODOS&desde=2026-11-08&hasta=2026-11-08&orden=antiguos&page=1",
+      "/control-pedidos/cedis/listado?tab=TODOS&orden=antiguos&page=1",
+      "/control-pedidos/cedis/listado?tab=TODOS&orden=antiguos&tipo=tienda&page=1"
+    ]
+  },
+  {
+    "vista": "Tienda",
+    "nombre": "movil",
+    "width": 390,
+    "height": 844,
+    "tema": "light",
+    "desborde": false,
+    "errores": [],
+    "indicadores": [
+      {
+        "activo": "true",
+        "texto": "3Todos"
+      },
+      {
+        "activo": "false",
+        "texto": "1Pendientes"
+      },
+      {
+        "activo": "false",
+        "texto": "1En atención"
+      },
+      {
+        "activo": "false",
+        "texto": "1Atendidos"
+      }
+    ],
+    "solicitudes": [
+      "/control-pedidos/tienda/listado?tab=TODOS&desde=2026-11-08&hasta=2026-11-08&orden=antiguos&page=1",
+      "/control-pedidos/tienda/listado?tab=TODOS&orden=antiguos&page=1",
+      "/control-pedidos/tienda/listado?tab=PENDIENTES&orden=antiguos&page=1"
+    ]
+  },
+  {
+    "vista": "Tienda",
+    "nombre": "movil",
+    "width": 390,
+    "height": 844,
+    "tema": "dark",
+    "desborde": false,
+    "errores": [],
+    "indicadores": [
+      {
+        "activo": "true",
+        "texto": "3Todos"
+      },
+      {
+        "activo": "false",
+        "texto": "1Pendientes"
+      },
+      {
+        "activo": "false",
+        "texto": "1En atención"
+      },
+      {
+        "activo": "false",
+        "texto": "1Atendidos"
+      }
+    ],
+    "solicitudes": [
+      "/control-pedidos/tienda/listado?tab=TODOS&desde=2026-11-08&hasta=2026-11-08&orden=antiguos&page=1",
+      "/control-pedidos/tienda/listado?tab=TODOS&orden=antiguos&page=1",
+      "/control-pedidos/tienda/listado?tab=PENDIENTES&orden=antiguos&page=1"
+    ]
+  },
+  {
+    "vista": "Tienda",
+    "nombre": "escritorio",
+    "width": 1440,
+    "height": 1000,
+    "tema": "light",
+    "desborde": false,
+    "errores": [],
+    "indicadores": [
+      {
+        "activo": "true",
+        "texto": "3Todos"
+      },
+      {
+        "activo": "false",
+        "texto": "1Pendientes"
+      },
+      {
+        "activo": "false",
+        "texto": "1En atención"
+      },
+      {
+        "activo": "false",
+        "texto": "1Atendidos"
+      }
+    ],
+    "solicitudes": [
+      "/control-pedidos/tienda/listado?tab=TODOS&desde=2026-11-08&hasta=2026-11-08&orden=antiguos&page=1",
+      "/control-pedidos/tienda/listado?tab=TODOS&orden=antiguos&page=1",
+      "/control-pedidos/tienda/listado?tab=PENDIENTES&orden=antiguos&page=1"
+    ]
+  },
+  {
+    "vista": "Tienda",
+    "nombre": "escritorio",
+    "width": 1440,
+    "height": 1000,
+    "tema": "dark",
+    "desborde": false,
+    "errores": [],
+    "indicadores": [
+      {
+        "activo": "true",
+        "texto": "3Todos"
+      },
+      {
+        "activo": "false",
+        "texto": "1Pendientes"
+      },
+      {
+        "activo": "false",
+        "texto": "1En atención"
+      },
+      {
+        "activo": "false",
+        "texto": "1Atendidos"
+      }
+    ],
+    "solicitudes": [
+      "/control-pedidos/tienda/listado?tab=TODOS&desde=2026-11-08&hasta=2026-11-08&orden=antiguos&page=1",
+      "/control-pedidos/tienda/listado?tab=TODOS&orden=antiguos&page=1",
+      "/control-pedidos/tienda/listado?tab=PENDIENTES&orden=antiguos&page=1"
+    ]
+  }
+]

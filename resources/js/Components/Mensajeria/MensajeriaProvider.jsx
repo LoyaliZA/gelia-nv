@@ -40,6 +40,7 @@ export default function MensajeriaProvider({ children }) {
     } = api;
 
     const [widgetAbierto, setWidgetAbierto] = useState(false);
+    const ultimaSyncRef = useRef(0);
     const [portalVisible, setPortalVisible] = useState(false);
     const [drawerActivo, setDrawerActivo] = useState(false);
     const drawerActivoRef = useRef(false);
@@ -49,6 +50,7 @@ export default function MensajeriaProvider({ children }) {
 
     useEffect(() => {
         if (!userId) return undefined;
+        ultimaSyncRef.current = Date.now();
         refrescarConversaciones().catch(() => {});
         return undefined;
     }, [userId, refrescarConversaciones]);
@@ -136,8 +138,10 @@ export default function MensajeriaProvider({ children }) {
         let timer;
         const onVisible = () => {
             if (document.visibilityState !== 'visible') return;
+            if (Date.now() - ultimaSyncRef.current < 8000) return;
             window.clearTimeout(timer);
             timer = window.setTimeout(() => {
+                ultimaSyncRef.current = Date.now();
                 refrescarConversaciones().catch(() => {});
                 sincronizarHiloAbierto();
             }, 400);

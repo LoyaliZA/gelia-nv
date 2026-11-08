@@ -6,6 +6,7 @@ use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Models\User;
 use App\Support\ControlPedidos\VisibilidadPedidoBma;
+use App\Support\ControlPedidos\BitacoraCedis;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
@@ -37,16 +38,17 @@ class ListarPedidosCedisService
         };
 
         $this->aplicarFiltros($query, $filtros);
+        app(PrioridadAtencionPedidosConfig::class)->ordenar($query, false, (string) ($filtros['orden'] ?? 'antiguos'));
 
         $resultado = $paginar ? $query->paginate(15)->withQueryString() : $query->get();
-        $marcar = function (PedidoBma $pedido): PedidoBma {
+        $marcar = function (PedidoBma $pedido) use ($usuario): PedidoBma {
             $pedido->setAttribute('es_consulta_mercancia', $pedido->esConsultaMercancia());
             $pedido->setAttribute(
                 'consulta_cedis_modo_revision_mercancia',
                 $pedido->consultaCedisModoRevisionMercancia()
             );
 
-            return $pedido;
+            return BitacoraCedis::presentar($pedido, $usuario);
         };
 
         if ($resultado instanceof LengthAwarePaginator) {
@@ -58,7 +60,7 @@ class ListarPedidosCedisService
         return $resultado;
     }
 
-    public function metricas(?User $usuario = null): array
+    public function metricas(?User $usuario = null, array $filtros = []): array
     {
         $usuario = $usuario ?? Auth::user();
         $base = $this->queryBase($usuario);
@@ -75,7 +77,18 @@ class ListarPedidosCedisService
         $pendientesPesaje = $this->queryPendientesPesaje($usuario)->count();
         $entregados = (clone $base)->where('catalogo_estatus_pedido_id', $idsPorFase['ENTREGADO'] ?? 0)->count();
 
+        $todos = $this->queryTodos($usuario);
+        $this->aplicarFiltros($todos, array_merge($filtros, ['tab' => 'TODOS', 'tipo' => '']));
+        $tipos = [];
+        foreach (['tienda', 'mismo_dia', 'municipal', 'nacional'] as $tipo) {
+            $consulta = clone $todos;
+            app(PrioridadAtencionPedidosConfig::class)->filtrarTipo($consulta, $tipo);
+            $tipos[$tipo] = $consulta->count();
+        }
+
         return [
+            'tipos' => $tipos,
+            'todos' => $todos->count(),
             'empacados' => $empacados,
             'pendientes_envio' => $pendientesEnvio,
             'pendientes_guia' => $pendientesGuia,
@@ -142,7 +155,6 @@ class ListarPedidosCedisService
                 ->whereIn('catalogo_estatus_pedido_id', $idsVisibles ?: [0])
                 ->whereNotNull('pago_validado_at')
                 ->whereHas('remision')
-                ->orderByDesc('created_at')
         );
 
         if ($usuario instanceof User) {
@@ -171,9 +183,6 @@ class ListarPedidosCedisService
                             ->whereNull('empacado_at');
                     });
                 })
-                ->orderByRaw('CASE WHEN estatus_envio = ? THEN 0 ELSE 1 END', [$estatusPesaje])
-                ->orderByDesc('pesaje_solicitado_at')
-                ->orderByDesc('created_at')
         );
 
         if ($usuario instanceof User) {
@@ -190,8 +199,6 @@ class ListarPedidosCedisService
                 ->whereNull('pedido_principal_id')
                 ->where('estatus_envio', PedidoBma::ESTATUS_ENVIO_PENDIENTE_PESAJE)
                 ->whereNull('empacado_at')
-                ->orderByDesc('pesaje_solicitado_at')
-                ->orderByDesc('created_at')
         );
 
         if ($usuario instanceof User) {
@@ -203,6 +210,9 @@ class ListarPedidosCedisService
 
     private function aplicarFiltros(Builder $query, array $filtros): void
     {
+        FiltrosBandejaOperativa::aplicar($query, $filtros);
+        app(PrioridadAtencionPedidosConfig::class)->filtrarTipo($query, (string) ($filtros['tipo'] ?? ''));
+
         if (! empty($filtros['q'])) {
             $termino = trim($filtros['q']);
             $query->where(function (Builder $q) use ($termino) {

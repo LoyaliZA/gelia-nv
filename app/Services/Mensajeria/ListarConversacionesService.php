@@ -17,7 +17,9 @@ class ListarConversacionesService
 
     public function ejecutar(User $user): Collection
     {
-        return $this->baseQuery($user)->get()->map(fn ($row) => $this->formatear($row, $user));
+        $conversaciones = $this->baseQuery($user)->get();
+
+        return $this->conNoLeidos($conversaciones, $user);
     }
 
     public function resumen(User $user, int $limit = 8): array
@@ -28,7 +30,7 @@ class ListarConversacionesService
 
         return [
             'total_unread' => $totalUnread,
-            'conversaciones' => $conversaciones->map(fn ($row) => $this->formatear($row, $user))->values()->all(),
+            'conversaciones' => $this->conNoLeidos($conversaciones, $user)->values()->all(),
         ];
     }
 
@@ -43,15 +45,50 @@ class ListarConversacionesService
             ->orderByDesc('conversaciones.id');
     }
 
-    private function formatear(Conversacion $conversacion, User $user): array
+    private function conNoLeidos(Collection $conversaciones, User $user): Collection
     {
-        $miParticipante = $conversacion->participantes->firstWhere('user_id', $user->id);
-        $ultimoLeido = $miParticipante?->ultimo_leido_at;
+        $mapa = $this->mapaNoLeidos($user, $conversaciones->pluck('id')->all());
 
-        $unreadCount = $conversacion->mensajes()
-            ->where('user_id', '!=', $user->id)
-            ->when($ultimoLeido, fn ($q) => $q->where('created_at', '>', $ultimoLeido))
-            ->count();
+        return $conversaciones->map(fn ($row) => $this->formatear($row, $user, $mapa));
+    }
+
+    /**
+     * @param  array<int, int>  $ids
+     * @return array<int, int>
+     */
+    private function mapaNoLeidos(User $user, array $ids): array
+    {
+        if ($ids === []) {
+            return [];
+        }
+
+        $filas = DB::table('mensajes as m')
+            ->join('conversacion_participantes as cp', function ($join) use ($user) {
+                $join->on('cp.conversacion_id', '=', 'm.conversacion_id')
+                    ->where('cp.user_id', '=', $user->id);
+            })
+            ->whereIn('m.conversacion_id', $ids)
+            ->where('m.user_id', '!=', $user->id)
+            ->whereNull('m.deleted_at')
+            ->where(function ($q) {
+                $q->whereNull('cp.ultimo_leido_at')
+                    ->orWhereColumn('m.created_at', '>', 'cp.ultimo_leido_at');
+            })
+            ->groupBy('m.conversacion_id')
+            ->select('m.conversacion_id', DB::raw('COUNT(*) as total'))
+            ->get();
+
+        $mapa = [];
+        foreach ($filas as $fila) {
+            $mapa[(int) $fila->conversacion_id] = (int) $fila->total;
+        }
+
+        return $mapa;
+    }
+
+    private function formatear(Conversacion $conversacion, User $user, array $noLeidos): array
+    {
+        $unreadCount = $noLeidos[$conversacion->id] ?? 0;
 
         $otrosParticipantes = $conversacion->participantes
             ->filter(fn ($p) => $p->user_id !== $user->id)

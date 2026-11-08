@@ -1181,10 +1181,8 @@ class PedidoBmaController extends Controller
         $mime = $documento->mime_type ?: 'application/octet-stream';
         $nombre = $documento->nombre_original ?: basename($documento->ruta_archivo);
 
-        return Storage::disk('public')->response(
-            $documento->ruta_archivo,
-            $nombre,
-            ['Content-Type' => $mime]
+        return app(\App\Services\ControlPedidos\ServirArchivoPedidoService::class)->responder(
+            request(), 'public', $documento->ruta_archivo, $nombre, $mime
         );
     }
 

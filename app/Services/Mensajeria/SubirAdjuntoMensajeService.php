@@ -24,10 +24,8 @@ class SubirAdjuntoMensajeService
 
     public function __construct(
         private EnviarMensajeService $enviarMensaje,
-        private OptimizarImagenMensajeService $optimizarImagen,
         private FormatearMensajeService $formatearMensaje,
         private NotificarMensajeEnviadoService $notificarMensaje,
-        private IndexarTextoAdjuntoService $indexarTexto,
     ) {}
 
     public function ejecutar(
@@ -49,19 +47,16 @@ class SubirAdjuntoMensajeService
             ]);
         }
 
-        $adjuntoData = match ($tipo) {
-            Mensaje::TIPO_IMAGEN => $this->procesarImagen($file, $conversacion->id),
-            default => $this->guardarArchivo($file, $conversacion->id),
-        };
+        $adjuntoData = $this->guardarArchivo($file, $conversacion->id);
 
-        $formateado = DB::transaction(function () use ($conversacion, $user, $tipo, $contenido, $replyToId, $adjuntoData, $file) {
+        $mensajeId = DB::transaction(function () use ($conversacion, $user, $tipo, $contenido, $replyToId, $adjuntoData, $file) {
             $mensajeData = $this->enviarMensaje->ejecutar($conversacion, $user, [
                 'tipo' => $tipo,
                 'contenido' => $contenido,
                 'reply_to_id' => $replyToId,
             ], broadcast: false);
 
-            $adjunto = MensajeAdjunto::create([
+            MensajeAdjunto::create([
                 'mensaje_id' => $mensajeData['id'],
                 'ruta' => $adjuntoData['ruta'],
                 'thumbnail_ruta' => $adjuntoData['thumbnail_ruta'] ?? null,
@@ -71,22 +66,16 @@ class SubirAdjuntoMensajeService
                 'duracion_seg' => $adjuntoData['duracion_seg'] ?? null,
             ]);
 
-            $mensaje = Mensaje::with(['user:id,name,foto_perfil', 'adjuntos', 'lecturas'])
-                ->find($mensajeData['id']);
-
-            $adjunto->setRelation('mensaje', $mensaje);
-            $this->indexarTexto->ejecutar($adjunto);
-
-            return $this->formatearMensaje->ejecutar($mensaje, $user, $conversacion);
+            return $mensajeData['id'];
         });
 
-        $adjunto = MensajeAdjunto::where('mensaje_id', $formateado['id'])->first();
-        if ($adjunto) {
-            ProcesarAdjuntoMensajeJob::dispatch($adjunto->id);
-        }
+        $mensaje = Mensaje::with(['user:id,name,foto_perfil', 'adjuntos', 'replyTo.user:id,name', 'replyTo.adjuntos', 'lecturas'])
+            ->findOrFail($mensajeId);
+        $formateado = $this->formatearMensaje->ejecutar($mensaje, $user, $conversacion);
 
-        $mensaje = Mensaje::with(['user:id,name,foto_perfil', 'adjuntos', 'lecturas'])
-            ->find($formateado['id']);
+        if ($adjunto = $mensaje->adjuntos->first()) {
+            ProcesarAdjuntoMensajeJob::dispatch($adjunto->id)->afterResponse();
+        }
 
         $this->notificarMensaje->ejecutar(
             $conversacion,
@@ -95,15 +84,6 @@ class SubirAdjuntoMensajeService
         );
 
         return $formateado;
-    }
-
-    private function procesarImagen(UploadedFile $file, int $conversacionId): array
-    {
-        try {
-            return $this->optimizarImagen->ejecutar($file, $conversacionId);
-        } catch (ValidationException) {
-            return $this->guardarArchivo($file, $conversacionId);
-        }
     }
 
     private function guardarArchivo(UploadedFile $file, int $conversacionId): array

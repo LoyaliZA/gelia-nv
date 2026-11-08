@@ -45,9 +45,10 @@ class PedidoBmaCedisController extends Controller
 
         $liberaciones = null;
         if ($tab === 'LIBERACIONES') {
-            $liberaciones = $this->consultaLiberacionesCedis()
+            $consulta = $this->consultaLiberacionesCedis();
+            app(\App\Services\ControlPedidos\PrioridadAtencionPedidosConfig::class)->ordenar($consulta, true);
+            $liberaciones = $consulta
                 ->with(['pedido.cliente', 'pedido.vendedor', 'almacen', 'modalidad', 'productos'])
-                ->orderBy('updated_at')
                 ->paginate(15)
                 ->withQueryString();
         }
@@ -55,10 +56,11 @@ class PedidoBmaCedisController extends Controller
         return Inertia::render('ControlPedidos/Cedis/Index', [
             'pedidos' => fn () => $tab === 'LIBERACIONES' ? ['data' => []] : $listarService->ejecutar($request->all(), true, Auth::user()),
             'liberaciones' => $liberaciones,
-            'metricas' => fn () => array_merge($listarService->metricas(Auth::user()), [
+            'metricas' => fn () => array_merge($listarService->metricas(Auth::user(), $request->all()), [
                 'liberaciones_pendientes' => $this->consultaLiberacionesCedis()->count(),
             ]),
-            'filtros' => $request->only(['tab', 'q', 'page']),
+            'fecha_hoy' => now(app(\App\Services\ControlPedidos\PreparacionTiendaConfig::class)->zonaHoraria())->toDateString(),
+            'filtros' => $request->only(['tab', 'q', 'tipo', 'desde', 'hasta', 'vendedora', 'orden', 'page']),
             'tipos_caja' => $catalogos['tipos_caja'] ?? [],
             'almacenes_busqueda' => Almacen::query()
                 ->where('activo', true)
@@ -67,6 +69,7 @@ class PedidoBmaCedisController extends Controller
                 ->get(['id', 'codigo', 'nombre']),
             'can' => [
                 'liberar' => Auth::user()?->can('control_pedidos.cedis.liberar') ?? false,
+                'bitacora' => \App\Support\ControlPedidos\BitacoraCedis::puedeVer(Auth::user()),
             ],
         ]);
     }
@@ -77,8 +80,11 @@ class PedidoBmaCedisController extends Controller
 
         return response()->json([
             'pedidos' => $listarService->ejecutar($request->all(), true, Auth::user()),
-            'metricas' => $listarService->metricas(Auth::user()),
-            'filtros' => $request->only(['tab', 'q', 'page']),
+            'metricas' => array_merge($listarService->metricas(Auth::user(), $request->all()), [
+                'liberaciones_pendientes' => $this->consultaLiberacionesCedis()->count(),
+            ]),
+            'fecha_hoy' => now(app(\App\Services\ControlPedidos\PreparacionTiendaConfig::class)->zonaHoraria())->toDateString(),
+            'filtros' => $request->only(['tab', 'q', 'tipo', 'desde', 'hasta', 'vendedora', 'orden', 'page']),
         ]);
     }
 
@@ -408,10 +414,9 @@ class PedidoBmaCedisController extends Controller
             abort(404);
         }
 
-        return response()->file($path, [
-            'Content-Type' => $foto->mime_type ?: 'image/jpeg',
-            'Cache-Control' => 'private, max-age=300',
-        ]);
+        return app(\App\Services\ControlPedidos\ServirArchivoPedidoService::class)->responder(
+            request(), 'public', $foto->ruta_archivo, $foto->nombre_original, $foto->mime_type
+        );
     }
 
     public function liberarTarea(

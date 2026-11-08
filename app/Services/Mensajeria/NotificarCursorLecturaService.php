@@ -19,9 +19,16 @@ class NotificarCursorLecturaService
             'unread_count' => 0,
         ]));
 
-        foreach ($porAutor as $autorId => $mensajes) {
+        foreach ($porAutor as $autorId => $info) {
             $autorId = (int) $autorId;
-            if ($autorId === $lectorId || $mensajes === []) {
+            if ($autorId === $lectorId) {
+                continue;
+            }
+
+            $esLista = array_is_list($info);
+            $mensajes = $esLista ? $info : ($info['mensajes'] ?? []);
+            $leidoHasta = $esLista ? null : ($info['leido_hasta_id'] ?? null);
+            if ($mensajes === [] && ! $leidoHasta) {
                 continue;
             }
 
@@ -31,6 +38,8 @@ class NotificarCursorLecturaService
                 'lector_id' => $lectorId,
                 'ultimo_leido_at' => $ultimoLeidoAt,
                 'mensajes' => array_values($mensajes),
+                'leido_hasta_id' => $leidoHasta,
+                'estado_lectura' => $esLista ? null : ($info['estado_lectura'] ?? null),
             ]));
         }
     }

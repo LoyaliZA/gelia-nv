@@ -8,9 +8,12 @@ use App\Models\User;
 
 class FormatearMensajeService
 {
+    /** @var array<int, int> */
+    private array $participantesPorConversacion = [];
+
     public function ejecutar(Mensaje $mensaje, User $viewer, Conversacion $conversacion): array
     {
-        $totalParticipantes = $conversacion->participantes()->count();
+        $totalParticipantes = $this->totalParticipantes($conversacion);
         $otrosParticipantes = max(0, $totalParticipantes - 1);
         $lecturasOtros = $mensaje->lecturas
             ->filter(fn ($l) => $l->user_id !== $mensaje->user_id)
@@ -95,6 +98,18 @@ class FormatearMensajeService
         }
 
         return Mensaje::etiquetaTipo($mensaje->tipo);
+    }
+
+    private function totalParticipantes(Conversacion $conversacion): int
+    {
+        $id = $conversacion->id;
+        if (! array_key_exists($id, $this->participantesPorConversacion)) {
+            $this->participantesPorConversacion[$id] = $conversacion->relationLoaded('participantes')
+                ? $conversacion->participantes->count()
+                : $conversacion->participantes()->count();
+        }
+
+        return $this->participantesPorConversacion[$id];
     }
 
     /** Payload para broadcast: sin campos que dependen del usuario que ve el chat. */

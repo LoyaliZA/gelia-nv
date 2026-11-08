@@ -49,6 +49,7 @@ class EvaluarVencimientoApartadoFisicoService
                 continue;
             }
             if ($tarea->modalidad?->codigo === CatalogoModalidadPreparacionPedido::CODIGO_RECOGE_TIENDA) {
+                if (! app(ConfiguracionOperativaTienda::class)->horariosActivos()) continue;
                 $clave = 'aviso-vence:'.$cumplimiento->id.':'.$cumplimiento->vence_at->toIso8601String();
                 if (! \App\Models\ControlPedidos\PedidoBmaCumplimientoEvento::query()->where('idempotencia_clave', $clave)->exists()) {
                     $this->eventos->ejecutar($cumplimiento, \App\Models\ControlPedidos\PedidoBmaCumplimientoEvento::TIPO_VENCIMIENTO_AVISADO,

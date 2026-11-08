@@ -6,6 +6,7 @@ use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\CatalogoPaqueteriaPedido;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Support\ControlPedidos\BusquedaDelegadoPedidoBma;
+use App\Support\ControlPedidos\BitacoraCedis;
 use App\Support\ControlPedidos\FiltroPaqueteriaDelegadoPedidoBma;
 use App\Support\ControlPedidos\SituacionOperativaDelegadoPedidoBma;
 use Illuminate\Database\Eloquent\Builder;
@@ -20,12 +21,12 @@ class ListarPedidosDelegadoService
         $this->aplicarOrden($query, $filtros);
 
         if (! $paginar) {
-            return $query->get();
+            return $query->get()->each(fn (PedidoBma $pedido) => BitacoraCedis::presentar($pedido, auth()->user()));
         }
 
         $page = max(1, (int) ($filtros['page'] ?? 1));
 
-        return $query->paginate(15, ['*'], 'page', $page)->withQueryString();
+        return $query->paginate(15, ['*'], 'page', $page)->withQueryString()->through(fn (PedidoBma $pedido) => BitacoraCedis::presentar($pedido, auth()->user()));
     }
 
     public function metricas(): array

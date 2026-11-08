@@ -1,0 +1,62 @@
+[
+  {
+    "vista": "cedis",
+    "nombre": "escritorio",
+    "width": 1440,
+    "height": 1000,
+    "tema": "dark",
+    "errores": [],
+    "desborde": false,
+    "piezasEnPedido": 2
+  },
+  {
+    "vista": "tienda",
+    "nombre": "escritorio",
+    "width": 1440,
+    "height": 1000,
+    "tema": "dark",
+    "errores": [],
+    "desborde": false,
+    "piezasEnPedido": 2
+  },
+  {
+    "vista": "cedis",
+    "nombre": "modal",
+    "width": 475,
+    "height": 932,
+    "tema": "dark",
+    "errores": [],
+    "desborde": false,
+    "piezasEnPedido": 2
+  },
+  {
+    "vista": "tienda",
+    "nombre": "modal",
+    "width": 475,
+    "height": 932,
+    "tema": "dark",
+    "errores": [],
+    "desborde": false,
+    "piezasEnPedido": 2
+  },
+  {
+    "vista": "cedis",
+    "nombre": "movil",
+    "width": 390,
+    "height": 844,
+    "tema": "light",
+    "errores": [],
+    "desborde": false,
+    "piezasEnPedido": 2
+  },
+  {
+    "vista": "tienda",
+    "nombre": "movil",
+    "width": 390,
+    "height": 844,
+    "tema": "light",
+    "errores": [],
+    "desborde": false,
+    "piezasEnPedido": 2
+  }
+]

@@ -26,6 +26,13 @@ class FusionarSolicitudPreparacionPedido
      */
     public function ejecutar(?array $actual, ?array $entrada): ?array
     {
+        if (! empty($actual['cobertura_tienda']['tipo'])) {
+            // Autoguardado y formularios viejos no sustituyen una decisión operativa.
+            if ($entrada === null) return $this->normalizar($actual);
+            foreach (['codigo_modalidad', 'atencion_tienda', 'modalidad_entrega', 'area_revision', 'caso_tienda', 'almacen_revision_id'] as $clave) {
+                unset($entrada[$clave]);
+            }
+        }
         if ($entrada === null) {
             return null;
         }
@@ -192,7 +199,7 @@ class FusionarSolicitudPreparacionPedido
             return false;
         }
         foreach ([
-            'acciones_disponibilidad', 'reapertura_disponibilidad', 'solicitudes_ajuste_ids', 'cobertura_tienda', 'segundo_traslado', 'historial_traslados_tienda', 'movimientos_tienda_version', 'cambio_modalidad_tienda', 'credito_wizerp', 'tienda_md_reporte',
+            'acciones_disponibilidad', 'reapertura_disponibilidad', 'solicitudes_ajuste_ids', 'cobertura_tienda', 'cambio_cobertura_tienda', 'historial_cambios_cobertura', 'segundo_traslado', 'historial_traslados_tienda', 'movimientos_tienda_version', 'cambio_modalidad_tienda', 'credito_wizerp', 'tienda_md_reporte',
             'retiro_recoleccion', 'liberacion_fisica_20', 'cambio_modalidad',
             'continuacion_ejecutor', 'entrega_custodia', 'compromisos_inventario', 'complemento_pdv', 'anexo_integracion', 'transferencia_tienda', 'seguimiento_recoleccion', 'remision_tienda',
         ] as $clave) {
@@ -270,6 +277,7 @@ class FusionarSolicitudPreparacionPedido
             return null;
         }
 
+        $metadata = array_intersect_key($valor, array_flip(['actualizacion_pendiente', 'actualizacion_id', 'evidencia_actual_ids', 'historial_respuestas', 'respuesta_id', 'cambios_revisados']));
         $respondida = $valor['respondida_at'] ?? null;
         $decision = $valor['decision_at'] ?? null;
 
@@ -281,6 +289,7 @@ class FusionarSolicitudPreparacionPedido
             'decision_at' => is_string($decision) ? $decision : null,
             'decision_por_id' => $this->identificador($valor['decision_por_id'] ?? null),
         ];
+        $salida = array_merge($salida, $metadata);
         if (array_key_exists('aceptacion_vigente', $valor)) {
             $salida['aceptacion_vigente'] = (bool) $valor['aceptacion_vigente'];
         }
@@ -303,7 +312,7 @@ class FusionarSolicitudPreparacionPedido
     private function conservarOperacionTienda(array &$salida, array $origen): void
     {
         foreach ([
-            'acciones_disponibilidad', 'reapertura_disponibilidad', 'solicitudes_ajuste_ids', 'cobertura_tienda',
+            'acciones_disponibilidad', 'reapertura_disponibilidad', 'solicitudes_ajuste_ids', 'cobertura_tienda', 'cambio_cobertura_tienda', 'historial_cambios_cobertura',
             'segundo_traslado', 'historial_traslados_tienda', 'movimientos_tienda_version', 'cambio_modalidad_tienda',
             'credito_wizerp',
             'ruta_almacenes_tienda',

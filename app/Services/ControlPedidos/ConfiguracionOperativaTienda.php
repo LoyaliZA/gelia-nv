@@ -6,7 +6,7 @@ use App\Models\ConfiguracionSistema;
 use App\Models\ControlPedidos\PedidoBma;
 use Carbon\Carbon;
 
-/** Parámetros editables; los vencimientos ya registrados conservan su fecha. */
+/** Horarios, plazos y pasos opcionales; las vigencias registradas conservan su fecha. */
 final class ConfiguracionOperativaTienda
 {
     public const CLAVE = 'control_pedidos.tienda.operacion';
@@ -14,10 +14,12 @@ final class ConfiguracionOperativaTienda
     public function defaults(): array
     {
         return [
+            'horarios_activos' => false,
             'md_dias' => [1, 2, 3, 4, 5], 'md_corte' => '13:00',
             'apartado_dias' => [1, 2, 3, 4, 5, 6], 'apartado_cierre' => '17:00',
             'sabado_apertura' => '09:00', 'sabado_cierre' => '13:00',
             'recoleccion_dias' => 20,
+            'seguimiento_entrega_pdv' => false,
         ];
     }
 
@@ -37,7 +39,32 @@ final class ConfiguracionOperativaTienda
         }
         $datos['recoleccion_dias'] = max(1, min(365, (int) $datos['recoleccion_dias']));
 
+        $datos['horarios_activos'] = filter_var($datos['horarios_activos'], FILTER_VALIDATE_BOOLEAN);
+        $datos['seguimiento_entrega_pdv'] = filter_var($datos['seguimiento_entrega_pdv'], FILTER_VALIDATE_BOOLEAN);
+
         return $datos;
+    }
+
+    public function horariosActivos(): bool
+    {
+        return $this->obtener()['horarios_activos'];
+    }
+
+    public function detalleHorarioApartado(): string
+    {
+        $datos = $this->obtener();
+        $nombres = [1 => 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
+        $dias = implode(', ', array_map(fn ($dia) => $nombres[$dia], $datos['apartado_dias']));
+        $sabado = in_array(6, $datos['apartado_dias'], true)
+            ? ' Sábado de '.$datos['sabado_apertura'].' a '.$datos['sabado_cierre'].'.' : '';
+
+        return 'Jornadas permitidas: '.$dias.'. Límite ordinario: '.$datos['apartado_cierre'].'.'.$sabado
+            .' Zona horaria: '.app(PreparacionTiendaConfig::class)->zonaHoraria().'.';
+    }
+
+    public function seguimientoEntregaPdvHabilitado(): bool
+    {
+        return $this->obtener()['seguimiento_entrega_pdv'];
     }
 
     public function diasRecoleccion(?PedidoBma $pedido = null): int
@@ -47,12 +74,13 @@ final class ConfiguracionOperativaTienda
 
     public function diaMd(Carbon $local): bool
     {
-        return in_array($local->dayOfWeekIso, $this->obtener()['md_dias'], true);
+        return ! $this->horariosActivos() || in_array($local->dayOfWeekIso, $this->obtener()['md_dias'], true);
     }
 
     public function notaMd(): string
     {
         $datos = $this->obtener();
+        if (! $datos['horarios_activos']) return 'Mismo día: horarios y jornadas desactivados para pruebas.';
         $nombres = [1 => 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb', 'dom'];
         $dias = implode(', ', array_map(fn ($dia) => $nombres[$dia], $datos['md_dias']));
 

@@ -1,0 +1,42 @@
+[
+  {
+    "vista": "escritorio-oscuro",
+    "activos": false,
+    "alerta": false,
+    "deshabilitado": false,
+    "detalle": null,
+    "desbordes": [],
+    "errores": [],
+    "rotas": 0
+  },
+  {
+    "vista": "escritorio-oscuro",
+    "activos": true,
+    "alerta": true,
+    "deshabilitado": true,
+    "detalle": "Confirmación fuera de horarioEl apartado ya venció. Vigencia registrada: 04/11/2026 17:00. Jornadas permitidas: lunes, martes, miércoles, jueves, viernes, sábado. Límite ordinario: 17:00. Sábado de 09:00 a 13:00. Zona horaria: America/Mexico_City.",
+    "desbordes": [],
+    "errores": [],
+    "rotas": 0
+  },
+  {
+    "vista": "movil-claro",
+    "activos": false,
+    "alerta": false,
+    "deshabilitado": false,
+    "detalle": null,
+    "desbordes": [],
+    "errores": [],
+    "rotas": 0
+  },
+  {
+    "vista": "movil-claro",
+    "activos": true,
+    "alerta": true,
+    "deshabilitado": true,
+    "detalle": "Confirmación fuera de horarioEl apartado ya venció. Vigencia registrada: 04/11/2026 17:00. Jornadas permitidas: lunes, martes, miércoles, jueves, viernes, sábado. Límite ordinario: 17:00. Sábado de 09:00 a 13:00. Zona horaria: America/Mexico_City.",
+    "desbordes": [],
+    "errores": [],
+    "rotas": 0
+  }
+]

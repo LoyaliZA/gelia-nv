@@ -87,15 +87,35 @@ export function aplicarCursorLectura({ conversaciones, mensajes, conversacionAct
     }
 
     const mapa = new Map((detalle.mensajes || []).map((m) => [Number(m.id), m.estado_lectura]));
+    const hasta = detalle.leido_hasta_id != null ? Number(detalle.leido_hasta_id) : null;
+    const estadoHasta = detalle.estado_lectura || 'leido';
 
     return {
         conversaciones,
-        mensajes: mensajes.map((m) => (
-            mapa.has(Number(m.id))
-                ? { ...m, estado_lectura: fusionarEstadoLectura(m.estado_lectura, mapa.get(Number(m.id))) }
-                : m
-        )),
+        mensajes: mensajes.map((m) => {
+            if (mapa.has(Number(m.id))) {
+                return {
+                    ...m,
+                    estado_lectura: fusionarEstadoLectura(m.estado_lectura, mapa.get(Number(m.id))),
+                };
+            }
+            if (hasta != null && m.es_propio && Number(m.id) > 0 && Number(m.id) <= hasta) {
+                return {
+                    ...m,
+                    estado_lectura: fusionarEstadoLectura(m.estado_lectura, estadoHasta),
+                };
+            }
+            return m;
+        }),
     };
+}
+
+export function conservarPendientes(servidor, locales) {
+    const pendientes = (locales || []).filter((m) => m.pendiente);
+    const base = servidor || [];
+    if (!pendientes.length) return base;
+    const ids = new Set(base.map((m) => m.id));
+    return [...base, ...pendientes.filter((m) => !ids.has(m.id))];
 }
 
 export function fusionarMensajesHilo(previos, frescos) {
@@ -111,5 +131,10 @@ export function fusionarMensajesHilo(previos, frescos) {
         if (!vistos.has(m.id)) mezcla.push(m);
     });
 
-    return mezcla.sort((a, b) => Number(a.id) - Number(b.id));
+    return mezcla.sort((a, b) => {
+        const ap = a.pendiente ? 1 : 0;
+        const bp = b.pendiente ? 1 : 0;
+        if (ap !== bp) return ap - bp;
+        return Number(a.id) - Number(b.id);
+    });
 }

@@ -63,9 +63,8 @@ class PedidoBmaEvidenciaTiendaPublicaController extends Controller
             abort(404);
         }
 
-        return response()->file($path, [
-            'Content-Type' => $foto->mime_type ?: 'image/jpeg',
-            'Cache-Control' => 'private, max-age=300',
-        ]);
+        return app(\App\Services\ControlPedidos\ServirArchivoPedidoService::class)->responder(
+            request(), 'public', $foto->ruta, $foto->nombre_original, $foto->mime_type
+        );
     }
 }

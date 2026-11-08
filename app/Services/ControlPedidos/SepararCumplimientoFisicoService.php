@@ -8,6 +8,7 @@ use App\Models\ControlPedidos\PedidoBmaCumplimientoEvento;
 use App\Models\ControlPedidos\PedidoBmaTareaPreparacion;
 use App\Models\User;
 use App\Support\ControlPedidos\MaquinaEstadosCumplimientoFisico;
+use App\Support\ControlPedidos\ApartadoT01;
 use App\Support\ControlPedidos\InstruccionEntrega;
 use App\Support\ControlPedidos\PlazoApartadoTienda;
 use Illuminate\Support\Facades\DB;
@@ -57,6 +58,11 @@ class SepararCumplimientoFisicoService
 
         $cumplimiento = DB::transaction(function () use ($tarea, $usuario, $cantidad, $ubicacion, $versionEsperada, $esRecogeHoy) {
             $tarea = InstruccionEntrega::bloquearParaEjecutar($tarea);
+            if (ApartadoT01::aplica($tarea->pedido)) {
+                throw ValidationException::withMessages([
+                    'estado' => 'Este pedido se separa con Confirmar pedido separado, después del cierre y la confirmación de Ventas.',
+                ]);
+            }
             $this->asegurar->ejecutar($tarea);
             $cumplimiento = PedidoBmaCumplimientoFisico::query()
                 ->where('pedido_bma_tarea_preparacion_id', $tarea->id)

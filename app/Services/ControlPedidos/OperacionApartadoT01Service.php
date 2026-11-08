@@ -26,6 +26,9 @@ final class OperacionApartadoT01Service
                 $apartado = $tarea->cumplimientoFisico()->lockForUpdate()->firstOrFail();
                 $destino = $entregar ? PedidoBmaCumplimientoFisico::ESTADO_ENTREGADA : PedidoBmaCumplimientoFisico::ESTADO_DEVUELTA_ANAQUEL;
                 if ($apartado->estado === $destino) return $apartado;
+                if ($entregar && ! app(ConfiguracionOperativaTienda::class)->seguimientoEntregaPdvHabilitado()) {
+                    throw ValidationException::withMessages(['operacion' => 'El paso de pago, remisión y entrega de Pago al recoger está deshabilitado en Configuración operativa.']);
+                }
                 if ((int) $apartado->version !== (int) $datos['version']) {
                     throw ValidationException::withMessages(['version' => 'El apartado cambió. Actualice antes de continuar.']);
                 }

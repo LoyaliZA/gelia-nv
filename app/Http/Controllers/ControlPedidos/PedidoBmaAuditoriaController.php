@@ -359,7 +359,7 @@ class PedidoBmaAuditoriaController extends Controller
         $this->assertPedidoVisible($pedidoBma);
 
         if ((int) $incidencia->pedido_bma_id !== (int) $pedidoBma->id) {
-            return redirect()->back()->with('error', 'La incidencia no pertenece a este pedido.');
+            return redirect()->back()->with('error', 'El error reportado no pertenece a este pedido.');
         }
 
         $datos = $request->validate([
@@ -369,7 +369,7 @@ class PedidoBmaAuditoriaController extends Controller
         app(\App\Services\SaldosAFavor\RegistrarIncidenciaSafService::class)
             ->resolver($incidencia, Auth::id(), $datos['nota'] ?? 'Corregido en auditoría; se continúa el pedido.');
 
-        return redirect()->back()->with('success', 'Incidencia de saldo a favor marcada como revisada.');
+        return redirect()->back()->with('success', 'Error de saldo a favor marcado como revisado.');
     }
 
     public function marcarRevisionEnCurso(PedidoBma $pedidoBma): JsonResponse

@@ -220,6 +220,7 @@ export function TarjetaTarea({ tarea: t, puedeTomar, compacto = false, onAbrir }
 
             <div className="pt-2 border-t theme-border space-y-2">
                 {ctaPrincipal()}
+                {t.pedido?.es_t01_documental && t.pedido?.seguimiento_entrega_pdv_habilitado && t.apartado?.estado === 'APARTADO_CONFIRMADO' && <Link href={showUrl} className="inline-flex items-center gap-2 text-sm font-semibold theme-text-primario underline min-h-[44px]">Pago y entrega</Link>}
                 {!onAbrir && <BotonAccionCubico
                     icon={Eye}
                     label="Ver detalle"

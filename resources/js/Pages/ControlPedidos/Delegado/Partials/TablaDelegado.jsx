@@ -91,7 +91,7 @@ function CardPedidoDelegado({ pedido, onAbrir, onBitacora }) {
                             : 'gelia-estado-vivo gelia-estado-vivo--compacto gelia-estado-vivo--info'
                     }`}
                 >
-                    {senial ? 'Retraso o incidencia de guía' : 'Resguardo'}
+                    {senial ? 'Retraso o error de guía' : 'Resguardo'}
                 </p>
             )}
             <div className="p-4 space-y-3">

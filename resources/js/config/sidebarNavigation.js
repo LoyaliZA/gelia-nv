@@ -71,8 +71,9 @@ export function sortNavigationGroupChildren(nodes) {
         if (!node || node.type !== 'group' || !node.children?.length) {
             return node;
         }
-        // El grupo Almacenes declara un orden de trabajo; el resto sigue en orden alfabético.
-        const hijos = node.id === 'almacenes' ? [...node.children] : [...node.children].sort(compareNavByLabel);
+        // Almacenes y Gestión de pedidos declaran un orden de trabajo; el resto sigue alfabético.
+        const ordenExplicito = node.id === 'almacenes' || node.id === 'gestion_pedidos';
+        const hijos = ordenExplicito ? [...node.children] : [...node.children].sort(compareNavByLabel);
         const children = hijos.map((child) => {
             if (child?.type === 'group' && child.children?.length) {
                 return sortNavigationGroupChildren([child])[0];
@@ -184,14 +185,6 @@ export function buildSidebarNavigation({ can, showAdminMenu, manualesHubVisible 
             href: () => routeHref('control_pedidos.delegado.index', '/control-pedidos/delegado'),
             active: (url) => url.startsWith('/control-pedidos/delegado'),
         },
-        can('control_pedidos.configurar_plazos') && {
-            type: 'link',
-            id: 'control_pedidos_plazos',
-            label: 'Plazos de retraso',
-            icon: Clock,
-            href: () => routeHref('control_pedidos.plazos.index', '/control-pedidos/plazos'),
-            active: (url) => url.startsWith('/control-pedidos/plazos'),
-        },
         can('clientes.direcciones.ver') && {
             type: 'link',
             id: 'control_pedidos_direcciones',
@@ -199,6 +192,14 @@ export function buildSidebarNavigation({ can, showAdminMenu, manualesHubVisible 
             icon: MapPin,
             href: () => routeHref('control_pedidos.direcciones.index', '/control-pedidos/direcciones'),
             active: (url) => url.startsWith('/control-pedidos/direcciones'),
+        },
+        can('control_pedidos.configurar_plazos') && {
+            type: 'link',
+            id: 'control_pedidos_plazos',
+            label: 'Configurar Operación',
+            icon: Clock,
+            href: () => routeHref('control_pedidos.plazos.index', '/control-pedidos/plazos'),
+            active: (url) => url.startsWith('/control-pedidos/plazos'),
         },
     ].filter(Boolean);
 

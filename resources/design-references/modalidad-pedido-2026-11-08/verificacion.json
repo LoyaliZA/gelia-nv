@@ -1,0 +1,106 @@
+[
+  {
+    "vista": "escritorio-oscuro",
+    "caso": "apartado",
+    "alerta": true,
+    "borde": "1px",
+    "clase": "inline-flex items-center justify-center gap-2 rounded-xl border theme-border px-3 py-2 text-[10px] font-black uppercase tracking-widest theme-text-main theme-surface hover:bg-black/5 dark:hover:bg-white/5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed registrar-tienda-guardar-modalidad min-h-[44px] justify-self-start",
+    "colorBorde": "color(srgb 0.500588 0.211176 0.360588)",
+    "confirmacionHabilitada": true,
+    "css": [
+      "https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,700;0,900;1,400;1,700;1,900&family=JetBrains+Mono:wght@400;500;600;700;800&family=Montserrat:ital,wght@0,400;0,700;0,900;1,400;1,700;1,900&family=Nunito:ital,wght@0,400;0,700;0,900;1,400;1,700;1,900&family=Poppins:ital,wght@0,400;0,700;0,900;1,400;1,700;1,900&family=Roboto:ital,wght@0,400;0,700;0,900;1,400;1,700;1,900&display=swap",
+      "http://laravel.test:9192/build/assets/app-FwrGQsrV.css"
+    ],
+    "fondo": "color(srgb 0.156078 0.0917647 0.123529)",
+    "icono": true,
+    "orden": true,
+    "desbordes": [],
+    "errores": [],
+    "rotas": 0
+  },
+  {
+    "vista": "escritorio-oscuro",
+    "caso": "apartado-pendiente",
+    "desbordes": [],
+    "errores": [],
+    "rotas": 0
+  },
+  {
+    "vista": "escritorio-oscuro",
+    "caso": "confirmar",
+    "alerta": false,
+    "borde": "1px",
+    "clase": "inline-flex items-center justify-center gap-2 rounded-xl border theme-border px-3 py-2 text-[10px] font-black uppercase tracking-widest theme-text-main theme-surface hover:bg-black/5 dark:hover:bg-white/5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed registrar-tienda-guardar-modalidad min-h-[44px] justify-self-start",
+    "colorBorde": "color(srgb 0.500588 0.211176 0.360588)",
+    "confirmacionHabilitada": true,
+    "css": [
+      "https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,700;0,900;1,400;1,700;1,900&family=JetBrains+Mono:wght@400;500;600;700;800&family=Montserrat:ital,wght@0,400;0,700;0,900;1,400;1,700;1,900&family=Nunito:ital,wght@0,400;0,700;0,900;1,400;1,700;1,900&family=Poppins:ital,wght@0,400;0,700;0,900;1,400;1,700;1,900&family=Roboto:ital,wght@0,400;0,700;0,900;1,400;1,700;1,900&display=swap",
+      "http://laravel.test:9192/build/assets/app-FwrGQsrV.css"
+    ],
+    "fondo": "color(srgb 0.156078 0.0917647 0.123529)",
+    "icono": true,
+    "orden": true,
+    "desbordes": [],
+    "errores": [],
+    "rotas": 0
+  },
+  {
+    "vista": "escritorio-oscuro",
+    "caso": "confirmar-pendiente",
+    "desbordes": [],
+    "errores": [],
+    "rotas": 0
+  },
+  {
+    "vista": "movil-claro",
+    "caso": "apartado",
+    "alerta": true,
+    "borde": "1px",
+    "clase": "inline-flex items-center justify-center gap-2 rounded-xl border theme-border px-3 py-2 text-[10px] font-black uppercase tracking-widest theme-text-main theme-surface hover:bg-black/5 dark:hover:bg-white/5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed registrar-tienda-guardar-modalidad min-h-[44px] justify-self-start",
+    "colorBorde": "color(srgb 0.908235 0.618824 0.768235)",
+    "confirmacionHabilitada": true,
+    "css": [
+      "https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,700;0,900;1,400;1,700;1,900&family=JetBrains+Mono:wght@400;500;600;700;800&family=Montserrat:ital,wght@0,400;0,700;0,900;1,400;1,700;1,900&family=Nunito:ital,wght@0,400;0,700;0,900;1,400;1,700;1,900&family=Poppins:ital,wght@0,400;0,700;0,900;1,400;1,700;1,900&family=Roboto:ital,wght@0,400;0,700;0,900;1,400;1,700;1,900&display=swap",
+      "http://laravel.test:9192/build/assets/app-FwrGQsrV.css"
+    ],
+    "fondo": "color(srgb 0.992549 0.928235 0.96)",
+    "icono": true,
+    "orden": true,
+    "desbordes": [],
+    "errores": [],
+    "rotas": 0
+  },
+  {
+    "vista": "movil-claro",
+    "caso": "apartado-pendiente",
+    "desbordes": [],
+    "errores": [],
+    "rotas": 0
+  },
+  {
+    "vista": "movil-claro",
+    "caso": "confirmar",
+    "alerta": false,
+    "borde": "1px",
+    "clase": "inline-flex items-center justify-center gap-2 rounded-xl border theme-border px-3 py-2 text-[10px] font-black uppercase tracking-widest theme-text-main theme-surface hover:bg-black/5 dark:hover:bg-white/5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed registrar-tienda-guardar-modalidad min-h-[44px] justify-self-start",
+    "colorBorde": "color(srgb 0.908235 0.618824 0.768235)",
+    "confirmacionHabilitada": true,
+    "css": [
+      "https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,700;0,900;1,400;1,700;1,900&family=JetBrains+Mono:wght@400;500;600;700;800&family=Montserrat:ital,wght@0,400;0,700;0,900;1,400;1,700;1,900&family=Nunito:ital,wght@0,400;0,700;0,900;1,400;1,700;1,900&family=Poppins:ital,wght@0,400;0,700;0,900;1,400;1,700;1,900&family=Roboto:ital,wght@0,400;0,700;0,900;1,400;1,700;1,900&display=swap",
+      "http://laravel.test:9192/build/assets/app-FwrGQsrV.css"
+    ],
+    "fondo": "color(srgb 0.992549 0.928235 0.96)",
+    "icono": true,
+    "orden": true,
+    "desbordes": [],
+    "errores": [],
+    "rotas": 0
+  },
+  {
+    "vista": "movil-claro",
+    "caso": "confirmar-pendiente",
+    "desbordes": [],
+    "errores": [],
+    "rotas": 0
+  }
+]

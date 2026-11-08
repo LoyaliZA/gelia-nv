@@ -7,7 +7,7 @@ import { GELIA_ESTADO_VIVO_TONO } from '../../../../utils/geliaTheme';
 export const KPI_METRICAS_TIENDA = [
     { key: 'pendientes', label: 'Pendientes', tab: 'PENDIENTES', icon: Clock, tono: 'aviso' },
     { key: 'en_atencion', label: 'En atención', tab: 'EN_ATENCION', icon: Package, tono: 'info' },
-    { key: 'con_incidencia', label: 'Incidencia', tab: 'CON_INCIDENCIA', icon: AlertTriangle, tono: 'error' },
+    { key: 'con_incidencia', label: 'Error reportado', tab: 'CON_INCIDENCIA', icon: AlertTriangle, tono: 'error' },
     { key: 'listas_traslado', label: 'Listas traslado', tab: 'LISTAS_TRASLADO', icon: Truck, tono: 'info' },
     { key: 'listas_caratula', label: 'Listas carátula', tab: 'LISTAS_CARATULA', icon: Package, tono: 'exito' },
     { key: 'en_traslado', label: 'En traslado', tab: 'EN_TRASLADO', icon: Truck, tono: 'info' },
@@ -35,6 +35,7 @@ export const TONO_ESTADO_TIENDA = {
 };
 
 export function accionPrincipalTienda(tarea, puedeTomar = false) {
+    if (tarea.pedido?.revision_disponibilidad?.actualizacion_pendiente) return { label: 'Actualización de consulta', atender: true };
     const atender = tarea.estado === 'PENDIENTE' && (tarea.puede_tomar ?? puedeTomar);
     if (atender) return { label: 'Atender pedido', atender: true };
     if (tarea.estado === 'EN_ATENCION') {
@@ -49,7 +50,7 @@ export function accionPrincipalTienda(tarea, puedeTomar = false) {
 export const ETIQUETA_ESTADO_TIENDA = {
     PENDIENTE: 'Pendiente',
     EN_ATENCION: 'En atención',
-    CON_INCIDENCIA: 'Incidencia',
+    CON_INCIDENCIA: 'Error reportado',
     LISTA_PARA_TRASLADO: 'Lista traslado',
     LISTA_PARA_CARATULA: 'Lista carátula',
     EN_TRASLADO: 'En traslado',
@@ -92,9 +93,10 @@ export function fmtVencimiento(iso) {
 }
 
 export function avisoParaTarea(t, venc) {
+    if (t.pedido?.revision_disponibilidad?.actualizacion_pendiente) return { label: 'Actualización de consulta', tono: 'warning', icon: Package, texto: 'Revise los cambios de Ventas y envíe una nueva captura del pedido.' };
     if (t.estado === 'CON_INCIDENCIA' || t.estado === 'RECHAZADA_CEDIS') {
         return {
-            label: t.estado === 'RECHAZADA_CEDIS' ? 'Rechazo CEDIS' : 'Incidencia',
+            label: t.estado === 'RECHAZADA_CEDIS' ? 'Rechazo CEDIS' : 'Error reportado',
             tono: 'danger',
             icon: AlertTriangle,
             texto: t.motivo_rechazo_cedis

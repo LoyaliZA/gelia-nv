@@ -7,6 +7,7 @@ use App\Models\ControlPedidos\PedidoBmaDocumento;
 use App\Models\ControlPedidos\PedidoBmaTareaPreparacion;
 use App\Models\Producto;
 use App\Models\User;
+use App\Support\ControlPedidos\ApartadoT01;
 use App\Support\ControlPedidos\InstruccionEntrega;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -76,15 +77,17 @@ final class AtenderAnexoTiendaService
                     'piezas_respuesta' => $piezas, 'resultado' => $nota ?: 'Disponibilidad confirmada. Falta el cierre de la consulta y la separación física del anexo.',
                     'respondida_at' => now()->toIso8601String(), 'respondida_por_id' => $usuario->id, 'respondida_por' => $usuario->name,
                 ]);
-                if (!empty($anexo['sustituye_revision_id'])) {
+                if (! empty($anexo['sustituye_revision_id'])) {
                     $lineasRevision = $disponible ? $piezas : [['descripcion' => $anexo['descripcion'], 'sku' => $anexo['sku'] ?? null, 'cantidad' => $anexo['cantidad'] ?: 1]];
-                    foreach ($lineasRevision as $linea) $pedido->revisionesProducto()->create([
-                        'orden' => (int) $pedido->revisionesProducto()->max('orden') + 1,
-                        'descripcion_producto' => $linea['descripcion'], 'sku' => $linea['sku'] ?? null,
-                        'producto_id' => $linea['producto_id'] ?? null, 'cantidad_solicitada' => $linea['cantidad'],
-                        'cantidad_encontrada' => $disponible ? $linea['cantidad'] : 0,
-                        'estado_fisico' => $disponible ? 'bueno' : 'sin_existencia', 'comentario' => $nota,
-                    ]);
+                    foreach ($lineasRevision as $linea) {
+                        $pedido->revisionesProducto()->create([
+                            'orden' => (int) $pedido->revisionesProducto()->max('orden') + 1,
+                            'descripcion_producto' => $linea['descripcion'], 'sku' => $linea['sku'] ?? null,
+                            'producto_id' => $linea['producto_id'] ?? null, 'cantidad_solicitada' => $linea['cantidad'],
+                            'cantidad_encontrada' => $disponible ? $linea['cantidad'] : 0,
+                            'estado_fisico' => $disponible ? 'bueno' : 'sin_existencia', 'comentario' => $nota,
+                        ]);
+                    }
                 }
                 $json['anexo_sin_remision'][$indice] = $anexo;
                 $pedido->update(['solicitud_preparacion_json' => $json]);
@@ -96,21 +99,48 @@ final class AtenderAnexoTiendaService
                 app(NotificarPedidoBmaService::class)->ejecutar($pedido->fresh(['cliente', 'vendedor']), 'pedido_disponibilidad_respondida',
                     $disponible ? 'Tienda respondió la disponibilidad del anexo. Revise la respuesta con el cliente.' : 'Tienda reportó un faltante o detalle en el anexo: '.$nota,
                     ['control_pedidos.crear'], $usuario->id, true);
+
                 return $pedido->fresh();
             });
         } catch (\Throwable $e) {
-            if ($ruta) Storage::disk('public')->delete($ruta);
+            if ($ruta) {
+                Storage::disk('public')->delete($ruta);
+            }
             throw $e;
         }
     }
+
     private function separar(PedidoBma $pedido, PedidoBmaTareaPreparacion $tarea, User $usuario, int $indice): PedidoBma
     {
         $json = $pedido->solicitud_preparacion_json ?? [];
         $anexo = $json['anexo_sin_remision'][$indice] ?? null;
+        $cobertura = $json['cobertura_tienda'] ?? [];
+        if (ApartadoT01::aplica($pedido)
+            && ($cobertura['requiere_confirmacion_pedido'] ?? false) && empty($cobertura['confirmacion_enviada_at'])) {
+            throw ValidationException::withMessages(['anexo' => 'Ventas debe confirmar la modalidad y enviar el pedido antes de separar el anexo.']);
+        }
+        if (($anexo['estado'] ?? null) === 'revisado_conjunto') {
+            if (isset($anexo['separada_at'])) {
+                return $pedido;
+            }
+            if (! $pedido->consultaCerrada() || $pedido->tieneAjusteTiendaPendiente()) {
+                throw ValidationException::withMessages(['anexo' => 'Espere el cierre vigente antes de separar el anexo.']);
+            }
+            $json['anexo_sin_remision'][$indice]['separada_at'] = now()->toIso8601String();
+            $json['anexo_sin_remision'][$indice]['separada_por_id'] = $usuario->id;
+            $pedido->update(['solicitud_preparacion_json' => $json]);
+            app(RegistrarHistorialPedidoService::class)->ejecutar($pedido->id, $usuario->id,
+                $pedido->catalogo_estatus_pedido_id, $pedido->catalogo_estatus_pedido_id,
+                'Auxiliar confirmó la separación del anexo conforme a la captura actualizada.', 'separacion_anexo_tienda');
+
+            return $pedido->fresh();
+        }
         if (! is_array($anexo) || ($anexo['estado'] ?? null) !== 'disponible' || empty($anexo['piezas_respuesta'])) {
             throw ValidationException::withMessages(['anexo' => 'Responda la disponibilidad del anexo antes de confirmar su separación.']);
         }
-        if (isset($anexo['separada_at'])) return $pedido;
+        if (isset($anexo['separada_at'])) {
+            return $pedido;
+        }
         if (! $pedido->consultaCerrada() || $pedido->tieneAjusteTiendaPendiente()) {
             throw ValidationException::withMessages(['anexo' => 'Espere el cierre vigente de la consulta antes de separar el anexo.']);
         }
@@ -134,7 +164,7 @@ final class AtenderAnexoTiendaService
             $cumplimiento->update(['cantidad' => (int) $tarea->productos()->sum('cantidad_encontrada'), 'version' => $cumplimiento->version + 1]);
         }
         app(NotificarPedidoBmaService::class)->ejecutar($pedido->fresh(['cliente', 'vendedor']), 'pedido_disponibilidad_respondida', 'Tienda confirmó la separación física del anexo.', ['control_pedidos.crear'], $usuario->id, true);
+
         return $pedido->fresh();
     }
-
 }

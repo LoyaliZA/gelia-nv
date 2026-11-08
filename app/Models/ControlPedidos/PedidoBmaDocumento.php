@@ -62,6 +62,11 @@ class PedidoBmaDocumento extends Model
 
     protected $appends = ['url'];
 
+    public function getNombreOriginalAttribute(?string $value): string
+    {
+        return \App\Support\ControlPedidos\NombreArchivoPedido::mostrar($value, $this->tipo ?? '', $this->pedido_bma_id, $this->id);
+    }
+
     public function pedido(): BelongsTo
     {
         return $this->belongsTo(PedidoBma::class, 'pedido_bma_id');

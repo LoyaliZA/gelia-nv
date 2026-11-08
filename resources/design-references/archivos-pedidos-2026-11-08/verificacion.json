@@ -1,0 +1,66 @@
+[
+  {
+    "modo": "galeria",
+    "nombre": "escritorio",
+    "width": 1440,
+    "height": 1000,
+    "tema": "dark",
+    "desborde": false,
+    "descargas": [],
+    "errores": [],
+    "imagen": "http://laravel.test:9192/control-pedidos/pedidos/45/documentos/123?vista=miniatura",
+    "texto": "Captura del pedido\n\n1 archivo\nADJUNTAR FOTOS O PDF\n\nArrastra archivos aquí o pega capturas con Ctrl+V. JPG, PNG, WEBP o PDF, hasta 10 MB por archivo.\n\nEvidencia vigente\n\npedido-45-123.png\n\nQuitar",
+    "solicitudes": [
+      "/control-pedidos/pedidos/45/documentos/123?vista=miniatura"
+    ]
+  },
+  {
+    "modo": "visor",
+    "nombre": "escritorio",
+    "width": 1440,
+    "height": 1000,
+    "tema": "dark",
+    "desborde": false,
+    "descargas": [
+      "http://laravel.test:9192/control-pedidos/pedidos/45/documentos/123"
+    ],
+    "errores": [],
+    "imagen": "http://laravel.test:9192/control-pedidos/pedidos/45/documentos/123?vista=previa",
+    "texto": "pedido-45-123.png\nTipo: pdf pedido\nDescargar\nAbrir en pestaña\nCerrar",
+    "solicitudes": [
+      "/control-pedidos/pedidos/45/documentos/123?vista=previa"
+    ]
+  },
+  {
+    "modo": "galeria",
+    "nombre": "movil",
+    "width": 390,
+    "height": 844,
+    "tema": "light",
+    "desborde": false,
+    "descargas": [],
+    "errores": [],
+    "imagen": "http://laravel.test:9192/control-pedidos/pedidos/45/documentos/123?vista=miniatura",
+    "texto": "Captura del pedido\n\n1 archivo\nADJUNTAR FOTOS O PDF\n\nArrastra archivos aquí o pega capturas con Ctrl+V. JPG, PNG, WEBP o PDF, hasta 10 MB por archivo.\n\nEvidencia vigente\n\npedido-45-123.png\n\nQuitar",
+    "solicitudes": [
+      "/control-pedidos/pedidos/45/documentos/123?vista=miniatura"
+    ]
+  },
+  {
+    "modo": "visor",
+    "nombre": "movil",
+    "width": 390,
+    "height": 844,
+    "tema": "light",
+    "desborde": false,
+    "descargas": [
+      "http://laravel.test:9192/control-pedidos/pedidos/45/documentos/123"
+    ],
+    "errores": [],
+    "imagen": "http://laravel.test:9192/control-pedidos/pedidos/45/documentos/123?vista=previa",
+    "texto": "pedido-45-123.png\nTipo: pdf pedido\nCerrar vista de la foto\nDescargar\nAbrir en pestaña\nCerrar",
+    "solicitudes": [
+      "/control-pedidos/pedidos/45/documentos/123?vista=previa"
+    ]
+  }
+]

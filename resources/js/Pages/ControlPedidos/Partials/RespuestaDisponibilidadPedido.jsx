@@ -7,9 +7,9 @@ import { MiniaturaDocumento } from './ModalVistaPreviaDocumento';
 const ESTADOS = { bueno: 'Bueno', regular: 'Con detalle', malo: 'Malo', danado: 'Dañado', sin_existencia: 'Sin existencias' };
 
 /** Presentación común. Los identificadores y decisiones siguen perteneciendo a su revisión. */
-export default function RespuestaDisponibilidadPedido({ titulo = 'Respuesta de disponibilidad', ariaLabel = titulo, responsable, fecha, estado, origen, filas = [], generales = [], cantidad, labelCantidad = 'Piezas afectadas', columnaCantidad = 'Revisadas', aceptacionVigente = true, onVer, accionesDePieza, children }) {
+export default function RespuestaDisponibilidadPedido({ titulo = 'Respuesta de disponibilidad', ariaLabel = titulo, responsable, fecha, estado, origen, filas = [], generales = [], anteriores = [], cantidad, labelCantidad = 'Piezas afectadas', columnaCantidad = 'Revisadas', aceptacionVigente = true, onVer, accionesDePieza, children }) {
     const incidencias = estado === 'excepciones_pendientes';
-    const etiqueta = incidencias ? 'Con incidencias' : estado === 'sin_excepciones' ? 'Sin incidencias' : 'Revisión registrada';
+    const etiqueta = incidencias ? 'Con detalles o faltantes' : estado === 'sin_excepciones' ? 'Todo OK' : 'Revisión registrada';
     return <section className="registrar-tienda-panel tienda-respuesta" aria-label={ariaLabel}>
         <header className="tienda-respuesta-encabezado">
             <span className={GELIA_ICON_BOX}><ClipboardCheck size={22} aria-hidden /></span>
@@ -40,6 +40,7 @@ export default function RespuestaDisponibilidadPedido({ titulo = 'Respuesta de d
             {cantidad !== null && cantidad !== undefined && <span className="tienda-respuesta-conteo"><Layers size={18} aria-hidden />{labelCantidad}: <strong>{cantidad}</strong></span>}
             {generales.length > 0 && <div className="tienda-respuesta-captura"><Image size={18} aria-hidden /><span>Captura del pedido</span><div className="flex flex-wrap gap-2">{generales.map((doc, i) => <MiniaturaDocumento key={doc.id || i} documento={doc} onVer={() => onVer?.(generales, i)} className="tienda-respuesta-miniatura" />)}</div></div>}
         </footer>
+        {anteriores.length > 0 && <details className="tienda-respuesta-notas"><summary className="cursor-pointer text-sm theme-text-muted">Capturas anteriores ({anteriores.length})</summary><div className="flex flex-wrap gap-2 mt-2">{anteriores.map((doc, i) => <MiniaturaDocumento key={doc.id || i} documento={doc} onVer={() => onVer?.(anteriores, i)} className="tienda-respuesta-miniatura" />)}</div></details>}
         {React.Children.toArray(children).length > 0 && <div className="tienda-respuesta-notas">{children}</div>}
     </section>;
 }

@@ -26,6 +26,11 @@ class PedidoBmaTareaSesionEvidenciaFoto extends Model
         ];
     }
 
+    public function getNombreOriginalAttribute(?string $value): string
+    {
+        return \App\Support\ControlPedidos\NombreArchivoPedido::mostrar($value, 'evidencia', $this->pedido_bma_tarea_sesion_evidencia_id, $this->id);
+    }
+
     public function sesion(): BelongsTo
     {
         return $this->belongsTo(PedidoBmaTareaSesionEvidencia::class, 'pedido_bma_tarea_sesion_evidencia_id');

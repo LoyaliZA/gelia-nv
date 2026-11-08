@@ -6,8 +6,9 @@ import PrepararApartadoRecoge from './PrepararApartadoRecoge';
 
 const post = vi.hoisted(() => vi.fn());
 const get = vi.hoisted(() => vi.fn());
-vi.mock('axios', () => ({ default: { get } }));
-vi.mock('@inertiajs/react', () => ({ router: { post } }));
+const axiosPost = vi.hoisted(() => vi.fn());
+vi.mock('axios', () => ({ default: { get, post: axiosPost } }));
+vi.mock('@inertiajs/react', () => ({ router: { post, reload: vi.fn() } }));
 vi.mock('../../../../Components/Almacenes/SelectorProducto', () => ({ default: ({ onChange }) => <button onClick={() => onChange(7, { id: 7, sku: 'CREMA-7', descripcion: 'Crema' })}>Elegir crema</button> }));
 let root;
 let container;
@@ -19,6 +20,7 @@ beforeEach(() => {
     globalThis.route = (name, id) => `${name}/${id}`;
     post.mockReset();
     get.mockReset();
+    axiosPost.mockReset().mockResolvedValue({ data: {} });
     container = document.createElement('div'); document.body.append(container);
     root = createRoot(container);
 });
@@ -187,16 +189,16 @@ it('en la consulta de tienda responde disponibilidad y separa solo la selección
     expect(container.querySelector('#tienda-evidencias')).toBeNull();
     await click('Enviar respuesta');
     expect(post).not.toHaveBeenCalled();
-    expect(container.textContent).toContain('Indique el estado del pedido');
+    expect(container.textContent).toContain('Indica el estado del pedido');
     const elegir = (texto) => act(() => [...container.querySelectorAll('label')].find((el) => el.textContent.includes(texto)).querySelector('input').click());
-    await elegir('Todas las piezas en buen estado');
-    expect(container.textContent).toContain('Todas las piezas correctas');
-    expect(container.textContent).toContain('Foto del conjunto físico');
+    await elegir('Todo OK');
+    expect(container.textContent).toContain('Captura del pedido');
+    expect(container.textContent).toContain('Captura del pedido');
     expect(container.querySelector('#tienda-productos')).toBeNull();
-    await elegir('Piezas con detalles');
-    expect(container.textContent).toContain('Buscar o escanear');
+    await elegir('Con detalle o faltante');
+    expect(container.textContent).toContain('Buscar o escanear producto');
     expect(button('Agregar pieza')).toBeUndefined();
-    expect(container.querySelector('#tienda-productos')).not.toBeNull();
+    expect(container.querySelector('[aria-label="Productos con detalle o faltantes"]')).not.toBeNull();
     expect(container.querySelector('#tienda-evidencias')).toBeNull();
     await mount({ tarea: { ...consulta, pedido: { ...consulta.pedido, revision_disponibilidad: { estado: 'excepciones_pendientes' }, excepciones: [{ id: 1, descripcion: 'Crema agotada' }] } } });
     expect(button('Confirmar pedido separado')).toBeUndefined();
@@ -229,6 +231,25 @@ it('después del cierre confirma el conjunto aprobado sin volver a pedir product
  expect(container.textContent).not.toContain('Registrar productos');
  expect(button('Elegir crema')).toBeUndefined();
  await click('Confirmar pedido separado');
- expect(post).toHaveBeenCalledTimes(1);
- expect(post.mock.lastCall[1].lineas).toEqual([]);
+ expect(axiosPost).toHaveBeenCalledTimes(1);
+ expect(axiosPost.mock.lastCall[1].lineas).toEqual([]);
+});
+
+it('espera modalidad y confirmación de Ventas y concentra los anexos en una sola confirmación', async () => {
+ const pedido = { area_revision: 'preparacion_tienda', consulta_cerrada: true, revision_disponibilidad: { estado: 'sin_excepciones' }, cobertura_tienda: { requiere_confirmacion_pedido: true }, anexos_por_separar: [{ indice: 0, estado: 'revisado_conjunto' }] };
+ await mount({ tarea: { ...tarea, pedido } });
+ expect(button('Confirmar pedido separado')).toBeUndefined();
+ expect(button('Confirmar separación del anexo')).toBeUndefined();
+ expect(container.textContent).toContain('confirme la modalidad');
+ await mount({ tarea: { ...tarea, pedido: { ...pedido, cobertura_tienda: { ...pedido.cobertura_tienda, tipo: 'apartado', confirmacion_enviada_at: '2026-11-08T10:00:00Z' } } } });
+ expect(button('Confirmar pedido separado')).toBeDefined();
+ expect(button('Confirmar separación del anexo')).toBeUndefined();
+ await click('Confirmar pedido separado');
+ expect(axiosPost).toHaveBeenCalledExactlyOnceWith('control_pedidos.tienda.apartado.confirmar/1', { version: 2, lineas: [] }, expect.anything());
+});
+it('una actualización de solo retiro invalida la separación aunque el cierre anterior siga en la lectura', async () => {
+ await mount({ tarea: { ...tarea, pedido: { area_revision: 'preparacion_tienda', consulta_cerrada: true, revision_disponibilidad: { estado: 'sin_excepciones', actualizacion_pendiente: true }, retiro_piezas: [{ estado: 'revisado' }] } } });
+ expect(button('Confirmar pedido separado')).toBeUndefined();
+ expect(container.textContent).toContain('Actualización de consulta');
+ expect(button('Enviar respuesta')).toBeDefined();
 });

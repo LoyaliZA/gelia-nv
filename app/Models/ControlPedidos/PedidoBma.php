@@ -255,8 +255,18 @@ class PedidoBma extends Model
 
     public function getSolicitudPreparacionAttribute(): ?array
     {
-        return app(FusionarSolicitudPreparacionPedido::class)
-            ->normalizar($this->solicitud_preparacion_json);
+        $solicitud = app(FusionarSolicitudPreparacionPedido::class)->normalizar($this->solicitud_preparacion_json);
+        if (($solicitud['modalidad_entrega'] ?? null) === 'tienda') {
+            $config = app(\App\Services\ControlPedidos\ConfiguracionOperativaTienda::class);
+            $solicitud['horarios_operativos'] = ['activos' => $config->horariosActivos(), 'detalle_apartado' => $config->detalleHorarioApartado()];
+            if (($solicitud['cobertura_tienda']['tipo'] ?? null) === 'apartado') {
+                $vence = $solicitud['cobertura_tienda']['vence_at'] ?? null;
+                $evaluacion = app(\App\Support\ControlPedidos\PlazoApartadoTienda::class)->evaluarConfirmacion(now(), $vence ? \Carbon\Carbon::parse($vence) : null);
+                $solicitud['cobertura_tienda']['motivo_vigencia'] = $evaluacion['permite'] ? null : $evaluacion['mensaje'];
+            }
+        }
+
+        return $solicitud;
     }
 
     public function vendedor(): BelongsTo
@@ -1199,6 +1209,7 @@ class PedidoBma extends Model
 
     public function tieneAjusteTiendaPendiente(): bool
     {
+        if (!empty($this->solicitud_preparacion_json['revision_disponibilidad']['actualizacion_pendiente'])) return true;
         $json = is_array($this->solicitud_preparacion_json) ? $this->solicitud_preparacion_json : [];
         foreach ((array) ($json['retiro_piezas'] ?? []) as $retiro) {
             if (is_array($retiro) && ($retiro['estado'] ?? 'pendiente') === 'pendiente') {
@@ -1225,7 +1236,7 @@ class PedidoBma extends Model
             return 'Hay un anexo o retiro pendiente de atención. Resuélvalo antes de entregar.';
         }
         foreach ((array) ($this->solicitud_preparacion_json['anexo_sin_remision'] ?? []) as $anexo) {
-            if (! $this->esConsultaDisponibilidadCedis() && is_array($anexo) && ($anexo['estado'] ?? null) === 'disponible' && ! isset($anexo['separada_at'])) {
+            if (! $this->esConsultaDisponibilidadCedis() && is_array($anexo) && in_array($anexo['estado'] ?? null, ['disponible', 'revisado_conjunto'], true) && ! isset($anexo['separada_at'])) {
                 return 'Falta confirmar la separación física del anexo antes de entregar.';
             }
         }

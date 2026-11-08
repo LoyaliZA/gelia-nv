@@ -28,7 +28,7 @@ class PlazosRetrasoPedidoBmaController extends Controller
 
         return redirect()
             ->route('control_pedidos.plazos.index')
-            ->with('success', 'Plazos de retraso actualizados.')
+            ->with('success', 'Configuración de operación actualizada.')
             ->with('plazos', $guardados);
     }
 }

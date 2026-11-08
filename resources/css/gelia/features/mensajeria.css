@@ -100,6 +100,12 @@
     min-width: 0;
     box-sizing: border-box;
     overflow: hidden;
+    content-visibility: auto;
+    contain-intrinsic-size: auto 4.5rem;
+}
+
+.gelia-mensaje-fila--pendiente {
+    opacity: 0.72;
 }
 
 .gelia-mensaje-fila--propio {
@@ -326,8 +332,7 @@
     align-items: center;
     justify-content: center;
     padding: 1rem;
-    background: rgba(0, 0, 0, 0.55);
-    backdrop-filter: blur(4px);
+    background: rgba(0, 0, 0, 0.72);
 }
 
 .gelia-preparar-adjunto-modal {
@@ -544,6 +549,10 @@ html.glass-active .gelia-buscador-mensajeria-panel.theme-no-blur {
 
 .gelia-mensaje-burbuja-wrap {
     transition: transform 0.12s ease-out;
+}
+
+.gelia-mensaje-burbuja-wrap--arrastre {
+    transition: none;
 }
 
 .gelia-mensaje-burbuja-wrap:not(.gelia-mensaje-burbuja-wrap--propio) {

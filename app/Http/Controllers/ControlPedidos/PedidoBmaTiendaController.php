@@ -53,6 +53,7 @@ use App\Services\ControlPedidos\SolicitarDevolucionCumplimientoService;
 use App\Services\ControlPedidos\TomarTareaPreparacionService;
 use App\Models\ControlPedidos\PedidoBmaCumplimientoEvento;
 use App\Models\ControlPedidos\PedidoBmaRevisionProducto;
+use App\Support\ControlPedidos\RespuestaPreparacionTienda;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
 use App\Support\ControlPedidos\VisibilidadTareaPreparacion;
 use Illuminate\Http\JsonResponse;
@@ -90,9 +91,10 @@ class PedidoBmaTiendaController extends Controller
 
         return Inertia::render('ControlPedidos/Tienda/Index', [
             'tareas' => fn () => $this->paginaTareas($listarService->ejecutar(Auth::user(), $request->all())),
-            'metricas' => fn () => $listarService->metricas(Auth::user()),
+            'metricas' => fn () => $listarService->metricas(Auth::user(), $request->all()),
             'cola_estados_cuenta' => fn () => $colaEstadosCuenta->resumen(Auth::user(), $config),
-            'filtros' => $request->only(['tab', 'q', 'modalidad', 'almacen_id', 'estado', 'origen_solicitud', 'prioridad_md', 'page', 'tarea']),
+            'fecha_hoy' => now(app(\App\Services\ControlPedidos\PreparacionTiendaConfig::class)->zonaHoraria())->toDateString(),
+            'filtros' => $request->only(['tab', 'q', 'tipo', 'desde', 'hasta', 'vendedora', 'orden', 'modalidad', 'almacen_id', 'estado', 'origen_solicitud', 'prioridad_md', 'page', 'tarea']),
             'origenes_solicitud' => \App\Models\ControlPedidos\PedidoBma::ORIGENES_SOLICITUD,
             'config' => $config->todas(),
             'estados_fisicos' => PedidoBmaRevisionProducto::LABELS,
@@ -110,8 +112,9 @@ class PedidoBmaTiendaController extends Controller
 
         return response()->json([
             'tareas' => $this->paginaTareas($listarService->ejecutar(Auth::user(), $request->all())),
-            'metricas' => $listarService->metricas(Auth::user()),
-            'filtros' => $request->only(['tab', 'q', 'modalidad', 'almacen_id', 'estado', 'origen_solicitud', 'prioridad_md', 'page']),
+            'metricas' => $listarService->metricas(Auth::user(), $request->all()),
+            'fecha_hoy' => now(app(\App\Services\ControlPedidos\PreparacionTiendaConfig::class)->zonaHoraria())->toDateString(),
+            'filtros' => $request->only(['tab', 'q', 'tipo', 'desde', 'hasta', 'vendedora', 'orden', 'modalidad', 'almacen_id', 'estado', 'origen_solicitud', 'prioridad_md', 'page']),
         ]);
     }
 
@@ -145,7 +148,10 @@ class PedidoBmaTiendaController extends Controller
         ]);
 
         $datos = [
-            'tarea' => VisibilidadTareaPreparacion::payloadTienda($tarea, Auth::user()),
+            'tarea' => [
+                ...VisibilidadTareaPreparacion::payloadTienda($tarea, Auth::user()),
+                'respuesta' => RespuestaPreparacionTienda::datos($tarea),
+            ],
             'requisitos' => array_merge($requisitos->efectivos($tarea), [
                 'causa_remision_salida' => $requisitos->causaRemisionSalida($tarea),
             ]),
@@ -307,7 +313,7 @@ class PedidoBmaTiendaController extends Controller
         return redirect()->back()->with('success', 'Traspaso vinculado correctamente.');
     }
 
-    public function reportarIncidencia(PedidoBmaTareaPreparacion $tarea, ReportarIncidenciaPreparacionRequest $request, ReportarIncidenciaPreparacionService $service): RedirectResponse
+    public function reportarIncidencia(PedidoBmaTareaPreparacion $tarea, ReportarIncidenciaPreparacionRequest $request, ReportarIncidenciaPreparacionService $service): RedirectResponse|JsonResponse
     {
         $datos = $request->validated();
 
@@ -325,11 +331,23 @@ class PedidoBmaTiendaController extends Controller
                 $datos['version'] ?? null,
             );
         } catch (\Throwable $e) {
+            if ($request->wantsJson()) {
+                if ($e instanceof ValidationException) {
+                    throw $e;
+                }
+
+                return response()->json(['message' => $e->getMessage()], 422);
+            }
+
             return redirect()->back()->with('error', $e->getMessage())->withInput();
         }
 
+        if ($request->wantsJson()) {
+            return response()->json(['message' => 'Error reportado. Ventas fue notificada.']);
+        }
+
         return redirect()->route('control_pedidos.tienda.index', ['tab' => 'CON_INCIDENCIA'])
-            ->with('success', 'Incidencia reportada. Ventas fue notificada.');
+            ->with('success', 'Error reportado. Ventas fue notificada.');
     }
 
     public function corregir(PedidoBmaTareaPreparacion $tarea, CorregirTareaPreparacionRequest $request, CorregirTareaPreparacionService $service): RedirectResponse
@@ -606,7 +624,7 @@ class PedidoBmaTiendaController extends Controller
         PedidoBmaTareaPreparacion $tarea,
         PedidoBmaTareaDocumento $tareaDocumento,
         RegistrarHistorialPedidoService $historial,
-    ): HttpResponse {
+    ): \Symfony\Component\HttpFoundation\BinaryFileResponse {
         abort_unless(VisibilidadTareaPreparacion::puedeVer(Auth::user(), $tarea), 403);
         abort_unless((int) $tareaDocumento->pedido_bma_tarea_preparacion_id === (int) $tarea->id, 404);
 
@@ -631,10 +649,9 @@ class PedidoBmaTiendaController extends Controller
         $disk = Storage::disk('local')->exists($tareaDocumento->ruta_interna) ? 'local' : 'public';
         abort_unless(Storage::disk($disk)->exists($tareaDocumento->ruta_interna), 404);
 
-        return response(Storage::disk($disk)->get($tareaDocumento->ruta_interna), 200, [
-            'Content-Type' => $tareaDocumento->mime_type ?: 'application/octet-stream',
-            'Content-Disposition' => 'inline; filename="'.addslashes($tareaDocumento->nombre_original).'"',
-        ]);
+        return app(\App\Services\ControlPedidos\ServirArchivoPedidoService::class)->responder(
+            request(), $disk, $tareaDocumento->ruta_interna, $tareaDocumento->nombre_original, $tareaDocumento->mime_type
+        );
     }
 
     public function separarApartado(
@@ -765,7 +782,7 @@ class PedidoBmaTiendaController extends Controller
     ): JsonResponse {
         $tarea->loadMissing(['pedido', 'modalidad', 'cumplimientoFisico']);
         if (isset($tarea->pedido->solicitud_preparacion_json['revision_disponibilidad']['estado'])) {
-            return response()->json($service->ejecutar($tarea->pedido, Auth::user(), $request->validated(), [], $tarea));
+            return response()->json($service->ejecutar($tarea->pedido, Auth::user(), $request->validated(), $request->file('evidencias', []) ?: [], $tarea));
         }
         $lineas = $request->all()['lineas'] ?? null;
         if (is_array($lineas) && $lineas !== []
@@ -796,7 +813,7 @@ class PedidoBmaTiendaController extends Controller
         $service->ejecutar($tarea, Auth::user(), $datos);
 
         $mensaje = ! empty($datos['motivo_incidencia'])
-            ? 'Incidencia enviada a Ventas. Las piezas registradas se conservaron.' : 'Preparación guardada. Puede continuar antes de confirmar.';
+            ? 'Error reportado a Ventas. Las piezas registradas se conservaron.' : 'Preparación guardada. Puede continuar antes de confirmar.';
 
         return $request->wantsJson() ? response()->json(['message' => $mensaje]) : redirect()->back()->with('success', $mensaje);
     }
@@ -829,8 +846,9 @@ class PedidoBmaTiendaController extends Controller
         ], true) && $documento->activo, 404);
         abort_unless(Storage::disk('public')->exists($documento->ruta_archivo), 404);
 
-        return Storage::disk('public')->response($documento->ruta_archivo, $documento->nombre_original,
-            ['Content-Type' => $documento->mime_type ?: 'application/octet-stream']);
+        return app(\App\Services\ControlPedidos\ServirArchivoPedidoService::class)->responder(
+            request(), 'public', $documento->ruta_archivo, $documento->nombre_original, $documento->mime_type
+        );
     }
 
     public function solicitarDevolucionApartado(

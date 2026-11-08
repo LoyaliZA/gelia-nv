@@ -100,6 +100,18 @@ class ConfirmarApartadoRecogeHoyService
                 ]);
             }
 
+            // La confirmación documental abarca el pedido vigente completo, incluidos sus anexos.
+            // Todo ocurre en esta transacción: no quedan separaciones parciales si falla el cierre.
+            if ($documental) {
+                foreach ($tarea->pedido->solicitud_preparacion_json['anexo_sin_remision'] ?? [] as $indice => $anexo) {
+                    if (is_array($anexo) && in_array($anexo['estado'] ?? null, ['disponible', 'revisado_conjunto'], true) && empty($anexo['separada_at'])) {
+                        app(AtenderAnexoTiendaService::class)->ejecutar($tarea, $usuario, ['indice' => $indice, 'decision' => 'separar'], null);
+                    }
+                }
+                $cumplimiento->refresh();
+                $tarea->load('pedido');
+            }
+
             MaquinaEstadosCumplimientoFisico::assertTransicion(
                 $cumplimiento->estado,
                 PedidoBmaCumplimientoFisico::ESTADO_APARTADO_CONFIRMADO

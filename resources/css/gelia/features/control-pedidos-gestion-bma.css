@@ -695,7 +695,7 @@
 }
 
 .gelia-pedidos-pasos button[aria-current='step'] {
-    background: color-mix(in srgb, var(--color-primario) 10%, var(--theme-surface-solid));
+    background: color-mix(in srgb, var(--color-primario) 10%, var(--theme-surface-solid)) !important;
     color: var(--theme-text-main);
     box-shadow: inset 0 -2px var(--color-primario);
 }
@@ -942,25 +942,26 @@
 }
 
 .gelia-cedis-tipo {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: 0.25rem 0.625rem;
-    padding: 0.625rem 0.75rem;
-    border: 1px solid var(--theme-border);
-    background: var(--theme-element-bg);
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem;
+    border: 1px solid color-mix(in srgb, var(--color-primario) 30%, var(--theme-border));
+    border-radius: 0.75rem;
+    background: color-mix(in srgb, var(--color-primario) 10%, var(--theme-surface-solid)) !important;
     color: var(--theme-text-main);
     overflow-wrap: anywhere;
 }
-
-.gelia-cedis-tipo > strong {
-    font-size: 1.125rem;
-    font-weight: 700;
-}
-
-.gelia-cedis-tipo > span:last-child:not(:first-child) {
-    flex-basis: 100%;
-}
+.gelia-cedis-tipo-identidad { grid-column: 2; text-align: center; }
+.gelia-cedis-tipo-departamento { grid-column: 3; text-align: right; min-width: 0; }
+.gelia-cedis-tipo span { display: block; font-size: 0.65rem; color: var(--theme-text-muted); }
+.gelia-cedis-tipo strong { display: block; font-size: 1.05rem; line-height: 1.3; font-weight: 700; }
+.gelia-cedis-cliente { font-size: 0.95rem; font-weight: 700; color: var(--theme-text-main); margin: 0.65rem 0; overflow-wrap: anywhere; }
+.gelia-cedis-solicitud { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.75rem; }
+.gelia-cedis-solicitante { display: inline-flex; align-items: center; gap: 0.35rem; border: 1px solid color-mix(in srgb, var(--color-aviso) 50%, var(--theme-border)); background: color-mix(in srgb, var(--color-aviso) 13%, var(--theme-surface-solid)); padding: 0.35rem 0.55rem; border-radius: 0.65rem; color: var(--theme-text-main); font-size: 0.75rem; font-weight: 600; }
+.gelia-cedis-solicitante > svg { flex-shrink: 0; color: color-mix(in srgb, var(--color-aviso) 65%, var(--theme-text-main)); }
+.gelia-cedis-tarjeta-ruta { min-width: 0; }
 
 .gelia-pedidos-atributos {
     display: flex;
@@ -1190,6 +1191,15 @@
     border: 1px solid var(--theme-border);
     border-radius: var(--pedidos-surface-radius);
     background: var(--theme-surface-solid);
+}
+
+.registrar-tienda-panel .registrar-tienda-guardar-modalidad {
+    border-color: color-mix(in srgb, var(--color-primario) 45%, var(--theme-border)) !important;
+    background: color-mix(in srgb, var(--color-primario) 10%, var(--theme-surface-solid)) !important;
+}
+
+.registrar-tienda-panel .registrar-tienda-guardar-modalidad:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--color-primario) 18%, var(--theme-surface-solid)) !important;
 }
 
 .registrar-tienda-seccion-titulo {
@@ -1530,3 +1540,5 @@
     .tienda-respuesta-tabla td[data-label="Resultado"] { overflow-wrap: normal; }
     .tienda-respuesta-tabla td[data-label]::before { content: attr(data-label); display: block; margin-bottom: .375rem; color: var(--theme-text-muted); font-size: .75rem; }
 }
+
+.gelia-pedidos-cedis .gelia-pedidos-estados:empty { display: none; }

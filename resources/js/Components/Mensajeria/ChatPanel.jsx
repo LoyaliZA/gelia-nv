@@ -14,6 +14,8 @@ import useChatScroll from '@/hooks/useChatScroll';
 import { prepararMensajesGrupo } from '@/utils/mensajeriaGrupo';
 import { animarEntrada, animarPop } from '@/utils/animarMensajeria';
 
+const PARTICIPANTES_VACIOS = [];
+
 function etiquetaDia(fecha) {
     if (!fecha) return '';
     const dia = new Date(fecha);
@@ -156,21 +158,28 @@ const ChatPanel = forwardRef(function ChatPanel({
     }, []);
 
     const handleEnviarTextoConRespuesta = useCallback(async (texto) => {
-        await onEnviarTexto?.(texto, respondiendoA?.id ?? null);
+        const replyId = respondiendoA?.id ?? null;
         setRespondiendoA(null);
+        await onEnviarTexto?.(texto, replyId);
     }, [onEnviarTexto, respondiendoA?.id]);
 
     const handleEnviarAdjuntoConRespuesta = useCallback(async (file, tipo, contenido) => {
-        await onEnviarAdjunto?.(file, tipo, contenido, respondiendoA?.id ?? null);
+        const replyId = respondiendoA?.id ?? null;
         setRespondiendoA(null);
+        await onEnviarAdjunto?.(file, tipo, contenido, replyId);
     }, [onEnviarAdjunto, respondiendoA?.id]);
 
     const handleEnviarSticker = useCallback(async (stickerId) => {
-        await onEnviarSticker?.(stickerId, respondiendoA?.id ?? null);
+        const replyId = respondiendoA?.id ?? null;
         setRespondiendoA(null);
+        await onEnviarSticker?.(stickerId, replyId);
     }, [onEnviarSticker, respondiendoA?.id]);
 
     const esGrupo = conversacion?.tipo === 'grupo';
+    const participantesGrupo = useMemo(
+        () => (esGrupo ? (conversacion.participantes ?? PARTICIPANTES_VACIOS) : PARTICIPANTES_VACIOS),
+        [esGrupo, conversacion?.participantes],
+    );
     const mensajesRender = useMemo(
         () => prepararMensajesGrupo(mensajes, esGrupo),
         [mensajes, esGrupo]
@@ -349,7 +358,7 @@ const ChatPanel = forwardRef(function ChatPanel({
                                     mensaje={mensaje}
                                     esGrupo={esGrupo}
                                     mostrarRemitente={mostrarRemitente}
-                                    participantesGrupo={esGrupo ? conversacion.participantes || [] : []}
+                                    participantesGrupo={participantesGrupo}
                                     onResponder={handleResponder}
                                     onIrAMensaje={handleIrACitacion}
                                 />

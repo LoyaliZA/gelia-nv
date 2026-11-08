@@ -49,7 +49,7 @@ final class ConfirmarPedidoTiendaService
                 throw ValidationException::withMessages(['confirmacion' => $plazo['mensaje']]);
             }
             $json['cobertura_tienda'] = array_merge($cobertura, [
-                'vence_at' => $plazo['vence_at']->toIso8601String(),
+                'vence_at' => $plazo['vence_at']?->toIso8601String(),
                 'requiere_confirmacion_pedido' => true,
                 'confirmacion_enviada_at' => now()->toIso8601String(),
                 'confirmacion_enviada_por_id' => $actor->id,

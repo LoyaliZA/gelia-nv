@@ -1,3 +1,4 @@
+import { nombreVisibleArchivoPedido, vistaArchivoPedido } from './vistasArchivoPedido';
 import React, { useId, useImperativeHandle, useRef, useState } from 'react';
 import { Camera, ImagePlus, FileText, Trash2, CheckCircle2 } from 'lucide-react';
 import { BTN_SECONDARY } from './pedidosBmaStyles';
@@ -45,7 +46,7 @@ export default function GaleriaEvidenciasPedido({
         onChange(preview?.remoto ? archivos : archivos.filter((_, i) => i !== localesAntes), previews.filter((_, i) => i !== idx));
         setErrorArchivo('');
     };
-    const docs = previews.map((p) => ({ url: p.url, nombre_original: p.name, mime_type: p.mime, tipo: 'evidencia_condicion' }));
+    const docs = previews.map((p, idx) => ({ url: p.url, nombre_original: nombreVisibleArchivoPedido(p.name, idx), mime_type: p.mime, tipo: 'evidencia_condicion' }));
     const mensaje = error || errorArchivo;
     return (
         <div className="gelia-pedidos-adjuntos space-y-3" onPaste={(event) => {
@@ -87,15 +88,15 @@ export default function GaleriaEvidenciasPedido({
             {previews.length > 0 && <div className="gelia-pedidos-evidencias">
                 {previews.map((preview, idx) => (
                     <div key={`${preview.url}-${idx}`} className="gelia-pedidos-evidencia">
-                        <button type="button" className="gelia-pedidos-evidencia-vista relative" onClick={() => onVer?.(docs, idx)} aria-label={`Ver evidencia ${idx + 1}: ${preview.name}`}>
+                        <button type="button" className="gelia-pedidos-evidencia-vista relative" onClick={() => onVer?.(docs, idx)} aria-label={`Ver evidencia ${idx + 1}: ${nombreVisibleArchivoPedido(preview.name, idx)}`}>
                             {/pdf/i.test(preview.mime || '') || /\.pdf$/i.test(preview.name || '')
                                 ? <span className="h-full flex flex-col items-center justify-center gap-1 theme-text-muted text-xs"><FileText className="w-6 h-6" aria-hidden="true" /> PDF</span>
-                                : <img src={preview.url} alt={preview.name || `Evidencia ${idx + 1}`} width="112" height="112" loading="lazy" className="w-full h-full object-cover" />}
+                                : <img src={vistaArchivoPedido(preview.url, 'miniatura')} alt={nombreVisibleArchivoPedido(preview.name, idx)} width="112" height="112" loading="lazy" className="w-full h-full object-cover" />}
                             {preview.vigente && <span className="gelia-pedidos-evidencia-remota">Evidencia vigente</span>}
                             {preview.remoto && !preview.vigente && <span className="gelia-pedidos-evidencia-remota">Desde celular</span>}
                         </button>
-                        <p className="gelia-pedidos-evidencia-nombre" title={preview.name}>{preview.name || `Evidencia ${idx + 1}`}</p>
-                        <button type="button" disabled={disabled} onClick={() => setQuitarIdx(idx)} className="gelia-pedidos-evidencia-quitar" aria-label={`Quitar evidencia ${idx + 1}: ${preview.name}`}>
+                        <p className="gelia-pedidos-evidencia-nombre" title={nombreVisibleArchivoPedido(preview.name, idx)}>{nombreVisibleArchivoPedido(preview.name, idx)}</p>
+                        <button type="button" disabled={disabled} onClick={() => setQuitarIdx(idx)} className="gelia-pedidos-evidencia-quitar" aria-label={`Quitar evidencia ${idx + 1}: ${nombreVisibleArchivoPedido(preview.name, idx)}`}>
                             <Trash2 className="w-3.5 h-3.5" aria-hidden="true" /> Quitar
                         </button>
                     </div>

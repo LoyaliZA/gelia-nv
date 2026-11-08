@@ -1,3 +1,4 @@
+import { nombreVisibleArchivoPedido, vistaArchivoPedido } from './vistasArchivoPedido';
 import usePedidoDialog from './usePedidoDialog';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -35,6 +36,7 @@ export default function ModalVistaPreviaDocumento({
     indice = 0,
     onClose,
     onChangeIndice = null,
+    accionesDocumento = null,
 }) {
     const lista = useMemo(() => {
         if (Array.isArray(documentos) && documentos.length) {
@@ -89,7 +91,7 @@ export default function ModalVistaPreviaDocumento({
     const actual = lista[Math.min(idx, lista.length - 1)];
     const pdf = esPdf(actual);
     const imagen = esImagen(actual);
-    const titulo = actual.nombre_original || actual.tipo || 'Vista previa';
+    const titulo = nombreVisibleArchivoPedido(actual.nombre_original, idx);
 
     const cerrar = (e) => {
         e?.stopPropagation?.();
@@ -113,7 +115,7 @@ export default function ModalVistaPreviaDocumento({
                     <div className="min-w-0">
                         <h2 className="text-lg font-black italic uppercase theme-text-main m-0 truncate">{titulo}</h2>
                         <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1 text-[10px] font-bold theme-text-muted uppercase">
-                            {actual.tipo && <span>Tipo: {String(actual.tipo).replace(/_/g, ' ')}</span>}
+                            {actual.tipo && <span>Tipo: {actual.tipo === 'evidencia_incidencia' ? 'Evidencia del error' : String(actual.tipo).replace(/_/g, ' ')}</span>}
                             {(actual.autor?.name || actual.subido_por?.name || actual.uploaded_by?.name) && (
                                 <span>Por: {actual.autor?.name || actual.subido_por?.name || actual.uploaded_by?.name}</span>
                             )}
@@ -134,7 +136,7 @@ export default function ModalVistaPreviaDocumento({
                         <X className="w-5 h-5" />
                     </button>
                 </div>
-                <div className="sm:hidden px-4 pt-3 shrink-0">
+                <div className={`${accionesDocumento ? 'hidden' : 'sm:hidden'} px-4 pt-3 shrink-0`}>
                     <button type="button" onClick={cerrar} className={`${BTN_PRIMARY} w-full min-h-[44px] inline-flex items-center justify-center gap-2`}>
                         <X className="w-4 h-4" /> Cerrar vista de la foto
                     </button>
@@ -164,7 +166,7 @@ export default function ModalVistaPreviaDocumento({
                         <VisorPdfPaginas url={actual.url} titulo={titulo} className="w-full self-stretch" maxHeight="min(82dvh, calc(100dvh - 8rem))" />
                     ) : imagen ? (
                         <img
-                            src={actual.url}
+                            src={vistaArchivoPedido(actual.url)}
                             alt={titulo}
                             className="max-w-full object-contain p-4 transition-transform origin-center"
                             style={{
@@ -179,7 +181,7 @@ export default function ModalVistaPreviaDocumento({
                             </p>
                             <a
                                 href={actual.url}
-                                download={actual.nombre_original || undefined}
+                                download={titulo}
                                 className={`${BTN_PRIMARY} inline-flex items-center gap-2 min-h-[44px]`}
                             >
                                 <Download className="w-4 h-4" />
@@ -188,7 +190,8 @@ export default function ModalVistaPreviaDocumento({
                         </div>
                     )}
                 </div>
-                <div className="gelia-modal-footer p-4 md:p-6 pb-[max(1rem,env(safe-area-inset-bottom))] flex flex-col sm:flex-row-reverse sm:flex-wrap justify-end gap-3 border-t theme-border">
+                <div className={`gelia-modal-footer p-4 md:p-6 pb-[max(1rem,env(safe-area-inset-bottom))] flex ${accionesDocumento ? 'flex-wrap items-center' : 'flex-col sm:flex-row-reverse sm:flex-wrap'} justify-end gap-3 border-t theme-border`}>
+                    {accionesDocumento?.(actual)}
                     {imagen && (
                         <div className="flex flex-wrap gap-2 mr-auto">
                             <button type="button" className={`${BTN_SECONDARY} min-h-[44px] px-3`} onClick={() => setZoom((z) => Math.min(z + 0.25, 3))} aria-label="Acercar">
@@ -202,9 +205,12 @@ export default function ModalVistaPreviaDocumento({
                             </button>
                         </div>
                     )}
-                    <a
+                    {accionesDocumento ? <>
+                        <a href={actual.url} download={titulo} className={`${BTN_SECONDARY} min-h-[44px] px-3`} aria-label="Descargar captura"><Download size={16} aria-hidden /></a>
+                        <button type="button" onClick={cerrar} className={`${BTN_SECONDARY} min-h-[44px] px-3`}>Cerrar</button>
+                    </> : <><a
                         href={actual.url}
-                        download={actual.nombre_original || undefined}
+                        download={titulo}
                         className={`${BTN_PRIMARY} w-full sm:w-auto min-h-[44px] inline-flex items-center justify-center gap-2`}
                     >
                         <Download className="w-4 h-4 shrink-0" />
@@ -221,7 +227,7 @@ export default function ModalVistaPreviaDocumento({
                     </a>
                     <button type="button" onClick={cerrar} className={`${BTN_SECONDARY} w-full sm:w-auto min-h-[44px]`}>
                         Cerrar
-                    </button>
+                    </button></>}
                 </div>
             </div>
         </div>,
@@ -246,7 +252,7 @@ export function MiniaturaDocumento({ documento, onVer, className = 'block w-20 h
                 </div>
             ) : (
                 <img
-                    src={documento.url}
+                    src={vistaArchivoPedido(documento.url, 'miniatura')}
                     alt={documento.nombre_original || 'Evidencia del pedido'}
                     width="80" height="80" loading="lazy"
                     className="w-full h-full object-cover group-hover:opacity-90 transition-opacity duration-150"

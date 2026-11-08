@@ -7,13 +7,14 @@ const get=vi.hoisted(()=>vi.fn());
 const post=vi.hoisted(()=>vi.fn());
 const pagoProps=vi.hoisted(()=>({current:null}));
 vi.mock('axios',()=>({default:{get,post}}));
+vi.mock('./CambioModalidadPagoTienda',()=>({default:()=> <p>Control de cambios de modalidad</p>}));
 vi.mock('./SeccionPagosExhibicion',()=>({default:(props)=>{pagoProps.current=props;return <p>Historial de pagos</p>;}}));
 let root,container;
 const callbacks={onTotalMercancia:vi.fn(),onAplicaSaf:vi.fn(),onSaldoFavor:vi.fn(),onSafAplicaciones:vi.fn()};
 const props={pedidoId:9,clienteId:8,solicitud:{cobertura_tienda:{tipo:'transferencia'}},editable:true,totalMercancia:8999,aplicaSaf:true,saldoFavor:500,safAplicaciones:[{saf_credito_id:1,monto:500}],importesListos:true,...callbacks};
 const render=(extra={})=>act(async()=>{ root.render(<ImportesPagoTienda {...props} {...extra}/>); await Promise.resolve(); });
 it('permite solicitar TIENDA MD sin facultad especial de departamento', async () => {
- await render({notaMismoDia:'Mismo día: transferencia reportada hasta las 12:15 (sáb).'});
+ await render({solicitud:{atencion_tienda:'prevista'},notaMismoDia:'Mismo día: transferencia reportada hasta las 12:15 (sáb).'});
  const check=[...container.querySelectorAll('input[type="checkbox"]')].find(input=>input.closest('label')?.textContent.includes('Mismo día:'));
  expect(check).toBeTruthy();expect(check.disabled).toBe(false);
  expect(container.textContent).toContain('hasta las 12:15 (sáb)');
@@ -23,15 +24,15 @@ beforeEach(()=>{globalThis.IS_REACT_ACT_ENVIRONMENT=true;globalThis.route=(name,
 afterEach(async()=>{await act(()=>root.unmount());container.remove();});
 it('muestra desglose y pendiente antes de la captura de pago y vincula la etiqueta al importe',async()=>{
  await render();
- expect(container.textContent.indexOf('Importe pendiente por pagar')).toBeLessThan(container.textContent.indexOf('Modalidad de cobertura'));
+ expect(container.textContent.indexOf('Modalidad de cobertura')).toBeLessThan(container.textContent.indexOf('Importe pendiente por pagar'));
  expect(container.querySelector('label[for="total-mercancia-tienda"]').control).toBe(container.querySelector('#total-mercancia-tienda'));
  expect(pagoProps.current).toMatchObject({puedeRegistrar:true,formaPagoFija:'transferencia',etiquetaCubrir:'Cubrir pendiente'});
 });
 it('deja desactivar el saldo ya aplicado aunque el disponible restante sea cero',async()=>{
  await render();
- const checkbox=container.querySelector('input[type="checkbox"]');
- expect(checkbox.disabled).toBe(false);
- await act(()=>checkbox.click());
+ const input=[...container.querySelectorAll('input[type="checkbox"]')].find(i=>i.closest('label').textContent.includes('Saldo a favor'));
+ expect(input.disabled).toBe(false);
+ await act(()=>input.click());
  expect(callbacks.onAplicaSaf).toHaveBeenCalledWith(false);
  expect(callbacks.onSafAplicaciones).toHaveBeenCalledWith([]);
 });
@@ -47,9 +48,9 @@ it('crédito omite captura y seleccionar modalidad no la guarda automáticamente
  expect(container.textContent).toContain('no pide una exhibición');
  await render({solicitud:{cobertura_tienda:{tipo:'transferencia'},atencion_tienda:'prevista'}});
  const select=container.querySelector('select');
- await act(()=>{select.value='apartado';select.dispatchEvent(new Event('change',{bubbles:true}));});
+ expect(select.disabled).toBe(true);
  expect(post).not.toHaveBeenCalled();
- expect(pagoProps.current.puedeRegistrar).toBe(false);
+ expect(pagoProps.current.puedeRegistrar).toBe(true);
 });
 it('oculta cargos sin aplicación y pago al recoger no permite exhibición ni comprobante',async()=>{
  await render({solicitud:{cobertura_tienda:{tipo:'apartado'}},costos:{costo_envio:0,aplica_seguro:false,costo_seguro:0}});
@@ -63,7 +64,7 @@ it('oculta cargos sin aplicación y pago al recoger no permite exhibición ni co
 it('conserva cargos existentes y usa la cookie actual sin adjuntar un token CSRF viejo',async()=>{
  const meta=document.createElement('meta');meta.name='csrf-token';meta.content='token-antiguo';document.head.append(meta);
  post.mockResolvedValue({data:{solicitud_preparacion:{cobertura_tienda:{tipo:'transferencia'}}}});
- await render({costos:{costo_envio:120,aplica_seguro:true,costo_seguro:20}});
+ await render({solicitud:{atencion_tienda:'prevista'},costos:{costo_envio:120,aplica_seguro:true,costo_seguro:20}});
  expect(container.textContent).toContain('Reexpedición');
  expect(container.textContent).toContain('Seguro');
  await act(async()=>{ [...container.querySelectorAll('button')].find(b=>b.textContent==='Guardar modalidad').click(); await Promise.resolve(); });
@@ -90,4 +91,51 @@ it('una modalidad guardada fuera de vigencia explica el bloqueo de confirmación
  const confirmar=[...container.querySelectorAll('button')].find(b=>b.textContent==='Enviar confirmación a tienda');
  expect(confirmar.disabled).toBe(true);
  expect(container.textContent).toContain('La vigencia terminó');
+});
+
+it('horarios apagados permiten confirmar aun con fecha y bloqueo guardados anteriormente', async () => {
+ await render({solicitud:{area_revision:'preparacion_tienda',horarios_operativos:{activos:false},cobertura_tienda:{tipo:'apartado',vence_at:'2020-11-04T17:00:00-06:00',motivo_vigencia:'Cierre anterior'}}});
+ expect([...container.querySelectorAll('button')].find(b=>b.textContent==='Enviar confirmación a tienda').disabled).toBe(false);
+ expect(container.textContent).not.toContain('Cierre anterior');
+ expect(container.textContent).not.toContain('Vigencia terminada');
+});
+it('horarios activos muestran un contenedor de alerta con días, límite y zona', async () => {
+ await render({solicitud:{area_revision:'preparacion_tienda',horarios_operativos:{activos:true,detalle_apartado:'Lunes a viernes. Límite: 17:00. America/Mexico_City.'},cobertura_tienda:{tipo:'apartado',vence_at:'2100-11-04T17:00:00-06:00'}}});
+ const alerta=container.querySelector('[role="alert"]');
+ expect(alerta.textContent).toContain('Horario de confirmación');
+ expect(alerta.textContent).toContain('17:00');
+ expect(alerta.textContent).toContain('America/Mexico_City');
+});
+
+it('la confirmación queda bloqueada con importes pendientes o modalidad sin guardar', async () => {
+ const solicitud={area_revision:'preparacion_tienda',cobertura_tienda:{tipo:'apartado',vence_at:'2100-11-04T17:00:00-06:00'}};
+ await render({solicitud,importesListos:false});
+ const boton=()=>[...container.querySelectorAll('button')].find(b=>b.textContent==='Enviar confirmación a tienda');
+ expect(boton().disabled).toBe(true);
+ await render({solicitud,importesListos:true});
+ expect(boton().disabled).toBe(false);
+ expect(container.querySelector('select').disabled).toBe(true);
+ expect(container.textContent).toContain('Control de cambios de modalidad');
+});
+it('comunica la cobertura pendiente de transferencia y conserva la confirmación visible de una consulta reabierta', async () => {
+ const onEstadoConfirmacion=vi.fn();
+ await render({onEstadoConfirmacion});
+ expect(onEstadoConfirmacion).toHaveBeenLastCalledWith(false);
+ await render({onEstadoConfirmacion,solicitud:{area_revision:'preparacion_tienda',cobertura_tienda:{tipo:'apartado',vence_at:'2100-11-04T17:00:00-06:00'}},editable:false});
+ const boton=[...container.querySelectorAll('button')].find(b=>b.textContent==='Enviar confirmación a tienda');
+ expect(boton.disabled).toBe(true);
+ expect(container.querySelector('[aria-label="Pago y remisión en PDV"]')).toBeTruthy();
+});
+
+it('transferencia espera cobertura completa sin bloqueos y guardar los cambios de Mismo día', async () => {
+ const onEstadoConfirmacion=vi.fn();
+ await render({onEstadoConfirmacion});
+ expect(onEstadoConfirmacion).toHaveBeenLastCalledWith(false);
+ await act(()=>pagoProps.current.onResumenChange({cubierto:true,bloqueos:[],pendiente:0.4,tolerancia_aplicada:0.44}));
+ expect(onEstadoConfirmacion).toHaveBeenLastCalledWith(true);
+ await act(()=>pagoProps.current.onResumenChange({cubierto:true,bloqueos:['Comprobante rechazado']}));
+ expect(onEstadoConfirmacion).toHaveBeenLastCalledWith(false);
+ await act(()=>pagoProps.current.onResumenChange({cubierto:true,bloqueos:[]}));
+ const check=[...container.querySelectorAll('input[type="checkbox"]')].find(i=>i.closest('label').textContent.includes('Mismo día:'));
+ expect(check.disabled).toBe(true);
 });

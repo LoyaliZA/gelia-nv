@@ -36,7 +36,7 @@ class RegenerarCaratulaPedidoService
             ->exists();
         if ($colocada) {
             throw ValidationException::withMessages([
-                'caratula' => 'No se regenera una carátula ya colocada. Corrija la tarea vía incidencia si aplica.',
+                'caratula' => 'No se regenera una carátula ya colocada. Reporte el error de la tarea si corresponde.',
             ]);
         }
 

@@ -49,10 +49,11 @@ export default function EntregaApartadoT01({ tarea, auth, onEnviar, onDirtyChang
         if (onEnviar) onEnviar(url, datos, opciones);
         else router.post(url, datos, opciones);
     };
+    if (!tarea.pedido?.seguimiento_entrega_pdv_habilitado || !['APARTADO_CONFIRMADO', 'ENTREGADA', 'DEVUELTA_ANAQUEL'].includes(apartado?.estado)) return null;
     return <section className="registrar-tienda-panel space-y-4" aria-label="Pago y entrega en tienda">
         <div className="registrar-tienda-seccion-titulo"><Banknote size={18} aria-hidden="true" /><h3>Pago y entrega en tienda</h3></div>
         <p className="text-sm m-0 theme-text-main">{apartado?.estado === 'ENTREGADA' ? `Pedido entregado · Remisión ${apartado.folio_operacion || 'registrada'} · ${apartado.receptor_nombre || ''}` : apartado?.estado === 'DEVUELTA_ANAQUEL' ? 'Apartado liberado. La vendedora recibió el aviso.' : 'Se paga en tienda. El cobro y la emisión de remisión se realizan en PDV.'}</p>
-        {modalidadConfirmada && <VigenciaApartadoTienda venceAt={apartado?.vence_at} finalizado={finalizado || Boolean(apartado?.pago_confirmado_at)} />}
+        {tarea.pedido?.horarios_activos !== false && modalidadConfirmada && <VigenciaApartadoTienda venceAt={apartado?.vence_at} finalizado={finalizado || Boolean(apartado?.pago_confirmado_at)} />}
         {error && <p className="text-sm theme-text-peligro m-0" role="alert">{error}</p>}
         {!finalizado && !modalidadConfirmada && <p className="text-sm theme-text-muted m-0">Espere a que la vendedora confirme Pago al recoger.</p>}
         {!finalizado && autorizado && modalidadConfirmada && <fieldset disabled={ocupado} className="min-w-0 grid gap-4">

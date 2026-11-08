@@ -10,7 +10,7 @@ const mensaje = error => error?.response?.status === 419
     ? 'La sesión cambió o venció. Recargue GELIA antes de continuar; no se confirmó la operación.'
     : Object.values(error?.response?.data?.errors || {}).flat()[0] || error?.response?.data?.message || 'No se completó la operación.';
 
-export default function ConfirmacionRevisionTienda({ pedido, sucursales = [], consultaCerrada = false, importesListos = false, onLectura, destinoAccion, onAviso }) {
+export default function ConfirmacionRevisionTienda({ pedido, sucursales = [], consultaCerrada = false, importesListos = false, procesosListos = true, onLectura, destinoAccion, onAviso }) {
     const [sucursal, setSucursal] = useState(String(pedido?.sucursal_destino_id || ''));
     const [editando, setEditando] = useState(!pedido?.sucursal_destino_id);
     const [ocupado, setOcupado] = useState(false);
@@ -58,7 +58,8 @@ export default function ConfirmacionRevisionTienda({ pedido, sucursales = [], co
             <p className="text-sm theme-text-muted m-0">{cobertura === 'credito' ? 'El auxiliar revisará el crédito en Wizerp.' : 'El auxiliar revisará el pago y la remisión.'}</p>
             {!cedis && destinoPendiente && <p className="text-sm theme-text-muted m-0">Confirma el destino del pedido antes de enviarlo a revisión.</p>}
             {!importesListos && <p className="text-sm theme-text-muted m-0">Espere a que se guarden los importes antes de confirmar.</p>}
-            <AccionPrincipalTienda destino={destinoAccion}><button type="button" className={`${THEME_BTN_PRIMARY} min-h-[44px] justify-self-start`} disabled={ocupado || destinoPendiente || !consultaCerrada || !importesListos} onClick={() => confirmar('enviar')}><Send size={18} />{ocupado ? 'Enviando…' : 'Confirmar pedido y enviar a revisión'}</button></AccionPrincipalTienda>
+            {!procesosListos && <p className="text-sm theme-text-muted m-0">Completa y guarda la modalidad, los importes y la cobertura del pedido antes de confirmar.</p>}
+            <AccionPrincipalTienda destino={destinoAccion}><button type="button" className={`${THEME_BTN_PRIMARY} min-h-[44px] justify-self-start`} disabled={ocupado || destinoPendiente || !consultaCerrada || !importesListos || !procesosListos} onClick={() => confirmar('enviar')}><Send size={18} />{ocupado ? 'Enviando…' : 'Confirmar pedido y enviar a revisión'}</button></AccionPrincipalTienda>
         </>}
         {aviso && <p className="text-sm theme-text-main m-0" role="status">{aviso}</p>}
     </section>;

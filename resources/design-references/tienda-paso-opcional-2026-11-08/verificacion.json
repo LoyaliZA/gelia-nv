@@ -1,0 +1,82 @@
+[
+  {
+    "nombre": "escritorio",
+    "width": 1440,
+    "height": 1000,
+    "tema": "dark",
+    "vista": "config",
+    "habilitado": false,
+    "errores": [],
+    "desborde": false
+  },
+  {
+    "nombre": "escritorio",
+    "width": 1440,
+    "height": 1000,
+    "tema": "dark",
+    "vista": "modal",
+    "habilitado": true,
+    "errores": [],
+    "desborde": false
+  },
+  {
+    "nombre": "escritorio",
+    "width": 1440,
+    "height": 1000,
+    "tema": "dark",
+    "vista": "detalle",
+    "habilitado": false,
+    "errores": [],
+    "desborde": false
+  },
+  {
+    "nombre": "escritorio",
+    "width": 1440,
+    "height": 1000,
+    "tema": "dark",
+    "vista": "detalle",
+    "habilitado": true,
+    "errores": [],
+    "desborde": false
+  },
+  {
+    "nombre": "movil",
+    "width": 390,
+    "height": 844,
+    "tema": "light",
+    "vista": "config",
+    "habilitado": false,
+    "errores": [],
+    "desborde": false
+  },
+  {
+    "nombre": "movil",
+    "width": 390,
+    "height": 844,
+    "tema": "light",
+    "vista": "modal",
+    "habilitado": true,
+    "errores": [],
+    "desborde": false
+  },
+  {
+    "nombre": "movil",
+    "width": 390,
+    "height": 844,
+    "tema": "light",
+    "vista": "detalle",
+    "habilitado": false,
+    "errores": [],
+    "desborde": false
+  },
+  {
+    "nombre": "movil",
+    "width": 390,
+    "height": 844,
+    "tema": "light",
+    "vista": "detalle",
+    "habilitado": true,
+    "errores": [],
+    "desborde": false
+  }
+]

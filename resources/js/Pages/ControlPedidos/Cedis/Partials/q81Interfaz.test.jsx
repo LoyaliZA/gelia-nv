@@ -7,11 +7,14 @@ import SeccionRevisionFisicaPedido from '../../Partials/SeccionRevisionFisicaPed
 import EncabezadoRevisionPedido from '../../Auditar/Partials/EncabezadoRevisionPedido';
 import BarraAccionesRevision from '../../Auditar/Partials/BarraAccionesRevision';
 
-vi.mock('@inertiajs/react', () => ({ usePage: () => ({ props: { auth: { user: { permissions: ['control_pedidos.cedis.enviar'], roles: [] } } } }), router: { post: vi.fn() } }));
+const perfil = vi.hoisted(() => ({ permissions: ['control_pedidos.cedis.enviar'], roles: [] }));
+vi.mock('@inertiajs/react', () => ({ usePage: () => ({ props: { auth: { user: perfil } } }), router: { post: vi.fn() } }));
 let root, container;
 beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true;
     vi.stubGlobal('route', () => '/prueba');
+    vi.stubGlobal('localStorage', { getItem: vi.fn(() => null) });
+    perfil.permissions = ['control_pedidos.cedis.enviar']; perfil.roles = [];
     container = document.createElement('div'); document.body.append(container); root = createRoot(container);
 });
 afterEach(async () => { await act(() => root.unmount()); container.remove(); vi.unstubAllGlobals(); });
@@ -22,14 +25,14 @@ const renderTarjeta = (extra = {}, props = {}) => act(() => root.render(<Tarjeta
 it('distingue tipo, almacén, destino, recorrido y folios en un traslado sin guía comercial', async () => {
     await renderTarjeta({ tarea_preparacion_vigente: { modalidad: { nombre: 'Preparación desde tienda' } } });
     expect(container.querySelector('header').textContent).toContain('Tipo de pedidoTienda');
-    for (const texto of ['Almacén de salida', 'Almacén salida', 'Destino', 'Sucursal destino', 'Traslado interno', 'Preparación desde tienda', 'PED-81', 'Folio interno GELIA (generado por el sistema): GELIA-81', 'Bolsas a preparar']) expect(container.textContent).toContain(texto);
+    for (const texto of ['Origen', 'Almacén salida', 'Destino', 'Sucursal destino', 'Traslado interno', 'Preparación desde tienda', 'PED-81', 'Folio Pedido: PED-81', 'GELIA-81', 'Bolsas a preparar']) expect(container.textContent).toContain(texto);
     expect(container.textContent).not.toContain('Envíos / Guía');
     expect(container.textContent).not.toContain('Paquetería');
 });
 it('mantiene la consulta y bloquea empaque y salida mientras hay actualización pendiente', async () => {
     const responder = vi.fn();
     await renderTarjeta({ estatus_envio: 'pendiente_pesaje', consulta_actualizacion_pendiente: true }, { onResponderPesaje: responder });
-    expect(container.textContent).toContain('Pendiente de respuesta');
+    expect(container.textContent).toContain('Actualización de consulta solicitada');
     expect(container.textContent).not.toContain('Pendiente de pesaje CEDIS');
     const botones = [...container.querySelectorAll('button')];
     expect(botones.some((b) => b.textContent.includes('Marcar empacado'))).toBe(false);
@@ -81,4 +84,33 @@ it('una pieza retirada deja de contarse como actual y conserva acceso a su evide
     expect(container.querySelector('details').textContent).toContain('Historial de piezas retiradas (1)');
     await act(() => [...container.querySelectorAll('button')].find((b) => b.textContent.includes('Ver evidencia conservada')).click());
     expect(verDoc).toHaveBeenCalledWith(foto);
+});
+it('la consulta presenta cliente una vez, folios compactos, departamento arriba y omite piezas extra', async () => {
+ await renderTarjeta({estatus_envio:'pendiente_pesaje',vendedor:{name:'Solicitante de ejemplo',departamento:{nombre:'Ventas'}},solicitud_preparacion:{area_revision:'control_pedidos',revision_disponibilidad:{estado:'sin_excepciones',actualizacion_pendiente:true}},documentos:[{tipo:'anexo_piezas',url:'/anexo.pdf'}]});
+ expect(container.querySelector('.gelia-cedis-tipo-departamento').textContent).toContain('Ventas');
+ expect(container.querySelector('.gelia-cedis-solicitante').textContent).toBe('Solicitante de ejemplo');
+ expect(container.textContent.match(/Cliente de prueba/g)).toHaveLength(1);
+ expect(container.textContent).toContain('Folio Pedido: PED-81');
+ expect(container.textContent).not.toContain('Folio interno');
+ expect(container.textContent).not.toContain('Piezas extra');
+ expect(container.textContent).not.toContain('No pide peso');
+ expect(container.querySelector('.gelia-cedis-aviso-consulta').textContent).toBe('Actualización de consulta solicitada');
+});
+it('reemplaza el aviso pendiente por una sola Consulta respondida', async () => {
+ await renderTarjeta({estatus_envio:'pesaje_listo',estatus:{fase_ciclo:'PESAJE_RESPONDIDO'},solicitud_preparacion:{area_revision:'control_pedidos',revision_disponibilidad:{estado:'sin_excepciones'}}});
+ expect(container.querySelector('.gelia-cedis-aviso-consulta').textContent).toBe('Consulta respondida');
+ expect(container.textContent.match(/Consulta respondida/g)).toHaveLength(1);
+ expect(container.querySelector('.gelia-pedidos-estados').textContent).not.toContain('Consulta respondida');
+});
+it('Bitácora necesita permiso explícito, incluso para el rol Gerente, y respeta la restricción del servidor', async () => {
+ const abrir=vi.fn();
+ await renderTarjeta({}, {onBitacora:abrir});
+ expect([...container.querySelectorAll('button')].some(b=>b.textContent==='Bitácora')).toBe(false);
+ perfil.roles=['Gerente'];await renderTarjeta({}, {onBitacora:abrir});
+ expect([...container.querySelectorAll('button')].some(b=>b.textContent==='Bitácora')).toBe(false);
+ perfil.permissions.push('control_pedidos.cedis.bitacora');await renderTarjeta({}, {onBitacora:abrir});
+ await act(()=>[...container.querySelectorAll('button')].find(b=>b.textContent==='Bitácora').click());
+ expect(abrir).toHaveBeenCalledOnce();
+ await renderTarjeta({puede_ver_bitacora:false}, {onBitacora:abrir});
+ expect([...container.querySelectorAll('button')].some(b=>b.textContent==='Bitácora')).toBe(false);
 });

@@ -297,6 +297,7 @@ export default function FormularioRegistrarTienda({
     const [errorArchivo, setErrorArchivo] = useState('');
     const [ampliado, setAmpliado] = useState(false);
     const [pedidoId, setPedidoId] = useState(pedido?.id || null);
+    const [procesosConfirmacionListos, setProcesosConfirmacionListos] = useState(false);
     const [consultaCerrada, setConsultaCerrada] = useState(Boolean(pedido?.consulta_cerrada || pedido?.consulta_cerrada_at));
     const [totalMercancia, setTotalMercancia] = useState(
         pedido?.total_mercancia === null || pedido?.total_mercancia === undefined ? '' : pedido.total_mercancia,
@@ -1228,7 +1229,8 @@ export default function FormularioRegistrarTienda({
                                 mostrarCustodia={false}
                                 consultaCerrada={consultaCerrada}
                                 importes={{
-                                    destinoAccion: consultaCerrada ? destinoAccion : null,
+                                    destinoAccion,
+                                    onEstadoConfirmacion: setProcesosConfirmacionListos,
                                     clienteId,
                                     totalMercancia,
                                     onTotalMercancia: setTotalMercancia,
@@ -1255,7 +1257,7 @@ export default function FormularioRegistrarTienda({
                                     onSolicitud: actualizarSolicitud,
                                 }}
                             />
-                            <ConfirmacionRevisionTienda destinoAccion={consultaCerrada ? destinoAccion : null} onAviso={setAvisoConfirmacion} pedido={{ ...pedido, id: pedidoId, solicitud_preparacion: solicitudViva }} sucursales={catalogos.sucursales || []} consultaCerrada={consultaCerrada} importesListos={importesListos} onLectura={adoptarLectura} />
+                            <ConfirmacionRevisionTienda procesosListos={lecturaOperativaLista && procesosConfirmacionListos} destinoAccion={destinoAccion} onAviso={setAvisoConfirmacion} pedido={{ ...pedido, id: pedidoId, solicitud_preparacion: solicitudViva }} sucursales={catalogos.sucursales || []} consultaCerrada={consultaCerrada} importesListos={importesListos} onLectura={adoptarLectura} />
                         </>
                     )}
                     {borradorConfirmado && !enviada && (

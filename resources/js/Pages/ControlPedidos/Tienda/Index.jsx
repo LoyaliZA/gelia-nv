@@ -1,28 +1,26 @@
 import useActualizacionesPedidos from '../Partials/useActualizacionesPedidos';
 import React, { useEffect, useRef, useState } from 'react';
-import { Head, router, usePage } from '@inertiajs/react';
-import { Store, Loader2, Radio } from 'lucide-react';
+import { Head, usePage } from '@inertiajs/react';
+import { Store } from 'lucide-react';
 import AppLayout from '../../../Layouts/AppLayout';
 import GeliaPageShell from '../../../Components/GeliaPageShell';
-import GeliaTituloCard from '../../../Components/GeliaTituloCard';
-import { geliaCardClass } from '../../../utils/geliaTheme';
+import { geliaCardClass, GELIA_ICON_BOX } from '../../../utils/geliaTheme';
 import FiltrosTienda, { TABS_TIENDA } from './Partials/FiltrosTienda';
 import MetricasBandejaTienda from './Partials/MetricasBandejaTienda';
-import BandejasTienda from './Partials/BandejasTienda';
+import useFiltrosOperacion from '../Partials/useFiltrosOperacion';
 import ListadoTienda from './Partials/ListadoTienda';
 import ModalPreparacionTienda from './Partials/ModalPreparacionTienda';
 import AvisoResultadoTienda from './Partials/AvisoResultadoTienda';
 import useListadoDiscreto from '../Partials/useListadoDiscreto';
-import { ORIGEN_TABLERO } from './Partials/tiendaUi';
+
 
 export default function Index({
     auth,
     tareas,
     metricas = {},
     cola_estados_cuenta = { total: 0, casos: [] },
-    origenes_solicitud = [],
-    almacenes = [],
     filtros = {},
+    fecha_hoy,
 }) {
     const { flash } = usePage().props;
     const [modalTarea, setModalTarea] = useState(null);
@@ -41,40 +39,13 @@ export default function Index({
         metricas,
     });
 
-    const [tabActiva, setTabActiva] = useState(filtros.tab || 'PENDIENTES');
-    const [busqueda, setBusqueda] = useState(filtros.q || '');
-    const [origenSolicitud, setOrigenSolicitud] = useState(filtros.origen_solicitud || '');
-    const [prioridadMd, setPrioridadMd] = useState(
-        filtros.prioridad_md === true || filtros.prioridad_md === '1' ? '1'
-            : filtros.prioridad_md === false || filtros.prioridad_md === '0' ? '0' : ''
-    );
-    const [modalidad, setModalidad] = useState(filtros.modalidad || '');
-    const [almacenId, setAlmacenId] = useState(
-        filtros.almacen_id ? String(filtros.almacen_id) : ''
-    );
-    const [ultimaSync, setUltimaSync] = useState(null);
-
-    const paramsListado = (extra = {}) => ({
-        tab: tabActiva,
-        q: busqueda || undefined,
-        origen_solicitud: origenSolicitud || undefined,
-        prioridad_md: prioridadMd === '' ? undefined : prioridadMd,
-        modalidad: modalidad || undefined,
-        almacen_id: almacenId || undefined,
-        ...extra,
-    });
-    const debounceBusqueda = useRef(null);
+    const { valores, params: paramsListado, cambiar, limpiar } = useFiltrosOperacion(filtros, cargar);
+    const tabActiva = valores.tab;
 
     const tabLabel = (TABS_TIENDA.find((t) => t.id === tabActiva) || TABS_TIENDA[0]).label;
 
     useActualizacionesPedidos({ onActualizar: () => onActualizar(), pausado: Boolean(cargando) });
 
-
-    useEffect(() => {
-        if (!cargando && tareasVista) {
-            setUltimaSync(new Date());
-        }
-    }, [cargando, tareasVista?.data]);
 
     useEffect(() => {
         if (filtros.tarea && tareasVista?.data?.length) {
@@ -86,97 +57,27 @@ export default function Index({
         }
     }, [filtros.tarea, tareasVista]);
 
-    const onTabChange = (tab) => {
-        setTabActiva(tab);
-        cargar(paramsListado({ tab, page: 1 }));
-    };
-
-    const onBuscar = (valor) => {
-        setBusqueda(valor);
-        clearTimeout(debounceBusqueda.current);
-        debounceBusqueda.current = setTimeout(() => {
-            cargar(paramsListado({ q: valor || undefined, page: 1 }));
-        }, 350);
-    };
-
-    const onOrigenChange = (valor) => {
-        setOrigenSolicitud(valor);
-        cargar(paramsListado({ origen_solicitud: valor || undefined, page: 1 }));
-    };
-
-    const onPrioridadMdChange = (valor) => {
-        setPrioridadMd(valor);
-        cargar(paramsListado({ prioridad_md: valor === '' ? undefined : valor, page: 1 }));
-    };
-
-    const onModalidadChange = (valor) => {
-        setModalidad(valor);
-        cargar(paramsListado({ modalidad: valor || undefined, page: 1 }));
-    };
-
-    const onAlmacenChange = (valor) => {
-        setAlmacenId(valor);
-        cargar(paramsListado({ almacen_id: valor || undefined, page: 1 }));
-    };
-
-    const onLimpiarFiltros = () => {
-        setTabActiva('PENDIENTES');
-        setBusqueda('');
-        setOrigenSolicitud('');
-        setPrioridadMd('');
-        setModalidad('');
-        setAlmacenId('');
-        cargar({ tab: 'PENDIENTES', page: 1 });
-    };
+    const onTabChange = tab => cambiar({ tab });
+    const onLimpiarFiltros = limpiar;
 
     const onActualizar = () => {
         cargar(paramsListado({ page: tareasVista?.current_page || 1 }));
     };
-
-    const syncAside = (
-        <div className="flex flex-col items-end gap-1 text-right" aria-live="polite">
-            <span className="inline-flex items-center gap-2 text-xs font-semibold theme-text-muted">
-                {cargando ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden />
-                ) : (
-                    <Radio className="w-3.5 h-3.5 text-primario" aria-hidden />
-                )}
-                {cargando ? 'Sincronizando…' : 'Actualización por cambios'}
-            </span>
-            {ultimaSync && !cargando && (
-                <span className="text-[11px] theme-text-muted font-medium">
-                    Actualizado {ultimaSync.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
-                </span>
-            )}
-        </div>
-    );
 
     return (
         <AppLayout auth={auth}>
             <Head title="Preparación Tienda | GELIANV" />
             <GeliaPageShell className="gelia-tienda-op space-y-4 md:space-y-6">
                 <a className="text-primario underline text-sm" href={route('traspasos.abastecimiento.index')}>Abastecimiento a preparación en PDV</a>
-                <GeliaTituloCard
-                    eyebrow="Gestión de pedidos"
-                    title="Preparación"
-                    titleHighlight="Tienda"
-                    description="Bandeja de recolección local y traslado a CEDIS"
-                    icon={Store}
-                    aside={syncAside}
-                >
-                    {metricasVista?.observabilidad_origen && (
-                        <div className="flex flex-wrap gap-2 pt-1">
-                            {Object.entries(metricasVista.observabilidad_origen).map(([k, n]) => (
-                                <span key={k} className="text-xs font-semibold px-2.5 py-1 rounded-lg theme-element border theme-border tabular-nums">
-                                    {ORIGEN_TABLERO[k] || k}: {n}
-                                </span>
-                            ))}
-                            <span className="text-xs font-semibold px-2.5 py-1 rounded-lg theme-element border theme-border tabular-nums">
-                                Mismo día activas: {metricasVista.prioridad_md_activas ?? 0}
-                            </span>
+                <header className={`${geliaCardClass()} p-4 sm:p-5`}>
+                    <div className="flex items-center gap-3">
+                        <span className={`${GELIA_ICON_BOX} p-3 rounded-xl`} aria-hidden="true"><Store className="w-6 h-6" /></span>
+                        <div className="min-w-0">
+                            <h1 className="text-xl md:text-2xl font-bold theme-text-main m-0">Preparación Tienda</h1>
+                            <p className="text-sm theme-text-muted mt-1 m-0">Pedidos de tu sucursal</p>
                         </div>
-                    )}
-                </GeliaTituloCard>
+                    </div>
+                </header>
 
                 <AvisoResultadoTienda flash={flash} />
 
@@ -195,40 +96,17 @@ export default function Index({
                     </div>
                 )}
 
-                <div className={`${geliaCardClass()} gelia-tienda-op-workspace p-4 md:p-5 space-y-4`}>
+                <div className={`${geliaCardClass()} gelia-tienda-op-workspace p-3 sm:p-5 space-y-4`}>
                     <MetricasBandejaTienda
                         metricas={metricasVista}
                         tabActiva={tabActiva}
                         onTabChange={onTabChange}
                     />
                     <div className="gelia-tienda-op-divider" aria-hidden />
-                    <BandejasTienda
-                        tabActiva={tabActiva}
-                        onTabChange={onTabChange}
-                        metricas={metricasVista}
-                    />
-                    <div className="gelia-tienda-op-divider" aria-hidden />
                     {errorListado && (
                         <p className="text-sm font-medium m-0 theme-text-peligro" role="alert">{errorListado}</p>
                     )}
-                    <FiltrosTienda
-                        tabActiva={tabActiva}
-                        busqueda={busqueda}
-                        origenSolicitud={origenSolicitud}
-                        prioridadMd={prioridadMd}
-                        modalidad={modalidad}
-                        almacenId={almacenId}
-                        almacenes={almacenes}
-                        origenesSolicitud={origenes_solicitud}
-                        onBuscar={onBuscar}
-                        onOrigenChange={onOrigenChange}
-                        onPrioridadMdChange={onPrioridadMdChange}
-                        onModalidadChange={onModalidadChange}
-                        onAlmacenChange={onAlmacenChange}
-                        onLimpiarFiltros={onLimpiarFiltros}
-                        onActualizar={onActualizar}
-                        buscando={cargando}
-                    />
+                    <FiltrosTienda fechaHoy={fecha_hoy} valores={valores} onCambiar={cambiar} onLimpiar={limpiar} onActualizar={onActualizar} buscando={cargando} />
                 </div>
 
                 <ListadoTienda
@@ -237,8 +115,7 @@ export default function Index({
                     auth={auth}
                     tabLabel={tabLabel}
                     buscando={cargando}
-                    hayFiltrosActivos={Boolean(busqueda) || Boolean(origenSolicitud) || prioridadMd !== ''
-                        || Boolean(modalidad) || Boolean(almacenId) || tabActiva !== 'PENDIENTES'}
+                    hayFiltrosActivos={Boolean(valores.q || valores.vendedora || valores.desde || valores.hasta) || tabActiva !== 'TODOS'}
                     onLimpiarFiltros={onLimpiarFiltros}
                     onIrAPagina={(page) => cargar(paramsListado({ page }))}
                 />

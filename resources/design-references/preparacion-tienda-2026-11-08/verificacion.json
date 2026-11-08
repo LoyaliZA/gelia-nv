@@ -1,0 +1,122 @@
+[
+  {
+    "nombre": "escritorio",
+    "width": 1440,
+    "height": 1000,
+    "tema": "dark",
+    "estado": "inicial",
+    "confirmar": 0,
+    "errores": [],
+    "desborde": false
+  },
+  {
+    "nombre": "escritorio",
+    "width": 1440,
+    "height": 1000,
+    "tema": "dark",
+    "estado": "respuesta",
+    "confirmar": 0,
+    "errores": [],
+    "desborde": false
+  },
+  {
+    "nombre": "escritorio",
+    "width": 1440,
+    "height": 1000,
+    "tema": "dark",
+    "estado": "modalidad",
+    "confirmar": 0,
+    "errores": [],
+    "desborde": false
+  },
+  {
+    "nombre": "escritorio",
+    "width": 1440,
+    "height": 1000,
+    "tema": "dark",
+    "estado": "cambios",
+    "confirmar": 0,
+    "errores": [],
+    "desborde": false
+  },
+  {
+    "nombre": "escritorio",
+    "width": 1440,
+    "height": 1000,
+    "tema": "dark",
+    "estado": "aprobada",
+    "confirmar": 1,
+    "errores": [],
+    "desborde": false
+  },
+  {
+    "nombre": "escritorio",
+    "width": 1440,
+    "height": 1000,
+    "tema": "dark",
+    "estado": "confirmada",
+    "confirmar": 0,
+    "errores": [],
+    "desborde": false
+  },
+  {
+    "nombre": "movil",
+    "width": 390,
+    "height": 844,
+    "tema": "light",
+    "estado": "inicial",
+    "confirmar": 0,
+    "errores": [],
+    "desborde": false
+  },
+  {
+    "nombre": "movil",
+    "width": 390,
+    "height": 844,
+    "tema": "light",
+    "estado": "respuesta",
+    "confirmar": 0,
+    "errores": [],
+    "desborde": false
+  },
+  {
+    "nombre": "movil",
+    "width": 390,
+    "height": 844,
+    "tema": "light",
+    "estado": "modalidad",
+    "confirmar": 0,
+    "errores": [],
+    "desborde": false
+  },
+  {
+    "nombre": "movil",
+    "width": 390,
+    "height": 844,
+    "tema": "light",
+    "estado": "cambios",
+    "confirmar": 0,
+    "errores": [],
+    "desborde": false
+  },
+  {
+    "nombre": "movil",
+    "width": 390,
+    "height": 844,
+    "tema": "light",
+    "estado": "aprobada",
+    "confirmar": 1,
+    "errores": [],
+    "desborde": false
+  },
+  {
+    "nombre": "movil",
+    "width": 390,
+    "height": 844,
+    "tema": "light",
+    "estado": "confirmada",
+    "confirmar": 0,
+    "errores": [],
+    "desborde": false
+  }
+]

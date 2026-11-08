@@ -368,7 +368,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                 pedidoBma: pedido.id,
                 incidencia: inc.id,
             }),
-            { nota: 'Revisado en auditoría; se continúa con la incidencia.' },
+            { nota: 'Revisado en auditoría; se continúa con la observación registrada.' },
             {
                 preserveScroll: true,
                 onFinish: () => setProcesando(false),

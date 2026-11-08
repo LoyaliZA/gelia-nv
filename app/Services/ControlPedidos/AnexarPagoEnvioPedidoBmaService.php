@@ -20,6 +20,8 @@ class AnexarPagoEnvioPedidoBmaService
             throw new \RuntimeException('Este pedido no admite anexar pago de envío en su estado actual.');
         }
 
+        app(BancosGestionPedidosConfig::class)->validar($pedido, isset($datos['catalogo_banco_id']) ? (int) $datos['catalogo_banco_id'] : null);
+
         $monto = (float) ($datos['monto'] ?? 0);
         if ($monto <= 0) {
             throw new \InvalidArgumentException('El monto del envío debe ser mayor que cero.');
