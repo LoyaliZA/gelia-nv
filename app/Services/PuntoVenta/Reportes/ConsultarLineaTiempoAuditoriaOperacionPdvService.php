@@ -347,6 +347,7 @@ class ConsultarLineaTiempoAuditoriaOperacionPdvService
         return match ($origen) {
             EsperaDisponibilidadPdv::ORIGEN_ATENCION_CERRADA => 'cierre de atención',
             EsperaDisponibilidadPdv::ORIGEN_PAUSA_FINALIZADA => 'fin de pausa',
+            EsperaDisponibilidadPdv::ORIGEN_TRANSFERENCIA => 'transferencia de cliente',
             'cooldown' => 'espera entre turnos',
             'jornada.abierta' => 'apertura de jornada',
             'gerencia.reatencion' => 'reatención manual',

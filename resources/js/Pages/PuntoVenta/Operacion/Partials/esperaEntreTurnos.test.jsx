@@ -40,6 +40,7 @@ beforeEach(() => {
     // La computadora puede tener una hora distinta de la del servidor.
     vi.setSystemTime(new Date('2026-10-16T19:00:00.000Z'));
     vi.stubGlobal('route', (nombre) => nombre);
+    vi.stubGlobal('localStorage', { getItem: () => null });
     contenedor = document.createElement('div');
     document.body.appendChild(contenedor);
     root = createRoot(contenedor);

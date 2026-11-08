@@ -70,7 +70,7 @@ class ConsultaPersonaDisponiblePdvService implements ConsultaPersonaDisponiblePd
 
     /**
      * Destino de reatención manual. La fila automática sigue usando esDisponible.
-     * Durante la pausa abierta y la espera (fin de pausa o cierre de atención) la persona aún puede recibir esa reasignación.
+     * Durante la pausa abierta y la espera (fin de pausa, cierre de atención o transferencia) la persona aún puede recibir esa reasignación.
      */
     public function esDestinoReatencionManual(User $user, int $sucursalId): bool
     {
@@ -212,6 +212,7 @@ class ConsultaPersonaDisponiblePdvService implements ConsultaPersonaDisponiblePd
             && in_array($espera->origen, [
                 EsperaDisponibilidadPdv::ORIGEN_PAUSA_FINALIZADA,
                 EsperaDisponibilidadPdv::ORIGEN_ATENCION_CERRADA,
+                EsperaDisponibilidadPdv::ORIGEN_TRANSFERENCIA,
             ], true)
             && $espera->disponible_desde_nuevo !== null
             && $jornada->disponible_desde->equalTo($espera->disponible_desde_nuevo);

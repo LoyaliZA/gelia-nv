@@ -124,14 +124,6 @@ export function esEstadoVendedorConocido(estadoVendedor) {
 
 const ESTADOS_VENDEDOR_INACTIVOS_GERENCIA = new Set(['no_activado', 'no_llego', 'jornada_cerrada']);
 
-const PRIORIDAD_ORDEN_EQUIPO_ACTIVO_GERENCIA = {
-    atendiendo: 0,
-    disponible: 1,
-    en_espera: 2,
-    en_retencion: 3,
-    cierre_pendiente: 4,
-};
-
 const PRIORIDAD_ORDEN_EQUIPO_INACTIVO_GERENCIA = {
     no_activado: 0,
     no_llego: 1,
@@ -142,14 +134,21 @@ export function esVendedorEquipoInactivoGerencia(estadoVendedor) {
     return ESTADOS_VENDEDOR_INACTIVOS_GERENCIA.has(estadoVendedor);
 }
 
-function prioridadMiembroEquipoGerencia(miembro, inactivo) {
-    const estado = miembro?.estado_vendedor;
-    const mapa = inactivo ? PRIORIDAD_ORDEN_EQUIPO_INACTIVO_GERENCIA : PRIORIDAD_ORDEN_EQUIPO_ACTIVO_GERENCIA;
-    return mapa[estado] ?? 99;
-}
-
 function compararMiembrosEquipoGerencia(a, b, inactivo) {
-    const delta = prioridadMiembroEquipoGerencia(a, inactivo) - prioridadMiembroEquipoGerencia(b, inactivo);
+    if (!inactivo) {
+        const aperturaA = Date.parse(a?.jornada?.apertura_at);
+        const aperturaB = Date.parse(b?.jornada?.apertura_at);
+        const fechaA = Number.isFinite(aperturaA) ? aperturaA : Number.MAX_SAFE_INTEGER;
+        const fechaB = Number.isFinite(aperturaB) ? aperturaB : Number.MAX_SAFE_INTEGER;
+        if (fechaA !== fechaB) return fechaA - fechaB;
+        // La jornada conserva el orden de activación incluso dentro del mismo segundo.
+        const jornadaA = Number(a?.jornada?.id ?? a?.id ?? 0);
+        const jornadaB = Number(b?.jornada?.id ?? b?.id ?? 0);
+        return jornadaA - jornadaB || Number(a?.id || 0) - Number(b?.id || 0);
+    }
+
+    const delta = (PRIORIDAD_ORDEN_EQUIPO_INACTIVO_GERENCIA[a?.estado_vendedor] ?? 99)
+        - (PRIORIDAD_ORDEN_EQUIPO_INACTIVO_GERENCIA[b?.estado_vendedor] ?? 99);
     if (delta !== 0) return delta;
     return String(a?.nombre || '').localeCompare(String(b?.nombre || ''), 'es', { sensitivity: 'base' });
 }

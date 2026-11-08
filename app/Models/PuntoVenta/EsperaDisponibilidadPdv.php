@@ -11,6 +11,8 @@ class EsperaDisponibilidadPdv extends Model
 {
     public const ORIGEN_ATENCION_CERRADA = 'atencion.cerrada';
 
+    public const ORIGEN_TRANSFERENCIA = 'turno.transferido';
+
     public const ORIGEN_PAUSA_FINALIZADA = 'pausa.finalizada';
 
     protected $table = 'pdv_esperas_disponibilidad';

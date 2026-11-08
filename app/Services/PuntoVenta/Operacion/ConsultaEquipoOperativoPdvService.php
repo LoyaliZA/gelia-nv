@@ -132,6 +132,7 @@ class ConsultaEquipoOperativoPdvService
                         : null,
                 ),
                 'jornada' => $jornada instanceof JornadaPdv ? [
+                    'id' => (int) $jornada->id,
                     'estado' => $jornada->estado->value,
                     'version' => $jornada->version,
                     'apertura_at' => $jornada->apertura_at?->toIso8601String(),

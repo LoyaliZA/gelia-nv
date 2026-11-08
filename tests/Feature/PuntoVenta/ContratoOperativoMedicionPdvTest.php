@@ -99,7 +99,7 @@ class ContratoOperativoMedicionPdvTest extends TestCase
                 && $job->uniqueSuffix === 'cooldown:'.$this->empleado->id.':'.now()->addSeconds($segundos)->getTimestamp());
         } else {
             $this->assertNull($jornadaEmpleado->disponible_desde);
-            Queue::assertNotPushed(EjecutarMatchmakerTurnosPdvJob::class);
+            Queue::assertPushed(EjecutarMatchmakerTurnosPdvJob::class, fn ($job) => $job->origenDisparador === 'cooldown' && $job->delay === null && $job->afterCommit === true);
         }
         $this->assertNull($this->jornada($this->gerente)->disponible_desde);
         $espera = EsperaDisponibilidadPdv::query()->sole();
@@ -186,7 +186,7 @@ class ContratoOperativoMedicionPdvTest extends TestCase
         $this->assertSame(0, $espera->cooldown_segundos);
         $this->assertNull($espera->disponible_desde_nuevo);
         $this->assertSame(EsperaDisponibilidadPdv::ORIGEN_PAUSA_FINALIZADA, $espera->origen);
-        Queue::assertNotPushed(EjecutarMatchmakerTurnosPdvJob::class, fn ($job) => $job->origenDisparador === 'cooldown');
+        Queue::assertPushed(EjecutarMatchmakerTurnosPdvJob::class, fn ($job) => $job->origenDisparador === 'cooldown' && $job->delay === null && $job->afterCommit === true);
     }
 
     public function test_pausa_con_reserva_abierta_se_rechaza(): void
@@ -244,7 +244,11 @@ class ContratoOperativoMedicionPdvTest extends TestCase
     private function asignarAlEmpleado(): TurnoPdv
     {
         $turno = $this->nuevoTurno();
+        // Aislar el empleado bajo prueba: el primer reparto entre personas sin turnos es aleatorio.
+        $gerente = $this->jornada($this->gerente);
+        $gerente->update(['disponible_desde' => now()->addMinute()]);
         $this->asignar();
+        $gerente->update(['disponible_desde' => null]);
         $turno->refresh();
         $this->assertSame($this->empleado->id, $turno->atencionActual->user_id);
 
