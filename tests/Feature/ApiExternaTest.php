@@ -2,12 +2,18 @@
 
 namespace Tests\Feature;
 
+use App\Http\Middleware\CheckApiResourcePermission;
 use App\Models\ApiAplicacion;
+use App\Models\ApiAplicacionCampo;
+use App\Models\ApiAplicacionPermiso;
+use App\Models\ApiCampoRecurso;
+use App\Models\ApiRecurso;
 use App\Models\Cliente;
 use App\Models\User;
 use App\Services\ApiExterna\ApiPermisoService;
 use Database\Seeders\ApiExternaSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Request;
 use Laravel\Sanctum\Sanctum;
 use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
@@ -169,5 +175,74 @@ class ApiExternaTest extends TestCase
 
         $response->assertOk()
             ->assertJsonPath('data.rfc', 'XAXX010101000');
+    }
+
+    public function test_catalogo_nuevo_habilita_lectura_sin_cambiar_permisos_ni_secreto(): void
+    {
+        $hashSecreto = $this->aplicacion->fresh()->client_secret;
+
+        $permisoClientes = ApiAplicacionPermiso::query()
+            ->where('api_aplicacion_id', $this->aplicacion->id)
+            ->whereHas('recurso', fn ($query) => $query->where('slug', 'clientes'))
+            ->firstOrFail();
+        $permisoClientes->update(['puede_leer' => false]);
+
+        $recurso = ApiRecurso::create([
+            'slug' => 'productos',
+            'nombre' => 'Productos',
+            'activo' => true,
+            'lectura_habilitada' => true,
+            'escritura_habilitada' => true,
+        ]);
+
+        $campo = ApiCampoRecurso::create([
+            'api_recurso_id' => $recurso->id,
+            'slug' => 'sku',
+            'etiqueta' => 'SKU',
+            'es_sensible' => false,
+            'habilitado_global' => true,
+            'orden' => 1,
+        ]);
+
+        $request = Request::create('/api/v1/productos', 'GET');
+        $request->setUserResolver(fn () => $this->aplicacion);
+        $middleware = app(CheckApiResourcePermission::class);
+
+        $lectura = $middleware->handle(
+            $request,
+            fn () => response()->json(['ok' => true]),
+            'productos',
+            'read'
+        );
+        $escritura = $middleware->handle(
+            Request::create('/api/v1/productos', 'POST')->setUserResolver(fn () => $this->aplicacion),
+            fn () => response()->json(['ok' => true]),
+            'productos',
+            'write'
+        );
+
+        $this->assertSame(200, $lectura->getStatusCode());
+        $this->assertSame(403, $escritura->getStatusCode());
+
+        $permisoNuevo = ApiAplicacionPermiso::query()
+            ->where('api_aplicacion_id', $this->aplicacion->id)
+            ->where('api_recurso_id', $recurso->id)
+            ->firstOrFail();
+        $this->assertTrue($permisoNuevo->puede_leer);
+        $this->assertFalse($permisoNuevo->puede_escribir);
+        $this->assertTrue($permisoNuevo->activo);
+
+        $permisoClientes->refresh();
+        $this->assertFalse($permisoClientes->puede_leer);
+
+        $filaCampo = ApiAplicacionCampo::query()
+            ->where('api_aplicacion_id', $this->aplicacion->id)
+            ->where('api_campo_recurso_id', $campo->id)
+            ->firstOrFail();
+        $this->assertTrue($filaCampo->habilitado);
+
+        $this->aplicacion->refresh();
+        $this->assertSame($hashSecreto, $this->aplicacion->client_secret);
+        $this->assertSame('gel_testclient123456789012345', $this->aplicacion->client_id);
     }
 }
