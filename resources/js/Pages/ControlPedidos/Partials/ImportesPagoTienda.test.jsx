@@ -46,6 +46,10 @@ it('crédito omite captura y seleccionar modalidad no la guarda automáticamente
  await render({solicitud:{cobertura_tienda:{tipo:'credito'}}});
  expect(pagoProps.current.puedeRegistrar).toBe(false);
  expect(container.textContent).toContain('no pide una exhibición');
+ expect(container.textContent).not.toContain('queden guardados');
+ await render({solicitud:{cobertura_tienda:{tipo:'credito'}},importesListos:false,totalMercancia:0});
+ expect(container.textContent).toContain('El total a cubrir no está completo.');
+ expect(container.textContent).not.toContain('queden guardados');
  await render({solicitud:{cobertura_tienda:{tipo:'transferencia'},atencion_tienda:'prevista'}});
  const select=container.querySelector('select');
  expect(select.disabled).toBe(true);

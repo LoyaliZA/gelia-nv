@@ -194,7 +194,7 @@ class CoberturaPagoPedidoBmaService
             $bloqueos[] = 'Hay comprobantes rechazados pendientes de sustitución.';
         }
 
-        if ((float) $base['pendiente'] > (float) $base['tolerancia_aplicada']) {
+        if (! \App\Support\ControlPedidos\CustodiaDocumentalTienda::credito($pedido) && (float) $base['pendiente'] > (float) $base['tolerancia_aplicada']) {
             $bloqueos[] = RegistrarPagoPedidoBmaService::mensajeMontoFaltante((float) $base['pendiente']);
         }
 

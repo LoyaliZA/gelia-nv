@@ -74,14 +74,15 @@ function CreditoTienda({ pedidoId, resultado }) {
     return (
         <div className="mt-4 grid gap-2">
             <p className="text-sm theme-text-main m-0">
-                Crédito en Wizerp: {resultado?.resultado || 'sin resultado'}. No se pide comprobante de transferencia.
+                Método de pago: crédito. Si el crédito está vigente, confírmelo y registre la remisión para continuar en CEDIS. Si está vencido, devuelva el pedido: quien lo registró recibe esa indicación.
             </p>
+            {resultado?.resultado && <p className="text-sm theme-text-muted m-0">Resultado registrado: {resultado.resultado}.</p>}
             {aviso && <p className="text-sm theme-text-muted m-0">{aviso}</p>}
-            <label className={THEME_LABEL} htmlFor="credito-causa">Causa si está bloqueado</label>
+            <label className={THEME_LABEL} htmlFor="credito-causa">Indicación adicional</label>
             <textarea id="credito-causa" className="w-full min-h-16 rounded-lg border theme-border theme-element px-3 py-2 text-sm theme-text-main" value={causa} onChange={(evento) => setCausa(evento.target.value)} />
             <div className="flex flex-wrap gap-2">
                 <button type="button" className={BTN_PRIMARY} onClick={() => enviar('aprobado')}>Crédito aprobado</button>
-                <button type="button" className={BTN_SECONDARY} onClick={() => enviar('bloqueado')}>Crédito bloqueado</button>
+                <button type="button" className={BTN_SECONDARY} onClick={() => enviar('vencido')}>Crédito vencido</button>
             </div>
         </div>
     );
@@ -204,6 +205,11 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
     const pagoValidado = Boolean(pedido.pago_validado_at);
     const recogeTienda = Boolean(pedido.es_recoge_tienda_apartado);
     const fichaTienda = !pedidoRequiereLogistica(pedido) && !recogeTienda;
+    const creditoTienda = pedido.solicitud_preparacion?.codigo_modalidad === 'RECOGE_TIENDA_CREDITO'
+        || pedido.solicitud_preparacion?.cobertura_tienda?.tipo === 'credito';
+    const bloqueosAplican = creditoTienda
+        ? bloqueosPago.filter((bloqueo) => !/Faltan \$|Falta registrar exhibiciones|mercancía, envío/.test(bloqueo))
+        : bloqueosPago;
     const puedeAprobar = esPendiente && pagoValidado && Boolean(remision)
         && can('control_pedidos.auditar.aprobar') && !recogeTienda;
     const muestraAprobar = esPendiente && can('control_pedidos.auditar.aprobar') && !recogeTienda;
@@ -233,12 +239,12 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
     };
 
     const validarPago = () => {
-        if (bloqueosPago.length > 0) {
+        if (bloqueosAplican.length > 0) {
             setAlerta({
                 abierto: true,
                 tipo: 'error',
                 titulo: 'No se puede validar',
-                mensaje: bloqueosPago[0],
+                mensaje: bloqueosAplican[0],
             });
             return;
         }
@@ -715,7 +721,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                     <h3 className="gelia-pedidos-seccion-titulo">Cobertura</h3>
                                     <ResumenCoberturaPedido
                                         resumen={resumenCobertura}
-                                        bloqueos={bloqueosPago}
+                                        bloqueos={bloqueosAplican}
                                         pedido={pedido}
                                         zonas={catalogos?.zonas || []}
                                     />
@@ -807,15 +813,15 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                             <button
                                                 type="button"
                                                 onClick={validarPago}
-                                                disabled={procesando || pagoValidado || bloqueosPago.length > 0}
-                                                title={bloqueosPago[0] || undefined}
+                                                disabled={procesando || pagoValidado || bloqueosAplican.length > 0}
+                                                title={bloqueosAplican[0] || undefined}
                                                 className={`${BTN_PRIMARY} flex items-center gap-2 outline-none disabled:opacity-50`}
                                             >
                                                 {procesando ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
                                                 {pagoValidado ? 'Pagado y validado' : procesando ? 'Validando pago…' : (fichaTienda ? 'Pagado y validado' : 'Validar pago')}
                                             </button>
-                                            {bloqueosPago.length > 0 && !pagoValidado && (
-                                                <p className="w-full text-xs font-bold text-amber-600 m-0">{bloqueosPago[0]}</p>
+                                            {bloqueosAplican.length > 0 && !pagoValidado && (
+                                                <p className="w-full text-xs font-bold text-amber-600 m-0">{bloqueosAplican[0]}</p>
                                             )}
                                         </div>
                                     )}
@@ -926,7 +932,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                                 <h3 className="gelia-pedidos-seccion-titulo">Cobertura</h3>
                                                 <ResumenCoberturaPedido
                                                     resumen={resumenCobertura}
-                                                    bloqueos={bloqueosPago}
+                                                    bloqueos={bloqueosAplican}
                                                     pedido={pedido}
                                                     zonas={catalogos?.zonas || []}
                                                 />

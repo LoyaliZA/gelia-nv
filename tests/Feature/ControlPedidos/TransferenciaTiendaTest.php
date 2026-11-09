@@ -218,6 +218,47 @@ class TransferenciaTiendaTest extends TestCase
         $this->assertSame(['credito'], $this->pedido->pagosExhibicion()->pluck('forma_pago')->all());
     }
 
+    public function test_credito_vencido_regresa_el_pedido_con_la_indicacion(): void
+    {
+        $this->iniciarConfirmacion('credito');
+        CatalogoEstatusPedido::query()->firstOrCreate(
+            ['fase_ciclo' => 'RECHAZADO_VENDEDORA'],
+            ['codigo_interno' => 'RECHAZADO_VENDEDORA', 'nombre_visual' => 'Devuelto para corrección', 'color_hex' => '#999999', 'orden' => 8, 'activo' => true]
+        );
+        $this->actingAs($this->vendedora)->putJson(route('control_pedidos.enviar', $this->pedido))
+            ->assertOk()->assertJsonPath('estatus.fase_ciclo', 'PENDIENTE_AUXILIAR');
+
+        $devuelto = app(\App\Services\ControlPedidos\DevolverCreditoVencidoTiendaService::class)
+            ->ejecutar($this->pedido->fresh(), $this->auxiliar);
+
+        $this->assertSame('RECHAZADO_VENDEDORA', $devuelto->estatus->fase_ciclo);
+        $this->assertSame(
+            \App\Services\ControlPedidos\DevolverCreditoVencidoTiendaService::INDICACION,
+            $devuelto->motivo_rechazo
+        );
+        $this->assertSame('vencido', $devuelto->solicitud_preparacion_json['credito_wizerp']['resultado']);
+    }
+
+    public function test_credito_pagado_vuelve_a_revision_sin_exigir_evidencia(): void
+    {
+        $this->iniciarConfirmacion('credito');
+        CatalogoEstatusPedido::query()->firstOrCreate(
+            ['fase_ciclo' => 'RECHAZADO_VENDEDORA'],
+            ['codigo_interno' => 'RECHAZADO_VENDEDORA', 'nombre_visual' => 'Devuelto para corrección', 'color_hex' => '#999999', 'orden' => 8, 'activo' => true]
+        );
+        $this->actingAs($this->vendedora)->putJson(route('control_pedidos.enviar', $this->pedido))->assertOk();
+        app(\App\Services\ControlPedidos\DevolverCreditoVencidoTiendaService::class)
+            ->ejecutar($this->pedido->fresh(), $this->auxiliar);
+
+        $this->actingAs($this->vendedora)
+            ->postJson(route('control_pedidos.credito_pagado', $this->pedido))
+            ->assertOk()
+            ->assertJsonPath('estatus.fase_ciclo', 'PENDIENTE_AUXILIAR')
+            ->assertJsonPath('solicitud_preparacion.credito_wizerp.resultado', 'pagado')
+            ->assertJsonPath('motivo_rechazo', null);
+        $this->assertSame(0, $this->pedido->documentos()->where('comentario', 'Crédito pagado')->count());
+    }
+
     private function operar(string $accion, User $actor, array $datos = []): array
     {
         $version = $this->pedido->fresh()->solicitud_preparacion_json['transferencia_tienda']['version'] ?? 0;

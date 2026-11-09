@@ -32,6 +32,9 @@ it('bloquea confirmación con consulta abierta o importes aún sin guardar y con
     expect(boton('Confirmar pedido').disabled).toBe(true);
     await act(() => root.render(<ConfirmacionRevisionTienda {...props} pedido={conDestino} importesListos={false} />));
     expect(boton('Confirmar pedido').disabled).toBe(true);
+    expect(container.textContent).toContain('El total a cubrir no está completo.');
+    expect(container.textContent).not.toContain('Espere a que se guarden los importes');
+    expect(container.textContent).not.toContain('Completa y guarda la modalidad');
     await act(() => root.render(<ConfirmacionRevisionTienda {...props} pedido={conDestino} />));
     axios.put.mockRejectedValue({ response: { status: 422, data: { message: 'Falta registrar exhibiciones de pago.' } } });
     await act(async () => boton('Confirmar pedido').click());
@@ -81,6 +84,32 @@ it('ubica la acción en el pie compartido y comunica el resultado al encabezado 
         expect(pie.querySelector('button')).toBeNull();
         expect(container.textContent).not.toContain('Pedido en revisión del auxiliar');
     } finally { pie.remove(); }
+});
+
+it('espera el autoguardado y no envía si el importe no quedó guardado', async () => {
+    const antesDeEnviar = vi.fn().mockResolvedValue(false);
+    const conDestino = { ...pedido, sucursal_destino_id: 2 };
+    await act(() => root.render(<ConfirmacionRevisionTienda {...props} pedido={conDestino} antesDeEnviar={antesDeEnviar} />));
+    await act(async () => boton('Confirmar pedido').click());
+    expect(antesDeEnviar).toHaveBeenCalled();
+    expect(axios.put).not.toHaveBeenCalled();
+    expect(container.textContent).toContain('No se guardó el importe');
+    antesDeEnviar.mockResolvedValue(true);
+    axios.put.mockResolvedValue({ data: { estatus: { fase_ciclo: 'PENDIENTE_AUXILIAR' } } });
+    await act(async () => boton('Confirmar pedido').click());
+    expect(axios.put).toHaveBeenCalledWith('/control-pedidos/55/enviar', {}, expect.any(Object));
+});
+
+it('el crédito vencido bloquea la confirmación y permite Crédito pagado sin evidencia', async () => {
+    const devuelto = { ...pedido, sucursal_destino_id: 2, estatus: { fase_ciclo: 'RECHAZADO_VENDEDORA' }, solicitud_preparacion: { area_revision: 'control_pedidos', cobertura_tienda: { tipo: 'credito' }, credito_wizerp: { resultado: 'vencido', causa: 'El cliente tiene un crédito vencido y necesita liquidarlo.' } } };
+    axios.post.mockResolvedValue({ data: { estatus: { fase_ciclo: 'PENDIENTE_AUXILIAR' } } });
+    await act(() => root.render(<ConfirmacionRevisionTienda {...props} pedido={devuelto} />));
+    expect(boton('Confirmar pedido').disabled).toBe(true);
+    expect(container.textContent).toContain('Ctrl+V');
+    await act(async () => boton('Crédito pagado').click());
+    expect(axios.post.mock.calls[0][0]).toBe('/control-pedidos/55/credito-pagado');
+    expect(axios.put).not.toHaveBeenCalled();
+    expect(container.textContent).toContain('Crédito pagado. El pedido volvió a revisión.');
 });
 
 it('mantiene deshabilitada la acción del pie mientras los procesos no estén listos', async () => {

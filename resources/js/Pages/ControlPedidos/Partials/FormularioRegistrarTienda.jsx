@@ -192,6 +192,17 @@ function mismoMonto(a, b) {
     return canonMonto(a) === canonMonto(b);
 }
 
+export function importesListosCaptura({ cobertura, totalMercancia, saldoCapturado, confirmados, conflicto, estadoGuardado }) {
+    const persistidos = mismoMonto(totalMercancia, confirmados?.total_mercancia)
+        && mismoMonto(saldoCapturado, confirmados?.saldo_a_favor)
+        && canonMonto(totalMercancia) !== null
+        && !conflicto
+        && !['guardando', 'pendiente', 'error', 'conflicto'].includes(estadoGuardado);
+    if (cobertura !== 'credito') return persistidos;
+    const monto = canonMonto(totalMercancia);
+    return monto !== null && monto > 0 && !conflicto && estadoGuardado !== 'conflicto';
+}
+
 function aplicacionesDe(pedido) {
     return (pedido?.saf_aplicaciones || [])
         .filter((fila) => fila && fila.estado !== 'liberado' && fila.saf_credito_id)
@@ -339,6 +350,8 @@ export default function FormularioRegistrarTienda({
     const [avisoConfirmacion, setAvisoConfirmacion] = useState('');
     const [borradorConfirmado, setBorradorConfirmado] = useState(false);
     const [estadoGuardado, setEstadoGuardado] = useState(null);
+    const estadoGuardadoRef = useRef(null);
+    estadoGuardadoRef.current = estadoGuardado;
     const clave = useRef(globalThis.crypto?.randomUUID?.() || `tienda-${Date.now()}`);
     const archivoRef = useRef(null);
     const avanzado = capturaAvanzada(pedido);
@@ -775,11 +788,22 @@ export default function FormularioRegistrarTienda({
     if (!abierto) return null;
 
     const nombreAlmacenVisible = almacenes.find((almacen) => String(almacen.id) === String(almacenId))?.nombre || '';
-    const importesListos = mismoMonto(totalMercancia, confirmados.total_mercancia)
-        && mismoMonto(saldoDeDatos(datosRef.current), confirmados.saldo_a_favor)
-        && canonMonto(totalMercancia) !== null
-        && !conflicto
-        && !['guardando', 'pendiente', 'error', 'conflicto'].includes(estadoGuardado);
+    const importesListos = importesListosCaptura({
+        cobertura: solicitudViva?.cobertura_tienda?.tipo,
+        totalMercancia,
+        saldoCapturado: saldoDeDatos(datosRef.current),
+        confirmados,
+        conflicto,
+        estadoGuardado,
+    });
+    const asegurarGuardado = () => encolar(async () => {
+        if (suspenderRef.current || estadoGuardadoRef.current === 'conflicto') return false;
+        if (huellaActual() !== huellaRef.current || estadoGuardadoRef.current === 'error') {
+            const respuesta = await ejecutarGuardar(null, true);
+            if (!respuesta) return false;
+        }
+        return huellaActual() === huellaRef.current;
+    });
     const bancosContexto = (catalogos.bancos || []).filter((banco) => (
         banco.compartido !== false
         || (banco.departamento_ids || []).some((id) => String(id) === String(departamentoId))
@@ -871,6 +895,7 @@ export default function FormularioRegistrarTienda({
                             {badgesListaPedido(pedido).slice(0, 2).map((badge) => <span key={badge.key} className={badge.className} style={badge.style}>{badge.label}</span>)}
                         </div>}
                         {(enRevisionAuxiliar || avisoConfirmacion) && <p className="text-sm theme-text-main mt-2 mb-0" role="status">{enRevisionAuxiliar ? 'Pedido enviado a revisión del auxiliar.' : avisoConfirmacion}</p>}
+                        {pedido?.motivo_rechazo && <p className="text-sm theme-text-main mt-2 mb-0" role="status">{pedido.motivo_rechazo}</p>}
                     </div>
                     <button
                         type="button"
@@ -1257,7 +1282,7 @@ export default function FormularioRegistrarTienda({
                                     onSolicitud: actualizarSolicitud,
                                 }}
                             />
-                            <ConfirmacionRevisionTienda procesosListos={lecturaOperativaLista && procesosConfirmacionListos} destinoAccion={destinoAccion} onAviso={setAvisoConfirmacion} pedido={{ ...pedido, id: pedidoId, solicitud_preparacion: solicitudViva }} sucursales={catalogos.sucursales || []} consultaCerrada={consultaCerrada} importesListos={importesListos} onLectura={adoptarLectura} />
+                            <ConfirmacionRevisionTienda procesosListos={lecturaOperativaLista && procesosConfirmacionListos} destinoAccion={destinoAccion} onAviso={setAvisoConfirmacion} antesDeEnviar={asegurarGuardado} pedido={{ ...pedido, id: pedidoId, solicitud_preparacion: solicitudViva }} sucursales={catalogos.sucursales || []} consultaCerrada={consultaCerrada} importesListos={importesListos} onLectura={adoptarLectura} />
                         </>
                     )}
                     {borradorConfirmado && !enviada && (

@@ -51,3 +51,13 @@ it('crédito comparte bolsas y custodia sin presentarlo como transferencia', asy
     expect(container.textContent).toContain('Crédito · Recoger en tienda');
     expect(container.textContent).not.toContain('El auxiliar debe verificar el ingreso');
 });
+
+it('el crédito de CEDIS permanece en auditoría y no usa el recorrido de recoger en tienda', async () => {
+    const cedis = { id: 82, solicitud_preparacion: { modalidad_entrega: 'tienda', area_revision: 'control_pedidos', cobertura_tienda: { tipo: 'credito' } } };
+    axios.get.mockResolvedValue({ data: { ...respuesta, cobertura: 'credito', estado: 'pendiente_preparacion', puede_entregar: false, numero_remision: null, remision_adjunta: false, solicitud_preparacion: cedis.solicitud_preparacion, credito_wizerp: null } });
+    await act(() => root.render(<SeguimientoTransferenciaTienda pedido={cedis} sucursales={[{ id: 2, nombre: 'Otra' }]} />));
+    expect(container.textContent).toContain('Crédito · CEDIS');
+    expect(container.textContent).toContain('Pendiente de auditoría');
+    expect(container.textContent).not.toContain('Recoger en tienda');
+    expect(container.textContent).not.toContain('Cambiar destino');
+});

@@ -101,16 +101,27 @@ class PedidoBmaAuditoriaController extends Controller
     ): RedirectResponse {
         VisibilidadPedidoBma::assertPuedeConsultar(Auth::user(), $pedidoBma);
         $datos = $request->validate([
-            'resultado' => ['required', 'in:aprobado,bloqueado'],
+            'resultado' => ['required', 'in:aprobado,bloqueado,vencido'],
             'causa' => ['nullable', 'string', 'max:500'],
         ]);
         try {
-            $servicio->ejecutar($pedidoBma, Auth::user(), $datos['resultado'], (string) ($datos['causa'] ?? ''));
+            if ($datos['resultado'] === 'vencido') {
+                app(\App\Services\ControlPedidos\DevolverCreditoVencidoTiendaService::class)
+                    ->ejecutar($pedidoBma, Auth::user(), (string) ($datos['causa'] ?? ''));
+            } else {
+                $servicio->ejecutar($pedidoBma, Auth::user(), $datos['resultado'], (string) ($datos['causa'] ?? ''));
+            }
         } catch (\Illuminate\Validation\ValidationException $e) {
             return back()->with('error', collect($e->errors())->flatten()->first() ?: $e->getMessage());
+        } catch (\RuntimeException|\InvalidArgumentException $e) {
+            return back()->with('error', $e->getMessage());
         }
 
-        return back()->with('success', 'Resultado de crédito registrado. No confirma la entrega.');
+        $aviso = $datos['resultado'] === 'vencido'
+            ? 'El pedido regresó: el cliente tiene un crédito vencido y necesita liquidarlo.'
+            : 'Resultado de crédito registrado. No confirma la entrega.';
+
+        return back()->with('success', $aviso);
     }
 
     public function remisionCreditoTienda(

@@ -1148,7 +1148,7 @@ export const mezclarResumenCoberturaConPedido = (base, vivo) => {
 };
 
 export const mensajePagoFaltante = (pendiente) => (
-    `El total a cubrir no está completo. Faltan $${Number(pendiente).toFixed(2)}. Registre exhibiciones hasta cubrir mercancía, envío y seguro (menos el saldo a favor aplicado).`
+    `El total a cubrir no está completo. Faltan $${Number(pendiente).toFixed(2)}.`
 );
 
 /** max(real, volumétrico) redondeado al kg entero siguiente (ceil). Sin decimales. */

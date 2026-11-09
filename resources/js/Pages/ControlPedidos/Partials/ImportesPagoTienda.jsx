@@ -353,8 +353,9 @@ export default function ImportesPagoTienda({
                 <div className="grid gap-3">
                     {tipoGuardado === 'credito' && (
                         <p className="text-sm theme-text-main m-0">
-                            Crédito{solicitud?.credito_wizerp?.resultado ? `: ${solicitud.credito_wizerp.resultado}` : ''}.
-                            La gestión vigente no pide una exhibición, un banco ni un comprobante de pago.
+                            {solicitud?.credito_wizerp?.resultado === 'vencido'
+                                ? (solicitud.credito_wizerp.causa || 'El cliente tiene un crédito vencido y necesita liquidarlo.')
+                                : `Crédito${solicitud?.credito_wizerp?.resultado ? `: ${solicitud.credito_wizerp.resultado}` : ''}. La gestión vigente no pide una exhibición, un banco ni un comprobante de pago.`}
                         </p>
                     )}
                     {reporte && (
@@ -364,7 +365,10 @@ export default function ImportesPagoTienda({
                                 : 'El reporte quedó pendiente de acuerdo. No se reprograma solo.')}
                         </p>
                     )}
-                    {!importesListos && editable && (
+                    {!importesListos && editable && tipoGuardado === 'credito' && !(Number(totalMercancia) > 0) && (
+                        <p className="text-sm theme-text-muted m-0">El total a cubrir no está completo.</p>
+                    )}
+                    {!importesListos && editable && tipoGuardado !== 'credito' && (
                         <p className="text-sm theme-text-muted m-0">El pago espera a que los importes queden guardados.</p>
                     )}
                     {mostrarHistorial && (
