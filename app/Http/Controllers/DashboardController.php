@@ -57,16 +57,39 @@ class DashboardController extends Controller
         }
 
         if ($user->can('usuarios.gestionar') || $user->can('configuracion.ver_auditoria') || $user->can('clientes.carga_masiva')) {
-            $mesActual = now()->month;
-            $anioActual = now()->year;
+            $inicioMesActual = now()->startOfMonth();
 
-            $estadisticas['solicitudes_mes'] = SolicitudTag::whereMonth('created_at', $mesActual)
-                ->whereYear('created_at', $anioActual)
+            $estadisticas['solicitudes_mes'] = SolicitudTag::whereMonth('created_at', $inicioMesActual->month)
+                ->whereYear('created_at', $inicioMesActual->year)
                 ->count();
 
-            $estadisticas['cotizado_global'] = SolicitudTag::whereMonth('created_at', $mesActual)
-                ->whereYear('created_at', $anioActual)
-                ->sum('monto_cotizado');
+            $inicioMesAnterior = $inicioMesActual->copy()->subMonth();
+            $montosPorDia = SolicitudTag::query()
+                ->where('created_at', '>=', $inicioMesAnterior)
+                ->where('created_at', '<', $inicioMesActual)
+                ->whereNotNull('monto_cotizado')
+                ->selectRaw('DATE(created_at) as dia, SUM(monto_cotizado) as total')
+                ->groupByRaw('DATE(created_at)')
+                ->pluck('total', 'dia');
+
+            $tramos = [];
+            if ($montosPorDia->isNotEmpty()) {
+                $diasDelMes = $inicioMesAnterior->daysInMonth;
+                for ($desde = 1; $desde <= $diasDelMes; $desde += 7) {
+                    $tramos[] = ['desde' => $desde, 'hasta' => min($desde + 6, $diasDelMes), 'monto' => 0];
+                }
+
+                foreach ($montosPorDia as $fecha => $monto) {
+                    $dia = (int) substr($fecha, -2);
+                    $tramos[intdiv($dia - 1, 7)]['monto'] += $monto;
+                }
+            }
+
+            $estadisticas['cotizado_mes_anterior'] = [
+                'periodo' => $inicioMesAnterior->locale('es')->translatedFormat('F Y'),
+                'total' => $montosPorDia->sum(),
+                'tramos' => $tramos,
+            ];
         }
 
         if ($verWidgetSolicitudes) {
