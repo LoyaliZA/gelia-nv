@@ -9,6 +9,7 @@ import {
     badgesRetrasoSla,
     badgeAuditoriaRevision,
     esFasePreVenta,
+    estadoConsultaPedido,
     tieneGuiaLista,
     tieneGuiaPdfDisponible,
     puedeAnexarPagoEnvio,
@@ -147,7 +148,11 @@ export function accionesPedidoLista({
         out.push({ key: 'bitacora', label: 'Bitácora', tone: 'purple', onClick: () => onBitacora(pedido) });
     }
     if (puedeEditar?.(pedido) && onEditar) {
-        out.push({ key: 'editar', label: 'Editar', onClick: () => onEditar(pedido) });
+        out.push({
+            key: 'editar',
+            label: estadoConsultaPedido(pedido) === 'respondida' ? 'Continuar' : 'Editar',
+            onClick: () => onEditar(pedido),
+        });
     }
     if (pedido.puede_espera_pago && can('control_pedidos.espera_pago') && onEsperaPago) {
         out.push({ key: 'espera', label: 'Esperando pago', tone: 'teal', onClick: () => onEsperaPago(pedido) });

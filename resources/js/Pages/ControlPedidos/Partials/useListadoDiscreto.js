@@ -43,6 +43,11 @@ export default function useListadoDiscreto({
     const [errorListado, setErrorListado] = useState('');
     const abortRef = useRef(null);
 
+    useEffect(() => () => {
+        abortRef.current?.abort();
+        abortRef.current = null;
+    }, []);
+
     useEffect(() => {
         if (pedidosProp !== undefined) setPedidos(pedidosProp);
     }, [pedidosProp]);
@@ -78,6 +83,7 @@ export default function useListadoDiscreto({
                 signal: controller.signal,
                 headers: { Accept: 'application/json' },
             });
+            if (controller.signal.aborted) return null;
             if (data.pedidos !== undefined) setPedidos(data.pedidos);
             if (data.tareas !== undefined) setTareas(data.tareas);
             if (data.metricas !== undefined) setMetricas(data.metricas);

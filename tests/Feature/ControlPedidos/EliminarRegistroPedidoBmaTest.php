@@ -4,12 +4,15 @@ namespace Tests\Feature\ControlPedidos;
 
 use App\Models\ControlPedidos\AuditoriaPedidoBma;
 use App\Models\ControlPedidos\CatalogoEstatusPedido;
+use App\Models\ControlPedidos\CatalogoModalidadPreparacionPedido;
 use App\Models\ControlPedidos\CatalogoOrigenPedido;
 use App\Models\ControlPedidos\PedidoBma;
+use App\Models\ControlPedidos\PedidoBmaTareaPreparacion;
 use App\Models\User;
 use App\Services\ControlPedidos\EliminarPedidoBmaService;
 use App\Services\ControlPedidos\EliminarRegistroPedidoBmaService;
 use App\Services\ControlPedidos\ListarPedidosBmaService;
+use App\Services\ControlPedidos\ListarTareasTiendaService;
 use App\Services\ControlPedidos\RestaurarRegistroPedidoBmaService;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
@@ -171,6 +174,38 @@ class EliminarRegistroPedidoBmaTest extends TestCase
         $pedido->refresh();
         $this->assertTrue($pedido->trashed());
         $this->assertNull($pedido->eliminacion_registro_at);
+    }
+
+    public function test_eliminar_borrador_en_revision_retira_la_tarea_de_tienda(): void
+    {
+        $pedido = $this->crearPedido([
+            'fase' => CatalogoEstatusPedido::FASE_PESAJE_PENDIENTE,
+            'vendedor_id' => $this->vendedora->id,
+        ]);
+        $modalidad = CatalogoModalidadPreparacionPedido::firstOrCreate(
+            ['codigo' => 'RECOGE_TIENDA'],
+            ['nombre' => 'Recoge en tienda', 'activo' => true]
+        );
+        $tarea = PedidoBmaTareaPreparacion::query()->create([
+            'pedido_bma_id' => $pedido->id,
+            'catalogo_modalidad_preparacion_id' => $modalidad->id,
+            'almacen_id' => $pedido->almacen_id,
+            'area_responsable_codigo' => 'TIENDA',
+            'estado' => PedidoBmaTareaPreparacion::ESTADO_EN_ATENCION,
+            'solicitada_por_id' => $this->vendedora->id,
+            'solicitada_at' => now(),
+            'version' => 1,
+        ]);
+
+        $this->actingAs($this->vendedora);
+        app(EliminarPedidoBmaService::class)->ejecutar($pedido);
+
+        $this->assertTrue($pedido->fresh()->trashed());
+        $this->assertSoftDeleted('pedido_bma_tareas_preparacion', ['id' => $tarea->id]);
+        $this->assertSame(
+            0,
+            app(ListarTareasTiendaService::class)->ejecutar($this->vendedora, ['tab' => 'TODOS'])->total()
+        );
     }
 
     public function test_destroy_falla_en_fase_enviado_aunque_tenga_eliminar_registro(): void

@@ -1,6 +1,7 @@
 import useActualizacionesPedidos from './Partials/useActualizacionesPedidos';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Head, router, usePage } from '@inertiajs/react';
+import axios from 'axios';
 import AppLayout from '../../Layouts/AppLayout';
 import GeliaPageShell from '../../Components/GeliaPageShell';
 import { geliaCardClass } from '../../utils/geliaTheme';
@@ -62,14 +63,54 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
     const [ultimaSync, setUltimaSync] = useState(null);
     const detalleDesdeEnlaceRef = useRef(false);
     const debounceBusqueda = useRef(null);
-    const refrescoPendiente = useRef(false);
+    const paramsListado = useRef({ tab: tabActiva, q: busqueda || undefined, page: pedidos?.current_page || 1 });
     const flashMostradoRef = useRef(null);
 
     const cargarYMarcar = useCallback(async (params, opts) => {
+        paramsListado.current = params;
         const data = await cargar(params, opts);
         if (data) setUltimaSync(new Date());
         return data;
     }, [cargar]);
+
+    const refrescarListado = useCallback(() => cargarYMarcar(paramsListado.current, { silencioso: true }), [cargarYMarcar]);
+
+    useEffect(() => {
+        let vigente = true;
+        let recarga;
+        const programarRecarga = () => {
+            window.clearTimeout(recarga);
+            recarga = window.setTimeout(refrescarListado, 180);
+        };
+        const interceptor = axios.interceptors.response.use((respuesta) => {
+            const { method, url } = respuesta.config;
+            if (!vigente || !['post', 'put', 'patch', 'delete'].includes(method) || respuesta.headers['x-inertia']
+                || !respuesta.headers['content-type']?.includes('application/json') || respuesta.data?.ok === false) return respuesta;
+
+            const destino = new URL(url, window.location.href);
+            const [, modulo, recurso, pago] = destino.pathname.split('/');
+            if (destino.origin !== window.location.origin || modulo !== 'control-pedidos') return respuesta;
+
+            const guardaPedido = !recurso || recurso === 'autoguardar' || /^\d+$/.test(recurso)
+                || (recurso === 'pagos' && /^\d+$/.test(pago));
+            const guardaDireccion = ['actualizar-campos-direccion', 'registrar-direccion-catalogo'].includes(recurso)
+                && respuesta.data?.pedido_id;
+            // Reverb excluye el socket que realizó la escritura.
+            if (guardaPedido || guardaDireccion) {
+                programarRecarga();
+            }
+            return respuesta;
+        });
+        const retirarInertia = router.on('success', ({ detail: { page } }) => {
+            if (page.component === 'ControlPedidos/Index' && page.props.flash?.success) programarRecarga();
+        });
+        return () => {
+            vigente = false;
+            axios.interceptors.response.eject(interceptor);
+            retirarInertia();
+            window.clearTimeout(recarga);
+        };
+    }, [refrescarListado]);
 
     useEffect(() => {
         // Con el borrador abierto, el feedback va en el propio formulario (evitar alerta Index + click-through).
@@ -131,7 +172,11 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
         || Boolean(pedidoRestaurar)
         || Boolean(pedidoAuditoria);
 
-    useActualizacionesPedidos({ onActualizar: () => cargarYMarcar({ tab: tabActiva, q: busqueda || undefined, page: pedidosVista?.current_page || 1 }, { silencioso: true }), pausado: Boolean(pausarPollingListado) });
+    useActualizacionesPedidos({
+        onActualizar: refrescarListado,
+        pausado: Boolean(pausarPollingListado || cargando),
+        intervaloRespaldo: REFRESCO_LISTADO_MS,
+    });
 
 
     // Notificación en vivo (pesaje listo, errores CEDIS, etc.): refrescar al instante si el modal está abierto.
@@ -144,14 +189,11 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
             if (!modalForm.abierto) return;
             const vivoId = modalId || Number(modalForm.pedidoIdVivo);
             if (vivoId && vivoId !== pedidoId) return;
-            cargarYMarcar(
-                { tab: tabActiva, q: busqueda || undefined, page: pedidosVista?.current_page || 1 },
-                { silencioso: true }
-            );
+            refrescarListado();
         };
         window.addEventListener('notification-received', onNotification);
         return () => window.removeEventListener('notification-received', onNotification);
-    }, [modalForm.abierto, modalForm.pedido?.id, modalForm.pedidoIdVivo, tabActiva, busqueda, pedidosVista?.current_page, cargarYMarcar]);
+    }, [modalForm.abierto, modalForm.pedido?.id, modalForm.pedidoIdVivo, refrescarListado]);
 
     useEffect(() => () => clearTimeout(debounceBusqueda.current), []);
 
@@ -339,7 +381,7 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
                 pedido={modalDetalle.pedido}
                 onClose={() => setModalDetalle({ abierto: false, pedido: null })}
             />
-            <ModalMovimientosTienda abierto={Boolean(movimientoTienda)} pedido={movimientoTienda?.pedido} modo={movimientoTienda?.modo} onClose={() => setMovimientoTienda(null)} onActualizar={() => cargar({ tab: tabActiva, q: busqueda })} />
+            <ModalMovimientosTienda abierto={Boolean(movimientoTienda)} pedido={movimientoTienda?.pedido} modo={movimientoTienda?.modo} onClose={() => setMovimientoTienda(null)} />
             <ModalBitacoraPedido
                 abierto={modalBitacora.abierto}
                 pedido={modalBitacora.pedido}

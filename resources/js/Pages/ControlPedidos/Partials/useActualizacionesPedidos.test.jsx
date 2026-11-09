@@ -16,7 +16,7 @@ beforeEach(() => {
     actualizar = vi.fn(); pendiente = vi.fn();
     container = document.createElement('div'); document.body.append(container); root = createRoot(container);
 });
-afterEach(async () => { await act(() => root.unmount()); container.remove(); vi.useRealTimers(); });
+afterEach(async () => { await act(() => root.unmount()); container.remove(); vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 const render = (props = {}) => act(() => root.render(<Harness onActualizar={actualizar} onPendiente={pendiente} pedidoId={32} {...props} />));
 
 it('no consulta periódicamente y agrupa cambios del mismo pedido', async () => {
@@ -44,5 +44,29 @@ it('comprueba de nuevo al recuperar la conexión y retira listeners al cerrar', 
     expect(actualizar).toHaveBeenCalledOnce();
     await render({ activo: false });
     await act(() => { cambio(32); window.dispatchEvent(new Event('online')); vi.advanceTimersByTime(1000); });
+    expect(actualizar).toHaveBeenCalledOnce();
+});
+
+it('usa el respaldo de 15 segundos solo en una pestaña visible sin suscripción operativa', async () => {
+    const subscription = { subscribed: true };
+    const connection = { state: 'connected', bind: vi.fn(), unbind: vi.fn() };
+    const canal = { subscription, listen: vi.fn(), stopListening: vi.fn() };
+    vi.stubGlobal('Echo', { private: () => canal, connector: { pusher: { connection } }, leave: vi.fn() });
+    const visibilidad = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+    await render({ intervaloRespaldo: 15000 });
+    await act(() => vi.advanceTimersByTime(15000));
+    expect(actualizar).not.toHaveBeenCalled();
+
+    subscription.subscribed = false;
+    visibilidad.mockReturnValue('hidden');
+    await act(() => vi.advanceTimersByTime(15000));
+    expect(actualizar).not.toHaveBeenCalled();
+
+    visibilidad.mockReturnValue('visible');
+    await act(() => vi.advanceTimersByTime(15200));
+    expect(actualizar).toHaveBeenCalledOnce();
+
+    await render({ activo: false, intervaloRespaldo: 15000 });
+    await act(() => vi.advanceTimersByTime(30000));
     expect(actualizar).toHaveBeenCalledOnce();
 });

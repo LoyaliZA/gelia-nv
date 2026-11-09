@@ -794,6 +794,28 @@
     padding: 0.75rem 1rem 0;
 }
 
+.gelia-preparacion-modal .gelia-modal-body:has(> .gelia-preparacion--actualizacion) {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.gelia-preparacion-modal .gelia-preparacion--actualizacion {
+    flex: none;
+    overflow: visible;
+}
+
+/* La respuesta confirmada no trae workspace. display:block evita que el flex encoja el contenido. */
+.gelia-preparacion-modal .gelia-preparacion:not(:has(.gelia-preparacion-workspace)) {
+    display: block;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.gelia-preparacion-modal .gelia-preparacion--actualizacion .gelia-preparacion-captura {
+    overflow: visible;
+}
+
 .gelia-preparacion-documento-panel {
     display: flex;
     flex-direction: column;

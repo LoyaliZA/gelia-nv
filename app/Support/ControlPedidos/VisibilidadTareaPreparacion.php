@@ -22,7 +22,8 @@ final class VisibilidadTareaPreparacion
             $query->whereIn('almacen_id', $almacenes);
         }
 
-        return $query->where('area_responsable_codigo', 'TIENDA');
+        // Sin pedido vigente la tarea no es una solicitud: el borrador eliminado no debe seguir en la bandeja.
+        return $query->where('area_responsable_codigo', 'TIENDA')->whereHas('pedido');
     }
 
     public static function puedeVer(User $usuario, PedidoBmaTareaPreparacion $tarea): bool

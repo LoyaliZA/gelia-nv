@@ -73,7 +73,7 @@ export default function ConsultaPreparacionTienda({ tarea, auth, documentos = []
             : esperaConfirmacion ? 'Espere a que Ventas confirme la modalidad y envíe la confirmación del pedido.'
                 : !vigente ? 'La respuesta debe actualizarse antes de confirmar el apartado.' : null;
 
-    return <section className="gelia-preparacion" aria-label="Preparación en tienda">
+    return <section className={actualizacion ? 'gelia-preparacion gelia-preparacion--actualizacion' : 'gelia-preparacion'} aria-label="Preparación en tienda">
         {!inicial && !actualizacion && <header className="gelia-preparacion-contexto">
             <div className="min-w-0"><h3 className="text-sm font-semibold m-0">{confirmado ? 'Apartado en tienda' : 'Preparación en tienda'}</h3><dl className="gelia-preparacion-meta"><div><dt className="shrink-0">Cliente</dt><dd>{pedido.cliente_nombre || 'Sin cliente'}</dd></div><div><dt className="shrink-0">Almacén</dt><dd>{tarea.almacen?.nombre || 'No asignado'}</dd></div></dl></div>
             <button type="button" className={BTN_SECONDARY} disabled={!referencias.length} onClick={() => setVista({ documentos: referencias, indice: 0 })}><FileText size={16} aria-hidden />Ver pedido</button>

@@ -74,7 +74,8 @@ export default function ModalCorregirPreparacionTienda({
 
     return (
         <div className={THEME_MODAL_OVERLAY} onClick={onClose}>
-            <div className={`${THEME_MODAL_SHELL} max-w-2xl w-full max-h-[90vh] overflow-y-auto`} onClick={(e) => e.stopPropagation()}>
+            <div className={`${THEME_MODAL_SHELL} max-w-2xl w-full flex flex-col`} onClick={(e) => e.stopPropagation()}>
+                <div className="gelia-modal-body p-5">
                 <div className="flex items-start justify-between gap-4 mb-4">
                     <div>
                         <p className="text-xs font-black uppercase tracking-widest theme-text-primario m-0">Corregir preparación</p>
@@ -163,6 +164,7 @@ export default function ModalCorregirPreparacionTienda({
                     <button type="button" onClick={enviar} disabled={procesando} className={BTN_PRIMARY}>
                         Corregir y reenviar
                     </button>
+                </div>
                 </div>
             </div>
         </div>
