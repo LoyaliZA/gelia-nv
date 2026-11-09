@@ -147,6 +147,10 @@ class PedidoBmaTiendaController extends Controller
             'cumplimientoFisico.eventos.usuario',
         ]);
 
+        if ($tarea->pedido === null) {
+            abort(404, 'La solicitud ya no está disponible.');
+        }
+
         $datos = [
             'tarea' => [
                 ...VisibilidadTareaPreparacion::payloadTienda($tarea, Auth::user()),
