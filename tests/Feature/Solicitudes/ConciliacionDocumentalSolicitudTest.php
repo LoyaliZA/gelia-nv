@@ -487,6 +487,150 @@ class ConciliacionDocumentalSolicitudTest extends TestCase
         $this->assertSame($solicitud->id, $visibles->first()->id);
     }
 
+    public function test_la_asignacion_manual_rechaza_documentos_fuera_del_contrato(): void
+    {
+        $cliente = $this->cliente('1000.00', '880201');
+        $otro = $this->cliente('1000.00', '880202');
+        $periodo = $this->periodo();
+        $ajeno = EscalonamientoPeriodo::query()->firstOrCreate(
+            ['anio' => 2026, 'mes' => 10],
+            ['zona_horaria' => 'America/Mexico_City', 'estado' => EscalonamientoPeriodo::ESTADO_ABIERTO],
+        );
+        $solicitud = $this->pagada($cliente, '80.00', 'R-MAN');
+        $valido = $this->documento($cliente, 'R-MAN', '80.00', $periodo);
+        $svc = app(ConciliacionSolicitudEscalonamiento::class);
+
+        $this->rechazaAsignacion('cliente', fn () => $svc->asignar(
+            $periodo, $solicitud, $this->documento($otro, 'R-MAN', '80.00', $periodo), '80.00', 'cotejo', null,
+        ));
+        $this->rechazaAsignacion('folio', fn () => $svc->asignar(
+            $periodo, $solicitud, $this->documento($cliente, 'OTRO', '80.00', $periodo), '80.00', 'cotejo', null,
+        ));
+        $inactivo = $this->documento($cliente, 'R-OFF', '80.00', $periodo);
+        $inactivo->update(['estado' => 'inactivo', 'folio' => 'R-MAN']);
+        $this->rechazaAsignacion('activo', fn () => $svc->asignar($periodo, $solicitud, $inactivo->fresh(), '80.00', 'cotejo', null));
+        $usd = $this->documento($cliente, 'R-USD', '80.00', $periodo);
+        $usd->update(['moneda' => 'USD', 'folio' => 'R-MAN']);
+        $this->rechazaAsignacion('MXN', fn () => $svc->asignar($periodo, $solicitud, $usd->fresh(), '80.00', 'cotejo', null));
+        $cero = $this->documento($cliente, 'R-CERO', '80.00', $periodo);
+        $cero->update(['total' => '0.00', 'folio' => 'R-MAN']);
+        $this->rechazaAsignacion('positivo', fn () => $svc->asignar($periodo, $solicitud, $cero->fresh(), '10.00', 'cotejo', null));
+        $this->rechazaAsignacion('período', fn () => $svc->asignar($ajeno, $solicitud, $valido, '80.00', 'cotejo', null));
+        $this->rechazaAsignacion('confirmado', fn () => $svc->asignar($periodo, $solicitud, $valido, '90.00', 'cotejo', null));
+        $this->documento($cliente, 'R-MAN-B', '80.00', $periodo)->update(['folio' => 'R-MAN']);
+        $this->rechazaAsignacion('misma identidad', fn () => $svc->asignar($periodo, $solicitud, $valido->fresh(), '80.00', 'cotejo', null));
+
+        $sinPago = $this->pagada($cliente, '80.00', 'R-NOPAY');
+        $docPago = $this->documento($cliente, 'R-NOPAY', '80.00', $periodo);
+        $sinPago->pago_confirmado = false;
+        $sinPago->save();
+        $this->rechazaAsignacion('no está confirmado', fn () => $svc->asignar($periodo, $sinPago->fresh(), $docPago, '80.00', 'cotejo', null));
+
+        $cancelada = $this->pagada($cliente, '80.00', 'R-CAN');
+        $docCancelada = $this->documento($cliente, 'R-CAN', '80.00', $periodo);
+        $cancelada->catalogo_estado_solicitud_id = CatalogoEstadoSolicitud::idDe('Cancelada');
+        $cancelada->save();
+        $this->rechazaAsignacion('cancelada', fn () => $svc->asignar($periodo, $cancelada->fresh(), $docCancelada, '80.00', 'cotejo', null));
+
+        $this->assertSame('1000.00', $cliente->fresh()->monto_venta_actual);
+        $this->assertSame(0, EscalonamientoConciliacionSolicitud::query()->where('estado', EscalonamientoConciliacionSolicitud::ESTADO_ASIGNADA)->count());
+    }
+
+    public function test_un_cambio_de_folio_retira_la_cobertura_y_conserva_la_evidencia(): void
+    {
+        $cliente = $this->cliente('1000.00', '880203');
+        $documento = $this->documento($cliente, 'R-VIVO', '100.00');
+        $solicitud = $this->pagada($cliente, '100.00', 'R-VIVO');
+        $solicitud->update(['cubierto_por_carga_masiva' => true]);
+        $fila = app(ConciliacionSolicitudEscalonamiento::class)->conciliar($solicitud->fresh());
+
+        $solicitud->update(['numero_remision' => 'R-NUEVO']);
+
+        $fila->refresh();
+        $this->assertSame(EscalonamientoConciliacionSolicitud::ESTADO_ANULADA, $fila->estado);
+        $this->assertSame('100.00', (string) $fila->importe_asignado);
+        $this->assertNotNull($fila->id);
+        $this->assertStringContainsString('Cobertura retirada', (string) $fila->evidencia);
+        $this->assertSame('0.00', $this->sumaAsignada($documento));
+        $this->assertTrue((bool) $solicitud->fresh()->cubierto_por_carga_masiva);
+        $this->assertSame('1000.00', $cliente->fresh()->monto_venta_actual);
+        $this->assertSame(1000.0, $this->ajuste()->proyectarMonto($cliente->fresh(), $solicitud->fresh(), 100)['proyectado']);
+    }
+
+    public function test_documento_inactivo_o_ambiguo_o_monto_distinto_no_deja_cobertura_activa(): void
+    {
+        $cliente = $this->cliente('1000.00', '880204');
+        $periodo = $this->periodo();
+        $documento = $this->documento($cliente, 'R-STALE', '100.00', $periodo);
+        $solicitud = $this->pagada($cliente, '100.00', 'R-STALE');
+        $svc = app(ConciliacionSolicitudEscalonamiento::class);
+        $fila = $svc->conciliar($solicitud);
+
+        $solicitud->update(['monto_aplicado_al_cliente' => '40.00']);
+        $this->assertSame('40.00', (string) $fila->fresh()->importe_asignado);
+        $this->assertSame(EscalonamientoConciliacionSolicitud::ESTADO_ASIGNADA, $fila->fresh()->estado);
+
+        $solicitud->update(['monto_aplicado_al_cliente' => '80.00']);
+        $this->assertSame('40.00', (string) $fila->fresh()->importe_asignado);
+        $repetida = $svc->conciliar($solicitud->fresh());
+        $this->assertSame('80.00', (string) $repetida->fresh()->importe_asignado);
+        $this->assertSame(1, EscalonamientoConciliacionSolicitud::query()->where('solicitud_tag_id', $solicitud->id)->where('estado', EscalonamientoConciliacionSolicitud::ESTADO_ASIGNADA)->count());
+
+        $documento->update(['estado' => 'inactivo']);
+        $svc->resolverObsolescencia($solicitud->fresh());
+        $this->assertSame(EscalonamientoConciliacionSolicitud::ESTADO_ANULADA, $fila->fresh()->estado);
+        $this->assertSame('0.00', $this->sumaAsignada($documento));
+
+        $documento->update(['estado' => 'activo']);
+        $svc->conciliar($solicitud->fresh());
+        $this->documento($cliente, 'R-STALE-2', '100.00', $periodo)->update(['folio' => 'R-STALE']);
+        $svc->resolverObsolescencia($solicitud->fresh());
+        $this->assertSame(0, EscalonamientoConciliacionSolicitud::query()->where('solicitud_tag_id', $solicitud->id)->where('estado', EscalonamientoConciliacionSolicitud::ESTADO_ASIGNADA)->count());
+        $this->assertGreaterThan(0, EscalonamientoConciliacionSolicitud::query()->where('solicitud_tag_id', $solicitud->id)->count());
+        $this->assertSame('1000.00', $cliente->fresh()->monto_venta_actual);
+    }
+
+    public function test_una_fila_previa_a_la_migracion_se_conserva_solo_si_el_documento_sigue_siendo_valido(): void
+    {
+        $cliente = $this->cliente('1000.00', '880205');
+        $documento = $this->documento($cliente, 'R-PREV', '70.00');
+        $solicitud = $this->pagada($cliente, '70.00', 'R-PREV');
+        $solicitud->update(['cubierto_por_carga_masiva' => true]);
+        $fila = EscalonamientoConciliacionSolicitud::query()->create([
+            'escalonamiento_periodo_id' => $documento->escalonamiento_periodo_id,
+            'solicitud_tag_id' => $solicitud->id,
+            'documento_venta_id' => $documento->id,
+            'importe_asignado' => '70.00',
+            'estado' => EscalonamientoConciliacionSolicitud::ESTADO_ASIGNADA,
+            'procedencia' => EscalonamientoConciliacionSolicitud::PROCEDENCIA_DOCUMENTO,
+            'inclusion_acumulado' => EscalonamientoConciliacionSolicitud::INCLUSION_INDETERMINADA,
+            'clave_asignacion' => 'doc:'.$documento->id,
+            'evidencia' => 'Asignación anterior a la conciliación documental.',
+        ]);
+        $svc = app(ConciliacionSolicitudEscalonamiento::class);
+        $svc->resolverObsolescencia($solicitud->fresh());
+        $this->assertSame(EscalonamientoConciliacionSolicitud::ESTADO_ASIGNADA, $fila->fresh()->estado);
+        $this->assertSame('Asignación anterior a la conciliación documental.', $fila->fresh()->evidencia);
+
+        $solicitud->update(['numero_remision' => 'R-YA-NO']);
+        $this->assertSame(EscalonamientoConciliacionSolicitud::ESTADO_ANULADA, $fila->fresh()->estado);
+        $this->assertSame('70.00', (string) $fila->fresh()->importe_asignado);
+        $this->assertStringContainsString('Asignación anterior', (string) $fila->fresh()->evidencia);
+        $this->assertTrue((bool) $solicitud->fresh()->cubierto_por_carga_masiva);
+        $this->assertSame('1000.00', $cliente->fresh()->monto_venta_actual);
+        $this->assertSame(1, EscalonamientoConciliacionSolicitud::query()->whereKey($fila->id)->count());
+    }
+
+    private function rechazaAsignacion(string $fragmento, callable $accion): void
+    {
+        try {
+            $accion();
+            $this->fail('La asignación debía rechazarse.');
+        } catch (InvalidArgumentException $e) {
+            $this->assertStringContainsString($fragmento, $e->getMessage());
+        }
+    }
+
     private function ajuste(): AjustarMontoPorSolicitudService
     {
         return app(AjustarMontoPorSolicitudService::class);

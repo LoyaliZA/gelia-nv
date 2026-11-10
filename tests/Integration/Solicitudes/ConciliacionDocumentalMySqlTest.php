@@ -2,6 +2,7 @@
 
 namespace Tests\Integration\Solicitudes;
 
+use App\Models\AuditoriaSolicitud;
 use App\Models\CatalogoEstadoSolicitud;
 use App\Models\CatalogoListaDescuento;
 use App\Models\CatalogoProceso;
@@ -13,6 +14,8 @@ use App\Models\SolicitudTag;
 use App\Models\User;
 use App\Services\Escalonamiento\ConciliacionSolicitudEscalonamiento;
 use Illuminate\Support\Facades\DB;
+use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
 use Illuminate\Support\Facades\Schema;
 use RuntimeException;
 use Symfony\Component\Process\Process;
@@ -128,6 +131,101 @@ CODE;
         }
     }
 
+    public function test_conciliar_y_asignar_la_misma_solicitud_no_duplican(): void
+    {
+        [$cliente, $solicitud, $documento] = $this->escenario('100.00');
+        $conciliar = $this->procesoConciliar($solicitud->id);
+        $asignar = $this->procesoAsignar($solicitud->id, $documento->id, (int) $documento->escalonamiento_periodo_id, '100.00');
+        $conciliar->start();
+        $asignar->start();
+        $conciliar->wait();
+        $asignar->wait();
+
+        $this->assertTrue($conciliar->isSuccessful(), $conciliar->getErrorOutput());
+        $this->assertTrue($asignar->isSuccessful(), $asignar->getErrorOutput());
+        $this->assertSame('100.00', $this->sumaAsignada($documento));
+        $this->assertSame(1, EscalonamientoConciliacionSolicitud::query()->where('solicitud_tag_id', $solicitud->id)->where('estado', EscalonamientoConciliacionSolicitud::ESTADO_ASIGNADA)->count());
+        $this->assertSame('1000.00', $cliente->fresh()->monto_venta_actual);
+    }
+
+    public function test_cancelar_mientras_se_asigna_no_reactiva_cobertura(): void
+    {
+        [$cliente, $solicitud, $documento] = $this->escenario('100.00');
+        $cancelada = CatalogoEstadoSolicitud::query()->firstOrCreate(['nombre' => 'Cancelada'], ['activo' => true]);
+        $senal = tempnam(sys_get_temp_dir(), 'fase2a-cancel-');
+        unlink($senal);
+        $resultado = tempnam(sys_get_temp_dir(), 'fase2a-asig-');
+        $codigo = <<<'CODE'
+require 'vendor/autoload.php';
+$app = require 'bootstrap/app.php';
+$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+$base = (string) config('database.connections.mysql.database');
+$host = (string) config('database.connections.mysql.host');
+if ($base !== 'gelia_wizerp_test' || $base === 'gelia' || ! in_array($host, ['gelia-wizerp-mysql-test', '127.0.0.1'], true)) { exit(9); }
+Illuminate\Support\Facades\DB::transaction(function () use ($argv) {
+    $solicitud = App\Models\SolicitudTag::query()->lockForUpdate()->findOrFail($argv[1]);
+    $solicitud->catalogo_estado_solicitud_id = (int) $argv[2];
+    $solicitud->save();
+    file_put_contents($argv[3], 'locked');
+    usleep(800000);
+    app(App\Services\Escalonamiento\ConciliacionSolicitudEscalonamiento::class)->liberar($solicitud);
+});
+CODE;
+        $bloqueo = new Process([
+            PHP_BINARY, '-r', $codigo, (string) $solicitud->id, (string) $cancelada->id, $senal,
+        ], base_path(), $this->entorno());
+        $asignar = $this->procesoAsignar($solicitud->id, $documento->id, (int) $documento->escalonamiento_periodo_id, '100.00', $resultado);
+        $bloqueo->start();
+        try {
+            $limite = microtime(true) + 10;
+            while (! is_file($senal) && $bloqueo->isRunning() && microtime(true) < $limite) {
+                usleep(10000);
+            }
+            $this->assertFileExists($senal, $bloqueo->getErrorOutput());
+            $asignar->start();
+            $asignar->wait();
+            $bloqueo->wait();
+            $this->assertTrue($bloqueo->isSuccessful(), $bloqueo->getErrorOutput());
+            $this->assertTrue($asignar->isSuccessful(), $asignar->getErrorOutput());
+            $this->assertSame('rejected', trim((string) file_get_contents($resultado)));
+            $this->assertSame(0, EscalonamientoConciliacionSolicitud::query()->where('estado', EscalonamientoConciliacionSolicitud::ESTADO_ASIGNADA)->count());
+            $this->assertSame('1000.00', $cliente->fresh()->monto_venta_actual);
+        } finally {
+            $bloqueo->stop(0);
+            $asignar->stop(0);
+        }
+    }
+
+    public function test_dos_confirmaciones_http_concurrentes_conservan_un_solo_monto(): void
+    {
+        [$cliente, $solicitud] = $this->escenario('100.00');
+        $solicitud->update(['pago_confirmado' => false, 'monto_aplicado_al_cliente' => 0]);
+        Permission::findOrCreate('solicitudes.confirmar_pago', 'web');
+        Role::findOrCreate('Super Admin', 'web');
+        Role::findOrCreate('Administrador', 'web');
+        $usuario = User::factory()->create();
+        $usuario->givePermissionTo('solicitudes.confirmar_pago');
+        $solicitud->update(['vendedor_id' => $usuario->id]);
+
+        $primero = tempnam(sys_get_temp_dir(), 'fase2a-http-a-');
+        $segundo = tempnam(sys_get_temp_dir(), 'fase2a-http-b-');
+        $a = $this->procesoConfirmarHttp($usuario->id, $solicitud->id, '30.00', $primero);
+        $b = $this->procesoConfirmarHttp($usuario->id, $solicitud->id, '90.00', $segundo);
+        $a->start();
+        $b->start();
+        $a->wait();
+        $b->wait();
+
+        $solicitud->refresh();
+        $this->assertTrue($a->isSuccessful(), $a->getErrorOutput().file_get_contents($primero));
+        $this->assertTrue($b->isSuccessful(), $b->getErrorOutput().file_get_contents($segundo));
+        $this->assertContains((string) $solicitud->monto_aplicado_al_cliente, ['30.00', '90.00']);
+        $this->assertTrue((bool) $solicitud->pago_confirmado);
+        $this->assertSame(1, AuditoriaSolicitud::query()->where('solicitud_id', $solicitud->id)->count());
+        $this->assertSame('1000.00', $cliente->fresh()->monto_venta_actual);
+        $this->assertSame($cliente->lista_actual_id, $cliente->fresh()->lista_actual_id);
+    }
+
     /**
      * @return array{0: Cliente, 1: SolicitudTag, 2: DocumentoVenta}
      */
@@ -182,6 +280,68 @@ app(App\Services\Escalonamiento\ConciliacionSolicitudEscalonamiento::class)->con
 CODE;
 
         return new Process([PHP_BINARY, '-r', $codigo, (string) $solicitudId], base_path(), $this->entorno());
+    }
+
+    private function procesoAsignar(int $solicitudId, int $documentoId, int $periodoId, string $importe, ?string $resultado = null): Process
+    {
+        $codigo = <<<'CODE'
+require 'vendor/autoload.php';
+$app = require 'bootstrap/app.php';
+$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+$base = (string) config('database.connections.mysql.database');
+$host = (string) config('database.connections.mysql.host');
+if ($base !== 'gelia_wizerp_test' || $base === 'gelia' || ! in_array($host, ['gelia-wizerp-mysql-test', '127.0.0.1'], true)) { exit(9); }
+try {
+    $solicitud = App\Models\SolicitudTag::query()->findOrFail($argv[1]);
+    $documento = App\Models\Escalonamiento\DocumentoVenta::query()->findOrFail($argv[2]);
+    $periodo = App\Models\Escalonamiento\EscalonamientoPeriodo::query()->findOrFail($argv[3]);
+    app(App\Services\Escalonamiento\ConciliacionSolicitudEscalonamiento::class)->asignar($periodo, $solicitud, $documento, $argv[4], 'cotejo concurrente', null);
+    if (! empty($argv[5])) { file_put_contents($argv[5], 'assigned'); }
+} catch (InvalidArgumentException $e) {
+    if (! empty($argv[5])) { file_put_contents($argv[5], 'rejected'); }
+}
+CODE;
+        $args = [PHP_BINARY, '-r', $codigo, (string) $solicitudId, (string) $documentoId, (string) $periodoId, $importe];
+        if ($resultado !== null) {
+            $args[] = $resultado;
+        }
+
+        return new Process($args, base_path(), $this->entorno());
+    }
+
+    private function procesoConfirmarHttp(int $usuarioId, int $solicitudId, string $monto, string $salida): Process
+    {
+        $codigo = <<<'CODE'
+require 'vendor/autoload.php';
+$app = require 'bootstrap/app.php';
+$kernel = $app->make(Illuminate\Contracts\Http\Kernel::class);
+$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+$base = (string) config('database.connections.mysql.database');
+$host = (string) config('database.connections.mysql.host');
+if ($base !== 'gelia_wizerp_test' || $base === 'gelia' || ! in_array($host, ['gelia-wizerp-mysql-test', '127.0.0.1'], true)) { exit(9); }
+$usuario = App\Models\User::query()->findOrFail($argv[1]);
+$sesion = $app->make('session')->driver();
+$sesion->start();
+$sesion->put('_token', 'fase2a-http');
+Illuminate\Support\Facades\Auth::guard('web')->login($usuario);
+$sesion->save();
+Illuminate\Cookie\Middleware\EncryptCookies::except(config('session.cookie'));
+$peticion = Illuminate\Http\Request::create('/solicitudes/'.$argv[2].'/confirmar-pago', 'PUT', [
+    'monto_final_pagado' => $argv[3], '_token' => 'fase2a-http', 'modo' => 'pago',
+]);
+$peticion->cookies->set(config('session.cookie'), $sesion->getId());
+$peticion->headers->set('X-CSRF-TOKEN', 'fase2a-http');
+$respuesta = $kernel->handle($peticion);
+file_put_contents($argv[4], $respuesta->getStatusCode()."\n".$respuesta->getContent());
+$kernel->terminate($peticion, $respuesta);
+exit($respuesta->isRedirection() || $respuesta->isSuccessful() ? 0 : 1);
+CODE;
+
+        return new Process(
+            [PHP_BINARY, '-r', $codigo, (string) $usuarioId, (string) $solicitudId, $monto, $salida],
+            base_path(),
+            $this->entorno() + ['SESSION_DRIVER' => 'file'],
+        );
     }
 
     /**

@@ -48,6 +48,10 @@ class RechazarPagosVencidos extends Command
             }
 
             DB::transaction(function () use ($solicitud, &$contador) {
+                $solicitud = SolicitudTag::query()->lockForUpdate()->findOrFail($solicitud->id);
+                if ($solicitud->esProcesoOperativo()) {
+                    return;
+                }
                 $estadoAnteriorId = $solicitud->catalogo_estado_solicitud_id;
                 $idRespondida = CatalogoEstadoSolicitud::idDe('Respondida');
                 $idIncorrecta = CatalogoEstadoSolicitud::idDe('Incorrecta');

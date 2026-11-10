@@ -342,9 +342,8 @@ class AjustarMontoPorSolicitudService
 
     private function reclamoAlmacenado(SolicitudTag $solicitud): string
     {
-        $aplicado = $this->dinero($solicitud->monto_aplicado_al_cliente);
-        if ($solicitud->pago_confirmado && bccomp($aplicado, '0.00', 2) > 0) {
-            return $aplicado;
+        if ($solicitud->pago_confirmado) {
+            return $this->dinero($solicitud->monto_aplicado_al_cliente);
         }
 
         return $this->dinero($solicitud->monto_cotizado);

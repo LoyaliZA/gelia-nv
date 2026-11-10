@@ -639,6 +639,7 @@ class SolicitudController extends Controller
         Gate::authorize('solicitudes.confirmar_pago');
 
         DB::transaction(function () use ($solicitud) {
+            $solicitud = SolicitudTag::query()->lockForUpdate()->findOrFail($solicitud->id);
             $estadoAnteriorId = $solicitud->catalogo_estado_solicitud_id;
             $idRespondida = CatalogoEstadoSolicitud::idDe('Respondida');
             $idVerificada = CatalogoEstadoSolicitud::idDe('Verificada');

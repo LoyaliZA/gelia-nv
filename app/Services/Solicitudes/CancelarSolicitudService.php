@@ -24,6 +24,7 @@ class CancelarSolicitudService
     public function ejecutar(SolicitudTag $solicitud, ?string $motivo = null): void
     {
         DB::transaction(function () use ($solicitud, $motivo) {
+            $solicitud = SolicitudTag::query()->lockForUpdate()->findOrFail($solicitud->id);
             $solicitud->loadMissing(['proceso', 'cliente', 'vendedor', 'listaRebaja']);
 
             if (!$solicitud->cancelacion_solicitada_at) {

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToUsuario;
+use App\Services\Escalonamiento\ConciliacionSolicitudEscalonamiento;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -133,5 +134,29 @@ class SolicitudTag extends Model
             ->whereHas('proceso', function (Builder $proceso) {
                 $proceso->where('categoria_flujo', '!=', CatalogoProceso::CATEGORIA_OPERATIVO);
             });
+    }
+
+    protected static function booted(): void
+    {
+        $resolver = function (SolicitudTag $solicitud): void {
+            app(ConciliacionSolicitudEscalonamiento::class)->resolverObsolescencia($solicitud);
+        };
+
+        static::updated(function (SolicitudTag $solicitud) use ($resolver) {
+            $campos = [
+                'numero_remision',
+                'cliente_id',
+                'monto_aplicado_al_cliente',
+                'monto_final_tentativo',
+                'monto_cotizado',
+                'pago_confirmado',
+                'catalogo_estado_solicitud_id',
+            ];
+            if ($solicitud->wasChanged($campos)) {
+                $resolver($solicitud);
+            }
+        });
+
+        static::deleted($resolver);
     }
 }

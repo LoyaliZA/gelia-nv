@@ -99,6 +99,7 @@ class ConciliacionSolicitudEscalonamiento
             ->get();
 
         return $documentos
+            ->filter(fn (DocumentoVenta $doc) => $this->motivoInelegible($solicitud, $doc, (int) $periodo->id) === null)
             ->map(function (DocumentoVenta $doc) use ($folios, $objetivo) {
                 $puntaje = 0;
                 if (in_array($doc->folio, $folios, true)) {
@@ -132,29 +133,43 @@ class ConciliacionSolicitudEscalonamiento
         ?string $evidencia,
         ?User $usuario,
     ): EscalonamientoConciliacionSolicitud {
-        if ((int) $documento->cliente_id !== (int) $solicitud->cliente_id) {
-            throw new InvalidArgumentException('El documento no pertenece al cliente de la solicitud.');
-        }
-        if ($documento->escalonamiento_periodo_id !== $periodo->id) {
-            throw new InvalidArgumentException('El documento pertenece a otro período.');
-        }
-
         $importe = $this->dinero($importeAsignado);
         if (bccomp($importe, '0.00', 2) <= 0) {
             throw new InvalidArgumentException('El importe asignado debe ser positivo.');
         }
 
         return DB::transaction(function () use ($periodo, $solicitud, $documento, $importe, $evidencia, $usuario) {
-            $documento = DocumentoVenta::query()->lockForUpdate()->findOrFail($documento->id);
-            if ((int) $documento->cliente_id !== (int) $solicitud->cliente_id) {
-                throw new InvalidArgumentException('El documento no pertenece al cliente de la solicitud.');
+            $solicitud = SolicitudTag::query()->lockForUpdate()->findOrFail($solicitud->id);
+            $solicitud->load('estado');
+            if ($this->excluida($solicitud)) {
+                throw new InvalidArgumentException('La solicitud está cancelada, rechazada o vencida. No se asigna cobertura.');
             }
-            if ((int) $documento->escalonamiento_periodo_id !== (int) $periodo->id) {
-                throw new InvalidArgumentException('El documento pertenece a otro período.');
+            if (! $solicitud->pago_confirmado) {
+                throw new InvalidArgumentException('El pago de la solicitud no está confirmado. La asignación manual no consume el documento.');
             }
-            if (bccomp($importe, $this->dinero($documento->total), 2) > 0) {
-                throw new InvalidArgumentException('El importe asignado supera el total del documento.');
+
+            $bloqueados = $this->bloquearCandidatos($solicitud, (int) $documento->id);
+            $documento = $bloqueados->firstWhere('id', $documento->id);
+            if (! $documento) {
+                throw new InvalidArgumentException('El documento ya no existe.');
             }
+            $motivo = $this->motivoInelegible($solicitud, $documento, (int) $periodo->id);
+            if ($motivo !== null) {
+                throw new InvalidArgumentException($motivo);
+            }
+            $verificables = $bloqueados
+                ->filter(fn (DocumentoVenta $candidato) => $this->motivoInelegible($solicitud, $candidato, null) === null)
+                ->values();
+            if ($verificables->count() !== 1) {
+                throw new InvalidArgumentException('Hay más de un documento con la misma identidad. No se eligió uno.');
+            }
+
+            $objetivo = $this->importeObjetivo($solicitud);
+            if (bccomp($importe, $objetivo, 2) > 0) {
+                throw new InvalidArgumentException('El importe asignado supera el monto confirmado de la solicitud.');
+            }
+
+            $this->anularCoberturaAjena($solicitud, (int) $documento->id);
 
             $fila = EscalonamientoConciliacionSolicitud::query()->firstOrNew([
                 'solicitud_tag_id' => $solicitud->id,
@@ -171,7 +186,7 @@ class ConciliacionSolicitudEscalonamiento
             $fila->procedencia = EscalonamientoConciliacionSolicitud::PROCEDENCIA_DOCUMENTO;
             $fila->inclusion_acumulado = $this->inclusionDe($documento);
             $fila->clave_asignacion = $this->claveDocumento($documento);
-            $fila->evidencia = $evidencia;
+            $fila->evidencia = $this->anexarEvidencia($fila->exists ? $fila->evidencia : null, (string) $evidencia);
             $fila->user_id = $usuario?->id;
             $fila->save();
             $this->reemplazarPlaceholder($solicitud);
@@ -207,12 +222,104 @@ class ConciliacionSolicitudEscalonamiento
     {
         DB::transaction(function () use ($solicitud) {
             SolicitudTag::query()->lockForUpdate()->find($solicitud->id);
-            EscalonamientoConciliacionSolicitud::query()
+            $this->anularCoberturaAjena($solicitud, null);
+        });
+    }
+
+    /**
+     * Retira cobertura activa que ya no tiene identidad verificable o que excede el monto confirmado.
+     * No crea una asignación nueva ni modifica monto_venta_actual ni la marca histórica.
+     */
+    public function resolverObsolescencia(SolicitudTag $solicitud): void
+    {
+        DB::transaction(function () use ($solicitud) {
+            $solicitud = SolicitudTag::withTrashed()->lockForUpdate()->find($solicitud->id);
+            if (! $solicitud) {
+                return;
+            }
+            $solicitud->load('estado');
+            if ($this->excluida($solicitud) || ! $solicitud->pago_confirmado) {
+                $this->anularCoberturaAjena($solicitud, null);
+
+                return;
+            }
+
+            $documentos = $this->documentosVerificables($solicitud);
+            if ($documentos->count() !== 1) {
+                $this->anularCoberturaAjena($solicitud, null);
+
+                return;
+            }
+
+            $documento = $documentos->first();
+            $this->anularCoberturaAjena($solicitud, (int) $documento->id);
+            $fila = EscalonamientoConciliacionSolicitud::query()
                 ->where('solicitud_tag_id', $solicitud->id)
+                ->where('documento_venta_id', $documento->id)
                 ->where('estado', self::ESTADO_FILA_ACTIVA)
                 ->lockForUpdate()
-                ->update(['estado' => EscalonamientoConciliacionSolicitud::ESTADO_ANULADA]);
+                ->first();
+            if (! $fila) {
+                return;
+            }
+
+            $objetivo = $this->importeObjetivo($solicitud);
+            $libre = $this->disponible($documento, (int) $fila->id);
+            $tope = bccomp($objetivo, $libre, 2) <= 0 ? $objetivo : $libre;
+            $actual = $this->dinero($fila->importe_asignado);
+            if (bccomp($tope, '0.00', 2) <= 0) {
+                $fila->estado = EscalonamientoConciliacionSolicitud::ESTADO_ANULADA;
+                $fila->evidencia = $this->anexarEvidencia(
+                    $fila->evidencia,
+                    'Cobertura retirada: el monto confirmado ya no sostiene la asignación.',
+                );
+                $fila->save();
+
+                return;
+            }
+            if (bccomp($actual, $tope, 2) > 0) {
+                $fila->importe_asignado = $tope;
+                $fila->evidencia = $this->anexarEvidencia(
+                    $fila->evidencia,
+                    "Importe de cobertura actualizado de {$actual} a {$tope}.",
+                );
+                $fila->save();
+            }
         });
+    }
+
+    public function resolverPorDocumento(int $documentoId): void
+    {
+        $documento = DocumentoVenta::query()->find($documentoId);
+        $folios = array_values(array_filter([
+            trim((string) ($documento->folio ?? '')),
+            trim((string) ($documento->remision_original ?? '')),
+        ]));
+
+        $ids = EscalonamientoConciliacionSolicitud::query()
+            ->where('estado', self::ESTADO_FILA_ACTIVA)
+            ->where(function ($consulta) use ($documentoId, $folios) {
+                $consulta->where('documento_venta_id', $documentoId);
+                if ($folios !== []) {
+                    $consulta->orWhereIn('solicitud_tag_id', function ($sub) use ($folios) {
+                        $sub->select('id')
+                            ->from('solicitudes_tags')
+                            ->whereIn('numero_remision', $folios);
+                    });
+                }
+            })
+            ->orderBy('solicitud_tag_id')
+            ->pluck('solicitud_tag_id')
+            ->unique()
+            ->sort()
+            ->values();
+
+        foreach ($ids as $solicitudId) {
+            $solicitud = SolicitudTag::withTrashed()->find($solicitudId);
+            if ($solicitud) {
+                $this->resolverObsolescencia($solicitud);
+            }
+        }
     }
 
     public function inclusionDe(DocumentoVenta $documento): string
@@ -295,18 +402,17 @@ class ConciliacionSolicitudEscalonamiento
 
     public function importeObjetivo(SolicitudTag $solicitud): string
     {
-        $aplicado = bcadd((string) $solicitud->monto_aplicado_al_cliente, '0', 2);
-        if (bccomp($aplicado, '0.00', 2) > 0) {
-            return $aplicado;
+        if ($solicitud->pago_confirmado) {
+            return $this->dinero($solicitud->monto_aplicado_al_cliente);
         }
         $tentativo = $solicitud->monto_final_tentativo !== null
-            ? bcadd((string) $solicitud->monto_final_tentativo, '0', 2)
+            ? $this->dinero($solicitud->monto_final_tentativo)
             : '0.00';
         if (bccomp($tentativo, '0.00', 2) > 0) {
             return $tentativo;
         }
 
-        return bcadd((string) $solicitud->monto_cotizado, '0', 2);
+        return $this->dinero($solicitud->monto_cotizado);
     }
 
     /**
@@ -350,7 +456,7 @@ class ConciliacionSolicitudEscalonamiento
             $solicitud->load('estado');
 
             if ($this->excluida($solicitud)) {
-                $this->liberar($solicitud);
+                $this->anularCoberturaAjena($solicitud, null);
 
                 return $this->guardar(
                     $solicitud, null, EscalonamientoConciliacionSolicitud::CLAVE_SIN_DOCUMENTO,
@@ -362,6 +468,8 @@ class ConciliacionSolicitudEscalonamiento
 
             $documentos = $this->documentosVerificables($solicitud);
             if ($documentos->count() > 1) {
+                $this->anularCoberturaAjena($solicitud, null);
+
                 return $this->guardar(
                     $solicitud, null, EscalonamientoConciliacionSolicitud::CLAVE_SIN_DOCUMENTO,
                     EscalonamientoConciliacionSolicitud::ESTADO_INDETERMINADA, '0.00',
@@ -374,6 +482,7 @@ class ConciliacionSolicitudEscalonamiento
             if (! $documento) {
                 $marca = (bool) $solicitud->cubierto_por_carga_masiva;
                 $folio = trim((string) $solicitud->numero_remision);
+                $this->anularCoberturaAjena($solicitud, null);
 
                 return $this->guardar(
                     $solicitud, null, EscalonamientoConciliacionSolicitud::CLAVE_SIN_DOCUMENTO,
@@ -393,6 +502,8 @@ class ConciliacionSolicitudEscalonamiento
             }
 
             if (! $solicitud->pago_confirmado) {
+                $this->anularCoberturaAjena($solicitud, (int) $documento->id);
+
                 return $this->guardar(
                     $solicitud, $documento, $this->claveDocumento($documento),
                     EscalonamientoConciliacionSolicitud::ESTADO_PENDIENTE, '0.00',
@@ -403,6 +514,7 @@ class ConciliacionSolicitudEscalonamiento
                 );
             }
 
+            $this->anularCoberturaAjena($solicitud, (int) $documento->id);
             $objetivo = $this->importeObjetivo($solicitud);
             $fila = EscalonamientoConciliacionSolicitud::query()->firstOrNew([
                 'solicitud_tag_id' => $solicitud->id,
@@ -454,7 +566,7 @@ class ConciliacionSolicitudEscalonamiento
         $fila->estado = $estado;
         $fila->procedencia = $procedencia;
         $fila->inclusion_acumulado = $inclusion;
-        $fila->evidencia = $evidencia;
+        $fila->evidencia = $this->anexarEvidencia($fila->exists ? $fila->evidencia : null, $evidencia);
         if ($usuario) {
             $fila->user_id = $usuario->id;
         }
@@ -483,22 +595,104 @@ class ConciliacionSolicitudEscalonamiento
      */
     private function documentosVerificables(SolicitudTag $solicitud): Collection
     {
+        return $this->bloquearCandidatos($solicitud)
+            ->filter(fn (DocumentoVenta $documento) => $this->motivoInelegible($solicitud, $documento, null) === null)
+            ->sortBy('id')
+            ->values();
+    }
+
+    /**
+     * @return Collection<int, DocumentoVenta>
+     */
+    private function bloquearCandidatos(SolicitudTag $solicitud, ?int $documentoExtraId = null): Collection
+    {
         $folio = trim((string) $solicitud->numero_remision);
-        if ($folio === '' || ! $solicitud->cliente_id) {
+        $consulta = DocumentoVenta::query()->orderBy('id');
+        if ($folio !== '' && $solicitud->cliente_id) {
+            $consulta->where(function ($q) use ($solicitud, $folio, $documentoExtraId) {
+                $q->where(function ($q) use ($solicitud, $folio) {
+                    $q->where('cliente_id', $solicitud->cliente_id)
+                        ->where(function ($q) use ($folio) {
+                            $q->where('folio', $folio)->orWhere('remision_original', $folio);
+                        });
+                });
+                if ($documentoExtraId) {
+                    $q->orWhere('id', $documentoExtraId);
+                }
+            });
+        } elseif ($documentoExtraId) {
+            $consulta->whereKey($documentoExtraId);
+        } else {
             return collect();
         }
 
-        return DocumentoVenta::query()
-            ->where('cliente_id', $solicitud->cliente_id)
-            ->where('estado', 'activo')
-            ->where('moneda', 'MXN')
-            ->where('total', '>', 0)
-            ->where(function ($consulta) use ($folio) {
-                $consulta->where('folio', $folio)->orWhere('remision_original', $folio);
-            })
-            ->orderBy('id')
+        return $consulta->lockForUpdate()->get();
+    }
+
+    private function motivoInelegible(SolicitudTag $solicitud, DocumentoVenta $documento, ?int $periodoId): ?string
+    {
+        if (! $solicitud->cliente_id || (int) $documento->cliente_id !== (int) $solicitud->cliente_id) {
+            return 'El documento no pertenece al cliente de la solicitud.';
+        }
+        $folio = trim((string) $solicitud->numero_remision);
+        if ($folio === '') {
+            return 'La solicitud no tiene un folio de remisión verificable.';
+        }
+        $folioDocumento = trim((string) $documento->folio);
+        $original = trim((string) $documento->remision_original);
+        if ($folioDocumento !== $folio && $original !== $folio) {
+            return 'El documento no coincide con el folio ni con la remisión original de la solicitud.';
+        }
+        if ($documento->estado !== 'activo') {
+            return 'El documento no está activo.';
+        }
+        if (strtoupper((string) $documento->moneda) !== 'MXN') {
+            return 'El documento no está en moneda MXN.';
+        }
+        if (bccomp($this->dinero($documento->total), '0.00', 2) <= 0) {
+            return 'El documento no tiene un monto positivo.';
+        }
+        if ($periodoId !== null && (int) $documento->escalonamiento_periodo_id !== $periodoId) {
+            return 'El documento pertenece a otro período.';
+        }
+
+        return null;
+    }
+
+    private function anularCoberturaAjena(SolicitudTag $solicitud, ?int $documentoConservadoId): void
+    {
+        $filas = EscalonamientoConciliacionSolicitud::query()
+            ->where('solicitud_tag_id', $solicitud->id)
+            ->where('estado', self::ESTADO_FILA_ACTIVA)
+            ->when(
+                $documentoConservadoId,
+                fn ($consulta) => $consulta->where(function ($q) use ($documentoConservadoId) {
+                    $q->where('documento_venta_id', '!=', $documentoConservadoId)
+                        ->orWhereNull('documento_venta_id');
+                }),
+            )
             ->lockForUpdate()
             ->get();
+
+        foreach ($filas as $fila) {
+            $fila->estado = EscalonamientoConciliacionSolicitud::ESTADO_ANULADA;
+            $fila->evidencia = $this->anexarEvidencia(
+                $fila->evidencia,
+                'Cobertura retirada: la identidad documental ya no sostiene esta asignación.',
+            );
+            $fila->save();
+        }
+    }
+
+    private function anexarEvidencia(?string $previa, string $nota): string
+    {
+        $previa = trim((string) $previa);
+        $nota = trim($nota);
+        if ($nota === '' || ($previa !== '' && str_contains($previa, $nota))) {
+            return $previa;
+        }
+
+        return $previa === '' ? $nota : $previa."\n".$nota;
     }
 
     private function disponible(DocumentoVenta $documento, ?int $exceptoFilaId): string
