@@ -57,10 +57,11 @@ it('no presenta atributos de pieza activados por defecto y muestra ambos cuando 
 });
 it('mantiene metadatos accesibles y cierre de revisión con nombre', async () => {
     const cerrar = vi.fn();
-    await act(() => root.render(<EncabezadoRevisionPedido pedido={pedido} badge={{ label: 'En revisión' }} onClose={cerrar} />));
+    await act(() => root.render(<EncabezadoRevisionPedido pedido={pedido} badge={{ label: 'En revisión' }} avisoAprobacion="Valida el pago para aprobar el pedido." onClose={cerrar} />));
     const detalles = container.querySelector('details');
     expect(detalles.querySelector('summary').textContent).toBe('Datos de revisión');
     expect(detalles.textContent).toContain('GELIA-81');
+    expect(detalles.textContent).toContain('Valida el pago');
     await act(() => container.querySelector('[aria-label="Cerrar revisión"]').click()); expect(cerrar).toHaveBeenCalledOnce();
 });
 it('conserva acciones secundarias autorizadas y explica el bloqueo de aprobación', async () => {
@@ -69,7 +70,7 @@ it('conserva acciones secundarias autorizadas y explica el bloqueo de aprobació
     expect(container.querySelector('summary').textContent).toBe('Más acciones');
     const botones = [...container.querySelectorAll('button')];
     expect(botones.find((b) => b.textContent.includes('Aprobar pedido')).disabled).toBe(true);
-    expect(container.textContent).toContain('Valida el pago');
+    expect(botones.find((b) => b.textContent.includes('Aprobar pedido')).title).toBe('Valide el pago antes de aprobar');
     await act(() => botones.find((b) => b.textContent.includes('Reportar error')).click()); expect(reportar).toHaveBeenCalledOnce();
 });
 
