@@ -1042,12 +1042,19 @@
     white-space: normal;
 }
 
-.gelia-preparacion-modal .gelia-modal-body > .gelia-tienda-embebida {
-    flex: 1 1 auto;
-    min-width: 0;
-    min-height: 0;
-    width: 100%;
+/* Show embebido en modal: un solo scroll en el cuerpo evita recortar el pie (como consulta). */
+.gelia-preparacion-modal .gelia-modal-body:has(> .gelia-tienda-embebida) {
     overflow-y: auto;
+    overscroll-behavior: contain;
+    scroll-padding-block: 0.75rem;
+}
+
+.gelia-preparacion-modal .gelia-modal-body > .gelia-tienda-embebida {
+    flex: none;
+    min-width: 0;
+    width: 100%;
+    height: auto;
+    overflow: visible;
 }
 
 .gelia-pedidos-bma .gelia-tienda-salida,

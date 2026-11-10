@@ -236,7 +236,7 @@ export default function Show({
     if ((tarea.pedido?.es_custodia_documental || tarea.pedido?.es_t02_documental) && tarea.pedido?.consulta_cerrada) {
         return <Layout {...(!embedded ? { auth } : {})}>
             {!embedded && <Head title={`Transferencia y custodia — ${folio}`} />}
-            <GeliaPageShell className="gelia-tienda-op space-y-4">
+            <GeliaPageShell className={`gelia-tienda-op space-y-4 ${embedded ? 'gelia-tienda-embebida' : ''}`}>
                 {!embedded && <div className="flex flex-wrap items-center justify-between gap-3"><h1 className="text-lg font-bold">{folio}</h1><Link href={route('control_pedidos.tienda.index')} className={BTN_SECONDARY}>Volver al listado</Link></div>}
                 <AvisoResultadoTienda flash={flash} />
                 <SeguimientoTransferenciaTienda pedido={tarea.pedido} onDirtyChange={embedded ? onDirtyChange : setCapturaDirty} />
@@ -246,7 +246,7 @@ export default function Show({
     if (tarea.estado === 'EN_ATENCION' || (esRecogeHoy && tarea.pedido?.es_t01_documental && tarea.estado === 'RESPONDIDA')) {
         return <Layout {...(!embedded ? { auth } : {})}>
             {!embedded && <Head title={`Preparación Tienda — ${folio}`} />}
-            <GeliaPageShell className="gelia-tienda-op space-y-4">
+            <GeliaPageShell className={`gelia-tienda-op space-y-4 ${embedded ? 'gelia-tienda-embebida' : ''}`}>
                 {!embedded && <div className="flex items-center justify-between gap-3"><h1 className="text-lg font-bold">{folio}</h1><Link href={route('control_pedidos.tienda.index')} className={BTN_SECONDARY} onClick={(e) => { if (capturaDirty && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey && e.button === 0) { e.preventDefault(); setConfirmarVolver(true); } }}>Volver al listado</Link></div>}
                 <AvisoResultadoTienda flash={flash} />
                 <PrepararApartadoRecoge key={`${tarea.id}-${capturaVersion}`} tarea={tarea} auth={auth} documentos={documentos_solicitud} documentosTarea={documentos} requisitos={requisitos} tiposCaja={tipos_caja} onEnviar={enviarCaptura} onDirtyChange={embedded ? onDirtyChange : setCapturaDirty} onRefrescarDocumentos={() => router.reload({ only: ['documentos'], preserveScroll: true })} />

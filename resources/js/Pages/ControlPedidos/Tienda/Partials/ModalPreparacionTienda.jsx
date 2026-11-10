@@ -1,5 +1,5 @@
 import useActualizacionesPedidos from '../../Partials/useActualizacionesPedidos';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import axios from 'axios';
 import { Loader2, X } from 'lucide-react';
@@ -19,6 +19,7 @@ export default function ModalPreparacionTienda({ tareaId, atender = false, auth,
     const [dirty, setDirty] = useState(false);
     const [confirmarCerrar, setConfirmarCerrar] = useState(false);
     const [capturaVersion, setCapturaVersion] = useState(0);
+    const cuerpoModalRef = useRef(null);
     const ocupado = cargando || procesando;
     const pedirCerrar = () => dirty ? setConfirmarCerrar(true) : onClose();
     const dialog = usePedidoDialog({ abierto: true, onClose: pedirCerrar, bloqueado: procesando });
@@ -77,6 +78,27 @@ export default function ModalPreparacionTienda({ tareaId, atender = false, auth,
         }
     };
     useActualizacionesPedidos({ activo: Boolean(datos?.tarea?.pedido?.id), pedidoId: datos?.tarea?.pedido?.id, pausado: dirty || procesando || cargando, onActualizar: () => cargar().catch(() => setError('No se pudo actualizar la preparación.')), onPendiente: () => setMensaje('La preparación cambió. Se conserva su captura; al guardar se comprobará la versión.') });
+    useEffect(() => {
+        if (cargando || !datos?.tarea) return undefined;
+        const cuerpo = cuerpoModalRef.current;
+        if (!cuerpo) return undefined;
+        const registrar = () => {
+            const modal = cuerpo.closest('.gelia-preparacion-modal');
+            const embebida = cuerpo.querySelector('.gelia-tienda-embebida');
+            const pageShell = cuerpo.querySelector('.gelia-page-shell');
+            const preparacion = cuerpo.querySelector('.gelia-preparacion');
+            const blancoScroll = embebida || pageShell || preparacion || cuerpo;
+            const estiloCuerpo = getComputedStyle(cuerpo);
+            const estiloScroll = getComputedStyle(blancoScroll);
+            // #region agent log
+            fetch('http://localhost:7797/ingest/72d39cdc-fdaa-46e4-8d90-475f9e36d17d', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '8b64a3' }, body: JSON.stringify({ sessionId: '8b64a3', runId: 'post-fix-2', hypothesisId: 'C', location: 'ModalPreparacionTienda.jsx:scroll-audit', message: 'modal scroll layout', data: { tareaEstado: datos.tarea.estado, hasGeliaTiendaEmbebida: Boolean(embebida), bodyOverflowY: estiloCuerpo.overflowY, bodyScrollActivo: cuerpo.scrollHeight > cuerpo.clientHeight + 2 && estiloCuerpo.overflowY !== 'visible', bodyClientH: cuerpo.clientHeight, bodyScrollH: cuerpo.scrollHeight, scrollOverflowY: estiloScroll.overflowY, scrollClientH: blancoScroll.clientHeight, scrollScrollH: blancoScroll.scrollHeight, modalClientH: modal?.clientHeight ?? null }, timestamp: Date.now() }) }).catch(() => {});
+            // #endregion
+        };
+        const observer = new ResizeObserver(() => requestAnimationFrame(registrar));
+        observer.observe(cuerpo);
+        registrar();
+        return () => observer.disconnect();
+    }, [cargando, datos, mensaje, capturaVersion]);
     const tarea = datos?.tarea;
     const folio = tarea?.pedido?.folio_visible || tarea?.pedido?.folio || 'Preparación en tienda';
     const caratula = datos?.documentos?.filter((d) => d.tipo_evidencia === 'caratula_recoge_tienda').sort((a, b) => b.id - a.id)[0];
@@ -87,7 +109,7 @@ export default function ModalPreparacionTienda({ tareaId, atender = false, auth,
                 <div className="min-w-0 break-words"><h2 className="text-base font-bold theme-text-main m-0">{folio}</h2><p className="text-sm theme-text-muted m-0">{tarea?.estado_label || 'Cargando preparación…'}</p></div>
                 <button type="button" className={`${BTN_SECONDARY} min-h-[44px] shrink-0`} onClick={pedirCerrar} disabled={procesando} aria-label="Cerrar preparación"><X className="w-5 h-5" /></button>
             </header>
-            <div className="gelia-modal-body flex flex-col">
+            <div ref={cuerpoModalRef} className="gelia-modal-body flex flex-col">
                 {(error || mensaje) && <div className="gelia-preparacion-aviso-cambio"><AvisoResultadoTienda flash={{ error, success: mensaje }} /></div>}
                 {cargando ? <div role="status" className="flex items-center gap-2 py-8 px-4 theme-text-muted"><Loader2 className="w-5 h-5 animate-spin" /> Abriendo pedido…</div> : tarea && <>
                     {tarea.estado === 'PENDIENTE' && tarea.puede_tomar && <button type="button" className={BTN_PRIMARY} disabled={ocupado}
