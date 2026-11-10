@@ -9,6 +9,7 @@ use App\Models\CatalogoEstadoSolicitud;
 use App\Models\Cliente;
 use App\Models\User;
 use App\Services\Clientes\RegistrarHistorialMontoClienteService;
+use App\Services\Escalonamiento\ConciliacionSolicitudEscalonamiento;
 use App\Services\Solicitudes\AjustarMontoPorSolicitudService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -61,6 +62,7 @@ class RechazarPagosVencidos extends Command
                     'catalogo_estado_solicitud_id' => $idIncorrecta,
                     'motivo_incorrecta' => 'vencimiento_pago',
                 ]);
+                app(ConciliacionSolicitudEscalonamiento::class)->liberar($solicitud);
 
                 if ($cliente) {
                     if ((int) $estadoAnteriorId === (int) $idRespondida) {

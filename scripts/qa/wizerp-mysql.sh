@@ -36,4 +36,4 @@ foreach ($xml->testsuites->testsuite as $suite) { foreach ($suite->directory as 
 $xml->asXML("/tmp/gelia-wizerp-phpunit.xml");
 '
 ./vendor/bin/sail exec -e APP_CONFIG_CACHE=/tmp/gelia-mysql-test-config.php -e APP_ROUTES_CACHE=/tmp/gelia-mysql-test-routes.php \
-    laravel.test php vendor/bin/phpunit --configuration /tmp/gelia-wizerp-phpunit.xml --do-not-cache-result tests/Integration/Clientes
+    laravel.test php vendor/bin/phpunit --configuration /tmp/gelia-wizerp-phpunit.xml --do-not-cache-result tests/Integration/Clientes tests/Integration/Solicitudes
