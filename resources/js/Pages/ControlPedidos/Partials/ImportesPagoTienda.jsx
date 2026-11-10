@@ -81,6 +81,7 @@ export default function ImportesPagoTienda({
     saldoAFavorConfirmado = null,
     onLectura,
     onEstadoConfirmacion,
+    encolarGuardado,
 }) {
     const [solicitud, setSolicitud] = useState(solicitudInicial);
     useEffect(() => setSolicitud(solicitudInicial), [solicitudInicial]);
@@ -93,6 +94,7 @@ export default function ImportesPagoTienda({
     const [safCuenta, setSafCuenta] = useState(null);
     const [cargandoSaf, setCargandoSaf] = useState(false);
     const [resumenServidor, setResumenServidor] = useState(null);
+    const [coberturaGuardada, setCoberturaGuardada] = useState(null);
     const [atencionMd, setAtencionMd] = useState(null);
     const [errorSaf, setErrorSaf] = useState('');
     const sello = `${tipoGuardado}|${solicitud?.atencion_tienda || ''}|${solicitud?.tienda_md_reporte?.estado || ''}|${solicitud?.tienda_md_reporte?.primer_pago_at || ''}`;
@@ -147,18 +149,21 @@ export default function ImportesPagoTienda({
     const guardarModalidad = async (tipo, dia) => {
         setOcupado(true);
         setAviso('');
-        try {
+        const guardar = async () => {
             const respuesta = await axios.post(
                 `/control-pedidos/${pedidoId}/cobertura-tienda`,
                 { cobertura: tipo, mismo_dia: tipo === 'transferencia' && dia },
                 { headers: cabeceras() },
             );
+            onLectura?.(respuesta.data, true);
             if (respuesta.data?.solicitud_preparacion) {
                 setSolicitud(respuesta.data.solicitud_preparacion);
                 onSolicitud?.(respuesta.data.solicitud_preparacion);
             }
-            onLectura?.(respuesta.data);
             setAviso('Modalidad guardada.');
+        };
+        try {
+            await (encolarGuardado ? encolarGuardado(guardar) : guardar());
         } catch (error) {
             setAviso(mensajeDe(error, 'No se guardó la modalidad.'));
         } finally {
@@ -189,8 +194,13 @@ export default function ImportesPagoTienda({
 
     const modalidadPendiente = cobertura !== tipoGuardado
         || (cobertura === 'transferencia' && mismoDia !== (solicitud?.atencion_tienda === 'prevista'));
+    const transferenciaCubierta = coberturaGuardada !== null && coberturaGuardada.pedidoId === pedidoId
+        && coberturaGuardada.revision === revisionEsperada
+        && coberturaGuardada.resumen?.cubierto === true
+        && !(coberturaGuardada.resumen.bloqueos || []).length
+        && resumenServidor?.cubierto === true;
     const procesosListos = editable && importesListos && !ocupado && !cambioEnCaptura && !modalidadPendiente && Boolean(tipoGuardado)
-        && (tipoGuardado !== 'transferencia' || (resumenServidor?.cubierto === true && !(resumenServidor.bloqueos || []).length));
+        && (tipoGuardado !== 'transferencia' || transferenciaCubierta);
     useEffect(() => { onEstadoConfirmacion?.(procesosListos); }, [onEstadoConfirmacion, procesosListos]);
 
     const cambiarCobertura = (valor) => {
@@ -290,7 +300,7 @@ export default function ImportesPagoTienda({
                             id="total-mercancia-tienda"
                             value={totalMercancia}
                             onChange={onTotalMercancia}
-                            disabled={!editable}
+                            disabled={!editable || ocupado}
                             className="w-full min-h-[44px]"
                         />
                     </div>
@@ -393,10 +403,14 @@ export default function ImportesPagoTienda({
                             envioEsBase
                             costoReexpedicion={0}
                             revisionEsperada={revisionEsperada}
+                            revisionResumen={tipoGuardado === 'transferencia' ? revisionEsperada : null}
                             totalMercanciaConfirmado={totalMercanciaConfirmado}
                             saldoAFavorConfirmado={saldoAFavorConfirmado}
                             onLectura={(json) => {
                                 setResumenServidor(json?.resumen || null);
+                                if (tipoGuardado === 'transferencia') {
+                                    setCoberturaGuardada({ pedidoId, revision: json?.revision_registro ?? null, resumen: json?.resumen });
+                                }
                                 setAtencionMd(json?.atencion_md || null);
                                 onLectura?.(json);
                             }}

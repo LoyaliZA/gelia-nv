@@ -147,8 +147,8 @@ function ConfirmacionSolicitud({ pedidoId, visible, cerrada, onCerrada, faltante
         setOcupado(true);
         setError('');
         try {
-            await axios.post(`/control-pedidos/${pedidoId}/cerrar-consulta`, {}, { headers: cabeceras() });
-            onCerrada();
+            const { data } = await axios.post(`/control-pedidos/${pedidoId}/cerrar-consulta`, {}, { headers: cabeceras() });
+            onCerrada(data);
         } catch (errorCierre) {
             setError(mensajeDe(errorCierre, 'No se pudo confirmar la mercancía.'));
         } finally {
@@ -715,8 +715,8 @@ export default function SeguimientoSolicitudTienda({
                 faltante={faltante}
                 soloLectura={soloLectura}
                 onReabrir={reabrir}
-                onCerrada={() => {
-                    setCerradaLocal(true); onConsultaCerrada?.();
+                onCerrada={(lecturaCierre) => {
+                    setCerradaLocal(true); onConsultaCerrada?.(lecturaCierre);
                     setAviso('Consulta cerrada. La mercancía quedó confirmada con el cliente.');
                 }}
             />}
