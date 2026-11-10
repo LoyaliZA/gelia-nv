@@ -11,14 +11,14 @@ use App\Models\Escalonamiento\EscalonamientoPeriodo;
 use App\Models\Escalonamiento\EscalonamientoResumenCliente;
 use App\Models\User;
 use App\Services\Escalonamiento\AbrirPeriodoEscalonamiento;
-use App\Services\Escalonamiento\AsegurarPeriodoHistoricoEscalonamiento;
 use App\Services\Escalonamiento\AplicarCierreEscalonamiento;
+use App\Services\Escalonamiento\AsegurarPeriodoHistoricoEscalonamiento;
 use App\Services\Escalonamiento\AutorizarCierreEscalonamiento;
 use App\Services\Escalonamiento\CancelarSimulacionCierreEscalonamiento;
+use App\Services\Escalonamiento\EscalonamientoAutoridadConfig;
 use App\Services\Escalonamiento\Excepciones\CierreEscalonamientoException;
 use App\Services\Escalonamiento\RegistrarMovimiento;
 use App\Services\Escalonamiento\SimularCierreEscalonamiento;
-use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\PermissionRegistrar;
@@ -50,6 +50,7 @@ class CierreEscalonamientoTest extends TestCase
 
     public function test_aplicar_cierre_es_idempotente_y_abre_el_mes_siguiente(): void
     {
+        app(EscalonamientoAutoridadConfig::class)->guardar(true);
         [$publico, $plata] = $this->listasBase();
         $cliente = Cliente::create([
             'numero_cliente' => '8801',
@@ -90,7 +91,7 @@ class CierreEscalonamientoTest extends TestCase
         $this->assertSame(1, EscalonamientoCambioLista::query()->where('escalonamiento_cierre_id', $cierre->id)->count());
     }
 
-    public function test_tercer_mes_sin_compra_propone_inactividad_y_pg(): void
+    public function test_propuesta_de_inactividad_no_puede_aplicarse_sin_wizerp(): void
     {
         [$publico, $plata] = $this->listasBase();
         config(['escalonamiento.lista_publico_general_id' => $publico->id]);
@@ -112,11 +113,15 @@ class CierreEscalonamientoTest extends TestCase
         $this->assertSame($publico->id, $detalle->lista_siguiente_id);
 
         app(AutorizarCierreEscalonamiento::class)->autorizar($periodo->fresh(), $this->supervisor);
-        app(AplicarCierreEscalonamiento::class)->aplicar($periodo->fresh(), $this->supervisor);
-
-        $cliente->refresh();
-        $this->assertTrue($cliente->es_inactivo);
-        $this->assertSame($publico->id, $cliente->lista_actual_id);
+        app(EscalonamientoAutoridadConfig::class)->guardar(true);
+        try {
+            app(AplicarCierreEscalonamiento::class)->aplicar($periodo->fresh(), $this->supervisor);
+            $this->fail('La simulación no acredita inactividad comercial.');
+        } catch (CierreEscalonamientoException) {
+            $this->assertFalse($cliente->fresh()->es_inactivo);
+            $this->assertSame($plata->id, $cliente->fresh()->lista_actual_id);
+            $this->assertSame(EscalonamientoPeriodo::ESTADO_AUTORIZADO, $periodo->fresh()->estado);
+        }
     }
 
     public function test_cliente_bloqueado_no_baja_a_pg_por_inactividad(): void

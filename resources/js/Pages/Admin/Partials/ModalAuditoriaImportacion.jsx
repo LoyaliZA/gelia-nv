@@ -137,7 +137,10 @@ export default function ModalAuditoriaImportacion({ importacionId, onClose }) {
                         {importacion && (
                             <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                                 {[
-                                    { label: 'Procesadas', value: importacion.filas_procesadas },
+                                    { label: 'Leídas', value: importacion.filas_leidas },
+                                    { label: 'Estado', value: importacion.estado ?? 'Histórico' },
+                                    ...(['creados', 'actualizados', 'sin_cambios', 'activados', 'cambios_lista'].map((campo) => ({ label: campo.replaceAll('_', ' '), value: importacion.resumen?.[campo] ?? '—' }))),
+                                    { label: 'Inactivados', value: importacion.resumen?.clientes_marcados_inactivos ?? '—' },
                                     { label: 'Errores', value: importacion.errores, danger: true },
                                     { label: 'Omitidas', value: importacion.filas_omitidas },
                                     { label: 'Ascensos', value: importacion.ascensos, success: true },
@@ -348,7 +351,7 @@ export default function ModalAuditoriaImportacion({ importacionId, onClose }) {
                                                                 {err.numero_cliente ?? '—'}
                                                             </td>
                                                             <td className="py-2 text-[10px] font-bold text-red-600">
-                                                                {err.mensaje}
+                                                                {err.campo ? `${err.campo}: ` : ''}{err.mensaje}
                                                             </td>
                                                         </tr>
                                                     ))

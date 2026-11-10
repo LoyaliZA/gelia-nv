@@ -6,6 +6,7 @@ use App\Models\Cliente;
 use App\Models\Escalonamiento\EscalonamientoCambioLista;
 use App\Models\Escalonamiento\EscalonamientoCierre;
 use App\Models\Escalonamiento\EscalonamientoCierreDetalle;
+use App\Services\Escalonamiento\Excepciones\CierreEscalonamientoException;
 
 class AplicarCambioLista
 {
@@ -21,6 +22,17 @@ class AplicarCambioLista
             return $existente;
         }
 
+        if (! app(EscalonamientoAutoridad::class)->clienteGobernadoPorModulo($cliente, $cierre->periodo)) {
+            throw new CierreEscalonamientoException(
+                'Cierre bloqueado: Escalonamiento no tiene autoridad sobre este cliente. Se conserva el acumulado oficial de Wizerp.'
+            );
+        }
+        if ($detalle->propone_inactivo) {
+            throw new CierreEscalonamientoException(
+                'Cierre bloqueado: una propuesta de inactividad requiere actualización autoritativa de Wizerp.'
+            );
+        }
+
         $listaAnterior = $cliente->lista_actual_id;
         $montoAnterior = (string) $cliente->monto_venta_actual;
         $listaNueva = $detalle->lista_siguiente_id;
@@ -32,10 +44,7 @@ class AplicarCambioLista
         $cliente->monto_venta_actual = 0;
         $cliente->escalonamiento_meses_sin_compra = (int) $detalle->meses_sin_compra;
 
-        if ($detalle->propone_inactivo) {
-            $cliente->es_inactivo = true;
-        } elseif ($detalle->extras['tuvo_actividad_compra'] ?? false) {
-            $cliente->es_inactivo = false;
+        if ($detalle->extras['tuvo_actividad_compra'] ?? false) {
             $cliente->escalonamiento_ultima_compra_periodo_id = $cierre->escalonamiento_periodo_id;
         }
 

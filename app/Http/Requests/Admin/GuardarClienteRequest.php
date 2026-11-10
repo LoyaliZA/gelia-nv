@@ -73,7 +73,7 @@ class GuardarClienteRequest extends FormRequest
             'monto_venta_actual'       => 'nullable|numeric|min:0',
             'lista_actual_id'          => 'nullable|exists:catalogo_listas_descuento,id',
             'lista_bloqueada'          => 'nullable|boolean',
-            'es_inactivo'              => 'nullable|boolean',
+            'es_inactivo'              => 'prohibited',
             'rfc'                      => 'nullable|string|max:13',
             'codigo_postal'            => 'nullable|string|regex:/^\d{5}$/',
             'regimen_fiscal'           => 'nullable|string|max:255',

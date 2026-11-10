@@ -2,11 +2,9 @@
 
 namespace App\Services\Solicitudes;
 
-use App\Models\CatalogoEstadoSolicitud;
 use App\Models\CatalogoListaDescuento;
 use App\Models\Cliente;
 use App\Models\SolicitudTag;
-use App\Services\Clientes\ReactivarClienteInactivoService;
 use App\Services\Escalonamiento\EscalonamientoAutoridad;
 use App\Services\Escalonamiento\ProyeccionClienteEscalonamiento;
 
@@ -14,7 +12,6 @@ class AjustarMontoPorSolicitudService
 {
     public function __construct(
         private EscalonamientoService $escalonamiento,
-        private ReactivarClienteInactivoService $reactivarInactivo,
         private EscalonamientoAutoridad $autoridad,
         private ProyeccionClienteEscalonamiento $proyeccionCliente,
     ) {}
@@ -35,13 +32,14 @@ class AjustarMontoPorSolicitudService
 
         if (
             $solicitud->catalogo_lista_descuento_id
+            && ! $cliente->es_inactivo
             && ! $cliente->lista_bloqueada
             && ! $this->autoridad->clienteGobernadoPorModulo($cliente)
         ) {
             $cliente->lista_actual_id = $solicitud->catalogo_lista_descuento_id;
         }
 
-        if ($solicitud->catalogo_tipo_cliente_id) {
+        if ($solicitud->catalogo_tipo_cliente_id && ! $cliente->es_inactivo) {
             $cliente->catalogo_tipo_cliente_id = $solicitud->catalogo_tipo_cliente_id;
         }
 
@@ -128,27 +126,17 @@ class AjustarMontoPorSolicitudService
         }
 
         $antes = $this->capturarSnapshotCliente($cliente);
-        $montoGuardado = (float) $cliente->monto_venta_actual;
 
         $solicitud->monto_aplicado_al_cliente = $montoFinal;
 
         if (
             $asignarListaSolicitada
             && $solicitud->catalogo_lista_descuento_id
+            && ! $cliente->es_inactivo
             && ! $cliente->lista_bloqueada
             && ! $this->autoridad->clienteGobernadoPorModulo($cliente)
         ) {
             $cliente->lista_actual_id = $solicitud->catalogo_lista_descuento_id;
-        }
-
-        $this->reactivarInactivo->ejecutar(
-            $cliente,
-            $montoGuardado,
-            ! ($asignarListaSolicitada && $solicitud->catalogo_lista_descuento_id),
-        );
-
-        if ($cliente->es_inactivo && $asignarListaSolicitada && ! $cliente->lista_bloqueada) {
-            $cliente->es_inactivo = false;
         }
 
         $cliente->save();
@@ -167,42 +155,8 @@ class AjustarMontoPorSolicitudService
      */
     public function marcarCubiertasPorCarga(Cliente $cliente, float $montoGeliaAntes, float $montoWizerp): int
     {
-        $estados = array_values(array_filter([
-            CatalogoEstadoSolicitud::idDe('Pendiente'),
-            CatalogoEstadoSolicitud::idDe('Respondida'),
-            CatalogoEstadoSolicitud::idDe('Verificada'),
-        ]));
-
-        if ($estados === []) {
-            return 0;
-        }
-
-        $solicitudes = SolicitudTag::query()
-            ->with('proceso')
-            ->where('cliente_id', $cliente->id)
-            ->where('pago_confirmado', false)
-            ->whereIn('catalogo_estado_solicitud_id', $estados)
-            ->get();
-
-        $marcadas = 0;
-        foreach ($solicitudes as $solicitud) {
-            if ($solicitud->esProcesoOperativo()) {
-                continue;
-            }
-
-            $capa = $this->capaPendiente($solicitud);
-            $base = $montoGeliaAntes - $capa;
-            $cotizado = (float) ($solicitud->monto_cotizado ?? 0);
-            $cubierta = $cotizado > 0 && ($montoWizerp + 0.001) >= ($base + $cotizado);
-
-            $solicitud->update([
-                'cubierto_por_carga_masiva' => $cubierta,
-                'monto_aplicado_al_cliente' => 0,
-            ]);
-            $marcadas++;
-        }
-
-        return $marcadas;
+        // CSV de acumulados no acredita una remisión. Conservar marcas históricas intactas.
+        return 0;
     }
 
     /**

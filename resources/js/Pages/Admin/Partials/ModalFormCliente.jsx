@@ -23,7 +23,6 @@ export default function ModalFormCliente({ onClose, modoModal, clienteActual, ti
         monto_venta_actual: clienteActual?.monto_venta_actual || 0,
         lista_actual_id: clienteActual?.lista_actual_id || '',
         lista_bloqueada: clienteActual?.lista_bloqueada === 1 || clienteActual?.lista_bloqueada === true,
-        es_inactivo: clienteActual?.es_inactivo === 1 || clienteActual?.es_inactivo === true,
         rfc: clienteActual?.rfc || '',
         codigo_postal: clienteActual?.codigo_postal || '',
         regimen_fiscal: clienteActual?.regimen_fiscal || '',
@@ -443,21 +442,10 @@ export default function ModalFormCliente({ onClose, modoModal, clienteActual, ti
                                 </div>
                             </button>
 
-                            <button type="button" role="switch" aria-checked={data.es_inactivo} className="p-4 theme-element border theme-border rounded-xl flex items-center justify-between cursor-pointer transition-all hover:shadow-md"
-                                style={{ borderColor: data.es_inactivo ? 'var(--color-primario)' : '' }}
-                                onClick={() => setData('es_inactivo', !data.es_inactivo)}
-                            >
-                                <div className="flex items-center gap-3">
-                                    <TrendingUp className={`w-5 h-5 ${data.es_inactivo ? 'text-amber-500' : 'theme-text-muted'}`} />
-                                    <div>
-                                        <span className="text-[11px] font-black theme-text-main uppercase tracking-widest block leading-tight">Cliente Inactivo_</span>
-                                        <span className="text-[9px] font-bold theme-text-muted uppercase">Sin compras recientes (Wizerp)</span>
-                                    </div>
-                                </div>
-                                <div className="gelia-switch shrink-0 pointer-events-none" data-active={data.es_inactivo}>
-                                    <div className="gelia-switch-thumb shadow-md" />
-                                </div>
-                            </button>
+                            <div className="p-4 theme-element border theme-border rounded-xl">
+                                <span className="text-[11px] font-black theme-text-main uppercase tracking-widest block">Estado comercial</span>
+                                <span className="text-[11px] theme-text-muted">{clienteActual ? (clienteActual.es_inactivo ? 'Inactivo' : 'Activo') : 'Sin sincronizar'} · Administrado por Wizerp</span>
+                            </div>
                         </div>
                     </div>
 

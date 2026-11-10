@@ -6,16 +6,20 @@ use App\Models\CatalogoEstadoSolicitud;
 use App\Models\CatalogoListaDescuento;
 use App\Models\CatalogoProceso;
 use App\Models\Cliente;
+use App\Models\Escalonamiento\EscalonamientoMovimiento;
+use App\Models\Escalonamiento\EscalonamientoPeriodo;
 use App\Models\HistorialMontoCliente;
 use App\Models\SolicitudTag;
 use App\Models\User;
 use App\Services\Clientes\ImportarClientesWizerpService;
 use App\Services\Clientes\RegistrarHistorialMontoClienteService;
+use App\Services\Escalonamiento\EscalonamientoAutoridadConfig;
 use App\Services\Solicitudes\AjustarMontoPorSolicitudService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Notification;
+use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
 
 class MontoSolicitudVsCargaMasivaTest extends TestCase
@@ -23,17 +27,26 @@ class MontoSolicitudVsCargaMasivaTest extends TestCase
     use RefreshDatabase;
 
     private CatalogoListaDescuento $listaPg;
+
     private CatalogoListaDescuento $listaBronce;
+
     private CatalogoListaDescuento $listaPlata;
+
     private CatalogoProceso $proceso;
+
     private User $vendedor;
+
     private int $idPendiente;
+
     private int $idRespondida;
+
     private int $idIncorrecta;
 
     protected function setUp(): void
     {
         parent::setUp();
+        Permission::findOrCreate('solicitudes.verificar', 'web');
+        Permission::findOrCreate('solicitudes.reportar', 'web');
 
         foreach (['Pendiente', 'Respondida', 'Verificada', 'Incorrecta'] as $estado) {
             CatalogoEstadoSolicitud::create(['nombre' => $estado, 'activo' => true]);
@@ -112,7 +125,7 @@ class MontoSolicitudVsCargaMasivaTest extends TestCase
         $this->assertEquals(13000.0, (float) $cliente->monto_venta_actual);
         $this->assertSame($this->listaPlata->id, $cliente->lista_actual_id);
         $this->assertEquals(0.0, (float) $solicitud->fresh()->monto_aplicado_al_cliente);
-        $this->assertSame(0, \App\Models\Escalonamiento\EscalonamientoPeriodo::count());
+        $this->assertSame(0, EscalonamientoPeriodo::count());
     }
 
     public function test_carga_sin_la_remision_no_deja_que_el_vencimiento_coma_historial(): void
@@ -125,7 +138,7 @@ class MontoSolicitudVsCargaMasivaTest extends TestCase
 
         $solicitud->refresh();
         $this->assertFalse((bool) $solicitud->cubierto_por_carga_masiva);
-        $this->assertEquals(0.0, (float) $solicitud->monto_aplicado_al_cliente);
+        $this->assertEquals(3000.0, (float) $solicitud->monto_aplicado_al_cliente);
         $this->assertEquals(10500.0, (float) $cliente->fresh()->monto_venta_actual);
 
         app(AjustarMontoPorSolicitudService::class)->revertirBeneficios($solicitud);
@@ -152,7 +165,7 @@ class MontoSolicitudVsCargaMasivaTest extends TestCase
         $this->assertSame($this->listaPlata->id, $cliente->lista_actual_id);
         $this->assertEquals(6000.0, (float) $solicitud->monto_aplicado_al_cliente);
         $this->assertSame(0, HistorialMontoCliente::count());
-        $this->assertSame(0, \App\Models\Escalonamiento\EscalonamientoMovimiento::count());
+        $this->assertSame(0, EscalonamientoMovimiento::count());
     }
 
     public function test_lista_bloqueada_no_cambia_al_aprobar_ni_al_revertir(): void
@@ -172,7 +185,7 @@ class MontoSolicitudVsCargaMasivaTest extends TestCase
 
     public function test_con_autoridad_activa_la_carga_masiva_no_sobrescribe_monto(): void
     {
-        app(\App\Services\Escalonamiento\EscalonamientoAutoridadConfig::class)->guardar(true);
+        app(EscalonamientoAutoridadConfig::class)->guardar(true);
 
         $this->listaBronce->update(['participa_escalonamiento' => true]);
         $cliente = $this->cliente(1000);
@@ -183,7 +196,7 @@ class MontoSolicitudVsCargaMasivaTest extends TestCase
         $this->assertSame(0, HistorialMontoCliente::where('origen', RegistrarHistorialMontoClienteService::ORIGEN_CARGA_MASIVA)->count());
     }
 
-    public function test_carga_que_ya_trae_la_venta_evita_duplicar_al_confirmar(): void
+    public function test_carga_no_acredita_cobertura_sin_documento_y_pago_no_suma(): void
     {
         $cliente = $this->cliente(1000);
         $solicitud = $this->solicitud($cliente, 6000, $this->listaPlata->id, $this->idRespondida);
@@ -191,7 +204,7 @@ class MontoSolicitudVsCargaMasivaTest extends TestCase
         $this->importar("numero_cliente,nombre,monto_venta_actual\n{$cliente->numero_cliente},Cliente Test,7000\n");
 
         $solicitud->refresh();
-        $this->assertTrue((bool) $solicitud->cubierto_por_carga_masiva);
+        $this->assertFalse((bool) $solicitud->cubierto_por_carga_masiva);
 
         app(AjustarMontoPorSolicitudService::class)->aplicarPagoConfirmado($solicitud, 6000, $this->vendedor->id);
 

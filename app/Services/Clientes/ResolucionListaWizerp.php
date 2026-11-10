@@ -43,10 +43,6 @@ class ResolucionListaWizerp
             return $matches[1];
         }
 
-        if (is_numeric($codigo) && ! isset(self::MAPA_CODIGO_A_NOMBRE[$codigo])) {
-            return (string) (int) (float) $codigo;
-        }
-
         return $codigo;
     }
 

@@ -85,7 +85,7 @@ class ClienteController extends Controller
 
         $validated['es_heredado'] = $request->boolean('es_heredado');
         $validated['lista_bloqueada'] = $request->boolean('lista_bloqueada');
-        $validated['es_inactivo'] = $request->boolean('es_inactivo');
+        unset($validated['es_inactivo']); // Estado comercial administrado exclusivamente por Wizerp.
 
         if (array_key_exists('lista_actual_id', $validated) && $validated['lista_actual_id'] === null) {
             unset($validated['lista_actual_id']);
@@ -97,7 +97,7 @@ class ClienteController extends Controller
             unset($validated['fecha_inicio_credito']);
         }
 
-        if (config('escalonamiento.autoridad_activa')) {
+        if (app(\App\Services\Escalonamiento\EscalonamientoAutoridad::class)->estaActiva()) {
             unset($validated['monto_venta_actual'], $validated['lista_actual_id']);
         }
 
@@ -118,7 +118,8 @@ class ClienteController extends Controller
             $resultado = $importarService->ejecutar($request->file('archivo'));
 
             return back()
-                ->with('success', 'Carga masiva procesada y listas recalculadas correctamente.')
+                ->with($resultado['estado'] === 'completo' ? 'success' : 'warning', 'Importación '.$resultado['estado'].'.')
+                ->with('resultado_importacion', $resultado)
                 ->with('reporte_importacion', $resultado['ascensos'] ?? []);
                 
         } catch (\Exception $e) {

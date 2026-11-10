@@ -2,335 +2,178 @@
 
 namespace App\Services\Clientes;
 
-use App\Models\CatalogoListaDescuento;
 use App\Models\CambioListaImportacionCliente;
+use App\Models\CatalogoListaDescuento;
 use App\Models\Cliente;
 use App\Models\ErroresImportacionCliente;
 use App\Models\HistorialMontoCliente;
+use App\Models\ImportacionCliente;
 use App\Models\User;
-use Exception;
-use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Notification;
 use App\Notifications\AlertaLimiteCreditoSuperadoMasivoNotification;
 use App\Services\Mobile\MobileSyncPublicationService;
 use App\Services\Mobile\MobileSyncSuppression;
+use Illuminate\Database\QueryException;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 
 class ImportarClientesWizerpService
 {
-    private const CHUNK_SIZE = 500;
+    public function __construct(protected ProcesarFilaClienteAction $procesador) {}
 
-    protected ProcesarFilaClienteAction $procesador;
-
-    public function __construct(ProcesarFilaClienteAction $procesador)
-    {
-        $this->procesador = $procesador;
-    }
-
-    public function ejecutar(UploadedFile $archivo, ?\App\Models\ImportacionCliente $importacion = null): array
+    public function ejecutar(UploadedFile $archivo, ?ImportacionCliente $importacion = null): array
     {
         $inicio = microtime(true);
-        $importacionClienteId = $importacion?->id;
-        $usuarioId = $importacion?->usuario_id;
-        $path = $importacion
-            ? \Illuminate\Support\Facades\Storage::disk('local')->path($importacion->ruta_almacenamiento)
-            : $archivo->getRealPath();
-        $file = fopen($path, 'r');
-
-        $headers = $this->procesarCabeceras(fgetcsv($file));
-        $importaCodigoLista = in_array('codigo_lista', $headers, true);
-        $this->sincronizarListasWizerp();
-
-        $mapaVendedoras = $this->cargarMapaVendedoras();
-        $listas = CatalogoListaDescuento::orderBy('monto_requerido', 'desc')->get();
+        $stats = array_fill_keys(['leidas', 'procesadas', 'creados', 'actualizados', 'sin_cambios', 'omitidas', 'errores',
+            'ascensos', 'descensos', 'activados', 'clientes_marcados_inactivos', 'cambios_lista'], 0);
         $reporteAscensos = [];
-        $marcadosInactivos = 0;
-        $filas = [];
-        $erroresBatch = [];
-        $cambiosListaBatch = [];
-        $stats = [
-            'leidas'     => 0,
-            'procesadas' => 0,
-            'omitidas'   => 0,
-            'errores'    => 0,
-            'ascensos'   => 0,
-            'descensos'  => 0,
-        ];
-
-        $numeroFila = 1;
-        while ($row = fgetcsv($file)) {
-            $numeroFila++;
-
-            if (empty(array_filter($row))) {
-                continue;
-            }
-
-            $stats['leidas']++;
-            $rowNormalizado = $this->alinearFilaConCabeceras($row, $headers);
-            $data = array_combine($headers, $rowNormalizado);
-            $data = $this->normalizarClavesFila($data);
-
-            if (empty(trim($data['numero_cliente'] ?? ''))) {
-                $stats['omitidas']++;
-                Log::warning("Importacion Masiva - Fila {$numeroFila} omitida: Sin numero_cliente.");
-                continue;
-            }
-
-            $filas[] = [
-                'data' => $data,
-                'numero_fila' => $numeroFila,
-            ];
-        }
-
-        fclose($file);
-
-        Cache::put('import_clientes_en_curso', true, now()->addHours(2));
-
-        $alertasLimiteExcedido = [];
-        $publicacionMovil = app(MobileSyncPublicationService::class);
-
+        $errores = [];
+        $alertas = [];
+        $mysql = DB::connection()->getDriverName() === 'mysql';
+        $lock = null;
+        $adquirido = false;
         try {
-            MobileSyncSuppression::begin();
-            foreach (array_chunk($filas, self::CHUNK_SIZE) as $chunk) {
-                DB::transaction(function () use ($chunk, $listas, $mapaVendedoras, $importaCodigoLista, &$reporteAscensos, &$marcadosInactivos, &$stats, &$alertasLimiteExcedido, &$erroresBatch, &$cambiosListaBatch, $importacionClienteId, $usuarioId, $publicacionMovil) {
-                    $historialBatch = [];
-                    $numeros = array_values(array_unique(array_map(
-                        fn (array $fila) => trim($fila['data']['numero_cliente']),
-                        $chunk
-                    )));
+            if ($mysql) {
+                $adquirido = (int) DB::selectOne("SELECT GET_LOCK('gelia.importacion.clientes.wizerp', 0) AS adquirido")->adquirido === 1;
+            } else {
+                $lock = Cache::lock('gelia.importacion.clientes.wizerp', 0);
+                $adquirido = $lock->get();
+            }
+            if (! $adquirido) {
+                throw ValidationException::withMessages(['archivo' => 'Ya existe una importación de clientes en curso.']);
+            }
+            $path = $importacion
+                ? Storage::disk('local')->path($importacion->ruta_almacenamiento)
+                : $archivo->getRealPath();
+            // Preflight completo: ningún catálogo ni cliente se escribe antes de validar estructura.
+            $validado = app(ValidarArchivoClientesWizerp::class)->leer($path);
+            $stats['leidas'] = count($validado['filas']);
+            $importaCodigoLista = in_array('codigo_lista', $validado['headers'], true);
+            $this->sincronizarListasWizerp();
+            $mapa = $this->cargarMapaVendedoras();
+            $listas = CatalogoListaDescuento::orderByDesc('monto_requerido')->get();
+            Cache::put('import_clientes_en_curso', true, now()->addHours(2));
+            foreach ($validado['filas'] as $fila) {
+                if ($fila['duplicada']) {
+                    $stats['omitidas']++;
+                    $this->guardarProgreso($importacion, $stats, 'en_curso');
 
-                    $clientesPorNumero = Cliente::with('facturaCobranzaActiva')
-                        ->whereIn('numero_cliente', $numeros)
-                        ->get()
-                        ->keyBy('numero_cliente');
-
-                    $antesPorId = $clientesPorNumero->keyBy('id')->map(function (Cliente $cliente) {
-                        $copia = $cliente->replicate();
-                        $copia->id = $cliente->id;
-                        $copia->exists = true;
-
-                        return $copia;
-                    });
-
-                    foreach ($chunk as $fila) {
-                        $data = $fila['data'];
-                        $numeroFilaCsv = $fila['numero_fila'];
-
+                    continue;
+                }
+                try {
+                    $resultado = DB::transaction(function () use ($fila, $listas, $mapa, $importaCodigoLista, $importacion, $stats) {
+                        $cliente = Cliente::with('facturaCobranzaActiva')->where('numero_cliente', $fila['data']['numero_cliente'])->lockForUpdate()->first();
+                        $antes = $cliente ? clone $cliente : null;
+                        $coleccion = collect($cliente ? [$cliente->numero_cliente => $cliente] : []);
+                        $historial = [];
+                        $inactivos = 0;
+                        $alertasFila = [];
+                        MobileSyncSuppression::begin();
                         try {
-                            $cambio = $this->procesador->ejecutar(
-                                $data,
-                                $listas,
-                                $mapaVendedoras,
-                                $clientesPorNumero,
-                                $historialBatch,
-                                $importaCodigoLista,
-                                $marcadosInactivos,
-                                $alertasLimiteExcedido,
-                                $importacionClienteId,
-                                $usuarioId,
-                            );
-                            $stats['procesadas']++;
-                            if ($cambio) {
-                                if (($cambio['tipo_cambio'] ?? null) === CambioListaImportacionCliente::TIPO_ASCENSO) {
-                                    $reporteAscensos[] = $cambio;
-                                    $stats['ascensos']++;
-                                } elseif (($cambio['tipo_cambio'] ?? null) === CambioListaImportacionCliente::TIPO_DESCENSO) {
-                                    $stats['descensos']++;
-                                }
-
-                                if ($importacionClienteId !== null) {
-                                    $ahora = now();
-                                    $cambiosListaBatch[] = [
-                                        'importacion_cliente_id' => $importacionClienteId,
-                                        'numero_cliente' => $cambio['numero_cliente'],
-                                        'nombre_cliente' => $this->sanitizarTextoImportacion($cambio['nombre'] ?? null) ?: null,
-                                        'lista_anterior' => $cambio['lista_anterior'],
-                                        'lista_nueva' => $cambio['lista_nueva'],
-                                        'tipo_cambio' => $cambio['tipo_cambio'],
-                                        'codigo_lista' => $cambio['codigo_lista'] !== '' ? $cambio['codigo_lista'] : null,
-                                        'monto_nuevo' => $cambio['monto_nuevo'] ?? null,
-                                        'created_at' => $ahora,
-                                        'updated_at' => $ahora,
-                                    ];
-                                }
+                            $cambio = $this->procesador->ejecutar($fila['data'], $listas, $mapa, $coleccion,
+                                $historial, $importaCodigoLista, $inactivos, $alertasFila, $importacion?->id, $importacion?->usuario_id);
+                            $despues = $coleccion->get($fila['data']['numero_cliente']);
+                            if (! $despues) {
+                                throw ValidationException::withMessages(['numero_cliente' => 'La fila no produjo un cliente.']);
                             }
-                        } catch (Exception $e) {
-                            $stats['errores']++;
-                            Log::error("Importacion Masiva - Error en cliente {$data['numero_cliente']}: " . $e->getMessage());
-
-                            if ($importacionClienteId !== null) {
-                                $ahora = now();
-                                $erroresBatch[] = [
-                                    'importacion_cliente_id' => $importacionClienteId,
-                                    'numero_fila' => $numeroFilaCsv,
-                                    'numero_cliente' => trim($data['numero_cliente'] ?? '') ?: null,
-                                    'mensaje' => $this->sanitizarTextoImportacion($e->getMessage()),
-                                    'created_at' => $ahora,
-                                    'updated_at' => $ahora,
-                                ];
+                            if ($historial !== []) {
+                                HistorialMontoCliente::insert($historial);
                             }
+                            if ($cambio && $importacion) {
+                                CambioListaImportacionCliente::create([
+                                    'importacion_cliente_id' => $importacion->id, 'numero_cliente' => $cambio['numero_cliente'],
+                                    'nombre_cliente' => $cambio['nombre'], 'lista_anterior' => $cambio['lista_anterior'],
+                                    'lista_nueva' => $cambio['lista_nueva'], 'tipo_cambio' => $cambio['tipo_cambio'],
+                                    'codigo_lista' => $cambio['codigo_lista'], 'monto_nuevo' => $cambio['monto_nuevo'],
+                                ]);
+                            }
+                            $categoria = ! $antes ? 'creados' : ($despues->wasChanged() ? 'actualizados' : 'sin_cambios');
+                            $siguiente = $stats;
+                            $siguiente[$categoria]++;
+                            $siguiente['procesadas']++;
+                            $siguiente['clientes_marcados_inactivos'] += $inactivos;
+                            $siguiente['activados'] += ! $despues->es_inactivo && (! $antes || $antes->es_inactivo) ? 1 : 0;
+                            $siguiente['cambios_lista'] += $cambio ? 1 : 0;
+                            if (($cambio['tipo_cambio'] ?? '') === CambioListaImportacionCliente::TIPO_ASCENSO) {
+                                $siguiente['ascensos']++;
+                            } elseif (($cambio['tipo_cambio'] ?? '') === CambioListaImportacionCliente::TIPO_DESCENSO) {
+                                $siguiente['descensos']++;
+                            }
+                            // La publicación durable participa del mismo commit que el cliente.
+                            app(MobileSyncPublicationService::class)->publishDiffColeccion(
+                                collect($antes ? [$antes->id => $antes] : []), collect([$despues->id => $despues]));
+                            $this->guardarProgreso($importacion, $siguiente, 'en_curso');
+
+                            return ['stats' => $siguiente, 'cambio' => $cambio, 'alertas' => $categoria === 'sin_cambios' ? [] : $alertasFila];
+                        } finally {
+                            MobileSyncSuppression::end();
+                        }
+                    });
+                    $stats = $resultado['stats'];
+                    if (($resultado['cambio']['tipo_cambio'] ?? '') === CambioListaImportacionCliente::TIPO_ASCENSO) {
+                        $reporteAscensos[] = $resultado['cambio'];
+                    }
+                    $alertas = array_merge($alertas, $resultado['alertas']);
+                } catch (\Throwable $e) {
+                    $stats['errores']++;
+                    $detalles = $e instanceof ValidationException ? $e->errors() : ['fila' => [$e->getMessage()]];
+                    foreach ($detalles as $campo => $mensajes) {
+                        $error = ['numero_fila' => $fila['numero_fila'], 'numero_cliente' => $fila['data']['numero_cliente'] ?: null,
+                            'campo' => $campo, 'mensaje' => $this->sanitizarTextoImportacion(implode(' ', $mensajes))];
+                        $errores[] = $error;
+                        if ($importacion) {
+                            ErroresImportacionCliente::create(['importacion_cliente_id' => $importacion->id] + $error);
                         }
                     }
-
-                    if (!empty($historialBatch)) {
-                        foreach (array_chunk($historialBatch, 500) as $loteHistorial) {
-                            HistorialMontoCliente::insert($loteHistorial);
-                        }
+                    // Una caída de conexión/infraestructura detiene el archivo: no aparentar errores de contenido.
+                    if ($e instanceof \Error || ($e instanceof QueryException
+                        && ! in_array((string) $e->getCode(), ['23000', '22001', '22003'], true))) {
+                        throw $e;
                     }
-
-                    $publicacionMovil->publishDiffColeccion(
-                        $antesPorId,
-                        $clientesPorNumero->filter(fn ($cliente) => $cliente instanceof Cliente && $cliente->id)->keyBy('id')
-                    );
-                });
+                    $this->guardarProgreso($importacion, $stats, 'en_curso');
+                }
             }
+            $estado = $stats['errores'] === 0 ? 'completo' : ($stats['procesadas'] > 0 ? 'parcial' : 'fallido');
+            $stats['duracion_seg'] = round(microtime(true) - $inicio, 2);
+            $this->guardarProgreso($importacion, $stats, $estado);
+        } catch (\Throwable $e) {
+            $stats['no_aplicadas'] = max(0, $stats['leidas'] - $stats['procesadas'] - $stats['omitidas'] - $stats['errores']);
+            if ($importacion) {
+                $this->guardarProgreso($importacion, $stats, $stats['procesadas'] > 0 ? 'parcial' : 'fallido', $e->getMessage());
+            }
+            throw $e;
         } finally {
-            MobileSyncSuppression::end();
-            Cache::forget('import_clientes_en_curso');
-        }
-
-        if ($importacionClienteId !== null && ! empty($cambiosListaBatch)) {
-            try {
-                foreach (array_chunk($cambiosListaBatch, 500) as $loteCambiosLista) {
-                    CambioListaImportacionCliente::insert($loteCambiosLista);
+            if ($adquirido) {
+                Cache::forget('import_clientes_en_curso');
+                if ($mysql) {
+                    DB::selectOne("SELECT RELEASE_LOCK('gelia.importacion.clientes.wizerp')");
+                } else {
+                    $lock->release();
                 }
-            } catch (\Throwable $e) {
-                Log::warning('No se pudieron persistir cambios de lista de importación', [
-                    'importacion_cliente_id' => $importacionClienteId,
-                    'cambios_count' => count($cambiosListaBatch),
-                    'error' => $this->sanitizarTextoImportacion($e->getMessage()),
-                ]);
             }
         }
-
-        if ($importacionClienteId !== null && ! empty($erroresBatch)) {
-            try {
-                foreach (array_chunk($erroresBatch, 500) as $loteErrores) {
-                    ErroresImportacionCliente::insert($loteErrores);
-                }
-            } catch (\Throwable $e) {
-                Log::warning('No se pudieron persistir detalles de errores de importación', [
-                    'importacion_cliente_id' => $importacionClienteId,
-                    'errores_count' => count($erroresBatch),
-                    'error' => $this->sanitizarTextoImportacion($e->getMessage()),
-                ]);
-            }
+        if ($alertas !== []) {
+            Notification::send(User::permission('cobranza.recibir_alertas')->get(), new AlertaLimiteCreditoSuperadoMasivoNotification($alertas));
         }
 
-        if (!empty($alertasLimiteExcedido)) {
-            $usuariosNotificar = User::permission('cobranza.recibir_alertas')->get();
-            if ($usuariosNotificar->isNotEmpty()) {
-                Notification::send($usuariosNotificar, new AlertaLimiteCreditoSuperadoMasivoNotification($alertasLimiteExcedido));
-            }
-        }
+        return ['ascensos' => $reporteAscensos, 'clientes_marcados_inactivos' => $stats['clientes_marcados_inactivos'],
+            'stats' => $stats, 'estado' => $estado, 'errores_detalle' => array_slice($errores, 0, 100), 'detalle_limitado' => count($errores) > 100];
+    }
 
-        $duracion = round(microtime(true) - $inicio, 2);
-        Log::info('Importacion clientes Wizerp finalizada', [
-            'filas_leidas'                => $stats['leidas'],
-            'filas_procesadas'            => $stats['procesadas'],
-            'filas_omitidas'              => $stats['omitidas'],
-            'errores'                     => $stats['errores'],
-            'ascensos'                    => $stats['ascensos'],
-            'descensos'                   => $stats['descensos'],
-            'clientes_marcados_inactivos' => $marcadosInactivos,
-            'duracion_seg'                => $duracion,
-            'memoria_pico_mb'             => round(memory_get_peak_usage(true) / 1024 / 1024, 2),
-        ]);
-
-        return [
-            'ascensos'                    => $reporteAscensos,
-            'clientes_marcados_inactivos' => $marcadosInactivos,
-            'stats'                       => array_merge($stats, [
-                'ascensos'                    => $stats['ascensos'],
-                'descensos'                   => $stats['descensos'],
-                'clientes_marcados_inactivos' => $marcadosInactivos,
-                'duracion_seg'                => $duracion,
-            ]),
-        ];
+    private function guardarProgreso(?ImportacionCliente $importacion, array $stats, string $estado, ?string $mensaje = null): void
+    {
+        $importacion?->update(['estado' => $estado, 'resumen' => $stats, 'mensaje_fatal' => $mensaje === null ? null : $this->sanitizarTextoImportacion($mensaje),
+            'filas_leidas' => $stats['leidas'], 'filas_procesadas' => $stats['procesadas'], 'filas_omitidas' => $stats['omitidas'],
+            'errores' => $stats['errores'], 'ascensos' => $stats['ascensos'], 'descensos' => $stats['descensos'],
+            'clientes_marcados_inactivos' => $stats['clientes_marcados_inactivos'], 'duracion_seg' => $stats['duracion_seg'] ?? null]);
     }
 
     private function sanitizarTextoImportacion(?string $texto): string
     {
-        if ($texto === null || $texto === '') {
-            return '';
-        }
-
-        if (function_exists('mb_scrub')) {
-            return mb_substr(mb_scrub($texto, 'UTF-8'), 0, 4000);
-        }
-
-        $limpio = @iconv('UTF-8', 'UTF-8//IGNORE', $texto);
-
-        return mb_substr($limpio !== false ? $limpio : '', 0, 4000);
-    }
-
-    private function procesarCabeceras(array $headersRaw): array
-    {
-        $headersRaw[0] = preg_replace('/^\xEF\xBB\xBF/', '', $headersRaw[0]);
-
-        $headers = array_map(function ($header) {
-            return $this->normalizarNombreCabecera(strtolower(trim($header)));
-        }, $headersRaw);
-
-        return $headers;
-    }
-
-    private function normalizarNombreCabecera(string $header): string
-    {
-        $alias = [
-            'numero_cli'        => 'numero_cliente',
-            'monto_venta_actua' => 'monto_venta_actual',
-            'limite_asignado'   => 'monto_credito_autorizado',
-            'limite_de_credito' => 'monto_credito_autorizado',
-            'dias_de_credito'   => 'dias_credito',
-            'correo'            => 'correo_electronico',
-            'email'             => 'correo_electronico',
-            'cp'                => 'codigo_postal',
-            'razon_social'      => 'nombre_razon_social',
-        ];
-
-        return $alias[$header] ?? $header;
-    }
-
-    private function normalizarClavesFila(array $data): array
-    {
-        $alias = [
-            'numero_cli'        => 'numero_cliente',
-            'monto_venta_actua' => 'monto_venta_actual',
-            'limite_asignado'   => 'monto_credito_autorizado',
-            'limite_de_credito' => 'monto_credito_autorizado',
-            'dias_de_credito'   => 'dias_credito',
-            'correo'            => 'correo_electronico',
-            'email'             => 'correo_electronico',
-            'cp'                => 'codigo_postal',
-            'razon_social'      => 'nombre_razon_social',
-        ];
-
-        foreach ($alias as $from => $to) {
-            if (!isset($data[$to]) && isset($data[$from])) {
-                $data[$to] = $data[$from];
-            }
-        }
-
-        return $data;
-    }
-
-    private function alinearFilaConCabeceras(array $row, array $headers): array
-    {
-        $totalHeaders = count($headers);
-        $totalRow = count($row);
-
-        if ($totalRow < $totalHeaders) {
-            return array_pad($row, $totalHeaders, '');
-        }
-
-        if ($totalRow > $totalHeaders) {
-            return array_slice($row, 0, $totalHeaders);
-        }
-
-        return $row;
+        return mb_substr(mb_scrub($texto ?? '', 'UTF-8'), 0, 4000);
     }
 
     private function cargarMapaVendedoras(): array

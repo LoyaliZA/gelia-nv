@@ -1,3 +1,4 @@
+import ResumenImportacionClientes from './Partials/ResumenImportacionClientes';
 import React, { useState, useEffect, useCallback } from 'react';
 import { Head, useForm, usePage, router } from '@inertiajs/react';
 import {
@@ -179,10 +180,10 @@ export default function Clientes({ auth, clientes, vendedores = [], tipos_client
         if (formCarga.processing) return;
         formCarga.post(route('admin.clientes.importar'), {
             preserveScroll: true,
-            onSuccess: () => {
+            onSuccess: (page) => {
                 formCarga.reset();
                 router.reload({ only: ['clientes'] });
-                setModalExitoAbierto(true);
+                setModalExitoAbierto(page.props.flash?.resultado_importacion?.estado === 'completo');
             },
         });
     };
@@ -254,6 +255,7 @@ export default function Clientes({ auth, clientes, vendedores = [], tipos_client
 
     return (
         <AppLayout auth={auth}>
+            <ResumenImportacionClientes resultado={flash?.resultado_importacion} />
             <Head title="Gestión de Clientes | GELIANV" />
 
             {/* Renderizado condicional del modal extraído */}

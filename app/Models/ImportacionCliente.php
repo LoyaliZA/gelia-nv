@@ -11,6 +11,7 @@ class ImportacionCliente extends Model
     protected $table = 'importaciones_clientes';
 
     protected $fillable = [
+        'estado', 'resumen', 'mensaje_fatal',
         'usuario_id',
         'nombre_archivo_original',
         'ruta_almacenamiento',
@@ -25,6 +26,7 @@ class ImportacionCliente extends Model
     ];
 
     protected $casts = [
+        'resumen' => 'array',
         'duracion_seg' => 'decimal:2',
     ];
 
