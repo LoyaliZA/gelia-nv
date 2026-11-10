@@ -1913,3 +1913,22 @@
 .consulta-seleccion-detalle-lista span { font-size: 0.65rem; color: var(--theme-text-muted); }
 .consulta-seleccion-detalle-pie { display: flex; justify-content: end; flex-wrap: wrap; gap: 0.6rem; padding: 1rem; border-top: 1px solid var(--theme-border); flex-shrink: 0; }
 .consulta-seleccion-detalle-pie button { min-height: 2.75rem; }
+
+/* La consulta contiene otro panel de preparación: un solo scroll evita recortar su pie. */
+.gelia-preparacion-modal .gelia-modal-body:has(> .gelia-preparacion--consulta) {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scroll-padding-block: 0.75rem;
+}
+
+.gelia-preparacion-modal .gelia-preparacion--consulta,
+.gelia-preparacion-modal .gelia-preparacion--consulta .gelia-preparacion {
+    display: block;
+    flex: none;
+    height: auto;
+    overflow: visible;
+}
+
+.gelia-preparacion-modal .gelia-preparacion--consulta :is(.gelia-preparacion-workspace, .gelia-preparacion-captura) {
+    overflow: visible;
+}
