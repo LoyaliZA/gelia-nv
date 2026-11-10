@@ -4,7 +4,7 @@ import { esCapturaTienda } from './flujoCapturaPedido';
 import SeguimientoTransferenciaTienda from './SeguimientoTransferenciaTienda';
 
 /** Respuesta actual compartida por las vistas de consulta; no permite modificarla. */
-export default function ConsultaSolicitudTienda({ pedido, operarTransferencia = false, onTransferenciaActualizada }) {
+export default function ConsultaSolicitudTienda({ pedido, operarTransferencia = false, onTransferenciaActualizada, mostrarSeguimientoTransferencia = true }) {
     if (!esCapturaTienda(pedido)) return null;
     const solicitud = pedido.solicitud_preparacion;
     const area = solicitud.area_revision || (pedido.usa_preparacion_tienda ? 'preparacion_tienda' : 'control_pedidos');
@@ -19,5 +19,5 @@ export default function ConsultaSolicitudTienda({ pedido, operarTransferencia = 
         nombreAlmacen={pedido.tarea_preparacion?.almacen?.nombre || ''}
         revisiones={pedido.revisiones_producto || pedido.revisionesProducto || []}
         consultaCerrada={Boolean(pedido.consulta_cerrada || pedido.consulta_cerrada_at)}
-    /><SeguimientoTransferenciaTienda pedido={pedido} soloLectura={!operarTransferencia} onActualizar={onTransferenciaActualizada} /></>;
+    />{mostrarSeguimientoTransferencia && <SeguimientoTransferenciaTienda pedido={pedido} soloLectura={!operarTransferencia} onActualizar={onTransferenciaActualizada} />}</>;
 }

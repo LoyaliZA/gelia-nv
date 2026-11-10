@@ -1,5 +1,5 @@
 import React from 'react';
-import { CheckCircle2 } from 'lucide-react';
+import { CheckCircle2, Ellipsis } from 'lucide-react';
 import { BTN_PRIMARY, BTN_SECONDARY } from '../../Partials/pedidosBmaStyles';
 
 /** Acciones operativas; la X de la cabecera cierra la revisión. */
@@ -17,10 +17,13 @@ export default function BarraAccionesRevision({
 }) {
     if (!puedeLiberarResguardo && !esPendiente && !muestraAprobar) return null;
     return (
-        <div className="gelia-pedidos-auditoria-acciones flex flex-wrap items-center justify-end gap-2 min-w-0">
+        <div className="gelia-pedidos-auditoria-acciones flex flex-wrap items-start gap-2 min-w-0">
             {(puedeLiberarResguardo || esPendiente) && <details className="gelia-pedidos-acciones-secundarias">
-                <summary>Más acciones</summary>
-                <div className="flex flex-wrap gap-2 pt-2">
+                <summary className={`${BTN_SECONDARY} h-11 w-11 !p-0`} title="Más acciones">
+                    <Ellipsis size={20} aria-hidden="true" />
+                    <span className="sr-only">Más acciones</span>
+                </summary>
+                <div className="gelia-pedidos-acciones-secundarias-opciones grid gap-2 border theme-border theme-surface-solid theme-no-blur rounded-xl p-2">
             {puedeLiberarResguardo && (
                 <button
                     type="button"
@@ -53,9 +56,6 @@ export default function BarraAccionesRevision({
                 >
                     <CheckCircle2 className="w-4 h-4" /> Aprobar pedido
                 </button>
-            )}
-            {muestraAprobar && !puedeAprobar && (
-                <p className="text-xs theme-text-muted m-0 w-full">{!pagoValidado ? 'Valida el pago para aprobar el pedido.' : !tieneRemision ? 'Adjunta la remisión PDF para aprobar el pedido.' : ''}</p>
             )}
         </div>
     );

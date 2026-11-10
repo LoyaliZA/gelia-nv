@@ -11,17 +11,20 @@ use App\Http\Requests\ControlPedidos\RechazarAnexoEnvioPedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\RechazarPedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\ReportarErrorDatosPedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\SubirRemisionPedidoBmaRequest;
+use App\Models\ControlPedidos\CatalogoModalidadPreparacionPedido;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Models\SaldosAFavor\SafIncidencia;
 use App\Services\ControlPedidos\AnexarPagoEnvioPedidoBmaService;
 use App\Services\ControlPedidos\AprobarAnexoEnvioPedidoBmaService;
 use App\Services\ControlPedidos\AprobarPedidoBmaService;
+use App\Services\ControlPedidos\DevolverCreditoVencidoTiendaService;
 use App\Services\ControlPedidos\GestionarRemisionPedidoBmaService;
 use App\Services\ControlPedidos\LiberarResguardoPedidoBmaService;
 use App\Services\ControlPedidos\ListarPedidosAuditoriaService;
 use App\Services\ControlPedidos\ObtenerCatalogosPedidoBmaService;
 use App\Services\ControlPedidos\RechazarAnexoEnvioPedidoBmaService;
 use App\Services\ControlPedidos\RechazarPedidoBmaService;
+use App\Services\ControlPedidos\RegistrarResultadoCreditoTiendaService;
 use App\Services\ControlPedidos\ReportarErrorDatosPedidoBmaService;
 use App\Services\ControlPedidos\ValidarPagoPedidoBmaService;
 use App\Models\ControlPedidos\CatalogoEstatusPedido;
@@ -31,7 +34,9 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -97,19 +102,46 @@ class PedidoBmaAuditoriaController extends Controller
     public function registrarCreditoTienda(
         Request $request,
         PedidoBma $pedidoBma,
-        \App\Services\ControlPedidos\RegistrarResultadoCreditoTiendaService $servicio,
+        RegistrarResultadoCreditoTiendaService $servicio,
+        ValidarPagoPedidoBmaService $validarPago,
     ): RedirectResponse {
         VisibilidadPedidoBma::assertPuedeConsultar(Auth::user(), $pedidoBma);
+        $decisionAuditoria = $request->boolean('decision_auditoria');
         $datos = $request->validate([
-            'resultado' => ['required', 'in:aprobado,bloqueado,vencido'],
+            'decision_auditoria' => ['sometimes', 'boolean'],
+            'resultado' => ['required', Rule::in($decisionAuditoria
+                ? ['aprobado', 'vencido'] : ['aprobado', 'bloqueado', 'vencido'])],
             'causa' => ['nullable', 'string', 'max:500'],
         ]);
+        $usuario = Auth::user();
+        $resultado = $datos['resultado'];
+        $causa = (string) ($datos['causa'] ?? '');
+        $registrar = fn (PedidoBma $pedido) => $resultado === 'vencido'
+            ? app(DevolverCreditoVencidoTiendaService::class)->ejecutar($pedido, $usuario, $causa)
+            : $servicio->ejecutar($pedido, $usuario, $resultado, $causa);
+
         try {
-            if ($datos['resultado'] === 'vencido') {
-                app(\App\Services\ControlPedidos\DevolverCreditoVencidoTiendaService::class)
-                    ->ejecutar($pedidoBma, Auth::user(), (string) ($datos['causa'] ?? ''));
+            if ($decisionAuditoria) {
+                DB::transaction(function () use ($pedidoBma, $resultado, $registrar, $validarPago, $usuario) {
+                    $pedido = PedidoBma::query()->lockForUpdate()->findOrFail($pedidoBma->id);
+                    $solicitud = $pedido->solicitud_preparacion_json ?? [];
+                    $modalidad = $pedido->codigoModalidadPreparacionVigente() ?: ($solicitud['codigo_modalidad'] ?? null);
+                    if ($modalidad === CatalogoModalidadPreparacionPedido::CODIGO_RECOGE_TIENDA_CREDITO
+                        && $pedido->pago_validado_at && ($solicitud['credito_wizerp']['resultado'] ?? null) === 'aprobado') {
+                        if ($resultado === 'aprobado') {
+                            return;
+                        }
+
+                        throw new \RuntimeException('El crédito de este pedido ya fue aprobado y validado.');
+                    }
+
+                    $pedido = $registrar($pedido);
+                    if ($resultado === 'aprobado') {
+                        $validarPago->ejecutar($pedido, $usuario->id);
+                    }
+                });
             } else {
-                $servicio->ejecutar($pedidoBma, Auth::user(), $datos['resultado'], (string) ($datos['causa'] ?? ''));
+                $registrar($pedidoBma);
             }
         } catch (\Illuminate\Validation\ValidationException $e) {
             return back()->with('error', collect($e->errors())->flatten()->first() ?: $e->getMessage());
@@ -117,9 +149,12 @@ class PedidoBmaAuditoriaController extends Controller
             return back()->with('error', $e->getMessage());
         }
 
-        $aviso = $datos['resultado'] === 'vencido'
-            ? 'El pedido regresó: el cliente tiene un crédito vencido y necesita liquidarlo.'
-            : 'Resultado de crédito registrado. No confirma la entrega.';
+        $aviso = match (true) {
+            $decisionAuditoria && $resultado === 'vencido' => 'Pedido devuelto a Ventas por crédito vencido.',
+            $decisionAuditoria => 'Crédito aprobado y validado.',
+            $resultado === 'vencido' => 'El pedido regresó: el cliente tiene un crédito vencido y necesita liquidarlo.',
+            default => 'Resultado de crédito registrado. No confirma la entrega.',
+        };
 
         return back()->with('success', $aviso);
     }
