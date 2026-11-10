@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Api\V1;
 
+use App\Services\Escalonamiento\EscalonamientoAutoridad;
 use Illuminate\Foundation\Http\FormRequest;
 
 class StoreClienteExternoRequest extends FormRequest
@@ -24,13 +25,14 @@ class StoreClienteExternoRequest extends FormRequest
             'uso_factura' => 'nullable|string|max:255',
             'vendedor_id' => 'nullable|exists:users,id',
             'catalogo_tipo_cliente_id' => 'nullable|exists:catalogo_tipo_clientes,id',
-            'monto_venta_actual' => config('escalonamiento.autoridad_activa')
+            'monto_venta_actual' => app(EscalonamientoAutoridad::class)->estaActiva()
                 ? 'prohibited'
                 : 'nullable|numeric|min:0',
-            'lista_actual_id' => config('escalonamiento.autoridad_activa')
+            'lista_actual_id' => app(EscalonamientoAutoridad::class)->estaActiva()
                 ? 'prohibited'
                 : 'nullable|exists:catalogo_listas_descuento,id',
             'lista_bloqueada' => 'nullable|boolean',
+            'es_inactivo' => 'prohibited',
             'es_heredado' => 'nullable|boolean',
         ];
     }

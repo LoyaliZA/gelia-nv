@@ -13,7 +13,7 @@ class ErroresImportacionCliente extends Model
         'importacion_cliente_id',
         'numero_fila',
         'numero_cliente',
-        'mensaje',
+        'mensaje', 'campo',
     ];
 
     public function importacion(): BelongsTo

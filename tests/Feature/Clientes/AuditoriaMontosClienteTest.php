@@ -17,6 +17,8 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Mockery;
+use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class AuditoriaMontosClienteTest extends TestCase
@@ -34,8 +36,8 @@ class AuditoriaMontosClienteTest extends TestCase
 
     private function usuarioConPermisoClientes(): User
     {
-        \Spatie\Permission\Models\Permission::findOrCreate('clientes.ver', 'web');
-        $role = \Spatie\Permission\Models\Role::findOrCreate('admin', 'web');
+        Permission::findOrCreate('clientes.ver', 'web');
+        $role = Role::findOrCreate('admin', 'web');
         $role->givePermissionTo('clientes.ver');
         $user = User::factory()->create();
         $user->assignRole($role);
@@ -103,6 +105,7 @@ class AuditoriaMontosClienteTest extends TestCase
             'ruta_almacenamiento' => 'importaciones_clientes/test.csv',
         ]);
 
+        Storage::disk('local')->put($importacion->ruta_almacenamiento, "numero_cliente,nombre,monto_venta_actual\n500,Cliente Monto,250\n");
         $path = storage_path('app/test-audit-import.csv');
         file_put_contents($path, "numero_cliente,nombre,monto_venta_actual\n500,Cliente Monto,250\n");
         $archivo = new UploadedFile($path, 'test.csv', 'text/csv', null, true);

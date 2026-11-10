@@ -3,7 +3,6 @@
 namespace Tests\Feature\Clientes;
 
 use App\Models\CatalogoListaDescuento;
-use App\Models\Cliente;
 use App\Models\ImportacionCliente;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -47,7 +46,7 @@ class ImportacionClienteArchivoTest extends TestCase
 
         $user = $this->usuarioConPermisos(['clientes.ver', 'clientes.carga_masiva']);
 
-        $csv = "numero_cliente,nombre,monto_venta_actual\n900,Cliente Nuevo,150\n";
+        $csv = "numero_cliente,nombre,codigo_lista,monto_venta_actual\n900,Cliente Nuevo,2,150\n";
         $archivo = UploadedFile::fake()->createWithContent('clientes_wizerp.csv', $csv);
 
         $response = $this->actingAs($user)->post(route('admin.clientes.importar'), [

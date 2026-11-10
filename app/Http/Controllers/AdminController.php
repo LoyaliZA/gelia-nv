@@ -673,21 +673,19 @@ class AdminController extends Controller
             $resultado = $importadorService->ejecutar($request->file('archivo'), $importacion);
             $registrarImportacion->finalizar($importacion, $resultado['stats'] ?? []);
 
-            $inactivos = $resultado['clientes_marcados_inactivos'] ?? 0;
-            $mensaje = 'Base de datos de clientes actualizada correctamente.';
-            if ($inactivos > 0) {
-                $mensaje .= " {$inactivos} cliente(s) marcado(s) como inactivo(s).";
-            }
+            $estado = $resultado['estado'];
+            $mensaje = "Importación {$estado}: {$resultado['stats']['creados']} creados, {$resultado['stats']['actualizados']} actualizados, {$resultado['stats']['sin_cambios']} sin cambios, {$resultado['stats']['errores']} filas fallidas.";
 
             return back()
-                ->with('success', $mensaje)
+                ->with($estado === 'completo' ? 'success' : 'warning', $mensaje)
+                ->with('resultado_importacion', $resultado)
                 ->with('reporte_importacion', $resultado['ascensos'] ?? []);
         } catch (\Throwable $e) {
             $mensajeSeguro = is_string($e->getMessage())
                 ? (function_exists('mb_scrub') ? mb_scrub($e->getMessage(), 'UTF-8') : @iconv('UTF-8', 'UTF-8//IGNORE', $e->getMessage()))
                 : 'Error desconocido';
 
-            return back()->withErrors(['archivo' => 'Error procesando archivo. Verifique el formato de las cabeceras. Detalles: ' . ($mensajeSeguro ?: 'Error desconocido')]);
+            return back()->withErrors(['archivo' => 'Importación interrumpida; consulte su auditoría para conocer las filas confirmadas. Detalles: ' . ($mensajeSeguro ?: 'Error desconocido')]);
         }
     }
 

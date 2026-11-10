@@ -49,7 +49,6 @@ class ClienteUpdateValidationInertiaTest extends TestCase
                 'monto_venta_actual' => 0,
                 'lista_actual_id' => '',
                 'lista_bloqueada' => false,
-                'es_inactivo' => false,
             ]);
 
         $response->assertRedirect();

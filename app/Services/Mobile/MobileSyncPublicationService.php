@@ -7,6 +7,8 @@ use App\Models\Cliente;
 use App\Models\MobileSyncPublication;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class MobileSyncPublicationService
@@ -164,6 +166,24 @@ class MobileSyncPublicationService
      * @param  array<int, int>  $userIds
      */
     public function notificar(array $userIds, int $maxSeq, bool $requiresBootstrap): void
+    {
+        if (DB::transactionLevel() > 0) {
+            DB::afterCommit(function () use ($userIds, $maxSeq, $requiresBootstrap) {
+                try {
+                    $this->notificarConfirmado($userIds, $maxSeq, $requiresBootstrap);
+                } catch (\Throwable $e) {
+                    // La publicación durable permite recuperar por cursor aun sin aviso inmediato.
+                    Log::warning('Publicación móvil confirmada sin aviso inmediato', ['max_seq' => $maxSeq, 'error' => $e->getMessage()]);
+                }
+            });
+
+            return;
+        }
+
+        $this->notificarConfirmado($userIds, $maxSeq, $requiresBootstrap);
+    }
+
+    private function notificarConfirmado(array $userIds, int $maxSeq, bool $requiresBootstrap): void
     {
         $segundos = max(1, (int) config('mobile.notify_debounce_seconds', 4));
 
