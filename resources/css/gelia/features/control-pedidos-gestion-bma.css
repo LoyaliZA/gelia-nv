@@ -793,6 +793,7 @@
 .gelia-pedidos-auditoria-acciones > button {
     min-height: 44px;
     padding-inline: 0.875rem;
+    border-radius: 9999px;
     font-size: 0.8125rem;
     white-space: nowrap;
 }
@@ -924,12 +925,36 @@
     color: var(--theme-text-main);
 }
 
-.gelia-pedidos-acciones-secundarias summary,
-.gelia-pedidos-revision-metadatos summary {
+.gelia-pedidos-acciones-secundarias > summary,
+.gelia-pedidos-revision-metadatos > summary {
+    display: flex;
+    align-items: center;
     min-height: 44px;
-    align-content: center;
+    list-style: none;
     cursor: pointer;
     font-weight: 600;
+}
+
+.gelia-pedidos-acciones-secundarias > summary {
+    justify-content: center;
+    width: fit-content;
+    padding-inline: 0.875rem;
+    border: 1px solid var(--theme-border);
+    border-radius: 0.75rem;
+    background: var(--theme-element-bg);
+}
+
+.gelia-pedidos-revision-metadatos > summary {
+    font-size: 0.875rem;
+    font-weight: 700;
+}
+
+:is(.gelia-pedidos-acciones-secundarias, .gelia-pedidos-revision-metadatos) > summary::-webkit-details-marker {
+    display: none;
+}
+
+:is(.gelia-pedidos-acciones-secundarias, .gelia-pedidos-revision-metadatos) > summary::marker {
+    content: '';
 }
 
 .gelia-pedidos-auditoria > .gelia-pedidos-detalle-cabecera {
