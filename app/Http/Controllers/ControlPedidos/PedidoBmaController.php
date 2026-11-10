@@ -239,6 +239,8 @@ class PedidoBmaController extends Controller
 
         return response()->json(array_merge(['ok' => true], $this->contextoRegistrarTienda($pedido), [
             'solicitud_preparacion' => $pedido->solicitud_preparacion,
+            'revision_registro' => (int) $pedido->revision_registro,
+            'base_captura' => $pedido->base_captura,
         ]));
     }
 
@@ -1047,6 +1049,8 @@ class PedidoBmaController extends Controller
             return response()->json([
                 'ok' => true,
                 'consulta_cerrada' => $pedido->consultaCerrada(),
+                'revision_registro' => (int) $pedido->revision_registro,
+                'base_captura' => $pedido->base_captura,
                 'message' => 'Consulta cerrada. La mercancía quedó confirmada con el cliente.',
             ]);
         }

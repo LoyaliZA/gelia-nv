@@ -131,7 +131,7 @@ export default function ContinuidadTienda({
                         importes?.onSolicitud?.(siguienteSolicitud);
                     }}
                     notaMismoDia={notaMismoDia}
-                    editable={puedeCobertura}
+                    editable={puedeCobertura && importes?.lecturaLista !== false}
                 />
             )}
             {cierreVigente && mostrarCustodia && <section className="rounded-xl border theme-border theme-element p-4 grid gap-3">

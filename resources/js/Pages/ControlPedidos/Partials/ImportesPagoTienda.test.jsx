@@ -133,13 +133,17 @@ it('comunica la cobertura pendiente de transferencia y conserva la confirmación
 
 it('transferencia espera cobertura completa sin bloqueos y guardar los cambios de Mismo día', async () => {
  const onEstadoConfirmacion=vi.fn();
- await render({onEstadoConfirmacion});
+ await render({onEstadoConfirmacion,revisionEsperada:2});
  expect(onEstadoConfirmacion).toHaveBeenLastCalledWith(false);
  await act(()=>pagoProps.current.onResumenChange({cubierto:true,bloqueos:[],pendiente:0.4,tolerancia_aplicada:0.44}));
- expect(onEstadoConfirmacion).toHaveBeenLastCalledWith(true);
- await act(()=>pagoProps.current.onResumenChange({cubierto:true,bloqueos:['Comprobante rechazado']}));
  expect(onEstadoConfirmacion).toHaveBeenLastCalledWith(false);
- await act(()=>pagoProps.current.onResumenChange({cubierto:true,bloqueos:[]}));
+ await act(()=>pagoProps.current.onLectura({revision_registro:1,resumen:{cubierto:true,bloqueos:[]}}));
+ expect(onEstadoConfirmacion).toHaveBeenLastCalledWith(false);
+ await act(()=>pagoProps.current.onLectura({revision_registro:2,resumen:{cubierto:true,bloqueos:[],pendiente:0.4,tolerancia_aplicada:0.44}}));
+ expect(onEstadoConfirmacion).toHaveBeenLastCalledWith(true);
+ await act(()=>pagoProps.current.onLectura({revision_registro:2,resumen:{cubierto:false,bloqueos:['Comprobante rechazado']}}));
+ expect(onEstadoConfirmacion).toHaveBeenLastCalledWith(false);
+ await act(()=>pagoProps.current.onLectura({revision_registro:2,resumen:{cubierto:true,bloqueos:[]}}));
  const check=[...container.querySelectorAll('input[type="checkbox"]')].find(i=>i.closest('label').textContent.includes('Mismo día:'));
  expect(check.disabled).toBe(true);
 });

@@ -2010,6 +2010,45 @@ class SolicitudRegistrarTiendaTest extends TestCase
         $this->assertSame('transferencia', $pedido->fresh()->solicitud_preparacion_json['cobertura_tienda']['tipo']);
     }
 
+    public function test_el_cierre_y_la_modalidad_entregan_la_base_vigente_para_autoguardar_importes(): void
+    {
+        Storage::fake('public');
+        Storage::fake('local');
+        $this->permitirRevision();
+        $this->actingAs($this->usuario);
+        foreach (['apartado', 'credito', 'transferencia'] as $cobertura) {
+            $pedido = $this->pedido();
+            $this->documento($pedido);
+            $this->postJson("/control-pedidos/{$pedido->id}/solicitud-tienda", $this->solicitud($pedido, 'preparacion_tienda', $this->pdv->id))->assertOk();
+            $tarea = $pedido->tareasPreparacion()->sole();
+            $url = '/control-pedidos/tienda/tareas/'.$tarea->id;
+            $this->postJson($url.'/tomar', ['version' => $tarea->version])->assertOk();
+            $this->post($url.'/disponibilidad', [
+                'confirmacion_explicita' => 1, 'evidencias' => [UploadedFile::fake()->image('conjunto.jpg')],
+            ], ['Accept' => 'application/json'])->assertOk();
+            $baseInicial = RevisionCapturaPedido::base($pedido->fresh());
+
+            $cierre = $this->postJson("/control-pedidos/{$pedido->id}/cerrar-consulta")->assertOk();
+            $baseCierre = $cierre->json('base_captura');
+            $this->assertSame(RevisionCapturaPedido::base($pedido->fresh()), $baseCierre);
+            $this->assertNotSame($baseInicial, $baseCierre);
+
+            $modalidad = $this->postJson("/control-pedidos/{$pedido->id}/cobertura-tienda", ['cobertura' => $cobertura])
+                ->assertOk()->assertJsonPath('solicitud_preparacion.cobertura_tienda.tipo', $cobertura);
+            $baseModalidad = $modalidad->json('base_captura');
+            $this->assertNotSame($baseCierre, $baseModalidad);
+            $this->assertSame($cierre->json('revision_registro'), $modalidad->json('revision_registro'));
+            $datos = [
+                'pedido_id' => $pedido->id, 'total_mercancia' => 200,
+                'revision_esperada' => $modalidad->json('revision_registro'),
+            ];
+            $this->postJson('/control-pedidos/autoguardar', $datos + ['base_captura' => $baseCierre])
+                ->assertConflict()->assertJsonPath('codigo', 'conflicto_captura');
+            $this->postJson('/control-pedidos/autoguardar', $datos + ['base_captura' => $baseModalidad])->assertOk();
+            $this->assertEquals(200, $pedido->fresh()->total_mercancia);
+        }
+    }
+
     private function estatusRespondido(): void
     {
         CatalogoEstatusPedido::query()->firstOrCreate(
