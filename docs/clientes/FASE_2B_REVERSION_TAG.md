@@ -1,46 +1,52 @@
 # Reversión de beneficios TAG — Fase 2B
 
-Fecha: 10 de noviembre de 2026. Base: `develop`, `725e3724`.
+Documento único y vigente. Sustituye el diseño de aceptación que entró a `develop` con el PR #30. La base de esta implementación es `develop` (`14c60cb1`), que ya incluye la conciliación de Fase 2A (PR #28) y aquel diseño (PR #30).
 
-**Estado: diseño y pruebas de aceptación. Sin implementación.** No fusionar este documento como si la reversión ya existiera. No activa la autoridad de Escalonamiento, no cambia períodos y no escribe `monto_venta_actual`.
+**Estado: implementación en borrador. No fusionar ni desplegar.** No activa la autoridad de Escalonamiento, no cambia períodos y no escribe `monto_venta_actual`.
 
-Depende del contrato de Fase 2A: la cobertura documental se libera al cancelar, rechazar o vencer, y el pago no entra en el acumulado oficial. Esta fase no vuelve a asignar documentos ni concilia por un delta del CSV.
+El PR #31 ya se fusionó en `feature/fase2a-conciliacion-documental`, no en `develop`. Esta rama vuelve a llevar solo la implementación sobre `develop`.
 
-## Qué se concede hoy
+## Qué distingue cada beneficio
 
-`aplicarBeneficios` copia, sin tocar `monto_venta_actual`:
+- Propuesto: `evaluarCompraCliente` suma el histórico oficial y la cotización para sugerir una lista. No escribe `monto_venta_actual`, `lista_actual_id` ni una fila de `solicitud_beneficios`.
+- Provisional: `aplicarBeneficios` copia lista, tipo o TAG mientras la regla lo permite, y guarda una fila `vigente` con el valor anterior y el aplicado. Ocurre al aprobar una solicitud financiera y al confirmar el cambio de lista.
+- Confirmado: la lista que califica `monto_venta_actual`, o el mismo valor sostenido por otra solicitud en Respondida o Verificada. Con la autoridad apagada el oficial es el acumulado Wizerp. Una conciliación `indeterminada` no confirma la lista.
+- Revocado: la fila pasa a `revocado` o `reemplazado` y el valor solo cambia cuando esta solicitud todavía era responsable.
 
-- la lista solicitada, si el cliente no está inactivo, la lista no está bloqueada y el módulo no lo gobierna;
-- el tipo solicitado, si el cliente no está inactivo;
-- el vendedor, solo cuando el proceso asigna TAG o cliente.
+Una concesión sin fila previa no se borra por inferencia. La lista, en ese caso heredado, se alinea con el acumulado oficial si no hay otra concesión vigente, la lista no está bloqueada y el cliente no está inactivo. Tipo y vendedor no se vacían si esta solicitud no los concedió.
 
-Eso ocurre al aprobar una solicitud financiera y al confirmar el cambio de lista. `evaluarCompraCliente` propone esa lista sumando el histórico oficial y la cotización. La suma no es una venta confirmada.
+## Reversión
 
-`revertirBeneficios` recalcula la lista solo con `monto_venta_actual`, borra el tipo si la solicitud lo tenía y pone el monto aplicado en cero. No restaura el vendedor anterior. La cancelación omite el recálculo si hay una solicitud financiera posterior en Respondida o Verificada. El rechazo y el vencimiento no hacen esa comprobación.
+Al cancelar, rechazar o vencer se identifican las filas `vigente` de esa solicitud. Si el valor actual ya no coincide, se marca `reemplazado` y no se toca al cliente: una asignación posterior o una ratificación lo cambió. Si otra solicitud vigente tiene una concesión del mismo valor, se conserva. Si esta solicitud sigue siendo la responsable, la lista vuelve a la que califica el acumulado y el tipo o el TAG vuelven al valor anterior.
 
-## Contrato
+La lista bloqueada y el cliente gobernado por el módulo no se recalculan fuera de su regla. Un cliente inactivo no recibe una escritura de lista, tipo ni vendedor; la fila se cierra y el valor almacenado permanece. Ese valor almacenado sigue siendo un riesgo de los consumidores que leen `lista_actual_id` sin mirar la inactividad.
 
-1. Wizerp sigue siendo el acumulado oficial mientras la autoridad esté apagada. La reversión no escribe `monto_venta_actual` ni `cubierto_por_carga_masiva`.
-2. Un beneficio se conserva si la condición oficial actual lo justifica o si otra solicitud vigente del mismo cliente todavía lo sostiene.
-3. La lista resultante es la que califica `monto_venta_actual`, salvo lista bloqueada o cliente gobernado por el módulo. Cancelar una cotización no baja de la lista oficial. Una lista provisional no se conserva si ni el oficial ni una solicitud vigente la sostienen.
-4. Tipo y vendedor vuelven al valor anterior a la concesión que se revierte, salvo que otra solicitud vigente pida el valor actual.
-5. Una solicitud cancelada, rechazada o vencida no sostiene beneficios. Repetir la reversión no concede ni quita dos veces.
-6. Cada reversión guarda el antes y el después de lista, tipo y vendedor, la solicitud que originó el movimiento y las solicitudes que todavía sostienen algo. No se borra auditoría para ocultar el cambio.
-7. La operación es transaccional. Bloquea el cliente y después las solicitudes de ese cliente por id. Relee el estado bajo el bloqueo. Una aprobación y una cancelación concurrentes no dejan el beneficio de la solicitud excluida ni quitan el de la que sigue vigente.
+`monto_aplicado_al_cliente` vuelve a cero, como ya ocurría. `monto_venta_actual`, `cubierto_por_carga_masiva` y las filas de conciliación no se borran. `liberar()` sigue retirando solo cobertura `asignada`.
 
-## Fuera de alcance
+La cancelación ya no omite toda la reversión por existir una solicitud posterior. Esa comprobación queda limitada a la rebaja explícita de lista. Cada campo se decide por su propia concesión.
 
-No activar la autoridad. No cambiar períodos. No modificar el importador. No decidir la lista sumando oficial y pago. No crear una asignación documental excepcional.
+## Bloqueos
 
-## Aceptación
+El diseño del PR #30 pedía bloquear primero al cliente y después las solicitudes. Eso se invierte a propósito. Fase 2A ya bloquea la solicitud y después el cliente en el pago, y la solicitud antes que sus documentos en la conciliación. El orden de esta fase es:
 
-Las pruebas están en `tests/Fase2b/ReversionTagAceptacionTest.php`. No pertenecen a las suites Unit ni Feature. Cada una está incompleta a propósito: ejecutarlas no debe contarse como aprobación de la reversión.
+1. solicitudes del cliente, por id ascendente;
+2. cliente;
+3. filas de `solicitud_beneficios`, por id;
+4. cobertura documental, dentro de `liberar()`, que vuelve a tomar la solicitud ya bloqueada.
 
-- Cancelar, rechazar o vencer la única solicitud que concedió lista, tipo o TAG restaura la condición oficial o el valor anterior, sin cambiar `monto_venta_actual`.
-- Otra solicitud vigente que sostiene el mismo beneficio impide quitarlo.
-- Si el oficial ya califica la lista provisional, cancelar no la baja.
-- Repetir la reversión no cambia el cliente por segunda vez ni duplica la auditoría de negocio.
-- Revertir la primera de dos solicitudes no deshace lo que la segunda todavía justifica.
-- Aprobación y cancelación concurrentes dejan el estado que explican las solicitudes vigentes.
-- La marca histórica y las filas de conciliación anuladas permanecen.
-- La autoridad apagada sigue leyendo `monto_venta_actual`. Una prueba con la autoridad encendida no la deja activa.
+Cancelación, rechazo, vencimiento, confirmación de pago, cambio de estado y confirmación de lista toman ese orden al inicio de su transacción. No se bloquea al cliente antes que las solicitudes.
+
+## Pruebas
+
+`tests/Fase2b/ReversionTagAceptacionTest.php` queda como el bosquejo incompleto del PR #30. No es la prueba funcional y no se sustituye por ella.
+
+Las afirmaciones reales están en:
+
+- `tests/Feature/Solicitudes/ReversionBeneficiosTest.php`
+- `tests/Integration/Solicitudes/ReversionBeneficiosMySqlTest.php`
+
+## Pendiente
+
+La corrida concurrente de MySQL 8.4 con `scripts/qa/wizerp-mysql.sh` sigue sin Docker en este equipo. No se da por aprobada. La concurrencia que sí puede ejecutarse usa solo `gelia_wizerp_test` en el MySQL local. SQLite no acredita esa concurrencia.
+
+No hay un llamador nuevo de `conciliar()`. La inclusión indeterminada no promueve la lista.
