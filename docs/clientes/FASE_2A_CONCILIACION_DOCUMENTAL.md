@@ -86,7 +86,16 @@ La solicitud llama al resolvedor al cambiar folio, cliente, montos, pago o estad
 
 ## Dónde se concilia
 
-`conciliar()` no tiene ningún llamador de producción. Confirmar un pago, registrar un documento, validar una remisión y actualizar el acumulado oficial son hechos distintos. Ninguno de ellos ejecuta `conciliar()` ni modifica `monto_venta_actual` por esta fase. La conciliación efectiva sigue siendo una operación explícita. El punto de integración futuro es invocar `conciliar()` cuando la operación de negocio deba crear la cobertura, no al confirmar el pago ni al importar el CSV. Hasta entonces, el resolvedor solo retira cobertura que dejó de ser válida.
+`conciliar()` no tiene ningún llamador de producción. Confirmar un pago, registrar un documento, validar una remisión y actualizar el acumulado oficial son hechos distintos. Ninguno de ellos ejecuta `conciliar()` ni modifica `monto_venta_actual` por esta fase.
+
+Esos hechos no prueban lo mismo:
+
+1. El pago confirmado acredita el importe reclamado de la solicitud, no una venta oficial.
+2. El documento registrado y verificable acredita identidad, cliente, moneda y el tope disponible.
+3. La venta incorporada al acumulado oficial solo puede afirmarse cuando la autoridad está activa y el movimiento del documento ya está en el período. Con la autoridad apagada la inclusión queda `indeterminada`.
+4. La evidencia insuficiente —folio ausente, varios documentos o documento ajeno— no elige un documento y no se resuelve por la diferencia del CSV.
+
+El punto correcto para una conciliación explícita y autorizada es una operación que ya tenga el pago confirmado y un único documento verificable. Aun en ese caso, mientras la inclusión siga `indeterminada`, esa operación no puede promover la lista. La promoción exige la prueba de que el importe ya está en el acumulado oficial. El CSV actual no identifica documentos, así que esa prueba no existe con la autoridad apagada. Por eso se conserva el comportamiento seguro: `confirmarPago` no llama a `conciliar()`. El resolvedor solo retira cobertura que dejó de ser válida.
 
 ## Consumidores revisados
 
@@ -148,14 +157,13 @@ Se conservan las reglas de Fase 1: el CSV no infiere cobertura, Wizerp sigue sie
 
 Cumplidos en las pruebas de esta revisión: orden CSV/pago, pago y conciliación sin mover `monto_venta_actual`, varias solicitudes y un documento compartido, repetición de pago y de conciliación, cancelación y vencimiento, marca histórica, autoridad apagada y encendida en pruebas aisladas, identidad ambigua, rechazo de asignación manual inválida, retiro de cobertura obsoleta, fila previa a la migración, rollback, dos operaciones concurrentes sobre la misma solicitud, cancelación concurrente con asignación manual y dos confirmaciones HTTP simultáneas.
 
-Pendiente: `scripts/qa/wizerp-mysql.sh` en MySQL 8.4. El script solo crea un contenedor efímero `gelia-wizerp-mysql-test`, base `gelia_wizerp_test`, y lo elimina al salir. No apunta a la base `gelia`. Las pruebas de Clientes que incluye sí ejecutan migración fresca y truncado, pero únicamente sobre ese contenedor. Docker y Sail no están disponibles aquí, así que esa corrida no se ejecutó y no se da por aprobada. El build de Vite tampoco: no hay cambio de interfaz.
+Pendiente: `scripts/qa/wizerp-mysql.sh` en MySQL 8.4. El script solo crea un contenedor efímero `gelia-wizerp-mysql-test`, base `gelia_wizerp_test`, red `gelianv_sail`, y lo elimina al salir. No apunta a la base `gelia`. Las pruebas de Clientes que incluye sí ejecutan migración fresca y truncado, pero únicamente sobre ese contenedor. Este equipo no tiene Docker ni Podman, así que esa corrida no se ejecutó y no se da por aprobada. El procedimiento reproducible en el servidor de pruebas es ejecutar el script tal como está, sin redirigirlo a la base operativa. El build de Vite tampoco: no hay cambio de interfaz.
 
 ## Verificación en este entorno
 
-Sail y Docker no están disponibles. SQLite en memoria, PHP del host, cachés aisladas. La base `gelia` no se migró y conservó 353 tablas.
+Repetición final del 11 de noviembre de 2026 sobre `63d42f1`. Sail y Docker no están disponibles. SQLite en memoria, PHP 8.4.27 del host, cachés aisladas. La base `gelia` no se migró y conservó 353 tablas. El flujo de CI de ese commit terminó en éxito; no cierra el límite de inclusión ni sustituye MySQL 8.4.
 
-- `ConciliacionDocumentalSolicitudTest`, `ConciliacionSolicitudEscalonamientoTest`, `MontoSolicitudVsCargaMasivaTest`: **33 aprobadas, 198 aserciones**.
-- `IntegridadImportacionWizerpTest`, `ProteccionWizerpCierreTest`, `AutoridadEscalonamientoTest`: **39 aprobadas, 138 aserciones**.
+- `ConciliacionDocumentalSolicitudTest`, `ConciliacionSolicitudEscalonamientoTest`, `MontoSolicitudVsCargaMasivaTest`, `IntegridadImportacionWizerpTest`, `ProteccionWizerpCierreTest`, `AutoridadEscalonamientoTest`: **72 aprobadas, 336 aserciones**.
 
 MySQL 8.0.46, esquema exclusivo `gelia_wizerp_test`, migrado vacío —no con `migrate:fresh`— y eliminado al terminar. No se usó `ALLOW_DESTRUCTIVE_DB`.
 
