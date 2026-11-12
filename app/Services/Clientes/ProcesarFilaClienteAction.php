@@ -87,9 +87,15 @@ class ProcesarFilaClienteAction
         }
 
         if ($importaCodigoLista && $this->codigoListaVacio($data)) {
-            $clienteNuevo['es_inactivo'] = true;
+            // Celda vacía no es baja: la plantilla deja el código en blanco.
             $clienteNuevo['lista_actual_id'] = $listaPgId;
-            $marcadosInactivos++;
+            // #region agent log
+            static $logAltaVacia = 0;
+            if ($logAltaVacia < 2) {
+                $logAltaVacia++;
+                @file_put_contents('/var/www/html/.cursor/debug-017bf5.log', json_encode(['sessionId'=>'017bf5','runId'=>'post-fix','hypothesisId'=>'A','location'=>'ProcesarFilaClienteAction.php:crear','message'=>'codigo vacio no marca inactivo','data'=>['accion'=>'alta_sin_baja'],'timestamp'=>round(microtime(true)*1000)])."\n", FILE_APPEND);
+            }
+            // #endregion
         } elseif ($importaCodigoLista) {
             $listaIdCSV = $this->resolverLista($data, $listas);
             $clienteNuevo['lista_actual_id'] = $this->resolverListaFinal($listaIdCSV, $montoExtraido, $listas);
@@ -145,7 +151,6 @@ class ProcesarFilaClienteAction
         $updateData = [];
         $listaOriginalId = $cliente->lista_actual_id;
         $cambioReporte = null;
-        $listaPgId = $this->idListaPublicoGeneral($listas);
 
         if (!empty(trim($data['nombre'] ?? ''))) {
             $updateData['nombre'] = trim($data['nombre']);
@@ -167,21 +172,19 @@ class ProcesarFilaClienteAction
 
         $autoridadActiva = app(EscalonamientoAutoridad::class)->estaActiva();
         $listaIdCSV = null;
-        if ($importaCodigoLista && !$cliente->lista_bloqueada && ! $autoridadActiva) {
-            if ($this->codigoListaVacio($data)) {
-                if (!$cliente->es_inactivo) {
-                    $marcadosInactivos++;
-                }
-                $updateData['es_inactivo'] = true;
-                if ($cliente->lista_actual_id !== $listaPgId) {
-                    $updateData['lista_actual_id'] = $listaPgId;
-                }
-            } else {
-                $listaIdCSV = $this->resolverLista($data, $listas);
-                $updateData['es_inactivo'] = false;
-                if ($listaIdCSV && $cliente->lista_actual_id !== $listaIdCSV) {
-                    $updateData['lista_actual_id'] = $listaIdCSV;
-                }
+        if ($importaCodigoLista && $this->codigoListaVacio($data)) {
+            // #region agent log
+            static $logActualizaVacia = 0;
+            if ($logActualizaVacia < 3) {
+                $logActualizaVacia++;
+                @file_put_contents('/var/www/html/.cursor/debug-017bf5.log', json_encode(['sessionId'=>'017bf5','runId'=>'post-fix','hypothesisId'=>'A','location'=>'ProcesarFilaClienteAction.php:actualizar','message'=>'codigo vacio conserva lista y estado','data'=>['accion'=>'sin_cambio','es_inactivo'=>(bool)$cliente->es_inactivo],'timestamp'=>round(microtime(true)*1000)])."\n", FILE_APPEND);
+            }
+            // #endregion
+        } elseif ($importaCodigoLista && !$cliente->lista_bloqueada && ! $autoridadActiva) {
+            $listaIdCSV = $this->resolverLista($data, $listas);
+            $updateData['es_inactivo'] = false;
+            if ($listaIdCSV && $cliente->lista_actual_id !== $listaIdCSV) {
+                $updateData['lista_actual_id'] = $listaIdCSV;
             }
         }
 
