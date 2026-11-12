@@ -17,6 +17,7 @@ class ProcesarFilaClienteAction
         array $data, $listas, array $mapaVendedoras, Collection $clientesPorNumero,
         array &$historialBatch, bool $importaCodigoLista, int &$marcadosInactivos,
         array &$alertasLimiteExcedido, ?int $importacionClienteId = null, ?int $usuarioId = null,
+        bool $persistir = true,
     ): ?array {
         $numero = trim($data['numero_cliente'] ?? '');
         if (! preg_match('/^[0-9]{1,255}$/D', $numero)) {
@@ -31,16 +32,11 @@ class ProcesarFilaClienteAction
         if ($importaCodigoLista && $codigo !== '' && ! $listaCsv) {
             $this->error('codigo_lista', 'Código de lista desconocido.');
         }
+        // Un código vacío no es una baja ni cambia la lista. El cero tampoco inactiva.
+        // Una baja legítima requiere una señal explícita del ERP, que este archivo no trae.
         $estado = null;
-        if ($importaCodigoLista) {
-            if ($codigo !== '') {
-                $estado = false;
-            } elseif ($monto !== null) {
-                if (bccomp($monto, '0', 2) > 0) {
-                    $this->error('codigo_lista', 'Código vacío con monto positivo: información contradictoria.');
-                }
-                $estado = true;
-            }
+        if ($importaCodigoLista && $codigo !== '') {
+            $estado = false;
         }
         if ($nuevo && trim($data['nombre'] ?? '') === '') {
             $this->error('nombre', 'El nombre es obligatorio para un cliente nuevo.');
@@ -72,7 +68,8 @@ class ProcesarFilaClienteAction
         if ($monto !== null && ! $gobernado) {
             $cliente->monto_venta_actual = $monto;
         }
-        if (! $cliente->lista_bloqueada && ! $gobernado) {
+        $codigoVacio = $importaCodigoLista && $codigo === '';
+        if (! $cliente->lista_bloqueada && ! $gobernado && ! $codigoVacio) {
             if ($estado === true) {
                 $cliente->lista_actual_id = $pg->id;
             } elseif ($listaCsv) {
@@ -122,7 +119,7 @@ class ProcesarFilaClienteAction
                 'importacion_cliente_id' => $importacionClienteId, 'created_at' => now(), 'updated_at' => now(),
             ];
         }
-        if ($cliente->isDirty()) {
+        if ($persistir && $cliente->isDirty()) {
             $cliente->save();
         }
         $clientesPorNumero->put($numero, $cliente);

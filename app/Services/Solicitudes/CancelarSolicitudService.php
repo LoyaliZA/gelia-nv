@@ -24,6 +24,9 @@ class CancelarSolicitudService
     public function ejecutar(SolicitudTag $solicitud, ?string $motivo = null): void
     {
         DB::transaction(function () use ($solicitud, $motivo) {
+            if ($solicitud->cliente_id) {
+                $this->ajustarMonto->prepararBloqueo((int) $solicitud->cliente_id);
+            }
             $solicitud = SolicitudTag::query()->lockForUpdate()->findOrFail($solicitud->id);
             $solicitud->loadMissing(['proceso', 'cliente', 'vendedor', 'listaRebaja']);
 
@@ -48,11 +51,12 @@ class CancelarSolicitudService
             if (
                 in_array($estadoAnteriorId, $estadosConBeneficios)
                 && $solicitud->proceso?->esFinanciero()
-                && ! $this->solicitudPosteriorSostieneBeneficio($solicitud)
             ) {
+                $otraSolicitudSostiene = $this->solicitudPosteriorSostieneBeneficio($solicitud);
                 $listaRebaja = null;
                 if (
-                    $solicitud->catalogo_lista_rebaja_id
+                    ! $otraSolicitudSostiene
+                    && $solicitud->catalogo_lista_rebaja_id
                     && $solicitud->cliente_id
                     && $this->validarListaInferior->exigeListaRebaja($solicitud)
                 ) {

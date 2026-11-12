@@ -48,6 +48,9 @@ class RechazarPagosVencidos extends Command
             }
 
             DB::transaction(function () use ($solicitud, &$contador) {
+                if ($solicitud->cliente_id) {
+                    app(AjustarMontoPorSolicitudService::class)->prepararBloqueo((int) $solicitud->cliente_id);
+                }
                 $solicitud = SolicitudTag::query()->lockForUpdate()->findOrFail($solicitud->id);
                 if ($solicitud->esProcesoOperativo()) {
                     return;
@@ -76,10 +79,6 @@ class RechazarPagosVencidos extends Command
                             null,
                             RegistrarHistorialMontoClienteService::ORIGEN_CRON_RECHAZO_PAGO,
                         );
-                    } else {
-                        $cliente->update([
-                            'catalogo_tipo_cliente_id' => $solicitud->catalogo_tipo_cliente_id ? null : $cliente->catalogo_tipo_cliente_id,
-                        ]);
                     }
 
                     $cliente->refresh()->load(['listaDescuento', 'vendedor', 'tipo']);
@@ -88,11 +87,14 @@ class RechazarPagosVencidos extends Command
 
                 AuditoriaSolicitud::create([
                     'solicitud_id' => $solicitud->id,
-                    'usuario_id' => 1,
+                    'usuario_id' => null,
                     'estado_anterior_id' => $estadoAnteriorId,
                     'estado_nuevo_id' => $idIncorrecta,
                     'motivo_reporte' => 'SISTEMA AUTOMÁTICO: Plazo de pago expirado (24h).',
-                    'datos_snapshot' => !empty($snapshotDiff) ? $snapshotDiff : null,
+                    'datos_snapshot' => array_merge($snapshotDiff, [
+                        'origen' => 'vencimiento_automatico',
+                        'actor' => null,
+                    ]),
                 ]);
 
                 if ($solicitud->vendedor) {

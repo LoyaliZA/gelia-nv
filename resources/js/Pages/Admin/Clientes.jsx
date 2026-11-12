@@ -1,4 +1,5 @@
 import ResumenImportacionClientes from './Partials/ResumenImportacionClientes';
+import VistaPreviaImportacionClientes from './Partials/VistaPreviaImportacionClientes';
 import React, { useState, useEffect, useCallback } from 'react';
 import { Head, useForm, usePage, router } from '@inertiajs/react';
 import {
@@ -90,6 +91,8 @@ export default function Clientes({ auth, clientes, vendedores = [], tipos_client
     const formCarga = useForm({
         archivo: null,
     });
+    const [vistaPrevia, setVistaPrevia] = useState(null);
+    const [confirmando, setConfirmando] = useState(false);
 
     const paramsFiltros = useCallback((qOverride) => ({
         q: (qOverride !== undefined ? qOverride : busquedaAplicada).trim() || undefined,
@@ -178,13 +181,30 @@ export default function Clientes({ auth, clientes, vendedores = [], tipos_client
     const handleUpload = (e) => {
         e.preventDefault();
         if (formCarga.processing) return;
-        formCarga.post(route('admin.clientes.importar'), {
+        setVistaPrevia(null);
+        formCarga.post(route('admin.clientes.importar.previsualizar'), {
+            preserveScroll: true,
+            onSuccess: (page) => {
+                setVistaPrevia(page.props.flash?.previsualizacion_importacion || null);
+            },
+        });
+    };
+
+    const confirmarRevision = () => {
+        if (!vistaPrevia || vistaPrevia.bloqueado || confirmando) return;
+        setConfirmando(true);
+        router.post(route('admin.clientes.importar.confirmar'), {
+            importacion_id: vistaPrevia.importacion_id,
+            token: vistaPrevia.token,
+        }, {
             preserveScroll: true,
             onSuccess: (page) => {
                 formCarga.reset();
+                setVistaPrevia(null);
                 router.reload({ only: ['clientes'] });
                 setModalExitoAbierto(page.props.flash?.resultado_importacion?.estado === 'completo');
             },
+            onFinish: () => setConfirmando(false),
         });
     };
 
@@ -385,6 +405,7 @@ export default function Clientes({ auth, clientes, vendedores = [], tipos_client
                                             e.preventDefault();
                                             setDragActive(false);
                                             if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                                                setVistaPrevia(null);
                                                 formCarga.setData('archivo', e.dataTransfer.files[0]);
                                             }
                                         }}
@@ -408,7 +429,7 @@ export default function Clientes({ auth, clientes, vendedores = [], tipos_client
                                             name="archivo"
                                             aria-label="Seleccionar archivo de clientes"
                                             accept=".csv,.txt"
-                                            onChange={e => formCarga.setData('archivo', e.target.files[0])}
+                                            onChange={e => { setVistaPrevia(null); formCarga.setData('archivo', e.target.files[0]); }}
                                         />
                                     </label>
 
@@ -429,13 +450,14 @@ export default function Clientes({ auth, clientes, vendedores = [], tipos_client
                                         className="w-full py-4 text-white rounded-2xl font-black uppercase tracking-widest text-[11px] transition-all hover:scale-105 shadow-xl disabled:opacity-50 disabled:scale-100 outline-none flex justify-center items-center gap-2"
                                         style={{ backgroundColor: 'var(--color-primario)' }}
                                     >
-                                        <Database className="w-4 h-4" /> {formCarga.processing ? 'Sincronizando…' : 'Actualizar base de clientes'}
+                                        <Database className="w-4 h-4" /> {formCarga.processing ? 'Revisando…' : 'Revisar archivo'}
                                     </button>
                                     {formCarga.processing && (
                                         <p className="text-[9px] font-black uppercase tracking-widest text-amber-600 text-center">
-                                            No cierre esta pestaña hasta que termine la sincronización.
+                                            No cierre esta pestaña hasta que termine la revisión.
                                         </p>
                                     )}
+                                    <VistaPreviaImportacionClientes vista={vistaPrevia} onConfirmar={confirmarRevision} confirmando={confirmando} />
                                 </form>
 
                                 <div className="clientes-import-help mt-6 pt-5 border-t theme-border space-y-4">
@@ -444,10 +466,10 @@ export default function Clientes({ auth, clientes, vendedores = [], tipos_client
                                         <p className="text-[9px] font-black uppercase tracking-widest italic">Columnas admitidas</p>
                                     </div>
                                     <p className="text-[10px] theme-text-muted font-bold leading-relaxed">
-                                        El sistema detecta automáticamente los campos. Puedes enviar un archivo solo con las columnas necesarias. <br /><br />
+                                        El sistema detecta automáticamente los campos. La revisión ocurre antes de escribir y la confirmación vale solo para ese archivo. <br /><br />
                                         <strong style={{ color: 'var(--color-primario)' }}>numero_cliente</strong> (Requerido)<br />
                                         <strong style={{ color: 'var(--color-primario)' }}>nombre</strong><br />
-                                        <strong style={{ color: 'var(--color-primario)' }}>codigo_lista</strong> (Ej: PG, 1, 2, 3, 4, 7; celda vacía = inactivo; sin columna = solo actualiza monto)<br />
+                                        <strong style={{ color: 'var(--color-primario)' }}>codigo_lista</strong> (Ej: PG, 1, 2, 3, 4, 7; celda vacía = no cambia lista ni estado; sin columna = solo actualiza monto)<br />
                                         <strong style={{ color: 'var(--color-primario)' }}>monto_venta_actual</strong><br />
                                         <strong style={{ color: 'var(--color-primario)' }}>vendedor_id</strong> (TAG de la Vendedora)<br />
                                         <strong style={{ color: 'var(--color-primario)' }}>es_heredado</strong> (SI o NO)<br />

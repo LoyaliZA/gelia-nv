@@ -4,16 +4,18 @@ Fecha: 10 de noviembre de 2026. Base: `develop`, `f87541656afc8d56b822ff84ccfa20
 
 **Estado de entrega: PR en borrador, despliegue bloqueado.** No fusionar ni desplegar mientras no se resuelvan las dependencias descritas abajo. La aprobación de pruebas de importación no acredita conciliación documental ni reversión segura de beneficios históricos.
 
+GELIA decide con sus reglas. El archivo importado es una entrada, no un control remoto. No hay API ni sincronización con el origen del reporte. Ese nombre se conserva aquí y en el incidente del 12 de noviembre de 2026.
+
 ## Contrato implementado
 
-Wizerp es la única autoridad de las transiciones de estado comercial. Pagos, cotizaciones y cierres no reactivan ni inactivan por inferencia. La autoridad de Escalonamiento se consulta mediante el servicio operativo; esta entrega no la activa. Cuando está activa, el CSV conserva monto/lista publicados por ese módulo, pero sigue aplicando el estado autoritativo de Wizerp. Se conserva la protección global preexistente del CSV; los cierres necesitan además autoridad sobre el cliente específico.
+GELIA decide las transiciones de estado comercial. Una celda vacía no inactiva ni degrada. Pagos, cotizaciones y cierres no reactivan ni inactivan por inferencia. La autoridad de Escalonamiento se consulta mediante el servicio operativo; esta entrega no la activa. Cuando está activa, el archivo conserva monto y lista publicados por ese módulo, y no pisa un estado que GELIA no haya aceptado con una señal explícita. Se conserva la protección global preexistente del archivo; los cierres necesitan además autoridad sobre el cliente específico.
 
 | Caso | Antes | Después |
 | --- | --- | --- |
 | Sin columna de lista | Positivo diferente podía reactivar | Conserva estado; actualiza monto válido y permite ascensos explícitos |
-| Código vacío + monto ausente/vacío | Inactivaba | Omite estado/lista/monto; conserva actualización parcial de otros campos |
-| Código vacío + cero | Inactivaba salvo bloqueo/autoridad | Inactiva independientemente del bloqueo/autoridad; PG si lista editable; monto si no está protegido por autoridad |
-| Código vacío + positivo | Primera/repetida podían terminar distintas | Error de fila, sin cambios |
+| Código vacío + monto ausente/vacío | Inactivaba | Omite estado y lista; conserva actualización parcial de otros campos |
+| Código vacío + cero | Inactivaba salvo bloqueo/autoridad | No inactiva y no cambia la lista. El cero solo actualiza el monto autorizado. Ajuste del 12 de noviembre de 2026 |
+| Código vacío + positivo | Primera/repetida podían terminar distintas | No es error ni baja. Actualiza el monto autorizado y conserva lista y estado. Ajuste del 12 de noviembre de 2026 |
 | Código válido + monto vacío | Activaba salvo bloqueo/autoridad | Activa; aplica lista permitida; conserva monto |
 | Código válido + cero | Activaba salvo bloqueo/autoridad | Activa; aplica lista permitida y monto autorizado |
 | Código válido + positivo | Ascenso dependía del cambio de monto | Decisión determinista, incluyendo ascensos y exclusiones comerciales |
@@ -35,7 +37,7 @@ Montos: decimal exacto, punto decimal y hasta dos decimales, signo `$` opcional 
 
 ## Persistencia y resultados
 
-Validación estructural completa antes de tocar clientes/catálogos. Nombre obligatorio solo para alta; identificador requerido y formado por dígitos, conservando ceros iniciales. Nuevos clientes necesitan código válido o código vacío con cero explícito.
+Validación estructural completa antes de tocar clientes/catálogos. Nombre obligatorio solo para alta; identificador requerido y formado por dígitos, conservando ceros iniciales. Nuevos clientes necesitan nombre y un código de lista válido. Un código vacío no crea el cliente ni se interpreta como baja: no se inventa activo ni inactivo. Una fila rechazada no detiene las demás.
 
 MySQL utiliza un bloqueo asesor de sesión para excluir importaciones simultáneas, sin depender de una concesión de caché que expire a mitad del archivo. Cada fila consulta y bloquea el cliente dentro de su transacción. La restricción única mantiene la identidad ante carreras de alta. Los consumidores de SQLite de pruebas usan bloqueo de caché.
 
@@ -53,7 +55,7 @@ La migración es aditiva: estado/resumen/mensaje fatal de importación y campo d
 2. **Procedencia y vigencia de beneficios/TAG.** Rechazo/vencimiento/cancelación todavía requieren resolución integral por propietario del beneficio para preservar ratificaciones y cambios posteriores. No se añadió una reversión indiscriminada ni se presenta esa protección como terminada.
 3. **Inactivos y consumidores externos.** La proyección de lista devuelve PG para inactivos y solicitudes/pagos no conceden lista/tipo por esa vía. La lista almacenada bloqueada sigue intacta. Los consumidores que lean directamente la lista almacenada —incluido el contrato móvil actual— deben respetar el estado; no se certifica que todo consumidor externo ya lo haga. Verificar ese contrato antes del despliegue.
 4. **Cierres y altas indirectas bloqueados.** La simulación mensual heredada todavía puede mostrar propuestas de inactividad. No se rediseñó; su aplicación queda impedida. Clientes faltantes de remisiones deben pasar por importación con estado explícito; la remisión por sí sola no basta para crearlos.
-5. **Fecha de corte/versionado.** Repetición idempotente no evita que una fotografía antigua sobrescriba otra más reciente. Se requiere contrato temporal/versionado de Wizerp. No se cambió en esta fase.
+5. **Fecha de corte/versionado.** En esta fase, la repetición idempotente no evitaba que una fotografía antigua sobrescribiera otra más reciente. La revisión posterior bloquea la confirmación cuando el archivo trae `fecha_corte` o `fecha_exportacion` anterior al último historial de monto. Sin esa fecha no hay evidencia temporal. El uso está en `docs/clientes/IMPORTACION_MASIVA_REVISION.md`.
 6. **Alineación explícita de incidencias.** El recorrido administrativo heredado que copia monto/lista desde un resumen no se rediseñó; debe revisarse junto al contrato de autoridad antes de habilitar el conjunto en producción.
 
 ## Verificación reproducible

@@ -2,7 +2,7 @@
 
 Fecha: 10 de noviembre de 2026. Base: `develop`, `02735c3` (merge del PR #26).
 
-**Estado de entrega: PR en borrador. No fusionar ni desplegar.** La migración nueva no se ejecutó sobre la base de la aplicación. Esta fase no activa la autoridad de Escalonamiento ni cambia sus períodos. La reversión integral de TAG queda en Fase 2B.
+**Estado de entrega: PR en borrador. No fusionar ni desplegar.** GELIA decide la conciliación. Un archivo importado no prueba que un documento esté incluido en el acumulado, y `conciliar()` no tiene llamador de producción. No hay API con el origen del reporte. El incidente del 12 de noviembre de 2026 conserva ese nombre. La migración nueva no se ejecutó sobre la base de la aplicación. Esta fase no activa la autoridad de Escalonamiento ni cambia sus períodos. La reversión integral de TAG queda en Fase 2B.
 
 ## Diseño elegido
 
