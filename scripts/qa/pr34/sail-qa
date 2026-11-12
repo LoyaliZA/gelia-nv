@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$0")/../../.."
+set -a
+source .env.qa-pr34
+set +a
+export COMPOSE_ENV_FILES=.env.qa-pr34
+[[ "$COMPOSE_PROJECT_NAME" == gelia-pr34-qa && "$SAIL_FILES" == compose.pr34-qa.yaml && "$DB_DATABASE" == gelia_pr34_qa ]] || { echo "Configuración de QA inválida" >&2; exit 1; }
+exec ./vendor/bin/sail "$@"

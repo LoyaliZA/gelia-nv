@@ -59,6 +59,31 @@ class PreparacionTiendaWorkspaceTest extends TestCase
         $this->actingAs($this->auxiliar);
     }
 
+    public function test_auxiliar_asignado_lee_documentos_de_su_consulta_sin_acceso_general_al_pedido(): void
+    {
+        $this->tarea->update(['area_responsable_codigo' => 'TIENDA', 'asignada_a_id' => $this->auxiliar->id, 'estado' => 'EN_ATENCION']);
+        $pedido = $this->tarea->pedido;
+        Storage::disk('public')->put('pedidos_bma/qa-respuesta.pdf', '%PDF-1.4 evidencia de prueba');
+        $doc = $pedido->documentos()->create(['tipo' => 'evidencia_condicion', 'ruta_archivo' => 'pedidos_bma/qa-respuesta.pdf', 'nombre_original' => 'respuesta.pdf', 'mime_type' => 'application/pdf', 'tamano_bytes' => 30, 'activo' => true]);
+        $url = route('control_pedidos.documentos.show', [$pedido, $doc]);
+        $this->get($url)->assertOk()->assertHeader('Content-Type', 'application/pdf');
+        $docTarea = $this->tarea->documentos()->create(['tipo_evidencia' => 'evidencia_general', 'ruta_interna' => 'pedidos_bma/qa-respuesta.pdf', 'nombre_original' => 'respuesta.pdf', 'mime_type' => 'application/pdf', 'tamano_bytes' => 30, 'subido_por_id' => $this->auxiliar->id, 'subido_at' => now(), 'version' => 1]);
+        $urlTarea = route('control_pedidos.preparacion.documento', [$pedido, $this->tarea, $docTarea]);
+        $this->get($urlTarea)->assertOk()->assertHeader('Content-Type', 'application/pdf');
+        $this->getJson(route('control_pedidos.disponibilidad_tienda.show', $pedido))->assertForbidden();
+        $comprobante = $pedido->documentos()->create(['tipo' => 'comprobante', 'ruta_archivo' => 'pedidos_bma/qa-respuesta.pdf', 'nombre_original' => 'comprobante.pdf', 'mime_type' => 'application/pdf', 'tamano_bytes' => 30, 'activo' => true]);
+        $this->get(route('control_pedidos.documentos.show', [$pedido, $comprobante]))->assertForbidden();
+
+        $ajeno = User::factory()->create();
+        $ajeno->givePermissionTo(Permission::findOrCreate('control_pedidos.tienda.ver', 'web'));
+        $this->actingAs($ajeno)->get($url)->assertForbidden();
+        $this->get($urlTarea)->assertForbidden();
+        $this->actingAs($this->auxiliar);
+        $this->tarea->update(['estado' => 'SUSTITUIDA']);
+        $this->get($url)->assertForbidden();
+        $this->get($urlTarea)->assertForbidden();
+    }
+
     public function test_busqueda_de_bandeja_encuentra_remision_y_razon_social(): void
     {
         $lista = CatalogoListaDescuento::firstOrCreate(

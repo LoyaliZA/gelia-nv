@@ -1,0 +1,47 @@
+[
+  {
+    "caso": "Captura pendiente en Auditoría",
+    "pausa": {
+      "eventos": [
+        {
+          "accion": "actualizado",
+          "pedido_id": 31,
+          "tarea_id": null,
+          "tiempo": 3046.6999999284744
+        }
+      ],
+      "peticiones": [
+        {
+          "method": "get",
+          "tiempo": 3800.6999999284744,
+          "url": "/control-pedidos/31/transferencia-tienda"
+        }
+      ],
+      "valor": "QA34-CAPTURA-SIN-GUARDAR"
+    },
+    "reanudado": {
+      "eventos": [
+        {
+          "accion": "actualizado",
+          "pedido_id": 31,
+          "tarea_id": null,
+          "tiempo": 3046.6999999284744
+        }
+      ],
+      "peticiones": [
+        {
+          "method": "get",
+          "tiempo": 3800.6999999284744,
+          "url": "/control-pedidos/31/transferencia-tienda"
+        },
+        {
+          "method": "get",
+          "tiempo": 5379.5,
+          "url": "http://qa-pr34/control-pedidos/auditar/31/detalle"
+        }
+      ],
+      "texto": "0)\nFiltros avanzados\nActualizar\nLimpiar\n\nBandeja activaPendientes · 4\n\n1 pedido · Pendientes\n\nFolio\tVendedor\tFecha\tCliente\tTransporte\tTotal\tPagado\tDif.\tEstado\tAcciones\n\n\nQA34-CAPTURA2\n\nFolio interno GELIA (generado por el sistema): QA-PR34-CAPTURA2\n\nTIPO: QA PR34 TIENDA\n\n\t\nQA PR34 Ventas\nQA PR34 Ventas\n\t2026-11-12\t\n\nCliente ficticio PR34\n\nQA340001\n\n\t\n—\n\t$100.00\t$100.00\t$0.00\tPendiente de auditoríaPago en revisión\t\nRevisar\nBitácora\nVIENDO 1 AL 1 DE 1\nRevisión de pedido\n\nQA34-CAPTURA2\n\nCliente ficticio PR34\n\nRevisión\nPendiente de remisión\nMás acciones\nDatos de revisión\nDatos del cliente\n\nNombre del cliente\n\nCliente ficticio PR34\n\nNúmero de cuenta\n\nQA340001\n\nPedido\n\nQA34-CAPTURA2\n\nAlmacén\n\nQA34-CEDIS - QA PR34 CEDIS\n\nTipo de pedido\n\nQA PR34 Tienda\n\nPago validado. Continúa con remisión y aprobación si corresponde.\n\nComprobante y validación\nPDF\n#1 · QA PR34 Banco ficticio\nPendiente de revisión\nVer\n$100.00\nRechazado\nPagado y validado\n\nTotal de la compra\n$100.00\n\nRemisión de compra\nFecha de emisión de remisión Wizerp\n12 de noviembre de 2026\nHoy\n\nLos 20 días naturales parten de esta emisión; reemplazar el PDF no reinicia el plazo.\n\nNúmero de remisión\nGuardar número\n\nEscribe el número de la remisión. Al adjuntar el PDF, ese número queda registrado. El número de pedido lo captura quien registra el pedido.\n\nSeleccionar archivo de remisión\nSolo archivos .pdf\n\nConsulta cerrada\n\nLa mercancía quedó confirmada con el cliente.\nRespuesta de disponibilidad\nCEDIS\n\nRespondió QA PR34 Cedis\n\nTodo OK\nTransferencia · Recoger posteriormente\nActualizar seguimiento\nPendiente de preparación\nEl auxiliar debe registrar la remisión\nQA PR34 Tienda\nDatos y documentos del recorrido\nResto del pedido\nMostrar",
+      "valor": ""
+    }
+  }
+]

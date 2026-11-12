@@ -21,7 +21,7 @@ it('sin existencias no mezcla atributos ni repite el resultado o la explicación
     expect(container.textContent).not.toContain('Mejor ejemplar');
     expect(container.textContent).not.toContain('Única pieza');
     expect(container.textContent).not.toContain('El pedido se cierra');
-    expect(container.textContent).toContain('Con incidencias');
+    expect(container.textContent).toContain('Con detalles o faltantes');
 });
 it('la imagen adjunta tiene miniatura y abre el visor con el archivo seleccionado', async () => {
     const onVer = vi.fn();

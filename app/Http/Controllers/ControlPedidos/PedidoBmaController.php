@@ -1177,7 +1177,7 @@ class PedidoBmaController extends Controller
 
     public function documento(PedidoBma $pedidoBma, PedidoBmaDocumento $documento): StreamedResponse|\Symfony\Component\HttpFoundation\BinaryFileResponse
     {
-        if (! VisibilidadPedidoBma::puedeConsultar(Auth::user(), $pedidoBma)) {
+        if (! VisibilidadPedidoBma::puedeConsultarDocumentos(Auth::user(), $pedidoBma, $documento->tipo)) {
             abort(403, 'No tienes autorización para consultar documentos de este pedido.');
         }
 

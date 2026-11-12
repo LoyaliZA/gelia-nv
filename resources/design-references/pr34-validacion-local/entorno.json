@@ -1,0 +1,67 @@
+{
+  "assets_build": [
+    {
+      "ruta": "/build/assets/react-DPqvtlQV.js",
+      "status": 200
+    },
+    {
+      "ruta": "/build/assets/rolldown-runtime-QTnfLwEv.js",
+      "status": 200
+    },
+    {
+      "ruta": "/build/assets/app-BJmS0EMO.css",
+      "status": 200
+    },
+    {
+      "ruta": "/build/assets/app-b0ETwY6e.js",
+      "status": 200
+    },
+    {
+      "ruta": "/build/assets/Login-D7t8kmc0.js",
+      "status": 200
+    },
+    {
+      "ruta": "/build/assets/eye-off-DTe_Jpaz.js",
+      "status": 200
+    },
+    {
+      "ruta": "/build/assets/createLucideIcon-PzWhrBhQ.js",
+      "status": 200
+    },
+    {
+      "ruta": "/build/assets/eye-Dhi9i2Aw.js",
+      "status": 200
+    },
+    {
+      "ruta": "/build/assets/WebAuthnService-jUcFTLPQ.js",
+      "status": 200
+    },
+    {
+      "ruta": "/build/assets/loader-circle-DdRHkpxR.js",
+      "status": 200
+    },
+    {
+      "ruta": "/build/assets/lock-CZE4RdQU.js",
+      "status": 200
+    },
+    {
+      "ruta": "/build/assets/log-in-CsEm5GAW.js",
+      "status": 200
+    },
+    {
+      "ruta": "/build/assets/sun-DZfNl3Ss.js",
+      "status": 200
+    },
+    {
+      "ruta": "/build/assets/user-Yoy5Judr.js",
+      "status": 200
+    },
+    {
+      "ruta": "/build/assets/GeliaLogo-COTw3q18.js",
+      "status": 200
+    }
+  ],
+  "autenticado": false,
+  "login_con_password": true,
+  "url": "http://laravel.test/login"
+}

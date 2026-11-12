@@ -1,0 +1,301 @@
+[
+  {
+    "caso": "archivos",
+    "lote": 0,
+    "bytes": 8388608,
+    "status": 200
+  },
+  {
+    "caso": "archivos",
+    "lote": 1,
+    "bytes": 8388608,
+    "status": 200
+  },
+  {
+    "caso": "archivos",
+    "lote": 2,
+    "bytes": 8388608,
+    "status": 200
+  },
+  {
+    "caso": "archivos",
+    "lote": 3,
+    "bytes": 8388608,
+    "status": 200
+  },
+  {
+    "caso": "archivos",
+    "lote": 4,
+    "bytes": 8388608,
+    "status": 200
+  },
+  {
+    "caso": "archivos",
+    "lote": 5,
+    "bytes": 8388608,
+    "status": 200
+  },
+  {
+    "caso": "archivos",
+    "paso": "exactamente 50 MiB, reintento y lectura",
+    "exacto": {
+      "ids": [
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19
+      ],
+      "bytes": 52428800,
+      "documentos": [
+        {
+          "id": 12,
+          "bytes": 1048576,
+          "url": "http://qa-pr34/control-pedidos/pedidos/3/documentos/12"
+        },
+        {
+          "id": 13,
+          "bytes": 8388608,
+          "url": "http://qa-pr34/control-pedidos/pedidos/3/documentos/13"
+        },
+        {
+          "id": 14,
+          "bytes": 8388608,
+          "url": "http://qa-pr34/control-pedidos/pedidos/3/documentos/14"
+        },
+        {
+          "id": 15,
+          "bytes": 8388608,
+          "url": "http://qa-pr34/control-pedidos/pedidos/3/documentos/15"
+        },
+        {
+          "id": 16,
+          "bytes": 8388608,
+          "url": "http://qa-pr34/control-pedidos/pedidos/3/documentos/16"
+        },
+        {
+          "id": 17,
+          "bytes": 8388608,
+          "url": "http://qa-pr34/control-pedidos/pedidos/3/documentos/17"
+        },
+        {
+          "id": 18,
+          "bytes": 8388608,
+          "url": "http://qa-pr34/control-pedidos/pedidos/3/documentos/18"
+        },
+        {
+          "id": 19,
+          "bytes": 1048576,
+          "url": "http://qa-pr34/control-pedidos/pedidos/3/documentos/19"
+        }
+      ]
+    },
+    "reintento": 200,
+    "excedente": 422,
+    "lectura": 200
+  },
+  {
+    "caso": "archivos-exceso",
+    "lote": 0,
+    "bytes": 8388608,
+    "status": 200
+  },
+  {
+    "caso": "archivos-exceso",
+    "lote": 1,
+    "bytes": 8388608,
+    "status": 200
+  },
+  {
+    "caso": "archivos-exceso",
+    "lote": 2,
+    "bytes": 8388608,
+    "status": 200
+  },
+  {
+    "caso": "archivos-exceso",
+    "lote": 3,
+    "bytes": 8388608,
+    "status": 200
+  },
+  {
+    "caso": "archivos-exceso",
+    "lote": 4,
+    "bytes": 8388608,
+    "status": 200
+  },
+  {
+    "caso": "archivos-exceso",
+    "lote": 5,
+    "bytes": 8388608,
+    "status": 200
+  },
+  {
+    "caso": "archivos-exceso",
+    "paso": "50 MiB + 1 byte rechazado",
+    "status": 422,
+    "antes": {
+      "ids": [
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26
+      ],
+      "bytes": 51380224,
+      "documentos": [
+        {
+          "id": 20,
+          "bytes": 1048576,
+          "url": "http://qa-pr34/control-pedidos/pedidos/4/documentos/20"
+        },
+        {
+          "id": 21,
+          "bytes": 8388608,
+          "url": "http://qa-pr34/control-pedidos/pedidos/4/documentos/21"
+        },
+        {
+          "id": 22,
+          "bytes": 8388608,
+          "url": "http://qa-pr34/control-pedidos/pedidos/4/documentos/22"
+        },
+        {
+          "id": 23,
+          "bytes": 8388608,
+          "url": "http://qa-pr34/control-pedidos/pedidos/4/documentos/23"
+        },
+        {
+          "id": 24,
+          "bytes": 8388608,
+          "url": "http://qa-pr34/control-pedidos/pedidos/4/documentos/24"
+        },
+        {
+          "id": 25,
+          "bytes": 8388608,
+          "url": "http://qa-pr34/control-pedidos/pedidos/4/documentos/25"
+        },
+        {
+          "id": 26,
+          "bytes": 8388608,
+          "url": "http://qa-pr34/control-pedidos/pedidos/4/documentos/26"
+        }
+      ]
+    },
+    "despues": {
+      "ids": [
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26
+      ],
+      "bytes": 51380224,
+      "documentos": [
+        {
+          "id": 20,
+          "bytes": 1048576,
+          "url": "http://qa-pr34/control-pedidos/pedidos/4/documentos/20"
+        },
+        {
+          "id": 21,
+          "bytes": 8388608,
+          "url": "http://qa-pr34/control-pedidos/pedidos/4/documentos/21"
+        },
+        {
+          "id": 22,
+          "bytes": 8388608,
+          "url": "http://qa-pr34/control-pedidos/pedidos/4/documentos/22"
+        },
+        {
+          "id": 23,
+          "bytes": 8388608,
+          "url": "http://qa-pr34/control-pedidos/pedidos/4/documentos/23"
+        },
+        {
+          "id": 24,
+          "bytes": 8388608,
+          "url": "http://qa-pr34/control-pedidos/pedidos/4/documentos/24"
+        },
+        {
+          "id": 25,
+          "bytes": 8388608,
+          "url": "http://qa-pr34/control-pedidos/pedidos/4/documentos/25"
+        },
+        {
+          "id": 26,
+          "bytes": 8388608,
+          "url": "http://qa-pr34/control-pedidos/pedidos/4/documentos/26"
+        }
+      ]
+    }
+  },
+  {
+    "caso": "archivos-exceso",
+    "paso": "exactamente 50 MiB, reintento y lectura",
+    "exacto": {
+      "ids": [
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27
+      ],
+      "bytes": 52428800,
+      "documentos": [
+        {
+          "id": 20,
+          "bytes": 1048576,
+          "url": "http://qa-pr34/control-pedidos/pedidos/4/documentos/20"
+        },
+        {
+          "id": 21,
+          "bytes": 8388608,
+          "url": "http://qa-pr34/control-pedidos/pedidos/4/documentos/21"
+        },
+        {
+          "id": 22,
+          "bytes": 8388608,
+          "url": "http://qa-pr34/control-pedidos/pedidos/4/documentos/22"
+        },
+        {
+          "id": 23,
+          "bytes": 8388608,
+          "url": "http://qa-pr34/control-pedidos/pedidos/4/documentos/23"
+        },
+        {
+          "id": 24,
+          "bytes": 8388608,
+          "url": "http://qa-pr34/control-pedidos/pedidos/4/documentos/24"
+        },
+        {
+          "id": 25,
+          "bytes": 8388608,
+          "url": "http://qa-pr34/control-pedidos/pedidos/4/documentos/25"
+        },
+        {
+          "id": 26,
+          "bytes": 8388608,
+          "url": "http://qa-pr34/control-pedidos/pedidos/4/documentos/26"
+        },
+        {
+          "id": 27,
+          "bytes": 1048576,
+          "url": "http://qa-pr34/control-pedidos/pedidos/4/documentos/27"
+        }
+      ]
+    },
+    "reintento": 200,
+    "excedente": 422,
+    "lectura": 200
+  }
+]

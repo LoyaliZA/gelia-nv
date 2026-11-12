@@ -1,0 +1,92 @@
+[
+  {
+    "width": 1440,
+    "height": 932,
+    "tema": "",
+    "alto": 455.59375,
+    "ancho": 368,
+    "desborde": false,
+    "errores": [],
+    "recortado": false,
+    "enviado": {
+      "fecha": "2026-11-10",
+      "archivo": "remision-ejemplo.pdf"
+    },
+    "hoy": "12 de noviembre de 2026"
+  },
+  {
+    "width": 1440,
+    "height": 932,
+    "tema": "dark",
+    "alto": 455.59375,
+    "ancho": 368,
+    "desborde": false,
+    "errores": [],
+    "recortado": false,
+    "enviado": {
+      "fecha": "2026-11-10",
+      "archivo": "remision-ejemplo.pdf"
+    },
+    "hoy": "12 de noviembre de 2026"
+  },
+  {
+    "width": 1024,
+    "height": 932,
+    "tema": "",
+    "alto": 455.59375,
+    "ancho": 368,
+    "desborde": false,
+    "errores": [],
+    "recortado": false,
+    "enviado": {
+      "fecha": "2026-11-10",
+      "archivo": "remision-ejemplo.pdf"
+    },
+    "hoy": "12 de noviembre de 2026"
+  },
+  {
+    "width": 1024,
+    "height": 932,
+    "tema": "dark",
+    "alto": 455.59375,
+    "ancho": 368,
+    "desborde": false,
+    "errores": [],
+    "recortado": false,
+    "enviado": {
+      "fecha": "2026-11-10",
+      "archivo": "remision-ejemplo.pdf"
+    },
+    "hoy": "12 de noviembre de 2026"
+  },
+  {
+    "width": 390,
+    "height": 844,
+    "tema": "",
+    "alto": 474.1875,
+    "ancho": 318,
+    "desborde": false,
+    "errores": [],
+    "recortado": false,
+    "enviado": {
+      "fecha": "2026-11-10",
+      "archivo": "remision-ejemplo.pdf"
+    },
+    "hoy": "12 de noviembre de 2026"
+  },
+  {
+    "width": 390,
+    "height": 844,
+    "tema": "dark",
+    "alto": 474.1875,
+    "ancho": 318,
+    "desborde": false,
+    "errores": [],
+    "recortado": false,
+    "enviado": {
+      "fecha": "2026-11-10",
+      "archivo": "remision-ejemplo.pdf"
+    },
+    "hoy": "12 de noviembre de 2026"
+  }
+]

@@ -1,0 +1,11 @@
+{
+    "entorno": "qa-pr34",
+    "base": "gelia_pr34_qa",
+    "migraciones": 451,
+    "usuarios": 4,
+    "pedidos": 57,
+    "cola": "database",
+    "pendientes": 0,
+    "fallidos": 0,
+    "uid": 1000
+}

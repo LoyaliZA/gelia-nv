@@ -1,0 +1,61 @@
+{
+  "seleccion_local": {
+    "archivos": 2,
+    "enviados": false
+  },
+  "documentos": [
+    {
+      "id": 34,
+      "status": 200
+    },
+    {
+      "id": 35,
+      "status": 200
+    },
+    {
+      "id": 36,
+      "status": 200
+    },
+    {
+      "id": 37,
+      "status": 200
+    },
+    {
+      "id": 38,
+      "status": 200
+    },
+    {
+      "id": 39,
+      "status": 200
+    },
+    {
+      "id": 40,
+      "status": 200
+    },
+    {
+      "id": 41,
+      "status": 200
+    }
+  ],
+  "expediente_general": 403,
+  "documento_ajeno": 403,
+  "visor": {
+    "canvas": 1,
+    "error": false,
+    "texto": "S ANTIGUOS\nFechas, vendedora y orden\n\nJerarquía de atención vigente; fecha de solicitud dentro de cada prioridad.\n\n1 pedido · Todos\n\nTABLA\nTARJETAS\n\nRecoge en tienda\n\nQA34-VISUAL\n\nRecoge en tienda\n\n2026-11-12 · hace 5 min\n\nQA PR34 Tienda\n\nEn atención\n\nCliente\n\nCliente ficticio PR34\n\nAlmacén\n\nQA PR34 Tienda\n\nPiezas solicitadas\n\n0\n\nAntigüedad\n\nhace 5 min\n\nContinuar preparación\nVIENDO 1 AL 1 DE 1\nQA34-VISUAL\n\nEn atención\n\nPreparación en tienda\nCliente\nCliente ficticio PR34\nAlmacén\nQA PR34 Tienda\nVer pedido\nIndicaciones de Ventas\n\nPendiente de revisión del archivo. Sin apartado ni disponibilidad confirmada.\n\nRespuesta de disponibilidad\nTienda\n\nRespondió QA PR34 Tienda · 2026-11-12\n\nTodo OK\nCaptura del pedido\nRespuesta enviada\n\nEspere a que Ventas confirme la modalidad y envíe la confirmación del pedido.\n\nReportar error\nQA34-pedido-visual.pdf\nTipo: pdf pedido\nDescargar\nAbrir en pestaña\nCerrar"
+  },
+  "console": [
+    {
+      "level": "SEVERE",
+      "message": "http://qa-pr34/control-pedidos/55/disponibilidad-tienda - Failed to load resource: the server responded with a status of 403 (Forbidden)",
+      "source": "network",
+      "timestamp": 1794518418304
+    },
+    {
+      "level": "SEVERE",
+      "message": "http://qa-pr34/control-pedidos/pedidos/5/documentos/5 - Failed to load resource: the server responded with a status of 403 (Forbidden)",
+      "source": "network",
+      "timestamp": 1794518418439
+    }
+  ]
+}

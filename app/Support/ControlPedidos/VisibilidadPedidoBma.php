@@ -4,6 +4,8 @@ namespace App\Support\ControlPedidos;
 
 use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\PedidoBma;
+use App\Models\ControlPedidos\PedidoBmaDocumento;
+use App\Models\ControlPedidos\PedidoBmaTareaDocumento;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -239,6 +241,34 @@ final class VisibilidadPedidoBma
         }
 
         return false;
+    }
+
+    /** Lectura de evidencias para quien atiende la instrucción vigente, sin acceso general al expediente. */
+    public static function puedeConsultarDocumentos(User $usuario, PedidoBma $pedido, string $tipoDocumento): bool
+    {
+        if (self::puedeConsultar($usuario, $pedido)) {
+            return true;
+        }
+
+        if (! in_array($tipoDocumento, [
+            PedidoBmaDocumento::TIPO_PDF_PEDIDO,
+            PedidoBmaDocumento::TIPO_COTIZACION,
+            PedidoBmaDocumento::TIPO_ANEXO_PIEZAS,
+            PedidoBmaDocumento::TIPO_EVIDENCIA_CONDICION,
+            PedidoBmaTareaDocumento::TIPO_EVIDENCIA_PRODUCTO,
+            PedidoBmaTareaDocumento::TIPO_EVIDENCIA_GENERAL,
+            PedidoBmaTareaDocumento::TIPO_EVIDENCIA_INCIDENCIA,
+            PedidoBmaTareaDocumento::TIPO_CARATULA_RECOGE,
+        ], true)) {
+            return false;
+        }
+
+        $tarea = $pedido->instruccionEntregaVigente;
+
+        return $usuario->can('control_pedidos.tienda.ver')
+            && $tarea !== null
+            && $tarea->area_responsable_codigo === 'TIENDA'
+            && (int) $tarea->asignada_a_id === (int) $usuario->id;
     }
 
     public static function assertPuedeConsultar(User $usuario, PedidoBma $pedido): void

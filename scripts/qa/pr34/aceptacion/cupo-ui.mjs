@@ -1,0 +1,13 @@
+import {Browser,save,assert} from './browser.mjs';
+const a=new Browser(),b=new Browser();const id=3;try{
+ await a.start('ventas');await b.start('cedis');let p=(await a.api(`/control-pedidos/${id}/disponibilidad-tienda`)).data;
+ const data={confirmacion_explicita:1};const actualizacion=p.solicitud_preparacion.revision_disponibilidad?.actualizacion_id;if(actualizacion)data.actualizacion_id=actualizacion;
+ p.solicitud_preparacion.anexo_sin_remision.forEach((v,i)=>{data[`cambios_revisados[${i}][tipo]`]='anexo';data[`cambios_revisados[${i}][indice]`]=i;data[`cambios_revisados[${i}][resultado]`]='correcto'});
+ const respuesta=await b.api(`/control-pedidos/cedis/${id}/disponibilidad`,'POST',data,[{name:'QA34-cupo-conjunto.pdf',size:1024}]);assert(respuesta.status===200,'No respondió consulta cupo',respuesta);await b.close();
+ await a.go('/control-pedidos?q=QA34-ARCHIVOS');await a.wait("document.querySelector('[aria-label=\"Cerrar detalle\"]')");await a.js("document.querySelector('[aria-label=\"Cerrar detalle\"]').click()");await a.click('Continuar');await a.wait("document.body.innerText.includes('Modificar pedido')");await a.click('Modificar pedido');await a.wait("document.querySelector('input[aria-label=\"Adjuntar: Piezas a agregar\"]')");
+ await a.js(`window.qaEnviosExcedente=0;window.axios.interceptors.request.use(c=>{if(c.url.includes('/anexo-tienda')&&c.method==='post')window.qaEnviosExcedente++;return c});const dt=new DataTransfer();dt.items.add(new File(['%PDF-1.4 exceso'],'QA34-exceso-ui.pdf',{type:'application/pdf'}));const e=document.querySelector('input[aria-label="Adjuntar: Piezas a agregar"]');e.files=dt.files;e.dispatchEvent(new Event('change',{bubbles:true}));`);
+ await a.wait("document.body.innerText.includes('superan 50 MB en total')");
+ const estado=await a.js("return {mensaje:[...document.querySelectorAll('[role=alert]')].map(e=>e.textContent),envios:window.qaEnviosExcedente,texto:document.body.innerText.slice(-2200)}");assert(estado.envios===0,'Envió un excedente desde la galería',estado);
+ for(const width of [1440,1024,390]){await a.js("document.querySelector('#ajuste-evidencia')?.scrollIntoView({block:'center'})");await a.shot('archivos-cupo-ui-'+width,width);}
+ const final=await a.api(`/control-pedidos/${id}/disponibilidad-tienda`);const docs=final.data.documentos.filter(d=>d.tipo==='anexo_piezas');assert(docs.reduce((n,d)=>n+d.tamano_bytes,0)===52428800,'Alteró documentos al rechazar en UI',docs.length);save('archivos-cupo-ui',{...estado,documentos:docs.length,total:52428800});console.log(JSON.stringify({resultado:'aprobado',envios_excedente:0,bytes_guardados:52428800}));
+}finally{await a.close();await b.close();}
