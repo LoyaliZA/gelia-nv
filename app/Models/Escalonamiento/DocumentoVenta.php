@@ -3,7 +3,9 @@
 namespace App\Models\Escalonamiento;
 
 use App\Models\Cliente;
+use App\Services\Escalonamiento\ConciliacionSolicitudEscalonamiento;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -34,6 +36,27 @@ class DocumentoVenta extends Model
         'fecha_emision' => 'date',
         'datos_fuente' => 'array',
     ];
+
+    protected static function booted(): void
+    {
+        $programar = function (DocumentoVenta $documento): void {
+            $id = (int) $documento->id;
+            if ($id <= 0) {
+                return;
+            }
+            DB::afterCommit(function () use ($id) {
+                app(ConciliacionSolicitudEscalonamiento::class)->resolverPorDocumento($id);
+            });
+        };
+
+        static::saved(function (DocumentoVenta $documento) use ($programar) {
+            if ($documento->wasRecentlyCreated || $documento->wasChanged(['estado', 'cliente_id', 'folio', 'remision_original', 'moneda', 'total'])) {
+                $programar($documento);
+            }
+        });
+
+        static::deleted($programar);
+    }
 
     public function periodo(): BelongsTo
     {

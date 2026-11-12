@@ -8,6 +8,7 @@ use App\Models\CatalogoEstadoSolicitud;
 use App\Models\CatalogoProceso;
 use App\Models\AuditoriaSolicitud;
 use App\Notifications\AlertaSolicitud;
+use App\Services\Escalonamiento\ConciliacionSolicitudEscalonamiento;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
@@ -17,11 +18,13 @@ class CancelarSolicitudService
     public function __construct(
         private ValidarListaInferiorService $validarListaInferior,
         private AjustarMontoPorSolicitudService $ajustarMonto,
+        private ConciliacionSolicitudEscalonamiento $conciliacion,
     ) {}
 
     public function ejecutar(SolicitudTag $solicitud, ?string $motivo = null): void
     {
         DB::transaction(function () use ($solicitud, $motivo) {
+            $solicitud = SolicitudTag::query()->lockForUpdate()->findOrFail($solicitud->id);
             $solicitud->loadMissing(['proceso', 'cliente', 'vendedor', 'listaRebaja']);
 
             if (!$solicitud->cancelacion_solicitada_at) {
@@ -35,6 +38,7 @@ class CancelarSolicitudService
                 abort(422, 'Esta solicitud ya está cancelada.');
             }
 
+            $this->conciliacion->liberar($solicitud);
             $snapshotDiff = [];
             $estadosConBeneficios = [
                 CatalogoEstadoSolicitud::idDe('Respondida'),

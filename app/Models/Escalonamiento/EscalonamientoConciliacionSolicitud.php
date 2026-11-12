@@ -17,6 +17,34 @@ class EscalonamientoConciliacionSolicitud extends Model
 
     public const ESTADO_RECHAZADA = 'rechazada';
 
+    public const ESTADO_ASIGNADA = 'asignada';
+
+    public const ESTADO_INDETERMINADA = 'indeterminada';
+
+    public const ESTADO_SIN_DISPONIBILIDAD = 'sin_disponibilidad';
+
+    public const ESTADO_ANULADA = 'anulada';
+
+    public const ESTADO_REEMPLAZADA = 'reemplazada';
+
+    public const PROCEDENCIA_DOCUMENTO = 'documento';
+
+    public const PROCEDENCIA_HISTORICA = 'historica_sin_respaldo';
+
+    public const PROCEDENCIA_IDENTIDAD = 'identidad_insuficiente';
+
+    public const PROCEDENCIA_AMBIGUA = 'identidad_ambigua';
+
+    public const PROCEDENCIA_PAGO_PENDIENTE = 'pago_no_confirmado';
+
+    public const INCLUSION_INCLUIDA = 'incluida';
+
+    public const INCLUSION_FUERA = 'fuera';
+
+    public const INCLUSION_INDETERMINADA = 'indeterminada';
+
+    public const CLAVE_SIN_DOCUMENTO = 'sin-documento';
+
     protected $table = 'escalonamiento_conciliaciones_solicitud';
 
     protected $fillable = [
@@ -25,6 +53,9 @@ class EscalonamientoConciliacionSolicitud extends Model
         'documento_venta_id',
         'importe_asignado',
         'estado',
+        'procedencia',
+        'inclusion_acumulado',
+        'clave_asignacion',
         'evidencia',
         'user_id',
     ];
