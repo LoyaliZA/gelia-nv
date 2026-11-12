@@ -24,6 +24,10 @@ export default function ResumenImportacionClientes({ resultado }) {
                     </div>
                 ))}
             </dl>
+            {resultado.mensaje_fatal && <p className="text-sm theme-text-main m-0">{resultado.mensaje_fatal}</p>}
+            {(stats.no_aplicadas ?? 0) > 0 && (
+                <p className="text-sm theme-text-main m-0">Filas confirmadas: {stats.procesadas ?? 0}. Filas que no se escribieron: {stats.no_aplicadas}.</p>
+            )}
             {errores_detalle.length > 0 && (
                 <div className="border-t theme-border pt-3 space-y-2">
                     <p className="text-sm font-bold theme-text-main">Filas sin aplicar</p>

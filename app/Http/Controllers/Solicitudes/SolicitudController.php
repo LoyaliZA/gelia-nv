@@ -182,13 +182,16 @@ class SolicitudController extends Controller
         }
 
         DB::transaction(function () use ($solicitud, $request, $idRespondida, $idIncorrecta) {
+            $ajusteMonto = app(AjustarMontoPorSolicitudService::class);
+            if ($solicitud->cliente_id) {
+                $ajusteMonto->prepararBloqueo((int) $solicitud->cliente_id);
+            }
             $solicitud = SolicitudTag::query()->lockForUpdate()->findOrFail($solicitud->id);
             if ($solicitud->pago_confirmado) {
                 return;
             }
 
             $montoFinal = (float) $request->monto_final_pagado;
-            $ajusteMonto = app(AjustarMontoPorSolicitudService::class);
             $proyeccion = ['efecto_lista' => 'retenida', 'motivo_lista' => 'Sin cliente asociado. La lista no cambia.'];
             $esAlertaFaltaPago = false;
             if ($solicitud->cliente_id) {
@@ -260,6 +263,9 @@ class SolicitudController extends Controller
         Gate::authorize('solicitudes.confirmar_cambio_lista');
 
         DB::transaction(function () use ($solicitud) {
+            if ($solicitud->cliente_id) {
+                app(AjustarMontoPorSolicitudService::class)->prepararBloqueo((int) $solicitud->cliente_id);
+            }
             $estadoAnteriorId = $solicitud->catalogo_estado_solicitud_id;
             $estadoNuevoId = CatalogoEstadoSolicitud::idDe('Verificada');
 
@@ -529,6 +535,9 @@ class SolicitudController extends Controller
             $idIncorrecta,
             $aprobarFlujoTienda
         ) {
+            if ($solicitud->cliente_id) {
+                app(AjustarMontoPorSolicitudService::class)->prepararBloqueo((int) $solicitud->cliente_id);
+            }
 
             $rutaEvidencia = $solicitud->evidencia_respuesta_path;
             if ($request->hasFile('evidencia_respuesta')) {
@@ -639,6 +648,9 @@ class SolicitudController extends Controller
         Gate::authorize('solicitudes.confirmar_pago');
 
         DB::transaction(function () use ($solicitud) {
+            if ($solicitud->cliente_id) {
+                app(AjustarMontoPorSolicitudService::class)->prepararBloqueo((int) $solicitud->cliente_id);
+            }
             $solicitud = SolicitudTag::query()->lockForUpdate()->findOrFail($solicitud->id);
             $estadoAnteriorId = $solicitud->catalogo_estado_solicitud_id;
             $idRespondida = CatalogoEstadoSolicitud::idDe('Respondida');
@@ -656,19 +668,12 @@ class SolicitudController extends Controller
                 'motivo_incorrecta' => 'vencimiento_pago',
             ]);
 
-            if ($solicitud->cliente_id) {
-                $cliente = Cliente::find($solicitud->cliente_id);
-                if ($cliente) {
-                    $cliente->update(['catalogo_tipo_cliente_id' => null]);
-                }
-            }
-
             AuditoriaSolicitud::create([
                 'solicitud_id' => $solicitud->id,
                 'usuario_id' => Auth::id(),
                 'estado_anterior_id' => $estadoAnteriorId,
                 'estado_nuevo_id' => $idIncorrecta,
-                'motivo_reporte' => 'PAGO RECHAZADO: Se aplicó la reversión automática de las propiedades del cliente.',
+                'motivo_reporte' => 'PAGO RECHAZADO: Se aplicó la reversión de los beneficios que esta solicitud todavía sostenía.',
                 'datos_snapshot' => !empty($snapshotDiff) ? $snapshotDiff : null,
             ]);
 

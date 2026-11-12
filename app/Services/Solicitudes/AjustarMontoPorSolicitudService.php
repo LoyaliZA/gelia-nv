@@ -2,9 +2,11 @@
 
 namespace App\Services\Solicitudes;
 
+use App\Models\CatalogoEstadoSolicitud;
 use App\Models\CatalogoListaDescuento;
 use App\Models\Cliente;
 use App\Models\Escalonamiento\EscalonamientoConciliacionSolicitud;
+use App\Models\SolicitudBeneficio;
 use App\Models\SolicitudTag;
 use App\Services\Escalonamiento\ConciliacionSolicitudEscalonamiento;
 use App\Services\Escalonamiento\EscalonamientoAutoridad;
@@ -21,75 +23,130 @@ class AjustarMontoPorSolicitudService
     ) {}
 
     /**
-     * Aplica lista/tipo/tag provisionales. No suma al historial de venta.
+     * Bloquea las solicitudes del cliente por id ascendente. Debe llamarse dentro de
+     * una transacción y antes de bloquear al cliente o las filas de beneficio.
+     * Ese orden coincide con el pago y con la conciliación de Fase 2A, que toman
+     * primero la solicitud.
+     */
+    public function prepararBloqueo(int $clienteId): void
+    {
+        if ($clienteId <= 0) {
+            return;
+        }
+
+        $ids = SolicitudTag::query()
+            ->where('cliente_id', $clienteId)
+            ->orderBy('id')
+            ->pluck('id');
+
+        foreach ($ids as $id) {
+            SolicitudTag::query()->whereKey($id)->lockForUpdate()->first();
+        }
+    }
+
+    /**
+     * Copia lista, tipo o TAG solo cuando la regla vigente lo permite, y deja
+     * constancia de la concesión. No suma al historial de venta.
      *
      * @return array{antes: array<string, mixed>, despues: array<string, mixed>}
      */
     public function aplicarBeneficios(SolicitudTag $solicitud): array
     {
-        $cliente = $this->clienteDe($solicitud);
-        if (! $cliente) {
-            return [];
-        }
+        return DB::transaction(function () use ($solicitud) {
+            if (! $solicitud->cliente_id) {
+                return [];
+            }
 
-        $antes = $this->capturarSnapshotCliente($cliente);
+            $this->prepararBloqueo((int) $solicitud->cliente_id);
+            $cliente = Cliente::query()->lockForUpdate()->find($solicitud->cliente_id);
+            if (! $cliente) {
+                return [];
+            }
 
-        if (
-            $solicitud->catalogo_lista_descuento_id
-            && ! $cliente->es_inactivo
-            && ! $cliente->lista_bloqueada
-            && ! $this->autoridad->clienteGobernadoPorModulo($cliente)
-        ) {
-            $cliente->lista_actual_id = $solicitud->catalogo_lista_descuento_id;
-        }
+            $solicitud->setRelation('cliente', $cliente);
+            $solicitud->loadMissing('proceso');
+            $antes = $this->capturarSnapshotCliente($cliente);
+            $listaAnterior = $this->valor($cliente->lista_actual_id);
+            $tipoAnterior = $this->valor($cliente->catalogo_tipo_cliente_id);
+            $vendedorAnterior = $this->valor($cliente->vendedor_id);
 
-        if ($solicitud->catalogo_tipo_cliente_id && ! $cliente->es_inactivo) {
-            $cliente->catalogo_tipo_cliente_id = $solicitud->catalogo_tipo_cliente_id;
-        }
+            if (
+                $solicitud->catalogo_lista_descuento_id
+                && ! $cliente->es_inactivo
+                && ! $cliente->lista_bloqueada
+                && ! $this->autoridad->clienteGobernadoPorModulo($cliente)
+            ) {
+                $cliente->lista_actual_id = $solicitud->catalogo_lista_descuento_id;
+                $this->conceder($cliente, $solicitud, SolicitudBeneficio::CAMPO_LISTA, $listaAnterior, $this->valor($cliente->lista_actual_id));
+            }
 
-        if ($solicitud->vendedor_id && $this->solicitudAsignaTag($solicitud)) {
-            $cliente->vendedor_id = $solicitud->vendedor_id;
-        }
+            if ($solicitud->catalogo_tipo_cliente_id && ! $cliente->es_inactivo) {
+                $cliente->catalogo_tipo_cliente_id = $solicitud->catalogo_tipo_cliente_id;
+                $this->conceder($cliente, $solicitud, SolicitudBeneficio::CAMPO_TIPO, $tipoAnterior, $this->valor($cliente->catalogo_tipo_cliente_id));
+            }
 
-        $cliente->save();
-        $cliente->refresh()->load(['listaDescuento', 'vendedor', 'tipo']);
+            if ($solicitud->vendedor_id && $this->solicitudAsignaTag($solicitud) && ! $cliente->es_inactivo) {
+                $cliente->vendedor_id = $solicitud->vendedor_id;
+                $this->conceder($cliente, $solicitud, SolicitudBeneficio::CAMPO_VENDEDOR, $vendedorAnterior, $this->valor($cliente->vendedor_id));
+            }
 
-        return [
-            'antes' => $antes,
-            'despues' => $this->capturarSnapshotCliente($cliente),
-        ];
+            $cliente->save();
+            $cliente->refresh()->load(['listaDescuento', 'vendedor', 'tipo']);
+
+            return [
+                'antes' => $antes,
+                'despues' => $this->capturarSnapshotCliente($cliente),
+            ];
+        });
     }
 
     /**
-     * Quita lista/tipo/tag provisionales y recalcula la lista con el monto guardado.
-     * No modifica monto_venta_actual.
+     * Revierte solo el beneficio que esta solicitud todavía sostiene. La lista
+     * resultante es la que califica el acumulado oficial. No modifica
+     * monto_venta_actual ni la evidencia documental.
      *
      * @return array{antes: array<string, mixed>, despues: array<string, mixed>}
      */
     public function revertirBeneficios(SolicitudTag $solicitud, ?int $usuarioId = null, ?string $origen = null): array
     {
-        $cliente = $this->clienteDe($solicitud);
-        if (! $cliente) {
-            return [];
-        }
+        return DB::transaction(function () use ($solicitud) {
+            if (! $solicitud->cliente_id) {
+                return [];
+            }
 
-        $this->conciliacion->liberar($solicitud);
-        $antes = $this->capturarSnapshotCliente($cliente);
-        $this->recalcularListaCliente($cliente);
+            $this->prepararBloqueo((int) $solicitud->cliente_id);
+            $this->conciliacion->liberar($solicitud);
+            $cliente = Cliente::query()->lockForUpdate()->find($solicitud->cliente_id);
+            if (! $cliente) {
+                return [];
+            }
 
-        if ($solicitud->catalogo_tipo_cliente_id) {
-            $cliente->catalogo_tipo_cliente_id = null;
-        }
+            SolicitudBeneficio::query()
+                ->where('cliente_id', $cliente->id)
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
 
-        $cliente->save();
-        $solicitud->monto_aplicado_al_cliente = 0;
-        $solicitud->save();
-        $cliente->refresh()->load(['listaDescuento', 'vendedor', 'tipo']);
+            $montoOficial = (string) $cliente->monto_venta_actual;
+            $antes = $this->capturarSnapshotCliente($cliente);
+            $this->revertirCampo($cliente, $solicitud, SolicitudBeneficio::CAMPO_LISTA);
+            $this->revertirCampo($cliente, $solicitud, SolicitudBeneficio::CAMPO_TIPO);
+            $this->revertirCampo($cliente, $solicitud, SolicitudBeneficio::CAMPO_VENDEDOR);
 
-        return [
-            'antes' => $antes,
-            'despues' => $this->capturarSnapshotCliente($cliente),
-        ];
+            if ((string) $cliente->monto_venta_actual !== $montoOficial) {
+                $cliente->monto_venta_actual = $montoOficial;
+            }
+
+            $cliente->save();
+            $solicitud->monto_aplicado_al_cliente = 0;
+            $solicitud->save();
+            $cliente->refresh()->load(['listaDescuento', 'vendedor', 'tipo']);
+
+            return [
+                'antes' => $antes,
+                'despues' => $this->capturarSnapshotCliente($cliente),
+            ];
+        });
     }
 
     /**
@@ -366,6 +423,242 @@ class AjustarMontoPorSolicitudService
         }
 
         return bcadd((string) $valor, '0', 2);
+    }
+
+    private function revertirCampo(Cliente $cliente, SolicitudTag $solicitud, string $campo): void
+    {
+        $actual = $this->valorActual($cliente, $campo);
+        $propio = $this->concesionVigente($solicitud, $campo);
+
+        if ($this->otraSolicitudSostiene($solicitud, $campo, $actual)) {
+            $this->cerrarConcesion($propio, SolicitudBeneficio::ESTADO_REEMPLAZADO, 'Otra solicitud vigente sostiene el beneficio.');
+
+            return;
+        }
+
+        if ($propio && $this->mismoValor($propio->valor_aplicado, $actual)) {
+            if (! $cliente->es_inactivo) {
+                $this->restaurarCampo($cliente, $campo, $propio);
+            }
+            $this->cerrarConcesion(
+                $propio,
+                SolicitudBeneficio::ESTADO_REVOCADO,
+                $cliente->es_inactivo
+                    ? 'El cliente está inactivo. El valor almacenado no se reescribe.'
+                    : 'La solicitud ya no sostiene el beneficio.',
+            );
+
+            return;
+        }
+
+        if ($propio) {
+            $this->cerrarConcesion($propio, SolicitudBeneficio::ESTADO_REEMPLAZADO, 'El valor vigente ya no corresponde a esta solicitud.');
+
+            return;
+        }
+
+        if (
+            $campo === SolicitudBeneficio::CAMPO_LISTA
+            && ! $cliente->es_inactivo
+            && ! $this->hayConcesionVigente($cliente, $campo)
+        ) {
+            $antes = $cliente->lista_actual_id;
+            $this->recalcularListaCliente($cliente);
+            if ($this->esListaInferior($cliente->lista_actual_id, $antes)) {
+                $cliente->lista_actual_id = $antes;
+            }
+        }
+    }
+
+    private function restaurarCampo(Cliente $cliente, string $campo, SolicitudBeneficio $concesion): void
+    {
+        if ($campo === SolicitudBeneficio::CAMPO_LISTA) {
+            $this->recalcularListaCliente($cliente);
+
+            return;
+        }
+
+        $anterior = $concesion->valor_anterior === null ? null : (int) $concesion->valor_anterior;
+        if ($campo === SolicitudBeneficio::CAMPO_TIPO) {
+            $cliente->catalogo_tipo_cliente_id = $anterior;
+        }
+        if ($campo === SolicitudBeneficio::CAMPO_VENDEDOR) {
+            $cliente->vendedor_id = $anterior;
+        }
+    }
+
+    private function conceder(Cliente $cliente, SolicitudTag $solicitud, string $campo, ?string $anterior, ?string $aplicado): void
+    {
+        if (! $solicitud->id) {
+            return;
+        }
+
+        $vigente = $this->concesionVigente($solicitud, $campo);
+        if ($vigente && $this->mismoValor($vigente->valor_aplicado, $aplicado)) {
+            return;
+        }
+
+        if ($vigente) {
+            $this->cerrarConcesion($vigente, SolicitudBeneficio::ESTADO_REEMPLAZADO, 'Una concesión posterior de la misma solicitud reemplazó el valor.');
+        }
+
+        SolicitudBeneficio::query()->create([
+            'cliente_id' => $cliente->id,
+            'solicitud_tag_id' => $solicitud->id,
+            'campo' => $campo,
+            'valor_anterior' => $anterior,
+            'valor_aplicado' => $aplicado,
+            'estado' => SolicitudBeneficio::ESTADO_VIGENTE,
+            'motivo' => 'Concesión provisional mientras la solicitud está vigente.',
+        ]);
+    }
+
+    private function concesionVigente(SolicitudTag $solicitud, string $campo): ?SolicitudBeneficio
+    {
+        if (! $solicitud->id) {
+            return null;
+        }
+
+        return SolicitudBeneficio::query()
+            ->where('solicitud_tag_id', $solicitud->id)
+            ->where('campo', $campo)
+            ->where('estado', SolicitudBeneficio::ESTADO_VIGENTE)
+            ->orderByDesc('id')
+            ->first();
+    }
+
+    private function otraSolicitudSostiene(SolicitudTag $solicitud, string $campo, ?string $actual): bool
+    {
+        $ids = $this->idsSolicitudesVigentes($solicitud);
+        if ($ids === []) {
+            return false;
+        }
+
+        $consulta = SolicitudBeneficio::query()
+            ->whereIn('solicitud_tag_id', $ids)
+            ->where('campo', $campo)
+            ->where('estado', SolicitudBeneficio::ESTADO_VIGENTE);
+
+        if ($actual === null) {
+            $consulta->whereNull('valor_aplicado');
+        } else {
+            $consulta->where('valor_aplicado', $actual);
+        }
+
+        if ($consulta->exists()) {
+            return true;
+        }
+
+        if ($actual === null || ! ctype_digit($actual)) {
+            return false;
+        }
+
+        $sinConstancia = SolicitudTag::query()
+            ->whereIn('id', $ids)
+            ->whereNotIn('id', SolicitudBeneficio::query()->where('campo', $campo)->select('solicitud_tag_id'));
+        $id = (int) $actual;
+
+        return match ($campo) {
+            SolicitudBeneficio::CAMPO_LISTA => (clone $sinConstancia)->where('catalogo_lista_descuento_id', $id)->exists(),
+            SolicitudBeneficio::CAMPO_TIPO => (clone $sinConstancia)->where('catalogo_tipo_cliente_id', $id)->exists(),
+            SolicitudBeneficio::CAMPO_VENDEDOR => (clone $sinConstancia)
+                ->where('vendedor_id', $id)
+                ->whereHas('proceso', function ($proceso) {
+                    $proceso->where(function ($nombre) {
+                        $nombre->where('nombre', 'like', '%ASIGNAR TAG%')
+                            ->orWhere('nombre', 'like', '%ASIGNAR CLIENTE%');
+                    });
+                })
+                ->exists(),
+            default => false,
+        };
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    private function idsSolicitudesVigentes(SolicitudTag $solicitud): array
+    {
+        if (! $solicitud->cliente_id) {
+            return [];
+        }
+
+        $estados = array_values(array_filter([
+            CatalogoEstadoSolicitud::idDe('Respondida'),
+            CatalogoEstadoSolicitud::idDe('Verificada'),
+        ]));
+        if ($estados === []) {
+            return [];
+        }
+
+        return SolicitudTag::query()
+            ->where('cliente_id', $solicitud->cliente_id)
+            ->where('id', '!=', $solicitud->id)
+            ->whereIn('catalogo_estado_solicitud_id', $estados)
+            ->orderBy('id')
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+    }
+
+    private function hayConcesionVigente(Cliente $cliente, string $campo): bool
+    {
+        return SolicitudBeneficio::query()
+            ->where('cliente_id', $cliente->id)
+            ->where('campo', $campo)
+            ->where('estado', SolicitudBeneficio::ESTADO_VIGENTE)
+            ->exists();
+    }
+
+    private function esListaInferior(mixed $nueva, mixed $anterior): bool
+    {
+        if ($nueva === $anterior || $anterior === null) {
+            return false;
+        }
+        if ($nueva === null) {
+            return true;
+        }
+
+        $requerido = CatalogoListaDescuento::query()
+            ->whereIn('id', [$nueva, $anterior])
+            ->pluck('monto_requerido', 'id');
+
+        return bccomp((string) ($requerido[$nueva] ?? 0), (string) ($requerido[$anterior] ?? 0), 2) < 0;
+    }
+
+    private function cerrarConcesion(?SolicitudBeneficio $concesion, string $estado, string $motivo): void
+    {
+        if (! $concesion) {
+            return;
+        }
+
+        $concesion->estado = $estado;
+        $concesion->motivo = $motivo;
+        $concesion->save();
+    }
+
+    private function valorActual(Cliente $cliente, string $campo): ?string
+    {
+        return match ($campo) {
+            SolicitudBeneficio::CAMPO_LISTA => $this->valor($cliente->lista_actual_id),
+            SolicitudBeneficio::CAMPO_TIPO => $this->valor($cliente->catalogo_tipo_cliente_id),
+            SolicitudBeneficio::CAMPO_VENDEDOR => $this->valor($cliente->vendedor_id),
+            default => null,
+        };
+    }
+
+    private function valor(mixed $id): ?string
+    {
+        if ($id === null || $id === '') {
+            return null;
+        }
+
+        return (string) $id;
+    }
+
+    private function mismoValor(?string $esperado, ?string $actual): bool
+    {
+        return $esperado === $actual;
     }
 
     private function recalcularListaCliente(Cliente $cliente): void

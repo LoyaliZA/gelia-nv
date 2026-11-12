@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 use App\Models\Cliente;
+use App\Models\ImportacionCliente;
 use App\Models\CatalogoListaDescuento;
 use App\Models\HistorialMontoCliente;
 use App\Models\CatalogoProceso;
@@ -13,7 +14,7 @@ use App\Models\CatalogoEstadoSolicitud;
 use App\Models\CatalogoTipoCliente;
 use App\Models\TabuladorComision;
 use Illuminate\Support\Facades\DB;
-use App\Services\Clientes\ImportarClientesWizerpService;
+use App\Services\Clientes\RevisionImportacionClientes;
 use App\Services\Clientes\RegistrarImportacionClienteService;
 use Illuminate\Support\Facades\Gate;
 use Spatie\Permission\Models\Role;
@@ -657,36 +658,76 @@ class AdminController extends Controller
         ]);
     }
 
-    public function importarClientes(
-        Request $request,
-        ImportarClientesWizerpService $importadorService,
-        RegistrarImportacionClienteService $registrarImportacion,
-    ) {
+    public function importarClientes()
+    {
         Gate::authorize('clientes.carga_masiva');
 
-        $request->validate(['archivo' => 'required|mimes:csv,txt']);
+        return back()->withErrors([
+            'archivo' => 'La carga masiva exige una revisión previa y la confirmación de ese mismo archivo.',
+        ]);
+    }
 
+    public function previsualizarImportacion(
+        Request $request,
+        RegistrarImportacionClienteService $registrarImportacion,
+        RevisionImportacionClientes $revision,
+    ) {
+        Gate::authorize('clientes.carga_masiva');
+        $request->validate(['archivo' => 'required|file|mimes:csv,txt']);
         @set_time_limit(0);
 
-        try {
-            $importacion = $registrarImportacion->iniciar($request->file('archivo'));
-            $resultado = $importadorService->ejecutar($request->file('archivo'), $importacion);
-            $registrarImportacion->finalizar($importacion, $resultado['stats'] ?? []);
+        $importacion = $registrarImportacion->iniciar($request->file('archivo'));
 
-            $estado = $resultado['estado'];
-            $mensaje = "Importación {$estado}: {$resultado['stats']['creados']} creados, {$resultado['stats']['actualizados']} actualizados, {$resultado['stats']['sin_cambios']} sin cambios, {$resultado['stats']['errores']} filas fallidas.";
+        try {
+            $vista = $revision->previsualizar($importacion);
+        } catch (ValidationException $e) {
+            return back()->withErrors($e->errors());
+        }
+
+        return back()->with('previsualizacion_importacion', $vista);
+    }
+
+    public function confirmarImportacion(
+        Request $request,
+        RegistrarImportacionClienteService $registrarImportacion,
+        RevisionImportacionClientes $revision,
+    ) {
+        Gate::authorize('clientes.carga_masiva');
+        $request->validate([
+            'importacion_id' => 'required|integer',
+            'token' => 'required|string',
+        ]);
+        @set_time_limit(0);
+
+        $importacion = ImportacionCliente::query()
+            ->where('usuario_id', $request->user()->id)
+            ->findOrFail($request->integer('importacion_id'));
+
+        try {
+            $resultado = $revision->confirmar($importacion, (string) $request->input('token'));
+            $registrarImportacion->finalizar($importacion->fresh(), $resultado['stats'] ?? []);
+        } catch (ValidationException $e) {
+            return back()->withErrors($e->errors());
+        } catch (\Throwable $e) {
+            $importacion->refresh();
+            $mensaje = is_string($e->getMessage()) ? mb_scrub($e->getMessage(), 'UTF-8') : 'Error desconocido';
 
             return back()
-                ->with($estado === 'completo' ? 'success' : 'warning', $mensaje)
-                ->with('resultado_importacion', $resultado)
-                ->with('reporte_importacion', $resultado['ascensos'] ?? []);
-        } catch (\Throwable $e) {
-            $mensajeSeguro = is_string($e->getMessage())
-                ? (function_exists('mb_scrub') ? mb_scrub($e->getMessage(), 'UTF-8') : @iconv('UTF-8', 'UTF-8//IGNORE', $e->getMessage()))
-                : 'Error desconocido';
-
-            return back()->withErrors(['archivo' => 'Importación interrumpida; consulte su auditoría para conocer las filas confirmadas. Detalles: ' . ($mensajeSeguro ?: 'Error desconocido')]);
+                ->with('warning', 'Importación interrumpida. Las filas ya confirmadas están en la auditoría; el resto no se escribió.')
+                ->with('resultado_importacion', [
+                    'estado' => $importacion->estado ?: 'fallido',
+                    'stats' => array_diff_key($importacion->resumen ?? [], ['revision' => true]),
+                    'mensaje_fatal' => $importacion->mensaje_fatal ?: $mensaje,
+                ]);
         }
+
+        $estado = $resultado['estado'];
+        $mensaje = "Importación {$estado}: {$resultado['stats']['creados']} creados, {$resultado['stats']['actualizados']} actualizados, {$resultado['stats']['sin_cambios']} sin cambios, {$resultado['stats']['errores']} filas fallidas.";
+
+        return back()
+            ->with($estado === 'completo' ? 'success' : 'warning', $mensaje)
+            ->with('resultado_importacion', $resultado)
+            ->with('reporte_importacion', $resultado['ascensos'] ?? []);
     }
 
     public function historialCliente(Cliente $cliente)
