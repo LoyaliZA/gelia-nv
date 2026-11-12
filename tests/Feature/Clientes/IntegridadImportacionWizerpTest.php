@@ -62,8 +62,8 @@ class IntegridadImportacionWizerpTest extends TestCase
     {
         return [
             'vacíos' => [',', false, '1000.00', 'MAYOREO BRONCE', 0],
-            'cero' => [',0.00', true, '0.00', 'PUBLICO GENERAL', 0],
-            'contradicción' => [',2000', false, '1000.00', 'MAYOREO BRONCE', 1],
+            'cero' => [',0.00', false, '0.00', 'MAYOREO BRONCE', 0],
+            'vacio_positivo' => [',2000', false, '2000.00', 'MAYOREO BRONCE', 0],
             'válido vacío' => ['3,', false, '1000.00', 'MAYOREO PLATA', 0],
             'válido cero' => ['3,0', false, '0.00', 'MAYOREO PLATA', 0],
             'válido positivo' => ['2,6000', false, '6000.00', 'MAYOREO PLATA', 0],
@@ -91,10 +91,10 @@ class IntegridadImportacionWizerpTest extends TestCase
         $c = $this->cliente(['lista_bloqueada' => true]);
         $lista = $c->lista_actual_id;
         $this->importar("numero_cliente,codigo_lista,monto_venta_actual\n990001,,0\n");
-        $this->assertTrue($c->fresh()->es_inactivo);
+        $this->assertFalse($c->fresh()->es_inactivo);
         $this->assertSame($lista, $c->fresh()->lista_actual_id);
         $this->assertSame('0.00', $c->fresh()->monto_venta_actual);
-        $this->assertSame(CatalogoListaDescuento::where('nombre', 'PUBLICO GENERAL')->value('id'), app(ProyeccionClienteEscalonamiento::class)->listaVigenteId($c->fresh()));
+        $this->assertSame($lista, app(ProyeccionClienteEscalonamiento::class)->listaVigenteId($c->fresh()));
         $this->importar("numero_cliente,codigo_lista\n990001,3\n");
         $this->assertFalse($c->fresh()->es_inactivo);
         $this->assertSame($lista, $c->fresh()->lista_actual_id);

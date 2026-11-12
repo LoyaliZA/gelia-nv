@@ -67,7 +67,8 @@ class ProcesarFilaClienteAction
         if ($monto !== null && ! $gobernado) {
             $cliente->monto_venta_actual = $monto;
         }
-        if (! $cliente->lista_bloqueada && ! $gobernado) {
+        $codigoVacio = $importaCodigoLista && $codigo === '';
+        if (! $cliente->lista_bloqueada && ! $gobernado && ! $codigoVacio) {
             if ($estado === true) {
                 $cliente->lista_actual_id = $pg->id;
             } elseif ($listaCsv) {
@@ -143,7 +144,7 @@ class ProcesarFilaClienteAction
         return null;
     }
 
-private function error(string $campo, string $mensaje): never
+    private function error(string $campo, string $mensaje): never
     {
         throw ValidationException::withMessages([$campo => $mensaje]);
     }

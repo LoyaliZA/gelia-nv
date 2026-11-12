@@ -11,9 +11,9 @@ Wizerp es la única autoridad de las transiciones de estado comercial. Pagos, co
 | Caso | Antes | Después |
 | --- | --- | --- |
 | Sin columna de lista | Positivo diferente podía reactivar | Conserva estado; actualiza monto válido y permite ascensos explícitos |
-| Código vacío + monto ausente/vacío | Inactivaba | Omite estado/lista/monto; conserva actualización parcial de otros campos |
-| Código vacío + cero | Inactivaba salvo bloqueo/autoridad | Inactiva independientemente del bloqueo/autoridad; PG si lista editable; monto si no está protegido por autoridad |
-| Código vacío + positivo | Primera/repetida podían terminar distintas | Error de fila, sin cambios |
+| Código vacío + monto ausente/vacío | Inactivaba | Omite estado y lista; conserva actualización parcial de otros campos |
+| Código vacío + cero | Inactivaba salvo bloqueo/autoridad | No inactiva y no cambia la lista. El cero solo actualiza el monto autorizado. Ajuste del 12 de noviembre de 2026 |
+| Código vacío + positivo | Primera/repetida podían terminar distintas | No es error ni baja. Actualiza el monto autorizado y conserva lista y estado. Ajuste del 12 de noviembre de 2026 |
 | Código válido + monto vacío | Activaba salvo bloqueo/autoridad | Activa; aplica lista permitida; conserva monto |
 | Código válido + cero | Activaba salvo bloqueo/autoridad | Activa; aplica lista permitida y monto autorizado |
 | Código válido + positivo | Ascenso dependía del cambio de monto | Decisión determinista, incluyendo ascensos y exclusiones comerciales |
@@ -35,7 +35,7 @@ Montos: decimal exacto, punto decimal y hasta dos decimales, signo `$` opcional 
 
 ## Persistencia y resultados
 
-Validación estructural completa antes de tocar clientes/catálogos. Nombre obligatorio solo para alta; identificador requerido y formado por dígitos, conservando ceros iniciales. Nuevos clientes necesitan código válido o código vacío con cero explícito.
+Validación estructural completa antes de tocar clientes/catálogos. Nombre obligatorio solo para alta; identificador requerido y formado por dígitos, conservando ceros iniciales. Nuevos clientes necesitan nombre y un código de lista válido. Un código vacío no crea el cliente ni se interpreta como baja: no se inventa activo ni inactivo. Una fila rechazada no detiene las demás.
 
 MySQL utiliza un bloqueo asesor de sesión para excluir importaciones simultáneas, sin depender de una concesión de caché que expire a mitad del archivo. Cada fila consulta y bloquea el cliente dentro de su transacción. La restricción única mantiene la identidad ante carreras de alta. Los consumidores de SQLite de pruebas usan bloqueo de caché.
 
