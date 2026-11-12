@@ -52,13 +52,13 @@ Hay regresión sintética en `tests/Feature/Clientes/IncidenteWizerp20261112Test
 
 ## Seguimiento que no entra en este PR
 
-La vista previa de la carga masiva, los umbrales y el bloqueo de riesgo alto (apartado 14) quedan para un PR posterior. También quedan fuera el renombre de clases, una integración externa y una reescritura del módulo de clientes. No bloquean esta consolidación.
+La revisión previa de la carga masiva (apartado 14) entra en este mismo PR. El uso está en `docs/clientes/IMPORTACION_MASIVA_REVISION.md`. Siguen fuera el renombre de clases, una integración externa y una reescritura del módulo de clientes.
 
 ## Riesgos que siguen impidiendo un despliegue
 
 - No hay señal de ERP para una baja real.
 - Las 95 diferencias de monto no están conciliadas con Wizerp.
-- Una fotografía CSV antigua todavía puede sobrescribir una reciente.
+- Sin `fecha_corte` o `fecha_exportacion` legible, un archivo anterior todavía puede proponer montos distintos. Con esa fecha anterior al último historial, la confirmación se bloquea. Las 95 diferencias no se inventan.
 - Con la autoridad apagada, un documento no prueba inclusión en el acumulado.
 - Quien lea `lista_actual_id` sin el estado puede seguir beneficiando a un cliente inactivo.
 - MySQL 8.4 del script de QA no sustituye a una corrida que no se haya ejecutado.

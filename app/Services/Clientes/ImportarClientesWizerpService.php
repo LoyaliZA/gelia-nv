@@ -165,10 +165,19 @@ class ImportarClientesWizerpService
 
     private function guardarProgreso(?ImportacionCliente $importacion, array $stats, string $estado, ?string $mensaje = null): void
     {
-        $importacion?->update(['estado' => $estado, 'resumen' => $stats, 'mensaje_fatal' => $mensaje === null ? null : $this->sanitizarTextoImportacion($mensaje),
+        if (! $importacion) {
+            return;
+        }
+        $revision = $importacion->resumen['revision'] ?? null;
+        $resumen = $stats;
+        if (is_array($revision)) {
+            $resumen['revision'] = $revision;
+        }
+        $importacion->update(['estado' => $estado, 'resumen' => $resumen, 'mensaje_fatal' => $mensaje === null ? null : $this->sanitizarTextoImportacion($mensaje),
             'filas_leidas' => $stats['leidas'], 'filas_procesadas' => $stats['procesadas'], 'filas_omitidas' => $stats['omitidas'],
             'errores' => $stats['errores'], 'ascensos' => $stats['ascensos'], 'descensos' => $stats['descensos'],
             'clientes_marcados_inactivos' => $stats['clientes_marcados_inactivos'], 'duracion_seg' => $stats['duracion_seg'] ?? null]);
+        $importacion->resumen = $resumen;
     }
 
     private function sanitizarTextoImportacion(?string $texto): string
@@ -176,7 +185,7 @@ class ImportarClientesWizerpService
         return mb_substr(mb_scrub($texto ?? '', 'UTF-8'), 0, 4000);
     }
 
-    private function cargarMapaVendedoras(): array
+    public function cargarMapaVendedoras(): array
     {
         $mapa = [];
         $vendedoras = User::whereHas('roles', function ($q) {
@@ -193,7 +202,7 @@ class ImportarClientesWizerpService
         return $mapa;
     }
 
-    private function sincronizarListasWizerp(): void
+    public function sincronizarListasWizerp(): void
     {
         $listasOficiales = [
             ['nombre' => 'MAYOREO DIAMANTE', 'monto_requerido' => 80001.00],
