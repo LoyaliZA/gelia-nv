@@ -113,6 +113,8 @@ Para una recomposición, expresar antes de editar una dirección breve: referenc
 
 ### 5. Comparar el conjunto renderizado
 
+La evidencia que acredita una interfaz está en [GUIA_EVIDENCIA_VISUAL.md](GUIA_EVIDENCIA_VISUAL.md). Esta sección no la sustituye.
+
 La revisión tiene dos preguntas distintas: «¿Funciona y se puede usar?» y «¿Se reconoce como GELIA junto a las referencias?». Ambas necesitan evidencia.
 
 Comprobar, de forma proporcional al cambio:

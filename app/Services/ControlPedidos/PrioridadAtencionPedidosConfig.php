@@ -73,18 +73,26 @@ final class PrioridadAtencionPedidosConfig
         $base = PedidoBma::query();
         $direccion = $orden === 'recientes' ? 'desc' : 'asc';
         $query->reorder();
-        $urgencia = '('.$this->expresionUrgencia($tareas).') asc';
+        $urgencia = '('.$this->expresionUrgencia(false).')';
         if ($tareas) {
+            // MySQL no correlaciona JSON_TABLE con la fila de la tarea. La urgencia se calcula dentro del pedido.
             $base->selectRaw($sql, $bindings)->whereColumn('pedidos_bma.id', 'pedido_bma_tareas_preparacion.pedido_bma_id');
-            $query->orderBy($base)->orderByRaw($urgencia)->orderBy('solicitada_at', $direccion)->orderBy('pedido_bma_tareas_preparacion.id', $direccion);
+            $clave = PedidoBma::query()
+                ->selectRaw('((CASE WHEN pedidos_bma.prioridad_md = 1 THEN 0 ELSE 1 END) * 10) + '.$urgencia)
+                ->whereColumn('pedidos_bma.id', 'pedido_bma_tareas_preparacion.pedido_bma_id');
+            $query->orderBy($clave)->orderBy($base)->orderBy('solicitada_at', $direccion)->orderBy('pedido_bma_tareas_preparacion.id', $direccion);
         } else {
-            $query->orderByRaw($sql, $bindings)->orderByRaw($urgencia)->orderByRaw('COALESCE(pesaje_solicitado_at, pedidos_bma.created_at) '.$direccion)->orderBy('pedidos_bma.id', $direccion);
+            $query->orderByRaw('pedidos_bma.prioridad_md desc')
+                ->orderByRaw($urgencia.' asc')
+                ->orderByRaw($sql, $bindings)
+                ->orderByRaw('COALESCE(pesaje_solicitado_at, pedidos_bma.created_at) '.$direccion)
+                ->orderBy('pedidos_bma.id', $direccion);
         }
     }
 
     /**
-     * Después del tipo configurable: actualización que pide otra respuesta, consulta nueva sin respuesta, el resto.
-     * El tipo sigue primero para no pisar la jerarquía (mismo día, municipal, tienda, resguardo, nacional).
+     * Mismo día va antes, como compromiso obligatorio. Después: actualización que pide otra respuesta,
+     * consulta nueva sin respuesta y, al final, el resto. La jerarquía configurable solo ordena ese resto.
      */
     private function expresionUrgencia(bool $tareas): string
     {

@@ -1,6 +1,6 @@
 # Comprobación visual de Tienda
 
-Monta componentes reales con cliente, pedido, documento y respuestas ficticias. No abre una sesión operativa ni escribe en la base de datos. Complementa las pruebas de servidor; no acredita un recorrido autenticado entre usuarios.
+Monta componentes reales con cliente, pedido, documento y respuestas ficticias. No abre una sesión operativa ni escribe en la base de datos. Complementa las pruebas de servidor; no acredita un recorrido autenticado entre usuarios. La evidencia que sí acredita la interfaz está en [GUIA_EVIDENCIA_VISUAL.md](../../../GUIA_EVIDENCIA_VISUAL.md). Un HTML aislado o estas capturas de componente no la reemplazan.
 
 Vistas: solicitud, importes, revisión inicial, espera de Ventas, anexo, retiro, entrega, CEDIS y auditoría. Se revisan a 1440×1000 y 390×844, en claro y oscuro. Claro incluye una fuente y un acento personalizados.
 
