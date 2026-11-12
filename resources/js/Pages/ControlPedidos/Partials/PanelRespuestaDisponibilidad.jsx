@@ -222,7 +222,7 @@ export default function PanelRespuestaDisponibilidad({ modo = 'seccion', abierto
     return createPortal(<div className={`${THEME_MODAL_OVERLAY} p-0 md:p-4`}>
         <div {...dialogo} aria-label="Consulta de disponibilidad" className={`${THEME_MODAL_SHELL} gelia-preparacion-modal w-full max-w-7xl max-h-[100dvh] md:max-h-[94dvh] flex flex-col overflow-hidden`}>
             <header className="flex items-center justify-between gap-3 px-4 py-3 border-b theme-border shrink-0"><div className="min-w-0"><h2 className="text-base font-semibold theme-text-main m-0">Consulta de disponibilidad</h2>{(pedido.folio_remision || pedido.folio) && <p className="text-xs theme-text-muted m-0">Folio No. : {pedido.folio_remision || pedido.folio}</p>}</div><button type="button" className={THEME_BTN_SECONDARY} disabled={guardando} onClick={onClose} aria-label="Cerrar consulta"><X size={20} /></button></header>
-            <div className="gelia-modal-body min-h-0 overflow-y-auto">{contenido}</div>
+            <div className="gelia-modal-body min-h-0 flex-1 overflow-y-auto">{contenido}</div>
         </div>
     </div>, document.body);
 }

@@ -199,7 +199,7 @@ class FusionarSolicitudPreparacionPedido
             return false;
         }
         foreach ([
-            'acciones_disponibilidad', 'reapertura_disponibilidad', 'solicitudes_ajuste_ids', 'cobertura_tienda', 'cambio_cobertura_tienda', 'historial_cambios_cobertura', 'segundo_traslado', 'historial_traslados_tienda', 'movimientos_tienda_version', 'cambio_modalidad_tienda', 'credito_wizerp', 'tienda_md_reporte',
+            'acciones_disponibilidad', 'reapertura_disponibilidad', 'solicitudes_ajuste_ids', 'solicitudes_ajuste_lotes', 'cobertura_tienda', 'cambio_cobertura_tienda', 'historial_cambios_cobertura', 'segundo_traslado', 'historial_traslados_tienda', 'movimientos_tienda_version', 'cambio_modalidad_tienda', 'credito_wizerp', 'tienda_md_reporte',
             'retiro_recoleccion', 'liberacion_fisica_20', 'cambio_modalidad',
             'continuacion_ejecutor', 'entrega_custodia', 'compromisos_inventario', 'complemento_pdv', 'anexo_integracion', 'transferencia_tienda', 'seguimiento_recoleccion', 'remision_tienda',
         ] as $clave) {
@@ -312,7 +312,7 @@ class FusionarSolicitudPreparacionPedido
     private function conservarOperacionTienda(array &$salida, array $origen): void
     {
         foreach ([
-            'acciones_disponibilidad', 'reapertura_disponibilidad', 'solicitudes_ajuste_ids', 'cobertura_tienda', 'cambio_cobertura_tienda', 'historial_cambios_cobertura',
+            'acciones_disponibilidad', 'reapertura_disponibilidad', 'solicitudes_ajuste_ids', 'solicitudes_ajuste_lotes', 'cobertura_tienda', 'cambio_cobertura_tienda', 'historial_cambios_cobertura',
             'segundo_traslado', 'historial_traslados_tienda', 'movimientos_tienda_version', 'cambio_modalidad_tienda',
             'credito_wizerp',
             'ruta_almacenes_tienda',

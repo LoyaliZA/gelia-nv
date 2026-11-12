@@ -1939,3 +1939,47 @@
 .gelia-preparacion-modal .gelia-preparacion--consulta :is(.gelia-preparacion-workspace, .gelia-preparacion-captura) {
     overflow: visible;
 }
+
+/* Un solo scroll del cuerpo en cualquier ancho. Cabecera y acción quedan fijas. */
+.gelia-preparacion-modal .gelia-modal-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scroll-padding-block: 0.75rem;
+}
+
+.gelia-preparacion-modal .gelia-modal-body .gelia-preparacion,
+.gelia-preparacion-modal .gelia-modal-body .gelia-preparacion:not(:has(.gelia-preparacion-workspace)),
+.gelia-preparacion-modal .gelia-modal-body .gelia-preparacion--consulta,
+.gelia-preparacion-modal .gelia-modal-body .gelia-preparacion--consulta .gelia-preparacion,
+.gelia-preparacion-modal .gelia-modal-body .gelia-preparacion--embebida,
+.gelia-preparacion-modal .gelia-modal-body > .gelia-tienda-embebida {
+    display: block;
+    flex: none;
+    height: auto;
+    max-height: none;
+    min-height: 0;
+    overflow: visible;
+}
+
+.gelia-preparacion-modal .gelia-modal-body :is(.gelia-preparacion-workspace, .gelia-preparacion-captura, .gelia-preparacion-documento) {
+    height: auto;
+    max-height: none;
+    overflow: visible;
+}
+
+.gelia-preparacion-modal .gelia-preparacion-contexto,
+.gelia-preparacion-modal .gelia-preparacion-footer {
+    position: sticky;
+    z-index: 3;
+}
+
+.gelia-preparacion-modal .gelia-preparacion-contexto {
+    top: 0;
+}
+
+.gelia-preparacion-modal .gelia-preparacion-footer {
+    bottom: 0;
+}

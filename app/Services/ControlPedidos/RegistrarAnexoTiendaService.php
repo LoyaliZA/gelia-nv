@@ -12,6 +12,7 @@ use App\Support\ControlPedidos\RegistrarPedidos\DestinoRevisionRegistrarPedidos;
 use App\Support\ControlPedidos\VisibilidadPedidoBma;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
 /** Sin remisión documenta el ajuste. Con remisión abre un pedido relacionado y su propia cobertura. */
@@ -21,10 +22,12 @@ final class RegistrarAnexoTiendaService
         private GenerarFolioPedidoBmaService $folios,
         private RegistrarHistorialPedidoService $historial,
         private NotificarPedidoBmaService $notificar,
+        private AdjuntosConsultaTienda $adjuntos,
     ) {}
 
     /**
      * @param  list<array<string, mixed>>  $piezas
+     * @param  list<UploadedFile>  $evidencias
      */
     public function ejecutar(
         PedidoBma $pedido,
@@ -33,9 +36,11 @@ final class RegistrarAnexoTiendaService
         ?string $descripcion,
         ?int $cantidad,
         ?string $condicion,
-        UploadedFile $evidencia,
+        ?UploadedFile $evidencia,
         array $piezas = [],
         string $entrada = 'catalogo',
+        array $evidencias = [],
+        ?string $solicitudId = null,
     ): PedidoBma {
         if (! VisibilidadPedidoBma::puedeMutarComoVendedora($usuario, $pedido)) {
             throw ValidationException::withMessages([
@@ -44,29 +49,34 @@ final class RegistrarAnexoTiendaService
         }
 
         $lineas = $this->lineasDe($sku, $descripcion, $cantidad, $condicion, $piezas, $entrada);
+        $archivos = $this->adjuntos->sinRepetir([], $this->archivos($evidencia, $evidencias));
 
-        return DB::transaction(function () use ($pedido, $usuario, $evidencia, $lineas) {
+        return DB::transaction(function () use ($pedido, $usuario, $lineas, $archivos, $solicitudId) {
             $pedido = PedidoBma::query()->lockForUpdate()->findOrFail($pedido->id);
-
-            if ($pedido->tieneRemision() || filled($pedido->numero_remision)) {
-                return $this->pedidoRelacionado($pedido, $usuario, $lineas, $evidencia);
+            if ($solicitudId) {
+                $previo = $this->destinoDeSolicitud($pedido, $solicitudId);
+                if ($previo instanceof PedidoBma) {
+                    return $this->agregarArchivos($previo, $solicitudId, $archivos);
+                }
+            }
+            if ($archivos === []) {
+                throw ValidationException::withMessages(['evidencia' => 'Adjunte el PDF o la captura del anexo.']);
             }
 
-            $ruta = $evidencia->store('pedidos_bma/'.$pedido->id.'/anexo', 'public');
-            $documento = $pedido->documentos()->create([
-                'tipo' => PedidoBmaDocumento::TIPO_ANEXO_PIEZAS,
-                'ruta_archivo' => $ruta,
-                'nombre_original' => $evidencia->getClientOriginalName(),
-                'mime_type' => $evidencia->getMimeType(),
-                'tamano_bytes' => $evidencia->getSize(),
-                'orden' => ((int) $pedido->documentos()->max('orden')) + 1,
-                'comentario' => $this->comentarioDe($lineas),
-                'activo' => true,
-            ]);
+            if ($pedido->tieneRemision() || filled($pedido->numero_remision)) {
+                return $this->pedidoRelacionado($pedido, $usuario, $lineas, $archivos, $solicitudId);
+            }
+
+            $cerrada = $pedido->consulta_cerrada_at !== null;
+            $ciclo = $this->adjuntos->ciclo($pedido, $cerrada);
+            $this->adjuntos->asegurar($this->adjuntos->bytesUsados($pedido, $ciclo), $archivos);
+            $docs = $this->guardar($pedido, $archivos, 'anexo', PedidoBmaDocumento::TIPO_ANEXO_PIEZAS, $this->comentarioDe($lineas));
             $json = is_array($pedido->solicitud_preparacion_json) ? $pedido->solicitud_preparacion_json : [];
-            $lineas = array_map(fn ($linea) => array_merge($linea, ['pendiente_revision' => true, 'documento_id' => $documento->id]), $lineas);
+            $meta = $this->meta($docs, $ciclo, $solicitudId);
+            $lineas = array_map(fn ($linea) => array_merge($linea, $meta), $lineas);
             if (is_array($json['revision_disponibilidad'] ?? null)) {
                 $json['revision_disponibilidad']['aceptacion_vigente'] = false;
+                $json['revision_disponibilidad']['ciclo_id'] = $ciclo;
             }
             $json['anexo_sin_remision'] = array_values(array_merge(
                 is_array($json['anexo_sin_remision'] ?? null) ? $json['anexo_sin_remision'] : [],
@@ -85,8 +95,9 @@ final class RegistrarAnexoTiendaService
 
     /**
      * @param  list<array<string, mixed>>  $lineas
+     * @param  list<UploadedFile>  $archivos
      */
-    private function pedidoRelacionado(PedidoBma $pedido, User $usuario, array $lineas, UploadedFile $evidencia): PedidoBma
+    private function pedidoRelacionado(PedidoBma $pedido, User $usuario, array $lineas, array $archivos, ?string $solicitudId): PedidoBma
     {
         $estatus = CatalogoEstatusPedido::porFase(CatalogoEstatusPedido::FASE_BORRADOR);
         if (! $estatus) {
@@ -121,27 +132,161 @@ final class RegistrarAnexoTiendaService
                 'cobertura_tienda' => null,
             ],
         ]);
-        $ruta = $evidencia->store('pedidos_bma/'.$nuevo->id.'/anexo', 'public');
-        $nuevo->documentos()->create([
-            'tipo' => PedidoBmaDocumento::TIPO_ANEXO_PIEZAS,
-            'ruta_archivo' => $ruta,
-            'nombre_original' => $evidencia->getClientOriginalName(),
-            'mime_type' => $evidencia->getMimeType(),
-            'tamano_bytes' => $evidencia->getSize(),
-            'orden' => 1,
-            'comentario' => $this->comentarioDe($lineas),
-            'activo' => true,
-        ]);
+        $ciclo = $this->adjuntos->ciclo($nuevo, true);
+        $this->adjuntos->asegurar(0, $archivos);
+        $docs = $this->guardar($nuevo, $archivos, 'anexo', PedidoBmaDocumento::TIPO_ANEXO_PIEZAS, $this->comentarioDe($lineas));
+        $preparacion = $nuevo->solicitud_preparacion_json;
+        $preparacion['revision_disponibilidad']['ciclo_id'] = $ciclo;
+        $preparacion['piezas_anexo'] = array_map(fn ($linea) => array_merge($linea, $this->meta($docs, $ciclo, $solicitudId)), $lineas);
+        $nuevo->update(['solicitud_preparacion_json' => $preparacion]);
 
         $json = is_array($pedido->solicitud_preparacion_json) ? $pedido->solicitud_preparacion_json : [];
         $relacionados = is_array($json['anexos_relacionados'] ?? null) ? $json['anexos_relacionados'] : [];
         $relacionados[] = $nuevo->id;
         $json['anexos_relacionados'] = array_values(array_unique($relacionados));
+        if ($solicitudId) {
+            $json['anexos_por_solicitud'][$solicitudId] = $nuevo->id;
+        }
         $pedido->update(['solicitud_preparacion_json' => $json]);
         $this->nota($pedido, $usuario->id, $this->textoDe($lineas, true, $nuevo->folio));
         $this->avisarEjecutor($pedido, $usuario, $lineas);
 
         return $nuevo->fresh(['documentos', 'estatus']);
+    }
+
+    /**
+     * @param  list<UploadedFile>  $evidencias
+     * @return list<UploadedFile>
+     */
+    private function archivos(?UploadedFile $evidencia, array $evidencias): array
+    {
+        $lista = [];
+        foreach ($evidencias as $archivo) {
+            if ($archivo instanceof UploadedFile) {
+                $lista[] = $archivo;
+            }
+        }
+        if ($evidencia instanceof UploadedFile) {
+            $lista[] = $evidencia;
+        }
+
+        return $lista;
+    }
+
+    private function destinoDeSolicitud(PedidoBma $pedido, string $solicitudId): ?PedidoBma
+    {
+        $json = is_array($pedido->solicitud_preparacion_json) ? $pedido->solicitud_preparacion_json : [];
+        foreach ((array) ($json['anexo_sin_remision'] ?? []) as $linea) {
+            if (is_array($linea) && ($linea['solicitud_id'] ?? null) === $solicitudId) {
+                return $pedido;
+            }
+        }
+        $relacionado = $json['anexos_por_solicitud'][$solicitudId] ?? null;
+        if (is_numeric($relacionado)) {
+            return PedidoBma::query()->lockForUpdate()->find((int) $relacionado);
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  list<UploadedFile>  $archivos
+     */
+    private function agregarArchivos(PedidoBma $pedido, string $solicitudId, array $archivos): PedidoBma
+    {
+        $conocidas = [];
+        $jsonInicial = is_array($pedido->solicitud_preparacion_json) ? $pedido->solicitud_preparacion_json : [];
+        foreach ((array) ($jsonInicial['anexo_sin_remision'] ?? []) as $linea) {
+            if (is_array($linea) && ($linea['solicitud_id'] ?? null) === $solicitudId) {
+                $conocidas = array_merge($conocidas, (array) ($linea['huellas'] ?? []));
+            }
+        }
+        foreach ((array) ($jsonInicial['piezas_anexo'] ?? []) as $linea) {
+            if (is_array($linea) && ($linea['solicitud_id'] ?? null) === $solicitudId) {
+                $conocidas = array_merge($conocidas, (array) ($linea['huellas'] ?? []));
+            }
+        }
+        $nuevos = $this->adjuntos->sinRepetir($conocidas, $archivos);
+        if ($nuevos === []) {
+            return $pedido->fresh(['documentos', 'estatus']);
+        }
+        $ciclo = $this->adjuntos->ciclo($pedido, false);
+        $json = is_array($pedido->solicitud_preparacion_json) ? $pedido->solicitud_preparacion_json : [];
+        $this->adjuntos->asegurar($this->adjuntos->bytesUsados($pedido, $ciclo), $nuevos);
+        $docs = $this->guardar($pedido, $nuevos, 'anexo', PedidoBmaDocumento::TIPO_ANEXO_PIEZAS, 'Archivos adicionales del anexo');
+        foreach (['anexo_sin_remision', 'piezas_anexo'] as $clave) {
+            foreach ((array) ($json[$clave] ?? []) as $indice => $linea) {
+                if (! is_array($linea) || ($linea['solicitud_id'] ?? null) !== $solicitudId) {
+                    continue;
+                }
+                $documentos = array_values(array_merge((array) ($linea['documentos'] ?? []), $docs));
+                $json[$clave][$indice]['documentos'] = $documentos;
+                $json[$clave][$indice]['huellas'] = array_values(array_merge((array) ($linea['huellas'] ?? []), array_column($docs, 'huella')));
+                $json[$clave][$indice]['tamano_bytes'] = (int) ($linea['tamano_bytes'] ?? 0) + array_sum(array_column($docs, 'tamano_bytes'));
+                $json[$clave][$indice]['documento_id'] = $json[$clave][$indice]['documento_id'] ?? $docs[0]['id'];
+                $json[$clave][$indice]['ciclo_id'] = $linea['ciclo_id'] ?? $ciclo;
+            }
+        }
+        $pedido->update(['solicitud_preparacion_json' => $json]);
+
+        return $pedido->fresh(['documentos', 'estatus']);
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $docs
+     * @return array<string, mixed>
+     */
+    private function meta(array $docs, string $ciclo, ?string $solicitudId): array
+    {
+        return [
+            'pendiente_revision' => true,
+            'documento_id' => $docs[0]['id'] ?? null,
+            'documentos' => $docs,
+            'huellas' => array_column($docs, 'huella'),
+            'tamano_bytes' => array_sum(array_column($docs, 'tamano_bytes')),
+            'ciclo_id' => $ciclo,
+            ...($solicitudId ? ['solicitud_id' => $solicitudId] : []),
+        ];
+    }
+
+    /**
+     * @param  list<UploadedFile>  $archivos
+     * @return list<array{id: int, nombre: string, mime_type: ?string, tamano_bytes: int, huella: string}>
+     */
+    private function guardar(PedidoBma $pedido, array $archivos, string $carpeta, string $tipo, string $comentario): array
+    {
+        $guardados = [];
+        $rutas = [];
+        $orden = (int) $pedido->documentos()->max('orden');
+        try {
+            foreach ($archivos as $archivo) {
+                $orden++;
+                $ruta = $archivo->store('pedidos_bma/'.$pedido->id.'/'.$carpeta, 'public');
+                $rutas[] = $ruta;
+                $documento = $pedido->documentos()->create([
+                    'tipo' => $tipo,
+                    'ruta_archivo' => $ruta,
+                    'nombre_original' => $archivo->getClientOriginalName(),
+                    'mime_type' => $archivo->getMimeType(),
+                    'tamano_bytes' => $archivo->getSize(),
+                    'orden' => $orden,
+                    'comentario' => $comentario,
+                    'activo' => true,
+                ]);
+                $guardados[] = [
+                    'id' => $documento->id,
+                    'nombre' => $documento->nombre_original,
+                    'mime_type' => $documento->mime_type,
+                    'tamano_bytes' => (int) $documento->tamano_bytes,
+                    'huella' => $this->adjuntos->huella($archivo),
+                ];
+            }
+        } catch (\Throwable $e) {
+            Storage::disk('public')->delete($rutas);
+            throw $e;
+        }
+
+        return $guardados;
     }
 
     /**

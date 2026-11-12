@@ -3,6 +3,8 @@ import axios from 'axios';
 import { THEME_BTN_PRIMARY, THEME_BTN_SECONDARY, THEME_INPUT, THEME_LABEL, THEME_SELECT } from '../../../utils/geliaTheme';
 import ModalMovimientosTienda from './ModalMovimientosTienda';
 import ImportesPagoTienda from './ImportesPagoTienda';
+import { enviarEnLotes } from './lotesAdjuntosConsulta';
+import { uuidSolicitud } from '../../../utils/uuidSolicitud';
 
 function cabeceras() {
     return {
@@ -41,7 +43,7 @@ export default function ContinuidadTienda({
     const [descripcion, setDescripcion] = useState('');
     const [cantidad, setCantidad] = useState('1');
     const [condicion, setCondicion] = useState('');
-    const [evidencia, setEvidencia] = useState(null);
+    const [evidencias, setEvidencias] = useState([]);
     useEffect(() => { setSolicitudLocal(solicitud || {}); }, [pedidoId, solicitud]);
     const revision = solicitudLocal?.revision_disponibilidad?.estado;
     const aceptacionVigente = solicitudLocal?.revision_disponibilidad?.aceptacion_vigente !== false && solicitudLocal?.revision_disponibilidad?.vigente !== false && !solicitudLocal?.revision_disponibilidad?.sustituida_at;
@@ -85,20 +87,31 @@ export default function ContinuidadTienda({
     };
 
     const anexar = async () => {
-        if (!evidencia) {
+        if (evidencias.length === 0) {
             setAviso('Adjunte la evidencia del anexo.');
             return;
         }
         setOcupado(true);
         setAviso('');
-        const form = new FormData();
-        form.append('sku', sku);
-        form.append('descripcion', descripcion);
-        form.append('cantidad', cantidad);
-        form.append('condicion', condicion);
-        form.append('evidencia', evidencia);
+        const solicitudId = uuidSolicitud();
         try {
-            const respuesta = await axios.post(`/control-pedidos/${pedidoId}/anexo-tienda`, form, { headers: cabeceras() });
+            const respuesta = await enviarEnLotes({
+                url: `/control-pedidos/${pedidoId}/anexo-tienda`,
+                archivos: evidencias,
+                headers: cabeceras(),
+                post: (url, form, opciones) => axios.post(url, form, opciones),
+                armar: (lote) => {
+                    const form = new FormData();
+                    form.append('solicitud_id', solicitudId);
+                    form.append('sku', sku);
+                    form.append('descripcion', descripcion);
+                    form.append('cantidad', cantidad);
+                    form.append('condicion', condicion);
+                    lote.forEach((archivo) => form.append('evidencias[]', archivo));
+                    if (lote[0]) form.append('evidencia', lote[0]);
+                    return form;
+                },
+            });
             setAviso(
                 respuesta.data?.folio
                     ? `Anexo registrado en ${respuesta.data.folio}. Falta su cobertura y la integración física.`
@@ -168,8 +181,9 @@ export default function ContinuidadTienda({
                 </div>
                 <input
                     type="file"
+                    multiple
                     accept="application/pdf,image/jpeg,image/png,image/webp"
-                    onChange={(evento) => setEvidencia(evento.target.files?.[0] || null)}
+                    onChange={(evento) => setEvidencias(Array.from(evento.target.files || []))}
                 />
                 <button type="button" className={`${THEME_BTN_SECONDARY} min-h-[44px]`} disabled={ocupado} onClick={anexar}>
                     Solicitar anexo

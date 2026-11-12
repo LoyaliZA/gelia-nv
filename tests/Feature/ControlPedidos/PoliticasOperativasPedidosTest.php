@@ -14,6 +14,7 @@ use App\Models\User;
 use App\Services\ControlPedidos\BancosDepartamentoService;
 use App\Services\ControlPedidos\BancosGestionPedidosConfig;
 use App\Services\ControlPedidos\ListarPedidosCedisService;
+use App\Services\ControlPedidos\ListarTareasTiendaService;
 use App\Services\ControlPedidos\PrioridadAtencionPedidosConfig;
 use App\Services\SaldosAFavor\CoberturaPagoPedidoBmaService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -119,5 +120,64 @@ class PoliticasOperativasPedidosTest extends TestCase
         $query = PedidoBmaTareaPreparacion::query();
         $config->ordenar($query, true);
         $this->assertSame([$tienda->id, $md->id], $query->pluck('pedido_bma_id')->all());
+    }
+
+    public function test_la_consulta_que_pide_respuesta_sube_antes_de_paginar_sin_pasar_sobre_el_tipo(): void
+    {
+        $respondida = [
+            'estatus_envio' => PedidoBma::ESTATUS_ENVIO_PENDIENTE_PESAJE,
+            'pesaje_respondido_at' => now()->subDay(),
+            'consulta_cerrada_at' => now()->subDay(),
+            'consulta_actualizacion_pendiente' => false,
+            'created_at' => now()->subDays(3),
+            'solicitud_preparacion_json' => ['modalidad_entrega' => 'tienda', 'revision_disponibilidad' => ['estado' => 'sin_excepciones']],
+        ];
+        $antiguas = [];
+        for ($i = 0; $i < 16; $i++) {
+            $antiguas[] = $this->pedido('RESP-'.$i, $respondida)->id;
+        }
+        $actualizada = $this->pedido('ACTUALIZADA', [
+            'estatus_envio' => PedidoBma::ESTATUS_ENVIO_PENDIENTE_PESAJE,
+            'consulta_actualizacion_pendiente' => true,
+            'created_at' => now(),
+            'solicitud_preparacion_json' => [
+                'modalidad_entrega' => 'tienda',
+                'revision_disponibilidad' => ['estado' => 'sin_excepciones', 'actualizacion_pendiente' => true],
+                'anexo_sin_remision' => [['entrada' => 'documento']],
+            ],
+        ]);
+        $md = $this->pedido('MD-RESPONDIDO', [
+            'prioridad_md' => true,
+            'estatus_envio' => PedidoBma::ESTATUS_ENVIO_PENDIENTE_PESAJE,
+            'pesaje_respondido_at' => now(),
+            'consulta_cerrada_at' => now(),
+            'created_at' => now(),
+            'solicitud_preparacion_json' => ['modalidad_entrega' => 'tienda', 'revision_disponibilidad' => ['estado' => 'sin_excepciones']],
+        ]);
+
+        $pagina = app(ListarPedidosCedisService::class)->ejecutar(['tab' => 'PENDIENTES_PESAJE']);
+        $ids = $pagina->getCollection()->pluck('id')->all();
+        $this->assertSame($md->id, $ids[0]);
+        $this->assertSame($actualizada->id, $ids[1]);
+        $this->assertNotContains($antiguas[15], array_slice($ids, 0, 15));
+
+        $modalidad = CatalogoModalidadPreparacionPedido::firstOrCreate(['codigo' => 'RECOGE_TIENDA'], ['nombre' => 'Recoge', 'activo' => true]);
+        $almacen = Almacen::create(['codigo' => 'URG', 'nombre' => 'Almacén de urgencia', 'activo' => true]);
+        $crear = function (PedidoBma $pedido, $cuando) use ($modalidad, $almacen) {
+            PedidoBmaTareaPreparacion::create([
+                'pedido_bma_id' => $pedido->id, 'catalogo_modalidad_preparacion_id' => $modalidad->id,
+                'almacen_id' => $almacen->id, 'estado' => 'PENDIENTE', 'version' => 1,
+                'area_responsable_codigo' => 'TIENDA', 'solicitada_por_id' => $pedido->vendedor_id, 'solicitada_at' => $cuando,
+            ]);
+        };
+        foreach (array_slice($antiguas, 0, 16) as $indice => $id) {
+            $crear(PedidoBma::query()->findOrFail($id), now()->subDays(4)->addMinutes($indice));
+        }
+        $crear($actualizada, now());
+        $crear($md, now());
+        $tareas = app(ListarTareasTiendaService::class)->ejecutar(User::factory()->create(), ['tab' => 'TODOS']);
+        $ordenTareas = $tareas->getCollection()->pluck('pedido_bma_id')->all();
+        $this->assertSame($md->id, $ordenTareas[0]);
+        $this->assertSame($actualizada->id, $ordenTareas[1]);
     }
 }

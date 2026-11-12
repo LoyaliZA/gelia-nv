@@ -8,7 +8,7 @@ import ModalConfirmarAccion from './ModalConfirmarAccion';
 
 export default function GaleriaEvidenciasPedido({
     archivos = [], previews = [], onChange, onVer, label = 'Evidencias', etiquetaAdjuntar = null, obligatorio = false,
-    id, error, compacto = false, accionesCamara = false, capturaExterna = false, controlRef = null, soloImagenes = false, maxArchivos = Infinity, maxMb = 10, disabled = false,
+    id, error, compacto = false, accionesCamara = false, capturaExterna = false, controlRef = null, soloImagenes = false, maxArchivos = Infinity, maxMb = 10, maxBytesTotal = null, bytesUsados = 0, disabled = false,
 }) {
     const uid = useId();
     const controlId = id || `evidencias-${uid}`;
@@ -26,18 +26,28 @@ export default function GaleriaEvidenciasPedido({
         const candidatos = Array.from(lista || []);
         if (!candidatos.length) return;
         let aviso = '';
+        const base = Number(bytesUsados) + archivos.reduce((suma, archivo) => suma + Number(archivo?.size || 0), 0);
+        let acumulado = base;
         const validos = candidatos.filter((file) => {
             const tipo = ['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || /\.(jpe?g|png|webp)$/i.test(file.name) || (!soloImagenes && (file.type === 'application/pdf' || /\.pdf$/i.test(file.name)));
             if (!tipo) { aviso = `Usa archivos ${formatos}.`; return false; }
+            if (maxBytesTotal != null) {
+                if (acumulado + file.size > maxBytesTotal) {
+                    aviso = 'Los archivos de esta consulta superan 50 MB en total. Quite alguno antes de enviar. Lo ya guardado se conserva.';
+                    return false;
+                }
+                acumulado += file.size;
+                return true;
+            }
             if (file.size > maxMb * 1024 * 1024) { aviso = `“${file.name}” supera ${maxMb} MB. Adjunta un archivo más pequeño.`; return false; }
             return true;
         });
         const cupo = Math.max(0, maxArchivos - previews.length);
-        if (validos.length > cupo) aviso = `Puedes adjuntar hasta ${maxArchivos} fotos. Quita una para agregar otra.`;
-        const nuevos = validos.slice(0, cupo);
+        if (maxBytesTotal == null && validos.length > cupo) aviso = `Puedes adjuntar hasta ${maxArchivos} fotos. Quita una para agregar otra.`;
+        const nuevos = maxBytesTotal == null ? validos.slice(0, cupo) : validos;
         setErrorArchivo(aviso);
         if (!nuevos.length) return;
-        onChange([...archivos, ...nuevos], [...previews, ...nuevos.map((f) => ({ name: f.name, url: URL.createObjectURL(f), mime: f.type }))]);
+        onChange([...archivos, ...nuevos], [...previews, ...nuevos.map((f) => ({ name: f.name, url: URL.createObjectURL(f), mime: f.type, size: f.size }))]);
     };
     const quitar = (idx) => {
         const preview = previews[idx];
@@ -48,6 +58,8 @@ export default function GaleriaEvidenciasPedido({
     };
     const docs = previews.map((p, idx) => ({ url: p.url, nombre_original: nombreVisibleArchivoPedido(p.name, idx), mime_type: p.mime, tipo: 'evidencia_condicion' }));
     const mensaje = error || errorArchivo;
+    const consumo = Number(bytesUsados) + archivos.reduce((suma, archivo) => suma + Number(archivo?.size || 0), 0);
+    const textoTamano = (bytes) => `${(Number(bytes) / (1024 * 1024)).toFixed(1)} MB`;
     return (
         <div className="gelia-pedidos-adjuntos space-y-3" onPaste={(event) => {
             if (disabled) return;
@@ -81,7 +93,9 @@ export default function GaleriaEvidenciasPedido({
                 <input ref={adjuntosRef} type="file" accept={accept} multiple className="hidden" aria-label={`Adjuntar: ${label}`} disabled={disabled}
                     onChange={(event) => { agregar(event.target.files); event.target.value = ''; }} />
                 <p id={`${controlId}-ayuda`} className="text-xs theme-text-muted m-0 mt-2">
-                    {compacto ? `Arrastra o pega · ${soloImagenes ? 'Imágenes' : 'PDF / imágenes'} · ${maxMb} MB por archivo` : <>{esMovil ? 'Revisa la foto antes de registrar.' : 'Arrastra archivos aquí o pega capturas con Ctrl+V.'} {formatos}, hasta {maxMb} MB por archivo.</>}
+                    {maxBytesTotal != null
+                        ? `${textoTamano(consumo)} de 50 MB en esta consulta. ${soloImagenes ? 'Imágenes' : 'PDF o imágenes'}, sin límite de cantidad.`
+                        : compacto ? `Arrastra o pega · ${soloImagenes ? 'Imágenes' : 'PDF / imágenes'} · ${maxMb} MB por archivo` : <>{esMovil ? 'Revisa la foto antes de registrar.' : 'Arrastra archivos aquí o pega capturas con Ctrl+V.'} {formatos}, hasta {maxMb} MB por archivo.</>}
                 </p>
             </div>
             {mensaje && <p id={`${controlId}-error`} role="alert" className="text-sm theme-text-peligro m-0">{mensaje}</p>}
@@ -95,7 +109,7 @@ export default function GaleriaEvidenciasPedido({
                             {preview.vigente && <span className="gelia-pedidos-evidencia-remota">Evidencia vigente</span>}
                             {preview.remoto && !preview.vigente && <span className="gelia-pedidos-evidencia-remota">Desde celular</span>}
                         </button>
-                        <p className="gelia-pedidos-evidencia-nombre" title={nombreVisibleArchivoPedido(preview.name, idx)}>{nombreVisibleArchivoPedido(preview.name, idx)}</p>
+                        <p className="gelia-pedidos-evidencia-nombre" title={nombreVisibleArchivoPedido(preview.name, idx)}>{nombreVisibleArchivoPedido(preview.name, idx)}{preview.size ? <span className="block text-xs theme-text-muted">{textoTamano(preview.size)}</span> : null}</p>
                         <button type="button" disabled={disabled} onClick={() => setQuitarIdx(idx)} className="gelia-pedidos-evidencia-quitar" aria-label={`Quitar evidencia ${idx + 1}: ${nombreVisibleArchivoPedido(preview.name, idx)}`}>
                             <Trash2 className="w-3.5 h-3.5" aria-hidden="true" /> Quitar
                         </button>

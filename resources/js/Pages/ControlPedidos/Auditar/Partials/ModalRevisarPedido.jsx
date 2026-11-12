@@ -49,6 +49,7 @@ import DatosGeneralesAuditoria from './DatosGeneralesAuditoria';
 import TotalesEnviosAuditoria from './TotalesEnviosAuditoria';
 import BarraAccionesRevision from './BarraAccionesRevision';
 import { fechaInicialRemision, prepararAdjuntoRemision, remisionVigenteDe } from './remisionVigente';
+import useActualizacionesPedidos from '../../Partials/useActualizacionesPedidos';
 import { THEME_INPUT } from '../../../../utils/geliaTheme';
 import SelectorFecha from '../../../../Components/Calendario/SelectorFecha';
 
@@ -186,6 +187,28 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
     const cerrarRechazo = () => { if (!procesando) setRechazoPagos({ abierto: false, ids: [], motivo: '' }); };
     const dialog = usePedidoDialog({ abierto: abierto && Boolean(pedido), onClose: cerrar, bloqueado: procesando });
     const dialogRechazo = usePedidoDialog({ abierto: abierto && rechazoPagos.abierto, onClose: cerrarRechazo, bloqueado: procesando });
+    const capturaAuditoria = procesando
+        || numeroRemision !== (pedido?.numero_remision || '')
+        || fechaEmisionRemision !== fechaInicialRemision(pedido || {})
+        || rechazoPagos.abierto
+        || motivoAnexoAbierto
+        || errorDatosAbierto
+        || liberarCapturaAbierto
+        || Boolean(confirmacion);
+    useActualizacionesPedidos({
+        activo: Boolean(abierto && pedido?.id),
+        pedidoId: pedido?.id,
+        pausado: capturaAuditoria,
+        onActualizar: () => {
+            axios.get(route('control_pedidos.auditar.detalle', pedido.id)).then((respuesta) => {
+                const actualizado = respuesta.data?.pedido;
+                if (!actualizado || actualizado.id !== pedido.id) return;
+                setPedido(actualizado);
+                setNumeroRemision(actualizado.numero_remision || '');
+                setFechaEmisionRemision(fechaInicialRemision(actualizado));
+            }).catch(() => {});
+        },
+    });
 
     if (!abierto || !pedido) return null;
 

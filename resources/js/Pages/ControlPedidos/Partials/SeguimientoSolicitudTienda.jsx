@@ -15,6 +15,7 @@ import {
 } from '../../../utils/geliaTheme';
 import SelectorProducto from '../../../Components/Almacenes/SelectorProducto';
 import GaleriaEvidenciasPedido from './GaleriaEvidenciasPedido';
+import { CUPO_ADJUNTOS_CONSULTA, bytesConsulta, enviarEnLotes } from './lotesAdjuntosConsulta';
 import AvisoOperativoPedido from './AvisoOperativoPedido';
 import ModalVistaPreviaDocumento from './ModalVistaPreviaDocumento';
 import { formatearFechaNegocio } from './pedidosBmaStyles';
@@ -200,7 +201,7 @@ export function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso
     const [seleccionadas, setSeleccionadas] = useState([]);
     const [cantidad, setCantidad] = useState('1');
     const [nota, setNota] = useState('');
-    const [evidenciaAnexo, setEvidenciaAnexo] = useState(null);
+    const [evidenciasAnexo, setEvidenciasAnexo] = useState([]);
     const [marcadas, setMarcadas] = useState({});
     const [cantidades, setCantidades] = useState({});
     const [motivoOpcion, setMotivoOpcion] = useState('');
@@ -217,12 +218,7 @@ export function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso
     const [ocupado, setOcupado] = useState(false);
     const [error, setError] = useState('');
     const [previewAnexo, setPreviewAnexo] = useState([]);
-    useEffect(() => {
-        if (!evidenciaAnexo) { setPreviewAnexo([]); return; }
-        const url = URL.createObjectURL(evidenciaAnexo);
-        setPreviewAnexo([{ url, name: evidenciaAnexo.name, mime: evidenciaAnexo.type }]);
-        return () => URL.revokeObjectURL(url);
-    }, [evidenciaAnexo]);
+    const bytesGuardados = bytesConsulta(solicitud);
     const mostrarBusqueda = productos.length === 0 || manual;
     const campo = `${THEME_INPUT} w-full min-h-[44px] text-base`;
 
@@ -254,7 +250,7 @@ export function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso
 
     const solicitarAnexo = async () => {
         if (ocupado) return;
-        if (!evidenciaAnexo) {
+        if (evidenciasAnexo.length === 0) {
             setError(entrada === 'documento' ? 'Adjunte el PDF o la captura del anexo.' : 'Adjunte el soporte del anexo.');
             return;
         }
@@ -262,25 +258,38 @@ export function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso
             setError('Seleccione al menos un producto y su cantidad.');
             return;
         }
+        if (bytesGuardados + evidenciasAnexo.reduce((suma, archivo) => suma + Number(archivo.size || 0), 0) > CUPO_ADJUNTOS_CONSULTA) {
+            setError('Los archivos de esta consulta superan 50 MB en total. Quite alguno antes de enviar. Lo ya guardado se conserva.');
+            return;
+        }
         setOcupado(true);
         setError('');
-        const form = new FormData();
-        form.append('solicitud_id', claveAnexo.current);
-        form.append('entrada', entrada);
-        form.append('evidencia', evidenciaAnexo);
-        if (nota.trim()) form.append('condicion', nota.trim());
-        if (entrada === 'catalogo') {
-            seleccionadas.forEach((pieza, indice) => {
-                if (pieza.revision_id) form.append(`piezas[${indice}][revision_id]`, String(pieza.revision_id));
-                form.append(`piezas[${indice}][sku]`, pieza.sku);
-                form.append(`piezas[${indice}][descripcion]`, pieza.descripcion);
-                form.append(`piezas[${indice}][cantidad]`, String(pieza.cantidad));
-                if (pieza.producto_id) form.append(`piezas[${indice}][producto_id]`, String(pieza.producto_id));
-                form.append(`piezas[${indice}][condicion]`, nota.trim() || 'Pendiente de revisión');
-            });
-        }
         try {
-            const respuesta = await axios.post(`/control-pedidos/${pedidoId}/anexo-tienda`, form, { headers: cabeceras() });
+            const respuesta = await enviarEnLotes({
+                url: `/control-pedidos/${pedidoId}/anexo-tienda`,
+                archivos: evidenciasAnexo,
+                headers: cabeceras(),
+                post: (url, form, opciones) => axios.post(url, form, opciones),
+                armar: (lote) => {
+                    const form = new FormData();
+                    form.append('solicitud_id', claveAnexo.current);
+                    form.append('entrada', entrada);
+                    lote.forEach((archivo) => form.append('evidencias[]', archivo));
+                    if (lote[0]) form.append('evidencia', lote[0]);
+                    if (nota.trim()) form.append('condicion', nota.trim());
+                    if (entrada === 'catalogo') {
+                        seleccionadas.forEach((pieza, indice) => {
+                            if (pieza.revision_id) form.append(`piezas[${indice}][revision_id]`, String(pieza.revision_id));
+                            form.append(`piezas[${indice}][sku]`, pieza.sku);
+                            form.append(`piezas[${indice}][descripcion]`, pieza.descripcion);
+                            form.append(`piezas[${indice}][cantidad]`, String(pieza.cantidad));
+                            if (pieza.producto_id) form.append(`piezas[${indice}][producto_id]`, String(pieza.producto_id));
+                            form.append(`piezas[${indice}][condicion]`, nota.trim() || 'Pendiente de revisión');
+                        });
+                    }
+                    return form;
+                },
+            });
             const lineas = respuesta.data?.expediente?.anexo?.sin_remision;
             if (respuesta.data?.solicitud_preparacion) onSolicitud(respuesta.data.solicitud_preparacion);
             else if (Array.isArray(lineas)) onSolicitud({ ...solicitud, anexo_sin_remision: lineas });
@@ -289,7 +298,8 @@ export function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso
             setProducto(null);
             setCantidad('1');
             setNota('');
-            setEvidenciaAnexo(null);
+            setEvidenciasAnexo([]);
+            setPreviewAnexo([]);
             onAviso(
                 respuesta.data?.folio && respuesta.data?.pedido_id && respuesta.data.pedido_id !== pedidoId
                     ? `Anexo registrado en ${respuesta.data.folio}. Falta su cobertura y la integración física.`
@@ -356,26 +366,40 @@ export function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso
             setError('Elija las piezas y el motivo del retiro.');
             return;
         }
+        const seleccionRetiro = [...documentosRetiro, ...evidenciasRetiro];
+        if (bytesGuardados + seleccionRetiro.reduce((suma, archivo) => suma + Number(archivo.size || 0), 0) > CUPO_ADJUNTOS_CONSULTA) {
+            setError('Los archivos de esta consulta superan 50 MB en total. Quite alguno antes de enviar. Lo ya guardado se conserva.');
+            return;
+        }
         setOcupado(true);
         setError('');
-        const form = new FormData();
-        form.append('solicitud_id', claveRetiro.current);
-        form.append('entrada', entradaRetiro);
-        form.append('motivo', motivo);
-        form.append('motivo_opcion', motivoOpcion);
-        if (entradaRetiro === 'catalogo') {
-            elegidas.forEach((pieza, indice) => {
-                if (pieza.revision_id) form.append(`piezas[${indice}][revision_id]`, String(pieza.revision_id));
-                form.append(`piezas[${indice}][sku]`, pieza.sku);
-                form.append(`piezas[${indice}][descripcion]`, pieza.descripcion);
-                form.append(`piezas[${indice}][cantidad]`, String(pieza.cantidad));
-            });
-        }
-        documentosRetiro.forEach((archivo) => form.append('documentos[]', archivo));
-        evidenciasRetiro.forEach((archivo) => form.append('evidencias[]', archivo));
+        const cola = [
+            ...documentosRetiro.map((archivo) => ({ archivo, campo: 'documentos[]', size: archivo.size })),
+            ...evidenciasRetiro.map((archivo) => ({ archivo, campo: 'evidencias[]', size: archivo.size })),
+        ];
         try {
-            const respuesta = await axios.post(`/control-pedidos/${pedidoId}/retiro-piezas-tienda`, form, {
+            const respuesta = await enviarEnLotes({
+                url: `/control-pedidos/${pedidoId}/retiro-piezas-tienda`,
+                archivos: cola.length ? cola : [{ size: 0, archivo: null, campo: '' }],
                 headers: cabeceras(),
+                post: (url, form, opciones) => axios.post(url, form, opciones),
+                armar: (lote) => {
+                    const form = new FormData();
+                    form.append('solicitud_id', claveRetiro.current);
+                    form.append('entrada', entradaRetiro);
+                    form.append('motivo', motivo);
+                    form.append('motivo_opcion', motivoOpcion);
+                    if (entradaRetiro === 'catalogo') {
+                        elegidas.forEach((pieza, indice) => {
+                            if (pieza.revision_id) form.append(`piezas[${indice}][revision_id]`, String(pieza.revision_id));
+                            form.append(`piezas[${indice}][sku]`, pieza.sku);
+                            form.append(`piezas[${indice}][descripcion]`, pieza.descripcion);
+                            form.append(`piezas[${indice}][cantidad]`, String(pieza.cantidad));
+                        });
+                    }
+                    lote.forEach((item) => { if (item?.archivo && item.campo) form.append(item.campo, item.archivo); });
+                    return form;
+                },
             });
             if (respuesta.data?.solicitud_preparacion) onSolicitud(respuesta.data.solicitud_preparacion);
             claveRetiro.current = uuidSolicitud();
@@ -463,9 +487,9 @@ export function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso
                         <input id="ajuste-nota" className={campo} value={nota} onChange={(evento) => setNota(evento.target.value)} />
                     </div>
                     <GaleriaEvidenciasPedido compacto etiquetaAdjuntar="Adjuntar archivos" id="ajuste-evidencia" label={entrada === 'documento' ? 'Piezas a agregar' : 'Soporte del agregado'}
-                        obligatorio maxArchivos={1} archivos={evidenciaAnexo ? [evidenciaAnexo] : []}
+                        obligatorio maxBytesTotal={CUPO_ADJUNTOS_CONSULTA} bytesUsados={bytesGuardados} archivos={evidenciasAnexo}
                         previews={previewAnexo} disabled={ocupado}
-                        onChange={archivos => setEvidenciaAnexo(archivos[0] || null)} onVer={onVer} />
+                        onChange={(archivos, vistas) => { setEvidenciasAnexo(archivos); setPreviewAnexo(vistas); }} onVer={onVer} />
                     <button type="button" className={`${THEME_BTN_PRIMARY} min-h-[44px] justify-self-start`} disabled={ocupado} onClick={solicitarAnexo}>
                         <Send size={16} aria-hidden />{ocupado ? 'Enviando…' : 'Solicitar agregado'}
                     </button>
@@ -482,6 +506,8 @@ export function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso
                             id="retiro-piezas-documento"
                             label="Piezas a retirar"
                             obligatorio
+                            maxBytesTotal={CUPO_ADJUNTOS_CONSULTA}
+                            bytesUsados={bytesGuardados + evidenciasRetiro.reduce((suma, archivo) => suma + Number(archivo.size || 0), 0)}
                             archivos={documentosRetiro}
                             previews={previewsDocumentos}
                             onChange={(archivos, previews) => {
@@ -584,6 +610,8 @@ export function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso
                     <GaleriaEvidenciasPedido compacto etiquetaAdjuntar="Adjuntar archivos"
                         id="retiro-evidencia"
                         label="Evidencia petición cliente"
+                        maxBytesTotal={CUPO_ADJUNTOS_CONSULTA}
+                        bytesUsados={bytesGuardados + documentosRetiro.reduce((suma, archivo) => suma + Number(archivo.size || 0), 0)}
                         archivos={evidenciasRetiro}
                         previews={previewsRetiro}
                         onChange={(archivos, previews) => {

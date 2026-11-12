@@ -73,11 +73,86 @@ final class PrioridadAtencionPedidosConfig
         $base = PedidoBma::query();
         $direccion = $orden === 'recientes' ? 'desc' : 'asc';
         $query->reorder();
+        $urgencia = '('.$this->expresionUrgencia($tareas).') asc';
         if ($tareas) {
             $base->selectRaw($sql, $bindings)->whereColumn('pedidos_bma.id', 'pedido_bma_tareas_preparacion.pedido_bma_id');
-            $query->orderBy($base)->orderBy('solicitada_at', $direccion)->orderBy('pedido_bma_tareas_preparacion.id', $direccion);
+            $query->orderBy($base)->orderByRaw($urgencia)->orderBy('solicitada_at', $direccion)->orderBy('pedido_bma_tareas_preparacion.id', $direccion);
         } else {
-            $query->orderByRaw($sql, $bindings)->orderByRaw('COALESCE(pesaje_solicitado_at, pedidos_bma.created_at) '.$direccion)->orderBy('pedidos_bma.id', $direccion);
+            $query->orderByRaw($sql, $bindings)->orderByRaw($urgencia)->orderByRaw('COALESCE(pesaje_solicitado_at, pedidos_bma.created_at) '.$direccion)->orderBy('pedidos_bma.id', $direccion);
         }
+    }
+
+    /**
+     * Después del tipo configurable: actualización que pide otra respuesta, consulta nueva sin respuesta, el resto.
+     * El tipo sigue primero para no pisar la jerarquía (mismo día, municipal, tienda, resguardo, nacional).
+     */
+    private function expresionUrgencia(bool $tareas): string
+    {
+        $json = $this->columnaPedido($tareas, 'solicitud_preparacion_json');
+        $cerrada = $this->columnaPedido($tareas, 'consulta_cerrada_at');
+        $pesaje = $this->columnaPedido($tareas, 'pesaje_respondido_at');
+        $estatus = $this->columnaPedido($tareas, 'estatus_envio');
+        $flag = $this->columnaPedido($tareas, 'consulta_actualizacion_pendiente');
+        $driver = PedidoBma::query()->getConnection()->getDriverName();
+        $pendiente = $driver === 'mysql'
+            ? "CAST(JSON_UNQUOTE(JSON_EXTRACT({$json}, '$.revision_disponibilidad.actualizacion_pendiente')) AS CHAR)"
+            : "CAST(json_extract({$json}, '$.revision_disponibilidad.actualizacion_pendiente') AS TEXT)";
+        $estado = $driver === 'mysql'
+            ? "JSON_UNQUOTE(JSON_EXTRACT({$json}, '$.revision_disponibilidad.estado'))"
+            : "json_extract({$json}, '$.revision_disponibilidad.estado')";
+        $anexo = $this->existeAjusteSinCerrar($driver, $json, '$.anexo_sin_remision', 'respondida');
+        $retiro = $this->existeRetiroPendiente($driver, $json);
+
+        return "CASE
+            WHEN COALESCE({$flag}, 0) = 1 OR {$pendiente} IN ('1', 'true') OR {$anexo} OR {$retiro} THEN 0
+            WHEN {$cerrada} IS NULL AND {$pesaje} IS NULL AND {$estatus} = 'pendiente_pesaje'
+                AND ({$estado} IS NULL OR {$estado} NOT IN ('sin_excepciones', 'excepciones_pendientes', 'decision_registrada'))
+                THEN 1
+            ELSE 2 END";
+    }
+
+    private function columnaPedido(bool $tareas, string $columna): string
+    {
+        if (! $tareas) {
+            return 'pedidos_bma.'.$columna;
+        }
+
+        return '(select p.'.$columna.' from pedidos_bma p where p.id = pedido_bma_tareas_preparacion.pedido_bma_id)';
+    }
+
+    private function existeAjusteSinCerrar(string $driver, string $json, string $ruta, string $columna): string
+    {
+        if ($driver === 'mysql') {
+            return "EXISTS (SELECT 1 FROM JSON_TABLE(
+                CASE WHEN JSON_TYPE(JSON_EXTRACT({$json}, '{$ruta}')) = 'ARRAY'
+                    THEN JSON_EXTRACT({$json}, '{$ruta}') ELSE JSON_ARRAY() END,
+                '$[*]' COLUMNS ({$columna} VARCHAR(80) PATH '$.respondida_at')
+            ) AS adj WHERE adj.{$columna} IS NULL OR adj.{$columna} = '' OR adj.{$columna} = 'null')";
+        }
+
+        return "EXISTS (SELECT 1 FROM json_each(
+            CASE WHEN json_valid({$json}) AND json_type({$json}, '{$ruta}') = 'array'
+                THEN json_extract({$json}, '{$ruta}') ELSE json_array() END
+        ) AS adj WHERE json_type(adj.value) = 'object' AND (
+            json_extract(adj.value, '$.respondida_at') IS NULL
+            OR json_extract(adj.value, '$.respondida_at') = 'null'
+            OR json_extract(adj.value, '$.respondida_at') = ''
+        ))";
+    }
+
+    private function existeRetiroPendiente(string $driver, string $json): string
+    {
+        if ($driver === 'mysql') {
+            return "EXISTS (SELECT 1 FROM JSON_TABLE(
+                CASE WHEN JSON_TYPE(JSON_EXTRACT({$json}, '$.retiro_piezas')) = 'ARRAY'
+                    THEN JSON_EXTRACT({$json}, '$.retiro_piezas') ELSE JSON_ARRAY() END,
+                '$[*]' COLUMNS (estado VARCHAR(40) PATH '$.estado')
+            ) AS adj WHERE adj.estado IS NULL OR adj.estado = '' OR adj.estado = 'pendiente')";
+        }
+
+        return "EXISTS (SELECT 1 FROM json_each(
+            CASE WHEN json_valid({$json}) AND json_type({$json}, '$.retiro_piezas') = 'array'
+                THEN json_extract({$json}, '$.retiro_piezas') ELSE json_array() END
+        ) AS adj WHERE json_type(adj.value) = 'object' AND COALESCE(json_extract(adj.value, '$.estado'), 'pendiente') = 'pendiente')";
     }
 }

@@ -5,7 +5,7 @@ export function cambiosDisponibilidad(solicitud = {}, documentos = []) {
     const doc = id => documentos.find(d => Number(d.id) === Number(id));
     const anexos = (solicitud.anexo_sin_remision || []).map((a, indice) => ({
         ...a, clave: `anexo-${indice}`, tipo: 'anexo', indice,
-        documentos: [doc(a.documento_id)].filter(Boolean),
+        documentos: [...new Set([a.documento_id, ...(a.documentos || []).map((documento) => documento.id)].filter(Boolean))].map((id) => doc(id) || (a.documentos || []).find((documento) => Number(documento.id) === Number(id))).filter(Boolean),
         esDocumento: a.entrada === 'documento' || !a.sku,
         pendiente: !a.respondida_at,
         retirada: decisiones.find(d => d.accion === 'sustituir' && Number(d.revision_id) === Number(a.sustituye_revision_id)),
