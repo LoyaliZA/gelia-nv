@@ -276,7 +276,10 @@ class PedidoBmaController extends Controller
             'piezas.*.descripcion' => ['required', 'string', 'max:180'],
             'piezas.*.cantidad' => ['required', 'integer', 'min:1'],
             'piezas.*.producto_id' => ['nullable', 'integer'],
-            'evidencia' => ['required', 'file', 'max:10240', 'mimes:pdf,jpg,jpeg,png,webp'],
+            'lote' => ['nullable', 'string', 'max:40'],
+            'evidencia' => ['required_without:evidencias', 'nullable', 'file', 'mimes:pdf,jpg,jpeg,png,webp'],
+            'evidencias' => ['required_without:evidencia', 'nullable', 'array', 'min:1'],
+            'evidencias.*' => ['file', 'mimes:pdf,jpg,jpeg,png,webp'],
         ]);
         $entrada = $datos['entrada'] ?? 'catalogo';
         $piezas = $datos['piezas'] ?? [];
@@ -297,8 +300,10 @@ class PedidoBmaController extends Controller
             $datos['condicion'] ?? null,
             $request->file('evidencia'),
             $piezas,
-            $entrada
-        ));
+            $entrada,
+            array_values($request->file('evidencias') ?? []),
+            $datos['solicitud_id'] ?? null,
+        ), $datos['lote'] ?? null);
 
         return response()->json([
             'ok' => true,
@@ -330,10 +335,11 @@ class PedidoBmaController extends Controller
             'piezas.*.sku' => ['required_without:piezas.*.revision_id', 'nullable', 'string', 'max:80'],
             'piezas.*.descripcion' => ['required', 'string', 'max:180'],
             'piezas.*.cantidad' => ['required', 'integer', 'min:1'],
-            'documentos' => ['required_if:entrada,documento', 'nullable', 'array', 'min:1'],
-            'documentos.*' => ['file', 'max:10240', 'mimes:pdf,jpg,jpeg,png,webp'],
+            'lote' => ['nullable', 'string', 'max:40'],
+            'documentos' => ['nullable', 'array'],
+            'documentos.*' => ['file', 'mimes:pdf,jpg,jpeg,png,webp'],
             'evidencias' => ['nullable', 'array'],
-            'evidencias.*' => ['file', 'max:10240', 'mimes:pdf,jpg,jpeg,png,webp'],
+            'evidencias.*' => ['file', 'mimes:pdf,jpg,jpeg,png,webp'],
         ]);
         $entrada = $datos['entrada'] ?? 'catalogo';
         $pedido = app(\App\Services\ControlPedidos\EjecutarSolicitudAjusteTienda::class)->ejecutar($pedidoBma, $datos['solicitud_id'] ?? null, fn () => $servicio->ejecutar(
@@ -345,7 +351,8 @@ class PedidoBmaController extends Controller
             $entrada,
             array_values($request->file('documentos') ?? []),
             $datos['motivo_opcion'] ?? null,
-        ));
+            $datos['solicitud_id'] ?? null,
+        ), $datos['lote'] ?? null);
 
         return response()->json([
             'ok' => true,

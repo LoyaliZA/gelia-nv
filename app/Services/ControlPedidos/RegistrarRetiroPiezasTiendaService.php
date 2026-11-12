@@ -12,6 +12,7 @@ use App\Support\ControlPedidos\RegistrarPedidos\DestinoRevisionRegistrarPedidos;
 use App\Support\ControlPedidos\VisibilidadPedidoBma;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
 /** Documenta el retiro pedido por el cliente y avisa a quien revisó. No aparta, no cobra y no confirma la entrega. */
@@ -20,6 +21,7 @@ final class RegistrarRetiroPiezasTiendaService
     public function __construct(
         private RegistrarHistorialPedidoService $historial,
         private NotificarPedidoBmaService $notificar,
+        private AdjuntosConsultaTienda $adjuntos,
     ) {}
 
     /**
@@ -36,6 +38,7 @@ final class RegistrarRetiroPiezasTiendaService
         string $entrada = 'catalogo',
         array $documentos = [],
         ?string $motivoOpcion = null,
+        ?string $solicitudId = null,
     ): PedidoBma {
         if (! VisibilidadPedidoBma::puedeMutarComoVendedora($usuario, $pedido)) {
             throw ValidationException::withMessages([
@@ -48,15 +51,11 @@ final class RegistrarRetiroPiezasTiendaService
         $lineas = $entrada === 'documento' ? [] : $this->lineas($piezas);
         $archivosPiezas = $this->archivos($documentos);
         $archivosPeticion = $this->archivos($evidencias);
-        if ($motivo === '' || ($entrada === 'catalogo' && $lineas === []) || ($entrada === 'documento' && $archivosPiezas === [])) {
-            throw ValidationException::withMessages([
-                'retiro' => $entrada === 'documento'
-                    ? 'Adjunte el PDF o las capturas de las piezas a retirar e indique el motivo.'
-                    : 'Indique las piezas y el motivo del retiro.',
-            ]);
+        if ($motivo === '') {
+            throw ValidationException::withMessages(['retiro' => 'Indique el motivo del retiro.']);
         }
 
-        return DB::transaction(function () use ($pedido, $usuario, $lineas, $motivo, $entrada, $archivosPiezas, $archivosPeticion, $motivoOpcion) {
+        return DB::transaction(function () use ($pedido, $usuario, $lineas, $motivo, $entrada, $archivosPiezas, $archivosPeticion, $motivoOpcion, $solicitudId) {
             $pedido = PedidoBma::query()->lockForUpdate()->findOrFail($pedido->id);
             if ($pedido->pedidoPagadoORemisionado()) {
                 throw ValidationException::withMessages([
@@ -71,6 +70,23 @@ final class RegistrarRetiroPiezasTiendaService
             }
 
             $previos = is_array($json['retiro_piezas'] ?? null) ? $json['retiro_piezas'] : [];
+            if ($solicitudId) {
+                foreach ($previos as $indice => $retiro) {
+                    if (is_array($retiro) && ($retiro['solicitud_id'] ?? null) === $solicitudId) {
+                        return $this->agregarArchivos($pedido, $indice, $archivosPiezas, $archivosPeticion);
+                    }
+                }
+            }
+            if (($entrada === 'catalogo' && $lineas === []) || ($entrada === 'documento' && $archivosPiezas === [])) {
+                throw ValidationException::withMessages([
+                    'retiro' => $entrada === 'documento'
+                        ? 'Adjunte el PDF o las capturas de las piezas a retirar e indique el motivo.'
+                        : 'Indique las piezas y el motivo del retiro.',
+                ]);
+            }
+            $cerrada = $pedido->consulta_cerrada_at !== null;
+            $ciclo = $this->adjuntos->ciclo($pedido, $cerrada);
+            $this->adjuntos->asegurar($this->adjuntos->bytesUsados($pedido, $ciclo), [...$archivosPiezas, ...$archivosPeticion]);
             $version = count($previos) + 1;
             $orden = (int) $pedido->documentos()->max('orden');
             $docsPiezas = $this->guardarArchivos($pedido, $archivosPiezas, $orden, PedidoBmaDocumento::RELACION_RETIRO_PIEZAS, 'Piezas a retirar', $version);
@@ -95,8 +111,15 @@ final class RegistrarRetiroPiezasTiendaService
                 'faltantes_retirados' => $retiradas,
                 'documentos_piezas' => $docsPiezas,
                 'documentos_peticion' => $docsPeticion,
+                'ciclo_id' => $ciclo,
+                'huellas' => array_values(array_filter(array_merge(array_column($docsPiezas, 'huella'), array_column($docsPeticion, 'huella')))),
+                'tamano_bytes' => array_sum(array_column($docsPiezas, 'tamano_bytes')) + array_sum(array_column($docsPeticion, 'tamano_bytes')),
+                ...($solicitudId ? ['solicitud_id' => $solicitudId] : []),
             ];
             $json['retiro_piezas'] = array_values($previos);
+            if (is_array($json['revision_disponibilidad'] ?? null)) {
+                $json['revision_disponibilidad']['ciclo_id'] = $ciclo;
+            }
             if (is_array($json['revision_disponibilidad'] ?? null)) {
                 $pedido->solicitud_preparacion_json = $json;
                 $json['revision_disponibilidad']['aceptacion_vigente'] = $retiradas !== [] && ! $pedido->tieneAjusteTiendaPendiente();
@@ -247,33 +270,74 @@ final class RegistrarRetiroPiezasTiendaService
     }
 
     /**
-     * @param  list<UploadedFile>  $archivos
-     * @return list<array{id: int, nombre: string, mime_type: ?string, grupo: string}>
+     * @param  list<UploadedFile>  $piezas
+     * @param  list<UploadedFile>  $peticion
      */
+    private function agregarArchivos(PedidoBma $pedido, int $indice, array $piezas, array $peticion): PedidoBma
+    {
+        $json = is_array($pedido->solicitud_preparacion_json) ? $pedido->solicitud_preparacion_json : [];
+        $retiro = $json['retiro_piezas'][$indice] ?? [];
+        $conocidas = array_values(array_filter((array) ($retiro['huellas'] ?? []), 'is_string'));
+        $nuevasPiezas = $this->adjuntos->sinRepetir($conocidas, $piezas);
+        foreach ($nuevasPiezas as $archivo) {
+            $conocidas[] = $this->adjuntos->huella($archivo);
+        }
+        $nuevasPeticion = $this->adjuntos->sinRepetir($conocidas, $peticion);
+        if ($nuevasPiezas === [] && $nuevasPeticion === []) {
+            return $pedido->fresh(['documentos', 'estatus']);
+        }
+        $ciclo = is_string($retiro['ciclo_id'] ?? null) && $retiro['ciclo_id'] !== ''
+            ? $retiro['ciclo_id']
+            : $this->adjuntos->ciclo($pedido, false);
+        $this->adjuntos->asegurar($this->adjuntos->bytesUsados($pedido, $ciclo), [...$nuevasPiezas, ...$nuevasPeticion]);
+        $version = (int) ($retiro['version'] ?? ($indice + 1));
+        $orden = (int) $pedido->documentos()->max('orden');
+        $docsPiezas = $this->guardarArchivos($pedido, $nuevasPiezas, $orden, PedidoBmaDocumento::RELACION_RETIRO_PIEZAS, 'Piezas a retirar', $version);
+        $docsPeticion = $this->guardarArchivos($pedido, $nuevasPeticion, $orden + count($docsPiezas), PedidoBmaDocumento::RELACION_RETIRO_PETICION, 'Evidencia petición Cliente', $version);
+        $retiro['documentos_piezas'] = array_values(array_merge((array) ($retiro['documentos_piezas'] ?? []), $docsPiezas));
+        $retiro['documentos_peticion'] = array_values(array_merge((array) ($retiro['documentos_peticion'] ?? []), $docsPeticion));
+        $retiro['huellas'] = array_values(array_unique(array_merge($conocidas, array_column($docsPeticion, 'huella'))));
+        $retiro['tamano_bytes'] = (int) ($retiro['tamano_bytes'] ?? 0) + array_sum(array_column($docsPiezas, 'tamano_bytes')) + array_sum(array_column($docsPeticion, 'tamano_bytes'));
+        $retiro['ciclo_id'] = $ciclo;
+        $json['retiro_piezas'][$indice] = $retiro;
+        $pedido->update(['solicitud_preparacion_json' => $json]);
+
+        return $pedido->fresh(['documentos', 'estatus']);
+    }
+
     private function guardarArchivos(PedidoBma $pedido, array $archivos, int $orden, string $relacion, string $comentario, int $version): array
     {
         $guardados = [];
-        foreach ($archivos as $archivo) {
-            $orden++;
-            $ruta = $archivo->store('pedidos_bma/'.$pedido->id.'/retiro', 'public');
-            $documento = $pedido->documentos()->create([
-                'tipo' => PedidoBmaDocumento::TIPO_EVIDENCIA_CONDICION,
-                'ruta_archivo' => $ruta,
-                'nombre_original' => $archivo->getClientOriginalName(),
-                'mime_type' => $archivo->getMimeType(),
-                'tamano_bytes' => $archivo->getSize(),
-                'orden' => $orden,
-                'comentario' => $comentario,
-                'relacion_tipo' => $relacion,
-                'relacion_id' => $version,
-                'activo' => true,
-            ]);
-            $guardados[] = [
-                'id' => $documento->id,
-                'nombre' => $documento->nombre_original,
-                'mime_type' => $documento->mime_type,
-                'grupo' => $relacion,
-            ];
+        $rutas = [];
+        try {
+            foreach ($archivos as $archivo) {
+                $orden++;
+                $ruta = $archivo->store('pedidos_bma/'.$pedido->id.'/retiro', 'public');
+                $rutas[] = $ruta;
+                $documento = $pedido->documentos()->create([
+                    'tipo' => PedidoBmaDocumento::TIPO_EVIDENCIA_CONDICION,
+                    'ruta_archivo' => $ruta,
+                    'nombre_original' => $archivo->getClientOriginalName(),
+                    'mime_type' => $archivo->getMimeType(),
+                    'tamano_bytes' => $archivo->getSize(),
+                    'orden' => $orden,
+                    'comentario' => $comentario,
+                    'relacion_tipo' => $relacion,
+                    'relacion_id' => $version,
+                    'activo' => true,
+                ]);
+                $guardados[] = [
+                    'id' => $documento->id,
+                    'nombre' => $documento->nombre_original,
+                    'mime_type' => $documento->mime_type,
+                    'tamano_bytes' => (int) $documento->tamano_bytes,
+                    'huella' => $this->adjuntos->huella($archivo),
+                    'grupo' => $relacion,
+                ];
+            }
+        } catch (\Throwable $e) {
+            Storage::disk('public')->delete($rutas);
+            throw $e;
         }
 
         return $guardados;

@@ -1622,6 +1622,102 @@ class SolicitudRegistrarTiendaTest extends TestCase
         $this->assertCount(1, $pedido->fresh()->solicitud_preparacion_json['anexo_sin_remision']);
     }
 
+    public function test_anexo_y_retiro_admiten_varios_archivos_hasta_50_mb_por_consulta(): void
+    {
+        config(['control_pedidos.ajuste_tienda_adjuntos_max_bytes' => 4096]);
+        $pedido = $this->consultaConExcepcion();
+        $ajeno = User::factory()->create();
+        $this->actingAs($ajeno)->post('/control-pedidos/'.$pedido->id.'/anexo-tienda', [
+            'entrada' => 'documento',
+            'evidencia' => UploadedFile::fake()->create('ajeno.pdf', 1, 'application/pdf'),
+        ], ['Accept' => 'application/json'])->assertForbidden();
+
+        $clave = (string) Str::uuid();
+        $url = '/control-pedidos/'.$pedido->id.'/anexo-tienda';
+        $archivo = fn (string $nombre, int $bytes, string $relleno) => UploadedFile::fake()->createWithContent($nombre, str_repeat($relleno, $bytes));
+        $this->actingAs($this->usuario)->post($url, [
+            'entrada' => 'documento', 'solicitud_id' => $clave, 'lote' => '0',
+            'evidencias' => [$archivo('uno.pdf', 1024, 'a'), $archivo('dos.pdf', 1024, 'b')],
+        ], ['Accept' => 'application/json'])->assertOk();
+        $this->actingAs($this->usuario)->post($url, [
+            'entrada' => 'documento', 'solicitud_id' => $clave, 'lote' => '1',
+            'evidencias' => [$archivo('tres.pdf', 1024, 'c')],
+        ], ['Accept' => 'application/json'])->assertOk();
+        $this->actingAs($this->usuario)->post($url, [
+            'entrada' => 'documento', 'solicitud_id' => $clave, 'lote' => '1',
+            'evidencias' => [$archivo('tres-reintento.pdf', 1024, 'd')],
+        ], ['Accept' => 'application/json'])->assertOk();
+
+        $fresco = $pedido->fresh();
+        $linea = $fresco->solicitud_preparacion_json['anexo_sin_remision'][0];
+        $this->assertCount(1, $fresco->solicitud_preparacion_json['anexo_sin_remision']);
+        $this->assertCount(3, $linea['documentos']);
+        $this->assertSame(3, $fresco->documentos()->where('tipo', PedidoBmaDocumento::TIPO_ANEXO_PIEZAS)->count());
+        $this->assertSame($linea['ciclo_id'], $fresco->solicitud_preparacion_json['revision_disponibilidad']['ciclo_id']);
+
+        $this->actingAs($this->usuario)->post($url, [
+            'entrada' => 'documento', 'solicitud_id' => (string) Str::uuid(),
+            'evidencia' => UploadedFile::fake()->createWithContent('exceso.pdf', str_repeat('e', 2048)),
+        ], ['Accept' => 'application/json'])->assertStatus(422)->assertJsonPath('errors.archivos.0', 'Los archivos de esta consulta superan 50 MB en total. Quite alguno antes de enviar. Lo ya guardado se conserva.');
+        $this->assertSame(3, $pedido->fresh()->documentos()->where('tipo', PedidoBmaDocumento::TIPO_ANEXO_PIEZAS)->count());
+
+        $otro = $this->pedido([
+            'solicitud_preparacion_json' => [
+                'version' => 1, 'modalidad_entrega' => 'tienda', 'area_revision' => 'preparacion_tienda',
+                'revision_disponibilidad' => ['estado' => 'sin_excepciones', 'ciclo_id' => 'ciclo-anterior'],
+                'anexo_sin_remision' => [['entrada' => 'documento', 'ciclo_id' => 'ciclo-anterior', 'respondida_at' => now()->toIso8601String(), 'documento_id' => 1, 'tamano_bytes' => 900000]],
+            ],
+            'consulta_cerrada_at' => now(),
+        ]);
+        $this->documento($otro);
+        $this->actingAs($this->usuario)->post('/control-pedidos/'.$otro->id.'/anexo-tienda', [
+            'entrada' => 'documento',
+            'evidencia' => UploadedFile::fake()->create('nueva-consulta.pdf', 1, 'application/pdf'),
+        ], ['Accept' => 'application/json'])->assertOk();
+        $this->assertNotSame('ciclo-anterior', $otro->fresh()->solicitud_preparacion_json['revision_disponibilidad']['ciclo_id']);
+
+        $this->permitirRevision();
+        $tarea = $this->solicitarTienda();
+        $visible = $tarea->pedido;
+        $this->actingAs($this->usuario)->post('/control-pedidos/'.$visible->id.'/anexo-tienda', [
+            'entrada' => 'documento',
+            'evidencias' => [
+                UploadedFile::fake()->createWithContent('pieza-a.pdf', 'pieza-a'),
+                UploadedFile::fake()->createWithContent('pieza-b.pdf', 'pieza-b-distinta'),
+            ],
+        ], ['Accept' => 'application/json'])->assertOk();
+        $this->actingAs($this->usuario)->getJson('/control-pedidos/tienda/tareas/'.$tarea->id)
+            ->assertOk()
+            ->assertJsonCount(2, 'tarea.pedido.anexos_pendientes.0.documentos');
+
+        $retiro = $this->pedido([
+            'solicitud_preparacion_json' => [
+                'version' => 1, 'modalidad_entrega' => 'tienda', 'area_revision' => 'preparacion_tienda',
+                'revision_disponibilidad' => ['estado' => 'sin_excepciones', 'confirmada' => true],
+            ],
+        ]);
+        $claveRetiro = (string) Str::uuid();
+        $retiroUrl = '/control-pedidos/'.$retiro->id.'/retiro-piezas-tienda';
+        $this->actingAs($this->usuario)->post($retiroUrl, [
+            'entrada' => 'documento', 'solicitud_id' => $claveRetiro, 'lote' => '0',
+            'motivo' => 'El cliente ya no lo quiere', 'motivo_opcion' => 'El cliente ya no lo quiere',
+            'documentos' => [UploadedFile::fake()->image('retiro-1.jpg', 12, 12)],
+        ], ['Accept' => 'application/json'])->assertOk();
+        $this->actingAs($this->usuario)->post($retiroUrl, [
+            'entrada' => 'documento', 'solicitud_id' => $claveRetiro, 'lote' => '1',
+            'motivo' => 'El cliente ya no lo quiere', 'motivo_opcion' => 'El cliente ya no lo quiere',
+            'documentos' => [UploadedFile::fake()->image('retiro-2.jpg', 24, 18)],
+        ], ['Accept' => 'application/json'])->assertOk();
+        $this->actingAs($this->usuario)->post($retiroUrl, [
+            'entrada' => 'documento', 'solicitud_id' => $claveRetiro, 'lote' => '1',
+            'motivo' => 'El cliente ya no lo quiere',
+            'documentos' => [UploadedFile::fake()->image('retiro-2-reintento.jpg')],
+        ], ['Accept' => 'application/json'])->assertOk();
+        $guardado = $retiro->fresh()->solicitud_preparacion_json['retiro_piezas'];
+        $this->assertCount(1, $guardado);
+        $this->assertCount(2, $guardado[0]['documentos_piezas']);
+    }
+
     private function reservarSafT01(PedidoBma $pedido): SafCredito
     {
         $cuenta = SafCuenta::create(['cliente_id' => $pedido->cliente_id, 'moneda' => 'MXN']);

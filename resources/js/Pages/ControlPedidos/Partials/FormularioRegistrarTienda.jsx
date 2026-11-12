@@ -770,7 +770,7 @@ export default function FormularioRegistrarTienda({
     const refrescarRef = useRef(null);
     useActualizacionesPedidos({
         activo: abierto && Boolean(pedidoId), pedidoId,
-        pausado: guardando || enviando || ['pendiente', 'guardando'].includes(estadoGuardado),
+        pausado: guardando || enviando || ['pendiente', 'guardando', 'error', 'conflicto'].includes(estadoGuardado),
         onActualizar: () => refrescarRef.current?.(),
         onPendiente: () => setAviso('El pedido cambió. Se conserva su captura mientras termina de guardar.'),
     });

@@ -7,6 +7,7 @@ import ModalMovimientosTienda from './ModalMovimientosTienda';
 import GaleriaEvidenciasPedido from './GaleriaEvidenciasPedido';
 import ModalVistaPreviaDocumento from './ModalVistaPreviaDocumento';
 import { formatearFechaNegocio } from './pedidosBmaStyles';
+import useActualizacionesPedidos from './useActualizacionesPedidos';
 
 export function esTransferenciaT02(pedido) {
     const solicitud = pedido?.solicitud_preparacion || pedido?.solicitud_preparacion_json || {};
@@ -56,6 +57,8 @@ export default function SeguimientoTransferenciaTienda({ pedido, sucursales = []
         catch (fallo) { setError(mensajeError(fallo)); }
     }, [activo, pedido?.id]);
     useEffect(() => { cargar(); }, [cargar, pedido?.pago_validado_at, pedido?.numero_remision, pedido?.catalogo_estatus_pedido_id]);
+    const capturaLocal = archivos.length > 0 || Boolean(observaciones || ubicacion || receptor || acuerdo) || ocupado;
+    useActualizacionesPedidos({ activo: activo && Boolean(pedido?.id), pedidoId: pedido?.id, pausado: capturaLocal, onActualizar: () => cargar() });
     useEffect(() => { onDirtyChange?.(archivos.length > 0 || Boolean(observaciones || ubicacion || receptor || acuerdo)); }, [archivos, observaciones, ubicacion, receptor, acuerdo, onDirtyChange]);
     useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
     if (!activo) return null;

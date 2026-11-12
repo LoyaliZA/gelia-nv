@@ -12,6 +12,7 @@ use App\Models\PuntoVenta\ResguardoPdvEntrega;
 use App\Models\PuntoVenta\ResguardoPdvEvento;
 use App\Models\User;
 use App\Services\PuntoVenta\Resguardos\RegistrarEntregaResguardoPdvService;
+use App\Services\SaldosAFavor\CoberturaPagoPedidoBmaService;
 use App\Support\ControlPedidos\AlmacenPdv;
 use App\Support\ControlPedidos\AtencionMismoDiaTienda;
 use App\Support\ControlPedidos\EstatusSucursalPedidoBma;
@@ -120,7 +121,7 @@ final class TransferenciaTiendaService
             'nota_md' => app(ConfiguracionOperativaTienda::class)->notaMd(),
             'limite_recoleccion' => $limite?->toIso8601String(),
             'pendiente_gestion' => $estado !== 'entregada' && $limite && now()->gte($limite),
-            'bloqueo' => $pedido->tieneSinExistenciaAbierta() ? 'Hay piezas sin existencias pendientes. Reabra la consulta para retirarlas o sustituirlas.' : $pedido->motivoBloqueoEntregaTienda(),
+            'bloqueo' => $this->accionPendiente($pedido),
             'puede_preparar' => $listo && (! $md || $md['puede_preparar_md']) && $pedido->puedeMarcarEmpacado() && $estado === 'pendiente_preparacion' && $this->puedeOrigen($pedido, $actor)
                 && (($json['area_revision'] ?? '') !== 'control_pedidos' || $actor->can('control_pedidos.cedis.empacar')),
             'bloqueo_destino' => ! $custodiaDestino ? 'La sucursal destino necesita un almacén PDV activo de custodia antes de confirmar la salida.' : null,
@@ -132,6 +133,37 @@ final class TransferenciaTiendaService
                 && $actor->idsSucursalesOperables()->contains((int) $pedido->sucursal_destino_id),
             'almacenes_destino' => Almacen::query()->where('activo', true)->where('sucursal_id', $pedido->sucursal_destino_id)->get(['id', 'nombre']),
         ];
+    }
+
+    /** La vista nombra la etapa pendiente. No cambia el pago ni fuerza el estado. */
+    private function accionPendiente(PedidoBma $pedido): ?string
+    {
+        try {
+            $partes = [];
+            if ($pedido->tieneSinExistenciaAbierta()) {
+                $partes[] = 'Hay piezas sin existencias pendientes. Reabra la consulta para retirarlas o sustituirlas.';
+            } elseif ($entrega = $pedido->motivoBloqueoEntregaTienda()) {
+                $partes[] = $entrega;
+            }
+            if (CustodiaDocumentalTienda::aplica($pedido) && ! $pedido->consultaCerrada() && $partes === []) {
+                $partes[] = $pedido->motivoBloqueoCierreConsultaTienda()
+                    ?: 'Cierre la consulta vigente antes de continuar.';
+            }
+            if (! CustodiaDocumentalTienda::credito($pedido) && $pedido->pagosExhibicion()->activosParaCobertura()->exists()) {
+                $calculo = app(CoberturaPagoPedidoBmaService::class)->calcular($pedido);
+                $faltante = collect($calculo['bloqueos'] ?? [])->first(
+                    fn ($mensaje) => is_string($mensaje) && str_contains($mensaje, 'Faltan')
+                );
+                if (is_string($faltante) && $faltante !== '') {
+                    $partes[] = $faltante;
+                }
+            }
+            $partes = array_values(array_unique($partes));
+
+            return $partes === [] ? null : implode(' ', $partes);
+        } catch (\Throwable) {
+            return 'No se pudo comprobar la etapa pendiente. Recargue el seguimiento antes de continuar.';
+        }
     }
 
     public function ejecutar(PedidoBma $pedido, User $actor, string $accion, array $datos): array
