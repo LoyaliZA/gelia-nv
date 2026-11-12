@@ -31,16 +31,11 @@ class ProcesarFilaClienteAction
         if ($importaCodigoLista && $codigo !== '' && ! $listaCsv) {
             $this->error('codigo_lista', 'Código de lista desconocido.');
         }
+        // Un código vacío no es una baja ni cambia la lista. El cero tampoco inactiva.
+        // Una baja legítima requiere una señal explícita del ERP, que este archivo no trae.
         $estado = null;
-        if ($importaCodigoLista) {
-            if ($codigo !== '') {
-                $estado = false;
-            } elseif ($monto !== null) {
-                if (bccomp($monto, '0', 2) > 0) {
-                    $this->error('codigo_lista', 'Código vacío con monto positivo: información contradictoria.');
-                }
-                $estado = true;
-            }
+        if ($importaCodigoLista && $codigo !== '') {
+            $estado = false;
         }
         if ($nuevo && trim($data['nombre'] ?? '') === '') {
             $this->error('nombre', 'El nombre es obligatorio para un cliente nuevo.');
@@ -148,7 +143,7 @@ class ProcesarFilaClienteAction
         return null;
     }
 
-    private function error(string $campo, string $mensaje): never
+private function error(string $campo, string $mensaje): never
     {
         throw ValidationException::withMessages([$campo => $mensaje]);
     }

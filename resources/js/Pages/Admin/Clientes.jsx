@@ -447,7 +447,7 @@ export default function Clientes({ auth, clientes, vendedores = [], tipos_client
                                         El sistema detecta automáticamente los campos. Puedes enviar un archivo solo con las columnas necesarias. <br /><br />
                                         <strong style={{ color: 'var(--color-primario)' }}>numero_cliente</strong> (Requerido)<br />
                                         <strong style={{ color: 'var(--color-primario)' }}>nombre</strong><br />
-                                        <strong style={{ color: 'var(--color-primario)' }}>codigo_lista</strong> (Ej: PG, 1, 2, 3, 4, 7; celda vacía = inactivo; sin columna = solo actualiza monto)<br />
+                                        <strong style={{ color: 'var(--color-primario)' }}>codigo_lista</strong> (Ej: PG, 1, 2, 3, 4, 7; celda vacía = no cambia lista ni estado; sin columna = solo actualiza monto)<br />
                                         <strong style={{ color: 'var(--color-primario)' }}>monto_venta_actual</strong><br />
                                         <strong style={{ color: 'var(--color-primario)' }}>vendedor_id</strong> (TAG de la Vendedora)<br />
                                         <strong style={{ color: 'var(--color-primario)' }}>es_heredado</strong> (SI o NO)<br />
