@@ -17,6 +17,7 @@ class ProcesarFilaClienteAction
         array $data, $listas, array $mapaVendedoras, Collection $clientesPorNumero,
         array &$historialBatch, bool $importaCodigoLista, int &$marcadosInactivos,
         array &$alertasLimiteExcedido, ?int $importacionClienteId = null, ?int $usuarioId = null,
+        bool $persistir = true,
     ): ?array {
         $numero = trim($data['numero_cliente'] ?? '');
         if (! preg_match('/^[0-9]{1,255}$/D', $numero)) {
@@ -118,7 +119,7 @@ class ProcesarFilaClienteAction
                 'importacion_cliente_id' => $importacionClienteId, 'created_at' => now(), 'updated_at' => now(),
             ];
         }
-        if ($cliente->isDirty()) {
+        if ($persistir && $cliente->isDirty()) {
             $cliente->save();
         }
         $clientesPorNumero->put($numero, $cliente);

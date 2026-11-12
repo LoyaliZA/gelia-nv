@@ -14,6 +14,7 @@ use App\Services\Mobile\MobileSyncPublicationService;
 use App\Services\Mobile\MobileSyncSuppression;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
@@ -22,7 +23,21 @@ use Illuminate\Validation\ValidationException;
 
 class ImportarClientesWizerpService
 {
+    private int $bloqueosImportacion = 0;
+
+    private mixed $bloqueoCache = null;
+
     public function __construct(protected ProcesarFilaClienteAction $procesador) {}
+
+    public function duranteBloqueo(callable $accion): mixed
+    {
+        $this->adquirirBloqueo();
+        try {
+            return $accion();
+        } finally {
+            $this->liberarBloqueo();
+        }
+    }
 
     public function ejecutar(UploadedFile $archivo, ?ImportacionCliente $importacion = null): array
     {
@@ -32,19 +47,8 @@ class ImportarClientesWizerpService
         $reporteAscensos = [];
         $errores = [];
         $alertas = [];
-        $mysql = DB::connection()->getDriverName() === 'mysql';
-        $lock = null;
-        $adquirido = false;
         try {
-            if ($mysql) {
-                $adquirido = (int) DB::selectOne("SELECT GET_LOCK('gelia.importacion.clientes.wizerp', 0) AS adquirido")->adquirido === 1;
-            } else {
-                $lock = Cache::lock('gelia.importacion.clientes.wizerp', 0);
-                $adquirido = $lock->get();
-            }
-            if (! $adquirido) {
-                throw ValidationException::withMessages(['archivo' => 'Ya existe una importación de clientes en curso.']);
-            }
+            $this->adquirirBloqueo();
             $path = $importacion
                 ? Storage::disk('local')->path($importacion->ruta_almacenamiento)
                 : $archivo->getRealPath();
@@ -52,6 +56,12 @@ class ImportarClientesWizerpService
             $validado = app(ValidarArchivoClientesWizerp::class)->leer($path);
             $stats['leidas'] = count($validado['filas']);
             $importaCodigoLista = in_array('codigo_lista', $validado['headers'], true);
+            $revisionImportacion = ($importacion && is_array($importacion->resumen)) ? ($importacion->resumen['revision'] ?? null) : null;
+            $catalogoAprobado = is_array($revisionImportacion) ? ($revisionImportacion['catalogo'] ?? null) : null;
+            if (is_string($catalogoAprobado) && ! hash_equals($catalogoAprobado, $this->huellaCatalogoRevision())) {
+                throw ValidationException::withMessages(['archivo' => 'El catálogo cambió después de la revisión. Hay que revisar el archivo de nuevo.']);
+            }
+            $estadoAprobado = is_array($revisionImportacion) ? ($revisionImportacion['estado_clientes'] ?? null) : null;
             $this->sincronizarListasWizerp();
             $mapa = $this->cargarMapaVendedoras();
             $listas = CatalogoListaDescuento::orderByDesc('monto_requerido')->get();
@@ -64,8 +74,11 @@ class ImportarClientesWizerpService
                     continue;
                 }
                 try {
-                    $resultado = DB::transaction(function () use ($fila, $listas, $mapa, $importaCodigoLista, $importacion, $stats) {
+                    $resultado = DB::transaction(function () use ($fila, $listas, $mapa, $importaCodigoLista, $importacion, $stats, $estadoAprobado) {
                         $cliente = Cliente::with('facturaCobranzaActiva')->where('numero_cliente', $fila['data']['numero_cliente'])->lockForUpdate()->first();
+                        if (is_array($estadoAprobado) && array_key_exists($fila['data']['numero_cliente'], $estadoAprobado)) {
+                            $this->exigirEstadoAprobado($cliente, $estadoAprobado[$fila['data']['numero_cliente']]);
+                        }
                         $antes = $cliente ? clone $cliente : null;
                         $coleccion = collect($cliente ? [$cliente->numero_cliente => $cliente] : []);
                         $historial = [];
@@ -146,14 +159,7 @@ class ImportarClientesWizerpService
             }
             throw $e;
         } finally {
-            if ($adquirido) {
-                Cache::forget('import_clientes_en_curso');
-                if ($mysql) {
-                    DB::selectOne("SELECT RELEASE_LOCK('gelia.importacion.clientes.wizerp')");
-                } else {
-                    $lock->release();
-                }
-            }
+            $this->liberarBloqueo();
         }
         if ($alertas !== []) {
             Notification::send(User::permission('cobranza.recibir_alertas')->get(), new AlertaLimiteCreditoSuperadoMasivoNotification($alertas));
@@ -204,21 +210,122 @@ class ImportarClientesWizerpService
 
     public function sincronizarListasWizerp(): void
     {
-        $listasOficiales = [
-            ['nombre' => 'MAYOREO DIAMANTE', 'monto_requerido' => 80001.00],
-            ['nombre' => 'MAYOREO ORO',      'monto_requerido' => 30001.00],
-            ['nombre' => 'MAYOREO PLATA',    'monto_requerido' => 5001.00],
-            ['nombre' => 'MAYOREO BRONCE',   'monto_requerido' => 0.01],
-            ['nombre' => 'PUBLICO GENERAL',  'monto_requerido' => 0.00],
-            ['nombre' => 'PLATAFORMAS',      'monto_requerido' => 999999.00],
-            ['nombre' => 'COLABORADORES',    'monto_requerido' => 999999.00],
-        ];
-
-        foreach ($listasOficiales as $lista) {
+        foreach ($this->definicionesListasOficiales() as $lista) {
             CatalogoListaDescuento::firstOrCreate(
                 ['nombre' => $lista['nombre']],
                 ['monto_requerido' => $lista['monto_requerido'], 'activo' => 1]
             );
+        }
+    }
+
+    public function listasParaRevision(): Collection
+    {
+        $existentes = CatalogoListaDescuento::query()->orderBy('nombre')->get();
+        $nombres = $existentes->pluck('nombre')->all();
+        $temporales = [];
+        $id = -1;
+        foreach ($this->definicionesListasOficiales() as $definicion) {
+            if (in_array($definicion['nombre'], $nombres, true)) {
+                continue;
+            }
+            $modelo = new CatalogoListaDescuento([
+                'nombre' => $definicion['nombre'],
+                'monto_requerido' => $definicion['monto_requerido'],
+                'activo' => 1,
+            ]);
+            $modelo->id = $id--;
+            $modelo->exists = false;
+            $temporales[] = $modelo;
+        }
+
+        return $existentes->concat($temporales)->sortByDesc(fn ($lista) => (float) $lista->monto_requerido)->values();
+    }
+
+    public function huellaCatalogoRevision(): string
+    {
+        $lineas = $this->listasParaRevision()
+            ->map(fn ($lista) => $lista->nombre.'|'.bcadd((string) $lista->monto_requerido, '0', 2))
+            ->sort()
+            ->values()
+            ->all();
+
+        return hash('sha256', implode("\n", $lineas));
+    }
+
+    /**
+     * @return list<array{nombre: string, monto_requerido: float}>
+     */
+    private function definicionesListasOficiales(): array
+    {
+        return [
+            ['nombre' => 'MAYOREO DIAMANTE', 'monto_requerido' => 80001.00],
+            ['nombre' => 'MAYOREO ORO', 'monto_requerido' => 30001.00],
+            ['nombre' => 'MAYOREO PLATA', 'monto_requerido' => 5001.00],
+            ['nombre' => 'MAYOREO BRONCE', 'monto_requerido' => 0.01],
+            ['nombre' => 'PUBLICO GENERAL', 'monto_requerido' => 0.00],
+            ['nombre' => 'PLATAFORMAS', 'monto_requerido' => 999999.00],
+            ['nombre' => 'COLABORADORES', 'monto_requerido' => 999999.00],
+        ];
+    }
+
+    private function adquirirBloqueo(): void
+    {
+        if ($this->bloqueosImportacion > 0) {
+            $this->bloqueosImportacion++;
+
+            return;
+        }
+        if (DB::connection()->getDriverName() === 'mysql') {
+            $adquirido = (int) DB::selectOne("SELECT GET_LOCK('gelia.importacion.clientes.wizerp', 0) AS adquirido")->adquirido === 1;
+        } else {
+            $this->bloqueoCache = Cache::lock('gelia.importacion.clientes.wizerp', 0);
+            $adquirido = $this->bloqueoCache->get();
+        }
+        if (! $adquirido) {
+            throw ValidationException::withMessages(['archivo' => 'Ya existe una importación de clientes en curso.']);
+        }
+        $this->bloqueosImportacion = 1;
+    }
+
+    private function liberarBloqueo(): void
+    {
+        if ($this->bloqueosImportacion === 0) {
+            return;
+        }
+        $this->bloqueosImportacion--;
+        if ($this->bloqueosImportacion > 0) {
+            return;
+        }
+        Cache::forget('import_clientes_en_curso');
+        if (DB::connection()->getDriverName() === 'mysql') {
+            DB::selectOne("SELECT RELEASE_LOCK('gelia.importacion.clientes.wizerp')");
+        } elseif ($this->bloqueoCache) {
+            $this->bloqueoCache->release();
+            $this->bloqueoCache = null;
+        }
+    }
+
+    private function exigirEstadoAprobado(?Cliente $cliente, mixed $esperado): void
+    {
+        if ($esperado === null) {
+            if ($cliente) {
+                throw ValidationException::withMessages(['numero_cliente' => 'El cliente ya existe y la revisión lo trataba como nuevo.']);
+            }
+
+            return;
+        }
+        if (! is_array($esperado) || ! $cliente) {
+            throw ValidationException::withMessages(['numero_cliente' => 'El cliente de la revisión ya no está en el estado aprobado.']);
+        }
+        $attrs = $cliente->getAttributes();
+        $actual = [
+            'lista' => (string) ($attrs['lista_actual_id'] ?? ''),
+            'monto' => bcadd((string) ($attrs['monto_venta_actual'] ?? '0'), '0', 2),
+            'inactivo' => (int) ($attrs['es_inactivo'] ?? 0),
+            'updated_at' => (string) ($attrs['updated_at'] ?? ''),
+        ];
+        if ($actual != $esperado) {
+            throw ValidationException::withMessages(['numero_cliente' => 'El cliente cambió después de la revisión.']);
         }
     }
 }

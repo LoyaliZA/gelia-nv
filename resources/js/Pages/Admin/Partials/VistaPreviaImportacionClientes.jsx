@@ -4,6 +4,7 @@ const TEXTOS = {
     lista_bloqueada: 'El archivo reemplazaría una lista protegida.',
     archivo_repetido: 'Este archivo ya fue importado.',
     archivo_anterior: 'Hay montos más recientes que la fecha del archivo.',
+    archivo_invalido: 'El archivo completo no se puede confirmar. Hay que corregirlo y revisarlo de nuevo.',
     descenso_lista: 'Hay descensos de lista. Quedan a la vista en esta revisión.',
     diferencia_monto: 'Hay diferencias de monto de 1000 o más. No se corrigen solas.',
 };

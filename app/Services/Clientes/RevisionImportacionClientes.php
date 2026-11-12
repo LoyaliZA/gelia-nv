@@ -25,11 +25,91 @@ class RevisionImportacionClientes
     public function previsualizar(ImportacionCliente $importacion): array
     {
         $path = Storage::disk('local')->path($importacion->ruta_almacenamiento);
+        $sha = is_file($path) ? (hash_file('sha256', $path) ?: '') : '';
+        try {
+            $this->validador->leer($path);
+        } catch (ValidationException $e) {
+            if (isset($e->errors()['archivo'])) {
+                return $this->vistaBloqueada($importacion, $sha, (string) collect($e->errors())->flatten()->first());
+            }
+            throw $e;
+        }
+
+        $analisis = $this->analizar($importacion);
+        $revision = [
+            'archivo_sha256' => $sha,
+            'huella_clientes' => $analisis['huella'],
+            'numeros' => $analisis['numeros'],
+            'token' => Str::random(40),
+            'bloqueado' => $analisis['bloqueado'],
+            'aplicada' => false,
+            'proyeccion' => $analisis['hash'],
+            'catalogo' => $this->importador->huellaCatalogoRevision(),
+            'estado_clientes' => $analisis['estado_clientes'],
+        ];
+        $importacion->estado = 'previsualizada';
+        $importacion->resumen = ['revision' => $revision];
+        $importacion->save();
+
+        return [
+            'importacion_id' => $importacion->id,
+            'token' => $revision['token'],
+            'bloqueado' => $revision['bloqueado'],
+            'bloqueos' => $analisis['bloqueos'],
+            'avisos' => $analisis['avisos'],
+            'conteos' => $analisis['conteos'],
+            'muestras' => $analisis['muestras'],
+        ];
+    }
+
+    public function confirmar(ImportacionCliente $importacion, string $token): array
+    {
+        return $this->importador->duranteBloqueo(function () use ($importacion, $token) {
+            $importacion->refresh();
+            $revision = $importacion->resumen['revision'] ?? null;
+            if (! is_array($revision) || ! hash_equals((string) ($revision['token'] ?? ''), $token)) {
+                throw ValidationException::withMessages(['archivo' => 'La confirmación no corresponde a la revisión de este archivo.']);
+            }
+            if (! empty($revision['aplicada']) && is_array($revision['resultado'] ?? null)) {
+                return $revision['resultado'];
+            }
+            if (! empty($revision['bloqueado'])) {
+                throw ValidationException::withMessages(['archivo' => 'La revisión detuvo la escritura. Hay que corregir el archivo y revisarlo de nuevo.']);
+            }
+
+            $path = Storage::disk('local')->path($importacion->ruta_almacenamiento);
+            $analisis = $this->analizar($importacion);
+            if (! is_file($path)
+                || ! hash_equals((string) $revision['archivo_sha256'], hash_file('sha256', $path) ?: '')
+                || ! hash_equals((string) ($revision['proyeccion'] ?? ''), $analisis['hash'])
+                || ! hash_equals((string) ($revision['catalogo'] ?? ''), $this->importador->huellaCatalogoRevision())
+                || ! hash_equals((string) ($revision['huella_clientes'] ?? ''), $this->huella($revision['numeros'] ?? []))
+                || $analisis['bloqueado']) {
+                throw ValidationException::withMessages(['archivo' => 'La revisión ya no coincide con los cambios aprobados. Hay que revisar el archivo de nuevo.']);
+            }
+
+            $archivo = new UploadedFile($path, $importacion->nombre_archivo_original, 'text/csv', null, true);
+            $resultado = $this->importador->ejecutar($archivo, $importacion->fresh());
+            $importacion->refresh();
+            $resumen = $importacion->resumen ?? [];
+            $resumen['revision']['aplicada'] = true;
+            $resumen['revision']['resultado'] = $resultado;
+            $importacion->resumen = $resumen;
+            $importacion->save();
+
+            return $resultado;
+        });
+    }
+
+    /**
+     * @return array{conteos: array<string, int>, bloqueos: list<array{codigo: string, filas: int}>, avisos: list<array{codigo: string, filas: int}>, muestras: list<array{numero_cliente: string, nombre: string, motivo: string}>, hash: string, huella: string, numeros: list<string>, estado_clientes: array<string, ?array{lista: string, monto: string, inactivo: int, updated_at: string}>, bloqueado: bool}
+     */
+    private function analizar(ImportacionCliente $importacion): array
+    {
+        $path = Storage::disk('local')->path($importacion->ruta_almacenamiento);
         $validado = $this->validador->leer($path);
-        $sha = hash_file('sha256', $path);
-        $this->importador->sincronizarListasWizerp();
         $mapa = $this->importador->cargarMapaVendedoras();
-        $listas = CatalogoListaDescuento::orderByDesc('monto_requerido')->get();
+        $listas = $this->importador->listasParaRevision();
         $importaCodigo = in_array('codigo_lista', $validado['headers'], true);
         $importaFecha = in_array('fecha_corte', $validado['headers'], true) || in_array('fecha_exportacion', $validado['headers'], true);
 
@@ -42,7 +122,8 @@ class RevisionImportacionClientes
         $avisos = [];
         $muestras = [];
         $numeros = [];
-        $ids = [];
+        $lineas = [];
+        $estadoClientes = [];
 
         $clientes = Cliente::query()
             ->whereIn('numero_cliente', array_values(array_filter(array_map(
@@ -57,18 +138,23 @@ class RevisionImportacionClientes
             ->groupBy('cliente_id')
             ->pluck('corte', 'cliente_id');
 
+        $sha = is_file($path) ? (hash_file('sha256', $path) ?: '') : '';
         foreach ($validado['filas'] as $fila) {
             $numero = $fila['data']['numero_cliente'] ?? '';
             if ($numero !== '') {
                 $numeros[] = $numero;
             }
+            $antesModelo = $clientes->get($numero);
+            $antes = $antesModelo?->getAttributes();
+            if ($numero !== '' && ! array_key_exists($numero, $estadoClientes)) {
+                $estadoClientes[$numero] = $this->estadoCliente($antes);
+            }
             if ($fila['duplicada']) {
                 $conteos['sin_cambios']++;
+                $lineas[] = $fila['numero_fila'].'|'.$numero.'|sin_cambios|||';
 
                 continue;
             }
-            $antesModelo = $clientes->get($numero);
-            $antes = $antesModelo?->getAttributes();
             $historial = [];
             $inactivos = 0;
             $alertas = [];
@@ -77,13 +163,20 @@ class RevisionImportacionClientes
             try {
                 $cambio = $this->procesador->ejecutar(
                     $fila['data'], $listas, $mapa, $coleccion, $historial, $importaCodigo, $inactivos, $alertas,
+                    null, null, false,
                 );
                 $despues = $coleccion->get($numero);
                 $evaluacion = $this->evaluarFila($fila, $antes, $despues, $cambio, $importaCodigo, $importaFecha, $cortes);
+                $lineas[] = $this->lineaProyeccion($fila, $despues, $cambio, $listas, $evaluacion['categoria']);
             } catch (ValidationException $e) {
                 $conteos['errores']++;
+                $mensaje = (string) collect($e->errors())->flatten()->first();
+                $lineas[] = $fila['numero_fila'].'|'.$numero.'|error|'.$mensaje;
+                if ($this->errorInvalidaArchivo($e)) {
+                    $bloqueos['archivo_invalido'] = ($bloqueos['archivo_invalido'] ?? 0) + 1;
+                }
                 $nombreError = $fila['data']['nombre'] ?? (is_array($antes) ? ($antes['nombre'] ?? '') : '');
-                $this->muestra($muestras, $conteos, $numero, (string) $nombreError, 'Fila con error: '.collect($e->errors())->flatten()->first());
+                $this->muestra($muestras, $conteos, $numero, (string) $nombreError, 'Fila con error: '.$mensaje);
 
                 continue;
             } finally {
@@ -102,22 +195,45 @@ class RevisionImportacionClientes
             if ($evaluacion['motivo'] !== null) {
                 $this->muestra($muestras, $conteos, $numero, $despues?->nombre ?? ($antes['nombre'] ?? ''), $evaluacion['motivo']);
             }
-            if ($antesModelo) {
-                $ids[] = $antesModelo->id;
-            }
         }
 
         if ($this->archivoRepetido($importacion, $sha)) {
             $bloqueos['archivo_repetido'] = 1;
         }
+        $codigos = array_keys($bloqueos);
+        sort($codigos);
+        $lineas[] = 'bloqueos:'.implode(',', $codigos);
+        $numeros = array_values(array_unique($numeros));
 
+        return [
+            'conteos' => $conteos,
+            'bloqueos' => $this->listar($bloqueos),
+            'avisos' => $this->listar($avisos),
+            'muestras' => $muestras,
+            'hash' => hash('sha256', implode("\n", $lineas)),
+            'huella' => $this->huella($numeros),
+            'numeros' => $numeros,
+            'estado_clientes' => $estadoClientes,
+            'bloqueado' => $bloqueos !== [],
+        ];
+    }
+
+    private function vistaBloqueada(ImportacionCliente $importacion, string $sha, string $motivo): array
+    {
+        $conteos = array_fill_keys([
+            'filas', 'nuevos', 'actualizaciones', 'sin_cambios', 'errores', 'cambios_lista', 'descensos',
+            'activaciones', 'inactivaciones', 'cambios_monto', 'afectados',
+        ], 0);
         $revision = [
             'archivo_sha256' => $sha,
-            'huella_clientes' => $this->huella($numeros),
-            'numeros' => array_values(array_unique($numeros)),
+            'huella_clientes' => hash('sha256', ''),
+            'numeros' => [],
             'token' => Str::random(40),
-            'bloqueado' => $bloqueos !== [],
+            'bloqueado' => true,
             'aplicada' => false,
+            'proyeccion' => hash('sha256', 'archivo_invalido|'.$motivo),
+            'catalogo' => hash('sha256', ''),
+            'estado_clientes' => [],
         ];
         $importacion->estado = 'previsualizada';
         $importacion->resumen = ['revision' => $revision];
@@ -126,51 +242,65 @@ class RevisionImportacionClientes
         return [
             'importacion_id' => $importacion->id,
             'token' => $revision['token'],
-            'bloqueado' => $revision['bloqueado'],
-            'bloqueos' => $this->listar($bloqueos),
-            'avisos' => $this->listar($avisos),
+            'bloqueado' => true,
+            'bloqueos' => [['codigo' => 'archivo_invalido', 'filas' => 1]],
+            'avisos' => [],
             'conteos' => $conteos,
-            'muestras' => $muestras,
+            'muestras' => [['numero_cliente' => '', 'nombre' => '', 'motivo' => $motivo]],
         ];
     }
 
-    public function confirmar(ImportacionCliente $importacion, string $token): array
+    private function errorInvalidaArchivo(ValidationException $e): bool
     {
-        $revision = $importacion->resumen['revision'] ?? null;
-        if (! is_array($revision) || ! hash_equals((string) ($revision['token'] ?? ''), $token)) {
-            throw ValidationException::withMessages(['archivo' => 'La confirmación no corresponde a la revisión de este archivo.']);
+        if (isset($e->errors()['archivo'])) {
+            return true;
         }
-        if (! empty($revision['aplicada']) && is_array($revision['resultado'] ?? null)) {
-            return $revision['resultado'];
-        }
-        if (! empty($revision['bloqueado'])) {
-            throw ValidationException::withMessages(['archivo' => 'La revisión detuvo la escritura. Hay que corregir el archivo y revisarlo de nuevo.']);
+        foreach (collect($e->errors())->flatten() as $mensaje) {
+            if (str_contains((string) $mensaje, 'Falta la lista técnica PUBLICO GENERAL')) {
+                return true;
+            }
         }
 
-        $path = Storage::disk('local')->path($importacion->ruta_almacenamiento);
-        if (! is_file($path) || ! hash_equals((string) $revision['archivo_sha256'], hash_file('sha256', $path))) {
-            throw ValidationException::withMessages(['archivo' => 'El archivo cambió después de la revisión. Hay que revisarlo de nuevo.']);
-        }
-        if (! hash_equals((string) $revision['huella_clientes'], $this->huella($revision['numeros'] ?? []))) {
-            throw ValidationException::withMessages(['archivo' => 'El estado de los clientes cambió. Hay que revisar el archivo de nuevo.']);
+        return false;
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $antes
+     * @return ?array{lista: string, monto: string, inactivo: int, updated_at: string}
+     */
+    private function estadoCliente(?array $antes): ?array
+    {
+        if ($antes === null) {
+            return null;
         }
 
-        $archivo = new UploadedFile($path, $importacion->nombre_archivo_original, 'text/csv', null, true);
-        $resultado = $this->importador->ejecutar($archivo, $importacion->fresh());
-        $importacion->refresh();
-        $resumen = $importacion->resumen ?? [];
-        $resumen['revision']['aplicada'] = true;
-        $resumen['revision']['resultado'] = $resultado;
-        $importacion->resumen = $resumen;
-        $importacion->save();
+        return [
+            'lista' => (string) ($antes['lista_actual_id'] ?? ''),
+            'monto' => bcadd((string) ($antes['monto_venta_actual'] ?? '0'), '0', 2),
+            'inactivo' => (int) ($antes['es_inactivo'] ?? 0),
+            'updated_at' => (string) ($antes['updated_at'] ?? ''),
+        ];
+    }
 
-        return $resultado;
+    private function lineaProyeccion(array $fila, ?Cliente $despues, ?array $cambio, $listas, string $categoria): string
+    {
+        $lista = $listas->first(fn ($item) => (string) $item->id === (string) $despues?->lista_actual_id);
+
+        return implode('|', [
+            $fila['numero_fila'],
+            $fila['data']['numero_cliente'] ?? '',
+            $categoria,
+            (string) ($lista?->nombre ?? ''),
+            $despues ? bcadd((string) $despues->monto_venta_actual, '0', 2) : '',
+            $despues ? (int) $despues->es_inactivo : '',
+            $cambio['tipo_cambio'] ?? '',
+        ]);
     }
 
     /**
      * @param  array<string, mixed>|null  $antes
      * @param  array<string, int>  $cortes
-     * @return array{conteos: array<string, int>, bloqueos: list<string>, avisos: list<string>, motivo: ?string}
+     * @return array{conteos: array<string, int>, bloqueos: list<string>, avisos: list<string>, motivo: ?string, categoria: string}
      */
     private function evaluarFila(array $fila, ?array $antes, ?Cliente $despues, ?array $cambio, bool $importaCodigo, bool $importaFecha, $cortes): array
     {
@@ -183,10 +313,13 @@ class RevisionImportacionClientes
         if ($nuevo) {
             $conteos['nuevos']++;
             $motivos[] = 'Cliente nuevo.';
-        } elseif ($despues && $despues->wasChanged()) {
+            $categoria = 'nuevo';
+        } elseif ($despues && ($despues->wasChanged() || $despues->isDirty())) {
             $conteos['actualizaciones']++;
+            $categoria = 'actualizacion';
         } else {
             $conteos['sin_cambios']++;
+            $categoria = 'sin_cambios';
         }
 
         $listaAntes = $antes['lista_actual_id'] ?? null;
@@ -244,6 +377,7 @@ class RevisionImportacionClientes
             'bloqueos' => $bloqueos,
             'avisos' => $avisos,
             'motivo' => $motivos === [] ? null : implode(' ', $motivos),
+            'categoria' => $categoria,
         ];
     }
 

@@ -170,6 +170,88 @@ class RevisionImportacionClientesTest extends TestCase
         $this->assertSame(0, HistorialMontoCliente::count());
     }
 
+    public function test_la_revision_no_escribe_catalogos_y_la_confirmacion_si(): void
+    {
+        $bronce = $this->lista('MAYOREO BRONCE');
+        $this->cliente('820', $bronce, '10.00');
+        $this->assertNull(CatalogoListaDescuento::where('nombre', 'MAYOREO DIAMANTE')->first());
+        $conteo = CatalogoListaDescuento::count();
+
+        $vista = $this->revisar("numero_cliente,codigo_lista,monto_venta_actual\n820,4,90000\n");
+
+        $this->assertFalse($vista['bloqueado']);
+        $this->assertSame(1, $vista['conteos']['cambios_lista']);
+        $this->assertSame($conteo, CatalogoListaDescuento::count());
+        $this->assertSame('10.00', Cliente::where('numero_cliente', '820')->value('monto_venta_actual'));
+
+        $this->confirmar($vista);
+
+        $diamante = CatalogoListaDescuento::where('nombre', 'MAYOREO DIAMANTE')->first();
+        $cliente = Cliente::where('numero_cliente', '820')->first();
+        $this->assertNotNull($diamante);
+        $this->assertSame($diamante->id, $cliente->lista_actual_id);
+        $this->assertSame('90000.00', $cliente->monto_venta_actual);
+    }
+
+    public function test_un_catalogo_concurrente_no_aplica_otro_cambio(): void
+    {
+        $bronce = $this->lista('MAYOREO BRONCE');
+        $this->cliente('830', $bronce, '10.00');
+        $vista = $this->revisar("numero_cliente,codigo_lista,monto_venta_actual\n830,2,90000\n");
+        $this->assertFalse($vista['bloqueado']);
+        $this->assertNull(CatalogoListaDescuento::where('nombre', 'MAYOREO DIAMANTE')->first());
+
+        CatalogoListaDescuento::create([
+            'nombre' => 'MAYOREO DIAMANTE',
+            'monto_requerido' => 1000000,
+            'activo' => true,
+        ]);
+
+        $this->actingAs($this->usuario)->post(route('admin.clientes.importar.confirmar'), [
+            'importacion_id' => $vista['importacion_id'],
+            'token' => $vista['token'],
+        ])->assertSessionHasErrors('archivo');
+
+        $this->assertSame('10.00', Cliente::where('numero_cliente', '830')->value('monto_venta_actual'));
+        $this->assertSame($bronce, Cliente::where('numero_cliente', '830')->value('lista_actual_id'));
+        $this->assertNull(CatalogoListaDescuento::where('nombre', 'MAYOREO ORO')->first());
+    }
+
+    public function test_un_error_de_fila_no_bloquea_a_las_demas_ni_escribe_en_la_revision(): void
+    {
+        $conteo = CatalogoListaDescuento::count();
+        $vista = $this->revisar("numero_cliente,nombre,codigo_lista,monto_venta_actual\n840,Cliente ficticio,2,15\n841,Cliente ficticio,2,no\n");
+
+        $this->assertFalse($vista['bloqueado']);
+        $this->assertSame(1, $vista['conteos']['errores']);
+        $this->assertSame(1, $vista['conteos']['nuevos']);
+        $this->assertSame($conteo, CatalogoListaDescuento::count());
+        $this->assertNull(Cliente::where('numero_cliente', '840')->first());
+
+        $this->confirmar($vista);
+
+        $this->assertSame('15.00', Cliente::where('numero_cliente', '840')->value('monto_venta_actual'));
+        $this->assertNull(Cliente::where('numero_cliente', '841')->first());
+    }
+
+    public function test_un_archivo_invalido_bloquea_la_confirmacion_sin_escribir(): void
+    {
+        $conteo = CatalogoListaDescuento::count();
+        $vista = $this->revisar("numero_cliente,monto_venta_actual\n850,10\n850,20\n");
+
+        $this->assertTrue($vista['bloqueado']);
+        $this->assertTrue(collect($vista['bloqueos'])->contains(fn ($bloqueo) => $bloqueo['codigo'] === 'archivo_invalido'));
+        $this->assertSame($conteo, CatalogoListaDescuento::count());
+
+        $this->actingAs($this->usuario)->post(route('admin.clientes.importar.confirmar'), [
+            'importacion_id' => $vista['importacion_id'],
+            'token' => $vista['token'],
+        ])->assertSessionHasErrors('archivo');
+
+        $this->assertNull(Cliente::where('numero_cliente', '850')->first());
+        $this->assertSame($conteo, CatalogoListaDescuento::count());
+    }
+
     public function test_la_ruta_directa_no_escribe_sin_revision(): void
     {
         $archivo = UploadedFile::fake()->createWithContent('directo.csv', "numero_cliente,nombre,codigo_lista\n500,Cliente ficticio,2\n");
