@@ -4,9 +4,11 @@ Fecha: 10 de noviembre de 2026. Base: `develop`, `f87541656afc8d56b822ff84ccfa20
 
 **Estado de entrega: PR en borrador, despliegue bloqueado.** No fusionar ni desplegar mientras no se resuelvan las dependencias descritas abajo. La aprobación de pruebas de importación no acredita conciliación documental ni reversión segura de beneficios históricos.
 
+GELIA decide con sus reglas. El archivo importado es una entrada, no un control remoto. No hay API ni sincronización con el origen del reporte. Ese nombre se conserva aquí y en el incidente del 12 de noviembre de 2026.
+
 ## Contrato implementado
 
-Wizerp es la única autoridad de las transiciones de estado comercial. Pagos, cotizaciones y cierres no reactivan ni inactivan por inferencia. La autoridad de Escalonamiento se consulta mediante el servicio operativo; esta entrega no la activa. Cuando está activa, el CSV conserva monto/lista publicados por ese módulo, pero sigue aplicando el estado autoritativo de Wizerp. Se conserva la protección global preexistente del CSV; los cierres necesitan además autoridad sobre el cliente específico.
+GELIA decide las transiciones de estado comercial. Una celda vacía no inactiva ni degrada. Pagos, cotizaciones y cierres no reactivan ni inactivan por inferencia. La autoridad de Escalonamiento se consulta mediante el servicio operativo; esta entrega no la activa. Cuando está activa, el archivo conserva monto y lista publicados por ese módulo, y no pisa un estado que GELIA no haya aceptado con una señal explícita. Se conserva la protección global preexistente del archivo; los cierres necesitan además autoridad sobre el cliente específico.
 
 | Caso | Antes | Después |
 | --- | --- | --- |

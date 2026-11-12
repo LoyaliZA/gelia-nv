@@ -87,11 +87,14 @@ class RechazarPagosVencidos extends Command
 
                 AuditoriaSolicitud::create([
                     'solicitud_id' => $solicitud->id,
-                    'usuario_id' => 1,
+                    'usuario_id' => null,
                     'estado_anterior_id' => $estadoAnteriorId,
                     'estado_nuevo_id' => $idIncorrecta,
                     'motivo_reporte' => 'SISTEMA AUTOMÁTICO: Plazo de pago expirado (24h).',
-                    'datos_snapshot' => !empty($snapshotDiff) ? $snapshotDiff : null,
+                    'datos_snapshot' => array_merge($snapshotDiff, [
+                        'origen' => 'vencimiento_automatico',
+                        'actor' => null,
+                    ]),
                 ]);
 
                 if ($solicitud->vendedor) {

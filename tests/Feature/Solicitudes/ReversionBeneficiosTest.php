@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Solicitudes;
 
+use App\Models\AuditoriaSolicitud;
 use App\Models\CatalogoEstadoSolicitud;
 use App\Models\CatalogoListaDescuento;
 use App\Models\CatalogoProceso;
@@ -320,6 +321,123 @@ class ReversionBeneficiosTest extends TestCase
         $this->assertSame($this->plata->id, $inactivo->fresh()->lista_actual_id);
         $this->assertTrue((bool) $inactivo->fresh()->es_inactivo);
         $this->assertEquals(1000.0, (float) $inactivo->fresh()->monto_venta_actual);
+    }
+
+    public function test_el_vencimiento_guarda_auditoria_sin_usuario_uno(): void
+    {
+        Notification::fake();
+        if ((int) $this->vendedorAnterior->id === 1) {
+            $this->vendedorAnterior->forceDelete();
+            $this->vendedorAnterior = User::factory()->create(['name' => 'Vendedor anterior']);
+        }
+        if ((int) $this->vendedorNuevo->id === 1) {
+            $this->vendedorNuevo->forceDelete();
+            $this->vendedorNuevo = User::factory()->create(['name' => 'Vendedor asignado']);
+        }
+        User::withTrashed()->whereKey(1)->forceDelete();
+        $admin = User::factory()->create(['name' => 'Admin existente']);
+        $admin->givePermissionTo('solicitudes.verificar');
+        $this->assertNull(User::withTrashed()->find(1));
+        $this->assertNotSame(1, $admin->id);
+
+        $cliente = $this->cliente(1000);
+        $concedida = $this->solicitud($cliente, $this->procesoLista, $this->vendedorAnterior, $this->plata->id);
+        $this->ajuste()->aplicarBeneficios($concedida);
+        $concedida->created_at = now()->subHours(25);
+        $concedida->save();
+
+        $historica = $this->solicitud($cliente, $this->procesoLista, $this->vendedorAnterior, $this->bronce->id, null, $this->respondida);
+        $historica->created_at = now()->subHours(30);
+        $historica->save();
+        $this->assertSame(0, SolicitudBeneficio::query()->where('solicitud_tag_id', $historica->id)->count());
+
+        Artisan::call('pagos:rechazar-vencidos');
+        Artisan::call('pagos:rechazar-vencidos');
+
+        $cliente->refresh();
+        $this->assertSame($this->bronce->id, $cliente->lista_actual_id);
+        $this->assertEquals(1000.0, (float) $cliente->monto_venta_actual);
+        $this->assertSame($this->incorrecta, (int) $concedida->fresh()->catalogo_estado_solicitud_id);
+        $this->assertSame($this->incorrecta, (int) $historica->fresh()->catalogo_estado_solicitud_id);
+
+        $auditorias = AuditoriaSolicitud::query()->orderBy('id')->get();
+        $this->assertCount(2, $auditorias);
+        foreach ($auditorias as $auditoria) {
+            $this->assertNull($auditoria->usuario_id);
+            $this->assertSame('SISTEMA AUTOMÁTICO: Plazo de pago expirado (24h).', $auditoria->motivo_reporte);
+            $this->assertSame('vencimiento_automatico', $auditoria->datos_snapshot['origen']);
+            $this->assertNull($auditoria->datos_snapshot['actor']);
+            $this->assertNotSame($admin->id, $auditoria->usuario_id);
+        }
+
+        $cliente->lista_actual_id = $this->plata->id;
+        $cliente->save();
+        $this->ajuste()->revertirBeneficios($concedida->fresh());
+        $this->ajuste()->revertirBeneficios($historica->fresh());
+
+        $this->assertSame($this->plata->id, $cliente->fresh()->lista_actual_id);
+        $this->assertEquals(1000.0, (float) $cliente->fresh()->monto_venta_actual);
+        $this->assertCount(2, AuditoriaSolicitud::query()->get());
+    }
+
+    public function test_una_solicitud_historica_sin_constancia_no_degrada_la_lista(): void
+    {
+        $cliente = $this->cliente(1000);
+        $cliente->lista_actual_id = $this->plata->id;
+        $cliente->catalogo_tipo_cliente_id = $this->tipo->id;
+        $cliente->save();
+        $historica = $this->solicitud($cliente, $this->procesoLista, $this->vendedorNuevo, $this->plata->id, $this->tipo->id);
+
+        $this->ajuste()->revertirBeneficios($historica);
+        $this->ajuste()->revertirBeneficios($historica->fresh());
+
+        $cliente->refresh();
+        $this->assertSame($this->plata->id, $cliente->lista_actual_id);
+        $this->assertSame($this->tipo->id, $cliente->catalogo_tipo_cliente_id);
+        $this->assertSame($this->vendedorAnterior->id, $cliente->vendedor_id);
+        $this->assertEquals(1000.0, (float) $cliente->monto_venta_actual);
+        $this->assertSame(0, SolicitudBeneficio::query()->where('solicitud_tag_id', $historica->id)->count());
+    }
+
+    public function test_otra_solicitud_vigente_sin_constancia_sostiene_lista_y_tag(): void
+    {
+        $cliente = $this->cliente(1000);
+        $concedida = $this->solicitud($cliente, $this->procesoLista, $this->vendedorAnterior, $this->plata->id);
+        $this->ajuste()->aplicarBeneficios($concedida);
+        $historica = $this->solicitud($cliente, $this->procesoLista, $this->vendedorAnterior, $this->plata->id);
+        $this->assertSame(0, SolicitudBeneficio::query()->where('solicitud_tag_id', $historica->id)->count());
+
+        $this->ajuste()->revertirBeneficios($concedida);
+
+        $this->assertSame($this->plata->id, $cliente->fresh()->lista_actual_id);
+        $this->assertSame(
+            SolicitudBeneficio::ESTADO_REEMPLAZADO,
+            SolicitudBeneficio::query()->where('solicitud_tag_id', $concedida->id)->value('estado')
+        );
+
+        $tag = $this->solicitud($cliente, $this->procesoTag, $this->vendedorNuevo, null);
+        $this->ajuste()->aplicarBeneficios($tag);
+        $otraTag = $this->solicitud($cliente, $this->procesoTag, $this->vendedorNuevo, null);
+        $this->ajuste()->revertirBeneficios($tag);
+
+        $this->assertSame($this->vendedorNuevo->id, $cliente->fresh()->vendedor_id);
+        $this->assertEquals(1000.0, (float) $cliente->fresh()->monto_venta_actual);
+
+        $tag->catalogo_estado_solicitud_id = $this->incorrecta;
+        $tag->save();
+        $otraTag->catalogo_estado_solicitud_id = $this->incorrecta;
+        $otraTag->save();
+        $cliente->refresh();
+        $cliente->vendedor_id = $this->vendedorAnterior->id;
+        $cliente->save();
+        $cambioLista = $this->solicitud($cliente, $this->procesoLista, $this->vendedorNuevo, $this->plata->id);
+        $tagSola = $this->solicitud($cliente, $this->procesoTag, $this->vendedorNuevo, null);
+        $this->ajuste()->aplicarBeneficios($tagSola);
+        $this->ajuste()->revertirBeneficios($tagSola);
+
+        $this->assertSame($this->vendedorAnterior->id, $cliente->fresh()->vendedor_id);
+        $this->assertSame($this->plata->id, $cliente->fresh()->lista_actual_id);
+        $this->assertNotNull($cambioLista->id);
     }
 
     public function test_la_cotizacion_no_escribe_el_acumulado_oficial(): void

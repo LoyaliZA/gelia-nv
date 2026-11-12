@@ -2,6 +2,8 @@
 
 Este documento no contiene datos de clientes ni el contenido de ningún respaldo. No se leyó `storage/app/backups/backup_gelia_nv_2026-11-12_110021.sql.gz`.
 
+GELIA decide con sus reglas. El archivo de aquel día es una entrada histórica, no un control remoto. No hay API ni base compartida con el origen del reporte. El nombre de ese origen se conserva en este incidente y no se renombra el código histórico mientras la consolidación sigue en borrador.
+
 ## Hechos verificados en el código
 
 La rama de producción `main` recibió el commit `bd086c41` («FIX EMERGENCIA IMPORTACION MASIVA») sobre el importador anterior a Fase 1. Ese arreglo deja de tratar un `codigo_lista` vacío como baja y deja de cambiar `lista_actual_id`. También escribía un registro de depuración en `/var/www/html/.cursor/debug-017bf5.log`. Esa escritura no forma parte de la consolidación.
@@ -50,7 +52,7 @@ Hay regresión sintética en `tests/Feature/Clientes/IncidenteWizerp20261112Test
 
 ## Seguimiento que no entra en este PR
 
-La vista previa de la carga masiva, los umbrales y el bloqueo de riesgo alto (apartado 14) quedan para un PR posterior. No bloquean esta consolidación.
+La vista previa de la carga masiva, los umbrales y el bloqueo de riesgo alto (apartado 14) quedan para un PR posterior. También quedan fuera el renombre de clases, una integración externa y una reescritura del módulo de clientes. No bloquean esta consolidación.
 
 ## Riesgos que siguen impidiendo un despliegue
 

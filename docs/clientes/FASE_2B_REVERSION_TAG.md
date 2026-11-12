@@ -2,7 +2,9 @@
 
 Documento único y vigente. Sustituye el diseño de aceptación que entró a `develop` con el PR #30. La base de esta implementación es `develop` (`14c60cb1`), que ya incluye la conciliación de Fase 2A (PR #28) y aquel diseño (PR #30).
 
-**Estado: implementación en borrador. No fusionar ni desplegar.** No activa la autoridad de Escalonamiento, no cambia períodos y no escribe `monto_venta_actual`.
+**Estado: implementación en borrador. No fusionar ni desplegar.** GELIA decide con sus reglas. El archivo importado es una entrada, no un control remoto, y no hay API con el origen del reporte. El incidente del 12 de noviembre de 2026 conserva ese nombre. No activa la autoridad de Escalonamiento, no cambia períodos y no escribe `monto_venta_actual`.
+
+El vencimiento automático guarda la auditoría con `usuario_id` nulo y origen `vencimiento_automatico`. No usa la cuenta 1 ni inventa un usuario. El motivo sigue identificando la acción del sistema.
 
 El PR #31 ya se fusionó en `feature/fase2a-conciliacion-documental`, no en `develop`. Esta rama vuelve a llevar solo la implementación sobre `develop`.
 
@@ -13,7 +15,7 @@ El PR #31 ya se fusionó en `feature/fase2a-conciliacion-documental`, no en `dev
 - Confirmado: la lista que califica `monto_venta_actual`, o el mismo valor sostenido por otra solicitud en Respondida o Verificada. Con la autoridad apagada el oficial es el acumulado Wizerp. Una conciliación `indeterminada` no confirma la lista.
 - Revocado: la fila pasa a `revocado` o `reemplazado` y el valor solo cambia cuando esta solicitud todavía era responsable.
 
-Una concesión sin fila previa no se borra por inferencia. La lista, en ese caso heredado, se alinea con el acumulado oficial si no hay otra concesión vigente, la lista no está bloqueada y el cliente no está inactivo. Tipo y vendedor no se vacían si esta solicitud no los concedió.
+Una concesión sin fila previa no se borra por inferencia. Si no hay fila de esta solicitud, la lista puede alinearse con el acumulado oficial solo cuando eso no la baja. Una lista legítima más alta no se degrada por falta de constancia. Otra solicitud en Respondida o Verificada sostiene el valor actual si tiene una fila vigente igual, o si no tiene ninguna fila de ese campo y su dato solicitado coincide. Una fila ya cerrada no sigue sosteniendo el valor. Tipo y vendedor no se vacían si esta solicitud no los concedió. Un cambio de lista no se trata como TAG.
 
 ## Reversión
 

@@ -462,7 +462,11 @@ class AjustarMontoPorSolicitudService
             && ! $cliente->es_inactivo
             && ! $this->hayConcesionVigente($cliente, $campo)
         ) {
+            $antes = $cliente->lista_actual_id;
             $this->recalcularListaCliente($cliente);
+            if ($this->esListaInferior($cliente->lista_actual_id, $antes)) {
+                $cliente->lista_actual_id = $antes;
+            }
         }
     }
 
@@ -541,7 +545,33 @@ class AjustarMontoPorSolicitudService
             $consulta->where('valor_aplicado', $actual);
         }
 
-        return $consulta->exists();
+        if ($consulta->exists()) {
+            return true;
+        }
+
+        if ($actual === null || ! ctype_digit($actual)) {
+            return false;
+        }
+
+        $sinConstancia = SolicitudTag::query()
+            ->whereIn('id', $ids)
+            ->whereNotIn('id', SolicitudBeneficio::query()->where('campo', $campo)->select('solicitud_tag_id'));
+        $id = (int) $actual;
+
+        return match ($campo) {
+            SolicitudBeneficio::CAMPO_LISTA => (clone $sinConstancia)->where('catalogo_lista_descuento_id', $id)->exists(),
+            SolicitudBeneficio::CAMPO_TIPO => (clone $sinConstancia)->where('catalogo_tipo_cliente_id', $id)->exists(),
+            SolicitudBeneficio::CAMPO_VENDEDOR => (clone $sinConstancia)
+                ->where('vendedor_id', $id)
+                ->whereHas('proceso', function ($proceso) {
+                    $proceso->where(function ($nombre) {
+                        $nombre->where('nombre', 'like', '%ASIGNAR TAG%')
+                            ->orWhere('nombre', 'like', '%ASIGNAR CLIENTE%');
+                    });
+                })
+                ->exists(),
+            default => false,
+        };
     }
 
     /**
@@ -578,6 +608,22 @@ class AjustarMontoPorSolicitudService
             ->where('campo', $campo)
             ->where('estado', SolicitudBeneficio::ESTADO_VIGENTE)
             ->exists();
+    }
+
+    private function esListaInferior(mixed $nueva, mixed $anterior): bool
+    {
+        if ($nueva === $anterior || $anterior === null) {
+            return false;
+        }
+        if ($nueva === null) {
+            return true;
+        }
+
+        $requerido = CatalogoListaDescuento::query()
+            ->whereIn('id', [$nueva, $anterior])
+            ->pluck('monto_requerido', 'id');
+
+        return bccomp((string) ($requerido[$nueva] ?? 0), (string) ($requerido[$anterior] ?? 0), 2) < 0;
     }
 
     private function cerrarConcesion(?SolicitudBeneficio $concesion, string $estado, string $motivo): void
