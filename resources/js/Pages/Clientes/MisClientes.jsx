@@ -3,6 +3,7 @@ import { Head, useForm, router, usePage } from '@inertiajs/react';
 import { Users, Plus, X, Hash, User, Calendar, ShieldAlert, MapPin, Link2, Copy } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
 import GeliaLoader from '../../Components/GeliaLoader';
+import GeliaPaginacion from '../../Components/GeliaPaginacion';
 import { geliaCardClass, THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from '../../utils/geliaTheme';
 import { soloDigitosNumeroCliente } from '../../utils/numeroClienteInput';
 
@@ -156,6 +157,10 @@ export default function MisClientes({ auth, clientes }) {
                                                 <div className="inline-block px-3 py-1 rounded-lg theme-element border theme-border text-[9px] font-black uppercase tracking-widest theme-text-main mb-1">
                                                     {cliente.lista_descuento ? cliente.lista_descuento.nombre : 'Público General'}
                                                 </div>
+                                                <div className="text-[9px] font-bold theme-text-muted mt-1">
+                                                    {cliente.es_inactivo ? 'Inactivo' : 'Activo'} · {cliente.es_menudeo ? 'Menudeo' : 'Mayoreo'}
+                                                    {(cliente.es_inactivo || cliente.es_menudeo) && cliente.lista_descuento?.nombre !== 'PUBLICO GENERAL' ? ' · Lista efectiva: Público General' : ''}
+                                                </div>
                                                 {cliente.tipo && (
                                                     <div className="text-[8px] font-bold text-gray-400 uppercase mt-1">
                                                         {cliente.tipo.nombre}
@@ -216,6 +221,9 @@ export default function MisClientes({ auth, clientes }) {
                             </tbody>
                         </table>
                     </div>
+                    {clientes.last_page > 1 && (
+                        <GeliaPaginacion paginator={clientes} onIrAPagina={irAPagina} />
+                    )}
                 </div>
 
             </div>

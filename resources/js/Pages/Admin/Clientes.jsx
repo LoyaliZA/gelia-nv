@@ -1,6 +1,6 @@
 import ResumenImportacionClientes from './Partials/ResumenImportacionClientes';
 import React, { useState, useEffect, useCallback } from 'react';
-import { Head, useForm, usePage, router } from '@inertiajs/react';
+import { Head, Link, useForm, usePage, router } from '@inertiajs/react';
 import axios from 'axios';
 import {
     Users, Upload, Search,
@@ -22,7 +22,9 @@ import ModalAuditoriaImportacion from './Partials/ModalAuditoriaImportacion';
 import { publishLocalTask, startBackgroundTask } from '../../utils/geliaBackgroundTasks';
 
 import BadgeListaDescuento from '../../Components/BadgeListaDescuento';
-import { geliaCardClass, GELIA_PAGE_SHELL, THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from '../../utils/geliaTheme';
+import SelectorFecha from '../../Components/Calendario/SelectorFecha';
+import { fechaCalendario } from '../../utils/fechaCalendario';
+import { geliaCardClass, GELIA_PAGE_SHELL, THEME_INPUT, THEME_LABEL, THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from '../../utils/geliaTheme';
 
 const formatoMoneda = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
 
@@ -94,6 +96,11 @@ export default function Clientes({ auth, clientes, vendedores = [], tipos_client
     const formCarga = useForm({
         archivo: null,
     });
+    const ahoraCarga = new Date();
+    const [modalidadCarga, setModalidadCarga] = useState('actualizacion_normal');
+    const [fechaCorteDia, setFechaCorteDia] = useState(fechaCalendario(ahoraCarga));
+    const [horaCorte, setHoraCorte] = useState(String(ahoraCarga.getHours()).padStart(2, '0'));
+    const [minutoCorte, setMinutoCorte] = useState(String(ahoraCarga.getMinutes()).padStart(2, '0'));
     const [subiendo, setSubiendo] = useState(false);
     const [errorCarga, setErrorCarga] = useState(null);
     const [modalImportacionId, setModalImportacionId] = useState(null);
@@ -192,6 +199,7 @@ export default function Clientes({ auth, clientes, vendedores = [], tipos_client
         e.preventDefault();
         const archivo = formCarga.data.archivo;
         if (!archivo || subiendo) return;
+        if (modalidadCarga === 'actualizacion_con_corte' && !fechaCorteDia) return;
         setErrorCarga(null);
         setSubiendo(true);
         publishLocalTask({
@@ -203,6 +211,10 @@ export default function Clientes({ auth, clientes, vendedores = [], tipos_client
         });
         const datos = new FormData();
         datos.append('archivo', archivo);
+        datos.append('modalidad_carga', modalidadCarga);
+        if (modalidadCarga === 'actualizacion_con_corte') {
+            datos.append('fecha_corte', `${fechaCorteDia} ${horaCorte}:${minutoCorte}:00`);
+        }
         try {
             const { data } = await axios.post(route('admin.clientes.importar.previsualizar'), datos, {
                 headers: { Accept: 'application/json' },
@@ -226,7 +238,7 @@ export default function Clientes({ auth, clientes, vendedores = [], tipos_client
             }
         } catch (error) {
             const cuerpo = error.response?.data;
-            const mensaje = cuerpo?.mensaje || cuerpo?.errors?.archivo?.[0] || 'No se pudo enviar el archivo.';
+            const mensaje = cuerpo?.mensaje || cuerpo?.errors?.fecha_corte?.[0] || cuerpo?.errors?.modalidad_carga?.[0] || cuerpo?.errors?.archivo?.[0] || 'No se pudo enviar el archivo.';
             setErrorCarga(mensaje);
             publishLocalTask(null);
             if (cuerpo?.importacion_id) {
@@ -359,6 +371,12 @@ export default function Clientes({ auth, clientes, vendedores = [], tipos_client
 
                     {/* --- BOTONES DE ACCION --- */}
                     <div className="clientes-header-actions flex flex-wrap gap-3 w-full xl:w-auto">
+                        {auth?.user?.permissions?.includes('clientes.resolver_conflicto_importacion') && (
+                            <Link href={route('admin.clientes.conflictos')} className="py-4 px-6 theme-element border theme-border theme-text-main rounded-2xl font-black uppercase tracking-widest text-[11px]">Conflictos</Link>
+                        )}
+                        {auth?.user?.permissions?.includes('clientes.recuperar_aplicacion_autorizada') && (
+                            <Link href={route('admin.clientes.recuperacion')} className="py-4 px-6 theme-element border theme-border theme-text-main rounded-2xl font-black uppercase tracking-widest text-[11px]">Autorizaciones</Link>
+                        )}
                         <button
                             onClick={() => setPanelProteccionAbierto(true)}
                             className="py-4 px-6 theme-element border theme-border theme-text-main rounded-2xl font-black uppercase tracking-widest text-[11px] transition-all hover:shadow-md outline-none flex justify-center items-center gap-2 group"
@@ -462,6 +480,40 @@ export default function Clientes({ auth, clientes, vendedores = [], tipos_client
                                         />
                                     </label>
 
+                                    <fieldset className="rounded-xl border theme-border p-3 space-y-3">
+                                        <legend className={`${THEME_LABEL} px-1`}>Modalidad de la carga</legend>
+                                        <label className="flex items-center gap-2 text-sm theme-text-main">
+                                            <input type="radio" name="modalidad-carga-previa" checked={modalidadCarga === 'actualizacion_normal'} onChange={() => setModalidadCarga('actualizacion_normal')} />
+                                            Actualización normal
+                                        </label>
+                                        <label className="flex items-center gap-2 text-sm theme-text-main">
+                                            <input type="radio" name="modalidad-carga-previa" checked={modalidadCarga === 'actualizacion_con_corte'} onChange={() => setModalidadCarga('actualizacion_con_corte')} />
+                                            Actualización con corte
+                                        </label>
+                                        {modalidadCarga === 'actualizacion_con_corte' && (
+                                            <div className="grid grid-cols-1 gap-3">
+                                                <div>
+                                                    <span className={`${THEME_LABEL} block mb-1`}>Fecha del corte</span>
+                                                    <SelectorFecha value={fechaCorteDia} onChange={setFechaCorteDia} aria-label="Fecha del corte" />
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    <label>
+                                                        <span className={`${THEME_LABEL} block mb-1`}>Hora</span>
+                                                        <select value={horaCorte} onChange={(event) => setHoraCorte(event.target.value)} aria-label="Hora del corte" className={`${THEME_INPUT} w-full min-h-11`}>
+                                                            {Array.from({ length: 24 }, (_, hora) => String(hora).padStart(2, '0')).map((hora) => <option key={hora} value={hora}>{hora}</option>)}
+                                                        </select>
+                                                    </label>
+                                                    <label>
+                                                        <span className={`${THEME_LABEL} block mb-1`}>Minuto</span>
+                                                        <select value={minutoCorte} onChange={(event) => setMinutoCorte(event.target.value)} aria-label="Minuto del corte" className={`${THEME_INPUT} w-full min-h-11`}>
+                                                            {Array.from({ length: 60 }, (_, minuto) => String(minuto).padStart(2, '0')).map((minuto) => <option key={minuto} value={minuto}>{minuto}</option>)}
+                                                        </select>
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </fieldset>
+
                                     {errorCarga && (
                                         <p className="text-sm font-bold theme-text-peligro text-center m-0">{errorCarga}</p>
                                     )}
@@ -475,7 +527,7 @@ export default function Clientes({ auth, clientes, vendedores = [], tipos_client
 
                                     <button
                                         type="submit"
-                                        disabled={subiendo || !formCarga.data.archivo}
+                                        disabled={subiendo || !formCarga.data.archivo || (modalidadCarga === 'actualizacion_con_corte' && !fechaCorteDia)}
                                         className="w-full py-4 text-white rounded-2xl font-black uppercase tracking-widest text-[11px] transition-all hover:scale-105 shadow-xl disabled:opacity-50 disabled:scale-100 outline-none flex justify-center items-center gap-2"
                                         style={{ backgroundColor: 'var(--color-primario)' }}
                                     >
@@ -499,7 +551,7 @@ export default function Clientes({ auth, clientes, vendedores = [], tipos_client
                                         <strong style={{ color: 'var(--color-primario)' }}>nombre</strong><br />
                                         <strong style={{ color: 'var(--color-primario)' }}>codigo_lista</strong> (Ej: PG, 1, 2, 3, 4, 7; celda vacía = no cambia lista ni estado; sin columna = solo actualiza monto)<br />
                                         <strong style={{ color: 'var(--color-primario)' }}>monto_venta_actual</strong><br />
-                                        <strong style={{ color: 'var(--color-primario)' }}>vendedor_id</strong> (TAG de la Vendedora)<br />
+                                        <strong style={{ color: 'var(--color-primario)' }}>vendedor_id</strong> (TAG de quien atiende)<br />
                                         <strong style={{ color: 'var(--color-primario)' }}>es_heredado</strong> (SI o NO)<br />
                                         <strong style={{ color: 'var(--color-primario)' }}>limite_asignado</strong> o <strong style={{ color: 'var(--color-primario)' }}>monto_credito_autorizado</strong> (Sin símbolos, ej: 5000)<br />
                                         <strong style={{ color: 'var(--color-primario)' }}>dias_credito</strong> o <strong style={{ color: 'var(--color-primario)' }}>dias_de_credito</strong> (Número entero, ej: 15)<br /><br />
@@ -687,10 +739,14 @@ export default function Clientes({ auth, clientes, vendedores = [], tipos_client
                                                     </h3>
                                                     <div className="flex flex-wrap items-center gap-2 mt-2">
                                                         <BadgeListaDescuento nombre={cliente.lista_descuento?.nombre} />
-                                                        {(cliente.es_inactivo === true || cliente.es_inactivo === 1) && (
-                                                            <span className="px-2 py-1 bg-amber-500/10 text-amber-600 border border-amber-500/30 text-[9px] font-black uppercase tracking-widest rounded-md">
-                                                                Inactivo
-                                                            </span>
+                                                        <span className="px-2 py-1 theme-element border theme-border text-[9px] font-black uppercase tracking-widest rounded-md theme-text-main">
+                                                            {(cliente.es_inactivo === true || cliente.es_inactivo === 1) ? 'Inactivo' : 'Activo'}
+                                                        </span>
+                                                        <span className="px-2 py-1 theme-element border theme-border text-[9px] font-black uppercase tracking-widest rounded-md theme-text-main">
+                                                            {(cliente.es_menudeo === true || cliente.es_menudeo === 1) ? 'Menudeo' : 'Mayoreo'}
+                                                        </span>
+                                                        {((cliente.es_inactivo === true || cliente.es_inactivo === 1) || (cliente.es_menudeo === true || cliente.es_menudeo === 1)) && cliente.lista_descuento?.nombre !== 'PUBLICO GENERAL' && (
+                                                            <span className="text-[10px] font-semibold theme-text-muted">Lista efectiva: Público General</span>
                                                         )}
                                                         <span className="flex items-center gap-1 text-xs font-semibold theme-text-muted tabular-nums">
                                                             <TrendingUp className="w-3 h-3 text-emerald-500" />

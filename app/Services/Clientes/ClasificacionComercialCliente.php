@@ -78,25 +78,33 @@ class ClasificacionComercialCliente
     }
 
     /**
-     * El código explícito fija la lista de un cliente nuevo o sin condición de menudeo.
-     * Un menudeo sin conversión no adopta una lista mayorista. El monto no asciende.
+     * El monto explícito, incluido cero, clasifica. El monto vacío no se interpreta.
+     * Una lista mayorista con monto explícito convierte Menudeo a Mayoreo.
+     * Una mayorista sin monto queda sin regla: no convierte ni reactiva.
      */
     public function aplicarEnImportacion(Cliente $cliente, CatalogoListaDescuento $listaCodigo, ?string $monto): ?string
     {
-        if ($this->esMenudeo($cliente) && ! $this->conversionVigente($cliente) && $this->esListaMayorista($listaCodigo)) {
-            return 'lista_mayorista_sin_conversion';
-        }
         if ($this->conversionVigente($cliente) && $this->esPublicoGeneral($listaCodigo)) {
             return 'conversion_autorizada';
         }
+        if ($monto === null && $this->esPublicoGeneral($listaCodigo)) {
+            return 'pg_sin_monto';
+        }
+        if ($monto === null && $this->esListaMayorista($listaCodigo)) {
+            return 'mayorista_sin_monto';
+        }
+
+        if ($this->esListaMayorista($listaCodigo) && $monto !== null) {
+            $cliente->lista_actual_id = $listaCodigo->id;
+            if ($this->esMenudeo($cliente)) {
+                $this->asignar($cliente, false, self::ORIGEN_IMPORTACION);
+            }
+
+            return 'mayoreo';
+        }
 
         $cliente->lista_actual_id = $listaCodigo->id;
-        if (
-            ! $this->conversionVigente($cliente)
-            && $this->esPublicoGeneral($listaCodigo)
-            && $monto !== null
-            && bccomp($monto, '0', 2) > 0
-        ) {
+        if ($this->esPublicoGeneral($listaCodigo) && $monto !== null && ! $this->conversionVigente($cliente)) {
             $this->asignar($cliente, true, self::ORIGEN_IMPORTACION);
         }
 

@@ -209,7 +209,7 @@ class MobileSyncPublicationService
     {
         $campos = [
             'nombre', 'nombre_razon_social', 'rfc', 'lista_actual_id', 'vendedor_id',
-            'vendedor_original_id', 'catalogo_tipo_cliente_id', 'es_inactivo', 'es_heredado',
+            'vendedor_original_id', 'catalogo_tipo_cliente_id', 'es_inactivo', 'es_menudeo', 'es_heredado',
             'lista_bloqueada', 'monto_credito_autorizado', 'dias_credito', 'fecha_inicio_credito',
             'codigo_postal', 'regimen_fiscal', 'correo_electronico', 'uso_factura',
             'direccion_fiscal', 'colonia_fiscal', 'municipio_fiscal', 'estado_fiscal', 'pais_fiscal',

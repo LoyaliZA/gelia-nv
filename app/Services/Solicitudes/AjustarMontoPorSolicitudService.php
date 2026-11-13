@@ -78,6 +78,14 @@ class AjustarMontoPorSolicitudService
             $pideConversion = (bool) $solicitud->convertir_menudeo_mayoreo;
             $autorizada = $this->solicitudAutorizada($solicitud);
             $bloquearListaMenudeo = $esMenudeo && (! $pideConversion || ! $autorizada);
+            $hayBeneficio = $solicitud->catalogo_lista_descuento_id
+                || $solicitud->catalogo_tipo_cliente_id
+                || ($solicitud->vendedor_id && $this->solicitudAsignaTag($solicitud))
+                || $pideConversion;
+            if ($autorizada && $cliente->es_inactivo && $hayBeneficio) {
+                $this->aplicarRestauracionesPendientes($cliente);
+                $cliente->es_inactivo = false;
+            }
 
             if (
                 $solicitud->catalogo_lista_descuento_id
@@ -519,16 +527,17 @@ class AjustarMontoPorSolicitudService
         }
 
         if ($propio && $this->mismoValor($propio->valor_aplicado, $actual)) {
-            if (! $cliente->es_inactivo) {
-                $this->restaurarCampo($cliente, $campo, $propio);
+            if ($cliente->es_inactivo) {
+                $this->cerrarConcesion(
+                    $propio,
+                    SolicitudBeneficio::ESTADO_RESTAURACION_PENDIENTE,
+                    'El cliente está inactivo. La restauración queda pendiente.',
+                );
+
+                return;
             }
-            $this->cerrarConcesion(
-                $propio,
-                SolicitudBeneficio::ESTADO_REVOCADO,
-                $cliente->es_inactivo
-                    ? 'El cliente está inactivo. El valor almacenado no se reescribe.'
-                    : 'La solicitud ya no sostiene el beneficio.',
-            );
+            $this->restaurarCampo($cliente, $campo, $propio);
+            $this->cerrarConcesion($propio, SolicitudBeneficio::ESTADO_REVOCADO, 'La solicitud ya no sostiene el beneficio.');
 
             return;
         }
@@ -549,6 +558,31 @@ class AjustarMontoPorSolicitudService
             if ($this->esListaInferior($cliente->lista_actual_id, $antes)) {
                 $cliente->lista_actual_id = $antes;
             }
+        }
+    }
+
+    private function aplicarRestauracionesPendientes(Cliente $cliente): void
+    {
+        $pendientes = SolicitudBeneficio::query()
+            ->where('cliente_id', $cliente->id)
+            ->where('estado', SolicitudBeneficio::ESTADO_RESTAURACION_PENDIENTE)
+            ->orderBy('id')
+            ->get();
+        foreach ($pendientes as $pendiente) {
+            $actual = $this->valorActual($cliente, $pendiente->campo);
+            $vigentePosterior = SolicitudBeneficio::query()
+                ->where('cliente_id', $cliente->id)
+                ->where('campo', $pendiente->campo)
+                ->where('estado', SolicitudBeneficio::ESTADO_VIGENTE)
+                ->where('id', '>', $pendiente->id)
+                ->exists();
+            if ($vigentePosterior || ! $this->mismoValor($pendiente->valor_aplicado, $actual)) {
+                $this->cerrarConcesion($pendiente, SolicitudBeneficio::ESTADO_REEMPLAZADO, 'Una autorización posterior sostiene el valor.');
+
+                continue;
+            }
+            $this->restaurarCampo($cliente, $pendiente->campo, $pendiente);
+            $this->cerrarConcesion($pendiente, SolicitudBeneficio::ESTADO_REVOCADO, 'Se restauró el valor al reactivar.');
         }
     }
 

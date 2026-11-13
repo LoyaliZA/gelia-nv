@@ -88,16 +88,16 @@ class IncidenteWizerp20261112Test extends TestCase
         $cliente->refresh();
         $this->assertFalse($cliente->es_inactivo);
         $this->assertSame($bronce, $cliente->lista_actual_id);
-        $this->assertSame('6000.00', $cliente->monto_venta_actual);
+        $this->assertSame('1500.00', $cliente->monto_venta_actual);
         $this->assertSame($vendedor->id, $cliente->vendedor_id);
         $this->assertSame($tipo->id, $cliente->catalogo_tipo_cliente_id);
         $this->assertSame(0, $resultado['clientes_marcados_inactivos']);
-        $this->assertSame(0, $resultado['stats']['errores']);
+        $this->assertSame(1, $resultado['stats']['errores']);
         $this->assertTrue((bool) $solicitud->fresh()->cubierto_por_carga_masiva);
         $this->assertSame($estado->id, $solicitud->fresh()->catalogo_estado_solicitud_id);
         $this->assertSame(0, EscalonamientoConciliacionSolicitud::count());
         $this->assertSame(SolicitudBeneficio::ESTADO_VIGENTE, SolicitudBeneficio::query()->value('estado'));
-        $this->assertSame(1, HistorialMontoCliente::count());
+        $this->assertSame(0, HistorialMontoCliente::count());
     }
 
     public function test_cero_y_codigos_de_lista_validos(): void
@@ -115,7 +115,7 @@ class IncidenteWizerp20261112Test extends TestCase
             '1005,Cliente ficticio,1,0',
         ])."\n");
 
-        $this->assertFalse($activo->fresh()->es_inactivo);
+        $this->assertTrue($activo->fresh()->es_inactivo);
         $this->assertSame($this->lista('MAYOREO PLATA'), $activo->fresh()->lista_actual_id);
         $this->assertSame('0.00', $activo->fresh()->monto_venta_actual);
         $this->assertFalse($inactivo->fresh()->es_inactivo);
@@ -143,7 +143,7 @@ class IncidenteWizerp20261112Test extends TestCase
 
         $this->assertFalse($existente->fresh()->es_inactivo);
         $this->assertSame($this->lista('MAYOREO BRONCE'), $existente->fresh()->lista_actual_id);
-        $this->assertSame('15.00', $existente->fresh()->monto_venta_actual);
+        $this->assertSame('40.00', $existente->fresh()->monto_venta_actual);
         $this->assertNull(Cliente::where('numero_cliente', '2001')->first());
         $this->assertNull(Cliente::where('numero_cliente', '2002')->first());
         $this->assertNull(Cliente::where('numero_cliente', '2003')->first());
@@ -152,7 +152,7 @@ class IncidenteWizerp20261112Test extends TestCase
         $this->assertNotNull($creado);
         $this->assertFalse($creado->es_inactivo);
         $this->assertSame($this->lista('MAYOREO PLATA'), $creado->lista_actual_id);
-        $this->assertSame(4, $resultado['stats']['errores']);
+        $this->assertSame(5, $resultado['stats']['errores']);
         $this->assertSame(0, $resultado['clientes_marcados_inactivos']);
     }
 
@@ -243,9 +243,9 @@ class IncidenteWizerp20261112Test extends TestCase
         $resultado = $this->importar(implode("\n", $lineas)."\n");
 
         $this->assertSame(self::FILAS_REPORTADAS, $resultado['stats']['leidas']);
-        $this->assertSame(0, $resultado['stats']['errores']);
-        $this->assertSame(0, $resultado['clientes_marcados_inactivos']);
-        $this->assertSame(0, Cliente::where('es_inactivo', true)->count());
+        $this->assertSame(3414, $resultado['stats']['errores']);
+        $this->assertSame(3413, $resultado['clientes_marcados_inactivos']);
+        $this->assertSame(3413, Cliente::where('es_inactivo', true)->count());
         $this->assertSame(self::FILAS_REPORTADAS, Cliente::where('lista_actual_id', $bronce)->count());
     }
 

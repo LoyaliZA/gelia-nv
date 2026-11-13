@@ -21,6 +21,8 @@ class SolicitudBeneficio extends Model
 
     public const ESTADO_REEMPLAZADO = 'reemplazado';
 
+    public const ESTADO_RESTAURACION_PENDIENTE = 'restauracion_pendiente';
+
     protected $table = 'solicitud_beneficios';
 
     protected $fillable = [

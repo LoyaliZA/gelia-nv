@@ -1,14 +1,15 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import axios from 'axios';
-import { X } from 'lucide-react';
+import { AlertTriangle, X } from 'lucide-react';
+import { fechaLocal } from '../../../utils/fechaCalendario';
 import GeliaPaginacion from '../../../Components/GeliaPaginacion';
 import GeliaLoader from '../../../Components/GeliaLoader';
 import { THEME_BTN_PRIMARY, THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from '../../../utils/geliaTheme';
 import { FASES_CARGA, motivoCargaCliente } from '../../../utils/backgroundTaskAdapters';
 
 const TEXTOS = {
-    inactivacion: 'Hay inactivaciones propuestas. GELIA no las escribe hasta definir una señal explícita de baja.',
+    inactivacion: 'Hay inactivaciones previstas. Un código vacío con monto cero deja inactivo al cliente y conserva la lista almacenada.',
     codigo_vacio: 'Un código de lista vacío cambiaría el estado, la lista o la condición de menudeo.',
     lista_bloqueada: 'El archivo reemplazaría una lista protegida.',
     archivo_repetido: 'Este archivo ya fue importado.',
@@ -17,7 +18,7 @@ const TEXTOS = {
     descenso_lista: 'Hay descensos de lista. Quedan a la vista en esta revisión.',
     diferencia_monto: 'Si confirmas el archivo y la fila es válida, el monto se actualiza con el valor importado. Una diferencia de 1000 o más queda visible para revisión.',
     provisional_vigente: 'Hay provisionales vigentes. El oficial nuevo puede incluir ya esos importes. Esta actualización no los cierra.',
-    lista_mayorista_sin_conversion: 'Un código mayorista no retira Menudeo ni asigna esa lista sin una conversión autorizada.',
+    lista_mayorista_sin_conversion: 'Un código mayorista con monto explícito pasa el cliente a Mayoreo, salvo un conflicto real.',
     conversion_autorizada: 'Una importación con Público General no vuelve a marcar Menudeo si la conversión ya fue autorizada.',
 };
 
@@ -28,7 +29,10 @@ const CONTEOS = [
     ['sin_cambios', 'Sin cambios', false],
     ['errores', 'Errores', true],
     ['cambios_lista', 'Cambios de lista', true],
-    ['inactivaciones', 'Inactivaciones propuestas', true],
+    ['inactivaciones', 'Inactivaciones', true],
+    ['activaciones', 'Reactivaciones', true],
+    ['omitidas', 'Omitidos', false],
+    ['conflictos', 'Conflictos', true],
     ['cambios_monto', 'Diferencias monetarias', true],
 ];
 
@@ -39,6 +43,10 @@ const FILTROS = [
     ['actualizacion', 'Actualizaciones'],
     ['sin_cambios', 'Sin cambios'],
     ['error', 'Errores'],
+    ['inactivacion', 'Inactivación'],
+    ['reactivacion', 'Reactivación'],
+    ['omision', 'Omisión'],
+    ['conflicto', 'Conflicto'],
 ];
 
 const TIPOS = {
@@ -46,6 +54,8 @@ const TIPOS = {
     actualizacion: 'Actualización',
     sin_cambios: 'Sin cambios',
     error: 'Error',
+    omitida: 'Omitido',
+    conflicto: 'Conflicto pendiente',
 };
 
 const formatoMoneda = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
@@ -56,6 +66,31 @@ function etapaDe(fase) {
     if (fase === 'esperando_confirmacion') return 'revision';
     if (['completado', 'completado_con_incidencias', 'error'].includes(fase)) return 'resultados';
     return 'proceso';
+}
+
+function partesCorte(valor) {
+    const normal = String(valor || '').replace('T', ' ').trim();
+    const [fecha = '', hora = ''] = normal.split(' ');
+    let fechaLegible = fecha;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+        fechaLegible = fechaLocal(fecha).toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' });
+    }
+    return { fecha: fechaLegible, hora: hora.slice(0, 5) };
+}
+
+function senalesDeFila(motivo) {
+    const texto = motivo || '';
+    const senales = [];
+    if (/pasaría a inactivo/i.test(texto)) senales.push({ id: 'inactivo', texto: 'Cambio a Inactivo', tono: 'theme-element border theme-border theme-text-main' });
+    if (/pasaría a activo/i.test(texto)) senales.push({ id: 'activo', texto: 'Cambio a Activo', tono: 'bg-emerald-500/15 text-emerald-600 border border-emerald-500/40' });
+    if (/diferencia de monto supera 1000/i.test(texto)) senales.push({ id: 'mil', texto: 'Cambio superior a mil detectado', tono: 'bg-amber-500/15 text-amber-600 border border-amber-500/40' });
+    const resto = texto
+        .replace(/El cliente pasaría a inactivo\./gi, '')
+        .replace(/El cliente pasaría a activo\./gi, '')
+        .replace(/La diferencia de monto supera 1000\. Si la fila es válida, el monto importado se aplica al confirmar\./gi, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+    return { senales, resto };
 }
 
 function tonoAviso(codigo, bloqueo) {
@@ -76,9 +111,6 @@ export default function ModalRevisionImportacionClientes({ importacionId, onClos
     const [incidencias, setIncidencias] = useState(false);
     const [cargando, setCargando] = useState(true);
     const [confirmando, setConfirmando] = useState(false);
-    const [revisando, setRevisando] = useState(false);
-    const [modalidad, setModalidad] = useState('actualizacion_normal');
-    const [fechaCorte, setFechaCorte] = useState('');
     const [error, setError] = useState(null);
 
     const cargar = useCallback(async (pagina = 1) => {
@@ -121,12 +153,6 @@ export default function ModalRevisionImportacionClientes({ importacionId, onClos
     }, [progreso?.fase, cargar]);
 
     useEffect(() => {
-        if (!progreso?.token) return;
-        setModalidad(progreso.modalidad_carga || 'actualizacion_normal');
-        setFechaCorte(progreso.fecha_corte ? progreso.fecha_corte.replace(' ', 'T').slice(0, 16) : '');
-    }, [progreso?.token, progreso?.modalidad_carga, progreso?.fecha_corte]);
-
-    useEffect(() => {
         const previo = document.body.style.overflow;
         document.body.style.overflow = 'hidden';
         return () => { document.body.style.overflow = previo; };
@@ -156,36 +182,10 @@ export default function ModalRevisionImportacionClientes({ importacionId, onClos
         }
     };
 
-    const generarRevision = async () => {
-        if (revisando) return;
-        setRevisando(true);
-        setError(null);
-        try {
-            const { data } = await axios.post(route('admin.clientes.importaciones.reabrir', importacionId), {
-                modalidad_carga: modalidad,
-                fecha_corte: modalidad === 'actualizacion_con_corte' ? fechaCorte : null,
-            });
-            setProgreso(data);
-            setFilas(null);
-        } catch (e) {
-            setError(e.response?.data?.errors?.fecha_corte?.[0]
-                || e.response?.data?.errors?.modalidad_carga?.[0]
-                || e.response?.data?.errors?.archivo?.[0]
-                || 'No se pudo generar la nueva revisión.');
-        } finally {
-            setRevisando(false);
-        }
-    };
-
     const conteos = progreso?.conteos || {};
     const etapa = etapaDe(progreso?.fase);
     const modalidadGuardada = progreso?.modalidad_carga || 'actualizacion_normal';
-    const fechaGuardada = (progreso?.fecha_corte || '').replace('T', ' ').slice(0, 16);
-    const fechaElegida = fechaCorte ? fechaCorte.replace('T', ' ').slice(0, 16) : '';
-    const modalidadDistinta = etapa === 'revision' && (
-        modalidad !== modalidadGuardada
-        || (modalidad === 'actualizacion_con_corte' && fechaElegida !== fechaGuardada)
-    );
+    const corte = partesCorte(progreso?.fecha_corte);
     const atendidas = (progreso?.filas_procesadas || 0) + (progreso?.filas_omitidas || 0) + (progreso?.errores || 0);
     const porcentaje = progreso?.indeterminado ? null : (progreso?.porcentaje ?? 0);
 
@@ -233,38 +233,46 @@ export default function ModalRevisionImportacionClientes({ importacionId, onClos
                                     Bloqueo de archivo. {TEXTOS[bloqueo.codigo] || bloqueo.codigo} ({bloqueo.filas})
                                 </p>
                             ))}
-                            <fieldset className="rounded-xl border theme-border p-3 space-y-2">
+                            <fieldset className="rounded-xl border theme-border p-3 space-y-3">
                                 <legend className="text-[11px] font-bold theme-text-muted px-1">Modalidad de esta revisión</legend>
-                                <p className="text-sm theme-text-main m-0">
-                                    {modalidadGuardada === 'actualizacion_con_corte'
-                                        ? `Actualización con corte${progreso.fecha_corte ? ` · ${progreso.fecha_corte}` : ''}`
-                                        : 'Actualización normal'}
-                                </p>
-                                <label className="flex items-center gap-2 text-sm theme-text-main">
-                                    <input type="radio" name="modalidad-carga" checked={modalidad === 'actualizacion_normal'} onChange={() => setModalidad('actualizacion_normal')} />
-                                    Actualización normal
-                                </label>
-                                <label className="flex items-center gap-2 text-sm theme-text-main">
-                                    <input type="radio" name="modalidad-carga" checked={modalidad === 'actualizacion_con_corte'} onChange={() => setModalidad('actualizacion_con_corte')} />
-                                    Actualización con corte
-                                </label>
-                                {modalidad === 'actualizacion_con_corte' && (
-                                    <input
-                                        type="datetime-local"
-                                        value={fechaCorte}
-                                        onChange={(event) => setFechaCorte(event.target.value)}
-                                        aria-label="Fecha y hora del corte"
-                                        className="theme-element border theme-border rounded-xl px-3 py-2 text-sm theme-text-main"
-                                    />
-                                )}
-                                {modalidadDistinta && (
-                                    <p className="text-xs font-bold theme-text-aviso m-0">La opción cambió. Genera una nueva revisión antes de confirmar.</p>
+                                <p className="text-xs theme-text-muted m-0">Quedó definida antes del análisis. Confirmar usa esta misma opción.</p>
+                                <div className="flex flex-wrap gap-2">
+                                    <span className={`px-3 py-2 rounded-xl text-xs font-bold border ${modalidadGuardada === 'actualizacion_normal' ? 'text-white border-transparent' : 'theme-element theme-border theme-text-muted'}`} style={modalidadGuardada === 'actualizacion_normal' ? { backgroundColor: 'var(--color-primario)' } : {}}>
+                                        Actualización normal
+                                    </span>
+                                    <span className={`px-3 py-2 rounded-xl text-xs font-bold border ${modalidadGuardada === 'actualizacion_con_corte' ? 'text-white border-transparent' : 'theme-element theme-border theme-text-muted'}`} style={modalidadGuardada === 'actualizacion_con_corte' ? { backgroundColor: 'var(--color-primario)' } : {}}>
+                                        Actualización con corte
+                                    </span>
+                                </div>
+                                {modalidadGuardada === 'actualizacion_con_corte' && (
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                        <div className="theme-element border theme-border rounded-xl px-3 py-2">
+                                            <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0">Fecha</p>
+                                            <p className="text-sm font-bold theme-text-main m-0 capitalize">{corte.fecha || 'Sin fecha'}</p>
+                                        </div>
+                                        <div className="theme-element border theme-border rounded-xl px-3 py-2">
+                                            <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0">Hora</p>
+                                            <p className="text-sm font-bold theme-text-main m-0 tabular-nums">{corte.hora || 'Sin hora'}</p>
+                                        </div>
+                                    </div>
                                 )}
                             </fieldset>
                             {(progreso.avisos || []).map((aviso) => (
-                                <p key={aviso.codigo} className={`text-sm m-0 ${tonoAviso(aviso.codigo, false)}`}>
-                                    {aviso.codigo === 'diferencia_monto' ? 'Aviso.' : 'Advertencia.'} {TEXTOS[aviso.codigo] || aviso.codigo} ({aviso.filas})
-                                </p>
+                                aviso.codigo === 'diferencia_monto' ? (
+                                    <div key={aviso.codigo} className="relative overflow-hidden rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4">
+                                        <div className="flex items-center gap-4 min-w-0">
+                                            <AlertTriangle className="gelia-alerta-pulso w-12 h-12 shrink-0 text-amber-500" aria-hidden="true" />
+                                            <div className="min-w-0">
+                                                <p className="text-sm font-black theme-text-main m-0">Diferencia superior a mil</p>
+                                                <p className="text-xs theme-text-main m-0 mt-1">{aviso.filas} filas. Si la fila es válida, el monto importado se aplica al confirmar.</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <p key={aviso.codigo} className={`text-sm m-0 ${tonoAviso(aviso.codigo, false)}`}>
+                                        {TEXTOS[aviso.codigo] || aviso.codigo} ({aviso.filas})
+                                    </p>
+                                )
                             ))}
                             <div className="flex flex-col sm:flex-row gap-2">
                                 <input
@@ -284,8 +292,7 @@ export default function ModalRevisionImportacionClientes({ importacionId, onClos
                             <div className="space-y-2">
                                 {(filas?.data || []).map((fila) => {
                                     const cambios = Array.isArray(fila.cambios) ? fila.cambios : [];
-                                    const tono = fila.categoria === 'error' || fila.es_bloqueo ? 'theme-text-peligro' : fila.es_aviso ? 'theme-text-aviso' : 'theme-text-info';
-                                    const etiqueta = fila.categoria === 'error' || fila.es_bloqueo ? 'Error de fila' : fila.es_aviso ? 'Advertencia' : 'Aviso';
+                                    const { senales, resto } = senalesDeFila(fila.motivo);
                                     return (
                                         <article key={fila.id} className="theme-element border theme-border rounded-xl p-3 min-w-0">
                                             <p className="text-sm font-bold theme-text-main m-0 break-words">
@@ -293,16 +300,36 @@ export default function ModalRevisionImportacionClientes({ importacionId, onClos
                                             </p>
                                             <p className="text-xs theme-text-muted m-0 mt-1">{TIPOS[fila.categoria] || fila.categoria}</p>
                                             {cambios.map((cambio) => (
-                                                <p key={`${fila.id}-${cambio.campo}`} className="text-xs theme-text-main m-0 mt-1 break-words">
-                                                    {cambio.campo}: {cambio.campo === 'Monto' ? `${dinero(cambio.anterior)} → ${dinero(cambio.nuevo)}` : `${cambio.anterior} → ${cambio.nuevo}`}
-                                                </p>
+                                                cambio.campo === 'Inactividad' || cambio.campo === 'Menudeo' ? (
+                                                    <p key={`${fila.id}-${cambio.campo}`} className="flex flex-wrap items-center gap-2 m-0 mt-2">
+                                                        <span className="text-[10px] font-black uppercase tracking-widest theme-text-muted">{cambio.campo}</span>
+                                                        <span className="px-2 py-1 rounded-md text-[10px] font-black uppercase theme-element border theme-border theme-text-main">{cambio.anterior}</span>
+                                                        <span className="text-xs theme-text-muted" aria-hidden="true">→</span>
+                                                        <span className={`px-2 py-1 rounded-md text-[10px] font-black uppercase border ${cambio.nuevo === 'Inactivo' ? 'bg-amber-500/15 text-amber-600 border-amber-500/40' : 'bg-emerald-500/15 text-emerald-600 border-emerald-500/40'}`}>{cambio.nuevo}</span>
+                                                    </p>
+                                                ) : (
+                                                    <p key={`${fila.id}-${cambio.campo}`} className="text-xs theme-text-main m-0 mt-1 break-words">
+                                                        {cambio.campo}: {cambio.campo === 'Monto' ? `${dinero(cambio.anterior)} → ${dinero(cambio.nuevo)}` : `${cambio.anterior} → ${cambio.nuevo}`}
+                                                    </p>
+                                                )
                                             ))}
                                             {cambios.length === 0 && (fila.monto_anterior != null || fila.monto_nuevo != null) && (
                                                 <p className="text-xs theme-text-main m-0 mt-1">
                                                     Monto: {dinero(fila.monto_anterior)} → {dinero(fila.monto_nuevo)}
                                                 </p>
                                             )}
-                                            {fila.motivo && <p className={`text-xs m-0 mt-1 break-words ${tono}`}>{etiqueta}. {fila.motivo}</p>}
+                                            {senales.length > 0 && (
+                                                <div className="flex flex-wrap gap-2 mt-2">
+                                                    {senales.map((senal) => (
+                                                        <span key={senal.id} className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wide ${senal.tono}`}>
+                                                            {senal.id === 'mil' && <AlertTriangle className="w-3.5 h-3.5" aria-hidden="true" />}
+                                                            {senal.texto}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            )}
+                                            {fila.categoria === 'error' && fila.motivo && <p className="text-xs m-0 mt-1 break-words theme-text-peligro">Error de fila. {fila.motivo}</p>}
+                                            {fila.categoria !== 'error' && resto && <p className="text-xs m-0 mt-1 break-words theme-text-muted">{resto}</p>}
                                         </article>
                                     );
                                 })}
@@ -316,7 +343,7 @@ export default function ModalRevisionImportacionClientes({ importacionId, onClos
                         <div className="space-y-4">
                             <p className="text-sm theme-text-main m-0">{FASES_CARGA[progreso.fase] || 'Procesando'}</p>
                             <div className="h-2 rounded-full theme-element overflow-hidden" role="progressbar" aria-valuenow={porcentaje ?? 0} aria-valuemin={0} aria-valuemax={100}>
-                                <div className="h-full bg-[var(--color-primario)] transition-all" style={{ width: `${porcentaje ?? 8}%` }} />
+                                <div className="h-full bg-[var(--color-primario)] transition-all" style={{ width: `${porcentaje == null ? 0 : porcentaje}%` }} />
                             </div>
                             <p className="text-sm font-bold theme-text-main m-0 tabular-nums">
                                 {porcentaje === null ? 'El avance todavía no tiene un total confirmado.' : `${porcentaje}% · ${atendidas}/${progreso.filas_leidas || 0}`}
@@ -383,13 +410,8 @@ export default function ModalRevisionImportacionClientes({ importacionId, onClos
                     {etapa === 'resultados' && progreso?.fase !== 'error' && (
                         <button type="button" onClick={() => onResultados(importacionId)} className="theme-element border theme-border rounded-xl px-4 py-3 text-xs font-bold theme-text-main">Consultar resultados</button>
                     )}
-                    {etapa === 'revision' && modalidadDistinta && (
-                        <button type="button" onClick={generarRevision} disabled={revisando || (modalidad === 'actualizacion_con_corte' && !fechaCorte)} className="theme-element border theme-border rounded-xl px-4 py-3 text-xs font-bold theme-text-main sm:ml-auto disabled:opacity-50">
-                            {revisando ? 'Generando revisión…' : 'Generar nueva revisión'}
-                        </button>
-                    )}
                     {etapa === 'revision' && (
-                        <button type="button" onClick={confirmar} disabled={!progreso?.puede_confirmar || confirmando || modalidadDistinta} className={`${THEME_BTN_PRIMARY} rounded-xl px-4 py-3 text-xs font-black uppercase ${modalidadDistinta ? '' : 'sm:ml-auto'} disabled:opacity-50`}>
+                        <button type="button" onClick={confirmar} disabled={!progreso?.puede_confirmar || confirmando} className={`${THEME_BTN_PRIMARY} rounded-xl px-4 py-3 text-xs font-black uppercase sm:ml-auto disabled:opacity-50`}>
                             {progreso?.bloqueado ? 'Escritura detenida' : confirmando ? 'Confirmando…' : 'Confirmar importación'}
                         </button>
                     )}

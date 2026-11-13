@@ -3,11 +3,21 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\{AdminController, ClienteController};
 use App\Http\Controllers\Admin\AuditoriaMontosClienteController;
+use App\Http\Controllers\Admin\ConflictoImportacionClienteController;
 use App\Http\Controllers\Admin\ImportacionClienteSeguimientoController;
+use App\Http\Controllers\Admin\RecuperacionAplicacionClienteController;
 use App\Http\Controllers\Clientes\Direcciones\{ClienteDireccionController, SolicitudDireccionRevisionController};
 
 Route::middleware(['can:clientes.ver'])->group(function () {
     Route::get('/clientes', [AdminController::class, 'clientes'])->name('clientes');
+    Route::middleware(['can:clientes.resolver_conflicto_importacion'])->group(function () {
+        Route::get('/clientes/importaciones/conflictos', [ConflictoImportacionClienteController::class, 'index'])->name('clientes.conflictos');
+        Route::post('/clientes/importaciones/conflictos/{conflicto}', [ConflictoImportacionClienteController::class, 'resolver'])->name('clientes.conflictos.resolver');
+    });
+    Route::middleware(['can:clientes.recuperar_aplicacion_autorizada'])->group(function () {
+        Route::get('/clientes/autorizaciones/pendientes', [RecuperacionAplicacionClienteController::class, 'index'])->name('clientes.recuperacion');
+        Route::post('/clientes/autorizaciones/{solicitud}/aplicar', [RecuperacionAplicacionClienteController::class, 'aplicar'])->name('clientes.recuperacion.aplicar');
+    });
     Route::post('/clientes/importar/previsualizar', [AdminController::class, 'previsualizarImportacion'])->name('clientes.importar.previsualizar');
     Route::post('/clientes/importar/confirmar', [AdminController::class, 'confirmarImportacion'])->name('clientes.importar.confirmar');
     Route::post('/clientes/importaciones/{importacion}/revision', [AdminController::class, 'reabrirRevision'])->name('clientes.importaciones.reabrir');

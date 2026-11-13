@@ -51,6 +51,9 @@ class SolicitudTag extends Model
         'factura_razon_social',
         'archivo_facturas_path',
         'factura_datos_fiscales',
+        'aplicacion_cliente',
+        'aplicacion_error',
+        'aplicacion_intentos',
     ];
 
     protected $casts = [
