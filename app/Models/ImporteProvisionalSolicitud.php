@@ -29,6 +29,7 @@ class ImporteProvisionalSolicitud extends Model
         'estado',
         'importacion_cliente_id',
         'fecha_operacion',
+        'fecha_confirmacion',
         'fecha_corte',
         'origen',
         'usuario_id',
@@ -41,6 +42,7 @@ class ImporteProvisionalSolicitud extends Model
     protected $casts = [
         'importe' => 'decimal:2',
         'fecha_operacion' => 'datetime',
+        'fecha_confirmacion' => 'datetime',
         'fecha_corte' => 'datetime',
         'trazabilidad' => 'array',
     ];

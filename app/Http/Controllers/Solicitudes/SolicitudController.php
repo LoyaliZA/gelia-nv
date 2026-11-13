@@ -249,7 +249,7 @@ class SolicitudController extends Controller
                     $solicitud,
                     $esAlertaFaltaPago ? 'alerta_pago_insuficiente' : 'pago_confirmado',
                     $esAlertaFaltaPago
-                        ? Auth::user()->name.' registró un pago cuyo acumulado oficial no alcanza la lista solicitada.'
+                        ? Auth::user()->name.' registró un pago cuyo acumulado no alcanza la lista solicitada.'
                         : Auth::user()->name.' confirmó el pago. La lista no se modifica con este movimiento.',
                 ));
             }

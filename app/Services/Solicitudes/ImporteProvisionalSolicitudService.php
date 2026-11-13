@@ -3,6 +3,7 @@
 namespace App\Services\Solicitudes;
 
 use App\Models\Cliente;
+use App\Models\Escalonamiento\EscalonamientoConciliacionSolicitud;
 use App\Models\ImporteProvisionalSolicitud;
 use App\Models\SolicitudTag;
 use Carbon\Carbon;
@@ -42,20 +43,34 @@ class ImporteProvisionalSolicitudService
      */
     public function sustituirPorPago(SolicitudTag $solicitud, string $importe, ?int $usuarioId): void
     {
-        if (! $solicitud->exists || ! $this->admiteImporte($solicitud, $importe)) {
+        if (! $solicitud->exists) {
+            return;
+        }
+        $solicitud->loadMissing('proceso');
+        if ($solicitud->proceso?->esOperativo() || CrearSolicitudService::esFlujoTienda($solicitud)) {
+            return;
+        }
+        if (bccomp($this->decimal($importe), '0', 2) <= 0) {
+            $this->revocarSiVigente($solicitud, $usuarioId, 'pago_en_cero');
+
             return;
         }
 
         $vigente = $this->vigente($solicitud);
         if ($vigente) {
             $anterior = (string) $vigente->importe;
+            $aprobacion = $vigente->fecha_operacion;
+            $confirmacion = now();
             $vigente->tipo = ImporteProvisionalSolicitud::TIPO_PAGO;
             $vigente->importe = $this->decimal($importe);
+            $vigente->fecha_confirmacion = $confirmacion;
             $vigente->usuario_id = $usuarioId;
             $vigente->trazabilidad = $this->anotar($vigente, [
                 'evento' => 'pago_sustituye_cotizacion',
                 'importe_anterior' => $anterior,
                 'importe_pagado' => $this->decimal($importe),
+                'fecha_aprobacion' => $aprobacion?->format('Y-m-d H:i:s'),
+                'fecha_confirmacion' => $confirmacion->format('Y-m-d H:i:s'),
             ]);
             $vigente->save();
 
@@ -109,10 +124,19 @@ class ImporteProvisionalSolicitudService
 
     public function cerrarPorCorte(Cliente $cliente, Carbon $corte, int $importacionId, ?int $usuarioId): int
     {
+        $instante = $corte->format('Y-m-d H:i:s');
         $vigentes = ImporteProvisionalSolicitud::query()
             ->where('cliente_id', $cliente->id)
             ->where('estado', ImporteProvisionalSolicitud::ESTADO_VIGENTE)
-            ->where('fecha_operacion', '<=', $corte->format('Y-m-d H:i:s'))
+            ->where(function ($consulta) use ($instante) {
+                $consulta->where(function ($consulta) use ($instante) {
+                    $consulta->whereNotNull('fecha_confirmacion')
+                        ->where('fecha_confirmacion', '<=', $instante);
+                })->orWhere(function ($consulta) use ($instante) {
+                    $consulta->whereNull('fecha_confirmacion')
+                        ->where('fecha_operacion', '<=', $instante);
+                });
+            })
             ->lockForUpdate()
             ->get();
 
@@ -214,6 +238,35 @@ class ImporteProvisionalSolicitudService
         return bcadd(bcadd($oficial, $provisional, 2), $this->decimal($importeEnCurso), 2);
     }
 
+    /**
+     * El documento ya está dentro del oficial. Se suman los demás vigentes que
+     * la conciliación todavía no incluyó, y no se vuelve a sumar este pago.
+     */
+    public function baseConDocumentoIncluido(Cliente $cliente, SolicitudTag $enCurso, string $oficial): string
+    {
+        $vigentes = ImporteProvisionalSolicitud::query()
+            ->where('cliente_id', $cliente->id)
+            ->where('estado', ImporteProvisionalSolicitud::ESTADO_VIGENTE)
+            ->get(['solicitud_tag_id', 'importe']);
+        $incluidas = EscalonamientoConciliacionSolicitud::query()
+            ->where('estado', EscalonamientoConciliacionSolicitud::ESTADO_ASIGNADA)
+            ->where('inclusion_acumulado', EscalonamientoConciliacionSolicitud::INCLUSION_INCLUIDA)
+            ->whereIn('solicitud_tag_id', $vigentes->pluck('solicitud_tag_id'))
+            ->pluck('solicitud_tag_id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+        $excluir = array_merge($incluidas, [(int) $enCurso->id]);
+        $suma = '0.00';
+        foreach ($vigentes as $fila) {
+            if (in_array((int) $fila->solicitud_tag_id, $excluir, true)) {
+                continue;
+            }
+            $suma = bcadd($suma, (string) $fila->importe, 2);
+        }
+
+        return bcadd($this->decimal($oficial), $suma, 2);
+    }
+
     private function admiteImporte(SolicitudTag $solicitud, string $importe): bool
     {
         $solicitud->loadMissing('proceso');
@@ -259,6 +312,7 @@ class ImporteProvisionalSolicitudService
                 'tipo' => $tipo,
                 'estado' => ImporteProvisionalSolicitud::ESTADO_VIGENTE,
                 'fecha_operacion' => now(),
+                'fecha_confirmacion' => $tipo === ImporteProvisionalSolicitud::TIPO_PAGO ? now() : null,
                 'origen' => $origen,
                 'usuario_id' => $usuarioId,
                 'clave_operacion' => $solicitud->id.'-'.str_replace('.', '', uniqid('', true)),

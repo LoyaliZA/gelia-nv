@@ -5,6 +5,8 @@ namespace Tests\Feature\Solicitudes;
 use App\Models\Area;
 use App\Models\AuditoriaSolicitud;
 use App\Models\CatalogoEstadoSolicitud;
+use App\Models\Escalonamiento\EscalonamientoConciliacionSolicitud;
+use App\Models\Escalonamiento\EscalonamientoPeriodo;
 use App\Models\CatalogoListaDescuento;
 use App\Models\CatalogoProceso;
 use App\Models\CatalogoTipoCliente;
@@ -21,6 +23,7 @@ use App\Services\Escalonamiento\EscalonamientoAutoridadConfig;
 use App\Services\Solicitudes\AcumuladoOperativoCliente;
 use App\Services\Solicitudes\AjustarMontoPorSolicitudService;
 use App\Services\Solicitudes\ImporteProvisionalSolicitudService;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Notification;
@@ -199,22 +202,6 @@ class AcumuladoOperativoSolicitudTest extends TestCase
             'modalidad_carga' => ImportacionCliente::MODALIDAD_CORTE,
             'fecha_corte' => now()->addHour()->format('Y-m-d H:i:s'),
         ])->assertSessionHasErrors('fecha_corte');
-
-        $reciente = $this->cliente('5000.00', '8808');
-        $recienteSolicitud = $this->solicitud($reciente, '30000.00', $this->respondida);
-        $this->ajuste()->aplicarBeneficios($recienteSolicitud);
-        $this->retroceder($recienteSolicitud, 5);
-        HistorialMontoCliente::create([
-            'cliente_id' => $reciente->id,
-            'monto_anterior' => '1000.00',
-            'monto_nuevo' => '5000.00',
-            'diferencia_aplicada' => '4000.00',
-            'origen' => RegistrarHistorialMontoClienteService::ORIGEN_CARGA_MASIVA,
-        ]);
-        $anterior = $this->revisar($this->plantilla($reciente, '35000'), ImportacionCliente::MODALIDAD_CORTE, now()->subDays(3)->format('Y-m-d H:i:s'));
-        $this->confirmar($anterior, ImportacionCliente::MODALIDAD_CORTE, ImportacionCliente::find($anterior['importacion_id'])->resumen['revision']['fecha_corte']);
-        $this->assertSame('5000.00', $reciente->fresh()->monto_venta_actual);
-        $this->assertSame('vigente', ImporteProvisionalSolicitud::query()->where('cliente_id', $reciente->id)->value('estado'));
 
         $this->retroceder($solicitud, 2);
         $corte = now()->subDay()->format('Y-m-d H:i:s');
@@ -470,6 +457,166 @@ class AcumuladoOperativoSolicitudTest extends TestCase
 
         $this->artisan('solicitudes:reconciliar-importes-provisionales', ['--aplicar' => true])->assertSuccessful();
         $this->assertSame(1, ImporteProvisionalSolicitud::count());
+    }
+
+    public function test_confirmar_cero_revoca_la_cotizacion_vigente(): void
+    {
+        $cliente = $this->cliente('5000.00');
+        $solicitud = $this->solicitud($cliente, '30000.00', $this->pendiente);
+        $this->actingAs($this->vendedor)->put(route('solicitudes.actualizar_estado', $solicitud), [
+            'catalogo_estado_solicitud_id' => $this->respondida,
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->actingAs($this->vendedor)->put(route('solicitudes.confirmar_pago', $solicitud), [
+            'monto_final_pagado' => 0,
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $cliente->refresh();
+        $solicitud->refresh();
+        $this->assertSame('5000.00', $cliente->monto_venta_actual);
+        $this->assertTrue($solicitud->pago_confirmado);
+        $this->assertSame('0.00', (string) $solicitud->monto_aplicado_al_cliente);
+        $this->assertSame(0, ImporteProvisionalSolicitud::query()->where('estado', 'vigente')->count());
+        $this->assertSame('revocado', ImporteProvisionalSolicitud::query()->value('estado'));
+        $this->assertSame('5000.00', app(AcumuladoOperativoCliente::class)->operativo($cliente));
+    }
+
+    public function test_el_corte_anterior_al_pago_no_usa_la_fecha_de_la_cotizacion(): void
+    {
+        $zona = config('app.timezone');
+        $cliente = $this->cliente('5000.00', '8811');
+        $solicitud = $this->solicitud($cliente, '30000.00', $this->respondida);
+        Carbon::setTestNow(Carbon::parse('2026-11-07 10:00:00', $zona));
+        try {
+            $this->ajuste()->aplicarBeneficios($solicitud);
+            Carbon::setTestNow(Carbon::parse('2026-11-11 16:00:00', $zona));
+            $this->ajuste()->aplicarPagoConfirmado($solicitud, 28000, $this->vendedor->id);
+        } finally {
+            Carbon::setTestNow();
+        }
+
+        $fila = ImporteProvisionalSolicitud::query()->where('solicitud_tag_id', $solicitud->id)->firstOrFail();
+        $this->assertSame('2026-11-07 10:00:00', $fila->fecha_operacion->format('Y-m-d H:i:s'));
+        $this->assertSame('2026-11-11 16:00:00', $fila->fecha_confirmacion->format('Y-m-d H:i:s'));
+
+        $vista = $this->revisar($this->plantilla($cliente, '8000'), ImportacionCliente::MODALIDAD_CORTE, '2026-11-10 12:00:00');
+        $this->confirmar($vista, ImportacionCliente::MODALIDAD_CORTE, ImportacionCliente::find($vista['importacion_id'])->resumen['revision']['fecha_corte']);
+
+        $fila->refresh();
+        $this->assertSame('vigente', $fila->estado);
+        $this->assertSame('8000.00', $cliente->fresh()->monto_venta_actual);
+        $this->assertSame('36000.00', app(AcumuladoOperativoCliente::class)->operativo($cliente->fresh()));
+
+        app(ImporteProvisionalSolicitudService::class)->cerrarPorCorte(
+            $cliente->fresh(),
+            Carbon::parse('2026-11-11 18:00:00', $zona),
+            (int) $vista['importacion_id'],
+            $this->vendedor->id,
+        );
+        $this->assertSame('cerrado_por_corte', $fila->fresh()->estado);
+        $this->assertSame('2026-11-07 10:00:00', $fila->fresh()->fecha_operacion->format('Y-m-d H:i:s'));
+        $this->assertSame('8000.00', $cliente->fresh()->monto_venta_actual);
+        $this->assertSame('8000.00', app(AcumuladoOperativoCliente::class)->operativo($cliente->fresh()));
+    }
+
+    public function test_dos_cortes_consecutivos_no_se_comparan_con_la_hora_de_carga(): void
+    {
+        $cliente = $this->cliente('5000.00', '8812');
+        $primero = '2026-11-08 09:00:00';
+        $segundo = '2026-11-11 15:00:00';
+        $vista = $this->revisar($this->plantilla($cliente, '12000'), ImportacionCliente::MODALIDAD_CORTE, $primero);
+        $this->confirmar($vista, ImportacionCliente::MODALIDAD_CORTE, ImportacionCliente::find($vista['importacion_id'])->resumen['revision']['fecha_corte']);
+        $primeraId = (int) $vista['importacion_id'];
+        HistorialMontoCliente::query()->where('importacion_cliente_id', $primeraId)->update(['created_at' => '2026-11-12 18:00:00']);
+        ImportacionCliente::query()->whereKey($primeraId)->update(['created_at' => '2026-11-12 10:00:00']);
+
+        $this->assertTrue(
+            Carbon::parse(HistorialMontoCliente::query()->where('importacion_cliente_id', $primeraId)->value('created_at'))
+                ->greaterThan(Carbon::parse($segundo))
+        );
+
+        $siguiente = $this->revisar($this->plantilla($cliente, '18000'), ImportacionCliente::MODALIDAD_CORTE, $segundo);
+        $this->confirmar($siguiente, ImportacionCliente::MODALIDAD_CORTE, ImportacionCliente::find($siguiente['importacion_id'])->resumen['revision']['fecha_corte']);
+
+        $this->assertSame('18000.00', $cliente->fresh()->monto_venta_actual);
+        $this->assertTrue(
+            ImportacionCliente::find($siguiente['importacion_id'])->created_at
+                ->greaterThan(ImportacionCliente::find($primeraId)->created_at)
+        );
+
+        $atras = $this->revisar($this->plantilla($cliente, '9000'), ImportacionCliente::MODALIDAD_CORTE, '2026-11-09 09:00:00');
+        $this->confirmar($atras, ImportacionCliente::MODALIDAD_CORTE, ImportacionCliente::find($atras['importacion_id'])->resumen['revision']['fecha_corte']);
+        $this->assertSame('18000.00', $cliente->fresh()->monto_venta_actual);
+    }
+
+    public function test_la_conciliacion_incluida_usa_el_operativo_sin_duplicar_el_pago(): void
+    {
+        $periodo = EscalonamientoPeriodo::create([
+            'anio' => 2026,
+            'mes' => 11,
+            'zona_horaria' => 'America/Mexico_City',
+            'estado' => 'abierto',
+        ]);
+        $cliente = $this->cliente('5000.00', '8813');
+        $incluida = $this->solicitud($cliente, '3000.00', $this->respondida);
+        $otra = $this->solicitud($cliente, '12000.00', $this->respondida);
+        $this->ajuste()->aplicarBeneficios($incluida);
+        $this->ajuste()->aplicarBeneficios($otra);
+        $cliente->update(['lista_actual_id' => $this->plata->id]);
+        EscalonamientoConciliacionSolicitud::create([
+            'escalonamiento_periodo_id' => $periodo->id,
+            'solicitud_tag_id' => $incluida->id,
+            'importe_asignado' => '3000.00',
+            'estado' => EscalonamientoConciliacionSolicitud::ESTADO_ASIGNADA,
+            'procedencia' => EscalonamientoConciliacionSolicitud::PROCEDENCIA_DOCUMENTO,
+            'inclusion_acumulado' => EscalonamientoConciliacionSolicitud::INCLUSION_INCLUIDA,
+            'clave_asignacion' => 'incluida:'.$incluida->id,
+            'evidencia' => 'Documento ya incluido en el oficial.',
+        ]);
+
+        $insuficiente = $this->ajuste()->proyectarMonto($cliente->fresh(), $incluida->fresh(), 3000);
+        $this->assertSame('pago_insuficiente', $insuficiente['efecto_lista']);
+        $this->assertSame('5000.00', $insuficiente['venta_oficial']);
+        $this->assertSame(5000.0, $insuficiente['proyectado']);
+
+        $this->actingAs($this->vendedor)->put(route('solicitudes.confirmar_pago', $incluida), [
+            'monto_final_pagado' => 3000,
+        ])->assertRedirect()->assertSessionHasNoErrors();
+        $incluida->refresh();
+        $this->assertSame('5000.00', $cliente->fresh()->monto_venta_actual);
+        $this->assertSame('pago_insuficiente', $incluida->motivo_incorrecta);
+        $this->assertFalse($incluida->pago_confirmado);
+        $this->assertSame($this->plata->id, $cliente->fresh()->lista_actual_id);
+        $this->assertNull(ImporteProvisionalSolicitud::query()->where('solicitud_tag_id', $incluida->id)->where('estado', 'vigente')->value('id'));
+        $this->assertSame('12000.00', (string) ImporteProvisionalSolicitud::query()->where('solicitud_tag_id', $otra->id)->where('estado', 'vigente')->value('importe'));
+        $this->assertSame('17000.00', app(AcumuladoOperativoCliente::class)->operativo($cliente->fresh()));
+
+        $cubre = $this->cliente('5000.00', '8814');
+        $pago = $this->solicitud($cubre, '3000.00', $this->respondida);
+        $apoyo = $this->solicitud($cubre, '16000.00', $this->respondida);
+        $this->ajuste()->aplicarBeneficios($pago);
+        $this->ajuste()->aplicarBeneficios($apoyo);
+        $cubre->update(['lista_actual_id' => $this->plata->id]);
+        EscalonamientoConciliacionSolicitud::create([
+            'escalonamiento_periodo_id' => $periodo->id,
+            'solicitud_tag_id' => $pago->id,
+            'importe_asignado' => '3000.00',
+            'estado' => EscalonamientoConciliacionSolicitud::ESTADO_ASIGNADA,
+            'procedencia' => EscalonamientoConciliacionSolicitud::PROCEDENCIA_DOCUMENTO,
+            'inclusion_acumulado' => EscalonamientoConciliacionSolicitud::INCLUSION_INCLUIDA,
+            'clave_asignacion' => 'incluida:'.$pago->id,
+            'evidencia' => 'Documento ya incluido en el oficial.',
+        ]);
+
+        $decision = $this->ajuste()->proyectarMonto($cubre->fresh(), $pago->fresh(), 3000);
+        $this->assertSame('sin_cambio', $decision['efecto_lista']);
+        $this->actingAs($this->vendedor)->put(route('solicitudes.confirmar_pago', $pago), [
+            'monto_final_pagado' => 3000,
+        ])->assertRedirect()->assertSessionHasNoErrors();
+        $cubre->refresh();
+        $this->assertSame('5000.00', $cubre->monto_venta_actual);
+        $this->assertSame($this->plata->id, $cubre->lista_actual_id);
+        $this->assertSame('24000.00', app(AcumuladoOperativoCliente::class)->operativo($cubre));
     }
 
     private function ajuste(): AjustarMontoPorSolicitudService

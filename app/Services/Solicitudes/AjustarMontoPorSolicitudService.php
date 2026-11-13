@@ -304,9 +304,10 @@ class AjustarMontoPorSolicitudService
             }
             $item->loadMissing('listaDescuento');
             $requerido = $item->listaDescuento?->monto_requerido;
-            if ($requerido !== null && bccomp($oficial, $this->dinero($requerido), 2) < 0) {
+            $base = $this->importes->baseConDocumentoIncluido($cliente, $item, $oficial);
+            if ($requerido !== null && bccomp($base, $this->dinero($requerido), 2) < 0) {
                 $efecto = 'pago_insuficiente';
-                $motivo = 'El acumulado oficial no alcanza la lista solicitada. El documento conciliado ya forma parte de ese acumulado.';
+                $motivo = 'El acumulado no alcanza la lista solicitada. El documento conciliado ya está en el oficial y no se vuelve a sumar.';
                 continue;
             }
             $efecto = 'sin_cambio';

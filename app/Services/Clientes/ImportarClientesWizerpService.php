@@ -9,6 +9,7 @@ use App\Models\ErroresImportacionCliente;
 use App\Models\FilaRevisionImportacionCliente;
 use App\Models\HistorialMontoCliente;
 use App\Models\ImportacionCliente;
+use App\Models\ImporteProvisionalSolicitud;
 use App\Models\User;
 use App\Notifications\AlertaLimiteCreditoSuperadoMasivoNotification;
 use App\Services\Escalonamiento\EscalonamientoAutoridad;
@@ -291,17 +292,41 @@ class ImportarClientesWizerpService
 
     private function corteAnteriorAlOficial(Cliente $cliente, \Carbon\Carbon $corte, ?int $exceptoImportacionId): bool
     {
-        $ultimo = HistorialMontoCliente::query()
+        $ultimo = $this->ultimoCorteAplicado($cliente, $exceptoImportacionId);
+
+        return $ultimo !== null && $ultimo->greaterThan($corte);
+    }
+
+    private function ultimoCorteAplicado(Cliente $cliente, ?int $exceptoImportacionId): ?\Carbon\Carbon
+    {
+        $porImporte = ImportacionCliente::query()
+            ->where('modalidad_carga', ImportacionCliente::MODALIDAD_CORTE)
+            ->whereNotNull('fecha_corte')
+            ->when($exceptoImportacionId, fn ($consulta) => $consulta->where('id', '!=', $exceptoImportacionId))
+            ->whereIn('id', HistorialMontoCliente::query()
+                ->where('cliente_id', $cliente->id)
+                ->whereNotNull('importacion_cliente_id')
+                ->select('importacion_cliente_id'))
+            ->max('fecha_corte');
+        $porCierre = ImporteProvisionalSolicitud::query()
             ->where('cliente_id', $cliente->id)
+            ->whereNotNull('fecha_corte')
             ->when($exceptoImportacionId, function ($consulta) use ($exceptoImportacionId) {
                 $consulta->where(function ($consulta) use ($exceptoImportacionId) {
                     $consulta->whereNull('importacion_cliente_id')
                         ->orWhere('importacion_cliente_id', '!=', $exceptoImportacionId);
                 });
             })
-            ->max('created_at');
+            ->max('fecha_corte');
+        $fechas = array_filter([$porImporte, $porCierre]);
+        if ($fechas === []) {
+            return null;
+        }
 
-        return $ultimo !== null && \Carbon\Carbon::parse($ultimo)->greaterThan($corte);
+        return collect($fechas)
+            ->map(fn ($fecha) => \Carbon\Carbon::parse($fecha))
+            ->sortByDesc(fn (\Carbon\Carbon $fecha) => $fecha->getTimestamp())
+            ->first();
     }
 
     private function guardarProgreso(?ImportacionCliente $importacion, array $stats, string $estado, ?string $mensaje = null): void
