@@ -5,7 +5,7 @@ import { X } from 'lucide-react';
 import GeliaPaginacion from '../../../Components/GeliaPaginacion';
 import GeliaLoader from '../../../Components/GeliaLoader';
 import { THEME_BTN_PRIMARY, THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from '../../../utils/geliaTheme';
-import { FASES_CARGA } from '../../../utils/backgroundTaskAdapters';
+import { FASES_CARGA, motivoCargaCliente } from '../../../utils/backgroundTaskAdapters';
 
 const TEXTOS = {
     inactivacion: 'Hay inactivaciones propuestas. GELIA no las escribe hasta definir una señal explícita de baja.',
@@ -216,7 +216,7 @@ export default function ModalRevisionImportacionClientes({ importacionId, onClos
 
                 <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5 space-y-4">
                     {cargando && !progreso ? <GeliaLoader /> : null}
-                    {(error || progreso?.mensaje) && <p className="text-sm font-bold theme-text-peligro m-0">{error || progreso.mensaje}</p>}
+                    {(error || progreso?.mensaje) && <p className="text-sm font-bold theme-text-peligro m-0 break-words">{motivoCargaCliente(error || progreso.mensaje)}</p>}
 
                     {etapa === 'revision' && progreso && (
                         <>

@@ -30,7 +30,11 @@ class ValidarArchivoClientesWizerp
                 'dias_de_credito' => 'dias_credito', 'correo' => 'correo_electronico', 'email' => 'correo_electronico',
                 'cp' => 'codigo_postal', 'razon_social' => 'nombre_razon_social',
             ];
-            $headers = array_map(fn ($v) => $alias[strtolower(trim($v ?? ''))] ?? strtolower(trim($v ?? '')), $raw);
+            $headers = array_map(function ($v) use ($alias) {
+                $texto = strtolower($this->texto((string) ($v ?? '')));
+
+                return $alias[$texto] ?? $texto;
+            }, $raw);
             if (in_array('', $headers, true) || count(array_unique($headers)) !== count($headers) || ! in_array('numero_cliente', $headers, true)) {
                 throw ValidationException::withMessages(['archivo' => 'Cabeceras inválidas: se requiere numero_cliente y columnas únicas después de resolver alias.']);
             }
@@ -45,7 +49,7 @@ class ValidarArchivoClientesWizerp
                 if (count($row) !== count($headers)) {
                     throw ValidationException::withMessages(['archivo' => "Fila {$numero}: número de columnas distinto de la cabecera."]);
                 }
-                $data = array_combine($headers, array_map(fn ($v) => trim($v ?? ''), $row));
+                $data = array_combine($headers, array_map(fn ($v) => $this->texto((string) ($v ?? '')), $row));
                 $key = 'cliente:'.$data['numero_cliente'];
                 $duplicada = isset($vistos[$key]) && $data['numero_cliente'] !== '';
                 if ($duplicada && $vistos[$key]['data'] !== $data) {
@@ -63,5 +67,16 @@ class ValidarArchivoClientesWizerp
         } finally {
             fclose($file);
         }
+    }
+
+    // Excel en Windows exporta CSV en Windows-1252; json_encode rechaza esos bytes.
+    private function texto(string $valor): string
+    {
+        $valor = trim($valor);
+        if ($valor === '' || preg_match('//u', $valor) === 1) {
+            return $valor;
+        }
+
+        return mb_convert_encoding($valor, 'UTF-8', 'Windows-1252');
     }
 }

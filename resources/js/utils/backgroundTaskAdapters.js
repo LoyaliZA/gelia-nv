@@ -3,6 +3,17 @@ import {
     ESTADOS_TERMINALES,
 } from './tiendanubeImageImportTracker';
 
+export function motivoCargaCliente(texto) {
+    if (!texto) return null;
+    if (texto.includes('has timed out')) {
+        return 'La carga superó el tiempo disponible y se detuvo antes de aplicar los registros.';
+    }
+    if (texto.includes('Invalid JSON') || texto.includes('may need CAST')) {
+        return 'La revisión no pudo guardar el archivo porque un texto no venía en un formato legible.';
+    }
+    return texto;
+}
+
 export const FASES_CARGA = {
     preparando: 'Preparando archivo',
     subiendo: 'Subiendo archivo',
@@ -54,14 +65,14 @@ function presentarClientes(data) {
         porcentaje,
         indeterminado: porcentaje == null,
         descripcion: data.mensaje
-            ? data.mensaje
+            ? motivoCargaCliente(data.mensaje)
             : (transfiriendo
                 ? 'El archivo todavía se está transfiriendo. Esta página debe seguir abierta.'
                 : 'El servidor ya recibió el archivo. El proceso continúa sin dejar esta página abierta.'),
         detalle: data.filas_leidas
             ? `${data.filas_procesadas ?? 0}/${data.filas_leidas} · pendientes ${data.pendientes ?? 0} · errores ${data.errores ?? 0}`
             : null,
-        error: data.mensaje || null,
+        error: motivoCargaCliente(data.mensaje),
         activo: FASES_ACTIVAS_CLIENTES.includes(fase),
         terminal: FASES_TERMINALES_CLIENTES.includes(fase),
         href: `${route('admin.clientes')}?importacion=${data.id}`,
@@ -98,7 +109,7 @@ export const TASK_ADAPTERS = {
             if (fase === 'completado_con_incidencias') {
                 return { tipo: 'error', mensaje: `Carga de clientes #${data.id} terminó con incidencias.` };
             }
-            return { tipo: 'error', mensaje: data.mensaje || `Carga de clientes #${data.id} falló.` };
+            return { tipo: 'error', mensaje: motivoCargaCliente(data.mensaje) || `Carga de clientes #${data.id} falló.` };
         },
     },
 };

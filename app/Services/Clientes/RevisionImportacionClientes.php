@@ -697,14 +697,26 @@ class RevisionImportacionClientes
             'es_bloqueo' => $bloqueo ? 1 : 0,
             'es_aviso' => $aviso ? 1 : 0,
             'cambios' => $cambios === null || $cambios === [] ? null : json_encode($cambios, JSON_UNESCAPED_UNICODE),
-            'datos' => json_encode([
-                'data' => $fila['data'] ?? [],
-                'duplicada' => (bool) ($fila['duplicada'] ?? false),
-            ], JSON_UNESCAPED_UNICODE),
+            'datos' => $this->jsonDatosRevision($fila),
         ];
         if (count($this->loteRevision) >= 200 || $this->hechasRevision === $total || $this->hechasRevision % 50 === 0) {
             $this->vaciarRevision(true, $importacion, $total);
         }
+    }
+
+    private function jsonDatosRevision(array $fila): string
+    {
+        $datos = json_encode([
+            'data' => $fila['data'] ?? [],
+            'duplicada' => (bool) ($fila['duplicada'] ?? false),
+        ], JSON_UNESCAPED_UNICODE);
+        if ($datos === false) {
+            throw ValidationException::withMessages([
+                'archivo' => 'Fila '.(int) ($fila['numero_fila'] ?? 0).': hay texto que no se pudo leer. Guarde el archivo como CSV UTF-8.',
+            ]);
+        }
+
+        return $datos;
     }
 
     private function vaciarRevision(bool $persistir, ImportacionCliente $importacion, int $total): void

@@ -9,6 +9,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Log;
 use Throwable;
 
 class AnalizarImportacionClientesJob implements ShouldQueue
@@ -43,9 +44,21 @@ class AnalizarImportacionClientesJob implements ShouldQueue
         if (! $importacion || in_array($importacion->estado, ['previsualizada', 'completo', 'parcial', 'cancelada'], true)) {
             return;
         }
+        Log::error('La importación de clientes falló al revisar el archivo.', [
+            'importacion_id' => $this->importacionId,
+            'excepcion' => $e::class,
+            'motivo' => $this->motivoSinDatos($e->getMessage()),
+        ]);
         $importacion->update([
             'estado' => 'fallido',
             'mensaje_fatal' => mb_substr($e->getMessage(), 0, 500),
         ]);
+    }
+
+    private function motivoSinDatos(string $mensaje): string
+    {
+        $corte = strstr($mensaje, 'SQL:', true);
+
+        return mb_substr(trim($corte === false ? $mensaje : $corte), 0, 300);
     }
 }

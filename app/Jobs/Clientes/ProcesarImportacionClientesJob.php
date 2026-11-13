@@ -13,6 +13,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use Throwable;
@@ -23,7 +24,8 @@ class ProcesarImportacionClientesJob implements ShouldQueue
 
     public const LOTE = 40;
 
-    public int $timeout = 55;
+    // La confirmación vuelve a leer el archivo completo (~62 s en 6835 filas) antes del primer lote.
+    public int $timeout = 180;
 
     public int $tries = 1;
 
@@ -66,9 +68,14 @@ class ProcesarImportacionClientesJob implements ShouldQueue
                 try {
                     $cacheado = $revision->assertRevisionVigente($importacion, $this->token);
                 } catch (ValidationException $e) {
+                    $mensaje = (string) collect($e->errors())->flatten()->first();
+                    Log::error('La importación de clientes rechazó la confirmación.', [
+                        'importacion_id' => $importacion->id,
+                        'motivo' => mb_substr($mensaje, 0, 300),
+                    ]);
                     $importacion->update([
                         'estado' => 'fallido',
-                        'mensaje_fatal' => (string) collect($e->errors())->flatten()->first(),
+                        'mensaje_fatal' => $mensaje,
                     ]);
 
                     return;
@@ -91,6 +98,10 @@ class ProcesarImportacionClientesJob implements ShouldQueue
 
                     return;
                 }
+                Log::error('La importación de clientes no pudo escribir el lote.', [
+                    'importacion_id' => $importacion->id,
+                    'motivo' => mb_substr($mensaje, 0, 300),
+                ]);
                 $importacion->refresh();
                 if (! in_array($importacion->estado, ['parcial', 'fallido', 'completo'], true)) {
                     $importacion->update(['estado' => 'fallido', 'mensaje_fatal' => $mensaje]);
@@ -129,6 +140,11 @@ class ProcesarImportacionClientesJob implements ShouldQueue
         if (! $importacion || in_array($importacion->estado, ['completo', 'parcial', 'previsualizada', 'cancelada'], true)) {
             return;
         }
+        Log::error('La importación de clientes falló al escribir.', [
+            'importacion_id' => $this->importacionId,
+            'excepcion' => $e::class,
+            'motivo' => mb_substr(trim((string) (strstr($e->getMessage(), 'SQL:', true) ?: $e->getMessage())), 0, 300),
+        ]);
         $importacion->update([
             'estado' => $importacion->filas_procesadas > 0 ? 'parcial' : 'fallido',
             'mensaje_fatal' => mb_substr($e->getMessage(), 0, 500),

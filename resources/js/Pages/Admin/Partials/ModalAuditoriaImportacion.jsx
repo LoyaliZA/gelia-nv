@@ -5,6 +5,7 @@ import { X, History, AlertTriangle, ChevronRight, TrendingUp } from 'lucide-reac
 import GeliaPaginacion from '../../../Components/GeliaPaginacion';
 import GeliaLoader from '../../../Components/GeliaLoader';
 import { THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from '../../../utils/geliaTheme';
+import { motivoCargaCliente } from '../../../utils/backgroundTaskAdapters';
 
 const formatMoneda = (valor) => new Intl.NumberFormat('es-MX', {
     style: 'currency',
@@ -14,6 +15,18 @@ const formatMoneda = (valor) => new Intl.NumberFormat('es-MX', {
 const nombreUsuario = (usuario) => {
     if (!usuario) return 'Sistema';
     return [usuario.name, usuario.apellido_paterno].filter(Boolean).join(' ');
+};
+
+const ESTADO_CARGA = {
+    fallido: 'No terminó',
+    parcial: 'Parcial',
+    completo: 'Completa',
+    cancelada: 'Cancelada',
+    previsualizada: 'En revisión',
+    analizando: 'Analizando',
+    en_curso: 'En proceso',
+    en_cola: 'En proceso',
+    recibido: 'Recibida',
 };
 
 const TIPO_CAMBIO_LABELS = {
@@ -138,7 +151,7 @@ export default function ModalAuditoriaImportacion({ importacionId, onClose }) {
                             <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                                 {[
                                     { label: 'Leídas', value: importacion.filas_leidas },
-                                    { label: 'Estado', value: importacion.estado ?? 'Histórico' },
+                                    { label: 'Estado', value: ESTADO_CARGA[importacion.estado] || importacion.estado || 'Histórico', danger: importacion.estado === 'fallido' },
                                     ...(['creados', 'actualizados', 'sin_cambios', 'activados', 'cambios_lista'].map((campo) => ({ label: campo.replaceAll('_', ' '), value: importacion.resumen?.[campo] ?? '—' }))),
                                     { label: 'Inactivados', value: importacion.resumen?.clientes_marcados_inactivos ?? '—' },
                                     { label: 'Errores', value: importacion.errores, danger: true },
@@ -156,6 +169,12 @@ export default function ModalAuditoriaImportacion({ importacionId, onClose }) {
                                     </div>
                                 ))}
                             </div>
+                        )}
+
+                        {importacion && motivoCargaCliente(importacion.mensaje_fatal) && (
+                            <p className="text-sm font-bold theme-text-peligro m-0 break-words">
+                                {motivoCargaCliente(importacion.mensaje_fatal)}
+                            </p>
                         )}
 
                         {importacion && (
