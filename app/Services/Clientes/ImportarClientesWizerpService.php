@@ -9,10 +9,13 @@ use App\Models\ErroresImportacionCliente;
 use App\Models\FilaRevisionImportacionCliente;
 use App\Models\HistorialMontoCliente;
 use App\Models\ImportacionCliente;
+use App\Models\ImporteProvisionalSolicitud;
 use App\Models\User;
 use App\Notifications\AlertaLimiteCreditoSuperadoMasivoNotification;
+use App\Services\Escalonamiento\EscalonamientoAutoridad;
 use App\Services\Mobile\MobileSyncPublicationService;
 use App\Services\Mobile\MobileSyncSuppression;
+use App\Services\Solicitudes\ImporteProvisionalSolicitudService;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
@@ -131,6 +134,7 @@ class ImportarClientesWizerpService
                             $this->exigirEstadoAprobado($cliente, $estadoAprobado[$fila['data']['numero_cliente']]);
                         }
                         $antes = $cliente ? clone $cliente : null;
+                        $this->exigirCorteAplicable($importacion, $cliente, $fila['data']);
                         $coleccion = collect($cliente ? [$cliente->numero_cliente => $cliente] : []);
                         $historial = [];
                         $inactivos = 0;
@@ -147,6 +151,8 @@ class ImportarClientesWizerpService
                             if ($historial !== []) {
                                 HistorialMontoCliente::insert($historial);
                             }
+                            $this->cerrarProvisionalesSiCorte($importacion, $despues, $fila['data']);
+                            $this->registrarCorteAplicado($importacion, $despues, $fila['data']);
                             if ($cambio && $importacion) {
                                 CambioListaImportacionCliente::create([
                                     'importacion_cliente_id' => $importacion->id, 'numero_cliente' => $cambio['numero_cliente'],
@@ -248,6 +254,98 @@ class ImportarClientesWizerpService
             'hay_mas' => $hayMas,
             'cursor_fila' => $this->cursorFila,
         ];
+    }
+
+    public function exigirCorteAplicable(?ImportacionCliente $importacion, ?Cliente $cliente, array $data): void
+    {
+        if (! $importacion || ! $cliente || $importacion->modalidad_carga !== ImportacionCliente::MODALIDAD_CORTE || ! $importacion->fecha_corte) {
+            return;
+        }
+        if (app(MontoWizerp::class)->interpretar($data['monto_venta_actual'] ?? null) === null) {
+            return;
+        }
+        if ($this->corteAnteriorAlOficial($cliente, $importacion->fecha_corte, $importacion->id)) {
+            throw ValidationException::withMessages([
+                'fecha_corte' => 'El corte es anterior a la última actualización oficial de este cliente. No se escribe el monto ni se cierran provisionales.',
+            ]);
+        }
+    }
+
+    private function cerrarProvisionalesSiCorte(?ImportacionCliente $importacion, Cliente $cliente, array $data): void
+    {
+        if (! $importacion || $importacion->modalidad_carga !== ImportacionCliente::MODALIDAD_CORTE || ! $importacion->fecha_corte) {
+            return;
+        }
+        if (app(MontoWizerp::class)->interpretar($data['monto_venta_actual'] ?? null) === null) {
+            return;
+        }
+        if (app(EscalonamientoAutoridad::class)->clienteGobernadoPorModulo($cliente)) {
+            return;
+        }
+
+        app(ImporteProvisionalSolicitudService::class)->cerrarPorCorte(
+            $cliente,
+            $importacion->fecha_corte,
+            $importacion->id,
+            $importacion->usuario_id,
+        );
+    }
+
+    private function registrarCorteAplicado(?ImportacionCliente $importacion, Cliente $cliente, array $data): void
+    {
+        if (! $importacion || $importacion->modalidad_carga !== ImportacionCliente::MODALIDAD_CORTE || ! $importacion->fecha_corte) {
+            return;
+        }
+        if (app(MontoWizerp::class)->interpretar($data['monto_venta_actual'] ?? null) === null) {
+            return;
+        }
+        if (app(EscalonamientoAutoridad::class)->clienteGobernadoPorModulo($cliente)) {
+            return;
+        }
+
+        Cliente::query()->whereKey($cliente->id)->update([
+            'fecha_ultimo_corte_administrativo' => $importacion->fecha_corte->format('Y-m-d H:i:s'),
+        ]);
+    }
+
+    private function corteAnteriorAlOficial(Cliente $cliente, \Carbon\Carbon $corte, ?int $exceptoImportacionId): bool
+    {
+        $ultimo = $this->ultimoCorteAplicado($cliente, $exceptoImportacionId);
+
+        return $ultimo !== null && $ultimo->greaterThan($corte);
+    }
+
+    private function ultimoCorteAplicado(Cliente $cliente, ?int $exceptoImportacionId): ?\Carbon\Carbon
+    {
+        $porImporte = ImportacionCliente::query()
+            ->where('modalidad_carga', ImportacionCliente::MODALIDAD_CORTE)
+            ->whereNotNull('fecha_corte')
+            ->when($exceptoImportacionId, fn ($consulta) => $consulta->where('id', '!=', $exceptoImportacionId))
+            ->whereIn('id', HistorialMontoCliente::query()
+                ->where('cliente_id', $cliente->id)
+                ->whereNotNull('importacion_cliente_id')
+                ->select('importacion_cliente_id'))
+            ->max('fecha_corte');
+        $porCierre = ImporteProvisionalSolicitud::query()
+            ->where('cliente_id', $cliente->id)
+            ->whereNotNull('fecha_corte')
+            ->when($exceptoImportacionId, function ($consulta) use ($exceptoImportacionId) {
+                $consulta->where(function ($consulta) use ($exceptoImportacionId) {
+                    $consulta->whereNull('importacion_cliente_id')
+                        ->orWhere('importacion_cliente_id', '!=', $exceptoImportacionId);
+                });
+            })
+            ->max('fecha_corte');
+        $porCliente = Cliente::query()->whereKey($cliente->id)->value('fecha_ultimo_corte_administrativo');
+        $fechas = array_filter([$porImporte, $porCierre, $porCliente]);
+        if ($fechas === []) {
+            return null;
+        }
+
+        return collect($fechas)
+            ->map(fn ($fecha) => \Carbon\Carbon::parse($fecha))
+            ->sortByDesc(fn (\Carbon\Carbon $fecha) => $fecha->getTimestamp())
+            ->first();
     }
 
     private function guardarProgreso(?ImportacionCliente $importacion, array $stats, string $estado, ?string $mensaje = null): void

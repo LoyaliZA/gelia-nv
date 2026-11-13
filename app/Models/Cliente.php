@@ -34,6 +34,7 @@ class Cliente extends Model
         'vendedor_id',
         'vendedor_original_id', // Agregado a la asignación masiva
         'monto_venta_actual',
+        'fecha_ultimo_corte_administrativo',
         'es_heredado',
         'es_inactivo',
         'es_menudeo',
@@ -69,6 +70,7 @@ class Cliente extends Model
 
     protected $casts = [
         'monto_venta_actual' => 'decimal:2',
+        'fecha_ultimo_corte_administrativo' => 'datetime',
         'es_heredado' => 'boolean',
         'es_inactivo' => 'boolean',
         'es_menudeo' => 'boolean',

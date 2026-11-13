@@ -14,6 +14,7 @@ use App\Models\CatalogoEstadoSolicitud;
 use App\Models\CatalogoTipoCliente;
 use App\Models\TabuladorComision;
 use Illuminate\Support\Facades\DB;
+use App\Services\Clientes\FechaCorteImportacion;
 use App\Services\Clientes\RegistrarImportacionClienteService;
 use App\Services\Clientes\PresentarSeguimientoImportacionCliente;
 use App\Jobs\Clientes\AnalizarImportacionClientesJob;
@@ -681,6 +682,7 @@ class AdminController extends Controller
         @set_time_limit(0);
 
         $importacion = $registrarImportacion->iniciar($request->file('archivo'));
+        $this->guardarModalidad($importacion, $request);
         $mensaje = 'El servidor recibió el archivo, pero no hay un trabajador activo para analizarlo.';
         $importacion->update(['estado' => 'recibido', 'mensaje_fatal' => $cola->puedeEncolar() ? null : $mensaje]);
         if (! $cola->puedeEncolar()) {
@@ -726,6 +728,7 @@ class AdminController extends Controller
         if (! is_array($revision) || ! hash_equals((string) ($revision['token'] ?? ''), (string) $request->input('token'))) {
             throw ValidationException::withMessages(['archivo' => 'La confirmación no corresponde a la revisión de este archivo.']);
         }
+        $this->exigirModalidadDeRevision($importacion, $request);
         if (! empty($revision['aplicada']) && is_array($revision['resultado'] ?? null)) {
             return $this->responderConfirmacion($request, $presentar, $importacion, $revision['resultado']);
         }
@@ -774,6 +777,71 @@ class AdminController extends Controller
         $resultado = $importacion->resumen['revision']['resultado'] ?? null;
 
         return $this->responderConfirmacion($request, $presentar, $importacion, is_array($resultado) ? $resultado : null);
+    }
+
+    public function reabrirRevision(
+        Request $request,
+        ImportacionCliente $importacion,
+        DisponibilidadCola $cola,
+        PresentarSeguimientoImportacionCliente $presentar,
+    ) {
+        Gate::authorize('clientes.carga_masiva');
+        if ((int) $importacion->usuario_id !== (int) $request->user()->id) {
+            abort(404);
+        }
+        if ($importacion->estado !== 'previsualizada') {
+            throw ValidationException::withMessages(['archivo' => 'Esta revisión ya no se puede volver a generar.']);
+        }
+        if (! $cola->puedeEncolar()) {
+            throw ValidationException::withMessages(['archivo' => 'No hay un trabajador activo para analizar el archivo.']);
+        }
+
+        $this->guardarModalidad($importacion, $request);
+        $importacion->estado = 'analizando';
+        $importacion->mensaje_fatal = null;
+        $importacion->save();
+        AnalizarImportacionClientesJob::dispatch($importacion->id);
+
+        return response()->json($presentar->progreso($importacion->fresh()));
+    }
+
+    private function guardarModalidad(ImportacionCliente $importacion, Request $request): void
+    {
+        $modalidad = (string) $request->input('modalidad_carga', ImportacionCliente::MODALIDAD_NORMAL);
+        if (! in_array($modalidad, [ImportacionCliente::MODALIDAD_NORMAL, ImportacionCliente::MODALIDAD_CORTE], true)) {
+            throw ValidationException::withMessages(['modalidad_carga' => 'La modalidad de carga no es válida.']);
+        }
+        $fecha = null;
+        if ($modalidad === ImportacionCliente::MODALIDAD_CORTE) {
+            $fecha = app(FechaCorteImportacion::class)->exigir((string) $request->input('fecha_corte'));
+        }
+        $importacion->forceFill([
+            'modalidad_carga' => $modalidad,
+            'fecha_corte' => $fecha,
+        ])->save();
+    }
+
+    private function exigirModalidadDeRevision(ImportacionCliente $importacion, Request $request): void
+    {
+        $revision = is_array($importacion->resumen) ? ($importacion->resumen['revision'] ?? []) : [];
+        $esperada = $revision['modalidad_carga'] ?? ImportacionCliente::MODALIDAD_NORMAL;
+        $enviada = (string) $request->input('modalidad_carga', ImportacionCliente::MODALIDAD_NORMAL);
+        if ($enviada !== $esperada) {
+            throw ValidationException::withMessages([
+                'modalidad_carga' => 'La modalidad no coincide con la revisión. Genera una nueva revisión del archivo.',
+            ]);
+        }
+        if ($esperada !== ImportacionCliente::MODALIDAD_CORTE) {
+            return;
+        }
+        $enviadaFecha = app(FechaCorteImportacion::class)
+            ->exigir((string) $request->input('fecha_corte'))
+            ->format('Y-m-d H:i:s');
+        if ($enviadaFecha !== ($revision['fecha_corte'] ?? null)) {
+            throw ValidationException::withMessages([
+                'fecha_corte' => 'La fecha de corte no coincide con la revisión. Genera una nueva revisión del archivo.',
+            ]);
+        }
     }
 
     private function puedeReanudar(ImportacionCliente $importacion): bool

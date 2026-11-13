@@ -7,6 +7,7 @@ use App\Models\Cliente;
 use App\Services\Clientes\ClasificacionComercialCliente;
 use App\Services\Clientes\Direcciones\GestionDireccionesClienteService;
 use App\Services\Escalonamiento\ProyeccionClienteEscalonamiento;
+use App\Services\Solicitudes\AcumuladoOperativoCliente;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -57,7 +58,10 @@ class ClienteApiController extends Controller
 
         $this->aplicarBusqueda($query, $termino);
 
-        $clientes = $query->limit(50)->get()->map(function ($cliente) use ($conFiscales) {
+        $encontrados = $query->limit(50)->get();
+        $acumulados = app(AcumuladoOperativoCliente::class)->presentarMuchos($encontrados);
+        $clientes = $encontrados->map(function ($cliente) use ($conFiscales, $acumulados) {
+            $operativo = $acumulados[$cliente->id];
             $fila = [
                 'id' => $cliente->id,
                 'numero_cliente' => $cliente->numero_cliente,
@@ -67,6 +71,10 @@ class ClienteApiController extends Controller
                 'lista_actual_id' => $this->proyeccionCliente->listaVigenteId($cliente) ?? $cliente->lista_actual_id,
                 'lista_actual' => $cliente->listaDescuento->nombre ?? 'Sin Lista',
                 'monto_venta_actual' => $this->proyeccionCliente->montoAcumulado($cliente),
+                'acumulado_oficial' => $operativo['acumulado_oficial'],
+                'acumulado_provisional' => $operativo['acumulado_provisional'],
+                'acumulado_operativo' => $operativo['acumulado_operativo'],
+                'inclusion_indeterminada' => $operativo['inclusion_indeterminada'],
                 ...app(ClasificacionComercialCliente::class)->presentacion($cliente),
                 'monto_credito_autorizado' => $cliente->monto_credito_autorizado !== null
                     ? (float) $cliente->monto_credito_autorizado
@@ -114,6 +122,8 @@ class ClienteApiController extends Controller
             return response()->json(['encontrado' => false], 404);
         }
 
+        $operativo = app(AcumuladoOperativoCliente::class)->presentar($cliente);
+
         return response()->json([
             'encontrado' => true,
             'id' => $cliente->id,
@@ -123,6 +133,10 @@ class ClienteApiController extends Controller
             'lista_actual_id' => $this->proyeccionCliente->listaVigenteId($cliente) ?? $cliente->lista_actual_id,
             'lista_actual' => $cliente->listaDescuento->nombre ?? 'Sin Lista',
             'monto_venta_actual' => $this->proyeccionCliente->montoAcumulado($cliente),
+            'acumulado_oficial' => $operativo['acumulado_oficial'],
+            'acumulado_provisional' => $operativo['acumulado_provisional'],
+            'acumulado_operativo' => $operativo['acumulado_operativo'],
+            'inclusion_indeterminada' => $operativo['inclusion_indeterminada'],
             ...app(ClasificacionComercialCliente::class)->presentacion($cliente),
         ]);
     }

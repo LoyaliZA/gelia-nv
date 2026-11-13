@@ -149,6 +149,16 @@ class ClienteController extends Controller
             ->orderBy('created_at', 'desc')
             ->paginate(15);
 
+        $presentados = app(\App\Services\Solicitudes\AcumuladoOperativoCliente::class)
+            ->presentarMuchos($clientes->getCollection());
+        $clientes->setCollection($clientes->getCollection()->map(function ($cliente) use ($presentados) {
+            foreach ($presentados[$cliente->id] ?? [] as $clave => $valor) {
+                $cliente->setAttribute($clave, $valor);
+            }
+
+            return $cliente;
+        }));
+
         return Inertia::render('Clientes/MisClientes', [
             'clientes' => $clientes
         ]);

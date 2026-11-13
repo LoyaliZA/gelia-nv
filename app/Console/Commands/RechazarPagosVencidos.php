@@ -74,11 +74,14 @@ class RechazarPagosVencidos extends Command
                 if ($cliente) {
                     if ((int) $estadoAnteriorId === (int) $idRespondida) {
                         $ajuste = app(AjustarMontoPorSolicitudService::class);
-                        $ajuste->revertirBeneficios(
+                        $reversion = $ajuste->revertirBeneficios(
                             $solicitud,
                             null,
                             RegistrarHistorialMontoClienteService::ORIGEN_CRON_RECHAZO_PAGO,
                         );
+                        if (! empty($reversion['incidencia_lista'])) {
+                            $snapshotDiff['incidencia_lista'] = $reversion['incidencia_lista'];
+                        }
                     }
 
                     $cliente->refresh()->load(['listaDescuento', 'vendedor', 'tipo']);

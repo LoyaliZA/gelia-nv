@@ -7,6 +7,7 @@ use App\Models\Cliente;
 use App\Models\FilaRevisionImportacionCliente;
 use App\Models\HistorialMontoCliente;
 use App\Models\ImportacionCliente;
+use App\Models\ImporteProvisionalSolicitud;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -54,6 +55,8 @@ class RevisionImportacionClientes
             'catalogo' => $this->importador->huellaCatalogoRevision(),
             'estado_clientes' => $analisis['estado_clientes'],
             'headers' => $analisis['headers'],
+            'modalidad_carga' => $importacion->modalidad_carga ?: ImportacionCliente::MODALIDAD_NORMAL,
+            'fecha_corte' => $importacion->fecha_corte?->timezone(config('app.timezone'))->format('Y-m-d H:i:s'),
         ];
         if ($this->conservadaCancelada($importacion)) {
             return $this->vistaCancelada($importacion);
@@ -201,6 +204,7 @@ class RevisionImportacionClientes
             $evaluacion = null;
             DB::beginTransaction();
             try {
+                $this->importador->exigirCorteAplicable($importacion, $antesModelo, $fila['data']);
                 $cambio = $this->procesador->ejecutar(
                     $fila['data'], $listas, $mapa, $coleccion, $historial, $importaCodigo, $inactivos, $alertas,
                     null, null, false,
@@ -260,6 +264,7 @@ class RevisionImportacionClientes
         if ($this->archivoRepetido($importacion, $sha)) {
             $bloqueos['archivo_repetido'] = 1;
         }
+        $avisos += $this->avisoProvisional($importacion, $clientes);
         $codigos = array_keys($bloqueos);
         sort($codigos);
         $lineas[] = 'bloqueos:'.implode(',', $codigos);
@@ -277,6 +282,25 @@ class RevisionImportacionClientes
             'bloqueado' => $bloqueos !== [],
             'headers' => $validado['headers'],
         ];
+    }
+
+    /** @param  \Illuminate\Support\Collection<string, Cliente>  $clientes */
+    private function avisoProvisional(ImportacionCliente $importacion, $clientes): array
+    {
+        if (($importacion->modalidad_carga ?: ImportacionCliente::MODALIDAD_NORMAL) !== ImportacionCliente::MODALIDAD_NORMAL) {
+            return [];
+        }
+        $ids = $clientes->pluck('id')->filter()->all();
+        if ($ids === []) {
+            return [];
+        }
+        $conVigente = ImporteProvisionalSolicitud::query()
+            ->whereIn('cliente_id', $ids)
+            ->where('estado', ImporteProvisionalSolicitud::ESTADO_VIGENTE)
+            ->distinct()
+            ->count('cliente_id');
+
+        return $conVigente > 0 ? ['provisional_vigente' => $conVigente] : [];
     }
 
     private function conservadaCancelada(ImportacionCliente $importacion): bool
