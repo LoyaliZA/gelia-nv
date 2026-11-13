@@ -46,6 +46,8 @@ class PresentarSeguimientoImportacionCliente
             'indeterminado' => $indeterminado,
             'mensaje' => $importacion->mensaje_fatal,
             'puede_confirmar' => $importacion->estado === 'previsualizada' && empty($revision['bloqueado']),
+            'modalidad_carga' => $revision['modalidad_carga'] ?? ImportacionCliente::MODALIDAD_NORMAL,
+            'fecha_corte' => $revision['fecha_corte'] ?? null,
             'puede_cancelar' => in_array($importacion->estado, ['recibido', 'analizando', 'previsualizada'], true)
                 && $importacion->cursorConfirmado() === 0,
         ];

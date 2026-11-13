@@ -16,6 +16,7 @@ const TEXTOS = {
     archivo_invalido: 'El archivo completo no se puede confirmar. Hay que corregirlo y revisarlo de nuevo.',
     descenso_lista: 'Hay descensos de lista. Quedan a la vista en esta revisión.',
     diferencia_monto: 'Si confirmas el archivo y la fila es válida, el monto se actualiza con el valor importado. Una diferencia de 1000 o más queda visible para revisión.',
+    provisional_vigente: 'Hay provisionales vigentes. El oficial nuevo puede incluir ya esos importes. Esta actualización no los cierra.',
     lista_mayorista_sin_conversion: 'Un código mayorista no retira Menudeo ni asigna esa lista sin una conversión autorizada.',
     conversion_autorizada: 'Una importación con Público General no vuelve a marcar Menudeo si la conversión ya fue autorizada.',
 };
@@ -75,6 +76,9 @@ export default function ModalRevisionImportacionClientes({ importacionId, onClos
     const [incidencias, setIncidencias] = useState(false);
     const [cargando, setCargando] = useState(true);
     const [confirmando, setConfirmando] = useState(false);
+    const [revisando, setRevisando] = useState(false);
+    const [modalidad, setModalidad] = useState('actualizacion_normal');
+    const [fechaCorte, setFechaCorte] = useState('');
     const [error, setError] = useState(null);
 
     const cargar = useCallback(async (pagina = 1) => {
@@ -117,6 +121,12 @@ export default function ModalRevisionImportacionClientes({ importacionId, onClos
     }, [progreso?.fase, cargar]);
 
     useEffect(() => {
+        if (!progreso?.token) return;
+        setModalidad(progreso.modalidad_carga || 'actualizacion_normal');
+        setFechaCorte(progreso.fecha_corte ? progreso.fecha_corte.replace(' ', 'T').slice(0, 16) : '');
+    }, [progreso?.token, progreso?.modalidad_carga, progreso?.fecha_corte]);
+
+    useEffect(() => {
         const previo = document.body.style.overflow;
         document.body.style.overflow = 'hidden';
         return () => { document.body.style.overflow = previo; };
@@ -130,18 +140,52 @@ export default function ModalRevisionImportacionClientes({ importacionId, onClos
             const { data } = await axios.post(route('admin.clientes.importar.confirmar'), {
                 importacion_id: importacionId,
                 token: progreso.token,
+                modalidad_carga: progreso.modalidad_carga || 'actualizacion_normal',
+                fecha_corte: progreso.fecha_corte || null,
             });
             setProgreso(data);
             setFilas(null);
         } catch (e) {
-            setError(e.response?.data?.mensaje || e.response?.data?.errors?.archivo?.[0] || 'No se pudo confirmar la revisión.');
+            setError(e.response?.data?.mensaje
+                || e.response?.data?.errors?.modalidad_carga?.[0]
+                || e.response?.data?.errors?.fecha_corte?.[0]
+                || e.response?.data?.errors?.archivo?.[0]
+                || 'No se pudo confirmar la revisión.');
         } finally {
             setConfirmando(false);
         }
     };
 
+    const generarRevision = async () => {
+        if (revisando) return;
+        setRevisando(true);
+        setError(null);
+        try {
+            const { data } = await axios.post(route('admin.clientes.importaciones.reabrir', importacionId), {
+                modalidad_carga: modalidad,
+                fecha_corte: modalidad === 'actualizacion_con_corte' ? fechaCorte : null,
+            });
+            setProgreso(data);
+            setFilas(null);
+        } catch (e) {
+            setError(e.response?.data?.errors?.fecha_corte?.[0]
+                || e.response?.data?.errors?.modalidad_carga?.[0]
+                || e.response?.data?.errors?.archivo?.[0]
+                || 'No se pudo generar la nueva revisión.');
+        } finally {
+            setRevisando(false);
+        }
+    };
+
     const conteos = progreso?.conteos || {};
     const etapa = etapaDe(progreso?.fase);
+    const modalidadGuardada = progreso?.modalidad_carga || 'actualizacion_normal';
+    const fechaGuardada = (progreso?.fecha_corte || '').replace('T', ' ').slice(0, 16);
+    const fechaElegida = fechaCorte ? fechaCorte.replace('T', ' ').slice(0, 16) : '';
+    const modalidadDistinta = etapa === 'revision' && (
+        modalidad !== modalidadGuardada
+        || (modalidad === 'actualizacion_con_corte' && fechaElegida !== fechaGuardada)
+    );
     const atendidas = (progreso?.filas_procesadas || 0) + (progreso?.filas_omitidas || 0) + (progreso?.errores || 0);
     const porcentaje = progreso?.indeterminado ? null : (progreso?.porcentaje ?? 0);
 
@@ -189,6 +233,34 @@ export default function ModalRevisionImportacionClientes({ importacionId, onClos
                                     Bloqueo de archivo. {TEXTOS[bloqueo.codigo] || bloqueo.codigo} ({bloqueo.filas})
                                 </p>
                             ))}
+                            <fieldset className="rounded-xl border theme-border p-3 space-y-2">
+                                <legend className="text-[11px] font-bold theme-text-muted px-1">Modalidad de esta revisión</legend>
+                                <p className="text-sm theme-text-main m-0">
+                                    {modalidadGuardada === 'actualizacion_con_corte'
+                                        ? `Actualización con corte${progreso.fecha_corte ? ` · ${progreso.fecha_corte}` : ''}`
+                                        : 'Actualización normal'}
+                                </p>
+                                <label className="flex items-center gap-2 text-sm theme-text-main">
+                                    <input type="radio" name="modalidad-carga" checked={modalidad === 'actualizacion_normal'} onChange={() => setModalidad('actualizacion_normal')} />
+                                    Actualización normal
+                                </label>
+                                <label className="flex items-center gap-2 text-sm theme-text-main">
+                                    <input type="radio" name="modalidad-carga" checked={modalidad === 'actualizacion_con_corte'} onChange={() => setModalidad('actualizacion_con_corte')} />
+                                    Actualización con corte
+                                </label>
+                                {modalidad === 'actualizacion_con_corte' && (
+                                    <input
+                                        type="datetime-local"
+                                        value={fechaCorte}
+                                        onChange={(event) => setFechaCorte(event.target.value)}
+                                        aria-label="Fecha y hora del corte"
+                                        className="theme-element border theme-border rounded-xl px-3 py-2 text-sm theme-text-main"
+                                    />
+                                )}
+                                {modalidadDistinta && (
+                                    <p className="text-xs font-bold theme-text-aviso m-0">La opción cambió. Genera una nueva revisión antes de confirmar.</p>
+                                )}
+                            </fieldset>
                             {(progreso.avisos || []).map((aviso) => (
                                 <p key={aviso.codigo} className={`text-sm m-0 ${tonoAviso(aviso.codigo, false)}`}>
                                     {aviso.codigo === 'diferencia_monto' ? 'Aviso.' : 'Advertencia.'} {TEXTOS[aviso.codigo] || aviso.codigo} ({aviso.filas})
@@ -311,8 +383,13 @@ export default function ModalRevisionImportacionClientes({ importacionId, onClos
                     {etapa === 'resultados' && progreso?.fase !== 'error' && (
                         <button type="button" onClick={() => onResultados(importacionId)} className="theme-element border theme-border rounded-xl px-4 py-3 text-xs font-bold theme-text-main">Consultar resultados</button>
                     )}
+                    {etapa === 'revision' && modalidadDistinta && (
+                        <button type="button" onClick={generarRevision} disabled={revisando || (modalidad === 'actualizacion_con_corte' && !fechaCorte)} className="theme-element border theme-border rounded-xl px-4 py-3 text-xs font-bold theme-text-main sm:ml-auto disabled:opacity-50">
+                            {revisando ? 'Generando revisión…' : 'Generar nueva revisión'}
+                        </button>
+                    )}
                     {etapa === 'revision' && (
-                        <button type="button" onClick={confirmar} disabled={!progreso?.puede_confirmar || confirmando} className={`${THEME_BTN_PRIMARY} rounded-xl px-4 py-3 text-xs font-black uppercase sm:ml-auto disabled:opacity-50`}>
+                        <button type="button" onClick={confirmar} disabled={!progreso?.puede_confirmar || confirmando || modalidadDistinta} className={`${THEME_BTN_PRIMARY} rounded-xl px-4 py-3 text-xs font-black uppercase ${modalidadDistinta ? '' : 'sm:ml-auto'} disabled:opacity-50`}>
                             {progreso?.bloqueado ? 'Escritura detenida' : confirmando ? 'Confirmando…' : 'Confirmar importación'}
                         </button>
                     )}

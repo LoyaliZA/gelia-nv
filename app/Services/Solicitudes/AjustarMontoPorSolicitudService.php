@@ -23,6 +23,7 @@ class AjustarMontoPorSolicitudService
         private EscalonamientoAutoridad $autoridad,
         private ProyeccionClienteEscalonamiento $proyeccionCliente,
         private ConciliacionSolicitudEscalonamiento $conciliacion,
+        private ImporteProvisionalSolicitudService $importes,
     ) {}
 
     /**
@@ -114,6 +115,10 @@ class AjustarMontoPorSolicitudService
             }
 
             $cliente->save();
+            $solicitud->loadMissing('proceso');
+            if ($solicitud->exists && $solicitud->proceso && ! $solicitud->proceso->esOperativo()) {
+                $this->importes->registrarCotizacion($solicitud, Auth::id());
+            }
             $cliente->refresh()->load(['listaDescuento', 'vendedor', 'tipo']);
 
             return [
@@ -153,10 +158,12 @@ class AjustarMontoPorSolicitudService
             $montoOficial = (string) $cliente->monto_venta_actual;
             $menudeoAntes = (bool) $cliente->es_menudeo;
             $antes = $this->capturarSnapshotCliente($cliente);
-            $this->revertirCampo($cliente, $solicitud, SolicitudBeneficio::CAMPO_MODALIDAD);
-            $this->revertirCampo($cliente, $solicitud, SolicitudBeneficio::CAMPO_LISTA);
-            $this->revertirCampo($cliente, $solicitud, SolicitudBeneficio::CAMPO_TIPO);
-            $this->revertirCampo($cliente, $solicitud, SolicitudBeneficio::CAMPO_VENDEDOR);
+            $consolidada = $this->importes->tieneCierrePorCorte($solicitud);
+            $this->importes->revocarSiVigente($solicitud, $usuarioId, $origen ?? 'reversion');
+            $this->revertirCampo($cliente, $solicitud, SolicitudBeneficio::CAMPO_MODALIDAD, $consolidada);
+            $this->revertirCampo($cliente, $solicitud, SolicitudBeneficio::CAMPO_LISTA, $consolidada);
+            $this->revertirCampo($cliente, $solicitud, SolicitudBeneficio::CAMPO_TIPO, $consolidada);
+            $this->revertirCampo($cliente, $solicitud, SolicitudBeneficio::CAMPO_VENDEDOR, $consolidada);
             if ((bool) $cliente->es_menudeo !== $menudeoAntes) {
                 app(ClasificacionComercialCliente::class)->registrarEvento($cliente, $usuarioId, (int) $solicitud->id);
             }
@@ -169,11 +176,16 @@ class AjustarMontoPorSolicitudService
             $solicitud->monto_aplicado_al_cliente = 0;
             $solicitud->save();
             $cliente->refresh()->load(['listaDescuento', 'vendedor', 'tipo']);
-
-            return [
+            $resultado = [
                 'antes' => $antes,
                 'despues' => $this->capturarSnapshotCliente($cliente),
             ];
+            $incidencia = $this->incidenciaListaConservada($cliente, $consolidada);
+            if ($incidencia !== null) {
+                $resultado['incidencia_lista'] = $incidencia;
+            }
+
+            return $resultado;
         });
     }
 
@@ -193,6 +205,7 @@ class AjustarMontoPorSolicitudService
             'base' => $oficial,
             'proyectado' => $oficial,
             'aplicara_monto' => false,
+            'base_lista' => $this->importes->baseDecisionLista($cliente, $solicitud, $this->dinero($montoFinal)),
         ];
     }
 
@@ -336,7 +349,7 @@ class AjustarMontoPorSolicitudService
             return [];
         }
 
-        return DB::transaction(function () use ($solicitud, $montoFinal, $asignarListaSolicitada) {
+        return DB::transaction(function () use ($solicitud, $montoFinal, $usuarioId, $asignarListaSolicitada) {
             $solicitud = SolicitudTag::query()->lockForUpdate()->findOrFail($solicitud->id);
             $cliente = $this->clienteDe($solicitud);
             if (! $cliente) {
@@ -353,6 +366,7 @@ class AjustarMontoPorSolicitudService
                 ];
             }
 
+            $this->importes->sustituirPorPago($solicitud, $this->dinero($montoFinal), $usuarioId);
             $solicitud->monto_aplicado_al_cliente = $this->dinero($montoFinal);
             $solicitud->pago_confirmado = true;
 
@@ -441,6 +455,21 @@ class AjustarMontoPorSolicitudService
         return in_array($nombre, ['Cancelada', 'Incorrecta', 'Rechazada'], true);
     }
 
+    private function incidenciaListaConservada(Cliente $cliente, bool $consolidada): ?string
+    {
+        if (! $consolidada) {
+            return null;
+        }
+
+        $cliente->loadMissing('listaDescuento');
+        $requerido = $cliente->listaDescuento?->monto_requerido;
+        if ($requerido === null || bccomp($this->dinero($cliente->monto_venta_actual), $this->dinero($requerido), 2) >= 0) {
+            return null;
+        }
+
+        return 'La lista se conserva por política administrativa. El oficial no alcanza el umbral y el corte no la respalda.';
+    }
+
     private function dinero(float|int|string|null $valor): string
     {
         if ($valor === null || $valor === '') {
@@ -453,10 +482,22 @@ class AjustarMontoPorSolicitudService
         return bcadd((string) $valor, '0', 2);
     }
 
-    private function revertirCampo(Cliente $cliente, SolicitudTag $solicitud, string $campo): void
+    private function revertirCampo(Cliente $cliente, SolicitudTag $solicitud, string $campo, bool $consolidada = false): void
     {
         $actual = $this->valorActual($cliente, $campo);
         $propio = $this->concesionVigente($solicitud, $campo);
+
+        if ($consolidada && $campo === SolicitudBeneficio::CAMPO_LISTA) {
+            if ($propio) {
+                $this->cerrarConcesion(
+                    $propio,
+                    SolicitudBeneficio::ESTADO_REEMPLAZADO,
+                    'La lista se conserva por política administrativa. El corte no la respalda documentalmente.',
+                );
+            }
+
+            return;
+        }
 
         if ($campo === SolicitudBeneficio::CAMPO_MODALIDAD && $propio && $this->modalidadRatificada($cliente, $solicitud, $propio)) {
             $this->cerrarConcesion($propio, SolicitudBeneficio::ESTADO_REEMPLAZADO, 'Una solicitud o una acción posterior ratificó la modalidad.');

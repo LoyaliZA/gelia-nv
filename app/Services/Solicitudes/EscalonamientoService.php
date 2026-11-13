@@ -57,13 +57,12 @@ class EscalonamientoService
         $listas = collect($catalogoListas);
         if ($this->proyeccionCliente) {
             $listaActual = $this->proyeccionCliente->listaActualEnCatalogo($cliente, $listas);
-            $acumulado = $this->proyeccionCliente->montoAcumulado($cliente);
         } else {
             $listaActual = $cliente->lista_actual_id
                 ? $listas->firstWhere('id', (int) $cliente->lista_actual_id)
                 : null;
-            $acumulado = (float) ($cliente->monto_venta_actual ?? 0);
         }
+        $acumulado = (float) app(AcumuladoOperativoCliente::class)->operativo($cliente);
 
         return $this->evaluar(
             $acumulado,

@@ -63,8 +63,16 @@ export const listaVisibleEnSolicitudes = (lista) => {
 export const fmtMontoEscalonamiento = (valor) =>
     `$${Number(valor).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-export const parseMontoHistorico = (cliente) =>
-    parseFloat(cliente?.monto_venta_actual?.toString().replace(/[^0-9.-]+/g, '') || 0);
+const parseNumeroMonto = (valor) =>
+    parseFloat(valor?.toString().replace(/[^0-9.-]+/g, '') || 0);
+
+export const parseMontoHistorico = (cliente) => {
+    if (cliente?.acumulado_operativo !== undefined && cliente?.acumulado_operativo !== null && cliente?.acumulado_operativo !== '') {
+        return parseNumeroMonto(cliente.acumulado_operativo);
+    }
+
+    return parseNumeroMonto(cliente?.monto_venta_actual);
+};
 
 export const filtrarListasValidas = (catalogoListas) =>
     [...catalogoListas]

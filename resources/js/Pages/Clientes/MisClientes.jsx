@@ -169,7 +169,7 @@ export default function MisClientes({ auth, clientes }) {
                                                     {new Intl.NumberFormat('es-MX', { 
                                                         style: 'currency', 
                                                         currency: 'MXN' 
-                                                    }).format(cliente.monto_venta_actual || 0)}
+                                                    }).format(cliente.acumulado_operativo ?? cliente.monto_venta_actual ?? 0)}
                                                 </span>
                                             </td>
 

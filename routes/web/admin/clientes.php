@@ -10,6 +10,7 @@ Route::middleware(['can:clientes.ver'])->group(function () {
     Route::get('/clientes', [AdminController::class, 'clientes'])->name('clientes');
     Route::post('/clientes/importar/previsualizar', [AdminController::class, 'previsualizarImportacion'])->name('clientes.importar.previsualizar');
     Route::post('/clientes/importar/confirmar', [AdminController::class, 'confirmarImportacion'])->name('clientes.importar.confirmar');
+    Route::post('/clientes/importaciones/{importacion}/revision', [AdminController::class, 'reabrirRevision'])->name('clientes.importaciones.reabrir');
     Route::post('/clientes/importar', [AdminController::class, 'importarClientes'])->name('clientes.importar');
 
     Route::get('/clientes/especiales/protegidos', [ClienteController::class, 'obtenerEspeciales'])->name('clientes.especiales');

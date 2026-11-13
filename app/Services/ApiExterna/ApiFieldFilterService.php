@@ -6,6 +6,7 @@ use App\Models\ApiAplicacion;
 use App\Models\ApiRecurso;
 use App\Models\Cliente;
 use App\Services\Escalonamiento\ProyeccionClienteEscalonamiento;
+use App\Services\Solicitudes\AcumuladoOperativoCliente;
 use Illuminate\Support\Collection;
 
 class ApiFieldFilterService
@@ -57,6 +58,12 @@ class ApiFieldFilterService
             if (array_key_exists($slug, $mapa)) {
                 $resultado[$slug] = $mapa[$slug];
             }
+        }
+        if (array_key_exists('monto_venta_actual', $resultado)) {
+            $operativo = app(AcumuladoOperativoCliente::class)->presentar($cliente);
+            $resultado['acumulado_oficial'] = $operativo['acumulado_oficial'];
+            $resultado['acumulado_provisional'] = $operativo['acumulado_provisional'];
+            $resultado['acumulado_operativo'] = $operativo['acumulado_operativo'];
         }
 
         return $resultado;

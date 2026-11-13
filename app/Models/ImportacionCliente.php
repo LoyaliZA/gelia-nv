@@ -8,11 +8,17 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class ImportacionCliente extends Model
 {
+    public const MODALIDAD_NORMAL = 'actualizacion_normal';
+
+    public const MODALIDAD_CORTE = 'actualizacion_con_corte';
+
     protected $table = 'importaciones_clientes';
 
     protected $fillable = [
         'estado', 'resumen', 'mensaje_fatal',
         'usuario_id',
+        'modalidad_carga',
+        'fecha_corte',
         'nombre_archivo_original',
         'ruta_almacenamiento',
         'filas_leidas',
@@ -31,6 +37,7 @@ class ImportacionCliente extends Model
         'resumen' => 'array',
         'contadores' => 'array',
         'duracion_seg' => 'decimal:2',
+        'fecha_corte' => 'datetime',
     ];
 
     public function cursorConfirmado(): int

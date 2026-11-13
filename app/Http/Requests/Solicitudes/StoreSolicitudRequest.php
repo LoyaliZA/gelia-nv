@@ -226,8 +226,8 @@ class StoreSolicitudRequest extends FormRequest
                     }
                 }
 
-                $montoVentaActual = app(\App\Services\Escalonamiento\ProyeccionClienteEscalonamiento::class)
-                    ->montoAcumulado($cliente);
+                $montoVentaActual = (float) app(\App\Services\Solicitudes\AcumuladoOperativoCliente::class)
+                    ->operativo($cliente);
                 $montoProyectado = $montoVentaActual + $montoCotizado;
 
                 if ($listaSolicitadaId) {
