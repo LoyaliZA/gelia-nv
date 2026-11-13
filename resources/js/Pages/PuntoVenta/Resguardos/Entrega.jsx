@@ -21,6 +21,7 @@ export default function Entrega({
     const {
         enviar,
         enviando,
+        preparando,
         progreso,
         error,
         exito,
@@ -84,6 +85,7 @@ export default function Entrega({
                         resguardo={resguardo}
                         catalogos={catalogos}
                         enviando={enviando}
+                        preparando={preparando}
                         progreso={progreso}
                         error={error}
                         onEnviar={enviar}

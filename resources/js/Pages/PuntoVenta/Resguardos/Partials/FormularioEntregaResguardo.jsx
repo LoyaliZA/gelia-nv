@@ -18,6 +18,7 @@ import { BTN_SECONDARY, THEME_INPUT, formatearFechaOperativa } from './resguardo
 import {
     PASOS_ENTREGA,
     indicePaso,
+    etiquetaProgresoEntrega,
     puedeAvanzarPaso,
     validarPasoBultos,
     validarPasoEvidencia,
@@ -32,6 +33,7 @@ export default function FormularioEntregaResguardo({
     resguardo,
     catalogos = {},
     enviando = false,
+    preparando = false,
     progreso = 0,
     error = null,
     onEnviar,
@@ -228,7 +230,7 @@ export default function FormularioEntregaResguardo({
                 <div className={`${geliaCardClass()} p-4 space-y-2`}>
                     <div className="flex items-center gap-2 text-[10px] font-black uppercase theme-text-muted">
                         <Loader2 className="w-4 h-4 animate-spin" />
-                        Registrando entrega… {progreso}%
+                        {etiquetaProgresoEntrega({ preparando, progreso })}
                     </div>
                     <div className="h-2 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
                         <div

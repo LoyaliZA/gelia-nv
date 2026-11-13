@@ -4,8 +4,9 @@ namespace App\Listeners;
 
 use App\Events\PuntoVenta\EntregaResguardoPdvCompletada;
 use App\Services\ControlPedidos\InformarEntregaResguardoPdvService;
+use Illuminate\Contracts\Queue\ShouldQueue;
 
-class InformarEntregaResguardoControlPedidos
+class InformarEntregaResguardoControlPedidos implements ShouldQueue
 {
     public function __construct(
         private readonly InformarEntregaResguardoPdvService $integracion,

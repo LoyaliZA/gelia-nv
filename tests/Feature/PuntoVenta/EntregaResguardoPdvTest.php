@@ -3,6 +3,8 @@
 namespace Tests\Feature\PuntoVenta;
 
 use App\Events\PuntoVenta\EntregaResguardoPdvCompletada;
+use App\Listeners\InformarEntregaResguardoControlPedidos;
+use App\Listeners\PuntoVenta\NotificarEntregaResguardoPdv;
 use App\Models\Almacen;
 use App\Models\ConfiguracionSistema;
 use App\Models\ControlPedidos\CatalogoEstatusPedido;
@@ -21,6 +23,7 @@ use App\Services\ControlPedidos\InformarEntregaResguardoPdvService;
 use App\Services\PuntoVenta\PuntoVentaModulo;
 use App\Services\PuntoVenta\Resguardos\RegistrarEntregaResguardoPdvService;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -306,6 +309,40 @@ class EntregaResguardoPdvTest extends TestCase
                 ->where('pedido_bma_id', $pedido->id)
                 ->where('accion', AccionesHistorialPedidoBma::ENTREGA_PDV)
                 ->count()
+        );
+    }
+
+    public function test_la_entrega_responde_y_el_worker_sigue_el_pedido(): void
+    {
+        $this->assertTrue(is_subclass_of(InformarEntregaResguardoControlPedidos::class, ShouldQueue::class));
+        $this->assertTrue(is_subclass_of(NotificarEntregaResguardoPdv::class, ShouldQueue::class));
+
+        $pedido = $this->crearPedidoEnviado();
+        $resguardo = $this->crearResguardoEnCustodia($pedido);
+
+        $this->actingAs($this->usuario)->putJson(
+            route('punto_venta.resguardos.entrega', $resguardo),
+            $this->payloadEntrega($resguardo)
+        )->assertOk()
+            ->assertJsonPath('resguardo.estado', ResguardoPdv::ESTADO_ENTREGADO);
+
+        $entrega = ResguardoPdvEntrega::query()->where('resguardo_id', $resguardo->id)->firstOrFail();
+        $evento = ResguardoPdvEvento::query()->where('resguardo_id', $resguardo->id)->firstOrFail();
+        $eventoEntrega = new EntregaResguardoPdvCompletada(
+            $resguardo->fresh(),
+            $entrega,
+            $evento,
+            $this->usuario->id,
+            (int) $resguardo->sucursal_id,
+        );
+
+        // RefreshDatabase no dispara afterCommit; el worker (sync en PHPUnit) ejecuta el mismo handle.
+        app(NotificarEntregaResguardoPdv::class)->handle($eventoEntrega);
+        app(InformarEntregaResguardoControlPedidos::class)->handle($eventoEntrega);
+
+        $this->assertSame(
+            CatalogoEstatusPedido::FASE_ENTREGADO,
+            $pedido->fresh()->load('estatus')->estatus?->fase_ciclo
         );
     }
 

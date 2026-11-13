@@ -9,7 +9,7 @@ import ModalConfirmarAccion from '../../ControlPedidos/Partials/ModalConfirmarAc
 import { BTN_SECONDARY } from './Partials/resguardosStyles';
 import { PasoEvidencia, PasoReceptor } from './Partials/FormularioEntregaResguardo';
 import useEntregaMultiple from './Partials/useEntregaMultiple';
-import { validarPasoBultos, validarPasoEvidencia, validarPasoReceptor } from './Partials/entregaResguardoUtils';
+import { etiquetaProgresoEntrega, validarPasoBultos, validarPasoEvidencia, validarPasoReceptor } from './Partials/entregaResguardoUtils';
 import useToastAlCambiar from '../../../hooks/useToastAlCambiar';
 
 function borradorInicial(resguardo) {
@@ -34,6 +34,7 @@ export default function EntregaMultiple({
     const {
         enviar,
         enviando,
+        preparando,
         progreso,
         error,
         exito,
@@ -248,7 +249,7 @@ export default function EntregaMultiple({
                 )}
 
                 {enviando && (
-                    <p className="text-[10px] font-black uppercase theme-text-muted m-0">Registrando… {progreso}%</p>
+                    <p className="text-[10px] font-black uppercase theme-text-muted m-0">{etiquetaProgresoEntrega({ preparando, progreso })}</p>
                 )}
 
                 {!exito && puedeEntregar && (

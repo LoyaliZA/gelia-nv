@@ -1,4 +1,10 @@
+import { compressImageToWebp } from '../../../../utils/compressImage';
+
 const STORAGE_IDEMPOTENCY = 'pdv:entrega:idempotency';
+
+export const EVIDENCIA_ENTREGA_MAX_DIMENSION = 1600;
+export const EVIDENCIA_ENTREGA_MAX_BYTES = 700 * 1024;
+export const MENSAJE_FOTO_ENTREGA_GRANDE = 'No se pudo preparar la foto. Usa una imagen más pequeña e intenta de nuevo.';
 
 export const FIRMA_ENTREGA_ANCHO_NORMALIZADO = 600;
 export const FIRMA_ENTREGA_ALTO_NORMALIZADO = 200;
@@ -102,6 +108,33 @@ export function validarFormularioEntrega(datos) {
         ...validarPasoReceptor(datos),
         ...validarPasoEvidencia(datos),
     };
+}
+
+export function etiquetaProgresoEntrega({ preparando = false, progreso = 0 } = {}) {
+    if (preparando) return 'Preparando fotos…';
+    if (progreso >= 100) return 'Guardando entrega…';
+    return `Registrando entrega… ${progreso}%`;
+}
+
+export async function comprimirEvidenciasEntrega(archivos = []) {
+    const salida = [];
+
+    for (const archivo of Array.from(archivos || [])) {
+        try {
+            salida.push(await compressImageToWebp(archivo, {
+                maxDimension: EVIDENCIA_ENTREGA_MAX_DIMENSION,
+                maxBytes: EVIDENCIA_ENTREGA_MAX_BYTES,
+            }));
+        } catch {
+            if (archivo?.size <= EVIDENCIA_ENTREGA_MAX_BYTES) {
+                salida.push(archivo);
+                continue;
+            }
+            throw new Error(MENSAJE_FOTO_ENTREGA_GRANDE);
+        }
+    }
+
+    return salida;
 }
 
 export function dataUrlAFichero(dataUrl, nombre = 'firma.png') {
