@@ -4,6 +4,7 @@ namespace App\Services\Mobile;
 
 use App\Models\Cliente;
 use App\Models\User;
+use App\Services\Clientes\ClasificacionComercialCliente;
 
 class MobileClienteSerializerService
 {
@@ -59,10 +60,17 @@ class MobileClienteSerializerService
             }
         }
 
+        $presentacion = app(ClasificacionComercialCliente::class)->presentacion($cliente);
         $resultado['id'] = $cliente->id;
         $resultado['numero_cliente'] = $cliente->numero_cliente;
         $resultado['nombre'] = $cliente->nombre;
         $resultado['alcance'] = $this->alcance->tipoAlcance($user);
+        foreach ($presentacion as $clave => $valor) {
+            $resultado[$clave] = $valor;
+        }
+        if (($cliente->es_inactivo || $cliente->modalidad_comercial === ClasificacionComercialCliente::MENUDEO) && array_key_exists('lista_descuento', $resultado)) {
+            $resultado['lista_descuento'] = $presentacion['lista_efectiva_nombre'];
+        }
 
         return $resultado;
     }

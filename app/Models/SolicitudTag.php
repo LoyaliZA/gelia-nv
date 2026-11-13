@@ -44,6 +44,7 @@ class SolicitudTag extends Model
         'solicitar_cotizacion',
         'compra_en_tienda',
         'compra_en_tienda_solo_tag',
+        'convertir_menudeo_mayoreo',
         'cancelacion_solicitada_at',
         'motivo_cancelacion',
         'catalogo_lista_rebaja_id',
@@ -66,6 +67,7 @@ class SolicitudTag extends Model
         'solicitar_cotizacion' => 'boolean',
         'compra_en_tienda' => 'boolean',
         'compra_en_tienda_solo_tag' => 'boolean',
+        'convertir_menudeo_mayoreo' => 'boolean',
         'cancelacion_solicitada_at' => 'datetime',
         'factura_datos_fiscales' => 'array',
     ];

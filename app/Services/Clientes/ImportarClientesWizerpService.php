@@ -402,6 +402,9 @@ class ImportarClientesWizerpService
             'monto' => bcadd((string) ($attrs['monto_venta_actual'] ?? '0'), '0', 2),
             'inactivo' => (int) ($attrs['es_inactivo'] ?? 0),
             'updated_at' => (string) ($attrs['updated_at'] ?? ''),
+            'modalidad' => (string) ($attrs['modalidad_comercial'] ?? ''),
+            'origen' => (string) ($attrs['modalidad_origen'] ?? ''),
+            'conversion_solicitud_id' => (string) ($attrs['conversion_solicitud_id'] ?? ''),
         ];
         if ($actual != $esperado) {
             throw ValidationException::withMessages(['numero_cliente' => 'El cliente cambió después de la revisión.']);

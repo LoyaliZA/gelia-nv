@@ -66,7 +66,7 @@ class IntegridadImportacionWizerpTest extends TestCase
             'vacio_positivo' => [',2000', false, '2000.00', 'MAYOREO BRONCE', 0],
             'válido vacío' => ['3,', false, '1000.00', 'MAYOREO PLATA', 0],
             'válido cero' => ['3,0', false, '0.00', 'MAYOREO PLATA', 0],
-            'válido positivo' => ['2,6000', false, '6000.00', 'MAYOREO PLATA', 0],
+            'válido positivo' => ['2,6000', false, '6000.00', 'MAYOREO BRONCE', 0],
             'desconocido' => ['NO,100', false, '1000.00', 'MAYOREO BRONCE', 1],
             'fraccionario' => ['2.9,100', false, '1000.00', 'MAYOREO BRONCE', 1],
             'monto inválido' => ['3,abc', false, '1000.00', 'MAYOREO BRONCE', 1],

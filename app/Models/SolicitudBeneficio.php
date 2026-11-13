@@ -13,6 +13,8 @@ class SolicitudBeneficio extends Model
 
     public const CAMPO_VENDEDOR = 'vendedor';
 
+    public const CAMPO_MODALIDAD = 'modalidad';
+
     public const ESTADO_VIGENTE = 'vigente';
 
     public const ESTADO_REVOCADO = 'revocado';

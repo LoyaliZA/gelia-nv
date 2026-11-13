@@ -8,6 +8,7 @@ use App\Models\CatalogoEstadoSolicitud;
 use App\Models\CatalogoProceso;
 use App\Models\AuditoriaSolicitud;
 use App\Notifications\AlertaSolicitud;
+use App\Services\Clientes\ClasificacionComercialCliente;
 use App\Services\Escalonamiento\ConciliacionSolicitudEscalonamiento;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -82,7 +83,7 @@ class CancelarSolicitudService
                     }
                 }
 
-                if ($listaRebaja && $cliente) {
+                if ($listaRebaja && $cliente && ! $this->conversionProtegeLaLista($cliente, $solicitud)) {
                     $cliente->lista_actual_id = $listaRebaja->id;
                     $cliente->save();
                     $cliente->refresh()->load(['listaDescuento', 'vendedor', 'tipo']);
@@ -119,6 +120,17 @@ class CancelarSolicitudService
                 );
             }
         });
+    }
+
+    private function conversionProtegeLaLista(Cliente $cliente, SolicitudTag $solicitud): bool
+    {
+        if ($cliente->modalidad_comercial === ClasificacionComercialCliente::MENUDEO) {
+            return true;
+        }
+
+        return $cliente->modalidad_comercial === ClasificacionComercialCliente::MAYOREO
+            && $cliente->modalidad_origen === ClasificacionComercialCliente::ORIGEN_CONVERSION
+            && (int) $cliente->conversion_solicitud_id !== (int) $solicitud->id;
     }
 
     private function solicitudPosteriorSostieneBeneficio(SolicitudTag $solicitud): bool

@@ -339,7 +339,7 @@ class RevisionImportacionClientes
 
     /**
      * @param  array<string, mixed>|null  $antes
-     * @return ?array{lista: string, monto: string, inactivo: int, updated_at: string}
+     * @return ?array{lista: string, monto: string, inactivo: int, updated_at: string, modalidad: string, origen: string, conversion_solicitud_id: string}
      */
     private function estadoCliente(?array $antes): ?array
     {
@@ -352,6 +352,9 @@ class RevisionImportacionClientes
             'monto' => bcadd((string) ($antes['monto_venta_actual'] ?? '0'), '0', 2),
             'inactivo' => (int) ($antes['es_inactivo'] ?? 0),
             'updated_at' => (string) ($antes['updated_at'] ?? ''),
+            'modalidad' => (string) ($antes['modalidad_comercial'] ?? ''),
+            'origen' => (string) ($antes['modalidad_origen'] ?? ''),
+            'conversion_solicitud_id' => (string) ($antes['conversion_solicitud_id'] ?? ''),
         ];
     }
 
@@ -367,6 +370,9 @@ class RevisionImportacionClientes
             $despues ? bcadd((string) $despues->monto_venta_actual, '0', 2) : '',
             $despues ? (int) $despues->es_inactivo : '',
             $cambio['tipo_cambio'] ?? '',
+            (string) ($despues->modalidad_comercial ?? ''),
+            (string) ($despues->modalidad_origen ?? ''),
+            (string) ($despues->conversion_solicitud_id ?? ''),
         ]);
     }
 
@@ -416,11 +422,19 @@ class RevisionImportacionClientes
             $bloqueos[] = 'inactivacion';
             $motivos[] = 'La fila inactivaría al cliente. GELIA no acepta esa baja.';
         }
-        if ($importaCodigo && $codigo === '' && $antes && ($listaAntes != $listaDespues || $inactivoAntes !== $inactivoDespues)) {
+        if ($importaCodigo && $codigo === '' && $antes && ($listaAntes != $listaDespues || $inactivoAntes !== $inactivoDespues || (string) ($antes['modalidad_comercial'] ?? '') !== (string) ($despues->modalidad_comercial ?? ''))) {
             $bloqueos[] = 'codigo_vacio';
-            $motivos[] = 'Un código vacío cambiaría la lista o el estado.';
+            $motivos[] = 'Un código vacío cambiaría la lista, el estado o la modalidad.';
         } elseif ($importaCodigo && $codigo === '' && $antes) {
-            $motivos[] = 'El código vacío conserva la lista y el estado.';
+            $motivos[] = 'El código vacío conserva la lista, el estado y la modalidad.';
+        }
+        if ($despues?->discrepanciaModalidad === 'lista_mayorista_sin_conversion') {
+            $avisos[] = 'lista_mayorista_sin_conversion';
+            $motivos[] = 'El código mayorista no cambia a un cliente de menudeo sin conversión autorizada.';
+        }
+        if ($despues?->discrepanciaModalidad === 'conversion_autorizada') {
+            $avisos[] = 'conversion_autorizada';
+            $motivos[] = 'La importación no deshace una conversión mayorista autorizada.';
         }
         if (! empty($antes['lista_bloqueada']) && $listaAntes != $listaDespues) {
             $bloqueos[] = 'lista_bloqueada';
@@ -500,13 +514,16 @@ class RevisionImportacionClientes
         $lineas = Cliente::query()
             ->whereIn('numero_cliente', $numeros)
             ->orderBy('numero_cliente')
-            ->get(['numero_cliente', 'lista_actual_id', 'monto_venta_actual', 'es_inactivo', 'updated_at'])
+            ->get(['numero_cliente', 'lista_actual_id', 'monto_venta_actual', 'es_inactivo', 'updated_at', 'modalidad_comercial', 'modalidad_origen', 'conversion_solicitud_id'])
             ->map(fn (Cliente $cliente) => implode('|', [
                 $cliente->numero_cliente,
                 $cliente->lista_actual_id,
                 $cliente->monto_venta_actual,
                 (int) $cliente->es_inactivo,
                 (string) $cliente->updated_at,
+                (string) ($cliente->modalidad_comercial ?? ''),
+                (string) ($cliente->modalidad_origen ?? ''),
+                (string) ($cliente->conversion_solicitud_id ?? ''),
             ]))
             ->all();
 

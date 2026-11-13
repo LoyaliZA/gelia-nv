@@ -29,6 +29,11 @@ const esProcesoAsignarTagSolo = (procesos, procesoId) => {
     return nombre === 'ASIGNAR TAG';
 };
 
+const admiteConversionMenudeo = (procesos, procesoId) => {
+    const nombre = (obtenerProceso(procesos, procesoId)?.nombre || '').trim().toUpperCase();
+    return ['ASIGNAR TAG', 'CAMBIO DE LISTA', 'ASIGNAR TAG Y CAMBIO DE LISTA'].includes(nombre);
+};
+
 const resolverListaBronce = (catalogoListas) => {
     const bronce = catalogoListas.find(l => l.nombre?.toUpperCase() === 'MAYOREO BRONCE')
         || catalogoListas.find(l => l.nombre?.toUpperCase().includes('BRONCE'));
@@ -72,11 +77,13 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
         total_proyectado_neto: '',
         compra_en_tienda: !!(solicitudAEditar?.compra_en_tienda),
         compra_en_tienda_solo_tag: !!(solicitudAEditar?.compra_en_tienda_solo_tag),
+        convertir_menudeo_mayoreo: !!(solicitudAEditar?.convertir_menudeo_mayoreo),
     });
 
     useSolicitudErrores(errors);
     const procesoFinancieroSeleccionado = esProcesoFinancieroSeleccionado(procesos, data.catalogo_proceso_id);
     const procesoAsignarTagSolo = esProcesoAsignarTagSolo(procesos, data.catalogo_proceso_id);
+    const puedeConvertirMenudeo = infoCliente?.modalidad_comercial === 'menudeo' && !infoCliente?.es_inactivo && admiteConversionMenudeo(procesos, data.catalogo_proceso_id);
     const listaBronce = resolverListaBronce(listas);
     const flujoTienda = procesoFinancieroSeleccionado && (!!data.compra_en_tienda || !!data.compra_en_tienda_solo_tag);
     const cotizacionOpcional = flujoTienda;
@@ -101,6 +108,9 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
         if (!procesoAsignarTagSolo && data.compra_en_tienda_solo_tag) {
             setData('compra_en_tienda_solo_tag', false);
         }
+        if (!admiteConversionMenudeo(procesos, data.catalogo_proceso_id) && data.convertir_menudeo_mayoreo) {
+            setData('convertir_menudeo_mayoreo', false);
+        }
     }, [data.catalogo_proceso_id, procesoFinancieroSeleccionado, procesoAsignarTagSolo]);
 
     useEffect(() => {
@@ -115,7 +125,7 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
     }, [data.compra_en_tienda, listaBronce?.id]);
 
     useEffect(() => {
-        if (!data.compra_en_tienda_solo_tag) return;
+        if (!data.compra_en_tienda_solo_tag || data.convertir_menudeo_mayoreo) return;
         setData('catalogo_lista_descuento_id', '');
         setData('monto_cotizado', '');
         setData('confirmo_informacion_escalonamiento', false);
@@ -123,14 +133,23 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
         setData('total_proyectado_neto', '');
         setAnalisisFinanciero(null);
         setAlertaLista({ mensaje: 'Compra Realizada: Solicitar tag — sin lista ni cotización' });
-    }, [data.compra_en_tienda_solo_tag]);
+    }, [data.compra_en_tienda_solo_tag, data.convertir_menudeo_mayoreo]);
+
+    useEffect(() => {
+        if (!data.convertir_menudeo_mayoreo || !listaBronce) return;
+        const actual = buscarListaPorId(listas, data.catalogo_lista_descuento_id);
+        const mayorista = actual && String(actual.nombre).toUpperCase().startsWith('MAYOREO ');
+        if (!mayorista) {
+            setData('catalogo_lista_descuento_id', String(listaBronce.id));
+        }
+    }, [data.convertir_menudeo_mayoreo, listaBronce?.id]);
 
     useEffect(() => {
         if (cotizacionOpcional || !infoCliente || !data.monto_cotizado || isNaN(data.monto_cotizado)) {
             if (!cotizacionOpcional) {
                 setAnalisisFinanciero(null);
                 setAlertaLista(null);
-                if (!modoEdicion) {
+                if (!modoEdicion && !(infoCliente?.modalidad_comercial === 'menudeo' && data.convertir_menudeo_mayoreo)) {
                     setData('catalogo_lista_descuento_id', '');
                 }
                 setData('confirmo_informacion_escalonamiento', false);
@@ -156,7 +175,7 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
         setData('monto_final_tentativo', analisis.montoFinalTentativo);
         setData('total_proyectado_neto', analisis.totalProyectadoNeto);
 
-        if (analisis.esAscenso && analisis.listaCalificadaEfectiva) {
+        if (infoCliente?.modalidad_comercial !== 'menudeo' && analisis.esAscenso && analisis.listaCalificadaEfectiva) {
             const reqObjetivo = parseFloat(analisis.listaCalificadaEfectiva.monto_requerido);
             const listaSeleccionada = buscarListaPorId(listas, data.catalogo_lista_descuento_id);
             const reqSeleccionada = listaSeleccionada ? parseFloat(listaSeleccionada.monto_requerido) : -1;
@@ -403,6 +422,24 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                                         </span>
                                         <p className="text-[10px] font-bold theme-text-muted mt-1 leading-snug">
                                             Para asegurar el TAG de la vendedora cuando la compra ya ocurrió (p. ej. al día siguiente). Sin lista ni cotización. No requiere confirmar pago.
+                                        </p>
+                                    </div>
+                                </label>
+                                )}
+                                {puedeConvertirMenudeo && (
+                                <label className="flex items-start gap-3 p-4 rounded-2xl border-2 border-amber-500/40 bg-amber-500/10 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={!!data.convertir_menudeo_mayoreo}
+                                        onChange={e => setData('convertir_menudeo_mayoreo', e.target.checked)}
+                                        className="mt-1 w-4 h-4"
+                                    />
+                                    <div>
+                                        <span className="text-sm font-medium theme-text-main">
+                                            Convertir cliente de Menudeo a Mayoreo
+                                        </span>
+                                        <p className="text-[10px] font-bold theme-text-muted mt-1 leading-snug">
+                                            Queda registrada en la solicitud. La lista y la modalidad cambian solo cuando la solicitud se autoriza. Bronce es el nivel inicial, salvo otra lista mayorista elegida aquí.
                                         </p>
                                     </div>
                                 </label>

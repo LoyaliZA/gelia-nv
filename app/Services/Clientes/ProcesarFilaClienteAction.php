@@ -5,7 +5,6 @@ namespace App\Services\Clientes;
 use App\Models\CambioListaImportacionCliente;
 use App\Models\Cliente;
 use App\Services\Escalonamiento\EscalonamientoAutoridad;
-use App\Services\Solicitudes\EscalonamientoService;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
 
@@ -62,27 +61,21 @@ class ProcesarFilaClienteAction
             $cliente->lista_actual_id = $pg->id;
             $cliente->es_heredado = false;
         }
-        if ($estado !== null) {
+        $clasificacion = app(ClasificacionComercialCliente::class);
+        $codigoVacio = $importaCodigoLista && $codigo === '';
+        $listaActual = $listas->firstWhere('id', $cliente->lista_actual_id);
+        $categoriaEspecial = $this->resolucionLista->nombreExcluyeEscalonamiento($listaActual?->nombre);
+        $listaCodigo = $listaCsv ? $listas->firstWhere('id', $listaCsv) : null;
+        $aviso = null;
+        if (! $cliente->lista_bloqueada && ! $gobernado && ! $codigoVacio && ! $categoriaEspecial && $listaCodigo) {
+            $aviso = $clasificacion->aplicarEnImportacion($cliente, $listaCodigo, $monto);
+        }
+        $cliente->discrepanciaModalidad = $aviso;
+        if ($estado !== null && $aviso !== 'lista_mayorista_sin_conversion') {
             $cliente->es_inactivo = $estado;
         }
         if ($monto !== null && ! $gobernado) {
             $cliente->monto_venta_actual = $monto;
-        }
-        $codigoVacio = $importaCodigoLista && $codigo === '';
-        if (! $cliente->lista_bloqueada && ! $gobernado && ! $codigoVacio) {
-            if ($estado === true) {
-                $cliente->lista_actual_id = $pg->id;
-            } elseif ($listaCsv) {
-                $cliente->lista_actual_id = $listaCsv;
-            }
-            $base = $listas->firstWhere('id', $cliente->lista_actual_id);
-            if ($estado !== true && $monto !== null && bccomp($monto, '0', 2) > 0
-                && ! $this->resolucionLista->nombreExcluyeEscalonamiento($base?->nombre)) {
-                $calculada = app(EscalonamientoService::class)->resolverListaPorAcumuladoNeto((float) $monto, $listas);
-                if ($calculada && $base && bccomp((string) $calculada->monto_requerido, (string) $base->monto_requerido, 2) > 0) {
-                    $cliente->lista_actual_id = $calculada->id;
-                }
-            }
         }
         foreach (['nombre', 'direccion_fiscal', 'colonia_fiscal', 'municipio_fiscal', 'estado_fiscal', 'pais_fiscal',
             'direccion_contacto', 'colonia_contacto', 'municipio_contacto', 'estado_contacto', 'pais_contacto', 'cp_contacto',
@@ -109,6 +102,8 @@ class ProcesarFilaClienteAction
                 $cliente->$campo = (int) $data[$campo];
             }
         }
+        $modalidadAntes = (string) ($antes['modalidad_comercial'] ?? '');
+        $origenAntes = (string) ($antes['modalidad_origen'] ?? '');
         $montoAnterior = (string) ($antes['monto_venta_actual'] ?? '0');
         if (! $nuevo && bccomp($montoAnterior, (string) $cliente->monto_venta_actual, 2) !== 0) {
             $historialBatch[] = [
@@ -121,6 +116,11 @@ class ProcesarFilaClienteAction
         }
         if ($persistir && $cliente->isDirty()) {
             $cliente->save();
+        }
+        $cambioModalidad = $modalidadAntes !== (string) ($cliente->modalidad_comercial ?? '')
+            || $origenAntes !== (string) ($cliente->modalidad_origen ?? '');
+        if ($persistir && $cambioModalidad && $cliente->id) {
+            $clasificacion->registrarEvento($cliente, $usuarioId, null);
         }
         $clientesPorNumero->put($numero, $cliente);
         if ($estado === true && ($nuevo || ! ($antes['es_inactivo'] ?? false))) {

@@ -5,12 +5,15 @@ namespace App\Services\Solicitudes;
 use App\Models\CatalogoEstadoSolicitud;
 use App\Models\CatalogoListaDescuento;
 use App\Models\Cliente;
+use App\Models\ClienteModalidadEvento;
 use App\Models\Escalonamiento\EscalonamientoConciliacionSolicitud;
 use App\Models\SolicitudBeneficio;
 use App\Models\SolicitudTag;
+use App\Services\Clientes\ClasificacionComercialCliente;
 use App\Services\Escalonamiento\ConciliacionSolicitudEscalonamiento;
 use App\Services\Escalonamiento\EscalonamientoAutoridad;
 use App\Services\Escalonamiento\ProyeccionClienteEscalonamiento;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 class AjustarMontoPorSolicitudService
@@ -69,15 +72,35 @@ class AjustarMontoPorSolicitudService
             $listaAnterior = $this->valor($cliente->lista_actual_id);
             $tipoAnterior = $this->valor($cliente->catalogo_tipo_cliente_id);
             $vendedorAnterior = $this->valor($cliente->vendedor_id);
+            $clasificacion = app(ClasificacionComercialCliente::class);
+            $esMenudeo = $clasificacion->esMenudeo($cliente);
+            $pideConversion = (bool) $solicitud->convertir_menudeo_mayoreo;
+            $autorizada = $this->solicitudAutorizada($solicitud);
+            $bloquearListaMenudeo = $esMenudeo && (! $pideConversion || ! $autorizada);
 
             if (
                 $solicitud->catalogo_lista_descuento_id
                 && ! $cliente->es_inactivo
                 && ! $cliente->lista_bloqueada
                 && ! $this->autoridad->clienteGobernadoPorModulo($cliente)
+                && ! $bloquearListaMenudeo
             ) {
                 $cliente->lista_actual_id = $solicitud->catalogo_lista_descuento_id;
                 $this->conceder($cliente, $solicitud, SolicitudBeneficio::CAMPO_LISTA, $listaAnterior, $this->valor($cliente->lista_actual_id));
+            }
+
+            if (
+                $pideConversion
+                && $autorizada
+                && ! $cliente->es_inactivo
+                && ! $cliente->lista_bloqueada
+                && ! $this->autoridad->clienteGobernadoPorModulo($cliente)
+            ) {
+                if ($esMenudeo) {
+                    $this->aplicarConversionMenudeo($cliente, $solicitud, $clasificacion, $listaAnterior);
+                } elseif ($cliente->modalidad_comercial === ClasificacionComercialCliente::MAYOREO) {
+                    $this->ratificarConversion($cliente, $solicitud, $clasificacion);
+                }
             }
 
             if ($solicitud->catalogo_tipo_cliente_id && ! $cliente->es_inactivo) {
@@ -109,7 +132,7 @@ class AjustarMontoPorSolicitudService
      */
     public function revertirBeneficios(SolicitudTag $solicitud, ?int $usuarioId = null, ?string $origen = null): array
     {
-        return DB::transaction(function () use ($solicitud) {
+        return DB::transaction(function () use ($solicitud, $usuarioId) {
             if (! $solicitud->cliente_id) {
                 return [];
             }
@@ -128,10 +151,15 @@ class AjustarMontoPorSolicitudService
                 ->get();
 
             $montoOficial = (string) $cliente->monto_venta_actual;
+            $modalidadAntes = $cliente->modalidad_comercial;
             $antes = $this->capturarSnapshotCliente($cliente);
+            $this->revertirCampo($cliente, $solicitud, SolicitudBeneficio::CAMPO_MODALIDAD);
             $this->revertirCampo($cliente, $solicitud, SolicitudBeneficio::CAMPO_LISTA);
             $this->revertirCampo($cliente, $solicitud, SolicitudBeneficio::CAMPO_TIPO);
             $this->revertirCampo($cliente, $solicitud, SolicitudBeneficio::CAMPO_VENDEDOR);
+            if ($cliente->modalidad_comercial !== $modalidadAntes) {
+                app(ClasificacionComercialCliente::class)->registrarEvento($cliente, $usuarioId, (int) $solicitud->id);
+            }
 
             if ((string) $cliente->monto_venta_actual !== $montoOficial) {
                 $cliente->monto_venta_actual = $montoOficial;
@@ -430,6 +458,18 @@ class AjustarMontoPorSolicitudService
         $actual = $this->valorActual($cliente, $campo);
         $propio = $this->concesionVigente($solicitud, $campo);
 
+        if ($campo === SolicitudBeneficio::CAMPO_MODALIDAD && $propio && $this->modalidadRatificada($cliente, $solicitud, $propio)) {
+            $this->cerrarConcesion($propio, SolicitudBeneficio::ESTADO_REEMPLAZADO, 'Una solicitud o una acción posterior ratificó la modalidad.');
+
+            return;
+        }
+
+        if ($campo === SolicitudBeneficio::CAMPO_MODALIDAD && $propio && $this->mismoValor($propio->valor_aplicado, $actual) && ($propio->valor_anterior === null || $propio->valor_anterior === '')) {
+            $this->cerrarConcesion($propio, SolicitudBeneficio::ESTADO_REEMPLAZADO, 'No hay procedencia verificable para restaurar la modalidad.');
+
+            return;
+        }
+
         if ($this->otraSolicitudSostiene($solicitud, $campo, $actual)) {
             $this->cerrarConcesion($propio, SolicitudBeneficio::ESTADO_REEMPLAZADO, 'Otra solicitud vigente sostiene el beneficio.');
 
@@ -472,7 +512,26 @@ class AjustarMontoPorSolicitudService
 
     private function restaurarCampo(Cliente $cliente, string $campo, SolicitudBeneficio $concesion): void
     {
+        if ($campo === SolicitudBeneficio::CAMPO_MODALIDAD) {
+            $cliente->modalidad_comercial = $concesion->valor_anterior;
+            if ($concesion->valor_anterior !== ClasificacionComercialCliente::MAYOREO) {
+                $cliente->modalidad_origen = ClasificacionComercialCliente::ORIGEN_REVERSION;
+                $cliente->conversion_solicitud_id = null;
+                $cliente->conversion_usuario_id = null;
+                $cliente->conversion_autorizada_at = null;
+            }
+
+            return;
+        }
+
         if ($campo === SolicitudBeneficio::CAMPO_LISTA) {
+            if ($cliente->modalidad_comercial === ClasificacionComercialCliente::MENUDEO) {
+                if ($concesion->valor_anterior !== null && $concesion->valor_anterior !== '') {
+                    $cliente->lista_actual_id = (int) $concesion->valor_anterior;
+                }
+
+                return;
+            }
             $this->recalcularListaCliente($cliente);
 
             return;
@@ -549,7 +608,7 @@ class AjustarMontoPorSolicitudService
             return true;
         }
 
-        if ($actual === null || ! ctype_digit($actual)) {
+        if ($campo === SolicitudBeneficio::CAMPO_MODALIDAD || $actual === null || ! ctype_digit($actual)) {
             return false;
         }
 
@@ -643,6 +702,9 @@ class AjustarMontoPorSolicitudService
             SolicitudBeneficio::CAMPO_LISTA => $this->valor($cliente->lista_actual_id),
             SolicitudBeneficio::CAMPO_TIPO => $this->valor($cliente->catalogo_tipo_cliente_id),
             SolicitudBeneficio::CAMPO_VENDEDOR => $this->valor($cliente->vendedor_id),
+            SolicitudBeneficio::CAMPO_MODALIDAD => $cliente->modalidad_comercial === null || $cliente->modalidad_comercial === ''
+                ? null
+                : (string) $cliente->modalidad_comercial,
             default => null,
         };
     }
@@ -663,6 +725,10 @@ class AjustarMontoPorSolicitudService
 
     private function recalcularListaCliente(Cliente $cliente): void
     {
+        if ($cliente->modalidad_comercial === ClasificacionComercialCliente::MENUDEO) {
+            return;
+        }
+
         if ($cliente->lista_bloqueada) {
             return;
         }
@@ -683,6 +749,72 @@ class AjustarMontoPorSolicitudService
 
         $listaCalificada = $this->escalonamiento->resolverListaPorAcumuladoNeto((float) $cliente->monto_venta_actual, $listas);
         $cliente->lista_actual_id = $listaCalificada ? $listaCalificada->id : null;
+    }
+
+    private function aplicarConversionMenudeo(Cliente $cliente, SolicitudTag $solicitud, ClasificacionComercialCliente $clasificacion, ?string $listaAnterior): void
+    {
+        $lista = $solicitud->catalogo_lista_descuento_id
+            ? CatalogoListaDescuento::query()->find($solicitud->catalogo_lista_descuento_id)
+            : null;
+        if (! $clasificacion->esListaMayorista($lista)) {
+            $lista = $clasificacion->buscarBronce();
+        }
+        if ($lista && (int) $cliente->lista_actual_id !== (int) $lista->id) {
+            $cliente->lista_actual_id = $lista->id;
+            $this->conceder($cliente, $solicitud, SolicitudBeneficio::CAMPO_LISTA, $listaAnterior, $this->valor($cliente->lista_actual_id));
+        } elseif ($lista) {
+            $this->conceder($cliente, $solicitud, SolicitudBeneficio::CAMPO_LISTA, $listaAnterior, $this->valor($cliente->lista_actual_id));
+        }
+
+        $anterior = $cliente->modalidad_comercial;
+        $usuarioId = Auth::id() ?: $solicitud->vendedor_id;
+        $clasificacion->asignar(
+            $cliente,
+            ClasificacionComercialCliente::MAYOREO,
+            ClasificacionComercialCliente::ORIGEN_CONVERSION,
+            (int) $solicitud->id,
+            $usuarioId ? (int) $usuarioId : null,
+        );
+        $this->conceder($cliente, $solicitud, SolicitudBeneficio::CAMPO_MODALIDAD, $anterior, ClasificacionComercialCliente::MAYOREO);
+        $clasificacion->registrarEvento($cliente, $usuarioId ? (int) $usuarioId : null, (int) $solicitud->id);
+    }
+
+    private function ratificarConversion(Cliente $cliente, SolicitudTag $solicitud, ClasificacionComercialCliente $clasificacion): void
+    {
+        $usuarioId = Auth::id() ?: $solicitud->vendedor_id;
+        $clasificacion->asignar(
+            $cliente,
+            ClasificacionComercialCliente::MAYOREO,
+            ClasificacionComercialCliente::ORIGEN_CONVERSION,
+            (int) $solicitud->id,
+            $usuarioId ? (int) $usuarioId : null,
+        );
+        $this->conceder($cliente, $solicitud, SolicitudBeneficio::CAMPO_MODALIDAD, ClasificacionComercialCliente::MAYOREO, ClasificacionComercialCliente::MAYOREO);
+        $clasificacion->registrarEvento($cliente, $usuarioId ? (int) $usuarioId : null, (int) $solicitud->id);
+    }
+
+    private function solicitudAutorizada(SolicitudTag $solicitud): bool
+    {
+        $id = (int) $solicitud->catalogo_estado_solicitud_id;
+        $respondida = (int) CatalogoEstadoSolicitud::idDe('Respondida');
+        $verificada = (int) CatalogoEstadoSolicitud::idDe('Verificada');
+
+        return $id > 0 && ($id === $respondida || $id === $verificada);
+    }
+
+    private function modalidadRatificada(Cliente $cliente, SolicitudTag $solicitud, SolicitudBeneficio $propio): bool
+    {
+        if ($cliente->conversion_solicitud_id && (int) $cliente->conversion_solicitud_id !== (int) $solicitud->id) {
+            return true;
+        }
+
+        return ClienteModalidadEvento::query()
+            ->where('cliente_id', $cliente->id)
+            ->where('created_at', '>=', $propio->created_at)
+            ->where(function ($consulta) use ($solicitud) {
+                $consulta->whereNull('solicitud_id')->orWhere('solicitud_id', '!=', $solicitud->id);
+            })
+            ->exists();
     }
 
     private function solicitudAsignaTag(SolicitudTag $solicitud): bool

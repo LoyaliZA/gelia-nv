@@ -3,6 +3,7 @@
 namespace App\Services\PuntoVenta\Turnos;
 
 use App\Models\Cliente;
+use App\Services\Clientes\ClasificacionComercialCliente;
 use App\Support\Catalogos\ClasificacionListaTurno;
 
 final class ResolverPrioridadesTurnoPdvService
@@ -38,6 +39,10 @@ final class ResolverPrioridadesTurnoPdvService
     private function clasificacionLista(?Cliente $cliente): array
     {
         if (! $cliente instanceof Cliente) {
+            return ClasificacionListaTurno::resolver(null, null, 0);
+        }
+
+        if ($cliente->es_inactivo || $cliente->modalidad_comercial === ClasificacionComercialCliente::MENUDEO) {
             return ClasificacionListaTurno::resolver(null, null, 0);
         }
 
