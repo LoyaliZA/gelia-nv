@@ -27,6 +27,14 @@ class ImportarClientesWizerpService
 
     private mixed $bloqueoCache = null;
 
+    private int $cursorFila = 0;
+
+    /** @var list<array<string, mixed>> */
+    private array $ascensosDetalle = [];
+
+    /** @var list<mixed> */
+    private array $alertasCredito = [];
+
     public function __construct(protected ProcesarFilaClienteAction $procesador) {}
 
     public function duranteBloqueo(callable $accion): mixed
@@ -39,14 +47,26 @@ class ImportarClientesWizerpService
         }
     }
 
-    public function ejecutar(UploadedFile $archivo, ?ImportacionCliente $importacion = null): array
+    public function ejecutar(UploadedFile $archivo, ?ImportacionCliente $importacion = null, int $desdeFila = 0, ?int $limite = null): array
     {
         $inicio = microtime(true);
         $stats = array_fill_keys(['leidas', 'procesadas', 'creados', 'actualizados', 'sin_cambios', 'omitidas', 'errores',
             'ascensos', 'descensos', 'activados', 'clientes_marcados_inactivos', 'cambios_lista'], 0);
-        $reporteAscensos = [];
         $errores = [];
-        $alertas = [];
+        $this->cursorFila = $desdeFila;
+        $this->ascensosDetalle = [];
+        $this->alertasCredito = [];
+        if ($importacion) {
+            $memoria = $importacion->resumen ?? [];
+            if ($desdeFila > 0 && isset($memoria['inicio_ts'])) {
+                $inicio = (float) $memoria['inicio_ts'];
+                $this->ascensosDetalle = array_values($memoria['ascensos_detalle'] ?? []);
+                $this->alertasCredito = array_values($memoria['alertas_credito'] ?? []);
+            } else {
+                $memoria['inicio_ts'] = $inicio;
+                $importacion->resumen = $memoria;
+            }
+        }
         try {
             $this->adquirirBloqueo();
             $path = $importacion
@@ -55,6 +75,16 @@ class ImportarClientesWizerpService
             // Preflight completo: ningún catálogo ni cliente se escribe antes de validar estructura.
             $validado = app(ValidarArchivoClientesWizerp::class)->leer($path);
             $stats['leidas'] = count($validado['filas']);
+            if ($importacion && $desdeFila > 0 && is_array($importacion->resumen)) {
+                foreach (array_keys($stats) as $clave) {
+                    if ($clave === 'leidas') {
+                        continue;
+                    }
+                    if (isset($importacion->resumen[$clave]) && is_numeric($importacion->resumen[$clave])) {
+                        $stats[$clave] = (int) $importacion->resumen[$clave];
+                    }
+                }
+            }
             $importaCodigoLista = in_array('codigo_lista', $validado['headers'], true);
             $revisionImportacion = ($importacion && is_array($importacion->resumen)) ? ($importacion->resumen['revision'] ?? null) : null;
             $catalogoAprobado = is_array($revisionImportacion) ? ($revisionImportacion['catalogo'] ?? null) : null;
@@ -66,7 +96,18 @@ class ImportarClientesWizerpService
             $mapa = $this->cargarMapaVendedoras();
             $listas = CatalogoListaDescuento::orderByDesc('monto_requerido')->get();
             Cache::put('import_clientes_en_curso', true, now()->addHours(2));
+            $manejadas = 0;
+            $hayMas = false;
             foreach ($validado['filas'] as $fila) {
+                if ((int) $fila['numero_fila'] <= $desdeFila) {
+                    continue;
+                }
+                if ($limite !== null && $manejadas >= $limite) {
+                    $hayMas = true;
+                    break;
+                }
+                $manejadas++;
+                $this->cursorFila = (int) $fila['numero_fila'];
                 if ($fila['duplicada']) {
                     $stats['omitidas']++;
                     $this->guardarProgreso($importacion, $stats, 'en_curso');
@@ -127,9 +168,9 @@ class ImportarClientesWizerpService
                     });
                     $stats = $resultado['stats'];
                     if (($resultado['cambio']['tipo_cambio'] ?? '') === CambioListaImportacionCliente::TIPO_ASCENSO) {
-                        $reporteAscensos[] = $resultado['cambio'];
+                        $this->ascensosDetalle[] = $resultado['cambio'];
                     }
-                    $alertas = array_merge($alertas, $resultado['alertas']);
+                    $this->alertasCredito = array_merge($this->alertasCredito, $resultado['alertas']);
                 } catch (\Throwable $e) {
                     $stats['errores']++;
                     $detalles = $e instanceof ValidationException ? $e->errors() : ['fila' => [$e->getMessage()]];
@@ -149,10 +190,19 @@ class ImportarClientesWizerpService
                     $this->guardarProgreso($importacion, $stats, 'en_curso');
                 }
             }
+            if ($hayMas) {
+                $stats['duracion_seg'] = round(microtime(true) - $inicio, 2);
+                $this->guardarProgreso($importacion, $stats, 'en_curso');
+
+                return $this->resultadoEjecucion($stats, 'en_curso', $errores, true);
+            }
             $estado = $stats['errores'] === 0 ? 'completo' : ($stats['procesadas'] > 0 ? 'parcial' : 'fallido');
             $stats['duracion_seg'] = round(microtime(true) - $inicio, 2);
             $this->guardarProgreso($importacion, $stats, $estado);
         } catch (\Throwable $e) {
+            if ($limite !== null && $e instanceof ValidationException && str_contains((string) collect($e->errors())->flatten()->first(), 'en curso')) {
+                throw $e;
+            }
             $stats['no_aplicadas'] = max(0, $stats['leidas'] - $stats['procesadas'] - $stats['omitidas'] - $stats['errores']);
             if ($importacion) {
                 $this->guardarProgreso($importacion, $stats, $stats['procesadas'] > 0 ? 'parcial' : 'fallido', $e->getMessage());
@@ -161,12 +211,30 @@ class ImportarClientesWizerpService
         } finally {
             $this->liberarBloqueo();
         }
-        if ($alertas !== []) {
-            Notification::send(User::permission('cobranza.recibir_alertas')->get(), new AlertaLimiteCreditoSuperadoMasivoNotification($alertas));
+        if ($this->alertasCredito !== []) {
+            Notification::send(User::permission('cobranza.recibir_alertas')->get(), new AlertaLimiteCreditoSuperadoMasivoNotification($this->alertasCredito));
         }
 
-        return ['ascensos' => $reporteAscensos, 'clientes_marcados_inactivos' => $stats['clientes_marcados_inactivos'],
-            'stats' => $stats, 'estado' => $estado, 'errores_detalle' => array_slice($errores, 0, 100), 'detalle_limitado' => count($errores) > 100];
+        return $this->resultadoEjecucion($stats, $estado, $errores, false);
+    }
+
+    /**
+     * @param  array<string, mixed>  $stats
+     * @param  list<array<string, mixed>>  $errores
+     * @return array<string, mixed>
+     */
+    private function resultadoEjecucion(array $stats, string $estado, array $errores, bool $hayMas): array
+    {
+        return [
+            'ascensos' => $this->ascensosDetalle,
+            'clientes_marcados_inactivos' => $stats['clientes_marcados_inactivos'],
+            'stats' => $stats,
+            'estado' => $estado,
+            'errores_detalle' => array_slice($errores, 0, 100),
+            'detalle_limitado' => count($errores) > 100,
+            'hay_mas' => $hayMas,
+            'cursor_fila' => $this->cursorFila,
+        ];
     }
 
     private function guardarProgreso(?ImportacionCliente $importacion, array $stats, string $estado, ?string $mensaje = null): void
@@ -175,7 +243,18 @@ class ImportarClientesWizerpService
             return;
         }
         $revision = $importacion->resumen['revision'] ?? null;
-        $resumen = $stats;
+        $conservar = [];
+        foreach (['conteos', 'bloqueos', 'avisos', 'muestras', 'inicio_ts'] as $clave) {
+            if (array_key_exists($clave, $importacion->resumen ?? [])) {
+                $conservar[$clave] = $importacion->resumen[$clave];
+            }
+        }
+        $resumen = $stats + $conservar;
+        $resumen['ascensos_detalle'] = $this->ascensosDetalle;
+        $resumen['alertas_credito'] = $this->alertasCredito;
+        if ($this->cursorFila > 0) {
+            $resumen['cursor_fila'] = $this->cursorFila;
+        }
         if (is_array($revision)) {
             $resumen['revision'] = $revision;
         }
