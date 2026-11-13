@@ -18,7 +18,7 @@ import AvisoVersionNueva from '../Components/AvisoVersionNueva';
 import WooSyncFloatingTracker from '../Components/WooSyncFloatingTracker';
 import ImportacionAlmacenFloatingTracker from '../Components/Almacenes/ImportacionAlmacenFloatingTracker';
 import CobranzaReporteFloatingTracker from '../Components/CobranzaReporteFloatingTracker';
-import TiendanubeImportFloatingTracker from '../Components/TiendanubeImportFloatingTracker';
+import GeliaBackgroundTasks from '../Components/GeliaBackgroundTasks';
 import {
     resolveAlertasPrefs,
     getTipoAlerta,
@@ -259,6 +259,8 @@ export default function AppLayout({ children, fullScreen = false }) {
     const canViewTiendanubeImport = esSuperAdmin
         || permisosTn.includes('tiendanube.ver')
         || permisosTn.includes('tiendanube.productos.editar');
+    const permisosClientes = auth?.user?.permissions ?? [];
+    const canViewCargaClientes = esSuperAdmin || permisosClientes.includes('clientes.carga_masiva');
 
     // --- ESCUCHADORES DE EVENTOS GLOBALES DE INERTIA ---
     useEffect(() => {
@@ -882,7 +884,10 @@ export default function AppLayout({ children, fullScreen = false }) {
                         </div>
                     )}
                     <CobranzaReporteFloatingTracker canView={canViewCobranzaReportes} />
-                    <TiendanubeImportFloatingTracker canView={canViewTiendanubeImport} />
+                    <GeliaBackgroundTasks modulos={{
+                        'tiendanube-imagenes': canViewTiendanubeImport,
+                        'clientes-importacion': canViewCargaClientes,
+                    }} />
                 </div>
 
             </div>
