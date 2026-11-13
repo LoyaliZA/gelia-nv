@@ -1,0 +1,74 @@
+name: gelia-pr34-qa
+x-app: &app
+  image: gelianv-sail:php-8.4.27-node-26.13.0
+  pull_policy: never
+  env_file: .env.qa-pr34
+  environment:
+    SUPERVISOR_PHP_USER: sail
+    WWWUSER: ${WWWUSER:-1000}
+    LARAVEL_SAIL: 1
+  volumes:
+    - .:/var/www/html:ro
+    - ./.env.qa-pr34:/var/www/html/.env:ro
+    - ./storage/pr34-qa/storage:/var/www/html/storage
+    - ./storage/pr34-qa/bootstrap-cache:/var/www/html/bootstrap/cache
+    - ./storage/pr34-qa/build:/var/www/html/public/build
+    - ./storage/pr34-qa/vite-temp:/var/www/html/node_modules/.vite-temp
+    - ./docker/sail/zz-gelia-uploads.ini:/etc/php/8.4/cli/conf.d/zz-gelia-uploads.ini:ro
+  networks: [qa]
+  restart: unless-stopped
+services:
+  laravel.test:
+    <<: *app
+    command: php artisan serve --host=0.0.0.0 --port=80
+    ports: ['127.0.0.1:9184:80']
+    networks:
+      qa:
+        aliases: [qa-pr34]
+    depends_on:
+      mysql:
+        condition: service_healthy
+  reverb:
+    <<: *app
+    command: php artisan reverb:start --host=0.0.0.0 --port=8080 --debug
+    ports: ['127.0.0.1:8184:8080']
+    networks:
+      qa:
+        aliases: [reverb-pr34]
+  queue:
+    <<: *app
+    command: php artisan queue:work --sleep=1 --tries=1 --timeout=120
+    depends_on:
+      mysql:
+        condition: service_healthy
+  selenium:
+    image: selenium/standalone-chromium
+    pull_policy: never
+    shm_size: 1gb
+    environment:
+      SE_NODE_MAX_SESSIONS: 2
+      SE_NODE_OVERRIDE_MAX_SESSIONS: 'true'
+    networks: [qa, browser-egress]
+    restart: unless-stopped
+  mysql:
+    image: mysql:8.4
+    pull_policy: never
+    env_file: .env.qa-pr34
+    environment:
+      MYSQL_DATABASE: gelia_pr34_qa
+      MYSQL_USER: gelia_pr34_qa
+    command: --log-bin-trust-function-creators=1
+    volumes: [mysql-qa:/var/lib/mysql]
+    networks: [qa]
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD-SHELL', 'mysqladmin ping -h 127.0.0.1 -u root -p"$$MYSQL_ROOT_PASSWORD" --silent']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+networks:
+  browser-egress: {}
+  qa:
+    internal: true
+volumes:
+  mysql-qa:

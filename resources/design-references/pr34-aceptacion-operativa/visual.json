@@ -1,0 +1,116 @@
+{
+  "id": 55,
+  "tarea": 25,
+  "medidas": [
+    {
+      "etapa": "inicial",
+      "alto": 835,
+      "ancho": 1440,
+      "anidados": [],
+      "boton_visible": true,
+      "desborde": false,
+      "scroll": 300,
+      "total": 1135
+    },
+    {
+      "etapa": "inicial",
+      "alto": 835,
+      "ancho": 1024,
+      "anidados": [],
+      "boton_visible": true,
+      "desborde": false,
+      "scroll": 300,
+      "total": 1135
+    },
+    {
+      "etapa": "inicial",
+      "alto": 695,
+      "ancho": 390,
+      "anidados": [],
+      "boton_visible": true,
+      "desborde": false,
+      "scroll": 1002,
+      "total": 1697
+    },
+    {
+      "etapa": "respuesta",
+      "alto": 835,
+      "desborde": false,
+      "scroll": 0,
+      "total": 835,
+      "width": 1440
+    },
+    {
+      "etapa": "respuesta",
+      "alto": 835,
+      "desborde": false,
+      "scroll": 0,
+      "total": 835,
+      "width": 1024
+    },
+    {
+      "etapa": "respuesta",
+      "alto": 695,
+      "desborde": false,
+      "scroll": 314,
+      "total": 1009,
+      "width": 390
+    }
+  ],
+  "documentos": [
+    {
+      "id": 34,
+      "url": "http://qa-pr34/control-pedidos/pedidos/55/documentos/34"
+    },
+    {
+      "id": 35,
+      "url": "http://qa-pr34/control-pedidos/pedidos/55/documentos/35"
+    },
+    {
+      "id": 36,
+      "url": "http://qa-pr34/control-pedidos/pedidos/55/documentos/36"
+    },
+    {
+      "id": 37,
+      "url": "http://qa-pr34/control-pedidos/pedidos/55/documentos/37"
+    },
+    {
+      "id": 38,
+      "url": "http://qa-pr34/control-pedidos/pedidos/55/documentos/38"
+    },
+    {
+      "id": 39,
+      "url": "http://qa-pr34/control-pedidos/pedidos/55/documentos/39"
+    },
+    {
+      "id": 40,
+      "url": "http://qa-pr34/control-pedidos/pedidos/55/documentos/40"
+    },
+    {
+      "id": 41,
+      "url": "http://qa-pr34/control-pedidos/pedidos/55/documentos/41"
+    }
+  ],
+  "expediente": 403,
+  "documento_ajeno": 403,
+  "console": [
+    {
+      "level": "WARNING",
+      "message": "http://qa-pr34/build/assets/AppLayout-7coh1lfC.js 0:43187 \"[NotificationBrowserService] No se pudo reproducir el tono de alerta.\" NotAllowedError: play() failed because the user didn't interact with the document first. https://goo.gl/xX8pDD",
+      "source": "console-api",
+      "timestamp": 1794518120606
+    },
+    {
+      "level": "SEVERE",
+      "message": "http://qa-pr34/control-pedidos/55/disponibilidad-tienda - Failed to load resource: the server responded with a status of 403 (Forbidden)",
+      "source": "network",
+      "timestamp": 1794518127693
+    },
+    {
+      "level": "SEVERE",
+      "message": "http://qa-pr34/control-pedidos/pedidos/5/documentos/5 - Failed to load resource: the server responded with a status of 403 (Forbidden)",
+      "source": "network",
+      "timestamp": 1794518127834
+    }
+  ]
+}

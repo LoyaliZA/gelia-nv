@@ -192,6 +192,17 @@ function mismoMonto(a, b) {
     return canonMonto(a) === canonMonto(b);
 }
 
+export function importesListosCaptura({ cobertura, totalMercancia, saldoCapturado, confirmados, conflicto, estadoGuardado }) {
+    const persistidos = mismoMonto(totalMercancia, confirmados?.total_mercancia)
+        && mismoMonto(saldoCapturado, confirmados?.saldo_a_favor)
+        && canonMonto(totalMercancia) !== null
+        && !conflicto
+        && !['guardando', 'pendiente', 'error', 'conflicto'].includes(estadoGuardado);
+    if (cobertura !== 'credito') return persistidos;
+    const monto = canonMonto(totalMercancia);
+    return monto !== null && monto > 0 && !conflicto && estadoGuardado !== 'conflicto';
+}
+
 function aplicacionesDe(pedido) {
     return (pedido?.saf_aplicaciones || [])
         .filter((fila) => fila && fila.estado !== 'liberado' && fila.saf_credito_id)
@@ -339,6 +350,8 @@ export default function FormularioRegistrarTienda({
     const [avisoConfirmacion, setAvisoConfirmacion] = useState('');
     const [borradorConfirmado, setBorradorConfirmado] = useState(false);
     const [estadoGuardado, setEstadoGuardado] = useState(null);
+    const estadoGuardadoRef = useRef(null);
+    estadoGuardadoRef.current = estadoGuardado;
     const clave = useRef(globalThis.crypto?.randomUUID?.() || `tienda-${Date.now()}`);
     const archivoRef = useRef(null);
     const avanzado = capturaAvanzada(pedido);
@@ -450,20 +463,22 @@ export default function FormularioRegistrarTienda({
         return cuerpo;
     };
 
+    const aplicarBase = (lectura) => {
+        if (lectura.revision_registro == null || !lectura.base_captura) return;
+        const actual = baseRef.current;
+        if (lectura.revision_registro === actual.revision_esperada && lectura.base_captura === actual.base_captura) return;
+        const siguiente = { revision_esperada: lectura.revision_registro, base_captura: lectura.base_captura };
+        baseRef.current = siguiente;
+        setBase(siguiente);
+    };
+
     const aplicarRespuesta = (respuesta) => {
         if (!respuesta) return;
         if (respuesta.id) {
             pedidoIdRef.current = respuesta.id;
             setPedidoId(respuesta.id);
         }
-        if (respuesta.revision_registro != null && respuesta.base_captura) {
-            const siguiente = {
-                revision_esperada: respuesta.revision_registro,
-                base_captura: respuesta.base_captura,
-            };
-            baseRef.current = siguiente;
-            setBase(siguiente);
-        }
+        aplicarBase(respuesta);
         if (respuesta.total_mercancia !== undefined || respuesta.saldo_a_favor !== undefined) {
             setConfirmados((actual) => ({
                 ...actual,
@@ -490,14 +505,15 @@ export default function FormularioRegistrarTienda({
         setErrorCampo('');
         setEstadoGuardado('guardando');
         const ciclo = cicloRef.current;
+        const huellaEnviada = huellaActual();
         try {
             const respuesta = await axios.post('/control-pedidos/autoguardar', cuerpo || payload(), {
                 headers: cabeceras(),
             });
             if (ciclo !== cicloRef.current) return null;
             aplicarRespuesta(respuesta.data);
-            huellaRef.current = huellaActual();
-            setEstadoGuardado('guardado');
+            huellaRef.current = huellaEnviada;
+            setEstadoGuardado(huellaActual() === huellaEnviada ? 'guardado' : 'pendiente');
             if (!silencioso) setBorradorConfirmado(true);
             return respuesta.data;
         } catch (error) {
@@ -754,18 +770,21 @@ export default function FormularioRegistrarTienda({
     const refrescarRef = useRef(null);
     useActualizacionesPedidos({
         activo: abierto && Boolean(pedidoId), pedidoId,
-        pausado: guardando || enviando || ['pendiente', 'guardando'].includes(estadoGuardado),
+        pausado: guardando || enviando || ['pendiente', 'guardando', 'error', 'conflicto'].includes(estadoGuardado),
         onActualizar: () => refrescarRef.current?.(),
         onPendiente: () => setAviso('El pedido cambió. Se conserva su captura mientras termina de guardar.'),
     });
     useEffect(() => {
         if (!abierto || !pedidoId) return;
         let vigente = true;
+        const baseAlLeer = baseRef.current;
         setLecturaOperativaLista(false);
         axios.get(`/control-pedidos/${pedidoId}/disponibilidad-tienda`).then(({ data }) => {
             if (vigente && data?.id === pedidoId) {
-                setPedido(data);
                 setLecturaOperativaLista(true);
+                if (baseRef.current !== baseAlLeer) return;
+                if (Number(data.revision_registro) === Number(baseAlLeer.revision_esperada)) aplicarBase(data);
+                setPedido(data);
                 if (data.solicitud_preparacion) setSolicitudViva(data.solicitud_preparacion);
                 setConsultaCerrada(Boolean(data.consulta_cerrada || data.consulta_cerrada_at));
             }
@@ -775,24 +794,43 @@ export default function FormularioRegistrarTienda({
     if (!abierto) return null;
 
     const nombreAlmacenVisible = almacenes.find((almacen) => String(almacen.id) === String(almacenId))?.nombre || '';
-    const importesListos = mismoMonto(totalMercancia, confirmados.total_mercancia)
-        && mismoMonto(saldoDeDatos(datosRef.current), confirmados.saldo_a_favor)
-        && canonMonto(totalMercancia) !== null
-        && !conflicto
-        && !['guardando', 'pendiente', 'error', 'conflicto'].includes(estadoGuardado);
+    const importesListos = importesListosCaptura({
+        cobertura: solicitudViva?.cobertura_tienda?.tipo,
+        totalMercancia,
+        saldoCapturado: saldoDeDatos(datosRef.current),
+        confirmados,
+        conflicto,
+        estadoGuardado,
+    });
+    const asegurarGuardado = () => encolar(async () => {
+        if (suspenderRef.current || estadoGuardadoRef.current === 'conflicto') return false;
+        if (huellaActual() !== huellaRef.current || estadoGuardadoRef.current === 'error') {
+            const respuesta = await ejecutarGuardar(null, true);
+            if (!respuesta) return false;
+        }
+        return huellaActual() === huellaRef.current;
+    });
     const bancosContexto = (catalogos.bancos || []).filter((banco) => (
         banco.compartido !== false
         || (banco.departamento_ids || []).some((id) => String(id) === String(departamentoId))
     ));
-    const adoptarLectura = (lectura) => {
+    const adoptarLectura = (lectura, operacionLocal = false) => {
         if (!lectura) return;
+        if (lectura.revision_registro != null && Number(lectura.revision_registro) < Number(baseRef.current.revision_esperada)) return;
+        if (operacionLocal && lectura.revision_registro != null && Number(lectura.revision_registro) !== Number(baseRef.current.revision_esperada)) {
+            setConflicto('El pedido cambió en otra sesión. Conserve esta captura y revise los datos guardados.');
+            setEstadoGuardado('conflicto');
+            return;
+        }
         setPedido((actual) => ({ ...actual, ...lectura }));
         if (lectura.consulta_cerrada !== undefined) setConsultaCerrada(Boolean(lectura.consulta_cerrada));
         if (lectura.solicitud_preparacion) setSolicitudViva(lectura.solicitud_preparacion);
         const limpio = mismoMonto(datosRef.current.totalMercancia, confirmadosRef.current.total_mercancia)
             && mismoMonto(saldoDeDatos(datosRef.current), confirmadosRef.current.saldo_a_favor);
         if (!limpio) {
-            if (lectura.revision_registro != null && Number(lectura.revision_registro) !== Number(confirmadosRef.current.revision_registro)) {
+            if (operacionLocal) {
+                aplicarBase(lectura);
+            } else if (lectura.revision_registro != null && Number(lectura.revision_registro) !== Number(confirmadosRef.current.revision_registro)) {
                 setConflicto('Los importes guardados cambiaron. Conserve esta captura y actualice los datos antes de registrar el pago.');
             }
             return;
@@ -806,16 +844,13 @@ export default function FormularioRegistrarTienda({
             ...(lectura.costo_seguro !== undefined ? { costo_seguro: lectura.costo_seguro } : {}),
             ...(lectura.revision_registro != null ? { revision_registro: lectura.revision_registro } : {}),
         }));
-        if (lectura.revision_registro != null && lectura.base_captura) {
-            const siguiente = { revision_esperada: lectura.revision_registro, base_captura: lectura.base_captura };
-            baseRef.current = siguiente;
-            setBase(siguiente);
-        }
+        aplicarBase(lectura);
     };
     refrescarRef.current = async () => {
+        const baseAlLeer = baseRef.current;
         try {
             const { data } = await axios.get(route('control_pedidos.pagos.resumen', pedidoId), { headers: { Accept: 'application/json' } });
-            adoptarLectura(data);
+            if (baseRef.current === baseAlLeer) adoptarLectura(data);
         } catch {
             setAviso('No se pudo actualizar el pedido. Vuelva a abrirlo para consultar su estado.');
         }
@@ -871,6 +906,7 @@ export default function FormularioRegistrarTienda({
                             {badgesListaPedido(pedido).slice(0, 2).map((badge) => <span key={badge.key} className={badge.className} style={badge.style}>{badge.label}</span>)}
                         </div>}
                         {(enRevisionAuxiliar || avisoConfirmacion) && <p className="text-sm theme-text-main mt-2 mb-0" role="status">{enRevisionAuxiliar ? 'Pedido enviado a revisión del auxiliar.' : avisoConfirmacion}</p>}
+                        {pedido?.motivo_rechazo && <p className="text-sm theme-text-main mt-2 mb-0" role="status">{pedido.motivo_rechazo}</p>}
                     </div>
                     <button
                         type="button"
@@ -1215,7 +1251,7 @@ export default function FormularioRegistrarTienda({
                                 nombreAlmacen={nombreAlmacenVisible}
                                 revisiones={pedido?.revisiones_producto || pedido?.revisionesProducto || []}
                                 consultaCerrada={consultaCerrada}
-                                onConsultaCerrada={() => { setConsultaCerrada(true); refrescarRef.current?.(); }}
+                                onConsultaCerrada={(lectura) => { adoptarLectura(lectura, true); setConsultaCerrada(true); refrescarRef.current?.(); }}
                             />
                             <SeguimientoTransferenciaTienda pedido={{ ...pedido, id: pedidoId, solicitud_preparacion: solicitudViva }} sucursales={catalogos.sucursales || []} onActualizar={() => refrescarRef.current?.()} />
                             <ContinuidadTienda
@@ -1230,6 +1266,8 @@ export default function FormularioRegistrarTienda({
                                 consultaCerrada={consultaCerrada}
                                 importes={{
                                     destinoAccion,
+                                    lecturaLista: lecturaOperativaLista,
+                                    encolarGuardado: encolar,
                                     onEstadoConfirmacion: setProcesosConfirmacionListos,
                                     clienteId,
                                     totalMercancia,
@@ -1257,7 +1295,7 @@ export default function FormularioRegistrarTienda({
                                     onSolicitud: actualizarSolicitud,
                                 }}
                             />
-                            <ConfirmacionRevisionTienda procesosListos={lecturaOperativaLista && procesosConfirmacionListos} destinoAccion={destinoAccion} onAviso={setAvisoConfirmacion} pedido={{ ...pedido, id: pedidoId, solicitud_preparacion: solicitudViva }} sucursales={catalogos.sucursales || []} consultaCerrada={consultaCerrada} importesListos={importesListos} onLectura={adoptarLectura} />
+                            <ConfirmacionRevisionTienda procesosListos={lecturaOperativaLista && procesosConfirmacionListos} destinoAccion={destinoAccion} onAviso={setAvisoConfirmacion} antesDeEnviar={asegurarGuardado} pedido={{ ...pedido, id: pedidoId, solicitud_preparacion: solicitudViva }} sucursales={catalogos.sucursales || []} consultaCerrada={consultaCerrada} importesListos={importesListos} onLectura={adoptarLectura} />
                         </>
                     )}
                     {borradorConfirmado && !enviada && (

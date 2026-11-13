@@ -49,6 +49,7 @@ import DatosGeneralesAuditoria from './DatosGeneralesAuditoria';
 import TotalesEnviosAuditoria from './TotalesEnviosAuditoria';
 import BarraAccionesRevision from './BarraAccionesRevision';
 import { fechaInicialRemision, prepararAdjuntoRemision, remisionVigenteDe } from './remisionVigente';
+import useActualizacionesPedidos from '../../Partials/useActualizacionesPedidos';
 import { THEME_INPUT } from '../../../../utils/geliaTheme';
 import SelectorFecha from '../../../../Components/Calendario/SelectorFecha';
 
@@ -61,28 +62,33 @@ const Campo = ({ label, value }) => (
     </div>
 );
 
-function CreditoTienda({ pedidoId, resultado }) {
+function CreditoTienda({ resultado, pagoValidado, esRechazado, puedeDecidir, procesando, error, onDecidir }) {
     const [causa, setCausa] = useState(resultado?.causa || '');
-    const [aviso, setAviso] = useState(resultado?.pendiente || '');
-    const enviar = (valor) => {
-        router.post(route('control_pedidos.auditar.credito_tienda', pedidoId), {
-            resultado: valor,
-            causa,
-        }, { preserveScroll: true, onError: (errores) => setAviso(Object.values(errores)[0] || 'No se registró el crédito.') });
-    };
+    const aprobado = resultado?.resultado === 'aprobado' && pagoValidado;
+    const devuelto = resultado?.resultado === 'vencido' && esRechazado;
 
     return (
         <div className="mt-4 grid gap-2">
             <p className="text-sm theme-text-main m-0">
-                Crédito en Wizerp: {resultado?.resultado || 'sin resultado'}. No se pide comprobante de transferencia.
+                Método de pago: crédito. Si el crédito está vigente, confírmelo y registre la remisión para continuar en CEDIS. Si está vencido, devuelva el pedido: quien lo registró recibe esa indicación.
             </p>
-            {aviso && <p className="text-sm theme-text-muted m-0">{aviso}</p>}
-            <label className={THEME_LABEL} htmlFor="credito-causa">Causa si está bloqueado</label>
-            <textarea id="credito-causa" className="w-full min-h-16 rounded-lg border theme-border theme-element px-3 py-2 text-sm theme-text-main" value={causa} onChange={(evento) => setCausa(evento.target.value)} />
-            <div className="flex flex-wrap gap-2">
-                <button type="button" className={BTN_PRIMARY} onClick={() => enviar('aprobado')}>Crédito aprobado</button>
-                <button type="button" className={BTN_SECONDARY} onClick={() => enviar('bloqueado')}>Crédito bloqueado</button>
+            <div role="status">
+                {aprobado && <p className="text-sm font-bold theme-text-main m-0">Crédito aprobado y validado.</p>}
+                {devuelto && <p className="text-sm font-bold theme-text-main m-0">Pedido devuelto a Ventas por crédito vencido.</p>}
+                {!aprobado && !devuelto && resultado?.resultado && <p className="text-sm theme-text-muted m-0">Resultado registrado: {resultado.resultado}.</p>}
             </div>
+            {resultado?.pendiente && <p className="text-sm theme-text-muted m-0">{resultado.pendiente}</p>}
+            {error && <p role="alert" className="text-sm theme-text-peligro m-0">{error}</p>}
+            {puedeDecidir ? (
+                <>
+                    <label className={THEME_LABEL} htmlFor="credito-causa">Indicación adicional</label>
+                    <textarea id="credito-causa" className="w-full min-h-16 rounded-lg border theme-border theme-element px-3 py-2 text-sm theme-text-main" value={causa} onChange={(evento) => setCausa(evento.target.value)} disabled={procesando} />
+                    <div className="flex flex-wrap gap-2">
+                        <button type="button" className={BTN_PRIMARY} disabled={procesando} onClick={() => onDecidir('aprobado', causa)}>Crédito aprobado</button>
+                        <button type="button" className={`${BTN_SECONDARY} border border-red-500/40 text-red-500 disabled:opacity-50`} disabled={procesando} onClick={() => onDecidir('vencido', causa)}>Rechazado</button>
+                    </div>
+                </>
+            ) : resultado?.causa && <p className="text-sm theme-text-muted m-0">{resultado.causa}</p>}
         </div>
     );
 }
@@ -122,6 +128,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
     const [rechazoPagos, setRechazoPagos] = useState({ abierto: false, ids: [], motivo: '' });
     const [bloqueosPago, setBloqueosPago] = useState([]);
     const [errorRechazo, setErrorRechazo] = useState(null);
+    const [errorCredito, setErrorCredito] = useState('');
     const [resumenCobertura, setResumenCobertura] = useState(null);
     const [masInformacion, setMasInformacion] = useState(false);
     const [errorNumeroRemision, setErrorNumeroRemision] = useState('');
@@ -142,6 +149,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
             setResumenCobertura(null);
             setBloqueosPago([]);
             setErrorRechazo(null);
+            setErrorCredito('');
             setMasInformacion(false);
             setErrorNumeroRemision('');
         }
@@ -179,6 +187,28 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
     const cerrarRechazo = () => { if (!procesando) setRechazoPagos({ abierto: false, ids: [], motivo: '' }); };
     const dialog = usePedidoDialog({ abierto: abierto && Boolean(pedido), onClose: cerrar, bloqueado: procesando });
     const dialogRechazo = usePedidoDialog({ abierto: abierto && rechazoPagos.abierto, onClose: cerrarRechazo, bloqueado: procesando });
+    const capturaAuditoria = procesando
+        || numeroRemision !== (pedido?.numero_remision || '')
+        || fechaEmisionRemision !== fechaInicialRemision(pedido || {})
+        || rechazoPagos.abierto
+        || motivoAnexoAbierto
+        || errorDatosAbierto
+        || liberarCapturaAbierto
+        || Boolean(confirmacion);
+    useActualizacionesPedidos({
+        activo: Boolean(abierto && pedido?.id),
+        pedidoId: pedido?.id,
+        pausado: capturaAuditoria,
+        onActualizar: () => {
+            axios.get(route('control_pedidos.auditar.detalle', pedido.id)).then((respuesta) => {
+                const actualizado = respuesta.data?.pedido;
+                if (!actualizado || actualizado.id !== pedido.id) return;
+                setPedido(actualizado);
+                setNumeroRemision(actualizado.numero_remision || '');
+                setFechaEmisionRemision(fechaInicialRemision(actualizado));
+            }).catch(() => {});
+        },
+    });
 
     if (!abierto || !pedido) return null;
 
@@ -204,9 +234,17 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
     const pagoValidado = Boolean(pedido.pago_validado_at);
     const recogeTienda = Boolean(pedido.es_recoge_tienda_apartado);
     const fichaTienda = !pedidoRequiereLogistica(pedido) && !recogeTienda;
+    const creditoTienda = pedido.solicitud_preparacion?.codigo_modalidad === 'RECOGE_TIENDA_CREDITO'
+        || pedido.solicitud_preparacion?.cobertura_tienda?.tipo === 'credito';
+    const bloqueosAplican = creditoTienda
+        ? bloqueosPago.filter((bloqueo) => !/Faltan \$|Falta registrar exhibiciones|mercancía, envío/.test(bloqueo))
+        : bloqueosPago;
     const puedeAprobar = esPendiente && pagoValidado && Boolean(remision)
         && can('control_pedidos.auditar.aprobar') && !recogeTienda;
     const muestraAprobar = esPendiente && can('control_pedidos.auditar.aprobar') && !recogeTienda;
+    const avisoAprobacion = muestraAprobar && !puedeAprobar
+        ? (!pagoValidado ? 'Valida el pago para aprobar el pedido.' : !remision ? 'Adjunta la remisión PDF para aprobar el pedido.' : '')
+        : '';
     const anexoPendiente = anexoEnvioPendienteDe(pedido);
     const puedeRevisarAnexo = Boolean(anexoPendiente) && pedido.estatus_envio === 'pendiente_revision_anexo';
     const puedeAnexar = puedeAnexarPagoEnvio(pedido);
@@ -233,12 +271,12 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
     };
 
     const validarPago = () => {
-        if (bloqueosPago.length > 0) {
+        if (bloqueosAplican.length > 0) {
             setAlerta({
                 abierto: true,
                 tipo: 'error',
                 titulo: 'No se puede validar',
-                mensaje: bloqueosPago[0],
+                mensaje: bloqueosAplican[0],
             });
             return;
         }
@@ -247,6 +285,28 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
             preserveScroll: true,
             onSuccess: (page) => recargarPedido('Pago validado correctamente.', page),
             onError: (errors) => setAlerta({ abierto: true, tipo: 'error', titulo: 'Error', mensaje: errors?.message || 'No se pudo validar el pago.' }),
+            onFinish: () => setProcesando(false),
+        });
+    };
+
+    const decidirCredito = (resultado, causa) => {
+        setErrorCredito('');
+        setProcesando(true);
+        router.post(route('control_pedidos.auditar.credito_tienda', pedido.id), {
+            resultado,
+            causa,
+            decision_auditoria: true,
+        }, {
+            preserveScroll: true,
+            onSuccess: (page) => {
+                const error = page.props.flash?.error;
+                if (error) {
+                    setErrorCredito(error);
+                    return;
+                }
+                return recargarPedido(null, page);
+            },
+            onError: (errores) => setErrorCredito(Object.values(errores)[0] || 'No se registró el crédito.'),
             onFinish: () => setProcesando(false),
         });
     };
@@ -646,7 +706,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                 <div
                     {...dialog}
                     aria-labelledby="auditoria-revision-titulo"
-                    className={`${THEME_MODAL_SHELL} gelia-pedidos-dialog-workspace gelia-pedidos-auditoria ${fichaTienda ? 'max-w-3xl' : 'max-w-6xl'} w-full flex flex-col`}
+                    className={`${THEME_MODAL_SHELL} gelia-pedidos-dialog-workspace gelia-pedidos-auditoria w-full flex flex-col`}
                     style={{ maxHeight: 'calc(100dvh - 2rem)' }}
                     onClick={(e) => e.stopPropagation()}
                 >
@@ -655,13 +715,10 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                         badge={badge}
                         badgeHito={badgeHito}
                         badgeRemision={badgeRemision}
-                        reRevision={reRevision}
-                        esRechazado={esRechazado}
                         pagoValidado={pagoValidado}
+                        avisoAprobacion={avisoAprobacion}
                         procesando={procesando}
-                        can={can}
                         onClose={cerrar}
-                        onResolverSaf={resolverSaf}
                         acciones={
                             <BarraAccionesRevision
                                 procesando={procesando}
@@ -684,22 +741,9 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                         }
                     />
 
-                    <NavegacionPedido
+                    {!fichaTienda && <NavegacionPedido
                         label="Secciones de la auditoría"
-                        onSeleccionar={fichaTienda ? (id) => {
-                            if (id === 'auditoria-mas') setMasInformacion(true);
-                            window.requestAnimationFrame(() => {
-                                const destino = document.getElementById(id);
-                                destino?.scrollIntoView({ block: 'start', behavior: 'instant' });
-                                destino?.focus({ preventScroll: true });
-                            });
-                        } : null}
-                        secciones={fichaTienda ? [
-                        { id: 'auditoria-ficha', label: 'Datos' },
-                        { id: 'auditoria-pagos', label: 'Comprobante' },
-                        { id: 'auditoria-remision', label: 'Archivo' },
-                        { id: 'auditoria-mas', label: 'Resto del pedido' },
-                    ] : [
+                        secciones={[
                         { id: 'auditoria-pagos', label: 'Comprobantes' },
                         { id: 'auditoria-cobertura', label: 'Cobertura' },
                         { id: 'auditoria-remision', label: 'Remisión' },
@@ -707,7 +751,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                         { id: 'auditoria-datos', label: 'Datos del pedido' },
                         { id: 'auditoria-compartido', label: 'Pedido compartido' },
                         (anexoPendiente || puedeAnexar || (pedido.anexos_envio || []).length > 0) && { id: 'auditoria-anexo', label: 'Anexo de envío' },
-                    ]} />
+                    ]} />}
                     <div className="gelia-modal-body p-4 md:p-5">
                         <div className={fichaTienda ? 'flex min-h-0 flex-1 flex-col' : 'gelia-pedidos-auditoria-grid'}>
                             {!fichaTienda && <aside className="gelia-pedidos-auditoria-panel gelia-pedidos-auditoria-cobertura space-y-4" aria-label="Cobertura y pedido compartido">
@@ -715,7 +759,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                     <h3 className="gelia-pedidos-seccion-titulo">Cobertura</h3>
                                     <ResumenCoberturaPedido
                                         resumen={resumenCobertura}
-                                        bloqueos={bloqueosPago}
+                                        bloqueos={bloqueosAplican}
                                         pedido={pedido}
                                         zonas={catalogos?.zonas || []}
                                     />
@@ -764,6 +808,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                         </div>
                                     )}
                                     <SeccionPagosExhibicion
+                                        key={creditoTienda ? pedido.pago_validado_at : undefined}
                                         pedidoId={pedido.id}
                                         bancos={bancos}
                                         puedeRegistrar={false}
@@ -791,10 +836,19 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                             El pago presencial y la entrega con fotografía se confirman en la sucursal. Esta bandeja no pide transferencia ni remisión para el apartado.
                                         </p>
                                     )}
-                                    {pedido.solicitud_preparacion?.codigo_modalidad === 'RECOGE_TIENDA_CREDITO' && (
-                                        <CreditoTienda pedidoId={pedido.id} resultado={pedido.solicitud_preparacion?.credito_wizerp} />
+                                    {creditoTienda && (
+                                        <CreditoTienda
+                                            key={pedido.id}
+                                            resultado={pedido.solicitud_preparacion?.credito_wizerp}
+                                            pagoValidado={pagoValidado}
+                                            esRechazado={esRechazado}
+                                            puedeDecidir={esPendiente && !recogeTienda && !pagoValidado && can('control_pedidos.auditar')}
+                                            procesando={procesando}
+                                            error={errorCredito}
+                                            onDecidir={decidirCredito}
+                                        />
                                     )}
-                                    {esPendiente && !recogeTienda && (
+                                    {esPendiente && !recogeTienda && !creditoTienda && (
                                         <div className="mt-4 flex flex-wrap gap-2">
                                             <button
                                                 type="button"
@@ -807,15 +861,15 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                             <button
                                                 type="button"
                                                 onClick={validarPago}
-                                                disabled={procesando || pagoValidado || bloqueosPago.length > 0}
-                                                title={bloqueosPago[0] || undefined}
+                                                disabled={procesando || pagoValidado || bloqueosAplican.length > 0}
+                                                title={bloqueosAplican[0] || undefined}
                                                 className={`${BTN_PRIMARY} flex items-center gap-2 outline-none disabled:opacity-50`}
                                             >
                                                 {procesando ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
                                                 {pagoValidado ? 'Pagado y validado' : procesando ? 'Validando pago…' : (fichaTienda ? 'Pagado y validado' : 'Validar pago')}
                                             </button>
-                                            {bloqueosPago.length > 0 && !pagoValidado && (
-                                                <p className="w-full text-xs font-bold text-amber-600 m-0">{bloqueosPago[0]}</p>
+                                            {bloqueosAplican.length > 0 && !pagoValidado && (
+                                                <p className="w-full text-xs font-bold text-amber-600 m-0">{bloqueosAplican[0]}</p>
                                             )}
                                         </div>
                                     )}
@@ -827,7 +881,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                     </p>
                                 )}
                                 <section id="auditoria-remision" tabIndex={-1} className={SECCION_WRAP}>
-                                    <h3 className="gelia-pedidos-seccion-titulo">{fichaTienda ? 'Archivo de tienda' : 'Remisión'}</h3>
+                                    <h3 className="gelia-pedidos-seccion-titulo">{fichaTienda ? 'Remisión de compra' : 'Remisión'}</h3>
                                     {pedido.solicitud_preparacion?.cobertura_tienda?.tipo === 'transferencia' && esPendiente && <div className="mb-3">
                                         <label htmlFor="auditoria-fecha-emision" className="block text-xs theme-text-muted mb-1">Fecha de emisión de remisión Wizerp</label>
                                         <SelectorFecha id="auditoria-fecha-emision" aria-label="Fecha de emisión de remisión Wizerp" aria-describedby="auditoria-fecha-emision-ayuda" value={pedido.solicitud_preparacion?.remision_tienda?.emitida_at?.slice(0, 10) || fechaEmisionRemision} onChange={setFechaEmisionRemision} disabled={procesando || Boolean(pedido.solicitud_preparacion?.remision_tienda?.emitida_at)} />
@@ -904,7 +958,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                         <p className="text-xs theme-text-muted font-bold italic">Sin remisión adjunta</p>
                                     )}
                                 </section>
-                                <ConsultaSolicitudTienda pedido={pedido} />
+                                <ConsultaSolicitudTienda pedido={pedido} mostrarSeguimientoTransferencia={!(creditoTienda && pedido.solicitud_preparacion?.area_revision === 'control_pedidos')} />
                                 {fichaTienda ? (
                                 <details
                                     id="auditoria-mas"
@@ -926,7 +980,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                                 <h3 className="gelia-pedidos-seccion-titulo">Cobertura</h3>
                                                 <ResumenCoberturaPedido
                                                     resumen={resumenCobertura}
-                                                    bloqueos={bloqueosPago}
+                                                    bloqueos={bloqueosAplican}
                                                     pedido={pedido}
                                                     zonas={catalogos?.zonas || []}
                                                 />

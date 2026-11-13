@@ -40,9 +40,8 @@ import WidgetFacturas from './Widgets/WidgetFacturas';
 import WidgetContabilidad from './Widgets/WidgetContabilidad';
 
 const KPI_STRIP_CONFIG = [
-    { key: 'mis_activas', label: 'Mis solicitudes abiertas', hint: 'TAG · mi cartera', format: 'number' },
-    { key: 'solicitudes_mes', label: 'Solicitudes creadas', hint: 'Este mes · todas', format: 'number' },
-    { key: 'cotizado_global', label: 'Monto cotizado', hint: 'Este mes · suma', format: 'money' },
+    { key: 'mis_activas', label: 'Mis solicitudes abiertas', hint: 'TAG · mi cartera' },
+    { key: 'solicitudes_mes', label: 'Solicitudes creadas', hint: 'Este mes · todas' },
 ];
 
 const PRESET_IDS = Object.values(DASHBOARD_PRESETS);
@@ -109,9 +108,38 @@ function buildFuncionesPanel({ variant, funcionesVisibles }) {
     });
 }
 
-function formatKpiValue(value, format) {
-    if (format === 'money') return formatoMoneda(value);
-    return Number(value || 0).toLocaleString('es-MX');
+function GraficaMontoCotizado({ periodo, total, tramos }) {
+    const maximo = Math.max(0, ...tramos.map(({ monto }) => monto)) || 1;
+
+    return (
+        <figure className={geliaCardClass('m-0 min-w-0 p-4 md:p-5')}>
+            <figcaption className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1">
+                <span className="text-xs font-medium theme-text-muted">Monto cotizado</span>
+                <span className="text-[11px] theme-text-muted capitalize">{periodo}</span>
+            </figcaption>
+            <p className="text-2xl md:text-[1.75rem] font-semibold theme-text-main m-0 leading-none tabular-nums mt-2 break-words">
+                {formatoMoneda(total)}
+            </p>
+            {tramos.length > 0 ? (
+                <ol aria-label="Monto por tramo de días" className="m-0 mt-3 grid list-none grid-cols-[auto_minmax(0,1fr)_auto] gap-x-2 gap-y-1 p-0 text-[11px] tabular-nums">
+                    {tramos.map(({ desde, hasta, monto }) => (
+                        <li key={desde} className="col-span-3 grid grid-cols-subgrid items-center">
+                            <span className="theme-text-muted"><span className="sr-only">Días </span>{desde}–{hasta}</span>
+                            <span aria-hidden="true" className="h-1.5 overflow-hidden rounded-full theme-element">
+                                <span
+                                    className="block h-full rounded-full bg-[var(--color-primario)]"
+                                    style={{ width: `${(monto / maximo) * 100}%` }}
+                                />
+                            </span>
+                            <span className="text-right theme-text-main">{formatoMoneda(monto)}</span>
+                        </li>
+                    ))}
+                </ol>
+            ) : (
+                <p className="text-[11px] theme-text-muted m-0 mt-2">Sin montos registrados en este periodo.</p>
+            )}
+        </figure>
+    );
 }
 
 export default function AdminDashboard({
@@ -184,6 +212,7 @@ export default function AdminDashboard({
         () => KPI_STRIP_CONFIG.filter((item) => Object.prototype.hasOwnProperty.call(estadisticas, item.key)),
         [estadisticas]
     );
+    const cotizadoMesAnterior = estadisticas.cotizado_mes_anterior;
 
     const layoutFlags = useMemo(
         () => ({
@@ -410,17 +439,18 @@ export default function AdminDashboard({
                     <RelojConexion />
                 </header>
 
-                {kpiItems.length > 0 && (
+                {(kpiItems.length > 0 || cotizadoMesAnterior) && (
                     <section aria-label="Indicadores" className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-5 dashboard-page-reveal">
-                        {kpiItems.map(({ key, label, hint, format }) => (
+                        {kpiItems.map(({ key, label, hint }) => (
                             <div key={key} className={geliaCardClass('p-4 md:p-5 min-h-[4.5rem] flex flex-col justify-center')}>
                                 <p className="text-xs font-medium theme-text-muted m-0">{label}</p>
                                 <p className="text-2xl md:text-[1.75rem] font-semibold theme-text-main m-0 leading-none tabular-nums mt-2">
-                                    {formatKpiValue(estadisticas[key], format)}
+                                    {Number(estadisticas[key] || 0).toLocaleString('es-MX')}
                                 </p>
                                 {hint && <p className="text-[11px] theme-text-muted m-0 mt-2">{hint}</p>}
                             </div>
                         ))}
+                        {cotizadoMesAnterior && <GraficaMontoCotizado {...cotizadoMesAnterior} />}
                     </section>
                 )}
 

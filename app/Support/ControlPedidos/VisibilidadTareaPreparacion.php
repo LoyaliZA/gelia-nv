@@ -22,7 +22,8 @@ final class VisibilidadTareaPreparacion
             $query->whereIn('almacen_id', $almacenes);
         }
 
-        return $query->where('area_responsable_codigo', 'TIENDA');
+        // Sin pedido vigente la tarea no es una solicitud: el borrador eliminado no debe seguir en la bandeja.
+        return $query->where('area_responsable_codigo', 'TIENDA')->whereHas('pedido');
     }
 
     public static function puedeVer(User $usuario, PedidoBmaTareaPreparacion $tarea): bool
@@ -128,9 +129,20 @@ final class VisibilidadTareaPreparacion
                         if (! is_array($linea)) {
                             return null;
                         }
-                        $documento = isset($linea['documento_id']) ? $pedido->documentos()->whereKey($linea['documento_id'])->first() : null;
+                        $ids = collect($linea['documentos'] ?? [])->pluck('id')->push($linea['documento_id'] ?? null)->filter()->unique()->values();
+                        $documentos = $pedido->documentos->whereIn('id', $ids->all())->values()->map(fn ($documento) => [
+                            'id' => $documento->id,
+                            'url' => $documento->url,
+                            'nombre_original' => $documento->nombre_original,
+                            'mime_type' => $documento->mime_type,
+                            'tamano_bytes' => $documento->tamano_bytes,
+                        ])->all();
 
-                        return array_merge($linea, ['indice' => $indice, 'documento' => $documento]);
+                        return array_merge($linea, [
+                            'indice' => $indice,
+                            'documento' => $documentos[0] ?? (isset($linea['documento_id']) ? $pedido->documentos()->whereKey($linea['documento_id'])->first() : null),
+                            'documentos' => $documentos,
+                        ]);
                     })
                     ->filter(fn ($linea) => is_array($linea) && ! isset($linea['respondida_at']))
                     ->values()->all(),

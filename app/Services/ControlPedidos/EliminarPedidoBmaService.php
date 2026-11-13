@@ -29,6 +29,9 @@ class EliminarPedidoBmaService
                 Storage::disk('public')->delete($documento->ruta_archivo);
             }
 
+            // El pedido solo se oculta; sin esto la tarea sigue en Preparación en tienda como fila vacía.
+            $pedido->tareasPreparacion()->delete();
+
             $pedido->delete();
         });
     }

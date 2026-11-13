@@ -14,7 +14,9 @@ use App\Services\Escalonamiento\ResolverIncidenciaEscalonamiento;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\PermissionRegistrar;
 use Tests\TestCase;
@@ -78,7 +80,7 @@ class ResolverIncidenciaEscalonamientoTest extends TestCase
         $this->assertSame('abierta', $bloqueada->fresh()->estado);
     }
 
-    public function test_crear_cliente_y_registrar_documentos_desde_la_incidencia(): void
+    public function test_incidencia_no_crea_cliente_sin_estado_comercial(): void
     {
         Storage::fake('local');
         $this->listaPublicoGeneral();
@@ -95,16 +97,13 @@ class ResolverIncidenciaEscalonamientoTest extends TestCase
         $this->assertCount(1, $incidencia->contexto['documentos']);
         $this->assertNull(DocumentoVenta::query()->where('folio', 'F-1')->first());
 
-        app(ResolverIncidenciaEscalonamiento::class)->resolver($incidencia, 'crear_cliente_y_registrar', null);
-
-        $cliente = Cliente::query()->where('numero_cliente', '9777')->first();
-        $this->assertNotNull($cliente);
-        $this->assertSame('Cliente Nuevo', $cliente->nombre);
-        $this->assertNotNull(DocumentoVenta::query()->where('folio', 'F-1')->first());
-        $this->assertSame('resuelta', $incidencia->fresh()->estado);
+        $this->assertAltaBloqueada(fn () => app(ResolverIncidenciaEscalonamiento::class)->resolver($incidencia, 'crear_cliente_y_registrar', null));
+        $this->assertNull(Cliente::where('numero_cliente', '9777')->first());
+        $this->assertNull(DocumentoVenta::where('folio', 'F-1')->first());
+        $this->assertSame('abierta', $incidencia->fresh()->estado);
     }
 
-    public function test_la_previsualizacion_puede_crear_el_cliente_y_dejar_el_documento_para_confirmar(): void
+    public function test_previsualizacion_no_crea_cliente_sin_estado_comercial(): void
     {
         Storage::fake('local');
         $this->listaPublicoGeneral();
@@ -116,17 +115,13 @@ class ResolverIncidenciaEscalonamientoTest extends TestCase
 
         $this->assertSame('incidencia', $previa->filas->first()->resultado);
 
-        app(ResolverIncidenciaEscalonamiento::class)->resolverPrevisualizacion($previa, 'crear_cliente_y_registrar', null);
-
-        $this->assertNotNull(Cliente::query()->where('numero_cliente', '9778')->first());
-        $this->assertNull(DocumentoVenta::query()->where('folio', 'F-2')->first());
-        $this->assertSame('alta', $previa->filas()->first()->resultado);
-
-        $importar->confirmar($previa->id, null);
-        $this->assertNotNull(DocumentoVenta::query()->where('folio', 'F-2')->first());
+        $this->assertAltaBloqueada(fn () => app(ResolverIncidenciaEscalonamiento::class)->resolverPrevisualizacion($previa, 'crear_cliente_y_registrar', null));
+        $this->assertNull(Cliente::where('numero_cliente', '9778')->first());
+        $this->assertNull(DocumentoVenta::where('folio', 'F-2')->first());
+        $this->assertSame('incidencia', $previa->filas()->first()->resultado);
     }
 
-    public function test_una_incidencia_antigua_toma_el_numero_desde_el_motivo(): void
+    public function test_incidencia_antigua_tampoco_acredita_estado(): void
     {
         $this->listaPublicoGeneral();
         $periodo = app(AbrirPeriodoEscalonamiento::class)->abrir(2026, 10);
@@ -144,13 +139,12 @@ class ResolverIncidenciaEscalonamientoTest extends TestCase
         );
         $this->assertContains('crear_cliente', $acciones);
 
-        app(ResolverIncidenciaEscalonamiento::class)->resolver($incidencia, 'crear_cliente', null);
-
-        $this->assertNotNull(Cliente::query()->where('numero_cliente', '9666')->first());
-        $this->assertSame('resuelta', $incidencia->fresh()->estado);
+        $this->assertAltaBloqueada(fn () => app(ResolverIncidenciaEscalonamiento::class)->resolver($incidencia, 'crear_cliente', null));
+        $this->assertNull(Cliente::where('numero_cliente', '9666')->first());
+        $this->assertSame('abierta', $incidencia->fresh()->estado);
     }
 
-    public function test_un_cliente_solo_por_nombre_se_crea_con_el_numero_indicado(): void
+    public function test_nombre_y_numero_no_bastan_para_alta(): void
     {
         $this->listaPublicoGeneral();
         $periodo = app(AbrirPeriodoEscalonamiento::class)->abrir(2026, 10);
@@ -162,16 +156,11 @@ class ResolverIncidenciaEscalonamientoTest extends TestCase
             'estado' => 'abierta',
         ]);
 
-        app(ResolverIncidenciaEscalonamiento::class)->resolver($incidencia, 'crear_cliente', null, [
-            'numero_cliente' => '9555',
-        ]);
-
-        $cliente = Cliente::query()->where('numero_cliente', '9555')->first();
-        $this->assertNotNull($cliente);
-        $this->assertSame('Cliente Solo Nombre', $cliente->nombre);
+        $this->assertAltaBloqueada(fn () => app(ResolverIncidenciaEscalonamiento::class)->resolver($incidencia, 'crear_cliente', null, ['numero_cliente' => '9555']));
+        $this->assertNull(Cliente::where('numero_cliente', '9555')->first());
     }
 
-    public function test_solo_agregar_a_la_base_no_registra_el_documento_al_confirmar(): void
+    public function test_alta_sin_registrar_documento_tambien_exige_estado(): void
     {
         Storage::fake('local');
         $this->listaPublicoGeneral();
@@ -181,12 +170,19 @@ class ResolverIncidenciaEscalonamientoTest extends TestCase
             ['remision', 'F-3', '', '', '9779', 'Cliente Omitido', 'MXN', '400.00', '2026-10-05', 'activo', ''],
         ]), null, 'remision');
 
-        app(ResolverIncidenciaEscalonamiento::class)->resolverPrevisualizacion($previa, 'crear_cliente', null);
-        $importar->confirmar($previa->id, null);
+        $this->assertAltaBloqueada(fn () => app(ResolverIncidenciaEscalonamiento::class)->resolverPrevisualizacion($previa, 'crear_cliente', null));
+        $this->assertNull(Cliente::where('numero_cliente', '9779')->first());
+        $this->assertNull(DocumentoVenta::where('folio', 'F-3')->first());
+    }
 
-        $this->assertNotNull(Cliente::query()->where('numero_cliente', '9779')->first());
-        $this->assertNull(DocumentoVenta::query()->where('folio', 'F-3')->first());
-        $this->assertSame('omitida', $previa->filas()->first()->resultado);
+    private function assertAltaBloqueada(callable $accion): void
+    {
+        try {
+            $accion();
+            $this->fail('No se puede inferir estado de una remisión.');
+        } catch (ValidationException $e) {
+            $this->assertStringContainsString('Alta bloqueada', implode(' ', Arr::flatten($e->errors())));
+        }
     }
 
     private function operador(): User

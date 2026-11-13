@@ -1,0 +1,56 @@
+[
+  {
+    "caso": "Ventas recibe aprobación de Auxiliar",
+    "antes": {
+      "navigation": [
+        {
+          "start": 0,
+          "type": "navigate"
+        }
+      ],
+      "socket": "546894689.281878469",
+      "tiempo": 2619.2000000476837,
+      "url": "http://qa-pr34/control-pedidos?q=QA34-REALTIME"
+    },
+    "despues": {
+      "eventos": [
+        {
+          "accion": "actualizado",
+          "pedido_id": 6,
+          "tarea_id": null,
+          "tiempo": 3464.2999999523163
+        }
+      ],
+      "navigation": [
+        {
+          "start": 0,
+          "type": "navigate"
+        }
+      ],
+      "peticiones": [
+        {
+          "method": "get",
+          "tiempo": 4204.100000023842,
+          "url": "/control-pedidos/6/transferencia-tienda"
+        }
+      ],
+      "socket": "546894689.281878469",
+      "url": "http://qa-pr34/control-pedidos?q=QA34-REALTIME"
+    },
+    "latencia_ms": 739.8000000715256,
+    "frames": [
+      {
+        "method": "Network.webSocketFrameReceived",
+        "params": {
+          "requestId": "4096.196",
+          "response": {
+            "mask": false,
+            "opcode": 1,
+            "payloadData": "{\"event\":\"pedido.actualizado\",\"data\":\"{\\\"pedido_id\\\":6,\\\"tarea_id\\\":null,\\\"accion\\\":\\\"actualizado\\\"}\",\"channel\":\"private-control-pedidos.operaciones\"}"
+          },
+          "timestamp": 628179.008295
+        }
+      }
+    ]
+  }
+]

@@ -1,0 +1,56 @@
+[
+  {
+    "caso": "Ventas recibe aprobación de Auxiliar",
+    "antes": {
+      "navigation": [
+        {
+          "start": 0,
+          "type": "navigate"
+        }
+      ],
+      "socket": "519013083.991753448",
+      "tiempo": 2646.1999999999534,
+      "url": "http://qa-pr34/control-pedidos?q=QA34-ASINCRONO2"
+    },
+    "despues": {
+      "eventos": [
+        {
+          "accion": "actualizado",
+          "pedido_id": 57,
+          "tarea_id": null,
+          "tiempo": 3914.0999999999767
+        }
+      ],
+      "navigation": [
+        {
+          "start": 0,
+          "type": "navigate"
+        }
+      ],
+      "peticiones": [
+        {
+          "method": "get",
+          "tiempo": 4303.899999999907,
+          "url": "/control-pedidos/57/transferencia-tienda"
+        }
+      ],
+      "socket": "519013083.991753448",
+      "url": "http://qa-pr34/control-pedidos?q=QA34-ASINCRONO2"
+    },
+    "latencia_ms": 389.79999999993015,
+    "frames": [
+      {
+        "method": "Network.webSocketFrameReceived",
+        "params": {
+          "requestId": "2897.604",
+          "response": {
+            "mask": false,
+            "opcode": 1,
+            "payloadData": "{\"event\":\"pedido.actualizado\",\"data\":\"{\\\"pedido_id\\\":57,\\\"tarea_id\\\":null,\\\"accion\\\":\\\"actualizado\\\"}\",\"channel\":\"private-control-pedidos.operaciones\"}"
+          },
+          "timestamp": 825.225117
+        }
+      }
+    ]
+  }
+]

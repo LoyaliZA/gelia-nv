@@ -4,423 +4,150 @@ namespace App\Services\Clientes;
 
 use App\Models\CambioListaImportacionCliente;
 use App\Models\Cliente;
+use App\Services\Clientes\ClasificacionComercialCliente;
 use App\Services\Escalonamiento\EscalonamientoAutoridad;
-use App\Services\Escalonamiento\ProyeccionClienteEscalonamiento;
-use App\Services\Solicitudes\AjustarMontoPorSolicitudService;
-use App\Services\Solicitudes\EscalonamientoService;
 use Illuminate\Support\Collection;
+use Illuminate\Validation\ValidationException;
 
 class ProcesarFilaClienteAction
 {
-    public function __construct(
-        private ResolucionListaWizerp $resolucionLista,
-    ) {}
+    public function __construct(private ResolucionListaWizerp $resolucionLista, private MontoWizerp $montos) {}
 
     public function ejecutar(
-        array $data,
-        $listas,
-        array $mapaVendedoras,
-        Collection $clientesPorNumero,
-        array &$historialBatch,
-        bool $importaCodigoLista,
-        int &$marcadosInactivos,
-        array &$alertasLimiteExcedido,
-        ?int $importacionClienteId = null,
-        ?int $usuarioId = null,
+        array $data, $listas, array $mapaVendedoras, Collection $clientesPorNumero,
+        array &$historialBatch, bool $importaCodigoLista, int &$marcadosInactivos,
+        array &$alertasLimiteExcedido, ?int $importacionClienteId = null, ?int $usuarioId = null,
+        bool $persistir = true,
     ): ?array {
-        $numeroCliente = trim($data['numero_cliente'] ?? '');
-        if (empty($numeroCliente)) {
-            return null;
+        $numero = trim($data['numero_cliente'] ?? '');
+        if (! preg_match('/^[0-9]{1,255}$/D', $numero)) {
+            $this->error('numero_cliente', 'Se requiere un número de cliente formado por dígitos.');
         }
-
-        $cliente = $clientesPorNumero->get($numeroCliente);
-
-        if ($cliente) {
-            return $this->actualizarClienteExistente(
-                $cliente,
-                $data,
-                $listas,
-                $mapaVendedoras,
-                $historialBatch,
-                $importaCodigoLista,
-                $marcadosInactivos,
-                $alertasLimiteExcedido,
-                $importacionClienteId,
-                $usuarioId,
-            );
+        $cliente = $clientesPorNumero->get($numero);
+        $nuevo = $cliente === null;
+        $monto = $this->montos->interpretar($data['monto_venta_actual'] ?? null);
+        $credito = $this->montos->interpretar($data['monto_credito_autorizado'] ?? null, 'monto_credito_autorizado');
+        $codigo = trim($data['codigo_lista'] ?? '');
+        $listaCsv = $codigo !== '' && $importaCodigoLista ? $this->resolucionLista->resolverListaId($listas, $codigo) : null;
+        if ($importaCodigoLista && $codigo !== '' && ! $listaCsv) {
+            $this->error('codigo_lista', 'Código de lista desconocido.');
         }
-
-        $nuevo = $this->crearNuevoCliente($data, $listas, $mapaVendedoras, $importaCodigoLista, $marcadosInactivos, $alertasLimiteExcedido);
+        // Un código vacío no es una baja ni cambia la lista. El cero tampoco inactiva.
+        // Una baja legítima requiere una señal explícita del ERP, que este archivo no trae.
+        $estado = null;
+        if ($importaCodigoLista && $codigo !== '') {
+            $estado = false;
+        }
+        if ($nuevo && trim($data['nombre'] ?? '') === '') {
+            $this->error('nombre', 'El nombre es obligatorio para un cliente nuevo.');
+        }
+        if ($nuevo && $estado === null) {
+            $this->error('codigo_lista', 'Un cliente nuevo requiere información de Wizerp que determine su estado comercial.');
+        }
+        foreach (['dias_credito', 'dias_cheque_postfechado'] as $campo) {
+            if (($data[$campo] ?? '') !== '' && (! ctype_digit($data[$campo]) || bccomp($data[$campo], '2147483647', 0) > 0)) {
+                $this->error($campo, 'Se requiere un entero no negativo de hasta 2147483647.');
+            }
+        }
+        $cliente ??= new Cliente(['numero_cliente' => $numero]);
+        $antes = $cliente->getAttributes();
+        // El estado comercial siempre viene del ERP; monto/lista tienen autoridad independiente.
+        $gobernado = app(EscalonamientoAutoridad::class)->estaActiva();
+        $pg = $listas->firstWhere('nombre', 'PUBLICO GENERAL');
+        if (! $pg) {
+            $this->error('codigo_lista', 'Falta la lista técnica PUBLICO GENERAL.');
+        }
         if ($nuevo) {
-            $clientesPorNumero->put($numeroCliente, $nuevo);
+            $cliente->monto_venta_actual = '0.00';
+            $cliente->lista_actual_id = $pg->id;
+            $cliente->es_heredado = false;
+        }
+        $clasificacion = app(ClasificacionComercialCliente::class);
+        $codigoVacio = $importaCodigoLista && $codigo === '';
+        $listaActual = $listas->firstWhere('id', $cliente->lista_actual_id);
+        $categoriaEspecial = $this->resolucionLista->nombreExcluyeEscalonamiento($listaActual?->nombre);
+        $listaCodigo = $listaCsv ? $listas->firstWhere('id', $listaCsv) : null;
+        $aviso = null;
+        if (! $cliente->lista_bloqueada && ! $gobernado && ! $codigoVacio && ! $categoriaEspecial && $listaCodigo) {
+            $aviso = $clasificacion->aplicarEnImportacion($cliente, $listaCodigo, $monto);
+        }
+        $cliente->discrepanciaModalidad = $aviso;
+        if ($estado !== null) {
+            $cliente->es_inactivo = $estado;
+        }
+        if ($monto !== null && ! $gobernado) {
+            $cliente->monto_venta_actual = $monto;
+        }
+        foreach (['nombre', 'direccion_fiscal', 'colonia_fiscal', 'municipio_fiscal', 'estado_fiscal', 'pais_fiscal',
+            'direccion_contacto', 'colonia_contacto', 'municipio_contacto', 'estado_contacto', 'pais_contacto', 'cp_contacto',
+            'telefono', 'parte_relacional', 'variable_contable', 'rfc', 'codigo_postal', 'regimen_fiscal',
+            'correo_electronico', 'uso_factura', 'nombre_razon_social'] as $campo) {
+            if (trim($data[$campo] ?? '') !== '') {
+                $cliente->$campo = trim($data[$campo]);
+            }
+        }
+        if (($data['es_heredado'] ?? '') !== '') {
+            $cliente->es_heredado = in_array(strtoupper(trim($data['es_heredado'])), ['1', 'SI', 'SÍ', 'TRUE', 'VERDADERO', 'X', 'YES'], true);
+        }
+        if (($data['vendedor_id'] ?? '') !== '') {
+            $vendedor = $mapaVendedoras[strtoupper(trim($data['vendedor_id']))] ?? null;
+            if ($vendedor) {
+                $cliente->vendedor_id = $vendedor;
+            }
+        }
+        if ($credito !== null) {
+            $cliente->monto_credito_autorizado = $credito;
+        }
+        foreach (['dias_credito', 'dias_cheque_postfechado'] as $campo) {
+            if (($data[$campo] ?? '') !== '') {
+                $cliente->$campo = (int) $data[$campo];
+            }
+        }
+        $menudeoAntes = ClasificacionComercialCliente::bandera($antes['es_menudeo'] ?? false);
+        $origenAntes = (string) ($antes['modalidad_origen'] ?? '');
+        $montoAnterior = (string) ($antes['monto_venta_actual'] ?? '0');
+        if (! $nuevo && bccomp($montoAnterior, (string) $cliente->monto_venta_actual, 2) !== 0) {
+            $historialBatch[] = [
+                'cliente_id' => $cliente->id, 'usuario_id' => $usuarioId,
+                'monto_anterior' => $montoAnterior, 'monto_nuevo' => $cliente->monto_venta_actual,
+                'diferencia_aplicada' => bcsub((string) $cliente->monto_venta_actual, $montoAnterior, 2),
+                'origen' => RegistrarHistorialMontoClienteService::ORIGEN_CARGA_MASIVA,
+                'importacion_cliente_id' => $importacionClienteId, 'created_at' => now(), 'updated_at' => now(),
+            ];
+        }
+        if ($persistir && $cliente->isDirty()) {
+            $cliente->save();
+        }
+        $cambioModalidad = $menudeoAntes !== ClasificacionComercialCliente::bandera($cliente->es_menudeo)
+            || $origenAntes !== (string) ($cliente->modalidad_origen ?? '');
+        if ($persistir && $cambioModalidad && $cliente->id) {
+            $clasificacion->registrarEvento($cliente, $usuarioId, null);
+        }
+        $clientesPorNumero->put($numero, $cliente);
+        if ($estado === true && ($nuevo || ! ($antes['es_inactivo'] ?? false))) {
+            $marcadosInactivos++;
+        }
+        $limite = (float) $cliente->monto_credito_autorizado;
+        $deuda = (float) ($cliente->facturaCobranzaActiva?->monto ?? 0);
+        if ($limite > 0 && $deuda > $limite) {
+            $alertasLimiteExcedido[] = ['cliente' => $cliente, 'monto_actual' => $deuda, 'limite' => $limite];
+        }
+        $listaAnterior = $listas->firstWhere('id', $antes['lista_actual_id'] ?? null);
+        $listaNueva = $listas->firstWhere('id', $cliente->lista_actual_id);
+        if (! $nuevo && $listaAnterior && $listaNueva && $listaAnterior->id !== $listaNueva->id) {
+            $comparacion = bccomp((string) $listaNueva->monto_requerido, (string) $listaAnterior->monto_requerido, 2);
+
+            return ['numero_cliente' => $numero, 'nombre' => $cliente->nombre,
+                'lista_anterior' => $listaAnterior->nombre, 'lista_nueva' => $listaNueva->nombre,
+                'tipo_cambio' => $comparacion > 0 ? CambioListaImportacionCliente::TIPO_ASCENSO : ($comparacion < 0 ? CambioListaImportacionCliente::TIPO_DESCENSO : CambioListaImportacionCliente::TIPO_CAMBIO),
+                'codigo_lista' => $importaCodigoLista ? $codigo : null, 'monto_nuevo' => $cliente->monto_venta_actual];
         }
 
         return null;
     }
 
-    private function crearNuevoCliente(
-        array $data,
-        $listas,
-        array $mapaVendedoras,
-        bool $importaCodigoLista,
-        int &$marcadosInactivos,
-        array &$alertasLimiteExcedido
-    ): ?Cliente {
-        if (empty(trim($data['nombre'] ?? ''))) {
-            return null;
-        }
-
-        $listaPgId = $this->idListaPublicoGeneral($listas);
-        $montoExtraido = $this->limpiarMonto($data['monto_venta_actual'] ?? null);
-        $autoridadActiva = app(EscalonamientoAutoridad::class)->estaActiva();
-
-        $clienteNuevo = [
-            'numero_cliente'     => trim($data['numero_cliente']),
-            'nombre'             => trim($data['nombre']),
-            'monto_venta_actual' => $autoridadActiva ? 0.00 : ($montoExtraido ?? 0.00),
-            'es_heredado'        => $this->evaluarHeredado($data['es_heredado'] ?? null),
-            'es_inactivo'        => false,
-        ];
-
-        if (!empty($data['vendedor_id'])) {
-            $clienteNuevo['vendedor_id'] = $this->traducirVendedora($data['vendedor_id'], $mapaVendedoras);
-        }
-
-        if ($importaCodigoLista && $this->codigoListaVacio($data)) {
-            // Celda vacía no es baja: la plantilla deja el código en blanco.
-            $clienteNuevo['lista_actual_id'] = $listaPgId;
-            // #region agent log
-            static $logAltaVacia = 0;
-            if ($logAltaVacia < 2) {
-                $logAltaVacia++;
-                @file_put_contents('/var/www/html/.cursor/debug-017bf5.log', json_encode(['sessionId'=>'017bf5','runId'=>'post-fix','hypothesisId'=>'A','location'=>'ProcesarFilaClienteAction.php:crear','message'=>'codigo vacio no marca inactivo','data'=>['accion'=>'alta_sin_baja'],'timestamp'=>round(microtime(true)*1000)])."\n", FILE_APPEND);
-            }
-            // #endregion
-        } elseif ($importaCodigoLista) {
-            $listaIdCSV = $this->resolverLista($data, $listas);
-            $clienteNuevo['lista_actual_id'] = $this->resolverListaFinal($listaIdCSV, $montoExtraido, $listas);
-        } else {
-            $clienteNuevo['lista_actual_id'] = $this->resolverListaFinal(null, $montoExtraido, $listas);
-        }
-
-        if (isset($data['monto_credito_autorizado']) && trim($data['monto_credito_autorizado']) !== '') {
-            $clienteNuevo['monto_credito_autorizado'] = $this->limpiarMonto($data['monto_credito_autorizado']);
-        }
-        if (isset($data['dias_credito']) && trim($data['dias_credito']) !== '') {
-            $clienteNuevo['dias_credito'] = (int) trim($data['dias_credito']);
-        }
-
-        $camposNuevos = [
-            'direccion_fiscal', 'colonia_fiscal', 'municipio_fiscal', 'estado_fiscal', 'pais_fiscal',
-            'direccion_contacto', 'colonia_contacto', 'municipio_contacto', 'estado_contacto', 'pais_contacto', 'cp_contacto', 'telefono',
-            'parte_relacional', 'variable_contable',
-            'rfc', 'codigo_postal', 'regimen_fiscal', 'correo_electronico', 'uso_factura', 'nombre_razon_social'
-        ];
-
-        foreach ($camposNuevos as $campo) {
-            if (isset($data[$campo]) && trim($data[$campo]) !== '') {
-                $clienteNuevo[$campo] = trim($data[$campo]);
-            }
-        }
-
-        if (isset($data['dias_cheque_postfechado']) && trim($data['dias_cheque_postfechado']) !== '') {
-            $clienteNuevo['dias_cheque_postfechado'] = (int) trim($data['dias_cheque_postfechado']);
-        }
-
-        $nuevoRegistro = Cliente::create($clienteNuevo);
-
-        // Se elimina la comparación entre monto_venta_actual y monto_credito_autorizado, 
-        // ya que monto_venta_actual representa ventas, no deuda.
-        // Al ser un cliente nuevo, su deuda actual (saldo de facturas) es 0.
-
-        return $nuevoRegistro;
-    }
-
-    private function actualizarClienteExistente(
-        Cliente $cliente,
-        array $data,
-        $listas,
-        array $mapaVendedoras,
-        array &$historialBatch,
-        bool $importaCodigoLista,
-        int &$marcadosInactivos,
-        array &$alertasLimiteExcedido,
-        ?int $importacionClienteId = null,
-        ?int $usuarioId = null,
-    ): ?array {
-        $updateData = [];
-        $listaOriginalId = $cliente->lista_actual_id;
-        $cambioReporte = null;
-
-        if (!empty(trim($data['nombre'] ?? ''))) {
-            $updateData['nombre'] = trim($data['nombre']);
-        }
-
-        if (!empty($data['vendedor_id'])) {
-            $vendedorIdTraducido = $this->traducirVendedora($data['vendedor_id'], $mapaVendedoras);
-            if ($vendedorIdTraducido) {
-                $updateData['vendedor_id'] = $vendedorIdTraducido;
-            }
-        }
-
-        if (isset($data['es_heredado']) && $data['es_heredado'] !== '') {
-            $esHeredadoCsv = $this->evaluarHeredado($data['es_heredado']);
-            if ($cliente->es_heredado !== $esHeredadoCsv) {
-                $updateData['es_heredado'] = $esHeredadoCsv;
-            }
-        }
-
-        $autoridadActiva = app(EscalonamientoAutoridad::class)->estaActiva();
-        $listaIdCSV = null;
-        if ($importaCodigoLista && $this->codigoListaVacio($data)) {
-            // #region agent log
-            static $logActualizaVacia = 0;
-            if ($logActualizaVacia < 3) {
-                $logActualizaVacia++;
-                @file_put_contents('/var/www/html/.cursor/debug-017bf5.log', json_encode(['sessionId'=>'017bf5','runId'=>'post-fix','hypothesisId'=>'A','location'=>'ProcesarFilaClienteAction.php:actualizar','message'=>'codigo vacio conserva lista y estado','data'=>['accion'=>'sin_cambio','es_inactivo'=>(bool)$cliente->es_inactivo],'timestamp'=>round(microtime(true)*1000)])."\n", FILE_APPEND);
-            }
-            // #endregion
-        } elseif ($importaCodigoLista && !$cliente->lista_bloqueada && ! $autoridadActiva) {
-            $listaIdCSV = $this->resolverLista($data, $listas);
-            $updateData['es_inactivo'] = false;
-            if ($listaIdCSV && $cliente->lista_actual_id !== $listaIdCSV) {
-                $updateData['lista_actual_id'] = $listaIdCSV;
-            }
-        }
-
-        $montoExtraido = $this->limpiarMonto($data['monto_venta_actual'] ?? null);
-
-        if ($montoExtraido !== null) {
-            $montoGeliaAntes = $autoridadActiva
-                ? app(ProyeccionClienteEscalonamiento::class)->montoAcumulado($cliente)
-                : (float) $cliente->monto_venta_actual;
-            app(AjustarMontoPorSolicitudService::class)->marcarCubiertasPorCarga(
-                $cliente,
-                $montoGeliaAntes,
-                $montoExtraido,
-            );
-        }
-
-        if (! $autoridadActiva && $montoExtraido !== null && !$this->montosSonIguales($cliente->monto_venta_actual, $montoExtraido)) {
-            $updateData['monto_venta_actual'] = $montoExtraido;
-
-            $listaEvaluacionId = $updateData['lista_actual_id'] ?? $cliente->lista_actual_id;
-
-            if (!$cliente->lista_bloqueada && $montoExtraido > 0.001 && !$this->esListaExcluida($listaEvaluacionId, $listas)) {
-                $nuevaListaIdPorMonto = $this->determinarListaPorMonto($montoExtraido, $listas);
-
-                $listaActualValidacion = $listas->firstWhere('id', $listaEvaluacionId);
-                $nuevaListaCalculada = $listas->firstWhere('id', $nuevaListaIdPorMonto);
-
-                if ($listaActualValidacion && $nuevaListaCalculada && ($nuevaListaCalculada->monto_requerido > $listaActualValidacion->monto_requerido)) {
-                    $updateData['lista_actual_id'] = $nuevaListaIdPorMonto;
-                }
-            }
-
-            $this->agregarHistorialMonto($cliente, $montoExtraido, $historialBatch, $importacionClienteId, $usuarioId);
-
-            $updateData = app(ReactivarClienteInactivoService::class)->cambiosParaImportacion(
-                $cliente,
-                $montoExtraido,
-                $updateData,
-                $listas,
-            );
-        }
-
-        if (isset($data['monto_credito_autorizado']) && trim($data['monto_credito_autorizado']) !== '') {
-            $nuevoLimite = $this->limpiarMonto($data['monto_credito_autorizado']);
-            if (!$this->montosSonIguales((float) $cliente->monto_credito_autorizado, (float) $nuevoLimite)) {
-                $updateData['monto_credito_autorizado'] = $nuevoLimite;
-            }
-        }
-
-        if (isset($data['dias_credito']) && trim($data['dias_credito']) !== '') {
-            $nuevosDias = (int) trim($data['dias_credito']);
-            if ($cliente->dias_credito !== $nuevosDias) {
-                $updateData['dias_credito'] = $nuevosDias;
-            }
-        }
-
-        $camposNuevos = [
-            'direccion_fiscal', 'colonia_fiscal', 'municipio_fiscal', 'estado_fiscal', 'pais_fiscal',
-            'direccion_contacto', 'colonia_contacto', 'municipio_contacto', 'estado_contacto', 'pais_contacto', 'cp_contacto', 'telefono',
-            'parte_relacional', 'variable_contable',
-            'rfc', 'codigo_postal', 'regimen_fiscal', 'correo_electronico', 'uso_factura', 'nombre_razon_social'
-        ];
-
-        foreach ($camposNuevos as $campo) {
-            if (isset($data[$campo]) && trim($data[$campo]) !== '') {
-                $valorLimpio = trim($data[$campo]);
-                if ($cliente->$campo !== $valorLimpio) {
-                    $updateData[$campo] = $valorLimpio;
-                }
-            }
-        }
-
-        if (isset($data['dias_cheque_postfechado']) && trim($data['dias_cheque_postfechado']) !== '') {
-            $diasCheque = (int) trim($data['dias_cheque_postfechado']);
-            if ($cliente->dias_cheque_postfechado !== $diasCheque) {
-                $updateData['dias_cheque_postfechado'] = $diasCheque;
-            }
-        }
-
-        if (!empty($updateData)) {
-            $listaDefinitivaId = $updateData['lista_actual_id'] ?? $listaOriginalId;
-
-            if ($listaDefinitivaId !== $listaOriginalId) {
-                $listaAnterior = $listas->firstWhere('id', $listaOriginalId);
-                $listaNueva = $listas->firstWhere('id', $listaDefinitivaId);
-
-                if ($listaAnterior && $listaNueva) {
-                    $tipoCambio = CambioListaImportacionCliente::TIPO_CAMBIO;
-                    if ($listaNueva->monto_requerido > $listaAnterior->monto_requerido) {
-                        $tipoCambio = CambioListaImportacionCliente::TIPO_ASCENSO;
-                    } elseif ($listaNueva->monto_requerido < $listaAnterior->monto_requerido) {
-                        $tipoCambio = CambioListaImportacionCliente::TIPO_DESCENSO;
-                    }
-
-                    $cambioReporte = [
-                        'numero_cliente' => $cliente->numero_cliente,
-                        'nombre'         => $updateData['nombre'] ?? $cliente->nombre,
-                        'lista_anterior' => $listaAnterior->nombre,
-                        'lista_nueva'    => $listaNueva->nombre,
-                        'tipo_cambio'    => $tipoCambio,
-                        'codigo_lista'   => $importaCodigoLista ? trim((string) ($data['codigo_lista'] ?? '')) : null,
-                        'monto_nuevo'    => $updateData['monto_venta_actual'] ?? $cliente->monto_venta_actual,
-                    ];
-                }
-            }
-
-            $cliente->update($updateData);
-        }
-
-        $limiteFinal = (float) $cliente->monto_credito_autorizado;
-        $deudaReal = (float) ($cliente->facturaCobranzaActiva?->monto ?? 0);
-
-        if ($limiteFinal > 0 && $deudaReal > $limiteFinal) {
-            $alertasLimiteExcedido[] = [
-                'cliente' => $cliente,
-                'monto_actual' => $deudaReal,
-                'limite' => $limiteFinal
-            ];
-        }
-
-        return $cambioReporte;
-    }
-
-    private function codigoListaVacio(array $data): bool
+    private function error(string $campo, string $mensaje): never
     {
-        return trim((string) ($data['codigo_lista'] ?? '')) === '';
-    }
-
-    private function idListaPublicoGeneral($listas): int
-    {
-        return $listas->firstWhere('nombre', 'PUBLICO GENERAL')->id;
-    }
-
-    private function agregarHistorialMonto(
-        Cliente $cliente,
-        float $montoNuevo,
-        array &$historialBatch,
-        ?int $importacionClienteId = null,
-        ?int $usuarioId = null,
-    ): void {
-        $filaHistorial = app(RegistrarHistorialMontoClienteService::class)->filaBatch(
-            $cliente,
-            $montoNuevo,
-            RegistrarHistorialMontoClienteService::ORIGEN_CARGA_MASIVA,
-            $usuarioId,
-            $importacionClienteId,
-        );
-        if ($filaHistorial !== []) {
-            $historialBatch[] = $filaHistorial;
-        }
-    }
-
-    private function evaluarHeredado(?string $valor): bool
-    {
-        if (!$valor) {
-            return false;
-        }
-        $limpio = strtoupper(trim($valor));
-
-        return in_array($limpio, ['1', 'SI', 'SÍ', 'TRUE', 'VERDADERO', 'X', 'YES']);
-    }
-
-    private function esListaExcluida(int $listaId, $listas): bool
-    {
-        $lista = $listas->firstWhere('id', $listaId);
-
-        return $lista && $this->resolucionLista->nombreExcluyeEscalonamiento($lista->nombre);
-    }
-
-    private function montosSonIguales(float $montoA, float $montoB): bool
-    {
-        return abs($montoA - $montoB) < 0.001;
-    }
-
-    private function traducirVendedora(?string $nombreWizerp, array $mapaVendedoras): ?int
-    {
-        if (empty(trim($nombreWizerp ?? ''))) {
-            return null;
-        }
-        $nombreNormalizado = strtoupper(trim($nombreWizerp));
-
-        return $mapaVendedoras[$nombreNormalizado] ?? null;
-    }
-
-    private function resolverLista(array $data, $listas): ?int
-    {
-        if ($this->codigoListaVacio($data)) {
-            return null;
-        }
-
-        return $this->resolucionLista->resolverListaId($listas, (string) ($data['codigo_lista'] ?? ''));
-    }
-
-    /**
-     * Jerarquía: con monto > 0 el monto solo puede ascender la lista del CSV;
-     * con monto 0 o vacío prevalece codigo_lista del CSV.
-     */
-    private function resolverListaFinal(?int $listaIdCSV, ?float $montoExtraido, $listas): int
-    {
-        $listaPgId = $this->idListaPublicoGeneral($listas);
-
-        if ($montoExtraido === null || $montoExtraido <= 0.001) {
-            return $listaIdCSV ?? $listaPgId;
-        }
-
-        $listaPorMonto = $this->determinarListaPorMonto($montoExtraido, $listas);
-
-        if (!$listaIdCSV) {
-            return $listaPorMonto;
-        }
-
-        $listaCsv = $listas->firstWhere('id', $listaIdCSV);
-        $listaMonto = $listas->firstWhere('id', $listaPorMonto);
-
-        if ($listaCsv && $listaMonto && ($listaMonto->monto_requerido > $listaCsv->monto_requerido)) {
-            return $listaPorMonto;
-        }
-
-        return $listaIdCSV;
-    }
-
-    private function limpiarMonto(?string $montoRaw): ?float
-    {
-        if ($montoRaw === null || trim($montoRaw) === '') {
-            return null;
-        }
-        $montoLimpio = trim(str_replace(['$', ','], '', $montoRaw));
-        if ($montoLimpio === '-') {
-            return 0.00;
-        }
-
-        return is_numeric($montoLimpio) ? (float) $montoLimpio : null;
-    }
-
-    private function determinarListaPorMonto(float $monto, $listas): int
-    {
-        return app(EscalonamientoService::class)->resolverListaPorAcumuladoNetoId($monto, $listas);
+        throw ValidationException::withMessages([$campo => $mensaje]);
     }
 }

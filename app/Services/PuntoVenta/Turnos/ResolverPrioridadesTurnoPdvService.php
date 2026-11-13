@@ -41,6 +41,10 @@ final class ResolverPrioridadesTurnoPdvService
             return ClasificacionListaTurno::resolver(null, null, 0);
         }
 
+        if ($cliente->es_inactivo || $cliente->es_menudeo) {
+            return ClasificacionListaTurno::resolver(null, null, 0);
+        }
+
         $cliente->loadMissing('listaDescuento');
         $lista = $cliente->listaDescuento;
 

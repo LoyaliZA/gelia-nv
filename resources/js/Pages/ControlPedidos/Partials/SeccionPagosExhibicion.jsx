@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { router, useForm } from '@inertiajs/react';
 import { ImagePlus, Trash2 } from 'lucide-react';
 import {
@@ -143,6 +143,7 @@ export default function SeccionPagosExhibicion({
     formaPagoFija = null,
     onLectura = null,
     revisionEsperada = null,
+    revisionResumen = null,
     totalMercanciaConfirmado = null,
     saldoAFavorConfirmado = null,
 }) {
@@ -150,6 +151,7 @@ export default function SeccionPagosExhibicion({
     const [pagos, setPagos] = useState([]);
     const [formas, setFormas] = useState(formasPago);
     const [cargando, setCargando] = useState(false);
+    const ultimaCargaResumen = useRef(0);
     const [dividido, setDividido] = useState(false);
     const [editandoId, setEditandoId] = useState(null);
     const [docPreview, setDocPreview] = useState(null);
@@ -279,12 +281,15 @@ export default function SeccionPagosExhibicion({
 
     const cargar = async () => {
         if (!pedidoId) return;
+        const carga = revisionResumen == null ? null : ++ultimaCargaResumen.current;
+        const vigente = () => carga === null || carga === ultimaCargaResumen.current;
         setCargando(true);
         try {
             const res = await fetch(route(rutaResumen, pedidoId), {
                 headers: { Accept: 'application/json' },
             });
             const json = await res.json();
+            if (!vigente()) return;
             const nextPagos = json.pagos || [];
             setPagos(nextPagos);
             if (Array.isArray(json.formas_pago) && json.formas_pago.length) {
@@ -301,13 +306,14 @@ export default function SeccionPagosExhibicion({
                 onResumenChange(nextResumen, nextPagos);
             }
         } finally {
-            setCargando(false);
+            if (vigente()) setCargando(false);
         }
     };
 
     useEffect(() => {
         cargar();
-    }, [pedidoId]);
+        return () => { if (revisionResumen != null) ultimaCargaResumen.current += 1; };
+    }, [pedidoId, revisionResumen]);
 
     useEffect(() => {
         if (totalMercancia == null && saldoAFavorAplicado == null) return;

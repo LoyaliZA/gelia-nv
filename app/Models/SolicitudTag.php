@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToUsuario;
+use App\Services\Escalonamiento\ConciliacionSolicitudEscalonamiento;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -43,6 +44,7 @@ class SolicitudTag extends Model
         'solicitar_cotizacion',
         'compra_en_tienda',
         'compra_en_tienda_solo_tag',
+        'convertir_menudeo_mayoreo',
         'cancelacion_solicitada_at',
         'motivo_cancelacion',
         'catalogo_lista_rebaja_id',
@@ -65,6 +67,7 @@ class SolicitudTag extends Model
         'solicitar_cotizacion' => 'boolean',
         'compra_en_tienda' => 'boolean',
         'compra_en_tienda_solo_tag' => 'boolean',
+        'convertir_menudeo_mayoreo' => 'boolean',
         'cancelacion_solicitada_at' => 'datetime',
         'factura_datos_fiscales' => 'array',
     ];
@@ -133,5 +136,29 @@ class SolicitudTag extends Model
             ->whereHas('proceso', function (Builder $proceso) {
                 $proceso->where('categoria_flujo', '!=', CatalogoProceso::CATEGORIA_OPERATIVO);
             });
+    }
+
+    protected static function booted(): void
+    {
+        $resolver = function (SolicitudTag $solicitud): void {
+            app(ConciliacionSolicitudEscalonamiento::class)->resolverObsolescencia($solicitud);
+        };
+
+        static::updated(function (SolicitudTag $solicitud) use ($resolver) {
+            $campos = [
+                'numero_remision',
+                'cliente_id',
+                'monto_aplicado_al_cliente',
+                'monto_final_tentativo',
+                'monto_cotizado',
+                'pago_confirmado',
+                'catalogo_estado_solicitud_id',
+            ];
+            if ($solicitud->wasChanged($campos)) {
+                $resolver($solicitud);
+            }
+        });
+
+        static::deleted($resolver);
     }
 }

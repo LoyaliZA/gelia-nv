@@ -1,0 +1,33 @@
+import {Browser,fixtures,save,assert} from './browser.mjs';
+const ventas=new Browser(),otro=new Browser();const reporte=[];const id=fixtures.pedidos.transferencia.id;
+const paso=(nombre,r)=>{reporte.push({paso:nombre,...r});save('transferencia',reporte);assert(r.status===200,nombre,r);return r.data;};
+const leer=()=>ventas.api(`/control-pedidos/${id}/disponibilidad-tienda`);
+const pdf=(name,field='evidencias[]')=>[{name,size:1024,field}];
+try{
+ await ventas.start('ventas');await otro.start('cedis');
+ let actual=(await leer()).data;
+ paso('solicitar CEDIS',await ventas.api(`/control-pedidos/${id}/solicitud-tienda`,'POST',{area_revision:'control_pedidos',revision_esperada:actual.revision_registro,base_captura:actual.base_captura}));
+ paso('responder CEDIS',await otro.api(`/control-pedidos/cedis/${id}/disponibilidad`,'POST',{confirmacion_explicita:1},pdf('QA34-cedis-conjunto.pdf')));
+ paso('cerrar consulta',await ventas.api(`/control-pedidos/${id}/cerrar-consulta`,'POST',{}));
+ paso('modalidad transferencia',await ventas.api(`/control-pedidos/${id}/cobertura-tienda`,'POST',{cobertura:'transferencia',mismo_dia:false}));
+ paso('pago base',await ventas.api(`/control-pedidos/${id}/pagos`,'POST',{monto:100,forma_pago:'transferencia',catalogo_banco_id:fixtures.banco_id,idempotency_key:'qa34-pago-base'},pdf('QA34-pago-base.pdf','comprobante')));
+ let pagos=await ventas.api(`/control-pedidos/${id}/pagos`);save('transferencia-pagos-base',pagos);assert(Number(pagos.data.resumen.pendiente)===0,'No guardó pago base',pagos);
+ paso('solicitar anexo',await ventas.api(`/control-pedidos/${id}/anexo-tienda`,'POST',{entrada:'documento',solicitud_id:crypto.randomUUID(),lote:0},pdf('QA34-anexo-transferencia.pdf')));
+ actual=(await leer()).data;
+ const bloqueo=await ventas.api(`/control-pedidos/${id}/transferencia-tienda`);save('transferencia-bloqueo-anexo',bloqueo);assert(!bloqueo.data.consulta_cerrada,'El anexo no invalidó consulta',bloqueo);
+ paso('responder anexo CEDIS',await otro.api(`/control-pedidos/cedis/${id}/disponibilidad`,'POST',{confirmacion_explicita:1,actualizacion_id:actual.solicitud_preparacion.revision_disponibilidad.actualizacion_id,'cambios_revisados[0][tipo]':'anexo','cambios_revisados[0][indice]':0,'cambios_revisados[0][resultado]':'correcto'},pdf('QA34-conjunto-con-anexo.pdf')));
+ actual=(await leer()).data;
+ paso('ajustar importe 150',await ventas.api(`/control-pedidos/${id}`,'PUT',{total_mercancia:150,revision_esperada:actual.revision_registro,base_captura:actual.base_captura}));
+ paso('cerrar consulta ajustada',await ventas.api(`/control-pedidos/${id}/cerrar-consulta`,'POST',{}));
+ const falta=await ventas.api(`/control-pedidos/${id}/enviar`,'PUT',{});reporte.push({paso:'envío bloqueado por diferencia',...falta});save('transferencia',reporte);assert(falta.status===422,'Se envió con diferencia',falta);
+ pagos=await ventas.api(`/control-pedidos/${id}/pagos`);save('transferencia-pagos-diferencia',pagos);assert(Number(pagos.data.resumen.pendiente)===50,'La diferencia no es 50',pagos);
+ paso('pago diferencia',await ventas.api(`/control-pedidos/${id}/pagos`,'POST',{monto:50,forma_pago:'transferencia',catalogo_banco_id:fixtures.banco_id,idempotency_key:'qa34-pago-diferencia'},pdf('QA34-pago-diferencia.pdf','comprobante')));
+ paso('enviar a auxiliar',await ventas.api(`/control-pedidos/${id}/enviar`,'PUT',{}));
+ await otro.close();await otro.start('auxiliar');
+ paso('aprobar ingreso',await otro.api(`/control-pedidos/auditar/${id}/validar-pago`,'POST',{}));
+ actual=(await leer()).data;assert(actual.pago_validado_at,'No aprobó el ingreso',actual.pago_validado_at);
+ const incompatible=await ventas.api(`/control-pedidos/${id}`,'PUT',{total_mercancia:200,revision_esperada:actual.revision_registro,base_captura:actual.base_captura});
+ reporte.push({paso:'cambio incompatible tras aprobación',...incompatible});save('transferencia',reporte);assert(incompatible.status===422,'Aceptó cambio incompatible',incompatible);
+ const final=(await leer()).data;save('transferencia-estado-final',final);assert(Number(final.total_mercancia)===150&&final.pago_validado_at,'Perdió pago o importe aprobado',final.total_mercancia);
+ console.log(JSON.stringify({resultado:'aprobado',pago_validado:final.pago_validado_at,total:final.total_mercancia}));
+}finally{await ventas.close();await otro.close();}

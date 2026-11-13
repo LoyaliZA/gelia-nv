@@ -11,6 +11,7 @@ class ImportacionCliente extends Model
     protected $table = 'importaciones_clientes';
 
     protected $fillable = [
+        'estado', 'resumen', 'mensaje_fatal',
         'usuario_id',
         'nombre_archivo_original',
         'ruta_almacenamiento',
@@ -22,11 +23,22 @@ class ImportacionCliente extends Model
         'descensos',
         'clientes_marcados_inactivos',
         'duracion_seg',
+        'cursor_fila',
+        'contadores',
     ];
 
     protected $casts = [
+        'resumen' => 'array',
+        'contadores' => 'array',
         'duracion_seg' => 'decimal:2',
     ];
+
+    public function cursorConfirmado(): int
+    {
+        $resumen = is_array($this->resumen) ? (int) ($this->resumen['cursor_fila'] ?? 0) : 0;
+
+        return max((int) $this->cursor_fila, $resumen);
+    }
 
     public function usuario(): BelongsTo
     {

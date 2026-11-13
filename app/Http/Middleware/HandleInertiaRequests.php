@@ -113,6 +113,8 @@ class HandleInertiaRequests extends Middleware
                 'saf_excedente' => fn () => $request->session()->get('saf_excedente'),
                 'activo_registrado' => fn () => $request->session()->get('activo_registrado'),
                 // Permite el paso del reporte hacia React
+                'resultado_importacion' => fn () => $request->session()->get('resultado_importacion'),
+                'previsualizacion_importacion' => fn () => $request->session()->get('previsualizacion_importacion'),
                 'reporte_importacion' => fn () => $request->session()->get('reporte_importacion'),
                 'reporte_importacion_almacenes' => fn () => $request->session()->get('reporte_importacion_almacenes'),
                 'reporte_importacion_colaboradores' => fn () => $request->session()->get('reporte_importacion_colaboradores'),

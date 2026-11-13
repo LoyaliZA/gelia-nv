@@ -1,0 +1,390 @@
+{
+  "data": {
+    "aplica_seguro": false,
+    "atencion_md": null,
+    "base_captura": "4c6ee8d2daa2f34fab1a8202652859901638bde78519842d9d59378621299203",
+    "caja_pdv": {
+      "disponible": false,
+      "id": null,
+      "nombre": "Caja PDV"
+    },
+    "catalogo_estatus_pedido_id": 14,
+    "consulta_cerrada": true,
+    "consulta_cerrada_at": "2026-11-12T14:45:16-06:00",
+    "costo_envio": "0.00",
+    "costo_seguro": "0.00",
+    "documentos": [
+      {
+        "activo": true,
+        "comentario": null,
+        "created_at": "2026-11-12T20:37:52.000000Z",
+        "id": 2,
+        "mime_type": "application/pdf",
+        "nombre_original": "QA-PR34-pedido.pdf",
+        "orden": 1,
+        "pedido_bma_caja_id": null,
+        "pedido_bma_id": 2,
+        "reemplaza_documento_id": null,
+        "relacion_id": null,
+        "relacion_tipo": null,
+        "ruta_archivo": "pedidos_bma/qa-pr34/2/pedido.pdf",
+        "sustituido_at": null,
+        "sustituido_por_id": null,
+        "tamano_bytes": 401,
+        "tipo": "pdf_pedido",
+        "updated_at": "2026-11-12T20:37:52.000000Z",
+        "url": "http://qa-pr34/control-pedidos/pedidos/2/documentos/2"
+      },
+      {
+        "activo": true,
+        "comentario": "Captura del pedido",
+        "created_at": "2026-11-12T20:45:13.000000Z",
+        "id": 9,
+        "mime_type": "application/pdf",
+        "nombre_original": "QA34-cedis-conjunto.pdf",
+        "orden": 1,
+        "pedido_bma_caja_id": null,
+        "pedido_bma_id": 2,
+        "reemplaza_documento_id": null,
+        "relacion_id": null,
+        "relacion_tipo": "revision_general",
+        "ruta_archivo": "pedidos_bma/2/disponibilidad/6RIng0wh3cfXhpzZKzuiEpLpkXJzn3iPvLrMzNzp.pdf",
+        "sustituido_at": null,
+        "sustituido_por_id": null,
+        "tamano_bytes": 1024,
+        "tipo": "evidencia_condicion",
+        "updated_at": "2026-11-12T20:45:13.000000Z",
+        "url": "http://qa-pr34/control-pedidos/pedidos/2/documentos/9"
+      },
+      {
+        "activo": true,
+        "comentario": "Captura del pedido",
+        "created_at": "2026-11-12T20:45:16.000000Z",
+        "id": 11,
+        "mime_type": "application/pdf",
+        "nombre_original": "QA34-conjunto-con-anexo.pdf",
+        "orden": 1,
+        "pedido_bma_caja_id": null,
+        "pedido_bma_id": 2,
+        "reemplaza_documento_id": null,
+        "relacion_id": null,
+        "relacion_tipo": "revision_general",
+        "ruta_archivo": "pedidos_bma/2/disponibilidad/ucAGw94JSMpiKQaR7uFCA9svRFYamR81HXll2bcm.pdf",
+        "sustituido_at": null,
+        "sustituido_por_id": null,
+        "tamano_bytes": 1024,
+        "tipo": "evidencia_condicion",
+        "updated_at": "2026-11-12T20:45:16.000000Z",
+        "url": "http://qa-pr34/control-pedidos/pedidos/2/documentos/11"
+      },
+      {
+        "activo": true,
+        "comentario": "Anexo documental pendiente de identificación",
+        "created_at": "2026-11-12T20:45:15.000000Z",
+        "id": 10,
+        "mime_type": "application/pdf",
+        "nombre_original": "QA34-anexo-transferencia.pdf",
+        "orden": 2,
+        "pedido_bma_caja_id": null,
+        "pedido_bma_id": 2,
+        "reemplaza_documento_id": null,
+        "relacion_id": null,
+        "relacion_tipo": null,
+        "ruta_archivo": "pedidos_bma/2/anexo/V14zY4lEMxhTHUfpRDvo3fMijVME5uUYedhr607G.pdf",
+        "sustituido_at": null,
+        "sustituido_por_id": null,
+        "tamano_bytes": 1024,
+        "tipo": "anexo_piezas",
+        "updated_at": "2026-11-12T20:45:15.000000Z",
+        "url": "http://qa-pr34/control-pedidos/pedidos/2/documentos/10"
+      }
+    ],
+    "empacado_at": null,
+    "estatus": {
+      "activo": true,
+      "codigo_interno": "PESAJE_RESPONDIDO",
+      "color_hex": "#FB923C",
+      "created_at": "2026-11-12T20:35:57.000000Z",
+      "fase_ciclo": "PESAJE_RESPONDIDO",
+      "id": 14,
+      "nombre_visual": "Pesaje respondido",
+      "orden": 13,
+      "updated_at": "2026-11-12T20:35:57.000000Z"
+    },
+    "formas_pago": [
+      {
+        "clasificacion": "ingreso_bancario",
+        "clasificacion_label": "Ingreso bancario",
+        "codigo": "transferencia",
+        "cuenta_ingreso_bancario": true,
+        "label": "Transferencia",
+        "requiere_banco": true,
+        "requiere_comprobante": true
+      },
+      {
+        "clasificacion": "ingreso_bancario",
+        "clasificacion_label": "Ingreso bancario",
+        "codigo": "deposito",
+        "cuenta_ingreso_bancario": true,
+        "label": "Depósito",
+        "requiere_banco": true,
+        "requiere_comprobante": true
+      },
+      {
+        "clasificacion": "pago_no_bancario",
+        "clasificacion_label": "Pago no bancario",
+        "codigo": "efectivo",
+        "cuenta_ingreso_bancario": false,
+        "label": "Efectivo",
+        "requiere_banco": false,
+        "requiere_comprobante": true
+      },
+      {
+        "clasificacion": "ingreso_bancario",
+        "clasificacion_label": "Ingreso bancario",
+        "codigo": "tarjeta",
+        "cuenta_ingreso_bancario": true,
+        "label": "Tarjeta",
+        "requiere_banco": false,
+        "requiere_comprobante": true
+      },
+      {
+        "clasificacion": "pago_no_bancario",
+        "clasificacion_label": "Pago no bancario",
+        "codigo": "otro",
+        "cuenta_ingreso_bancario": false,
+        "label": "Otro",
+        "requiere_banco": false,
+        "requiere_comprobante": true
+      },
+      {
+        "clasificacion": "pago_no_bancario",
+        "clasificacion_label": "Pago no bancario",
+        "codigo": "credito",
+        "cuenta_ingreso_bancario": false,
+        "label": "CREDITO",
+        "requiere_banco": false,
+        "requiere_comprobante": false
+      }
+    ],
+    "motivo_bloqueo_cierre": null,
+    "numero_remision": null,
+    "pago_validado_at": null,
+    "pagos": [
+      {
+        "activo_para_cobertura": true,
+        "archivos": [
+          {
+            "created_at": "2026-11-12T20:45:14.000000Z",
+            "id": 1,
+            "mime_type": "application/pdf",
+            "nombre_original": "QA34-pago-base.pdf",
+            "orden": 1,
+            "pedido_bma_pago_id": 1,
+            "ruta_archivo": "pedidos_bma/pagos/2/HpiLiCHozUOrsfeB4AhMqjF8FHLwrknvnPzCIXpa.pdf",
+            "tamano_bytes": 1024,
+            "updated_at": "2026-11-12T20:45:14.000000Z",
+            "url": "http://qa-pr34/storage/pedidos_bma/pagos/2/HpiLiCHozUOrsfeB4AhMqjF8FHLwrknvnPzCIXpa.pdf"
+          }
+        ],
+        "banco": {
+          "activo": true,
+          "compartido": true,
+          "created_at": "2026-11-12T20:37:52.000000Z",
+          "facturacion_habilitada": true,
+          "id": 12,
+          "motivo_bloqueo_facturacion": null,
+          "nombre": "QA PR34 Banco ficticio",
+          "updated_at": "2026-11-12T20:37:52.000000Z"
+        },
+        "capturado_por_id": 1,
+        "catalogo_banco_id": 12,
+        "comprobantes": [
+          {
+            "id": 1,
+            "mime_type": "application/pdf",
+            "nombre_original": "QA34-pago-base.pdf",
+            "orden": 1,
+            "url": "http://qa-pr34/storage/pedidos_bma/pagos/2/HpiLiCHozUOrsfeB4AhMqjF8FHLwrknvnPzCIXpa.pdf"
+          }
+        ],
+        "created_at": "2026-11-12T20:45:14.000000Z",
+        "estado_revision": "pendiente",
+        "fecha_pago": "2026-11-12T20:45:14.000000Z",
+        "forma_pago": "transferencia",
+        "id": 1,
+        "idempotency_key": "qa34-pago-base",
+        "mime_type": "application/pdf",
+        "monto": "100.00",
+        "motivo_rechazo": null,
+        "nombre_original": "QA34-pago-base.pdf",
+        "numero_exhibicion": 1,
+        "observaciones": null,
+        "pedido_bma_id": 2,
+        "rechazado_at": null,
+        "rechazado_por_id": null,
+        "reemplaza": null,
+        "reemplaza_pago_id": null,
+        "referencia": null,
+        "revisado_at": null,
+        "revisado_por_id": null,
+        "ruta_archivo": "pedidos_bma/pagos/2/HpiLiCHozUOrsfeB4AhMqjF8FHLwrknvnPzCIXpa.pdf",
+        "sustituido_at": null,
+        "sustituto": null,
+        "tamano_bytes": 1024,
+        "updated_at": "2026-11-12T20:45:14.000000Z",
+        "url": "http://qa-pr34/storage/pedidos_bma/pagos/2/HpiLiCHozUOrsfeB4AhMqjF8FHLwrknvnPzCIXpa.pdf"
+      }
+    ],
+    "prioridad_md": false,
+    "puede_cerrar_consulta": false,
+    "resumen": {
+      "bloqueos": [
+        "El total a cubrir no está completo. Faltan $50.00. Registre exhibiciones hasta cubrir mercancía, envío y seguro (menos el saldo a favor aplicado)."
+      ],
+      "cobertura": "parcial",
+      "cubierto": false,
+      "diferencia": "50.00",
+      "estado_pago": "parcialmente_pagado",
+      "excedente": 0,
+      "excedente_generado": "0.00",
+      "fuentes_pago": [
+        "QA PR34 Banco ficticio"
+      ],
+      "nuevo_saldo_sugerido": 0,
+      "pagos_validos": "100.00",
+      "pendiente": "50.00",
+      "revision": "pendiente",
+      "saldo_a_favor_aplicado": 0,
+      "saldo_favor_aplicado": "0.00",
+      "saldos_aplicados": 0,
+      "tolerancia_aplicada": "0.44",
+      "total_a_cobrar": "150.00",
+      "total_a_cubrir": "150.00",
+      "total_final": 150,
+      "total_pagado": 100,
+      "total_recibido": 100,
+      "totales_envio": {
+        "cajas_activas": 0,
+        "cajas_con_costo": 0,
+        "costo_adicional": "0.00",
+        "costo_envios": "0.00",
+        "costo_para_cobertura": "0.00",
+        "costo_seguro": "0.00",
+        "fuente": "legado",
+        "incompleto": false,
+        "moneda": "MXN",
+        "requiere_desglose": false
+      }
+    },
+    "revision_registro": 1,
+    "revisiones_producto": [],
+    "saf_aplicaciones": [],
+    "saldo_a_favor": "0.00",
+    "solicitud_preparacion": {
+      "almacen_revision_id": null,
+      "anexo_integrado": false,
+      "anexo_sin_remision": [
+        {
+          "ciclo_id": "cea688b9-d4a5-48d3-80d7-57a8ce7cc8b1",
+          "documento_id": 10,
+          "documentos": [
+            {
+              "huella": "7c4de53af7093f87b3b726942e6f2d618bbaf54d",
+              "id": 10,
+              "mime_type": "application/pdf",
+              "nombre": "QA34-anexo-transferencia.pdf",
+              "tamano_bytes": 1024
+            }
+          ],
+          "entrada": "documento",
+          "estado": "revisado_conjunto",
+          "huellas": [
+            "7c4de53af7093f87b3b726942e6f2d618bbaf54d"
+          ],
+          "pendiente_identificacion": false,
+          "pendiente_revision": false,
+          "respondida_at": "2026-11-12T14:45:16-06:00",
+          "respondida_por": "QA PR34 Cedis",
+          "respondida_por_id": 4,
+          "respuesta_cambio": "correcto",
+          "resultado": "Revisado en el conjunto actualizado. Consulte los detalles y la nueva captura.",
+          "solicitado_at": "2026-11-12T14:45:15-06:00",
+          "solicitud_id": "06cbc24b-6dea-4084-b32e-5d405d71eed8",
+          "tamano_bytes": 1024
+        }
+      ],
+      "area_revision": "control_pedidos",
+      "atencion_tienda": null,
+      "cobertura_tienda": {
+        "confirmada": false,
+        "registrada_at": "2026-11-12T14:45:14-06:00",
+        "registrada_por_id": 1,
+        "tipo": "transferencia"
+      },
+      "codigo_modalidad": "RECOGE_TIENDA_TRANSFERENCIA",
+      "horarios_operativos": {
+        "activos": false,
+        "detalle_apartado": "Jornadas permitidas: lunes, martes, miércoles, jueves, viernes, sábado. Límite ordinario: 17:00. Sábado de 09:00 a 13:00. Zona horaria: America/Mexico_City."
+      },
+      "modalidad_entrega": "tienda",
+      "revision_disponibilidad": {
+        "aceptacion_vigente": true,
+        "actualizacion_pendiente": false,
+        "cambios_revisados": {
+          "anexo:0": "correcto"
+        },
+        "confirmada": true,
+        "decision_at": null,
+        "decision_por_id": null,
+        "estado": "sin_excepciones",
+        "evidencia_actual_ids": [
+          11
+        ],
+        "historial_respuestas": [
+          {
+            "aceptacion_vigente": false,
+            "actualizacion_id": "cca0fa6f-b200-45ac-9b26-a79218d04517",
+            "actualizacion_pendiente": true,
+            "cambios_revisados": [],
+            "ciclo_id": "cea688b9-d4a5-48d3-80d7-57a8ce7cc8b1",
+            "confirmada": true,
+            "estado": "sin_excepciones",
+            "evidencia_actual_ids": [
+              9
+            ],
+            "respondida_at": "2026-11-12T14:45:13-06:00",
+            "respondida_por_id": 4,
+            "respuesta_id": "8a81021d-8442-4406-a427-3d2fb9470037"
+          }
+        ],
+        "respondida_at": "2026-11-12T14:45:16-06:00",
+        "respondida_por_id": 4,
+        "respuesta_id": "e265e72b-122a-48f6-82b1-93b01198f7d0"
+      },
+      "solicitudes_ajuste_ids": {
+        "06cbc24b-6dea-4084-b32e-5d405d71eed8": 2
+      },
+      "solicitudes_ajuste_lotes": {
+        "06cbc24b-6dea-4084-b32e-5d405d71eed8": [
+          "0"
+        ]
+      },
+      "version": 1
+    },
+    "sucursal_destino": {
+      "activo": true,
+      "codigo": "QA34",
+      "created_at": "2026-11-12T20:37:36.000000Z",
+      "es_demo": false,
+      "id": 2,
+      "nombre": "QA PR34 Tienda",
+      "updated_at": "2026-11-12T20:37:36.000000Z"
+    },
+    "sucursal_destino_id": 2,
+    "tarea_preparacion": null,
+    "total_a_cobrar": "150.00",
+    "total_mercancia": "150.00"
+  },
+  "status": 200
+}

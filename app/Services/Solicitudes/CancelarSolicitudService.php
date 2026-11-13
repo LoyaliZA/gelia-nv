@@ -8,6 +8,8 @@ use App\Models\CatalogoEstadoSolicitud;
 use App\Models\CatalogoProceso;
 use App\Models\AuditoriaSolicitud;
 use App\Notifications\AlertaSolicitud;
+use App\Services\Clientes\ClasificacionComercialCliente;
+use App\Services\Escalonamiento\ConciliacionSolicitudEscalonamiento;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
@@ -17,11 +19,16 @@ class CancelarSolicitudService
     public function __construct(
         private ValidarListaInferiorService $validarListaInferior,
         private AjustarMontoPorSolicitudService $ajustarMonto,
+        private ConciliacionSolicitudEscalonamiento $conciliacion,
     ) {}
 
     public function ejecutar(SolicitudTag $solicitud, ?string $motivo = null): void
     {
         DB::transaction(function () use ($solicitud, $motivo) {
+            if ($solicitud->cliente_id) {
+                $this->ajustarMonto->prepararBloqueo((int) $solicitud->cliente_id);
+            }
+            $solicitud = SolicitudTag::query()->lockForUpdate()->findOrFail($solicitud->id);
             $solicitud->loadMissing(['proceso', 'cliente', 'vendedor', 'listaRebaja']);
 
             if (!$solicitud->cancelacion_solicitada_at) {
@@ -35,6 +42,7 @@ class CancelarSolicitudService
                 abort(422, 'Esta solicitud ya está cancelada.');
             }
 
+            $this->conciliacion->liberar($solicitud);
             $snapshotDiff = [];
             $estadosConBeneficios = [
                 CatalogoEstadoSolicitud::idDe('Respondida'),
@@ -44,11 +52,12 @@ class CancelarSolicitudService
             if (
                 in_array($estadoAnteriorId, $estadosConBeneficios)
                 && $solicitud->proceso?->esFinanciero()
-                && ! $this->solicitudPosteriorSostieneBeneficio($solicitud)
             ) {
+                $otraSolicitudSostiene = $this->solicitudPosteriorSostieneBeneficio($solicitud);
                 $listaRebaja = null;
                 if (
-                    $solicitud->catalogo_lista_rebaja_id
+                    ! $otraSolicitudSostiene
+                    && $solicitud->catalogo_lista_rebaja_id
                     && $solicitud->cliente_id
                     && $this->validarListaInferior->exigeListaRebaja($solicitud)
                 ) {
@@ -74,7 +83,7 @@ class CancelarSolicitudService
                     }
                 }
 
-                if ($listaRebaja && $cliente) {
+                if ($listaRebaja && $cliente && ! $this->conversionProtegeLaLista($cliente, $solicitud)) {
                     $cliente->lista_actual_id = $listaRebaja->id;
                     $cliente->save();
                     $cliente->refresh()->load(['listaDescuento', 'vendedor', 'tipo']);
@@ -111,6 +120,17 @@ class CancelarSolicitudService
                 );
             }
         });
+    }
+
+    private function conversionProtegeLaLista(Cliente $cliente, SolicitudTag $solicitud): bool
+    {
+        $clasificacion = app(ClasificacionComercialCliente::class);
+        if ($clasificacion->esMenudeo($cliente)) {
+            return true;
+        }
+
+        return $clasificacion->conversionVigente($cliente)
+            && (int) $cliente->conversion_solicitud_id !== (int) $solicitud->id;
     }
 
     private function solicitudPosteriorSostieneBeneficio(SolicitudTag $solicitud): bool

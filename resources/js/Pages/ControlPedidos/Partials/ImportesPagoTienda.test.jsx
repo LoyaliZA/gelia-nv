@@ -46,6 +46,10 @@ it('crédito omite captura y seleccionar modalidad no la guarda automáticamente
  await render({solicitud:{cobertura_tienda:{tipo:'credito'}}});
  expect(pagoProps.current.puedeRegistrar).toBe(false);
  expect(container.textContent).toContain('no pide una exhibición');
+ expect(container.textContent).not.toContain('queden guardados');
+ await render({solicitud:{cobertura_tienda:{tipo:'credito'}},importesListos:false,totalMercancia:0});
+ expect(container.textContent).toContain('El total a cubrir no está completo.');
+ expect(container.textContent).not.toContain('queden guardados');
  await render({solicitud:{cobertura_tienda:{tipo:'transferencia'},atencion_tienda:'prevista'}});
  const select=container.querySelector('select');
  expect(select.disabled).toBe(true);
@@ -129,13 +133,17 @@ it('comunica la cobertura pendiente de transferencia y conserva la confirmación
 
 it('transferencia espera cobertura completa sin bloqueos y guardar los cambios de Mismo día', async () => {
  const onEstadoConfirmacion=vi.fn();
- await render({onEstadoConfirmacion});
+ await render({onEstadoConfirmacion,revisionEsperada:2});
  expect(onEstadoConfirmacion).toHaveBeenLastCalledWith(false);
  await act(()=>pagoProps.current.onResumenChange({cubierto:true,bloqueos:[],pendiente:0.4,tolerancia_aplicada:0.44}));
- expect(onEstadoConfirmacion).toHaveBeenLastCalledWith(true);
- await act(()=>pagoProps.current.onResumenChange({cubierto:true,bloqueos:['Comprobante rechazado']}));
  expect(onEstadoConfirmacion).toHaveBeenLastCalledWith(false);
- await act(()=>pagoProps.current.onResumenChange({cubierto:true,bloqueos:[]}));
+ await act(()=>pagoProps.current.onLectura({revision_registro:1,resumen:{cubierto:true,bloqueos:[]}}));
+ expect(onEstadoConfirmacion).toHaveBeenLastCalledWith(false);
+ await act(()=>pagoProps.current.onLectura({revision_registro:2,resumen:{cubierto:true,bloqueos:[],pendiente:0.4,tolerancia_aplicada:0.44}}));
+ expect(onEstadoConfirmacion).toHaveBeenLastCalledWith(true);
+ await act(()=>pagoProps.current.onLectura({revision_registro:2,resumen:{cubierto:false,bloqueos:['Comprobante rechazado']}}));
+ expect(onEstadoConfirmacion).toHaveBeenLastCalledWith(false);
+ await act(()=>pagoProps.current.onLectura({revision_registro:2,resumen:{cubierto:true,bloqueos:[]}}));
  const check=[...container.querySelectorAll('input[type="checkbox"]')].find(i=>i.closest('label').textContent.includes('Mismo día:'));
  expect(check.disabled).toBe(true);
 });

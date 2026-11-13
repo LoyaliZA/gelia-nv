@@ -46,6 +46,9 @@ class ActualizarPedidoBmaService
                 : null
         );
         if (!$pedido->esEditablePorVendedora()) {
+            if ($pedido->tieneRemision() || $pedido->tienePagoValidado()) {
+                throw new \RuntimeException('La compra ya tiene pago comprobado o remisión. El cambio de mercancía o importe se hace con la gestión documentada. Se conservan los pagos, la evidencia y el historial.');
+            }
             throw new \RuntimeException('Este pedido no puede editarse en su estado actual.');
         }
 
@@ -67,14 +70,14 @@ class ActualizarPedidoBmaService
 
             if ($pedido->tieneRemision() || $pedido->tienePagoValidado()) {
                 if ((int) $clienteId !== (int) $pedido->cliente_id) {
-                    throw new \RuntimeException('La compra ya tiene pago comprobado o remisión. No se cambia el cliente ni la mercancía.');
+                    throw new \RuntimeException('La compra ya tiene pago comprobado o remisión. El cambio de cliente, mercancía o importe se hace con la gestión documentada. Se conservan los pagos, la evidencia y el historial.');
                 }
                 foreach (['total_mercancia', 'cantidad_piezas'] as $campo) {
                     if (! array_key_exists($campo, $datos) || $datos[$campo] === null || $datos[$campo] === '') {
                         continue;
                     }
                     if (abs((float) $datos[$campo] - (float) $pedido->{$campo}) > 0.009) {
-                        throw new \RuntimeException('La compra ya tiene pago comprobado o remisión. No se modifican mercancía ni importes.');
+                        throw new \RuntimeException('La compra ya tiene pago comprobado o remisión. El cambio de mercancía o importe se hace con la gestión documentada. Se conservan los pagos, la evidencia y el historial.');
                     }
                 }
             }

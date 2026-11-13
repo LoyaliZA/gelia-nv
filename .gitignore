@@ -35,3 +35,7 @@ Thumbs.db
 /logs
 /evidencia
 /.archify
+/conflictos
+# Entorno de aceptación aislado PR #34 (secretos y datos locales).
+/.env.qa-pr34
+/storage/pr34-qa/

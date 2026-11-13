@@ -9,6 +9,7 @@ use App\Models\Escalonamiento\EscalonamientoIncidencia;
 use App\Models\Escalonamiento\EscalonamientoPeriodo;
 use App\Models\Escalonamiento\EscalonamientoResumenCliente;
 use App\Models\User;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -135,7 +136,7 @@ class ResolverIncidenciaEscalonamiento
     }
 
     /**
-     * @param  \Illuminate\Support\Collection<int, EscalonamientoImportacionFila>  $filas
+     * @param  Collection<int, EscalonamientoImportacionFila>  $filas
      * @return array{creados: int, filas: int, omitidas: int, mensaje: string}
      */
     private function aplicarPrevisualizacion($filas, EscalonamientoPeriodo $periodo, string $accion): array
@@ -408,21 +409,8 @@ class ResolverIncidenciaEscalonamiento
             return $existente;
         }
 
-        try {
-            $listaId = $this->listaPublicoGeneral->id();
-        } catch (ValidationException) {
-            throw ValidationException::withMessages([
-                'accion' => 'No se pudo crear el cliente porque no hay una lista Público General única.',
-            ]);
-        }
-
-        return Cliente::create([
-            'numero_cliente' => $numero,
-            'nombre' => $nombre !== '' ? $nombre : 'Cliente '.$numero,
-            'lista_actual_id' => $listaId,
-            'monto_venta_actual' => 0,
-            'es_heredado' => false,
-            'es_inactivo' => false,
+        throw ValidationException::withMessages([
+            'cliente' => 'Alta bloqueada: importe primero el cliente desde Wizerp con nombre y estado comercial explícito. La remisión no determina ese estado.',
         ]);
     }
 

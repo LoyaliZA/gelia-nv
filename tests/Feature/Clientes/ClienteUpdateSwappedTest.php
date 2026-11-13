@@ -45,7 +45,6 @@ class ClienteUpdateSwappedTest extends TestCase
             'monto_venta_actual' => 10180.5,
             'lista_actual_id' => $listaId,
             'lista_bloqueada' => false,
-            'es_inactivo' => false,
             'correccion_emergencia' => $emergencia,
         ];
     }
@@ -122,5 +121,16 @@ class ClienteUpdateSwappedTest extends TestCase
         $this->assertEquals('8930', $mal->numero_cliente);
         $this->assertEquals('HUB VICTORIANO HERNANDEZ ALAN', $mal->nombre);
         $this->assertEquals('HUB VICTORIANO HERNANDEZ ALAN', $legitimo->numero_cliente);
+    }
+
+    public function test_edicion_manual_conserva_estado_y_rechaza_transiciones(): void
+    {
+        $lista = $this->listaPg();
+        $cliente = Cliente::create(['numero_cliente' => '990055', 'nombre' => 'Estado Wizerp', 'lista_actual_id' => $lista->id, 'es_inactivo' => true]);
+        $datos = ['numero_cliente' => '990055', 'nombre' => 'Nombre corregido', 'lista_actual_id' => $lista->id];
+        $this->actingAs($this->admin())->put(route('admin.clientes.update', $cliente), $datos)->assertSessionHasNoErrors();
+        $this->assertTrue($cliente->fresh()->es_inactivo);
+        $this->put(route('admin.clientes.update', $cliente), $datos + ['es_inactivo' => false])->assertSessionHasErrors('es_inactivo');
+        $this->assertTrue($cliente->fresh()->es_inactivo);
     }
 }

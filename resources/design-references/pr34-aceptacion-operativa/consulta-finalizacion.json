@@ -1,0 +1,22 @@
+[
+  {
+    "paso": "respuesta actualizada con foto",
+    "data": {
+      "decision": "Revisión sin excepciones. Falta el apartado físico de lo aceptado. No hay pago ni entrega.",
+      "estado": "sin_excepciones",
+      "idempotente": false
+    },
+    "status": 200
+  },
+  {
+    "paso": "cierre",
+    "data": {
+      "base_captura": "2b8ef5a2373dc1b2a4c7ed812b417615b5b2f8195109d667df6a2f1b98a43d0e",
+      "consulta_cerrada": true,
+      "message": "Consulta cerrada. La mercancía quedó confirmada con el cliente.",
+      "ok": true,
+      "revision_registro": 0
+    },
+    "status": 200
+  }
+]

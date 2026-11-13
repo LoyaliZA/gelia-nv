@@ -1,0 +1,72 @@
+{
+  "lotes": [
+    {
+      "archivos": [
+        {
+          "bytes": 6291456,
+          "name": "QA34-ui-multiple-0.pdf"
+        }
+      ],
+      "lote": "0",
+      "solicitud_id": "a2d7078e-f67e-4bc7-a8bb-3b8f26fe22dd",
+      "url": "/control-pedidos/5/anexo-tienda"
+    },
+    {
+      "archivos": [
+        {
+          "bytes": 6291456,
+          "name": "QA34-ui-multiple-1.pdf"
+        }
+      ],
+      "lote": "1",
+      "solicitud_id": "a2d7078e-f67e-4bc7-a8bb-3b8f26fe22dd",
+      "url": "/control-pedidos/5/anexo-tienda"
+    }
+  ],
+  "anexos": [
+    {
+      "ciclo_id": "710ceef5-90c5-449d-a6b8-83481137a6ec",
+      "documento_id": 31,
+      "documentos": [
+        {
+          "huella": "500a495facdd6e55f79840badf1470e5d7f2201b",
+          "id": 31,
+          "mime_type": "application/pdf",
+          "nombre": "QA34-ui-multiple-0.pdf",
+          "tamano_bytes": 6291456
+        },
+        {
+          "huella": "8b083d4b55bf35c95194907d88166bb320bef6c8",
+          "id": 32,
+          "mime_type": "application/pdf",
+          "nombre": "QA34-ui-multiple-1.pdf",
+          "tamano_bytes": 6291456
+        }
+      ],
+      "entrada": "documento",
+      "huellas": [
+        "500a495facdd6e55f79840badf1470e5d7f2201b",
+        "8b083d4b55bf35c95194907d88166bb320bef6c8"
+      ],
+      "pendiente_identificacion": true,
+      "pendiente_revision": true,
+      "solicitado_at": "2026-11-12T15:13:51-06:00",
+      "solicitud_id": "a2d7078e-f67e-4bc7-a8bb-3b8f26fe22dd",
+      "tamano_bytes": 12582912
+    }
+  ],
+  "console": [
+    {
+      "level": "INFO",
+      "message": "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js 21 Warning: Indexing all PDF objects",
+      "source": "worker",
+      "timestamp": 1794518028919
+    },
+    {
+      "level": "INFO",
+      "message": "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js 21 Warning: Indexing all PDF objects",
+      "source": "worker",
+      "timestamp": 1794518029012
+    }
+  ]
+}

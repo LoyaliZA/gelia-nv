@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Cliente;
+use App\Services\Clientes\ClasificacionComercialCliente;
 use App\Services\Clientes\Direcciones\GestionDireccionesClienteService;
 use App\Services\Escalonamiento\ProyeccionClienteEscalonamiento;
 use Illuminate\Http\JsonResponse;
@@ -31,6 +32,9 @@ class ClienteApiController extends Controller
             'es_heredado',
             'es_inactivo',
             'lista_actual_id',
+            'es_menudeo',
+            'modalidad_origen',
+            'conversion_solicitud_id',
             'monto_venta_actual',
             'monto_credito_autorizado',
         ];
@@ -63,6 +67,7 @@ class ClienteApiController extends Controller
                 'lista_actual_id' => $this->proyeccionCliente->listaVigenteId($cliente) ?? $cliente->lista_actual_id,
                 'lista_actual' => $cliente->listaDescuento->nombre ?? 'Sin Lista',
                 'monto_venta_actual' => $this->proyeccionCliente->montoAcumulado($cliente),
+                ...app(ClasificacionComercialCliente::class)->presentacion($cliente),
                 'monto_credito_autorizado' => $cliente->monto_credito_autorizado !== null
                     ? (float) $cliente->monto_credito_autorizado
                     : null,
@@ -96,6 +101,9 @@ class ClienteApiController extends Controller
                 'es_heredado',
                 'es_inactivo',
                 'lista_actual_id',
+                'es_menudeo',
+                'modalidad_origen',
+                'conversion_solicitud_id',
                 'monto_venta_actual',
             ])
             ->with('listaDescuento:id,nombre')
@@ -115,6 +123,7 @@ class ClienteApiController extends Controller
             'lista_actual_id' => $this->proyeccionCliente->listaVigenteId($cliente) ?? $cliente->lista_actual_id,
             'lista_actual' => $cliente->listaDescuento->nombre ?? 'Sin Lista',
             'monto_venta_actual' => $this->proyeccionCliente->montoAcumulado($cliente),
+            ...app(ClasificacionComercialCliente::class)->presentacion($cliente),
         ]);
     }
 

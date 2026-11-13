@@ -44,6 +44,7 @@ Route::prefix('control-pedidos')->name('control_pedidos.')->group(function () {
         Route::post('/{pedidoBma}/solicitud-tienda', [PedidoBmaController::class, 'solicitarTienda'])->name('solicitud_tienda');
         Route::post('/{pedidoBma}/cobertura-tienda', [PedidoBmaController::class, 'coberturaTienda'])->name('cobertura_tienda');
         Route::post('/{pedidoBma}/confirmar-pedido-tienda', [PedidoBmaController::class, 'confirmarPedidoTienda'])->name('confirmar_pedido_tienda');
+        Route::post('/{pedidoBma}/credito-pagado', [\App\Http\Controllers\ControlPedidos\CreditoPagadoTiendaController::class, 'store'])->name('credito_pagado');
         Route::post('/{pedidoBma}/anexo-tienda', [PedidoBmaController::class, 'anexoTienda'])->name('anexo_tienda');
         Route::post('/{pedidoBma}/retiro-piezas-tienda', [PedidoBmaController::class, 'retiroPiezasTienda'])->name('retiro_piezas_tienda');
         Route::post('/{pedidoBma}/retiro-custodia-envio', [PedidoBmaController::class, 'retirarCustodiaEnvio'])->name('retiro_custodia_envio');

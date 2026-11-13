@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 use App\Models\Cliente;
+use App\Models\ImportacionCliente;
 use App\Models\CatalogoListaDescuento;
 use App\Models\HistorialMontoCliente;
 use App\Models\CatalogoProceso;
@@ -13,8 +14,11 @@ use App\Models\CatalogoEstadoSolicitud;
 use App\Models\CatalogoTipoCliente;
 use App\Models\TabuladorComision;
 use Illuminate\Support\Facades\DB;
-use App\Services\Clientes\ImportarClientesWizerpService;
 use App\Services\Clientes\RegistrarImportacionClienteService;
+use App\Services\Clientes\PresentarSeguimientoImportacionCliente;
+use App\Jobs\Clientes\AnalizarImportacionClientesJob;
+use App\Jobs\Clientes\ProcesarImportacionClientesJob;
+use App\Support\Colas\DisponibilidadCola;
 use Illuminate\Support\Facades\Gate;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\Models\Permission;
@@ -657,38 +661,144 @@ class AdminController extends Controller
         ]);
     }
 
-    public function importarClientes(
-        Request $request,
-        ImportarClientesWizerpService $importadorService,
-        RegistrarImportacionClienteService $registrarImportacion,
-    ) {
+    public function importarClientes()
+    {
         Gate::authorize('clientes.carga_masiva');
 
-        $request->validate(['archivo' => 'required|mimes:csv,txt']);
+        return back()->withErrors([
+            'archivo' => 'La carga masiva exige una revisión previa y la confirmación de ese mismo archivo.',
+        ]);
+    }
 
+    public function previsualizarImportacion(
+        Request $request,
+        RegistrarImportacionClienteService $registrarImportacion,
+        DisponibilidadCola $cola,
+        PresentarSeguimientoImportacionCliente $presentar,
+    ) {
+        Gate::authorize('clientes.carga_masiva');
+        $request->validate(['archivo' => 'required|file|mimes:csv,txt']);
         @set_time_limit(0);
 
-        try {
-            $importacion = $registrarImportacion->iniciar($request->file('archivo'));
-            $resultado = $importadorService->ejecutar($request->file('archivo'), $importacion);
-            $registrarImportacion->finalizar($importacion, $resultado['stats'] ?? []);
-
-            $inactivos = $resultado['clientes_marcados_inactivos'] ?? 0;
-            $mensaje = 'Base de datos de clientes actualizada correctamente.';
-            if ($inactivos > 0) {
-                $mensaje .= " {$inactivos} cliente(s) marcado(s) como inactivo(s).";
+        $importacion = $registrarImportacion->iniciar($request->file('archivo'));
+        $mensaje = 'El servidor recibió el archivo, pero no hay un trabajador activo para analizarlo.';
+        $importacion->update(['estado' => 'recibido', 'mensaje_fatal' => $cola->puedeEncolar() ? null : $mensaje]);
+        if (! $cola->puedeEncolar()) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'ok' => false,
+                    'importacion_id' => $importacion->id,
+                    'estado' => 'recibido',
+                    'fase' => 'archivo_recibido',
+                    'mensaje' => $mensaje,
+                ], 503);
             }
 
-            return back()
-                ->with('success', $mensaje)
-                ->with('reporte_importacion', $resultado['ascensos'] ?? []);
-        } catch (\Throwable $e) {
-            $mensajeSeguro = is_string($e->getMessage())
-                ? (function_exists('mb_scrub') ? mb_scrub($e->getMessage(), 'UTF-8') : @iconv('UTF-8', 'UTF-8//IGNORE', $e->getMessage()))
-                : 'Error desconocido';
-
-            return back()->withErrors(['archivo' => 'Error procesando archivo. Verifique el formato de las cabeceras. Detalles: ' . ($mensajeSeguro ?: 'Error desconocido')]);
+            return back()->withErrors(['archivo' => $mensaje]);
         }
+
+        $importacion->update(['estado' => 'analizando']);
+        AnalizarImportacionClientesJob::dispatch($importacion->id);
+        $importacion->refresh();
+        if ($request->expectsJson()) {
+            return response()->json($presentar->progreso($importacion));
+        }
+
+        return back()->with('previsualizacion_importacion', $presentar->vistaFlash($importacion));
+    }
+
+    public function confirmarImportacion(
+        Request $request,
+        PresentarSeguimientoImportacionCliente $presentar,
+        DisponibilidadCola $cola,
+    ) {
+        Gate::authorize('clientes.carga_masiva');
+        $request->validate([
+            'importacion_id' => 'required|integer',
+            'token' => 'required|string',
+        ]);
+        @set_time_limit(0);
+
+        $importacion = ImportacionCliente::query()
+            ->where('usuario_id', $request->user()->id)
+            ->findOrFail($request->integer('importacion_id'));
+        $revision = is_array($importacion->resumen) ? ($importacion->resumen['revision'] ?? null) : null;
+        if (! is_array($revision) || ! hash_equals((string) ($revision['token'] ?? ''), (string) $request->input('token'))) {
+            throw ValidationException::withMessages(['archivo' => 'La confirmación no corresponde a la revisión de este archivo.']);
+        }
+        if (! empty($revision['aplicada']) && is_array($revision['resultado'] ?? null)) {
+            return $this->responderConfirmacion($request, $presentar, $importacion, $revision['resultado']);
+        }
+        if (! empty($revision['bloqueado'])) {
+            throw ValidationException::withMessages(['archivo' => 'La revisión detuvo la escritura. Hay que corregir el archivo y revisarlo de nuevo.']);
+        }
+        if ($importacion->estado === 'fallido' && $importacion->cursorConfirmado() === 0) {
+            throw ValidationException::withMessages(['archivo' => $importacion->mensaje_fatal ?: 'La revisión ya no coincide con los cambios aprobados. Hay que revisar el archivo de nuevo.']);
+        }
+        if (in_array($importacion->estado, ['en_cola', 'en_curso'], true) && $importacion->updated_at?->gt(now()->subMinutes(2))) {
+            return $request->expectsJson()
+                ? response()->json($presentar->progreso($importacion))
+                : back()->with('warning', 'La importación ya está en proceso.');
+        }
+        $reanudar = $this->puedeReanudar($importacion);
+        if ($importacion->estado !== 'previsualizada' && ! $reanudar) {
+            throw ValidationException::withMessages(['archivo' => 'La revisión ya no admite confirmación. Hay que revisar el archivo de nuevo.']);
+        }
+        if (! $cola->puedeEncolar()) {
+            $mensaje = 'No hay un trabajador activo para procesar la importación. La revisión sigue pendiente.';
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'mensaje' => $mensaje, 'progreso' => $presentar->progreso($importacion)], 503);
+            }
+
+            return back()->withErrors(['archivo' => $mensaje]);
+        }
+
+        $cursor = $reanudar ? $importacion->cursorConfirmado() : 0;
+        $cambios = ['estado' => 'en_cola', 'mensaje_fatal' => null];
+        if ($cursor === 0) {
+            $cambios['filas_procesadas'] = 0;
+            $cambios['filas_omitidas'] = 0;
+            $cambios['errores'] = 0;
+            $cambios['cursor_fila'] = 0;
+            $cambios['contadores'] = null;
+        }
+        $importacion->update($cambios);
+        ProcesarImportacionClientesJob::dispatch($importacion->id, (string) $request->input('token'), $cursor);
+        $importacion->refresh();
+        if ($importacion->mensaje_fatal && ! in_array($importacion->estado, ['completo', 'parcial', 'en_cola', 'en_curso'], true)) {
+            return $request->expectsJson()
+                ? response()->json($presentar->progreso($importacion), 422)
+                : back()->withErrors(['archivo' => $importacion->mensaje_fatal]);
+        }
+
+        $resultado = $importacion->resumen['revision']['resultado'] ?? null;
+
+        return $this->responderConfirmacion($request, $presentar, $importacion, is_array($resultado) ? $resultado : null);
+    }
+
+    private function puedeReanudar(ImportacionCliente $importacion): bool
+    {
+        $aplicada = (bool) ($importacion->resumen['revision']['aplicada'] ?? false);
+
+        return ! $aplicada && in_array($importacion->estado, ['fallido', 'parcial', 'en_curso', 'en_cola'], true) && $importacion->cursorConfirmado() > 0;
+    }
+
+    private function responderConfirmacion(Request $request, PresentarSeguimientoImportacionCliente $presentar, ImportacionCliente $importacion, ?array $resultado)
+    {
+        if ($request->expectsJson()) {
+            return response()->json($presentar->progreso($importacion));
+        }
+        if (! is_array($resultado)) {
+            return back()->with('warning', 'La importación quedó en proceso.');
+        }
+        $estado = $resultado['estado'] ?? $importacion->estado;
+        $stats = $resultado['stats'] ?? [];
+        $mensaje = "Importación {$estado}: ".($stats['creados'] ?? 0).' creados, '.($stats['actualizados'] ?? 0).' actualizados, '.($stats['sin_cambios'] ?? 0).' sin cambios, '.($stats['errores'] ?? 0).' filas fallidas.';
+
+        return back()
+            ->with($estado === 'completo' ? 'success' : 'warning', $mensaje)
+            ->with('resultado_importacion', $resultado)
+            ->with('reporte_importacion', $resultado['ascensos'] ?? []);
     }
 
     public function historialCliente(Cliente $cliente)

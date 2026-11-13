@@ -87,7 +87,7 @@ export default function ModalPreparacionTienda({ tareaId, atender = false, auth,
                 <div className="min-w-0 break-words"><h2 className="text-base font-bold theme-text-main m-0">{folio}</h2><p className="text-sm theme-text-muted m-0">{tarea?.estado_label || 'Cargando preparación…'}</p></div>
                 <button type="button" className={`${BTN_SECONDARY} min-h-[44px] shrink-0`} onClick={pedirCerrar} disabled={procesando} aria-label="Cerrar preparación"><X className="w-5 h-5" /></button>
             </header>
-            <div className="gelia-modal-body flex flex-col">
+            <div className="gelia-modal-body flex min-h-0 flex-1 flex-col">
                 {(error || mensaje) && <div className="gelia-preparacion-aviso-cambio"><AvisoResultadoTienda flash={{ error, success: mensaje }} /></div>}
                 {cargando ? <div role="status" className="flex items-center gap-2 py-8 px-4 theme-text-muted"><Loader2 className="w-5 h-5 animate-spin" /> Abriendo pedido…</div> : tarea && <>
                     {tarea.estado === 'PENDIENTE' && tarea.puede_tomar && <button type="button" className={BTN_PRIMARY} disabled={ocupado}

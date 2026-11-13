@@ -41,6 +41,9 @@ class ProyeccionClienteEscalonamiento
 
     public function listaVigenteId(Cliente $cliente, ?EscalonamientoPeriodo $periodo = null): ?int
     {
+        if ($cliente->es_inactivo) {
+            return app(ListaPublicoGeneralEscalonamiento::class)->id();
+        }
         if (! $this->autoridad->estaActiva()) {
             $id = $cliente->lista_actual_id;
 

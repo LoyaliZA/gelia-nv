@@ -13,7 +13,8 @@ class EjercicioEscalonamientoController extends Controller
     public function index(Request $request): Response
     {
         return Inertia::render('EjercicioEscalonamiento/Index', [
-            'listas' => CatalogoListaDescuento::where('activo', true)
+            'listas' => CatalogoListaDescuento::with('porcentajeEscalonamiento')
+                ->where('activo', true)
                 ->orderBy('monto_requerido', 'asc')
                 ->get(),
         ]);

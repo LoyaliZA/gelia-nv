@@ -19,10 +19,7 @@ class AuditoriaMontosClienteController extends Controller
 {
     public function importaciones(Request $request)
     {
-        $importaciones = ImportacionCliente::with('usuario:id,name,apellido_paterno')
-            ->latest()
-            ->paginate(15, ['*'], 'importaciones_page')
-            ->withQueryString();
+        $importaciones = $this->paginarImportaciones();
 
         return response()->json($importaciones);
     }
@@ -38,10 +35,7 @@ class AuditoriaMontosClienteController extends Controller
 
     public function datosAuditoria(Request $request)
     {
-        $importaciones = ImportacionCliente::with('usuario:id,name,apellido_paterno')
-            ->latest()
-            ->paginate(15, ['*'], 'importaciones_page')
-            ->withQueryString();
+        $importaciones = $this->paginarImportaciones();
 
         $auditoriaMontos = $this->queryAuditoriaMontos($request, excludeCargaMasiva: true)
             ->paginate(25, ['*'], 'auditoria_page')
@@ -153,5 +147,21 @@ class AuditoriaMontosClienteController extends Controller
         }
 
         return $query;
+    }
+
+    // resumen guarda la revisión del archivo; ordenarlo con SELECT * supera sort_buffer_size (error 1038).
+    private function paginarImportaciones()
+    {
+        return ImportacionCliente::query()
+            ->select([
+                'id', 'usuario_id', 'nombre_archivo_original', 'estado', 'mensaje_fatal',
+                'filas_leidas', 'filas_procesadas', 'filas_omitidas', 'errores',
+                'ascensos', 'descensos', 'clientes_marcados_inactivos', 'duracion_seg',
+                'created_at', 'updated_at',
+            ])
+            ->with('usuario:id,name,apellido_paterno')
+            ->latest()
+            ->paginate(15, ['*'], 'importaciones_page')
+            ->withQueryString();
     }
 }

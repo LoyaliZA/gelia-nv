@@ -7,6 +7,7 @@ import ModalMovimientosTienda from './ModalMovimientosTienda';
 import GaleriaEvidenciasPedido from './GaleriaEvidenciasPedido';
 import ModalVistaPreviaDocumento from './ModalVistaPreviaDocumento';
 import { formatearFechaNegocio } from './pedidosBmaStyles';
+import useActualizacionesPedidos from './useActualizacionesPedidos';
 
 export function esTransferenciaT02(pedido) {
     const solicitud = pedido?.solicitud_preparacion || pedido?.solicitud_preparacion_json || {};
@@ -56,6 +57,8 @@ export default function SeguimientoTransferenciaTienda({ pedido, sucursales = []
         catch (fallo) { setError(mensajeError(fallo)); }
     }, [activo, pedido?.id]);
     useEffect(() => { cargar(); }, [cargar, pedido?.pago_validado_at, pedido?.numero_remision, pedido?.catalogo_estatus_pedido_id]);
+    const capturaLocal = archivos.length > 0 || Boolean(observaciones || ubicacion || receptor || acuerdo) || ocupado;
+    useActualizacionesPedidos({ activo: activo && Boolean(pedido?.id), pedidoId: pedido?.id, pausado: capturaLocal, onActualizar: () => cargar() });
     useEffect(() => { onDirtyChange?.(archivos.length > 0 || Boolean(observaciones || ubicacion || receptor || acuerdo)); }, [archivos, observaciones, ubicacion, receptor, acuerdo, onDirtyChange]);
     useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
     if (!activo) return null;
@@ -91,24 +94,29 @@ export default function SeguimientoTransferenciaTienda({ pedido, sucursales = []
     const estado = datos?.estado;
     const md = datos?.atencion_md;
     const credito = datos?.cobertura === 'credito';
+    const cedis = (datos?.solicitud_preparacion?.area_revision || pedido?.solicitud_preparacion?.area_revision) === 'control_pedidos';
+    const resultadoCredito = datos?.credito_wizerp?.resultado;
+    const creditoCedisPendiente = Boolean(credito && cedis && resultadoCredito !== 'aprobado');
     const enDestino = ['en_traslado', 'recibida', 'en_custodia', 'entregada'].includes(estado);
     const requiereFoto = datos?.puede_preparar || datos?.puede_entregar;
     const tono = datos?.pendiente_gestion ? 'var(--color-aviso)' : ['en_custodia', 'entregada'].includes(estado) ? 'var(--color-exito)' : 'var(--color-primario)';
     const siguiente = datos?.bloqueo || !datos?.consulta_cerrada ? 'Resolver la consulta de disponibilidad'
-        : credito && datos?.credito_wizerp?.resultado !== 'aprobado' ? 'El auxiliar debe registrar la aprobación del crédito en Wizerp'
+        : creditoCedisPendiente && resultadoCredito === 'vencido' ? (datos.credito_wizerp?.causa || 'El cliente tiene un crédito vencido y necesita liquidarlo.')
+        : creditoCedisPendiente ? 'Pendiente de auditoría. Quien audita confirma el crédito y la remisión; después el pedido continúa en CEDIS.'
+        : credito && resultadoCredito !== 'aprobado' ? 'El auxiliar debe registrar la aprobación del crédito en Wizerp'
         : !datos?.pago_validado ? (credito ? 'El auxiliar debe validar la cobertura de crédito' : 'El auxiliar debe verificar el ingreso')
         : !datos?.numero_remision || !datos?.remision_adjunta ? 'El auxiliar debe registrar la remisión'
         : ESTADOS[estado] || 'Consultar seguimiento';
     return <section className="registrar-tienda-panel space-y-4 min-w-0 tienda-transferencia" aria-label="Transferencia y custodia en tienda">
         <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="registrar-tienda-seccion-titulo"><Archive size={20} aria-hidden="true" /><h3>{credito ? 'Crédito · Recoger en tienda' : md ? 'Tienda · Recolección el mismo día' : 'Transferencia · Recoger posteriormente'}</h3></div>
+            <div className="registrar-tienda-seccion-titulo"><Archive size={20} aria-hidden="true" /><h3>{credito && cedis ? 'Crédito · CEDIS' : credito ? 'Crédito · Recoger en tienda' : md ? 'Tienda · Recolección el mismo día' : 'Transferencia · Recoger posteriormente'}</h3></div>
             <button type="button" className={GELIA_BTN_OUTLINE} disabled={ocupado} onClick={cargar}><RefreshCw size={16} />Actualizar seguimiento</button>
         </div>
         {error && <div role="alert" className="tienda-alerta-disponibilidad rounded-xl border p-3 text-sm">{error}</div>}
         {!datos && !error && <p role="status" className="text-sm theme-text-muted m-0">Cargando seguimiento…</p>}
         {datos && <>
             <div className="rounded-xl border theme-border theme-element p-4 grid gap-2" role="status">
-                <span className="text-xs theme-text-muted">{datos.pendiente_gestion ? 'Pendiente de gestión' : ESTADOS[estado]}</span>
+                <span className="text-xs theme-text-muted">{creditoCedisPendiente ? (resultadoCredito === 'vencido' ? 'Devuelto por crédito vencido' : 'Pendiente de auditoría') : datos.pendiente_gestion ? 'Pendiente de gestión' : ESTADOS[estado]}</span>
                 <strong className="text-base theme-text-main">{siguiente}</strong>
                 <span className="text-sm theme-text-main"><MapPin size={16} className="inline mr-1" />{datos.sucursal || 'Sucursal de destino pendiente'}{md?.fecha_objetivo ? ` · ${md.fecha_objetivo}` : ''}</span>
             </div>
@@ -139,7 +147,7 @@ export default function SeguimientoTransferenciaTienda({ pedido, sucursales = []
                 {datos.puede_custodia && <><label className={THEME_LABEL}>Almacén de custodia<select className={`${THEME_SELECT} w-full mt-1`} value={almacen} onChange={e => setAlmacen(e.target.value)}><option value="">Elegir almacén</option>{datos.almacenes_destino.map(a => <option key={a.id} value={a.id}>{a.nombre}</option>)}</select></label><label className={THEME_LABEL}>Ubicación e identificación del pedido<input className={`${THEME_INPUT} w-full mt-1`} maxLength={240} value={ubicacion} onChange={e => setUbicacion(e.target.value)} /></label><button type="button" className={THEME_BTN_PRIMARY} onClick={() => enviar('custodia')}><Archive size={18} />Confirmar custodia identificada</button></>}
                 {datos.puede_entregar && <><label className={THEME_LABEL}>Quién recibe<input className={`${THEME_INPUT} w-full mt-1`} maxLength={160} value={receptor} onChange={e => setReceptor(e.target.value)} /></label><button type="button" className={THEME_BTN_PRIMARY} onClick={() => enviar('entregar')}><CheckCircle2 size={18} />Confirmar entrega al cliente</button></>}
             </fieldset>}
-            {!soloLectura && <div className="flex flex-wrap gap-2 border-t theme-border pt-3">
+            {!soloLectura && !creditoCedisPendiente && <div className="flex flex-wrap gap-2 border-t theme-border pt-3">
                 {sucursales.length > 0 && ['pendiente_preparacion','preparada'].includes(estado) && <button type="button" className={GELIA_BTN_OUTLINE} aria-expanded={herramienta === 'destino'} disabled={ocupado} onClick={() => setHerramienta(herramienta === 'destino' ? '' : 'destino')}><MapPin size={16} />Cambiar destino</button>}
                 {datos.puede_gestionar && <button type="button" className={GELIA_BTN_OUTLINE} aria-expanded={herramienta === 'seguimiento'} disabled={ocupado} onClick={() => setHerramienta(herramienta === 'seguimiento' ? '' : 'seguimiento')}><MessageSquare size={16} />Seguimiento con el cliente</button>}
                 {datos.puede_continuar_posterior && <button type="button" className={GELIA_BTN_OUTLINE} aria-expanded={continuar} disabled={ocupado} onClick={() => { setContinuar(!continuar); setHerramienta(''); }}><CalendarClock size={16} />Acordar recolección posterior</button>}

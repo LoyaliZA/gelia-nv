@@ -1,0 +1,15 @@
+import fs from 'node:fs';import {Browser,save,assert} from './browser.mjs';
+const a=new Browser(),b=new Browser();const visual=JSON.parse(fs.readFileSync('/var/www/html/storage/app/qa-pr34-aceptacion/visual.json'));const reporte={};
+try{
+ await a.start('ventas');await a.go('/control-pedidos?q=QA34-LECTURA-AJENA');await a.wait("document.querySelector('[aria-label=\"Cerrar detalle\"]')");await a.js("document.querySelector('[aria-label=\"Cerrar detalle\"]').click()");await a.click('Continuar');await a.wait("document.body.innerText.includes('Modificar pedido')");await a.click('Modificar pedido');await a.wait("document.querySelector('input[aria-label=\"Adjuntar: Piezas a agregar\"]')");
+ await a.js(`const dt=new DataTransfer();for(let i=0;i<2;i++){const bytes=new Uint8Array(1024);bytes.fill(32);bytes.set(new TextEncoder().encode('%PDF-1.4\\n% Solo seleccion local '+i+'\\n%%EOF'));dt.items.add(new File([bytes],'QA34-seleccion-local-'+i+'.pdf',{type:'application/pdf'}));}const e=document.querySelector('input[aria-label="Adjuntar: Piezas a agregar"]');e.files=dt.files;e.dispatchEvent(new Event('change',{bubbles:true}));`);await a.wait("document.body.innerText.includes('2 archivos')");
+ for(const width of [1440,1024,390]){await a.shot('seleccion-local-'+width,width);await a.js("document.querySelector('#ajuste-evidencia').closest('.gelia-pedidos-adjuntos').scrollIntoView({block:'center'})");await a.shot('seleccion-multiple-enfoque-'+width,width);}
+ reporte.seleccion_local={archivos:2,enviados:false};await a.close();
+ await b.start('tienda');const tarea=await b.api(`/control-pedidos/tienda/tareas/${visual.tarea}`);reporte.documentos=[];
+ for(const d of tarea.data.tarea.respuesta.documentos){const r=await b.api(d.url);assert(r.status===200,'No leyó foto asignada',d.url);reporte.documentos.push({id:d.id,status:r.status});}
+ const general=await b.api(`/control-pedidos/${visual.id}/disponibilidad-tienda`),ajeno=await b.api('/control-pedidos/pedidos/5/documentos/5');assert(general.status===403&&ajeno.status===403,'Amplió permisos',{general:general.status,ajeno:ajeno.status});reporte.expediente_general=general.status;reporte.documento_ajeno=ajeno.status;
+ await b.go('/control-pedidos/tienda?q=QA34-VISUAL');await b.wait("document.body.innerText.includes('Continuar preparación')");await b.click('Continuar preparación');await b.wait("document.body.innerText.includes('Respuesta enviada')");await b.click('Ver pedido');
+ await b.wait("!!document.querySelector('canvas') || document.body.innerText.includes('No se pudo')");
+ reporte.visor=await b.js("return {canvas:document.querySelectorAll('canvas').length,error:document.body.innerText.includes('No se pudo cargar'),texto:document.body.innerText.slice(-900)}");assert(reporte.visor.canvas>0&&!reporte.visor.error,'No renderizó PDF real',reporte.visor);
+ await b.shot('visor-pedido-real-390',390);reporte.console=await b.cmd('/log',{type:'browser'});save('revision-final',reporte);console.log(JSON.stringify({resultado:'aprobado',fotos:reporte.documentos.length,pdf_canvas:reporte.visor.canvas,lectura_ajena:403}));
+}finally{await a.close();await b.close();}

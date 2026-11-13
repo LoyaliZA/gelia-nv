@@ -1,5 +1,7 @@
+import ResumenImportacionClientes from './Partials/ResumenImportacionClientes';
 import React, { useState, useEffect, useCallback } from 'react';
 import { Head, useForm, usePage, router } from '@inertiajs/react';
+import axios from 'axios';
 import {
     Users, Upload, Search,
     FileSpreadsheet, TrendingUp,
@@ -15,6 +17,9 @@ import ModalFormCliente from './Partials/ModalFormCliente';
 import useClienteDialog from './Partials/useClienteDialog';
 import ModalConfiguracionEspecial from './Partials/ModalConfiguracionEspecial';
 import TabAuditoriaClientes from './Partials/TabAuditoriaClientes';
+import ModalRevisionImportacionClientes from './Partials/ModalRevisionImportacionClientes';
+import ModalAuditoriaImportacion from './Partials/ModalAuditoriaImportacion';
+import { publishLocalTask, startBackgroundTask } from '../../utils/geliaBackgroundTasks';
 
 import BadgeListaDescuento from '../../Components/BadgeListaDescuento';
 import { geliaCardClass, GELIA_PAGE_SHELL, THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from '../../utils/geliaTheme';
@@ -89,6 +94,15 @@ export default function Clientes({ auth, clientes, vendedores = [], tipos_client
     const formCarga = useForm({
         archivo: null,
     });
+    const [subiendo, setSubiendo] = useState(false);
+    const [errorCarga, setErrorCarga] = useState(null);
+    const [modalImportacionId, setModalImportacionId] = useState(null);
+    const [auditoriaId, setAuditoriaId] = useState(null);
+
+    useEffect(() => {
+        const id = new URLSearchParams(window.location.search).get('importacion');
+        if (id) setModalImportacionId(Number(id));
+    }, []);
 
     const paramsFiltros = useCallback((qOverride) => ({
         q: (qOverride !== undefined ? qOverride : busquedaAplicada).trim() || undefined,
@@ -174,17 +188,53 @@ export default function Clientes({ auth, clientes, vendedores = [], tipos_client
     };
 
     // --- SECCIÓN: MANEJO DE ACCIONES ---
-    const handleUpload = (e) => {
+    const handleUpload = async (e) => {
         e.preventDefault();
-        if (formCarga.processing) return;
-        formCarga.post(route('admin.clientes.importar'), {
-            preserveScroll: true,
-            onSuccess: () => {
-                formCarga.reset();
-                router.reload({ only: ['clientes'] });
-                setModalExitoAbierto(true);
-            },
+        const archivo = formCarga.data.archivo;
+        if (!archivo || subiendo) return;
+        setErrorCarga(null);
+        setSubiendo(true);
+        publishLocalTask({
+            module: 'clientes-importacion',
+            fase: 'subiendo',
+            porcentaje: 0,
+            titulo: 'Carga de clientes',
+            descripcion: 'El archivo todavía se está transfiriendo. Esta página debe seguir abierta.',
         });
+        const datos = new FormData();
+        datos.append('archivo', archivo);
+        try {
+            const { data } = await axios.post(route('admin.clientes.importar.previsualizar'), datos, {
+                headers: { Accept: 'application/json' },
+                onUploadProgress: (event) => {
+                    const total = event.total || archivo.size || 0;
+                    const porcentaje = total > 0 ? Math.min(99, Math.round((event.loaded / total) * 100)) : null;
+                    publishLocalTask({
+                        module: 'clientes-importacion',
+                        fase: 'subiendo',
+                        porcentaje,
+                        indeterminado: porcentaje == null,
+                        titulo: 'Carga de clientes',
+                        descripcion: 'El archivo todavía se está transfiriendo. Esta página debe seguir abierta.',
+                    });
+                },
+            });
+            publishLocalTask(null);
+            if (data.id || data.importacion_id) {
+                startBackgroundTask({ module: 'clientes-importacion', id: data.id || data.importacion_id });
+                setModalImportacionId(data.id || data.importacion_id);
+            }
+        } catch (error) {
+            const cuerpo = error.response?.data;
+            const mensaje = cuerpo?.mensaje || cuerpo?.errors?.archivo?.[0] || 'No se pudo enviar el archivo.';
+            setErrorCarga(mensaje);
+            publishLocalTask(null);
+            if (cuerpo?.importacion_id) {
+                startBackgroundTask({ module: 'clientes-importacion', id: cuerpo.importacion_id });
+            }
+        } finally {
+            setSubiendo(false);
+        }
     };
 
     const abrirModal = (modo, cliente = null) => {
@@ -254,6 +304,7 @@ export default function Clientes({ auth, clientes, vendedores = [], tipos_client
 
     return (
         <AppLayout auth={auth}>
+            <ResumenImportacionClientes resultado={flash?.resultado_importacion} />
             <Head title="Gestión de Clientes | GELIANV" />
 
             {/* Renderizado condicional del modal extraído */}
@@ -358,7 +409,7 @@ export default function Clientes({ auth, clientes, vendedores = [], tipos_client
                     {/* --- PANEL LATERAL: CARGA MASIVA --- */}
                     <div className="min-w-0 order-2 xl:order-1">
                         <section className={`${activeCardClass} clientes-import p-5 sm:p-6`} style={{ animationDelay: '100ms' }}>
-                            <details>
+                            <details id="carga-masiva">
                                 <summary className="clientes-import-toggle flex items-center justify-between gap-3">
                                     <div className="flex items-center gap-3">
                                         <Upload className="w-6 h-6 drop-shadow-sm" style={{ color: 'var(--color-primario)' }} />
@@ -383,6 +434,7 @@ export default function Clientes({ auth, clientes, vendedores = [], tipos_client
                                             e.preventDefault();
                                             setDragActive(false);
                                             if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                                                setErrorCarga(null);
                                                 formCarga.setData('archivo', e.dataTransfer.files[0]);
                                             }
                                         }}
@@ -406,12 +458,12 @@ export default function Clientes({ auth, clientes, vendedores = [], tipos_client
                                             name="archivo"
                                             aria-label="Seleccionar archivo de clientes"
                                             accept=".csv,.txt"
-                                            onChange={e => formCarga.setData('archivo', e.target.files[0])}
+                                            onChange={e => { setErrorCarga(null); formCarga.setData('archivo', e.target.files[0]); }}
                                         />
                                     </label>
 
-                                    {formCarga.errors.archivo && (
-                                        <p className="text-red-500 text-[10px] font-bold mt-2 uppercase tracking-widest text-center">{formCarga.errors.archivo}</p>
+                                    {errorCarga && (
+                                        <p className="text-sm font-bold theme-text-peligro text-center m-0">{errorCarga}</p>
                                     )}
 
                                     {formCarga.data.archivo && (
@@ -423,15 +475,15 @@ export default function Clientes({ auth, clientes, vendedores = [], tipos_client
 
                                     <button
                                         type="submit"
-                                        disabled={formCarga.processing || !formCarga.data.archivo}
+                                        disabled={subiendo || !formCarga.data.archivo}
                                         className="w-full py-4 text-white rounded-2xl font-black uppercase tracking-widest text-[11px] transition-all hover:scale-105 shadow-xl disabled:opacity-50 disabled:scale-100 outline-none flex justify-center items-center gap-2"
                                         style={{ backgroundColor: 'var(--color-primario)' }}
                                     >
-                                        <Database className="w-4 h-4" /> {formCarga.processing ? 'Sincronizando…' : 'Actualizar base de clientes'}
+                                        <Database className="w-4 h-4" /> {subiendo ? 'Enviando archivo…' : 'Revisar archivo'}
                                     </button>
-                                    {formCarga.processing && (
-                                        <p className="text-[9px] font-black uppercase tracking-widest text-amber-600 text-center">
-                                            No cierre esta pestaña hasta que termine la sincronización.
+                                    {subiendo && (
+                                        <p className="text-[10px] font-bold theme-text-muted text-center m-0">
+                                            El archivo todavía se está transfiriendo. Esta página debe seguir abierta hasta que el servidor lo reciba.
                                         </p>
                                     )}
                                 </form>
@@ -442,7 +494,7 @@ export default function Clientes({ auth, clientes, vendedores = [], tipos_client
                                         <p className="text-[9px] font-black uppercase tracking-widest italic">Columnas admitidas</p>
                                     </div>
                                     <p className="text-[10px] theme-text-muted font-bold leading-relaxed">
-                                        El sistema detecta automáticamente los campos. Puedes enviar un archivo solo con las columnas necesarias. <br /><br />
+                                        El sistema detecta automáticamente los campos. La revisión ocurre antes de escribir y la confirmación vale solo para ese archivo. <br /><br />
                                         <strong style={{ color: 'var(--color-primario)' }}>numero_cliente</strong> (Requerido)<br />
                                         <strong style={{ color: 'var(--color-primario)' }}>nombre</strong><br />
                                         <strong style={{ color: 'var(--color-primario)' }}>codigo_lista</strong> (Ej: PG, 1, 2, 3, 4, 7; celda vacía = no cambia lista ni estado; sin columna = solo actualiza monto)<br />
@@ -720,6 +772,25 @@ export default function Clientes({ auth, clientes, vendedores = [], tipos_client
                 </div>
                 )}
             </div>
+            {modalImportacionId && (
+                <ModalRevisionImportacionClientes
+                    importacionId={modalImportacionId}
+                    onClose={() => setModalImportacionId(null)}
+                    onElegirOtro={() => {
+                        setModalImportacionId(null);
+                        formCarga.setData('archivo', null);
+                        document.getElementById('carga-masiva')?.setAttribute('open', '');
+                        document.getElementById('carga-masiva')?.scrollIntoView({ block: 'nearest' });
+                    }}
+                    onResultados={(id) => {
+                        setModalImportacionId(null);
+                        setAuditoriaId(id);
+                    }}
+                />
+            )}
+            {auditoriaId && (
+                <ModalAuditoriaImportacion importacionId={auditoriaId} onClose={() => setAuditoriaId(null)} />
+            )}
         </AppLayout>
     );
 }

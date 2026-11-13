@@ -18,6 +18,8 @@ use App\Models\PuntoVenta\ResguardoPdvEvidencia;
 use App\Models\SaldosAFavor\PedidoBmaPago;
 use App\Models\Sucursal;
 use App\Models\User;
+use App\Notifications\AlertaPedidoBma;
+use App\Services\ControlPedidos\DevolverCreditoVencidoTiendaService;
 use App\Services\ControlPedidos\GestionarRemisionPedidoBmaService;
 use App\Services\ControlPedidos\MarcarEmpacadoPedidoBmaService;
 use App\Services\ControlPedidos\SeguimientoRecoleccionT02Service;
@@ -181,7 +183,12 @@ class TransferenciaTiendaTest extends TestCase
             ->assertOk()->assertJsonPath('estatus.fase_ciclo', 'PENDIENTE_AUXILIAR');
         $this->assertNull($this->pedido->fresh()->pago_validado_at);
         $this->assertSame(0, $this->pedido->resguardosPdv()->count());
-        app(\App\Services\ControlPedidos\ValidarPagoPedidoBmaService::class)->ejecutar($this->pedido->fresh(), $this->auxiliar->id);
+        $this->actingAs($this->auxiliar)->post(route('control_pedidos.auditar.credito_tienda', $this->pedido), [
+            'decision_auditoria' => true, 'resultado' => 'aprobado',
+        ])->assertRedirect()->assertSessionHas('error', 'Este pedido no está en cobertura de crédito.');
+        $this->assertNull($this->pedido->fresh()->pago_validado_at);
+        $this->post(route('control_pedidos.auditar.validar_pago', $this->pedido))
+            ->assertRedirect()->assertSessionHas('success', 'Pago validado correctamente.');
         app(GestionarRemisionPedidoBmaService::class)->actualizarNumeroRemision($this->pedido->fresh(), 'REM-CONFIRMADA', $this->auxiliar->id);
         app(GestionarRemisionPedidoBmaService::class)->subir($this->pedido->fresh(), UploadedFile::fake()->create('remision.pdf', 10, 'application/pdf'), $this->auxiliar->id, now()->toDateString());
         app(\App\Services\ControlPedidos\AprobarPedidoBmaService::class)->ejecutar($this->pedido->fresh(), $this->auxiliar->id);
@@ -204,11 +211,33 @@ class TransferenciaTiendaTest extends TestCase
         } catch (\RuntimeException $e) {
             $this->assertStringContainsString('Wizerp', $e->getMessage());
         }
-        app(\App\Services\ControlPedidos\RegistrarResultadoCreditoTiendaService::class)->ejecutar($this->pedido->fresh(), $this->auxiliar, 'aprobado');
-        app(\App\Services\ControlPedidos\ValidarPagoPedidoBmaService::class)->ejecutar($this->pedido->fresh(), $this->auxiliar->id);
+        $rutaCredito = route('control_pedidos.auditar.credito_tienda', $this->pedido);
+        $decision = ['decision_auditoria' => true, 'resultado' => 'aprobado'];
+        $this->post($rutaCredito, $decision)->assertForbidden();
+        $this->actingAs($this->auxiliar)->post($rutaCredito, $decision)
+            ->assertRedirect()->assertSessionHas('success', 'Crédito aprobado y validado.');
+        $validado = $this->pedido->fresh();
+        $this->assertNotNull($validado->pago_validado_at);
+        $this->assertSame($this->auxiliar->id, $validado->pago_validado_por_id);
+        $this->assertNull($validado->numero_remision);
+        $this->assertSame(PedidoBmaPago::REVISION_VERIFICADO, $validado->pagosExhibicion()->sole()->estado_revision);
+
+        $historial = $validado->historial()->count();
+        $this->post($rutaCredito, $decision)->assertRedirect()->assertSessionHas('success');
+        $this->assertSame($historial, $validado->historial()->count());
+        $this->post($rutaCredito, ['decision_auditoria' => true, 'resultado' => 'vencido'])
+            ->assertRedirect()->assertSessionHas('error', 'El crédito de este pedido ya fue aprobado y validado.');
+
+        $this->getJson(route('control_pedidos.auditar.listado', ['tab' => 'PENDIENTES']))->assertOk()
+            ->assertJsonPath('pedidos.data.0.id', $this->pedido->id)
+            ->assertJsonPath('pedidos.data.0.hito_auditoria', 'pendiente_remision')
+            ->assertJsonPath('pedidos.data.0.solicitud_preparacion.credito_wizerp.resultado', 'aprobado');
+
         app(GestionarRemisionPedidoBmaService::class)->actualizarNumeroRemision($this->pedido->fresh(), 'REM-CREDITO', $this->auxiliar->id);
         app(GestionarRemisionPedidoBmaService::class)->subir($this->pedido->fresh(), UploadedFile::fake()->create('credito.pdf', 10, 'application/pdf'), $this->auxiliar->id);
         app(\App\Services\ControlPedidos\AprobarPedidoBmaService::class)->ejecutar($this->pedido->fresh(), $this->auxiliar->id);
+        $this->actingAs($this->cedis)->getJson(route('control_pedidos.cedis.listado', ['tab' => 'PENDIENTES']))->assertOk()
+            ->assertJsonPath('pedidos.data.0.id', $this->pedido->id);
         $this->assertSame('T-09', $this->preparar()['flujo']);
         $this->operar('salida', $this->cedis);
         $this->assertSame(ResguardoPdv::ESTADO_PENDIENTE_RECEPCION, $this->pedido->resguardosPdv()->firstOrFail()->estado);
@@ -216,6 +245,75 @@ class TransferenciaTiendaTest extends TestCase
         $this->operar('custodia', $this->auxiliar, ['almacen_id' => $this->destino->id, 'ubicacion' => 'Anaquel crédito']);
         $this->assertSame('entregada', $this->operar('entregar', $this->auxiliar, ['receptor' => 'Cliente crédito', 'foto' => UploadedFile::fake()->image('entrega-credito.jpg')])['estado']);
         $this->assertSame(['credito'], $this->pedido->pagosExhibicion()->pluck('forma_pago')->all());
+    }
+
+    public function test_auditoria_revierte_la_aprobacion_de_credito_si_falla_la_validacion(): void
+    {
+        $this->iniciarConfirmacion('credito');
+        $this->actingAs($this->vendedora)->putJson(route('control_pedidos.enviar', $this->pedido))
+            ->assertOk()->assertJsonPath('estatus.fase_ciclo', 'PENDIENTE_AUXILIAR');
+        $this->pedido->pagosExhibicion()->create([
+            'numero_exhibicion' => 1, 'monto' => 100, 'forma_pago' => 'transferencia', 'fecha_pago' => now(),
+            'estado_revision' => PedidoBmaPago::REVISION_RECHAZADO, 'activo_para_cobertura' => false,
+        ]);
+        $antes = $this->pedido->fresh();
+        $historial = $antes->historial()->count();
+
+        $this->actingAs($this->auxiliar)->post(route('control_pedidos.auditar.credito_tienda', $this->pedido), [
+            'decision_auditoria' => true, 'resultado' => 'aprobado',
+        ])->assertRedirect()->assertSessionHas('error', 'Hay comprobantes rechazados pendientes de sustitución.');
+
+        $despues = $this->pedido->fresh();
+        $this->assertSame($antes->solicitud_preparacion_json, $despues->solicitud_preparacion_json);
+        $this->assertNull($despues->pago_validado_at);
+        $this->assertSame(PedidoBmaPago::REVISION_RECHAZADO, $despues->pagosExhibicion()->sole()->estado_revision);
+        $this->assertSame($historial, $despues->historial()->count());
+    }
+
+    public function test_credito_vencido_regresa_el_pedido_con_la_indicacion(): void
+    {
+        $this->iniciarConfirmacion('credito');
+        CatalogoEstatusPedido::query()->firstOrCreate(
+            ['fase_ciclo' => 'RECHAZADO_VENDEDORA'],
+            ['codigo_interno' => 'RECHAZADO_VENDEDORA', 'nombre_visual' => 'Devuelto para corrección', 'color_hex' => '#999999', 'orden' => 8, 'activo' => true]
+        );
+        $this->actingAs($this->vendedora)->putJson(route('control_pedidos.enviar', $this->pedido))
+            ->assertOk()->assertJsonPath('estatus.fase_ciclo', 'PENDIENTE_AUXILIAR');
+
+        $causa = 'Vencimiento confirmado en Wizerp.';
+        $this->actingAs($this->auxiliar)->post(route('control_pedidos.auditar.credito_tienda', $this->pedido), [
+            'decision_auditoria' => true, 'resultado' => 'vencido', 'causa' => $causa,
+        ])->assertRedirect()->assertSessionHas('success', 'Pedido devuelto a Ventas por crédito vencido.');
+        $devuelto = $this->pedido->fresh();
+        $this->assertSame('RECHAZADO_VENDEDORA', $devuelto->estatus->fase_ciclo);
+        $this->assertSame(DevolverCreditoVencidoTiendaService::INDICACION.' '.$causa, $devuelto->motivo_rechazo);
+        $this->assertSame('vencido', $devuelto->solicitud_preparacion_json['credito_wizerp']['resultado']);
+        $this->getJson(route('control_pedidos.auditar.detalle', $this->pedido))->assertOk()
+            ->assertJsonPath('pedido.solicitud_preparacion.credito_wizerp.causa', $devuelto->motivo_rechazo);
+        $this->getJson(route('control_pedidos.auditar.listado', ['tab' => 'RECHAZADOS']))->assertOk()
+            ->assertJsonPath('pedidos.data.0.solicitud_preparacion.credito_wizerp.resultado', 'vencido');
+        Notification::assertSentTo($this->vendedora, AlertaPedidoBma::class, fn ($alerta) => $alerta->tipoAlerta === 'pedido_rechazado_auxiliar'
+            && str_contains($alerta->mensaje, $causa));
+    }
+
+    public function test_credito_pagado_vuelve_a_revision_sin_exigir_evidencia(): void
+    {
+        $this->iniciarConfirmacion('credito');
+        CatalogoEstatusPedido::query()->firstOrCreate(
+            ['fase_ciclo' => 'RECHAZADO_VENDEDORA'],
+            ['codigo_interno' => 'RECHAZADO_VENDEDORA', 'nombre_visual' => 'Devuelto para corrección', 'color_hex' => '#999999', 'orden' => 8, 'activo' => true]
+        );
+        $this->actingAs($this->vendedora)->putJson(route('control_pedidos.enviar', $this->pedido))->assertOk();
+        app(\App\Services\ControlPedidos\DevolverCreditoVencidoTiendaService::class)
+            ->ejecutar($this->pedido->fresh(), $this->auxiliar);
+
+        $this->actingAs($this->vendedora)
+            ->postJson(route('control_pedidos.credito_pagado', $this->pedido))
+            ->assertOk()
+            ->assertJsonPath('estatus.fase_ciclo', 'PENDIENTE_AUXILIAR')
+            ->assertJsonPath('solicitud_preparacion.credito_wizerp.resultado', 'pagado')
+            ->assertJsonPath('motivo_rechazo', null);
+        $this->assertSame(0, $this->pedido->documentos()->where('comentario', 'Crédito pagado')->count());
     }
 
     private function operar(string $accion, User $actor, array $datos = []): array
@@ -531,6 +629,99 @@ class TransferenciaTiendaTest extends TestCase
             $this->assertStringContainsString('almacén PDV', $e->getMessage());
         }
         $this->assertSame(0, ResguardoPdv::query()->count());
+    }
+
+    public function test_editar_productos_antes_de_validar_muestra_la_diferencia_y_continua_al_cubrirla(): void
+    {
+        $this->iniciarConfirmacion('transferencia');
+        $banco = \App\Models\CatalogoBanco::query()->create(['nombre' => 'Banco prueba', 'activo' => true, 'compartido' => true]);
+        $pagos = app(\App\Services\SaldosAFavor\RegistrarPagoPedidoBmaService::class);
+        $comprobante = fn (string $nombre) => UploadedFile::fake()->create($nombre, 10, 'application/pdf');
+        $pagos->handle($this->pedido->fresh(), [
+            'monto' => 100, 'forma_pago' => 'transferencia', 'catalogo_banco_id' => $banco->id, 'idempotency_key' => 'pago-base',
+        ], $comprobante('transferencia.pdf'), $this->vendedora->id);
+
+        $this->actingAs($this->vendedora)->post('/control-pedidos/'.$this->pedido->id.'/anexo-tienda', [
+            'entrada' => 'documento',
+            'evidencia' => UploadedFile::fake()->create('anexo.pdf', 20, 'application/pdf'),
+        ], ['Accept' => 'application/json'])->assertOk();
+        $this->actingAs($this->vendedora)->getJson('/control-pedidos/'.$this->pedido->id.'/transferencia-tienda')
+            ->assertOk()
+            ->assertJsonPath('consulta_cerrada', false);
+        $bloqueoAnexo = app(TransferenciaTiendaService::class)->resumen($this->pedido->fresh(), $this->vendedora)['bloqueo'];
+        $this->assertStringContainsString('anexo', (string) $bloqueoAnexo);
+
+        $json = $this->pedido->fresh()->solicitud_preparacion_json;
+        unset($json['anexo_sin_remision'], $json['revision_disponibilidad']['actualizacion_pendiente']);
+        $json['revision_disponibilidad']['aceptacion_vigente'] = true;
+        $this->pedido->update(['solicitud_preparacion_json' => $json, 'consulta_cerrada_at' => now(), 'consulta_actualizacion_pendiente' => false]);
+        app(\App\Services\ControlPedidos\ActualizarPedidoBmaService::class)->ejecutar($this->pedido->fresh(), [
+            'total_mercancia' => 150,
+            'base_captura' => \App\Support\ControlPedidos\RevisionCapturaPedido::base($this->pedido->fresh()),
+        ], $this->vendedora->id);
+        $this->actingAs($this->vendedora)->postJson('/control-pedidos/'.$this->pedido->id.'/cerrar-consulta')->assertOk();
+
+        $this->actingAs($this->vendedora)->putJson(route('control_pedidos.enviar', $this->pedido->fresh()))
+            ->assertStatus(422);
+        $bloqueo = app(TransferenciaTiendaService::class)->resumen($this->pedido->fresh(), $this->auxiliar)['bloqueo'];
+        $this->assertStringContainsString('Faltan $50.00', (string) $bloqueo);
+        $this->assertSame('50.00', $this->actingAs($this->vendedora)->getJson('/control-pedidos/'.$this->pedido->id.'/pagos')->assertOk()->json('resumen.pendiente'));
+        $this->assertNull($this->pedido->fresh()->pago_validado_at);
+
+        $pagos->handle($this->pedido->fresh(), [
+            'monto' => 50, 'forma_pago' => 'transferencia', 'catalogo_banco_id' => $banco->id, 'idempotency_key' => 'pago-diferencia',
+        ], $comprobante('diferencia.pdf'), $this->vendedora->id);
+        $this->actingAs($this->vendedora)->putJson(route('control_pedidos.enviar', $this->pedido->fresh()))
+            ->assertOk()->assertJsonPath('estatus.fase_ciclo', 'PENDIENTE_AUXILIAR');
+        $this->actingAs($this->auxiliar)->post(route('control_pedidos.auditar.validar_pago', $this->pedido))
+            ->assertRedirect()->assertSessionHas('success');
+        app(GestionarRemisionPedidoBmaService::class)->actualizarNumeroRemision($this->pedido->fresh(), 'REM-DIFERENCIA', $this->auxiliar->id);
+        app(GestionarRemisionPedidoBmaService::class)->subir($this->pedido->fresh(), $comprobante('remision.pdf'), $this->auxiliar->id, now()->toDateString());
+        app(\App\Services\ControlPedidos\AprobarPedidoBmaService::class)->ejecutar($this->pedido->fresh(), $this->auxiliar->id);
+
+        $aprobado = $this->pedido->fresh();
+        $this->assertNotNull($aprobado->pago_validado_at);
+        $this->assertSame(2, $aprobado->pagosExhibicion()->count());
+        $this->assertSame('150.00', number_format((float) $aprobado->total_mercancia, 2, '.', ''));
+        $this->assertStringNotContainsString('Faltan', (string) app(TransferenciaTiendaService::class)->resumen($aprobado, $this->cedis)['bloqueo']);
+    }
+
+    public function test_tras_pago_comprobado_el_cambio_informal_conserva_pagos_y_no_reutiliza_cobertura(): void
+    {
+        $this->iniciarConfirmacion('transferencia');
+        $banco = \App\Models\CatalogoBanco::query()->create(['nombre' => 'Banco prueba', 'activo' => true, 'compartido' => true]);
+        app(\App\Services\SaldosAFavor\RegistrarPagoPedidoBmaService::class)->handle($this->pedido->fresh(), [
+            'monto' => 100, 'forma_pago' => 'transferencia', 'catalogo_banco_id' => $banco->id, 'idempotency_key' => 'pago-cerrado',
+        ], UploadedFile::fake()->create('transferencia.pdf', 10, 'application/pdf'), $this->vendedora->id);
+        $this->actingAs($this->vendedora)->putJson(route('control_pedidos.enviar', $this->pedido))->assertOk();
+        $this->actingAs($this->auxiliar)->post(route('control_pedidos.auditar.validar_pago', $this->pedido))->assertRedirect();
+        $pagos = $this->pedido->fresh()->pagosExhibicion()->count();
+        $validado = $this->pedido->fresh()->pago_validado_at;
+
+        try {
+            app(\App\Services\ControlPedidos\ActualizarPedidoBmaService::class)->ejecutar($this->pedido->fresh(), [
+                'total_mercancia' => 180,
+            ], $this->vendedora->id);
+            $this->fail('El cambio informal no procede después del pago comprobado.');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('gestión documentada', $e->getMessage());
+            $this->assertStringContainsString('Se conservan los pagos', $e->getMessage());
+        }
+        $this->assertSame($pagos, $this->pedido->fresh()->pagosExhibicion()->count());
+        $this->assertEquals($validado, $this->pedido->fresh()->pago_validado_at);
+        $this->assertSame('100.00', number_format((float) $this->pedido->fresh()->total_mercancia, 2, '.', ''));
+
+        $this->pedido->update(['total_mercancia' => 180, 'total_a_cobrar' => 180]);
+        app(GestionarRemisionPedidoBmaService::class)->actualizarNumeroRemision($this->pedido->fresh(), 'REM-DESFASE', $this->auxiliar->id);
+        app(GestionarRemisionPedidoBmaService::class)->subir($this->pedido->fresh(), UploadedFile::fake()->create('remision.pdf', 10, 'application/pdf'), $this->auxiliar->id, now()->toDateString());
+        try {
+            app(\App\Services\ControlPedidos\AprobarPedidoBmaService::class)->ejecutar($this->pedido->fresh(), $this->auxiliar->id);
+            $this->fail('La aprobación anterior no cubre el importe nuevo.');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('Faltan $80.00', $e->getMessage());
+        }
+        $this->assertSame($pagos, $this->pedido->fresh()->pagosExhibicion()->count());
+        $this->assertNotNull($this->pedido->fresh()->pago_validado_at);
     }
 
 }

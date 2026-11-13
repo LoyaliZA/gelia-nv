@@ -794,6 +794,28 @@
     padding: 0.75rem 1rem 0;
 }
 
+.gelia-preparacion-modal .gelia-modal-body:has(> .gelia-preparacion--actualizacion) {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.gelia-preparacion-modal .gelia-preparacion--actualizacion {
+    flex: none;
+    overflow: visible;
+}
+
+/* La respuesta confirmada no trae workspace. display:block evita que el flex encoja el contenido. */
+.gelia-preparacion-modal .gelia-preparacion:not(:has(.gelia-preparacion-workspace)) {
+    display: block;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.gelia-preparacion-modal .gelia-preparacion--actualizacion .gelia-preparacion-captura {
+    overflow: visible;
+}
+
 .gelia-preparacion-documento-panel {
     display: flex;
     flex-direction: column;
@@ -1020,12 +1042,19 @@
     white-space: normal;
 }
 
-.gelia-preparacion-modal .gelia-modal-body > .gelia-tienda-embebida {
-    flex: 1 1 auto;
-    min-width: 0;
-    min-height: 0;
-    width: 100%;
+/* Show embebido en modal: un solo scroll en el cuerpo evita recortar el pie (como consulta). */
+.gelia-preparacion-modal .gelia-modal-body:has(> .gelia-tienda-embebida) {
     overflow-y: auto;
+    overscroll-behavior: contain;
+    scroll-padding-block: 0.75rem;
+}
+
+.gelia-preparacion-modal .gelia-modal-body > .gelia-tienda-embebida {
+    flex: none;
+    min-width: 0;
+    width: 100%;
+    height: auto;
+    overflow: visible;
 }
 
 .gelia-pedidos-bma .gelia-tienda-salida,
@@ -1891,3 +1920,66 @@
 .consulta-seleccion-detalle-lista span { font-size: 0.65rem; color: var(--theme-text-muted); }
 .consulta-seleccion-detalle-pie { display: flex; justify-content: end; flex-wrap: wrap; gap: 0.6rem; padding: 1rem; border-top: 1px solid var(--theme-border); flex-shrink: 0; }
 .consulta-seleccion-detalle-pie button { min-height: 2.75rem; }
+
+/* La consulta contiene otro panel de preparación: un solo scroll evita recortar su pie. */
+.gelia-preparacion-modal .gelia-modal-body:has(> .gelia-preparacion--consulta) {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scroll-padding-block: 0.75rem;
+}
+
+.gelia-preparacion-modal .gelia-preparacion--consulta,
+.gelia-preparacion-modal .gelia-preparacion--consulta .gelia-preparacion {
+    display: block;
+    flex: none;
+    height: auto;
+    overflow: visible;
+}
+
+.gelia-preparacion-modal .gelia-preparacion--consulta :is(.gelia-preparacion-workspace, .gelia-preparacion-captura) {
+    overflow: visible;
+}
+
+/* Un solo scroll del cuerpo en cualquier ancho. Cabecera y acción quedan fijas. */
+.gelia-preparacion-modal .gelia-modal-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scroll-padding-block: 0.75rem;
+}
+
+.gelia-preparacion-modal .gelia-modal-body .gelia-preparacion,
+.gelia-preparacion-modal .gelia-modal-body .gelia-preparacion:not(:has(.gelia-preparacion-workspace)),
+.gelia-preparacion-modal .gelia-modal-body .gelia-preparacion--consulta,
+.gelia-preparacion-modal .gelia-modal-body .gelia-preparacion--consulta .gelia-preparacion,
+.gelia-preparacion-modal .gelia-modal-body .gelia-preparacion--embebida,
+.gelia-preparacion-modal .gelia-modal-body > .gelia-tienda-embebida {
+    display: block;
+    flex: none;
+    height: auto;
+    max-height: none;
+    min-height: 0;
+    overflow: visible;
+}
+
+.gelia-preparacion-modal .gelia-modal-body :is(.gelia-preparacion-workspace, .gelia-preparacion-captura, .gelia-preparacion-documento) {
+    height: auto;
+    max-height: none;
+    overflow: visible;
+}
+
+.gelia-preparacion-modal .gelia-preparacion-contexto,
+.gelia-preparacion-modal .gelia-preparacion-footer {
+    position: sticky;
+    z-index: 3;
+}
+
+.gelia-preparacion-modal .gelia-preparacion-contexto {
+    top: 0;
+}
+
+.gelia-preparacion-modal .gelia-preparacion-footer {
+    bottom: 0;
+}

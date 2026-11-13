@@ -40,7 +40,7 @@ class ReactivarClienteInactivoTest extends TestCase
         return CatalogoListaDescuento::where('nombre', $nombre)->value('id');
     }
 
-    public function test_servicio_reactiva_cliente_inactivo_con_monto_positivo(): void
+    public function test_servicio_no_reactiva_cliente_por_monto_positivo(): void
     {
         $this->sincronizarListas();
         $listaPg = $this->idLista('PUBLICO GENERAL');
@@ -57,12 +57,12 @@ class ReactivarClienteInactivoTest extends TestCase
         $reactivado = app(ReactivarClienteInactivoService::class)->ejecutar($cliente, 8000.0);
         $cliente->save();
 
-        $this->assertTrue($reactivado);
-        $this->assertFalse($cliente->fresh()->es_inactivo);
-        $this->assertEquals($listaPlata, $cliente->fresh()->lista_actual_id);
+        $this->assertFalse($reactivado);
+        $this->assertTrue($cliente->fresh()->es_inactivo);
+        $this->assertEquals($listaPg, $cliente->fresh()->lista_actual_id);
     }
 
-    public function test_servicio_usa_umbral_efectivo_no_catalogo_crudo(): void
+    public function test_servicio_no_asigna_listas_por_umbral_bruto_ni_neto(): void
     {
         CatalogoListaDescuento::create([
             'nombre' => 'MAYOREO PLATA',
@@ -96,7 +96,7 @@ class ReactivarClienteInactivoTest extends TestCase
         ]);
         app(ReactivarClienteInactivoService::class)->ejecutar($casi, 5098.0);
         $casi->save();
-        $this->assertEquals($listaBronce, $casi->fresh()->lista_actual_id);
+        $this->assertEquals($listaPg, $casi->fresh()->lista_actual_id);
 
         $estable = Cliente::create([
             'numero_cliente' => '710',
@@ -107,7 +107,7 @@ class ReactivarClienteInactivoTest extends TestCase
         ]);
         app(ReactivarClienteInactivoService::class)->ejecutar($estable, 5107.0);
         $estable->save();
-        $this->assertEquals($listaPlata, $estable->fresh()->lista_actual_id);
+        $this->assertEquals($listaPg, $estable->fresh()->lista_actual_id);
     }
 
     public function test_servicio_no_reactiva_si_monto_es_cero(): void
@@ -129,11 +129,10 @@ class ReactivarClienteInactivoTest extends TestCase
         $this->assertTrue($cliente->fresh()->es_inactivo);
     }
 
-    public function test_importacion_solo_monto_reactiva_cliente_inactivo(): void
+    public function test_importacion_solo_monto_conserva_inactividad_y_lista(): void
     {
         $this->sincronizarListas();
         $listaPg = $this->idLista('PUBLICO GENERAL');
-        $listaPlata = $this->idLista('MAYOREO PLATA');
 
         Cliente::create([
             'numero_cliente' => '800',
@@ -151,8 +150,9 @@ class ReactivarClienteInactivoTest extends TestCase
 
         $cliente = Cliente::where('numero_cliente', '800')->first();
 
-        $this->assertFalse($cliente->es_inactivo);
+        $this->assertTrue($cliente->es_inactivo);
         $this->assertEquals(6000.0, (float) $cliente->monto_venta_actual);
-        $this->assertEquals($listaPlata, $cliente->lista_actual_id);
+        $this->assertEquals($listaPg, $cliente->lista_actual_id);
+        $this->assertFalse($cliente->es_menudeo);
     }
 }

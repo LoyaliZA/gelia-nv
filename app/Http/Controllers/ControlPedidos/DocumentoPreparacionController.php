@@ -13,7 +13,7 @@ class DocumentoPreparacionController extends Controller
 {
     public function __invoke(PedidoBma $pedidoBma, PedidoBmaTareaPreparacion $tarea, PedidoBmaTareaDocumento $documento)
     {
-        abort_unless(VisibilidadPedidoBma::puedeConsultar(request()->user(), $pedidoBma), 403);
+        abort_unless(VisibilidadPedidoBma::puedeConsultarDocumentos(request()->user(), $pedidoBma, $documento->tipo_evidencia), 403);
         abort_unless((int) $tarea->pedido_bma_id === (int) $pedidoBma->id && (int) $documento->pedido_bma_tarea_preparacion_id === (int) $tarea->id, 404);
         abort_unless(in_array($documento->tipo_evidencia, [PedidoBmaTareaDocumento::TIPO_EVIDENCIA_PRODUCTO, PedidoBmaTareaDocumento::TIPO_EVIDENCIA_GENERAL, PedidoBmaTareaDocumento::TIPO_EVIDENCIA_INCIDENCIA, PedidoBmaTareaDocumento::TIPO_CARATULA_RECOGE], true), 404);
         $disk = Storage::disk('local')->exists($documento->ruta_interna) ? 'local' : 'public';

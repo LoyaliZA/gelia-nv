@@ -18,6 +18,9 @@ class Cliente extends Model
 {
     use FiltraFilasDemo, SoftDeletes;
 
+    /** Aviso de la fila en curso. No es columna. */
+    public ?string $discrepanciaModalidad = null;
+
     protected $fillable = [
         'numero_cliente',
         'nombre',
@@ -33,6 +36,11 @@ class Cliente extends Model
         'monto_venta_actual',
         'es_heredado',
         'es_inactivo',
+        'es_menudeo',
+        'modalidad_origen',
+        'conversion_solicitud_id',
+        'conversion_usuario_id',
+        'conversion_autorizada_at',
         'es_demo',
         'catalogo_tipo_cliente_id',
         'lista_bloqueada', // <-- NUEVO CAMPO PARA CONTROLAR BLOQUEO DE LISTA
@@ -63,6 +71,8 @@ class Cliente extends Model
         'monto_venta_actual' => 'decimal:2',
         'es_heredado' => 'boolean',
         'es_inactivo' => 'boolean',
+        'es_menudeo' => 'boolean',
+        'conversion_autorizada_at' => 'datetime',
         'es_demo' => 'boolean',
         'lista_bloqueada' => 'boolean',
         'escalonamiento_meses_sin_compra' => 'integer',
@@ -125,6 +135,16 @@ class Cliente extends Model
     public function historialMontos(): HasMany
     {
         return $this->hasMany(HistorialMontoCliente::class);
+    }
+
+    public function modalidadEventos(): HasMany
+    {
+        return $this->hasMany(ClienteModalidadEvento::class);
+    }
+
+    public function conversionSolicitud(): BelongsTo
+    {
+        return $this->belongsTo(SolicitudTag::class, 'conversion_solicitud_id');
     }
 
     public function bitacorasCobranza(): HasMany

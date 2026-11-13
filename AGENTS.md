@@ -37,7 +37,7 @@ Antes de analizar, crear o modificar una interfaz, leer [GUIA_DISENO_GELIA.md](G
 - Elegir únicamente las skills necesarias para un problema identificado. Impeccable es opcional y su hook automático está desactivado por decisión del 5 de noviembre; no reactivarlo por rutina. La suite local visual-refresh/visual-discovery/visual-implementation fue retirada. Seguir la adaptación de skills de `GUIA_DISENO_GELIA.md`, sin activar cadenas de diseño o movimiento por defecto.
 - Evaluar el conjunto: composición, jerarquía, densidad, tipografía, cliente, estados y acciones. Usar tokens correctos o corregir un desbordamiento no demuestra por sí solo que el diseño encaje en GELIA.
 - Reutilizar tokens, primitivas, constantes y componentes existentes. Conservar la personalización de tema, fuente y acento.
-- Verificar el resultado renderizado a los tamaños pertinentes; informar qué se comprobó y qué sigue pendiente. Una revisión aislada no acredita integración ni funcionamiento de negocio.
+- Verificar la interfaz según [GUIA_EVIDENCIA_VISUAL.md](GUIA_EVIDENCIA_VISUAL.md). Una revisión aislada no acredita integración ni funcionamiento de negocio.
 - Continuar con las decisiones ya autorizadas. No reiniciar una exploración ni solicitar de nuevo una aprobación existente por una recomendación genérica de una skill.
 
 Estas indicaciones se limitan al trabajo con interfaz. Un cambio de backend no inicia un rediseño. Las instrucciones de la sesión y las reglas del entorno conservan su precedencia.
