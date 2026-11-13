@@ -1,3 +1,5 @@
+import { dismissBackgroundTask, startBackgroundTask } from './geliaBackgroundTasks';
+
 export const TN_IMAGE_IMPORT_STORAGE_KEY = 'gelia_tiendanube_image_import_id';
 export const TN_IMAGE_IMPORT_POS_KEY = 'gelia_tiendanube_image_import_pos';
 
@@ -10,6 +12,7 @@ export function startTiendanubeImageImportTracking(importId) {
     const next = String(importId);
     const prev = localStorage.getItem(TN_IMAGE_IMPORT_STORAGE_KEY);
     localStorage.setItem(TN_IMAGE_IMPORT_STORAGE_KEY, next);
+    startBackgroundTask({ module: 'tiendanube-imagenes', id: Number(importId) });
     // Evita bucle: el widget escucha STARTED y volvía a llamar start → stack overflow.
     if (prev === next) return;
     window.dispatchEvent(new CustomEvent(TN_IMAGE_IMPORT_STARTED_EVENT, { detail: { importId: Number(importId) } }));
@@ -17,7 +20,9 @@ export function startTiendanubeImageImportTracking(importId) {
 
 export function clearTiendanubeImageImportTracking() {
     if (typeof window === 'undefined') return;
+    const raw = localStorage.getItem(TN_IMAGE_IMPORT_STORAGE_KEY);
     localStorage.removeItem(TN_IMAGE_IMPORT_STORAGE_KEY);
+    if (raw) dismissBackgroundTask({ module: 'tiendanube-imagenes', id: Number(raw) });
     window.dispatchEvent(new CustomEvent(TN_IMAGE_IMPORT_CLEARED_EVENT));
 }
 

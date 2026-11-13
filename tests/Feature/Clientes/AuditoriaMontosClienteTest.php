@@ -181,6 +181,7 @@ class AuditoriaMontosClienteTest extends TestCase
             'usuario_id' => $user->id,
             'nombre_archivo_original' => 'carga.csv',
             'ruta_almacenamiento' => 'importaciones_clientes/carga.csv',
+            'resumen' => ['revision' => ['token' => 'secreto'], 'creados' => 3],
         ]);
 
         $this->registrarHistorialCargaMasiva($clienteCarga, $importacion, $user);
@@ -194,6 +195,8 @@ class AuditoriaMontosClienteTest extends TestCase
         $this->assertCount(1, $origenes);
         $this->assertSame(RegistrarHistorialMontoClienteService::ORIGEN_SOLICITUD_APROBACION, $origenes[0]);
         $this->assertNotContains(RegistrarHistorialMontoClienteService::ORIGEN_CARGA_MASIVA, $origenes);
+        $this->assertSame('carga.csv', $response->json('importaciones.data.0.nombre_archivo_original'));
+        $this->assertArrayNotHasKey('resumen', $response->json('importaciones.data.0'));
     }
 
     public function test_endpoint_auditoria_importacion_devuelve_cambios_y_errores_de_la_carga(): void

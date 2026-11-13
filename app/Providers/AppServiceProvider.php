@@ -65,6 +65,7 @@ use Illuminate\Console\Events\CommandStarting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Log;
@@ -344,6 +345,10 @@ class AppServiceProvider extends ServiceProvider
                 Limit::perMinute(10)->by('mobile-login-ip:'.$request->ip()),
                 Limit::perMinute(10)->by('mobile-login:'.$login),
             ];
+        });
+
+        Queue::looping(function () {
+            Cache::put(\App\Support\Colas\DisponibilidadCola::HEARTBEAT_KEY, now()->toIso8601String(), 120);
         });
     }
 }

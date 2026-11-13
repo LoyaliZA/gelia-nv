@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\{AdminController, ClienteController};
 use App\Http\Controllers\Admin\AuditoriaMontosClienteController;
+use App\Http\Controllers\Admin\ImportacionClienteSeguimientoController;
 use App\Http\Controllers\Clientes\Direcciones\{ClienteDireccionController, SolicitudDireccionRevisionController};
 
 Route::middleware(['can:clientes.ver'])->group(function () {
@@ -16,6 +17,9 @@ Route::middleware(['can:clientes.ver'])->group(function () {
     Route::post('/clientes/toggle-bloqueo-masivo', [ClienteController::class, 'toggleBloqueoMasivo'])->name('clientes.toggle_bloqueo_masivo');
 
     Route::get('/clientes/auditoria/datos', [AuditoriaMontosClienteController::class, 'datosAuditoria'])->name('clientes.auditoria.datos');
+    Route::get('/clientes/importaciones/activas', [ImportacionClienteSeguimientoController::class, 'activas'])->name('clientes.importaciones.activas');
+    Route::get('/clientes/importaciones/{importacion}/progreso', [ImportacionClienteSeguimientoController::class, 'progreso'])->name('clientes.importaciones.progreso');
+    Route::get('/clientes/importaciones/{importacion}/revision', [ImportacionClienteSeguimientoController::class, 'revision'])->name('clientes.importaciones.revision');
     Route::get('/clientes/importaciones/{importacion}/auditoria', [AuditoriaMontosClienteController::class, 'auditoriaImportacion'])->name('clientes.importaciones.auditoria');
     Route::get('/clientes/importaciones/{importacion}/archivo', [AuditoriaMontosClienteController::class, 'descargarArchivo'])->name('clientes.importaciones.archivo');
     Route::get('/clientes/{cliente}/historial', [AdminController::class, 'historialCliente'])->name('clientes.historial');
