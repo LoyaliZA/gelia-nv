@@ -732,7 +732,7 @@ class AdminController extends Controller
         if (! empty($revision['bloqueado'])) {
             throw ValidationException::withMessages(['archivo' => 'La revisión detuvo la escritura. Hay que corregir el archivo y revisarlo de nuevo.']);
         }
-        if ($importacion->estado === 'fallido' && (int) ($importacion->resumen['cursor_fila'] ?? 0) === 0) {
+        if ($importacion->estado === 'fallido' && $importacion->cursorConfirmado() === 0) {
             throw ValidationException::withMessages(['archivo' => $importacion->mensaje_fatal ?: 'La revisión ya no coincide con los cambios aprobados. Hay que revisar el archivo de nuevo.']);
         }
         if (in_array($importacion->estado, ['en_cola', 'en_curso'], true) && $importacion->updated_at?->gt(now()->subMinutes(2))) {
@@ -753,12 +753,14 @@ class AdminController extends Controller
             return back()->withErrors(['archivo' => $mensaje]);
         }
 
-        $cursor = $reanudar ? (int) ($importacion->resumen['cursor_fila'] ?? 0) : 0;
+        $cursor = $reanudar ? $importacion->cursorConfirmado() : 0;
         $cambios = ['estado' => 'en_cola', 'mensaje_fatal' => null];
         if ($cursor === 0) {
             $cambios['filas_procesadas'] = 0;
             $cambios['filas_omitidas'] = 0;
             $cambios['errores'] = 0;
+            $cambios['cursor_fila'] = 0;
+            $cambios['contadores'] = null;
         }
         $importacion->update($cambios);
         ProcesarImportacionClientesJob::dispatch($importacion->id, (string) $request->input('token'), $cursor);
@@ -778,7 +780,7 @@ class AdminController extends Controller
     {
         $aplicada = (bool) ($importacion->resumen['revision']['aplicada'] ?? false);
 
-        return ! $aplicada && in_array($importacion->estado, ['fallido', 'parcial', 'en_curso', 'en_cola'], true) && (int) ($importacion->resumen['cursor_fila'] ?? 0) > 0;
+        return ! $aplicada && in_array($importacion->estado, ['fallido', 'parcial', 'en_curso', 'en_cola'], true) && $importacion->cursorConfirmado() > 0;
     }
 
     private function responderConfirmacion(Request $request, PresentarSeguimientoImportacionCliente $presentar, ImportacionCliente $importacion, ?array $resultado)

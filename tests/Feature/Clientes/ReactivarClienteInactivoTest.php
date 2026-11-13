@@ -129,11 +129,10 @@ class ReactivarClienteInactivoTest extends TestCase
         $this->assertTrue($cliente->fresh()->es_inactivo);
     }
 
-    public function test_importacion_solo_monto_conserva_inactividad_y_permite_ascenso(): void
+    public function test_importacion_solo_monto_conserva_inactividad_y_lista(): void
     {
         $this->sincronizarListas();
         $listaPg = $this->idLista('PUBLICO GENERAL');
-        $listaPlata = $this->idLista('MAYOREO PLATA');
 
         Cliente::create([
             'numero_cliente' => '800',
@@ -153,6 +152,7 @@ class ReactivarClienteInactivoTest extends TestCase
 
         $this->assertTrue($cliente->es_inactivo);
         $this->assertEquals(6000.0, (float) $cliente->monto_venta_actual);
-        $this->assertEquals($listaPlata, $cliente->lista_actual_id);
+        $this->assertEquals($listaPg, $cliente->lista_actual_id);
+        $this->assertFalse($cliente->es_menudeo);
     }
 }

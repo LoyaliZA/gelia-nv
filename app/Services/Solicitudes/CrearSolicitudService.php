@@ -12,6 +12,7 @@ use App\Notifications\AlertaSolicitud;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Http\UploadedFile;
+use App\Services\Clientes\ClasificacionComercialCliente;
 use App\Services\Solicitudes\EscalonamientoService;
 
 class CrearSolicitudService
@@ -43,31 +44,42 @@ class CrearSolicitudService
 
             $listaDescuentoId = $esOperativo ? null : ($datos['catalogo_lista_descuento_id'] ?? null);
             $montoCotizado = $esOperativo ? 0 : (float) ($datos['monto_cotizado'] ?? 0);
+            $convertirMenudeo = filter_var($datos['convertir_menudeo_mayoreo'] ?? false, FILTER_VALIDATE_BOOLEAN);
+            $clienteEscalon = (! $esOperativo && $clienteId) ? Cliente::find($clienteId) : null;
+            $esMenudeo = (bool) $clienteEscalon?->es_menudeo;
+            $clasificacion = app(ClasificacionComercialCliente::class);
 
-            if ($compraSoloTag) {
+            if ($convertirMenudeo && $esMenudeo) {
+                $listaExpresa = $listaDescuentoId ? CatalogoListaDescuento::find($listaDescuentoId) : null;
+                if (! $clasificacion->esListaMayorista($listaExpresa)) {
+                    $listaDescuentoId = $clasificacion->buscarBronce()?->id;
+                }
+            } elseif ($compraSoloTag) {
                 $listaDescuentoId = null;
                 $montoCotizado = 0;
             } elseif ($compraEnTienda) {
                 $listaBronce = $this->resolverListaBronce();
                 $listaDescuentoId = $listaBronce?->id;
                 $montoCotizado = 0;
-            } elseif (!$esOperativo && $montoCotizado > 0 && $clienteId) {
-                $clienteEscalon = Cliente::find($clienteId);
-                if ($clienteEscalon) {
-                    $listasEscalon = CatalogoListaDescuento::with('porcentajeEscalonamiento')->where('activo', true)->get();
-                    $escalon = app(EscalonamientoService::class)->evaluarCompraCliente(
-                        $clienteEscalon,
-                        $montoCotizado,
-                        $listaDescuentoId ? (int) $listaDescuentoId : null,
-                        $listasEscalon
-                    );
+            } elseif (!$esOperativo && $montoCotizado > 0 && $clienteEscalon && ! $esMenudeo) {
+                $listasEscalon = CatalogoListaDescuento::with('porcentajeEscalonamiento')->where('activo', true)->get();
+                $escalon = app(EscalonamientoService::class)->evaluarCompraCliente(
+                    $clienteEscalon,
+                    $montoCotizado,
+                    $listaDescuentoId ? (int) $listaDescuentoId : null,
+                    $listasEscalon
+                );
 
-                    if ($escalon['es_ascenso'] && $escalon['lista_calificada_efectiva']) {
-                        $listaDescuentoId = (int) $escalon['lista_calificada_efectiva']->id;
-                    }
+                if ($escalon['es_ascenso'] && $escalon['lista_calificada_efectiva']) {
+                    $listaDescuentoId = (int) $escalon['lista_calificada_efectiva']->id;
+                }
 
-                    $montoFinalTentativo = $escalon['monto_final_tentativo'];
-                    $totalProyectadoNeto = $escalon['total_proyectado_neto'];
+                $montoFinalTentativo = $escalon['monto_final_tentativo'];
+                $totalProyectadoNeto = $escalon['total_proyectado_neto'];
+            } elseif ($esMenudeo && ! $convertirMenudeo && $listaDescuentoId) {
+                $listaPedida = CatalogoListaDescuento::find($listaDescuentoId);
+                if ($clasificacion->esListaMayorista($listaPedida)) {
+                    $listaDescuentoId = null;
                 }
             }
 
@@ -95,6 +107,7 @@ class CrearSolicitudService
                 'catalogo_lista_descuento_id' => $esOperativo ? null : $listaDescuentoId,
                 'compra_en_tienda' => $compraEnTienda,
                 'compra_en_tienda_solo_tag' => $compraSoloTag,
+                'convertir_menudeo_mayoreo' => $convertirMenudeo && $esMenudeo,
                 'confirmo_informacion_escalonamiento' => $esOperativo ? false : filter_var($datos['confirmo_informacion_escalonamiento'] ?? false, FILTER_VALIDATE_BOOLEAN),
                 'monto_final_tentativo' => $esOperativo ? null : $montoFinalTentativo,
                 'total_proyectado_neto' => $esOperativo ? null : $totalProyectadoNeto,
@@ -122,6 +135,7 @@ class CrearSolicitudService
                     'proceso_id' => $solicitud->catalogo_proceso_id,
                     'compra_en_tienda' => $compraEnTienda,
                     'compra_en_tienda_solo_tag' => $compraSoloTag,
+                    'convertir_menudeo_mayoreo' => $solicitud->convertir_menudeo_mayoreo,
                     'lista_bronce_autoasignada' => $compraEnTienda,
                     'lista_descuento_nombre' => $compraEnTienda
                         ? CatalogoListaDescuento::find($listaDescuentoId)?->nombre

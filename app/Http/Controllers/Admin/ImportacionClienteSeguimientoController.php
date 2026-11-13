@@ -46,7 +46,8 @@ class ImportacionClienteSeguimientoController extends Controller
                         ->orWhere('motivo', 'like', '%'.$q.'%');
                 });
             })
-            ->when($categoria !== '', fn ($query) => $query->where('categoria', $categoria))
+            ->when($categoria === 'con_cambios', fn ($query) => $query->where('categoria', '!=', 'sin_cambios'))
+            ->when($categoria !== '' && $categoria !== 'con_cambios', fn ($query) => $query->where('categoria', $categoria))
             ->when($request->boolean('incidencias'), function ($query) {
                 $query->where(function ($inner) {
                     $inner->where('es_bloqueo', true)->orWhere('es_aviso', true)->orWhere('categoria', 'error');

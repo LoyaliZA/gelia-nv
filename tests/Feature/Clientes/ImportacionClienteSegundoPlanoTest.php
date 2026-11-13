@@ -10,6 +10,7 @@ use App\Models\FilaRevisionImportacionCliente;
 use App\Models\HistorialMontoCliente;
 use App\Models\ImportacionCliente;
 use App\Models\User;
+use App\Services\Clientes\ValidarArchivoClientesWizerp;
 use App\Support\Colas\DisponibilidadCola;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -160,6 +161,32 @@ class ImportacionClienteSegundoPlanoTest extends TestCase
         $importacion = ImportacionCliente::first();
         $this->assertSame('recibido', $importacion->estado);
         $this->assertNull(Cliente::where('numero_cliente', '720')->first());
+    }
+
+    public function test_el_segundo_lote_no_vuelve_a_leer_el_csv(): void
+    {
+        $lineas = ['numero_cliente,nombre,codigo_lista,monto_venta_actual'];
+        for ($i = 1; $i <= 41; $i++) {
+            $lineas[] = $i.',Cliente ficticio '.$i.',pg,10';
+        }
+        $this->actingAs($this->usuario)->post(route('admin.clientes.importar.previsualizar'), [
+            'archivo' => $this->archivo(implode("\n", $lineas)."\n"),
+        ])->assertRedirect();
+        $importacion = ImportacionCliente::first();
+        $this->assertNotNull($importacion->resumen['tiempos']['analisis_ms'] ?? null);
+        $this->assertNotNull(FilaRevisionImportacionCliente::query()->where('importacion_cliente_id', $importacion->id)->value('datos'));
+
+        ValidarArchivoClientesWizerp::$lecturas = 0;
+        (new ProcesarImportacionClientesJob($importacion->id, $importacion->resumen['revision']['token']))->handle(
+            app(\App\Services\Clientes\RevisionImportacionClientes::class),
+            app(\App\Services\Clientes\ImportarClientesWizerpService::class),
+            app(\App\Services\Clientes\RegistrarImportacionClienteService::class),
+        );
+
+        $this->assertSame(1, ValidarArchivoClientesWizerp::$lecturas);
+        $this->assertSame(41, Cliente::query()->count());
+        $this->assertSame('completo', $importacion->fresh()->estado);
+        $this->assertArrayHasKey('lote_ms', $importacion->fresh()->resumen['tiempos']);
     }
 
     public function test_el_progreso_de_imagenes_de_tiendanube_sigue_expuesto(): void

@@ -90,6 +90,14 @@ export const resolverListaPorAcumuladoNeto = (acumuladoPagado, catalogoListas) =
 
 const NIVELES_MAYORES = ['PLATA', 'ORO', 'DIAMANTE'];
 
+const NOMBRES_DESGLOSE = ['PUBLICO GENERAL', 'MAYOREO BRONCE', 'MAYOREO PLATA', 'MAYOREO ORO', 'MAYOREO DIAMANTE'];
+
+export const listasDesgloseComercial = (catalogoListas) =>
+    NOMBRES_DESGLOSE
+        .map((nombre) => catalogoListas.find((lista) => String(lista.nombre || '').toUpperCase() === nombre))
+        .filter(Boolean)
+        .sort((a, b) => parseFloat(a.monto_requerido) - parseFloat(b.monto_requerido));
+
 export const filtrarListasNivelesMayores = (catalogoListas) =>
     [...catalogoListas]
         .filter(l => {
@@ -233,7 +241,7 @@ export const desgloseSimulacionPorLista = (cliente, montoCotizadoInput, catalogo
     const totalProyectadoBruto = montoHistorico + montoCotizado;
     const listaActual = catalogoListas.find(l => l.id == cliente?.lista_actual_id || l.nombre === cliente?.lista_actual) ?? null;
 
-    return filtrarListasNivelesMayores(catalogoListas).map(lista => {
+    return listasDesgloseComercial(catalogoListas).map(lista => {
         const montoRequerido = parseFloat(lista.monto_requerido);
         const porcentajeDescuento = porcentajeAplicado(lista, listaActual);
         const umbral = umbralIncremental(lista, listaActual);

@@ -27,7 +27,19 @@ const FilaMontoEscalonamiento = ({ etiqueta, valor, destacado = false, valorClas
     </div>
 );
 
-const TarjetaDesgloseNivel = ({ item, esProyectada }) => {
+const TarjetaDesgloseNivel = ({ item, esProyectada, deshabilitada = false, vigente = false }) => {
+    if (deshabilitada || vigente) {
+        return (
+            <div className={`rounded-2xl border-2 p-4 md:p-5 flex flex-col gap-3 h-full min-w-0 ${vigente ? 'border-[var(--color-primario)]/50 bg-[var(--color-primario)]/5' : 'theme-element border theme-border opacity-80'}`}>
+                <p className="text-sm font-black theme-text-main uppercase tracking-wide m-0 leading-snug truncate">
+                    {item.nombre.replace('MAYOREO ', '')}
+                </p>
+                <p className="text-xs font-bold theme-text-muted m-0">Catálogo {fmtMontoEscalonamiento(item.monto_requerido)}</p>
+                <p className="text-xs font-black uppercase tracking-wide theme-text-muted m-0">{vigente ? 'Lista vigente' : 'No habilitado'}</p>
+            </div>
+        );
+    }
+
     const califica = item.califica_neto;
     const calificaBrutoSolo = item.califica_bruto && !califica;
 
@@ -114,6 +126,7 @@ const PanelSeccion = ({ titulo, subtitulo, children, className = '' }) => (
 export default function EjercicioEscalonamientoPanel({ listas, variant = 'page' }) {
     const isModal = variant === 'modal';
     const [clientesEnVista, setClientesEnVista] = useState([]);
+    const [simulacionMayoreo, setSimulacionMayoreo] = useState({});
     const [terminoBusqueda, setTerminoBusqueda] = useState('');
     const [resultadosBusqueda, setResultadosBusqueda] = useState([]);
     const [buscando, setBuscando] = useState(false);
@@ -243,7 +256,7 @@ export default function EjercicioEscalonamientoPanel({ listas, variant = 'page' 
     );
 
     const gridPrincipalClass = isModal ? 'grid grid-cols-1 gap-4 items-stretch' : 'grid grid-cols-1 xl:grid-cols-12 gap-4 items-stretch';
-    const gridDesgloseClass = isModal ? 'grid grid-cols-1 gap-3 items-stretch' : 'grid grid-cols-1 sm:grid-cols-3 gap-3 items-stretch';
+    const gridDesgloseClass = isModal ? 'grid grid-cols-1 gap-3 items-stretch' : 'grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3 items-stretch';
     const colResumenClass = isModal ? 'min-w-0' : 'xl:col-span-3 min-w-0';
     const colNivelesClass = isModal ? 'min-w-0' : 'xl:col-span-9 min-w-0';
 
@@ -258,12 +271,23 @@ export default function EjercicioEscalonamientoPanel({ listas, variant = 'page' 
     ) : (
         <div className="space-y-6">
             {clientesEnVista.map(cliente => {
-                const analisis = evaluarEscalonamiento(cliente, cliente.monto_cotizado_input, listas);
-                const desgloseNiveles = desgloseSimulacionPorLista(cliente, cliente.monto_cotizado_input, listas);
-                const listaActualObj = listas.find(l => l.id == cliente.lista_actual_id || l.nombre === cliente.lista_actual);
+                const inactivo = cliente.es_inactivo === true || cliente.es_inactivo === 1;
+                const menudeo = !inactivo && (cliente.es_menudeo === true || cliente.es_menudeo === 1);
+                const simularMayoreo = !!simulacionMayoreo[cliente.id];
+                const hipotetico = inactivo || (menudeo && simularMayoreo);
+                const clienteCalculo = hipotetico && cliente.lista_efectiva_id
+                    ? { ...cliente, lista_actual_id: cliente.lista_efectiva_id, lista_actual: cliente.lista_efectiva_nombre }
+                    : cliente;
+                const analisis = evaluarEscalonamiento(clienteCalculo, cliente.monto_cotizado_input, listas);
+                const desgloseNiveles = desgloseSimulacionPorLista(clienteCalculo, cliente.monto_cotizado_input, listas);
+                const listaActualObj = listas.find(l => l.id == cliente.lista_almacenada_id || l.id == cliente.lista_actual_id || l.nombre === cliente.lista_actual);
+                const nombreListaVisible = (menudeo || inactivo)
+                    ? (cliente.lista_efectiva_nombre || 'Público General')
+                    : (listaActualObj?.nombre || cliente.lista_almacenada_nombre || 'Público General');
                 const listaProyectadaId = analisis.listaAnticipada?.id;
                 const tieneCotizacion = cliente.monto_cotizado_input && parseFloat(cliente.monto_cotizado_input) > 0;
-                const mostrarAlertas = tieneCotizacion && (
+                const mostrarCalculo = tieneCotizacion && (!menudeo || simularMayoreo);
+                const mostrarAlertas = mostrarCalculo && !hipotetico && (
                     (analisis.casiAlcanzaSiguiente && analisis.listaCasiAlcanzada)
                     || (analisis.mantieneListaAnticipada && analisis.listaAnticipada && !analisis.listaAnticipada.nombre.toUpperCase().includes('PUBLICO') && !analisis.casiAlcanzaSiguiente)
                     || (analisis.listaSiguienteEfectiva && analisis.faltanteBrutoParaSiguiente > 0 && !analisis.casiAlcanzaSiguiente && analisis.listaSiguienteEfectiva.id !== analisis.listaAnticipada?.id)
@@ -281,12 +305,18 @@ export default function EjercicioEscalonamientoPanel({ listas, variant = 'page' 
                                     </h3>
                                     <div className="flex flex-wrap gap-2 mt-3">
                                         <span className="text-xs font-bold bg-[var(--color-primario)] text-white px-3 py-1.5 rounded-lg uppercase">
-                                            {listaActualObj?.nombre || 'Público General'}
+                                            {nombreListaVisible}
                                         </span>
+                                        {menudeo && (
+                                            <span className="text-xs font-black bg-amber-500/15 text-amber-900 dark:text-amber-200 border border-amber-500/40 px-3 py-1.5 rounded-lg uppercase">Menudeo</span>
+                                        )}
+                                        {inactivo && (
+                                            <span className="text-xs font-black bg-black text-white dark:bg-white dark:text-black px-3 py-1.5 rounded-lg uppercase">Cliente inactivo</span>
+                                        )}
                                         {cliente.es_heredado && (
                                             <span className="text-xs font-black bg-purple-500 text-white px-3 py-1.5 rounded-lg uppercase">Heredado</span>
                                         )}
-                                        {tieneCotizacion && analisis.listaAnticipada && (
+                                        {mostrarCalculo && !hipotetico && analisis.listaAnticipada && (
                                             <span className="text-xs font-black bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border border-emerald-500/40 px-3 py-1.5 rounded-lg uppercase flex items-center gap-1.5">
                                                 <TrendingUp className="w-3.5 h-3.5" />
                                                 {analisis.listaAnticipada.nombre.replace('MAYOREO ', '')} · {analisis.porcentajeDescuento.toFixed(2)}%
@@ -328,7 +358,41 @@ export default function EjercicioEscalonamientoPanel({ listas, variant = 'page' 
                             </div>
                         </div>
 
-                        {!tieneCotizacion ? (
+                        {menudeo && (
+                            <div className="mx-4 md:mx-5 mt-4 p-4 rounded-xl border border-amber-500/40 bg-amber-500/10 space-y-3">
+                                <p className="text-sm font-black text-amber-900 dark:text-amber-200 m-0">Cliente de Menudeo</p>
+                                <p className="text-sm font-bold text-amber-900 dark:text-amber-200 m-0">
+                                    Este cliente compra actualmente a precio público. Puede simular su escalonamiento de Mayoreo para conocer los beneficios que podría solicitar.
+                                </p>
+                                <p className="text-xs font-bold text-amber-900 dark:text-amber-200 m-0">
+                                    Monto histórico: {fmtMontoEscalonamiento(analisis.montoHistorico)}
+                                </p>
+                                {!simularMayoreo ? (
+                                    <button
+                                        type="button"
+                                        onClick={() => setSimulacionMayoreo((prev) => ({ ...prev, [cliente.id]: true }))}
+                                        className="inline-flex items-center px-4 py-2.5 text-xs font-black uppercase tracking-wide rounded-xl border border-amber-500/40 bg-amber-500/15 text-amber-900 dark:text-amber-200"
+                                    >
+                                        Simular escalonamiento de Mayoreo
+                                    </button>
+                                ) : (
+                                    <p className="text-xs font-bold text-amber-900 dark:text-amber-200 m-0">
+                                        Resultado hipotético. No cambia la lista, la condición de menudeo ni el acumulado.
+                                    </p>
+                                )}
+                            </div>
+                        )}
+                        {inactivo && (
+                            <div className="mx-4 md:mx-5 mt-4 p-4 rounded-xl border-2 border-black/80 dark:border-white/80 bg-black text-white dark:bg-white dark:text-black space-y-1">
+                                <p className="text-sm font-black uppercase tracking-wide m-0">CLIENTE INACTIVO</p>
+                                <p className="text-sm font-bold m-0">Cotice un monto para evaluar su reactivación.</p>
+                                {tieneCotizacion && (
+                                    <p className="text-xs font-bold m-0 opacity-80">Escenario hipotético. No activa al cliente ni cambia su lista.</p>
+                                )}
+                            </div>
+                        )}
+
+                        {!mostrarCalculo && !(menudeo && !simularMayoreo) ? (
                             <div className="flex items-center justify-center gap-3 p-10 theme-text-main">
                                 <Calculator className="w-9 h-9 opacity-50" />
                                 <p className="text-base font-bold m-0">Ingresa un monto para ver el desglose {isModal ? '' : 'horizontal'}.</p>
@@ -336,7 +400,7 @@ export default function EjercicioEscalonamientoPanel({ listas, variant = 'page' 
                         ) : (
                             <div className="p-4 md:p-6 space-y-4">
                                 <div className={gridPrincipalClass}>
-                                    <div className={colResumenClass}>
+                                    {mostrarCalculo && <div className={colResumenClass}>
                                         <PanelSeccion titulo="Desglose de cálculo">
                                             <div className="space-y-0.5">
                                                 <FilaMontoEscalonamiento etiqueta="Historial" valor={analisis.montoHistorico} compacto />
@@ -369,20 +433,24 @@ export default function EjercicioEscalonamientoPanel({ listas, variant = 'page' 
                                                 )}
                                             </div>
                                         </PanelSeccion>
-                                    </div>
+                                    </div>}
 
                                     {desgloseNiveles.length > 0 && (
                                         <div className={colNivelesClass}>
                                             <PanelSeccion
-                                                titulo="Desglose Plata · Oro · Diamante"
-                                                subtitulo="El porcentaje es el descuento adicional sobre la lista que el cliente ya tiene"
+                                                titulo="Público General · Bronce · Plata · Oro · Diamante"
+                                                subtitulo={hipotetico
+                                                    ? 'Cálculo hipotético. No concede la lista ni el descuento.'
+                                                    : 'El porcentaje es el descuento adicional sobre la lista que el cliente ya tiene'}
                                             >
                                                 <div className={gridDesgloseClass}>
                                                     {desgloseNiveles.map(item => (
                                                         <TarjetaDesgloseNivel
                                                             key={item.id}
                                                             item={item}
-                                                            esProyectada={item.id === listaProyectadaId}
+                                                            esProyectada={!hipotetico && item.id === listaProyectadaId}
+                                                            deshabilitada={menudeo && !simularMayoreo && !String(item.nombre).toUpperCase().includes('PUBLICO')}
+                                                            vigente={menudeo && !simularMayoreo && String(item.nombre).toUpperCase().includes('PUBLICO')}
                                                         />
                                                     ))}
                                                 </div>
@@ -452,7 +520,7 @@ export default function EjercicioEscalonamientoPanel({ listas, variant = 'page' 
                 eyebrow="Herramientas"
                 title="Ejercicio"
                 titleHighlight="Escalonamiento"
-                description="Simula y compara proyecciones de descuento por cliente · Plata · Oro · Diamante"
+                description="Simula y compara proyecciones de descuento por cliente · Público General · Bronce · Plata · Oro · Diamante"
                 icon={Calculator}
                 aside={toolbar}
             />

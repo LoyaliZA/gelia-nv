@@ -32,6 +32,7 @@ class StoreSolicitudRequest extends FormRequest
             'observaciones_vendedor' => ['nullable', 'string'],
             'compra_en_tienda' => ['nullable', 'boolean'],
             'compra_en_tienda_solo_tag' => ['nullable', 'boolean'],
+            'convertir_menudeo_mayoreo' => ['nullable', 'boolean'],
         ];
 
         if ($esOperativo) {
@@ -129,6 +130,32 @@ class StoreSolicitudRequest extends FormRequest
         return $this->aplicaFlujoCompraEnTienda() || $this->aplicaFlujoCompraEnTiendaSoloTag();
     }
 
+    private function validarConversionMenudeo(Validator $validator): void
+    {
+        $cliente = Cliente::where('numero_cliente', $this->input('numero_cliente'))->first();
+        if (! $cliente) {
+            return;
+        }
+
+        $convertir = filter_var($this->input('convertir_menudeo_mayoreo'), FILTER_VALIDATE_BOOLEAN);
+        $nombre = strtoupper(trim($this->resolverProceso()?->nombre ?? ''));
+        $procesoPermite = in_array($nombre, ['ASIGNAR TAG', 'CAMBIO DE LISTA', 'ASIGNAR TAG Y CAMBIO DE LISTA'], true);
+        if ($convertir && ! $cliente->es_menudeo) {
+            $validator->errors()->add('convertir_menudeo_mayoreo', 'Solo un cliente de menudeo puede solicitar la conversión a mayoreo.');
+        }
+        if ($convertir && ! $procesoPermite) {
+            $validator->errors()->add('convertir_menudeo_mayoreo', 'Este proceso no admite la conversión de menudeo a mayoreo.');
+        }
+
+        $listaId = $this->input('catalogo_lista_descuento_id');
+        if ($cliente->es_menudeo && $listaId && ! $convertir) {
+            $lista = CatalogoListaDescuento::find($listaId);
+            if ($lista && str_starts_with(strtoupper($lista->nombre), 'MAYOREO ')) {
+                $validator->errors()->add('catalogo_lista_descuento_id', 'Un cliente de menudeo requiere la conversión explícita para solicitar una lista mayorista.');
+            }
+        }
+    }
+
     private function validarTipoClienteSolicitado(Validator $validator): void
     {
         $numeroCliente = $this->input('numero_cliente');
@@ -166,6 +193,7 @@ class StoreSolicitudRequest extends FormRequest
                 }
 
                 $this->validarTipoClienteSolicitado($validator);
+                $this->validarConversionMenudeo($validator);
 
                 $usuario = $this->user()->loadMissing(['departamentos', 'area']);
                 $tieneDepartamento = $usuario->departamentos->isNotEmpty() || $usuario->area?->departamento_id;
