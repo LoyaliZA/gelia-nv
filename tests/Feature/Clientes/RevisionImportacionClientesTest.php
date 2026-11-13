@@ -46,13 +46,13 @@ class RevisionImportacionClientesTest extends TestCase
 
         $cero = Cliente::where('numero_cliente', '100')->first();
         $positivo = Cliente::where('numero_cliente', '101')->first();
-        $this->assertFalse($cero->es_inactivo);
+        $this->assertTrue($cero->es_inactivo);
         $this->assertFalse($positivo->es_inactivo);
         $this->assertSame($bronce, $cero->lista_actual_id);
         $this->assertSame($bronce, $positivo->lista_actual_id);
         $this->assertSame('0.00', $cero->monto_venta_actual);
-        $this->assertSame('25.00', $positivo->monto_venta_actual);
-        $this->assertSame(0, $vista['conteos']['inactivaciones']);
+        $this->assertSame('80.00', $positivo->monto_venta_actual);
+        $this->assertSame(1, $vista['conteos']['inactivaciones']);
         $this->assertSame(0, $vista['conteos']['descensos']);
     }
 
@@ -74,7 +74,7 @@ class RevisionImportacionClientesTest extends TestCase
                 'updated_at' => $ahora,
             ];
             $fecha = $i === $total ? '2020-01-01' : '2026-11-12';
-            $lineas[] = $i.',,5000,'.$fecha;
+            $lineas[] = $i.',3,5000,'.$fecha;
             if (count($lote) === 500) {
                 Cliente::insert($lote);
                 $lote = [];

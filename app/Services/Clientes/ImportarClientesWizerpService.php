@@ -3,6 +3,7 @@
 namespace App\Services\Clientes;
 
 use App\Models\CambioListaImportacionCliente;
+use App\Models\ConflictoImportacionCliente;
 use App\Models\CatalogoListaDescuento;
 use App\Models\Cliente;
 use App\Models\ErroresImportacionCliente;
@@ -60,7 +61,7 @@ class ImportarClientesWizerpService
     {
         $inicio = microtime(true);
         $stats = array_fill_keys(['leidas', 'procesadas', 'creados', 'actualizados', 'sin_cambios', 'omitidas', 'errores',
-            'ascensos', 'descensos', 'activados', 'clientes_marcados_inactivos', 'cambios_lista'], 0);
+            'ascensos', 'descensos', 'activados', 'clientes_marcados_inactivos', 'cambios_lista', 'conflictos'], 0);
         $errores = [];
         $this->cursorFila = $desdeFila;
         $this->ascensosDetalle = [];
@@ -123,13 +124,15 @@ class ImportarClientesWizerpService
                 $this->cursorFila = (int) $fila['numero_fila'];
                 if ($fila['duplicada']) {
                     $stats['omitidas']++;
-                    $this->marcarAvance($importacion, $stats);
 
                     continue;
                 }
                 try {
                     $resultado = DB::transaction(function () use ($fila, $listas, $mapa, $importaCodigoLista, $importacion, $stats, $estadoAprobado) {
-                        $cliente = Cliente::with('facturaCobranzaActiva')->where('numero_cliente', $fila['data']['numero_cliente'])->lockForUpdate()->first();
+                        $cliente = Cliente::query()->where('numero_cliente', $fila['data']['numero_cliente'])->lockForUpdate()->first();
+                        if ($cliente && (float) $cliente->monto_credito_autorizado > 0) {
+                            $cliente->load('facturaCobranzaActiva');
+                        }
                         if (is_array($estadoAprobado) && array_key_exists($fila['data']['numero_cliente'], $estadoAprobado)) {
                             $this->exigirEstadoAprobado($cliente, $estadoAprobado[$fila['data']['numero_cliente']]);
                         }
@@ -144,7 +147,19 @@ class ImportarClientesWizerpService
                             $escritura = microtime(true);
                             $cambio = $this->procesador->ejecutar($fila['data'], $listas, $mapa, $coleccion,
                                 $historial, $importaCodigoLista, $inactivos, $alertasFila, $importacion?->id, $importacion?->usuario_id);
+                            $efectoFila = $this->procesador->efecto;
                             $despues = $coleccion->get($fila['data']['numero_cliente']);
+                            if (! $despues && ($efectoFila['omitida'] || $efectoFila['conflictos'] !== [])) {
+                                $siguiente = $stats;
+                                $siguiente['omitidas'] += $efectoFila['omitida'] ? 1 : 0;
+                                $siguiente['conflictos'] += count($efectoFila['conflictos']);
+                                $siguiente['procesadas']++;
+                                foreach ($efectoFila['conflictos'] as $conflicto) {
+                                    $this->registrarConflicto($importacion, $fila, $antes, null, $conflicto);
+                                }
+
+                                return ['stats' => $siguiente, 'cambio' => null, 'alertas' => []];
+                            }
                             if (! $despues) {
                                 throw ValidationException::withMessages(['numero_cliente' => 'La fila no produjo un cliente.']);
                             }
@@ -162,8 +177,21 @@ class ImportarClientesWizerpService
                                 ]);
                             }
                             $this->tiemposMs['escritura'] += (microtime(true) - $escritura) * 1000;
-                            $categoria = ! $antes ? 'creados' : ($despues->wasChanged() ? 'actualizados' : 'sin_cambios');
+                            $efecto = $this->procesador->efecto;
+                            if ($efecto['omitida']) {
+                                $categoria = 'omitidas';
+                            } elseif (! $antes) {
+                                $categoria = 'creados';
+                            } elseif ($despues->wasChanged()) {
+                                $categoria = 'actualizados';
+                            } else {
+                                $categoria = 'sin_cambios';
+                            }
+                            foreach ($efecto['conflictos'] as $conflicto) {
+                                $this->registrarConflicto($importacion, $fila, $antes, $despues, $conflicto);
+                            }
                             $siguiente = $stats;
+                            $siguiente['conflictos'] += count($efecto['conflictos']);
                             $siguiente[$categoria]++;
                             $siguiente['procesadas']++;
                             $siguiente['clientes_marcados_inactivos'] += $inactivos;
@@ -178,7 +206,6 @@ class ImportarClientesWizerpService
                             app(MobileSyncPublicationService::class)->publishDiffColeccion(
                                 collect($antes ? [$antes->id => $antes] : []), collect([$despues->id => $despues]));
                             $this->tiemposMs['sincronizacion'] += (microtime(true) - $sincronizacion) * 1000;
-                            $this->marcarAvance($importacion, $siguiente);
 
                             return ['stats' => $siguiente, 'cambio' => $cambio, 'alertas' => $categoria === 'sin_cambios' ? [] : $alertasFila];
                         } finally {
@@ -206,7 +233,6 @@ class ImportarClientesWizerpService
                         && ! in_array((string) $e->getCode(), ['23000', '22001', '22003'], true))) {
                         throw $e;
                     }
-                    $this->marcarAvance($importacion, $stats);
                 }
             }
             if ($hayMas) {
@@ -303,9 +329,15 @@ class ImportarClientesWizerpService
             return;
         }
 
-        Cliente::query()->whereKey($cliente->id)->update([
-            'fecha_ultimo_corte_administrativo' => $importacion->fecha_corte->format('Y-m-d H:i:s'),
-        ]);
+        Cliente::query()
+            ->whereKey($cliente->id)
+            ->where(function ($consulta) use ($importacion) {
+                $consulta->whereNull('fecha_ultimo_corte_administrativo')
+                    ->orWhere('fecha_ultimo_corte_administrativo', '!=', $importacion->fecha_corte->format('Y-m-d H:i:s'));
+            })
+            ->update([
+                'fecha_ultimo_corte_administrativo' => $importacion->fecha_corte->format('Y-m-d H:i:s'),
+            ]);
     }
 
     private function corteAnteriorAlOficial(Cliente $cliente, \Carbon\Carbon $corte, ?int $exceptoImportacionId): bool
@@ -390,6 +422,39 @@ class ImportarClientesWizerpService
     /**
      * @param  array<string, int|float>  $stats
      */
+    /**
+     * @param  array<string, mixed>  $fila
+     * @param  array{alcance: string, motivo: string, solicitud_id: ?int}  $conflicto
+     */
+    private function registrarConflicto(?ImportacionCliente $importacion, array $fila, ?Cliente $antes, ?Cliente $despues, array $conflicto): void
+    {
+        if (! $importacion) {
+            return;
+        }
+        $vigente = $antes ? [
+            'lista_actual_id' => $antes->lista_actual_id,
+            'es_menudeo' => (bool) $antes->es_menudeo,
+            'es_inactivo' => (bool) $antes->es_inactivo,
+        ] : null;
+        ConflictoImportacionCliente::query()->create([
+            'importacion_cliente_id' => $importacion->id,
+            'cliente_id' => $antes?->id ?? $despues?->id,
+            'numero_cliente' => (string) ($fila['data']['numero_cliente'] ?? ''),
+            'numero_fila' => (int) ($fila['numero_fila'] ?? 0),
+            'alcance' => $conflicto['alcance'],
+            'estado' => ConflictoImportacionCliente::PENDIENTE,
+            'motivo' => $conflicto['motivo'],
+            'valor_vigente' => $vigente,
+            'valor_propuesto' => [
+                'codigo_lista' => $fila['data']['codigo_lista'] ?? null,
+                'monto_venta_actual' => $fila['data']['monto_venta_actual'] ?? null,
+            ],
+            'origen_vigente' => $antes?->modalidad_origen,
+            'origen_propuesto' => 'importacion',
+            'solicitud_tag_id' => $conflicto['solicitud_id'],
+        ]);
+    }
+
     private function marcarAvance(?ImportacionCliente $importacion, array $stats): void
     {
         if (! $importacion) {
@@ -555,6 +620,13 @@ class ImportarClientesWizerpService
             ->all();
 
         return hash('sha256', implode("\n", $lineas));
+    }
+
+    public function huellaReglasRevision(): string
+    {
+        $autoridad = app(EscalonamientoAutoridad::class)->estaActiva() ? '1' : '0';
+
+        return hash('sha256', 'matriz-clientes-2026-11-13|'.$autoridad);
     }
 
     /**

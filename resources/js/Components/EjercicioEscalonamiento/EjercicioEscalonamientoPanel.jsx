@@ -9,6 +9,7 @@ import {
     Users,
     Eraser,
 } from 'lucide-react';
+import BadgeListaDescuento from '@/Components/BadgeListaDescuento';
 import CampoBusqueda from '@/Components/CampoBusqueda';
 import GeliaTituloCard from '@/Components/GeliaTituloCard';
 import { THEME_INPUT, geliaCardClass } from '@/utils/geliaTheme';
@@ -31,9 +32,7 @@ const TarjetaDesgloseNivel = ({ item, esProyectada, deshabilitada = false, vigen
     if (deshabilitada || vigente) {
         return (
             <div className={`rounded-2xl border-2 p-4 md:p-5 flex flex-col gap-3 h-full min-w-0 ${vigente ? 'border-[var(--color-primario)]/50 bg-[var(--color-primario)]/5' : 'theme-element border theme-border opacity-80'}`}>
-                <p className="text-sm font-black theme-text-main uppercase tracking-wide m-0 leading-snug truncate">
-                    {item.nombre.replace('MAYOREO ', '')}
-                </p>
+                <BadgeListaDescuento nombre={item.nombre} />
                 <p className="text-xs font-bold theme-text-muted m-0">Catálogo {fmtMontoEscalonamiento(item.monto_requerido)}</p>
                 <p className="text-xs font-black uppercase tracking-wide theme-text-muted m-0">{vigente ? 'Lista vigente' : 'No habilitado'}</p>
             </div>
@@ -55,9 +54,7 @@ const TarjetaDesgloseNivel = ({ item, esProyectada, deshabilitada = false, vigen
         }`}>
             <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                    <p className="text-sm font-black theme-text-main uppercase tracking-wide m-0 leading-snug truncate">
-                        {item.nombre.replace('MAYOREO ', '')}
-                    </p>
+                    <BadgeListaDescuento nombre={item.nombre} />
                     <p className="text-xs font-bold theme-text-main mt-1 m-0">
                         Catálogo {fmtMontoEscalonamiento(item.monto_requerido)}
                     </p>
@@ -311,7 +308,7 @@ export default function EjercicioEscalonamientoPanel({ listas, variant = 'page' 
                                             <span className="text-xs font-black bg-amber-500/15 text-amber-900 dark:text-amber-200 border border-amber-500/40 px-3 py-1.5 rounded-lg uppercase">Menudeo</span>
                                         )}
                                         {inactivo && (
-                                            <span className="text-xs font-black bg-black text-white dark:bg-white dark:text-black px-3 py-1.5 rounded-lg uppercase">Cliente inactivo</span>
+                                            <span className="text-xs font-black px-3 py-1.5 rounded-lg uppercase border border-zinc-400 text-zinc-500 dark:text-zinc-300 dark:border-zinc-500 bg-gradient-to-r from-zinc-500/20 via-zinc-400/10 to-zinc-500/5">Cliente inactivo</span>
                                         )}
                                         {cliente.es_heredado && (
                                             <span className="text-xs font-black bg-purple-500 text-white px-3 py-1.5 rounded-lg uppercase">Heredado</span>
@@ -383,11 +380,14 @@ export default function EjercicioEscalonamientoPanel({ listas, variant = 'page' 
                             </div>
                         )}
                         {inactivo && (
-                            <div className="mx-4 md:mx-5 mt-4 p-4 rounded-xl border-2 border-black/80 dark:border-white/80 bg-black text-white dark:bg-white dark:text-black space-y-1">
-                                <p className="text-sm font-black uppercase tracking-wide m-0">CLIENTE INACTIVO</p>
-                                <p className="text-sm font-bold m-0">Cotice un monto para evaluar su reactivación.</p>
+                            <div className="mx-4 md:mx-5 mt-4 p-4 rounded-xl border border-zinc-400/80 bg-gradient-to-br from-zinc-500/15 via-zinc-400/5 to-transparent space-y-1">
+                                <p className="text-sm font-black uppercase tracking-wide m-0 text-zinc-600 dark:text-zinc-300 flex items-center gap-2">
+                                    <AlertTriangle className="w-4 h-4 shrink-0" aria-hidden="true" />
+                                    Cliente inactivo
+                                </p>
+                                <p className="text-sm font-bold m-0 text-zinc-600 dark:text-zinc-300">Cotice un monto para evaluar su reactivación.</p>
                                 {tieneCotizacion && (
-                                    <p className="text-xs font-bold m-0 opacity-80">Escenario hipotético. No activa al cliente ni cambia su lista.</p>
+                                    <p className="text-xs font-bold m-0 text-zinc-500 dark:text-zinc-400">Simulación de reactivación</p>
                                 )}
                             </div>
                         )}

@@ -444,7 +444,7 @@ export default function ModalFormCliente({ onClose, modoModal, clienteActual, ti
 
                             <div className="p-4 theme-element border theme-border rounded-xl">
                                 <span className="text-[11px] font-black theme-text-main uppercase tracking-widest block">Estado comercial</span>
-                                <span className="text-[11px] theme-text-muted">{clienteActual ? (clienteActual.es_inactivo ? 'Inactivo' : 'Activo') : 'Sin sincronizar'} · Administrado por Wizerp</span>
+                                <span className="text-[11px] theme-text-muted">{clienteActual ? (clienteActual.es_inactivo ? 'Inactivo' : 'Activo') : 'Sin sincronizar'} · El estado comercial llega por importación o por una autorización</span>
                             </div>
                         </div>
                     </div>

@@ -115,10 +115,11 @@ class ModalidadComercialClienteTest extends TestCase
         $cliente->refresh();
         $this->assertFalse($cliente->es_inactivo);
         $this->assertSame($this->pg->id, $cliente->lista_actual_id);
-        $this->assertFalse($cliente->es_menudeo);
+        $this->assertTrue($cliente->es_menudeo);
+        $this->assertSame(ClasificacionComercialCliente::ORIGEN_IMPORTACION, $cliente->modalidad_origen);
     }
 
-    public function test_codigo_vacio_no_altera_modalidad_ni_lista(): void
+    public function test_codigo_vacio_con_monto_positivo_no_escribe(): void
     {
         $cliente = $this->cliente('400', '80.00');
         $this->importar("numero_cliente,codigo_lista,monto_venta_actual\n400,,90\n");
@@ -127,7 +128,7 @@ class ModalidadComercialClienteTest extends TestCase
         $this->assertSame($this->pg->id, $cliente->lista_actual_id);
         $this->assertTrue($cliente->es_menudeo);
         $this->assertSame(ClasificacionComercialCliente::ORIGEN_MIGRACION, $cliente->modalidad_origen);
-        $this->assertSame('90.00', $cliente->monto_venta_actual);
+        $this->assertSame('80.00', $cliente->monto_venta_actual);
         $this->assertFalse($cliente->es_inactivo);
     }
 
@@ -285,13 +286,12 @@ class ModalidadComercialClienteTest extends TestCase
         $vista = $this->revisar("numero_cliente,codigo_lista,monto_venta_actual\n1400,2,90\n");
 
         $this->assertFalse($vista['bloqueado']);
-        $this->assertTrue(collect($vista['avisos'])->contains(fn ($aviso) => $aviso['codigo'] === 'lista_mayorista_sin_conversion'));
         $this->confirmar($vista);
 
         $cliente->refresh();
-        $this->assertSame($this->pg->id, $cliente->lista_actual_id);
-        $this->assertTrue($cliente->es_menudeo);
-        $this->assertSame(ClasificacionComercialCliente::ORIGEN_MIGRACION, $cliente->modalidad_origen);
+        $this->assertSame($this->bronce->id, $cliente->lista_actual_id);
+        $this->assertFalse($cliente->es_menudeo);
+        $this->assertSame(ClasificacionComercialCliente::ORIGEN_IMPORTACION, $cliente->modalidad_origen);
         $this->assertSame('90.00', $cliente->monto_venta_actual);
     }
 

@@ -11,7 +11,14 @@ use Illuminate\Validation\ValidationException;
 
 class ProcesarFilaClienteAction
 {
-    public function __construct(private ResolucionListaWizerp $resolucionLista, private MontoWizerp $montos) {}
+    /** @var array{omitida: bool, motivo: ?string, conflictos: list<array{alcance: string, motivo: string, solicitud_id: ?int}>} */
+    public array $efecto = ['omitida' => false, 'motivo' => null, 'conflictos' => []];
+
+    public function __construct(
+        private ResolucionListaWizerp $resolucionLista,
+        private MontoWizerp $montos,
+        private ProteccionComercialImportacion $proteccion,
+    ) {}
 
     public function ejecutar(
         array $data, $listas, array $mapaVendedoras, Collection $clientesPorNumero,
@@ -19,6 +26,7 @@ class ProcesarFilaClienteAction
         array &$alertasLimiteExcedido, ?int $importacionClienteId = null, ?int $usuarioId = null,
         bool $persistir = true,
     ): ?array {
+        $this->efecto = ['omitida' => false, 'motivo' => null, 'conflictos' => []];
         $numero = trim($data['numero_cliente'] ?? '');
         if (! preg_match('/^[0-9]{1,255}$/D', $numero)) {
             $this->error('numero_cliente', 'Se requiere un número de cliente formado por dígitos.');
@@ -32,11 +40,21 @@ class ProcesarFilaClienteAction
         if ($importaCodigoLista && $codigo !== '' && ! $listaCsv) {
             $this->error('codigo_lista', 'Código de lista desconocido.');
         }
-        // Un código vacío no es una baja ni cambia la lista. El cero tampoco inactiva.
-        // Una baja legítima requiere una señal explícita del ERP, que este archivo no trae.
+        $montoCero = $monto !== null && bccomp($monto, '0', 2) === 0;
+        $montoPositivo = $monto !== null && bccomp($monto, '0', 2) > 0;
+        if ($importaCodigoLista && $codigo === '' && $monto === null) {
+            $this->efecto = ['omitida' => true, 'motivo' => 'Se omitió por falta de datos suficientes.', 'conflictos' => []];
+
+            return null;
+        }
+        if ($importaCodigoLista && $codigo === '' && $montoPositivo) {
+            $this->error('codigo_lista', 'El código de lista vacío y un monto positivo se contradicen.');
+        }
         $estado = null;
         if ($importaCodigoLista && $codigo !== '') {
             $estado = false;
+        } elseif ($importaCodigoLista && $codigo === '' && $montoCero) {
+            $estado = true;
         }
         if ($nuevo && trim($data['nombre'] ?? '') === '') {
             $this->error('nombre', 'El nombre es obligatorio para un cliente nuevo.');
@@ -68,7 +86,42 @@ class ProcesarFilaClienteAction
         $categoriaEspecial = $this->resolucionLista->nombreExcluyeEscalonamiento($listaActual?->nombre);
         $listaCodigo = $listaCsv ? $listas->firstWhere('id', $listaCsv) : null;
         $aviso = null;
-        if (! $cliente->lista_bloqueada && ! $gobernado && ! $codigoVacio && ! $categoriaEspecial && $listaCodigo) {
+        $mayoristaSinMonto = $listaCodigo && $clasificacion->esListaMayorista($listaCodigo) && $monto === null;
+        if ($mayoristaSinMonto) {
+            $estado = null;
+        }
+        $aplicariaLista = ! $codigoVacio && ! $mayoristaSinMonto && $listaCodigo && ! $cliente->lista_bloqueada && ! $gobernado && ! $categoriaEspecial;
+        if ($listaCodigo && $clasificacion->esPublicoGeneral($listaCodigo) && $monto === null && ! $codigoVacio) {
+            $this->efecto['conflictos'][] = ['alcance' => 'fila', 'motivo' => 'PG con monto vacío. Conflicto pendiente de resolución.', 'solicitud_id' => null];
+            if (! $nuevo) {
+                $cliente->setRawAttributes($antes, true);
+            }
+
+            return null;
+        }
+        $menudeoPropuesto = null;
+        $listaPropuesta = null;
+        if ($aplicariaLista && $clasificacion->esListaMayorista($listaCodigo) && $monto !== null) {
+            $menudeoPropuesto = false;
+            $listaPropuesta = (int) $listaCodigo->id;
+        } elseif ($aplicariaLista && $clasificacion->esPublicoGeneral($listaCodigo) && $monto !== null && ! $clasificacion->conversionVigente($cliente)) {
+            $menudeoPropuesto = true;
+            $listaPropuesta = (int) $listaCodigo->id;
+        }
+        $freno = $this->proteccion->evaluar($cliente, $listaPropuesta, $menudeoPropuesto, $estado === false && (bool) ($antes['es_inactivo'] ?? $cliente->es_inactivo));
+        if ($freno['conversion'] && $menudeoPropuesto === false) {
+            $aplicariaLista = false;
+            $this->efecto['conflictos'][] = ['alcance' => 'conversion', 'motivo' => (string) $freno['motivo'], 'solicitud_id' => $freno['solicitud_id']];
+        }
+        if ($freno['reactivacion'] && $estado === false) {
+            $estado = null;
+            $this->efecto['conflictos'][] = ['alcance' => 'reactivacion', 'motivo' => (string) $freno['motivo'], 'solicitud_id' => $freno['solicitud_id']];
+        }
+        if ($listaCodigo && ($cliente->lista_bloqueada || $categoriaEspecial || $gobernado) && ! $codigoVacio && ! $mayoristaSinMonto
+            && (int) $cliente->lista_actual_id !== (int) $listaCodigo->id) {
+            $this->efecto['conflictos'][] = ['alcance' => 'lista', 'motivo' => 'La lista protegida no se reescribe.', 'solicitud_id' => null];
+        }
+        if ($aplicariaLista) {
             $aviso = $clasificacion->aplicarEnImportacion($cliente, $listaCodigo, $monto);
         }
         $cliente->discrepanciaModalidad = $aviso;

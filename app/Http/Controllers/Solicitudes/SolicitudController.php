@@ -565,7 +565,9 @@ class SolicitudController extends Controller
             $esFinanciero = $solicitud->proceso?->esFinanciero() ?? true;
 
             if ($esFinanciero && in_array($estadoNuevoId, $estadosAprobatorios, true) && !in_array($estadoAnteriorId, $estadosAprobatorios, true)) {
-                $snapshotDiff = app(AjustarMontoPorSolicitudService::class)->aplicarBeneficios($solicitud);
+                $solicitud->aplicacion_cliente = 'pendiente';
+                $solicitud->aplicacion_error = null;
+                $solicitud->save();
             } elseif ($esFinanciero && $estadoNuevoId === $idIncorrecta && in_array($estadoAnteriorId, $estadosAprobatorios, true)) {
                 $snapshotDiff = app(AjustarMontoPorSolicitudService::class)->revertirBeneficios($solicitud, Auth::id());
             }
@@ -625,6 +627,23 @@ class SolicitudController extends Controller
                 ));
             }
         });
+
+        $solicitud->refresh();
+        if ($solicitud->aplicacion_cliente === 'pendiente') {
+            try {
+                app(AjustarMontoPorSolicitudService::class)->aplicarBeneficios($solicitud);
+                $solicitud->forceFill(['aplicacion_cliente' => 'aplicada', 'aplicacion_error' => null])->save();
+            } catch (\Throwable $e) {
+                $solicitud->forceFill([
+                    'aplicacion_cliente' => 'fallida',
+                    'aplicacion_error' => mb_substr($e->getMessage(), 0, 500),
+                ])->save();
+                $solicitud->increment('aplicacion_intentos');
+                \App\Jobs\Solicitudes\RecuperarAplicacionClienteJob::dispatch($solicitud->id);
+
+                return $this->redirectToSolicitudesList($request, 'La solicitud quedó autorizada. La actualización del cliente sigue pendiente.');
+            }
+        }
 
         return $this->redirectToSolicitudesList($request, 'El estado ha sido actualizado correctamente.');
     }

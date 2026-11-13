@@ -38,6 +38,8 @@ return [
     'catalogos.comisiones.ver',
     'catalogos.gestionar',
     'clientes.carga_masiva',
+    'clientes.recuperar_aplicacion_autorizada',
+    'clientes.resolver_conflicto_importacion',
     'clientes.correccion_emergencia',
     'clientes.crear',
     'clientes.direcciones.crear',

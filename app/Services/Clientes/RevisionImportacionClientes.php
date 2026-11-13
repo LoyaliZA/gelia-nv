@@ -53,6 +53,7 @@ class RevisionImportacionClientes
             'aplicada' => false,
             'proyeccion' => $analisis['hash'],
             'catalogo' => $this->importador->huellaCatalogoRevision(),
+            'reglas' => $this->importador->huellaReglasRevision(),
             'estado_clientes' => $analisis['estado_clientes'],
             'headers' => $analisis['headers'],
             'modalidad_carga' => $importacion->modalidad_carga ?: ImportacionCliente::MODALIDAD_NORMAL,
@@ -98,12 +99,19 @@ class RevisionImportacionClientes
         }
 
         $path = Storage::disk('local')->path($importacion->ruta_almacenamiento);
+        $archivoIgual = is_file($path) && hash_equals((string) $revision['archivo_sha256'], hash_file('sha256', $path) ?: '');
+        $catalogoIgual = hash_equals((string) ($revision['catalogo'] ?? ''), $this->importador->huellaCatalogoRevision());
+        $clientesIgual = hash_equals((string) ($revision['huella_clientes'] ?? ''), $this->huella($revision['numeros'] ?? []));
+        $reglasIgual = hash_equals((string) ($revision['reglas'] ?? ''), $this->importador->huellaReglasRevision());
+        if ($archivoIgual && $catalogoIgual && $clientesIgual && $reglasIgual && empty($revision['bloqueado'])) {
+            return null;
+        }
         $analisis = $this->analizar($importacion);
-        if (! is_file($path)
-            || ! hash_equals((string) $revision['archivo_sha256'], hash_file('sha256', $path) ?: '')
+        if (! $archivoIgual
             || ! hash_equals((string) ($revision['proyeccion'] ?? ''), $analisis['hash'])
-            || ! hash_equals((string) ($revision['catalogo'] ?? ''), $this->importador->huellaCatalogoRevision())
-            || ! hash_equals((string) ($revision['huella_clientes'] ?? ''), $this->huella($revision['numeros'] ?? []))
+            || ! $catalogoIgual
+            || ! $clientesIgual
+            || ! $reglasIgual
             || $analisis['bloqueado']) {
             throw ValidationException::withMessages(['archivo' => 'La revisión ya no coincide con los cambios aprobados. Hay que revisar el archivo de nuevo.']);
         }
@@ -149,7 +157,7 @@ class RevisionImportacionClientes
 
         $conteos = array_fill_keys([
             'filas', 'nuevos', 'actualizaciones', 'sin_cambios', 'errores', 'cambios_lista', 'descensos',
-            'activaciones', 'inactivaciones', 'cambios_monto', 'afectados',
+            'activaciones', 'inactivaciones', 'cambios_monto', 'afectados', 'omitidas', 'conflictos',
         ], 0);
         $conteos['filas'] = count($validado['filas']);
         $bloqueos = [];
@@ -202,7 +210,6 @@ class RevisionImportacionClientes
             $alertas = [];
             $coleccion = collect($antesModelo ? [$numero => $antesModelo] : []);
             $evaluacion = null;
-            DB::beginTransaction();
             try {
                 $this->importador->exigirCorteAplicable($importacion, $antesModelo, $fila['data']);
                 $cambio = $this->procesador->ejecutar(
@@ -211,6 +218,18 @@ class RevisionImportacionClientes
                 );
                 $despues = $coleccion->get($numero);
                 $evaluacion = $this->evaluarFila($fila, $antes, $despues, $cambio, $importaCodigo, $importaFecha, $cortes, $listas);
+                $efecto = $this->procesador->efecto;
+                if ($efecto['omitida']) {
+                    $evaluacion['categoria'] = 'omitida';
+                    $evaluacion['motivo'] = $efecto['motivo'];
+                    $evaluacion['conteos']['sin_cambios'] = 0;
+                    $evaluacion['conteos']['omitidas'] = ($evaluacion['conteos']['omitidas'] ?? 0) + 1;
+                }
+                if ($efecto['conflictos'] !== []) {
+                    $evaluacion['conteos']['conflictos'] = count($efecto['conflictos']);
+                    $evaluacion['avisos'][] = 'conflicto';
+                    $evaluacion['motivo'] = trim(($evaluacion['motivo'] ?? '').' '.implode(' ', array_column($efecto['conflictos'], 'motivo')));
+                }
                 $lineas[] = $this->lineaProyeccion($fila, $despues, $cambio, $listas, $evaluacion['categoria']);
             } catch (ValidationException $e) {
                 $conteos['errores']++;
@@ -227,8 +246,6 @@ class RevisionImportacionClientes
                     'nombre' => (string) $nombreError,
                     'bloqueos' => $this->errorInvalidaArchivo($e) ? ['archivo_invalido'] : [],
                 ];
-            } finally {
-                DB::rollBack();
             }
 
             if (($evaluacion['categoria'] ?? null) === 'error') {
@@ -327,7 +344,7 @@ class RevisionImportacionClientes
     {
         $conteos = array_fill_keys([
             'filas', 'nuevos', 'actualizaciones', 'sin_cambios', 'errores', 'cambios_lista', 'descensos',
-            'activaciones', 'inactivaciones', 'cambios_monto', 'afectados',
+            'activaciones', 'inactivaciones', 'cambios_monto', 'afectados', 'omitidas', 'conflictos',
         ], 0);
         $revision = [
             'archivo_sha256' => $sha,
@@ -437,7 +454,7 @@ class RevisionImportacionClientes
      */
     private function evaluarFila(array $fila, ?array $antes, ?Cliente $despues, ?array $cambio, bool $importaCodigo, bool $importaFecha, $cortes, $listas): array
     {
-        $conteos = array_fill_keys(['nuevos', 'actualizaciones', 'sin_cambios', 'cambios_lista', 'descensos', 'activaciones', 'inactivaciones', 'cambios_monto'], 0);
+        $conteos = array_fill_keys(['nuevos', 'actualizaciones', 'sin_cambios', 'cambios_lista', 'descensos', 'activaciones', 'inactivaciones', 'cambios_monto', 'omitidas', 'conflictos'], 0);
         $bloqueos = [];
         $avisos = [];
         $motivos = [];
@@ -473,13 +490,13 @@ class RevisionImportacionClientes
         }
         if ($inactivoDespues && ($nuevo || ! $inactivoAntes)) {
             $conteos['inactivaciones']++;
-            $bloqueos[] = 'inactivacion';
-            $motivos[] = 'La fila inactivaría al cliente. GELIA no acepta esa baja.';
+            $motivos[] = 'El cliente pasaría a inactivo.';
         }
-        if ($importaCodigo && $codigo === '' && $antes && ($listaAntes != $listaDespues || $inactivoAntes !== $inactivoDespues || ClasificacionComercialCliente::bandera($antes['es_menudeo'] ?? false) !== ClasificacionComercialCliente::bandera($despues?->es_menudeo))) {
+        $cambiaListaOMenudeo = $antes && ($listaAntes != $listaDespues || ClasificacionComercialCliente::bandera($antes['es_menudeo'] ?? false) !== ClasificacionComercialCliente::bandera($despues?->es_menudeo));
+        if ($importaCodigo && $codigo === '' && $cambiaListaOMenudeo) {
             $bloqueos[] = 'codigo_vacio';
-            $motivos[] = 'Un código vacío cambiaría la lista, el estado o la condición de menudeo.';
-        } elseif ($importaCodigo && $codigo === '' && $antes) {
+            $motivos[] = 'Un código vacío cambiaría la lista o la condición de menudeo.';
+        } elseif ($importaCodigo && $codigo === '' && $antes && ! $inactivoDespues) {
             $motivos[] = 'El código vacío conserva la lista, el estado y la condición de menudeo.';
         }
         if ($despues?->discrepanciaModalidad === 'lista_mayorista_sin_conversion') {

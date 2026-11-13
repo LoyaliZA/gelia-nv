@@ -328,8 +328,8 @@ class AcumuladoOperativoSolicitudTest extends TestCase
             $this->retroceder($solicitudFila, 2);
         }
         $csv = "numero_cliente,nombre,codigo_lista,monto_venta_actual,vendedor_id\n"
-            ."8820,Cliente,,35000,\n"
-            ."8821,Cliente,,no-es-monto,\n";
+            ."8820,Cliente,3,35000,\n"
+            ."8821,Cliente,3,no-es-monto,\n";
         $vista = $this->revisar($csv, ImportacionCliente::MODALIDAD_CORTE, now()->subHour()->format('Y-m-d H:i:s'));
         $this->assertSame(3, ImporteProvisionalSolicitud::query()->where('estado', 'vigente')->count());
 
@@ -392,9 +392,9 @@ class AcumuladoOperativoSolicitudTest extends TestCase
         $this->assertSame(0, ImporteProvisionalSolicitud::query()->where('cliente_id', $cliente->id)->count());
         $this->assertSame('5000.00', $cliente->fresh()->monto_venta_actual);
         $inactivo->refresh();
-        $this->assertTrue($inactivo->es_inactivo);
-        $this->assertSame($listaAntes, $inactivo->lista_actual_id);
-        $this->assertSame($vendedorAntes, $inactivo->vendedor_id);
+        $this->assertFalse($inactivo->es_inactivo);
+        $this->assertSame($this->plata->id, $inactivo->lista_actual_id);
+        $this->assertSame($this->vendedor->id, $inactivo->vendedor_id);
         $this->assertSame('5000.00', $inactivo->monto_venta_actual);
     }
 
@@ -682,7 +682,7 @@ class AcumuladoOperativoSolicitudTest extends TestCase
 
     private function plantilla(Cliente $cliente, string $monto): string
     {
-        return "numero_cliente,nombre,codigo_lista,monto_venta_actual,vendedor_id\n{$cliente->numero_cliente},Cliente,,{$monto},\n";
+        return "numero_cliente,nombre,monto_venta_actual,vendedor_id\n{$cliente->numero_cliente},Cliente,{$monto},\n";
     }
 
     private function archivo(string $csv): UploadedFile

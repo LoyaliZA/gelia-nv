@@ -49,7 +49,7 @@ class ImportarClientesInactivosTest extends TestCase
         return app(ImportarClientesWizerpService::class)->ejecutar($archivo);
     }
 
-    public function test_codigo_lista_vacio_no_marca_inactivo_ni_cambia_lista(): void
+    public function test_codigo_lista_vacio_con_cero_inactiva_sin_cambiar_lista(): void
     {
         $this->sincronizarListas();
         $listaPlata = $this->idLista('MAYOREO PLATA');
@@ -66,9 +66,9 @@ class ImportarClientesInactivosTest extends TestCase
 
         $cliente = Cliente::where('numero_cliente', '100')->first();
 
-        $this->assertFalse($cliente->es_inactivo);
+        $this->assertTrue($cliente->es_inactivo);
         $this->assertEquals($listaPlata, $cliente->lista_actual_id);
-        $this->assertEquals(0, $resultado['clientes_marcados_inactivos']);
+        $this->assertEquals(1, $resultado['clientes_marcados_inactivos']);
     }
 
     public function test_sin_columna_codigo_lista_solo_actualiza_monto(): void

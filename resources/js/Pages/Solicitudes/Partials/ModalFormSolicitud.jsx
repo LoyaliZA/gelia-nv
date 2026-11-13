@@ -84,7 +84,7 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
     const procesoFinancieroSeleccionado = esProcesoFinancieroSeleccionado(procesos, data.catalogo_proceso_id);
     const procesoAsignarTagSolo = esProcesoAsignarTagSolo(procesos, data.catalogo_proceso_id);
     const esMenudeo = infoCliente?.es_menudeo === true || infoCliente?.es_menudeo === 1;
-    const puedeConvertirMenudeo = esMenudeo && !infoCliente?.es_inactivo && admiteConversionMenudeo(procesos, data.catalogo_proceso_id);
+    const puedeConvertirMenudeo = esMenudeo && admiteConversionMenudeo(procesos, data.catalogo_proceso_id);
     const listaBronce = resolverListaBronce(listas);
     const flujoTienda = procesoFinancieroSeleccionado && (!!data.compra_en_tienda || !!data.compra_en_tienda_solo_tag);
     const cotizacionOpcional = flujoTienda;
@@ -422,7 +422,7 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                                             Compra Realizada: Solicitar tag
                                         </span>
                                         <p className="text-[10px] font-bold theme-text-muted mt-1 leading-snug">
-                                            Para asegurar el TAG de la vendedora cuando la compra ya ocurrió (p. ej. al día siguiente). Sin lista ni cotización. No requiere confirmar pago.
+                                            Para registrar el TAG de quien atendió la venta cuando la compra ya ocurrió. Sin lista ni cotización. No requiere confirmar pago.
                                         </p>
                                     </div>
                                 </label>

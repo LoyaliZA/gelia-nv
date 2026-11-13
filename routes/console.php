@@ -46,6 +46,7 @@ foreach ($horariosCobranza as $hora) {
 }
 
 Schedule::command('sesiones:cerrar-jornada')->everyFiveMinutes();
+Schedule::command('clientes:recuperar-aplicaciones')->everyFiveMinutes();
 Schedule::command('presencia:marcar-fuera-de-linea')->everyMinute();
 Schedule::command('sesiones:sincronizar-expiradas')->everyFifteenMinutes();
 Schedule::command('saldos-favor:vencer-creditos')->dailyAt('01:15');

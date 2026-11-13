@@ -67,7 +67,11 @@ class ImportacionClienteSeguimientoController extends Controller
                 });
             })
             ->when($categoria === 'con_cambios', fn ($query) => $query->where('categoria', '!=', 'sin_cambios'))
-            ->when($categoria !== '' && $categoria !== 'con_cambios', fn ($query) => $query->where('categoria', $categoria))
+            ->when($categoria === 'inactivacion', fn ($query) => $query->where('motivo', 'like', '%pasaría a inactivo%'))
+            ->when($categoria === 'reactivacion', fn ($query) => $query->where('motivo', 'like', '%pasaría a activo%'))
+            ->when($categoria === 'omision', fn ($query) => $query->where('categoria', 'omitida'))
+            ->when($categoria === 'conflicto', fn ($query) => $query->where('motivo', 'like', '%conflicto%'))
+            ->when($categoria !== '' && ! in_array($categoria, ['con_cambios', 'inactivacion', 'reactivacion', 'omision', 'conflicto'], true), fn ($query) => $query->where('categoria', $categoria))
             ->when($request->boolean('incidencias'), function ($query) {
                 $query->where(function ($inner) {
                     $inner->where('es_bloqueo', true)->orWhere('es_aviso', true)->orWhere('categoria', 'error');
