@@ -272,7 +272,7 @@ export default function EjercicioEscalonamientoPanel({ listas, variant = 'page' 
         <div className="space-y-6">
             {clientesEnVista.map(cliente => {
                 const inactivo = cliente.es_inactivo === true || cliente.es_inactivo === 1;
-                const menudeo = !inactivo && cliente.modalidad_comercial === 'menudeo';
+                const menudeo = !inactivo && (cliente.es_menudeo === true || cliente.es_menudeo === 1);
                 const simularMayoreo = !!simulacionMayoreo[cliente.id];
                 const hipotetico = inactivo || (menudeo && simularMayoreo);
                 const clienteCalculo = hipotetico && cliente.lista_efectiva_id
@@ -360,8 +360,9 @@ export default function EjercicioEscalonamientoPanel({ listas, variant = 'page' 
 
                         {menudeo && (
                             <div className="mx-4 md:mx-5 mt-4 p-4 rounded-xl border border-amber-500/40 bg-amber-500/10 space-y-3">
+                                <p className="text-sm font-black text-amber-900 dark:text-amber-200 m-0">Cliente de Menudeo</p>
                                 <p className="text-sm font-bold text-amber-900 dark:text-amber-200 m-0">
-                                    Cliente de menudeo. Actualmente compra a precio público. ¿Desea simular su escalonamiento de mayoreo?
+                                    Este cliente compra actualmente a precio público. Puede simular su escalonamiento de Mayoreo para conocer los beneficios que podría solicitar.
                                 </p>
                                 <p className="text-xs font-bold text-amber-900 dark:text-amber-200 m-0">
                                     Monto histórico: {fmtMontoEscalonamiento(analisis.montoHistorico)}
@@ -372,21 +373,21 @@ export default function EjercicioEscalonamientoPanel({ listas, variant = 'page' 
                                         onClick={() => setSimulacionMayoreo((prev) => ({ ...prev, [cliente.id]: true }))}
                                         className="inline-flex items-center px-4 py-2.5 text-xs font-black uppercase tracking-wide rounded-xl border border-amber-500/40 bg-amber-500/15 text-amber-900 dark:text-amber-200"
                                     >
-                                        Simular escalonamiento de mayoreo
+                                        Simular escalonamiento de Mayoreo
                                     </button>
                                 ) : (
                                     <p className="text-xs font-bold text-amber-900 dark:text-amber-200 m-0">
-                                        Resultado hipotético. No cambia la lista, la modalidad ni el acumulado.
+                                        Resultado hipotético. No cambia la lista, la condición de menudeo ni el acumulado.
                                     </p>
                                 )}
                             </div>
                         )}
                         {inactivo && (
                             <div className="mx-4 md:mx-5 mt-4 p-4 rounded-xl border-2 border-black/80 dark:border-white/80 bg-black text-white dark:bg-white dark:text-black space-y-1">
-                                <p className="text-sm font-black uppercase tracking-wide m-0">Cliente inactivo</p>
+                                <p className="text-sm font-black uppercase tracking-wide m-0">CLIENTE INACTIVO</p>
                                 <p className="text-sm font-bold m-0">Cotice un monto para evaluar su reactivación.</p>
                                 {tieneCotizacion && (
-                                    <p className="text-xs font-bold m-0 opacity-80">Escenario hipotético. No activa al cliente ni cambia su lista o modalidad.</p>
+                                    <p className="text-xs font-bold m-0 opacity-80">Escenario hipotético. No activa al cliente ni cambia su lista.</p>
                                 )}
                             </div>
                         )}

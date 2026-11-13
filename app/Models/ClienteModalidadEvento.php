@@ -9,8 +9,13 @@ class ClienteModalidadEvento extends Model
 {
     protected $table = 'cliente_modalidad_eventos';
 
+    protected $casts = [
+        'es_menudeo' => 'boolean',
+    ];
+
     protected $fillable = [
         'cliente_id',
+        'es_menudeo',
         'modalidad',
         'origen',
         'solicitud_id',

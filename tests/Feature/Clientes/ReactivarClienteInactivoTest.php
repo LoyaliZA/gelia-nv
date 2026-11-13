@@ -153,6 +153,6 @@ class ReactivarClienteInactivoTest extends TestCase
         $this->assertTrue($cliente->es_inactivo);
         $this->assertEquals(6000.0, (float) $cliente->monto_venta_actual);
         $this->assertEquals($listaPg, $cliente->lista_actual_id);
-        $this->assertNull($cliente->modalidad_comercial);
+        $this->assertFalse($cliente->es_menudeo);
     }
 }

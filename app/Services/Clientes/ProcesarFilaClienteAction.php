@@ -4,6 +4,7 @@ namespace App\Services\Clientes;
 
 use App\Models\CambioListaImportacionCliente;
 use App\Models\Cliente;
+use App\Services\Clientes\ClasificacionComercialCliente;
 use App\Services\Escalonamiento\EscalonamientoAutoridad;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
@@ -71,7 +72,7 @@ class ProcesarFilaClienteAction
             $aviso = $clasificacion->aplicarEnImportacion($cliente, $listaCodigo, $monto);
         }
         $cliente->discrepanciaModalidad = $aviso;
-        if ($estado !== null && $aviso !== 'lista_mayorista_sin_conversion') {
+        if ($estado !== null) {
             $cliente->es_inactivo = $estado;
         }
         if ($monto !== null && ! $gobernado) {
@@ -102,7 +103,7 @@ class ProcesarFilaClienteAction
                 $cliente->$campo = (int) $data[$campo];
             }
         }
-        $modalidadAntes = (string) ($antes['modalidad_comercial'] ?? '');
+        $menudeoAntes = ClasificacionComercialCliente::bandera($antes['es_menudeo'] ?? false);
         $origenAntes = (string) ($antes['modalidad_origen'] ?? '');
         $montoAnterior = (string) ($antes['monto_venta_actual'] ?? '0');
         if (! $nuevo && bccomp($montoAnterior, (string) $cliente->monto_venta_actual, 2) !== 0) {
@@ -117,7 +118,7 @@ class ProcesarFilaClienteAction
         if ($persistir && $cliente->isDirty()) {
             $cliente->save();
         }
-        $cambioModalidad = $modalidadAntes !== (string) ($cliente->modalidad_comercial ?? '')
+        $cambioModalidad = $menudeoAntes !== ClasificacionComercialCliente::bandera($cliente->es_menudeo)
             || $origenAntes !== (string) ($cliente->modalidad_origen ?? '');
         if ($persistir && $cambioModalidad && $cliente->id) {
             $clasificacion->registrarEvento($cliente, $usuarioId, null);

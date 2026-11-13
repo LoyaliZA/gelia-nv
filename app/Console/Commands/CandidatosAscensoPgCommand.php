@@ -32,8 +32,7 @@ class CandidatosAscensoPgCommand extends Command
 
                 foreach ($cambios as $cambio) {
                     $cliente = $clientes->get($cambio->numero_cliente);
-                    if ($cliente && $cliente->modalidad_comercial === ClasificacionComercialCliente::MAYOREO
-                        && $cliente->modalidad_origen === ClasificacionComercialCliente::ORIGEN_CONVERSION) {
+                    if ($cliente && app(ClasificacionComercialCliente::class)->conversionVigente($cliente)) {
                         continue;
                     }
 

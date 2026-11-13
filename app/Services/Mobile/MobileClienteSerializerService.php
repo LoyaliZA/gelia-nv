@@ -68,7 +68,7 @@ class MobileClienteSerializerService
         foreach ($presentacion as $clave => $valor) {
             $resultado[$clave] = $valor;
         }
-        if (($cliente->es_inactivo || $cliente->modalidad_comercial === ClasificacionComercialCliente::MENUDEO) && array_key_exists('lista_descuento', $resultado)) {
+        if (($cliente->es_inactivo || $cliente->es_menudeo) && array_key_exists('lista_descuento', $resultado)) {
             $resultado['lista_descuento'] = $presentacion['lista_efectiva_nombre'];
         }
 

@@ -8,10 +8,6 @@ use App\Models\ClienteModalidadEvento;
 
 class ClasificacionComercialCliente
 {
-    public const MENUDEO = 'menudeo';
-
-    public const MAYOREO = 'mayoreo';
-
     public const ORIGEN_IMPORTACION = 'importacion';
 
     public const ORIGEN_MIGRACION = 'migracion_conservadora';
@@ -22,9 +18,14 @@ class ClasificacionComercialCliente
 
     public const ORIGEN_ADMINISTRACION = 'administracion';
 
+    public static function bandera(mixed $valor): int
+    {
+        return filter_var($valor, FILTER_VALIDATE_BOOLEAN) ? 1 : 0;
+    }
+
     public function esMenudeo(Cliente $cliente): bool
     {
-        return $cliente->modalidad_comercial === self::MENUDEO;
+        return (bool) $cliente->es_menudeo;
     }
 
     public function esListaMayorista(?CatalogoListaDescuento $lista): bool
@@ -39,25 +40,26 @@ class ClasificacionComercialCliente
 
     public function conversionVigente(Cliente $cliente): bool
     {
-        return $cliente->modalidad_comercial === self::MAYOREO
+        return ! $this->esMenudeo($cliente)
             && $cliente->modalidad_origen === self::ORIGEN_CONVERSION
             && (bool) $cliente->conversion_solicitud_id;
     }
 
-    public function asignar(Cliente $cliente, ?string $modalidad, string $origen, ?int $solicitudId = null, ?int $usuarioId = null): void
+    public function asignar(Cliente $cliente, bool $esMenudeo, string $origen, ?int $solicitudId = null, ?int $usuarioId = null): void
     {
-        $cliente->modalidad_comercial = $modalidad;
+        $cliente->es_menudeo = $esMenudeo;
         $cliente->modalidad_origen = $origen;
-        if ($origen === self::ORIGEN_CONVERSION) {
+        if ($origen === self::ORIGEN_CONVERSION && ! $esMenudeo) {
             $cliente->conversion_solicitud_id = $solicitudId;
             $cliente->conversion_usuario_id = $usuarioId;
             $cliente->conversion_autorizada_at = now();
+
+            return;
         }
-        if ($modalidad !== self::MAYOREO) {
-            $cliente->conversion_solicitud_id = null;
-            $cliente->conversion_usuario_id = null;
-            $cliente->conversion_autorizada_at = null;
-        }
+
+        $cliente->conversion_solicitud_id = null;
+        $cliente->conversion_usuario_id = null;
+        $cliente->conversion_autorizada_at = null;
     }
 
     public function registrarEvento(Cliente $cliente, ?int $usuarioId, ?int $solicitudId): void
@@ -68,7 +70,7 @@ class ClasificacionComercialCliente
 
         ClienteModalidadEvento::query()->create([
             'cliente_id' => $cliente->id,
-            'modalidad' => $cliente->modalidad_comercial,
+            'es_menudeo' => $this->esMenudeo($cliente),
             'origen' => $cliente->modalidad_origen,
             'solicitud_id' => $solicitudId,
             'usuario_id' => $usuarioId,
@@ -76,7 +78,7 @@ class ClasificacionComercialCliente
     }
 
     /**
-     * El código explícito fija la lista de un cliente nuevo o sin modalidad.
+     * El código explícito fija la lista de un cliente nuevo o sin condición de menudeo.
      * Un menudeo sin conversión no adopta una lista mayorista. El monto no asciende.
      */
     public function aplicarEnImportacion(Cliente $cliente, CatalogoListaDescuento $listaCodigo, ?string $monto): ?string
@@ -89,8 +91,13 @@ class ClasificacionComercialCliente
         }
 
         $cliente->lista_actual_id = $listaCodigo->id;
-        if ($this->esPublicoGeneral($listaCodigo) && $monto !== null && bccomp($monto, '0', 2) > 0) {
-            $this->asignar($cliente, self::MENUDEO, self::ORIGEN_IMPORTACION);
+        if (
+            ! $this->conversionVigente($cliente)
+            && $this->esPublicoGeneral($listaCodigo)
+            && $monto !== null
+            && bccomp($monto, '0', 2) > 0
+        ) {
+            $this->asignar($cliente, true, self::ORIGEN_IMPORTACION);
         }
 
         return null;
@@ -123,7 +130,7 @@ class ClasificacionComercialCliente
     }
 
     /**
-     * @return array{modalidad_comercial: ?string, modalidad_origen: ?string, conversion_autorizada: bool, lista_almacenada_id: ?int, lista_almacenada_nombre: ?string, lista_efectiva_id: ?int, lista_efectiva_nombre: ?string}
+     * @return array{es_menudeo: bool, modalidad_origen: ?string, conversion_autorizada: bool, lista_almacenada_id: ?int, lista_almacenada_nombre: ?string, lista_efectiva_id: ?int, lista_efectiva_nombre: ?string}
      */
     public function presentacion(Cliente $cliente): array
     {
@@ -137,7 +144,8 @@ class ClasificacionComercialCliente
         }
 
         return [
-            'modalidad_comercial' => $cliente->modalidad_comercial,
+            'es_menudeo' => $this->esMenudeo($cliente),
+            'es_inactivo' => (bool) $cliente->es_inactivo,
             'modalidad_origen' => $cliente->modalidad_origen,
             'conversion_autorizada' => $this->conversionVigente($cliente),
             'lista_almacenada_id' => $cliente->lista_actual_id ? (int) $cliente->lista_actual_id : null,
@@ -146,4 +154,4 @@ class ClasificacionComercialCliente
             'lista_efectiva_nombre' => $efectivaNombre,
         ];
     }
-}
+};

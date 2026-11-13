@@ -83,7 +83,8 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
     useSolicitudErrores(errors);
     const procesoFinancieroSeleccionado = esProcesoFinancieroSeleccionado(procesos, data.catalogo_proceso_id);
     const procesoAsignarTagSolo = esProcesoAsignarTagSolo(procesos, data.catalogo_proceso_id);
-    const puedeConvertirMenudeo = infoCliente?.modalidad_comercial === 'menudeo' && !infoCliente?.es_inactivo && admiteConversionMenudeo(procesos, data.catalogo_proceso_id);
+    const esMenudeo = infoCliente?.es_menudeo === true || infoCliente?.es_menudeo === 1;
+    const puedeConvertirMenudeo = esMenudeo && !infoCliente?.es_inactivo && admiteConversionMenudeo(procesos, data.catalogo_proceso_id);
     const listaBronce = resolverListaBronce(listas);
     const flujoTienda = procesoFinancieroSeleccionado && (!!data.compra_en_tienda || !!data.compra_en_tienda_solo_tag);
     const cotizacionOpcional = flujoTienda;
@@ -149,7 +150,7 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
             if (!cotizacionOpcional) {
                 setAnalisisFinanciero(null);
                 setAlertaLista(null);
-                if (!modoEdicion && !(infoCliente?.modalidad_comercial === 'menudeo' && data.convertir_menudeo_mayoreo)) {
+                if (!modoEdicion && !(esMenudeo && data.convertir_menudeo_mayoreo)) {
                     setData('catalogo_lista_descuento_id', '');
                 }
                 setData('confirmo_informacion_escalonamiento', false);
@@ -175,7 +176,7 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
         setData('monto_final_tentativo', analisis.montoFinalTentativo);
         setData('total_proyectado_neto', analisis.totalProyectadoNeto);
 
-        if (infoCliente?.modalidad_comercial !== 'menudeo' && analisis.esAscenso && analisis.listaCalificadaEfectiva) {
+        if (!esMenudeo && analisis.esAscenso && analisis.listaCalificadaEfectiva) {
             const reqObjetivo = parseFloat(analisis.listaCalificadaEfectiva.monto_requerido);
             const listaSeleccionada = buscarListaPorId(listas, data.catalogo_lista_descuento_id);
             const reqSeleccionada = listaSeleccionada ? parseFloat(listaSeleccionada.monto_requerido) : -1;

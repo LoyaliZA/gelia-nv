@@ -124,12 +124,12 @@ class CancelarSolicitudService
 
     private function conversionProtegeLaLista(Cliente $cliente, SolicitudTag $solicitud): bool
     {
-        if ($cliente->modalidad_comercial === ClasificacionComercialCliente::MENUDEO) {
+        $clasificacion = app(ClasificacionComercialCliente::class);
+        if ($clasificacion->esMenudeo($cliente)) {
             return true;
         }
 
-        return $cliente->modalidad_comercial === ClasificacionComercialCliente::MAYOREO
-            && $cliente->modalidad_origen === ClasificacionComercialCliente::ORIGEN_CONVERSION
+        return $clasificacion->conversionVigente($cliente)
             && (int) $cliente->conversion_solicitud_id !== (int) $solicitud->id;
     }
 

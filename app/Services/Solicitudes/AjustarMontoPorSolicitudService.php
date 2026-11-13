@@ -98,7 +98,7 @@ class AjustarMontoPorSolicitudService
             ) {
                 if ($esMenudeo) {
                     $this->aplicarConversionMenudeo($cliente, $solicitud, $clasificacion, $listaAnterior);
-                } elseif ($cliente->modalidad_comercial === ClasificacionComercialCliente::MAYOREO) {
+                } elseif ($clasificacion->conversionVigente($cliente)) {
                     $this->ratificarConversion($cliente, $solicitud, $clasificacion);
                 }
             }
@@ -151,13 +151,13 @@ class AjustarMontoPorSolicitudService
                 ->get();
 
             $montoOficial = (string) $cliente->monto_venta_actual;
-            $modalidadAntes = $cliente->modalidad_comercial;
+            $menudeoAntes = (bool) $cliente->es_menudeo;
             $antes = $this->capturarSnapshotCliente($cliente);
             $this->revertirCampo($cliente, $solicitud, SolicitudBeneficio::CAMPO_MODALIDAD);
             $this->revertirCampo($cliente, $solicitud, SolicitudBeneficio::CAMPO_LISTA);
             $this->revertirCampo($cliente, $solicitud, SolicitudBeneficio::CAMPO_TIPO);
             $this->revertirCampo($cliente, $solicitud, SolicitudBeneficio::CAMPO_VENDEDOR);
-            if ($cliente->modalidad_comercial !== $modalidadAntes) {
+            if ((bool) $cliente->es_menudeo !== $menudeoAntes) {
                 app(ClasificacionComercialCliente::class)->registrarEvento($cliente, $usuarioId, (int) $solicitud->id);
             }
 
@@ -513,8 +513,8 @@ class AjustarMontoPorSolicitudService
     private function restaurarCampo(Cliente $cliente, string $campo, SolicitudBeneficio $concesion): void
     {
         if ($campo === SolicitudBeneficio::CAMPO_MODALIDAD) {
-            $cliente->modalidad_comercial = $concesion->valor_anterior;
-            if ($concesion->valor_anterior !== ClasificacionComercialCliente::MAYOREO) {
+            $cliente->es_menudeo = $concesion->valor_anterior === '1';
+            if ($concesion->valor_anterior === '1') {
                 $cliente->modalidad_origen = ClasificacionComercialCliente::ORIGEN_REVERSION;
                 $cliente->conversion_solicitud_id = null;
                 $cliente->conversion_usuario_id = null;
@@ -525,7 +525,7 @@ class AjustarMontoPorSolicitudService
         }
 
         if ($campo === SolicitudBeneficio::CAMPO_LISTA) {
-            if ($cliente->modalidad_comercial === ClasificacionComercialCliente::MENUDEO) {
+            if ($cliente->es_menudeo) {
                 if ($concesion->valor_anterior !== null && $concesion->valor_anterior !== '') {
                     $cliente->lista_actual_id = (int) $concesion->valor_anterior;
                 }
@@ -702,9 +702,7 @@ class AjustarMontoPorSolicitudService
             SolicitudBeneficio::CAMPO_LISTA => $this->valor($cliente->lista_actual_id),
             SolicitudBeneficio::CAMPO_TIPO => $this->valor($cliente->catalogo_tipo_cliente_id),
             SolicitudBeneficio::CAMPO_VENDEDOR => $this->valor($cliente->vendedor_id),
-            SolicitudBeneficio::CAMPO_MODALIDAD => $cliente->modalidad_comercial === null || $cliente->modalidad_comercial === ''
-                ? null
-                : (string) $cliente->modalidad_comercial,
+            SolicitudBeneficio::CAMPO_MODALIDAD => $cliente->es_menudeo ? '1' : '0',
             default => null,
         };
     }
@@ -725,7 +723,7 @@ class AjustarMontoPorSolicitudService
 
     private function recalcularListaCliente(Cliente $cliente): void
     {
-        if ($cliente->modalidad_comercial === ClasificacionComercialCliente::MENUDEO) {
+        if ($cliente->es_menudeo) {
             return;
         }
 
@@ -766,16 +764,16 @@ class AjustarMontoPorSolicitudService
             $this->conceder($cliente, $solicitud, SolicitudBeneficio::CAMPO_LISTA, $listaAnterior, $this->valor($cliente->lista_actual_id));
         }
 
-        $anterior = $cliente->modalidad_comercial;
+        $anterior = $cliente->es_menudeo ? '1' : '0';
         $usuarioId = Auth::id() ?: $solicitud->vendedor_id;
         $clasificacion->asignar(
             $cliente,
-            ClasificacionComercialCliente::MAYOREO,
+            false,
             ClasificacionComercialCliente::ORIGEN_CONVERSION,
             (int) $solicitud->id,
             $usuarioId ? (int) $usuarioId : null,
         );
-        $this->conceder($cliente, $solicitud, SolicitudBeneficio::CAMPO_MODALIDAD, $anterior, ClasificacionComercialCliente::MAYOREO);
+        $this->conceder($cliente, $solicitud, SolicitudBeneficio::CAMPO_MODALIDAD, $anterior, '0');
         $clasificacion->registrarEvento($cliente, $usuarioId ? (int) $usuarioId : null, (int) $solicitud->id);
     }
 
@@ -784,12 +782,12 @@ class AjustarMontoPorSolicitudService
         $usuarioId = Auth::id() ?: $solicitud->vendedor_id;
         $clasificacion->asignar(
             $cliente,
-            ClasificacionComercialCliente::MAYOREO,
+            false,
             ClasificacionComercialCliente::ORIGEN_CONVERSION,
             (int) $solicitud->id,
             $usuarioId ? (int) $usuarioId : null,
         );
-        $this->conceder($cliente, $solicitud, SolicitudBeneficio::CAMPO_MODALIDAD, ClasificacionComercialCliente::MAYOREO, ClasificacionComercialCliente::MAYOREO);
+        $this->conceder($cliente, $solicitud, SolicitudBeneficio::CAMPO_MODALIDAD, '0', '0');
         $clasificacion->registrarEvento($cliente, $usuarioId ? (int) $usuarioId : null, (int) $solicitud->id);
     }
 

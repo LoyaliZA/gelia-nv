@@ -22,6 +22,8 @@ class FilaRevisionImportacionCliente extends Model
         'monto_nuevo',
         'es_bloqueo',
         'es_aviso',
+        'cambios',
+        'datos',
     ];
 
     protected $casts = [
@@ -29,6 +31,8 @@ class FilaRevisionImportacionCliente extends Model
         'es_aviso' => 'boolean',
         'monto_anterior' => 'decimal:2',
         'monto_nuevo' => 'decimal:2',
+        'cambios' => 'array',
+        'datos' => 'array',
     ];
 
     public function importacion(): BelongsTo

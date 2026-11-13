@@ -41,6 +41,7 @@ class RevisionImportacionClientes
             throw $e;
         }
 
+        $inicioAnalisis = microtime(true);
         $analisis = $this->analizar($importacion, true);
         $revision = [
             'archivo_sha256' => $sha,
@@ -52,6 +53,7 @@ class RevisionImportacionClientes
             'proyeccion' => $analisis['hash'],
             'catalogo' => $this->importador->huellaCatalogoRevision(),
             'estado_clientes' => $analisis['estado_clientes'],
+            'headers' => $analisis['headers'],
         ];
         $importacion->estado = 'previsualizada';
         $importacion->resumen = [
@@ -60,6 +62,7 @@ class RevisionImportacionClientes
             'bloqueos' => $analisis['bloqueos'],
             'avisos' => $analisis['avisos'],
             'muestras' => $analisis['muestras'],
+            'tiempos' => ['analisis_ms' => (int) round((microtime(true) - $inicioAnalisis) * 1000)],
         ];
         $importacion->save();
 
@@ -200,7 +203,7 @@ class RevisionImportacionClientes
                     null, null, false,
                 );
                 $despues = $coleccion->get($numero);
-                $evaluacion = $this->evaluarFila($fila, $antes, $despues, $cambio, $importaCodigo, $importaFecha, $cortes);
+                $evaluacion = $this->evaluarFila($fila, $antes, $despues, $cambio, $importaCodigo, $importaFecha, $cortes, $listas);
                 $lineas[] = $this->lineaProyeccion($fila, $despues, $cambio, $listas, $evaluacion['categoria']);
             } catch (ValidationException $e) {
                 $conteos['errores']++;
@@ -246,7 +249,7 @@ class RevisionImportacionClientes
                 $persistirFilas, $importacion, $fila, $numero,
                 (string) ($despues?->nombre ?? ($antes['nombre'] ?? '')),
                 $evaluacion['categoria'], $evaluacion['motivo'], $evaluacion['monto_anterior'] ?? null, $evaluacion['monto_nuevo'] ?? null,
-                $evaluacion['bloqueos'] !== [], $evaluacion['avisos'] !== [], $conteos['filas'],
+                $evaluacion['bloqueos'] !== [], $evaluacion['avisos'] !== [], $conteos['filas'], $evaluacion['cambios'] ?? null,
             );
         }
         $this->vaciarRevision($persistirFilas, $importacion, $conteos['filas']);
@@ -269,6 +272,7 @@ class RevisionImportacionClientes
             'numeros' => $numeros,
             'estado_clientes' => $estadoClientes,
             'bloqueado' => $bloqueos !== [],
+            'headers' => $validado['headers'],
         ];
     }
 
@@ -339,7 +343,7 @@ class RevisionImportacionClientes
 
     /**
      * @param  array<string, mixed>|null  $antes
-     * @return ?array{lista: string, monto: string, inactivo: int, updated_at: string, modalidad: string, origen: string, conversion_solicitud_id: string}
+     * @return ?array{lista: string, monto: string, inactivo: int, updated_at: string, es_menudeo: int, origen: string, conversion_solicitud_id: string}
      */
     private function estadoCliente(?array $antes): ?array
     {
@@ -352,7 +356,7 @@ class RevisionImportacionClientes
             'monto' => bcadd((string) ($antes['monto_venta_actual'] ?? '0'), '0', 2),
             'inactivo' => (int) ($antes['es_inactivo'] ?? 0),
             'updated_at' => (string) ($antes['updated_at'] ?? ''),
-            'modalidad' => (string) ($antes['modalidad_comercial'] ?? ''),
+            'es_menudeo' => ClasificacionComercialCliente::bandera($antes['es_menudeo'] ?? false),
             'origen' => (string) ($antes['modalidad_origen'] ?? ''),
             'conversion_solicitud_id' => (string) ($antes['conversion_solicitud_id'] ?? ''),
         ];
@@ -370,7 +374,7 @@ class RevisionImportacionClientes
             $despues ? bcadd((string) $despues->monto_venta_actual, '0', 2) : '',
             $despues ? (int) $despues->es_inactivo : '',
             $cambio['tipo_cambio'] ?? '',
-            (string) ($despues->modalidad_comercial ?? ''),
+            ClasificacionComercialCliente::bandera($despues?->es_menudeo),
             (string) ($despues->modalidad_origen ?? ''),
             (string) ($despues->conversion_solicitud_id ?? ''),
         ]);
@@ -379,9 +383,9 @@ class RevisionImportacionClientes
     /**
      * @param  array<string, mixed>|null  $antes
      * @param  array<string, int>  $cortes
-     * @return array{conteos: array<string, int>, bloqueos: list<string>, avisos: list<string>, motivo: ?string, categoria: string}
+     * @return array{conteos: array<string, int>, bloqueos: list<string>, avisos: list<string>, motivo: ?string, categoria: string, cambios: list<array{campo: string, anterior: string, nuevo: string}>}
      */
-    private function evaluarFila(array $fila, ?array $antes, ?Cliente $despues, ?array $cambio, bool $importaCodigo, bool $importaFecha, $cortes): array
+    private function evaluarFila(array $fila, ?array $antes, ?Cliente $despues, ?array $cambio, bool $importaCodigo, bool $importaFecha, $cortes, $listas): array
     {
         $conteos = array_fill_keys(['nuevos', 'actualizaciones', 'sin_cambios', 'cambios_lista', 'descensos', 'activaciones', 'inactivaciones', 'cambios_monto'], 0);
         $bloqueos = [];
@@ -422,11 +426,11 @@ class RevisionImportacionClientes
             $bloqueos[] = 'inactivacion';
             $motivos[] = 'La fila inactivaría al cliente. GELIA no acepta esa baja.';
         }
-        if ($importaCodigo && $codigo === '' && $antes && ($listaAntes != $listaDespues || $inactivoAntes !== $inactivoDespues || (string) ($antes['modalidad_comercial'] ?? '') !== (string) ($despues->modalidad_comercial ?? ''))) {
+        if ($importaCodigo && $codigo === '' && $antes && ($listaAntes != $listaDespues || $inactivoAntes !== $inactivoDespues || ClasificacionComercialCliente::bandera($antes['es_menudeo'] ?? false) !== ClasificacionComercialCliente::bandera($despues?->es_menudeo))) {
             $bloqueos[] = 'codigo_vacio';
-            $motivos[] = 'Un código vacío cambiaría la lista, el estado o la modalidad.';
+            $motivos[] = 'Un código vacío cambiaría la lista, el estado o la condición de menudeo.';
         } elseif ($importaCodigo && $codigo === '' && $antes) {
-            $motivos[] = 'El código vacío conserva la lista, el estado y la modalidad.';
+            $motivos[] = 'El código vacío conserva la lista, el estado y la condición de menudeo.';
         }
         if ($despues?->discrepanciaModalidad === 'lista_mayorista_sin_conversion') {
             $avisos[] = 'lista_mayorista_sin_conversion';
@@ -451,7 +455,7 @@ class RevisionImportacionClientes
             }
             if (bccomp($delta, self::UMBRAL_DIFERENCIA_MONTO, 2) >= 0) {
                 $avisos[] = 'diferencia_monto';
-                $motivos[] = 'La diferencia de monto supera 1000.';
+                $motivos[] = 'La diferencia de monto supera 1000. Si la fila es válida, el monto importado se aplica al confirmar.';
             }
             if ($this->archivoAnterior($fila, $antes, $importaFecha, $cortes)) {
                 $bloqueos[] = 'archivo_anterior';
@@ -467,7 +471,63 @@ class RevisionImportacionClientes
             'categoria' => $categoria,
             'monto_anterior' => $montoAntes !== null ? bcadd((string) $montoAntes, '0', 2) : null,
             'monto_nuevo' => $montoDespues !== null ? bcadd((string) $montoDespues, '0', 2) : null,
+            'cambios' => $this->cambiosDeFila($antes, $despues, $listas, $montoAntes, $montoDespues),
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $antes
+     * @return list<array{campo: string, anterior: string, nuevo: string}>
+     */
+    private function cambiosDeFila(?array $antes, ?Cliente $despues, $listas, mixed $montoAntes, mixed $montoDespues): array
+    {
+        $cambios = [];
+        $listaAntes = is_array($antes) ? ($antes['lista_actual_id'] ?? null) : null;
+        $listaDespues = $despues?->lista_actual_id;
+        if ((string) $listaAntes !== (string) $listaDespues && ($antes !== null || $listaDespues !== null)) {
+            $cambios[] = [
+                'campo' => 'Lista',
+                'anterior' => $this->nombreLista($listas, $listaAntes),
+                'nuevo' => $this->nombreLista($listas, $listaDespues),
+            ];
+        }
+        $inactivoAntes = (bool) (is_array($antes) ? ($antes['es_inactivo'] ?? false) : false);
+        $inactivoDespues = (bool) ($despues?->es_inactivo ?? false);
+        if ($inactivoAntes !== $inactivoDespues) {
+            $cambios[] = [
+                'campo' => 'Inactividad',
+                'anterior' => $inactivoAntes ? 'Inactivo' : 'Activo',
+                'nuevo' => $inactivoDespues ? 'Inactivo' : 'Activo',
+            ];
+        }
+        $menudeoAntes = ClasificacionComercialCliente::bandera(is_array($antes) ? ($antes['es_menudeo'] ?? false) : false) === 1;
+        $menudeoDespues = (bool) $despues?->es_menudeo;
+        if ($menudeoAntes !== $menudeoDespues) {
+            $cambios[] = [
+                'campo' => 'Menudeo',
+                'anterior' => $menudeoAntes ? 'Menudeo' : 'Sin menudeo',
+                'nuevo' => $menudeoDespues ? 'Menudeo' : 'Sin menudeo',
+            ];
+        }
+        if ($montoAntes !== null && $montoDespues !== null && bccomp((string) $montoAntes, (string) $montoDespues, 2) !== 0) {
+            $cambios[] = [
+                'campo' => 'Monto',
+                'anterior' => bcadd((string) $montoAntes, '0', 2),
+                'nuevo' => bcadd((string) $montoDespues, '0', 2),
+            ];
+        }
+
+        return $cambios;
+    }
+
+    private function nombreLista($listas, mixed $id): string
+    {
+        if ($id === null || $id === '') {
+            return 'Sin lista';
+        }
+        $lista = $listas->first(fn ($item) => (string) $item->id === (string) $id);
+
+        return (string) ($lista->nombre ?? $id);
     }
 
     private function archivoAnterior(array $fila, array $antes, bool $importaFecha, $cortes): bool
@@ -514,14 +574,14 @@ class RevisionImportacionClientes
         $lineas = Cliente::query()
             ->whereIn('numero_cliente', $numeros)
             ->orderBy('numero_cliente')
-            ->get(['numero_cliente', 'lista_actual_id', 'monto_venta_actual', 'es_inactivo', 'updated_at', 'modalidad_comercial', 'modalidad_origen', 'conversion_solicitud_id'])
+            ->get(['numero_cliente', 'lista_actual_id', 'monto_venta_actual', 'es_inactivo', 'updated_at', 'es_menudeo', 'modalidad_origen', 'conversion_solicitud_id'])
             ->map(fn (Cliente $cliente) => implode('|', [
                 $cliente->numero_cliente,
                 $cliente->lista_actual_id,
                 $cliente->monto_venta_actual,
                 (int) $cliente->es_inactivo,
                 (string) $cliente->updated_at,
-                (string) ($cliente->modalidad_comercial ?? ''),
+                ClasificacionComercialCliente::bandera($cliente->es_menudeo),
                 (string) ($cliente->modalidad_origen ?? ''),
                 (string) ($cliente->conversion_solicitud_id ?? ''),
             ]))
@@ -569,6 +629,7 @@ class RevisionImportacionClientes
         bool $bloqueo,
         bool $aviso,
         int $total,
+        ?array $cambios = null,
     ): void {
         $this->hechasRevision++;
         if (! $persistir) {
@@ -585,6 +646,11 @@ class RevisionImportacionClientes
             'monto_nuevo' => $montoNuevo,
             'es_bloqueo' => $bloqueo ? 1 : 0,
             'es_aviso' => $aviso ? 1 : 0,
+            'cambios' => $cambios === null || $cambios === [] ? null : json_encode($cambios, JSON_UNESCAPED_UNICODE),
+            'datos' => json_encode([
+                'data' => $fila['data'] ?? [],
+                'duplicada' => (bool) ($fila['duplicada'] ?? false),
+            ], JSON_UNESCAPED_UNICODE),
         ];
         if (count($this->loteRevision) >= 200 || $this->hechasRevision === $total || $this->hechasRevision % 50 === 0) {
             $this->vaciarRevision(true, $importacion, $total);

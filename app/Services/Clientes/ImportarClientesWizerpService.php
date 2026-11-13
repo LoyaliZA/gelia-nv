@@ -6,6 +6,7 @@ use App\Models\CambioListaImportacionCliente;
 use App\Models\CatalogoListaDescuento;
 use App\Models\Cliente;
 use App\Models\ErroresImportacionCliente;
+use App\Models\FilaRevisionImportacionCliente;
 use App\Models\HistorialMontoCliente;
 use App\Models\ImportacionCliente;
 use App\Models\User;
@@ -35,6 +36,11 @@ class ImportarClientesWizerpService
     /** @var list<mixed> */
     private array $alertasCredito = [];
 
+    private float $loteInicio = 0.0;
+
+    /** @var array<string, float> */
+    private array $tiemposMs = ['lectura' => 0, 'consultas' => 0, 'escritura' => 0, 'sincronizacion' => 0];
+
     public function __construct(protected ProcesarFilaClienteAction $procesador) {}
 
     public function duranteBloqueo(callable $accion): mixed
@@ -56,12 +62,22 @@ class ImportarClientesWizerpService
         $this->cursorFila = $desdeFila;
         $this->ascensosDetalle = [];
         $this->alertasCredito = [];
+        $this->tiemposMs = ['lectura' => 0, 'consultas' => 0, 'escritura' => 0, 'sincronizacion' => 0];
         if ($importacion) {
             $memoria = $importacion->resumen ?? [];
-            if ($desdeFila > 0 && isset($memoria['inicio_ts'])) {
-                $inicio = (float) $memoria['inicio_ts'];
+            if ($desdeFila > 0) {
+                $inicio = (float) ($memoria['inicio_ts'] ?? $inicio);
                 $this->ascensosDetalle = array_values($memoria['ascensos_detalle'] ?? []);
                 $this->alertasCredito = array_values($memoria['alertas_credito'] ?? []);
+                $contadores = is_array($importacion->contadores) ? $importacion->contadores : $memoria;
+                foreach (array_keys($stats) as $clave) {
+                    if ($clave === 'leidas') {
+                        continue;
+                    }
+                    if (isset($contadores[$clave]) && is_numeric($contadores[$clave])) {
+                        $stats[$clave] = (int) $contadores[$clave];
+                    }
+                }
             } else {
                 $memoria['inicio_ts'] = $inicio;
                 $importacion->resumen = $memoria;
@@ -69,40 +85,34 @@ class ImportarClientesWizerpService
         }
         try {
             $this->adquirirBloqueo();
+            $this->loteInicio = microtime(true);
             $path = $importacion
                 ? Storage::disk('local')->path($importacion->ruta_almacenamiento)
                 : $archivo->getRealPath();
-            // Preflight completo: ningún catálogo ni cliente se escribe antes de validar estructura.
-            $validado = app(ValidarArchivoClientesWizerp::class)->leer($path);
-            $stats['leidas'] = count($validado['filas']);
-            if ($importacion && $desdeFila > 0 && is_array($importacion->resumen)) {
-                foreach (array_keys($stats) as $clave) {
-                    if ($clave === 'leidas') {
-                        continue;
-                    }
-                    if (isset($importacion->resumen[$clave]) && is_numeric($importacion->resumen[$clave])) {
-                        $stats[$clave] = (int) $importacion->resumen[$clave];
-                    }
-                }
-            }
-            $importaCodigoLista = in_array('codigo_lista', $validado['headers'], true);
+            $lectura = microtime(true);
+            $fuente = $this->fuenteFilas($importacion, (string) $path, $desdeFila, $limite);
+            $this->tiemposMs['lectura'] += (microtime(true) - $lectura) * 1000;
+            $stats['leidas'] = $fuente['leidas'];
             $revisionImportacion = ($importacion && is_array($importacion->resumen)) ? ($importacion->resumen['revision'] ?? null) : null;
             $catalogoAprobado = is_array($revisionImportacion) ? ($revisionImportacion['catalogo'] ?? null) : null;
             if (is_string($catalogoAprobado) && ! hash_equals($catalogoAprobado, $this->huellaCatalogoRevision())) {
                 throw ValidationException::withMessages(['archivo' => 'El catálogo cambió después de la revisión. Hay que revisar el archivo de nuevo.']);
             }
             $estadoAprobado = is_array($revisionImportacion) ? ($revisionImportacion['estado_clientes'] ?? null) : null;
+            $consulta = microtime(true);
             $this->sincronizarListasWizerp();
             $mapa = $this->cargarMapaVendedoras();
             $listas = CatalogoListaDescuento::orderByDesc('monto_requerido')->get();
+            $this->tiemposMs['consultas'] += (microtime(true) - $consulta) * 1000;
             Cache::put('import_clientes_en_curso', true, now()->addHours(2));
             $manejadas = 0;
-            $hayMas = false;
-            foreach ($validado['filas'] as $fila) {
-                if ((int) $fila['numero_fila'] <= $desdeFila) {
+            $hayMas = $fuente['hay_mas'];
+            $importaCodigoLista = in_array('codigo_lista', $fuente['headers'], true);
+            foreach ($fuente['filas'] as $fila) {
+                if (! $fuente['acotado'] && (int) $fila['numero_fila'] <= $desdeFila) {
                     continue;
                 }
-                if ($limite !== null && $manejadas >= $limite) {
+                if (! $fuente['acotado'] && $limite !== null && $manejadas >= $limite) {
                     $hayMas = true;
                     break;
                 }
@@ -110,7 +120,7 @@ class ImportarClientesWizerpService
                 $this->cursorFila = (int) $fila['numero_fila'];
                 if ($fila['duplicada']) {
                     $stats['omitidas']++;
-                    $this->guardarProgreso($importacion, $stats, 'en_curso');
+                    $this->marcarAvance($importacion, $stats);
 
                     continue;
                 }
@@ -127,6 +137,7 @@ class ImportarClientesWizerpService
                         $alertasFila = [];
                         MobileSyncSuppression::begin();
                         try {
+                            $escritura = microtime(true);
                             $cambio = $this->procesador->ejecutar($fila['data'], $listas, $mapa, $coleccion,
                                 $historial, $importaCodigoLista, $inactivos, $alertasFila, $importacion?->id, $importacion?->usuario_id);
                             $despues = $coleccion->get($fila['data']['numero_cliente']);
@@ -144,6 +155,7 @@ class ImportarClientesWizerpService
                                     'codigo_lista' => $cambio['codigo_lista'], 'monto_nuevo' => $cambio['monto_nuevo'],
                                 ]);
                             }
+                            $this->tiemposMs['escritura'] += (microtime(true) - $escritura) * 1000;
                             $categoria = ! $antes ? 'creados' : ($despues->wasChanged() ? 'actualizados' : 'sin_cambios');
                             $siguiente = $stats;
                             $siguiente[$categoria]++;
@@ -156,10 +168,11 @@ class ImportarClientesWizerpService
                             } elseif (($cambio['tipo_cambio'] ?? '') === CambioListaImportacionCliente::TIPO_DESCENSO) {
                                 $siguiente['descensos']++;
                             }
-                            // La publicación durable participa del mismo commit que el cliente.
+                            $sincronizacion = microtime(true);
                             app(MobileSyncPublicationService::class)->publishDiffColeccion(
                                 collect($antes ? [$antes->id => $antes] : []), collect([$despues->id => $despues]));
-                            $this->guardarProgreso($importacion, $siguiente, 'en_curso');
+                            $this->tiemposMs['sincronizacion'] += (microtime(true) - $sincronizacion) * 1000;
+                            $this->marcarAvance($importacion, $siguiente);
 
                             return ['stats' => $siguiente, 'cambio' => $cambio, 'alertas' => $categoria === 'sin_cambios' ? [] : $alertasFila];
                         } finally {
@@ -187,7 +200,7 @@ class ImportarClientesWizerpService
                         && ! in_array((string) $e->getCode(), ['23000', '22001', '22003'], true))) {
                         throw $e;
                     }
-                    $this->guardarProgreso($importacion, $stats, 'en_curso');
+                    $this->marcarAvance($importacion, $stats);
                 }
             }
             if ($hayMas) {
@@ -244,7 +257,7 @@ class ImportarClientesWizerpService
         }
         $revision = $importacion->resumen['revision'] ?? null;
         $conservar = [];
-        foreach (['conteos', 'bloqueos', 'avisos', 'muestras', 'inicio_ts'] as $clave) {
+        foreach (['conteos', 'bloqueos', 'avisos', 'muestras', 'inicio_ts', 'tiempos'] as $clave) {
             if (array_key_exists($clave, $importacion->resumen ?? [])) {
                 $conservar[$clave] = $importacion->resumen[$clave];
             }
@@ -255,14 +268,129 @@ class ImportarClientesWizerpService
         if ($this->cursorFila > 0) {
             $resumen['cursor_fila'] = $this->cursorFila;
         }
+        if ($this->loteInicio > 0) {
+            $this->tiemposMs['lote'] = (microtime(true) - $this->loteInicio) * 1000;
+            $this->loteInicio = 0;
+        }
+        $tiempos = is_array($resumen['tiempos'] ?? null) ? $resumen['tiempos'] : [];
+        foreach ($this->tiemposMs as $clave => $ms) {
+            $tiempos[$clave.'_ms'] = round((float) ($tiempos[$clave.'_ms'] ?? 0) + $ms, 1);
+        }
+        $this->tiemposMs = array_fill_keys(array_keys($this->tiemposMs), 0);
+        $resumen['tiempos'] = $tiempos;
         if (is_array($revision)) {
             $resumen['revision'] = $revision;
         }
         $importacion->update(['estado' => $estado, 'resumen' => $resumen, 'mensaje_fatal' => $mensaje === null ? null : $this->sanitizarTextoImportacion($mensaje),
             'filas_leidas' => $stats['leidas'], 'filas_procesadas' => $stats['procesadas'], 'filas_omitidas' => $stats['omitidas'],
             'errores' => $stats['errores'], 'ascensos' => $stats['ascensos'], 'descensos' => $stats['descensos'],
-            'clientes_marcados_inactivos' => $stats['clientes_marcados_inactivos'], 'duracion_seg' => $stats['duracion_seg'] ?? null]);
+            'clientes_marcados_inactivos' => $stats['clientes_marcados_inactivos'], 'duracion_seg' => $stats['duracion_seg'] ?? null,
+            'cursor_fila' => $this->cursorFila, 'contadores' => $stats]);
         $importacion->resumen = $resumen;
+    }
+
+    /**
+     * @param  array<string, int|float>  $stats
+     */
+    private function marcarAvance(?ImportacionCliente $importacion, array $stats): void
+    {
+        if (! $importacion) {
+            return;
+        }
+
+        $importacion->newQuery()->whereKey($importacion->id)->update([
+            'estado' => 'en_curso',
+            'cursor_fila' => $this->cursorFila,
+            'filas_leidas' => $stats['leidas'],
+            'filas_procesadas' => $stats['procesadas'],
+            'filas_omitidas' => $stats['omitidas'],
+            'errores' => $stats['errores'],
+            'ascensos' => $stats['ascensos'],
+            'descensos' => $stats['descensos'],
+            'clientes_marcados_inactivos' => $stats['clientes_marcados_inactivos'],
+            'contadores' => json_encode($stats),
+            'updated_at' => now(),
+        ]);
+    }
+
+    /**
+     * @return array{filas: list<array<string, mixed>>, headers: list<string>, leidas: int, hay_mas: bool, acotado: bool}
+     */
+    private function fuenteFilas(?ImportacionCliente $importacion, string $path, int $desdeFila, ?int $limite): array
+    {
+        $material = $this->filasMaterializadas($importacion, $path, $desdeFila, $limite);
+        if ($material !== null) {
+            return $material;
+        }
+
+        $validado = app(ValidarArchivoClientesWizerp::class)->leer($path);
+
+        return [
+            'filas' => $validado['filas'],
+            'headers' => $validado['headers'],
+            'leidas' => count($validado['filas']),
+            'hay_mas' => false,
+            'acotado' => false,
+        ];
+    }
+
+    /**
+     * @return ?array{filas: list<array<string, mixed>>, headers: list<string>, leidas: int, hay_mas: bool, acotado: bool}
+     */
+    private function filasMaterializadas(?ImportacionCliente $importacion, string $path, int $desdeFila, ?int $limite): ?array
+    {
+        if (! $importacion) {
+            return null;
+        }
+        $hayDatos = FilaRevisionImportacionCliente::query()
+            ->where('importacion_cliente_id', $importacion->id)
+            ->whereNotNull('datos')
+            ->exists();
+        if (! $hayDatos) {
+            return null;
+        }
+
+        $revision = is_array($importacion->resumen) ? ($importacion->resumen['revision'] ?? []) : [];
+        $sha = (string) ($revision['archivo_sha256'] ?? '');
+        $actual = is_file($path) ? (hash_file('sha256', $path) ?: '') : '';
+        if ($sha === '' || ! hash_equals($sha, $actual)) {
+            throw ValidationException::withMessages(['archivo' => 'El archivo ya no coincide con la revisión aprobada.']);
+        }
+
+        $consulta = FilaRevisionImportacionCliente::query()
+            ->where('importacion_cliente_id', $importacion->id)
+            ->where('numero_fila', '>', $desdeFila)
+            ->orderBy('numero_fila');
+        if ($limite !== null) {
+            $consulta->limit($limite + 1);
+        }
+        $rows = $consulta->get(['numero_fila', 'datos']);
+        $hayMas = $limite !== null && $rows->count() > $limite;
+        if ($hayMas) {
+            $rows = $rows->take($limite);
+        }
+        $filas = [];
+        foreach ($rows as $row) {
+            $datos = is_array($row->datos) ? $row->datos : [];
+            $filas[] = [
+                'numero_fila' => (int) $row->numero_fila,
+                'data' => is_array($datos['data'] ?? null) ? $datos['data'] : [],
+                'duplicada' => (bool) ($datos['duplicada'] ?? false),
+            ];
+        }
+        $headers = is_array($revision['headers'] ?? null) ? $revision['headers'] : array_keys($filas[0]['data'] ?? []);
+        $leidas = (int) $importacion->filas_leidas;
+        if ($leidas === 0) {
+            $leidas = FilaRevisionImportacionCliente::query()->where('importacion_cliente_id', $importacion->id)->count();
+        }
+
+        return [
+            'filas' => $filas,
+            'headers' => $headers,
+            'leidas' => $leidas,
+            'hay_mas' => $hayMas,
+            'acotado' => true,
+        ];
     }
 
     private function sanitizarTextoImportacion(?string $texto): string
@@ -402,7 +530,7 @@ class ImportarClientesWizerpService
             'monto' => bcadd((string) ($attrs['monto_venta_actual'] ?? '0'), '0', 2),
             'inactivo' => (int) ($attrs['es_inactivo'] ?? 0),
             'updated_at' => (string) ($attrs['updated_at'] ?? ''),
-            'modalidad' => (string) ($attrs['modalidad_comercial'] ?? ''),
+            'es_menudeo' => ClasificacionComercialCliente::bandera($attrs['es_menudeo'] ?? false),
             'origen' => (string) ($attrs['modalidad_origen'] ?? ''),
             'conversion_solicitud_id' => (string) ($attrs['conversion_solicitud_id'] ?? ''),
         ];

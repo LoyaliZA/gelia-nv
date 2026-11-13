@@ -46,7 +46,7 @@ class CrearSolicitudService
             $montoCotizado = $esOperativo ? 0 : (float) ($datos['monto_cotizado'] ?? 0);
             $convertirMenudeo = filter_var($datos['convertir_menudeo_mayoreo'] ?? false, FILTER_VALIDATE_BOOLEAN);
             $clienteEscalon = (! $esOperativo && $clienteId) ? Cliente::find($clienteId) : null;
-            $esMenudeo = $clienteEscalon?->modalidad_comercial === ClasificacionComercialCliente::MENUDEO;
+            $esMenudeo = (bool) $clienteEscalon?->es_menudeo;
             $clasificacion = app(ClasificacionComercialCliente::class);
 
             if ($convertirMenudeo && $esMenudeo) {

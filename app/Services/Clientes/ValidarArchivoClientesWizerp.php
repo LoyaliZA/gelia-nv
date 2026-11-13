@@ -6,8 +6,11 @@ use Illuminate\Validation\ValidationException;
 
 class ValidarArchivoClientesWizerp
 {
+    public static int $lecturas = 0;
+
     public function leer(string $path): array
     {
+        self::$lecturas++;
         if (! is_file($path) || ! is_readable($path)) {
             throw ValidationException::withMessages(['archivo' => 'No se puede leer el archivo.']);
         }

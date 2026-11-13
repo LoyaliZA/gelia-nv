@@ -6,7 +6,6 @@ use App\Models\Cliente;
 use App\Models\CatalogoProceso;
 use App\Models\CatalogoListaDescuento;
 use App\Models\CatalogoTipoCliente;
-use App\Services\Clientes\ClasificacionComercialCliente;
 use App\Services\Solicitudes\CrearSolicitudService;
 use App\Services\Solicitudes\EscalonamientoService;
 use App\Services\Solicitudes\TipoClienteSolicitudResolver;
@@ -141,7 +140,7 @@ class StoreSolicitudRequest extends FormRequest
         $convertir = filter_var($this->input('convertir_menudeo_mayoreo'), FILTER_VALIDATE_BOOLEAN);
         $nombre = strtoupper(trim($this->resolverProceso()?->nombre ?? ''));
         $procesoPermite = in_array($nombre, ['ASIGNAR TAG', 'CAMBIO DE LISTA', 'ASIGNAR TAG Y CAMBIO DE LISTA'], true);
-        if ($convertir && $cliente->modalidad_comercial !== ClasificacionComercialCliente::MENUDEO) {
+        if ($convertir && ! $cliente->es_menudeo) {
             $validator->errors()->add('convertir_menudeo_mayoreo', 'Solo un cliente de menudeo puede solicitar la conversión a mayoreo.');
         }
         if ($convertir && ! $procesoPermite) {
@@ -149,7 +148,7 @@ class StoreSolicitudRequest extends FormRequest
         }
 
         $listaId = $this->input('catalogo_lista_descuento_id');
-        if ($cliente->modalidad_comercial === ClasificacionComercialCliente::MENUDEO && $listaId && ! $convertir) {
+        if ($cliente->es_menudeo && $listaId && ! $convertir) {
             $lista = CatalogoListaDescuento::find($listaId);
             if ($lista && str_starts_with(strtoupper($lista->nombre), 'MAYOREO ')) {
                 $validator->errors()->add('catalogo_lista_descuento_id', 'Un cliente de menudeo requiere la conversión explícita para solicitar una lista mayorista.');

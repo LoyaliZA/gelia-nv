@@ -84,7 +84,7 @@ class ModalidadComercialClienteTest extends TestCase
 
         $cliente->refresh();
         $this->assertSame($this->pg->id, $cliente->lista_actual_id);
-        $this->assertSame(ClasificacionComercialCliente::MENUDEO, $cliente->modalidad_comercial);
+        $this->assertTrue($cliente->es_menudeo);
         $this->assertNotSame($this->bronce->id, $cliente->lista_actual_id);
     }
 
@@ -102,20 +102,20 @@ class ModalidadComercialClienteTest extends TestCase
 
         $cliente->refresh();
         $this->assertSame($this->pg->id, $cliente->lista_actual_id);
-        $this->assertSame(ClasificacionComercialCliente::MENUDEO, $cliente->modalidad_comercial);
+        $this->assertTrue($cliente->es_menudeo);
         $this->assertNull($solicitud->catalogo_lista_descuento_id);
         $this->assertSame('5767.00', $cliente->monto_venta_actual);
     }
 
     public function test_pg_con_monto_cero_no_se_inactiva_ni_clasifica(): void
     {
-        $cliente = $this->cliente('300', '10.00', modalidad: null, montoInicial: '0.00');
+        $cliente = $this->cliente('300', '10.00', menudeo: false, montoInicial: '0.00');
         $this->importar("numero_cliente,codigo_lista,monto_venta_actual\n300,pg,0\n");
 
         $cliente->refresh();
         $this->assertFalse($cliente->es_inactivo);
         $this->assertSame($this->pg->id, $cliente->lista_actual_id);
-        $this->assertNull($cliente->modalidad_comercial);
+        $this->assertFalse($cliente->es_menudeo);
     }
 
     public function test_codigo_vacio_no_altera_modalidad_ni_lista(): void
@@ -125,7 +125,7 @@ class ModalidadComercialClienteTest extends TestCase
 
         $cliente->refresh();
         $this->assertSame($this->pg->id, $cliente->lista_actual_id);
-        $this->assertSame(ClasificacionComercialCliente::MENUDEO, $cliente->modalidad_comercial);
+        $this->assertTrue($cliente->es_menudeo);
         $this->assertSame(ClasificacionComercialCliente::ORIGEN_MIGRACION, $cliente->modalidad_origen);
         $this->assertSame('90.00', $cliente->monto_venta_actual);
         $this->assertFalse($cliente->es_inactivo);
@@ -133,7 +133,7 @@ class ModalidadComercialClienteTest extends TestCase
 
     public function test_inactivo_puede_consultarse_sin_activarse(): void
     {
-        $cliente = $this->cliente('500', '20.00', lista: $this->bronce, inactivo: true, modalidad: null);
+        $cliente = $this->cliente('500', '20.00', lista: $this->bronce, inactivo: true, menudeo: false);
         $antes = $cliente->updated_at?->toDateTimeString();
 
         $this->actingAs(User::factory()->create())->getJson('/api/clientes/500')
@@ -155,7 +155,7 @@ class ModalidadComercialClienteTest extends TestCase
 
         $this->actingAs(User::factory()->create())->getJson('/api/clientes?q=600')
             ->assertOk()
-            ->assertJsonPath('0.modalidad_comercial', ClasificacionComercialCliente::MENUDEO);
+            ->assertJsonPath('0.es_menudeo', true);
 
         $this->assertSame($marca, $cliente->fresh()->updated_at?->toDateTimeString());
         $this->assertSame($this->pg->id, $cliente->fresh()->lista_actual_id);
@@ -170,7 +170,7 @@ class ModalidadComercialClienteTest extends TestCase
         app(AjustarMontoPorSolicitudService::class)->aplicarBeneficios($solicitud);
 
         $cliente->refresh();
-        $this->assertSame(ClasificacionComercialCliente::MENUDEO, $cliente->modalidad_comercial);
+        $this->assertTrue($cliente->es_menudeo);
         $this->assertSame($this->pg->id, $cliente->lista_actual_id);
         $this->assertSame('15.00', $cliente->monto_venta_actual);
     }
@@ -184,12 +184,12 @@ class ModalidadComercialClienteTest extends TestCase
 
         $bronce->refresh();
         $plata->refresh();
-        $this->assertSame(ClasificacionComercialCliente::MAYOREO, $bronce->modalidad_comercial);
+        $this->assertFalse($bronce->es_menudeo);
         $this->assertSame(ClasificacionComercialCliente::ORIGEN_CONVERSION, $bronce->modalidad_origen);
         $this->assertSame($this->bronce->id, $bronce->lista_actual_id);
         $this->assertSame($this->plata->id, $plata->lista_actual_id);
         $this->assertSame('15.00', $bronce->monto_venta_actual);
-        $this->assertSame('menudeo', SolicitudBeneficio::query()->where('cliente_id', $bronce->id)->where('campo', 'modalidad')->value('valor_anterior'));
+        $this->assertSame('1', SolicitudBeneficio::query()->where('cliente_id', $bronce->id)->where('campo', 'es_menudeo')->value('valor_anterior'));
     }
 
     public function test_importacion_pg_no_deshace_conversion_ratificada(): void
@@ -203,7 +203,7 @@ class ModalidadComercialClienteTest extends TestCase
         $this->confirmar($vista);
 
         $cliente->refresh();
-        $this->assertSame(ClasificacionComercialCliente::MAYOREO, $cliente->modalidad_comercial);
+        $this->assertFalse($cliente->es_menudeo);
         $this->assertSame($this->bronce->id, $cliente->lista_actual_id);
         $this->assertSame('120.00', $cliente->monto_venta_actual);
     }
@@ -220,11 +220,11 @@ class ModalidadComercialClienteTest extends TestCase
         $ajuste->revertirBeneficios($original);
 
         $cliente->refresh();
-        $this->assertSame(ClasificacionComercialCliente::MAYOREO, $cliente->modalidad_comercial);
+        $this->assertFalse($cliente->es_menudeo);
         $this->assertSame($this->plata->id, $cliente->lista_actual_id);
         $this->assertSame(
             SolicitudBeneficio::ESTADO_REEMPLAZADO,
-            SolicitudBeneficio::query()->where('solicitud_tag_id', $original->id)->where('campo', 'modalidad')->value('estado'),
+            SolicitudBeneficio::query()->where('solicitud_tag_id', $original->id)->where('campo', 'es_menudeo')->value('estado'),
         );
     }
 
@@ -237,8 +237,8 @@ class ModalidadComercialClienteTest extends TestCase
         $ajuste->revertirBeneficios($solicitud);
 
         $cliente->refresh();
-        $this->assertSame('menudeo', $cliente->modalidad_comercial);
-        $this->assertNotSame(0, $cliente->modalidad_comercial);
+        $this->assertTrue($cliente->es_menudeo);
+        $this->assertNotSame(0, $cliente->es_menudeo);
         $this->assertSame($this->pg->id, $cliente->lista_actual_id);
         $this->assertSame('30.00', $cliente->monto_venta_actual);
     }
@@ -251,7 +251,7 @@ class ModalidadComercialClienteTest extends TestCase
         $ajuste->aplicarBeneficios($solicitud);
         ClienteModalidadEvento::query()->create([
             'cliente_id' => $cliente->id,
-            'modalidad' => ClasificacionComercialCliente::MAYOREO,
+            'es_menudeo' => false,
             'origen' => ClasificacionComercialCliente::ORIGEN_ADMINISTRACION,
             'solicitud_id' => null,
             'usuario_id' => null,
@@ -261,22 +261,22 @@ class ModalidadComercialClienteTest extends TestCase
 
         $ajuste->revertirBeneficios($solicitud);
 
-        $this->assertSame(ClasificacionComercialCliente::MAYOREO, $cliente->fresh()->modalidad_comercial);
+        $this->assertFalse($cliente->fresh()->es_menudeo);
         $this->assertSame($this->bronce->id, $cliente->fresh()->lista_actual_id);
     }
 
     public function test_listas_bloqueadas_y_especiales_siguen_protegidas(): void
     {
-        $bloqueado = $this->cliente('1300', '10.00', lista: $this->bronce, modalidad: null);
+        $bloqueado = $this->cliente('1300', '10.00', lista: $this->bronce, menudeo: false);
         $bloqueado->update(['lista_bloqueada' => true]);
-        $especial = $this->cliente('1301', '4000.00', lista: CatalogoListaDescuento::where('nombre', 'COLABORADORES')->first(), modalidad: null);
+        $especial = $this->cliente('1301', '4000.00', lista: CatalogoListaDescuento::where('nombre', 'COLABORADORES')->first(), menudeo: false);
 
         $this->importar("numero_cliente,codigo_lista,monto_venta_actual\n1300,pg,5000\n1301,pg,5000\n");
 
         $this->assertSame($this->bronce->id, $bloqueado->fresh()->lista_actual_id);
-        $this->assertNull($bloqueado->fresh()->modalidad_comercial);
+        $this->assertFalse($bloqueado->fresh()->es_menudeo);
         $this->assertSame($especial->lista_actual_id, $especial->fresh()->lista_actual_id);
-        $this->assertNull($especial->fresh()->modalidad_comercial);
+        $this->assertFalse($especial->fresh()->es_menudeo);
     }
 
     public function test_menudeo_con_codigo_bronce_conserva_la_clasificacion_y_avisa(): void
@@ -290,19 +290,19 @@ class ModalidadComercialClienteTest extends TestCase
 
         $cliente->refresh();
         $this->assertSame($this->pg->id, $cliente->lista_actual_id);
-        $this->assertSame(ClasificacionComercialCliente::MENUDEO, $cliente->modalidad_comercial);
+        $this->assertTrue($cliente->es_menudeo);
         $this->assertSame(ClasificacionComercialCliente::ORIGEN_MIGRACION, $cliente->modalidad_origen);
         $this->assertSame('90.00', $cliente->monto_venta_actual);
     }
 
     public function test_codigo_explicito_en_cliente_sin_modalidad_fija_la_lista(): void
     {
-        $cliente = $this->cliente('1500', '10.00', modalidad: null);
+        $cliente = $this->cliente('1500', '10.00', menudeo: false);
         $this->importar("numero_cliente,codigo_lista,monto_venta_actual\n1500,3,6000\n");
 
         $cliente->refresh();
         $this->assertSame($this->plata->id, $cliente->lista_actual_id);
-        $this->assertNull($cliente->modalidad_comercial);
+        $this->assertFalse($cliente->es_menudeo);
     }
 
     public function test_conversion_entre_revision_y_confirmacion_invalida_la_revision(): void
@@ -310,7 +310,7 @@ class ModalidadComercialClienteTest extends TestCase
         $cliente = $this->cliente('1600', '10.00');
         $vista = $this->revisar("numero_cliente,codigo_lista,monto_venta_actual\n1600,pg,40\n");
         $cliente->update([
-            'modalidad_comercial' => ClasificacionComercialCliente::MAYOREO,
+            'es_menudeo' => false,
             'modalidad_origen' => ClasificacionComercialCliente::ORIGEN_CONVERSION,
             'conversion_solicitud_id' => $this->solicitud($cliente, $this->respondida, $this->bronce->id)->id,
             'conversion_autorizada_at' => now(),
@@ -327,18 +327,18 @@ class ModalidadComercialClienteTest extends TestCase
     public function test_api_separa_lista_almacenada_y_efectiva(): void
     {
         $cliente = $this->cliente('1700', '25.00', lista: $this->plata);
-        $cliente->update(['modalidad_comercial' => ClasificacionComercialCliente::MENUDEO]);
+        $cliente->update(['es_menudeo' => true]);
         $web = $this->actingAs(User::factory()->create())->getJson('/api/clientes/1700')->assertOk();
         $movil = app(MobileClienteSerializerService::class)->serializar($cliente->fresh(), User::factory()->create());
 
         $web->assertJsonPath('lista_actual_id', $this->plata->id);
         $web->assertJsonPath('lista_almacenada_id', $this->plata->id);
         $web->assertJsonPath('lista_efectiva_id', $this->pg->id);
-        $web->assertJsonPath('modalidad_comercial', ClasificacionComercialCliente::MENUDEO);
+        $web->assertJsonPath('es_menudeo', true);
         $this->assertSame($this->plata->id, $movil['lista_actual_id']);
         $this->assertSame($this->pg->id, $movil['lista_efectiva_id']);
         $this->assertSame('PUBLICO GENERAL', $movil['lista_descuento']);
-        $this->assertSame(ClasificacionComercialCliente::MENUDEO, $movil['modalidad_comercial']);
+        $this->assertTrue($movil['es_menudeo']);
     }
 
     public function test_asignar_tag_con_conversion_conserva_la_lista_mayorista(): void
@@ -356,20 +356,20 @@ class ModalidadComercialClienteTest extends TestCase
 
         $this->assertTrue($solicitud->convertir_menudeo_mayoreo);
         $this->assertSame($this->plata->id, $solicitud->catalogo_lista_descuento_id);
-        $this->assertSame(ClasificacionComercialCliente::MENUDEO, $cliente->fresh()->modalidad_comercial);
+        $this->assertTrue($cliente->fresh()->es_menudeo);
         $this->assertSame($this->pg->id, $cliente->fresh()->lista_actual_id);
 
         $solicitud->update(['catalogo_estado_solicitud_id' => $this->respondida]);
         app(AjustarMontoPorSolicitudService::class)->aplicarBeneficios($solicitud->fresh());
 
         $cliente->refresh();
-        $this->assertSame(ClasificacionComercialCliente::MAYOREO, $cliente->modalidad_comercial);
+        $this->assertFalse($cliente->es_menudeo);
         $this->assertSame($this->plata->id, $cliente->lista_actual_id);
     }
 
     public function test_el_reporte_de_candidatos_no_corrige_clientes(): void
     {
-        $cliente = $this->cliente('1900', '50.00', lista: $this->bronce, modalidad: null);
+        $cliente = $this->cliente('1900', '50.00', lista: $this->bronce, menudeo: false);
         CambioListaImportacionCliente::create([
             'importacion_cliente_id' => ImportacionCliente::create([
                 'usuario_id' => User::factory()->create()->id,
@@ -387,7 +387,7 @@ class ModalidadComercialClienteTest extends TestCase
         Artisan::call('clientes:candidatos-ascenso-pg');
 
         $this->assertStringContainsString('1900', Artisan::output());
-        $this->assertNull($cliente->fresh()->modalidad_comercial);
+        $this->assertFalse($cliente->fresh()->es_menudeo);
         $this->assertSame($this->bronce->id, $cliente->fresh()->lista_actual_id);
     }
 
@@ -396,7 +396,7 @@ class ModalidadComercialClienteTest extends TestCase
         string $monto,
         ?CatalogoListaDescuento $lista = null,
         bool $inactivo = false,
-        ?string $modalidad = ClasificacionComercialCliente::MENUDEO,
+        bool $menudeo = true,
         ?string $montoInicial = null,
     ): Cliente {
         return Cliente::create([
@@ -405,8 +405,8 @@ class ModalidadComercialClienteTest extends TestCase
             'lista_actual_id' => ($lista ?? $this->pg)->id,
             'monto_venta_actual' => $montoInicial ?? $monto,
             'es_inactivo' => $inactivo,
-            'modalidad_comercial' => $modalidad,
-            'modalidad_origen' => $modalidad === ClasificacionComercialCliente::MENUDEO
+            'es_menudeo' => $menudeo,
+            'modalidad_origen' => $menudeo
                 ? ClasificacionComercialCliente::ORIGEN_MIGRACION
                 : null,
         ]);

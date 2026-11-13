@@ -42,7 +42,7 @@ class ProcesarImportacionClientesJob implements ShouldQueue
         if (! $importacion || $importacion->estado === 'completo') {
             return;
         }
-        $cursor = (int) ($importacion->resumen['cursor_fila'] ?? 0);
+        $cursor = $importacion->cursorConfirmado();
         if ($cursor > $this->desdeFila) {
             return;
         }
@@ -58,7 +58,7 @@ class ProcesarImportacionClientesJob implements ShouldQueue
 
         try {
             $importacion->refresh();
-            $cursor = (int) ($importacion->resumen['cursor_fila'] ?? 0);
+            $cursor = $importacion->cursorConfirmado();
             if ($cursor > $this->desdeFila || $importacion->estado === 'completo') {
                 return;
             }
