@@ -12,6 +12,7 @@ use App\Models\CatalogoProceso;
 use App\Models\CatalogoTipoCliente;
 use App\Models\Cliente;
 use App\Models\Departamento;
+use App\Models\ErroresImportacionCliente;
 use App\Models\HistorialMontoCliente;
 use App\Models\ImportacionCliente;
 use App\Models\ImporteProvisionalSolicitud;
@@ -547,6 +548,27 @@ class AcumuladoOperativoSolicitudTest extends TestCase
         $atras = $this->revisar($this->plantilla($cliente, '9000'), ImportacionCliente::MODALIDAD_CORTE, '2026-11-09 09:00:00');
         $this->confirmar($atras, ImportacionCliente::MODALIDAD_CORTE, ImportacionCliente::find($atras['importacion_id'])->resumen['revision']['fecha_corte']);
         $this->assertSame('18000.00', $cliente->fresh()->monto_venta_actual);
+    }
+
+    public function test_el_corte_sin_cambio_de_monto_bloquea_un_corte_anterior(): void
+    {
+        $cliente = $this->cliente('5000.00', '8815');
+        $vista = $this->revisar($this->plantilla($cliente, '5000'), ImportacionCliente::MODALIDAD_CORTE, '2026-11-12 10:00:00');
+        $this->confirmar($vista, ImportacionCliente::MODALIDAD_CORTE, ImportacionCliente::find($vista['importacion_id'])->resumen['revision']['fecha_corte']);
+
+        $cliente->refresh();
+        $this->assertSame('5000.00', $cliente->monto_venta_actual);
+        $this->assertSame(0, HistorialMontoCliente::query()->where('cliente_id', $cliente->id)->count());
+        $this->assertSame(0, ImporteProvisionalSolicitud::query()->where('cliente_id', $cliente->id)->count());
+        $this->assertSame('2026-11-12 10:00:00', $cliente->fecha_ultimo_corte_administrativo->format('Y-m-d H:i:s'));
+
+        $atras = $this->revisar($this->plantilla($cliente, '9000'), ImportacionCliente::MODALIDAD_CORTE, '2026-11-12 08:00:00');
+        $this->confirmar($atras, ImportacionCliente::MODALIDAD_CORTE, ImportacionCliente::find($atras['importacion_id'])->resumen['revision']['fecha_corte']);
+
+        $cliente->refresh();
+        $this->assertSame('5000.00', $cliente->monto_venta_actual);
+        $this->assertSame('2026-11-12 10:00:00', $cliente->fecha_ultimo_corte_administrativo->format('Y-m-d H:i:s'));
+        $this->assertSame(1, ErroresImportacionCliente::query()->where('importacion_cliente_id', $atras['importacion_id'])->where('campo', 'fecha_corte')->count());
     }
 
     public function test_la_conciliacion_incluida_usa_el_operativo_sin_duplicar_el_pago(): void

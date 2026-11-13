@@ -152,6 +152,7 @@ class ImportarClientesWizerpService
                                 HistorialMontoCliente::insert($historial);
                             }
                             $this->cerrarProvisionalesSiCorte($importacion, $despues, $fila['data']);
+                            $this->registrarCorteAplicado($importacion, $despues, $fila['data']);
                             if ($cambio && $importacion) {
                                 CambioListaImportacionCliente::create([
                                     'importacion_cliente_id' => $importacion->id, 'numero_cliente' => $cambio['numero_cliente'],
@@ -290,6 +291,23 @@ class ImportarClientesWizerpService
         );
     }
 
+    private function registrarCorteAplicado(?ImportacionCliente $importacion, Cliente $cliente, array $data): void
+    {
+        if (! $importacion || $importacion->modalidad_carga !== ImportacionCliente::MODALIDAD_CORTE || ! $importacion->fecha_corte) {
+            return;
+        }
+        if (app(MontoWizerp::class)->interpretar($data['monto_venta_actual'] ?? null) === null) {
+            return;
+        }
+        if (app(EscalonamientoAutoridad::class)->clienteGobernadoPorModulo($cliente)) {
+            return;
+        }
+
+        Cliente::query()->whereKey($cliente->id)->update([
+            'fecha_ultimo_corte_administrativo' => $importacion->fecha_corte->format('Y-m-d H:i:s'),
+        ]);
+    }
+
     private function corteAnteriorAlOficial(Cliente $cliente, \Carbon\Carbon $corte, ?int $exceptoImportacionId): bool
     {
         $ultimo = $this->ultimoCorteAplicado($cliente, $exceptoImportacionId);
@@ -318,7 +336,8 @@ class ImportarClientesWizerpService
                 });
             })
             ->max('fecha_corte');
-        $fechas = array_filter([$porImporte, $porCierre]);
+        $porCliente = Cliente::query()->whereKey($cliente->id)->value('fecha_ultimo_corte_administrativo');
+        $fechas = array_filter([$porImporte, $porCierre, $porCliente]);
         if ($fechas === []) {
             return null;
         }
