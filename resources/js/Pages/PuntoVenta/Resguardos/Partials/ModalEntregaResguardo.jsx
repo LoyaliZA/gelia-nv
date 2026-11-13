@@ -32,6 +32,7 @@ export default function ModalEntregaResguardo({
     const {
         enviar,
         enviando,
+        preparando,
         progreso,
         error,
         exito,
@@ -146,6 +147,7 @@ export default function ModalEntregaResguardo({
                             resguardo={resguardo}
                             catalogos={catalogos}
                             enviando={enviando}
+                            preparando={preparando}
                             progreso={progreso}
                             error={error}
                             onEnviar={enviar}

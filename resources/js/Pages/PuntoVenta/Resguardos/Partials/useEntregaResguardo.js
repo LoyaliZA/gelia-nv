@@ -4,8 +4,10 @@ import { router } from '@inertiajs/react';
 import {
     armarFormDataEntrega,
     claveIdempotenciaEntrega,
+    comprimirEvidenciasEntrega,
     dataUrlAFichero,
     limpiarClaveIdempotenciaEntrega,
+    MENSAJE_FOTO_ENTREGA_GRANDE,
     mensajeErrorEntrega,
     validarFormularioEntrega,
     esConflictoVersion,
@@ -21,6 +23,7 @@ export default function useEntregaResguardo({
     onRecargarFormulario,
 }) {
     const [enviando, setEnviando] = useState(false);
+    const [preparando, setPreparando] = useState(false);
     const [progreso, setProgreso] = useState(0);
     const [error, setError] = useState(null);
     const [exito, setExito] = useState(false);
@@ -60,8 +63,25 @@ export default function useEntregaResguardo({
 
         envioBloqueado.current = true;
         setEnviando(true);
+        setPreparando(true);
         setProgreso(0);
         setError(null);
+
+        let evidenciasListas = evidencias;
+        try {
+            evidenciasListas = await comprimirEvidenciasEntrega(evidencias);
+        } catch (err) {
+            const mensaje = err?.message === MENSAJE_FOTO_ENTREGA_GRANDE
+                ? err.message
+                : MENSAJE_FOTO_ENTREGA_GRANDE;
+            setError(mensaje);
+            envioBloqueado.current = false;
+            setPreparando(false);
+            setEnviando(false);
+            return { error: mensaje };
+        }
+
+        setPreparando(false);
 
         const firma = dataUrlAFichero(firmaDataUrl);
         const form = armarFormDataEntrega({
@@ -72,7 +92,7 @@ export default function useEntregaResguardo({
             metodoValidacion,
             observaciones,
             firma,
-            evidencias,
+            evidencias: evidenciasListas,
             bultoIds,
         });
 
@@ -113,6 +133,7 @@ export default function useEntregaResguardo({
                 status: err?.response?.status,
             };
         } finally {
+            setPreparando(false);
             setEnviando(false);
         }
     }, [enviando, metodoValidacion, resguardoId, modoModal, onExitoModal]);
@@ -146,6 +167,7 @@ export default function useEntregaResguardo({
     return {
         enviar,
         enviando,
+        preparando,
         progreso,
         error,
         exito,

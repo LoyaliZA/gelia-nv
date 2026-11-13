@@ -5,8 +5,10 @@ import {
     armarFormDataEntregaMultiple,
     claveIdempotenciaEntrega,
     claveIdempotenciaEntregaMultiple,
+    comprimirEvidenciasEntrega,
     dataUrlAFichero,
     limpiarClaveIdempotenciaEntregaMultiple,
+    MENSAJE_FOTO_ENTREGA_GRANDE,
     mensajeErrorEntrega,
     validarFormularioEntrega,
     esConflictoVersion,
@@ -14,6 +16,7 @@ import {
 
 export default function useEntregaMultiple({ resguardos, metodoValidacion }) {
     const [enviando, setEnviando] = useState(false);
+    const [preparando, setPreparando] = useState(false);
     const [progreso, setProgreso] = useState(0);
     const [error, setError] = useState(null);
     const [exito, setExito] = useState(false);
@@ -43,24 +46,40 @@ export default function useEntregaMultiple({ resguardos, metodoValidacion }) {
 
         envioBloqueado.current = true;
         setEnviando(true);
+        setPreparando(true);
         setProgreso(0);
         setError(null);
 
-        const entregas = resguardos.map((resguardo) => {
-            const datos = borradores[resguardo.id];
-            return {
-                resguardoId: resguardo.id,
-                version: resguardo.version,
-                idempotencyKey: `${loteRef.current}:${resguardo.id}`,
-                relacion: datos.relacion,
-                nombreQuienRetira: datos.nombreQuienRetira,
-                metodoValidacion,
-                observaciones: datos.observaciones,
-                firma: dataUrlAFichero(datos.firmaDataUrl, `firma-${resguardo.id}.png`),
-                evidencias: datos.evidencias || [],
-                bultoIds: datos.bultoIds || [],
-            };
-        });
+        let entregas;
+        try {
+            entregas = [];
+            for (const resguardo of resguardos) {
+                const datos = borradores[resguardo.id];
+                entregas.push({
+                    resguardoId: resguardo.id,
+                    version: resguardo.version,
+                    idempotencyKey: `${loteRef.current}:${resguardo.id}`,
+                    relacion: datos.relacion,
+                    nombreQuienRetira: datos.nombreQuienRetira,
+                    metodoValidacion,
+                    observaciones: datos.observaciones,
+                    firma: dataUrlAFichero(datos.firmaDataUrl, `firma-${resguardo.id}.png`),
+                    evidencias: await comprimirEvidenciasEntrega(datos.evidencias || []),
+                    bultoIds: datos.bultoIds || [],
+                });
+            }
+        } catch (err) {
+            const mensaje = err?.message === MENSAJE_FOTO_ENTREGA_GRANDE
+                ? err.message
+                : MENSAJE_FOTO_ENTREGA_GRANDE;
+            setError(mensaje);
+            envioBloqueado.current = false;
+            setPreparando(false);
+            setEnviando(false);
+            return { error: mensaje };
+        }
+
+        setPreparando(false);
 
         try {
             const { data } = await axios.post(route('punto_venta.resguardos.entregas_multiples.store'), armarFormDataEntregaMultiple(entregas), {
@@ -84,6 +103,7 @@ export default function useEntregaMultiple({ resguardos, metodoValidacion }) {
             }
             return { error: mensaje, status: err?.response?.status };
         } finally {
+            setPreparando(false);
             setEnviando(false);
         }
     }, [enviando, ids, metodoValidacion, resguardos]);
@@ -95,6 +115,7 @@ export default function useEntregaMultiple({ resguardos, metodoValidacion }) {
     return {
         enviar,
         enviando,
+        preparando,
         progreso,
         error,
         exito,

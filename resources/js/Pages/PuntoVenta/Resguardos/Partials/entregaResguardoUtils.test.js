@@ -1,9 +1,15 @@
 import { describe, expect, it, beforeEach, vi } from 'vitest';
+import { compressImageToWebp } from '../../../../utils/compressImage';
 import {
     armarFormDataEntrega,
     claveIdempotenciaEntrega,
+    comprimirEvidenciasEntrega,
     dataUrlAFichero,
+    etiquetaProgresoEntrega,
+    EVIDENCIA_ENTREGA_MAX_BYTES,
+    EVIDENCIA_ENTREGA_MAX_DIMENSION,
     limpiarClaveIdempotenciaEntrega,
+    MENSAJE_FOTO_ENTREGA_GRANDE,
     mensajeErrorEntrega,
     validarFormularioEntrega,
     validarPasoBultos,
@@ -15,6 +21,10 @@ import {
     FIRMA_ENTREGA_ANCHO_NORMALIZADO,
     FIRMA_ENTREGA_ALTO_NORMALIZADO,
 } from './entregaResguardoUtils';
+
+vi.mock('../../../../utils/compressImage', () => ({
+    compressImageToWebp: vi.fn(),
+}));
 
 describe('entregaResguardoUtils', () => {
     const storage = new Map();
@@ -111,6 +121,55 @@ describe('entregaResguardoUtils', () => {
         expect(form.get('firma')).toBe(fichero);
         expect(form.get('bulto_ids[0]')).toBe('11');
         expect(form.get('bulto_ids[1]')).toBe('12');
+    });
+
+    it('nombra la espera de fotos y el guardado sin inventar un porcentaje', () => {
+        expect(etiquetaProgresoEntrega({ preparando: true, progreso: 0 })).toBe('Preparando fotos…');
+        expect(etiquetaProgresoEntrega({ progreso: 40 })).toBe('Registrando entrega… 40%');
+        expect(etiquetaProgresoEntrega({ progreso: 100 })).toBe('Guardando entrega…');
+    });
+
+    it('sustituye la foto grande por la versión comprimida antes del FormData', async () => {
+        const grande = new File([new Uint8Array(8)], 'camara.jpg', { type: 'image/jpeg' });
+        Object.defineProperty(grande, 'size', { value: 2_000_000 });
+        const comprimida = new File(['webp'], 'camara.webp', { type: 'image/webp' });
+        compressImageToWebp.mockResolvedValueOnce(comprimida);
+
+        const listas = await comprimirEvidenciasEntrega([grande]);
+
+        expect(listas).toEqual([comprimida]);
+        expect(compressImageToWebp).toHaveBeenCalledWith(grande, {
+            maxDimension: EVIDENCIA_ENTREGA_MAX_DIMENSION,
+            maxBytes: EVIDENCIA_ENTREGA_MAX_BYTES,
+        });
+
+        const form = armarFormDataEntrega({
+            version: 1,
+            idempotencyKey: 'pdv:ent:1:foto',
+            relacion: 'titular',
+            nombreQuienRetira: 'Persona titular',
+            metodoValidacion: 'firma',
+            firma: new File(['firma'], 'firma.png', { type: 'image/png' }),
+            evidencias: listas,
+            bultoIds: [1],
+        });
+        expect(form.get('evidencias[0]')).toBe(comprimida);
+        expect(form.get('evidencias[0]').size).toBeLessThan(grande.size);
+    });
+
+    it('conserva el original pequeño si el navegador no puede comprimir', async () => {
+        compressImageToWebp.mockRejectedValueOnce(new Error('CANVAS_BLOB_FAILED'));
+        const chica = new File(['abc'], 'ok.jpg', { type: 'image/jpeg' });
+
+        await expect(comprimirEvidenciasEntrega([chica])).resolves.toEqual([chica]);
+    });
+
+    it('no envía la foto si sigue grande después de fallar la compresión', async () => {
+        compressImageToWebp.mockRejectedValueOnce(new Error('COMPRESS_TOO_LARGE'));
+        const grande = new File([new Uint8Array(8)], 'camara.jpg', { type: 'image/jpeg' });
+        Object.defineProperty(grande, 'size', { value: 2_000_000 });
+
+        await expect(comprimirEvidenciasEntrega([grande])).rejects.toThrow(MENSAJE_FOTO_ENTREGA_GRANDE);
     });
 
     it('traduce errores HTTP de concurrencia, conflicto y validación', () => {

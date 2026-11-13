@@ -4,8 +4,9 @@ namespace App\Listeners\PuntoVenta;
 
 use App\Events\PuntoVenta\EntregaResguardoPdvCompletada;
 use App\Services\PuntoVenta\Resguardos\NotificarResguardoPdvService;
+use Illuminate\Contracts\Queue\ShouldQueue;
 
-class NotificarEntregaResguardoPdv
+class NotificarEntregaResguardoPdv implements ShouldQueue
 {
     public function __construct(
         private readonly NotificarResguardoPdvService $notificaciones,
