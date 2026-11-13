@@ -27,14 +27,20 @@ class AnalizarImportacionClientesJob implements ShouldQueue
         if (! $importacion || ! in_array($importacion->estado, ['recibido', 'analizando'], true)) {
             return;
         }
-        $importacion->update(['estado' => 'analizando']);
+        $marco = ImportacionCliente::query()
+            ->whereKey($importacion->id)
+            ->whereIn('estado', ['recibido', 'analizando'])
+            ->update(['estado' => 'analizando', 'updated_at' => now()]);
+        if ($marco === 0) {
+            return;
+        }
         $revision->previsualizar($importacion->fresh());
     }
 
     public function failed(Throwable $e): void
     {
         $importacion = ImportacionCliente::find($this->importacionId);
-        if (! $importacion || in_array($importacion->estado, ['previsualizada', 'completo', 'parcial'], true)) {
+        if (! $importacion || in_array($importacion->estado, ['previsualizada', 'completo', 'parcial', 'cancelada'], true)) {
             return;
         }
         $importacion->update([

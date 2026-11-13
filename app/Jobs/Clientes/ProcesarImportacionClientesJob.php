@@ -39,7 +39,7 @@ class ProcesarImportacionClientesJob implements ShouldQueue
         RegistrarImportacionClienteService $registrar,
     ): void {
         $importacion = ImportacionCliente::find($this->importacionId);
-        if (! $importacion || $importacion->estado === 'completo') {
+        if (! $importacion || in_array($importacion->estado, ['completo', 'cancelada'], true)) {
             return;
         }
         $cursor = $importacion->cursorConfirmado();
@@ -59,7 +59,7 @@ class ProcesarImportacionClientesJob implements ShouldQueue
         try {
             $importacion->refresh();
             $cursor = $importacion->cursorConfirmado();
-            if ($cursor > $this->desdeFila || $importacion->estado === 'completo') {
+            if ($cursor > $this->desdeFila || in_array($importacion->estado, ['completo', 'cancelada'], true)) {
                 return;
             }
             if ($this->desdeFila === 0 && $cursor === 0) {
@@ -126,7 +126,7 @@ class ProcesarImportacionClientesJob implements ShouldQueue
     public function failed(Throwable $e): void
     {
         $importacion = ImportacionCliente::find($this->importacionId);
-        if (! $importacion || in_array($importacion->estado, ['completo', 'parcial', 'previsualizada'], true)) {
+        if (! $importacion || in_array($importacion->estado, ['completo', 'parcial', 'previsualizada', 'cancelada'], true)) {
             return;
         }
         $importacion->update([

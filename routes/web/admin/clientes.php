@@ -19,6 +19,7 @@ Route::middleware(['can:clientes.ver'])->group(function () {
     Route::get('/clientes/auditoria/datos', [AuditoriaMontosClienteController::class, 'datosAuditoria'])->name('clientes.auditoria.datos');
     Route::get('/clientes/importaciones/activas', [ImportacionClienteSeguimientoController::class, 'activas'])->name('clientes.importaciones.activas');
     Route::get('/clientes/importaciones/{importacion}/progreso', [ImportacionClienteSeguimientoController::class, 'progreso'])->name('clientes.importaciones.progreso');
+    Route::delete('/clientes/importaciones/{importacion}/cancelar', [ImportacionClienteSeguimientoController::class, 'cancelar'])->name('clientes.importaciones.cancelar');
     Route::get('/clientes/importaciones/{importacion}/revision', [ImportacionClienteSeguimientoController::class, 'revision'])->name('clientes.importaciones.revision');
     Route::get('/clientes/importaciones/{importacion}/auditoria', [AuditoriaMontosClienteController::class, 'auditoriaImportacion'])->name('clientes.importaciones.auditoria');
     Route::get('/clientes/importaciones/{importacion}/archivo', [AuditoriaMontosClienteController::class, 'descargarArchivo'])->name('clientes.importaciones.archivo');

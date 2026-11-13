@@ -194,6 +194,48 @@ class ImportacionClienteSegundoPlanoTest extends TestCase
         $this->assertTrue(Route::has('tiendanube.imagenes.importar.progreso'));
     }
 
+    public function test_cancelar_una_revision_la_saca_de_la_cola(): void
+    {
+        $this->actingAs($this->usuario)->post(route('admin.clientes.importar.previsualizar'), [
+            'archivo' => $this->archivo("numero_cliente,nombre,monto_venta_actual\n1,Cliente ficticio,10\n"),
+        ])->assertRedirect();
+        $importacion = ImportacionCliente::first();
+        $this->assertSame('previsualizada', $importacion->estado);
+
+        $this->actingAs($this->usuario)
+            ->deleteJson(route('admin.clientes.importaciones.cancelar', $importacion))
+            ->assertOk()
+            ->assertJsonPath('message', 'La carga salió de la cola.');
+        $this->assertSame('cancelada', $importacion->fresh()->estado);
+        $this->assertNull(Cliente::where('numero_cliente', '1')->first());
+        (new ProcesarImportacionClientesJob($importacion->id, 'token-viejo'))->handle(
+            app(\App\Services\Clientes\RevisionImportacionClientes::class),
+            app(\App\Services\Clientes\ImportarClientesWizerpService::class),
+            app(\App\Services\Clientes\RegistrarImportacionClienteService::class),
+        );
+        (new AnalizarImportacionClientesJob($importacion->id))->handle(
+            app(\App\Services\Clientes\RevisionImportacionClientes::class),
+        );
+        $this->assertSame('cancelada', $importacion->fresh()->estado);
+        $this->actingAs($this->usuario)
+            ->getJson(route('admin.clientes.importaciones.activas'))
+            ->assertOk()
+            ->assertJsonPath('ids', []);
+
+        $ajena = User::factory()->create();
+        $ajena->assignRole(Role::findByName('admin_import', 'web'));
+        $this->actingAs($ajena)
+            ->deleteJson(route('admin.clientes.importaciones.cancelar', $importacion))
+            ->assertNotFound();
+
+        $importacion->update(['estado' => 'en_curso', 'filas_procesadas' => 1]);
+        $this->actingAs($this->usuario)
+            ->deleteJson(route('admin.clientes.importaciones.cancelar', $importacion))
+            ->assertStatus(422);
+        $this->assertSame('en_curso', $importacion->fresh()->estado);
+        $this->assertSame(1, $importacion->fresh()->filas_procesadas);
+    }
+
     public function test_otra_cuenta_no_consulta_la_revision(): void
     {
         $this->actingAs($this->usuario)->post(route('admin.clientes.importar.previsualizar'), [

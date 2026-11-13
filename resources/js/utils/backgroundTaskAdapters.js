@@ -13,6 +13,7 @@ export const FASES_CARGA = {
     completado: 'Completado',
     completado_con_incidencias: 'Completado con incidencias',
     error: 'Error',
+    cancelada: 'Cancelada',
 };
 
 const FASES_ACTIVAS_CLIENTES = [
@@ -24,7 +25,7 @@ const FASES_ACTIVAS_CLIENTES = [
     'procesando',
 ];
 
-const FASES_TERMINALES_CLIENTES = ['completado', 'completado_con_incidencias', 'error'];
+const FASES_TERMINALES_CLIENTES = ['completado', 'completado_con_incidencias', 'error', 'cancelada'];
 
 function presentarTiendanube(data) {
     const activo = ESTADOS_ACTIVOS.includes(data.estado);
@@ -90,6 +91,7 @@ export const TASK_ADAPTERS = {
         presentar: presentarClientes,
         toast(data) {
             const fase = data.fase;
+            if (fase === 'cancelada') return null;
             if (fase === 'completado') {
                 return { tipo: 'success', mensaje: `Carga de clientes #${data.id} completada.` };
             }

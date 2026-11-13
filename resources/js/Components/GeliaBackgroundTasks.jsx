@@ -246,6 +246,26 @@ export default function GeliaBackgroundTasks({ modulos = {} }) {
         quitar(task);
     };
 
+    const cancelarCliente = async (task) => {
+        if (!window.confirm('¿Cancelar esta carga? No se escribirán clientes y saldrá de la cola.')) return;
+        try {
+            const res = await fetch(route('admin.clientes.importaciones.cancelar', task.id), {
+                method: 'DELETE',
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '',
+                    Accept: 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.message || 'No se pudo cancelar la carga.');
+            dismissBackgroundTask(task);
+            quitar(task);
+        } catch (err) {
+            emitToast(err.message || 'No se pudo cancelar la carga.', 'error');
+        }
+    };
+
     if (!puedeVer || (visibles.length === 0 && !hayLocal)) return null;
 
     const vistas = [
@@ -390,6 +410,15 @@ export default function GeliaBackgroundTasks({ modulos = {} }) {
                                         <Link href={vista.href} className="inline-flex items-center px-2.5 py-1 rounded-lg text-[9px] font-black uppercase border theme-border theme-text-main">
                                             {vista.hrefLabel}
                                         </Link>
+                                    )}
+                                    {task.module === 'clientes-importacion' && crudo?.puede_cancelar && (
+                                        <button
+                                            type="button"
+                                            onClick={() => cancelarCliente(task)}
+                                            className="inline-flex items-center px-2.5 py-1 rounded-lg text-[9px] font-black uppercase border theme-border theme-text-peligro"
+                                        >
+                                            Cancelar
+                                        </button>
                                     )}
                                     {task.module === 'tiendanube-imagenes' && ((crudo?.fallidos ?? 0) > 0 || (crudo?.alertas_dimension ?? 0) > 0) && (
                                         <button

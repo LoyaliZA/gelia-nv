@@ -55,6 +55,9 @@ class RevisionImportacionClientes
             'estado_clientes' => $analisis['estado_clientes'],
             'headers' => $analisis['headers'],
         ];
+        if ($this->conservadaCancelada($importacion)) {
+            return $this->vistaCancelada($importacion);
+        }
         $importacion->estado = 'previsualizada';
         $importacion->resumen = [
             'revision' => $revision,
@@ -276,6 +279,26 @@ class RevisionImportacionClientes
         ];
     }
 
+    private function conservadaCancelada(ImportacionCliente $importacion): bool
+    {
+        $importacion->refresh();
+
+        return $importacion->estado === 'cancelada';
+    }
+
+    private function vistaCancelada(ImportacionCliente $importacion): array
+    {
+        return [
+            'importacion_id' => $importacion->id,
+            'token' => null,
+            'bloqueado' => true,
+            'bloqueos' => [],
+            'avisos' => [],
+            'conteos' => [],
+            'muestras' => [],
+        ];
+    }
+
     private function vistaBloqueada(ImportacionCliente $importacion, string $sha, string $motivo): array
     {
         $conteos = array_fill_keys([
@@ -293,6 +316,9 @@ class RevisionImportacionClientes
             'catalogo' => hash('sha256', ''),
             'estado_clientes' => [],
         ];
+        if ($this->conservadaCancelada($importacion)) {
+            return $this->vistaCancelada($importacion);
+        }
         $importacion->estado = 'previsualizada';
         $importacion->resumen = [
             'revision' => $revision,

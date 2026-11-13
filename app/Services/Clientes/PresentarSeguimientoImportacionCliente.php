@@ -46,6 +46,8 @@ class PresentarSeguimientoImportacionCliente
             'indeterminado' => $indeterminado,
             'mensaje' => $importacion->mensaje_fatal,
             'puede_confirmar' => $importacion->estado === 'previsualizada' && empty($revision['bloqueado']),
+            'puede_cancelar' => in_array($importacion->estado, ['recibido', 'analizando', 'previsualizada'], true)
+                && $importacion->cursorConfirmado() === 0,
         ];
     }
 
@@ -75,6 +77,7 @@ class PresentarSeguimientoImportacionCliente
             'completo' => 'completado',
             'parcial' => 'completado_con_incidencias',
             'fallido' => 'error',
+            'cancelada' => 'cancelada',
             default => 'preparando',
         };
     }

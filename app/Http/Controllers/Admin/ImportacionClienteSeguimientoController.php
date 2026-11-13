@@ -32,6 +32,26 @@ class ImportacionClienteSeguimientoController extends Controller
         return response()->json($presentar->progreso($importacion));
     }
 
+    public function cancelar(Request $request, ImportacionCliente $importacion)
+    {
+        $this->autorizar($request, $importacion);
+
+        // filas_procesadas en la revisión cuenta filas analizadas; la escritura empieza en el cursor.
+        if (! in_array($importacion->estado, ['recibido', 'analizando', 'previsualizada'], true)
+            || $importacion->cursorConfirmado() > 0) {
+            return response()->json([
+                'message' => 'Esta carga ya escribió clientes y no se puede cancelar.',
+            ], 422);
+        }
+
+        $importacion->update([
+            'estado' => 'cancelada',
+            'mensaje_fatal' => 'La carga se canceló antes de confirmar.',
+        ]);
+
+        return response()->json(['message' => 'La carga salió de la cola.']);
+    }
+
     public function revision(Request $request, ImportacionCliente $importacion, PresentarSeguimientoImportacionCliente $presentar)
     {
         $this->autorizar($request, $importacion);
