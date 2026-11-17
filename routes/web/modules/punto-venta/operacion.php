@@ -114,4 +114,8 @@ Route::middleware(['pdv.piso'])
         Route::post('/equipo/{user}/cancelar-cierre-pendiente', [GestionEquipoPdvController::class, 'cancelarCierrePendiente'])
             ->middleware('pdv.permiso:'.PuntoVentaModulo::PERMISO_OPERACION_EQUIPO_GESTIONAR)
             ->name('equipo.cancelar_cierre_pendiente');
+
+        Route::post('/equipo/{user}/finalizar-jornada', [GestionEquipoPdvController::class, 'finalizarJornada'])
+            ->middleware('pdv.permiso:'.PuntoVentaModulo::PERMISO_OPERACION_EQUIPO_GESTIONAR)
+            ->name('equipo.finalizar_jornada');
     });

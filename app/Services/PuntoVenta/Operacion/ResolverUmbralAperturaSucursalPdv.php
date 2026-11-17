@@ -30,7 +30,7 @@ final class ResolverUmbralAperturaSucursalPdv
             return ['aplicable' => false];
         }
 
-        $horario = $this->horario->resolverParaSucursal($sucursalId);
+        $horario = $this->horario->resolverParaSucursal($sucursalId, $ahora);
         if ($horario === null || $horario['hora_apertura'] === null) {
             return ['aplicable' => false];
         }

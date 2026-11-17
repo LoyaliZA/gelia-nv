@@ -22,8 +22,7 @@ class AperturaHorarioSucursalPdvService
     public function ejecutar(int $sucursalId, CarbonInterface $ahora): bool
     {
         DB::transaction(function () use ($sucursalId, $ahora): void {
-            $this->cerrarEquipo->cerrarJornadasDeDiasAnteriores($sucursalId, $ahora, 0);
-            $this->cerrarEquipo->retirarColaDeDiasAnteriores($sucursalId, $ahora);
+            $this->cerrarEquipo->barrerPendientesDeDiasAnteriores($sucursalId, $ahora, 0);
         });
 
         $diaReferencia = $this->sucursalDia->obtenerOCrear($sucursalId, $ahora);

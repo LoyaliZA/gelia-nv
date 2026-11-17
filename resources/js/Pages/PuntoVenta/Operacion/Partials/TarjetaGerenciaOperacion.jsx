@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import axios from 'axios';
 import { CalendarClock, ChevronDown, Clock, Loader2, ShieldAlert } from 'lucide-react';
 import ModalConfirmarAccion from '../../../ControlPedidos/Partials/ModalConfirmarAccion';
-import { geliaCardClass, THEME_BTN_PRIMARY, THEME_BTN_SECONDARY } from '../../../../utils/geliaTheme';
+import { geliaCardClass, THEME_BTN_PRIMARY } from '../../../../utils/geliaTheme';
+import ModalHorarioOperativoPdv from './ModalHorarioOperativoPdv';
 import {
     esConflictoVersion,
     isoDesdeDatetimeLocal,
@@ -16,7 +17,6 @@ import {
     valorDatetimeLocalDesdeIso,
 } from './operacionUtils';
 
-const STORAGE_HORARIO = 'pdv:operacion:horario_expandido';
 const STORAGE_GERENCIA = 'pdv:operacion:gerencia_expandida';
 
 export default function TarjetaGerenciaOperacion({
@@ -31,13 +31,7 @@ export default function TarjetaGerenciaOperacion({
     const [modalReabrir, setModalReabrir] = useState(false);
     const [modalApertura, setModalApertura] = useState(false);
     const [ampliacionLocal, setAmpliacionLocal] = useState('');
-    const [horaApertura, setHoraApertura] = useState(estado?.horario_cierre?.hora_apertura || '');
-    const [horaCierre, setHoraCierre] = useState(estado?.horario_cierre?.hora_cierre || '19:00');
-    const [zonaHoraria, setZonaHoraria] = useState(estado?.horario_cierre?.zona_horaria || '');
-    const [horarioAbierto, setHorarioAbierto] = useState(() => {
-        if (typeof window === 'undefined') return false;
-        return window.sessionStorage.getItem(STORAGE_HORARIO) === '1';
-    });
+    const [modalHorario, setModalHorario] = useState(false);
     const [gerenciaAbierta, setGerenciaAbierta] = useState(() => {
         if (typeof window === 'undefined') return false;
         return window.sessionStorage.getItem(STORAGE_GERENCIA) === '1';
@@ -50,12 +44,6 @@ export default function TarjetaGerenciaOperacion({
             return siguiente;
         });
     };
-
-    useEffect(() => {
-        setHoraApertura(estado?.horario_cierre?.hora_apertura || '');
-        setHoraCierre(estado?.horario_cierre?.hora_cierre || '19:00');
-        setZonaHoraria(estado?.horario_cierre?.zona_horaria || '');
-    }, [estado?.horario_cierre?.hora_apertura, estado?.horario_cierre?.hora_cierre, estado?.horario_cierre?.zona_horaria]);
 
     const ejecutar = async (peticion, etiquetaAccion) => {
         setCargando(true);
@@ -77,6 +65,7 @@ export default function TarjetaGerenciaOperacion({
             setModalCierre(false);
             setModalReabrir(false);
             setModalApertura(false);
+            setModalHorario(false);
         }
     };
 
@@ -117,12 +106,8 @@ export default function TarjetaGerenciaOperacion({
         );
     };
 
-    const guardarHorarioCierre = () => ejecutar(
-        () => axios.put(route('punto_venta.operacion.configuracion.horario_cierre'), {
-            hora_apertura: horaApertura || null,
-            hora_cierre: horaCierre,
-            zona_horaria: zonaHoraria || null,
-        }),
+    const guardarHorarioCierre = (payload) => ejecutar(
+        () => axios.put(route('punto_venta.operacion.configuracion.horario_cierre'), payload),
         'configuración de horario operativo',
     );
 
@@ -166,81 +151,21 @@ export default function TarjetaGerenciaOperacion({
             </p>
 
             {puedeConfigurarHorarioCierre(permisos) && (
-                <div className="rounded-2xl border theme-border">
-                    <button
-                        type="button"
-                        className="flex w-full items-center gap-2 p-4 text-left"
-                        aria-expanded={horarioAbierto}
-                        onClick={() => {
-                            setHorarioAbierto((actual) => {
-                                const siguiente = !actual;
-                                window.sessionStorage.setItem(STORAGE_HORARIO, siguiente ? '1' : '0');
-                                return siguiente;
-                            });
-                        }}
-                    >
-                        <Clock className="w-4 h-4 theme-text-muted shrink-0" aria-hidden />
-                        <span className="min-w-0 flex-1">
-                            <span className="block text-xs font-black uppercase tracking-widest theme-text-main">
-                                Horario operativo
-                            </span>
-                            <span className="block text-xs font-semibold theme-text-muted mt-1">
-                                {resumenHorarioOperativo(estado)}
-                            </span>
+                <button
+                    type="button"
+                    className="flex w-full items-center gap-2 p-4 text-left rounded-2xl border theme-border"
+                    onClick={() => setModalHorario(true)}
+                >
+                    <Clock className="w-4 h-4 theme-text-muted shrink-0" aria-hidden />
+                    <span className="min-w-0 flex-1">
+                        <span className="block text-xs font-black uppercase tracking-widest theme-text-main">
+                            Horario operativo
                         </span>
-                        <ChevronDown className={`w-4 h-4 theme-text-muted shrink-0 transition-transform ${horarioAbierto ? 'rotate-180' : ''}`} aria-hidden />
-                    </button>
-                    <div className={`grid transition-[grid-template-rows] duration-200 ${horarioAbierto ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
-                        <div className="overflow-hidden min-h-0">
-                    <div className="space-y-3 px-4 pb-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <label className="space-y-1">
-                            <span className="text-[10px] font-black uppercase tracking-widest theme-text-muted">Apertura</span>
-                            <input
-                                type="time"
-                                className="w-full min-h-[44px] rounded-xl border theme-border theme-element px-3 text-sm font-semibold"
-                                value={horaApertura}
-                                onChange={(event) => setHoraApertura(event.target.value)}
-                            />
-                        </label>
-                        <label className="space-y-1">
-                            <span className="text-[10px] font-black uppercase tracking-widest theme-text-muted">Cierre</span>
-                            <input
-                                type="time"
-                                className="w-full min-h-[44px] rounded-xl border theme-border theme-element px-3 text-sm font-semibold"
-                                value={horaCierre}
-                                onChange={(event) => setHoraCierre(event.target.value)}
-                            />
-                        </label>
-                        <label className="space-y-1">
-                            <span className="text-[10px] font-black uppercase tracking-widest theme-text-muted">Zona horaria</span>
-                            <input
-                                type="text"
-                                className="w-full min-h-[44px] rounded-xl border theme-border theme-element px-3 text-sm font-semibold"
-                                value={zonaHoraria}
-                                placeholder="America/Mexico_City"
-                                onChange={(event) => setZonaHoraria(event.target.value)}
-                            />
-                        </label>
-                    </div>
-                    {!estado?.horario_cierre?.configurado && (
-                        <p className="text-xs font-semibold text-amber-700 dark:text-amber-300 m-0">
-                            Sin horario persistido; al guardar se usará el valor provisional de planeación. Deja apertura vacía para no restringir altas.
-                        </p>
-                    )}
-                    <button
-                        type="button"
-                        className={`${THEME_BTN_SECONDARY} min-h-[44px] px-4 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest inline-flex items-center justify-center gap-2`}
-                        disabled={cargando}
-                        onClick={guardarHorarioCierre}
-                    >
-                        {cargando ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> : <CalendarClock className="w-4 h-4" aria-hidden />}
-                        Guardar horario
-                    </button>
-                    </div>
-                        </div>
-                    </div>
-                </div>
+                        <span className="block text-xs font-semibold theme-text-muted mt-1">
+                            {resumenHorarioOperativo(estado)}
+                        </span>
+                    </span>
+                </button>
             )}
 
             {puedeAmpliarHorario(estado, permisos) && (
@@ -326,6 +251,14 @@ export default function TarjetaGerenciaOperacion({
                 variante="danger"
                 onClose={() => setModalCierre(false)}
                 onConfirm={cerrarSucursal}
+            />
+
+            <ModalHorarioOperativoPdv
+                abierto={modalHorario}
+                horario={estado?.horario_cierre}
+                cargando={cargando}
+                onCerrar={() => setModalHorario(false)}
+                onGuardar={guardarHorarioCierre}
             />
         </section>
     );

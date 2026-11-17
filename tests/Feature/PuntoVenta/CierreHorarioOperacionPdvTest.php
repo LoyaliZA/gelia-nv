@@ -17,6 +17,7 @@ use App\Services\PuntoVenta\Operacion\EvaluarCierreHorarioOperacionPdvService;
 use App\Services\PuntoVenta\Operacion\HorarioCierreOperacionPdvConfig;
 use App\Services\PuntoVenta\PuntoVentaModulo;
 use App\Support\PuntoVenta\Operacion\EstadoJornadaPdv;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
@@ -46,6 +47,13 @@ class CierreHorarioOperacionPdvTest extends TestCase
         );
 
         $this->sucursal = Sucursal::factory()->create(['nombre' => 'Sucursal Horario']);
+        Carbon::setTestNow(Carbon::parse('2026-11-16 12:00:00', 'America/Mexico_City'));
+    }
+
+    protected function tearDown(): void
+    {
+        Carbon::setTestNow();
+        parent::tearDown();
     }
 
     public function test_no_dispara_antes_del_horario_configurado(): void
@@ -267,9 +275,42 @@ class CierreHorarioOperacionPdvTest extends TestCase
         $this->assertSame(TurnoPdv::ESTADO_ASIGNADO, $turnoAsignado->fresh()->estado);
     }
 
+    public function test_sabado_usa_hora_de_cierre_propia(): void
+    {
+        $this->configurarHorario([
+            'hora_cierre' => '19:00',
+            'hora_cierre_sabado' => '15:00',
+            'zona_horaria' => 'America/Mexico_City',
+            'dias_operacion' => [1, 2, 3, 4, 5, 6],
+        ]);
+
+        $antes = Carbon::parse('2026-11-14 14:30:00', 'America/Mexico_City');
+        $this->assertFalse(app(CierreHorarioSucursalPdvService::class)->ejecutar($this->sucursal->id, $antes));
+
+        Event::fake([JornadaCierreHorario::class]);
+        $despues = Carbon::parse('2026-11-14 15:05:00', 'America/Mexico_City');
+        $this->assertTrue(app(CierreHorarioSucursalPdvService::class)->ejecutar($this->sucursal->id, $despues));
+        Event::assertDispatched(JornadaCierreHorario::class);
+    }
+
+    public function test_domingo_no_encola_cierre_automatico(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-11-15 19:10:00', 'America/Mexico_City'));
+        $this->configurarHorario([
+            'hora_cierre' => '19:00',
+            'zona_horaria' => 'America/Mexico_City',
+        ]);
+
+        $resultado = app(EvaluarCierreHorarioOperacionPdvService::class)->ejecutar();
+
+        $this->assertGreaterThan(0, $resultado['omitidas']);
+        $this->assertSame(0, $resultado['encoladas']);
+    }
+
     public function test_comando_programado_y_evaluador_encolan_jobs(): void
     {
         Queue::fake();
+        Carbon::setTestNow(Carbon::parse('2026-11-16 19:10:00', 'America/Mexico_City'));
         $this->configurarHorario(['hora_cierre' => '19:00', 'zona_horaria' => 'America/Mexico_City']);
 
         Artisan::call('pdv:evaluar-cierre-horario-operacion');

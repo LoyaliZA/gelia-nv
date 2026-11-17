@@ -46,12 +46,7 @@ class ConsultaEstadoOperativoPdvService
                     'acepta_altas' => null,
                     'version' => null,
                 ],
-                'horario_cierre' => [
-                    'configurado' => false,
-                    'hora_cierre' => null,
-                    'zona_horaria' => null,
-                    'es_override_sucursal' => false,
-                ],
+                'horario_cierre' => $this->horarioCierre->serializarParaSucursal(null, $ahora),
                 'cierre_programado' => null,
                 'equipo' => [],
                 'estado_vendedor' => null,
@@ -107,9 +102,8 @@ class ConsultaEstadoOperativoPdvService
             ->whereDate('fecha_operativa', $fechaOperativa)
             ->first();
 
-        $horarioEfectivo = $this->horarioCierre->resolverParaSucursal($sucursalId);
-        $global = $this->horarioCierre->obtenerGlobal();
-        $claveSucursal = (string) $sucursalId;
+        $horarioCierre = $this->horarioCierre->serializarParaSucursal($sucursalId, $ahora);
+        $horarioEfectivo = $this->horarioCierre->resolverParaSucursal($sucursalId, $ahora);
         $antesDeApertura = $this->horarioCierre->estaAntesDeApertura($sucursalId, $ahora);
 
         return [
@@ -137,13 +131,7 @@ class ConsultaEstadoOperativoPdvService
                 'cierre_automatico_invalidado' => (bool) ($dia?->cierre_automatico_invalidado ?? false),
                 'version' => $dia?->version ?? 1,
             ],
-            'horario_cierre' => [
-                'configurado' => $horarioEfectivo !== null,
-                'hora_apertura' => $horarioEfectivo['hora_apertura'] ?? null,
-                'hora_cierre' => $horarioEfectivo['hora_cierre'] ?? null,
-                'zona_horaria' => $horarioEfectivo['zona_horaria'] ?? null,
-                'es_override_sucursal' => isset($global['por_sucursal'][$claveSucursal]),
-            ],
+            'horario_cierre' => $horarioCierre,
             'horario_apertura' => [
                 'hora_apertura' => $horarioEfectivo['hora_apertura'] ?? null,
                 'zona_horaria' => $horarioEfectivo['zona_horaria'] ?? null,
@@ -193,7 +181,7 @@ class ConsultaEstadoOperativoPdvService
 
         $evaluacion = $this->umbralCierre->evaluar($sucursalId, $dia, $ahora);
         if (! $evaluacion['aplicable']) {
-            $horario = $this->horarioCierre->resolverParaSucursal($sucursalId);
+            $horario = $this->horarioCierre->resolverParaSucursal($sucursalId, $ahora);
             if ($horario === null || $dia->cierre_manual_at !== null) {
                 return null;
             }

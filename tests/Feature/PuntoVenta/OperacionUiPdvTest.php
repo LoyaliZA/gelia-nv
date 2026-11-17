@@ -10,6 +10,7 @@ use App\Services\PuntoVenta\Operacion\GestionarEquipoOperativoPdvService;
 use App\Services\PuntoVenta\Operacion\HorarioCierreOperacionPdvConfig;
 use App\Services\PuntoVenta\PuntoVentaModulo;
 use App\Support\PuntoVenta\Operacion\TipoIntervaloOperativoPdv;
+use Carbon\Carbon;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -45,6 +46,12 @@ class OperacionUiPdvTest extends TestCase
         $this->sucursal = Sucursal::factory()->create(['nombre' => 'Sucursal UI Operación']);
         $this->ventas = $this->crearVendedor('Vendedor UI');
         $this->gerencia = $this->crearGerencia('Gerente UI');
+    }
+
+    protected function tearDown(): void
+    {
+        Carbon::setTestNow();
+        parent::tearDown();
     }
 
     public function test_pagina_operacion_requiere_permiso_ver(): void
@@ -92,13 +99,14 @@ class OperacionUiPdvTest extends TestCase
             ->assertJsonStructure([
                 'servidor_at',
                 'intervalo' => ['tipo', 'inicio_at'],
-                'horario_cierre' => ['configurado', 'hora_cierre', 'zona_horaria'],
+                'horario_cierre' => ['configurado', 'hora_cierre', 'zona_horaria', 'dias_operacion', 'opera_hoy'],
                 'equipo',
             ]);
     }
 
     public function test_gerencia_actualiza_horario_cierre_de_sucursal(): void
     {
+        Carbon::setTestNow(Carbon::parse('2026-11-16 11:00:00', 'America/Mexico_City'));
         $this->configurarHorario();
 
         $response = $this->actingAs($this->gerencia)->putJson(
@@ -113,6 +121,68 @@ class OperacionUiPdvTest extends TestCase
         $config = app(HorarioCierreOperacionPdvConfig::class);
         $efectivo = $config->resolverParaSucursal($this->sucursal->id);
         $this->assertSame('20:30', $efectivo['hora_cierre'] ?? null);
+    }
+
+    public function test_gerencia_guarda_dias_y_horario_de_sabado(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-11-14 11:00:00', 'America/Mexico_City'));
+        $this->configurarHorario();
+
+        $response = $this->actingAs($this->gerencia)->putJson(
+            route('punto_venta.operacion.configuracion.horario_cierre'),
+            [
+                'hora_apertura' => '10:00',
+                'hora_cierre' => '19:00',
+                'dias_operacion' => [1, 2, 3, 4, 5, 6],
+                'hora_apertura_sabado' => '10:00',
+                'hora_cierre_sabado' => '15:00',
+            ],
+        );
+
+        $response->assertOk()
+            ->assertJsonPath('horario_cierre.hora_cierre', '15:00')
+            ->assertJsonPath('horario_cierre.hora_cierre_sabado', '15:00')
+            ->assertJsonPath('horario_cierre.dias_operacion', [1, 2, 3, 4, 5, 6])
+            ->assertJsonPath('horario_cierre.opera_hoy', true);
+
+        $config = app(HorarioCierreOperacionPdvConfig::class);
+        $efectivo = $config->resolverParaSucursal($this->sucursal->id, now());
+        $this->assertSame('15:00', $efectivo['hora_cierre'] ?? null);
+
+        $lunes = Carbon::parse('2026-11-16 11:00:00', 'America/Mexico_City');
+        $efectivoLunes = $config->resolverParaSucursal($this->sucursal->id, $lunes);
+        $this->assertSame('19:00', $efectivoLunes['hora_cierre'] ?? null);
+    }
+
+    public function test_gerencia_conserva_horario_de_otras_sucursales(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-11-16 11:00:00', 'America/Mexico_City'));
+        $otra = Sucursal::factory()->create(['nombre' => 'Sucursal Otra']);
+        $config = app(HorarioCierreOperacionPdvConfig::class);
+        $config->persistir(array_merge($config->configuracionInicialPlaneada(), [
+            'por_sucursal' => [
+                (string) $otra->id => [
+                    'hora_cierre' => '21:00',
+                    'dias_operacion' => [1, 2, 3, 4, 5],
+                ],
+            ],
+        ]));
+
+        $this->actingAs($this->gerencia)->putJson(
+            route('punto_venta.operacion.configuracion.horario_cierre'),
+            [
+                'hora_apertura' => '10:00',
+                'hora_cierre' => '20:00',
+                'dias_operacion' => [1, 2, 3, 4, 5, 6],
+                'hora_cierre_sabado' => '15:00',
+            ],
+        )->assertOk();
+
+        $global = $config->obtenerGlobal();
+        $this->assertSame('21:00', $global['por_sucursal'][(string) $otra->id]['hora_cierre'] ?? null);
+        $this->assertSame([1, 2, 3, 4, 5], $global['por_sucursal'][(string) $otra->id]['dias_operacion'] ?? null);
+        $this->assertSame('20:00', $global['por_sucursal'][(string) $this->sucursal->id]['hora_cierre'] ?? null);
+        $this->assertSame('15:00', $global['por_sucursal'][(string) $this->sucursal->id]['hora_cierre_sabado'] ?? null);
     }
 
     private function activarModulo(): void

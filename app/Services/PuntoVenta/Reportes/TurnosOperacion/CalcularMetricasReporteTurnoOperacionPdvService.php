@@ -1104,7 +1104,7 @@ class CalcularMetricasReporteTurnoOperacionPdvService
             return false;
         }
 
-        $horario = $this->horarioCierre->resolverParaSucursal($sucursalId);
+        $horario = $this->horarioCierre->resolverParaSucursal($sucursalId, $altaAt);
         if ($horario === null) {
             return false;
         }

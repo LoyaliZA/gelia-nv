@@ -15,14 +15,17 @@ class ActualizarHorarioCierreSucursalPdvService
     ) {}
 
     /**
-     * @return array{
-     *   configurado: bool,
-     *   hora_cierre: string|null,
+     * @param  array{
+     *   hora_apertura: string|null,
+     *   hora_cierre: string,
      *   zona_horaria: string|null,
-     *   es_override_sucursal: bool
-     * }
+     *   dias_operacion: list<int>|null,
+     *   hora_apertura_sabado: string|null,
+     *   hora_cierre_sabado: string|null
+     * }  $datos
+     * @return array<string, mixed>
      */
-    public function ejecutar(User $actor, string $horaCierre, ?string $horaApertura = null, ?string $zonaHoraria = null): array
+    public function ejecutar(User $actor, array $datos): array
     {
         $sucursalId = $this->alcance->sucursalActivaId($actor);
         if ($sucursalId === null) {
@@ -44,23 +47,23 @@ class ActualizarHorarioCierreSucursalPdvService
             $override = [];
         }
 
-        $override['hora_cierre'] = $horaCierre;
-        $override['hora_apertura'] = $horaApertura;
-        if ($zonaHoraria !== null && trim($zonaHoraria) !== '') {
-            $override['zona_horaria'] = trim($zonaHoraria);
+        $override['hora_cierre'] = $datos['hora_cierre'];
+        $override['hora_apertura'] = $datos['hora_apertura'];
+        $override['hora_apertura_sabado'] = $datos['hora_apertura_sabado'];
+        $override['hora_cierre_sabado'] = $datos['hora_cierre_sabado'];
+        if ($datos['dias_operacion'] !== null) {
+            $override['dias_operacion'] = $datos['dias_operacion'];
+        }
+        if ($datos['zona_horaria'] !== null && trim($datos['zona_horaria']) !== '') {
+            $override['zona_horaria'] = trim($datos['zona_horaria']);
         }
 
         $global['por_sucursal'][$claveSucursal] = $override;
         $this->horario->persistir($global);
 
-        $efectivo = $this->horario->resolverParaSucursal($sucursalId);
+        $serializado = $this->horario->serializarParaSucursal($sucursalId);
+        $serializado['es_override_sucursal'] = true;
 
-        return [
-            'configurado' => $efectivo !== null,
-            'hora_apertura' => $efectivo['hora_apertura'] ?? null,
-            'hora_cierre' => $efectivo['hora_cierre'] ?? null,
-            'zona_horaria' => $efectivo['zona_horaria'] ?? null,
-            'es_override_sucursal' => true,
-        ];
+        return $serializado;
     }
 }

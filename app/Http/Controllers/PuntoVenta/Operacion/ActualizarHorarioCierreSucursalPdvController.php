@@ -18,12 +18,7 @@ class ActualizarHorarioCierreSucursalPdvController extends Controller
         $user = $request->user();
         $datos = $request->payloadOperacion();
 
-        $horario = $servicio->ejecutar(
-            $user,
-            $datos['hora_cierre'],
-            $datos['hora_apertura'],
-            $datos['zona_horaria'],
-        );
+        $horario = $servicio->ejecutar($user, $datos);
 
         return response()->json([
             'horario_cierre' => $horario,

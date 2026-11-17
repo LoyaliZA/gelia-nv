@@ -144,7 +144,7 @@ class ConsultaEquipoOperativoPdvService
                     'motivo' => $intervalo->etiquetaMotivoPausa(),
                 ] : null,
                 'cronometro' => $this->resolverEstado->serializarCronometro($estado, $jornada, $intervalo),
-                'acciones' => $this->resolverEstado->accionesDisponibles($estado),
+                'acciones' => $this->resolverEstado->accionesDisponibles($estado, $tieneAtencion),
             ];
         })->values()->all();
     }
