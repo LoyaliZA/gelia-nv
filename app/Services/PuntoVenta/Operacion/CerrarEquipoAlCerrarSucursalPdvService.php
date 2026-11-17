@@ -2,6 +2,7 @@
 
 namespace App\Services\PuntoVenta\Operacion;
 
+use App\Models\PuntoVenta\IntervaloOperativoPdv;
 use App\Models\PuntoVenta\JornadaPdv;
 use App\Models\PuntoVenta\TurnoPdv;
 use App\Models\PuntoVenta\TurnoPdvAtencion;
@@ -13,6 +14,7 @@ class CerrarEquipoAlCerrarSucursalPdvService
 {
     public function __construct(
         private readonly CerrarJornadaPdvService $cerrarJornada,
+        private readonly CompletarCierreJornadaTrasAtencionPdvService $completarCierre,
         private readonly OperacionPdvConfig $config,
     ) {}
 
@@ -35,35 +37,15 @@ class CerrarEquipoAlCerrarSucursalPdvService
         }
     }
 
+    public function barrerPendientesDeDiasAnteriores(int $sucursalId, CarbonInterface $ahora, int $actorId): void
+    {
+        $this->retirarColaDeDiasAnteriores($sucursalId, $ahora);
+        $this->completarJornadasDeDiasAnteriores($sucursalId, $ahora, $actorId);
+    }
+
     public function cerrarJornadasDeDiasAnteriores(int $sucursalId, CarbonInterface $ahora, int $actorId): void
     {
-        $inicioDia = $this->config->inicioDiaOperativo($sucursalId, $ahora);
-
-        $jornadas = JornadaPdv::query()
-            ->where('sucursal_id', $sucursalId)
-            ->where('estado', EstadoJornadaPdv::Abierta)
-            ->where('apertura_at', '<', $inicioDia)
-            ->lockForUpdate()
-            ->get();
-
-        foreach ($jornadas as $jornada) {
-            $tieneAtencion = TurnoPdvAtencion::query()
-                ->where('user_id', $jornada->user_id)
-                ->whereNull('fin_at')
-                ->exists();
-
-            if ($tieneAtencion) {
-                continue;
-            }
-
-            $this->cerrarJornada->cerrarParaUsuario(
-                (int) $jornada->user_id,
-                $sucursalId,
-                (int) $jornada->version,
-                $ahora,
-                $actorId,
-            );
-        }
+        $this->completarJornadasDeDiasAnteriores($sucursalId, $ahora, $actorId);
     }
 
     public function retirarColaDeDiasAnteriores(int $sucursalId, CarbonInterface $ahora): int
@@ -76,6 +58,56 @@ class CerrarEquipoAlCerrarSucursalPdvService
     public function retirarColaDeFecha(int $sucursalId, string $fechaOperativa, CarbonInterface $ahora): int
     {
         return $this->retirarCola($sucursalId, $ahora, $fechaOperativa, false);
+    }
+
+    private function completarJornadasDeDiasAnteriores(int $sucursalId, CarbonInterface $ahora, int $actorId): void
+    {
+        $inicioDia = $this->config->inicioDiaOperativo($sucursalId, $ahora);
+
+        $jornadas = JornadaPdv::query()
+            ->where('sucursal_id', $sucursalId)
+            ->whereIn('estado', [
+                EstadoJornadaPdv::Abierta,
+                EstadoJornadaPdv::CerradaConAtencion,
+            ])
+            ->where('apertura_at', '<', $inicioDia)
+            ->lockForUpdate()
+            ->get();
+
+        foreach ($jornadas as $jornada) {
+            $this->cerrarAtencionesAbiertasDeUsuario((int) $jornada->user_id, $ahora);
+
+            if ($jornada->estado === EstadoJornadaPdv::CerradaConAtencion) {
+                $this->completarCierre->completarParaUsuario(
+                    (int) $jornada->user_id,
+                    $sucursalId,
+                    $ahora,
+                );
+
+                continue;
+            }
+
+            $this->cerrarJornada->cerrarParaUsuario(
+                (int) $jornada->user_id,
+                $sucursalId,
+                (int) $jornada->version,
+                $ahora,
+                $actorId,
+            );
+
+            IntervaloOperativoPdv::query()
+                ->where('jornada_id', $jornada->id)
+                ->whereNull('fin_at')
+                ->update(['fin_at' => $ahora, 'intervalo_abierto_marcador' => null]);
+        }
+    }
+
+    private function cerrarAtencionesAbiertasDeUsuario(int $userId, CarbonInterface $ahora): void
+    {
+        TurnoPdvAtencion::query()
+            ->where('user_id', $userId)
+            ->whereNull('fin_at')
+            ->update(['fin_at' => $ahora]);
     }
 
     private function retirarCola(

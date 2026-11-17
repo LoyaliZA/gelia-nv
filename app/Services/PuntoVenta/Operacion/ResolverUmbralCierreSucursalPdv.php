@@ -26,7 +26,7 @@ final class ResolverUmbralCierreSucursalPdv
             return ['aplicable' => false];
         }
 
-        $horario = $this->horario->resolverParaSucursal($sucursalId);
+        $horario = $this->horario->resolverParaSucursal($sucursalId, $ahora);
         if ($horario === null) {
             return ['aplicable' => false];
         }

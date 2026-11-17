@@ -7,7 +7,9 @@ use App\Jobs\PuntoVenta\Operacion\AperturaHorarioSucursalPdvJob;
 use App\Models\ConfiguracionSistema;
 use App\Models\PuntoVenta\OperacionPdvEvento;
 use App\Models\PuntoVenta\SucursalDiaOperacionPdv;
+use App\Models\PuntoVenta\JornadaPdv;
 use App\Models\PuntoVenta\TurnoPdv;
+use App\Models\PuntoVenta\TurnoPdvAtencion;
 use App\Models\Sucursal;
 use App\Models\User;
 use App\Services\PuntoVenta\AlcancePdv;
@@ -16,6 +18,7 @@ use App\Services\PuntoVenta\Operacion\EvaluarAperturaHorarioOperacionPdvService;
 use App\Services\PuntoVenta\Operacion\HorarioCierreOperacionPdvConfig;
 use App\Services\PuntoVenta\Operacion\ResolverSucursalDiaOperacionPdv;
 use App\Services\PuntoVenta\PuntoVentaModulo;
+use App\Support\PuntoVenta\Operacion\EstadoJornadaPdv;
 use Carbon\Carbon;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
@@ -65,6 +68,7 @@ class AperturaHorarioOperacionPdvTest extends TestCase
         ]);
         $this->recepcion->concederAccesoSucursal($this->sucursal, esPrincipal: true);
         app(AlcancePdv::class)->establecerSucursalActiva($this->recepcion, $this->sucursal->id);
+        Carbon::setTestNow(Carbon::parse('2026-11-16 12:00:00', 'America/Mexico_City'));
     }
 
     protected function tearDown(): void
@@ -234,6 +238,7 @@ class AperturaHorarioOperacionPdvTest extends TestCase
 
     public function test_configuracion_sin_hora_apertura_no_evalua(): void
     {
+        Carbon::setTestNow(Carbon::parse('2026-11-16 09:00:00', 'America/Mexico_City'));
         $this->configurarHorario([
             'hora_apertura' => null,
             'hora_cierre' => '19:00',
@@ -266,6 +271,81 @@ class AperturaHorarioOperacionPdvTest extends TestCase
         $despues = now('America/Mexico_City')->setTime(8, 5);
         $this->assertFalse(app(AperturaHorarioSucursalPdvService::class)->ejecutar($this->sucursal->id, $despues));
         Event::assertNotDispatched(JornadaAperturaHorario::class);
+    }
+
+    public function test_apertura_completa_cierre_pendiente_de_dias_anteriores_sin_atencion(): void
+    {
+        $this->configurarHorario([
+            'hora_apertura' => '08:00',
+            'hora_cierre' => '19:00',
+            'zona_horaria' => 'America/Mexico_City',
+        ]);
+
+        $sabado = Carbon::parse('2026-11-14 15:10:00', 'America/Mexico_City');
+        $vendedor = User::factory()->create();
+        $jornada = JornadaPdv::factory()->cerradaConAtencion()->create([
+            'user_id' => $vendedor->id,
+            'sucursal_id' => $this->sucursal->id,
+            'apertura_at' => $sabado->copy()->setTime(10, 0),
+            'cierre_at' => $sabado,
+        ]);
+
+        $lunes = Carbon::parse('2026-11-16 08:05:00', 'America/Mexico_City');
+        app(AperturaHorarioSucursalPdvService::class)->ejecutar($this->sucursal->id, $lunes);
+
+        $this->assertSame(EstadoJornadaPdv::Cerrada, $jornada->fresh()->estado);
+        $this->assertNull($jornada->fresh()->jornada_activa_marcador);
+    }
+
+    public function test_apertura_cierra_atencion_de_ayer_y_completa_la_jornada(): void
+    {
+        $this->configurarHorario([
+            'hora_apertura' => '08:00',
+            'hora_cierre' => '19:00',
+            'zona_horaria' => 'America/Mexico_City',
+        ]);
+
+        $sabado = Carbon::parse('2026-11-14 15:10:00', 'America/Mexico_City');
+        $vendedor = User::factory()->create();
+        $jornada = JornadaPdv::factory()->cerradaConAtencion()->create([
+            'user_id' => $vendedor->id,
+            'sucursal_id' => $this->sucursal->id,
+            'apertura_at' => $sabado->copy()->setTime(10, 0),
+            'cierre_at' => $sabado,
+        ]);
+        $turno = TurnoPdv::factory()->create([
+            'sucursal_id' => $this->sucursal->id,
+            'fecha_operativa' => $sabado->toDateString(),
+            'estado' => TurnoPdv::ESTADO_ASIGNADO,
+        ]);
+        $atencion = TurnoPdvAtencion::factory()->create([
+            'turno_id' => $turno->id,
+            'user_id' => $vendedor->id,
+            'fin_at' => null,
+        ]);
+
+        $lunes = Carbon::parse('2026-11-16 08:05:00', 'America/Mexico_City');
+        app(AperturaHorarioSucursalPdvService::class)->ejecutar($this->sucursal->id, $lunes);
+
+        $this->assertNotNull($atencion->fresh()->fin_at);
+        $this->assertSame(EstadoJornadaPdv::Cerrada, $jornada->fresh()->estado);
+        $this->assertSame(TurnoPdv::ESTADO_CERRADO, $turno->fresh()->estado);
+        $this->assertNotSame(EstadoJornadaPdv::Abierta, $jornada->fresh()->estado);
+    }
+
+    public function test_domingo_no_encola_apertura_automatica(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-11-15 09:00:00', 'America/Mexico_City'));
+        $this->configurarHorario([
+            'hora_apertura' => '08:00',
+            'hora_cierre' => '19:00',
+            'zona_horaria' => 'America/Mexico_City',
+        ]);
+
+        $resultado = app(EvaluarAperturaHorarioOperacionPdvService::class)->ejecutar();
+
+        $this->assertGreaterThan(0, $resultado['omitidas']);
+        $this->assertSame(0, $resultado['encoladas']);
     }
 
     /**

@@ -256,6 +256,7 @@ const ETIQUETAS_ACCION_EQUIPO = {
     cerrar_jornada: 'Cerrar jornada',
     reactivar: 'Reactivar',
     cancelar_cierre_pendiente: 'Cancelar cierre pendiente',
+    finalizar_jornada: 'Finalizar jornada',
 };
 
 export function etiquetaAccionEquipo(accion) {
@@ -491,6 +492,9 @@ export function isoDesdeDatetimeLocal(valor) {
 
 export function resumenHorarioOperativo(estado) {
     const horario = estado?.horario_cierre || {};
+    if (horario.opera_hoy === false && horario.configurado) {
+        return 'Hoy no opera';
+    }
     const apertura = horario.hora_apertura || 'Sin restricción';
     const cierre = horario.hora_cierre || '—';
     const partes = [`${apertura}–${cierre}`];

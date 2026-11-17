@@ -67,6 +67,7 @@ class ConfiguracionSistemaController extends Controller
         Cache::forget(\App\Services\ControlPedidos\PagosPedidoBmaConfig::CACHE_KEY);
         Cache::forget(\App\Services\ControlPedidos\EnviosPedidoBmaConfig::CACHE_KEY);
         Cache::forget(\App\Services\ControlPedidos\FormularioProgresivoPedidoBmaConfig::CACHE_KEY);
+        Cache::forget(\App\Services\PuntoVenta\Operacion\HorarioCierreOperacionPdvConfig::CACHE_KEY);
         $this->olvidarCachePreparacionTienda($configuracion->clave);
 
         return redirect()->back()->with('success', 'Configuración creada correctamente.');
@@ -120,6 +121,7 @@ class ConfiguracionSistemaController extends Controller
         Cache::forget(\App\Services\ControlPedidos\PagosPedidoBmaConfig::CACHE_KEY);
         Cache::forget(\App\Services\ControlPedidos\EnviosPedidoBmaConfig::CACHE_KEY);
         Cache::forget(\App\Services\ControlPedidos\FormularioProgresivoPedidoBmaConfig::CACHE_KEY);
+        Cache::forget(\App\Services\PuntoVenta\Operacion\HorarioCierreOperacionPdvConfig::CACHE_KEY);
         $this->olvidarCachePreparacionTienda($configuracion->clave);
 
         return redirect()->back()->with('success', 'Configuración actualizada correctamente.');
@@ -137,6 +139,7 @@ class ConfiguracionSistemaController extends Controller
         Cache::forget(\App\Services\ControlPedidos\PagosPedidoBmaConfig::CACHE_KEY);
         Cache::forget(\App\Services\ControlPedidos\EnviosPedidoBmaConfig::CACHE_KEY);
         Cache::forget(\App\Services\ControlPedidos\FormularioProgresivoPedidoBmaConfig::CACHE_KEY);
+        Cache::forget(\App\Services\PuntoVenta\Operacion\HorarioCierreOperacionPdvConfig::CACHE_KEY);
         $this->olvidarCachePreparacionTienda($clave);
 
         return redirect()->back()->with('success', 'Configuración eliminada correctamente.');

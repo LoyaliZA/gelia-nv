@@ -13,12 +13,18 @@ final class HorarioCierreOperacionPdvConfig
 
     public const CACHE_KEY = 'pdv.operacion.horario_cierre';
 
+    /** @var list<int> */
+    public const DIAS_OPERACION_PREDETERMINADOS = [1, 2, 3, 4, 5, 6];
+
     /**
      * @return array{
      *   activo: bool,
      *   zona_horaria: string,
      *   hora_apertura: string|null,
      *   hora_cierre: string,
+     *   dias_operacion: list<int>,
+     *   hora_apertura_sabado: string|null,
+     *   hora_cierre_sabado: string|null,
      *   por_sucursal: array<string, array<string, mixed>>
      * }
      */
@@ -29,6 +35,9 @@ final class HorarioCierreOperacionPdvConfig
             'zona_horaria' => (string) config('app.timezone', 'America/Mexico_City'),
             'hora_apertura' => null,
             'hora_cierre' => '19:00',
+            'dias_operacion' => self::DIAS_OPERACION_PREDETERMINADOS,
+            'hora_apertura_sabado' => null,
+            'hora_cierre_sabado' => null,
             'por_sucursal' => [],
         ];
     }
@@ -64,6 +73,9 @@ final class HorarioCierreOperacionPdvConfig
      *   zona_horaria: string,
      *   hora_apertura: string|null,
      *   hora_cierre: string,
+     *   dias_operacion: list<int>,
+     *   hora_apertura_sabado: string|null,
+     *   hora_cierre_sabado: string|null,
      *   por_sucursal: array<string, array<string, mixed>>
      * }|null
      */
@@ -83,28 +95,33 @@ final class HorarioCierreOperacionPdvConfig
     }
 
     /**
+     * Configuración combinada (global + override), sin filtrar por día.
+     *
      * @return array{
+     *   activo: bool,
      *   zona_horaria: string,
      *   hora_apertura: string|null,
-     *   hora_cierre: string
+     *   hora_cierre: string,
+     *   dias_operacion: list<int>,
+     *   hora_apertura_sabado: string|null,
+     *   hora_cierre_sabado: string|null,
+     *   por_sucursal: array<string, array<string, mixed>>
      * }|null
      */
-    public function resolverParaSucursal(?int $sucursalId): ?array
+    public function combinadoParaSucursal(?int $sucursalId): ?array
     {
         $global = $this->obtenerGlobal();
         if ($global === null || ! $global['activo']) {
             return null;
         }
 
-        $efectivo = $this->horarioEfectivo($global);
-
         if ($sucursalId === null) {
-            return $efectivo;
+            return $global;
         }
 
         $overrides = $global['por_sucursal'][(string) $sucursalId] ?? null;
         if (! is_array($overrides) || $overrides === []) {
-            return $efectivo;
+            return $global;
         }
 
         $combinado = $this->normalizarCompleto(array_merge($global, $overrides));
@@ -113,12 +130,81 @@ final class HorarioCierreOperacionPdvConfig
             return null;
         }
 
-        return $this->horarioEfectivo($combinado);
+        return $combinado;
+    }
+
+    /**
+     * @return array{
+     *   zona_horaria: string,
+     *   hora_apertura: string|null,
+     *   hora_cierre: string
+     * }|null
+     */
+    public function resolverParaSucursal(?int $sucursalId, ?CarbonInterface $cuando = null): ?array
+    {
+        $combinado = $this->combinadoParaSucursal($sucursalId);
+        if ($combinado === null) {
+            return null;
+        }
+
+        $cuando = $cuando ?? now();
+        if (! $this->operaEn($combinado, $cuando)) {
+            return null;
+        }
+
+        return $this->horarioEfectivo($combinado, $cuando);
+    }
+
+    public function operaEnFecha(?int $sucursalId, CarbonInterface $cuando): bool
+    {
+        $combinado = $this->combinadoParaSucursal($sucursalId);
+        if ($combinado === null) {
+            return false;
+        }
+
+        return $this->operaEn($combinado, $cuando);
+    }
+
+    /**
+     * @return array{
+     *   configurado: bool,
+     *   hora_apertura: string|null,
+     *   hora_cierre: string|null,
+     *   zona_horaria: string|null,
+     *   es_override_sucursal: bool,
+     *   dias_operacion: list<int>,
+     *   hora_apertura_semana: string|null,
+     *   hora_cierre_semana: string|null,
+     *   hora_apertura_sabado: string|null,
+     *   hora_cierre_sabado: string|null,
+     *   opera_hoy: bool
+     * }
+     */
+    public function serializarParaSucursal(?int $sucursalId, ?CarbonInterface $cuando = null): array
+    {
+        $cuando = $cuando ?? now();
+        $global = $this->obtenerGlobal();
+        $combinado = $this->combinadoParaSucursal($sucursalId);
+        $efectivo = $this->resolverParaSucursal($sucursalId, $cuando);
+
+        return [
+            'configurado' => $combinado !== null,
+            'hora_apertura' => $efectivo['hora_apertura'] ?? null,
+            'hora_cierre' => $efectivo['hora_cierre'] ?? null,
+            'zona_horaria' => $combinado['zona_horaria'] ?? ($efectivo['zona_horaria'] ?? null),
+            'es_override_sucursal' => $sucursalId !== null && isset($global['por_sucursal'][(string) $sucursalId]),
+            'dias_operacion' => $combinado['dias_operacion'] ?? self::DIAS_OPERACION_PREDETERMINADOS,
+            'hora_apertura_semana' => $combinado['hora_apertura'] ?? null,
+            'hora_cierre_semana' => $combinado['hora_cierre'] ?? null,
+            'hora_apertura_sabado' => $combinado['hora_apertura_sabado'] ?? null,
+            'hora_cierre_sabado' => $combinado['hora_cierre_sabado'] ?? null,
+            'opera_hoy' => $combinado !== null && $this->operaEnFecha($sucursalId, $cuando),
+        ];
     }
 
     public function estaAntesDeApertura(int $sucursalId, CarbonInterface $ahora): bool
     {
-        $horario = $this->resolverParaSucursal($sucursalId);
+        $horario = $this->resolverParaSucursal($sucursalId, $ahora);
         if ($horario === null || $horario['hora_apertura'] === null) {
             return false;
         }
@@ -139,6 +225,9 @@ final class HorarioCierreOperacionPdvConfig
      *   zona_horaria: string,
      *   hora_apertura: string|null,
      *   hora_cierre: string,
+     *   dias_operacion: list<int>,
+     *   hora_apertura_sabado: string|null,
+     *   hora_cierre_sabado: string|null,
      *   por_sucursal: array<string, array<string, mixed>>
      * }
      */
@@ -170,8 +259,32 @@ final class HorarioCierreOperacionPdvConfig
             'zona_horaria' => $zona,
             'hora_apertura' => $horaApertura,
             'hora_cierre' => $horaCierre ?? '',
+            'dias_operacion' => $this->normalizarDias($configuracion['dias_operacion'] ?? null),
+            'hora_apertura_sabado' => $this->normalizarHora($configuracion['hora_apertura_sabado'] ?? null),
+            'hora_cierre_sabado' => $this->normalizarHora($configuracion['hora_cierre_sabado'] ?? null),
             'por_sucursal' => $porSucursalNormalizado,
         ];
+    }
+
+    /**
+     * @param  array{
+     *   activo: bool,
+     *   zona_horaria: string,
+     *   hora_apertura?: string|null,
+     *   hora_cierre: string,
+     *   dias_operacion?: list<int>,
+     *   hora_apertura_sabado?: string|null,
+     *   hora_cierre_sabado?: string|null,
+     *   por_sucursal?: array<string, array<string, mixed>>
+     * }  $config
+     */
+    private function operaEn(array $config, CarbonInterface $cuando): bool
+    {
+        $zona = (string) $config['zona_horaria'];
+        $dia = (int) $cuando->copy()->timezone($zona)->isoWeekday();
+        $dias = $config['dias_operacion'] ?? self::DIAS_OPERACION_PREDETERMINADOS;
+
+        return in_array($dia, $dias, true);
     }
 
     private function normalizarHora(mixed $valor): ?string
@@ -193,25 +306,71 @@ final class HorarioCierreOperacionPdvConfig
     }
 
     /**
+     * @return list<int>
+     */
+    private function normalizarDias(mixed $valor): array
+    {
+        if (! is_array($valor) || $valor === []) {
+            return self::DIAS_OPERACION_PREDETERMINADOS;
+        }
+
+        $dias = [];
+        foreach ($valor as $dia) {
+            if (! is_numeric($dia)) {
+                continue;
+            }
+            $entero = (int) $dia;
+            if ($entero < 1 || $entero > 7) {
+                continue;
+            }
+            $dias[$entero] = $entero;
+        }
+
+        if ($dias === []) {
+            return self::DIAS_OPERACION_PREDETERMINADOS;
+        }
+
+        $ordenados = array_values($dias);
+        sort($ordenados);
+
+        return $ordenados;
+    }
+
+    /**
      * @param  array{
      *   activo: bool,
      *   zona_horaria: string,
      *   hora_apertura?: string|null,
      *   hora_cierre: string,
-     *   por_sucursal?: array<string, array<string, mixed>>
+     *   hora_apertura_sabado?: string|null,
+     *   hora_cierre_sabado?: string|null
      * }  $config
      * @return array{zona_horaria: string, hora_apertura: string|null, hora_cierre: string}|null
      */
-    private function horarioEfectivo(array $config): ?array
+    private function horarioEfectivo(array $config, CarbonInterface $cuando): ?array
     {
         $horaCierre = $this->normalizarHora($config['hora_cierre'] ?? null);
+        $horaApertura = $this->normalizarHora($config['hora_apertura'] ?? null);
+
+        $local = $cuando->copy()->timezone((string) $config['zona_horaria']);
+        if ((int) $local->isoWeekday() === 6) {
+            $aperturaSabado = $this->normalizarHora($config['hora_apertura_sabado'] ?? null);
+            $cierreSabado = $this->normalizarHora($config['hora_cierre_sabado'] ?? null);
+            if ($aperturaSabado !== null) {
+                $horaApertura = $aperturaSabado;
+            }
+            if ($cierreSabado !== null) {
+                $horaCierre = $cierreSabado;
+            }
+        }
+
         if ($horaCierre === null) {
             return null;
         }
 
         return [
             'zona_horaria' => (string) $config['zona_horaria'],
-            'hora_apertura' => $this->normalizarHora($config['hora_apertura'] ?? null),
+            'hora_apertura' => $horaApertura,
             'hora_cierre' => $horaCierre,
         ];
     }

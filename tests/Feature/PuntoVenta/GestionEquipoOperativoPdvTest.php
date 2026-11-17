@@ -408,6 +408,71 @@ class GestionEquipoOperativoPdvTest extends TestCase
         $this->assertSame('atendiendo', $miembro['estado_vendedor']);
     }
 
+    public function test_finalizar_jornada_completa_cierre_pendiente_sin_atencion(): void
+    {
+        app(GestionarEquipoOperativoPdvService::class)->activar($this->gerente, $this->vendedor, now());
+        $jornada = JornadaPdv::query()->sole();
+
+        $jornada->update([
+            'estado' => EstadoJornadaPdv::CerradaConAtencion,
+            'cierre_at' => now(),
+        ]);
+
+        $miembro = collect(
+            $this->actingAs($this->gerente)->getJson(route('punto_venta.operacion.datos'))->json('equipo')
+        )->firstWhere('id', $this->vendedor->id);
+        $this->assertContains('finalizar_jornada', $miembro['acciones']);
+        $this->assertContains('cancelar_cierre_pendiente', $miembro['acciones']);
+
+        $this->actingAs($this->gerente)
+            ->postJson(route('punto_venta.operacion.equipo.finalizar_jornada', $this->vendedor), [
+                'version' => $jornada->fresh()->version,
+            ])
+            ->assertOk();
+
+        $this->assertSame(EstadoJornadaPdv::Cerrada, $jornada->fresh()->estado);
+        $miembro = collect(
+            $this->actingAs($this->gerente)->getJson(route('punto_venta.operacion.datos'))->json('equipo')
+        )->firstWhere('id', $this->vendedor->id);
+        $this->assertSame('jornada_cerrada', $miembro['estado_vendedor']);
+    }
+
+    public function test_finalizar_jornada_no_se_ofrece_con_atencion_abierta(): void
+    {
+        app(GestionarEquipoOperativoPdvService::class)->activar($this->gerente, $this->vendedor, now());
+        $jornada = JornadaPdv::query()->sole();
+
+        TurnoPdvAtencion::factory()->create([
+            'user_id' => $this->vendedor->id,
+            'fin_at' => null,
+        ]);
+
+        IntervaloOperativoPdv::query()
+            ->where('jornada_id', $jornada->id)
+            ->update(['tipo' => TipoIntervaloOperativoPdv::EnAtencion]);
+
+        app(GestionarEquipoOperativoPdvService::class)->cerrarJornada(
+            $this->gerente,
+            $this->vendedor,
+            $jornada->version,
+            now(),
+        );
+
+        $jornada->refresh();
+        $miembro = collect(
+            $this->actingAs($this->gerente)->getJson(route('punto_venta.operacion.datos'))->json('equipo')
+        )->firstWhere('id', $this->vendedor->id);
+        $this->assertSame('cierre_pendiente', $miembro['estado_vendedor']);
+        $this->assertNotContains('finalizar_jornada', $miembro['acciones']);
+
+        $this->actingAs($this->gerente)
+            ->postJson(route('punto_venta.operacion.equipo.finalizar_jornada', $this->vendedor), [
+                'version' => $jornada->version,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['accion']);
+    }
+
     public function test_accion_gerencial_registra_auditoria(): void
     {
         $this->actingAs($this->gerente)
