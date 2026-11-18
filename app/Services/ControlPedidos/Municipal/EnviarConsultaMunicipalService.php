@@ -72,7 +72,10 @@ class EnviarConsultaMunicipalService
                 'enviada_at' => $previo['enviada_at'] ?? now()->toIso8601String(),
                 'enviada_por_id' => $previo['enviada_por_id'] ?? $usuario->id,
             ];
-            unset($json['revision_disponibilidad']);
+            $heredada = in_array($previo['procedencia'] ?? '', ['heredada_parcial', 'heredada_completa'], true);
+            if (! ($heredada && ! empty($previo['enviada_at']))) {
+                unset($json['revision_disponibilidad']);
+            }
             $cambios = ['solicitud_preparacion_json' => $json];
             $fase = $pedido->estatus?->fase_ciclo;
             if ($fase === CatalogoEstatusPedido::FASE_BORRADOR) {

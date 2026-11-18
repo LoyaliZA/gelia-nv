@@ -3,8 +3,12 @@
 namespace App\Services\ControlPedidos;
 
 use App\Models\ControlPedidos\PedidoBma;
+use App\Services\ControlPedidos\Conversion\ConversionModalidadException;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
 use App\Support\ControlPedidos\ConsultaMunicipal;
+use App\Support\ControlPedidos\Conversion\CodigosConversionModalidad;
+use App\Support\ControlPedidos\Conversion\ContextoCierreConsultaEsperado;
+use App\Support\ControlPedidos\Conversion\ConversionModalidadEnCursoPedidoBma;
 use App\Support\ControlPedidos\VisibilidadPedidoBma;
 use Illuminate\Support\Facades\DB;
 
@@ -14,13 +18,38 @@ class CerrarConsultaPedidoBmaService
         private RegistrarHistorialPedidoService $historialService,
     ) {}
 
-    public function ejecutar(PedidoBma $pedido, int $usuarioId): PedidoBma
+    public function ejecutar(PedidoBma $pedido, int $usuarioId, ?ContextoCierreConsultaEsperado $contexto = null): PedidoBma
     {
-        return DB::transaction(function () use ($pedido, $usuarioId) {
+        return DB::transaction(function () use ($pedido, $usuarioId, $contexto) {
             $pedido = PedidoBma::query()->lockForUpdate()->findOrFail($pedido->id);
+            $this->assertContextoEsperado($pedido, $contexto);
 
             return $this->cerrar($pedido, $usuarioId);
         });
+    }
+
+    private function assertContextoEsperado(PedidoBma $pedido, ?ContextoCierreConsultaEsperado $contexto): void
+    {
+        if (ConversionModalidadEnCursoPedidoBma::activa((int) $pedido->id)) {
+            throw ConversionModalidadException::enCursoAlCerrar();
+        }
+
+        $json = is_array($pedido->solicitud_preparacion_json) ? $pedido->solicitud_preparacion_json : [];
+        $modalidadActual = (string) ($json['modalidad_entrega'] ?? '');
+        $confirmada = ($json['conversion_modalidad']['estado'] ?? null) === CodigosConversionModalidad::ESTADO_CONFIRMADA;
+
+        if ($contexto?->tieneModalidad() && $contexto->modalidad_esperada !== $modalidadActual) {
+            throw ConversionModalidadException::contextoObsoleto();
+        }
+        if ($contexto?->tieneVersion()) {
+            $version = (int) $pedido->historial()->max('id');
+            if ($contexto->version_consulta !== $version) {
+                throw ConversionModalidadException::vistaAtrasada();
+            }
+        }
+        if ($confirmada && $contexto?->modalidad_esperada !== $modalidadActual) {
+            throw ConversionModalidadException::contextoObsoleto();
+        }
     }
 
     private function cerrarMunicipal(PedidoBma $pedido, int $usuarioId): PedidoBma

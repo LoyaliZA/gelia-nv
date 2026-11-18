@@ -143,7 +143,15 @@ export default function SeguimientoSolicitudMunicipal({ pedido, onCerrar, onReab
                 </AvisoOperativoPedido>
             )}
             {puedeCerrar && (
-                <button type="button" className={THEME_BTN_PRIMARY} disabled={cerrando} onClick={onCerrar}>
+                <button
+                    type="button"
+                    className={THEME_BTN_PRIMARY}
+                    disabled={cerrando}
+                    onClick={() => onCerrar?.({
+                        modalidad_esperada: pedido?.solicitud_preparacion?.modalidad_entrega || 'municipal',
+                        version_consulta: pedido?.version_consulta ?? null,
+                    })}
+                >
                     {cerrando ? 'Cerrando…' : 'Cerrar consulta'}
                 </button>
             )}

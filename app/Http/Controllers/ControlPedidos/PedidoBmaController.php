@@ -1030,7 +1030,19 @@ class PedidoBmaController extends Controller
         $listarService->asegurarAcceso($pedidoBma, Auth::user());
 
         try {
-            $pedido = $service->ejecutar($pedidoBma->load(['estatus', 'origen', 'vendedor']), Auth::id());
+            $contexto = ($request->exists('modalidad_esperada') || $request->exists('version_consulta'))
+                ? new \App\Support\ControlPedidos\Conversion\ContextoCierreConsultaEsperado(
+                    $request->input('modalidad_esperada'),
+                    $request->filled('version_consulta') ? (int) $request->input('version_consulta') : null,
+                )
+                : null;
+            $pedido = $service->ejecutar($pedidoBma->load(['estatus', 'origen', 'vendedor']), Auth::id(), $contexto);
+        } catch (\App\Services\ControlPedidos\Conversion\ConversionModalidadException $e) {
+            if ($request->expectsJson()) {
+                return response()->json(['message' => $e->getMessage(), 'codigo' => $e->codigo], $e->status);
+            }
+
+            return redirect()->back()->with('error', $e->getMessage());
         } catch (Throwable $e) {
             if ($request->expectsJson()) {
                 $esNegocio = $e instanceof \InvalidArgumentException

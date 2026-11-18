@@ -8,7 +8,18 @@ import { THEME_BTN_PRIMARY, THEME_INPUT, THEME_LABEL, THEME_SELECT } from '../..
 import ExpedienteConsignatario from './ExpedienteConsignatario';
 import SeguimientoSolicitudMunicipal from './SeguimientoSolicitudMunicipal';
 
-export default function FormularioRegistrarMunicipal({ abierto, pedido, catalogos = {}, onPedidoCreado, antesDeGuardar, asegurarDocumento, onLectura, motivoComun = '', ocupado = false, onOcupado, children }) {
+function contextoCierreConsulta(pedido) {
+    return {
+        modalidad_esperada: pedido?.solicitud_preparacion?.modalidad_entrega || 'municipal',
+        version_consulta: pedido?.version_consulta ?? null,
+    };
+}
+
+export default function FormularioRegistrarMunicipal({
+    abierto, pedido, catalogos = {}, onPedidoCreado, antesDeGuardar, asegurarDocumento, onLectura,
+    motivoComun = '', ocupado = false, onOcupado, children, modo = 'alta', persistirSolicitud: persistirExterno,
+    onConfirmarConversion,
+}) {
     const solicitud = pedido?.solicitud_preparacion || {};
     const finanzas = solicitud.finanzas_municipales || {};
     const usuarioId = usePage().props.auth?.user?.id;
@@ -28,8 +39,11 @@ export default function FormularioRegistrarMunicipal({ abierto, pedido, catalogo
     const [actual, setActual] = useState(pedido);
     const [docPreview, setDocPreview] = useState(null);
     const [cambios, setCambios] = useState(Boolean(Object.keys(borrador).length));
-    const enviada = Boolean(actual.solicitud_preparacion?.consulta_municipal?.enviada_at);
-    const bloqueado = enviada || Boolean(actual.consulta_cerrada) || Boolean(actual.cancelado_at);
+    const conversion = modo === 'conversion';
+    const enviada = !conversion && Boolean(actual.solicitud_preparacion?.consulta_municipal?.enviada_at);
+    const bloqueado = conversion
+        ? Boolean(actual.cancelado_at)
+        : enviada || Boolean(actual.consulta_cerrada) || Boolean(actual.cancelado_at);
     useEffect(() => { setActual(pedido); }, [pedido]);
     useEffect(() => { onOcupado?.(guardando || ajustePendiente); }, [guardando, ajustePendiente, onOcupado]);
     useEffect(() => {
@@ -53,17 +67,27 @@ export default function FormularioRegistrarMunicipal({ abierto, pedido, catalogo
 
     if (!abierto) return null;
 
+    const camposMunicipales = () => ({
+        catalogo_paqueteria_id: Number(paqueteriaId),
+        consignatario_id: Number(consignatarioId),
+        almacen_id: almacenId ? Number(almacenId) : null,
+        leyenda_terminal: puedePorCobrar ? leyenda : 'PAGADO',
+        costo_transporte: puedeDiferido && costoModo === 'diferido' ? 'diferido' : 'conocido',
+        costo_envio: costo === '' ? null : costo,
+    });
+
     const persistirSolicitud = async () => {
         const comun = antesDeGuardar ? await antesDeGuardar() : actual;
         if (!comun?.id) throw new Error('No se pudieron guardar los datos del pedido. Revise el aviso del formulario antes de continuar.');
-        const { data } = await window.axios.post(route('control_pedidos.municipal.solicitud', comun.id), {
-            catalogo_paqueteria_id: Number(paqueteriaId),
-            consignatario_id: Number(consignatarioId),
-            almacen_id: almacenId ? Number(almacenId) : null,
-            leyenda_terminal: puedePorCobrar ? leyenda : 'PAGADO',
-            costo_transporte: puedeDiferido && costoModo === 'diferido' ? 'diferido' : 'conocido',
-            costo_envio: costo === '' ? null : costo,
-        }, { headers: { Accept: 'application/json' } });
+        const payload = camposMunicipales();
+        if (persistirExterno) {
+            const data = await persistirExterno(payload, comun) || {};
+            const siguiente = { ...actual, ...comun, ...data };
+            setCambios(false);
+            actualizar(siguiente);
+            return siguiente;
+        }
+        const { data } = await window.axios.post(route('control_pedidos.municipal.solicitud', comun.id), payload, { headers: { Accept: 'application/json' } });
         const siguiente = { ...actual, ...comun, ...data };
         setCambios(false);
         actualizar(siguiente);
@@ -119,12 +143,18 @@ export default function FormularioRegistrarMunicipal({ abierto, pedido, catalogo
         }
     };
 
-    const cerrarConsulta = async () => {
+    const cerrarConsulta = async (contexto) => {
         setGuardando(true);
         try {
-            await window.axios.post(route('control_pedidos.cerrar_consulta', actual.id), {}, { headers: { Accept: 'application/json' } });
+            await window.axios.post(route('control_pedidos.cerrar_consulta', actual.id), {
+                ...contextoCierreConsulta(actual),
+                ...(contexto || {}),
+            }, { headers: { Accept: 'application/json' } });
             await refrescar();
         } catch (error) {
+            if (error.response?.status === 409 && error.response?.data?.codigo === 'contexto_obsoleto') {
+                await refrescar().catch(() => {});
+            }
             setAviso(error.response?.data?.message || 'No se pudo cerrar la consulta.');
         } finally {
             setGuardando(false);
@@ -207,7 +237,7 @@ export default function FormularioRegistrarMunicipal({ abierto, pedido, catalogo
                         <div className="flex flex-wrap gap-2">{actual.documentos.filter(doc => doc.tipo === 'evidencia_condicion').map(doc => <button key={doc.id} type="button" className={GELIA_BTN_OUTLINE} onClick={() => setDocPreview(doc)}>{doc.nombre_original || 'Ver evidencia'}</button>)}</div>
                     </section>}
                     {enviada && <button type="button" className={`${GELIA_BTN_OUTLINE} justify-self-start`} disabled={guardando || ocupado} onClick={() => refrescar().catch(() => setAviso('No se pudo actualizar la consulta.'))}><RefreshCw size={16} />Actualizar respuesta</button>}
-                    <SeguimientoSolicitudMunicipal pedido={actual} onCerrar={cerrarConsulta} onReabrir={reabrir} cerrando={guardando || ocupado} onPedidoActualizado={actualizar} onOcupado={setAjustePendiente} />
+                    {!conversion && <SeguimientoSolicitudMunicipal pedido={actual} onCerrar={cerrarConsulta} onReabrir={reabrir} cerrando={guardando || ocupado} onPedidoActualizado={actualizar} onOcupado={setAjustePendiente} />}
                     <ModalVistaPreviaDocumento abierto={Boolean(docPreview)} documento={docPreview} onClose={() => setDocPreview(null)} />
                 </>;
     const pie = <>
@@ -218,5 +248,20 @@ export default function FormularioRegistrarMunicipal({ abierto, pedido, catalogo
                         {!enviada && <button type="button" className={THEME_BTN_PRIMARY} disabled={guardando || ocupado || Boolean(motivoEnvio)} aria-describedby="municipal-motivo-envio" onClick={enviar}><Send size={16} />{guardando ? (etapa === 'Guardando documento.' ? 'Guardando documento' : etapa === 'Enviando consulta.' ? 'Enviando consulta' : 'Preparando solicitud') : 'Enviar consulta'}</button>}
                     </div>
                 </>;
-    return children({ contenido, pie, bloqueado, guardando });
+    const pieConversion = onConfirmarConversion ? (
+        <div className="registrar-tienda-pie-acciones">
+            <button type="button" className={THEME_BTN_PRIMARY} disabled={guardando || ocupado} onClick={() => onConfirmarConversion(camposMunicipales())}>
+                Confirmar cambio
+            </button>
+        </div>
+    ) : null;
+    return children({
+        contenido,
+        pie: conversion ? pieConversion : pie,
+        bloqueado,
+        guardando,
+        captura: camposMunicipales(),
+        motivoEnvio,
+        sucia: cambios,
+    });
 }

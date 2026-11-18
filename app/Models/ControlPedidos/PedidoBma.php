@@ -1238,6 +1238,20 @@ class PedidoBma extends Model
             return 'Hay un traslado autorizado pendiente de salida o recepción en la sucursal de destino.';
         }
 
+        $conversion = is_array($this->solicitud_preparacion_json['conversion_modalidad'] ?? null)
+            ? $this->solicitud_preparacion_json['conversion_modalidad']
+            : [];
+        if (($conversion['estado'] ?? null) === 'confirmada'
+            && ($this->solicitud_preparacion_json['modalidad_entrega'] ?? null) === 'municipal') {
+            $bloqueada = \App\Models\PuntoVenta\ResguardoPdv::query()
+                ->where('pedido_bma_id', $this->id)
+                ->where('entrega_bloqueada', true)
+                ->exists();
+            if ($bloqueada) {
+                return 'Hay un cambio a envío municipal pendiente de adecuación física. La entrega en sucursal no continúa hasta resolverlo.';
+            }
+        }
+
         if ($this->tieneAjusteTiendaPendiente()) {
             return 'Hay un anexo o retiro pendiente de atención. Resuélvalo antes de entregar.';
         }

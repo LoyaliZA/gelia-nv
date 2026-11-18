@@ -77,6 +77,9 @@ class FusionarSolicitudPreparacionPedido
         } elseif (array_key_exists('modalidad_entrega', $base)) {
             $salida['modalidad_entrega'] = $this->modalidadEntrega($base['modalidad_entrega']);
         }
+        if (($base['conversion_modalidad']['estado'] ?? null) === 'confirmada') {
+            $salida['modalidad_entrega'] = $this->modalidadEntrega($base['modalidad_entrega'] ?? $salida['modalidad_entrega'] ?? null);
+        }
 
         if (array_key_exists('area_revision', $entrada)) {
             $salida['area_revision'] = $this->areaRevision($entrada['area_revision']);
@@ -206,7 +209,7 @@ class FusionarSolicitudPreparacionPedido
         }
         foreach ([
             'acciones_disponibilidad', 'reapertura_disponibilidad', 'solicitudes_ajuste_ids', 'solicitudes_ajuste_lotes', 'cobertura_tienda', 'cambio_cobertura_tienda', 'historial_cambios_cobertura', 'segundo_traslado', 'historial_traslados_tienda', 'movimientos_tienda_version', 'cambio_modalidad_tienda', 'credito_wizerp', 'tienda_md_reporte',
-            'retiro_recoleccion', 'liberacion_fisica_20', 'cambio_modalidad',
+            'retiro_recoleccion', 'liberacion_fisica_20', 'cambio_modalidad', 'conversion_modalidad',
             'continuacion_ejecutor', 'entrega_custodia', 'compromisos_inventario', 'complemento_pdv', 'anexo_integracion', 'transferencia_tienda', 'seguimiento_recoleccion', 'remision_tienda',
         ] as $clave) {
             if (is_array($salida[$clave] ?? null) && $salida[$clave] !== []) {
@@ -332,6 +335,7 @@ class FusionarSolicitudPreparacionPedido
             'retiro_piezas',
             'liberacion_fisica_20',
             'cambio_modalidad',
+            'conversion_modalidad',
             'continuacion_ejecutor',
             'transferencia_tienda',
             'seguimiento_recoleccion',

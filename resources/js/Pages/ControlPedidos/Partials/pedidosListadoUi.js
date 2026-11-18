@@ -88,6 +88,64 @@ const ORDEN_PRIMARIA = [
     'ver',
 ];
 
+export const GRUPOS_ACCIONES_PEDIDO = {
+    consulta: 'Consulta y seguimiento',
+    operaciones: 'Operaciones',
+    administracion: 'Administración',
+};
+
+const GRUPO_POR_CLAVE = {
+    ver: 'consulta',
+    bitacora: 'consulta',
+    auditoria: 'consulta',
+    guia: 'operaciones',
+    cargar: 'operaciones',
+    completar: 'operaciones',
+    anexar: 'operaciones',
+    'traslado-tienda': 'operaciones',
+    'seguimiento-traslado': 'operaciones',
+    'modalidad-tienda': 'operaciones',
+    'conversion-modalidad': 'operaciones',
+    editar: 'operaciones',
+    espera: 'operaciones',
+    cancelar: 'administracion',
+    'eliminar-borrador': 'administracion',
+    'eliminar-registro': 'administracion',
+    restaurar: 'administracion',
+};
+
+const CLAVE_GRUPO_POR_ETIQUETA = Object.fromEntries(
+    Object.entries(GRUPOS_ACCIONES_PEDIDO).map(([clave, etiqueta]) => [etiqueta, clave])
+);
+
+export function grupoAccionPedido(accion) {
+    if (GRUPO_POR_CLAVE[accion?.key]) return GRUPO_POR_CLAVE[accion.key];
+    if (GRUPOS_ACCIONES_PEDIDO[accion?.grupo]) return accion.grupo;
+    return CLAVE_GRUPO_POR_ETIQUETA[accion?.grupo] || 'operaciones';
+}
+
+export function agruparAccionesPedido(acciones) {
+    const orden = ['consulta', 'operaciones', 'administracion'];
+    const buckets = { consulta: [], operaciones: [], administracion: [] };
+    for (const accion of acciones || []) {
+        (buckets[grupoAccionPedido(accion)] || buckets.operaciones).push(accion);
+    }
+    return orden.filter((key) => buckets[key].length).map((key) => ({
+        key,
+        label: GRUPOS_ACCIONES_PEDIDO[key],
+        acciones: buckets[key],
+    }));
+}
+
+export function flagsConversionPedido(pedido) {
+    return pedido?.conversion_modalidad || {};
+}
+
+export function puedeCambiarModalidadConversion(pedido) {
+    const flags = flagsConversionPedido(pedido);
+    return Boolean(flags.puede_iniciar || flags.puede_continuar);
+}
+
 /**
  * @returns {Array<{ key: string, label: string, tone?: string, onClick: () => void }>}
  */
@@ -108,6 +166,7 @@ export function accionesPedidoLista({
     onCancelar,
     onBitacora,
     onMovimientoTienda,
+    onCambiarModalidad,
     onVerGuia,
     onAnexarEnvio,
     onCompletarEnvio,
@@ -150,12 +209,27 @@ export function accionesPedidoLista({
         out.push({ key: 'ver', label: 'Ver', onClick: () => onVer(pedido) });
     }
     const solicitudTienda = pedido.solicitud_preparacion || pedido.solicitud_preparacion_json || {};
-    if (!esPapelera && onMovimientoTienda && solicitudTienda.modalidad_entrega === 'tienda' && !pedido.cancelado_at && pedido.estatus?.fase_ciclo !== 'ENTREGADO') {
-        if (pedido.estatus_sucursal === 'en_custodia' && pedido.puede_mutar && can('control_pedidos.crear') && (!['pendiente', 'autorizada'].includes(solicitudTienda.segundo_traslado?.estado) || solicitudTienda.segundo_traslado?.recepcion_confirmada) && !solicitudTienda.cambio_modalidad_tienda) {
+    if (!esPapelera && solicitudTienda.modalidad_entrega === 'tienda' && !pedido.cancelado_at && pedido.estatus?.fase_ciclo !== 'ENTREGADO') {
+        const traslado = solicitudTienda.segundo_traslado;
+        const trasladoActivo = Boolean(traslado && !traslado.recepcion_confirmada && ['pendiente', 'autorizada'].includes(traslado.estado));
+        const enCustodiaOperable = pedido.estatus_sucursal === 'en_custodia' && pedido.puede_mutar && can('control_pedidos.crear');
+        const convertir = puedeCambiarModalidadConversion(pedido);
+        if (onMovimientoTienda && enCustodiaOperable && !trasladoActivo && !solicitudTienda.cambio_modalidad_tienda) {
             out.push({ key: 'traslado-tienda', label: 'Solicitar traslado', onClick: () => onMovimientoTienda(pedido, 'traslado') });
+        }
+        if (convertir && (onCambiarModalidad || onMovimientoTienda)) {
+            out.push({
+                key: 'conversion-modalidad',
+                label: 'Cambiar modalidad',
+                onClick: () => (onCambiarModalidad
+                    ? onCambiarModalidad(pedido)
+                    : onMovimientoTienda(pedido, 'modalidad')),
+            });
+        } else if (onMovimientoTienda && enCustodiaOperable && !trasladoActivo && !solicitudTienda.cambio_modalidad_tienda) {
             out.push({ key: 'modalidad-tienda', label: 'Cambiar modalidad', onClick: () => onMovimientoTienda(pedido, 'modalidad') });
-        } else if (solicitudTienda.segundo_traslado || solicitudTienda.cambio_modalidad_tienda) {
-            out.push({ key: 'traslado-tienda', label: 'Seguimiento de traslado y modalidad', onClick: () => onMovimientoTienda(pedido, 'traslado') });
+        }
+        if (onMovimientoTienda && (traslado || (solicitudTienda.cambio_modalidad_tienda && !convertir))) {
+            out.push({ key: 'seguimiento-traslado', label: 'Seguimiento de traslado y modalidad', onClick: () => onMovimientoTienda(pedido, 'traslado') });
         }
     }
     if (onBitacora) {
@@ -186,7 +260,10 @@ export function accionesPedidoLista({
         out.push({ key: 'eliminar-registro', label: 'Eliminar registro', tone: 'danger', onClick: () => onEliminarRegistro(pedido) });
     }
 
-    return out;
+    return out.map((accion) => ({
+        ...accion,
+        grupo: GRUPOS_ACCIONES_PEDIDO[GRUPO_POR_CLAVE[accion.key]] || GRUPOS_ACCIONES_PEDIDO.operaciones,
+    }));
 }
 
 export function elegirAccionPrimaria(acciones) {

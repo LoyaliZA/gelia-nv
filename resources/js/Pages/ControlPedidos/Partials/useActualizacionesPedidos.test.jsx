@@ -117,6 +117,21 @@ it('reanuda una pausa funcional aunque conserve la misma función y descarta pen
     expect(actualizar).toHaveBeenCalledOnce();
 });
 
+it('refresca reserva y conversión aunque la captura esté pausada', async () => {
+    await render({ pausado: true });
+    await act(() => {
+        window.dispatchEvent(new CustomEvent('pedido-bma.actualizado', { detail: { pedido_id: 32, accion: 'conversion_reserva_adquirida' } }));
+        vi.advanceTimersByTime(200);
+    });
+    expect(actualizar).toHaveBeenCalledOnce();
+    expect(actualizar.mock.calls[0][0].accion).toBe('conversion_reserva_adquirida');
+    await act(() => {
+        window.dispatchEvent(new CustomEvent('pedido-bma.actualizado', { detail: { pedido_id: 32, accion: 'conversion_modalidad' } }));
+        vi.advanceTimersByTime(200);
+    });
+    expect(actualizar).toHaveBeenCalledTimes(2);
+});
+
 it('una lectura fallida no se considera respaldo exitoso y volver a visible recupera la lectura', async () => {
     actualizar.mockRejectedValueOnce(new Error('Sin red'));
     vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');

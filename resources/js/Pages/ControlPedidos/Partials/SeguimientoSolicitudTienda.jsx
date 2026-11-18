@@ -2,6 +2,7 @@ import AccionPrincipalTienda from './AccionPrincipalTienda';
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { AlertTriangle, RotateCcw, ChevronDown, CheckCircle2, Clock, PackagePlus } from 'lucide-react';
+import SeguimientoSolicitudMunicipal from '../Municipal/SeguimientoSolicitudMunicipal';
 import {
     GELIA_BTN_OUTLINE,
     GELIA_ICON_BOX,
@@ -114,7 +115,14 @@ function ResultadoDisponibilidad({ area, pedido, revisiones, onVer, accionesDePi
     />;
 }
 
-function ConfirmacionSolicitud({ pedidoId, visible, cerrada, onCerrada, faltante, onReabrir, soloLectura, destinoAccion, area }) {
+function contextoCierreConsulta(pedido, modalidad = 'tienda') {
+    return {
+        modalidad_esperada: pedido?.solicitud_preparacion?.modalidad_entrega || modalidad,
+        version_consulta: pedido?.version_consulta ?? null,
+    };
+}
+
+function ConfirmacionSolicitud({ pedido, pedidoId, visible, cerrada, onCerrada, onContextoObsoleto, faltante, onReabrir, soloLectura, destinoAccion, area }) {
     const [ocupado, setOcupado] = useState(false);
     const [error, setError] = useState('');
     if (!visible && !cerrada) return null;
@@ -124,9 +132,16 @@ function ConfirmacionSolicitud({ pedidoId, visible, cerrada, onCerrada, faltante
         setOcupado(true);
         setError('');
         try {
-            const { data } = await axios.post(`/control-pedidos/${pedidoId}/cerrar-consulta`, {}, { headers: cabeceras() });
+            const { data } = await axios.post(`/control-pedidos/${pedidoId}/cerrar-consulta`, contextoCierreConsulta(pedido, 'tienda'), { headers: cabeceras() });
             onCerrada(data);
         } catch (errorCierre) {
+            if (errorCierre?.response?.status === 409 && errorCierre?.response?.data?.codigo === 'contexto_obsoleto') {
+                try {
+                    const { data } = await axios.get(`/control-pedidos/${pedidoId}/disponibilidad-tienda`, { headers: cabeceras() });
+                    onContextoObsoleto?.(data, errorCierre.response.data.message);
+                    return;
+                } catch { /* El mensaje del 409 basta si la lectura posterior falla. */ }
+            }
             setError(mensajeDe(errorCierre, 'No se pudo confirmar la mercancía.'));
         } finally {
             setOcupado(false);
@@ -204,6 +219,7 @@ export default function SeguimientoSolicitudTienda({
 
     const [aviso, setAviso] = useState('');
     const [vista, setVista] = useState(null);
+    const [municipalTrasConversion, setMunicipalTrasConversion] = useState(null);
     const marcaRespuesta = pedido?.solicitud_preparacion?.revision_disponibilidad?.estado
         || pedido?.tarea_preparacion?.estado
         || pedido?.pesaje_respondido_at
@@ -221,6 +237,26 @@ export default function SeguimientoSolicitudTienda({
         || (ajustePendiente ? 'Hay un anexo pendiente de respuesta. Puede seguir anexando o retirando piezas.' : '');
 
     if (!pedidoId) return null;
+    if (municipalTrasConversion?.solicitud_preparacion?.modalidad_entrega === 'municipal') {
+        return (
+            <div className="tienda-seguimiento mt-4 grid gap-4 theme-text-main">
+                {aviso && <p className="text-sm theme-text-main m-0 break-words" role="status">{aviso}</p>}
+                <SeguimientoSolicitudMunicipal
+                    pedido={municipalTrasConversion}
+                    onCerrar={async (contexto) => {
+                        const { data } = await axios.post(`/control-pedidos/${pedidoId}/cerrar-consulta`, contexto || contextoCierreConsulta(municipalTrasConversion, 'municipal'), { headers: cabeceras() });
+                        setMunicipalTrasConversion(data);
+                        onPedidoActualizado?.(data);
+                        onConsultaCerrada?.(data);
+                    }}
+                    onPedidoActualizado={(datos) => {
+                        setMunicipalTrasConversion(datos);
+                        onPedidoActualizado?.(datos);
+                    }}
+                />
+            </div>
+        );
+    }
     if (!emitida) {
         return <EsperaRevision area={area} nombreAlmacen={nombreAlmacen} />;
     }
@@ -232,7 +268,7 @@ export default function SeguimientoSolicitudTienda({
                     {aviso}
                 </p>
             )}
-            {cerrada && <ConfirmacionSolicitud pedidoId={pedidoId} cerrada faltante={faltante} soloLectura={soloLectura} onReabrir={reabrir} />}
+            {cerrada && <ConfirmacionSolicitud pedido={visto} pedidoId={pedidoId} cerrada faltante={faltante} soloLectura={soloLectura} onReabrir={reabrir} />}
             <RespuestaPreparacionTienda
                 tarea={visto?.tarea_preparacion}
                 mostrarCaptura={false}
@@ -268,6 +304,7 @@ export default function SeguimientoSolicitudTienda({
                 </PanelEspera>
             )}
             {!cerrada && <ConfirmacionSolicitud
+                pedido={visto}
                 pedidoId={pedidoId}
                 destinoAccion={destinoAccion}
                 area={area}
@@ -276,6 +313,11 @@ export default function SeguimientoSolicitudTienda({
                 faltante={faltante}
                 soloLectura={soloLectura}
                 onReabrir={reabrir}
+                onContextoObsoleto={(datos, mensaje) => {
+                    setAviso(mensaje || 'La consulta ya no corresponde a esta modalidad. Actualice para continuar en envío municipal.');
+                    onPedidoActualizado?.(datos);
+                    setMunicipalTrasConversion(datos);
+                }}
                 onCerrada={(lecturaCierre) => {
                     setCerradaLocal(true); onConsultaCerrada?.(lecturaCierre);
                     setAviso('Consulta cerrada. La mercancía quedó confirmada con el cliente.');

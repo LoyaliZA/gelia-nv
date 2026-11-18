@@ -156,6 +156,12 @@ class ListarPedidosBmaService
         $pedido->setAttribute('motivo_bloqueo_cierre', ConsultaMunicipal::es($pedido)
             ? ConsultaMunicipal::motivoBloqueo($pedido)
             : (($pedido->esConsultaDisponibilidadTienda() || $pedido->esConsultaDisponibilidadCedis()) ? $pedido->motivoBloqueoCierreConsultaTienda() : null));
+        $conversion = app(\App\Services\ControlPedidos\Conversion\EvaluarElegibilidadConversion::class)->flags($pedido, $usuario);
+        $pedido->setAttribute('conversion_modalidad', $conversion->toArray()['conversion_modalidad']);
+        if ($conversion->reserva_activa) {
+            $pedido->setAttribute('puede_cerrar_consulta', false);
+            $pedido->setAttribute('motivo_bloqueo_cierre', \App\Support\ControlPedidos\Conversion\CodigosConversionModalidad::MENSAJE_RESERVA);
+        }
         if (ConsultaMunicipal::es($pedido)) {
             $pedido->setAttribute('etiqueta_consulta', EtiquetaConsultaMunicipal::de($pedido));
         }

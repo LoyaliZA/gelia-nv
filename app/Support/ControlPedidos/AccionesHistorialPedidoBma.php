@@ -57,6 +57,7 @@ final class AccionesHistorialPedidoBma
     public const STOCK_SIN_EXISTENCIA = 'stock_sin_existencia';
     public const REPORTE_SIN_EXISTENCIA = 'reporte_sin_existencia';
     public const CIERRE_CONSULTA = 'cierre_consulta';
+    public const CAMBIO_MODALIDAD_CONVERSION = 'cambio_modalidad_conversion';
     public const REABRIR_CONSULTA = 'reabrir_consulta';
     public const ACTUALIZAR_CONSULTA = 'actualizar_consulta';
     public const SESION_EVIDENCIA = 'sesion_evidencia';
@@ -106,6 +107,7 @@ final class AccionesHistorialPedidoBma
         self::RESPUESTA_DISPONIBILIDAD => 'Respuesta de disponibilidad',
         self::SOLICITUD_REPESAJE => 'Solicitud de re-pesaje',
         self::CIERRE_CONSULTA => 'Cierre de consulta CEDIS',
+        self::CAMBIO_MODALIDAD_CONVERSION => 'Cambio a envío municipal',
         self::REABRIR_CONSULTA => 'Reapertura de consulta CEDIS',
         self::ACTUALIZAR_CONSULTA => 'Actualización de consulta CEDIS',
         self::ENVIO_AUXILIAR => 'Envío a auxiliar',

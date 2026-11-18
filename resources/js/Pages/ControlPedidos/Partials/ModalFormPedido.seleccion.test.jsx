@@ -4,7 +4,8 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ModalFormPedido from './ModalFormPedido';
 vi.mock('./ModalFormPedidoLegado', () => ({ default: ({ pedido }) => <div data-form="legado">{pedido?.id}</div>, hayBorradorPedidoLocal: () => false }));
-vi.mock('./FormularioRegistrarTienda', () => ({ default: ({ pedido, onContinuarEnvio }) => <div data-form="actual">{pedido?.id}<button onClick={() => onContinuarEnvio({ ...pedido, solicitud_preparacion: { modalidad_entrega: 'nacional' } })}>Continuar envío</button></div> }));
+vi.mock('./useReservaConversionModalidad', () => ({ default: () => ({ flags: null, reservaOk: true, error: '', aviso: '', setError: () => {}, setAviso: () => {}, setFlags: () => {}, instanciaId: () => 'x', claveIdempotencia: () => 'x', marcarConfirmada: () => {} }) }));
+vi.mock('./FormularioRegistrarTienda', () => ({ default: ({ pedido, onContinuarEnvio, intencion }) => <div data-form="actual" data-intencion={intencion || 'alta'}>{pedido?.id}<button onClick={() => onContinuarEnvio({ ...pedido, solicitud_preparacion: { modalidad_entrega: 'nacional' } })}>Continuar envío</button></div> }));
 let root, container;
 beforeEach(() => { globalThis.IS_REACT_ACT_ENVIRONMENT = true; container = document.createElement('div'); document.body.append(container); root = createRoot(container); });
 afterEach(async () => { await act(() => root.unmount()); container.remove(); });
@@ -31,6 +32,10 @@ describe('Modal de edición según la captura del pedido', () => {
         expect(container.querySelector('[data-form="actual"]').textContent).toContain('21');
         await act(() => root.render(<ModalFormPedido key="historico" abierto pedido={{ id: 22, estatus: { fase_ciclo: 'BORRADOR' }, solicitud_preparacion: { codigo_modalidad: 'ENVIO_MUNICIPIO' } }} />));
         expect(container.querySelector('[data-form="legado"]').textContent).toBe('22');
+    });
+    it('abre el formulario actual en modo conversión', async () => {
+        await act(() => root.render(<ModalFormPedido abierto intencion="conversion" pedido={{ id: 81, solicitud_preparacion: { modalidad_entrega: 'tienda' } }} />));
+        expect(container.querySelector('[data-form="actual"]').getAttribute('data-intencion')).toBe('conversion');
     });
 
 });

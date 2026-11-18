@@ -1,5 +1,6 @@
 import FormularioRegistrarMunicipal from '../Municipal/FormularioRegistrarMunicipal';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import SeguimientoSolicitudMunicipal from '../Municipal/SeguimientoSolicitudMunicipal';
+import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { usePage } from '@inertiajs/react';
 import axios from 'axios';
@@ -50,6 +51,16 @@ import useActualizacionesPedidos from './useActualizacionesPedidos';
 import SeguimientoSolicitudTienda, { respuestaDeTiendaEmitida } from './SeguimientoSolicitudTienda';
 import { fusionarLecturaMunicipal } from '../Municipal/vigenciaConsultaMunicipal';
 import { lecturaConsultaVigente } from './vigenciaConsultaPedido';
+import PanelConversionModalidad from './PanelConversionModalidad';
+import AvisoOperativoPedido from './AvisoOperativoPedido';
+import {
+    DESTINOS_P0,
+    armarFormularioConversion,
+    clienteHttpConversion,
+    flagsConversionDe,
+    fusionarPedidoConversion,
+    mensajeErrorConversion,
+} from './conversionModalidad';
 
 const MENSAJE_ARCHIVO = 'Adjunta el PDF o la imagen del pedido.';
 const MENSAJE_AREA = 'Elige el destino de la revisión.';
@@ -219,6 +230,29 @@ function saldoDeDatos(datos) {
     return canonMonto(datos.saldoFavor) ?? 0;
 }
 
+function VistaPreviaConversion({ activo, pedidoId, instanciaId, captura, onFlags, onError }) {
+    const huella = JSON.stringify(captura || {});
+    useEffect(() => {
+        if (!activo || !pedidoId || !captura?.catalogo_paqueteria_id || !captura?.consignatario_id) return undefined;
+        const timer = window.setTimeout(async () => {
+            try {
+                const { data } = await clienteHttpConversion().post(`/control-pedidos/${pedidoId}/conversion-modalidad/vista-previa`, {
+                    destino: 'municipal',
+                    instancia_id: instanciaId,
+                    ...captura,
+                }, { headers: { Accept: 'application/json' } });
+                onFlags?.(flagsConversionDe(data));
+            } catch (error) {
+                if (error?.response?.status !== 404) {
+                    onError?.(mensajeErrorConversion(error, 'No se pudo calcular el cargo de transporte.'));
+                }
+            }
+        }, 400);
+        return () => window.clearTimeout(timer);
+    }, [activo, pedidoId, instanciaId, huella]);
+    return null;
+}
+
 function motivoSolicitud({ modalidad, tieneCliente, tieneDepartamento, tieneFolio, tieneArchivo, receptor, enviada }) {
     if (modalidad !== 'tienda' || enviada) return '';
     if (!tieneCliente) return 'Indica el número de cliente.';
@@ -237,7 +271,12 @@ export default function FormularioRegistrarTienda({
     registrarTienda = {},
     onPedidoCreado = null,
     onContinuarEnvio,
+    onActualizar = null,
+    intencion = 'alta',
+    reservaConversion = null,
 }) {
+    const conversion = intencion === 'conversion';
+    const conversionId = useId();
     const { auth } = usePage().props;
     const [pedido, setPedido] = useState(pedidoInicial);
     const pedidoVivoRef = useRef(pedido); pedidoVivoRef.current = pedido;
@@ -364,7 +403,18 @@ export default function FormularioRegistrarTienda({
     const documentoRef = useRef(documento);
     documentoRef.current = documento;
     const [archivoPendiente, setArchivoPendiente] = useState(false);
+    const [motivoConversion, setMotivoConversion] = useState('');
+    const [errorCapturaConversion, setErrorCapturaConversion] = useState(false);
+    const [archivosConversion, setArchivosConversion] = useState([]);
+    const [previewsConversion, setPreviewsConversion] = useState([]);
+    const [vistaConversion, setVistaConversion] = useState(null);
+    const [confirmarSalidaConversion, setConfirmarSalidaConversion] = useState(false);
+    const [resultadoConversion, setResultadoConversion] = useState(null);
+    const [ocupadoConversion, setOcupadoConversion] = useState(false);
+    const capturaMunicipalRef = useRef({ captura: null, motivoEnvio: '', sucia: false });
     const avanzado = capturaAvanzada(pedido);
+    const flagsConversion = reservaConversion?.flags;
+    const destinosConversion = flagsConversion?.destinos?.length ? flagsConversion.destinos : DESTINOS_P0;
     const receptor = receptorDe(area, almacenId, almacenes);
     const motivo = useMemo(
         () =>
@@ -758,6 +808,15 @@ export default function FormularioRegistrarTienda({
 
     const cambiarModalidad = (valor) => {
         if (!valor) return;
+        if (conversion) {
+            const destino = destinosConversion.find((item) => item.codigo === valor);
+            if (!destino?.habilitado) return;
+            deseadaRef.current = valor;
+            setTransito('');
+            setModalidad(valor);
+            if (valor !== 'tienda') setArea('');
+            return;
+        }
         if (avanzado) {
             setAviso(MENSAJE_MODALIDAD);
             return;
@@ -778,6 +837,7 @@ export default function FormularioRegistrarTienda({
     }, [pedido?.id, pedido?.consulta_cerrada, pedido?.consulta_cerrada_at]);
 
     useEffect(() => {
+        if (conversion) return undefined;
         if (!abierto || (modalidad === 'municipal' && solicitud.consulta_municipal?.enviada_at)) return undefined;
         const actual = huellaActual();
         if (!huellaRef.current) {
@@ -804,10 +864,23 @@ export default function FormularioRegistrarTienda({
         return () => window.clearTimeout(timer);
     }, [abierto, clienteId, numeroCliente, departamentoId, folio, modalidad, area, caso, almacenId, sucursalMd, totalMercancia, aplicaSaf, saldoFavor, safAplicaciones, safTocado]);
 
+    const suciaConversion = conversion && !resultadoConversion && Boolean(
+        motivoConversion || archivosConversion.length || errorCapturaConversion
+        || capturaMunicipalRef.current.sucia || (modalidad && modalidad !== modalidadDe(solicitud)),
+    );
+    const intentarCerrar = () => {
+        if (ocupadoConversion || vistaConversion) return;
+        if (suciaConversion && !confirmarSalidaConversion) {
+            setConfirmarSalidaConversion(true);
+            return;
+        }
+        onClose?.();
+    };
     const dialog = usePedidoDialog({
         abierto,
-        onClose,
-        bloqueado: guardando || enviando || operandoMunicipal || estadoArchivo === 'cargando',
+        onClose: conversion ? intentarCerrar : onClose,
+        bloqueado: guardando || enviando || operandoMunicipal || estadoArchivo === 'cargando' || ocupadoConversion || Boolean(vistaConversion),
+        cerrarConEscape: !vistaConversion && !ocupadoConversion,
     });
 
     const refrescarRef = useRef(null);
@@ -834,7 +907,7 @@ export default function FormularioRegistrarTienda({
         onPendiente: () => setAviso('El pedido cambió. Se conserva su captura mientras termina de guardar.'),
     });
     useEffect(() => {
-        if (!abierto || !pedidoId) return;
+        if (!abierto || !pedidoId || resultadoConversion) return;
         let vigente = true;
         const baseAlLeer = baseRef.current;
         setLecturaOperativaLista(false);
@@ -951,7 +1024,67 @@ export default function FormularioRegistrarTienda({
         if (actual) opcionesDepartamento.unshift(actual);
     }
 
-    const renderFormulario = (municipal = null) => createPortal(
+    const confirmarConversion = async () => {
+        if (!conversion || ocupadoConversion || resultadoConversion) return;
+        if (modalidad !== 'municipal') {
+            reservaConversion?.setError?.('Seleccione un destino habilitado.');
+            return;
+        }
+        const captura = capturaMunicipalRef.current.captura || {};
+        if (capturaMunicipalRef.current.motivoEnvio) {
+            reservaConversion?.setError?.(capturaMunicipalRef.current.motivoEnvio);
+            return;
+        }
+        if (!captura.catalogo_paqueteria_id || !captura.consignatario_id) {
+            reservaConversion?.setError?.('Complete la terminal y el consignatario.');
+            return;
+        }
+        if (!motivoConversion.trim() && !errorCapturaConversion) {
+            reservaConversion?.setError?.('Registre el motivo o notifique un error de captura.');
+            return;
+        }
+        if (!errorCapturaConversion && !archivosConversion.length) {
+            reservaConversion?.setError?.('Adjunte la petición del cliente o notifique un error de captura.');
+            return;
+        }
+        setOcupadoConversion(true);
+        reservaConversion?.setError?.('');
+        const form = armarFormularioConversion({
+            instanciaId: reservaConversion?.instanciaId?.(),
+            motivo: motivoConversion,
+            errorCaptura: errorCapturaConversion,
+            revisionEsperada: pedido?.revision_registro,
+            conversionVersion: flagsConversion?.version,
+            claveIdempotencia: reservaConversion?.claveIdempotencia?.(),
+            captura,
+            evidencias: archivosConversion,
+        });
+        try {
+            const { data } = await clienteHttpConversion().post(`/control-pedidos/${pedidoId}/conversion-modalidad`, form, { headers: { Accept: 'application/json' } });
+            reservaConversion?.marcarConfirmada?.();
+            const fusionado = fusionarPedidoConversion(pedido, data);
+            setResultadoConversion(data);
+            setPedido(fusionado);
+            if (fusionado.solicitud_preparacion) setSolicitudViva(fusionado.solicitud_preparacion);
+            onPedidoCreado?.(fusionado);
+            onActualizar?.();
+        } catch (error) {
+            reservaConversion?.setError?.(mensajeErrorConversion(error, 'No se pudo confirmar el cambio de modalidad.'));
+        } finally {
+            setOcupadoConversion(false);
+        }
+    };
+
+    const renderFormulario = (municipal = null) => {
+        if (conversion && municipal) {
+            capturaMunicipalRef.current = {
+                captura: municipal.captura,
+                motivoEnvio: municipal.motivoEnvio,
+                sucia: municipal.sucia,
+            };
+        }
+        const pedidoSeguimiento = resultadoConversion ? fusionarPedidoConversion(pedido, resultadoConversion) : null;
+        return createPortal(
         <div className={THEME_MODAL_OVERLAY} data-gelia-modal="1">
             <div
                 {...dialog}
@@ -967,10 +1100,12 @@ export default function FormularioRegistrarTienda({
                             Gestión de pedidos{pedido?.folio ? ` · ${pedido.folio}` : ''}
                         </p>
                         <h2 id="registrar-tienda-titulo" className={GELIA_MODAL_TITLE}>
-                            {pedidoInicial?.id ? 'Editar pedido' : 'Registrar pedido'}
+                            {conversion ? 'Cambiar modalidad' : pedidoInicial?.id ? 'Editar pedido' : 'Registrar pedido'}
                         </h2>
                         <p className="registrar-tienda-descripcion">
-                            {modalidad === 'municipal' ? 'Datos del pedido y envío municipal a terminal.' : 'Captura el pedido y elige el destino de la revisión.'}
+                            {conversion
+                                ? 'El pedido conserva sus datos. Complete solo lo que el envío municipal necesita.'
+                                : modalidad === 'municipal' ? 'Datos del pedido y envío municipal a terminal.' : 'Captura el pedido y elige el destino de la revisión.'}
                         </p>
                         {pedido?.estatus && <div className="flex flex-wrap gap-1.5 mt-2" aria-label="Estado del pedido" aria-live="polite">
                             {badgesListaPedido(pedido).slice(0, 2).map((badge) => <span key={badge.key} className={badge.className} style={badge.style}>{badge.label}</span>)}
@@ -981,9 +1116,9 @@ export default function FormularioRegistrarTienda({
                     <button
                         type="button"
                         className={`${GELIA_BTN_OUTLINE} registrar-tienda-cerrar`}
-                        onClick={onClose}
-                        disabled={guardando || enviando || operandoMunicipal}
-                        aria-label="Cerrar registro"
+                        onClick={conversion ? intentarCerrar : onClose}
+                        disabled={guardando || enviando || operandoMunicipal || ocupadoConversion}
+                        aria-label={conversion ? 'Cerrar cambio de modalidad' : 'Cerrar registro'}
                     >
                         <X size={18} aria-hidden="true" />
                     </button>
@@ -1016,10 +1151,37 @@ export default function FormularioRegistrarTienda({
                             {errorCampo}
                         </p>
                     )}
-                    {avanzado && (
+                    {avanzado && !conversion && (
                         <p className="mb-4 text-sm theme-text-main m-0" role="status">
                             {MENSAJE_MODALIDAD}
                         </p>
+                    )}
+                    {conversion && reservaConversion?.error && (
+                        <p role="alert" className="mb-4 theme-text-peligro text-sm m-0">{reservaConversion.error}</p>
+                    )}
+                    {conversion && reservaConversion?.aviso && (
+                        <p role="status" className="mb-4 text-sm theme-text-aviso m-0">{reservaConversion.aviso}</p>
+                    )}
+                    {conversion && !reservaConversion?.reservaOk && !reservaConversion?.error && !resultadoConversion && (
+                        <p role="status" className="mb-4 text-sm theme-text-muted m-0">Reservando el cambio…</p>
+                    )}
+                    {conversion && flagsConversion?.accion_ui === 'continuar' && (
+                        <AvisoOperativoPedido tono="info" className="mb-4">Continúa la solicitud de cambio pendiente de conexión. No se crea otra petición.</AvisoOperativoPedido>
+                    )}
+                    {confirmarSalidaConversion && (
+                        <div className="mb-4 grid gap-4" role="status">
+                            <h3 className="text-lg font-bold theme-text-main m-0">¿Descartar lo capturado?</h3>
+                            <p className="text-sm theme-text-main m-0">Los datos que aún no se confirman se perderán. El pedido no se modifica.</p>
+                            <div className="flex flex-wrap gap-2 justify-end">
+                                <button type="button" className={THEME_BTN_SECONDARY} onClick={() => setConfirmarSalidaConversion(false)}>Seguir editando</button>
+                                <button type="button" className={THEME_BTN_PRIMARY} onClick={onClose}>Descartar y cerrar</button>
+                            </div>
+                        </div>
+                    )}
+                    {resultadoConversion && (
+                        <AvisoOperativoPedido tono="success" icon={Check} label="Cambio confirmado" className="mb-4">
+                            El pedido {resultadoConversion.folio || pedido.folio} quedó en envío municipal. No se creó un folio nuevo.
+                        </AvisoOperativoPedido>
                     )}
                     <section className="registrar-tienda-panel" aria-labelledby="registrar-tienda-datos">
                         <div className="registrar-tienda-seccion-titulo">
@@ -1033,7 +1195,7 @@ export default function FormularioRegistrarTienda({
                                 </label>
                                 <CampoBusqueda
                                     id="cliente-tienda"
-                                    disabled={municipal?.bloqueado || municipal?.guardando}
+                                    disabled={conversion || municipal?.bloqueado || municipal?.guardando}
                                     className={campo}
                                     value={numeroCliente}
                                     onChange={(evento) => buscarCliente(evento.target.value)}
@@ -1063,7 +1225,7 @@ export default function FormularioRegistrarTienda({
                                 {puedeCorregirDepartamento ? (
                                     <select
                                         id="depto-tienda"
-                                        disabled={municipal?.bloqueado || municipal?.guardando}
+                                        disabled={conversion || municipal?.bloqueado || municipal?.guardando}
                                         className={`${THEME_SELECT} w-full min-h-[44px] text-base`}
                                         value={String(departamentoId)}
                                         onChange={(evento) => setDepartamentoId(evento.target.value)}
@@ -1090,7 +1252,7 @@ export default function FormularioRegistrarTienda({
                                     <Hash className="theme-field-icon" aria-hidden="true" />
                                     <input
                                         id="folio-tienda"
-                                        disabled={municipal?.bloqueado || municipal?.guardando}
+                                        disabled={conversion || municipal?.bloqueado || municipal?.guardando}
                                         className={campo}
                                         value={folio}
                                         onChange={(evento) => setFolio(evento.target.value)}
@@ -1109,13 +1271,15 @@ export default function FormularioRegistrarTienda({
                                         id="modalidad-tienda"
                                         className={`${THEME_SELECT} w-full min-h-[44px] text-base`}
                                         value={transito || modalidad}
-                                        disabled={avanzado || guardando || enviando || municipal?.bloqueado || municipal?.guardando}
+                                        disabled={conversion
+                                            ? Boolean(resultadoConversion) || ocupadoConversion || !reservaConversion?.reservaOk
+                                            : avanzado || guardando || enviando || municipal?.bloqueado || municipal?.guardando}
                                         onChange={(evento) => cambiarModalidad(evento.target.value)}
                                     >
-                                        <option value="">Elegir</option>
-                                        {OPCIONES_MODALIDAD.map(([valor, titulo]) => (
-                                            <option key={valor} value={valor}>
-                                                {titulo}
+                                        <option value="">{conversion ? 'Modalidad actual' : 'Elegir'}</option>
+                                        {(conversion ? destinosConversion.map((item) => [item.codigo, item.nombre, !item.habilitado, item.motivo_bloqueo]) : OPCIONES_MODALIDAD.map(([valor, titulo]) => [valor, titulo, false, null])).map(([valor, titulo, bloqueado, motivoBloqueo]) => (
+                                            <option key={valor} value={valor} disabled={Boolean(bloqueado)}>
+                                                {bloqueado && motivoBloqueo ? `${titulo} · ${motivoBloqueo}` : titulo}
                                             </option>
                                         ))}
                                     </select>
@@ -1142,7 +1306,7 @@ export default function FormularioRegistrarTienda({
                         </div>
                     </section>
                     <div className="registrar-tienda-atencion">
-                        {(transito || modalidad) === 'tienda' && (
+                        {(transito || modalidad) === 'tienda' && !conversion && (
                             <section
                                 className="registrar-tienda-panel"
                                 aria-labelledby="registrar-tienda-atencion-titulo"
@@ -1271,7 +1435,7 @@ export default function FormularioRegistrarTienda({
                                     <button
                                         type="button"
                                         className={`${GELIA_BTN_OUTLINE} min-h-[44px]`}
-                                        disabled={estadoArchivo === 'cargando' || municipal?.bloqueado || municipal?.guardando}
+                                        disabled={conversion || estadoArchivo === 'cargando' || municipal?.bloqueado || municipal?.guardando}
                                         onClick={() => archivoRef.current?.click()}
                                     >
                                         <FileUpIcon size={18} aria-hidden="true" />
@@ -1290,7 +1454,7 @@ export default function FormularioRegistrarTienda({
                                             <button
                                                 type="button"
                                                 className={`${GELIA_BTN_OUTLINE} min-h-[44px]`}
-                                                disabled={estadoArchivo === 'cargando' || municipal?.bloqueado || municipal?.guardando}
+                                                disabled={conversion || estadoArchivo === 'cargando' || municipal?.bloqueado || municipal?.guardando}
                                                 onClick={retirarArchivo}
                                             >
                                                 <Trash2Icon size={18} aria-hidden="true" />
@@ -1309,13 +1473,50 @@ export default function FormularioRegistrarTienda({
                             </div>
                         </section>
                     </div>
-                    {municipal?.contenido}
+                    {(!conversion || (modalidad === 'municipal' && !resultadoConversion)) && municipal?.contenido}
+                    {conversion && modalidad === 'municipal' && !resultadoConversion && (
+                        <>
+                            <VistaPreviaConversion
+                                activo={Boolean(reservaConversion?.reservaOk)}
+                                pedidoId={pedidoId}
+                                instanciaId={reservaConversion?.instanciaId?.()}
+                                captura={municipal?.captura}
+                                onFlags={(siguientes) => siguientes && reservaConversion?.setFlags?.(siguientes)}
+                                onError={(texto) => reservaConversion?.setError?.(texto)}
+                            />
+                            <PanelConversionModalidad
+                                id={conversionId}
+                                flags={flagsConversion || {}}
+                                captura={municipal?.captura || {}}
+                                motivo={motivoConversion}
+                                onMotivo={setMotivoConversion}
+                                errorCaptura={errorCapturaConversion}
+                                onErrorCaptura={setErrorCapturaConversion}
+                                archivos={archivosConversion}
+                                previews={previewsConversion}
+                                onEvidencias={(archivos, previews) => { setArchivosConversion(archivos); setPreviewsConversion(previews); }}
+                                onVer={(documentos, indice) => setVistaConversion({ documentos, indice })}
+                                ocupado={ocupadoConversion}
+                            />
+                        </>
+                    )}
+                    {resultadoConversion && pedidoSeguimiento && (
+                        <SeguimientoSolicitudMunicipal
+                            pedido={pedidoSeguimiento}
+                            onPedidoActualizado={(lectura) => {
+                                const siguiente = { ...pedidoSeguimiento, ...lectura };
+                                setPedido(siguiente);
+                                onPedidoCreado?.(siguiente);
+                                onActualizar?.();
+                            }}
+                        />
+                    )}
                     {modalidad === 'tienda' && (enviada || respuestaDeTiendaEmitida(pedido)) && (
                         <>
-                            {!lecturaOperativaLista && <div className="flex flex-wrap items-center gap-2 text-sm theme-text-muted" role="status"><span>Consultando los cambios guardados antes de habilitar ajustes.</span><button type="button" className={GELIA_BTN_OUTLINE} onClick={() => setRevisionLecturaOperativa(n => n + 1)}>Actualizar cambios guardados</button></div>}
+                            {!conversion && !lecturaOperativaLista && <div className="flex flex-wrap items-center gap-2 text-sm theme-text-muted" role="status"><span>Consultando los cambios guardados antes de habilitar ajustes.</span><button type="button" className={GELIA_BTN_OUTLINE} onClick={() => setRevisionLecturaOperativa(n => n + 1)}>Actualizar cambios guardados</button></div>}
                             <SeguimientoSolicitudTienda
-                                destinoAccion={destinoAccion}
-                                soloLectura={!lecturaOperativaLista}
+                                destinoAccion={conversion ? null : destinoAccion}
+                                soloLectura={conversion || !lecturaOperativaLista}
                                 pedidoId={pedidoId}
                                 pedido={{ ...pedido, solicitud_preparacion: solicitudViva }}
                                 onSolicitud={actualizarSolicitud}
@@ -1328,7 +1529,7 @@ export default function FormularioRegistrarTienda({
                                 onConsultaCerrada={(lectura) => { adoptarLectura(lectura, true); setConsultaCerrada(true); refrescarRef.current?.(); }}
                             />
                             <SeguimientoTransferenciaTienda pedido={{ ...pedido, id: pedidoId, solicitud_preparacion: solicitudViva }} sucursales={catalogos.sucursales || []} onActualizar={() => refrescarRef.current?.()} />
-                            <ContinuidadTienda
+                            {!conversion && <ContinuidadTienda
                                 pedidoId={pedidoId}
                                 solicitud={solicitudViva}
                                 sucursales={catalogos.sucursales || []}
@@ -1368,8 +1569,8 @@ export default function FormularioRegistrarTienda({
                                     onLectura: adoptarLectura,
                                     onSolicitud: actualizarSolicitud,
                                 }}
-                            />
-                            <ConfirmacionRevisionTienda procesosListos={lecturaOperativaLista && procesosConfirmacionListos} destinoAccion={destinoAccion} onAviso={setAvisoConfirmacion} antesDeEnviar={asegurarGuardado} pedido={{ ...pedido, id: pedidoId, solicitud_preparacion: solicitudViva }} sucursales={catalogos.sucursales || []} consultaCerrada={consultaCerrada} importesListos={importesListos} onLectura={adoptarLectura} />
+                            />}
+                            {!conversion && <ConfirmacionRevisionTienda procesosListos={lecturaOperativaLista && procesosConfirmacionListos} destinoAccion={destinoAccion} onAviso={setAvisoConfirmacion} antesDeEnviar={asegurarGuardado} pedido={{ ...pedido, id: pedidoId, solicitud_preparacion: solicitudViva }} sucursales={catalogos.sucursales || []} consultaCerrada={consultaCerrada} importesListos={importesListos} onLectura={adoptarLectura} />}
                         </>
                     )}
                     {modalidad !== 'municipal' && borradorConfirmado && !enviada && (
@@ -1384,7 +1585,22 @@ export default function FormularioRegistrarTienda({
                     )}
                 </div>
                 <footer className="gelia-modal-footer registrar-tienda-pie">
-                    {municipal ? municipal.pie : <>
+                    {conversion ? (
+                    <div className="registrar-tienda-pie-acciones">
+                        {resultadoConversion ? (
+                            <button type="button" className={THEME_BTN_PRIMARY} onClick={onClose}>Cerrar</button>
+                        ) : (
+                            <button
+                                type="button"
+                                className={`${THEME_BTN_PRIMARY} min-h-[44px]`}
+                                disabled={ocupadoConversion || !reservaConversion?.reservaOk || modalidad !== 'municipal'}
+                                onClick={confirmarConversion}
+                            >
+                                <Package size={16} aria-hidden />{ocupadoConversion ? 'Confirmando…' : 'Confirmar cambio de modalidad'}
+                            </button>
+                        )}
+                    </div>
+                    ) : municipal ? municipal.pie : <>
                     <div className="registrar-tienda-pie-estado" role="status" aria-live="polite">
                         {estadoGuardado && (
                             <span className="registrar-tienda-guardado">
@@ -1434,9 +1650,30 @@ export default function FormularioRegistrarTienda({
                 documento={documento}
                 onClose={() => setAmpliado(false)}
             />
+            <ModalVistaPreviaDocumento
+                abierto={Boolean(vistaConversion)}
+                documentos={vistaConversion?.documentos || []}
+                indice={vistaConversion?.indice || 0}
+                onClose={() => setVistaConversion(null)}
+            />
         </div>,
         document.body,
     );
+    };
+
+    if (conversion) {
+        return (
+            <FormularioRegistrarMunicipal
+                abierto={abierto}
+                modo="conversion"
+                pedido={{ ...pedido, id: pedidoId, cliente_id: clienteId, solicitud_preparacion: solicitudViva }}
+                catalogos={catalogos}
+                ocupado={ocupadoConversion}
+            >
+                {renderFormulario}
+            </FormularioRegistrarMunicipal>
+        );
+    }
     if (modalidad !== 'municipal') return renderFormulario();
     const tieneArchivoMunicipal = Boolean(documento?.id || archivoPendiente || estadoArchivo === 'cargando');
     const motivoComun = !clienteId ? 'Seleccione el cliente.' : !departamentoId ? 'Indique el departamento.'

@@ -3,7 +3,24 @@ import React, {
     useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState,
 } from 'react';
 import { createPortal } from 'react-dom';
-import { AlertTriangle, ChevronDown } from 'lucide-react';
+import {
+    AlertTriangle,
+    ArrowRightLeft,
+    Ban,
+    ChevronDown,
+    Clock,
+    Eye,
+    FileText,
+    Pencil,
+    Repeat,
+    RotateCcw,
+    ScrollText,
+    Shield,
+    Trash2,
+    Truck,
+    Upload,
+    Wallet,
+} from 'lucide-react';
 import { router } from '@inertiajs/react';
 import {
     geliaCardClass,
@@ -25,16 +42,42 @@ import {
     TABS_PEDIDOS_ADMIN,
 } from './pedidosBmaStyles';
 import EncabezadoFolioPedido from './EncabezadoFolioPedido';
-import BotonAccionCubico from './BotonAccionCubico';
 import ModalVistaPreviaDocumento from './ModalVistaPreviaDocumento';
 import {
     accionesPedidoLista,
+    agruparAccionesPedido,
     badgesListaPedido,
     elegirAccionPrimaria,
     MAX_BADGES_LISTADO,
 } from './pedidosListadoUi';
 
 const MENU_ACCIONES_Z_INDEX = 60;
+
+const ICONO_ACCION_PEDIDO = {
+    ver: Eye,
+    bitacora: ScrollText,
+    auditoria: Shield,
+    guia: FileText,
+    cargar: Upload,
+    completar: FileText,
+    anexar: Wallet,
+    'traslado-tienda': ArrowRightLeft,
+    'seguimiento-traslado': Truck,
+    'modalidad-tienda': Repeat,
+    'conversion-modalidad': Repeat,
+    editar: Pencil,
+    espera: Clock,
+    cancelar: Ban,
+    'eliminar-borrador': Trash2,
+    'eliminar-registro': Trash2,
+    restaurar: RotateCcw,
+};
+
+const CLASE_FILA_MENU = {
+    default: 'theme-text-main',
+    danger: 'theme-text-peligro',
+    warn: 'theme-text-aviso',
+};
 
 function textoTiempoRestante(iso) {
     if (!iso) return null;
@@ -91,25 +134,27 @@ function BadgeEstadoPrincipal({ item }) {
     );
 }
 
-function MenuAccionesPedido({ acciones, primaria, idBase }) {
+export function MenuAccionesPedido({ acciones, primaria, idBase }) {
     const [abierto, setAbierto] = useState(false);
     const triggerRef = useRef(null);
     const menuRef = useRef(null);
     const [pos, setPos] = useState(null);
     const menuId = `${idBase}-mas`;
     const restantes = acciones.filter((a) => a.key !== primaria?.key);
+    const grupos = agruparAccionesPedido(restantes);
+    const altoEstimado = Math.min(restantes.length * 40 + grupos.length * 22 + 16, 448);
 
     const actualizarPosicion = useCallback(() => {
         const el = triggerRef.current;
         if (!el) return;
         const rect = el.getBoundingClientRect();
         setPos({
-            top: window.innerHeight - rect.bottom > Math.min(restantes.length * 48 + 16, 448)
+            top: window.innerHeight - rect.bottom > altoEstimado
                 ? rect.bottom + 4
-                : Math.max(8, rect.top - Math.min(restantes.length * 48 + 16, window.innerHeight - 16)),
+                : Math.max(8, rect.top - Math.min(altoEstimado, window.innerHeight - 16)),
             right: Math.max(8, window.innerWidth - rect.right),
         });
-    }, [restantes.length]);
+    }, [altoEstimado]);
 
     useLayoutEffect(() => {
         if (!abierto) {
@@ -162,24 +207,40 @@ function MenuAccionesPedido({ acciones, primaria, idBase }) {
             role="menu"
             onKeyDown={tecladoMenu}
             aria-labelledby={menuId}
-            className="gelia-pedidos-menu fixed min-w-[12rem] max-w-[min(16rem,calc(100vw-1rem))] p-2 rounded-xl border theme-border theme-surface shadow-lg flex flex-col gap-1"
+            className="gelia-pedidos-menu fixed min-w-[13rem] max-w-[min(18rem,calc(100vw-1rem))] p-1.5 rounded-xl border theme-border theme-surface shadow-lg flex flex-col"
             style={{ top: pos.top, right: pos.right, zIndex: MENU_ACCIONES_Z_INDEX }}
         >
-            {restantes.map((accion) => (
-                <BotonAccionCubico
-                    key={accion.key}
-                    role="menuitem"
-                    icon={accion.icon}
-                    label={accion.label}
-                    onClick={() => {
-                        setAbierto(false);
-                        triggerRef.current?.focus();
-                        accion.onClick();
-                    }}
-                    tone={accion.tone || 'default'}
-                    conLabel
-                    className="!w-full"
-                />
+            {grupos.map((grupo, indice) => (
+                <div
+                    key={grupo.key}
+                    role="group"
+                    aria-label={grupo.label}
+                    className={indice > 0 ? 'mt-1 pt-1 border-t theme-border' : ''}
+                >
+                    <p className="px-3 pt-1.5 pb-0.5 text-[10px] font-semibold uppercase tracking-wide theme-text-muted m-0">
+                        {grupo.label}
+                    </p>
+                    {grupo.acciones.map((accion) => {
+                        const Icono = accion.icon || ICONO_ACCION_PEDIDO[accion.key];
+                        const tono = CLASE_FILA_MENU[accion.tone] || CLASE_FILA_MENU.default;
+                        return (
+                            <button
+                                key={accion.key}
+                                type="button"
+                                role="menuitem"
+                                onClick={() => {
+                                    setAbierto(false);
+                                    triggerRef.current?.focus();
+                                    accion.onClick();
+                                }}
+                                className={`w-full flex items-center gap-2 px-3 py-2 min-h-11 rounded-lg text-left text-xs font-semibold outline-none hover:bg-black/5 dark:hover:bg-white/5 ${tono}`}
+                            >
+                                {Icono ? <Icono className="w-4 h-4 shrink-0 opacity-70" aria-hidden /> : null}
+                                <span className="leading-tight break-words">{accion.label}</span>
+                            </button>
+                        );
+                    })}
+                </div>
             ))}
         </div>
     ) : null;
@@ -207,7 +268,7 @@ function useAccionesProps(props) {
     const {
         pedido, can, esPapelera, puedeEditar, puedeEliminarBorrador, puedeEliminarRegistro, puedeCancelar,
         onVer, onEditar, onEliminar, onEliminarRegistro, onRestaurar, onVerAuditoria, onCancelar, onBitacora, onMovimientoTienda,
-        onVerGuia, onAnexarEnvio, onCompletarEnvio, onCargarGuia,
+        onCambiarModalidad, onVerGuia, onAnexarEnvio, onCompletarEnvio, onCargarGuia,
     } = props;
 
     return useMemo(() => accionesPedidoLista({
@@ -227,6 +288,7 @@ function useAccionesProps(props) {
         onCancelar,
         onBitacora,
         onMovimientoTienda,
+        onCambiarModalidad,
         onVerGuia,
         onAnexarEnvio,
         onCompletarEnvio,
@@ -235,7 +297,7 @@ function useAccionesProps(props) {
     }), [
         pedido, can, esPapelera, puedeEditar, puedeEliminarBorrador, puedeEliminarRegistro, puedeCancelar,
         onVer, onEditar, onEliminar, onEliminarRegistro, onRestaurar, onVerAuditoria, onCancelar, onBitacora, onMovimientoTienda,
-        onVerGuia, onAnexarEnvio, onCompletarEnvio, onCargarGuia,
+        onCambiarModalidad, onVerGuia, onAnexarEnvio, onCompletarEnvio, onCargarGuia,
     ]);
 }
 
@@ -383,6 +445,7 @@ export default function TablaPedidos({
     onCancelar,
     onBitacora,
     onMovimientoTienda,
+    onCambiarModalidad,
     onAnexarEnvio,
     onCompletarEnvio,
     onCargarGuia,
@@ -436,6 +499,7 @@ export default function TablaPedidos({
         onCancelar,
         onBitacora,
         onMovimientoTienda,
+        onCambiarModalidad,
         onVerGuia: setDocPreview,
         onAnexarEnvio,
         onCompletarEnvio,

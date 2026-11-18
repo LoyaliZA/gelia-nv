@@ -1,5 +1,15 @@
 import { useEffect, useRef } from 'react';
 
+export const ACCIONES_CONVERSION_PEDIDO = [
+    'conversion_reserva_adquirida',
+    'conversion_reserva_liberada',
+    'conversion_modalidad',
+];
+
+export function esAccionConversionPedido(evento) {
+    return ACCIONES_CONVERSION_PEDIDO.includes(evento?.accion);
+}
+
 const listeners = new Set();
 let echo;
 let canal;
@@ -28,7 +38,7 @@ export default function useActualizacionesPedidos({ onActualizar, pedidoId = nul
         const aplazar = () => { pendiente = true; actual.current.onPendiente?.(); };
         const aplicar = (evento) => {
             if (cerrado) return;
-            if (estaPausado()) { aplazar(); return; }
+            if (estaPausado() && !esAccionConversionPedido(evento)) { aplazar(); return; }
             if (enVuelo) { pendiente = true; return; }
             pendiente = false;
             enVuelo = true;
@@ -46,7 +56,7 @@ export default function useActualizacionesPedidos({ onActualizar, pedidoId = nul
         const cambio = (evento = {}) => {
             evento = evento.detail || evento;
             if (pedidoId && evento.pedido_id && Number(evento.pedido_id) !== Number(pedidoId)) return;
-            if (estaPausado()) { aplazar(); return; }
+            if (estaPausado() && !esAccionConversionPedido(evento)) { aplazar(); return; }
             if (enVuelo) { pendiente = true; return; }
             clearTimeout(timeout);
             timeout = setTimeout(() => aplicar(evento), 180);
