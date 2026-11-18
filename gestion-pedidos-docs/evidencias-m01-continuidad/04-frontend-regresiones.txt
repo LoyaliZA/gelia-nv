@@ -1,0 +1,56 @@
+
+> test
+> vitest run resources/js/Pages/ControlPedidos/Municipal/registroMunicipal.test.jsx resources/js/Pages/ControlPedidos/Partials/modalPersistenciaContrato.test.jsx resources/js/Pages/ControlPedidos/Partials/modalConcurrenciaContrato.test.jsx
+
+(node:4046) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.12 [39m[90m/var/www/html[39m
+
+[90mstderr[2m | resources/js/Pages/ControlPedidos/Municipal/registroMunicipal.test.jsx[2m > [22m[2mguarda sin municipio y bloquea el envío mientras hay cambios sin guardar
+[22m[39mAn update to FormularioRegistrarMunicipal inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to FormularioRegistrarMunicipal inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to FormularioRegistrarMunicipal inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+ [32m✓[39m resources/js/Pages/ControlPedidos/Municipal/registroMunicipal.test.jsx [2m([22m[2m4 tests[22m[2m)[22m[32m 60[2mms[22m[39m
+ [32m✓[39m resources/js/Pages/ControlPedidos/Partials/modalPersistenciaContrato.test.jsx [2m([22m[2m3 tests[22m[2m)[22m[32m 187[2mms[22m[39m
+[90mstderr[2m | resources/js/Pages/ControlPedidos/Partials/modalConcurrenciaContrato.test.jsx[2m > [22m[2mQ3 modal montado: coordinación y confirmaciones[2m > [22m[2mun 409 conserva cambios, bloquea reintento y no adopta la base del servidor
+[22m[39m[autoguardar pedido] Conflicto Q3
+
+[90mstderr[2m | resources/js/Pages/ControlPedidos/Partials/modalConcurrenciaContrato.test.jsx[2m > [22m[2mQ3 modal montado: coordinación y confirmaciones[2m > [22m[2mpermite reintentar un error de red con la misma base sin fingir guardado
+[22m[39m[autoguardar pedido] No se pudo autoguardar en servidor. Los cambios siguen en este formulario.
+
+ [32m✓[39m resources/js/Pages/ControlPedidos/Partials/modalConcurrenciaContrato.test.jsx [2m([22m[2m10 tests[22m[2m)[22m[33m 473[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m3 passed[39m[22m[90m (3)[39m
+[2m      Tests [22m [1m[32m17 passed[39m[22m[90m (17)[39m
+[2m   Start at [22m 16:07:38
+[2m   Duration [22m 1.43s[2m (transform 1.05s, setup 0ms, import 1.68s, tests 720ms, environment 476ms)[22m
+

@@ -24,6 +24,7 @@ class GestionarEquipoOperativoPdvService
         private readonly AbrirJornadaPdvService $abrirJornada,
         private readonly CerrarJornadaPdvService $cerrarJornada,
         private readonly CancelarCierrePendienteJornadaPdvService $cancelarCierrePendiente,
+        private readonly CompletarCierreJornadaTrasAtencionPdvService $completarCierre,
         private readonly IniciarPausaPdvService $iniciarPausa,
         private readonly FinalizarPausaPdvService $finalizarPausa,
         private readonly ResolverEstadoVendedorOperacionPdvService $resolverEstado,
@@ -228,6 +229,45 @@ class GestionarEquipoOperativoPdvService
         );
     }
 
+    public function finalizarJornada(
+        User $gerente,
+        User $vendedor,
+        int $version,
+        CarbonInterface $ahora,
+        ?string $idempotencyKey = null,
+    ): array {
+        return $this->ejecutarConAuditoria(
+            $gerente,
+            $vendedor,
+            'finalizar_jornada',
+            $ahora,
+            $idempotencyKey,
+            function (int $sucursalId) use ($vendedor, $version, $ahora): array {
+                $jornada = JornadaPdv::query()
+                    ->where('user_id', $vendedor->id)
+                    ->where('sucursal_id', $sucursalId)
+                    ->where('estado', EstadoJornadaPdv::CerradaConAtencion)
+                    ->first();
+
+                if (! $jornada instanceof JornadaPdv) {
+                    throw ValidationException::withMessages([
+                        'jornada' => 'No hay un cierre pendiente para finalizar.',
+                    ]);
+                }
+
+                if ((int) $jornada->version !== $version) {
+                    throw ValidationException::withMessages([
+                        'version' => 'Otro usuario modificó la jornada. Actualice la página e intente de nuevo.',
+                    ]);
+                }
+
+                $this->completarCierre->ejecutar($vendedor, $sucursalId, $ahora);
+
+                return ['jornada' => $jornada->fresh()];
+            },
+        );
+    }
+
     public function iniciarPausa(
         User $gerente,
         User $vendedor,
@@ -356,7 +396,11 @@ class GestionarEquipoOperativoPdvService
         CarbonInterface $ahora,
     ): void {
         $estado = $this->estadoActual($vendedor, $sucursalId, $ahora);
-        $permitidas = $this->resolverEstado->accionesDisponibles($estado);
+        $tieneAtencion = TurnoPdvAtencion::query()
+            ->where('user_id', $vendedor->id)
+            ->whereNull('fin_at')
+            ->exists();
+        $permitidas = $this->resolverEstado->accionesDisponibles($estado, $tieneAtencion);
 
         if (! in_array($accion, $permitidas, true)) {
             throw ValidationException::withMessages([

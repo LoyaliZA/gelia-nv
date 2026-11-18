@@ -36,6 +36,10 @@ class AnexarPagoEnvioPedidoBmaService
         }
 
         return DB::transaction(function () use ($pedido, $datos, $comprobante, $usuarioId, $monto) {
+            if (\App\Support\ControlPedidos\ConsultaMunicipal::es($pedido)) {
+                $pedido = PedidoBma::query()->lockForUpdate()->findOrFail($pedido->id);
+                app(\App\Services\ControlPedidos\Municipal\PoliticaFinancieraMunicipal::class)->assertPuedeOperarComercial($pedido);
+            }
             $ruta = $comprobante->store("pedidos_bma/anexos_envio/{$pedido->id}", 'public');
 
             $tipo = $pedido->esEnvioSoloResguardos()

@@ -192,6 +192,16 @@ trait ResuelveDatosPedidoBma
         }
 
         // No resguardo: nunca persistir tipos de resguardo aunque el FE envíe id viejo.
+        if (array_key_exists('costo_transporte', $datos)) {
+            $paqueteria = CatalogoPaqueteriaPedido::find($datos['catalogo_paqueteria_id'] ?? null);
+            if (($datos['costo_transporte'] ?? null) === 'diferido' && $paqueteria?->permiteCostoDiferido()) {
+                return CatalogoTipoOperacionEnvio::porCodigo(
+                    CatalogoTipoOperacionEnvio::CODIGO_MUNICIPIO_DIFERIDO
+                )?->id ?? CatalogoTipoOperacionEnvio::idNormal();
+            }
+
+            return CatalogoTipoOperacionEnvio::idNormal();
+        }
         $paqueteriaId = $datos['catalogo_paqueteria_id'] ?? null;
         if ($paqueteriaId) {
             $paqueteria = CatalogoPaqueteriaPedido::find($paqueteriaId);

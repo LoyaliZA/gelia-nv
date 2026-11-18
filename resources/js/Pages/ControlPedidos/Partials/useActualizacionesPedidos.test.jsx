@@ -70,3 +70,75 @@ it('usa el respaldo de 15 segundos solo en una pestaña visible sin suscripción
     await act(() => vi.advanceTimersByTime(30000));
     expect(actualizar).toHaveBeenCalledOnce();
 });
+
+it('con respaldoAunqueSuscrito consulta a los 15 s aunque Echo figure suscrito y omite el ciclo si hubo evento reciente', async () => {
+    const subscription = { subscribed: true };
+    const connection = { state: 'connected', bind: vi.fn(), unbind: vi.fn() };
+    const canal = { subscription, listen: vi.fn(), stopListening: vi.fn() };
+    vi.stubGlobal('Echo', { private: () => canal, connector: { pusher: { connection } }, leave: vi.fn() });
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+    await render({ intervaloRespaldo: 15000, respaldoAunqueSuscrito: true });
+    await act(() => { cambio(32); vi.advanceTimersByTime(200); });
+    expect(actualizar).toHaveBeenCalledOnce();
+    await act(() => vi.advanceTimersByTime(15000));
+    expect(actualizar).toHaveBeenCalledOnce();
+    await act(() => vi.advanceTimersByTime(15200));
+    expect(actualizar).toHaveBeenCalledTimes(2);
+    await act(() => vi.advanceTimersByTime(15000));
+    expect(actualizar).toHaveBeenCalledTimes(3);
+});
+
+it('encola un cambio recibido durante una lectura y nunca consulta en paralelo', async () => {
+    let resolver;
+    actualizar.mockImplementationOnce(() => new Promise(resolve => { resolver = resolve; }));
+    await render();
+    await act(() => { cambio(32); vi.advanceTimersByTime(200); });
+    expect(actualizar).toHaveBeenCalledOnce();
+    await act(() => { cambio(32); cambio(32); vi.advanceTimersByTime(500); });
+    expect(actualizar).toHaveBeenCalledOnce();
+    await act(async () => resolver());
+    await act(() => vi.advanceTimersByTime(200));
+    expect(actualizar).toHaveBeenCalledTimes(2);
+});
+
+it('reanuda una pausa funcional aunque conserve la misma función y descarta pendientes del pedido anterior', async () => {
+    let editando = true;
+    const pausa = () => editando;
+    await render({ pausado: pausa });
+    await act(() => { cambio(32); vi.advanceTimersByTime(200); });
+    editando = false;
+    await render({ pausado: pausa });
+    expect(actualizar).toHaveBeenCalledOnce();
+    editando = true;
+    await render({ pausado: pausa });
+    await act(() => { cambio(32); vi.advanceTimersByTime(200); });
+    await render({ pedidoId: 99, pausado: true });
+    await render({ pedidoId: 99, pausado: false });
+    expect(actualizar).toHaveBeenCalledOnce();
+});
+
+it('refresca reserva y conversión aunque la captura esté pausada', async () => {
+    await render({ pausado: true });
+    await act(() => {
+        window.dispatchEvent(new CustomEvent('pedido-bma.actualizado', { detail: { pedido_id: 32, accion: 'conversion_reserva_adquirida' } }));
+        vi.advanceTimersByTime(200);
+    });
+    expect(actualizar).toHaveBeenCalledOnce();
+    expect(actualizar.mock.calls[0][0].accion).toBe('conversion_reserva_adquirida');
+    await act(() => {
+        window.dispatchEvent(new CustomEvent('pedido-bma.actualizado', { detail: { pedido_id: 32, accion: 'conversion_modalidad' } }));
+        vi.advanceTimersByTime(200);
+    });
+    expect(actualizar).toHaveBeenCalledTimes(2);
+});
+
+it('una lectura fallida no se considera respaldo exitoso y volver a visible recupera la lectura', async () => {
+    actualizar.mockRejectedValueOnce(new Error('Sin red'));
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+    await render({ intervaloRespaldo: 15000, respaldoAunqueSuscrito: true });
+    await act(() => { cambio(32); vi.advanceTimersByTime(200); });
+    await act(() => vi.advanceTimersByTime(15000));
+    expect(actualizar).toHaveBeenCalledTimes(2);
+    await act(() => { document.dispatchEvent(new Event('visibilitychange')); vi.advanceTimersByTime(200); });
+    expect(actualizar).toHaveBeenCalledTimes(3);
+});

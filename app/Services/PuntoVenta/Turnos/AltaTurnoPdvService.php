@@ -158,8 +158,16 @@ class AltaTurnoPdvService
             return;
         }
 
-        if ($this->horarioOperacion->estaAntesDeApertura($sucursalId, now())) {
-            $horario = $this->horarioOperacion->resolverParaSucursal($sucursalId);
+        $ahora = now();
+        if ($this->horarioOperacion->combinadoParaSucursal($sucursalId) !== null
+            && ! $this->horarioOperacion->operaEnFecha($sucursalId, $ahora)) {
+            throw ValidationException::withMessages([
+                'sucursal' => 'La sucursal no opera hoy. Gerencia puede abrirla de forma manual si hace falta.',
+            ]);
+        }
+
+        if ($this->horarioOperacion->estaAntesDeApertura($sucursalId, $ahora)) {
+            $horario = $this->horarioOperacion->resolverParaSucursal($sucursalId, $ahora);
             $hora = $horario['hora_apertura'] ?? null;
 
             throw ValidationException::withMessages([

@@ -39,12 +39,18 @@ const ACCION_PRIMARIA_POR_ESTADO = {
     disponible: 'pausa_iniciar',
     en_espera: 'pausa_iniciar',
     en_retencion: 'pausa_finalizar',
-    cierre_pendiente: 'cancelar_cierre_pendiente',
+    cierre_pendiente: 'finalizar_jornada',
     jornada_cerrada: 'reactivar',
 };
 
 function accionPrimariaEquipo(estado, acciones, reatencionHabilitada) {
     if (reatencionHabilitada) return 'reatencion';
+    if (estado === 'cierre_pendiente' && acciones.includes('finalizar_jornada')) {
+        return 'finalizar_jornada';
+    }
+    if (estado === 'cierre_pendiente' && acciones.includes('cancelar_cierre_pendiente')) {
+        return 'cancelar_cierre_pendiente';
+    }
     const preferida = ACCION_PRIMARIA_POR_ESTADO[estado];
     if (preferida && acciones.includes(preferida)) return preferida;
     return null;
@@ -65,6 +71,7 @@ const ICONO_ACCION = {
     pausa_iniciar: PauseIcon,
     pausa_finalizar: PlayIcon,
     cerrar_jornada: LogOutIcon,
+    finalizar_jornada: LogOutIcon,
     reactivar: PlayIcon,
     cancelar_cierre_pendiente: RotateCcwIcon,
     reatencion: RotateCcwIcon,
@@ -101,6 +108,7 @@ const RUTAS_ACCION = {
     cerrar_jornada: 'punto_venta.operacion.equipo.cerrar_jornada',
     reactivar: 'punto_venta.operacion.equipo.reactivar',
     cancelar_cierre_pendiente: 'punto_venta.operacion.equipo.cancelar_cierre_pendiente',
+    finalizar_jornada: 'punto_venta.operacion.equipo.finalizar_jornada',
 };
 
 export default function TarjetaVendedorGerencia({
@@ -141,7 +149,7 @@ export default function TarjetaVendedorGerencia({
         setCargando(true);
         onError?.(null);
 
-        const payload = (accion === 'desactivar' || accion === 'cerrar_jornada' || accion === 'cancelar_cierre_pendiente')
+        const payload = (accion === 'desactivar' || accion === 'cerrar_jornada' || accion === 'cancelar_cierre_pendiente' || accion === 'finalizar_jornada')
             ? { version: persona.jornada?.version, ...payloadExtra }
             : { ...payloadExtra };
 
@@ -169,7 +177,7 @@ export default function TarjetaVendedorGerencia({
             return;
         }
 
-        if (esAccionPeligrosaEquipo(accion)) {
+        if (accion === 'finalizar_jornada' || esAccionPeligrosaEquipo(accion)) {
             setAccionPendiente(accion);
             return;
         }
@@ -612,6 +620,10 @@ function mensajeConfirmacion(persona, accion) {
 
     if (accion === 'no_llego') {
         return `¿Confirmar que ${persona.nombre} no llegó hoy? No recibirá turnos.`;
+    }
+
+    if (accion === 'finalizar_jornada') {
+        return `¿Finalizar la jornada de ${persona.nombre}? Ya no hay una atención abierta y saldrá de activos de hoy.`;
     }
 
     if (accion === 'desactivar' || accion === 'cerrar_jornada') {

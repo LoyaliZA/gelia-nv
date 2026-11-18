@@ -46,6 +46,7 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
     const [tabActiva, setTabActiva] = useState(filtros.tab || 'TODAS');
     const [busqueda, setBusqueda] = useState(filtros.q || '');
     const [modalForm, setModalForm] = useState({ abierto: false, pedido: null, recuperarBorrador: false, instancia: 'new-clean' });
+    const [lecturaPropiaFormulario, setLecturaPropiaFormulario] = useState(false);
     const [confirmarBorradorNuevo, setConfirmarBorradorNuevo] = useState(false);
     const [modalDetalle, setModalDetalle] = useState({ abierto: false, pedido: null });
     const [movimientoTienda, setMovimientoTienda] = useState(null);
@@ -153,9 +154,9 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
             if (mismo) return m;
             return { ...m, pedido: fresco };
         };
-        setModalForm(refrescar);
+        if (!lecturaPropiaFormulario) setModalForm(refrescar);
         setModalDetalle(refrescar);
-    }, [pedidosVista]);
+    }, [pedidosVista, lecturaPropiaFormulario]);
 
     // Con el formulario abierto sí seguimos refrescando el listado (CEDIS → modal).
     // Pausamos solo overlays que no necesitan sync en vivo.
@@ -173,6 +174,7 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
         || Boolean(pedidoAuditoria);
 
     useActualizacionesPedidos({
+        activo: !lecturaPropiaFormulario,
         onActualizar: refrescarListado,
         pausado: Boolean(pausarPollingListado || cargando),
         intervaloRespaldo: REFRESCO_LISTADO_MS,
@@ -187,13 +189,14 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
             const modalId = Number(modalForm.pedido?.id);
             if (!pedidoId || !tipo.startsWith('pedido_')) return;
             if (!modalForm.abierto) return;
+            if (lecturaPropiaFormulario) return;
             const vivoId = modalId || Number(modalForm.pedidoIdVivo);
             if (vivoId && vivoId !== pedidoId) return;
             refrescarListado();
         };
         window.addEventListener('notification-received', onNotification);
         return () => window.removeEventListener('notification-received', onNotification);
-    }, [modalForm.abierto, modalForm.pedido?.id, modalForm.pedidoIdVivo, refrescarListado]);
+    }, [modalForm.abierto, modalForm.pedido?.id, modalForm.pedidoIdVivo, lecturaPropiaFormulario, refrescarListado]);
 
     useEffect(() => () => clearTimeout(debounceBusqueda.current), []);
 
@@ -236,6 +239,15 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
     };
     const abrirEditar = (pedido) => {
         setModalForm({ abierto: true, pedido, recuperarBorrador: false, instancia: `edit-${pedido.id}` });
+    };
+    const abrirConversion = (pedido) => {
+        setModalForm({
+            abierto: true,
+            pedido,
+            recuperarBorrador: false,
+            instancia: `conv-${pedido.id}`,
+            intencion: 'conversion',
+        });
     };
     const abrirVer = (pedido) => setModalDetalle({ abierto: true, pedido });
     const abrirBitacora = (pedido) => setModalBitacora({ abierto: true, pedido });
@@ -317,7 +329,14 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
                     onIrAPagina={onIrAPagina}
                     onVer={abrirVer}
                     onBitacora={abrirBitacora}
-                    onMovimientoTienda={(pedido, modo) => setMovimientoTienda({ pedido, modo })}
+                    onMovimientoTienda={(pedido, modo) => {
+                        if (modo === 'modalidad' && (pedido.conversion_modalidad?.puede_iniciar || pedido.conversion_modalidad?.puede_continuar)) {
+                            abrirConversion(pedido);
+                            return;
+                        }
+                        setMovimientoTienda({ pedido, modo });
+                    }}
+                    onCambiarModalidad={abrirConversion}
                     onEditar={abrirEditar}
                     onEliminar={setPedidoAEliminar}
                     onEliminarRegistro={setPedidoAEliminarRegistro}
@@ -336,6 +355,8 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
                     key={modalForm.instancia ?? (modalForm.recuperarBorrador ? 'new-draft' : 'new-clean')}
                     abierto
                     pedido={modalForm.pedido}
+                    intencion={modalForm.intencion || 'alta'}
+                    onActualizar={refrescarListado}
                     recuperarBorrador={modalForm.recuperarBorrador}
                     onPedidoCreado={(p) => {
                         setModalForm((m) => {
@@ -349,9 +370,11 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
                     }}
                     catalogos={catalogos}
                     registrarTienda={registrar_tienda}
+                    onLecturaPropia={setLecturaPropiaFormulario}
                     direccionesNormalizadas={direcciones_normalizadas}
                     onClose={() => {
-                        setModalForm({ abierto: false, pedido: null, recuperarBorrador: false, instancia: 'new-clean', pedidoIdVivo: null });
+                        setModalForm({ abierto: false, pedido: null, recuperarBorrador: false, instancia: 'new-clean', pedidoIdVivo: null, intencion: 'alta' });
+                        refrescarListado();
                     }}
                 />
             ) : null}
@@ -381,7 +404,16 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
                 pedido={modalDetalle.pedido}
                 onClose={() => setModalDetalle({ abierto: false, pedido: null })}
             />
-            <ModalMovimientosTienda abierto={Boolean(movimientoTienda)} pedido={movimientoTienda?.pedido} modo={movimientoTienda?.modo} onClose={() => setMovimientoTienda(null)} />
+            <ModalMovimientosTienda
+                abierto={Boolean(movimientoTienda)}
+                pedido={movimientoTienda?.pedido}
+                modo={movimientoTienda?.modo}
+                onClose={() => setMovimientoTienda(null)}
+                onContinuarConversion={(pedido) => {
+                    setMovimientoTienda(null);
+                    abrirConversion(pedido);
+                }}
+            />
             <ModalBitacoraPedido
                 abierto={modalBitacora.abierto}
                 pedido={modalBitacora.pedido}

@@ -39,6 +39,12 @@ class FusionarSolicitudPreparacionPedido
 
         $base = is_array($actual) ? $actual : [];
         $salida = ['version' => 1];
+        if (($base['modalidad_entrega'] ?? null) === 'municipal') {
+            foreach (['expediente', 'finanzas_municipales', 'consulta_municipal', 'municipio_destino'] as $clave) {
+                if (array_key_exists($clave, $base)) $salida[$clave] = $base[$clave];
+            }
+        }
+
 
         foreach (['codigo_modalidad', 'tipo_referencia', 'folio_referencia'] as $clave) {
             if (array_key_exists($clave, $entrada)) {
@@ -70,6 +76,9 @@ class FusionarSolicitudPreparacionPedido
             $salida['modalidad_entrega'] = $this->modalidadEntrega($entrada['modalidad_entrega']);
         } elseif (array_key_exists('modalidad_entrega', $base)) {
             $salida['modalidad_entrega'] = $this->modalidadEntrega($base['modalidad_entrega']);
+        }
+        if (($base['conversion_modalidad']['estado'] ?? null) === 'confirmada') {
+            $salida['modalidad_entrega'] = $this->modalidadEntrega($base['modalidad_entrega'] ?? $salida['modalidad_entrega'] ?? null);
         }
 
         if (array_key_exists('area_revision', $entrada)) {
@@ -200,7 +209,7 @@ class FusionarSolicitudPreparacionPedido
         }
         foreach ([
             'acciones_disponibilidad', 'reapertura_disponibilidad', 'solicitudes_ajuste_ids', 'solicitudes_ajuste_lotes', 'cobertura_tienda', 'cambio_cobertura_tienda', 'historial_cambios_cobertura', 'segundo_traslado', 'historial_traslados_tienda', 'movimientos_tienda_version', 'cambio_modalidad_tienda', 'credito_wizerp', 'tienda_md_reporte',
-            'retiro_recoleccion', 'liberacion_fisica_20', 'cambio_modalidad',
+            'retiro_recoleccion', 'liberacion_fisica_20', 'cambio_modalidad', 'conversion_modalidad',
             'continuacion_ejecutor', 'entrega_custodia', 'compromisos_inventario', 'complemento_pdv', 'anexo_integracion', 'transferencia_tienda', 'seguimiento_recoleccion', 'remision_tienda',
         ] as $clave) {
             if (is_array($salida[$clave] ?? null) && $salida[$clave] !== []) {
@@ -326,6 +335,7 @@ class FusionarSolicitudPreparacionPedido
             'retiro_piezas',
             'liberacion_fisica_20',
             'cambio_modalidad',
+            'conversion_modalidad',
             'continuacion_ejecutor',
             'transferencia_tienda',
             'seguimiento_recoleccion',

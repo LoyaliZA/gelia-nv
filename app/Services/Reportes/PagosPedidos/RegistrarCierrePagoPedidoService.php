@@ -19,6 +19,7 @@ class RegistrarCierrePagoPedidoService
 
     public function ejecutar(PedidoBma $pedido, int $usuarioId, string $origen = PedidoBmaCierrePago::ORIGEN_FLUJO): PedidoBmaCierrePago
     {
+        app(\App\Services\ControlPedidos\Municipal\PoliticaFinancieraMunicipal::class)->assertPuedeOperarComercial($pedido);
         $pedido->loadMissing(['vendedor.departamento', 'cliente', 'almacen', 'origen', 'estatus']);
 
         $resumen = $this->cobertura->calcular($pedido);
@@ -81,6 +82,7 @@ class RegistrarCierrePagoPedidoService
                 'estatus' => $pedido->estatus?->nombre_visual,
                 'remision_documento_id' => $remisionVigente?->id,
                 'remision_nombre' => $remisionVigente?->nombre_original,
+                'transporte_municipal' => $this->transporteMunicipal($pedido, $montoEnvio),
             ],
         ]);
 
@@ -117,5 +119,24 @@ class RegistrarCierrePagoPedidoService
         }
 
         return $cierre->load('items');
+    }
+
+    /** @return array<string, mixed>|null */
+    private function transporteMunicipal(PedidoBma $pedido, string $montoEnvio): ?array
+    {
+        $politica = app(\App\Services\ControlPedidos\Municipal\PoliticaFinancieraMunicipal::class);
+        if (! $politica->esMunicipal($pedido)) {
+            return null;
+        }
+        $evaluacion = $politica->evaluar($pedido);
+
+        return [
+            'conocimiento' => $evaluacion['conocimiento_costo'],
+            'importe' => $evaluacion['importe_transporte'],
+            'desconocido' => $evaluacion['transporte_desconocido'],
+            'cubierto' => $evaluacion['transporte_cubierto'],
+            'leyenda_terminal' => $evaluacion['leyenda_terminal'],
+            'monto_envio_no_es_gratuito' => $evaluacion['transporte_desconocido'] && (float) $montoEnvio === 0.0,
+        ];
     }
 }

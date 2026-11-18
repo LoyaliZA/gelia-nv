@@ -15,13 +15,17 @@ use Illuminate\Validation\ValidationException;
 /** Decisiones sobre excepciones de la consulta. Nunca confirma pago ni libera stock. */
 final class AccionesDisponibilidadTiendaService
 {
+    public function __construct(private PersistenciaAdjuntosConsulta $persistencia) {}
+
     public function ejecutar(PedidoBma $pedido, User $actor, array $datos): PedidoBma
     {
-        return DB::transaction(function () use ($pedido, $actor, $datos) {
+        $nuevos = [];
+        try {
+            return DB::transaction(function () use ($pedido, $actor, $datos, &$nuevos) {
             $pedido = PedidoBma::query()->lockForUpdate()->findOrFail($pedido->id);
             abort_unless($actor->can('control_pedidos.crear') && (int) $pedido->vendedor_id === (int) $actor->id, 403);
             $json = $pedido->solicitud_preparacion_json ?? [];
-            if (($json['modalidad_entrega'] ?? '') !== 'tienda' || $pedido->cancelado_at || $pedido->empacado_at || $pedido->consultaCerrada() || InstruccionEntrega::mercanciaYaSalio($pedido)) {
+            if (! in_array($json['modalidad_entrega'] ?? '', ['tienda', 'municipal'], true) || $pedido->cancelado_at || $pedido->empacado_at || $pedido->consultaCerrada() || InstruccionEntrega::mercanciaYaSalio($pedido)) {
                 throw ValidationException::withMessages(['consulta' => 'Abra la consulta antes de ajustar la disponibilidad. No se modifican pedidos preparados o cancelados.']);
             }
             if (! in_array($json['revision_disponibilidad']['estado'] ?? '', ['sin_excepciones', 'excepciones_pendientes', 'decision_registrada'], true)) {
@@ -55,19 +59,24 @@ final class AccionesDisponibilidadTiendaService
                     $nueva = ['entrada' => 'catalogo', 'producto_id' => $producto->id, 'sku' => $producto->sku,
                         'descripcion' => $producto->descripcion, 'cantidad' => $revision->cantidad_solicitada ?: 1, 'pendiente_revision' => true];
                 } else {
-                    $archivo = $datos['evidencia'];
-                    $documento = $pedido->documentos()->create(['tipo' => PedidoBmaDocumento::TIPO_ANEXO_PIEZAS,
-                        'ruta_archivo' => $archivo->store('pedidos_bma/'.$pedido->id.'/sustitucion', 'public'),
-                        'nombre_original' => $archivo->getClientOriginalName(), 'mime_type' => $archivo->getMimeType(),
-                        'tamano_bytes' => $archivo->getSize(), 'orden' => 1, 'activo' => true, 'comentario' => 'Alternativa solicitada por Ventas']);
-                    $nueva = ['entrada' => 'documento', 'documento_id' => $documento->id, 'pendiente_identificacion' => true,
+                    $docs = $this->persistencia->guardar($pedido, [$datos['evidencia']], [
+                        'carpeta' => 'sustitucion',
+                        'tipo' => PedidoBmaDocumento::TIPO_ANEXO_PIEZAS,
+                        'comentario' => 'Alternativa solicitada por Ventas',
+                    ]);
+                    $nuevos = array_column($docs, 'ruta');
+                    $documentoId = (int) ($docs[0]['id'] ?? 0);
+                    if ($documentoId < 1) {
+                        throw ValidationException::withMessages(['evidencia' => 'No se pudo guardar la alternativa.']);
+                    }
+                    $nueva = ['entrada' => 'documento', 'documento_id' => $documentoId, 'pendiente_identificacion' => true,
                         'descripcion' => 'Alternativa en documento', 'cantidad' => $revision->cantidad_solicitada ?: 1, 'pendiente_revision' => true];
                 }
             }
             // Las excepciones CEDIS son una consulta documental: todavía no hay separación física.
             $fisica = collect($json['compromisos_inventario'] ?? [])->contains(fn ($fila) => $fila['activo'] ?? false)
                 || in_array($pedido->instruccionEntregaVigente?->cumplimientoFisico?->estado, ['SEPARADA', 'APARTADO_CONFIRMADO', 'LISTA_PARA_SALIDA', 'DESPACHADA', 'ENTREGADA'], true);
-            if ($accion !== 'confirmar' && ($json['area_revision'] ?? '') !== 'control_pedidos' && $fisica) {
+            if (! \App\Support\ControlPedidos\ConsultaMunicipal::es($pedido) && $accion !== 'confirmar' && ($json['area_revision'] ?? '') !== 'control_pedidos' && $fisica) {
                 app(RegistrarRetiroPiezasTiendaService::class)->ejecutar($pedido, $actor, [[
                     'revision_id' => $revision->id, 'sku' => $revision->sku ?? '', 'descripcion' => $revision->descripcion_producto,
                     'cantidad' => $revision->cantidad_solicitada ?: 1,
@@ -89,12 +98,25 @@ final class AccionesDisponibilidadTiendaService
                 $evento['alternativa'] = $nueva;
                 $json['revision_disponibilidad']['aceptacion_vigente'] = false;
             }
+            if ($accion === 'retirar' && ! ActualizacionConsulta::requiereRespuesta($json)) {
+                $json['revision_disponibilidad']['aceptacion_vigente'] = true;
+                if (! $pedido->revisionesProducto()->whereNull('resolucion')->whereIn('estado_fisico', ['regular', 'malo', 'danado', 'sin_existencia'])->exists()) {
+                    $json['revision_disponibilidad']['estado'] = 'decision_registrada';
+                }
+            }
             if ($accion !== 'confirmar') {
                 ActualizacionConsulta::solicitar($json);
             }
             $json['acciones_disponibilidad'][(string) $revision->id] = $evento;
+            if (\App\Support\ControlPedidos\ConsultaMunicipal::es($pedido)) {
+                if ($accion === 'confirmar' && ! $pedido->revisionesProducto()->whereNull('resolucion')->whereIn('estado_fisico', ['regular', 'malo', 'danado', 'sin_existencia'])->exists()) {
+                    $json['revision_disponibilidad']['estado'] = 'decision_registrada';
+                }
+                $json['consulta_municipal']['estado'] = ActualizacionConsulta::pendiente($json) ? 'excepciones_pendientes' : 'respondida';
+            }
             $pedido->update(['solicitud_preparacion_json' => $json,
-                'estatus_envio' => ($json['area_revision'] ?? '') === 'control_pedidos' && ActualizacionConsulta::pendiente($json) ? PedidoBma::ESTATUS_ENVIO_PENDIENTE_PESAJE : $pedido->estatus_envio]);
+                'consulta_actualizacion_pendiente' => ActualizacionConsulta::pendiente($json),
+                'estatus_envio' => ! \App\Support\ControlPedidos\ConsultaMunicipal::es($pedido) && ($json['area_revision'] ?? '') === 'control_pedidos' && ActualizacionConsulta::pendiente($json) ? PedidoBma::ESTATUS_ENVIO_PENDIENTE_PESAJE : $pedido->estatus_envio]);
             app(RegistrarHistorialPedidoService::class)->ejecutar($pedido->id, $actor->id, $pedido->catalogo_estatus_pedido_id,
                 $pedido->catalogo_estatus_pedido_id, match ($accion) {
                     'confirmar' => 'Cliente confirma el estado reportado de ', 'retirar' => 'Ventas retira de la consulta ', default => 'Ventas solicita sustituir '
@@ -103,16 +125,22 @@ final class AccionesDisponibilidadTiendaService
             $this->notificar($pedido, $actor, 'Ventas registró cambios en las piezas de la consulta.');
 
             return $pedido->fresh();
-        });
+            });
+        } catch (\Throwable $e) {
+            $this->persistencia->limpiar($nuevos);
+            throw $e;
+        }
     }
 
     public function notificar(PedidoBma $pedido, User $actor, string $texto): void
     {
-        $cedis = ($pedido->solicitud_preparacion_json['area_revision'] ?? '') === 'control_pedidos';
+        $municipal = \App\Support\ControlPedidos\ConsultaMunicipal::es($pedido);
+        $cedis = $municipal ? data_get($pedido->solicitud_preparacion_json, 'consulta_municipal.area') === 'cedis'
+            : ($pedido->solicitud_preparacion_json['area_revision'] ?? '') === 'control_pedidos';
         $tarea = $pedido->instruccionEntregaVigente;
         app(NotificarPedidoBmaService::class)->ejecutar($pedido, 'pedido_consulta_actualizada', $texto,
-            [$cedis ? 'control_pedidos.cedis' : 'control_pedidos.tienda.ver'], $actor->id, true,
-            ['url' => $cedis ? '/control-pedidos/cedis?q='.$pedido->folio : '/control-pedidos/tienda'.($tarea ? '?tarea='.$tarea->id : '')]);
+            [$cedis ? 'control_pedidos.cedis' : ($municipal ? 'control_pedidos.municipal.responder_consulta' : 'control_pedidos.tienda.ver')], $actor->id, true,
+            ['url' => $cedis ? '/control-pedidos/cedis?q='.$pedido->folio : ($municipal ? '/control-pedidos/municipal/consultas-tienda' : '/control-pedidos/tienda'.($tarea ? '?tarea='.$tarea->id : ''))]);
     }
 
     /** CEDIS identifica la alternativa documental y responde, sin separar ni cobrar. */
@@ -151,7 +179,7 @@ final class AccionesDisponibilidadTiendaService
             $json['anexo_sin_remision'][$indice] = $anexo;
             $json['revision_disponibilidad']['aceptacion_vigente'] = ! collect($json['anexo_sin_remision'])->contains(fn ($a) => empty($a['respondida_at']));
             $pedido->update(['solicitud_preparacion_json' => $json,
-                'estatus_envio' => ($json['area_revision'] ?? '') === 'control_pedidos' && ActualizacionConsulta::pendiente($json) ? PedidoBma::ESTATUS_ENVIO_PENDIENTE_PESAJE : $pedido->estatus_envio]);
+                'estatus_envio' => ! \App\Support\ControlPedidos\ConsultaMunicipal::es($pedido) && ($json['area_revision'] ?? '') === 'control_pedidos' && ActualizacionConsulta::pendiente($json) ? PedidoBma::ESTATUS_ENVIO_PENDIENTE_PESAJE : $pedido->estatus_envio]);
             app(RegistrarHistorialPedidoService::class)->ejecutar($pedido->id, $actor->id, $pedido->catalogo_estatus_pedido_id, $pedido->catalogo_estatus_pedido_id,
                 'CEDIS respondió la alternativa solicitada: '.$rev->descripcion_producto.'. '.$anexo['resultado'], 'respuesta_alternativa_tienda');
             $this->notificar($pedido, $actor, 'CEDIS respondió la alternativa. Ventas debe confirmar la consulta con el cliente.');

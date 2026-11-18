@@ -1,0 +1,52 @@
+
+   PASS  Tests\Unit\ControlPedidos\ControlPedidosEnvioDiferidoFase1Test
+  ✓ municipio diferido con costo null resuelve pendiente regularizacion  0.11s  
+  ✓ normal con costo resuelve completo                                   0.03s  
+  ✓ municipio con costo tambien cierra completo                          0.03s  
+  ✓ flags anexo por estatus envio                                        0.03s  
+  ✓ aprobar anexo recalcula total como mercancia mas envio               0.04s  
+
+   PASS  Tests\Unit\Reportes\CalcularMetricasReportePagosPedidosTest
+  ✓ contadores cobertura y remisiones                                    6.35s  
+  ✓ usuario con permiso reporte ve cierres de otras vendedoras           0.06s  
+
+   PASS  Tests\Unit\SaldosAFavor\IntegridadCoberturaPagoTest
+  ✓ diferencia dentro de tolerancia es cubierto
+  ✓ diferencia un centavo sobre tolerancia no cubre
+  ✓ cambiar tolerancia cambia regla
+  ✓ centavos redondeo estable
+  ✓ compat resumen legacy sigue cubierto exacto
+
+   PASS  Tests\Feature\ControlPedidos\MunicipalOrdinarioM01Test
+  ✓ jaguar conserva costo desconocido y el expediente su identidad       0.23s  
+  ✓ excepcion pendiente impide cerrar la consulta                        0.13s  
+  ✓ reenvio no borra respuesta ni cierre duplicado crea historial        0.16s  
+  ✓ lector cedis no puede reescribir solicitud o enviarla                0.14s  
+  ✓ no se puede responder sin enviar o en otro departamento              0.13s  
+  ✓ identificaciones historicas solo por permiso o pedido referenciado…  0.22s  
+  ✓ documento tras baja continua numeracion y no expone ruta             0.11s  
+  ✓ archivo ejecutable no se publica como evidencia                      0.12s  
+  ✓ tienda filtra sucursal y rechaza respuesta directa ajena             0.96s  
+  ✓ resolver faltante y responder actualizacion permite cierre sin pisa… 0.20s  
+  ✓ costo conocido insuficiente no valida y cubierto si valida y asocia… 0.22s  
+  ✓ jaguar pago validado y reporte no presentan transporte gratis        0.19s  
+  ✓ numero remision y validacion no eluden consulta abierta              0.10s  
+
+   PASS  Tests\Feature\ControlPedidos\RemisionAuditoriaTest
+  ✓ eliminar y volver a adjuntar conserva historial y solo una remision… 0.09s  
+  ✓ auxiliar registra numero de remision y consulta detalle fuera del f… 0.10s  
+  ✓ numero de pedido no se puede modificar desde la captura auxiliar     0.07s  
+  ✓ corregir remision no cambia referencia visible ni resuelve error de… 0.08s  
+  ✓ captura anterior no puede sobrescribir pedido desde el servicio      0.06s  
+  ✓ detalle respeta permiso y alcance de la auxiliar                     0.08s  
+  ✓ no elimina remision de un pedido que ya salio de revision            0.08s  
+
+   PASS  Tests\Feature\SaldosAFavor\Fase1IntegridadPagosPedidoBmaTest
+  ✓ pago rechazado no suma y archivo se conserva                         0.09s  
+  ✓ pago revisado no se elimina                                          0.04s  
+  ✓ banco fuera de departamento rechazado                                0.04s  
+  ✓ validar idempotente con lock                                         0.06s  
+
+  Tests:    36 passed (252 assertions)
+  Duration: 10.81s
+

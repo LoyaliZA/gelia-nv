@@ -1,0 +1,51 @@
+ M app/Models/Cliente.php
+ M app/Services/ControlPedidos/AccionesDisponibilidadTiendaService.php
+ M app/Services/ControlPedidos/CerrarConsultaPedidoBmaService.php
+ M app/Services/ControlPedidos/EnviarPedidoBmaService.php
+ M app/Services/ControlPedidos/GestionarRemisionPedidoBmaService.php
+ M app/Services/ControlPedidos/ListarPedidosCedisService.php
+ M app/Services/ControlPedidos/NotificarPedidoBmaService.php
+ M app/Services/ControlPedidos/ObtenerCatalogosPedidoBmaService.php
+ M app/Services/ControlPedidos/ReabrirConsultaPedidoBmaService.php
+ M app/Services/ControlPedidos/ResponderDisponibilidadInicialService.php
+ M app/Services/ControlPedidos/ResuelveDatosPedidoBma.php
+ M app/Services/ControlPedidos/ValidacionCamposPedidoBma.php
+ M app/Services/ControlPedidos/ValidarPagoPedidoBmaService.php
+ M app/Services/Reportes/PagosPedidos/CalcularMetricasReportePagosPedidosService.php
+ M app/Services/Reportes/PagosPedidos/ExportarReportePagosPedidosCsvService.php
+ M app/Services/Reportes/PagosPedidos/ListarReportePagosPedidosService.php
+ M app/Services/Reportes/PagosPedidos/ObtenerDetalleReportePagoPedidoService.php
+ M app/Services/Reportes/PagosPedidos/RegistrarCierrePagoPedidoService.php
+ M app/Services/SaldosAFavor/CoberturaPagoPedidoBmaService.php
+ M app/Services/SaldosAFavor/RegistrarPagoPedidoBmaService.php
+ M app/Support/ControlPedidos/VisibilidadPedidoBma.php
+ M database/seeders/data/permisos_actuales.php
+ M resources/js/Pages/Admin/Clientes.jsx
+ M resources/js/Pages/ControlPedidos/Cedis/Index.jsx
+ M resources/js/Pages/ControlPedidos/Cedis/Partials/TarjetasCedis.jsx
+ M resources/js/Pages/ControlPedidos/Partials/ModalFormPedido.jsx
+ M resources/js/Pages/Reportes/PagosPedidos/Partials/MetricasPagosPedidos.jsx
+ M resources/js/Pages/Reportes/PagosPedidos/Partials/ResumenFinancieroPedido.jsx
+ M resources/js/Pages/Reportes/PagosPedidos/Partials/pagosPedidosStyles.js
+ M routes/web/admin/clientes.php
+ M routes/web/modules/control-pedidos/core.php
+?? app/Http/Controllers/Clientes/ExpedienteClienteController.php
+?? app/Http/Controllers/ControlPedidos/Municipal/
+?? app/Models/ClienteConsignatario.php
+?? app/Models/ClienteConsignatarioVersion.php
+?? app/Models/ClienteDocumento.php
+?? app/Models/ClienteExpedienteEvento.php
+?? app/Services/Clientes/Expediente/
+?? app/Services/ControlPedidos/Municipal/
+?? app/Support/ControlPedidos/AlcanceConsultaMunicipal.php
+?? app/Support/ControlPedidos/ConsultaMunicipal.php
+?? database/migrations/2026_11_14_120000_create_cliente_expediente_tables.php
+?? gestion-pedidos-docs/M01_AUDITORIA_CODEX_DETALLADA.md
+?? gestion-pedidos-docs/M01_IMPLEMENTACION_REPORTE_DETALLADO.md
+?? "gestion-pedidos-docs/PROCESO PARA PEDIDOS.md"
+?? gestion-pedidos-docs/evidencias-m01-auditoria/
+?? resources/design-references/m01-auditoria/
+?? resources/js/Pages/Admin/ExpedienteCliente.jsx
+?? resources/js/Pages/ControlPedidos/Municipal/
+?? scripts/qa/m01-auditoria/
+?? tests/Feature/ControlPedidos/MunicipalOrdinarioM01Test.php

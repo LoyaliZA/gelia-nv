@@ -1,3 +1,4 @@
+import { esRegistroMunicipal } from '../Municipal/terminalMunicipal';
 import { pedidoEsTrasladoInternoPdv } from './destinoSucursalPedido';
 import {
     THEME_BTN_PRIMARY,
@@ -41,7 +42,7 @@ export const etiquetaTransportePedido = (pedido) => {
     return null;
 };
 
-export const etiquetaOrigenGuia = (pedido) => (
+export const etiquetaOrigenGuia = (pedido) => esRegistroMunicipal(pedido) ? 'Envío municipal' : (
     Boolean(pedido?.cliente_proporciona_guia) ? LABEL_GUIA_CLIENTE : LABEL_GUIA_EMPRESA
 );
 

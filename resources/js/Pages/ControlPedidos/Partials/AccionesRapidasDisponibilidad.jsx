@@ -7,7 +7,7 @@ import SelectorProducto from '../../../Components/Almacenes/SelectorProducto';
 import GaleriaEvidenciasPedido from './GaleriaEvidenciasPedido';
 const etiquetas = { aceptar_condicion: 'Estado confirmado con el cliente', retirar: 'Retiro registrado', sustituir: 'Sustitución solicitada' };
 
-export default function AccionesRapidasDisponibilidad({ pedidoId, pieza, almacenId, onActualizar, onVer, soloLectura = false, compacta = false }) {
+export default function AccionesRapidasDisponibilidad({ pedidoId, pieza, almacenId, onActualizar, onVer, soloLectura = false, compacta = false, onOcupado = null }) {
     const menuRef = useRef(null);
     useEffect(() => {
         const cerrar = e => { if (menuRef.current && !menuRef.current.contains(e.target)) menuRef.current.open = false; };
@@ -22,6 +22,9 @@ export default function AccionesRapidasDisponibilidad({ pedidoId, pieza, almacen
     const [archivos, setArchivos] = useState([]);
     const [previews, setPreviews] = useState([]);
     const [ocupado, setOcupado] = useState(false);
+    useEffect(() => { onOcupado?.(ocupado || Boolean(accion), pieza.id); }, [ocupado, accion, onOcupado, pieza.id]);
+    // Al resolver una pieza su control desaparece: no debe dejar pausado al pedido.
+    useEffect(() => () => onOcupado?.(false, pieza.id), [onOcupado, pieza.id]);
     const [error, setError] = useState('');
     const clave = useRef(uuidSolicitud());
     const vistasRef = useRef([]); vistasRef.current = previews;

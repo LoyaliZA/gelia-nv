@@ -1,0 +1,23 @@
+
+   FAIL  Tests\Feature\ControlPedidos\MunicipalOrdinarioM01Test
+  ⨯ envio al auxiliar usa consulta municipal sin exigir pesaje nacional  6.48s  
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\ControlPedidos\MunicipalOrdinarioM01Test > envio al…   
+  Expected response status code [200] but received 422.
+Failed asserting that 422 is identical to 200.
+
+  at tests/Feature/ControlPedidos/MunicipalOrdinarioM01Test.php:542
+    538▕         $origen = \App\Models\ControlPedidos\CatalogoOrigenPedido::create(['nombre' => 'Envío municipal', 'requiere_logistica' => true, 'activo' => true]);
+    539▕         $almacen = \App\Models\Almacen::create(['codigo' => 'M01-CEDIS', 'nombre' => 'CEDIS', 'activo' => true, 'visible_en_pedidos' => true]);
+    540▕         $this->pedido->update(['origen_id' => $origen->id, 'almacen_id' => $almacen->id, 'folio_remision' => 'WIZ-M01']);
+    541▕         $this->pedido->documentos()->create(['tipo' => 'pdf_pedido', 'ruta_archivo' => 'pedido.pdf', 'nombre_original' => 'pedido.pdf', 'mime_type' => 'application/pdf', 'tamano_bytes' => 20, 'orden' => 1, 'activo' => true]);
+  ➜ 542▕         $this->putJson(route('control_pedidos.enviar', $this->pedido))->assertOk()->assertJsonPath('estatus.fase_ciclo', 'PENDIENTE_AUXILIAR');
+    543▕         $this->assertNull($this->pedido->fresh()->costo_envio);
+    544▕         $this->assertSame('pendiente_regularizacion', $this->pedido->fresh()->estatus_envio);
+    545▕     }
+    546▕
+
+
+  Tests:    1 failed (8 assertions)
+  Duration: 6.90s
+

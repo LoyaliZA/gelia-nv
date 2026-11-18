@@ -1,0 +1,24 @@
+{
+  "pasos": [
+    "Selección aislada de municipal sin POST.",
+    "Selección aislada de tienda sin POST.",
+    "Selección aislada de nacional sin POST."
+  ],
+  "medidas": [
+    {
+      "ancho": 1440,
+      "desborde": false
+    },
+    {
+      "ancho": 1024,
+      "desborde": false
+    },
+    {
+      "ancho": 390,
+      "desborde": false
+    }
+  ],
+  "posts": [],
+  "console": [],
+  "resultado": "aprobado"
+}

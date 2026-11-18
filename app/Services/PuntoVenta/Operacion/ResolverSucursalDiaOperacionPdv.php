@@ -28,7 +28,11 @@ final class ResolverSucursalDiaOperacionPdv
         }
 
         try {
-            $aceptaAltas = ! $this->horario->estaAntesDeApertura($sucursalId, $momento ?? now());
+            $momentoRef = $momento ?? now();
+            $aceptaAltas = $this->horario->combinadoParaSucursal($sucursalId) === null
+                ? ! $this->horario->estaAntesDeApertura($sucursalId, $momentoRef)
+                : ($this->horario->operaEnFecha($sucursalId, $momentoRef)
+                    && ! $this->horario->estaAntesDeApertura($sucursalId, $momentoRef));
 
             return SucursalDiaOperacionPdv::query()->create([
                 'sucursal_id' => $sucursalId,

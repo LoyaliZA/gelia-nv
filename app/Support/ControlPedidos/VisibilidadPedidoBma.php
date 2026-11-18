@@ -203,6 +203,9 @@ final class VisibilidadPedidoBma
     /** Consulta general (detalle, bitácora, documentos): BMA + bandejas por permiso. */
     public static function puedeConsultar(User $usuario, PedidoBma $pedido): bool
     {
+        if (ConsultaMunicipal::es($pedido) && AlcanceConsultaMunicipal::puedeResponder($usuario, $pedido)) {
+            return true;
+        }
         if (self::puedeConsultarEnListadoBma($usuario, $pedido)) {
             return true;
         }

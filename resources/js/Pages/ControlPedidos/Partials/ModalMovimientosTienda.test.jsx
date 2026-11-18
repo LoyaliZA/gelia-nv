@@ -51,6 +51,21 @@ it('gerencia debe definir recorrido antes de autorizar y destino debe verificar 
     await act(() => root.render(<ModalMovimientosTienda abierto pedido={pedido} />));
     await act(() => boton('Autorizar traslado').click()); expect(axios.post).not.toHaveBeenCalled(); expect(document.body.textContent).toContain('Defina el recorrido');
 });
+it('continúa el envío municipal por el cambio de modalidad cuando está habilitado', async () => {
+    const continuar = vi.fn();
+    axios.get.mockImplementation(async (url) => {
+        if (String(url).includes('conversion-modalidad')) {
+            return { data: { conversion_modalidad: { puede_iniciar: true, puede_continuar: true, destinos: [{ codigo: 'municipal', nombre: 'Envío municipal', habilitado: true }] } } };
+        }
+        return { data: datos };
+    });
+    await act(() => root.render(<ModalMovimientosTienda abierto pedido={pedido} modo="modalidad" onContinuarConversion={continuar} />));
+    await act(() => Promise.resolve());
+    await cambiar(document.querySelector('select'), 'municipal');
+    await act(() => boton('Registrar solicitud de cambio').click());
+    expect(continuar).toHaveBeenCalledWith(pedido);
+    expect(axios.post).not.toHaveBeenCalled();
+});
 it('solo ofrece las solicitudes del menú en custodia y mantiene el seguimiento durante el traslado', () => {
     const props = { can: () => true, onMovimientoTienda: vi.fn(), pedido: { ...pedido, puede_mutar: true, estatus_sucursal: 'en_custodia', solicitud_preparacion: { modalidad_entrega: 'tienda' } } };
     expect(accionesPedidoLista(props).map(a => a.label)).toEqual(expect.arrayContaining(['Solicitar traslado', 'Cambiar modalidad']));

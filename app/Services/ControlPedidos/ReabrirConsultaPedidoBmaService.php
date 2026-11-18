@@ -33,12 +33,21 @@ class ReabrirConsultaPedidoBmaService
             if ($tienda) {
                 $json['reapertura_disponibilidad'] = ['por_id' => $actor->id, 'por' => $actor->name, 'fecha' => now()->toIso8601String(), 'motivo' => $pedido->tieneSinExistenciaAbierta() ? 'Revisión de piezas sin existencias' : 'Revisión de consulta solicitada por Ventas'];
             }
+            if (\App\Support\ControlPedidos\ConsultaMunicipal::es($pedido)) {
+                if ($pedido->pedidoPagadoORemisionado()) {
+                    throw new \RuntimeException('El pedido ya tiene pago verificado o remisión.');
+                }
+                unset($json['consulta_municipal']['cerrada_at'], $json['consulta_municipal']['cerrada_por_id']);
+                \App\Support\ControlPedidos\ActualizacionConsulta::solicitar($json, true);
+                $json['consulta_municipal']['estado'] = 'excepciones_pendientes';
+            }
             $estatus = $pedido->estatus;
             $pedido->update([
                 'solicitud_preparacion_json' => $json,
                 'estatus_envio' => $tienda && ($json['area_revision'] ?? '') === 'control_pedidos' ? PedidoBma::ESTATUS_ENVIO_PENDIENTE_PESAJE : $pedido->estatus_envio,
                 'consulta_cerrada_at' => null,
                 'consulta_cerrada_por_id' => null,
+                'consulta_actualizacion_pendiente' => (bool) ($json['revision_disponibilidad']['actualizacion_pendiente'] ?? false),
             ]);
 
             $label = $pedido->consultaCedisModoRevisionMercancia() ? 'Consulta de mercancía' : 'Consulta de pesaje';
@@ -51,7 +60,7 @@ class ReabrirConsultaPedidoBmaService
                 AccionesHistorialPedidoBma::REABRIR_CONSULTA
             );
 
-            if ($tienda) {
+            if ($tienda || \App\Support\ControlPedidos\ConsultaMunicipal::es($pedido)) {
                 app(AccionesDisponibilidadTiendaService::class)->notificar($pedido, $actor, 'Ventas reabrió la consulta. Revise los cambios solicitados antes de preparar la mercancía.');
             }
 

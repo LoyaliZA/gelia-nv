@@ -20,6 +20,10 @@ class CierreHorarioSucursalPdvService
 
     public function ejecutar(int $sucursalId, CarbonInterface $ahora): bool
     {
+        DB::transaction(function () use ($sucursalId, $ahora): void {
+            $this->cerrarEquipo->barrerPendientesDeDiasAnteriores($sucursalId, $ahora, 0);
+        });
+
         $diaReferencia = $this->sucursalDia->obtenerOCrear($sucursalId, $ahora);
         $evaluacion = $this->umbral->evaluar($sucursalId, $diaReferencia, $ahora);
 

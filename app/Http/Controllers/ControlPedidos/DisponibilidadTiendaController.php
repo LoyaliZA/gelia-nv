@@ -8,6 +8,7 @@ use App\Services\ControlPedidos\AccionesDisponibilidadTiendaService;
 use App\Services\ControlPedidos\ListarPedidosBmaService;
 use App\Support\ControlPedidos\VisibilidadPedidoBma;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 final class DisponibilidadTiendaController extends Controller
 {
@@ -15,7 +16,13 @@ final class DisponibilidadTiendaController extends Controller
     {
         abort_unless(VisibilidadPedidoBma::puedeConsultar($request->user(), $pedidoBma), 403);
 
-        return response()->json($listar->presentar($pedidoBma, $request->user()));
+        return DB::transaction(function () use ($request, $pedidoBma, $listar) {
+            // Una sola instantánea de pedido y revisión/historial frente a mutaciones concurrentes.
+            $pedido = PedidoBma::query()->sharedLock()->findOrFail($pedidoBma->id);
+            abort_unless(VisibilidadPedidoBma::puedeConsultar($request->user(), $pedido), 403);
+
+            return response()->json($listar->presentar($pedido, $request->user()));
+        });
     }
 
     public function update(Request $request, PedidoBma $pedidoBma, AccionesDisponibilidadTiendaService $servicio, ListarPedidosBmaService $listar)

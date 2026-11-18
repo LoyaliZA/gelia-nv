@@ -7,6 +7,8 @@ use App\Models\ControlPedidos\PedidoBma;
 use App\Models\ControlPedidos\PedidoBmaReferencia;
 use App\Models\ControlPedidos\PedidoBmaTareaPreparacion;
 use App\Models\User;
+use App\Services\ControlPedidos\Municipal\EtiquetaConsultaMunicipal;
+use App\Support\ControlPedidos\ConsultaMunicipal;
 use App\Support\ControlPedidos\ContextoDepartamentoPedido;
 use App\Support\ControlPedidos\MaquinaEstadosPedidoBma;
 use App\Support\ControlPedidos\RespuestaPreparacionTienda;
@@ -136,6 +138,9 @@ class ListarPedidosBmaService
 
     private function anexarFlagsVista(PedidoBma $pedido, ?User $usuario): PedidoBma
     {
+        ConsultaMunicipal::hidratarAlmacen($pedido);
+        // Se calcula antes de filtrar la bitácora por permisos. No expone su contenido.
+        $pedido->setAttribute('version_consulta', (int) $pedido->historial->max('id'));
         $puedeEditar = $usuario
             ? VisibilidadPedidoBma::puedeMutarComoVendedora($usuario, $pedido)
             : false;
@@ -148,7 +153,18 @@ class ListarPedidosBmaService
         $pedido->setAttribute('tiene_sin_existencia_abierta', $pedido->tieneSinExistenciaAbierta());
         $pedido->setAttribute('consulta_cerrada', $pedido->consultaCerrada());
         $pedido->setAttribute('puede_cerrar_consulta', $puedeEditar && $pedido->puedeCerrarConsulta());
-        $pedido->setAttribute('motivo_bloqueo_cierre', ($pedido->esConsultaDisponibilidadTienda() || $pedido->esConsultaDisponibilidadCedis()) ? $pedido->motivoBloqueoCierreConsultaTienda() : null);
+        $pedido->setAttribute('motivo_bloqueo_cierre', ConsultaMunicipal::es($pedido)
+            ? ConsultaMunicipal::motivoBloqueo($pedido)
+            : (($pedido->esConsultaDisponibilidadTienda() || $pedido->esConsultaDisponibilidadCedis()) ? $pedido->motivoBloqueoCierreConsultaTienda() : null));
+        $conversion = app(\App\Services\ControlPedidos\Conversion\EvaluarElegibilidadConversion::class)->flags($pedido, $usuario);
+        $pedido->setAttribute('conversion_modalidad', $conversion->toArray()['conversion_modalidad']);
+        if ($conversion->reserva_activa) {
+            $pedido->setAttribute('puede_cerrar_consulta', false);
+            $pedido->setAttribute('motivo_bloqueo_cierre', \App\Support\ControlPedidos\Conversion\CodigosConversionModalidad::MENSAJE_RESERVA);
+        }
+        if (ConsultaMunicipal::es($pedido)) {
+            $pedido->setAttribute('etiqueta_consulta', EtiquetaConsultaMunicipal::de($pedido));
+        }
         $pedido->setAttribute('es_consulta_mercancia', $pedido->esConsultaMercancia());
         $pedido->setAttribute('consulta_cedis_modo_revision_mercancia', $pedido->consultaCedisModoRevisionMercancia());
         $pedido->setAttribute('fuentes_pago', $pedido->fuentesPagoResumen());

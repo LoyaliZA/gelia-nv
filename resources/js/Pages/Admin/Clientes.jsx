@@ -781,6 +781,13 @@ export default function Clientes({ auth, clientes, vendedores = [], tipos_client
                                                 )}
 
                                                 <a
+                                                    href={route('admin.clientes.expediente.pagina', cliente.id)}
+                                                    className="relative inline-flex items-center justify-center gap-2 min-h-11 px-3 theme-surface border theme-border rounded-xl text-xs font-bold"
+                                                    style={{ color: 'var(--color-primario)' }}
+                                                >
+                                                    Expediente
+                                                </a>
+                                                <a
                                                     href={route('admin.clientes.direcciones.index', cliente.id)}
                                                     className="relative inline-flex items-center justify-center gap-2 min-h-11 px-3 theme-surface border theme-border rounded-xl transition-shadow hover:shadow-md text-xs font-bold"
                                                     aria-label={`Ver direcciones de ${cliente.nombre}`}

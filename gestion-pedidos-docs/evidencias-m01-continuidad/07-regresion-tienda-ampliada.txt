@@ -1,0 +1,163 @@
+
+  [30;42;1m PASS [39;49;22m[39m Tests\Unit\ControlPedidos\ControlPedidosEnvioDiferidoFase1Test[39m
+  [32;1m✓[39;22m[90m [39m[90mmunicipio diferido con costo null resuelve pendiente regularizacion[39m[90m [39m [90m0.11s[39m  
+  [32;1m✓[39;22m[90m [39m[90mnormal con costo resuelve completo[39m[90m                                  [39m [90m0.04s[39m  
+  [32;1m✓[39;22m[90m [39m[90mmunicipio con costo tambien cierra completo[39m[90m                         [39m [90m0.03s[39m  
+  [32;1m✓[39;22m[90m [39m[90mflags anexo por estatus envio[39m[90m                                       [39m [90m0.03s[39m  
+  [32;1m✓[39;22m[90m [39m[90maprobar anexo recalcula total como mercancia mas envio[39m[90m              [39m [90m0.04s[39m  
+
+  [30;42;1m PASS [39;49;22m[39m Tests\Feature\ControlPedidos\ElegibilidadPesajePedidoTest[39m
+  [32;1m✓[39;22m[90m [39m[90mlocal sin peso avanza sin kilogramos de cedis[39m[90m                       [39m [90m6.67s[39m  
+  [32;1m✓[39;22m[90m [39m[90mlocal con peso obligatorio sigue exigiendo kilogramos[39m[90m               [39m [90m0.05s[39m  
+  [32;1m✓[39;22m[90m [39m[90mcomercial conserva pesaje aunque requiere peso sea falso[39m[90m            [39m [90m0.04s[39m  
+  [32;1m✓[39;22m[90m [39m[90mcaja se exige sin pedir kilogramos cuando el transporte local la ma[39m[90m…[39m [90m0.05s[39m  
+  [32;1m✓[39;22m[90m [39m[90menvio cedis con pesaje completo no hereda el bloqueo de peso[39m[90m        [39m [90m0.04s[39m  
+  [32;1m✓[39;22m[90m [39m[90mpreparacion bodega pide el peso de la tarea y no el detalle cedis[39m[90m   [39m [90m0.06s[39m  
+  [32;1m✓[39;22m[90m [39m[90mmunicipio exige peso de preparacion solo si el transporte lo pide[39m[90m   [39m [90m0.06s[39m  
+  [32;1m✓[39;22m[90m [39m[90msin logistica desde cedis no exige direccion guia ni peso[39m[90m           [39m [90m0.04s[39m  
+  [32;1m✓[39;22m[90m [39m[90mcomercial sin marca sigue exigiendo direccion y guia[39m[90m                [39m [90m0.05s[39m  
+  [32;1m✓[39;22m[90m [39m[90mtienda municipal sin logistica no repite direccion ni guia[39m[90m          [39m [90m0.05s[39m  
+  [32;1m✓[39;22m[90m [39m[90mnombre de departamento no cambia la obligacion de pesaje[39m[90m            [39m [90m0.05s[39m  
+  [32;1m✓[39;22m[90m [39m[90mconsulta de mercancia sin logistica no exige kilogramos[39m[90m             [39m [90m0.04s[39m  
+  [32;1m✓[39;22m[90m [39m[90mrespuesta incompleta de pesaje se rechaza y la de mercancia pide pi[39m[90m…[39m [90m0.05s[39m  
+  [32;1m✓[39;22m[90m [39m[90msolicitud duplicada no crea otra consulta[39m[90m                           [39m [90m0.06s[39m  
+  [32;1m✓[39;22m[90m [39m[90mpedido enviado no acepta pesaje ni consulta[39m[90m                         [39m [90m0.04s[39m  
+  [32;1m✓[39;22m[90m [39m[90mempaque municipal pide bascula solo cuando el transporte exige peso[39m[90m [39m [90m0.04s[39m  
+
+  [30;42;1m PASS [39;49;22m[39m Tests\Feature\ControlPedidos\MunicipalOrdinarioM01Test[39m
+  [32;1m✓[39;22m[90m [39m[90mprimer envio exige soporte y datos comunes sin exigir pago[39m[90m          [39m [90m0.14s[39m  
+  [32;1m✓[39;22m[90m [39m[90mautoguardado conserva expediente y transporte sin aceptar estado fa[39m[90m…[39m [90m0.17s[39m  
+  [32;1m✓[39;22m[90m [39m[90mterminal local regional guarda sin municipio y reabre desde catalog[39m[90m…[39m [90m0.13s[39m  
+  [32;1m✓[39;22m[90m [39m[90mterminal inactiva comercial o inexistente no se guarda[39m[90m              [39m [90m0.10s[39m  
+  [32;1m✓[39;22m[90m [39m[90mdestino historico y atributos de transporte se conservan[39m[90m            [39m [90m0.13s[39m  
+  [32;1m✓[39;22m[90m [39m[90mjaguar conserva costo desconocido y el expediente su identidad[39m[90m      [39m [90m0.21s[39m  
+  [32;1m✓[39;22m[90m [39m[90mexcepcion pendiente impide cerrar la consulta[39m[90m                       [39m [90m0.14s[39m  
+  [32;1m✓[39;22m[90m [39m[90mreenvio no borra respuesta ni cierre duplicado crea historial[39m[90m       [39m [90m0.16s[39m  
+  [32;1m✓[39;22m[90m [39m[90mlector cedis no puede reescribir solicitud o enviarla[39m[90m               [39m [90m0.13s[39m  
+  [32;1m✓[39;22m[90m [39m[90mno se puede responder sin enviar o en otro departamento[39m[90m             [39m [90m0.13s[39m  
+  [32;1m✓[39;22m[90m [39m[90midentificaciones historicas solo por permiso o pedido referenciado[39m[90m… [39m [90m0.23s[39m  
+  [32;1m✓[39;22m[90m [39m[90mdocumento tras baja continua numeracion y no expone ruta[39m[90m            [39m [90m0.12s[39m  
+  [32;1m✓[39;22m[90m [39m[90marchivo ejecutable no se publica como evidencia[39m[90m                     [39m [90m0.12s[39m  
+  [32;1m✓[39;22m[90m [39m[90mtienda filtra sucursal y rechaza respuesta directa ajena[39m[90m            [39m [90m0.96s[39m  
+  [32;1m✓[39;22m[90m [39m[90mresolver faltante y responder actualizacion permite cierre sin pisa[39m[90m…[39m [90m0.20s[39m  
+  [32;1m✓[39;22m[90m [39m[90mcosto conocido insuficiente no valida y cubierto si valida y asocia[39m[90m…[39m [90m0.23s[39m  
+  [32;1m✓[39;22m[90m [39m[90mjaguar pago validado y reporte no presentan transporte gratis[39m[90m       [39m [90m0.20s[39m  
+  [32;1m✓[39;22m[90m [39m[90mnumero remision y validacion no eluden consulta abierta[39m[90m             [39m [90m0.12s[39m  
+  [32;1m✓[39;22m[90m [39m[90mhistorial incluye bajas solo con permiso y no rutas privadas[39m[90m        [39m [90m0.14s[39m  
+  [32;1m✓[39;22m[90m [39m[90mguardar mismo consignatario conserva snapshot tras editar expedient[39m[90m…[39m [90m0.13s[39m  
+  [32;1m✓[39;22m[90m [39m[90mreapertura invalida ambos cierres y bloquea pago hasta nueva respue[39m[90m…[39m [90m0.17s[39m  
+  [32;1m✓[39;22m[90m [39m[90mcontexto inexistente no falla abierto y documento de otro cliente n[39m[90m…[39m [90m0.14s[39m  
+  [32;1m✓[39;22m[90m [39m[90mendpoints auxiliar denegan sin permiso y consulta abierta con permi[39m[90m…[39m [90m0.13s[39m  
+  [32;1m✓[39;22m[90m [39m[90menvio al auxiliar usa consulta municipal sin exigir pesaje nacional[39m[90m [39m [90m0.19s[39m  
+
+  [39;41;1m FAIL [39;49;22m[39m Tests\Feature\ControlPedidos\SolicitudRegistrarTiendaTest[39m
+  [32;1m✓[39;22m[90m [39m[90mel borrador guarda el destino y no crea tarea[39m[90m                       [39m [90m0.17s[39m  
+  [32;1m✓[39;22m[90m [39m[90mla solicitud llega a preparacion tienda sin apartar[39m[90m                 [39m [90m0.18s[39m  
+  [32;1m✓[39;22m[90m [39m[90mla solicitud llega a control pedidos sin confirmar disponibilidad[39m[90m   [39m [90m0.16s[39m  
+  [32;1m✓[39;22m[90m [39m[90mmismo dia no se clasifica automaticamente como apartado en pdv[39m[90m      [39m [90m0.13s[39m  
+  [32;1m✓[39;22m[90m [39m[90mtienda md se identifica desde la solicitud a cedis con sucursal sin[39m[90m…[39m [90m0.14s[39m  
+  [32;1m✓[39;22m[90m [39m[90mla revision de tienda se toma y responde sin el falso cierre[39m[90m        [39m [90m0.19s[39m  
+  [32;1m✓[39;22m[90m [39m[90mla ausencia de marcas no concluye la revision[39m[90m                       [39m [90m0.13s[39m  
+  [32;1m✓[39;22m[90m [39m[90muna instruccion sustituida no puede responderse[39m[90m                     [39m [90m0.12s[39m  
+  [32;1m✓[39;22m[90m [39m[90mcedis separa captura y fotos del defecto con reintento idempotente[39m[90m  [39m [90m0.17s[39m  
+  [32;1m✓[39;22m[90m [39m[90mcedis conserva unidades repetidas atributos y hasta cinco fotos[39m[90m     [39m [90m0.21s[39m  
+  [32;1m✓[39;22m[90m [39m[90mcedis admite atributos sin comentario y cantidad interna por unidad[39m[90m [39m [90m0.23s[39m  
+  [32;1m✓[39;22m[90m [39m[90mcedis defecto sin atributos requiere descripcion[39m[90m                    [39m [90m0.11s[39m  
+  [32;1m✓[39;22m[90m [39m[90mcedis sin existencias no exige ni admite fotos del producto[39m[90m         [39m [90m0.12s[39m  
+  [32;1m✓[39;22m[90m [39m[90mla consulta cedis devuelve disponibilidad sin traslado[39m[90m              [39m [90m0.12s[39m  
+  [31;1m⨯[39;22m[90m [39m[90mel faltante queda pendiente del cliente y no se acepta[39m[90m              [39m [90m0.21s[39m  
+  [32;1m✓[39;22m[90m [39m[90mventas retira faltantes sin sku y conserva pendiente el retiro fisi[39m[90m…[39m [90m0.13s[39m  
+  [32;1m✓[39;22m[90m [39m[90mel retiro de piezas queda documentado despues de la respuesta[39m[90m       [39m [90m0.09s[39m  
+  [32;1m✓[39;22m[90m [39m[90mel retiro conserva varias evidencias de la peticion[39m[90m                 [39m [90m0.09s[39m  
+  [32;1m✓[39;22m[90m [39m[90mel retiro no procede sin respuesta[39m[90m                                  [39m [90m0.08s[39m  
+  [32;1m✓[39;22m[90m [39m[90mel pdf del pedido no sustituye la foto del conjunto[39m[90m                 [39m [90m0.13s[39m  
+  [31;1m⨯[39;22m[90m [39m[90muna foto ya guardada se reconoce sin volver a cargarla[39m[90m              [39m [90m0.14s[39m  
+  [32;1m✓[39;22m[90m [39m[90mla revision conserva atributos y solo registra la pieza afectada[39m[90m    [39m [90m0.15s[39m  
+  [32;1m✓[39;22m[90m [39m[90mel anexo documental no exige sku y queda pendiente de identificar[39m[90m   [39m [90m0.17s[39m  
+  [32;1m✓[39;22m[90m [39m[90mel anexo por catalogo conserva las cantidades[39m[90m                       [39m [90m0.10s[39m  
+  [32;1m✓[39;22m[90m [39m[90mcerrar consulta sin respuesta responde json[39m[90m                         [39m [90m0.08s[39m  
+  [32;1m✓[39;22m[90m [39m[90mel retiro documental conserva todas las capturas sin sku[39m[90m            [39m [90m0.11s[39m  
+  [32;1m✓[39;22m[90m [39m[90mel auxiliar aplica una vez el retiro de catalogo y rechaza lo ajeno[39m[90m [39m [90m0.20s[39m  
+  [32;1m✓[39;22m[90m [39m[90mel motivo otro exige texto y la peticion puede ir sin evidencia[39m[90m     [39m [90m0.11s[39m  
+  [32;1m✓[39;22m[90m [39m[90mlas excepciones exigen confirmacion rapida antes de cerrar la consu[39m[90m…[39m [90m0.26s[39m  
+  [32;1m✓[39;22m[90m [39m[90mla cobertura y el cierre esperan una consulta vigente[39m[90m               [39m [90m0.22s[39m  
+  [32;1m✓[39;22m[90m [39m[90mel auxiliar espera el cierre y un reintento no modifica las piezas[39m[90m  [39m [90m0.19s[39m  
+  [32;1m✓[39;22m[90m [39m[90mel auxiliar responde un anexo documental despues del apartado y no[39m[90m… [39m [90m0.23s[39m  
+  [32;1m✓[39;22m[90m [39m[90mun auxiliar ajeno no responde el anexo y un pendiente bloquea cober[39m[90m…[39m [90m0.15s[39m  
+  [32;1m✓[39;22m[90m [39m[90mel anexo disponible se separa solo despues del cierre y una sola ve[39m[90m…[39m [90m0.32s[39m  
+  [32;1m✓[39;22m[90m [39m[90mretiro parcial libera solo la cantidad solicitada y conserva el res[39m[90m…[39m [90m0.15s[39m  
+  [32;1m✓[39;22m[90m [39m[90mconfirmar la separacion no reabre la consulta ya cerrada[39m[90m            [39m [90m0.48s[39m  
+  [32;1m✓[39;22m[90m [39m[90mt01 confirma el conjunto sin transcribir piezas y no duplica[39m[90m        [39m [90m0.45s[39m  
+  [32;1m✓[39;22m[90m [39m[90mt01 la modalidad inicia vigencia sin reiniciarla al guardar[39m[90m         [39m [90m0.28s[39m  
+  [32;1m✓[39;22m[90m [39m[90mt01 entrega con pago externo remision y foto sin exhibicion[39m[90m         [39m [90m0.47s[39m  
+  [32;1m✓[39;22m[90m [39m[90mt01 libera impago y no permite entregar o liberar pago registrado[39m[90m   [39m [90m0.48s[39m  
+  [32;1m✓[39;22m[90m [39m[90mt01 solo el auxiliar asignado entrega o libera[39m[90m                      [39m [90m0.45s[39m  
+  [32;1m✓[39;22m[90m [39m[90mt01 avisa al auxiliar al cerrar y a ventas al liberar[39m[90m               [39m [90m0.44s[39m  
+  [32;1m✓[39;22m[90m [39m[90mt01 entregar aplica saf reservado una vez sin crear cobro[39m[90m           [39m [90m0.47s[39m  
+  [32;1m✓[39;22m[90m [39m[90mt01 liberar devuelve saf disponible y deja el pedido terminal[39m[90m       [39m [90m0.46s[39m  
+  [32;1m✓[39;22m[90m [39m[90mbitacora cedis se excluye del listado y consulta hasta tener permis[39m[90m…[39m [90m0.31s[39m  
+  [32;1m✓[39;22m[90m [39m[90mbitacora cedis oculta relaciones anidadas sin borrar los registros[39m[90m  [39m [90m0.08s[39m  
+  [32;1m✓[39;22m[90m [39m[90malertas de consulta distinguen nueva actualizada y respondida[39m[90m       [39m [90m0.07s[39m  
+  [32;1m✓[39;22m[90m [39m[90mactualizacion cedis responde el conjunto con nueva captura sin reca[39m[90m…[39m [90m0.21s[39m  
+  [32;1m✓[39;22m[90m [39m[90mactualizacion tienda admite excepciones sin recapturar el conjunto[39m[90m… [39m [90m0.15s[39m  
+  [32;1m✓[39;22m[90m [39m[90msustitucion por captura se guarda una vez y un rechazo no habilita[39m[90m… [39m [90m0.21s[39m  
+  [32;1m✓[39;22m[90m [39m[90mtienda muestra la sustitucion y responde sin liberar inventario no[39m[90m… [39m [90m0.22s[39m  
+  [32;1m✓[39;22m[90m [39m[90maccion rapida no confirma faltante y retiro es idempotente[39m[90m          [39m [90m0.22s[39m  
+  [32;1m✓[39;22m[90m [39m[90msustitucion por sku espera respuesta cedis y conserva el cambio al[39m[90m… [39m [90m0.25s[39m  
+  [32;1m✓[39;22m[90m [39m[90mdetalle requiere confirmar estado y recupera consulta md sin borrar[39m[90m…[39m [90m0.22s[39m  
+  [32;1m✓[39;22m[90m [39m[90manexo avanzado reintentado no duplica documentos y devuelve solicit[39m[90m…[39m [90m0.15s[39m  
+  [32;1m✓[39;22m[90m [39m[90manexo y retiro admiten varios archivos hasta 50 mb por consulta[39m[90m     [39m [90m0.33s[39m  
+  [32;1m✓[39;22m[90m [39m[90mt01 guarda modalidad y envia confirmacion al auxiliar sin cobro ni[39m[90m… [39m [90m0.46s[39m  
+  [32;1m✓[39;22m[90m [39m[90mt01 fuera de horario guarda la modalidad pero no confirma una vigen[39m[90m…[39m [90m0.27s[39m  
+  [32;1m✓[39;22m[90m [39m[90mhorarios desactivados permiten confirmar y separar en domingo sin b[39m[90m…[39m [90m0.42s[39m  
+  [32;1m✓[39;22m[90m [39m[90mconfirmar el conjunto incluye anexos revisados sin confirmaciones d[39m[90m…[39m [90m0.53s[39m  
+  [32;1m✓[39;22m[90m [39m[90mtienda reporta error en json mientras espera a ventas[39m[90m               [39m [90m0.25s[39m  
+  [32;1m✓[39;22m[90m [39m[90mtienda recibe unidades con atributos sin observacion como cedis[39m[90m     [39m [90m0.18s[39m  
+  [32;1m✓[39;22m[90m [39m[90mel paso posterior apagado no bloquea confirmar apartado y rechaza n[39m[90m…[39m [90m0.48s[39m  
+  [32;1m✓[39;22m[90m [39m[90mcobertura guardada no se sustituye y reintento conserva confirmacio[39m[90m…[39m [90m0.11s[39m  
+  [32;1m✓[39;22m[90m [39m[90mcambio cobertura exige otro autorizador y aplica una sola vez[39m[90m       [39m [90m0.19s[39m  
+  [32;1m✓[39;22m[90m [39m[90mcambio cobertura obsoleto no se aplica y el rechazo conserva modali[39m[90m…[39m [90m0.16s[39m  
+  [32;1m✓[39;22m[90m [39m[90mcambio cobertura no borra remision ni apartado fisico[39m[90m               [39m [90m0.57s[39m  
+  [32;1m✓[39;22m[90m [39m[90mcambio cobertura conserva metadatos al autoguardar y no admite soli[39m[90m…[39m [90m0.13s[39m  
+  [32;1m✓[39;22m[90m [39m[90mcambio cobertura no convierte pagos existentes y conserva reporte m[39m[90m…[39m [90m0.16s[39m  
+  [32;1m✓[39;22m[90m [39m[90mcambio cobertura de regreso al apartado conserva el primer limite[39m[90m   [39m [90m0.21s[39m  
+  [32;1m✓[39;22m[90m [39m[90mcambio cobertura sin compromiso actualiza la instruccion real y con[39m[90m…[39m [90m0.33s[39m  
+  [32;1m✓[39;22m[90m [39m[90mprimera cobertura admite saf sin sobrescribir modalidad ya guardada[39m[90m [39m [90m0.10s[39m  
+  [32;1m✓[39;22m[90m [39m[90mel cierre y la modalidad entregan la base vigente para autoguardar[39m[90m… [39m [90m0.54s[39m  
+  [31m────────────────────────────────────────────────────────────────────────────[39m  
+  [41;1m FAILED [49;22m [1mTests\Feature\ControlPedidos\SolicitudRegistrarTiendaTest[22m [90m>[39m el fa…   
+[39;1m  Expected response status code [200] but received 422.
+Failed asserting that 422 is identical to 200.[39;22m
+
+  at [32mtests/Feature/ControlPedidos/SolicitudRegistrarTiendaTest.php[39m:[32m558[39m
+    554▕         unset($json['anexo_sin_remision']);
+    555▕         $fresco->update(['solicitud_preparacion_json' => $json]);
+    556▕         $this->postJson('/control-pedidos/'.$pedido->id.'/cerrar-consulta')->assertUnprocessable();
+    557▕         $this->postJson('/control-pedidos/'.$pedido->id.'/disponibilidad-tienda', ['revision_id' => $pieza->id, 'accion' => 'retirar', 'solicitud_id' => (string) Str::uuid()])->assertOk();
+  ➜ 558▕         $this->postJson('/control-pedidos/'.$pedido->id.'/cerrar-consulta')->assertOk();
+    559▕         $this->assertTrue($fresco->fresh()->consultaCerrada());
+    560▕         $this->postJson('/control-pedidos/'.$pedido->id.'/cobertura-tienda', ['cobertura' => 'transferencia'])->assertOk();
+    561▕         $this->assertNull($fresco->fresh()->pago_validado_at);
+    562▕         $this->assertSame(0, PedidoBmaTareaPreparacion::query()->count());
+
+  [31m────────────────────────────────────────────────────────────────────────────[39m  
+  [41;1m FAILED [49;22m [1mTests\Feature\ControlPedidos\SolicitudRegistrarTiendaTest[22m [90m>[39m una f…   
+[39;1m  Failed asserting that 2 is identical to 1.[39;22m
+
+  at [32mtests/Feature/ControlPedidos/SolicitudRegistrarTiendaTest.php[39m:[32m752[39m
+    748▕         $pedido = $tarea->pedido->fresh();
+    749▕         $this->assertSame(1, $pedido->documentos()->where('tipo', PedidoBmaDocumento::TIPO_EVIDENCIA_CONDICION)->count());
+    750▕         $this->assertSame(0, $pedido->revisionesProducto()->count());
+    751▕         $visible = RespuestaPreparacionTienda::datos($tarea->fresh(['documentos', 'productos', 'atendidaPor', 'cumplimientoFisico']));
+  ➜ 752▕         $this->assertSame($foto->id, $visible['documentos'][0]['id']);
+    753▕     }
+    754▕ 
+    755▕     public function test_la_revision_conserva_atributos_y_solo_registra_la_pieza_afectada(): void
+    756▕     {
+
+  [33m1   [39m[39;1mtests/Feature/ControlPedidos/SolicitudRegistrarTiendaTest.php[39;22m:[39;1m752[39;22m
+
+
+  [90mTests:[39m    [31;1m2 failed[39;22m[90m,[39m[39m [39m[32;1m116 passed[39;22m[90m (1426 assertions)[39m
+  [90mDuration:[39m [39m29.58s[39m
+

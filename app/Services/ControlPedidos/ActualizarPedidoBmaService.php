@@ -82,6 +82,17 @@ class ActualizarPedidoBmaService
                 }
             }
 
+            if (\App\Support\ControlPedidos\ConsultaMunicipal::es($pedido)
+                && filled(data_get($pedido->solicitud_preparacion_json, 'consulta_municipal.enviada_at'))) {
+                foreach (['cliente_id', 'numero_cliente', 'folio_remision', 'departamento_operacion_id'] as $campo) {
+                    if (! array_key_exists($campo, $datos)) continue;
+                    $previo = $campo === 'numero_cliente' ? $pedido->cliente?->numero_cliente : $pedido->{$campo};
+                    if ((string) ($datos[$campo] ?? '') !== (string) ($previo ?? '')) {
+                        throw \Illuminate\Validation\ValidationException::withMessages([$campo => 'La consulta municipal ya fue enviada. Sus datos de registro se conservan.']);
+                    }
+                }
+            }
+
             $eraRechazado = $pedido->estatus?->fase_ciclo === 'RECHAZADO_VENDEDORA';
 
             $attrs = $this->atributosActualizacionParcial($pedido, $datos);

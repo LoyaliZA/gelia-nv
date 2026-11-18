@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\ConflictoImportacionClienteController;
 use App\Http\Controllers\Admin\ImportacionClienteSeguimientoController;
 use App\Http\Controllers\Admin\RecuperacionAplicacionClienteController;
 use App\Http\Controllers\Clientes\Direcciones\{ClienteDireccionController, SolicitudDireccionRevisionController};
+use App\Http\Controllers\Clientes\ExpedienteClienteController;
 
 Route::middleware(['can:clientes.ver'])->group(function () {
     Route::get('/clientes', [AdminController::class, 'clientes'])->name('clientes');
@@ -38,6 +39,16 @@ Route::middleware(['can:clientes.ver'])->group(function () {
     Route::post('/clientes', [ClienteController::class, 'store'])->name('clientes.store');
     Route::put('/clientes/{cliente}', [ClienteController::class, 'update'])->name('clientes.update');
 
+    Route::middleware(['can:clientes.expediente.ver'])->group(function () {
+        Route::get('/clientes/{cliente}/expediente', [ExpedienteClienteController::class, 'pagina'])->name('clientes.expediente.pagina');
+        Route::get('/clientes/{cliente}/expediente/consignatarios', [ExpedienteClienteController::class, 'index'])->name('clientes.expediente.index');
+        Route::post('/clientes/{cliente}/expediente/consignatarios', [ExpedienteClienteController::class, 'store'])->name('clientes.expediente.store');
+        Route::put('/clientes/{cliente}/expediente/consignatarios/{consignatario}', [ExpedienteClienteController::class, 'update'])->name('clientes.expediente.update');
+        Route::post('/clientes/{cliente}/expediente/consignatarios/{consignatario}/documento', [ExpedienteClienteController::class, 'documento'])->name('clientes.expediente.documento');
+        Route::get('/clientes/{cliente}/expediente/documentos/{documento}', [ExpedienteClienteController::class, 'descargar'])->withTrashed()->name('clientes.expediente.descargar');
+        Route::delete('/clientes/{cliente}/expediente/consignatarios/{consignatario}', [ExpedienteClienteController::class, 'destroyConsignatario'])->name('clientes.expediente.destroy');
+        Route::delete('/clientes/{cliente}/expediente/documentos/{documento}', [ExpedienteClienteController::class, 'destroyDocumento'])->name('clientes.expediente.documento.destroy');
+    });
     Route::middleware(['can:clientes.direcciones.ver'])->group(function () {
         Route::get('/clientes/{cliente}/direcciones', [ClienteDireccionController::class, 'index'])
             ->name('clientes.direcciones.index');

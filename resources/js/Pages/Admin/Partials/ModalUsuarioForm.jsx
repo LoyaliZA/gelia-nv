@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
     ShieldCheck, X, Briefcase, Check, Network, User, Lock, Smartphone,
-    Save, Layers, Mail, AtSign, MapPin, SlidersHorizontal, LoaderCircle,
+    Save, Layers, Mail, AtSign, MapPin, SlidersHorizontal, LoaderCircle, Eye, EyeOff,
 } from 'lucide-react';
 import PermisosAtomicos from './PermisosAtomicos';
 import SelectorConBusqueda from './SelectorConBusqueda';
@@ -71,6 +71,21 @@ export default function ModalUsuarioForm({
     confirmado = false,
 }) {
     const [activeTab, setActiveTab] = useState('datos');
+    const [mostrarContrasena, setMostrarContrasena] = useState(false);
+    const campoContrasenaRef = useRef(null);
+    useEffect(() => {
+        if (!mostrarContrasena) return undefined;
+
+        const ocultarAlHacerClicFuera = (event) => {
+            if (!campoContrasenaRef.current?.contains(event.target)) {
+                setMostrarContrasena(false);
+            }
+        };
+
+        document.addEventListener('click', ocultarAlHacerClicFuera, true);
+        return () => document.removeEventListener('click', ocultarAlHacerClicFuera, true);
+    }, [mostrarContrasena]);
+
     const raizRef = useRef(null);
     const [compacto, setCompacto] = useState(false);
     const [expansionPermisos, setExpansionPermisos] = useState(() => ({
@@ -420,12 +435,38 @@ export default function ModalUsuarioForm({
                                     </div>
                                 </div>
                                 <div className="space-y-1.5">
-                                    <label className="usuarios-campo-label">Contraseña</label>
-                                    <div className="relative">
-                                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 theme-text-muted z-10 pointer-events-none" />
-                                        <input value={data.password || ''} onChange={(e) => setData('password', e.target.value)} type="password" required={!usuarioEditando} placeholder={usuarioEditando ? 'Dejar en blanco para conservar' : 'Asignar contraseña'} className="w-full pl-11 pr-4 py-3 rounded-2xl theme-element theme-border border text-[11px] font-bold theme-text-main outline-none transition-all focus:ring-1 focus:ring-transparent" style={{ '--tw-ring-color': 'var(--color-primario)' }} />
-                                        <TextoError mensaje={errors.password} />
+                                    <label htmlFor="usuarios-colaborador-password" className="usuarios-campo-label">Contraseña</label>
+                                    <div
+                                        ref={campoContrasenaRef}
+                                        className="relative"
+                                        onBlur={(event) => {
+                                            if (!event.currentTarget.contains(event.relatedTarget)) {
+                                                setMostrarContrasena(false);
+                                            }
+                                        }}
+                                    >
+                                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 theme-text-muted z-10 pointer-events-none" aria-hidden />
+                                        <input
+                                            id="usuarios-colaborador-password"
+                                            value={data.password || ''}
+                                            onChange={(e) => setData('password', e.target.value)}
+                                            onInput={() => setMostrarContrasena(false)}
+                                            type={mostrarContrasena ? 'text' : 'password'}
+                                            required={!usuarioEditando}
+                                            placeholder={usuarioEditando ? 'Dejar en blanco para conservar' : 'Asignar contraseña'}
+                                            className="w-full pl-11 pr-12 py-3 rounded-2xl theme-element theme-border border text-[11px] font-bold theme-text-main outline-none transition-all focus:ring-1 focus:ring-transparent"
+                                            style={{ '--tw-ring-color': 'var(--color-primario)' }}
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setMostrarContrasena((visible) => !visible)}
+                                            className="theme-btn-icon absolute right-1 inset-y-1 grid w-10 place-items-center rounded-xl focus-visible:outline-2 focus-visible:outline-[var(--color-primario)]"
+                                            aria-label={mostrarContrasena ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                                        >
+                                            {mostrarContrasena ? <EyeOff className="w-4 h-4" aria-hidden /> : <Eye className="w-4 h-4" aria-hidden />}
+                                        </button>
                                     </div>
+                                    <TextoError mensaje={errors.password} />
                                 </div>
                             </div>
                         </div>

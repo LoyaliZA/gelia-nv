@@ -1,0 +1,46 @@
+
+   FAIL  Tests\Feature\ControlPedidos\MunicipalOrdinarioM01Test
+  ✓ jaguar conserva costo desconocido y el expediente su identidad       6.53s  
+  ✓ excepcion pendiente impide cerrar la consulta                        0.13s  
+  ✓ reenvio no borra respuesta ni cierre duplicado crea historial        0.16s  
+  ✓ lector cedis no puede reescribir solicitud o enviarla                0.14s  
+  ✓ no se puede responder sin enviar o en otro departamento              0.12s  
+  ✓ identificaciones historicas solo por permiso o pedido referenciado…  0.22s  
+  ✓ documento tras baja continua numeracion y no expone ruta             0.11s  
+  ✓ archivo ejecutable no se publica como evidencia                      0.12s  
+  ✓ tienda filtra sucursal y rechaza respuesta directa ajena             0.96s  
+  ⨯ resolver faltante y responder actualizacion permite cierre sin pisa… 0.14s  
+  ✓ costo conocido insuficiente no valida y cubierto si valida y asocia… 0.22s  
+  ✓ jaguar pago validado y reporte no presentan transporte gratis        0.19s  
+  ✓ numero remision y validacion no eluden consulta abierta              0.10s  
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\ControlPedidos\MunicipalOrdinarioM01Test > resolver…   
+  Expected response status code [200] but received 422.
+Failed asserting that 422 is identical to 200.
+
+The following errors occurred during the last request:
+
+{
+    "message": "Abra la consulta antes de ajustar la disponibilidad. No se modifican pedidos preparados o cancelados.",
+    "errors": {
+        "consulta": [
+            "Abra la consulta antes de ajustar la disponibilidad. No se modifican pedidos preparados o cancelados."
+        ]
+    }
+}
+
+  at tests/Feature/ControlPedidos/MunicipalOrdinarioM01Test.php:361
+    357▕             'revision_id' => $revision->id, 'accion' => 'confirmar', 'solicitud_id' => (string) \Illuminate\Support\Str::uuid(),
+    358▕         ])->assertUnprocessable();
+    359▕         $this->postJson('/control-pedidos/'.$this->pedido->id.'/disponibilidad-tienda', [
+    360▕             'revision_id' => $revision->id, 'accion' => 'retirar', 'solicitud_id' => (string) \Illuminate\Support\Str::uuid(),
+  ➜ 361▕         ])->assertOk();
+    362▕         $this->postJson(route('control_pedidos.cerrar_consulta', $this->pedido))->assertUnprocessable();
+    363▕         $this->post(route('control_pedidos.municipal.disponibilidad', $this->pedido), [
+    364▕             'confirmacion_explicita' => 1,
+    365▕             'actualizacion_id' => data_get($this->pedido->fresh()->solicitud_preparacion_json, 'revision_disponibilidad.actualizacion_id'),
+
+
+  Tests:    1 failed, 12 passed (160 assertions)
+  Duration: 9.58s
+

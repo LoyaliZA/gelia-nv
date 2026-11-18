@@ -30,6 +30,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -231,16 +232,28 @@ class PedidoBmaCedisController extends Controller
         \App\Http\Requests\ControlPedidos\ResponderDisponibilidadInicialRequest $request,
         PedidoBma $pedidoBma,
         \App\Services\ControlPedidos\ResponderDisponibilidadInicialService $service,
+        \App\Services\ControlPedidos\ListarPedidosBmaService $listar,
     ): JsonResponse {
         Gate::authorize('control_pedidos.cedis');
         VisibilidadPedidoBma::assertPuedeConsultar(Auth::user(), $pedidoBma);
 
-        return response()->json($service->ejecutar(
+        $resultado = $service->ejecutar(
             $pedidoBma,
             Auth::user(),
             $request->validated(),
             $request->file('evidencias', []) ?: []
-        ));
+        );
+        return DB::transaction(function () use ($pedidoBma, $resultado, $listar) {
+            $pedido = PedidoBma::query()->sharedLock()->findOrFail($pedidoBma->id);
+
+            // La respuesta pertenece a la acción autorizada. Un GET posterior conserva
+            // su autorización normal aunque el pedido ya haya salido de la bandeja.
+            return response()->json([
+                ...$resultado,
+                'pedido' => $listar->presentar($pedido, Auth::user()),
+                'puede_consultar' => VisibilidadPedidoBma::puedeConsultar(Auth::user(), $pedido),
+            ]);
+        });
     }
 
     public function responderPesaje(

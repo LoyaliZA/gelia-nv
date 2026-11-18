@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useId, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Head, useForm, router, usePage } from '@inertiajs/react';
 import { Settings2, X, Check, RotateCcw, Sparkles } from 'lucide-react';
@@ -108,8 +108,32 @@ function buildFuncionesPanel({ variant, funcionesVisibles }) {
     });
 }
 
+function trazarPerfilCotizado(puntos, inicio) {
+    return puntos.map(([x, y], i) => {
+        if (i === 0) return `${inicio} ${x},${y}`;
+
+        const [xAnterior, yAnterior] = puntos[i - 1];
+        const tercio = (x - xAnterior) / 3;
+        // Las tangentes horizontales unen los tramos sin sobrepasar sus importes.
+        return `C ${xAnterior + tercio},${yAnterior} ${x - tercio},${y} ${x},${y}`;
+    }).join(' ');
+}
+
 function GraficaMontoCotizado({ periodo, total, tramos }) {
-    const maximo = Math.max(0, ...tramos.map(({ monto }) => monto)) || 1;
+    const degradado = useId();
+    const maximo = Math.max(0, ...tramos.map(({ monto }) => monto));
+    const base = 75;
+    const profundidadX = 1.5;
+    const profundidadY = 5;
+    const anchoTramo = 108 / Math.max(1, tramos.length - 1);
+    const puntos = tramos.map(({ monto }, i) => [
+        2 + i * anchoTramo,
+        base - (Math.max(0, monto) / (maximo || 1)) * 58,
+    ]);
+    const perfil = trazarPerfilCotizado(puntos, 'M');
+    const puntosTraseros = puntos.map(([x, y]) => [x + profundidadX, y - profundidadY]).reverse();
+    const perfilTrasero = trazarPerfilCotizado(puntosTraseros, 'L');
+    const [ultimoX, ultimoY] = puntos.at(-1) ?? [2, base];
 
     return (
         <figure className={geliaCardClass('m-0 min-w-0 p-4 md:p-5')}>
@@ -121,20 +145,50 @@ function GraficaMontoCotizado({ periodo, total, tramos }) {
                 {formatoMoneda(total)}
             </p>
             {tramos.length > 0 ? (
-                <ol aria-label="Monto por tramo de días" className="m-0 mt-3 grid list-none grid-cols-[auto_minmax(0,1fr)_auto] gap-x-2 gap-y-1 p-0 text-[11px] tabular-nums">
-                    {tramos.map(({ desde, hasta, monto }) => (
-                        <li key={desde} className="col-span-3 grid grid-cols-subgrid items-center">
-                            <span className="theme-text-muted"><span className="sr-only">Días </span>{desde}–{hasta}</span>
-                            <span aria-hidden="true" className="h-1.5 overflow-hidden rounded-full theme-element">
-                                <span
-                                    className="block h-full rounded-full bg-[var(--color-primario)]"
-                                    style={{ width: `${(monto / maximo) * 100}%` }}
+                <div className="mt-3 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
+                    <svg aria-hidden="true" viewBox="0 0 120 80" preserveAspectRatio="none" className="block h-[4.75rem] w-full">
+                        <defs>
+                            <linearGradient id={degradado} x1="0" x2="0" y1="0" y2="1">
+                                <stop stopColor="var(--color-primario)" />
+                                <stop offset="1" stopColor="color-mix(in srgb, var(--color-primario), black 28%)" />
+                            </linearGradient>
+                        </defs>
+                        <line x1="2" y1={base} x2="116" y2={base} stroke="currentColor" className="theme-text-muted opacity-25" />
+                        {maximo > 0 && (
+                            <>
+                                <polygon
+                                    points={`${ultimoX},${ultimoY} ${ultimoX + profundidadX},${ultimoY - profundidadY} ${ultimoX + profundidadX},${base - profundidadY} ${ultimoX},${base}`}
+                                    fill="color-mix(in srgb, var(--color-primario), black 40%)"
                                 />
-                            </span>
-                            <span className="text-right theme-text-main">{formatoMoneda(monto)}</span>
-                        </li>
-                    ))}
-                </ol>
+                                <path
+                                    d={`${perfil} ${perfilTrasero} Z`}
+                                    fill="color-mix(in srgb, var(--color-primario), white 27%)"
+                                />
+                                <path d={`${perfil} L ${ultimoX},${base} 2,${base} Z`} fill={`url(#${degradado})`} />
+                                <path d={perfil} fill="none" stroke="color-mix(in srgb, var(--color-primario), white 48%)" strokeWidth="1.2" strokeLinejoin="round" />
+                            </>
+                        )}
+                        {puntos.map(([x], i) => {
+                            const { desde, hasta, monto } = tramos[i];
+                            const inicio = i === 0 ? 0 : x - anchoTramo / 2;
+                            const fin = i === tramos.length - 1 ? 120 : x + anchoTramo / 2;
+
+                            return (
+                                <rect key={desde} x={inicio} width={fin - inicio} height="80" fill="transparent">
+                                    <title>{`Días ${desde}–${hasta}: ${formatoMoneda(monto)}`}</title>
+                                </rect>
+                            );
+                        })}
+                    </svg>
+                    <ol aria-label="Monto por tramo de días" className="m-0 grid list-none gap-y-1 p-0 text-[11px] tabular-nums">
+                        {tramos.map(({ desde, hasta, monto }) => (
+                            <li key={desde} className="flex items-center justify-between gap-2">
+                                <span className="theme-text-muted"><span className="sr-only">Días </span>{desde}–{hasta}</span>
+                                <span className="text-right theme-text-main">{formatoMoneda(monto)}</span>
+                            </li>
+                        ))}
+                    </ol>
+                </div>
             ) : (
                 <p className="text-[11px] theme-text-muted m-0 mt-2">Sin montos registrados en este periodo.</p>
             )}

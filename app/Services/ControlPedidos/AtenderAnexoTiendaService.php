@@ -11,18 +11,19 @@ use App\Support\ControlPedidos\ApartadoT01;
 use App\Support\ControlPedidos\InstruccionEntrega;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
 /** Responde al anexo solicitado. No compromete inventario ni declara separación física. */
 final class AtenderAnexoTiendaService
 {
+    public function __construct(private PersistenciaAdjuntosConsulta $persistencia) {}
+
     public function ejecutar(PedidoBmaTareaPreparacion $tarea, User $usuario, array $datos, ?UploadedFile $foto): PedidoBma
     {
         abort_unless($usuario->can('control_pedidos.tienda.responder') || $usuario->can('control_pedidos.tienda.apartado.separar'), 403);
-        $ruta = null;
+        $nuevos = [];
         try {
-            return DB::transaction(function () use ($tarea, $usuario, $datos, $foto, &$ruta) {
+            return DB::transaction(function () use ($tarea, $usuario, $datos, $foto, &$nuevos) {
                 $tarea = InstruccionEntrega::bloquearParaEjecutar($tarea);
                 if ((int) $tarea->asignada_a_id !== (int) $usuario->id || ! in_array($tarea->estado, ['EN_ATENCION', 'RESPONDIDA'], true)) {
                     throw ValidationException::withMessages(['tarea' => 'Solo el auxiliar asignado atiende el anexo pendiente.']);
@@ -60,14 +61,13 @@ final class AtenderAnexoTiendaService
                     if (($anexo['entrada'] ?? '') === 'catalogo' && array_sum(array_column($piezas, 'cantidad')) !== (int) $anexo['cantidad']) {
                         throw ValidationException::withMessages(['piezas' => 'Si hay cantidades faltantes, repórtelas a Ventas para acordarlas con el cliente.']);
                     }
-                    $ruta = $foto->store('pedidos_bma/'.$pedido->id.'/anexo', 'public');
-                    $documento = $pedido->documentos()->create([
+                    $docs = $this->persistencia->guardar($pedido, [$foto], [
+                        'carpeta' => 'anexo',
                         'tipo' => PedidoBmaDocumento::TIPO_EVIDENCIA_CONDICION,
-                        'ruta_archivo' => $ruta, 'nombre_original' => $foto->getClientOriginalName(),
-                        'mime_type' => $foto->getMimeType(), 'tamano_bytes' => $foto->getSize(),
-                        'activo' => true, 'comentario' => 'Disponibilidad del anexo; no confirma separación.',
+                        'comentario' => 'Disponibilidad del anexo; no confirma separación.',
                     ]);
-                    $anexo['evidencia_respuesta_id'] = $documento->id;
+                    $nuevos = array_column($docs, 'ruta');
+                    $anexo['evidencia_respuesta_id'] = (int) ($docs[0]['id'] ?? 0);
                 } elseif ($nota === '') {
                     throw ValidationException::withMessages(['nota' => 'Indique el faltante o detalle para que Ventas lo consulte con el cliente.']);
                 }
@@ -103,9 +103,7 @@ final class AtenderAnexoTiendaService
                 return $pedido->fresh();
             });
         } catch (\Throwable $e) {
-            if ($ruta) {
-                Storage::disk('public')->delete($ruta);
-            }
+            $this->persistencia->limpiar($nuevos);
             throw $e;
         }
     }

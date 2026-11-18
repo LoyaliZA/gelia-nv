@@ -1,0 +1,12 @@
+{
+    "resultado": "aprobado",
+    "pedido_municipal": 48,
+    "documentos_conservados": 4,
+    "historial_respuestas": 2,
+    "pedidos_esperados": 33,
+    "pedidos_en_base": 33,
+    "tienda": 55,
+    "anexos_respondidos": 1,
+    "nacional_sin_pesaje_registrado": 50,
+    "sin_pago_remision_empaque_o_tarea_municipal": true
+}

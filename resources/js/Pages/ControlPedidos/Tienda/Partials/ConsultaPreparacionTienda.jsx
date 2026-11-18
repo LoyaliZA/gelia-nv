@@ -27,7 +27,7 @@ export default function ConsultaPreparacionTienda({ tarea, auth, documentos = []
     const autorizado = tarea.puede_preparar ?? (Number(tarea.responsable?.id) === Number(auth?.user?.id) && (admin || permisos.includes('control_pedidos.tienda.apartado.separar') || permisos.includes('control_pedidos.tienda.responder')));
     const enAtencion = tarea.estado === 'EN_ATENCION';
     const confirmado = ['APARTADO_CONFIRMADO', 'ENTREGADA', 'DEVUELTA_ANAQUEL'].includes(tarea.apartado?.estado);
-    const actualizacion = Boolean(revision?.actualizacion_pendiente || pedido.anexos_pendientes?.length);
+    const actualizacion = Boolean(pedido.anexos_pendientes?.length || revision?.actualizacion_pendiente);
     const ajustes = actualizacion || (pedido.retiros || []).some(r => (r.estado || 'pendiente') === 'pendiente');
     const vigente = revision?.aceptacion_vigente !== false && revision?.vigente !== false && !revision?.sustituida_at;
     const vence = tarea.fecha_limite || tarea.apartado?.vence_at;

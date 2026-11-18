@@ -202,8 +202,12 @@ class ResolverEstadoVendedorOperacionPdvTest extends TestCase
             $this->resolver->accionesDisponibles(EstadoVendedorOperacionPdv::Atendiendo),
         );
         $this->assertSame(
-            ['cancelar_cierre_pendiente'],
+            ['finalizar_jornada', 'cancelar_cierre_pendiente'],
             $this->resolver->accionesDisponibles(EstadoVendedorOperacionPdv::CierrePendiente),
+        );
+        $this->assertSame(
+            ['cancelar_cierre_pendiente'],
+            $this->resolver->accionesDisponibles(EstadoVendedorOperacionPdv::CierrePendiente, true),
         );
         $this->assertSame(
             ['reactivar'],

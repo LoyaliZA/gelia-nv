@@ -5,12 +5,14 @@ import { ArrowRightLeft, Package, Store, X } from 'lucide-react';
 import { THEME_MODAL_OVERLAY, THEME_MODAL_SHELL, THEME_BTN_PRIMARY, THEME_BTN_SECONDARY, THEME_LABEL, THEME_SELECT, THEME_TEXTAREA, THEME_INPUT, GELIA_ICON_BOX } from '../../../utils/geliaTheme';
 import GaleriaEvidenciasPedido from './GaleriaEvidenciasPedido';
 import ModalVistaPreviaDocumento from './ModalVistaPreviaDocumento';
+import { flagsConversionDe } from './conversionModalidad';
 
 const mensaje = error => error?.response?.status === 419 ? 'La sesión venció. Recargue GELIA antes de continuar.' : Object.values(error?.response?.data?.errors || {}).flat()[0] || error?.response?.data?.message || 'No se pudo actualizar el movimiento.';
 export const ETAPAS_TRASLADO = { pendiente: 'Pendiente de autorización', rechazada: 'Solicitud rechazada', autorizada: 'Pendiente de salida de sucursal', en_camino: 'En traslado', recibido: 'Recibido en custodia' };
 
-export default function ModalMovimientosTienda({ abierto = false, pedido, modo = 'traslado', onClose, onActualizar }) {
+export default function ModalMovimientosTienda({ abierto = false, pedido, modo = 'traslado', onClose, onActualizar, onContinuarConversion }) {
     const [datos, setDatos] = useState(null);
+    const [conversion, setConversion] = useState(null);
     const [error, setError] = useState('');
     const [ocupado, setOcupado] = useState(false);
     const [destino, setDestino] = useState('');
@@ -33,8 +35,9 @@ export default function ModalMovimientosTienda({ abierto = false, pedido, modo =
     useEffect(() => {
         if (!abierto || !pedido?.id) return;
         let vigente = true;
-        setDatos(null); setError(''); setDestino(''); setMotivo(''); setCaptura(false); setArchivos([]); setPreviews([]); setRecorrido(''); setAlmacen(''); setUbicacion(''); setVerificado(false); setConfirmar(null); setExito('');
+        setDatos(null); setConversion(pedido.conversion_modalidad || null); setError(''); setDestino(''); setMotivo(''); setCaptura(false); setArchivos([]); setPreviews([]); setRecorrido(''); setAlmacen(''); setUbicacion(''); setVerificado(false); setConfirmar(null); setExito('');
         axios.get(`/control-pedidos/${pedido.id}/movimientos-tienda`).then(r => { if (vigente) setDatos(r.data); }).catch(e => { if (vigente) setError(mensaje(e)); });
+        axios.get(`/control-pedidos/${pedido.id}/conversion-modalidad`).then(r => { if (vigente) setConversion(flagsConversionDe(r.data) || pedido.conversion_modalidad || null); }).catch(() => { /* Agente A aún puede no haber publicado la ruta. */ });
         const anterior = document.activeElement;
         const overflow = document.body.style.overflow;
         document.body.style.overflow = 'hidden';
@@ -55,6 +58,10 @@ export default function ModalMovimientosTienda({ abierto = false, pedido, modo =
     };
     const preparar = accion => {
         setError('');
+        if (accion === 'modalidad' && destino === 'municipal' && (conversion?.puede_iniciar || conversion?.puede_continuar) && onContinuarConversion) {
+            onContinuarConversion(pedido);
+            return;
+        }
         if (['solicitar', 'modalidad'].includes(accion) && (!destino || !motivo.trim())) { setError('Seleccione el destino y registre el motivo.'); return; }
         if (accion === 'solicitar' && !captura && !archivos.length) { setError('Adjunte la petición del cliente o notifique un error de captura.'); return; }
         if (accion === 'autorizar' && !recorrido.trim()) { setError('Defina el recorrido físico del traslado.'); return; }
@@ -93,6 +100,12 @@ export default function ModalMovimientosTienda({ abierto = false, pedido, modo =
             <p className="m-0 theme-text-main">Sucursal actual: <strong>{etapa === 'recibido' ? datos.sucursal_destino : datos.sucursal_actual}</strong>{etapa === 'en_camino' ? ' · Mercancía en traslado' : ''}</p>
             {traslado && <><p className="m-0 theme-text-main">Destino solicitado: <strong>{datos.sucursal_destino}</strong></p><p className="m-0 font-semibold theme-text-main" role="status">{ETAPAS_TRASLADO[etapa]}</p>{traslado.motivo && <p className="m-0 theme-text-main">Motivo: {traslado.motivo}</p>}{traslado.anotacion && <p className="m-0 theme-text-muted">{traslado.anotacion}</p>}{traslado.recorrido && <p className="m-0 theme-text-main">Recorrido autorizado: {traslado.recorrido}</p>}{datos.evidencias?.length > 0 && <button type="button" className={THEME_BTN_SECONDARY} onClick={() => setVista({ documentos: datos.evidencias, indice: 0 })}>Ver petición del cliente</button>}</>}
             {datos.modalidad && <p className="m-0 theme-text-main">Envío {datos.modalidad.destino} solicitado · Pendiente de conexión.</p>}
+            {datos.modalidad?.destino === 'municipal' && (conversion?.puede_continuar || conversion?.accion_ui === 'continuar') && onContinuarConversion && (
+                <button type="button" className={THEME_BTN_PRIMARY} disabled={ocupado} onClick={() => onContinuarConversion(pedido)}>Continuar cambio de modalidad</button>
+            )}
+            {datos.modalidad?.destino === 'municipal' && conversion && !conversion.puede_continuar && !conversion.puede_iniciar && (
+                <p className="m-0 text-sm theme-text-muted">La solicitud de envío municipal queda pendiente de conexión. Ya no se puede aplicar el cambio porque la consulta se cerró.</p>
+            )}
         </div>}
         {datos?.bloqueo_destino && <p role="status" className="text-sm theme-text-aviso m-0">{datos.bloqueo_destino}</p>}
         {datos?.puede_solicitar && <fieldset disabled={ocupado} className="grid gap-4 min-w-0">

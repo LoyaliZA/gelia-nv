@@ -1,0 +1,52 @@
+
+> test
+> vitest run resources/js/Pages/ControlPedidos/Municipal/continuidadRegistro.test.jsx resources/js/Pages/ControlPedidos/Municipal/registroMunicipal.test.jsx resources/js/Pages/ControlPedidos/Partials/ModalFormPedido.seleccion.test.jsx resources/js/Pages/ControlPedidos/Partials/FormularioRegistrarTienda.confirmacion.test.jsx resources/js/Pages/ControlPedidos/Partials/flujoCapturaPedido.test.js
+
+(node:4981) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.12 [39m[90m/var/www/html[39m
+
+ [32m✓[39m resources/js/Pages/ControlPedidos/Partials/flujoCapturaPedido.test.js [2m([22m[2m10 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m resources/js/Pages/ControlPedidos/Partials/ModalFormPedido.seleccion.test.jsx [2m([22m[2m4 tests[22m[2m)[22m[32m 22[2mms[22m[39m
+[90mstderr[2m | resources/js/Pages/ControlPedidos/Municipal/registroMunicipal.test.jsx[2m > [22m[2mguarda sin municipio y bloquea el envío mientras hay cambios sin guardar
+[22m[39mAn update to FormularioRegistrarMunicipal inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to FormularioRegistrarMunicipal inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to FormularioRegistrarMunicipal inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+ [32m✓[39m resources/js/Pages/ControlPedidos/Municipal/registroMunicipal.test.jsx [2m([22m[2m4 tests[22m[2m)[22m[32m 79[2mms[22m[39m
+ [32m✓[39m resources/js/Pages/ControlPedidos/Municipal/continuidadRegistro.test.jsx [2m([22m[2m2 tests[22m[2m)[22m[32m 192[2mms[22m[39m
+ [32m✓[39m resources/js/Pages/ControlPedidos/Partials/FormularioRegistrarTienda.confirmacion.test.jsx [2m([22m[2m4 tests[22m[2m)[22m[33m 427[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m5 passed[39m[22m[90m (5)[39m
+[2m      Tests [22m [1m[32m24 passed[39m[22m[90m (24)[39m
+[2m   Start at [22m 16:26:39
+[2m   Duration [22m 1.16s[2m (transform 451ms, setup 0ms, import 1.13s, tests 725ms, environment 793ms)[22m
+

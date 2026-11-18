@@ -1,0 +1,340 @@
+{
+  "pasos": [
+    "Alta vacía y elección aislada de Municipal sin POST ni borrador.",
+    "CEDIS responde faltante sin SKU; Ventas recibe automáticamente la evidencia y el faltante con ambos modales abiertos (respaldo, Echo desconectado).",
+    "Retiro documental visible automáticamente en CEDIS; segunda respuesta vigente habilita cierre; reapertura y tercera respuesta sin cerrar ninguno de los modales."
+  ],
+  "sesiones": {
+    "ventas": 45,
+    "cedis": 46,
+    "hosts": [
+      "laravel.test",
+      "gelianv-laravel.test-1"
+    ],
+    "transporte": "BROADCAST_CONNECTION=null; Echo desconectado; respaldo real de 15 segundos"
+  },
+  "lecturas": {
+    "ventas": {
+      "estados": [
+        {
+          "actualizacion": false,
+          "at": 1794955331085,
+          "cerrada": false,
+          "excepciones": false,
+          "respondida": false
+        },
+        {
+          "actualizacion": false,
+          "at": 1794955348930,
+          "cerrada": false,
+          "excepciones": true,
+          "respondida": false
+        },
+        {
+          "actualizacion": false,
+          "at": 1794955393926,
+          "cerrada": false,
+          "excepciones": true,
+          "respondida": true
+        },
+        {
+          "actualizacion": false,
+          "at": 1794955393929,
+          "cerrada": false,
+          "excepciones": false,
+          "respondida": true
+        },
+        {
+          "actualizacion": false,
+          "at": 1794955407192,
+          "cerrada": true,
+          "excepciones": false,
+          "respondida": true
+        },
+        {
+          "actualizacion": false,
+          "at": 1794955407194,
+          "cerrada": true,
+          "excepciones": false,
+          "respondida": false
+        },
+        {
+          "actualizacion": false,
+          "at": 1794955407917,
+          "cerrada": true,
+          "excepciones": true,
+          "respondida": false
+        },
+        {
+          "actualizacion": false,
+          "at": 1794955407918,
+          "cerrada": false,
+          "excepciones": true,
+          "respondida": false
+        },
+        {
+          "actualizacion": false,
+          "at": 1794955438924,
+          "cerrada": false,
+          "excepciones": true,
+          "respondida": true
+        },
+        {
+          "actualizacion": false,
+          "at": 1794955438926,
+          "cerrada": false,
+          "excepciones": false,
+          "respondida": true
+        }
+      ],
+      "lecturas": [
+        {
+          "actualizacion": null,
+          "at": 1794955333855,
+          "id": 48,
+          "respuesta": null,
+          "version": 0
+        },
+        {
+          "actualizacion": null,
+          "at": 1794955348929,
+          "id": 48,
+          "respuesta": "3367d9d0-9e15-4cec-bf96-b1e6ee548be3",
+          "version": 56
+        },
+        {
+          "actualizacion": "02e365c9-f00d-4dfd-8bb5-b3eb62357518",
+          "at": 1794955363909,
+          "id": 48,
+          "respuesta": "3367d9d0-9e15-4cec-bf96-b1e6ee548be3",
+          "version": 57
+        },
+        {
+          "actualizacion": "02e365c9-f00d-4dfd-8bb5-b3eb62357518",
+          "at": 1794955378904,
+          "id": 48,
+          "respuesta": "3367d9d0-9e15-4cec-bf96-b1e6ee548be3",
+          "version": 57
+        },
+        {
+          "actualizacion": null,
+          "at": 1794955393923,
+          "id": 48,
+          "respuesta": "f0e62238-f29d-4f73-abde-3ae213fbbf87",
+          "version": 58
+        },
+        {
+          "actualizacion": null,
+          "at": 1794955407190,
+          "id": 48,
+          "respuesta": "f0e62238-f29d-4f73-abde-3ae213fbbf87",
+          "version": 59
+        },
+        {
+          "actualizacion": "c68a0bf1-596e-4873-a403-69774da1865d",
+          "at": 1794955407915,
+          "id": 48,
+          "respuesta": "f0e62238-f29d-4f73-abde-3ae213fbbf87",
+          "version": 60
+        },
+        {
+          "actualizacion": "c68a0bf1-596e-4873-a403-69774da1865d",
+          "at": 1794955408897,
+          "id": 48,
+          "respuesta": "f0e62238-f29d-4f73-abde-3ae213fbbf87",
+          "version": 60
+        },
+        {
+          "actualizacion": "c68a0bf1-596e-4873-a403-69774da1865d",
+          "at": 1794955423917,
+          "id": 48,
+          "respuesta": "f0e62238-f29d-4f73-abde-3ae213fbbf87",
+          "version": 60
+        },
+        {
+          "actualizacion": null,
+          "at": 1794955438921,
+          "id": 48,
+          "respuesta": "d459b70e-11cc-45f8-a238-471d22479928",
+          "version": 61
+        }
+      ],
+      "posts": [
+        {
+          "status": 200,
+          "url": "/control-pedidos/48/disponibilidad-tienda"
+        },
+        {
+          "status": 200,
+          "url": "http://laravel.test:9193/control-pedidos/48/cerrar-consulta"
+        },
+        {
+          "status": 200,
+          "url": "http://laravel.test:9193/control-pedidos/48/reabrir-consulta"
+        }
+      ],
+      "visible": "visible"
+    },
+    "cedis": {
+      "estados": [
+        {
+          "actualizacion": false,
+          "at": 1794955335933,
+          "cerrada": false,
+          "excepciones": false,
+          "respondida": false
+        },
+        {
+          "actualizacion": false,
+          "at": 1794955336681,
+          "cerrada": false,
+          "excepciones": false,
+          "respondida": true
+        },
+        {
+          "actualizacion": true,
+          "at": 1794955366239,
+          "cerrada": false,
+          "excepciones": false,
+          "respondida": false
+        },
+        {
+          "actualizacion": false,
+          "at": 1794955389363,
+          "cerrada": false,
+          "excepciones": false,
+          "respondida": true
+        },
+        {
+          "actualizacion": true,
+          "at": 1794955411245,
+          "cerrada": false,
+          "excepciones": false,
+          "respondida": false
+        },
+        {
+          "actualizacion": false,
+          "at": 1794955425433,
+          "cerrada": false,
+          "excepciones": false,
+          "respondida": true
+        }
+      ],
+      "lecturas": [
+        {
+          "actualizacion": null,
+          "at": 1794955336140,
+          "id": 48,
+          "respuesta": null,
+          "version": 0
+        },
+        {
+          "actualizacion": null,
+          "at": 1794955336676,
+          "id": 48,
+          "respuesta": "3367d9d0-9e15-4cec-bf96-b1e6ee548be3",
+          "version": 56
+        },
+        {
+          "actualizacion": null,
+          "at": 1794955336784,
+          "id": 48,
+          "respuesta": "3367d9d0-9e15-4cec-bf96-b1e6ee548be3",
+          "version": 56
+        },
+        {
+          "actualizacion": "02e365c9-f00d-4dfd-8bb5-b3eb62357518",
+          "at": 1794955366233,
+          "id": 48,
+          "respuesta": "3367d9d0-9e15-4cec-bf96-b1e6ee548be3",
+          "version": 57
+        },
+        {
+          "actualizacion": null,
+          "at": 1794955389357,
+          "id": 48,
+          "respuesta": "f0e62238-f29d-4f73-abde-3ae213fbbf87",
+          "version": 58
+        },
+        {
+          "actualizacion": null,
+          "at": 1794955389510,
+          "id": 48,
+          "respuesta": "f0e62238-f29d-4f73-abde-3ae213fbbf87",
+          "version": 58
+        },
+        {
+          "actualizacion": "c68a0bf1-596e-4873-a403-69774da1865d",
+          "at": 1794955411240,
+          "id": 48,
+          "respuesta": "f0e62238-f29d-4f73-abde-3ae213fbbf87",
+          "version": 60
+        },
+        {
+          "actualizacion": null,
+          "at": 1794955425427,
+          "id": 48,
+          "respuesta": "d459b70e-11cc-45f8-a238-471d22479928",
+          "version": 61
+        },
+        {
+          "actualizacion": null,
+          "at": 1794955426243,
+          "id": 48,
+          "respuesta": "d459b70e-11cc-45f8-a238-471d22479928",
+          "version": 61
+        },
+        {
+          "actualizacion": null,
+          "at": 1794955441235,
+          "id": 48,
+          "respuesta": "d459b70e-11cc-45f8-a238-471d22479928",
+          "version": 61
+        }
+      ],
+      "posts": [
+        {
+          "status": 200,
+          "url": "http://gelianv-laravel.test-1:9193/control-pedidos/cedis/48/disponibilidad"
+        },
+        {
+          "status": 200,
+          "url": "http://gelianv-laravel.test-1:9193/control-pedidos/cedis/48/disponibilidad"
+        },
+        {
+          "status": 200,
+          "url": "http://gelianv-laravel.test-1:9193/control-pedidos/cedis/48/disponibilidad"
+        }
+      ],
+      "visible": "visible"
+    }
+  },
+  "medidas": [
+    {
+      "ancho": 1440,
+      "desborde": false
+    },
+    {
+      "ancho": 1440,
+      "desborde": false
+    },
+    {
+      "ancho": 1024,
+      "desborde": false
+    },
+    {
+      "ancho": 1024,
+      "desborde": false
+    },
+    {
+      "ancho": 390,
+      "desborde": false
+    },
+    {
+      "ancho": 390,
+      "desborde": false
+    }
+  ],
+  "console": [],
+  "resultado": "aprobado"
+}

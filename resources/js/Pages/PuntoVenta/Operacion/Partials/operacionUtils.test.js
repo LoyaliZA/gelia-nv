@@ -34,6 +34,9 @@ describe('operacionUtils', () => {
             horario_cierre: { hora_apertura: '10:00', hora_cierre: '19:00' },
         })).toBe('10:00–19:00');
         expect(resumenHorarioOperativo({
+            horario_cierre: { configurado: true, opera_hoy: false, hora_cierre: '19:00' },
+        })).toBe('Hoy no opera');
+        expect(resumenHorarioOperativo({
             horario_cierre: { hora_cierre: '19:00' },
             sucursal_dia: { ampliacion_hasta_at: '2026-10-05T21:30:00' },
         })).toContain('Ampliación hasta');

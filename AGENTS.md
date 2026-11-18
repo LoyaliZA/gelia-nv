@@ -1,5 +1,7 @@
 # Guía para agentes de GELIA
 
+Contexto de Gestión de pedidos: [docs/ai/MAPA.md](docs/ai/MAPA.md); mantenerlo según [.cursor/rules/mantenimiento-contexto.mdc](.cursor/rules/mantenimiento-contexto.mdc).
+
 ## Continuidad de Gestión de pedidos y Tienda
 
 Actualizado el 4 de noviembre de 2026 para continuar el trabajo en otro servidor o chat. Antes de cambiar estos módulos, leer:

@@ -1,12 +1,22 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Clientes\ExpedienteClienteController;
 use App\Http\Controllers\ControlPedidos\PedidoBmaController;
 use App\Http\Controllers\ControlPedidos\DireccionesAuxiliarController;
 use App\Http\Controllers\ControlPedidos\PedidoBmaSaldosPagosController;
 use App\Http\Controllers\ControlPedidos\PlazosRetrasoPedidoBmaController;
 
 Route::prefix('control-pedidos')->name('control_pedidos.')->group(function () {
+    Route::get('/municipal/clientes/{cliente}/consignatarios', [ExpedienteClienteController::class, 'index'])->name('municipal.expediente.index');
+    Route::post('/municipal/clientes/{cliente}/consignatarios', [ExpedienteClienteController::class, 'store'])->name('municipal.expediente.store');
+    Route::put('/municipal/clientes/{cliente}/consignatarios/{consignatario}', [ExpedienteClienteController::class, 'update'])->name('municipal.expediente.update');
+    Route::post('/municipal/clientes/{cliente}/consignatarios/{consignatario}/documento', [ExpedienteClienteController::class, 'documento'])->name('municipal.expediente.documento');
+    Route::get('/municipal/clientes/{cliente}/documentos/{documento}', [ExpedienteClienteController::class, 'descargar'])->withTrashed()->name('municipal.expediente.descargar');
+    Route::get('/municipal/consultas-tienda', [\App\Http\Controllers\ControlPedidos\Municipal\ConsultaMunicipalController::class, 'tienda'])->name('municipal.consultas_tienda');
+    Route::post('/municipal/{pedidoBma}/solicitud', [\App\Http\Controllers\ControlPedidos\Municipal\SolicitudMunicipalController::class, 'guardar'])->name('municipal.solicitud');
+    Route::post('/municipal/{pedidoBma}/consulta', [\App\Http\Controllers\ControlPedidos\Municipal\SolicitudMunicipalController::class, 'enviarConsulta'])->name('municipal.consulta');
+    Route::post('/municipal/{pedidoBma}/disponibilidad', [\App\Http\Controllers\ControlPedidos\Municipal\ConsultaMunicipalController::class, 'responder'])->name('municipal.disponibilidad');
     Route::get('/{pedidoBma}/cambio-cobertura-tienda', [\App\Http\Controllers\ControlPedidos\CambioCoberturaTiendaController::class, 'show'])->name('cambio_cobertura_tienda.show');
     Route::post('/{pedidoBma}/cambio-cobertura-tienda', [\App\Http\Controllers\ControlPedidos\CambioCoberturaTiendaController::class, 'update'])->name('cambio_cobertura_tienda.update');
     Route::get('/{pedidoBma}/disponibilidad-tienda', [\App\Http\Controllers\ControlPedidos\DisponibilidadTiendaController::class, 'show'])->name('disponibilidad_tienda.show');
@@ -61,6 +71,13 @@ Route::prefix('control-pedidos')->name('control_pedidos.')->group(function () {
         Route::post('/{pedidoBma}/solicitar-preparacion-tienda', [PedidoBmaController::class, 'solicitarPreparacionTienda'])->name('solicitar_preparacion_tienda');
         Route::post('/{pedidoBma}/desglose-preparacion', [PedidoBmaController::class, 'guardarDesglosePreparacion'])->name('desglose_preparacion');
         Route::post('/{pedidoBma}/solicitar-repesaje', [PedidoBmaController::class, 'solicitarRepesaje'])->name('solicitar_repesaje');
+        Route::get('/{pedidoBma}/conversion-modalidad', [\App\Http\Controllers\ControlPedidos\ConversionModalidadController::class, 'show'])->name('conversion_modalidad.show');
+        Route::post('/{pedidoBma}/conversion-modalidad/vista-previa', [\App\Http\Controllers\ControlPedidos\ConversionModalidadController::class, 'vistaPrevia'])->name('conversion_modalidad.vista_previa');
+        Route::post('/{pedidoBma}/conversion-modalidad', [\App\Http\Controllers\ControlPedidos\ConversionModalidadController::class, 'confirmar'])->name('conversion_modalidad.confirmar');
+        Route::post('/{pedidoBma}/conversion-modalidad/cancelar', [\App\Http\Controllers\ControlPedidos\ConversionModalidadController::class, 'cancelar'])->name('conversion_modalidad.cancelar');
+        Route::post('/{pedidoBma}/conversion-modalidad/reserva', [\App\Http\Controllers\ControlPedidos\ConversionModalidadController::class, 'abrirReserva'])->name('conversion_modalidad.reserva.abrir');
+        Route::post('/{pedidoBma}/conversion-modalidad/reserva/latido', [\App\Http\Controllers\ControlPedidos\ConversionModalidadController::class, 'latidoReserva'])->name('conversion_modalidad.reserva.latido');
+        Route::delete('/{pedidoBma}/conversion-modalidad/reserva', [\App\Http\Controllers\ControlPedidos\ConversionModalidadController::class, 'soltarReserva'])->name('conversion_modalidad.reserva.soltar');
         Route::post('/{pedidoBma}/cerrar-consulta', [PedidoBmaController::class, 'cerrarConsulta'])->name('cerrar_consulta');
         Route::post('/{pedidoBma}/reabrir-consulta', [PedidoBmaController::class, 'reabrirConsulta'])->name('reabrir_consulta');
         Route::post('/{pedidoBma}/atender-sin-existencia', [PedidoBmaController::class, 'atenderSinExistencia'])->name('atender_sin_existencia');

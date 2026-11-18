@@ -1,0 +1,31 @@
+
+  [30;42;1m PASS [39;49;22m[39m Tests\Feature\ControlPedidos\MunicipalOrdinarioM01Test[39m
+  [32;1m✓[39;22m[90m [39m[90mprimer envio exige soporte y datos comunes sin exigir pago[39m[90m          [39m [90m6.41s[39m  
+  [32;1m✓[39;22m[90m [39m[90mautoguardado conserva expediente y transporte sin aceptar estado fa[39m[90m…[39m [90m0.20s[39m  
+  [32;1m✓[39;22m[90m [39m[90mterminal local regional guarda sin municipio y reabre desde catalog[39m[90m…[39m [90m0.13s[39m  
+  [32;1m✓[39;22m[90m [39m[90mterminal inactiva comercial o inexistente no se guarda[39m[90m              [39m [90m0.10s[39m  
+  [32;1m✓[39;22m[90m [39m[90mdestino historico y atributos de transporte se conservan[39m[90m            [39m [90m0.12s[39m  
+  [32;1m✓[39;22m[90m [39m[90mfallo de escritura no expone ruta ni sustituye identificacion vigen[39m[90m…[39m [90m0.09s[39m  
+  [32;1m✓[39;22m[90m [39m[90mjaguar conserva costo desconocido y el expediente su identidad[39m[90m      [39m [90m0.21s[39m  
+  [32;1m✓[39;22m[90m [39m[90mexcepcion pendiente impide cerrar la consulta[39m[90m                       [39m [90m0.14s[39m  
+  [32;1m✓[39;22m[90m [39m[90mreenvio no borra respuesta ni cierre duplicado crea historial[39m[90m       [39m [90m0.16s[39m  
+  [32;1m✓[39;22m[90m [39m[90mlector cedis no puede reescribir solicitud o enviarla[39m[90m               [39m [90m0.13s[39m  
+  [32;1m✓[39;22m[90m [39m[90mno se puede responder sin enviar o en otro departamento[39m[90m             [39m [90m0.12s[39m  
+  [32;1m✓[39;22m[90m [39m[90midentificaciones historicas solo por permiso o pedido referenciado[39m[90m… [39m [90m0.23s[39m  
+  [32;1m✓[39;22m[90m [39m[90mdocumento tras baja continua numeracion y no expone ruta[39m[90m            [39m [90m0.12s[39m  
+  [32;1m✓[39;22m[90m [39m[90marchivo ejecutable no se publica como evidencia[39m[90m                     [39m [90m0.12s[39m  
+  [32;1m✓[39;22m[90m [39m[90mtienda filtra sucursal y rechaza respuesta directa ajena[39m[90m            [39m [90m0.96s[39m  
+  [32;1m✓[39;22m[90m [39m[90mresolver faltante y responder actualizacion permite cierre sin pisa[39m[90m…[39m [90m0.20s[39m  
+  [32;1m✓[39;22m[90m [39m[90mcosto conocido insuficiente no valida y cubierto si valida y asocia[39m[90m…[39m [90m0.23s[39m  
+  [32;1m✓[39;22m[90m [39m[90mjaguar pago validado y reporte no presentan transporte gratis[39m[90m       [39m [90m0.20s[39m  
+  [32;1m✓[39;22m[90m [39m[90mnumero remision y validacion no eluden consulta abierta[39m[90m             [39m [90m0.11s[39m  
+  [32;1m✓[39;22m[90m [39m[90mhistorial incluye bajas solo con permiso y no rutas privadas[39m[90m        [39m [90m0.12s[39m  
+  [32;1m✓[39;22m[90m [39m[90mguardar mismo consignatario conserva snapshot tras editar expedient[39m[90m…[39m [90m0.12s[39m  
+  [32;1m✓[39;22m[90m [39m[90mreapertura invalida ambos cierres y bloquea pago hasta nueva respue[39m[90m…[39m [90m0.15s[39m  
+  [32;1m✓[39;22m[90m [39m[90mcontexto inexistente no falla abierto y documento de otro cliente n[39m[90m…[39m [90m0.14s[39m  
+  [32;1m✓[39;22m[90m [39m[90mendpoints auxiliar denegan sin permiso y consulta abierta con permi[39m[90m…[39m [90m0.13s[39m  
+  [32;1m✓[39;22m[90m [39m[90menvio al auxiliar usa consulta municipal sin exigir pesaje nacional[39m[90m [39m [90m0.19s[39m  
+
+  [90mTests:[39m    [32;1m25 passed[39;22m[90m (304 assertions)[39m
+  [90mDuration:[39m [39m11.26s[39m
+

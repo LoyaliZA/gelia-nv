@@ -15,7 +15,7 @@ final class OperacionPdvConfig
 
     public function zonaHorariaOperativa(?int $sucursalId = null): string
     {
-        $horario = $this->horarioCierre->resolverParaSucursal($sucursalId);
+        $horario = $this->horarioCierre->combinadoParaSucursal($sucursalId);
 
         return $horario['zona_horaria'] ?? $this->turnos->zonaHorariaOperativa($sucursalId);
     }

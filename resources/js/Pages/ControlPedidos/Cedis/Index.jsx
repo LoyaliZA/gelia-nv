@@ -20,6 +20,7 @@ import ModalBitacoraPedido from '../Partials/ModalBitacoraPedido';
 import ModalLiberarMercancia from '../Partials/ModalLiberarMercancia';
 import PanelRespuestaDisponibilidad from '../Partials/PanelRespuestaDisponibilidad';
 import useListadoDiscreto from '../Partials/useListadoDiscreto';
+import { lecturaConsultaVigente } from '../Partials/vigenciaConsultaPedido';
 
 const KPI_CONFIG = [
     { id: '', label: 'Todos', icon: Package },
@@ -66,6 +67,10 @@ export default function Index({
     const [alerta, setAlerta] = useState({ abierto: false, tipo: 'success', titulo: '', mensaje: '' });
     const [modalLiberar, setModalLiberar] = useState({ abierto: false, tarea: null });
     const [disponibilidad, setDisponibilidad] = useState({ abierto: false, pedido: null });
+    const [capturaDisponibilidad, setCapturaDisponibilidad] = useState(false);
+    const [avisoDisponibilidad, setAvisoDisponibilidad] = useState('');
+    const lecturaDisponibilidadRef = useRef(0);
+    const consultaAccesibleRef = useRef(true);
     const modalAbiertoRef = useRef(false);
     useEffect(() => {
         if (flash?.success) {
@@ -79,7 +84,54 @@ export default function Index({
         modalAbiertoRef.current = modalDetalle.abierto || modalPesaje.abierto || modalErrorDatos.abierto || modalApartado.abierto || modalBitacora.abierto || modalLiberar.abierto || disponibilidad.abierto;
     }, [modalDetalle.abierto, modalPesaje.abierto, modalErrorDatos.abierto, modalApartado.abierto, modalBitacora.abierto, modalLiberar.abierto, disponibilidad.abierto]);
 
-    useActualizacionesPedidos({ onActualizar: () => tabActiva === 'LIBERACIONES' ? router.reload({ only: ['liberaciones', 'metricas'] }) : cargar(params({ page: pedidosVista?.current_page || 1 }), { silencioso: true }), pausado: () => modalAbiertoRef.current || cargando });
+    const leerDisponibilidad = async (id) => {
+        const lectura = ++lecturaDisponibilidadRef.current;
+        try {
+            const { data } = await axios.get(`/control-pedidos/${id}/disponibilidad-tienda`);
+            if (lectura !== lecturaDisponibilidadRef.current) return false;
+            setDisponibilidad(actual => actual.abierto && actual.pedido?.id === id && lecturaConsultaVigente(actual.pedido, data) ? { ...actual, pedido: data } : actual);
+            setAvisoDisponibilidad('');
+            return data;
+        } catch (error) {
+            if (error?.response?.status === 403) consultaAccesibleRef.current = false;
+            setAvisoDisponibilidad(error?.response?.status === 403
+                ? 'La consulta ya no está disponible en su bandeja. Se conserva la respuesta mostrada.'
+                : 'No se pudo actualizar la consulta. Se conserva su captura y se volverá a intentar.');
+            return false;
+        }
+    };
+    useEffect(() => {
+        setCapturaDisponibilidad(false);
+        setAvisoDisponibilidad('');
+        consultaAccesibleRef.current = true;
+        if (disponibilidad.abierto) leerDisponibilidad(disponibilidad.pedido.id);
+        return () => { lecturaDisponibilidadRef.current++; };
+    }, [disponibilidad.abierto, disponibilidad.pedido?.id]);
+
+    // La misma suscripción actualiza el pedido abierto o la bandeja, nunca ambos a la vez.
+    useActualizacionesPedidos({
+        pedidoId: disponibilidad.abierto ? disponibilidad.pedido?.id : null,
+        intervaloRespaldo: disponibilidad.abierto ? 15000 : 0,
+        respaldoAunqueSuscrito: disponibilidad.abierto,
+        onActualizar: async () => {
+            if (disponibilidad.abierto) {
+                if (!consultaAccesibleRef.current) {
+                    // La etapa ya no permite GET por ID. El mismo hook detecta el
+                    // regreso en el listado autorizado, conservando filtros y URL.
+                    const { data: listado } = await axios.get(route('control_pedidos.cedis.listado'), {
+                        params: { q: disponibilidad.pedido.folio, tab: 'TODOS' }, headers: { Accept: 'application/json' },
+                    });
+                    if (!(listado.pedidos?.data || []).some(pedido => pedido.id === disponibilidad.pedido.id)) return;
+                }
+                const lectura = await leerDisponibilidad(disponibilidad.pedido.id);
+                if (lectura) consultaAccesibleRef.current = true;
+                return lectura;
+            }
+            return tabActiva === 'LIBERACIONES' ? router.reload({ only: ['liberaciones', 'metricas'] }) : cargar(params({ page: pedidosVista?.current_page || 1 }), { silencioso: true });
+        },
+        pausado: disponibilidad.abierto ? capturaDisponibilidad : (modalAbiertoRef.current || cargando),
+        onPendiente: () => { if (disponibilidad.abierto) setAvisoDisponibilidad('La consulta recibió cambios. Se conserva la captura pendiente; se leerán al terminar.'); },
+    });
 
 
     const onActualizar = () => {
@@ -99,11 +151,8 @@ export default function Index({
 
     const abrirDetalle = (pedido) => setModalDetalle({ abierto: true, pedido });
     const abrirPesaje = (pedido) => {
-        if (pedido?.solicitud_preparacion?.area_revision === 'control_pedidos') {
+        if (pedido?.solicitud_preparacion?.area_revision === 'control_pedidos' || pedido?.solicitud_preparacion?.consulta_municipal?.area === 'cedis') {
             setDisponibilidad({ abierto: true, pedido });
-            axios.get(`/control-pedidos/${pedido.id}/disponibilidad-tienda`).then(({ data }) => {
-                setDisponibilidad(actual => actual.abierto && actual.pedido?.id === pedido.id ? { ...actual, pedido: data } : actual);
-            }).catch(() => {});
             return;
         }
         setModalPesaje({ abierto: true, pedido });
@@ -218,25 +267,23 @@ export default function Index({
                 pedido={disponibilidad.pedido || {}}
                 modo="dialogo"
                 abierto={disponibilidad.abierto}
-                onClose={() => setDisponibilidad({ abierto: false, pedido: null })}
+                onClose={() => { setDisponibilidad({ abierto: false, pedido: null }); onActualizar(); }}
                 documentos={(disponibilidad.pedido?.documentos || []).filter((documento) => ['pdf_pedido', 'cotizacion', 'anexo', 'anexo_piezas'].includes(documento.tipo))}
                 revision={disponibilidad.pedido?.solicitud_preparacion?.revision_disponibilidad}
                 piezas={(disponibilidad.pedido?.revisiones_producto || []).filter((pieza) => !pieza.resolucion && ['regular', 'malo', 'danado', 'sin_existencia'].includes(pieza.estado_fisico)).map((pieza) => ({ id: pieza.id, descripcion: pieza.descripcion_producto, sku: pieza.sku, condicion: pieza.estado_fisico === 'sin_existencia' ? 'faltante' : 'detalle', unica_pieza: pieza.unica_pieza, mejor_ejemplar: pieza.mejor_ejemplar, cantidad: pieza.cantidad_solicitada, detalle: pieza.comentario }))}
                 puedeResponder
                 tomada
+                onDirtyChange={setCapturaDisponibilidad}
+                avisoActualizacion={avisoDisponibilidad}
+                puedeLeerDocumentos={consultaAccesibleRef.current}
                 onEnviar={async (form) => {
-                    const respuesta = await axios.post(route('control_pedidos.cedis.disponibilidad', disponibilidad.pedido.id), form, { headers: { Accept: 'application/json' } });
-                    setDisponibilidad((previo) => ({
-                        ...previo,
-                        pedido: {
-                            ...previo.pedido,
-                            solicitud_preparacion: {
-                                ...(previo.pedido?.solicitud_preparacion || {}),
-                                revision_disponibilidad: { estado: respuesta.data.estado },
-                                anexo_sin_remision: (previo.pedido?.solicitud_preparacion?.anexo_sin_remision || []).map(a => ({ ...a, respondida_at: a.respondida_at || new Date().toISOString() })),
-                            },
-                        },
-                    }));
+                    const { data } = await axios.post(route('control_pedidos.cedis.disponibilidad', disponibilidad.pedido.id), form, { headers: { Accept: 'application/json' } });
+                    if (data.pedido) {
+                        lecturaDisponibilidadRef.current++;
+                        consultaAccesibleRef.current = data.puede_consultar !== false;
+                        setDisponibilidad(actual => actual.abierto && actual.pedido?.id === data.pedido.id && lecturaConsultaVigente(actual.pedido, data.pedido) ? { ...actual, pedido: data.pedido } : actual);
+                        setAvisoDisponibilidad('');
+                    } else await leerDisponibilidad(disponibilidad.pedido.id);
                     onActualizar();
                 }}
             />

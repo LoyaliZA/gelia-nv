@@ -1,0 +1,31 @@
+# CEDIS y empaque
+
+- Propósito: preparar grupos de pedidos, registrar bultos y confirmar recolecciones sin anticipar recepción.
+- Ubicación: `routes/web/modules/control-pedidos/cedis.php`; `app/Services/ControlPedidos/{ListarPedidosCedisService,MarcarEmpacadoPedidoBmaService,MarcarEnviadoPedidoBmaService}.php`.
+- Frontend: `resources/js/Pages/ControlPedidos/Cedis/`; pruebas: `tests/Feature/ControlPedidos/{EmpaqueBultosCedisTest,BandejasOperativasTest}.php` y `tests/Unit/ControlPedidos/ControlPedidosCedisVisibilidadTest.php`.
+
+## Estado actual
+- [verificado] Empaque opera sobre raíz y complementos con bloqueo ordenado por ID: `app/Services/ControlPedidos/MarcarEmpacadoPedidoBmaService.php:25`.
+- [verificado] Bultos requieren evidencia cuando la variante lo exige: `app/Services/ControlPedidos/MarcarEmpacadoPedidoBmaService.php:63`.
+- [verificado] Recolección de varias cajas permite selección parcial; el pedido espera las restantes: `app/Services/ControlPedidos/MarcarEnviadoPedidoBmaService.php:79` y `:128`.
+
+## Reglas que no se rompen
+- [verificado] Alcance CEDIS depende de departamentos del vendedor, salvo administrador/ver_todos: `app/Support/ControlPedidos/VisibilidadPedidoBma.php:115`.
+- [verificado] Bitácora tiene facultad separada; ocultar también relaciones anidadas al serializar, sin borrar historial interno: `app/Support/ControlPedidos/BitacoraCedis.php:25`.
+- [verificado] Bloquear empaque ante actualización, errores graves o traslado a CEDIS sin recepción: `app/Services/ControlPedidos/MarcarEmpacadoPedidoBmaService.php:105` y `:125`.
+- [verificado] Regla ordinaria exige pago validado/remisión; solo-resguardos exige anexo de envío aprobado y no remisión de mercancía: `app/Services/ControlPedidos/MarcarEmpacadoPedidoBmaService.php:113`.
+- [verificado] Enviado requiere empaque, etapa correcta y guía si ofrece rastreo: `app/Services/ControlPedidos/MarcarEnviadoPedidoBmaService.php:38` y `:68`.
+
+## Dependencias con otros módulos
+- [Consultas](CONSULTAS_DISPONIBILIDAD.md), [Auditoría](AUDITORIA_PAGOS.md), [Guías](DELEGADO_GUIAS.md), Traspasos y PDV.
+- [verificado] Fase posterior al empaque distingue guía de cliente, sin rastreo y traslado interno: `app/Support/ControlPedidos/MaquinaEstadosPedidoBma.php:204`.
+
+## Cómo probar
+- [PRUEBAS](../PRUEBAS.md): grupo con miembro bloqueado, bulto sin evidencia, recolección parcial y usuario CEDIS sin Bitácora.
+
+## Puntos blandos
+- [verificado] `ResponderPesajeCedisDebugTest` es prueba HTTP con RefreshDatabase; «Debug» no implica archivo descartable: `tests/Feature/ControlPedidos/ResponderPesajeCedisDebugTest.php:17`.
+- [verificado] `check_cedis_responder_pesaje_ui.php` inspecciona cadenas de archivos; no prueba interacción real: `tests/Unit/ControlPedidos/check_cedis_responder_pesaje_ui.php:15`.
+- [inferido] Cambiar un estado del grupo desde una sola tarjeta puede afectar complementos; revisar atomicidad antes de ajustar botones: `app/Services/ControlPedidos/MarcarEmpacadoPedidoBmaService.php:43`.
+
+- Última verificación: 2026-11-18, `develop` @ `c63dd84722c4bf6a318d233177d560aaa2b44f3d`; lectura estática.

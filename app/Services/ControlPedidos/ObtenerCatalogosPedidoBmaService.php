@@ -78,7 +78,7 @@ class ObtenerCatalogosPedidoBmaService
                 'modalidad_tarifa', 'tarifa_monto', 'tarifa_unidad_peso', 'tarifa_paso_peso',
                 'requiere_caratula', 'requiere_identificacion', 'requiere_remision', 'permite_por_cobrar',
                 'requiere_peso', 'requiere_caja', 'requiere_evidencia_conjunto', 'campos_destino_obligatorios',
-                'plantilla_caratula', 'habilitado_envio_municipio', 'reglas_municipio_pendientes',
+                'plantilla_caratula', 'habilitado_envio_municipio',
             ]),
             'departamentos' => Departamento::query()
                 ->where('activo', true)
@@ -90,7 +90,7 @@ class ObtenerCatalogosPedidoBmaService
                 ->where('reglas_municipio_pendientes', false)
                 ->orderBy('nombre')
                 ->get([
-                    'id', 'nombre', 'categoria', 'sin_logistica',
+                    'id', 'nombre', 'categoria', 'sin_logistica', 'permite_costo_diferido',
                     'requiere_caratula', 'requiere_identificacion', 'requiere_remision', 'permite_por_cobrar',
                     'requiere_peso', 'requiere_caja', 'requiere_evidencia_conjunto', 'campos_destino_obligatorios',
                     'plantilla_caratula', 'habilitado_envio_municipio',

@@ -1,0 +1,19 @@
+{
+    "pedido_id": 42,
+    "folio_wizerp": "WIZ-CONTINUIDAD-38",
+    "comprobaciones": {
+        "cliente": true,
+        "departamento": true,
+        "modalidad": true,
+        "terminal": true,
+        "almacen_guardado": true,
+        "expediente_versionado": true,
+        "soporte_comercial": true,
+        "consulta_cerrada": true,
+        "revision_final_sin_excepciones": true,
+        "transporte_diferido_intacto": true,
+        "sin_pago_remision_empaque_entrega": true,
+        "sin_tarea_tienda": true,
+        "sin_municipio_inventado": true
+    }
+}

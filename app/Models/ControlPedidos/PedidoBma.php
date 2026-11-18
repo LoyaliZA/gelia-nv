@@ -15,6 +15,7 @@ use App\Models\Sucursal;
 use App\Services\ControlPedidos\FusionarSolicitudPreparacionPedido;
 use App\Support\ControlPedidos\AlmacenPdv;
 use App\Support\ControlPedidos\ApartadoT01;
+use App\Support\ControlPedidos\ActualizacionConsulta;
 use App\Support\ControlPedidos\MaquinaEstadosPedidoBma;
 use App\Support\ControlPedidos\RevisionCapturaPedido;
 use Illuminate\Database\Eloquent\Model;
@@ -256,6 +257,15 @@ class PedidoBma extends Model
     public function getSolicitudPreparacionAttribute(): ?array
     {
         $solicitud = app(FusionarSolicitudPreparacionPedido::class)->normalizar($this->solicitud_preparacion_json);
+        // Proyección de lectura: las claves operativas solo las escriben los servicios municipales.
+        // No ampliamos el contrato de entrada/autoguardado compartido.
+        if (($solicitud['modalidad_entrega'] ?? null) === 'municipal') {
+            foreach (['consulta_municipal', 'finanzas_municipales', 'expediente', 'municipio_destino'] as $clave) {
+                if (array_key_exists($clave, $this->solicitud_preparacion_json ?? [])) {
+                    $solicitud[$clave] = $this->solicitud_preparacion_json[$clave];
+                }
+            }
+        }
         if (($solicitud['modalidad_entrega'] ?? null) === 'tienda') {
             $config = app(\App\Services\ControlPedidos\ConfiguracionOperativaTienda::class);
             $solicitud['horarios_operativos'] = ['activos' => $config->horariosActivos(), 'detalle_apartado' => $config->detalleHorarioApartado()];
@@ -594,6 +604,9 @@ class PedidoBma extends Model
 
     public function puedeAnexarPagoEnvio(): bool
     {
+        if (\App\Support\ControlPedidos\ConsultaMunicipal::es($this)
+            && (\App\Support\ControlPedidos\ConsultaMunicipal::estado($this) !== 'cerrada'
+                || \App\Support\ControlPedidos\ConsultaMunicipal::motivoBloqueo($this) !== null)) return false;
         if (in_array($this->estatus_envio, [
             self::ESTATUS_ENVIO_PENDIENTE_REGULARIZACION,
             self::ESTATUS_ENVIO_ANEXO_RECHAZADO,
@@ -1113,6 +1126,10 @@ class PedidoBma extends Model
         if (! $this->esEditablePorVendedora()) {
             return false;
         }
+        // La consulta municipal ya tiene su política de cierre; no requiere un pesaje nacional.
+        if (\App\Support\ControlPedidos\ConsultaMunicipal::es($this)) {
+            return \App\Support\ControlPedidos\ConsultaMunicipal::motivoBloqueo($this) === null;
+        }
         if ($this->esConsultaDisponibilidadCedis()) {
             return ! $this->consulta_actualizacion_pendiente && $this->motivoBloqueoCierreConsultaTienda() === null;
         }
@@ -1181,8 +1198,8 @@ class PedidoBma extends Model
         if ($this->revisionesProducto()->whereIn('estado_fisico', ['regular', 'malo', 'danado'])->whereNull('resolucion')->exists()) {
             return 'Confirme el estado de las piezas con detalle, retírelas o solicite su sustitución antes de cerrar la consulta.';
         }
-        if (($revision['aceptacion_vigente'] ?? true) === false || $this->tieneAjusteTiendaPendiente()) {
-            return 'Hay un ajuste pendiente. La aceptación de esta versión no sigue vigente.';
+        if (ActualizacionConsulta::pendiente($json)) {
+            return 'Hay un anexo pendiente de respuesta. El retiro solicitado no exige reconfirmación.';
         }
 
         return null;
@@ -1200,8 +1217,8 @@ class PedidoBma extends Model
         if (! in_array($estado, ['sin_excepciones', 'excepciones_pendientes', 'decision_registrada'], true)) {
             return 'No se confirma la separación: falta la respuesta de disponibilidad.';
         }
-        if (($revision['aceptacion_vigente'] ?? true) === false || $this->tieneAjusteTiendaPendiente()) {
-            return 'No se confirma la separación: hay un ajuste pendiente o la aceptación de esta versión no sigue vigente.';
+        if ($this->tieneAjusteTiendaPendiente()) {
+            return 'No se confirma la separación: hay un anexo pendiente de respuesta.';
         }
 
         return null;
@@ -1209,20 +1226,9 @@ class PedidoBma extends Model
 
     public function tieneAjusteTiendaPendiente(): bool
     {
-        if (!empty($this->solicitud_preparacion_json['revision_disponibilidad']['actualizacion_pendiente'])) return true;
         $json = is_array($this->solicitud_preparacion_json) ? $this->solicitud_preparacion_json : [];
-        foreach ((array) ($json['retiro_piezas'] ?? []) as $retiro) {
-            if (is_array($retiro) && ($retiro['estado'] ?? 'pendiente') === 'pendiente') {
-                return true;
-            }
-        }
-        foreach ((array) ($json['anexo_sin_remision'] ?? []) as $anexo) {
-            if (is_array($anexo) && ! isset($anexo['respondida_at'])) {
-                return true;
-            }
-        }
 
-        return false;
+        return \App\Support\ControlPedidos\ActualizacionConsulta::pendiente($json);
     }
 
     public function motivoBloqueoEntregaTienda(): ?string
@@ -1230,6 +1236,20 @@ class PedidoBma extends Model
         $traslado = $this->solicitud_preparacion_json['segundo_traslado'] ?? [];
         if (($traslado['estado'] ?? '') === 'autorizada' && ! ($traslado['recepcion_confirmada'] ?? false)) {
             return 'Hay un traslado autorizado pendiente de salida o recepción en la sucursal de destino.';
+        }
+
+        $conversion = is_array($this->solicitud_preparacion_json['conversion_modalidad'] ?? null)
+            ? $this->solicitud_preparacion_json['conversion_modalidad']
+            : [];
+        if (($conversion['estado'] ?? null) === 'confirmada'
+            && ($this->solicitud_preparacion_json['modalidad_entrega'] ?? null) === 'municipal') {
+            $bloqueada = \App\Models\PuntoVenta\ResguardoPdv::query()
+                ->where('pedido_bma_id', $this->id)
+                ->where('entrega_bloqueada', true)
+                ->exists();
+            if ($bloqueada) {
+                return 'Hay un cambio a envío municipal pendiente de adecuación física. La entrega en sucursal no continúa hasta resolverlo.';
+            }
         }
 
         if ($this->tieneAjusteTiendaPendiente()) {

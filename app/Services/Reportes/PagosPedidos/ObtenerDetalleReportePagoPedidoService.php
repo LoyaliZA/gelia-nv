@@ -59,7 +59,8 @@ class ObtenerDetalleReportePagoPedidoService
             ],
             'financiero' => [
                 'monto_venta' => $cierre->monto_venta,
-                'monto_envio' => $cierre->monto_envio,
+                'monto_envio' => data_get($cierre->metadata_snapshot, 'transporte_municipal.desconocido') ? null : $cierre->monto_envio,
+                'transporte_municipal' => data_get($cierre->metadata_snapshot, 'transporte_municipal'),
                 'monto_seguro' => $cierre->monto_seguro,
                 'total_pedido' => $cierre->total_pedido,
                 'saf_aplicado' => $cierre->saf_aplicado,

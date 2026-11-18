@@ -1,0 +1,28 @@
+{
+  "pasos": [
+    "Campos completos habilitan Enviar consulta sin pulsar Guardar solicitud.",
+    "Un clic guarda datos comunes y municipales antes del endpoint de envío.",
+    "Cerrar, recargar Registro y reabrir conserva solicitud enviada, terminal, folio y costo diferido."
+  ],
+  "medidas": [
+    {
+      "ancho": 1440,
+      "desborde": false
+    },
+    {
+      "ancho": 1024,
+      "desborde": false
+    },
+    {
+      "ancho": 390,
+      "desborde": false
+    }
+  ],
+  "solicitudes": [
+    "/control-pedidos/autoguardar",
+    "http://laravel.test:9193/control-pedidos/municipal/45/solicitud",
+    "http://laravel.test:9193/control-pedidos/municipal/45/consulta"
+  ],
+  "console": [],
+  "resultado": "aprobado"
+}

@@ -8,11 +8,11 @@ use App\Models\ControlPedidos\PedidoBmaTareaPreparacion;
 use App\Models\User;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
 use App\Support\ControlPedidos\ActualizacionConsulta;
+use App\Support\ControlPedidos\ConsultaMunicipal;
 use App\Support\ControlPedidos\RegistrarPedidos\DestinoRevisionRegistrarPedidos;
 use App\Support\ControlPedidos\VisibilidadPedidoBma;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
 /** Documenta el retiro pedido por el cliente y avisa a quien revisó. No aparta, no cobra y no confirma la entrega. */
@@ -22,6 +22,7 @@ final class RegistrarRetiroPiezasTiendaService
         private RegistrarHistorialPedidoService $historial,
         private NotificarPedidoBmaService $notificar,
         private AdjuntosConsultaTienda $adjuntos,
+        private PersistenciaAdjuntosConsulta $persistencia,
     ) {}
 
     /**
@@ -57,6 +58,10 @@ final class RegistrarRetiroPiezasTiendaService
 
         return DB::transaction(function () use ($pedido, $usuario, $lineas, $motivo, $entrada, $archivosPiezas, $archivosPeticion, $motivoOpcion, $solicitudId) {
             $pedido = PedidoBma::query()->lockForUpdate()->findOrFail($pedido->id);
+            $municipal = ConsultaMunicipal::es($pedido);
+            if ($municipal) {
+                ConsultaMunicipal::exigirRespuesta($pedido);
+            }
             if ($pedido->pedidoPagadoORemisionado()) {
                 throw ValidationException::withMessages([
                     'retiro' => 'El pedido ya está pagado o remisionado. Use su gestión documentada; no se retiran piezas de forma informal.',
@@ -121,14 +126,28 @@ final class RegistrarRetiroPiezasTiendaService
                 $json['revision_disponibilidad']['ciclo_id'] = $ciclo;
             }
             if (is_array($json['revision_disponibilidad'] ?? null)) {
-                $pedido->solicitud_preparacion_json = $json;
-                $json['revision_disponibilidad']['aceptacion_vigente'] = $retiradas !== [] && ! $pedido->tieneAjusteTiendaPendiente();
+                $json['revision_disponibilidad']['aceptacion_vigente'] = ! ActualizacionConsulta::requiereRespuesta($json);
+                if ($json['revision_disponibilidad']['aceptacion_vigente'] && ! $pedido->revisionesProducto()->whereNull('resolucion')->whereIn('estado_fisico', ['regular', 'malo', 'danado', 'sin_existencia'])->exists()) {
+                    $json['revision_disponibilidad']['estado'] = 'decision_registrada';
+                }
             }
             ActualizacionConsulta::solicitar($json);
-            $pedido->update(['solicitud_preparacion_json' => $json, 'consulta_cerrada_at' => null, 'consulta_cerrada_por_id' => null,
-                'estatus_envio' => ($json['area_revision'] ?? '') === 'control_pedidos' ? PedidoBma::ESTATUS_ENVIO_PENDIENTE_PESAJE : $pedido->estatus_envio]);
+            $exigeRespuesta = ActualizacionConsulta::requiereRespuesta($json);
+            if ($exigeRespuesta) {
+                $json = ConsultaMunicipal::abrirPorAjuste($json);
+            }
+            $pedido->update([
+                'solicitud_preparacion_json' => $json,
+                'consulta_actualizacion_pendiente' => $exigeRespuesta,
+                ...($exigeRespuesta ? ['consulta_cerrada_at' => null, 'consulta_cerrada_por_id' => null] : []),
+                'estatus_envio' => ($municipal || ! $exigeRespuesta)
+                    ? $pedido->estatus_envio
+                    : (($json['area_revision'] ?? '') === 'control_pedidos' ? PedidoBma::ESTATUS_ENVIO_PENDIENTE_PESAJE : $pedido->estatus_envio),
+            ]);
 
-            $area = (string) ($json['area_revision'] ?? '');
+            $area = $municipal
+                ? (string) data_get($json, 'consulta_municipal.area')
+                : (string) ($json['area_revision'] ?? '');
             $estatusId = $pedido->catalogo_estatus_pedido_id;
             if ($estatusId) {
                 $this->historial->ejecutar(
@@ -143,12 +162,13 @@ final class RegistrarRetiroPiezasTiendaService
 
             $tareaId = $pedido->tareaPreparacionVigente()->value('id')
                 ?: $pedido->tareaPreparacionRespondida()->value('id');
-            $permiso = $area === DestinoRevisionRegistrarPedidos::CONTROL_PEDIDOS
+            $cedis = $municipal ? $area === 'cedis' : $area === DestinoRevisionRegistrarPedidos::CONTROL_PEDIDOS;
+            $permiso = $cedis
                 ? 'control_pedidos.cedis'
-                : 'control_pedidos.tienda.ver';
-            $url = $area === DestinoRevisionRegistrarPedidos::CONTROL_PEDIDOS
+                : ($municipal ? 'control_pedidos.municipal.responder_consulta' : 'control_pedidos.tienda.ver');
+            $url = $cedis
                 ? '/control-pedidos/cedis'
-                : '/control-pedidos/tienda'.($tareaId ? '?tarea='.$tareaId : '');
+                : ($municipal ? '/control-pedidos/municipal/consultas-tienda' : '/control-pedidos/tienda'.($tareaId ? '?tarea='.$tareaId : ''));
             $this->notificar->ejecutar(
                 $pedido->fresh(['cliente', 'vendedor']),
                 'pedido_consulta_actualizada',
@@ -307,39 +327,14 @@ final class RegistrarRetiroPiezasTiendaService
 
     private function guardarArchivos(PedidoBma $pedido, array $archivos, int $orden, string $relacion, string $comentario, int $version): array
     {
-        $guardados = [];
-        $rutas = [];
-        try {
-            foreach ($archivos as $archivo) {
-                $orden++;
-                $ruta = $archivo->store('pedidos_bma/'.$pedido->id.'/retiro', 'public');
-                $rutas[] = $ruta;
-                $documento = $pedido->documentos()->create([
-                    'tipo' => PedidoBmaDocumento::TIPO_EVIDENCIA_CONDICION,
-                    'ruta_archivo' => $ruta,
-                    'nombre_original' => $archivo->getClientOriginalName(),
-                    'mime_type' => $archivo->getMimeType(),
-                    'tamano_bytes' => $archivo->getSize(),
-                    'orden' => $orden,
-                    'comentario' => $comentario,
-                    'relacion_tipo' => $relacion,
-                    'relacion_id' => $version,
-                    'activo' => true,
-                ]);
-                $guardados[] = [
-                    'id' => $documento->id,
-                    'nombre' => $documento->nombre_original,
-                    'mime_type' => $documento->mime_type,
-                    'tamano_bytes' => (int) $documento->tamano_bytes,
-                    'huella' => $this->adjuntos->huella($archivo),
-                    'grupo' => $relacion,
-                ];
-            }
-        } catch (\Throwable $e) {
-            Storage::disk('public')->delete($rutas);
-            throw $e;
-        }
-
-        return $guardados;
+        return $this->persistencia->guardar($pedido, $archivos, [
+            'carpeta' => 'retiro',
+            'tipo' => PedidoBmaDocumento::TIPO_EVIDENCIA_CONDICION,
+            'comentario' => $comentario,
+            'relacion_tipo' => $relacion,
+            'relacion_id' => $version,
+            'orden' => $orden,
+            'grupo' => $relacion,
+        ]);
     }
 }

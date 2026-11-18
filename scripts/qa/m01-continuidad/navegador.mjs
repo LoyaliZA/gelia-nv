@@ -1,0 +1,113 @@
+import fs from 'node:fs';
+import { Browser, fixture, output, assert, crearArchivoQA } from './navegadorComun.mjs';
+const folioQA = 'WIZ-CONTINUIDAD-'+fixture.usuario_id;
+let archivoQA;
+const b = new Browser();
+const result = { pasos: [], medidas: [] };
+const cambiarSelect = async (label, value) => b.js(`const label=[...document.querySelectorAll('[role=dialog] label')].find(e=>e.textContent.trim().startsWith(arguments[0]));const el=label.querySelector('select');el.value=arguments[1];el.dispatchEvent(new Event('change',{bubbles:true}));`, [label, String(value)]);
+const subir = async selector => {
+    const el = (await b.cmd('/element', {using:'css selector', value:selector}))['element-6066-11e4-a52e-4f735466cecf'];
+    await b.js('document.querySelector(arguments[0]).value=""',[selector]);
+    await b.cmd(`/element/${el}/value`, {text:archivoQA});
+};
+const editar = async () => {
+    await b.go('/control-pedidos?q='+folioQA);
+    await b.wait(`[...document.querySelectorAll('tr,article')].some(e=>e.textContent.includes(${JSON.stringify(folioQA)}))`);
+    await b.js(`const row=[...document.querySelectorAll('tr,article')].find(e=>e.textContent.includes(arguments[0]));const buttons=[...row.querySelectorAll('button')];const edit=buttons.find(e=>e.textContent.trim()==='Editar');if(edit)edit.click();else buttons.find(e=>e.getAttribute('aria-haspopup')==='menu').click();`,[folioQA]);
+    if (!await b.js('return !!document.querySelector("#folio-tienda")')) await b.js(`const e=[...document.querySelectorAll('button')].find(e=>['Editar','Continuar'].includes(e.textContent.trim()));if(!e)throw Error('Sin acción de seguimiento');e.click()`);
+    await b.wait('!!document.querySelector("#folio-tienda")');
+};
+try {
+    const state = (await (await fetch('http://selenium:4444/status')).json()).value;
+    assert(!state.nodes.some(n => n.slots.some(s => s.session)), 'Selenium ocupado');
+    b.id = (await b.cmd('', { capabilities: { alwaysMatch: { browserName:'chrome', 'se:name':'Continuidad-M01', 'goog:chromeOptions':{args:['--headless=new','--no-sandbox','--disable-dev-shm-usage']}, 'goog:loggingPrefs':{browser:'ALL'} } } })).sessionId;
+    await b.cmd('/timeouts', {script:30000,pageLoad:30000});
+    archivoQA=await crearArchivoQA(b);
+    await b.go('/login'); await b.type('input[type=text]',fixture.email); await b.type('input[type=password]','M01-solo-pruebas-2026');
+    await b.js('document.querySelector("button[type=submit]").click()'); await b.wait('!location.pathname.includes("/login")');
+    await b.go('/control-pedidos'); await b.click('Nuevo pedido'); await b.wait('!!document.querySelector("#cliente-tienda")');
+    await b.type('#cliente-tienda',fixture.numero_cliente);
+    await b.wait(`[...document.querySelectorAll('[role=dialog] button')].some(e=>e.textContent.trim().startsWith(${JSON.stringify(fixture.numero_cliente)}))`);
+    await b.js(`const e=[...document.querySelectorAll('[role=dialog] button')].find(e=>e.textContent.trim().startsWith(arguments[0]));e.click()`,[fixture.numero_cliente]);
+    await b.type('#folio-tienda',folioQA);
+    await b.js(`const e=document.querySelector('#modalidad-tienda');e.value='municipal';e.dispatchEvent(new Event('change',{bubbles:true}))`);
+    await b.wait('document.body.textContent.includes("Terminal destino")');
+    assert(await b.js('return document.querySelector("#folio-tienda").value')===folioQA,'Perdió folio al seleccionar Municipal');
+    assert(await b.js('return document.querySelector("#cliente-tienda").value')===fixture.numero_cliente,'Perdió cliente');
+    assert(await b.js('return document.querySelector("#depto-tienda").textContent.includes(arguments[0])',[fixture.departamento]),'No conserva departamento automático');
+    result.pasos.push('Alta real: cliente, departamento automático y folio permanecen al elegir Municipal.');
+    const options=await b.js(`return [...document.querySelectorAll('[role=dialog] label')].find(e=>e.textContent.startsWith('Terminal destino')).querySelector('select').textContent`);
+    assert(!options.includes(fixture.comercial)&&!options.includes(fixture.inactiva),'Ofrece comercial o inactiva');
+    await cambiarSelect('Terminal destino',fixture.transporte_id); await cambiarSelect('Almacén de la mercancía',fixture.almacen_cedis_id); await cambiarSelect('Costo de transporte','diferido');
+    await b.click('Agregar consignatario'); await b.type('[role=dialog] form input','Persona ficticia de continuidad'); await b.type('[role=dialog] form label:last-of-type input','3311111111'); await b.click('Guardar consignatario');
+    await b.wait("[...document.querySelectorAll('label')].find(e=>e.textContent.startsWith('Persona que recoge'))?.querySelector('select')?.value > 0");
+    await b.click('Editar datos'); await b.click('Cancelar edición');
+    await subir('[role=dialog] li input[type=file]');
+    await b.wait('document.body.textContent.includes("Identificación vigente, versión 1")');
+    await subir('[role=dialog] li input[type=file]');
+    await b.wait('document.body.textContent.includes("Identificación vigente, versión 2")');
+    await subir('[role=dialog] .registrar-tienda-documento input[type=file]');
+    await b.wait('document.body.textContent.includes("Listo. m01-qa.png")');
+    await b.click('Ampliar'); await b.wait('document.querySelectorAll("[role=dialog]").length===2');
+    await b.js(`const d=[...document.querySelectorAll('[role=dialog]')].at(-1);const x=[...d.querySelectorAll('button')].find(e=>/Cerrar/.test(e.getAttribute('aria-label')||''));x.click()`);
+    await b.click('Guardar solicitud'); await b.wait('document.body.textContent.includes("Solicitud guardada.")');
+    await b.js(`document.querySelector('button[aria-label="Cerrar registro"]').click()`); await editar();
+    assert(await b.js('return document.querySelector("#folio-tienda").value')===folioQA,'No persistió folio');
+    assert(await b.js(`return document.body.textContent.includes('Listo. m01-qa.png')`),'No persistió documento');
+    assert(await b.js(`return [...document.querySelectorAll('label')].find(e=>e.textContent.startsWith('Terminal destino')).querySelector('select').value`)===String(fixture.transporte_id),'No persistió terminal');
+    result.pasos.push('Guardar, cerrar, recargar Registro y reabrir conserva cliente, folio, modalidad, documento, terminal y consignatario. Visor abierto desde Ampliar.');
+    for(const width of [1440,1024,390])for(const dark of [false,true]){
+        result.medidas.push(await b.shot('registro',width,dark));
+        assert(await b.js(`const d=document.querySelector('[role=dialog]'),body=d.querySelector('.gelia-modal-body');return body.scrollWidth<=body.clientWidth+1&&d.scrollWidth<=d.clientWidth+1&&[...d.querySelectorAll('button')].filter(e=>/Guardar solicitud|Enviar consulta/.test(e.textContent)).every(e=>e.getBoundingClientRect().bottom<=innerHeight+1)`),'Desborde o acciones fuera de pantalla');
+    }
+    await b.cmd('/goog/cdp/execute',{cmd:'Emulation.setDeviceMetricsOverride',params:{width:1440,height:1000,deviceScaleFactor:1,mobile:false}});
+    await b.click('Enviar consulta'); await b.wait('document.body.textContent.includes("La consulta ya fue enviada.")');
+    result.pasos.push('Enviar consulta mediante el botón real sin pago, remisión ni pesaje.');
+    await b.go('/control-pedidos/cedis?q='+folioQA); await b.js(`window.qaRed=[];window.axios.interceptors.response.use(r=>{window.qaRed.push({url:r.config.url,status:r.status,estado:r.data?.estado});return r})`); await b.wait(`document.body.textContent.includes(${JSON.stringify(folioQA)})`);
+    await b.click('Consulta pendiente: CEDIS'); await b.wait('document.body.textContent.includes("Estado del pedido")');
+    await b.click('Ver pedido'); await b.wait('document.querySelectorAll("[role=dialog]").length===2');
+    await b.wait(`[...document.querySelectorAll('[role=dialog]')].at(-1).querySelector('img')?.naturalWidth > 0`);
+    await b.shot('documento-cedis',1440,true);
+    await b.js(`const d=[...document.querySelectorAll('[role=dialog]')].at(-1);[...d.querySelectorAll('button')].find(e=>/Cerrar/.test(e.getAttribute('aria-label')||'')).click()`);
+    await b.js(`const l=[...document.querySelectorAll('label')].find(e=>e.textContent.includes('Con detalle o faltante'));l.querySelector('input').click()`);
+    await b.click('Capturar sin catálogo'); await b.wait('!!document.querySelector("input[placeholder]")');
+    result.pantallaRespuesta=await b.js('return document.querySelector("[role=dialog]").innerText');
+    // Continues with manual exception controls below.
+    await b.type('.gelia-cedis-producto label input','Pieza ficticia faltante');
+    await b.js(`document.querySelector('button[role=switch][aria-label="Sin existencias"]').click()`);
+    await subir('input[type=file][aria-label="Adjuntar: Captura del pedido"]');
+    await b.click('Enviar respuesta'); await b.wait('document.body.textContent.includes("Respuesta enviada a Ventas.")');
+    result.redCEDIS=await b.js('return window.qaRed');
+    result.pasos.push('CEDIS abre documento Wizerp y responde faltante sin SKU con evidencia usando controles reales.');
+    await b.shot('respuesta-cedis',1440,true);
+    await editar();
+    await b.wait('document.body.textContent.includes("Pieza ficticia faltante")');
+    assert(!await b.js(`return [...document.querySelectorAll('button')].some(e=>e.textContent.trim()==='Cerrar consulta')`),'Permite cerrar con faltante');
+    await b.shot('faltante-ventas',1440,true);
+    await b.click('Retirar'); await b.click('Confirmar retiro');
+    await b.wait('!document.body.textContent.includes("Confirmar retiro")');
+    await b.click('Actualizar respuesta');
+    result.pasos.push('Ventas recibe respuesta y evidencia; faltante bloquea Cerrar consulta. Retiro documental solicita nueva revisión.');
+    await b.go('/control-pedidos/cedis?q='+folioQA); await b.wait(`document.body.textContent.includes(${JSON.stringify(folioQA)})`);
+    await b.click('Consulta pendiente: CEDIS');
+    await b.wait('document.body.textContent.includes("Cambios") || document.body.textContent.includes("cambios")');
+    await b.js(`document.querySelectorAll('[role=dialog] input[type=checkbox]').forEach(e=>{if(!e.checked)e.click()})`);
+    await subir('input[type=file][aria-label="Adjuntar: Captura del pedido"]');
+    await b.click('Enviar respuesta'); await b.wait('document.body.textContent.includes("Respuesta enviada a Ventas.")');
+    await editar(); await b.wait("[...document.querySelectorAll('button')].some(e=>e.textContent.trim()==='Cerrar consulta')");
+    await b.click('Cerrar consulta'); await b.wait('document.body.textContent.includes("Consulta cerrada")');
+    await b.shot('consulta-cerrada',1440,false);
+    await b.js(`document.querySelector('button[aria-label="Cerrar registro"]').click()`); await editar();
+    assert(await b.js('return document.body.textContent.includes("Consulta cerrada")'),'Cierre no persistió');
+    result.pasos.push('CEDIS responde nueva revisión, Ventas cierra explícitamente y reapertura conserva cierre y transporte diferido.');
+    result.console=await b.cmd('/log',{type:'browser'});
+    assert(!result.console.some(e=>e.level==='SEVERE'),'Errores de consola');
+    assert(result.medidas.every(m=>!m.desborde),'Desborde horizontal');
+    result.resultado='aprobado';
+} catch(error) {
+    result.resultado='fallo';result.error=String(error.stack||error);process.exitCode=1;
+    if(b.id){result.console=await b.cmd('/log',{type:'browser'});result.pantalla=await b.js('return document.body.innerText'); result.red=await b.js('return window.qaRed');fs.writeFileSync(`${output}/fallo.png`,Buffer.from(await b.cmd('/screenshot',null,'GET'),'base64'));}
+} finally {
+    fs.writeFileSync(`${output}/resultado.json`,JSON.stringify(result,null,2));
+    if(b.id)await b.cmd('',null,'DELETE');console.log(JSON.stringify(result,null,2));
+}

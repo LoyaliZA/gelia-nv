@@ -4,7 +4,7 @@ import { ClipboardCheck } from 'lucide-react';
 import { formatearFechaNegocio } from './pedidosBmaStyles';
 import { esPdf, MiniaturaDocumento } from './ModalVistaPreviaDocumento';
 
-export default function RespuestaPreparacionTienda({ tarea, onVerDocumentos, accionesDePieza, mostrarSeguimientoEntrega = true }) {
+export default function RespuestaPreparacionTienda({ tarea, onVerDocumentos, accionesDePieza, mostrarSeguimientoEntrega = true, mostrarCaptura = true }) {
     const respuesta = tarea?.respuesta;
     const documentos = respuesta?.documentos || [];
     const mostrarSeguimiento = mostrarSeguimientoEntrega && (!respuesta?.documental || respuesta?.seguimiento_entrega_pdv_habilitado === true);
@@ -36,7 +36,7 @@ export default function RespuestaPreparacionTienda({ tarea, onVerDocumentos, acc
             ...(respuesta.productos || []).map(p => ({ ...p, clave: `producto-${p.id}`, documentos: fotosDe(p.id), original: p })),
             ...excepcionesSueltas.map(p => ({ ...p, clave: `revision-${p.id}`, cantidad: p.estado_fisico === 'sin_existencia' ? 0 : p.cantidad, observacion: p.detalle, documentos: p.documentos || [], original: { ...p, revision_id: p.id } })),
         ];
-        return <RespuestaDisponibilidadPedido titulo={titulo} origen="Tienda" ariaLabel="Respuesta de preparación" responsable={respuesta.responsable} fecha={respuesta.respondida_at} estado={respuesta.revision.estado} aceptacionVigente={respuesta.revision.aceptacion_vigente !== false}
+        return <RespuestaDisponibilidadPedido titulo={titulo} origen="Tienda" ariaLabel="Respuesta de preparación" responsable={respuesta.responsable} fecha={respuesta.respondida_at} estado={respuesta.revision.estado} aceptacionVigente={respuesta.revision.aceptacion_vigente !== false} mostrarCaptura={mostrarCaptura}
             filas={filas} generales={generales.filter(d => !d.anterior)} anteriores={generales.filter(d => d.anterior)} cantidad={respuesta.productos?.length || respuesta.piezas_afectadas ? respuesta.cantidad : null}
             labelCantidad={respuesta.piezas_afectadas ? 'Piezas afectadas' : 'Total preparado'} columnaCantidad={respuesta.apartado_confirmado ? 'Preparadas' : 'Revisadas'} onVer={ver} accionesDePieza={accionesDePieza}>
             {respuesta.documental && respuesta.apartado_confirmado && <p>Pedido completo separado conforme a la consulta aprobada.</p>}
@@ -68,7 +68,7 @@ export default function RespuestaPreparacionTienda({ tarea, onVerDocumentos, acc
         {respuesta.apartado_confirmado && <p className="text-sm theme-text-main m-0">Apartado confirmado. {mostrarSeguimiento && <>{respuesta.pago_presencial === 'confirmado' ? 'Pago presencial confirmado.' : 'Pago presencial pendiente.'} {respuesta.entrega === 'registrada' ? 'Entrega registrada.' : 'Entrega pendiente.'}</>}</p>}
         {respuesta.observaciones && !notasAutomaticas.includes(respuesta.observaciones.trim()) && <p className="text-sm m-0">{respuesta.observaciones}</p>}
         {tarea.incidencia?.motivo && <p role="alert" className="text-sm m-0">{tarea.incidencia.motivo}</p>}
-        {fotosGenerales.length > 0 && (
+        {mostrarCaptura && fotosGenerales.length > 0 && (
             <div className="space-y-2">
                 <p className="text-sm font-semibold m-0">Foto del conjunto</p>
                 <div className="flex flex-wrap gap-2">{fotosGenerales.map((d, i) => <MiniaturaDocumento key={d.id} documento={d} onVer={() => ver(fotosGenerales, i)} />)}</div>

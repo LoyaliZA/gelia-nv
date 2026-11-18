@@ -32,7 +32,7 @@ class EvaluarAperturaHorarioOperacionPdvService
             ->chunkById(100, function ($sucursales) use ($ahora, &$evaluadas, &$encoladas, &$omitidas) {
                 foreach ($sucursales as $sucursal) {
                     $evaluadas++;
-                    $horario = $this->horario->resolverParaSucursal((int) $sucursal->id);
+                    $horario = $this->horario->resolverParaSucursal((int) $sucursal->id, $ahora);
                     if ($horario === null) {
                         $omitidas++;
 

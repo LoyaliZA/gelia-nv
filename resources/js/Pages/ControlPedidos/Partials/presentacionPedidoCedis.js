@@ -1,0 +1,24 @@
+import { etiquetaSucursal } from './pedidosBmaStyles';
+import { pedidoEsTrasladoInternoPdv } from './destinoSucursalPedido';
+
+/** Presentación comercial; no cambia la modalidad ni activa un recorrido operativo. */
+export function presentacionPedidoCedis(pedido = {}) {
+    const solicitud = pedido.solicitud_preparacion || {};
+    let modalidad = solicitud.modalidad_entrega;
+    if (!modalidad && solicitud.codigo_modalidad === 'ENVIO_MUNICIPIO') modalidad = 'municipal';
+    if (!modalidad && !pedidoEsTrasladoInternoPdv(pedido)
+        && !String(solicitud.codigo_modalidad || '').startsWith('RECOGE_TIENDA')
+        && pedido.origen?.requiere_logistica === true) modalidad = 'nacional';
+    const municipal = modalidad === 'municipal';
+    const envio = municipal || modalidad === 'nacional';
+    const sucursal = pedido.sucursal_destino || pedido.sucursalDestino;
+    return {
+        modalidad,
+        etiqueta: envio ? 'Envío:' : 'Tipo de pedido',
+        nombre: municipal ? 'MUNICIPAL' : modalidad === 'nacional' ? 'NACIONAL' : pedido.origen?.nombre || 'Tipo no disponible',
+        origen: pedido.almacen?.nombre || pedido.almacen?.codigo
+            || (!envio && solicitud.area_revision === 'control_pedidos' ? 'CEDIS' : 'Por confirmar'),
+        destino: municipal ? pedido.paqueteria?.nombre || 'Por confirmar'
+            : sucursal ? etiquetaSucursal(sucursal) : pedido.sucursal_destino_nombre || pedido.expediente_registrar?.sucursal || 'Por confirmar',
+    };
+}

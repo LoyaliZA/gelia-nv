@@ -1,0 +1,34 @@
+{
+  "pasos": [
+    "Alta contextual con Guardar consignatario; selección de la persona creada.",
+    "Botón real abre selector; carga privada y sustitución correctas como sail, versiones 1 y 2; mensaje en español."
+  ],
+  "medidas": [
+    {
+      "ancho": 1440,
+      "desborde": false
+    },
+    {
+      "ancho": 1440,
+      "desborde": false
+    },
+    {
+      "ancho": 1024,
+      "desborde": false
+    },
+    {
+      "ancho": 1024,
+      "desborde": false
+    },
+    {
+      "ancho": 390,
+      "desborde": false
+    },
+    {
+      "ancho": 390,
+      "desborde": false
+    }
+  ],
+  "console": [],
+  "resultado": "aprobado"
+}

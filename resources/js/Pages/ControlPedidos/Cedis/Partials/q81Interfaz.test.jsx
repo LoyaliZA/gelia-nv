@@ -25,7 +25,7 @@ const renderTarjeta = (extra = {}, props = {}) => act(() => root.render(<Tarjeta
 it('distingue tipo, almacén, destino, recorrido y folios en un traslado sin guía comercial', async () => {
     await renderTarjeta({ tarea_preparacion_vigente: { modalidad: { nombre: 'Preparación desde tienda' } } });
     expect(container.querySelector('header').textContent).toContain('Tipo de pedidoTienda');
-    for (const texto of ['Origen', 'Almacén salida', 'Destino', 'Sucursal destino', 'Traslado interno', 'Preparación desde tienda', 'PED-81', 'Folio Pedido: PED-81', 'GELIA-81', 'Bolsas a preparar']) expect(container.textContent).toContain(texto);
+    for (const texto of ['Origen', 'Almacén salida', 'Destino', 'Sucursal destino', 'Traslado interno', 'Preparación desde tienda', 'PED-81', 'Folio: PED-81', 'GELIA-81', 'Bolsas a preparar']) expect(container.textContent).toContain(texto);
     expect(container.textContent).not.toContain('Envíos / Guía');
     expect(container.textContent).not.toContain('Paquetería');
 });
@@ -44,7 +44,7 @@ it('mantiene la consulta y bloquea empaque y salida mientras hay actualización 
 it('mantiene paquetería, guía y pesaje del envío externo', async () => {
     await renderTarjeta({ origen: { nombre: 'Envío', requiere_logistica: true }, es_traslado_interno_pdv: false,
         estatus_envio: 'pendiente_pesaje', paqueteria: { nombre: 'Transporte comercial' } });
-    for (const texto of ['Tipo de pedidoEnvío', 'Transporte comercial', 'Envíos / Guía', 'Responder pesaje']) expect(container.textContent).toContain(texto);
+    for (const texto of ['Envío:NACIONAL', 'Transporte comercial', 'Envíos / Guía', 'Responder pesaje']) expect(container.textContent).toContain(texto);
 });
 it('no presenta atributos de pieza activados por defecto y muestra ambos cuando están guardados', async () => {
     const revision = { id: 1, estado_fisico: 'danado', descripcion_producto: 'Pieza', comentario: 'Rayada' };
@@ -87,11 +87,11 @@ it('una pieza retirada deja de contarse como actual y conserva acceso a su evide
     expect(verDoc).toHaveBeenCalledWith(foto);
 });
 it('la consulta presenta cliente una vez, folios compactos, departamento arriba y omite piezas extra', async () => {
- await renderTarjeta({estatus_envio:'pendiente_pesaje',vendedor:{name:'Solicitante de ejemplo',departamento:{nombre:'Ventas'}},solicitud_preparacion:{area_revision:'control_pedidos',revision_disponibilidad:{estado:'sin_excepciones',actualizacion_pendiente:true}},documentos:[{tipo:'anexo_piezas',url:'/anexo.pdf'}]});
+ await renderTarjeta({estatus_envio:'pendiente_pesaje',vendedor:{name:'Solicitante de ejemplo',departamento:{nombre:'Ventas'}},solicitud_preparacion:{area_revision:'control_pedidos',revision_disponibilidad:{estado:'sin_excepciones'},anexo_sin_remision:[{entrada:'documento'}]},documentos:[{tipo:'anexo_piezas',url:'/anexo.pdf'}]});
  expect(container.querySelector('.gelia-cedis-tipo-departamento').textContent).toContain('Ventas');
  expect(container.querySelector('.gelia-cedis-solicitante').textContent).toBe('Solicitante de ejemplo');
  expect(container.textContent.match(/Cliente de prueba/g)).toHaveLength(1);
- expect(container.textContent).toContain('Folio Pedido: PED-81');
+ expect(container.textContent).toContain('Folio: PED-81');
  expect(container.textContent).not.toContain('Folio interno');
  expect(container.textContent).not.toContain('Piezas extra');
  expect(container.textContent).not.toContain('No pide peso');
@@ -102,6 +102,29 @@ it('reemplaza el aviso pendiente por una sola Consulta respondida', async () => 
  expect(container.querySelector('.gelia-cedis-aviso-consulta').textContent).toBe('Consulta respondida');
  expect(container.textContent.match(/Consulta respondida/g)).toHaveLength(1);
  expect(container.querySelector('.gelia-pedidos-estados').textContent).not.toContain('Consulta respondida');
+});
+it('presenta envío municipal con ruta persistida, PDF y acción de revisión, sin guía ni bultos', async () => {
+    const responder = vi.fn();
+    await renderTarjeta({
+        origen: null,
+        paqueteria: { nombre: 'Terminal ficticia' },
+        almacen: { nombre: 'CEDIS Norte' },
+        solicitud_preparacion: { modalidad_entrega: 'municipal', consulta_municipal: { area: 'cedis', estado: 'pendiente', almacen_id: 8 } },
+        documentos: [{ id: 3, tipo: 'pdf_pedido', url: '/wizerp.pdf', nombre_original: 'wizerp.pdf' }],
+    }, { onResponderPesaje: responder });
+    expect(container.querySelector('header').textContent).toContain('Envío:MUNICIPAL');
+    expect(container.querySelector('[aria-label="Origen y destino del pedido"]').textContent).toContain('OrigenCEDIS NorteDestinoTerminal ficticia');
+    expect(container.textContent).not.toContain('Terminal destino');
+    expect(container.textContent).not.toContain('Área responsable');
+    expect(container.textContent).toContain('Terminal ficticia');
+    expect(container.textContent).toContain('CEDIS Norte');
+    expect(container.textContent).toContain('Revisar disponibilidad');
+    expect(container.textContent).toContain('PDF pedido');
+    expect(container.textContent).not.toContain('Envíos / Guía');
+    expect(container.textContent).not.toContain('Bultos a preparar');
+    expect(container.textContent).not.toContain('Por confirmar');
+    await act(() => [...container.querySelectorAll('button')].find((b) => b.textContent.includes('Revisar disponibilidad')).click());
+    expect(responder).toHaveBeenCalledWith(expect.objectContaining({ id: 81 }));
 });
 it('Bitácora necesita permiso explícito, incluso para el rol Gerente, y respeta la restricción del servidor', async () => {
  const abrir=vi.fn();

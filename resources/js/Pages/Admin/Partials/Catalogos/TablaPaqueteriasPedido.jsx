@@ -126,7 +126,7 @@ export default function TablaPaqueteriasPedido({ datos = [] }) {
                             <th className="px-6 py-4 text-left text-[9px] font-black theme-text-muted uppercase tracking-widest">Categoría_</th>
                             <th className="px-6 py-4 text-left text-[9px] font-black theme-text-muted uppercase tracking-widest">Tarifa local_</th>
                             <th className="px-6 py-4 text-left text-[9px] font-black theme-text-muted uppercase tracking-widest">Costo diferido_</th>
-                            <th className="px-6 py-4 text-left text-[9px] font-black theme-text-muted uppercase tracking-widest">Sin logística_</th>
+                            <th className="px-6 py-4 text-left text-[9px] font-black theme-text-muted uppercase tracking-widest">Omite guía y domicilio_</th>
                             <th className="px-6 py-4 text-left text-[9px] font-black theme-text-muted uppercase tracking-widest">Status_</th>
                             <th className="px-6 py-4 text-right text-[9px] font-black theme-text-muted uppercase tracking-widest">Acciones_</th>
                         </tr>
@@ -202,9 +202,9 @@ export default function TablaPaqueteriasPedido({ datos = [] }) {
                                     className="w-4 h-4 mt-0.5"
                                 />
                                 <span className="text-sm font-bold theme-text-main">
-                                    Sin logística / no genera guía
+                                    Omitir guía y domicilio en pedidos anteriores
                                     <span className="block text-[10px] font-bold theme-text-muted mt-1">
-                                        Envío foráneo o municipal: no pide dirección, guía ni reexpedición. CEDIS solo confirma piezas. No marcar paqueterías internas ni comerciales con logística.
+                                        Conserva la regla de pedidos anteriores y comisiones de empaque. Las terminales municipales se seleccionan por la categoría Local / Regional, independientemente de esta opción.
                                     </span>
                                 </span>
                             </label>

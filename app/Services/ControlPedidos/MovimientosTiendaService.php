@@ -100,13 +100,18 @@ final class MovimientosTiendaService
                 app(EjecutarSegundoTrasladoTiendaService::class)->recibir($pedido, $actor, $datos);
             } else {
                 $json = $pedido->solicitud_preparacion_json;
-                $json['cambio_modalidad_tienda'] = ['estado' => 'pendiente_conexion', 'destino' => $datos['modalidad'],
+                if (($json['conversion_modalidad']['estado'] ?? null) === 'confirmada') {
+                    throw ValidationException::withMessages(['modalidad' => 'El cambio de modalidad ya está confirmado.']);
+                }
+                $destino = (string) ($datos['modalidad'] ?? '');
+                $json['cambio_modalidad_tienda'] = ['estado' => 'pendiente_conexion', 'destino' => $destino,
                     'motivo' => $datos['motivo'], 'solicitada_por_id' => $actor->id, 'solicitada_at' => now()->toIso8601String(),
                     'sucursal_custodia_id' => $pedido->sucursal_destino_id];
                 $pedido->update(['solicitud_preparacion_json' => $json]);
+                $etiqueta = $destino === 'municipal' ? 'envío municipal' : 'envío '.$destino;
                 app(RegistrarHistorialPedidoService::class)->ejecutar($pedido->id, $actor->id,
                     $pedido->catalogo_estatus_pedido_id, $pedido->catalogo_estatus_pedido_id,
-                    'Solicitud de cambio a envío '.$datos['modalidad'].'. '.$datos['motivo'].'. Pendiente de conexión; se conserva la custodia y el pago.',
+                    'Solicitud de cambio a '.$etiqueta.'. '.$datos['motivo'].'. Pendiente de conexión; se conserva la custodia y el pago.',
                     'solicitud_cambio_modalidad_tienda');
             }
             $pedido->refresh();

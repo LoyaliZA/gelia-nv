@@ -79,6 +79,8 @@ class CoberturaPagoPedidoBmaService
             'bloqueos' => $bloqueos,
             'cubierto' => $bloqueos === [] && $base['cubierto'],
             'totales_envio' => $totales,
+            'transporte_municipal' => \App\Support\ControlPedidos\ConsultaMunicipal::es($pedido)
+                ? app(\App\Services\ControlPedidos\Municipal\PoliticaFinancieraMunicipal::class)->evaluar($pedido) : null,
         ]);
     }
 

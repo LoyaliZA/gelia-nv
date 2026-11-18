@@ -218,7 +218,7 @@ export const CATALOGO = {
     'pdv.operacion.horario_cierre': {
         seccion: 'punto-venta', bloque: 'Horario', orden: 10, control: 'json',
         titulo: 'Horario de la sucursal',
-        ayuda: 'Apertura y cierre generales. Los ajustes por sucursal que ya existan se conservan.',
+        ayuda: 'Días que opera, apertura y cierre generales, y horario de sábado. Los ajustes por sucursal que ya existan se conservan.',
     },
     'pdv.resguardos.registro_manual': {
         seccion: 'punto-venta', bloque: 'Resguardos', orden: 10, control: 'switch',
@@ -441,8 +441,11 @@ export const ESQUEMAS = {
         campos: [
             { ruta: 'activo', tipo: 'switch', titulo: 'Horario activo', ayuda: 'Aplica apertura y cierre a la operación de la sucursal.' },
             { ruta: 'zona_horaria', tipo: 'text', titulo: 'Zona horaria', ayuda: 'Ejemplo: America/Mexico_City.' },
-            { ruta: 'hora_apertura', tipo: 'time', titulo: 'Hora de apertura', ayuda: 'Vacío: no hay una hora de apertura.' },
-            { ruta: 'hora_cierre', tipo: 'time', titulo: 'Hora de cierre', ayuda: 'Hora en la que cierra la operación.' },
+            { ruta: 'dias_operacion', tipo: 'dias', titulo: 'Días que opera', ayuda: 'Días en los que hay alta y cierre automático. El resto no abre ni cierra solo.', opciones: DIAS },
+            { ruta: 'hora_apertura', tipo: 'time', titulo: 'Hora de apertura', ayuda: 'Vacío: no hay una hora de apertura. Aplica de lunes a viernes, y el sábado si no hay horario propio.' },
+            { ruta: 'hora_cierre', tipo: 'time', titulo: 'Hora de cierre', ayuda: 'Hora en la que cierra la operación entre semana. El sábado usa la suya si está definida.' },
+            { ruta: 'hora_apertura_sabado', tipo: 'time', titulo: 'Apertura sábado', ayuda: 'Solo si el sábado está en los días que opera. Vacío: usa la apertura entre semana.' },
+            { ruta: 'hora_cierre_sabado', tipo: 'time', titulo: 'Cierre sábado', ayuda: 'Solo si el sábado está en los días que opera. Vacío: usa el cierre entre semana.' },
         ],
     },
     'pdv.publicidad.volumen_sala': {

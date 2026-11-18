@@ -63,8 +63,10 @@ class ResolverEstadoVendedorOperacionPdvService
     /**
      * @return list<string>
      */
-    public function accionesDisponibles(EstadoVendedorOperacionPdv $estado): array
-    {
+    public function accionesDisponibles(
+        EstadoVendedorOperacionPdv $estado,
+        bool $tieneAtencionAbierta = false,
+    ): array {
         return match ($estado) {
             EstadoVendedorOperacionPdv::NoActivado => ['activar', 'no_llego'],
             EstadoVendedorOperacionPdv::NoLlego => ['activar'],
@@ -72,7 +74,9 @@ class ResolverEstadoVendedorOperacionPdvService
             EstadoVendedorOperacionPdv::EnEspera => ['desactivar', 'pausa_iniciar', 'cerrar_jornada'],
             EstadoVendedorOperacionPdv::Atendiendo => ['cerrar_jornada'],
             EstadoVendedorOperacionPdv::EnRetencion => ['pausa_finalizar', 'desactivar', 'cerrar_jornada'],
-            EstadoVendedorOperacionPdv::CierrePendiente => ['cancelar_cierre_pendiente'],
+            EstadoVendedorOperacionPdv::CierrePendiente => $tieneAtencionAbierta
+                ? ['cancelar_cierre_pendiente']
+                : ['finalizar_jornada', 'cancelar_cierre_pendiente'],
             EstadoVendedorOperacionPdv::JornadaCerrada => ['reactivar'],
         };
     }

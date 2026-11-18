@@ -37,6 +37,7 @@ class RegistrarPagoPedidoBmaService
 
     public function handle(PedidoBma $pedido, array $datos, UploadedFile|array|null $comprobante = null, ?int $usuarioId = null): PedidoBmaPago
     {
+        app(\App\Services\ControlPedidos\Municipal\PoliticaFinancieraMunicipal::class)->assertPuedeOperarComercial($pedido);
         $monto = round((float) ($datos['monto'] ?? 0), 2);
         if ($monto <= 0) {
             throw new InvalidArgumentException('El monto de la exhibición debe ser mayor a cero.');
@@ -109,6 +110,7 @@ class RegistrarPagoPedidoBmaService
     ): PedidoBmaPago {
         return DB::transaction(function () use ($pedido, $datos, $archivos, $usuarioId, $monto, $forma, $bancoId, $clave) {
             $pedido = PedidoBma::query()->lockForUpdate()->findOrFail($pedido->id);
+            app(\App\Services\ControlPedidos\Municipal\PoliticaFinancieraMunicipal::class)->assertPuedeOperarComercial($pedido);
             if ($clave !== '') {
                 $existente = PedidoBmaPago::query()
                     ->where('pedido_bma_id', $pedido->id)
@@ -196,6 +198,7 @@ class RegistrarPagoPedidoBmaService
      */
     public function assertPagoListoParaAvanzar(PedidoBma $pedido, string $fase = self::FASE_ENVIAR): void
     {
+        app(\App\Services\ControlPedidos\Municipal\PoliticaFinancieraMunicipal::class)->assertPuedeOperarComercial($pedido);
         $this->assertSafCorresponde($pedido);
 
         $pagosActivos = PedidoBmaPago::query()

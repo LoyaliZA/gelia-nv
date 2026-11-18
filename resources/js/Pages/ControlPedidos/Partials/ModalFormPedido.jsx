@@ -1,18 +1,21 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import ModalFormPedidoLegado, { hayBorradorPedidoLocal } from './ModalFormPedidoLegado';
 import FormularioRegistrarTienda from './FormularioRegistrarTienda';
 import { usaRegistroActual } from './flujoCapturaPedido';
+import useReservaConversionModalidad from './useReservaConversionModalidad';
 
 export { hayBorradorPedidoLocal };
 
-function modoInicial(pedido, recuperarBorrador) {
+function modoInicial(pedido, recuperarBorrador, intencion) {
+    if (intencion === 'conversion') return 'tienda';
     if (recuperarBorrador) return 'legado';
+    if (pedido?.solicitud_preparacion?.modalidad_entrega === 'municipal') return 'tienda';
     return usaRegistroActual(pedido) ? 'tienda' : 'legado';
 }
 
 /**
- * Un alta nueva, o un borrador guardado por esta captura, usa Registrar pedidos — Tienda.
- * Municipal, nacional y los pedidos ya abiertos en el formulario anterior siguen ahí.
+ * La captura actual comparte datos y documento entre Tienda y Municipal.
+ * Nacional y municipales históricos sin marca conservan el formulario anterior.
  */
 export default function ModalFormPedido({
     abierto,
@@ -23,9 +26,23 @@ export default function ModalFormPedido({
     recuperarBorrador = false,
     onPedidoCreado = null,
     registrarTienda = {},
+    onLecturaPropia = null,
+    intencion = 'alta',
+    onActualizar = null,
 }) {
-    const [modo, setModo] = useState(() => modoInicial(pedido, recuperarBorrador));
+    const conversion = intencion === 'conversion';
+    const [modo, setModo] = useState(() => modoInicial(pedido, recuperarBorrador, intencion));
     const [pedidoEnvio, setPedidoEnvio] = useState(null);
+    const reservaConversion = useReservaConversionModalidad({
+        activo: conversion && abierto,
+        pedidoId: conversion ? pedido?.id : null,
+        flagsIniciales: conversion ? (pedido?.conversion_modalidad || null) : null,
+        onActualizar,
+    });
+    useEffect(() => {
+        onLecturaPropia?.(abierto && modo === 'tienda');
+        return () => onLecturaPropia?.(false);
+    }, [abierto, modo, onLecturaPropia]);
 
     if (modo === 'legado') {
         return (
@@ -50,6 +67,9 @@ export default function ModalFormPedido({
             catalogos={catalogos}
             registrarTienda={registrarTienda}
             onPedidoCreado={onPedidoCreado}
+            onActualizar={onActualizar}
+            intencion={intencion}
+            reservaConversion={conversion ? reservaConversion : null}
             onContinuarEnvio={(siguiente) => {
                 setPedidoEnvio(siguiente);
                 setModo('legado');

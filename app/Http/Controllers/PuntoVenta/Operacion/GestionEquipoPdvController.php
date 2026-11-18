@@ -150,4 +150,24 @@ class GestionEquipoPdvController extends Controller
 
         return response()->json($consulta->ejecutar($gerente, now()));
     }
+
+    public function finalizarJornada(
+        DesactivarEquipoPdvRequest $request,
+        User $user,
+        GestionarEquipoOperativoPdvService $servicio,
+        ConsultaEstadoOperativoPdvService $consulta,
+    ): JsonResponse {
+        /** @var User $gerente */
+        $gerente = $request->user();
+
+        $servicio->finalizarJornada(
+            $gerente,
+            $user,
+            (int) $request->validated('version'),
+            now(),
+            $request->header('Idempotency-Key'),
+        );
+
+        return response()->json($consulta->ejecutar($gerente, now()));
+    }
 }

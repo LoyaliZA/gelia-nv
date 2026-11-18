@@ -1,0 +1,51 @@
+{
+  "fixture": {
+    "usuario_id": 24,
+    "cliente_id": 21,
+    "pedido_id": 20,
+    "almacen_id": 3,
+    "transporte_id": 24
+  },
+  "pasos": [
+    "Autenticación real con usuario ficticio y cookie exclusiva.",
+    "Alta y edición de teléfono desde la interfaz de Clientes.",
+    "Carga y sustitución real de identificación ficticia desde el control de archivo.",
+    "Apertura de cola Tienda, selección de estado, carga de evidencia y envío real.",
+    "Cierre de Ventas mediante endpoint autenticado (no botón del modal).",
+    "Baja lógica de identificación y consignatario, consulta de historial desde Clientes."
+  ],
+  "medidas": [
+    {
+      "vista": "expediente",
+      "ancho": 1440,
+      "desborde": false
+    },
+    {
+      "vista": "expediente",
+      "ancho": 1024,
+      "desborde": false
+    },
+    {
+      "vista": "expediente",
+      "ancho": 390,
+      "desborde": false
+    },
+    {
+      "vista": "respuesta-tienda",
+      "ancho": 1440,
+      "desborde": false
+    },
+    {
+      "vista": "respuesta-tienda",
+      "ancho": 1024,
+      "desborde": false
+    },
+    {
+      "vista": "respuesta-tienda",
+      "ancho": 390,
+      "desborde": false
+    }
+  ],
+  "console": [],
+  "resultado": "aprobado"
+}

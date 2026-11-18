@@ -81,6 +81,7 @@ class EnviarPedidoBmaService
                 && ! \App\Support\ControlPedidos\CustodiaDocumentalTienda::aplica($pedido)
                 && ! $pedido->cliente_proporciona_guia
                 && ! $pedido->cliente_direccion_id
+                && ! \App\Support\ControlPedidos\ConsultaMunicipal::es($pedido)
                 && ! CrearSnapshotDireccionPedido::manualEstaCompleta($pedido->direccionVigente)
             ) {
                 throw new \InvalidArgumentException(

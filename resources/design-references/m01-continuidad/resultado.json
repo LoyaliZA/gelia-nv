@@ -1,0 +1,61 @@
+{
+  "pasos": [
+    "Alta real: cliente, departamento automático y folio permanecen al elegir Municipal.",
+    "Guardar, cerrar, recargar Registro y reabrir conserva cliente, folio, modalidad, documento, terminal y consignatario. Visor abierto desde Ampliar.",
+    "Enviar consulta mediante el botón real sin pago, remisión ni pesaje.",
+    "CEDIS abre documento Wizerp y responde faltante sin SKU con evidencia usando controles reales.",
+    "Ventas recibe respuesta y evidencia; faltante bloquea Cerrar consulta. Retiro documental solicita nueva revisión.",
+    "CEDIS responde nueva revisión, Ventas cierra explícitamente y reapertura conserva cierre y transporte diferido."
+  ],
+  "medidas": [
+    {
+      "ancho": 1440,
+      "desborde": false
+    },
+    {
+      "ancho": 1440,
+      "desborde": false
+    },
+    {
+      "ancho": 1024,
+      "desborde": false
+    },
+    {
+      "ancho": 1024,
+      "desborde": false
+    },
+    {
+      "ancho": 390,
+      "desborde": false
+    },
+    {
+      "ancho": 390,
+      "desborde": false
+    }
+  ],
+  "pantallaRespuesta": "Consulta de disponibilidad\n\nFolio No. : WIZ-CONTINUIDAD-38\n\nDisponibilidad · CEDIS\nCliente\nCliente ficticio de auditoría\nOrigen\nCEDIS\nDestino\nPor confirmar\nVER PEDIDO\nEstado del pedido\nTodo OK\nCon detalle o faltante\nProductos con detalle o faltantes\n1\n\nRegistra solo las piezas afectadas.\n\nBuscar o escanear producto\n\nCada lectura o selección registra una unidad.\n\nCAPTURAR SIN CATÁLOGO\n\nAbre una unidad para registrar sus detalles.\n\nPieza por identificar\nCon detalle\nPieza\nÚnica pieza\nMejor ejemplar\nSin existencias\nDetalle del defecto\n\nCaptura del pedido *\n\n0 archivos\nTomar foto\nGalería\n\nArrastra o pega · PDF / imágenes · 10 MB por archivo\n\nConsulta de disponibilidad · sin confirmar apartado.\nEnviar respuesta",
+  "redCEDIS": [
+    {
+      "estado": null,
+      "status": 200,
+      "url": "http://laravel.test:9193/mensajeria/conversaciones"
+    },
+    {
+      "estado": null,
+      "status": 200,
+      "url": "http://laravel.test:9193/mensajeria/presencia/heartbeat"
+    },
+    {
+      "estado": null,
+      "status": 200,
+      "url": "/control-pedidos/42/disponibilidad-tienda"
+    },
+    {
+      "estado": "excepciones_pendientes",
+      "status": 200,
+      "url": "http://laravel.test:9193/control-pedidos/cedis/42/disponibilidad"
+    }
+  ],
+  "console": [],
+  "resultado": "aprobado"
+}

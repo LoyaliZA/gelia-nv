@@ -13,7 +13,9 @@ use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
 use App\Support\ControlPedidos\ActualizacionConsulta;
 use App\Support\ControlPedidos\InstruccionEntrega;
 use App\Support\ControlPedidos\MaquinaEstadosPedidoBma;
+use App\Support\ControlPedidos\ConsultaMunicipal;
 use App\Support\ControlPedidos\RegistrarPedidos\DestinoRevisionRegistrarPedidos;
+use App\Support\ControlPedidos\UnidadesRevisionConsulta;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -36,6 +38,7 @@ class ResponderDisponibilidadInicialService
         private RegistrarHistorialPedidoService $historial,
         private NotificarPedidoBmaService $notificar,
         private RegistrarProductosPreparacionService $productos,
+        private PersistenciaAdjuntosConsulta $persistencia,
     ) {}
 
     /**
@@ -45,7 +48,9 @@ class ResponderDisponibilidadInicialService
      */
     public function ejecutar(PedidoBma $pedido, User $usuario, array $datos, array $evidencias, ?PedidoBmaTareaPreparacion $tarea = null): array
     {
-        return DB::transaction(function () use ($pedido, $usuario, $datos, $evidencias, $tarea) {
+        $nuevos = [];
+        try {
+            return DB::transaction(function () use ($pedido, $usuario, $datos, $evidencias, $tarea, &$nuevos) {
             $pedido = PedidoBma::query()->lockForUpdate()->findOrFail($pedido->id);
             $pedido->loadMissing('estatus');
             $json = is_array($pedido->solicitud_preparacion_json) ? $pedido->solicitud_preparacion_json : [];
@@ -58,6 +63,7 @@ class ResponderDisponibilidadInicialService
                 throw ValidationException::withMessages(['consulta' => 'La consulta recibió otros cambios. Actualice antes de responder.']);
             }
 
+            $esMunicipal = ConsultaMunicipal::es($pedido);
             if ($tarea !== null) {
                 $tarea = InstruccionEntrega::bloquearParaEjecutar($tarea);
                 if ((int) $tarea->pedido_bma_id !== (int) $pedido->id) {
@@ -70,12 +76,29 @@ class ResponderDisponibilidadInicialService
                 if ($area !== DestinoRevisionRegistrarPedidos::PREPARACION_TIENDA) {
                     throw ValidationException::withMessages(['area_revision' => 'Esta tarea no es la revisión de tienda.']);
                 }
+            } elseif ($esMunicipal) {
+                abort_unless(\App\Support\ControlPedidos\AlcanceConsultaMunicipal::puedeResponder($usuario, $pedido), 403);
+                if (ConsultaMunicipal::estado($pedido) === ConsultaMunicipal::CERRADA) {
+                    throw ValidationException::withMessages(['consulta' => 'La consulta ya fue cerrada por Ventas.']);
+                }
             } elseif ($area !== DestinoRevisionRegistrarPedidos::CONTROL_PEDIDOS
                 || (! in_array($pedido->estatus_envio, [PedidoBma::ESTATUS_ENVIO_PENDIENTE_PESAJE, PedidoBma::ESTATUS_ENVIO_PESAJE_LISTO], true))) {
                 throw ValidationException::withMessages(['area_revision' => 'Este pedido no está pendiente de consulta de disponibilidad.']);
             }
 
+            if ($esMunicipal) {
+                foreach (array_merge($evidencias, ...array_map(fn ($fila) => is_array($fila) ? ($fila['evidencias'] ?? []) : [], $datos['excepciones'] ?? [])) as $archivo) {
+                    if (! $archivo instanceof UploadedFile || ! $archivo->isValid() || $archivo->getSize() > 10 * 1024 * 1024
+                        || ! in_array($archivo->getMimeType(), ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'], true)) {
+                        throw ValidationException::withMessages(['evidencias' => 'Adjunte imágenes o PDF válidos de hasta 10 MB.']);
+                    }
+                }
+            }
+
             $guardada = is_array($json['revision_disponibilidad'] ?? null) ? $json['revision_disponibilidad'] : null;
+            if (! empty($datos['persistir_unidad'])) {
+                return $this->guardarUnidadBloqueada($pedido, $usuario, $datos, $json, $nuevos, $area);
+            }
             if (! $actualizacion && is_array($guardada) && isset($guardada['estado'])) {
                 return $this->resultado((string) $guardada['estado'], $area, true);
             }
@@ -100,23 +123,25 @@ class ResponderDisponibilidadInicialService
                 }
             }
             $confirmada = $actualizacion ? $excepciones === [] : (bool) ($datos['confirmacion_explicita'] ?? false);
+            $json = UnidadesRevisionConsulta::materializar($json);
             $cambiosRevisados = [];
-            foreach ($datos['cambios_revisados'] ?? [] as $cambio) {
-                $clave = $cambio['tipo'] === 'anexo' ? 'anexo_sin_remision' : 'retiro_piezas';
-                $indice = (int) $cambio['indice'];
-                if (! $actualizacion || ! isset($json[$clave][$indice])) {
-                    throw ValidationException::withMessages(['cambios_revisados' => 'La solicitud cambió. Actualice la consulta.']);
-                }
-                if ($cambio['resultado'] === 'incidencia' && $excepciones === []) {
-                    throw ValidationException::withMessages(['cambios_revisados' => 'Registre las piezas con detalle antes de enviar.']);
-                }
-                $cambiosRevisados[$cambio['tipo'].':'.$indice] = $cambio['resultado'];
-            }
-            if ($actualizacion && array_key_exists('cambios_revisados', $datos)) {
-                foreach ($json['anexo_sin_remision'] ?? [] as $indice => $anexo) {
-                    if (empty($anexo['respondida_at']) && ! isset($cambiosRevisados['anexo:'.$indice])) {
-                        throw ValidationException::withMessages(['cambios_revisados' => 'Revise las capturas y piezas solicitadas antes de enviar.']);
+            if ($actualizacion) {
+                foreach ($datos['cambios_revisados'] ?? [] as $cambio) {
+                    $unidadId = (string) ($cambio['unidad_id'] ?? '');
+                    $hallada = $unidadId !== '' ? UnidadesRevisionConsulta::localizar($json, $unidadId) : null;
+                    $hallada ??= $this->unidadPorIndice($json, $cambio);
+                    if ($hallada === null) {
+                        throw ValidationException::withMessages(['cambios_revisados' => 'La unidad no pertenece a esta consulta.']);
                     }
+                    $unidadId = (string) ($hallada['unidad']['unidad_id'] ?? $unidadId);
+                    $this->asegurarDocumentoDeUnidad($pedido, $hallada, $cambio);
+                    if (($cambio['resultado'] ?? '') === 'incidencia') {
+                        $deUnidad = array_values(array_filter($excepciones, fn ($ex) => ($ex['origen_unidad_id'] ?? '') === $unidadId));
+                        if ($deUnidad === [] && ($hallada['unidad']['resultado'] ?? null) !== 'incidencia' && $excepciones === []) {
+                            throw ValidationException::withMessages(['cambios_revisados' => 'Registre las piezas con detalle antes de enviar.']);
+                        }
+                    }
+                    $cambiosRevisados[$unidadId] = $cambio['resultado'];
                 }
             }
             $archivos = array_values(array_filter($evidencias, fn ($archivo) => $archivo instanceof UploadedFile));
@@ -142,26 +167,22 @@ class ResponderDisponibilidadInicialService
                 throw ValidationException::withMessages(['evidencias' => 'Adjunte la evidencia de la revisión.']);
             }
 
-            if ($actualizacion && $archivos === []) {
+            if ($actualizacion && $archivos === [] && ActualizacionConsulta::requiereRespuesta($json)) {
                 throw ValidationException::withMessages(['evidencias' => 'Adjunte una nueva captura del pedido actualizado.']);
             }
             $documentosAntes = $pedido->documentos()->pluck('id')->all();
             $estado = $excepciones === [] && ! $pedido->revisionesProducto()->whereNull('resolucion')->whereIn('estado_fisico', ['regular', 'malo', 'danado', 'sin_existencia'])->exists() ? 'sin_excepciones' : 'excepciones_pendientes';
             $comentario = $tarea === null ? 'Captura del pedido' : ($estado === 'sin_excepciones' ? 'Evidencia del pedido completo' : 'Evidencia de la excepción');
-            foreach ($archivos as $orden => $archivo) {
-                $ruta = $archivo->store('pedidos_bma/'.$pedido->id.'/disponibilidad', 'public');
-                $pedido->documentos()->create([
+            if ($archivos !== []) {
+                $docsConjunto = $this->persistencia->guardar($pedido, $archivos, [
+                    'carpeta' => 'disponibilidad',
                     'tipo' => PedidoBmaDocumento::TIPO_EVIDENCIA_CONDICION,
-                    'ruta_archivo' => $ruta,
-                    'nombre_original' => $archivo->getClientOriginalName(),
-                    'mime_type' => $archivo->getMimeType(),
-                    'tamano_bytes' => $archivo->getSize(),
-                    'orden' => $orden + 1,
                     'comentario' => $comentario,
                     'relacion_tipo' => PedidoBmaDocumento::RELACION_REVISION_GENERAL,
                     'relacion_id' => $tarea?->id,
-                    'activo' => true,
+                    'orden' => 0,
                 ]);
+                $nuevos = array_merge($nuevos, array_column($docsConjunto, 'ruta'));
             }
             if ($tarea !== null && $imagenesNuevas !== []) {
                 $this->productos->guardarGenerales($tarea, $usuario, $imagenesNuevas);
@@ -189,6 +210,7 @@ class ResponderDisponibilidadInicialService
                 ]);
             }
 
+            $origenes = is_array($json['revision_origenes'] ?? null) ? $json['revision_origenes'] : [];
             foreach ($excepciones as $orden => $excepcion) {
                 $revision = $pedido->revisionesProducto()->create([
                     'orden' => (int) $pedido->revisionesProducto()->max('orden') + 1,
@@ -204,43 +226,76 @@ class ResponderDisponibilidadInicialService
                     'mejor_ejemplar' => $excepcion['mejor_ejemplar'],
                     'resolucion' => null,
                 ]);
-                foreach ($excepcion['evidencias'] as $indice => $archivo) {
-                    $ruta = $archivo->store('pedidos_bma/'.$pedido->id.'/disponibilidad', 'public');
-                    $pedido->documentos()->create([
+                if ($excepcion['evidencias'] !== []) {
+                    $docsExcepcion = $this->persistencia->guardar($pedido, $excepcion['evidencias'], [
+                        'carpeta' => 'disponibilidad',
                         'tipo' => PedidoBmaDocumento::TIPO_EVIDENCIA_CONDICION,
-                        'ruta_archivo' => $ruta,
-                        'nombre_original' => $archivo->getClientOriginalName(),
-                        'mime_type' => $archivo->getMimeType(),
-                        'tamano_bytes' => $archivo->getSize(),
-                        'orden' => $indice + 1,
                         'comentario' => 'Foto del defecto: '.$excepcion['descripcion'],
                         'relacion_tipo' => PedidoBmaDocumento::RELACION_REVISION_PRODUCTO,
                         'relacion_id' => $revision->id,
-                        'activo' => true,
+                        'orden' => 0,
                     ]);
+                    $nuevos = array_merge($nuevos, array_column($docsExcepcion, 'ruta'));
+                }
+                if (! empty($excepcion['origen_unidad_id'])) {
+                    $origenes[(string) $revision->id] = $excepcion['origen_unidad_id'];
+                    $halladaOrigen = UnidadesRevisionConsulta::localizar($json, $excepcion['origen_unidad_id']);
+                    if ($halladaOrigen !== null) {
+                        $ids = $halladaOrigen['unidad']['revision_ids'] ?? [];
+                        $ids[] = $revision->id;
+                        $json[$halladaOrigen['clave']][$halladaOrigen['indice']] = UnidadesRevisionConsulta::aplicar(
+                            $json[$halladaOrigen['clave']][$halladaOrigen['indice']],
+                            $excepcion['origen_unidad_id'],
+                            ['resultado' => 'incidencia', 'revision_ids' => array_values(array_unique($ids))],
+                            $usuario->id,
+                            $usuario->name
+                        );
+                    }
                 }
             }
+            $json['revision_origenes'] = $origenes;
 
             if ($actualizacion) {
-                foreach ($json['anexo_sin_remision'] ?? [] as $indice => $anexo) {
-                    if (! empty($anexo['respondida_at'])) {
+                foreach ($datos['cambios_revisados'] ?? [] as $cambio) {
+                    $unidadId = (string) ($cambio['unidad_id'] ?? '');
+                    $hallada = ($unidadId !== '' ? UnidadesRevisionConsulta::localizar($json, $unidadId) : null) ?? $this->unidadPorIndice($json, $cambio);
+                    if ($hallada === null) {
                         continue;
                     }
-                    $json['anexo_sin_remision'][$indice] = array_merge($anexo, [
-                        'pendiente_identificacion' => false, 'pendiente_revision' => false,
-                        'respuesta_cambio' => $cambiosRevisados['anexo:'.$indice] ?? ($excepciones === [] ? 'correcto' : 'incidencia'),
-                        'estado' => 'revisado_conjunto', 'respondida_at' => now()->toIso8601String(),
-                        'respondida_por_id' => $usuario->id, 'respondida_por' => $usuario->name,
-                        'resultado' => 'Revisado en el conjunto actualizado. Consulte los detalles y la nueva captura.',
-                    ]);
+                    $unidadId = (string) ($hallada['unidad']['unidad_id'] ?? $unidadId);
+                    $json[$hallada['clave']][$hallada['indice']] = UnidadesRevisionConsulta::aplicar(
+                        $json[$hallada['clave']][$hallada['indice']],
+                        $unidadId,
+                        ['resultado' => $cambio['resultado']],
+                        $usuario->id,
+                        $usuario->name
+                    );
                 }
-                foreach ($json['retiro_piezas'] ?? [] as $indice => $retiro) {
-                    if (($retiro['estado'] ?? 'pendiente') !== 'pendiente') {
-                        continue;
+                foreach (['anexo_sin_remision' => 'anexo'] as $clave => $tipo) {
+                    foreach ($json[$clave] ?? [] as $indice => $linea) {
+                        if (! is_array($linea) || UnidadesRevisionConsulta::lineaYaAtendida($tipo, $linea)) {
+                            continue;
+                        }
+                        $unidades = is_array($linea['unidades'] ?? null) ? $linea['unidades'] : UnidadesRevisionConsulta::derivar($tipo, $linea);
+                        foreach ($unidades as $unidad) {
+                            if (empty($unidad['resultado'])) {
+                                throw ValidationException::withMessages(['cambios_revisados' => 'Revise cada captura y pieza solicitada antes de enviar.']);
+                            }
+                        }
+                        if ($unidades === [] || ! collect($unidades)->every(fn ($unidad) => ! empty($unidad['resultado']))) {
+                            continue;
+                        }
+                        $incidencias = collect($unidades)->contains(fn ($unidad) => ($unidad['resultado'] ?? '') === 'incidencia');
+                        $json[$clave][$indice]['respuesta_cambio'] = $incidencias ? 'incidencia' : 'correcto';
+                        $json[$clave][$indice]['respondida_at'] = now()->toIso8601String();
+                        $json[$clave][$indice]['respondida_por_id'] = $usuario->id;
+                        $json[$clave][$indice]['respondida_por'] = $usuario->name;
+                        if ($clave === 'anexo_sin_remision') {
+                            $json[$clave][$indice]['pendiente_identificacion'] = false;
+                            $json[$clave][$indice]['pendiente_revision'] = false;
+                            $json[$clave][$indice]['estado'] = 'revisado_conjunto';
+                        }
                     }
-                    $json['retiro_piezas'][$indice] = array_merge($retiro, ['estado' => 'aplicada',
-                        'atendida_at' => now()->toIso8601String(), 'atendida_por_id' => $usuario->id,
-                        'resultado' => 'Retiro documental revisado; sin liberación de inventario.']);
                 }
             }
             $historialRespuestas = $guardada['historial_respuestas'] ?? [];
@@ -251,6 +306,9 @@ class ResponderDisponibilidadInicialService
             }
             $evidenciaActual = $pedido->documentos()->whereNotIn('id', $documentosAntes)
                 ->where('relacion_tipo', PedidoBmaDocumento::RELACION_REVISION_GENERAL)->pluck('id')->all();
+            if ($evidenciaActual === [] && $actualizacion) {
+                $evidenciaActual = $guardada['evidencia_actual_ids'] ?? [];
+            }
             $json['revision_disponibilidad'] = [
                 'respuesta_id' => (string) Str::uuid(),
                 'actualizacion_pendiente' => false,
@@ -263,11 +321,24 @@ class ResponderDisponibilidadInicialService
                 'respondida_at' => now()->toIso8601String(),
                 'respondida_por_id' => $usuario->id,
             ];
+            if ($esMunicipal) {
+                $json = ConsultaMunicipal::aplicarEstado($json, $estado);
+            }
             $cambios = [
                 'solicitud_preparacion_json' => $json,
                 'tiene_observaciones_fisicas' => $estado === 'excepciones_pendientes',
+                'consulta_actualizacion_pendiente' => false,
             ];
-            if ($estado === 'sin_excepciones' && $area === DestinoRevisionRegistrarPedidos::CONTROL_PEDIDOS) {
+            if ($esMunicipal && $estado === 'sin_excepciones' && $pedido->estatus?->fase_ciclo === CatalogoEstatusPedido::FASE_PESAJE_PENDIENTE) {
+                $estatusNuevo = CatalogoEstatusPedido::porFase(CatalogoEstatusPedido::FASE_PESAJE_RESPONDIDO);
+                if ($estatusNuevo) {
+                    MaquinaEstadosPedidoBma::assertTransicion(
+                        $pedido->estatus?->fase_ciclo,
+                        CatalogoEstatusPedido::FASE_PESAJE_RESPONDIDO
+                    );
+                    $cambios['catalogo_estatus_pedido_id'] = $estatusNuevo->id;
+                }
+            } elseif (! $esMunicipal && $estado === 'sin_excepciones' && $area === DestinoRevisionRegistrarPedidos::CONTROL_PEDIDOS) {
                 $estatusNuevo = CatalogoEstatusPedido::porFase(CatalogoEstatusPedido::FASE_PESAJE_RESPONDIDO);
                 if (! $estatusNuevo) {
                     throw new \RuntimeException('No se encontró el estatus de consulta respondida.');
@@ -312,7 +383,11 @@ class ResponderDisponibilidadInicialService
             );
 
             return $this->resultado($estado, $area, false);
-        });
+            });
+        } catch (\Throwable $e) {
+            $this->persistencia->limpiar($nuevos);
+            throw $e;
+        }
     }
 
     /**
@@ -351,8 +426,138 @@ class ResponderDisponibilidadInicialService
     }
 
     /**
+     * @param  array{tipo: string, indice: int, linea: array<string, mixed>, unidad: array<string, mixed>, clave: string}  $hallada
+     * @param  array<string, mixed>  $cambio
+     */
+    private function asegurarDocumentoDeUnidad(PedidoBma $pedido, array $hallada, array $cambio): void
+    {
+        $documentoId = (int) ($cambio['documento_id'] ?? $hallada['unidad']['documento_id'] ?? 0);
+        if ($documentoId < 1) {
+            return;
+        }
+        $documentoUnidad = (int) ($hallada['unidad']['documento_id'] ?? 0);
+        $documento = $pedido->documentos()->whereKey($documentoId)->first();
+        if (! $documento || ! UnidadesRevisionConsulta::documentoDeLaLinea($hallada['linea'], $documentoId)
+            || ($documentoUnidad > 0 && $documentoId !== $documentoUnidad)) {
+            throw ValidationException::withMessages(['documento_id' => 'El documento no pertenece a esta unidad.']);
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $json
+     * @param  array<string, mixed>  $cambio
+     * @return array{tipo: string, indice: int, linea: array<string, mixed>, unidad: array<string, mixed>, clave: string}|null
+     */
+    private function unidadPorIndice(array $json, array $cambio): ?array
+    {
+        $tipo = ($cambio['tipo'] ?? 'anexo') === 'retiro' ? 'retiro' : 'anexo';
+        $clave = $tipo === 'retiro' ? 'retiro_piezas' : 'anexo_sin_remision';
+        if (! array_key_exists('indice', $cambio) || ! isset($json[$clave][(int) $cambio['indice']])) {
+            return null;
+        }
+        $indice = (int) $cambio['indice'];
+        $documentoId = (int) ($cambio['documento_id'] ?? 0);
+        foreach ($json[$clave][$indice]['unidades'] ?? [] as $unidad) {
+            if ($documentoId > 0 && (int) ($unidad['documento_id'] ?? 0) === $documentoId) {
+                return UnidadesRevisionConsulta::localizar($json, (string) $unidad['unidad_id']);
+            }
+        }
+        $unidades = is_array($json[$clave][$indice]['unidades'] ?? null) ? $json[$clave][$indice]['unidades'] : [];
+        if ($documentoId === 0 && count($unidades) === 1 && isset($unidades[0]['unidad_id'])) {
+            return UnidadesRevisionConsulta::localizar($json, (string) $unidades[0]['unidad_id']);
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $datos
+     * @param  array<string, mixed>  $json
+     * @param  list<string>  $nuevos
+     * @return array{estado: string, decision: string, idempotente: bool}
+     */
+    private function guardarUnidadBloqueada(PedidoBma $pedido, User $usuario, array $datos, array $json, array &$nuevos, string $area): array
+    {
+        if (! ActualizacionConsulta::pendiente($json)) {
+            throw ValidationException::withMessages(['consulta' => 'No hay una actualización pendiente.']);
+        }
+        $cambio = $datos['cambios_revisados'][0] ?? null;
+        $unidadId = is_array($cambio) ? (string) ($cambio['unidad_id'] ?? '') : '';
+        if ($unidadId === '') {
+            throw ValidationException::withMessages(['unidad_id' => 'Indique la unidad a guardar.']);
+        }
+        $json = UnidadesRevisionConsulta::materializar($json);
+        $hallada = UnidadesRevisionConsulta::localizar($json, $unidadId);
+        if ($hallada === null) {
+            throw ValidationException::withMessages(['unidad_id' => 'La unidad no pertenece a esta consulta.']);
+        }
+        $unidadId = (string) ($hallada['unidad']['unidad_id'] ?? $unidadId);
+        $this->asegurarDocumentoDeUnidad($pedido, $hallada, is_array($cambio) ? $cambio : []);
+        $resultado = (string) ($cambio['resultado'] ?? '');
+        if (! in_array($resultado, ['correcto', 'incidencia'], true)) {
+            throw ValidationException::withMessages(['resultado' => 'Indique el resultado de la unidad.']);
+        }
+        $excepciones = $this->excepciones($datos['excepciones'] ?? [], true);
+        foreach ($excepciones as $excepcion) {
+            if (($excepcion['origen_unidad_id'] ?? '') !== $unidadId) {
+                throw ValidationException::withMessages(['excepciones' => 'Las piezas deben corresponder a la unidad que se guarda.']);
+            }
+        }
+        if ($resultado === 'incidencia' && $excepciones === [] && $hallada['tipo'] !== 'retiro') {
+            throw ValidationException::withMessages(['cambios_revisados' => 'Registre las piezas con detalle antes de guardar.']);
+        }
+        if (($hallada['unidad']['resultado'] ?? null) === $resultado && $excepciones === []) {
+            $pedido->update(['solicitud_preparacion_json' => $json]);
+
+            return $this->resultado((string) ($json['revision_disponibilidad']['estado'] ?? 'excepciones_pendientes'), $area, true);
+        }
+        $revisionIds = $hallada['unidad']['revision_ids'] ?? [];
+        $origenes = is_array($json['revision_origenes'] ?? null) ? $json['revision_origenes'] : [];
+        foreach ($excepciones as $excepcion) {
+            $revision = $pedido->revisionesProducto()->create([
+                'orden' => (int) $pedido->revisionesProducto()->max('orden') + 1,
+                'descripcion_producto' => $excepcion['descripcion'],
+                'sku' => $excepcion['sku'],
+                'cantidad_solicitada' => $excepcion['cantidad'],
+                'cantidad_encontrada' => $excepcion['condicion'] === 'faltante' ? 0 : $excepcion['cantidad'],
+                'estado_fisico' => $excepcion['condicion'] === 'faltante'
+                    ? PedidoBmaRevisionProducto::ESTADO_SIN_EXISTENCIA
+                    : PedidoBmaRevisionProducto::ESTADO_REGULAR,
+                'comentario' => $excepcion['detalle'],
+                'unica_pieza' => $excepcion['unica_pieza'],
+                'mejor_ejemplar' => $excepcion['mejor_ejemplar'],
+                'resolucion' => null,
+            ]);
+            $revisionIds[] = $revision->id;
+            $origenes[(string) $revision->id] = $unidadId;
+            if ($excepcion['evidencias'] !== []) {
+                $docsExcepcion = $this->persistencia->guardar($pedido, $excepcion['evidencias'], [
+                    'carpeta' => 'disponibilidad',
+                    'tipo' => PedidoBmaDocumento::TIPO_EVIDENCIA_CONDICION,
+                    'comentario' => 'Foto del defecto: '.$excepcion['descripcion'],
+                    'relacion_tipo' => PedidoBmaDocumento::RELACION_REVISION_PRODUCTO,
+                    'relacion_id' => $revision->id,
+                    'orden' => 0,
+                ]);
+                $nuevos = array_merge($nuevos, array_column($docsExcepcion, 'ruta'));
+            }
+        }
+        $json[$hallada['clave']][$hallada['indice']] = UnidadesRevisionConsulta::aplicar(
+            $json[$hallada['clave']][$hallada['indice']],
+            $unidadId,
+            ['resultado' => $resultado, 'revision_ids' => array_values(array_unique($revisionIds))],
+            $usuario->id,
+            $usuario->name
+        );
+        $json['revision_origenes'] = $origenes;
+        $pedido->update(['solicitud_preparacion_json' => $json]);
+
+        return $this->resultado((string) ($json['revision_disponibilidad']['estado'] ?? 'excepciones_pendientes'), $area, false);
+    }
+
+    /**
      * @param  list<array<string, mixed>>  $entrada
-     * @return list<array{descripcion: string, cantidad: int, condicion: string, detalle: string, sku: ?string, evidencias: list<UploadedFile>, unica_pieza: bool, mejor_ejemplar: bool}>
+     * @return list<array{descripcion: string, cantidad: int, condicion: string, detalle: string, sku: ?string, evidencias: list<UploadedFile>, unica_pieza: bool, mejor_ejemplar: bool, origen_unidad_id: ?string}>
      */
     private function excepciones(array $entrada, bool $cedis = false): array
     {
@@ -389,6 +594,7 @@ class ResponderDisponibilidadInicialService
                 throw ValidationException::withMessages(["excepciones.{$indice}.condicion" => 'Sin existencias no admite atributos de una pieza disponible.']);
             }
             $sku = trim((string) ($fila['sku'] ?? ''));
+            $origenUnidad = trim((string) ($fila['origen_unidad_id'] ?? ''));
             $salida[] = [
                 'descripcion' => $descripcion,
                 'cantidad' => $cantidad,
@@ -398,6 +604,7 @@ class ResponderDisponibilidadInicialService
                 'evidencias' => $fotos,
                 'unica_pieza' => $unica,
                 'mejor_ejemplar' => $mejor,
+                'origen_unidad_id' => $origenUnidad !== '' ? $origenUnidad : null,
             ];
         }
 

@@ -19,9 +19,12 @@ class ResponderDisponibilidadInicialRequest extends FormRequest
         $cedis = $this->routeIs('control_pedidos.cedis.disponibilidad');
 
         return [
+            'persistir_unidad' => ['nullable', 'boolean'],
             'cambios_revisados' => ['nullable', 'array', 'max:200'],
             'cambios_revisados.*.tipo' => ['required', 'in:anexo,retiro'],
-            'cambios_revisados.*.indice' => ['required', 'integer', 'min:0'],
+            'cambios_revisados.*.indice' => ['nullable', 'integer', 'min:0'],
+            'cambios_revisados.*.unidad_id' => ['nullable', 'string', 'max:160'],
+            'cambios_revisados.*.documento_id' => ['nullable', 'integer', 'min:1'],
             'cambios_revisados.*.resultado' => ['required', 'in:correcto,incidencia'],
             'actualizacion_id' => ['nullable', 'uuid'],
             'confirmacion_explicita' => ['nullable', 'boolean'],
@@ -33,6 +36,7 @@ class ResponderDisponibilidadInicialRequest extends FormRequest
             'excepciones.*.unica_pieza' => ['nullable', 'boolean'],
             'excepciones.*.mejor_ejemplar' => ['nullable', 'boolean'],
             'excepciones.*.sku' => ['nullable', 'string', 'max:64'],
+            'excepciones.*.origen_unidad_id' => ['nullable', 'string', 'max:160'],
             'excepciones.*.evidencias' => ['nullable', 'array', 'max:5'],
             'excepciones.*.evidencias.*' => ['file', 'mimes:jpg,jpeg,png,webp', 'max:10240'],
             'evidencias' => ['nullable', 'array', 'max:8'],
