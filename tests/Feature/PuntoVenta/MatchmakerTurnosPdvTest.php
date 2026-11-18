@@ -17,6 +17,7 @@ use App\Models\Sucursal;
 use App\Models\User;
 use App\Services\PuntoVenta\AlcancePdv;
 use App\Services\PuntoVenta\Operacion\AbrirJornadaPdvService;
+use App\Services\PuntoVenta\Operacion\AplicarEsperaDisponibilidadPdvService;
 use App\Services\PuntoVenta\Operacion\FinalizarPausaPdvService;
 use App\Services\PuntoVenta\Operacion\IniciarPausaPdvService;
 use App\Services\PuntoVenta\PuntoVentaModulo;
@@ -410,18 +411,27 @@ class MatchmakerTurnosPdvTest extends TestCase
 
     public function test_transaccion_revertida_no_publica_el_matchmaker(): void
     {
-        Queue::fake();
+        // Queue::fake ignora afterCommit; el rollback debe borrar espera y cooldown.
+        $ventas = $this->crearVendedorOperacion('Rollback espera');
+        app(AbrirJornadaPdvService::class)->ejecutar($ventas, now());
+        $jornada = JornadaPdv::query()->where('user_id', $ventas->id)->firstOrFail();
 
         try {
-            DB::transaction(function (): void {
-                EjecutarMatchmakerTurnosPdvJob::dispatch($this->sucursal->id, TurnoPdvEvento::TIPO_ALTA)
-                    ->afterCommit();
+            DB::transaction(function () use ($ventas): void {
+                app(AplicarEsperaDisponibilidadPdvService::class)->ejecutar(
+                    $ventas->id,
+                    $this->sucursal->id,
+                    now(),
+                    'prueba',
+                    $ventas->id,
+                );
                 throw new \RuntimeException('forzar rollback');
             });
         } catch (\RuntimeException) {
         }
 
-        Queue::assertNothingPushed();
+        $this->assertNull($jornada->fresh()->disponible_desde);
+        $this->assertSame(0, EsperaDisponibilidadPdv::query()->count());
     }
 
     public function test_no_asigna_dos_turnos_a_la_misma_persona(): void
